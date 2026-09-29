@@ -211,6 +211,13 @@ export const CONFIG = deepFreeze({
          *  at 15 frames a second a jet steps across the sky in visible
          *  jumps (QA, 2026-09-25), and it is in sight well under a minute. */
         jetFps: 60,
+        /** While a gull is in view, this often: at 15 a gliding gull, with
+         *  nothing moving on it to carry the eye, hopped a pixel or two a
+         *  frame and read as laggy (QA, 2026-09-29), where a beating one
+         *  looked fine. By day a gull is nearly always in view, so this is
+         *  the daytime rate; by night, in the rain and for less motion there
+         *  are none, and the scenery goes back to ambientFps. */
+        gullFps: 30,
         /** The city's lit offices are repainted when the share of them
          *  with their lights on moves by this much (daylight.js officesLit). */
         officeStep: 0.03

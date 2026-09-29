@@ -511,3 +511,41 @@ describe('the gondolas and the flock, built from their source', () => {
         expect(flock.mesh.material.side).toBe(THREE.DoubleSide);
     });
 });
+
+describe('the gulls’ frame rate (QA, 2026-09-29: gliding gulls looked "laggy")', () => {
+    test('in sight from the desk by day, so the scenery draws at gullFps; none at night', () => {
+        expect(CONFIG.view.gullFps).toBeGreaterThan(CONFIG.view.ambientFps);
+        expect(CONFIG.view.gullFps).toBeLessThanOrEqual(CONFIG.view.jetFps);
+        lit.follow(cameraAt('desk'));
+        const day = momentAt(11);
+        lit.setLight(day.look, day.sky);
+        lit.setLife(day.at, 100, false, 100);
+        expect(lit.gullsInSight()).toBe(true);
+        // Looking straight down at the floor, none.
+        const down = cameraAt('desk');
+        down.lookAt(down.position.clone().add(new THREE.Vector3(0, -1, 0.001)));
+        down.updateMatrixWorld(true);
+        lit.follow(down);
+        expect(lit.gullsInSight()).toBe(false);
+        lit.follow(cameraAt('desk'));
+        const night = momentAt(23);
+        lit.setLight(night.look, night.sky);
+        lit.setLife(night.at, 100, false, 100);
+        expect(lit.gullsInSight()).toBe(false);
+    });
+
+    test('a glide is never still: the wings trim and the gull rocks between its beats, gently', async () => {
+        const gulls = await import('../www/office/js/gulls.js');
+        const g = gulls.flock()[0];
+        let t = 0;
+        while (gulls.flapping(g, t) || gulls.flapping(g, t + 2)) t += 0.5;
+        const a = gulls.gullPose(g, t);
+        const b = gulls.gullPose(g, t + 0.5);
+        expect(Math.abs(a.arm - b.arm) + Math.abs(a.hand - b.hand)).toBeGreaterThan(0.01);
+        for (let s = t; s < t + 2; s += 0.1) {
+            const p = gulls.gullPose(g, s);
+            expect(Math.abs(p.arm - gulls.GLIDE.arm)).toBeLessThanOrEqual(gulls.TRIM.arm + 1e-9);
+            expect(Math.abs(p.hand - gulls.GLIDE.hand)).toBeLessThanOrEqual(gulls.TRIM.hand + 1e-9);
+        }
+    });
+});

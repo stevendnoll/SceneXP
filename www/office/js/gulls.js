@@ -105,6 +105,11 @@ export function gullAt(g, t) {
  *  below level), the gull wing's bent line. */
 export const GLIDE = { arm: 0.12, hand: -0.45 };
 
+/** A glide's trim, radians and radians a second: the rocking on the
+ *  gusts, the arm's flex and the hand's, each at its own slow rate so they
+ *  never fall into step. */
+export const TRIM = { rock: 0.06, rockRate: 1.7, arm: 0.05, armRate: 2.3, hand: 0.07, handRate: 3.1 };
+
 /** A small hash of whole numbers, 0 to 1. */
 function hash(a, b) {
     let h = (a * 374761393 + b * 668265263) | 0;
@@ -143,9 +148,13 @@ export function gullPose(g, t) {
     // heading (vx, vz) has its left at (vz, -vx)), and the bank that turn
     // takes, a little more than a plane's, as a gull's is.
     const sideways = (v[2] * acc[0] - v[0] * acc[2]) / flat;
-    const bank = Math.max(-0.75, Math.min(0.75, Math.atan(sideways / G) * 1.3));
+    // Riding the air, a gliding gull is never quite still: it rocks a
+    // little on the gusts and flexes its wings to trim, slow and small
+    // (TRIM), so there is always something alive on it between its beats.
+    const bank = Math.max(-0.75, Math.min(0.75, Math.atan(sideways / G) * 1.3 + TRIM.rock * Math.sin(TRIM.rockRate * t + g.breathe)));
     const beat = flapping(g, t);
-    let { arm, hand } = GLIDE;
+    let arm = GLIDE.arm + TRIM.arm * Math.sin(TRIM.armRate * t + g.drift);
+    let hand = GLIDE.hand + TRIM.hand * Math.sin(TRIM.handRate * t + g.phase);
     if (beat) {
         const [into, length] = beat;
         const s = TAU * GULLS.flap.hz * into;

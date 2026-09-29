@@ -2446,11 +2446,12 @@ function animate() {
     state.scenerySeconds = sceneryClock(state.scenerySeconds, delta, Boolean(ui.lapse));
 
     // The moving scenery asks for a frame about CONFIG.view.ambientFps
-    // times a second when nothing else is drawing, and CONFIG.view.jetFps
-    // while a jet is crossing the view.
+    // times a second when nothing else is drawing, CONFIG.view.gullFps
+    // while a gull is in view, and CONFIG.view.jetFps while a jet is
+    // crossing it.
     const moving = lifeMoves();
     if (moving) {
-        const fps = world.jetInSight() ? CONFIG.view.jetFps : CONFIG.view.ambientFps;
+        const fps = world.jetInSight() ? CONFIG.view.jetFps : world.gullsInSight() ? CONFIG.view.gullFps : CONFIG.view.ambientFps;
         const paced = paceScenery(state.ambientDue, delta, fps);
         state.ambientDue = paced.due;
         if (paced.draw) state.dirty = true;

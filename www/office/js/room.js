@@ -1078,6 +1078,128 @@ export const DESK = {
 };
 
 /**
+ * The keyboard (QA, 2026-09-29: "more detail to the keyboard"): a slim
+ * aluminum wedge, thinner at the front, full size with its numeric keypad,
+ * white low-profile keys on it. `pitch` is one key's width with its gap,
+ * `gap` the aluminum between keys, `cap` the keys' height; `wedge` the
+ * base's thickness at the front and back. `rows` is the main block, back
+ * to front, each a list of key widths in pitches (15 across): the half-high
+ * function row, the numbers, then the letters, and the bottom row with
+ * the space bar. `nav` and `pad` are the two blocks to its right, each row
+ * a list of `[width, height]` keys (heights in rows, 0 for a gap).
+ */
+export const KEYBOARD = {
+    width: 0.44,
+    depth: 0.115,
+    pitch: 0.0185,
+    gap: 0.0022,
+    cap: 0.0035,
+    wedge: [0.0045, 0.0105],
+    fnRow: 0.6,
+    rows: [
+        [1.2, ...Array(12).fill(1.15)],
+        [...Array(13).fill(1), 2],
+        [1.5, ...Array(12).fill(1), 1.5],
+        [1.75, ...Array(11).fill(1), 2.25],
+        [2.25, ...Array(10).fill(1), 2.75],
+        [1, 1.25, 1.25, 1.5, 5, 1.5, 1.25, 1.25, 1]
+    ],
+    nav: [
+        [[1, 1], [1, 1], [1, 1]],
+        [[1, 1], [1, 1], [1, 1]],
+        [[1, 1], [1, 1], [1, 1]],
+        [[3, 0]],
+        [[1, 0], [1, 1], [1, 0]],
+        [[1, 1], [1, 1], [1, 1]]
+    ],
+    pad: [
+        [[1, 1], [1, 1], [1, 1], [1, 1]],
+        [[1, 1], [1, 1], [1, 1], [1, 1]],
+        [[1, 1], [1, 1], [1, 1], [1, 1]],
+        [[1, 1], [1, 1], [1, 1], [1, 1]],
+        [[1, 1], [1, 1], [1, 1], [1, 2]],
+        [[2, 1], [1, 1], [1, 0]]
+    ]
+};
+
+/**
+ * Every key as `[x, z, width, depth]` in meters, from the keyboard's middle
+ * (+z toward the typist): the main block, a half pitch of aluminum, the
+ * navigation keys and the arrows, another half pitch, the keypad.
+ */
+export function keyLayout(k = KEYBOARD) {
+    const keys = [];
+    const rowDepth = (r) => (r === 0 ? k.fnRow : 1) * k.pitch;
+    const rowZ = [];
+    let z = -((k.fnRow + k.rows.length - 1) * k.pitch) / 2;
+    for (let r = 0; r < k.rows.length; r++) {
+        rowZ.push(z);
+        z += rowDepth(r);
+    }
+    const across = 15 + 0.5 + 3 + 0.5 + 4;
+    const left = -(across * k.pitch) / 2;
+    k.rows.forEach((row, r) => {
+        let x = left;
+        for (const w of row) {
+            keys.push([x + (w * k.pitch) / 2, rowZ[r] + rowDepth(r) / 2, w * k.pitch - k.gap, rowDepth(r) - k.gap]);
+            x += w * k.pitch;
+        }
+    });
+    const block = (rows, x0) => rows.forEach((row, r) => {
+        let x = x0;
+        for (const [w, h] of row) {
+            if (h > 0) {
+                const depth = r === 0 ? rowDepth(0) : h * k.pitch;
+                keys.push([x + (w * k.pitch) / 2, rowZ[r] + depth / 2, w * k.pitch - k.gap, depth - k.gap]);
+            }
+            x += w * k.pitch;
+        }
+    });
+    block(k.nav, left + 15.5 * k.pitch);
+    block(k.pad, left + 19 * k.pitch);
+    return keys;
+}
+
+/** The keys as one geometry of boxes, each sitting on the wedge's sloping
+ *  top (its thickness `wedge` front to back), from the keyboard's middle. */
+function keysGeometry(k = KEYBOARD) {
+    const positions = [];
+    const normals = [];
+    const [thin, thick] = k.wedge;
+    for (const [x, z, w, d] of keyLayout(k)) {
+        const t = 0.5 - z / k.depth;
+        const base = thin + (thick - thin) * t;
+        const g = new THREE.BoxGeometry(w, k.cap, d).toNonIndexed();
+        g.translate(x, base + k.cap / 2 - 0.0008, z);
+        positions.push(...g.attributes.position.array);
+        normals.push(...g.attributes.normal.array);
+        g.dispose();
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    return g;
+}
+
+/** The keyboard's base: a box whose top slopes from `wedge[0]` thick at the
+ *  front (+z) to `wedge[1]` at the back, its foot at y 0. */
+function wedgeGeometry(k = KEYBOARD) {
+    const g = new THREE.BoxGeometry(k.width, 1, k.depth);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+        const t = 0.5 - pos.getZ(i) / k.depth;
+        const top = k.wedge[0] + (k.wedge[1] - k.wedge[0]) * t;
+        pos.setY(i, pos.getY(i) > 0 ? top : 0);
+    }
+    g.computeVertexNormals();
+    return g;
+}
+
+/** The wireless mouse, to the keyboard's right: a low white shell on a
+ *  slim aluminum foot, turned a little toward the typist. Meters. */
+export const MOUSE = { length: 0.114, width: 0.057, height: 0.0215, foot: 0.003, right: 0.075, turn: 0.12 };
+
+/**
  * Lay a texture on a mesh in meters: `toGrain(x, y, z, face)` gives each
  * vertex's meters along and across the texture from its place in the room
  * and the axis its face turns to ('x', 'y' or 'z'), and `size` how many
@@ -1177,7 +1299,32 @@ function buildDesk(group, config, picks, contacts, m) {
     computer.add(box(0.05, 0.16, 0.012, m.aluminum, mx, top + 0.09, mz - 0.03));
     const bezel = roundedBox(0.66, 0.41, 0.035, 0.012, metal, mx, top + 0.36, mz);
     computer.add(bezel);
-    computer.add(roundedBox(0.44, 0.012, 0.13, 0.004, mat(0xd6d8db, { roughness: 0.4, metalness: 0.6 }), mx, top + DESK.pad.thick + 0.006, z1 - 0.2));
+    // The keyboard: an aluminum wedge on the pad, its keys white.
+    const K = KEYBOARD;
+    const kz = z1 - 0.2;
+    const onPad = top + DESK.pad.thick;
+    const keyboard = new THREE.Mesh(wedgeGeometry(K), mat(0xd6d8db, { roughness: 0.4, metalness: 0.6 }));
+    keyboard.name = 'keyboard';
+    keyboard.position.set(mx, onPad, kz);
+    computer.add(keyboard);
+    const keys = new THREE.Mesh(keysGeometry(K), mat(0xf5f6f7, { roughness: 0.5 }));
+    keys.name = 'keys';
+    keys.position.copy(keyboard.position);
+    computer.add(keys);
+    // The mouse, to its right: the shell a low dome, the foot a thin oval.
+    const mouse = new THREE.Group();
+    mouse.name = 'mouse';
+    mouse.position.set(mx + K.width / 2 + MOUSE.right, onPad, kz + 0.005);
+    mouse.rotation.y = MOUSE.turn;
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, MOUSE.foot, 32), m.aluminum);
+    foot.scale.set(MOUSE.width / 2 - 0.002, 1, MOUSE.length / 2 - 0.002);
+    foot.position.y = MOUSE.foot / 2;
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.MeshPhysicalMaterial({ color: 0xf6f7f8, roughness: 0.3, clearcoat: 0.6, clearcoatRoughness: 0.2 }));
+    shell.scale.set(MOUSE.width / 2, MOUSE.height - MOUSE.foot, MOUSE.length / 2);
+    shell.position.y = MOUSE.foot;
+    mouse.add(foot, shell);
+    computer.add(mouse);
     // The leather pad under the keyboard, part of the desk.
     const { width: pw, depth: pd, front, thick } = DESK.pad;
     const pad = roundedSlab(mx - pw / 2, top, z1 - front - pd, mx + pw / 2, top + thick, z1 - front, 0.008, m.leather);
@@ -1189,7 +1336,8 @@ function buildDesk(group, config, picks, contacts, m) {
     contacts.push(
         { x: d.x, z: d.z, y: 0, w: d.width + 0.14, d: d.depth + 0.12, soft: 0.2, alpha: 0.42 },
         { x: mx, z: mz, y: top, w: 0.32, d: 0.24, soft: 0.07, alpha: 0.4 },
-        { x: mx, z: z1 - 0.2, y: top, w: 0.5, d: 0.2, soft: 0.05, alpha: 0.22 }
+        { x: mx, z: z1 - 0.2, y: top, w: 0.5, d: 0.2, soft: 0.05, alpha: 0.22 },
+        { x: mx + KEYBOARD.width / 2 + MOUSE.right, z: z1 - 0.195, y: top, w: 0.08, d: 0.14, soft: 0.02, alpha: 0.3 }
     );
     group.add(computer);
     picks.computer = computer;
@@ -1243,7 +1391,6 @@ function buildDesk(group, config, picks, contacts, m) {
     const manila = mat(COLORS.manila, { roughness: 0.9 });
     const fx = d.x + 0.02;
     const fz = z1 - 0.2;
-    const onPad = top + DESK.pad.thick;
     folder.add(box(0.22, 0.004, 0.3, manila, fx - 0.112, onPad + 0.002, fz));
     folder.add(box(0.22, 0.004, 0.3, manila, fx + 0.112, onPad + 0.002, fz));
     folder.add(box(0.2, 0.006, 0.27, paper, fx + 0.112, onPad + 0.007, fz));

@@ -868,3 +868,74 @@ describe('the front wall, the whiteboard and the printer', () => {
         expect(u(0.9)).toBeGreaterThan(u(0.1));
     });
 });
+
+describe('the keyboard and the mouse (QA, 2026-09-29: "more detail to the keyboard", "a wireless mouse to the right")', () => {
+    let top;
+    beforeAll(() => {
+        top = CONFIG.room.desk.height + roomMod.DESK.pad.thick;
+    });
+
+    test('a full-size keyboard: an aluminum wedge, thinner at the front, its white keys laid out on it', () => {
+        const computer = room.picks.computer;
+        const base = computer.getObjectByName('keyboard');
+        const keys = computer.getObjectByName('keys');
+        const b = boxOf(base);
+        const K = roomMod.KEYBOARD;
+        expect(b.min.y).toBeCloseTo(top, 6);
+        expect(b.max.x - b.min.x).toBeCloseTo(K.width, 6);
+        expect(K.wedge[1]).toBeGreaterThan(K.wedge[0]);
+        // Every key, the numeric keypad's too, on the base with aluminum round it.
+        const layout = roomMod.keyLayout();
+        expect(layout.length).toBeGreaterThan(100);
+        expect(keys.geometry.attributes.position.count).toBe(layout.length * 36);
+        const kb = boxOf(keys);
+        expect(kb.min.x).toBeGreaterThan(b.min.x + 0.004);
+        expect(kb.max.x).toBeLessThan(b.max.x - 0.004);
+        expect(kb.min.z).toBeGreaterThan(b.min.z + 0.004);
+        expect(kb.max.z).toBeLessThan(b.max.z - 0.004);
+        // No two keys touch.
+        for (let i = 0; i < layout.length; i++) {
+            for (let j = i + 1; j < layout.length; j++) {
+                const [xa, za, wa, da] = layout[i];
+                const [xb, zb, wb, db] = layout[j];
+                const apart = Math.abs(xa - xb) >= (wa + wb) / 2 + K.gap * 0.9 || Math.abs(za - zb) >= (da + db) / 2 + K.gap * 0.9;
+                expect(apart).toBe(true);
+            }
+        }
+        // Each row of the main block is fifteen keys wide; the space bar is the widest key.
+        for (const row of K.rows) expect(row.reduce((s, w) => s + w, 0)).toBeCloseTo(15, 9);
+        expect(Math.max(...layout.map((k) => k[2]))).toBeCloseTo(5 * K.pitch - K.gap, 9);
+        // The keys stand proud of the wedge, higher at the back than the front.
+        const pos = keys.geometry.attributes.position;
+        let backTop = -Infinity;
+        let frontTop = -Infinity;
+        for (let i = 0; i < pos.count; i++) {
+            if (pos.getZ(i) < -0.04) backTop = Math.max(backTop, pos.getY(i));
+            if (pos.getZ(i) > 0.04) frontTop = Math.max(frontTop, pos.getY(i));
+        }
+        expect(backTop).toBeGreaterThan(frontTop + 0.004);
+    });
+
+    test('a wireless mouse on the pad, just right of the keyboard as the desk sees it, part of the computer', () => {
+        const computer = room.picks.computer;
+        const mouse = computer.getObjectByName('mouse');
+        const m = boxOf(mouse);
+        const k = boxOf(computer.getObjectByName('keyboard'));
+        const pad = boxOf(room.group.getObjectByName('desk-pad'));
+        expect(m.min.y).toBeCloseTo(top, 6);
+        expect(m.max.y - m.min.y).toBeCloseTo(roomMod.MOUSE.height, 3);
+        expect(m.min.x).toBeGreaterThan(k.max.x + 0.02);
+        expect(m.max.x).toBeLessThan(pad.max.x);
+        expect(m.min.z).toBeGreaterThan(pad.min.z);
+        expect(m.max.z).toBeLessThan(pad.max.z);
+        // Right of the keyboard in the desk's own view, at every screen shape.
+        for (const aspect of [21 / 9, 16 / 10, 390 / 844]) {
+            const cam = cameraAt('desk', aspect);
+            const mc = m.getCenter(new THREE.Vector3()).project(cam);
+            const kr = new THREE.Vector3(k.max.x, k.max.y, (k.min.z + k.max.z) / 2).project(cam);
+            expect(mc.x).toBeGreaterThan(kr.x);
+        }
+        // Tapping it opens the computer.
+        expect(roomMod.pickOf(mouse.children[1])).toBe('computer');
+    });
+});

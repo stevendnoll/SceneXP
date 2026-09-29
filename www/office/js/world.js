@@ -1135,6 +1135,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     let raining = 0;
     // How dark it is (setLight, daylight.js cityLights): the gulls go home.
     let dark = 0;
+    // Where the gulls were last put (setLife), for gullsInSight; null while
+    // they are home.
+    let gullPoses = null;
     // Whether the airport's lights are on (setLight), for the flashers.
     let airportNight = false;
     paintSky(sky, 0x7fb2dd, 0xe3ecef);
@@ -1394,7 +1397,8 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             // time, by day, out of the rain, and never held still in the air.
             washers.hang(washers.crews.map(({ face }, i) => washerAt(face, date, i, raining)));
             const gullsOut = !still && dark < 0.6 && raining < 0.25;
-            gulls.fly(gullsOut ? flock().map((g) => gullPose(g, real)) : null, WATER_Y);
+            gullPoses = gullsOut ? flock().map((g) => gullPose(g, real)) : null;
+            gulls.fly(gullPoses, WATER_Y);
             const moved = drift(date, seconds, CLOUDS.tile);
             if (clouds.material.map) clouds.material.map.offset.set(moved.clouds[0], moved.clouds[1]);
             water.material.normalMap.offset.set(moved.ripple[0], moved.ripple[1]);
@@ -1423,6 +1427,21 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
                 if (group.position.distanceTo(camera.position) >= JET.smooth) return false;
                 reach.center.copy(group.position);
                 reach.radius = JET_REACH * group.scale.x;
+                return sight.intersectsSphere(reach) === true;
+            });
+        },
+        /**
+         * Whether a gull is out and inside the camera's view, where the
+         * scenery is worth drawing more often (main.js CONFIG.view.gullFps).
+         * Strictly true or false.
+         */
+        gullsInSight() {
+            if (!gullPoses || gulls.mesh.visible !== true) return false;
+            camera.updateMatrixWorld();
+            sight.setFromProjectionMatrix(seeing.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+            return gullPoses.some((p) => {
+                reach.center.set(p.x, WATER_Y + p.y, p.z);
+                reach.radius = 4;
                 return sight.intersectsSphere(reach) === true;
             });
         },
