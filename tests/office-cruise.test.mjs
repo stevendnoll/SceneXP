@@ -229,6 +229,46 @@ describe('the ships themselves', () => {
         });
     });
 
+    test('a ship’s front (QA, 2026-09-29: "especially the front of it"): the band runs to the stem, and the decks rise in a raked front, not a staircase', () => {
+        const bow = -LIFE.cruise.length / 2;
+        /** The foremost vertex of `hex` between two heights. */
+        const foremost = (body, hex, y0, y1) => {
+            const want = new THREE.Color().setHex(hex, THREE.SRGBColorSpace);
+            const p = body.attributes.position;
+            const c = body.attributes.color;
+            let z = Infinity;
+            for (let i = 0; i < p.count; i++) {
+                const y = p.getY(i);
+                if (y > y0 && y < y1 && Math.abs(c.getX(i) - want.r) + Math.abs(c.getY(i) - want.g) + Math.abs(c.getZ(i) - want.b) < 1e-4) z = Math.min(z, p.getZ(i));
+            }
+            return z;
+        };
+        // The waterline band reaches the stem (it stopped 42 m short, at a
+        // pale wedge).
+        for (const livery of fleetMod.CRUISE_LIVERIES.slice(1)) {
+            expect(foremost(fleetMod.cruiseParts(livery).body, livery.band, -1, fleetMod.CRUISE_LINES.band + 0.1) - bow).toBeLessThan(15);
+        }
+        // The eighth deck's front is within a few meters of the lowest's
+        // (it was 44 m back, a deck at a time).
+        const { body } = fleetMod.cruiseParts(fleetMod.CRUISE_LIVERIES[0]);
+        const { deck, height } = fleetMod.CRUISE_LINES;
+        const lowest = foremost(body, 0xf2f3f1, deck + 0.5, deck + height - 0.5);
+        const eighth = foremost(body, 0xf2f3f1, deck + 8 * height + 0.5, deck + 9 * height - 0.5);
+        expect(lowest - bow).toBeGreaterThan(30);
+        expect(eighth - lowest).toBeLessThan(15);
+        // The hull's sides turned outward, away from its middle line, so
+        // nothing is drawn inside out.
+        const p = body.attributes.position;
+        const n = body.attributes.normal;
+        let sides = 0;
+        for (let i = 0; i < p.count; i++) {
+            if (p.getY(i) > deck || Math.abs(p.getX(i)) < 3 || Math.abs(n.getY(i)) > 0.5 || Math.abs(n.getZ(i)) > 0.5) continue;
+            expect(Math.sign(n.getX(i))).toBe(Math.sign(p.getX(i)));
+            sides++;
+        }
+        expect(sides).toBeGreaterThan(100);
+    });
+
     test('the pier is built right side out: its basis a rotation, its shed on the side away from the ship', () => {
         const pier = cruisePier();
         const x = new THREE.Vector3(pier.side[0], 0, pier.side[1]);

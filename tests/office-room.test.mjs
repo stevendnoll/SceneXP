@@ -940,6 +940,24 @@ describe('the keyboard and the mouse (QA, 2026-09-29: "more detail to the keyboa
     });
 });
 
+describe('the pulsing markers (QA, 2026-09-29: "placed on top of their respective objects")', () => {
+    test('each sits on what is drawn of its thing, not over it, and a tap there from the desk finds that thing', () => {
+        for (const [aspect, ratio] of Object.entries(ASPECTS)) {
+            const cam = cameraAt('desk', ratio);
+            for (const key of ['computer', 'binoculars']) {
+                const at = new THREE.Vector3(...room.marks[key]);
+                const box = new THREE.Box3();
+                room.picks[key].traverse((o) => { if (o.isMesh && o.material.visible !== false) box.expandByObject(o, true); });
+                expect({ aspect, key, inside: box.containsPoint(at) }).toEqual({ aspect, key, inside: true });
+                // Nearer the middle than the top: on the monitor's face and
+                // on the binoculars' body, where the old rings floated above.
+                expect(box.max.y - at.y).toBeGreaterThan(0.04);
+                expect(firstPick(cam, at)).toBe(key);
+            }
+        }
+    });
+});
+
 describe('the binoculars on their tripod (QA, 2026-09-29: in the corner beside the chair, 8x)', () => {
     test('by the north window beside the chair, standing on the floor, clear of the walls, the chair and the wastebasket', () => {
         const scope = room.picks.binoculars;

@@ -248,70 +248,190 @@ export const CRUISE_LIVERIES = [
 ];
 
 /**
- * A cruise ship, bow toward -z: a long hull with its bow drawn to a point
- * and a band at the waterline, ten white decks stepped back toward the
- * stern with a row of cabin windows each side (lit by night), the bridge
- * across the front with its wings, a row of orange lifeboats down each
- * side, a mast, and the funnel aft in the line's colors.
+ * A smooth surface through a grid of points, `grid[i][j]` = [x, y, z]: each
+ * cell two triangles, colored `colorOf(i, j)` (an sRGB hex), turned to face
+ * `outward(point)` (a direction at the triangle's middle), and shaded
+ * smooth across the grid (a hull's curve) but not past its edges (a deck's
+ * edge). Cells closed to a line (a bow's point) are left out.
+ */
+export function surfaceGeometry(grid, colorOf, outward) {
+    const normals = grid.map((row) => row.map(() => [0, 0, 0]));
+    const tris = [];
+    for (let i = 0; i + 1 < grid.length; i++) {
+        for (let j = 0; j + 1 < grid[i].length; j++) {
+            const cell = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]];
+            for (const corners of [[cell[0], cell[1], cell[2]], [cell[0], cell[2], cell[3]]]) {
+                const [a, b, c] = corners.map(([r, s]) => grid[r][s]);
+                const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+                const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+                let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+                if (Math.hypot(...n) < 1e-9) continue;
+                const out = outward([0, 1, 2].map((k) => (a[k] + b[k] + c[k]) / 3));
+                const flip = n[0] * out[0] + n[1] * out[1] + n[2] * out[2] < 0;
+                if (flip) n = n.map((x) => -x);
+                // Weighted by area (n is unnormalized), so a sliver near
+                // the point does not bend its neighbors.
+                for (const [r, s] of corners) for (let k = 0; k < 3; k++) normals[r][s][k] += n[k];
+                tris.push({ corners: flip ? [corners[0], corners[2], corners[1]] : corners, color: colorOf(i, j) });
+            }
+        }
+    }
+    const positions = [];
+    const norms = [];
+    const colors = [];
+    const col = new THREE.Color();
+    for (const { corners, color } of tris) {
+        col.setHex(color, THREE.SRGBColorSpace);
+        for (const [r, s] of corners) {
+            positions.push(...grid[r][s]);
+            const n = normals[r][s];
+            const len = Math.hypot(...n) || 1;
+            norms.push(n[0] / len, n[1] / len, n[2] / len);
+            colors.push(col.r, col.g, col.b);
+        }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(norms, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    return g;
+}
+
+/**
+ * A cruise ship's lines, in meters (QA, 2026-09-29: "the front of it" did
+ * not look right, a flat wedge ahead of a ten-deck staircase). `beam` wide;
+ * the bow is the forward `bow` of its length, curving in to the stem in
+ * plan (`entry`, higher is fuller) and narrower at the waterline than at
+ * the deck (`flare`); the stem leans `rake` forward from the waterline to
+ * the deck, and the deck rises `sheer` toward it from `deck`; the band at
+ * the waterline is `band` high, and the transom is `stern` of the beam.
+ * The superstructure's front is rounded in plan to `nose` deep and leans
+ * back `lean` a deck, with the decks aft terraced `terrace` a deck from
+ * the sixth up.
+ */
+export const CRUISE_LINES = {
+    beam: 36, bow: 0.22, entry: 2.4, flare: 0.2, rake: 12, sheer: 4, deck: 13, band: 5, stern: 0.93,
+    decks: 10, height: 3.1, front: 0.15, nose: 12, lean: 1.2, terrace: 7
+};
+
+/**
+ * A cruise ship, bow toward -z: a hull with a raked, flared bow curving in
+ * to its stem and the line's band at the waterline running right up to it,
+ * a pale deck, ten white decks above with a rounded front (its rows of
+ * windows wrapping round) and terraces stepping down toward the stern, a
+ * row of cabin windows down each side (lit by night), the bridge wings out
+ * over the sides, a row of orange lifeboats, a mast, and the funnel aft,
+ * raked and in the line's colors. Also where its running lights go.
  */
 export function cruiseParts(livery = CRUISE_LIVERIES[0], L = LIFE.cruise.length) {
     const white = 0xf2f3f1;
-    const W = 36;
+    const glass = 0x39424d;
+    const S = CRUISE_LINES;
+    const W = S.beam;
     const bow = -L / 2;
-    const hullLen = L * 0.86;
-    const hullMid = L / 2 - hullLen / 2;
-    const parts = [
-        boxesGeometry([
-            [0, 2.5, hullMid, W, 5, hullLen, livery.band],
-            [0, 9, hullMid, W, 8, hullLen, livery.hull]
-        ]),
-        // The bow, drawn in to a raked point.
-        sweptBox((ix, iy, iz) => {
-            const y = iy ? 13 : 0;
-            const z = iz ? bow + L * 0.14 : bow + (iy ? 0 : 8);
-            const half = iz ? W / 2 : 1.2;
-            return [(ix ? 1 : -1) * half, y, z];
-        }, livery.hull)
-    ];
-    const decks = [];
+    const stern = L / 2;
+    const bowLen = L * S.bow;
+    const stemTop = S.deck + S.sheer;
+
+    // The hull's stations from the stem aft, closer together where the bow
+    // curves: at each, its deck height, and where it is along the ship and
+    // how far out its side is at a height y.
+    const stations = [];
+    for (let k = 0; k <= 12; k++) {
+        const u = (k / 12) ** 1.5;
+        const top = S.deck + S.sheer * (1 - u) ** 2;
+        stations.push({
+            top,
+            z: (y) => {
+                const stem = bow + S.rake * (1 - y / stemTop);
+                return stem + (bow + bowLen - stem) * u;
+            },
+            half: (y) => (W / 2) * (1 - (1 - u) ** S.entry) * (1 - S.flare * (1 - u) * (1 - y / top))
+        });
+    }
+    for (const [z, half] of [[stern - 30, W / 2], [stern, (W / 2) * S.stern]]) {
+        stations.push({ top: S.deck, z: () => z, half: () => half });
+    }
+    const levels = (s) => [0, S.band, s.top];
+    const hullColor = (i, j) => (j === 0 ? livery.band : livery.hull);
+    const parts = [];
+    for (const side of [-1, 1]) {
+        parts.push(surfaceGeometry(stations.map((s) => levels(s).map((y) => [side * s.half(y), y, s.z(y)])),
+            hullColor, () => [side, 0, 0]));
+    }
+    const aft = stations[stations.length - 1];
+    parts.push(surfaceGeometry([-1, 1].map((side) => levels(aft).map((y) => [side * aft.half(y), y, stern])), hullColor, () => [0, 0, 1]));
+    parts.push(surfaceGeometry(stations.map((s) => [-1, 1].map((side) => [side * s.half(s.top), s.top, s.z(s.top)])),
+        () => 0xbfc3c7, () => [0, 1, 0]));
+
+    // The decks: each a slab rounded in front, its windows a dark band
+    // round the nose and a strip down each side.
     const windows = [];
-    for (let d = 0; d < 10; d++) {
-        const y0 = 13 + d * 3.1;
-        const front = bow + L * 0.2 + d * 3.5 + (d > 6 ? (d - 6) * 8 : 0);
-        const back = L / 2 - 6 - (d > 7 ? (d - 7) * 12 : 0);
+    const frontOf = (d) => bow + L * S.front + d * S.lean + (d === S.decks - 1 ? 14 : 0);
+    for (let d = 0; d < S.decks; d++) {
+        const y0 = S.deck + d * S.height;
+        const y1 = y0 + S.height;
+        const front = frontOf(d);
+        const back = stern - 5 - Math.max(0, d - 5) * S.terrace;
         const width = d < 8 ? W - 1 : W - 6;
-        decks.push([0, y0 + 1.55, (front + back) / 2, width, 3.1, back - front, white]);
-        if (d < 9) {
-            for (const side of [-1, 1]) windows.push([side * (width / 2 + 0.2), y0 + 1.7, (front + back) / 2, 0.4, 1.2, back - front - 10, 0]);
+        const R = S.nose;
+        // Its outline from the back on the port side, round the nose, and
+        // back down the starboard side.
+        const nose = [];
+        for (let k = 0; k <= 8; k++) {
+            const phi = (k / 8) * (Math.PI / 2);
+            nose.push([(width / 2) * Math.sin(phi), front + R * (1 - Math.cos(phi))]);
+        }
+        const outline = [[-width / 2, back, false], ...nose.slice().reverse().map(([x, z]) => [-x, z, true]),
+            ...nose.slice(1).map(([x, z]) => [x, z, true]), [width / 2, back, false]];
+        const glazed = d < S.decks - 1;
+        const rise = [y0, y0 + 1.1, y0 + 2.3, y1];
+        parts.push(surfaceGeometry(outline.map(([x, z]) => rise.map((y) => [x, y, z])),
+            (i, j) => (glazed && j === 1 && outline[i][2] && outline[i + 1][2] ? glass : white),
+            ([x, , z]) => [x, 0, Math.min(0, z - (front + R))]));
+        parts.push(surfaceGeometry([-1, 1].map((side) => [y0, y1].map((y) => [side * width / 2, y, back])), () => white, () => [0, 0, 1]));
+        parts.push(surfaceGeometry([...nose.map(([x, z]) => [[-x, y1, z], [x, y1, z]]), [[-width / 2, y1, back], [width / 2, y1, back]]],
+            () => white, () => [0, 1, 0]));
+        if (glazed) {
+            for (const side of [-1, 1]) windows.push([side * (width / 2 + 0.2), y0 + 1.7, (front + R + back) / 2, 0.4, 1.2, back - front - R - 4, 0]);
         }
     }
-    // The bridge across the front of the seventh deck, its wings out over
-    // the sides, its windows dark by day.
-    const bridgeY = 13 + 7 * 3.1 + 1.6;
-    const bridgeZ = bow + L * 0.2 + 7 * 3.5 + 3;
-    decks.push([0, bridgeY, bridgeZ, W + 6, 3.2, 7, white]);
-    windows.push([0, bridgeY + 0.4, bridgeZ - 3.7, W + 4, 1.2, 0.4, 0]);
+    const boxes = [];
+    // The bridge is the eighth deck's glazed front; its wings reach out
+    // over the sides just behind it, each with a window looking forward.
+    const bridgeY = S.deck + 7 * S.height + 1.6;
+    const wingZ = frontOf(7) + S.nose - 2;
+    for (const side of [-1, 1]) {
+        boxes.push([side * (W / 2 + 0.5), bridgeY, wingZ, 7, 3.2, 6, white]);
+        windows.push([side * (W / 2 + 0.5), bridgeY + 0.4, wingZ - 3.1, 6, 1.2, 0.4, 0]);
+    }
     // The lifeboats, down each side over the hull.
     for (const side of [-1, 1]) {
-        for (let b = 0; b < 9; b++) decks.push([side * (W / 2 + 0.6), 17.5, bow + L * 0.3 + b * 17, 2.4, 2.6, 10, 0xe8742a]);
+        for (let b = 0; b < 9; b++) boxes.push([side * (W / 2 + 0.6), 17.5, bow + L * 0.3 + b * 17, 2.4, 2.6, 10, 0xe8742a]);
     }
-    // The mast over the bridge, and the funnel aft with its cap.
-    const top = 13 + 10 * 3.1;
-    decks.push([0, top + 5, bridgeZ + 8, 1.2, 10, 1.2, white]);
-    const funnelZ = L / 2 - L * 0.2;
-    decks.push([0, top + 6, funnelZ, 11, 12, 22, livery.funnel], [0, top + 12.8, funnelZ, 11.6, 1.8, 22.6, livery.cap]);
-    parts.push(boxesGeometry(decks));
-    return { body: joinGeometries(parts), windows: boxesGeometry(windows) };
+    // The mast on the top deck, and the funnel aft, raked, with its cap.
+    const top = S.deck + S.decks * S.height;
+    const mastZ = frontOf(S.decks - 1) + 6;
+    boxes.push([0, top + 5, mastZ, 1.2, 10, 1.2, white]);
+    parts.push(boxesGeometry(boxes));
+    const funnelZ = stern - L * 0.2;
+    const raked = (y0, y1, color) => sweptBox((ix, iy, iz) => {
+        const t = (iy ? y1 : y0) / 14;
+        return [(ix ? 1 : -1) * (5.5 - t), top + (iy ? y1 : y0), funnelZ + 5 * t + (iz ? 1 : -1) * (11 - 2 * t)];
+    }, color);
+    parts.push(raked(0, 12, livery.funnel), raked(12, 14, livery.cap));
+    return {
+        body: joinGeometries(parts),
+        windows: boxesGeometry(windows),
+        lights: { foremast: [0, 16, -L * 0.42], mainmast: [0, top + 10.5, mastZ], wings: [W / 2 + 4, bridgeY, wingZ], stern: [0, 12, stern] }
+    };
 }
 
 function cruiseShip(i) {
     const L = LIFE.cruise.length;
-    const { body, windows } = cruiseParts(CRUISE_LIVERIES[i % CRUISE_LIVERIES.length]);
+    const { body, windows, lights } = cruiseParts(CRUISE_LIVERIES[i % CRUISE_LIVERIES.length]);
     const c = craft(`cruise-${i}`, body, windows, { wake: L, scale: LIFE.cruise.scale });
-    const bridgeZ = -L / 2 + L * 0.2 + 7 * 3.5 + 3;
-    c.navLights = runningLights(`cruise-${i}-lights`, {
-        foremast: [0, 16, -L * 0.42], mainmast: [0, 13 + 10 * 3.1 + 10.5, bridgeZ + 8], wings: [21, 13 + 7 * 3.1 + 1.6, bridgeZ], stern: [0, 12, L / 2]
-    });
+    c.navLights = runningLights(`cruise-${i}-lights`, lights);
     c.group.add(c.navLights);
     return c;
 }

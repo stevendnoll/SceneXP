@@ -24,7 +24,7 @@
  * measure what the eye sees.
  *
  * Builds and returns `{ group, picks, lamp, folder, screen,
- * cabinet, board, whiteboard, notes, rain }`. It adds nothing
+ * cabinet, board, whiteboard, notes, rain, marks }`. It adds nothing
  * to a scene itself and reads no clock.
  */
 
@@ -1545,7 +1545,7 @@ function buildDesk(group, config, picks, contacts, m) {
     group.add(folder);
     picks.folder = folder;
 
-    return { screen, light, glow, folder, lampGroup };
+    return { screen, screenAt: [mx, top + 0.36, mz + 0.019], light, glow, folder, lampGroup };
 }
 
 function buildFloorThings(group, config, picks, contacts) {
@@ -1738,7 +1738,14 @@ export function buildRoom(config, textures = {}) {
         shiny,
         binoculars,
         champagne,
-        lamp: { light: desk.light, glow: desk.glow, group: desk.lampGroup }
+        lamp: { light: desk.light, glow: desk.glow, group: desk.lampGroup },
+        // Where the pulsing markers sit (main.js buildMarks): on the
+        // monitor's face and on the binoculars themselves, not over them
+        // (QA, 2026-09-29).
+        marks: {
+            computer: desk.screenAt,
+            binoculars: [config.room.binoculars.x, config.room.binoculars.head + BINOCULARS.rise, config.room.binoculars.z]
+        }
     };
 }
 

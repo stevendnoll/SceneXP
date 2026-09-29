@@ -127,7 +127,9 @@ test('a returning visitor is told what is waiting, in the card and in the title'
 test('a fresh office leads with adding an application, and a returning one with stepping inside', async () => {
     await boot();
     const labels = () => dom.el('welcome-actions').children.map((b) => b.textContent);
-    expect(labels()).toEqual(['Add your first application', 'Stock the office with samples', 'Look around']);
+    // No samples here (QA, 2026-09-29): they wait in Settings and the empty
+    // computer.
+    expect(labels()).toEqual(['Add your first application', 'Look around']);
 
     jest.resetModules();
     dom.uninstall();

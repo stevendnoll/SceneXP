@@ -769,18 +769,8 @@ function buildMarks(signal) {
     if (!room || typeof document.createElement !== 'function') return null;
     const root = document.createElement('div');
     root.className = 'office-marks';
-    const top = (object, lift) => {
-        const box = new THREE.Box3();
-        object.updateMatrixWorld(true);
-        object.traverse((o) => { if (o.isMesh && o.material && o.material.visible !== false) box.expandByObject(o); });
-        const c = box.getCenter(new THREE.Vector3());
-        return new THREE.Vector3(c.x, box.max.y + lift, c.z);
-    };
-    const b = CONFIG.room.binoculars;
-    const anchors = {
-        computer: () => top(room.picks.computer, 0.12),
-        binoculars: () => new THREE.Vector3(b.x, b.head + 0.32, b.z)
-    };
+    // On each thing, not over it (room.js marks).
+    const anchors = room.marks || {};
     marks.list = MARKS.filter((m) => anchors[m.key] && room.picks[m.key]).map((m) => {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -793,7 +783,7 @@ function buildMarks(signal) {
         btn.appendChild(ring);
         btn.addEventListener('click', () => actOn(m.key, { armed: false }), { signal });
         root.appendChild(btn);
-        return { key: m.key, btn, anchor: anchors[m.key](), at: '', occluded: false };
+        return { key: m.key, btn, anchor: new THREE.Vector3(...anchors[m.key]), at: '', occluded: false };
     });
     if (document.body && document.body.appendChild) document.body.appendChild(root);
     marks.root = root;
@@ -2539,11 +2529,8 @@ function showWelcome() {
                 closeCard('welcome');
                 openApplicationForm(null);
             }));
-            box.appendChild(button('Stock the office with samples', 'office-btn', () => {
-                closeCard('welcome');
-                stockOffice();
-                openComputer();
-            }));
+            // The samples are in Settings and the empty computer, not here
+            // (QA, 2026-09-29: Steve asked for the button gone).
             box.appendChild(button('Look around', 'office-btn', () => closeCard('welcome')));
         } else {
             box.appendChild(button('Step inside', 'office-btn office-btn-primary', () => closeCard('welcome')));
