@@ -16,6 +16,12 @@ import { join } from 'node:path';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/office/js/config.js';
+
+// Every test boots the whole page (the room and the world outside), about
+// two seconds alone, and past Jest's five under the full parallel run once
+// the real-three suites share the machine (2026-09-29: a different boot
+// timed out each run). As www/mandelbrot and www/xo do, more room.
+jest.setTimeout(30000);
 import { emptyDoc, addApplication, serialize } from '../www/office/js/store.js';
 import { formatDate, addDays } from '../www/office/js/dates.js';
 

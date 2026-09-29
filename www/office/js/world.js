@@ -37,7 +37,7 @@ import { BAY, HAZE, rippleNormals, meanSquareSlope } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis, sunClear } from './sky.min.js';
 import {
     ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
-    carLightPositions, carYaws, drift, jetsAt, jetFlashing, shipShift, LIFE, JET, LIVERIES
+    carLightPositions, carYaws, drift, jetsAt, jetFlashing, shipShift, cruiseLane, cruisePier, cruiseAt, LIFE, JET, LIVERIES
 } from './life.min.js';
 import { buildFleet, place, boxesGeometry, jetParts, joinGeometries, buildWashers, buildGulls } from './fleet.min.js';
 import { WASHERS, washerFaces, washerAt } from './washers.min.js';
@@ -470,7 +470,25 @@ function buildPiers(scene) {
     boxes.push([route.x, 3, shore + 26, 40, 2, 72, 0x6e6259]);
     boxes.push([route.x, 8, shore - 45, 44, 12, 40, 0x8f9aa3]);
     // One mesh for all of them (a draw call each would be eighteen).
-    const mesh = new THREE.Mesh(boxesGeometry(boxes), standard(0xffffff, { vertexColors: true, roughness: 0.9 }));
+    // The cruise terminal pier north of downtown (life.js cruisePier),
+    // its deck and the long terminal shed down its far side, leaving the
+    // side toward the office for the ship. Built along its own length, then
+    // turned out into the bay.
+    const pier = cruisePier();
+    const length = LIFE.cruise.pier.length;
+    const shed = pier.width * 0.45;
+    const cruiseBoxes = boxesGeometry([
+        [0, 3, length / 2, pier.width, 2, length, 0x6e6259],
+        [-(pier.width / 2 - shed / 2 - 2), 11, length * 0.42, shed, 14, length * 0.62, 0x8f9aa3],
+        [-(pier.width / 2 - shed / 2 - 2), 18.5, length * 0.42, shed * 0.6, 1, length * 0.6, 0x6d767e]
+    ]);
+    // Its +z runs out along the pier, its +x toward the berth (a rotation,
+    // so no face turns inside out), and the shed sits on its -x side.
+    cruiseBoxes.applyMatrix4(new THREE.Matrix4().makeBasis(
+        new THREE.Vector3(pier.side[0], 0, pier.side[1]), new THREE.Vector3(0, 1, 0), new THREE.Vector3(pier.out[0], 0, pier.out[1])
+    ));
+    cruiseBoxes.translate(pier.x0, 0, pier.z0);
+    const mesh = new THREE.Mesh(joinGeometries([boxesGeometry(boxes), cruiseBoxes]), standard(0xffffff, { vertexColors: true, roughness: 0.9 }));
     mesh.position.y = WATER_Y;
     mesh.name = 'piers';
     scene.add(mesh);
@@ -1119,6 +1137,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     // How far the ships' timetable is run on so one is in view on arrival
     // (arrive).
     let shipShiftMinutes = 0;
+    // The cruise ship's pier and its way in (life.js), laid out once.
+    const cruiseBerth = cruisePier();
+    const cruiseRoute = cruiseLane(LIFE.cruise, 300, cruiseBerth);
     // For asking whether the jet is in view (jetInSight).
     const sight = new THREE.Frustum();
     const seeing = new THREE.Matrix4();
@@ -1368,7 +1389,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             ferriesAt(date, route).forEach((at, i) => place(fleet.ferries[i], at));
             const ships = shipsAt(date, shipShiftMinutes);
             fleet.ships.forEach((c, slot) => place(c, ships.find((ship) => ((ship.k % 3) + 3) % 3 === slot) || null));
-            sailboatsAt(date, courses, raining).forEach((at, i) => place(fleet.sailboats[i], at));
+            const cruise = cruiseAt(date, cruiseRoute, cruiseBerth);
+        fleet.cruises.forEach((c, livery) => place(c, cruise && cruise.livery === livery ? cruise : null));
+        sailboatsAt(date, courses, raining).forEach((at, i) => place(fleet.sailboats[i], at));
             place(fleet.seaplane, seaplaneAt(date, raining));
             // Rain that is held still would read as scratches on the view,
             // so for less motion only the gray sky and the wet glass show.

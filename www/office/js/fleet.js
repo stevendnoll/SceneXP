@@ -170,6 +170,77 @@ function ship(i) {
     return craft(`ship-${i}`, boxesGeometry(boxes), windows, { wake: L });
 }
 
+/** The cruise lines' colors: the hull under the white decks, the band at
+ *  the waterline, and the funnel and its cap. Made up, not any real
+ *  line's. */
+export const CRUISE_LIVERIES = [
+    { hull: 0x1c2c4c, band: 0x1c2c4c, funnel: 0xf2f3f1, cap: 0x1c2c4c },
+    { hull: 0xf2f3f1, band: 0x23395f, funnel: 0x2f64a8, cap: 0x1d1f22 },
+    { hull: 0xf2f3f1, band: 0x3a3d42, funnel: 0xb8322a, cap: 0xf2f3f1 }
+];
+
+/**
+ * A cruise ship, bow toward -z: a long hull with its bow drawn to a point
+ * and a band at the waterline, ten white decks stepped back toward the
+ * stern with a row of cabin windows each side (lit by night), the bridge
+ * across the front with its wings, a row of orange lifeboats down each
+ * side, a mast, and the funnel aft in the line's colors.
+ */
+export function cruiseParts(livery = CRUISE_LIVERIES[0], L = LIFE.cruise.length) {
+    const white = 0xf2f3f1;
+    const W = 36;
+    const bow = -L / 2;
+    const hullLen = L * 0.86;
+    const hullMid = L / 2 - hullLen / 2;
+    const parts = [
+        boxesGeometry([
+            [0, 2.5, hullMid, W, 5, hullLen, livery.band],
+            [0, 9, hullMid, W, 8, hullLen, livery.hull]
+        ]),
+        // The bow, drawn in to a raked point.
+        sweptBox((ix, iy, iz) => {
+            const y = iy ? 13 : 0;
+            const z = iz ? bow + L * 0.14 : bow + (iy ? 0 : 8);
+            const half = iz ? W / 2 : 1.2;
+            return [(ix ? 1 : -1) * half, y, z];
+        }, livery.hull)
+    ];
+    const decks = [];
+    const windows = [];
+    for (let d = 0; d < 10; d++) {
+        const y0 = 13 + d * 3.1;
+        const front = bow + L * 0.2 + d * 3.5 + (d > 6 ? (d - 6) * 8 : 0);
+        const back = L / 2 - 6 - (d > 7 ? (d - 7) * 12 : 0);
+        const width = d < 8 ? W - 1 : W - 6;
+        decks.push([0, y0 + 1.55, (front + back) / 2, width, 3.1, back - front, white]);
+        if (d < 9) {
+            for (const side of [-1, 1]) windows.push([side * (width / 2 + 0.2), y0 + 1.7, (front + back) / 2, 0.4, 1.2, back - front - 10, 0]);
+        }
+    }
+    // The bridge across the front of the seventh deck, its wings out over
+    // the sides, its windows dark by day.
+    const bridgeY = 13 + 7 * 3.1 + 1.6;
+    const bridgeZ = bow + L * 0.2 + 7 * 3.5 + 3;
+    decks.push([0, bridgeY, bridgeZ, W + 6, 3.2, 7, white]);
+    windows.push([0, bridgeY + 0.4, bridgeZ - 3.7, W + 4, 1.2, 0.4, 0]);
+    // The lifeboats, down each side over the hull.
+    for (const side of [-1, 1]) {
+        for (let b = 0; b < 9; b++) decks.push([side * (W / 2 + 0.6), 17.5, bow + L * 0.3 + b * 17, 2.4, 2.6, 10, 0xe8742a]);
+    }
+    // The mast over the bridge, and the funnel aft with its cap.
+    const top = 13 + 10 * 3.1;
+    decks.push([0, top + 5, bridgeZ + 8, 1.2, 10, 1.2, white]);
+    const funnelZ = L / 2 - L * 0.2;
+    decks.push([0, top + 6, funnelZ, 11, 12, 22, livery.funnel], [0, top + 12.8, funnelZ, 11.6, 1.8, 22.6, livery.cap]);
+    parts.push(boxesGeometry(decks));
+    return { body: joinGeometries(parts), windows: boxesGeometry(windows) };
+}
+
+function cruiseShip(i) {
+    const { body, windows } = cruiseParts(CRUISE_LIVERIES[i % CRUISE_LIVERIES.length]);
+    return craft(`cruise-${i}`, body, windows, { wake: LIFE.cruise.length, scale: LIFE.cruise.scale });
+}
+
 /** A sailboat: a white hull, a mast, a mainsail and a jib, one mesh drawn
  *  from both sides (the sails are single sheets). */
 function sailboat(i) {
@@ -476,6 +547,8 @@ export function buildFleet(scene, cars) {
     const fleet = {
         ferries: [ferry(0), ferry(1)],
         ships: [ship(0), ship(1), ship(2)],
+        // One for each line's colors; the timetable says which is out.
+        cruises: CRUISE_LIVERIES.map((_, i) => cruiseShip(i)),
         sailboats: Array.from({ length: LIFE.sailboat.count }, (_, i) => sailboat(i)),
         seaplane: seaplane(),
         // Enough for the flights that are out at once, and one called by hand.
@@ -483,7 +556,7 @@ export function buildFleet(scene, cars) {
         cars: carLights(cars),
         vehicles
     };
-    const all = [...fleet.ferries, ...fleet.ships, ...fleet.sailboats, fleet.seaplane, ...fleet.jets];
+    const all = [...fleet.ferries, ...fleet.ships, ...fleet.cruises, ...fleet.sailboats, fleet.seaplane, ...fleet.jets];
     for (const c of all) scene.add(c.group);
     scene.add(fleet.cars, ...vehicles.meshes);
     const matrix = new THREE.Matrix4();

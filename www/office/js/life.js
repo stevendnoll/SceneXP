@@ -50,6 +50,40 @@ export const LIFE = {
          *  window on an upright phone), measured 2026-09-25. */
         arrival: { north: 400, south: 1200 }
     },
+    /**
+     * The cruise ship (QA, 2026-09-29: "now that we can pan pretty far to
+     * the right (north), would it be possible to add a cruise ship in the
+     * distance?"). The desk, turned right, sees one wide stretch of the
+     * northern water: bearings 41 to 50 degrees north of west, from the
+     * waterfront to the horizon (measured 2026-09-29). A ship sailing down
+     * that stretch is seen bow on, a sliver, so the ship's day is spent
+     * alongside a cruise terminal pier in it instead, broadside to the
+     * office, as Seattle's are north of downtown. `pier`: where it leaves
+     * the shore (x), how long and wide it is (meters), and its heading out
+     * into the bay (degrees west of south). `berth`: how far out along the
+     * pier the ship's middle lies, and how far off the pier's south-east
+     * side, the one the office sees (its terminal shed is on the other). `lane`: the way in, a smooth curve from the far end, each point
+     * a bearing and meters out (['b', bearing, out]) or a place near the
+     * berth (['berth', along, across], meters along the berthed ship's
+     * heading and out from the pier), straight legs joined by turns of
+     * `turn` meters' radius (a ship's, at a harbor pace): out from behind
+     * the tower at the stretch's right edge 16 km off, down the stretch,
+     * round behind the towers at its left edge and in alongside. `arrive` and `depart` are
+     * clock hours (a ship in at dawn, out in the late afternoon, as the
+     * real ones keep); at `speed` meters a second under way (about ten
+     * knots), slowing over the last `slow` meters, and leaving: backed off
+     * `back` meters in `backMinutes`, turned about in `turnMinutes`, and
+     * away. `length` meters, drawn `scale` times life; the line's colors
+     * change day by day, among `liveries`.
+     */
+    cruise: {
+        pier: { x: 2700, length: 1100, width: 55, heading: 45 },
+        berth: { along: 950, off: 45 },
+        lane: [['b', 56, 16000], ['b', 46, 12000], ['berth', -1500, 0], ['berth', 0, 0]],
+        turn: 700,
+        arrive: 5.6, depart: 16.5, speed: 5, slow: 900, back: 600, backMinutes: 10, turnMinutes: 8,
+        length: 300, scale: 1.1, liveries: 3
+    },
     sailboat: { count: 6, from: 8, to: 19.5, scale: 2 },
     seaplane: { takeoff: 20, landing: 50, from: 8, to: 19, run: 35, climb: 150, top: 45, rise: 4, scale: 2 },
     cars: { near: { x0: -200, x1: 120, z1: -6 } },
@@ -167,6 +201,187 @@ export function shipShift(date) {
         if (best === null || Math.abs(at - m) < Math.abs(best)) best = at - m;
     }
     return best;
+}
+
+// ---- The cruise ship ------------------------------------------------------------
+
+/**
+ * The cruise terminal pier (LIFE.cruise.pier) and the berth beside it, in
+ * the room's frame: where the pier leaves the shore (`x0`, `z0`) and ends
+ * (`x1`, `z1`), its `width`, `out` (the unit way it runs, out into the
+ * bay), `side` (the unit way off its south-east side, toward the office), the berthed ship's middle (`bx`, `bz`) and its heading as it lies
+ * there (`yaw`, bow toward the shore).
+ */
+export function cruisePier(cruise = LIFE.cruise) {
+    const { x, length, width, heading } = cruise.pier;
+    const a = (heading * Math.PI) / 180;
+    // West of south: south is -x, west is -z.
+    const out = [-Math.cos(a), -Math.sin(a)];
+    // Its south-east side, the one the office sees (the office lies south
+    // and east of the pier).
+    const side = [out[1], -out[0]];
+    const x0 = x;
+    const z0 = shoreZ(x);
+    const along = cruise.berth.along;
+    const off = width / 2 + cruise.berth.off;
+    const bx = x0 + out[0] * along + side[0] * off;
+    const bz = z0 + out[1] * along + side[1] * off;
+    return {
+        x0, z0, x1: x0 + out[0] * length, z1: z0 + out[1] * length, width, out, side, bx, bz,
+        yaw: yawFor(-out[0], -out[1])
+    };
+}
+
+/**
+ * The cruise ship's way in (LIFE.cruise.lane) in the room's frame: straight
+ * legs between its points, each corner rounded by an arc of `turn` meters'
+ * radius (less where a leg is too short for it), so a ship turns as a ship
+ * does, never pivots; laid out as `samples` points evenly along its length:
+ * `points` ([x, z], far end first, the berth last) and its `length`.
+ */
+export function cruiseLane(cruise = LIFE.cruise, samples = 300, pier = cruisePier(cruise)) {
+    const ahead = [-pier.out[0], -pier.out[1]];
+    const pts = cruise.lane.map(([kind, a, b]) => {
+        if (kind === 'berth') return [pier.bx + ahead[0] * a + pier.side[0] * b, pier.bz + ahead[1] * a + pier.side[1] * b];
+        const r = (a * Math.PI) / 180;
+        return [Math.sin(r) * b, -Math.cos(r) * b];
+    });
+    // The way as a fine polyline: each leg, and each corner's arc.
+    const fine = [pts[0]];
+    const line = (to) => {
+        const [fx, fz] = fine[fine.length - 1];
+        const n = Math.max(1, Math.ceil(Math.hypot(to[0] - fx, to[1] - fz) / 10));
+        for (let i = 1; i <= n; i++) fine.push([fx + ((to[0] - fx) * i) / n, fz + ((to[1] - fz) * i) / n]);
+    };
+    for (let i = 1; i < pts.length - 1; i++) {
+        const [p0, p, p1] = [pts[i - 1], pts[i], pts[i + 1]];
+        const lin = Math.hypot(p[0] - p0[0], p[1] - p0[1]);
+        const lout = Math.hypot(p1[0] - p[0], p1[1] - p[1]);
+        const u = [(p[0] - p0[0]) / lin, (p[1] - p0[1]) / lin];
+        const v = [(p1[0] - p[0]) / lout, (p1[1] - p[1]) / lout];
+        const theta = Math.acos(Math.min(1, Math.max(-1, u[0] * v[0] + u[1] * v[1])));
+        if (theta < 1e-6) {
+            line(p);
+            continue;
+        }
+        const reach = Math.min(cruise.turn * Math.tan(theta / 2), lin * 0.5, lout * 0.5);
+        const radius = reach / Math.tan(theta / 2);
+        const start = [p[0] - u[0] * reach, p[1] - u[1] * reach];
+        line(start);
+        // The arc about its center, off the leg toward the turn.
+        const turnSign = Math.sign(u[0] * v[1] - u[1] * v[0]);
+        const normal = [-u[1] * turnSign, u[0] * turnSign];
+        const center = [start[0] + normal[0] * radius, start[1] + normal[1] * radius];
+        const a0 = Math.atan2(start[1] - center[1], start[0] - center[0]);
+        const n = Math.max(2, Math.ceil((radius * theta) / 10));
+        for (let k = 1; k <= n; k++) {
+            const a = a0 + turnSign * theta * (k / n);
+            fine.push([center[0] + Math.cos(a) * radius, center[1] + Math.sin(a) * radius]);
+        }
+    }
+    line(pts[pts.length - 1]);
+    const run = [0];
+    for (let i = 1; i < fine.length; i++) run.push(run[i - 1] + Math.hypot(fine[i][0] - fine[i - 1][0], fine[i][1] - fine[i - 1][1]));
+    const length = run[run.length - 1];
+    // Evenly along it, so a ship keeps its speed round the turns.
+    const points = [];
+    let j = 0;
+    for (let i = 0; i <= samples; i++) {
+        const d = (i / samples) * length;
+        while (j < run.length - 2 && run[j + 1] < d) j++;
+        const f = (d - run[j]) / (run[j + 1] - run[j] || 1);
+        points.push([fine[j][0] + (fine[j + 1][0] - fine[j][0]) * f, fine[j][1] + (fine[j + 1][1] - fine[j][1]) * f]);
+    }
+    return { points, length };
+}
+
+/** Where along the lane `d` meters from its far end is, and which way it
+ *  runs there, as `[x, z, dx, dz]`. */
+export function laneAt(lane, d) {
+    const n = lane.points.length - 1;
+    const f = Math.min(n, Math.max(0, (d / lane.length) * n));
+    const i = Math.min(n - 1, Math.floor(f));
+    const [ax, az] = lane.points[i];
+    const [bx, bz] = lane.points[i + 1];
+    const k = f - i;
+    return [ax + (bx - ax) * k, az + (bz - az) * k, bx - ax, bz - az];
+}
+
+/**
+ * The cruise ship's day, as minutes after midnight for each part of it:
+ * `in` (sailing in, from the far end of the lane), `docked` (alongside),
+ * `off` (backing off the pier), `turned` (turned about, heading out) and
+ * `gone` (at the lane's far end, out of sight).
+ */
+export function cruiseDay(lane = cruiseLane(), cruise = LIFE.cruise) {
+    const { speed, slow, back, backMinutes, turnMinutes } = cruise;
+    const start = cruise.arrive * 60;
+    // Under way, then an even slowing over the last `slow` meters, which
+    // takes twice as long as it would at speed.
+    const docked = start + ((lane.length - slow) / speed + (2 * slow) / speed) / 60;
+    const leave = cruise.depart * 60;
+    const off = leave + backMinutes;
+    const turned = off + turnMinutes;
+    // Away, gathering speed over its first minutes.
+    const gone = turned + ((lane.length - back) / speed) / 60 + ACCELERATE / 2;
+    return { in: start, docked, leave, off, turned, gone };
+}
+
+/** How many minutes a leaving ship takes to come up to speed. */
+const ACCELERATE = 3;
+
+const easeInOut = (t) => {
+    const x = Math.min(1, Math.max(0, t));
+    return x * x * (3 - 2 * x);
+};
+
+/**
+ * The cruise ship at `date` (the sky's clock), or null while none is
+ * there (the night): `{ x, y, z, yaw, speed, livery, phase }`, `phase` one
+ * of 'in', 'docked', 'off', 'turning' and 'out'. A different line's ship
+ * each day, counted round LIFE.cruise.liveries.
+ */
+export function cruiseAt(date, lane = cruiseLane(), pier = cruisePier()) {
+    const cruise = LIFE.cruise;
+    const day = cruiseDay(lane, cruise);
+    const m = minutesOfDay(date);
+    const dayNumber = Math.floor((date.getTime() - date.getTimezoneOffset() * 60000) / 86400000);
+    const livery = ((dayNumber % cruise.liveries) + cruise.liveries) % cruise.liveries;
+    const at = (d, reverse = false) => {
+        const [x, z, dx, dz] = laneAt(lane, d);
+        return { x, y: WATER_Y, z, yaw: reverse ? yawFor(-dx, -dz) : yawFor(dx, dz) };
+    };
+    const { speed, slow, back } = cruise;
+    if (m < day.in || m >= day.gone) return null;
+    if (m < day.docked) {
+        const t = (m - day.in) * 60;
+        const cruising = (lane.length - slow) / speed;
+        let d = speed * t;
+        let v = 1;
+        if (t > cruising) {
+            const tau = t - cruising;
+            const a = (speed * speed) / (2 * slow);
+            d = lane.length - slow + speed * tau - (a * tau * tau) / 2;
+            v = Math.max(0, 1 - (a * tau) / speed);
+        }
+        return { ...at(Math.min(lane.length, d)), speed: v, livery, phase: 'in' };
+    }
+    if (m < day.leave) return { x: pier.bx, y: WATER_Y, z: pier.bz, yaw: pier.yaw, speed: 0, livery, phase: 'docked' };
+    if (m < day.off) {
+        // Backed off along the way it came in, bow still toward the shore.
+        const d = lane.length - back * easeInOut((m - day.leave) / (day.off - day.leave));
+        return { ...at(d), speed: 0, livery, phase: 'off' };
+    }
+    if (m < day.turned) {
+        // Turned about by the tugs where it lies, to starboard.
+        const here = at(lane.length - back);
+        return { ...here, yaw: here.yaw - Math.PI * easeInOut((m - day.off) / (day.turned - day.off)), speed: 0, livery, phase: 'turning' };
+    }
+    // Away up the lane, bow first, gathering speed.
+    const tau = m - day.turned;
+    const run = tau < ACCELERATE ? (tau * tau) / (2 * ACCELERATE) : tau - ACCELERATE / 2;
+    const d = Math.max(0, lane.length - back - speed * run * 60);
+    return { ...at(d, true), speed: Math.min(1, tau / ACCELERATE), livery, phase: 'out' };
 }
 
 // ---- The sailboats --------------------------------------------------------------
