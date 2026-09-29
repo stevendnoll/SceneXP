@@ -1561,7 +1561,11 @@ export const PLACES = [
     { place: 'board', label: 'Pinboard', key: '5' },
     { place: 'rolodex', label: 'Rolodex', key: '6' },
     { place: 'whiteboard', label: 'Whiteboard', key: '7' },
-    { place: 'printer', label: 'Printer', key: 'P' }
+    { place: 'printer', label: 'Printer', key: 'P' },
+    // Last, the way back to the welcome card and the directory link on it
+    // (QA, 2026-09-29: "no way to get back to the Welcome card without
+    // refreshing the page").
+    { place: 'welcome', label: 'Welcome', key: '?' }
 ];
 
 let placeButtons = [];
@@ -1637,7 +1641,8 @@ function goToPlace(place) {
         board: () => openBoard(),
         rolodex: () => openRolodex(),
         whiteboard: () => openWhiteboard(),
-        printer: () => openPrinter()
+        printer: () => openPrinter(),
+        welcome: () => showWelcome()
     }[place];
     if (!open) return false;
     open();
@@ -2486,6 +2491,7 @@ function setupEventListeners() {
             if (top) el('grid-search').focus();
             else openComputer({ focusSearch: true });
         } else if (top) return;
+        else if (key === '?') { event.preventDefault(); showWelcome(); track('place', { place: 'welcome' }); }
         else if (key === 'c' || key === '2') { event.preventDefault(); openComputer(); }
         else if (key === '3') { event.preventDefault(); openCalendar(); }
         else if (key === '4') { event.preventDefault(); openCabinet(); }

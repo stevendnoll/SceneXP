@@ -1471,13 +1471,33 @@ describe('the Rolodex', () => {
 // ---- M6: places, the whiteboard, the departures board, the printer ----------------
 
 describe('places', () => {
+    test('the welcome card comes back from Places and the ? key, its way to the directory on it (QA, 2026-09-29)', () => {
+        expect(el('welcome').hidden).toBe(true);
+        place('welcome');
+        expect(el('welcome').hidden).toBe(false);
+        expect(el('welcome-actions').children.length).toBeGreaterThan(0);
+        const html = readFileSync(join(process.cwd(), 'www/office/index.html'), 'utf8');
+        const card = html.slice(html.indexOf('<div id="welcome"'), html.indexOf('<!-- THE COMPUTER'));
+        expect(card).toContain('<a id="explore-link" class="welcome-explore" href="/">');
+        // Its own button takes the visitor back in.
+        el('welcome-actions').children.at(-1).click();
+        expect(el('welcome').hidden).toBe(true);
+        key('?');
+        expect(el('welcome').hidden).toBe(false);
+        // Not over another card: the key belongs to that card then.
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('c');
+        key('?');
+        expect(el('welcome').hidden).toBe(true);
+    });
+
     test('the list opens beside its button, goes where it says, and closes', () => {
         el('bar-places').click();
         expect(el('places-menu').hidden).toBe(false);
         expect(el('bar-places').getAttribute('aria-expanded')).toBe('true');
         const items = el('places-menu').children;
         expect(items.map((b) => b.children[0] ? b.dataset.place : b.dataset.place)).toEqual(
-            ['window', 'desk', 'computer', 'calendar', 'cabinet', 'board', 'rolodex', 'whiteboard', 'printer']);
+            ['window', 'desk', 'computer', 'calendar', 'cabinet', 'board', 'rolodex', 'whiteboard', 'printer', 'welcome']);
         expect(dom.documentStub.activeElement).toBe(items[0]);
         expect(el('places-menu').style.left).toMatch(/px$/);
         items.find((b) => b.dataset.place === 'calendar').click();
