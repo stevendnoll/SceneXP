@@ -111,6 +111,7 @@ const SCENE_LABELS = {
     jamar: "Jamar's Karaoke Night",
     job: 'Prospect City',
     mandelbrot: 'The Mandelbrot Set',
+    office: 'Corner Office',
     roqui: 'Zumba with Roqui',
     seedtoseed: 'The Seed to Seed Garden',
     steve: "Steve's Home Office",

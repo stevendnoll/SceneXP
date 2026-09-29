@@ -11,12 +11,11 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <!-- BEING BUILT (M0, 2026-09-24). This page is on the UNRELEASED list in
-         tests/directory.test.mjs, which insists on this noindex and on the
-         page being listed nowhere: not the home page, not sitemap.xml, not
-         llms.txt. Releasing it (M7) means removing this tag, taking it off
-         that list, and adding its card, sitemap line and llms.txt line. -->
-    <meta name="robots" content="noindex, nofollow">
+    <!-- RELEASED 2026-09-28 (M7). THE `noindex` IS GONE and there is
+         deliberately no `robots` tag here at all, the same as every other
+         experience: the site's default is indexable, and the page is on the
+         home page, in `sitemap.xml` and in `llms.txt`. A `robots` meta tag
+         reappearing on this page would mean somebody meant to hide it. -->
 
     <meta name="description" content="A job search tracker that lives in a 3D office. Your applications, interviews, contacts and follow-ups fill the furniture, and every record stays private in your own browser.">
     <meta name="theme-color" content="#141517">
@@ -26,28 +25,30 @@
          so they stay literal absolute URLs naming where this page is served. -->
     <link rel="canonical" href="https://www.scenexp.com/office/">
 
-    <!-- Open Graph. JPEG, NOT WEBP, and exactly one og:image. THE CARD IS A
-         PLACEHOLDER until M7, when a capture of the finished office replaces
-         it. og:image:alt describes THIS picture, so it is rewritten with the
-         card, and the ?v= moves with it. -->
+    <!-- Open Graph. JPEG, NOT WEBP (LinkedIn previews no WebP), and exactly
+         one og:image (Apple renders every one it finds). The card is Steve's
+         capture of the finished office at sunset (2026-09-29), converted from
+         the display's profile to sRGB and stripped; og-office.webp beside it
+         is the directory card's. og:image:alt describes THIS picture, so it
+         is rewritten with the card, and the ?v= moves with it. -->
     <meta property="og:title" content="Corner Office">
     <meta property="og:description" content="A job search tracker that lives in a 3D office, and keeps every record private in your own browser.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/office/">
     <meta property="og:locale" content="en_US">
-    <meta property="og:image" content="https://www.scenexp.com/office/assets/og-office.jpg?v=1">
+    <meta property="og:image" content="https://www.scenexp.com/office/assets/og-office.jpg?v=2">
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="The words Corner Office in cream lettering on a dark walnut background, with a line beneath reading a job search tracker in a 3D office.">
+    <meta property="og:image:alt" content="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond.">
 
     <!-- Twitter / X. The same single JPEG as og:image. -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Corner Office">
     <meta name="twitter:description" content="A job search tracker that lives in a 3D office, and keeps every record private in your own browser.">
-    <meta name="twitter:image" content="https://www.scenexp.com/office/assets/og-office.jpg?v=1">
-    <meta name="twitter:image:alt" content="The words Corner Office in cream lettering on a dark walnut background, with a line beneath reading a job search tracker in a 3D office.">
+    <meta name="twitter:image" content="https://www.scenexp.com/office/assets/og-office.jpg?v=2">
+    <meta name="twitter:image:alt" content="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond.">
 
     <!-- Structured data: site identity for search engines.
          JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
@@ -58,7 +59,7 @@
       "@id": "https://www.scenexp.com/office/#app",
       "url": "https://www.scenexp.com/office/",
       "name": "Corner Office",
-      "image": "https://www.scenexp.com/office/assets/og-office.jpg?v=1",
+      "image": "https://www.scenexp.com/office/assets/og-office.jpg?v=2",
       "description": "A browser-based job search tracker set in a 3D office. Applications, interviews, contacts and follow-ups are entered, searched, sorted and filtered on screen, and shown in the furniture of the room. Every record stays in the visitor's own browser.",
       "applicationCategory": "BusinessApplication",
       "operatingSystem": "Any",
@@ -146,7 +147,7 @@
          through #office-live. A tap on the room is a shortcut, never the only
          way to do anything. -->
     <canvas id="game-canvas" role="img"
-        aria-label="A corner office walled with windows onto the city, under an exposed concrete ceiling. A slim white desk holds a computer with sticky notes on it and a slim lamp, with a wastebasket beside it, a low white credenza of folders under the window, a fabric pinboard of index cards, a glass whiteboard of numbers, a printer, and a pair of binoculars on a tripod in the corner by the windows."></canvas>
+        aria-label="A corner office forty floors up, walled with windows onto a city by the bay with snowy mountains beyond, under an exposed concrete ceiling. A slim white desk holds a computer with sticky notes on it, a keyboard and mouse, and a slim lamp, with a wastebasket beside it. A low white filing cabinet of folders stands under the window beside a printer, a fabric pinboard of index cards and a glass whiteboard of numbers hang on the walls, and a pair of binoculars on a tripod stands by the windows beside the chair."></canvas>
 
     <!-- Every change, said aloud. Polite, so it waits its turn. -->
     <p id="office-live" class="sr-only" role="status" aria-live="polite"></p>
@@ -362,7 +363,7 @@
                 <button id="board-close" class="office-btn office-btn-small" type="button">Back to the desk</button>
             </div>
             <p id="board-summary" class="card-meta"></p>
-            <p class="card-meta board-hint">Drag a card to another column to change its status, or tap a card to open its folder.</p>
+            <p class="card-meta board-hint">Drag a card to another column to change its status, or tap or click a card to open its folder.</p>
             <form id="board-form" class="board-move" novalidate>
                 <label for="board-card">Card</label>
                 <select id="board-card" class="office-select"></select>

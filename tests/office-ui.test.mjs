@@ -1878,3 +1878,84 @@ describe('celebrating (QA, 2026-09-29: "the mere act of applying should be cause
         expect(said()).not.toMatch(/Application sent|Congratulations/);
     });
 });
+
+describe('the accessibility sweep (2026-09-28)', () => {
+    /** Every element under `root`, depth first. */
+    const walk = (root, out = []) => {
+        for (const child of root.children || []) {
+            out.push(child);
+            walk(child, out);
+        }
+        return out;
+    };
+    /** The words a sighted visitor reads on an element. */
+    const shown = (node) => (node.textContent || '').replace(/\s+/g, ' ').trim();
+
+    test('a card opened from a pulsing marker hands focus back somewhere real, though the marker is gone', () => {
+        const computer = t.marks.list.find((m) => m.key === 'computer');
+        computer.btn.focus();
+        computer.btn.click();
+        expect(el('computer').hidden).toBe(false);
+        // Hidden under the card, and retired once used.
+        t.updateMarks(true);
+        expect(computer.btn.hidden).toBe(true);
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        expect(el('computer').hidden).toBe(true);
+        expect(dom.documentStub.activeElement).toBe(el('bar-places'));
+    });
+
+    test('raised from Places by keyboard, focus goes to the way back down, and from there to Places', () => {
+        place('binoculars');
+        expect(dom.documentStub.activeElement).toBe(el('bar-binoculars'));
+        el('bar-binoculars').click();
+        expect(t.ui.binoculars).toBe(false);
+        expect(dom.documentStub.activeElement).toBe(el('bar-places'));
+    });
+
+    test('undoing the last change from the Undo button does not drop focus as the button disables', () => {
+        quickAdd('Acme', 'Designer', { follow: false });
+        el('bar-undo').focus();
+        el('bar-undo').click();
+        expect(el('bar-undo').disabled).toBe(true);
+        expect(dom.documentStub.activeElement).toBe(el('bar-new'));
+    });
+
+    test('the lamp has a key, as everything else in the room does', () => {
+        const on = t.ui.lampOn;
+        key('l');
+        expect(t.ui.lampOn).toBe(!on);
+    });
+
+    test('every named button says its shown words first, so a voice command finds it (WCAG 2.5.3)', () => {
+        // Stock the office so the folder, the calendar, today, a contact and
+        // the wastebasket all have rows with buttons in them.
+        t.stockOffice();
+        const app = live()[0];
+        t.changeStatus(app.id, 'interviewing');
+        key('c');
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        const roots = [];
+        t.openFolder(app.id);
+        roots.push(el('folder-body'), el('folder-actions'));
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('t');
+        roots.push(el('today-list'));
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        key('3');
+        roots.push(el('cal-body'), el('cal-day-list'));
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        let checked = 0;
+        for (const root of roots) {
+            for (const node of walk(root)) {
+                const name = node.getAttribute && node.getAttribute('aria-label');
+                if (!name || String(node.tagName).toLowerCase() !== 'button') continue;
+                const words = shown(node);
+                if (!words || !/[a-z]/i.test(words)) continue;
+                checked++;
+                expect({ words, name, ok: name.toLowerCase().startsWith(words.toLowerCase()) || name.includes(words) })
+                    .toEqual({ words, name, ok: true });
+            }
+        }
+        expect(checked).toBeGreaterThan(3);
+    });
+});

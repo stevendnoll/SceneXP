@@ -197,6 +197,30 @@ export function openCard(id, { armed = false, focus = null, onClose = null } = {
 }
 
 /** Hide a card and hand focus back to where it came from. */
+// Where focus goes when a card closes and what opened it can no longer take
+// it (setFocusFallback).
+let focusFallback = null;
+
+/**
+ * Where focus lands when a closing card's opener is gone: hidden (a pulsing
+ * marker is hidden under every card and retires once used; a Places item
+ * closes with its menu; the follow-ups pill goes when nothing is due),
+ * disabled, or out of the page. Without it the focus fell to nothing and a
+ * keyboard visitor started again from the top of the page.
+ */
+export function setFocusFallback(fn) {
+    focusFallback = typeof fn === 'function' ? fn : null;
+}
+
+/** Whether an element can take focus back: in the page, enabled, and
+ *  neither it nor anything round it hidden. */
+export function canTakeFocus(node) {
+    if (!node || typeof node.focus !== 'function' || node.disabled) return false;
+    if (node.isConnected === false) return false;
+    for (let n = node; n; n = n.parentElement) if (n.hidden) return false;
+    return true;
+}
+
 export function closeCard(id, { restoreFocus = true } = {}) {
     const overlay = byId(id);
     if (!overlay || !openIds.includes(id)) return;
@@ -208,9 +232,9 @@ export function closeCard(id, { restoreFocus = true } = {}) {
     const back = returnFocus.get(id);
     returnFocus.delete(id);
     if (hook) hook();
-    if (restoreFocus && back && typeof back.focus === 'function' && !back.hidden && !back.disabled) {
-        back.focus({ preventScroll: true });
-    }
+    if (!restoreFocus) return;
+    const target = canTakeFocus(back) ? back : focusFallback && focusFallback(id);
+    if (canTakeFocus(target)) target.focus({ preventScroll: true });
 }
 
 /** Close whatever is on top. Returns its id, or null when nothing was open. */

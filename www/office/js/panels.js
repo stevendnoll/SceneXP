@@ -145,7 +145,7 @@ export function renderFolder({ doc, app, status, config, now, on }) {
             ]),
             h('div', { className: 'folder-item-actions' }, [
                 isUpcoming(ev, now) ? button('Add to my calendar', 'office-btn office-btn-small', () => on.exportEvent(ev.id),
-                    { 'aria-label': `Add the ${name.toLowerCase()} on ${when} to my calendar` }) : null,
+                    { 'aria-label': `Add to my calendar: the ${name.toLowerCase()} on ${when}` }) : null,
                 button('Edit', 'office-btn office-btn-small', () => on.editEvent(ev.id),
                     { 'aria-label': `Edit the ${name.toLowerCase()} on ${when}` }),
                 button('Delete', 'office-btn office-btn-small', () => on.removeEvent(ev.id),
@@ -265,7 +265,7 @@ function eventRow(doc, ev, now, on, { withDay = false } = {}) {
         ]),
         h('div', { className: 'folder-item-actions' }, [
             isUpcoming(ev, now) ? button('Add to my calendar', 'office-btn office-btn-small', () => on.exportEvent(ev.id),
-                { 'aria-label': `Add the ${name.toLowerCase()} with ${app ? app.company || app.role : 'them'} to my calendar` }) : null,
+                { 'aria-label': `Add to my calendar: the ${name.toLowerCase()} with ${app ? app.company || app.role : 'them'}` }) : null,
             button('Open the folder', 'office-btn office-btn-small', () => on.openFolder(ev.applicationId),
                 { 'aria-label': `Open the folder for ${applicationName(app)}` })
         ])

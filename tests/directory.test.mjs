@@ -30,7 +30,7 @@ const CATEGORY_OF = {
     dad: 'personal', family: 'personal', roqui: 'personal', gavin: 'personal', jamar: 'personal',
     automan: 'business', interstate: 'business', seedtoseed: 'business', sunnyvalejenn: 'business',
     steve: 'worlds', mandelbrot: 'worlds', earthdefense: 'worlds', highwater: 'worlds', garden: 'worlds',
-    xo: 'worlds', tornado: 'worlds',
+    xo: 'worlds', tornado: 'worlds', office: 'worlds',
 };
 
 // THE MARKUP IS THE SOURCE OF TRUTH now that the catalog array is gone. Each
@@ -99,8 +99,8 @@ const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
 // and llms.txt line, which the tests above then insist on. (Added 2026-09-23
 // for Tornado Alley, M1, and emptied when it was released the same day. The
 // list stays, empty, for the next scene built in the open.) Corner Office
-// joined it at M0 on 2026-09-24, and leaves at its M7 release.
-const UNRELEASED = ['office'];
+// joined it at M0 on 2026-09-24, and left at its M7 release on 2026-09-28.
+const UNRELEASED = [];
 
 const sceneSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true })
     .filter((d) => d.isDirectory() && !IGNORED_DIRS.includes(d.name))

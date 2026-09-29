@@ -65,7 +65,7 @@ import { lightAt, lighting, css } from './daylight.min.js';
 import { stickyNotes, notesKey, noteWords, noteColor, quadCorners, cellUvs, NOTE_SLOTS, ATLAS } from './notes.min.js';
 import { download, readText } from './files.min.js';
 import {
-    initCards, openCard, closeCard, closeAll, isOpen, anyOpen, topCard, announce, toast, hideToast, h, button, clear,
+    initCards, setFocusFallback, canTakeFocus, openCard, closeCard, closeAll, isOpen, anyOpen, topCard, announce, toast, hideToast, h, button, clear,
     confirmCard
 } from './cards.min.js';
 import {
@@ -873,6 +873,12 @@ function raiseBinoculars() {
     goTo('binoculars');
     ui.binoculars = true;
     showBinocularButton();
+    // Raised from Places or a key, focus was on something now hidden: it
+    // moves to the way back down.
+    if (!canTakeFocus(document.activeElement) || document.activeElement === document.body) {
+        const down = el('bar-binoculars');
+        if (down && down.focus) down.focus({ preventScroll: true });
+    }
     track('binoculars');
     noteOpen('binoculars');
     return true;
@@ -902,7 +908,13 @@ function lowerBinoculars() {
     showBinocularMask(false);
     document.body.classList.remove('binocular-mode');
     if (was) startLook();
+    const wasOnButton = document.activeElement === el('bar-binoculars');
     showBinocularButton();
+    // The way down hides itself: focus moves on to Places, which stays.
+    if (wasOnButton) {
+        const places = el('bar-places');
+        if (places && places.focus) places.focus({ preventScroll: true });
+    }
     requestRender();
 }
 
@@ -1338,6 +1350,12 @@ function refresh() {
     }
     const undoBtn = el('bar-undo');
     if (undoBtn) {
+        // Disabling the focused button would drop focus to nothing: it moves
+        // on to the toolbar's first button first.
+        if (!history.canUndo && !undoBtn.disabled && document.activeElement === undoBtn) {
+            const first = el('bar-new');
+            if (first && first.focus) first.focus({ preventScroll: true });
+        }
         undoBtn.disabled = !history.canUndo;
         undoBtn.title = history.canUndo ? `Undo: ${history.label}` : 'Nothing to undo';
     }
@@ -1525,7 +1543,7 @@ function drawCabinetSheet(t = now()) {
     if (line) {
         line.textContent = searching
             ? liftedLine(lifted.map((r) => applicationName(r.app)), total)
-            : `Filed by ${SORT_LABELS[q.sortKey].toLowerCase()}. Search or choose a filter to lift folders out, and tap any folder to open it.`;
+            : `Filed by ${SORT_LABELS[q.sortKey].toLowerCase()}. Search or choose a filter to lift folders out, and tap or click any folder to open it.`;
     }
     if (!list) return;
     clear(list);
@@ -2630,6 +2648,8 @@ function setupEventListeners() {
     installCardFocusTrap({ signal });
     installCardScrollReset({ signal });
     initCards({ signal });
+    // A card whose opener has gone hands focus to Places (cards.js).
+    setFocusFallback(() => el('bar-places'));
     initGrid(CONFIG, {
         signal,
         onSortKey: (key) => setSort(key, CONFIG.sortKeys[key]),
@@ -2808,6 +2828,8 @@ function setupEventListeners() {
         else if (key === '7') { event.preventDefault(); openWhiteboard(); }
         else if (key === 'p') { event.preventDefault(); openPrinter(); }
         else if (key === 'b') { event.preventDefault(); if (ui.binoculars) putDownBinoculars(); else raiseBinoculars(); }
+        // The lamp, which otherwise only a tap on it switches.
+        else if (key === 'l') { event.preventDefault(); toggleLamp(); }
         else if (key === 't') { event.preventDefault(); openToday(); }
         else if (key === '1') { event.preventDefault(); goTo('desk'); }
         else if (key === '9') { event.preventDefault(); goTo('window'); track('place', { place: 'window' }); }
