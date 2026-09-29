@@ -22,6 +22,11 @@
  * What runs in a worker is not counted by coverage, so this is for the
  * sweeps that re-run code the rest of a suite already drives, not a way
  * round testing it.
+ *
+ * It relies on jest.config.mjs's `coverageProvider: 'v8'`, which leaves the
+ * source untouched. A Babel provider would write its counters into every
+ * function, and a job's source would then name counters the worker has
+ * never heard of.
  */
 import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
