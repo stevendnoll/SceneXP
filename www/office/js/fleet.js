@@ -62,6 +62,63 @@ export function joinGeometries(parts) {
 
 const HIDDEN_Y = -10000;
 
+/**
+ * A light's glow, for a point sprite: a bright round core fading softly to
+ * nothing, as RGBA bytes (white, tinted by each light's own color). A point
+ * sprite without one is a square, and at three pixels a jet's lights read
+ * as square ones (QA, 2026-09-29). `core` is how much of its radius burns
+ * fully; made once.
+ */
+export const LIGHT_DOT = { size: 32, core: 0.28 };
+
+let dotMade = null;
+export function lightDot() {
+    if (!dotMade) {
+        const n = LIGHT_DOT.size;
+        const data = new Uint8Array(n * n * 4);
+        for (let j = 0; j < n; j++) {
+            for (let i = 0; i < n; i++) {
+                const r = Math.hypot((i + 0.5) / n - 0.5, (j + 0.5) / n - 0.5) * 2;
+                const fall = Math.max(0, 1 - (r - LIGHT_DOT.core) / (1 - LIGHT_DOT.core));
+                const a = r <= LIGHT_DOT.core ? 1 : fall * fall;
+                const k = (j * n + i) * 4;
+                data[k] = 255;
+                data[k + 1] = 255;
+                data[k + 2] = 255;
+                data[k + 3] = Math.round(255 * a);
+            }
+        }
+        dotMade = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+        dotMade.magFilter = THREE.LinearFilter;
+        dotMade.minFilter = THREE.LinearFilter;
+        dotMade.generateMipmaps = false;
+        dotMade.needsUpdate = true;
+    }
+    return dotMade;
+}
+
+/**
+ * A few lights as round glows (lightDot) of `size` pixels whatever the
+ * distance, each `[x, y, z, [r, g, b]]` in a craft's own frame; hidden
+ * until the evening turns them on. The glow is about twice its bright
+ * core, so a size of 6 burns a spot three pixels across.
+ */
+export function glowPoints(name, points, size = 6) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(points.flatMap((p) => p.slice(0, 3)), 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(points.flatMap((p) => p[3]), 3));
+    const lights = new THREE.Points(g, new THREE.PointsMaterial({
+        size, sizeAttenuation: false, vertexColors: true, map: lightDot(), transparent: true, depthWrite: false, fog: true, toneMapped: false
+    }));
+    lights.name = name;
+    lights.visible = false;
+    lights.raycast = () => {};
+    return lights;
+}
+
+/** The running lights' colors, in the working (linear) space. */
+export const RUNNING = { red: [1, 0.15, 0.1], green: [0.3, 1, 0.45], white: [1, 1, 1], warm: [1, 0.8, 0.5] };
+
 /** A craft: its body, its windows (lit by night), and optionally a wake.
  *  `sided` draws the body from both sides (a sailboat's sails). */
 function craft(name, body, windows, { wake = 0, scale = 1, sided = false } = {}) {
@@ -169,8 +226,16 @@ function ship(i) {
         }
     }
     boxes.push([0, 22, L * 0.4, 34, 26, 22, 0xeef0ee], [0, 38, L * 0.43, 7, 8, 7, 0x2a2f36]);
+    // The foremast at the bow, for its masthead light.
+    boxes.push([0, 16, -L * 0.44, 1.2, 14, 1.2, 0xd8d8d0]);
     const windows = boxesGeometry([[0, 30, L * 0.4 - 11.2, 30, 1.4, 0.4, 0], [0, 26, L * 0.4 - 11.2, 30, 1.4, 0.4, 0]]);
-    return craft(`ship-${i}`, boxesGeometry(boxes), windows, { wake: L });
+    const c = craft(`ship-${i}`, boxesGeometry(boxes), windows, { wake: L });
+    c.navLights = runningLights(`ship-${i}-lights`, {
+        foremast: [0, 23.5, -L * 0.44], mainmast: [0, 43, L * 0.43], wings: [17.5, 33, L * 0.4 - 11], stern: [0, 11, L / 2],
+        glow: [[0, 30, L * 0.4 - 11.6], [0, 26, L * 0.4 - 11.6]]
+    });
+    c.group.add(c.navLights);
+    return c;
 }
 
 /** The cruise lines' colors: the hull under the white decks, the band at
@@ -240,8 +305,74 @@ export function cruiseParts(livery = CRUISE_LIVERIES[0], L = LIFE.cruise.length)
 }
 
 function cruiseShip(i) {
+    const L = LIFE.cruise.length;
     const { body, windows } = cruiseParts(CRUISE_LIVERIES[i % CRUISE_LIVERIES.length]);
-    return craft(`cruise-${i}`, body, windows, { wake: LIFE.cruise.length, scale: LIFE.cruise.scale });
+    const c = craft(`cruise-${i}`, body, windows, { wake: L, scale: LIFE.cruise.scale });
+    const bridgeZ = -L / 2 + L * 0.2 + 7 * 3.5 + 3;
+    c.navLights = runningLights(`cruise-${i}-lights`, {
+        foremast: [0, 16, -L * 0.42], mainmast: [0, 13 + 10 * 3.1 + 10.5, bridgeZ + 8], wings: [21, 13 + 7 * 3.1 + 1.6, bridgeZ], stern: [0, 12, L / 2]
+    });
+    c.group.add(c.navLights);
+    return c;
+}
+
+/**
+ * A ship's running lights by night, in its own frame (bow toward -z, so its
+ * port side, on the left as it sails, is -x): a white masthead light on
+ * the foremast and a second, higher one aft (`foremast`, `mainmast`), the
+ * red port and green starboard sidelights out on the bridge wings
+ * (`wings`, its starboard one), a white stern light, and the warm glow of
+ * the lit cabins (`glow`) that the windows alone are too small to show
+ * from across the bay.
+ */
+export function runningLights(name, { foremast, mainmast, wings, stern, glow = [] }) {
+    const { red, green, white, warm } = RUNNING;
+    const [wx, wy, wz] = wings;
+    const lights = glowPoints(name, [
+        [...foremast, white], [...mainmast, white], [-wx, wy, wz, red], [wx, wy, wz, green], [...stern, white],
+        ...glow.map((p) => [...p, warm])
+    ], 6);
+    // Each light's arc, as the rules of the road give them (degrees off
+    // the bow, starboard positive): the mastheads forward, a sidelight on
+    // its own side from dead ahead to abaft the beam, the stern light
+    // astern; the cabins all round. Where each sits, to put it back.
+    lights.userData.arcs = [[-112.5, 112.5], [-112.5, 112.5], [-112.5, 0], [0, 112.5], [112.5, 247.5], ...glow.map(() => null)];
+    lights.userData.at = lights.geometry.attributes.position.array.slice();
+    lights.frustumCulled = false;
+    return lights;
+}
+
+/** Which of a ship's running lights an eye at `bearing` degrees off its bow
+ *  (starboard positive) can see, one flag a light. */
+export function runningLightsSeen(arcs, bearing) {
+    const b = ((bearing % 360) + 360) % 360;
+    return arcs.map((arc) => {
+        if (!arc) return true;
+        const [lo, hi] = arc;
+        for (const turn of [-360, 0, 360]) if (b + turn >= lo && b + turn <= hi) return true;
+        return false;
+    });
+}
+
+const HIDE_LIGHT = -1e5;
+const eyeLocal = new THREE.Vector3();
+
+/** Show a ship's running lights as they look from `eye` (the camera's
+ *  place), the ones it is outside the arc of put out of sight. */
+export function aimRunningLights(c, eye) {
+    const lights = c.navLights;
+    if (!lights || !lights.visible || !c.group.visible) return null;
+    c.group.updateMatrixWorld(true);
+    eyeLocal.copy(eye);
+    c.group.worldToLocal(eyeLocal);
+    // Off the bow (-z), toward starboard (+x).
+    const bearing = (Math.atan2(eyeLocal.x, -eyeLocal.z) * 180) / Math.PI;
+    const seen = runningLightsSeen(lights.userData.arcs, bearing);
+    const pos = lights.geometry.attributes.position;
+    const at = lights.userData.at;
+    seen.forEach((on, i) => pos.setXYZ(i, at[i * 3], on ? at[i * 3 + 1] : HIDE_LIGHT, at[i * 3 + 2]));
+    pos.needsUpdate = true;
+    return seen;
 }
 
 /** A sailboat: a white hull, a mast, a mainsail and a jib, one mesh drawn
@@ -281,7 +412,7 @@ function carLights(cars) {
     g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(cars.length * 3), 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(cars.flatMap((c) => (c.red ? [1, 0.18, 0.12] : [1, 0.95, 0.82])), 3));
     const points = new THREE.Points(g, new THREE.PointsMaterial({
-        size: 3, sizeAttenuation: false, vertexColors: true, fog: true, toneMapped: false
+        size: 5, sizeAttenuation: false, vertexColors: true, map: lightDot(), transparent: true, depthWrite: false, fog: true, toneMapped: false
     }));
     points.name = 'cars';
     points.visible = false;
@@ -517,25 +648,15 @@ function jet() {
     const c = craft('jet', body, windows, { scale: JET.scale });
     c.hull = c.group.children[0];
     c.livery = 0;
-    const dots = (name, points) => {
-        const g = new THREE.BufferGeometry();
-        g.setAttribute('position', new THREE.Float32BufferAttribute(points.flatMap((p) => p.slice(0, 3)), 3));
-        g.setAttribute('color', new THREE.Float32BufferAttribute(points.flatMap((p) => p[3]), 3));
-        const lights = new THREE.Points(g, new THREE.PointsMaterial({
-            size: 3, sizeAttenuation: false, vertexColors: true, fog: true, toneMapped: false
-        }));
-        lights.name = name;
-        lights.visible = false;
+    const dots = (name, points, size) => {
+        const lights = glowPoints(name, points, size);
         c.group.add(lights);
         return lights;
     };
-    const red = [1, 0.15, 0.1];
-    const green = [0.3, 1, 0.45];
-    const white = [1, 1, 1];
-    c.navLights = dots('jet-lights', [[-17.9, 0.8, 5.0, red], [17.9, 0.8, 5.0, green], [0, 1.0, 19.9, white]]);
-    c.strobes = dots('jet-strobes', [[-18.1, 0.8, 5.4, white], [18.1, 0.8, 5.4, white], [0, 2.1, 0, red], [0, -2.1, 0, red]]);
-    c.landing = dots('jet-landing', [[0, -1.6, -17.5, [1, 0.98, 0.9]]]);
-    c.landing.material.size = 6;
+    const { red, green, white } = RUNNING;
+    c.navLights = dots('jet-lights', [[-17.9, 0.8, 5.0, red], [17.9, 0.8, 5.0, green], [0, 1.0, 19.9, white]], 6);
+    c.strobes = dots('jet-strobes', [[-18.1, 0.8, 5.4, white], [18.1, 0.8, 5.4, white], [0, 2.1, 0, red], [0, -2.1, 0, red]], 7);
+    c.landing = dots('jet-landing', [[0, -1.6, -17.5, [1, 0.98, 0.9]]], 12);
     return c;
 }
 
@@ -588,6 +709,7 @@ export function buildFleet(scene, cars) {
         for (const c of all) if (c.lit) c.lit.material.emissiveIntensity = level * 1.4;
         lightsOn = level > 0.3;
         fleet.cars.visible = lightsOn;
+        for (const c of [...fleet.ships, ...fleet.cruises]) c.navLights.visible = lightsOn;
         for (const jet of fleet.jets) {
             jet.navLights.visible = lightsOn;
             if (!lightsOn) {

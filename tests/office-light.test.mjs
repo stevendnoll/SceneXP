@@ -628,3 +628,88 @@ describe('through the binoculars', () => {
         expect(tall.middles[1][0] + tall.r).toBeLessThanOrEqual(390);
     });
 });
+
+describe('the lights out there by night (QA, 2026-09-29: "the lights on the passenger jets look square")', () => {
+    test('every light is a round glow, not a square: a bright core fading to nothing at the edge and corners', async () => {
+        const fleet = await import('../www/office/js/fleet.js');
+        const dot = fleet.lightDot();
+        expect(fleet.lightDot()).toBe(dot);
+        const n = fleet.LIGHT_DOT.size;
+        const alpha = (i, j) => dot.image.data[(j * n + i) * 4 + 3];
+        expect(alpha(n / 2, n / 2)).toBe(255);
+        expect(alpha(0, 0)).toBe(0);
+        expect(alpha(n - 1, n - 1)).toBe(0);
+        expect(alpha(0, n / 2)).toBeLessThan(20);
+        // The same distance out along an axis and a diagonal: the same glow.
+        const d = Math.round(n * 0.3);
+        expect(Math.abs(alpha(n / 2 + d, n / 2) - alpha(n / 2 + Math.round(d / Math.SQRT2), n / 2 + Math.round(d / Math.SQRT2)))).toBeLessThan(40);
+        const lights = [];
+        lit.scene.traverse((o) => {
+            if (!o.isPoints) return;
+            if (['stars', 'island-lamps', 'airport-lights', 'rain'].includes(o.name)) return;
+            lights.push(o);
+        });
+        expect(lights.length).toBeGreaterThan(10);
+        // The world's own copy (it loads the built module): the same glow.
+        const isDot = (m) => Boolean(m && m.image && m.image.width === n
+            && m.image.data[((n / 2) * n + n / 2) * 4 + 3] === 255 && m.image.data[3] === 0);
+        for (const p of lights) {
+            expect({ name: p.name, map: isDot(p.material.map), transparent: p.material.transparent })
+                .toEqual({ name: p.name, map: true, transparent: true });
+        }
+    });
+
+    test('the container ships and the cruise ship carry running lights: white mastheads, red to port, green to starboard, white astern', async () => {
+        const fleet = await import('../www/office/js/fleet.js');
+        for (const c of [...lit.fleet.ships, ...lit.fleet.cruises]) {
+            const nav = c.navLights;
+            expect(nav.parent).toBe(c.group);
+            // Where each light sits (a light out of its arc is put away).
+            const where = nav.userData.at;
+            const col = nav.geometry.attributes.color;
+            const at = (i) => [where[i * 3], where[i * 3 + 1], where[i * 3 + 2]];
+            const rgb = (i) => [col.getX(i), col.getY(i), col.getZ(i)];
+            // Bow toward -z: port is -x.
+            expect(at(2)[0]).toBeLessThan(0);
+            expect(rgb(2)[0]).toBeGreaterThan(rgb(2)[1] * 3);
+            expect(at(3)[0]).toBeGreaterThan(0);
+            expect(rgb(3)[1]).toBeGreaterThan(rgb(3)[0]);
+            // The aft masthead above the forward one; the stern light astern.
+            expect(at(1)[1]).toBeGreaterThan(at(0)[1]);
+            expect(at(0)[2]).toBeLessThan(0);
+            expect(at(4)[2]).toBeGreaterThan(0);
+        }
+        // Out by night only.
+        lit.fleet.light(1);
+        expect(lit.fleet.ships.every((c) => c.navLights.visible)).toBe(true);
+        lit.fleet.light(0);
+        expect(lit.fleet.ships.every((c) => !c.navLights.visible)).toBe(true);
+        // Each seen only in its own arc.
+        const arcs = lit.fleet.ships[0].navLights.userData.arcs;
+        const seen = (b) => fleet.runningLightsSeen(arcs, b);
+        expect(seen(0).slice(0, 5)).toEqual([true, true, true, true, false]);
+        expect(seen(90).slice(0, 5)).toEqual([true, true, false, true, false]);
+        expect(seen(-90).slice(0, 5)).toEqual([true, true, true, false, false]);
+        expect(seen(180).slice(0, 5)).toEqual([false, false, false, false, true]);
+        // The cabins' glow all round.
+        expect(seen(180).slice(5).every(Boolean)).toBe(true);
+    });
+
+    test('seen from the office, a ship passing shows the sidelight on its near side only', async () => {
+        const fleet = await import('../www/office/js/fleet.js');
+        const c = lit.fleet.ships[0];
+        lit.fleet.light(1);
+        // Across the view heading north (+x): its port side (-x... its left,
+        // west) faces away, its starboard side (east, toward the office) faces it.
+        c.group.visible = true;
+        c.group.position.set(0, city.WATER_Y, -6500);
+        c.group.rotation.set(0, Math.atan2(-1, 0), 0);
+        const eye = new THREE.Vector3(0, 1.5, 0);
+        const shown = fleet.aimRunningLights(c, eye);
+        // Heading +x, the office (+z of it) is on its starboard side.
+        expect(shown[3]).toBe(true);
+        expect(shown[2]).toBe(false);
+        expect(c.navLights.geometry.attributes.position.getY(2)).toBeLessThan(-1000);
+        lit.fleet.light(0);
+    });
+});

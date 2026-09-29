@@ -39,7 +39,7 @@ import {
     ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
     carLightPositions, carYaws, drift, jetsAt, jetFlashing, shipShift, cruiseLane, cruisePier, cruiseAt, LIFE, JET, LIVERIES
 } from './life.min.js';
-import { buildFleet, place, boxesGeometry, jetParts, joinGeometries, buildWashers, buildGulls } from './fleet.min.js';
+import { buildFleet, place, boxesGeometry, jetParts, joinGeometries, buildWashers, buildGulls, lightDot, aimRunningLights } from './fleet.min.js';
 import { WASHERS, washerFaces, washerAt } from './washers.min.js';
 import { flock, gullPose, gullShape, flockTriangles } from './gulls.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
@@ -275,8 +275,9 @@ function buildBeacons(scene, towers) {
     const positions = aviationLights(towers).flatMap(([x, y, z]) => [x, WATER_Y + y, z]);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    // Round glows (fleet.js lightDot), as every light out there is.
     const beacons = new THREE.Points(geometry, new THREE.PointsMaterial({
-        color: 0xff2a1a, size: 3, sizeAttenuation: false, fog: false, toneMapped: false
+        color: 0xff2a1a, size: 5, sizeAttenuation: false, map: lightDot(), transparent: true, depthWrite: false, fog: false, toneMapped: false
     }));
     beacons.name = 'beacons';
     beacons.visible = false;
@@ -363,7 +364,10 @@ function buildAirport(scene) {
         return p;
     };
     const lights = points('airport-lights', positions, colors, 1.6);
-    const flashers = points('airport-rabbit', rabbit, null, 3.5);
+    const flashers = points('airport-rabbit', rabbit, null, 6);
+    // Round, as the jets' lights are (fleet.js lightDot); the edge lights
+    // are too small for a square to show.
+    flashers.material.map = lightDot();
     flashers.geometry.setDrawRange(0, 1);
     return { ground, jets, lights, rabbit: flashers };
 }
@@ -1394,6 +1398,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             fleet.ships.forEach((c, slot) => place(c, ships.find((ship) => ((ship.k % 3) + 3) % 3 === slot) || null));
             const cruise = cruiseAt(date, cruiseRoute, cruiseBerth);
         fleet.cruises.forEach((c, livery) => place(c, cruise && cruise.livery === livery ? cruise : null));
+        // The ships' running lights as the office sees them: a sidelight
+        // only from its own side, the stern light only from astern.
+        for (const c of [...fleet.ships, ...fleet.cruises]) aimRunningLights(c, camera.position);
         sailboatsAt(date, courses, raining).forEach((at, i) => place(fleet.sailboats[i], at));
             place(fleet.seaplane, seaplaneAt(date, raining));
             // Rain that is held still would read as scratches on the view,
