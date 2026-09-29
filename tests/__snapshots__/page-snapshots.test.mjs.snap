@@ -3482,11 +3482,11 @@ html [lang="en"]
     title
       "Corner Office"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=2" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=3" rel="preload"]
     link [as="script" href="../lib/three.min.js" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=2" rel="stylesheet"]
+    link [href="css/experience.min.css?v=3" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -3518,7 +3518,7 @@ html [lang="en"]
           div.loader-progress#load-progress
         div.loader-status#load-status [aria-live="polite" role="status"]
           "Loading…"
-    canvas#game-canvas [aria-label="A corner office walled with windows onto the city, under an exposed concrete ceiling. A slim white desk holds a computer with sticky notes on it and a slim lamp, with a wastebasket beside it, a low white credenza of folders under the window, a fabric pinboard of index cards, a glass whiteboard of numbers, and a printer." role="img"]
+    canvas#game-canvas [aria-label="A corner office walled with windows onto the city, under an exposed concrete ceiling. A slim white desk holds a computer with sticky notes on it and a slim lamp, with a wastebasket beside it, a low white credenza of folders under the window, a fabric pinboard of index cards, a glass whiteboard of numbers, a printer, and a pair of binoculars on a tripod in the corner by the windows." role="img"]
     p#office-live.sr-only [aria-live="polite" role="status"]
     div#office-hud.ui-float.office-hud [aria-label="Your week" role="group"]
       span#hud-week.hud-chip
@@ -3526,6 +3526,8 @@ html [lang="en"]
         "Due today"
       span#hud-clock.hud-chip [aria-hidden="true" hidden]
     nav#office-bar.ui-float.office-bar [aria-label="The office"]
+      button#bar-binoculars.office-btn.office-btn-primary [hidden title="Put down the binoculars (Escape)" type="button"]
+        "Put down the binoculars"
       button#bar-new.office-btn.office-btn-primary [title="New application (N)" type="button"]
         "New application"
       button#bar-computer.office-btn [title="Open the computer (C)" type="button"]

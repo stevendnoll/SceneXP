@@ -145,7 +145,15 @@ export const CONFIG = deepFreeze({
         /** The whiteboard, on the left wall's front half. */
         whiteboard: { x: -2.97, z: 1.25, y: 1.5, width: 1.8, height: 1.0 },
         /** The printer, on a stand under the right-hand window. */
-        printer: { x: -0.4, z: -2.2, stand: 0.6 }
+        printer: { x: -0.4, z: -2.2, stand: 0.6 },
+        /** The binoculars on their tripod, in the corner beside the chair
+         *  (QA, 2026-09-29: Steve's choice), by the north window just past
+         *  the chair: nearer the corner they stood in the desk's line of
+         *  sight to the cruise terminal, which lies the way they point
+         *  (measured 2026-09-29). `x` and `z` the tripod's foot, `head` the height of its pan head,
+         *  `bearing` the way they point at rest, degrees north of west: at
+         *  the cruise terminal (life.js cruisePier). */
+        binoculars: { x: 2.6, z: -0.55, head: 1.36, bearing: 45 }
     },
 
     /** The camera's near and far planes. */
@@ -169,7 +177,13 @@ export const CONFIG = deepFreeze({
          *  canyon of towers to slivers of the bay and the mountains beyond:
          *  the view the office is named for. Framed by a census of what each
          *  pixel sees (tests/office-view.test.mjs). */
-        window: { eye: [2.45, 1.6, -1.9], aim: [1.4, -2.9, -14], fov: 62, maxFov: 66, holdWidth: true, holdTop: true }
+        window: { eye: [2.45, 1.6, -1.9], aim: [1.4, -2.9, -14], fov: 62, maxFov: 66, holdWidth: true, holdTop: true },
+        /** At the binoculars' eyepieces (room.binoculars, the eye a little
+         *  behind their middle), looking the way they point at rest and a
+         *  little down: the cruise ship at its pier under the mountains.
+         *  `fov` is the desk's 48 narrowed eight times over (in tan space):
+         *  8x (Steve's choice, 2026-09-29). */
+        binoculars: { eye: [2.444, 1.43, -0.394], aim: [73.16, -2.76, -71.11], fov: 6.37, maxFov: 14 }
     },
 
     view: {
@@ -189,6 +203,24 @@ export const CONFIG = deepFreeze({
         look: {
             pan: { speed: 0.7, maxAngle: 0.6, maxTilt: 0.35 },
             zoom: { speed: 1.2, wheel: 0.15, maxIn: 1.3, maxOut: 0.35 }
+        },
+        /**
+         * Through the binoculars: the same look (drag, arrows, wheel, pinch,
+         * + and -) on the binoculars' own terms. They swing `pan.maxAngle`
+         * radians either way, from the island's airport to past the cruise
+         * terminal, and tilt `pan.maxTilt`, slowly enough at 8x that a held
+         * key sweeps about a field a second; they zoom from 6x to 12x
+         * (`zoom.maxOut` and `zoom.maxIn`, in doublings from 8x). The room
+         * is not drawn through them (its frames are a blur a few
+         * centimeters from the objectives), and what is drawn larger than
+         * life for the naked eye goes back to life size (world.js
+         * setTrueScale), or the gulls would be the size of gliders.
+         */
+        binoculars: {
+            look: {
+                pan: { speed: 0.12, maxAngle: 1.4, maxTilt: 0.3 },
+                zoom: { speed: 0.5, wheel: 0.08, maxIn: Math.log2(12 / 8), maxOut: Math.log2(8 / 6) }
+            }
         },
         /** How long a glide between stations takes. Reduced motion cuts. */
         glideSeconds: 0.9,

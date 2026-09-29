@@ -939,3 +939,104 @@ describe('the keyboard and the mouse (QA, 2026-09-29: "more detail to the keyboa
         expect(roomMod.pickOf(mouse.children[1])).toBe('computer');
     });
 });
+
+describe('the binoculars on their tripod (QA, 2026-09-29: in the corner beside the chair, 8x)', () => {
+    test('by the north window beside the chair, standing on the floor, clear of the walls, the chair and the wastebasket', () => {
+        const scope = room.picks.binoculars;
+        const b = CONFIG.room.binoculars;
+        // What is drawn, exactly (not the invisible target round it for a
+        // fingertip, nor the loose bounds of a turned leg).
+        const box = new THREE.Box3();
+        scope.updateMatrixWorld(true);
+        scope.traverse((o) => { if (o.isMesh && o.material.visible !== false) box.expandByObject(o, true); });
+        const { width, depth } = CONFIG.room;
+        expect(box.min.y).toBeLessThan(0.005);
+        expect(box.min.y).toBeGreaterThanOrEqual(-1e-6);
+        expect(box.max.x).toBeLessThan(width / 2 - 0.02);
+        expect(box.min.z).toBeGreaterThan(-depth / 2 + 0.02);
+        // By the north window, toward the corner, beside the chair.
+        expect(width / 2 - b.x).toBeLessThan(0.5);
+        expect(Math.hypot(width / 2 - b.x, b.z + depth / 2)).toBeLessThan(2.1);
+        const seat = room.group.getObjectByName('chair').position;
+        expect(Math.hypot(b.x - seat.x, b.z - seat.z)).toBeLessThan(1.1);
+        // Its feet clear of the chair's base and the wastebasket.
+        const chair = room.group.getObjectByName('chair');
+        const basket = boxOf(room.picks.wastebasket).getCenter(new THREE.Vector3());
+        const feet = [];
+        scope.traverse((o) => { if (o.name === 'binoculars-foot') feet.push(o.getWorldPosition(new THREE.Vector3())); });
+        expect(feet).toHaveLength(3);
+        const { reach, wheel } = roomMod.CHAIR_LEGS;
+        for (const f of feet) {
+            expect(Math.hypot(f.x - chair.position.x, f.z - chair.position.z)).toBeGreaterThan(reach + wheel + 0.05);
+            expect(Math.hypot(f.x - basket.x, f.z - basket.z)).toBeGreaterThan(0.3);
+        }
+        const chairBox = boxOf(chair);
+        const body = boxOf(room.binoculars.body);
+        expect(body.intersectsBox(chairBox)).toBe(false);
+        // And out of the desk's line of sight to the cruise terminal (the
+        // stretch of water 41 to 50 degrees north of west), which they
+        // point along: nearer the corner they hid the ship.
+        const eye = new THREE.Vector3(...CONFIG.stations.desk.eye);
+        for (let bearing = 41; bearing <= 50; bearing += 1) {
+            const r = (bearing * Math.PI) / 180;
+            const far = eye.clone().add(new THREE.Vector3(Math.sin(r), -0.06, -Math.cos(r)).multiplyScalar(10));
+            const hits = new THREE.Raycaster(eye, far.clone().sub(eye).normalize(), 0, 4).intersectObject(scope, true)
+                .filter((h) => h.object.material.visible !== false);
+            expect(hits).toHaveLength(0);
+        }
+    });
+
+    test('the eyepiece station stands at their eyepieces, looks where they point, and sees eight times what the desk does', () => {
+        const s = CONFIG.stations.binoculars;
+        const b = CONFIG.room.binoculars;
+        const a = (b.bearing * Math.PI) / 180;
+        const forward = [Math.sin(a), -Math.cos(a)];
+        // The eye behind the binoculars' middle along the way they point,
+        // at their height.
+        expect(s.eye[0]).toBeCloseTo(b.x - forward[0] * roomMod.BINOCULARS.eye, 2);
+        expect(s.eye[2]).toBeCloseTo(b.z - forward[1] * roomMod.BINOCULARS.eye, 2);
+        expect(s.eye[1]).toBeCloseTo(b.head + roomMod.BINOCULARS.rise, 2);
+        const d = [s.aim[0] - s.eye[0], s.aim[2] - s.eye[2]];
+        const len = Math.hypot(...d);
+        expect((d[0] * forward[0] + d[1] * forward[1]) / len).toBeGreaterThan(0.999);
+        const tan = (deg) => Math.tan((deg * Math.PI) / 360);
+        expect(tan(CONFIG.stations.desk.fov) / tan(s.fov)).toBeCloseTo(8, 1);
+        // The window station, just by them, is clear of them.
+        const w = new THREE.Vector3(...CONFIG.stations.window.eye);
+        expect(boxOf(room.binoculars.body).distanceToPoint(w)).toBeGreaterThan(0.2);
+    });
+
+    test('a tap anywhere on them raises them, and so do the toolbar-less ways: Places and the B key (office-ui)', () => {
+        const scope = room.picks.binoculars;
+        const parts = [];
+        scope.traverse((o) => { if (o.isMesh) parts.push(o); });
+        for (const part of parts) expect(roomMod.pickOf(part)).toBe('binoculars');
+        // Seen from the desk turned right (the look's full turn), clear of
+        // everything in front of them.
+        const cam = cameraAt('desk', 16 / 10);
+        const dir = new THREE.Vector3();
+        cam.getWorldDirection(dir);
+        dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), -CONFIG.view.look.pan.maxAngle);
+        cam.lookAt(cam.position.clone().add(dir));
+        cam.updateMatrixWorld(true);
+        const head = new THREE.Vector3(CONFIG.room.binoculars.x, CONFIG.room.binoculars.head + 0.07, CONFIG.room.binoculars.z);
+        const ndc = head.clone().project(cam);
+        expect(Math.abs(ndc.x)).toBeLessThan(0.95);
+        expect(Math.abs(ndc.y)).toBeLessThan(0.95);
+        const [hit] = new THREE.Raycaster(cam.position, head.clone().sub(cam.position).normalize()).intersectObject(room.group, true);
+        expect(roomMod.pickOf(hit.object)).toBe('binoculars');
+    });
+
+    test('graphite and aluminum, their objectives coated glass toward the window', () => {
+        const scope = room.picks.binoculars;
+        let metal = 0;
+        let glass = 0;
+        scope.traverse((o) => {
+            if (!o.isMesh || !o.material || o.material.visible === false) return;
+            if (o.material.metalness >= 0.8) metal++;
+            if (o.material.clearcoat === 1) glass++;
+        });
+        expect(metal).toBeGreaterThanOrEqual(5);
+        expect(glass).toBe(2);
+    });
+});

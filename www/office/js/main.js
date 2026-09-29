@@ -47,7 +47,7 @@ import { SUNBEAM, sunbeam, mirrorLevel, interiorEnvironment, mirrorCamera, layMi
 import { buildWorld, TOWER_SHADOWS } from './world.min.js';
 import {
     screenLines, drawScreen, drawNoteAtlas, drawLabelCard, drawBoardHeader, drawCardFace,
-    drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, drawRainOnGlass, drawConcrete, FACADE_STYLES
+    drawWhiteboard, drawFacade, drawStreets, drawClouds, drawMoon, drawGlow, drawRainOnGlass, drawConcrete, drawBinocularMask, FACADE_STYLES
 } from './paint.min.js';
 import { CITY } from './city.min.js';
 import { CLOUDS, cloudPuffs, skyAt, dayLapse } from './sky.min.js';
@@ -123,6 +123,11 @@ const ui = {
     lampOn: true,
     /** How far the visitor has zoomed, doublings of magnification (setZoom). */
     zoom: 0,
+    /** The binoculars are raised (raiseBinoculars), from the glide to them
+     *  until they are put down; `eyepiece` once the eye is at them, when
+     *  the view is through them. */
+    binoculars: false,
+    eyepiece: false,
     /** The room's tone-mapping exposure (roomExposure), set with the light. */
     roomExposure: 1,
     /** Whether the folder lies open on the desk. Kept here as well as on the
@@ -586,7 +591,7 @@ export function zoomedFov(fov, zoom, widest = CONFIG.view.maxFov) {
 /** Zoom to `zoom` doublings (clamped to CONFIG.view.look.zoom), from the
  *  station's own composed lens. */
 function setZoom(zoom) {
-    const { maxIn, maxOut } = CONFIG.view.look.zoom;
+    const { maxIn, maxOut } = lookSettings().zoom;
     ui.zoom = Math.min(maxIn, Math.max(-maxOut, zoom));
     if (!camera || !state.pose) return ui.zoom;
     camera.fov = zoomedFov(state.pose.fov, ui.zoom);
@@ -617,7 +622,31 @@ function setupLook(signal) {
     };
     canvas.addEventListener('pointerdown', stopWhileLocked, { signal });
     canvas.addEventListener('wheel', stopWhileLocked, { passive: true, signal });
-    const { pan, zoom } = CONFIG.view.look;
+    signal.addEventListener('abort', () => { if (lookController) lookController.abort(); });
+    startLook();
+}
+
+/** The look's settings as the visitor stands: the room's, or through the
+ *  binoculars their own (CONFIG.view.binoculars.look). */
+function lookSettings() {
+    return ui.eyepiece ? CONFIG.view.binoculars.look : CONFIG.view.look;
+}
+
+// The shared part's own listeners, dropped and made again when the look
+// changes between the room's and the binoculars'.
+let lookController = null;
+
+/** (Re)start the shared pan part with the look for where the visitor
+ *  stands, from the composed view: its speeds and reach are fixed when it
+ *  starts, so a change of look is a fresh start. */
+function startLook() {
+    if (lookController) {
+        lookController.abort();
+        disposePortraitControls();
+    }
+    lookController = new AbortController();
+    const signal = lookController.signal;
+    const { pan, zoom } = lookSettings();
     initPortraitControls({
         getCamera: () => camera,
         lookAt: viewAim,
@@ -685,6 +714,7 @@ function applyPose(pose) {
 function handleResize() {
     if (!renderer || !camera) return;
     resolution.apply();
+    paintBinocularMask();
     if (!glide) applyPose(poseFor(ui.station, aspect(), CONFIG));
     requestRender();
 }
@@ -693,6 +723,7 @@ function handleResize() {
  *  motion, in which case it cuts. */
 function goTo(station) {
     if (!camera) return;
+    if (station !== 'binoculars' && ui.binoculars) lowerBinoculars();
     ui.station = station;
     showDayButton();
     const to = poseFor(station, aspect(), CONFIG);
@@ -703,6 +734,96 @@ function goTo(station) {
     ui.zoom = 0;
     glide = createGlide(from, to, state.reducedMotion ? 0 : CONFIG.view.glideSeconds);
     requestRender();
+}
+
+// ---- The binoculars -----------------------------------------------------------
+
+/**
+ * Raise the binoculars: the camera glides to their eyepieces, the lens
+ * narrowing to 8x on the way, and on arriving the view is through them
+ * (enterEyepiece). Anything open is closed first: the binoculars are a
+ * place, not a card.
+ */
+function raiseBinoculars() {
+    if (!camera || ui.binoculars) return false;
+    closeAll({ restoreFocus: false });
+    togglePlaces(false, { restoreFocus: false });
+    goTo('binoculars');
+    ui.binoculars = true;
+    showBinocularButton();
+    track('binoculars');
+    return true;
+}
+
+/** The eye is at the eyepieces: the view through them, the room left out,
+ *  what is enlarged for the naked eye at life size, the look theirs. */
+function enterEyepiece() {
+    ui.eyepiece = true;
+    ui.zoom = 0;
+    if (world) world.setTrueScale(true);
+    startLook();
+    showBinocularMask(true);
+    document.body.classList.add('binocular-mode');
+    announce('Looking through the binoculars. Drag or use the arrow keys to look around, and scroll, pinch or press plus and minus to zoom. Press Escape to put them down.');
+    requestRender();
+}
+
+/** Leave the binoculars' view where the camera is (the next glide takes it
+ *  away): the room drawn again, the enlargements back, the room's look. */
+function lowerBinoculars() {
+    const was = ui.eyepiece;
+    ui.binoculars = false;
+    ui.eyepiece = false;
+    ui.zoom = 0;
+    if (world) world.setTrueScale(false);
+    showBinocularMask(false);
+    document.body.classList.remove('binocular-mode');
+    if (was) startLook();
+    showBinocularButton();
+    requestRender();
+}
+
+/** Put the binoculars down and go back to the desk. */
+function putDownBinoculars() {
+    if (!ui.binoculars) return false;
+    goTo('desk');
+    announce('Back at the desk.');
+    return true;
+}
+
+/** The toolbar's way back, shown only while the binoculars are up. */
+function showBinocularButton() {
+    const btn = el('bar-binoculars');
+    if (btn) btn.hidden = !ui.binoculars;
+}
+
+// The mask over the scene while looking through the binoculars (paint.js
+// drawBinocularMask), made on first use and painted for the screen's size.
+let binocularMask = null;
+
+function showBinocularMask(on) {
+    if (on && !binocularMask && typeof document.createElement === 'function') {
+        binocularMask = document.createElement('canvas');
+        binocularMask.id = 'binocular-mask';
+        binocularMask.setAttribute('aria-hidden', 'true');
+        if (document.body && document.body.appendChild) document.body.appendChild(binocularMask);
+    }
+    if (!binocularMask) return false;
+    binocularMask.hidden = !on;
+    if (on) paintBinocularMask();
+    return on;
+}
+
+/** Paint the mask at the screen's size and pixel ratio. */
+function paintBinocularMask() {
+    if (!binocularMask || binocularMask.hidden) return null;
+    const ratio = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
+    const W = Math.max(1, Math.round((window.innerWidth || 1) * ratio));
+    const H = Math.max(1, Math.round((window.innerHeight || 1) * ratio));
+    binocularMask.width = W;
+    binocularMask.height = H;
+    const ctx = binocularMask.getContext && binocularMask.getContext('2d');
+    return ctx ? drawBinocularMask(ctx, W, H) : null;
 }
 
 /** Ask for one frame. Cheap to call as often as anything likes. */
@@ -1562,6 +1683,7 @@ export const PLACES = [
     { place: 'rolodex', label: 'Rolodex', key: '6' },
     { place: 'whiteboard', label: 'Whiteboard', key: '7' },
     { place: 'printer', label: 'Printer', key: 'P' },
+    { place: 'binoculars', label: 'Binoculars', key: 'B' },
     // Last, the way back to the welcome card and the directory link on it
     // (QA, 2026-09-29: "no way to get back to the Welcome card without
     // refreshing the page").
@@ -1642,6 +1764,7 @@ function goToPlace(place) {
         rolodex: () => openRolodex(),
         whiteboard: () => openWhiteboard(),
         printer: () => openPrinter(),
+        binoculars: () => raiseBinoculars(),
         welcome: () => showWelcome()
     }[place];
     if (!open) return false;
@@ -2263,6 +2386,7 @@ function actOn(key, { armed = true, instanceId = -1, uv = null } = {}) {
     case 'computer': openComputer({ armed }); break;
     case 'wastebasket': openWastebasket({ armed }); break;
     case 'lamp': toggleLamp(); break;
+    case 'binoculars': raiseBinoculars(); break;
     case 'folder': if (ui.lastFolderId) openFolder(ui.lastFolderId, { armed }); break;
     case 'notes': openToday({ armed }); break;
     default: return false;
@@ -2307,6 +2431,8 @@ function handleSceneTap(clientX, clientY) {
     // is a pointerdown and a pointerup that did not move).
     const top = topCard();
     if (!state.loaded || (top && top !== 'cabinet')) return null;
+    // Through the binoculars there is no room to tap.
+    if (ui.binoculars) return null;
     const hit = pickAt(clientX, clientY);
     if (!hit) return null;
     if (top === 'cabinet' && hit.key !== 'cabinet-folder') return null;
@@ -2408,6 +2534,8 @@ function setupEventListeners() {
     wire('bar-wastebasket', 'click', () => openWastebasket());
     wire('bar-settings', 'click', openSettings);
     wire('bar-day', 'click', watchDay);
+    wire('bar-binoculars', 'click', putDownBinoculars);
+    showBinocularButton();
     showDayButton();
     wire('bar-undo', 'click', undo);
     wire('grid-new', 'click', () => openApplicationForm(null));
@@ -2466,7 +2594,7 @@ function setupEventListeners() {
     canvas.addEventListener('pointermove', (event) => {
         if (event.pointerType !== 'mouse' || !state.loaded || drag) return;
     if (anyOpen() && topCard() !== 'cabinet' && topCard() !== 'board') return;
-        canvas.style.cursor = pickAt(event.clientX, event.clientY) ? 'pointer' : '';
+        canvas.style.cursor = !ui.binoculars && pickAt(event.clientX, event.clientY) ? 'pointer' : '';
     }, { signal });
     setupLook(signal);
 
@@ -2484,6 +2612,7 @@ function setupEventListeners() {
         // what the computer is for. Over any other card, nothing does.
         const top = topCard();
         if (top && top !== 'computer') return;
+        if (key === 'escape' && ui.binoculars && !top) { event.preventDefault(); putDownBinoculars(); return; }
         if (key === 'escape' && ui.lapse && !top) { event.preventDefault(); stopDay(false); return; }
         if (key === 'n') { event.preventDefault(); openApplicationForm(null); }
         else if (key === '/') {
@@ -2499,6 +2628,7 @@ function setupEventListeners() {
         else if (key === '6') { event.preventDefault(); openRolodex(); }
         else if (key === '7') { event.preventDefault(); openWhiteboard(); }
         else if (key === 'p') { event.preventDefault(); openPrinter(); }
+        else if (key === 'b') { event.preventDefault(); if (ui.binoculars) putDownBinoculars(); else raiseBinoculars(); }
         else if (key === 't') { event.preventDefault(); openToday(); }
         else if (key === '1') { event.preventDefault(); goTo('desk'); }
         else if (key === '9') { event.preventDefault(); goTo('window'); track('place', { place: 'window' }); }
@@ -2558,8 +2688,23 @@ function animate() {
 
     if (glide) {
         applyPose(glide.step(delta));
-        if (glide.done) glide = null;
+        if (glide.done) {
+            glide = null;
+            if (ui.binoculars && ui.station === 'binoculars' && !ui.eyepiece) enterEyepiece();
+        }
         state.dirty = true;
+    }
+    // A card opened over the binoculars (a key, the toolbar): they are put
+    // down, and the card has the desk behind it.
+    if (ui.binoculars && anyOpen() && topCard() !== 'welcome') goTo('desk');
+    // The binoculars' own body out of the way of an eye close to it (on the
+    // glide to the eyepieces and back).
+    if (room && room.binoculars && camera) {
+        const near = camera.position.distanceTo(room.binoculars.scope.position.clone().setY(CONFIG.room.binoculars.head)) < 0.75;
+        if (room.binoculars.body.visible === near) {
+            room.binoculars.body.visible = !near;
+            markRoom();
+        }
     }
     // The visitor's look (setupLook), and a frame when it has turned or
     // zoomed the camera, the world's camera with it.
@@ -2664,7 +2809,8 @@ function placeLife() {
 /**
  * One frame: the world outside first, lit and colored as it is and drawn
  * without tone mapping, then the depth cleared and the room drawn over it
- * with the usual ACES pass (world.js explains both).
+ * with the usual ACES pass (world.js explains both). Returns whether the
+ * room was drawn (not through the binoculars).
  */
 function draw() {
     renderer.clear();
@@ -2679,10 +2825,14 @@ function draw() {
         renderer.shadowMap.needsUpdate = roomDue;
         renderer.clearDepth();
     }
+    // Through the binoculars only the world: the room's frames are a blur
+    // a few centimeters from the objectives.
+    if (ui.eyepiece) return false;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = ui.roomExposure;
     drawMirrors();
     renderer.render(scene, camera);
+    return true;
 }
 
 /** The room's exposure for a light level (daylight.js `lighting`): from
@@ -2811,6 +2961,9 @@ export const __test__ = {
     ui,
     setZoom,
     lookLocked,
+    raiseBinoculars,
+    putDownBinoculars,
+    lookSettings,
     sceneryClock,
     roomExposure,
     history,

@@ -1503,7 +1503,7 @@ describe('places', () => {
         expect(el('bar-places').getAttribute('aria-expanded')).toBe('true');
         const items = el('places-menu').children;
         expect(items.map((b) => b.children[0] ? b.dataset.place : b.dataset.place)).toEqual(
-            ['window', 'desk', 'computer', 'calendar', 'cabinet', 'board', 'rolodex', 'whiteboard', 'printer', 'welcome']);
+            ['window', 'desk', 'computer', 'calendar', 'cabinet', 'board', 'rolodex', 'whiteboard', 'printer', 'binoculars', 'welcome']);
         expect(dom.documentStub.activeElement).toBe(items[0]);
         expect(el('places-menu').style.left).toMatch(/px$/);
         items.find((b) => b.dataset.place === 'calendar').click();
@@ -1734,5 +1734,67 @@ describe('looking around (QA, 2026-09-29: pan and zoom with no floating buttons)
     test('a touch on the room is a tap at its end, its click canceled', () => {
         const ended = fire(canvas(), 'touchend', { cancelable: true, changedTouches: [{ clientX: 640, clientY: 400 }] });
         expect(ended.defaultPrevented).toBe(true);
+    });
+});
+
+describe('the binoculars (QA, 2026-09-29: "tripod-mounted binoculars ... a zoomed-in view")', () => {
+    const settle = () => {
+        for (let i = 0; i < 30; i++) {
+            t.state.lastTime = performance.now() - 100;
+            t.animate();
+        }
+    };
+
+    test('raised from the room, Places or B: a glide to the eyepieces, then the view through them on their own terms', () => {
+        expect(el('bar-binoculars').hidden).toBe(true);
+        expect(t.actOn('binoculars')).not.toBe(false);
+        expect(t.ui.binoculars).toBe(true);
+        expect(t.ui.station).toBe('binoculars');
+        // Not through them until the eye is there.
+        expect(t.ui.eyepiece).toBe(false);
+        settle();
+        expect(t.ui.eyepiece).toBe(true);
+        expect(t.lookSettings()).toEqual(CONFIG.view.binoculars.look);
+        // 6x to 12x, from 8x.
+        expect(2 ** t.setZoom(9) * 8).toBeCloseTo(12, 9);
+        expect(2 ** t.setZoom(-9) * 8).toBeCloseTo(6, 9);
+        expect(dom.documentStub.body.classList.contains('binocular-mode')).toBe(true);
+        expect(el('bar-binoculars').hidden).toBe(false);
+        expect(said()).toMatch(/Looking through the binoculars\. Drag or use the arrow keys to look around/);
+        // Escape puts them down, back to the desk and the room's look.
+        fire(dom.documentStub, 'keydown', { key: 'Escape', target: dom.documentStub.body });
+        expect(t.ui.binoculars).toBe(false);
+        expect(t.ui.eyepiece).toBe(false);
+        expect(t.ui.station).toBe('desk');
+        expect(t.lookSettings()).toEqual(CONFIG.view.look);
+        expect(dom.documentStub.body.classList.contains('binocular-mode')).toBe(false);
+        expect(el('bar-binoculars').hidden).toBe(true);
+        // B raises them, and B again puts them down; Places raises them too.
+        key('b');
+        expect(t.ui.binoculars).toBe(true);
+        key('b');
+        expect(t.ui.binoculars).toBe(false);
+        place('binoculars');
+        expect(t.ui.binoculars).toBe(true);
+        el('bar-binoculars').click();
+        expect(t.ui.binoculars).toBe(false);
+    });
+
+    test('a card opened over them puts them down, with the desk behind it', () => {
+        t.raiseBinoculars();
+        settle();
+        expect(t.ui.eyepiece).toBe(true);
+        key('3');
+        settle();
+        expect(t.ui.binoculars).toBe(false);
+        expect(t.ui.station).toBe('desk');
+    });
+
+    test('through them only the world is drawn, and the room comes back as they come down', () => {
+        t.raiseBinoculars();
+        settle();
+        expect(t.draw()).toBe(false);
+        t.putDownBinoculars();
+        expect(t.draw()).toBe(true);
     });
 });

@@ -1011,6 +1011,102 @@ function buildPrinter(group, config, picks, m) {
 }
 
 /**
+ * The binoculars on their tripod (QA, 2026-09-29: "a pair of tripod-mounted
+ * binoculars that would let the user look around the scene"), in the corner
+ * beside the chair (config room.binoculars). Big observation binoculars in
+ * graphite armor with aluminum rings, their objectives toward the glass, on
+ * a pan head, a center column and three brushed aluminum legs. Meters:
+ * `barrel` each tube's radius, length and the distance between the two;
+ * `eyepiece` the eyepieces' radius and length; `legs` how far out the
+ * feet stand; `eye` how far behind the binoculars' middle the eye is
+ * (config stations.binoculars stands there).
+ */
+export const BINOCULARS = {
+    barrel: { radius: 0.042, length: 0.27, apart: 0.12 },
+    objective: { radius: 0.05, length: 0.07 },
+    eyepiece: { radius: 0.021, length: 0.07 },
+    legs: { reach: 0.44, hub: 1.02 },
+    column: 0.017,
+    eye: 0.22,
+    rise: 0.07
+};
+
+function buildBinoculars(group, config, picks, contacts, m) {
+    const b = config.room.binoculars;
+    const B = BINOCULARS;
+    const scope = tag(new THREE.Group(), 'binoculars');
+    scope.position.set(b.x, 0, b.z);
+    const a = (b.bearing * Math.PI) / 180;
+    // Its own frame turned so -z points the way they look.
+    scope.rotation.y = Math.atan2(-Math.sin(a), Math.cos(a));
+    const armor = mat(0x2b2d31, { roughness: 0.78 });
+    const black = mat(0x16171a, { roughness: 0.9 });
+    const lens = new THREE.MeshPhysicalMaterial({ color: 0x1b2d3f, roughness: 0.08, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.02 });
+    // The legs: from a hub on the column out to rubber feet, a third of a
+    // turn apart, one toward the corner.
+    const hubY = B.legs.hub;
+    for (let i = 0; i < 3; i++) {
+        const t = (i * 2 * Math.PI) / 3;
+        const foot = new THREE.Vector3(Math.sin(t) * B.legs.reach, 0.02, -Math.cos(t) * B.legs.reach);
+        const hub = new THREE.Vector3(Math.sin(t) * 0.03, hubY, -Math.cos(t) * 0.03);
+        const span = hub.clone().sub(foot);
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, span.length(), 12), m.aluminum);
+        leg.position.copy(foot).add(hub).multiplyScalar(0.5);
+        leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.normalize());
+        leg.name = 'binoculars-leg';
+        scope.add(leg);
+        const shoe = cylinder(0.016, 0.02, black, foot.x, 0.01, foot.z, 12);
+        shoe.name = 'binoculars-foot';
+        scope.add(shoe);
+    }
+    scope.add(cylinder(0.034, 0.06, black, 0, hubY, 0, 16));
+    // The center column up to the pan head, and the head's handle reaching
+    // back and to the right, to swing them by.
+    const top = b.head;
+    scope.add(cylinder(B.column, top - hubY, m.aluminum, 0, (top + hubY) / 2, 0, 12));
+    scope.add(roundedBox(0.07, 0.04, 0.07, 0.008, black, 0, top, 0));
+    const handle = cylinder(0.008, 0.2, m.aluminum, 0.03, top - 0.04, 0.1, 10);
+    handle.rotation.x = Math.PI / 2 + 0.35;
+    scope.add(handle);
+    scope.add(cylinder(0.012, 0.05, black, 0.03, top - 0.075, 0.195, 10));
+    // The binoculars themselves, a little over the head.
+    const body = new THREE.Group();
+    body.name = 'binoculars-body';
+    body.position.y = top + B.rise;
+    const { radius, length, apart } = B.barrel;
+    for (const side of [-1, 1]) {
+        const x = (side * apart) / 2;
+        const tube = cylinder(radius, length, armor, x, 0, 0, 24);
+        tube.rotation.x = Math.PI / 2;
+        body.add(tube);
+        const hood = cylinder(B.objective.radius, B.objective.length, armor, x, 0, -length / 2 - B.objective.length / 2 + 0.01, 24);
+        hood.rotation.x = Math.PI / 2;
+        body.add(hood);
+        const ring = cylinder(B.objective.radius + 0.002, 0.012, m.aluminum, x, 0, -length / 2 + 0.012, 24);
+        ring.rotation.x = Math.PI / 2;
+        body.add(ring);
+        const glass = new THREE.Mesh(new THREE.CircleGeometry(B.objective.radius - 0.006, 24), lens);
+        glass.position.set(x, 0, -length / 2 - B.objective.length + 0.02);
+        glass.rotation.y = Math.PI;
+        body.add(glass);
+        const eyepiece = cylinder(B.eyepiece.radius, B.eyepiece.length, black, x * 0.9, 0.012, length / 2 + B.eyepiece.length / 2 - 0.01, 18);
+        eyepiece.rotation.x = Math.PI / 2;
+        body.add(eyepiece);
+    }
+    // The bridge between the tubes and its focus wheel, in aluminum.
+    body.add(roundedBox(apart - radius, 0.03, length * 0.7, 0.008, armor, 0, 0.012, 0.02));
+    const wheel = cylinder(0.016, 0.03, m.aluminum, 0, 0.034, 0.07, 20);
+    wheel.rotation.z = Math.PI / 2;
+    body.add(wheel);
+    scope.add(body);
+    contacts.push({ x: b.x, z: b.z, y: 0, w: 0.9, d: 0.9, soft: 0.3, alpha: 0.25 });
+    addHitBox(scope, 0.04);
+    group.add(scope);
+    picks.binoculars = scope;
+    return { scope, body };
+}
+
+/**
  * The sticky notes: ONE mesh whose geometry holds a quad per note, each
  * mapped to its own cell of one atlas (notes.js). `setNotes` rebuilds the
  * geometry when the number of notes changes.
@@ -1560,6 +1656,7 @@ export function buildRoom(config, textures = {}) {
     const board = buildBoard(group, config, textures, picks);
     const whiteboard = buildWhiteboard(group, config, textures.whiteboard || null, picks);
     buildPrinter(group, config, picks, finish);
+    const binoculars = buildBinoculars(group, config, picks, contacts, finish);
     const notes = buildNotes(group, config, textures.notes || null, picks);
     const rain = buildRainPanes(group, config, textures.rainGlass || null);
     if (textures.screen) {
@@ -1587,6 +1684,7 @@ export function buildRoom(config, textures = {}) {
         contactShadows,
         reflections,
         shiny,
+        binoculars,
         lamp: { light: desk.light, glow: desk.glow, group: desk.lampGroup }
     };
 }

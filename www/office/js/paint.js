@@ -459,6 +459,41 @@ export function drawMoon(ctx, W, H, elongation) {
     }
 }
 
+/** The binoculars' two fields, as fractions of the screen's shorter side
+ *  and of each other: each circle's radius, and how far apart their
+ *  middles are (overlapping into the figure of eight a binocular view
+ *  makes), and how soft their edge is. */
+export const BINOCULAR_FIELD = { radius: 0.44, apart: 1.1, soft: 0.07, widest: 0.3 };
+
+/**
+ * The binoculars' view as a mask over the scene: black, with two
+ * overlapping round fields cut out of it, side by side, their edges soft.
+ * On a screen too narrow for two fields of the full height they shrink to
+ * fit its width. Returns the fields' radius and middles, in pixels.
+ */
+export function drawBinocularMask(ctx, W, H, field = BINOCULAR_FIELD) {
+    const r = Math.min(field.radius * H, field.widest * W, (0.96 * W) / (2 + field.apart));
+    const gap = (field.apart * r) / 2;
+    const middles = [[W / 2 - gap, H / 2], [W / 2 + gap, H / 2]];
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'destination-out';
+    for (const [x, y] of middles) {
+        const g = ctx.createRadialGradient(x, y, r * (1 - field.soft), x, y, r);
+        g.addColorStop(0, 'rgba(0, 0, 0, 1)');
+        g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+    return { r, middles };
+}
+
 /** The glow about the sun: a bright core fading softly to nothing, added
  *  over the sky (world.js colors it). */
 export function drawGlow(ctx, W, H) {

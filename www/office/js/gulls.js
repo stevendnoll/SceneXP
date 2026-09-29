@@ -260,14 +260,15 @@ export function posePoint([x0, y0, z0], part, pose, scale = GULLS.scale) {
 /**
  * The whole flock's triangles for a moment, written into `out` (positions,
  * nine numbers a triangle) and `normals` alongside: every gull's shape put
- * where its pose says. `y0` is the water's height in the room's frame.
+ * where its pose says, `scale` times life. `y0` is the water's height in
+ * the room's frame.
  */
-export function flockTriangles(poses, y0, out, normals, shape = gullShape()) {
+export function flockTriangles(poses, y0, out, normals, shape = gullShape(), scale = GULLS.scale) {
     let k = 0;
     for (const pose of poses) {
         const at = { ...pose, y: pose.y + y0 };
         for (const [part, , pts] of shape) {
-            const [a, b, c] = pts.map((p) => posePoint(p, part, at));
+            const [a, b, c] = pts.map((p) => posePoint(p, part, at, scale));
             const ux = b[0] - a[0]; const uy = b[1] - a[1]; const uz = b[2] - a[2];
             const vx = c[0] - a[0]; const vy = c[1] - a[1]; const vz = c[2] - a[2];
             // The face's own normal, by its winding: the material is

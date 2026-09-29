@@ -549,3 +549,82 @@ describe('the gulls’ frame rate (QA, 2026-09-29: gliding gulls looked "laggy")
         }
     });
 });
+
+describe('through the binoculars', () => {
+    test('what is drawn larger than life for the naked eye goes back to life size, and returns', async () => {
+        const gulls = await import('../www/office/js/gulls.js');
+        const all = [...lit.fleet.ferries, ...lit.fleet.ships, ...lit.fleet.cruises, ...lit.fleet.sailboats, lit.fleet.seaplane, ...lit.fleet.jets];
+        expect(all.some((c) => c.group.userData.scale > 1)).toBe(true);
+        lit.setTrueScale(true);
+        for (const c of all) expect(c.group.scale.x).toBe(1);
+        // The gulls at their next placing, 1.44 m across rather than 5.
+        const m = momentAt(11);
+        lit.setLight(m.look, m.sky);
+        const g = gulls.flock()[0];
+        const pose = { ...gulls.gullPose(g, 50), yaw: 0, pitch: 0, bank: 0, arm: 0, hand: 0 };
+        const out = new Float32Array(gulls.gullShape().length * 9);
+        gulls.flockTriangles([pose], 0, out, new Float32Array(out.length), gulls.gullShape(), 1);
+        const xs = [];
+        for (let i = 0; i < out.length; i += 3) xs.push(out[i]);
+        expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(1.44, 2);
+        lit.setLife(m.at, 100, false, 50);
+        const pos = lit.gulls.mesh.geometry.attributes.position;
+        const perGull = gulls.gullShape().length * 3;
+        const box = new THREE.Box3();
+        for (let i = 0; i < perGull; i++) box.expandByPoint(new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)));
+        const size = box.getSize(new THREE.Vector3());
+        expect(Math.max(size.x, size.y, size.z)).toBeLessThan(1.6);
+        lit.setTrueScale(false);
+        for (const c of all) expect(c.group.scale.x).toBe(c.group.userData.scale);
+    });
+
+    test('from their eyepieces, within their swing, the cruise ship at its pier and both window washers are in plain sight', async () => {
+        const life = await import('../www/office/js/life.js');
+        const washers = await import('../www/office/js/washers.js');
+        const s = CONFIG.stations.binoculars;
+        const eye = new THREE.Vector3(...s.eye);
+        const rest = Math.atan2(s.aim[0] - s.eye[0], -(s.aim[2] - s.eye[2]));
+        const swing = CONFIG.view.binoculars.look.pan.maxAngle;
+        const solid = [...lit.towers.meshes, lit.towers.roofs, lit.mountains, ...lit.hills.children];
+        const clear = (p) => {
+            const d = p.clone().sub(eye);
+            const far = d.length();
+            return new THREE.Raycaster(eye, d.normalize(), 0, far - 5).intersectObjects(solid, false).length === 0;
+        };
+        const within = (p) => Math.abs(Math.atan2(p.x - eye.x, -(p.z - eye.z)) - rest) < swing;
+        const pier = life.cruisePier();
+        const ship = new THREE.Vector3(pier.bx, city.WATER_Y + 30, pier.bz);
+        expect(within(ship)).toBe(true);
+        expect(clear(ship)).toBe(true);
+        for (const f of washers.washerFaces()) {
+            const p = new THREE.Vector3(f.x, f.roof - 15, f.z + 2);
+            expect(within(p)).toBe(true);
+            expect(clear(p)).toBe(true);
+        }
+    });
+
+    test('the mask: black but for two overlapping soft round fields side by side, fitted to the screen', async () => {
+        const { drawBinocularMask, BINOCULAR_FIELD } = await import('../www/office/js/paint.js');
+        const calls = [];
+        const ctx = new Proxy({}, {
+            get: (_t, p) => (p === 'createRadialGradient' ? (...a) => ({ a, addColorStop: (...c) => calls.push(['stop', ...c]) })
+                : (...a) => calls.push([p, ...a])),
+            set: (_t, p, v) => { calls.push(['set', p, v]); return true; }
+        });
+        const wide = drawBinocularMask(ctx, 1600, 1000);
+        expect(wide.r).toBeCloseTo(BINOCULAR_FIELD.radius * 1000, 6);
+        const [[x0, y0], [x1, y1]] = wide.middles;
+        expect(y0).toBe(500);
+        expect(y1).toBe(500);
+        // Overlapping, and centered.
+        expect(x1 - x0).toBeLessThan(2 * wide.r);
+        expect((x0 + x1) / 2).toBe(800);
+        // Cut out of black.
+        expect(calls.some((c) => c[0] === 'set' && c[1] === 'globalCompositeOperation' && c[2] === 'destination-out')).toBe(true);
+        expect(calls.filter((c) => c[0] === 'arc')).toHaveLength(2);
+        // An upright phone: both fields inside its width.
+        const tall = drawBinocularMask(ctx, 390, 844);
+        expect(tall.middles[0][0] - tall.r).toBeGreaterThanOrEqual(0);
+        expect(tall.middles[1][0] + tall.r).toBeLessThanOrEqual(390);
+    });
+});

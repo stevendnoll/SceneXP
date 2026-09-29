@@ -1543,3 +1543,21 @@ button.hud-chip:focus-visible {
 body .pan-controls.no-chrome.visible {
     display: none;
 }
+
+/* THROUGH THE BINOCULARS (main.js enterEyepiece). The mask is a canvas
+   over the scene (paint.js drawBinocularMask: black, two soft round fields
+   cut out of it), under the HUD and the toolbar, never in a pointer's way,
+   so the drag and the pinch still reach the scene. While it is up the
+   toolbar keeps only the way back, Places and the day going by. */
+#binocular-mask {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 20;
+}
+
+body.binocular-mode .office-bar .office-btn:not(#bar-binoculars):not(#bar-places):not(#bar-day) {
+    display: none;
+}

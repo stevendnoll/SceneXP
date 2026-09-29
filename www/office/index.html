@@ -88,7 +88,7 @@
     <title>Corner Office</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=2" as="style">
+    <link rel="preload" href="css/experience.min.css?v=3" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -96,7 +96,7 @@
     <!-- The shared sheet, then this scene's, which carries the office's own
          cards. -->
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=2">
+    <link rel="stylesheet" href="css/experience.min.css?v=3">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -146,7 +146,7 @@
          through #office-live. A tap on the room is a shortcut, never the only
          way to do anything. -->
     <canvas id="game-canvas" role="img"
-        aria-label="A corner office walled with windows onto the city, under an exposed concrete ceiling. A slim white desk holds a computer with sticky notes on it and a slim lamp, with a wastebasket beside it, a low white credenza of folders under the window, a fabric pinboard of index cards, a glass whiteboard of numbers, and a printer."></canvas>
+        aria-label="A corner office walled with windows onto the city, under an exposed concrete ceiling. A slim white desk holds a computer with sticky notes on it and a slim lamp, with a wastebasket beside it, a low white credenza of folders under the window, a fabric pinboard of index cards, a glass whiteboard of numbers, a printer, and a pair of binoculars on a tripod in the corner by the windows."></canvas>
 
     <!-- Every change, said aloud. Polite, so it waits its turn. -->
     <p id="office-live" class="sr-only" role="status" aria-live="polite"></p>
@@ -170,6 +170,9 @@
          in the room that does something has a button here too, so nothing
          depends on tapping the picture. -->
     <nav id="office-bar" class="ui-float office-bar" aria-label="The office">
+        <!-- Shown only while the binoculars are up (main.js
+             showBinocularButton), and then first. -->
+        <button id="bar-binoculars" class="office-btn office-btn-primary" type="button" title="Put down the binoculars (Escape)" hidden>Put down the binoculars</button>
         <button id="bar-new" class="office-btn office-btn-primary" type="button" title="New application (N)">New application</button>
         <button id="bar-computer" class="office-btn" type="button" title="Open the computer (C)">Computer</button>
         <button id="bar-places" class="office-btn" type="button" aria-expanded="false" aria-controls="places-menu">Places</button>

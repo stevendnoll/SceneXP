@@ -88,6 +88,9 @@ function craft(name, body, windows, { wake = 0, scale = 1, sided = false } = {})
         group.add(trail);
     }
     group.scale.setScalar(scale);
+    // Its own enlargement, which the binoculars take away (world.js
+    // setTrueScale).
+    group.userData.scale = scale;
     group.position.y = HIDDEN_Y;
     group.visible = false;
     return { group, lit, trail };
@@ -732,8 +735,9 @@ export function buildWashers(scene, faces, { width = 7, stand = 1.4, lift = 4.6,
 
 /**
  * The gulls (gulls.js): the whole flock one mesh, two-sided, its points
- * written afresh each frame (a few hundred). `fly(poses, y0)` puts them
- * where gulls.js gullPose says; `null` hides them.
+ * written afresh each frame (a few hundred). `fly(poses, y0, scale)` puts
+ * them where gulls.js gullPose says, `scale` times life (gulls.js
+ * GULLS.scale when not given); `null` hides them.
  */
 export function buildGulls(scene, count, shape, flockTriangles) {
     const n = count * shape.length * 3;
@@ -757,13 +761,13 @@ export function buildGulls(scene, count, shape, flockTriangles) {
     mesh.visible = false;
     mesh.raycast = () => {};
     scene.add(mesh);
-    const fly = (poses, y0) => {
+    const fly = (poses, y0, scale) => {
         if (!poses) {
             mesh.visible = false;
             return;
         }
         mesh.visible = true;
-        flockTriangles(poses, y0, geometry.attributes.position.array, geometry.attributes.normal.array, shape);
+        flockTriangles(poses, y0, geometry.attributes.position.array, geometry.attributes.normal.array, shape, scale);
         geometry.attributes.position.needsUpdate = true;
         geometry.attributes.normal.needsUpdate = true;
     };

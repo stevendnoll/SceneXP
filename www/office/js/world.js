@@ -1159,6 +1159,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     // Where the gulls were last put (setLife), for gullsInSight; null while
     // they are home.
     let gullPoses = null;
+    // Whether what is drawn larger than life is drawn at life size instead
+    // (setTrueScale: the binoculars).
+    let trueScale = false;
     // Whether the airport's lights are on (setLight), for the flashers.
     let airportNight = false;
     paintSky(sky, 0x7fb2dd, 0xe3ecef);
@@ -1421,7 +1424,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             washers.hang(washers.crews.map(({ face }, i) => washerAt(face, date, i, raining)));
             const gullsOut = !still && dark < 0.6 && raining < 0.25;
             gullPoses = gullsOut ? flock().map((g) => gullPose(g, real)) : null;
-            gulls.fly(gullPoses, WATER_Y);
+            gulls.fly(gullPoses, WATER_Y, trueScale ? 1 : undefined);
             const moved = drift(date, seconds, CLOUDS.tile);
             if (clouds.material.map) clouds.material.map.offset.set(moved.clouds[0], moved.clouds[1]);
             water.material.normalMap.offset.set(moved.ripple[0], moved.ripple[1]);
@@ -1452,6 +1455,19 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
                 reach.radius = JET_REACH * group.scale.x;
                 return sight.intersectsSphere(reach) === true;
             });
+        },
+        /**
+         * Draw what is enlarged for the naked eye (the craft's own `scale`,
+         * the gulls' GULLS.scale) at life size, or as it was: through 8x
+         * binoculars a gull 3.5 times life is the size of a glider and a
+         * jet twice life a whale (main.js, while the binoculars are up).
+         * The gulls take it at their next placing (setLife).
+         */
+        setTrueScale(on) {
+            trueScale = Boolean(on);
+            const all = [...fleet.ferries, ...fleet.ships, ...fleet.cruises, ...fleet.sailboats, fleet.seaplane, ...fleet.jets];
+            for (const c of all) c.group.scale.setScalar(trueScale ? 1 : c.group.userData.scale);
+            return trueScale;
         },
         /**
          * Whether a gull is out and inside the camera's view, where the

@@ -59,7 +59,8 @@ function seen(cam, point) {
     const dir = point.clone().sub(cam.position);
     const far = dir.length();
     const ray = new THREE.Raycaster(cam.position, dir.normalize(), 0, far - 5);
-    if (ray.intersectObject(room.group, true).length) return false;
+    // What is drawn: a fingertip's invisible target is no wall.
+    if (ray.intersectObject(room.group, true).some((h) => h.object.material.visible !== false)) return false;
     return ray.intersectObjects([...world.towers.meshes, world.towers.roofs, world.mountains, ...world.hills.children], false).length === 0;
 }
 
