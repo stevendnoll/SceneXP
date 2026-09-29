@@ -1,0 +1,1656 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+/*
+ * experience.css - Corner Office specifics, loaded after the shared stylesheet.
+ *
+ * THE CHROME WEARS THE SHARED `ember` THEME, the warm amber of a desk lamp.
+ * A theme of the office's own (manila and walnut) would have to live in the
+ * shared sheet, because tests/ui-theme.test.mjs holds every theme a page names
+ * to that sheet, and a shared sheet edit means a version bump on every page.
+ * Ember is close enough to earn its keep, and promoting an office theme can
+ * wait for M7 if the screenshots ask for one.
+ *
+ * THE CARDS ARE THIS SCENE'S OWN, shaped like Prospect City's and X's and
+ * O's: a fixed overlay, a scrolling panel, and the `hidden` attribute doing
+ * the hiding. The shared modal rules are scoped to the ids of the scenes that
+ * own them.
+ *
+ * IN ORDER BELOW: the page and the loading screen, the card
+ * family, the buttons, and the welcome card.
+ */
+
+/* The page behind the canvas: the room's own shadow color, so the moment
+ * before the first frame and the overscroll on a phone match the scene. */
+body {
+    background: #1d1e21;
+}
+
+#loading-screen {
+    background:
+        radial-gradient(120% 80% at 50% 110%, #34373c 0%, transparent 60%),
+        #141517;
+}
+
+.loader-title {
+    letter-spacing: 0.18em;
+}
+
+/* ---- Cards ---------------------------------------------------------------- */
+
+.card-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(8, 9, 11, 0.72);
+}
+
+.card-overlay[hidden] {
+    display: none;
+}
+
+.card-panel {
+    width: min(30rem, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 1.4rem 1.5rem 1.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 16px;
+    background: #1c1d20;
+    color: #eef0f3;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+    text-align: center;
+}
+
+.card-panel:focus {
+    outline: none;
+}
+
+.card-title {
+    margin: 0.2rem 0 0;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--ui-title);
+}
+
+.card-detail {
+    margin: 0.6rem 0 0;
+    color: var(--ui-subtitle);
+    line-height: 1.5;
+}
+
+.card-meta {
+    margin: 0.5rem 0 0;
+    color: #a3a8b0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.card-meta[hidden] {
+    display: none;
+}
+
+.card-actions {
+    margin-top: 1.2rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+/* ---- Buttons -------------------------------------------------------------- */
+
+.office-btn {
+    padding: 0.6rem 1.2rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    background: rgba(40, 42, 46, 0.94);
+    color: #eef0f3;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.office-btn:hover,
+.office-btn:focus-visible {
+    border-color: var(--ui-accent);
+    background: rgba(56, 59, 64, 0.96);
+}
+
+.office-btn:focus-visible {
+    outline: 2px solid var(--ui-accent-strong);
+    outline-offset: 2px;
+}
+
+.office-btn-primary {
+    border-color: var(--ui-accent);
+    background: var(--ui-accent);
+    color: var(--ui-on-accent);
+}
+
+.office-btn-primary:hover,
+.office-btn-primary:focus-visible {
+    background: var(--ui-accent-strong);
+    color: var(--ui-on-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .office-btn {
+        transition: none;
+    }
+}
+
+/* ---- The welcome card ----------------------------------------------------- */
+
+.welcome-panel {
+    width: min(32rem, 100%);
+}
+
+/* Empty and silent unless the browser will not keep the office. */
+.storage-note {
+    margin: 0.6rem 0 0;
+    color: #c9d2de;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.storage-note:empty {
+    display: none;
+}
+
+.welcome-explore-row {
+    margin: 1.2rem 0 0;
+}
+
+.welcome-explore {
+    color: var(--ui-subtitle);
+}
+
+.card-subtitle {
+    margin: 1.4rem 0 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--ui-title);
+}
+
+/* ---- More buttons --------------------------------------------------------- */
+
+.office-btn-small {
+    padding: 0.35rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+.office-btn-danger {
+    border-color: #d9826a;
+    color: #ffd9cc;
+}
+
+.office-btn-danger:hover,
+.office-btn-danger:focus-visible {
+    border-color: #f0a58f;
+    background: rgba(120, 44, 28, 0.9);
+}
+
+.office-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.office-btn[hidden] {
+    display: none;
+}
+
+/* A file input is hidden (.sr-only) and its label is the button. The focus
+   ring follows the input onto the label. */
+.office-file {
+    display: inline-block;
+}
+
+.outtray-actions input[type="file"]:focus-visible + .office-file,
+.office-file:focus-within {
+    outline: 2px solid var(--ui-accent-strong);
+    outline-offset: 2px;
+}
+
+/* ---- Inputs --------------------------------------------------------------- */
+
+.office-input,
+.office-select {
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+    background: #121315;
+    color: #f2f3f5;
+    font: inherit;
+    font-size: 1rem;
+}
+
+.office-input:focus-visible,
+.office-select:focus-visible {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 1px;
+    border-color: var(--ui-accent);
+}
+
+textarea.office-input {
+    resize: vertical;
+    line-height: 1.45;
+}
+
+/* ---- The week, top left --------------------------------------------------- */
+
+.office-hud {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 30;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    max-width: calc(100vw - 32px);
+    pointer-events: none;
+}
+
+.hud-chip {
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(26, 27, 30, 0.86);
+    color: var(--ui-subtitle);
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.hud-chip[hidden] {
+    display: none;
+}
+
+.hud-chip-due {
+    background: var(--ui-accent);
+    color: var(--ui-on-accent);
+}
+
+/* ---- The toolbar, bottom center ------------------------------------------- */
+
+.office-bar {
+    position: fixed;
+    left: 50%;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    z-index: 30;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.45rem;
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    padding: 0.45rem;
+    /* A pill on one row, and still a tidy shape when it wraps to two. */
+    border-radius: 24px;
+    background: rgba(22, 23, 26, 0.78);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* A narrow screen WRAPS the toolbar onto more rows, centered, so every
+   button is always on screen. (A single row that scrolled sideways was
+   tried in M5 and taken out: it hid the buttons past the edge, and nothing
+   said they were there.) */
+@media (max-width: 620px) {
+    .office-bar {
+        gap: 0.35rem;
+        padding: 0.4rem;
+        border-radius: 18px;
+    }
+
+    .office-bar .office-btn {
+        padding: 0.45rem 0.7rem;
+        font-size: 0.88rem;
+    }
+}
+
+/* ---- The toast ------------------------------------------------------------ */
+
+.office-toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 72px);
+    transform: translateX(-50%);
+    z-index: 160;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    max-width: calc(100vw - 32px);
+    padding: 0.6rem 0.7rem 0.6rem 1rem;
+    border-radius: 12px;
+    background: #eef0f3;
+    color: #1c1d20;
+    font-weight: 600;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* On a phone the toolbar may wrap to several rows, so the toast moves to
+   the top of the screen, under the week, where it can never cover it. */
+@media (max-width: 620px) {
+    .office-toast {
+        top: calc(max(16px, env(safe-area-inset-top)) + 44px);
+        bottom: auto;
+    }
+}
+
+.office-toast[hidden] {
+    display: none;
+}
+
+.office-toast .office-btn {
+    background: #2a1c0a;
+    color: #eef0f3;
+    border-color: #2a1c0a;
+}
+
+/* ---- Forms ---------------------------------------------------------------- */
+
+.form-panel {
+    width: min(34rem, 100%);
+    text-align: left;
+}
+
+.form-panel .card-title,
+.form-panel > .card-meta {
+    text-align: left;
+}
+
+.office-form {
+    margin-top: 0.8rem;
+}
+
+.form-row {
+    margin: 0 0 0.85rem;
+}
+
+.form-row > label,
+.form-pair label,
+.form-salary legend {
+    display: block;
+    margin-bottom: 0.3rem;
+    color: var(--ui-subtitle);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.form-row[hidden] {
+    display: none;
+}
+
+.form-check {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+}
+
+.form-check > label {
+    display: inline;
+    margin: 0;
+}
+
+.form-check input {
+    width: 1.15rem;
+    height: 1.15rem;
+    accent-color: var(--ui-accent);
+}
+
+.form-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+}
+
+.form-salary {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0.45rem 0.6rem;
+    border: 0;
+    padding: 0;
+}
+
+.form-salary legend {
+    grid-column: 1 / -1;
+    padding: 0;
+}
+
+.form-salary label {
+    color: #a3a8b0;
+    font-size: 0.85rem;
+}
+
+.form-currency {
+    width: 6rem;
+    text-transform: uppercase;
+}
+
+.form-more {
+    margin: 0.2rem 0 0.9rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+}
+
+.form-more > summary {
+    cursor: pointer;
+    color: var(--ui-accent-strong);
+    font-weight: 600;
+}
+
+.form-more[open] > summary {
+    margin-bottom: 0.8rem;
+}
+
+.form-found {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0 0;
+    color: var(--ui-accent-strong);
+    font-size: 0.9rem;
+}
+
+.form-found[hidden],
+.form-error[hidden] {
+    display: none;
+}
+
+.form-error {
+    margin: 0 0 0.6rem;
+    color: #ffb4a0;
+    font-weight: 600;
+}
+
+.form-panel .card-actions {
+    justify-content: flex-end;
+}
+
+/* ---- The computer --------------------------------------------------------- */
+
+.computer-overlay {
+    padding: clamp(0rem, 2vw, 1.5rem);
+}
+
+/* A monitor: a dark bezel around a screen-blue panel. */
+.computer-panel {
+    width: min(76rem, 100%);
+    height: min(52rem, 100%);
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 1.2rem;
+    border: 10px solid #1e2126;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #16202e 0%, #101824 100%);
+    text-align: left;
+}
+
+.computer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.computer-head .card-title {
+    margin: 0;
+}
+
+.grid-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem 1rem;
+    margin: 0.4rem 0 0;
+    color: #c7d3e2;
+    font-size: 0.92rem;
+}
+
+.grid-summary p {
+    margin: 0;
+}
+
+.grid-week {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.grid-week label {
+    color: var(--ui-subtitle);
+    font-weight: 600;
+}
+
+.grid-goal {
+    width: 4.5rem;
+    padding: 0.3rem 0.5rem;
+}
+
+.grid-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.8rem;
+}
+
+.grid-search {
+    flex: 1 1 16rem;
+    width: auto;
+}
+
+.grid-tools .office-select {
+    width: auto;
+}
+
+.grid-sort-label {
+    color: var(--ui-subtitle);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.grid-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+}
+
+.grid-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.grid-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.7rem;
+    border: 1px solid rgba(199, 211, 226, 0.25);
+    border-radius: 999px;
+    background: transparent;
+    color: #d6e0ec;
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.grid-chip:hover,
+.grid-chip:focus-visible {
+    border-color: var(--ui-accent);
+}
+
+.grid-chip:focus-visible {
+    outline: 2px solid var(--ui-accent-strong);
+    outline-offset: 2px;
+}
+
+/* A pressed chip is filled AND ticked, so it never reads by color alone. */
+.grid-chip.is-on {
+    border-color: var(--ui-accent);
+    background: var(--ui-accent);
+    color: var(--ui-on-accent);
+}
+
+.grid-chip.is-on::before {
+    content: "✓";
+    font-weight: 700;
+}
+
+.grid-chip-count {
+    opacity: 0.75;
+    font-variant-numeric: tabular-nums;
+}
+
+.grid-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-top: 0.8rem;
+    overflow: auto;
+    border-radius: 10px;
+    background: rgba(5, 10, 18, 0.35);
+}
+
+.grid-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: #e8eef6;
+    font-size: 0.92rem;
+}
+
+.grid-table[hidden] {
+    display: none;
+}
+
+.grid-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 0.55rem 0.7rem;
+    background: #1c2a3d;
+    color: #aebdd0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.grid-sort {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+}
+
+.grid-sort:focus-visible {
+    outline: 2px solid var(--ui-accent-strong);
+    outline-offset: 3px;
+}
+
+.grid-sort.is-asc::after {
+    content: " ↑";
+    color: var(--ui-accent);
+}
+
+.grid-sort.is-desc::after {
+    content: " ↓";
+    color: var(--ui-accent);
+}
+
+.grid-table td {
+    padding: 0.6rem 0.7rem;
+    border-top: 1px solid rgba(199, 211, 226, 0.1);
+    vertical-align: top;
+}
+
+.grid-row:hover td {
+    background: rgba(200, 208, 220, 0.06);
+}
+
+.grid-open {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #dfe4ea;
+    font: inherit;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+
+.grid-open:hover {
+    text-decoration: underline;
+}
+
+.grid-open:focus-visible {
+    outline: 2px solid var(--ui-accent-strong);
+    outline-offset: 3px;
+    border-radius: 2px;
+}
+
+.grid-sample {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.4rem;
+    border: 1px dashed rgba(199, 211, 226, 0.45);
+    border-radius: 6px;
+    color: #aebdd0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    vertical-align: 1px;
+}
+
+.grid-match {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--ui-accent-strong);
+    font-size: 0.8rem;
+}
+
+/* Status badges. Each has its own word, so color is a second cue only. */
+.status-badge {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: #2c3a4e;
+    color: #dbe4ef;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.status-badge.status-screening { background: #274a63; color: #d4ecff; }
+.status-badge.status-interviewing { background: #3c3f78; color: #e2e3ff; }
+.status-badge.status-offer { background: #2f6b4a; color: #dcffe9; }
+.status-badge.status-accepted { background: #e4c07a; color: #2a1c0a; }
+.status-badge.status-rejected { background: #4a3b3b; color: #f2d9d9; }
+.status-badge.status-withdrawn { background: #3b3b3b; color: #e0e0e0; }
+.status-badge.status-ghosted { background: transparent; border: 1px dashed #8a97a8; color: #c1ccda; }
+.status-badge.status-saved { background: transparent; border: 1px solid #5c6b7e; color: #c1ccda; }
+
+.grid-empty {
+    padding: 2rem 1rem;
+    color: #c7d3e2;
+    text-align: center;
+}
+
+.grid-empty[hidden] {
+    display: none;
+}
+
+/* A phone: the table becomes a list of cards, each cell labeled from its
+   column's name. */
+@media (max-width: 720px) {
+    .computer-overlay {
+        padding: 0;
+    }
+
+    .computer-panel {
+        height: 100%;
+        border-width: 0;
+        border-radius: 0;
+        padding: max(0.8rem, env(safe-area-inset-top)) 0.9rem 0.9rem;
+    }
+
+    .grid-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+    }
+
+    .grid-table,
+    .grid-table tbody,
+    .grid-table tr,
+    .grid-table td {
+        display: block;
+    }
+
+    .grid-table tr {
+        margin: 0 0 0.6rem;
+        padding: 0.6rem 0.8rem;
+        border-radius: 10px;
+        background: rgba(28, 42, 61, 0.7);
+    }
+
+    .grid-table td {
+        display: flex;
+        gap: 0.6rem;
+        padding: 0.15rem 0;
+        border: 0;
+    }
+
+    .grid-table td:empty {
+        display: none;
+    }
+
+    .grid-table td::before {
+        content: attr(data-label);
+        flex: 0 0 6.5rem;
+        color: #8ea0b6;
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+
+    .grid-table td.grid-company::before {
+        content: none;
+    }
+
+    .grid-table td.grid-company {
+        font-size: 1.05rem;
+        padding-bottom: 0.3rem;
+    }
+}
+
+/* ---- The folder ----------------------------------------------------------- */
+
+.folder-panel {
+    width: min(40rem, 100%);
+    text-align: left;
+    background: #202226;
+    border-color: rgba(200, 208, 220, 0.35);
+}
+
+.folder-body {
+    margin-top: 0.6rem;
+}
+
+.folder-status-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.folder-status-row label {
+    color: var(--ui-subtitle);
+    font-weight: 600;
+}
+
+.folder-status-row .office-select {
+    width: auto;
+}
+
+.folder-quiet {
+    margin: 0.7rem 0 0;
+    padding: 0.5rem 0.7rem;
+    border-left: 3px solid var(--ui-accent);
+    background: rgba(200, 208, 220, 0.08);
+    color: #e8ebef;
+}
+
+.folder-facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.35rem 1rem;
+    margin: 0.9rem 0 0;
+}
+
+.folder-fact {
+    display: contents;
+}
+
+.folder-facts dt {
+    color: #a3a8b0;
+    font-size: 0.88rem;
+}
+
+.folder-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.folder-link {
+    color: var(--ui-accent-strong);
+}
+
+.folder-notes {
+    margin: 0.9rem 0 0;
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+.folder-posting {
+    margin-top: 0.8rem;
+}
+
+.folder-posting summary {
+    cursor: pointer;
+    color: var(--ui-accent-strong);
+    font-weight: 600;
+}
+
+.folder-posting p {
+    max-height: 16rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    color: #c8ccd2;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.folder-section {
+    margin-top: 1.2rem;
+}
+
+.folder-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+}
+
+.folder-section-head h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--ui-title);
+}
+
+.folder-empty {
+    margin: 0.5rem 0 0;
+    color: #a3a8b0;
+    font-size: 0.9rem;
+}
+
+.folder-list {
+    margin: 0.5rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.folder-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.55rem 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.folder-item-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+    flex: 1 1 14rem;
+}
+
+.folder-task {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0.55rem;
+}
+
+.folder-task label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.folder-check {
+    width: 1.15rem;
+    height: 1.15rem;
+    margin-top: 0.15rem;
+    accent-color: var(--ui-accent);
+}
+
+.folder-item.is-done label {
+    color: #9aa0a8;
+    text-decoration: line-through;
+}
+
+.folder-item-when {
+    color: #a3a8b0;
+    font-size: 0.85rem;
+}
+
+.folder-item-title,
+.folder-item-notes {
+    font-size: 0.9rem;
+    white-space: pre-wrap;
+}
+
+.folder-outcome {
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.outcome-passed { color: #9ee0b6; }
+.outcome-declined { color: #f2b8a8; }
+.outcome-pending { color: #d6dae0; }
+
+.folder-item-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.outtray-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    margin-top: 1.1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .grid-chip {
+        transition: none;
+    }
+}
+
+/* ---- The due chip is a button (M2) ---------------------------------------- */
+
+button.hud-chip {
+    pointer-events: auto;
+    border: 0;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+button.hud-chip:focus-visible {
+    outline: 2px solid var(--ui-accent-strong);
+    outline-offset: 2px;
+}
+
+/* ---- The wall calendar ----------------------------------------------------
+ * The calendar card wears the office's own card and buttons (QA,
+ * 2026-09-29: it had its own cream and blue, unlike every other card). */
+
+.calendar-panel {
+    width: min(34rem, 100%);
+    text-align: left;
+}
+
+.calendar-panel .card-title,
+.calendar-panel .card-subtitle {
+    color: var(--ui-title);
+}
+
+.cal-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.8rem;
+}
+
+.cal-table {
+    width: 100%;
+    margin-top: 0.8rem;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.cal-table th {
+    padding: 0.2rem 0;
+    color: #a3a8b0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.cal-table td {
+    padding: 2px;
+}
+
+.cal-day {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 0.9;
+    padding: 0.2rem 0 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #eef0f3;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cal-day:hover {
+    border-color: rgba(var(--ui-accent-rgb), 0.5);
+}
+
+.cal-day:focus-visible {
+    outline: 2px solid var(--ui-accent-strong);
+    outline-offset: 1px;
+}
+
+.cal-day.is-out {
+    background: transparent;
+    color: #6e737b;
+    font-weight: 500;
+}
+
+.cal-day.is-today .cal-num {
+    display: inline-block;
+    min-width: 1.7em;
+    border-radius: 999px;
+    background: var(--ui-accent);
+    color: var(--ui-on-accent);
+}
+
+/* Chosen: a solid edge AND bold type, never color alone. */
+.cal-day.is-selected {
+    border: 2px solid var(--ui-accent-strong);
+    font-weight: 800;
+}
+
+.cal-dot,
+.cal-ring {
+    display: inline-block;
+    width: 0.5em;
+    height: 0.5em;
+    border-radius: 999px;
+    vertical-align: middle;
+}
+
+.cal-dot {
+    background: #e0736b;
+}
+
+.cal-ring {
+    border: 2px solid var(--ui-accent);
+}
+
+.cal-day .cal-dot,
+.cal-day .cal-ring {
+    position: absolute;
+    bottom: 0.3rem;
+}
+
+.cal-day .cal-dot {
+    left: calc(50% - 0.65em);
+}
+
+.cal-day .cal-ring {
+    left: calc(50% + 0.15em);
+}
+
+.cal-key {
+    margin: 0.5rem 0 0;
+    color: #a3a8b0;
+    font-size: 0.82rem;
+}
+
+.cal-key .cal-ring {
+    margin-left: 0.8rem;
+}
+
+/* ---- Today's list --------------------------------------------------------- */
+
+.today-heading {
+    list-style: none;
+    padding: 0.8rem 0 0.2rem;
+}
+
+.today-heading h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--ui-title);
+}
+
+/* ---- The filing cabinet's sheet ------------------------------------------- */
+
+/* The room stays in view: no backdrop, and taps outside the sheet reach the
+   folders in the cabinet. */
+.sheet-overlay {
+    align-items: flex-end;
+    padding: 0 0.8rem max(0.8rem, env(safe-area-inset-bottom));
+    background: transparent;
+    pointer-events: none;
+}
+
+.sheet-panel {
+    pointer-events: auto;
+    width: min(46rem, 100%);
+    max-height: 46vh;
+    padding: 0.8rem 1rem 0.9rem;
+    text-align: left;
+    background: rgba(22, 23, 26, 0.92);
+}
+
+.sheet-panel .card-title {
+    font-size: 1.15rem;
+}
+
+.sheet-panel .grid-tools {
+    margin-top: 0.5rem;
+}
+
+.cabinet-filters {
+    margin-top: 0.5rem;
+}
+
+.cabinet-lifted {
+    margin-top: 0.5rem;
+}
+
+.cabinet-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.5rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+@media (max-width: 620px) {
+    .sheet-panel {
+        max-height: 52vh;
+    }
+
+    /* Out of sight but still the select's name. */
+    .sheet-panel .grid-sort-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+}
+
+/* ---- The corkboard's sheet ------------------------------------------------ */
+
+.board-hint {
+    margin-top: 0.3rem;
+}
+
+.board-move {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+}
+
+.board-move label {
+    color: var(--ui-subtitle);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+@media (max-width: 620px) {
+    .board-move {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .board-move .office-btn {
+        grid-column: 1 / -1;
+    }
+}
+
+/* ---- The Rolodex and its people ------------------------------------------- */
+
+.rolodex-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin: 0.5rem 0 0;
+    padding: 0;
+    list-style: none;
+    max-height: 26vh;
+    overflow-y: auto;
+}
+
+.rolodex-person {
+    width: 100%;
+    text-align: left;
+}
+
+.rolodex-person .person-line {
+    display: block;
+    color: #a3a8b0;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.form-with {
+    border: 0;
+    padding: 0;
+}
+
+.form-with legend {
+    margin-bottom: 0.3rem;
+    color: var(--ui-subtitle);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.form-with-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+}
+
+.form-with-list label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.form-with[hidden] {
+    display: none;
+}
+
+.folder-link-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+    margin-top: 0.5rem;
+}
+
+.folder-link-row .office-select {
+    width: auto;
+    flex: 1 1 12rem;
+}
+
+.grid-chip-person.is-on::before {
+    content: "✕";
+}
+
+/* ---- Places --------------------------------------------------------------- */
+
+/* Opens above the toolbar, beside its button (main.js places it). */
+.places-menu {
+    position: fixed;
+    z-index: 140;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 13rem;
+    padding: 0.4rem;
+    border-radius: 14px;
+    background: rgba(22, 23, 26, 0.96);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+
+.places-menu[hidden] {
+    display: none;
+}
+
+.places-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: #eef0f3;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.places-item:hover,
+.places-item:focus-visible {
+    border-color: var(--ui-accent);
+    background: rgba(56, 59, 64, 0.96);
+}
+
+.places-item:focus-visible {
+    outline: 2px solid var(--ui-accent-strong);
+    outline-offset: 1px;
+}
+
+.places-item kbd {
+    min-width: 1.5rem;
+    padding: 0.05rem 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 6px;
+    color: #a3a8b0;
+    font: 600 0.78rem ui-monospace, Menlo, Consolas, monospace;
+    text-align: center;
+}
+
+.office-bar .office-btn[aria-expanded="true"] {
+    border-color: var(--ui-accent);
+}
+
+/* ---- The whiteboard sheet --------------------------------------------------- */
+
+.wb-summary {
+    margin: 0.5rem 0 0;
+    padding-left: 1.1rem;
+    color: var(--ui-subtitle);
+    line-height: 1.5;
+}
+
+.wb-tables {
+    margin-top: 0.6rem;
+}
+
+.wb-tables summary {
+    cursor: pointer;
+    color: var(--ui-accent-strong);
+    font-weight: 600;
+}
+
+.wb-table {
+    width: 100%;
+    margin-top: 0.6rem;
+    border-collapse: collapse;
+    color: #eef0f3;
+    font-size: 0.9rem;
+}
+
+.wb-table caption {
+    margin-bottom: 0.3rem;
+    color: var(--ui-subtitle);
+    font-weight: 600;
+    text-align: left;
+}
+
+.wb-table th,
+.wb-table td {
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: left;
+}
+
+.wb-table td:last-child {
+    font-variant-numeric: tabular-nums;
+}
+
+.dep-table[hidden] {
+    display: none;
+}
+
+/* ---- The prep sheet, on paper only ----------------------------------------- */
+
+.print-sheet {
+    display: none;
+}
+
+@media print {
+    @page {
+        margin: 16mm;
+    }
+
+    html,
+    body {
+        width: auto;
+        height: auto;
+        overflow: visible;
+        background: #fff;
+        color: #111;
+    }
+
+    body > *:not(.print-sheet) {
+        display: none !important;
+    }
+
+    .print-sheet {
+        display: block;
+        font: 10.5pt/1.45 Georgia, "Times New Roman", serif;
+    }
+
+    .print-head h1 {
+        margin: 0;
+        font-size: 20pt;
+    }
+
+    .print-role {
+        margin: 0.2em 0 0;
+        font-size: 13pt;
+    }
+
+    .print-facts {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.2em 1.2em;
+        margin: 1em 0;
+    }
+
+    .print-facts dt {
+        font-weight: 700;
+    }
+
+    .print-facts dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .print-section {
+        break-inside: avoid;
+        margin-top: 1em;
+    }
+
+    .print-section h2 {
+        margin: 0 0 0.3em;
+        padding-bottom: 0.15em;
+        border-bottom: 1px solid #999;
+        font-size: 11.5pt;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    .print-section ul {
+        margin: 0;
+        padding-left: 1.2em;
+    }
+
+    .print-pre {
+        white-space: pre-wrap;
+    }
+
+    .print-small {
+        font-size: 9pt;
+    }
+
+    .print-line {
+        height: 2.1em;
+        border-bottom: 1px solid #bbb;
+    }
+
+    .print-foot {
+        margin-top: 1.5em;
+        color: #666;
+        font-size: 8.5pt;
+    }
+}
+
+/* NO FLOATING LOOK BUTTONS (QA, 2026-09-29: pan and zoom "without any
+   floating arrow/zoom buttons"). The shared pan part builds its row, and
+   the office's reveal adds .visible to every .ui-float, so it is hidden
+   here, as www/automan hides its own. Hidden rather than left out, because
+   the part answers its keys only where its buttons exist. `body` makes this
+   beat the shared sheet's three-class .pan-controls.always-on.visible. */
+body .pan-controls.no-chrome.visible {
+    display: none;
+}
+
+/* THROUGH THE BINOCULARS (main.js enterEyepiece). The mask is a canvas
+   over the scene (paint.js drawBinocularMask: black, two soft round fields
+   cut out of it), under the HUD and the toolbar, never in a pointer's way,
+   so the drag and the pinch still reach the scene. While it is up the
+   toolbar keeps only the way back, Places and the day going by. */
+#binocular-mask {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 20;
+}
+
+body.binocular-mode .office-bar .office-btn:not(#bar-binoculars):not(#bar-places):not(#bar-day) {
+    display: none;
+}
+
+/* THE PULSING MARKERS (main.js buildMarks, marks.js): a ring over the
+   computer and one over the binoculars, saying the room answers a tap, in
+   the office's white and silver (www/automan's halos, without the gold).
+   Under the HUD and the toolbar, and never in a pointer's way but their own.
+   They retire once the visitor has opened a few things. */
+.office-marks {
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    pointer-events: none;
+}
+
+.office-mark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3.1rem;
+    height: 3.1rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.office-mark[hidden] {
+    display: none;
+}
+
+/* The steady ring, a bright outline over a dark halo, so it holds its edge
+   over the white walls and over the bright sky through the glass. */
+.office-mark-ring {
+    position: absolute;
+    inset: 0.35rem;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    background: radial-gradient(circle, rgba(214, 226, 240, 0.35) 0%, rgba(214, 226, 240, 0.1) 55%, rgba(20, 21, 23, 0) 72%);
+    box-shadow: 0 0 0 1px rgba(20, 21, 23, 0.5), 0 0 14px rgba(20, 21, 23, 0.45), inset 0 0 10px rgba(255, 255, 255, 0.35);
+}
+
+/* Two rings spreading out of it, half a cycle apart. */
+.office-mark-ring::before,
+.office-mark-ring::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    border: 2px solid rgba(232, 240, 250, 0.9);
+    animation: office-mark-pulse 2.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+.office-mark-ring::after {
+    animation-delay: 1.3s;
+}
+
+/* After half a minute the pulse halves in speed, and nothing else changes. */
+.office-marks-calm .office-mark-ring::before,
+.office-marks-calm .office-mark-ring::after {
+    animation-duration: 5.2s;
+}
+
+.office-marks-calm .office-mark-ring::after {
+    animation-delay: 2.6s;
+}
+
+@keyframes office-mark-pulse {
+    0% { transform: scale(0.7); opacity: 0; }
+    15% { opacity: 0.9; }
+    100% { transform: scale(2); opacity: 0; }
+}
+
+.office-mark:hover .office-mark-ring,
+.office-mark:focus-visible .office-mark-ring {
+    background: radial-gradient(circle, rgba(214, 226, 240, 0.55) 0%, rgba(214, 226, 240, 0.18) 55%, rgba(20, 21, 23, 0) 72%);
+}
+
+.office-mark:focus-visible {
+    outline: none;
+}
+
+.office-mark:focus-visible .office-mark-ring {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 0 6px rgba(20, 21, 23, 0.8);
+}
+
+/* Less motion: the ring stays, still. */
+@media (prefers-reduced-motion: reduce) {
+    .office-mark-ring::before,
+    .office-mark-ring::after {
+        animation: none;
+        opacity: 0;
+    }
+}

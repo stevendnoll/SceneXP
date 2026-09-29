@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party
+         scripts/styles). No media-src: this office makes no sound. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <!-- RELEASED 2026-09-28 (M7). THE `noindex` IS GONE and there is
+         deliberately no `robots` tag here at all, the same as every other
+         experience: the site's default is indexable, and the page is on the
+         home page, in `sitemap.xml` and in `llms.txt`. A `robots` meta tag
+         reappearing on this page would mean somebody meant to hide it. -->
+
+    <meta name="description" content="A job search tracker that lives in a 3D office. Your applications, interviews, contacts and follow-ups fill the furniture, and every record stays private in your own browser.">
+    <meta name="theme-color" content="#141517">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they stay literal absolute URLs naming where this page is served. -->
+    <link rel="canonical" href="https://www.scenexp.com/office/">
+
+    <!-- Open Graph. JPEG, NOT WEBP (LinkedIn previews no WebP), and exactly
+         one og:image (Apple renders every one it finds). The card is Steve's
+         capture of the finished office at sunset (2026-09-29), converted from
+         the display's profile to sRGB and stripped; og-office.webp beside it
+         is the directory card's. og:image:alt describes THIS picture, so it
+         is rewritten with the card, and the ?v= moves with it. -->
+    <meta property="og:title" content="Corner Office">
+    <meta property="og:description" content="A job search tracker that lives in a 3D office, and keeps every record private in your own browser.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/office/">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:image" content="https://www.scenexp.com/office/assets/og-office.jpg?v=2">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond.">
+
+    <!-- Twitter / X. The same single JPEG as og:image. -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Corner Office">
+    <meta name="twitter:description" content="A job search tracker that lives in a 3D office, and keeps every record private in your own browser.">
+    <meta name="twitter:image" content="https://www.scenexp.com/office/assets/og-office.jpg?v=2">
+    <meta name="twitter:image:alt" content="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "@id": "https://www.scenexp.com/office/#app",
+      "url": "https://www.scenexp.com/office/",
+      "name": "Corner Office",
+      "image": "https://www.scenexp.com/office/assets/og-office.jpg?v=2",
+      "description": "A browser-based job search tracker set in a 3D office. Applications, interviews, contacts and follow-ups are entered, searched, sorted and filtered on screen, and shown in the furniture of the room. Every record stays in the visitor's own browser.",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires JavaScript and WebGL",
+      "inLanguage": "en-US",
+      "isAccessibleForFree": true,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Continuum Commerce LLC"
+      },
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+
+    <title>Corner Office</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
+    <link rel="preload" href="css/experience.min.css?v=4" as="style">
+    <link rel="preload" href="../lib/three.min.js" as="script">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <!-- The shared sheet, then this scene's, which carries the office's own
+         cards. -->
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
+    <link rel="stylesheet" href="css/experience.min.css?v=4">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback
+         layout. A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <h1 class="sr-only">Corner Office</h1>
+
+    <!-- Shown when JavaScript is disabled, and read by crawlers that do not
+         render. -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Corner Office</h1>
+            <p>This is a job search tracker set in a 3D office, and it needs
+                JavaScript to run. Your applications, interviews, contacts and
+                follow-ups are kept in the furniture of the room, where you can
+                add, search, sort and filter them.</p>
+            <p>Everything you enter stays in your own browser and is never
+                sent anywhere.</p>
+            <p>SceneXP is a home for 3D experiences that run right in your
+                browser.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">CORNER OFFICE</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <!-- THE OFFICE IS A PICTURE TO A SCREEN READER, and says so. Everything
+         the room shows is also a row in the computer's grid, every object in
+         it is also a button in the toolbar below, and every change goes out
+         through #office-live. A tap on the room is a shortcut, never the only
+         way to do anything. -->
+    <canvas id="game-canvas" role="img"
+        aria-label="A corner office forty floors up, walled with windows onto a city by the bay, with an observation wheel turning on the waterfront and snowy mountains beyond, under an exposed concrete ceiling. A slim white desk holds a computer with sticky notes on it, a keyboard and mouse, and a slim lamp, with a wastebasket beside it. A low white filing cabinet of folders stands under the window beside a printer, a fabric pinboard of index cards and a glass whiteboard of numbers hang on the walls, and a pair of binoculars on a tripod stands by the windows beside the chair."></canvas>
+
+    <!-- Every change, said aloud. Polite, so it waits its turn. -->
+    <p id="office-live" class="sr-only" role="status" aria-live="polite"></p>
+
+    <!-- THE WEEK, top left. What is waiting today and how the week is going,
+         at a glance. Its id is `office-hud`, never `hud`: the shared sheet
+         owns #hud and hides it. A .ui-float, so it is display:none until
+         main.js reveals it after the loading screen. -->
+    <div id="office-hud" class="ui-float office-hud" role="group" aria-label="Your week">
+        <span id="hud-week" class="hud-chip"></span>
+        <!-- A button, because it opens today's list: the same list the
+             sticky notes on the monitor open. -->
+        <button id="hud-due" class="hud-chip hud-chip-due" type="button" hidden>Due today</button>
+        <!-- The clock while a day goes by at the window. Seen, not read out:
+             the start and the end are said through #office-live, and a clock
+             ticking through a live region would never stop talking. -->
+        <span id="hud-clock" class="hud-chip" aria-hidden="true" hidden></span>
+    </div>
+
+    <!-- THE TOOLBAR, bottom center, where a thumb can reach it. Every object
+         in the room that does something has a button here too, so nothing
+         depends on tapping the picture. -->
+    <nav id="office-bar" class="ui-float office-bar" aria-label="The office">
+        <!-- Shown only while the binoculars are up (main.js
+             showBinocularButton), and then first. -->
+        <button id="bar-binoculars" class="office-btn office-btn-primary" type="button" title="Put down the binoculars (Escape)" hidden>Put down the binoculars</button>
+        <button id="bar-new" class="office-btn office-btn-primary" type="button" title="New application (N)">New application</button>
+        <button id="bar-computer" class="office-btn" type="button" title="Open the computer (C)">Computer</button>
+        <button id="bar-places" class="office-btn" type="button" aria-expanded="false" aria-controls="places-menu">Places</button>
+        <!-- Reads "Stop the day" while a day is going by (main.js
+             showDayButton). -->
+        <button id="bar-day" class="office-btn" type="button">Watch a day go by</button>
+        <button id="bar-outtray" class="office-btn" type="button" title="Backups and exports">Out-tray</button>
+        <button id="bar-wastebasket" class="office-btn" type="button">Wastebasket</button>
+        <button id="bar-settings" class="office-btn" type="button">Settings</button>
+        <button id="bar-undo" class="office-btn" type="button" title="Undo (Ctrl or Command and Z)" disabled>Undo</button>
+    </nav>
+
+    <!-- PLACES: every station in the office, with its key. A plain list of
+         buttons (a disclosure, not an application menu) that main.js builds
+         from its PLACES table and opens above the toolbar, beside its
+         button. -->
+    <div id="places-menu" class="places-menu" role="group" aria-label="Places in the office" hidden></div>
+
+    <!-- THE UNDO TOAST. Not a live region itself: its words also go through
+         #office-live, so they are heard once. -->
+    <div id="office-toast" class="office-toast" hidden>
+        <span id="toast-text"></span>
+        <button id="toast-undo" class="office-btn office-btn-small" type="button" hidden>Undo</button>
+    </div>
+
+    <!-- ==== THE CARDS, IN STACKING ORDER (cards.js CARD_ORDER) ==== -->
+
+    <!-- THE WELCOME CARD. Its actions are built by main.js, because which
+         button leads depends on whether an office was found. -->
+    <div id="welcome" class="card-overlay" hidden>
+        <div id="welcome-panel" class="card-panel welcome-panel" role="dialog" aria-modal="true"
+            aria-labelledby="welcome-title" aria-describedby="welcome-intro" tabindex="-1">
+            <h2 id="welcome-title" class="card-title">Corner Office</h2>
+            <p id="welcome-intro" class="card-detail">A job search tracker that lives in a 3D office.
+                Your applications, interviews and follow-ups fill the furniture, and everything you
+                enter stays in this browser and goes nowhere else.</p>
+            <p id="welcome-look" class="card-meta">Drag to look around, and scroll or pinch to zoom.
+                The arrow keys and the + and − keys do the same.</p>
+
+            <!-- Shown only when a saved office was found. What is waiting
+                 today, or that nothing is. -->
+            <p id="welcome-resume" class="card-meta" hidden></p>
+
+            <!-- Filled in only when the browser will not let the page save,
+                 or the office is running out of room. Empty and silent
+                 otherwise. -->
+            <p id="storage-note" class="storage-note"></p>
+
+            <div id="welcome-actions" class="card-actions"></div>
+
+            <!-- THE WAY BACK TO THE DIRECTORY. Same tab, and nothing is lost
+                 by following it: the office is saved on every change. -->
+            <p class="welcome-explore-row">
+                <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- THE COMPUTER: every application in a table. The office's complete
+         keyboard path (grid.js). -->
+    <div id="computer" class="card-overlay computer-overlay" hidden>
+        <div id="computer-panel" class="card-panel computer-panel" role="dialog" aria-modal="true"
+            aria-labelledby="computer-title" tabindex="-1">
+            <div class="computer-head">
+                <h2 id="computer-title" class="card-title">Applications</h2>
+                <button id="computer-close" class="office-btn office-btn-small" type="button">Back to the desk</button>
+            </div>
+            <div class="grid-summary">
+                <p id="grid-count" class="grid-count"></p>
+                <p class="grid-week">
+                    <span id="grid-week"></span>
+                    <label for="grid-goal">Weekly goal</label>
+                    <input id="grid-goal" class="office-input grid-goal" type="number" min="1" max="100" inputmode="numeric">
+                </p>
+            </div>
+            <div class="grid-tools">
+                <label for="grid-search" class="sr-only">Search every application</label>
+                <input id="grid-search" class="office-input grid-search" type="search"
+                    placeholder="Search companies, roles, notes and postings" autocomplete="off" spellcheck="false">
+                <label for="grid-sort" class="grid-sort-label">Sort by</label>
+                <select id="grid-sort" class="office-select"></select>
+                <button id="grid-dir" class="office-btn office-btn-small" type="button" aria-label="Reverse the order">↓</button>
+                <button id="grid-new" class="office-btn office-btn-primary office-btn-small" type="button">New application</button>
+            </div>
+            <div class="grid-filter-row">
+                <div id="grid-filters" class="grid-filters" role="group" aria-label="Filters"></div>
+                <button id="grid-clear" class="office-btn office-btn-small" type="button" hidden>Clear the search and filters</button>
+            </div>
+            <div class="grid-scroll">
+                <table id="grid-table" class="grid-table">
+                    <caption class="sr-only">Your applications</caption>
+                    <thead>
+                        <tr>
+                            <th id="grid-h-company" scope="col" aria-sort="none"><button id="grid-sort-company" class="grid-sort" type="button">Company</button></th>
+                            <th id="grid-h-role" scope="col">Role</th>
+                            <th id="grid-h-people" scope="col">People</th>
+                            <th id="grid-h-status" scope="col" aria-sort="none"><button id="grid-sort-status" class="grid-sort" type="button">Status</button></th>
+                            <th id="grid-h-applied" scope="col" aria-sort="none"><button id="grid-sort-applied" class="grid-sort" type="button">Applied</button></th>
+                            <th id="grid-h-next" scope="col">Next up</th>
+                            <th id="grid-h-salary" scope="col" aria-sort="none"><button id="grid-sort-salary" class="grid-sort" type="button">Salary</button></th>
+                            <th id="grid-h-activity" scope="col" aria-sort="none"><button id="grid-sort-activity" class="grid-sort" type="button">Last activity</button></th>
+                        </tr>
+                    </thead>
+                    <tbody id="grid-body"></tbody>
+                </table>
+                <div id="grid-empty" class="grid-empty" hidden>
+                    <p id="grid-empty-text"></p>
+                    <div id="grid-empty-actions" class="card-actions"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE CALENDAR, from Places. The month is a table of day buttons, one tab stop
+         for the month with the arrow keys moving between days (panels.js
+         renderCalendar). -->
+    <div id="calendar" class="card-overlay" hidden>
+        <div id="calendar-panel" class="card-panel calendar-panel" role="dialog" aria-modal="true"
+            aria-labelledby="calendar-title" tabindex="-1">
+            <div class="computer-head">
+                <h2 id="calendar-title" class="card-title">Calendar</h2>
+                <button id="calendar-close" class="office-btn office-btn-small" type="button">Close</button>
+            </div>
+            <div class="cal-nav">
+                <button id="cal-prev" class="office-btn office-btn-small" type="button">Previous month</button>
+                <button id="cal-this" class="office-btn office-btn-small" type="button">This month</button>
+                <button id="cal-next" class="office-btn office-btn-small" type="button">Next month</button>
+            </div>
+            <table class="cal-table">
+                <caption class="sr-only">The days of the month. The arrow keys move between days.</caption>
+                <thead>
+                    <tr>
+                        <th scope="col" abbr="Monday">Mon</th>
+                        <th scope="col" abbr="Tuesday">Tue</th>
+                        <th scope="col" abbr="Wednesday">Wed</th>
+                        <th scope="col" abbr="Thursday">Thu</th>
+                        <th scope="col" abbr="Friday">Fri</th>
+                        <th scope="col" abbr="Saturday">Sat</th>
+                        <th scope="col" abbr="Sunday">Sun</th>
+                    </tr>
+                </thead>
+                <tbody id="cal-body"></tbody>
+            </table>
+            <p class="cal-key" aria-hidden="true"><span class="cal-dot"></span> An event <span class="cal-ring"></span> A follow-up</p>
+            <h3 id="cal-day-title" class="card-subtitle"></h3>
+            <ul id="cal-day-list" class="folder-list"></ul>
+            <div class="card-actions">
+                <button id="cal-export" class="office-btn" type="button">Add everything coming up to my calendar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE FILING CABINET. Not a card over the room but a sheet docked at
+         the foot of the screen, so the cabinet stays in view: typing here
+         lifts the folders that match out of their drawers, and changing the
+         filing order refiles them (cabinet.js). The same search and filters
+         as the computer's grid. -->
+    <div id="cabinet" class="card-overlay sheet-overlay" hidden>
+        <div id="cabinet-panel" class="card-panel sheet-panel" role="dialog" aria-modal="true"
+            aria-labelledby="cabinet-title" tabindex="-1">
+            <div class="computer-head">
+                <h2 id="cabinet-title" class="card-title">The filing cabinet</h2>
+                <button id="cabinet-close" class="office-btn office-btn-small" type="button">Back to the desk</button>
+            </div>
+            <div class="grid-tools">
+                <label for="cabinet-search" class="sr-only">Search the folders</label>
+                <input id="cabinet-search" class="office-input grid-search" type="search"
+                    placeholder="Search to lift the folders that match" autocomplete="off" spellcheck="false">
+                <label for="cabinet-sort" class="grid-sort-label">File by</label>
+                <select id="cabinet-sort" class="office-select"></select>
+            </div>
+            <div id="cabinet-filters" class="grid-filters cabinet-filters" role="group" aria-label="Filters"></div>
+            <p id="cabinet-lifted" class="card-meta cabinet-lifted" role="status" aria-live="polite"></p>
+            <ul id="cabinet-list" class="cabinet-list"></ul>
+        </div>
+    </div>
+
+    <!-- THE CORKBOARD. A sheet docked at the foot of the screen like the
+         cabinet's, so the board stays in view. Cards are dragged between
+         columns on the board itself, and this sheet is the same move for a
+         keyboard: choose a card, choose a column, Move. -->
+    <div id="board" class="card-overlay sheet-overlay" hidden>
+        <div id="board-panel" class="card-panel sheet-panel" role="dialog" aria-modal="true"
+            aria-labelledby="board-title" aria-describedby="board-summary" tabindex="-1">
+            <div class="computer-head">
+                <h2 id="board-title" class="card-title">The pinboard</h2>
+                <button id="board-close" class="office-btn office-btn-small" type="button">Back to the desk</button>
+            </div>
+            <p id="board-summary" class="card-meta"></p>
+            <p class="card-meta board-hint">Drag a card to another column to change its status, or tap or click a card to open its folder.</p>
+            <form id="board-form" class="board-move" novalidate>
+                <label for="board-card">Card</label>
+                <select id="board-card" class="office-select"></select>
+                <label for="board-to">Move to</label>
+                <select id="board-to" class="office-select"></select>
+                <button id="board-move" class="office-btn office-btn-primary office-btn-small" type="submit">Move</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- THE ROLODEX. A sheet docked at the foot of the screen, over the room
+         wherever the visitor stands. The people are this list, as text. -->
+    <div id="rolodex" class="card-overlay sheet-overlay" hidden>
+        <div id="rolodex-panel" class="card-panel sheet-panel" role="dialog" aria-modal="true"
+            aria-labelledby="rolodex-title" aria-describedby="rolodex-count" tabindex="-1">
+            <div class="computer-head">
+                <h2 id="rolodex-title" class="card-title">The Rolodex</h2>
+                <button id="rolodex-close" class="office-btn office-btn-small" type="button">Close</button>
+            </div>
+            <div class="grid-tools">
+                <label for="rolodex-search" class="sr-only">Search the people</label>
+                <input id="rolodex-search" class="office-input grid-search" type="search"
+                    placeholder="Type a name, a company or a title" autocomplete="off" spellcheck="false">
+                <button id="rolodex-new" class="office-btn office-btn-primary office-btn-small" type="button">New contact</button>
+            </div>
+            <p id="rolodex-count" class="card-meta" role="status" aria-live="polite"></p>
+            <ul id="rolodex-list" class="rolodex-list"></ul>
+        </div>
+    </div>
+
+    <!-- THE WHITEBOARD. A sheet docked under the board: its numbers in
+         sentences and tables (a canvas cannot be read aloud), and the weekly
+         goal, which a tap on the board's goal line comes here to change. -->
+    <div id="whiteboard" class="card-overlay sheet-overlay" hidden>
+        <div id="whiteboard-panel" class="card-panel sheet-panel" role="dialog" aria-modal="true"
+            aria-labelledby="whiteboard-title" tabindex="-1">
+            <div class="computer-head">
+                <h2 id="whiteboard-title" class="card-title">The whiteboard</h2>
+                <button id="whiteboard-close" class="office-btn office-btn-small" type="button">Back to the desk</button>
+            </div>
+            <ul id="wb-summary" class="wb-summary"></ul>
+            <p class="grid-week">
+                <label for="wb-goal">Weekly goal</label>
+                <input id="wb-goal" class="office-input grid-goal" type="number" min="1" max="100" inputmode="numeric">
+            </p>
+            <details class="wb-tables">
+                <summary>The numbers as tables</summary>
+                <table class="wb-table">
+                    <caption>How far they got</caption>
+                    <thead><tr><th scope="col">Stage</th><th scope="col">Applications</th></tr></thead>
+                    <tbody id="wb-funnel"></tbody>
+                </table>
+                <table class="wb-table">
+                    <caption>Sent each week</caption>
+                    <thead><tr><th scope="col">Week of</th><th scope="col">Sent</th></tr></thead>
+                    <tbody id="wb-weeks"></tbody>
+                </table>
+            </details>
+        </div>
+    </div>
+
+    <!-- TODAY: what the sticky notes on the monitor say, as a list. -->
+    <div id="today" class="card-overlay" hidden>
+        <div id="today-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="today-title" aria-describedby="today-note" tabindex="-1">
+            <h2 id="today-title" class="card-title">Today</h2>
+            <p id="today-note" class="card-meta"></p>
+            <ul id="today-list" class="folder-list"></ul>
+            <p class="card-meta">A calendar file puts every interview and follow-up coming up into the calendar you
+                already use, each with a reminder, so they find you even when the office is closed.</p>
+            <div class="card-actions">
+                <button id="today-close" class="office-btn" type="button">Close</button>
+                <button id="today-calendar" class="office-btn" type="button">Open the calendar</button>
+                <button id="today-export" class="office-btn office-btn-primary" type="button">Add everything coming up to my calendar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE FOLDER, opened on the desk. Drawn by panels.js renderFolder. -->
+    <div id="folder" class="card-overlay" hidden>
+        <div id="folder-panel" class="card-panel folder-panel" role="dialog" aria-modal="true"
+            aria-labelledby="folder-title" tabindex="-1">
+            <div class="computer-head">
+                <h2 id="folder-title" class="card-title"></h2>
+                <button id="folder-close" class="office-btn office-btn-small" type="button">Close the folder</button>
+            </div>
+            <div id="folder-body" class="folder-body"></div>
+            <div id="folder-actions" class="card-actions"></div>
+        </div>
+    </div>
+
+    <!-- A PERSON, from the Rolodex. Drawn by panels.js renderContact. -->
+    <div id="contact" class="card-overlay" hidden>
+        <div id="contact-panel" class="card-panel folder-panel" role="dialog" aria-modal="true"
+            aria-labelledby="contact-title" tabindex="-1">
+            <div class="computer-head">
+                <h2 id="contact-title" class="card-title"></h2>
+                <button id="contact-close" class="office-btn office-btn-small" type="button">Close</button>
+            </div>
+            <div id="contact-body" class="folder-body"></div>
+            <div id="contact-actions" class="card-actions"></div>
+        </div>
+    </div>
+
+    <!-- THE WASTEBASKET. -->
+    <div id="wastebasket" class="card-overlay" hidden>
+        <div id="wastebasket-panel" class="card-panel" role="dialog" aria-modal="true"
+            aria-labelledby="wastebasket-title" aria-describedby="wastebasket-note" tabindex="-1">
+            <h2 id="wastebasket-title" class="card-title">The wastebasket</h2>
+            <p id="wastebasket-note" class="card-detail"></p>
+            <ul id="wastebasket-list" class="folder-list"></ul>
+            <div class="card-actions">
+                <button id="wastebasket-close" class="office-btn" type="button">Close</button>
+                <button id="wastebasket-empty" class="office-btn office-btn-danger" type="button">Empty the wastebasket</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE OUT-TRAY: backups and exports. Nothing here leaves the device
+         except as a file the visitor chooses to save. -->
+    <div id="outtray" class="card-overlay" hidden>
+        <div id="outtray-panel" class="card-panel" role="dialog" aria-modal="true"
+            aria-labelledby="outtray-title" aria-describedby="outtray-intro" tabindex="-1">
+            <h2 id="outtray-title" class="card-title">The out-tray</h2>
+            <p id="outtray-intro" class="card-detail">Your office lives only in this browser. A backup file
+                keeps it safe and carries it to another device.</p>
+            <div class="outtray-actions">
+                <button id="outtray-backup" class="office-btn office-btn-primary" type="button">Save a backup</button>
+                <button id="outtray-csv" class="office-btn" type="button">Export applications for a spreadsheet</button>
+                <button id="outtray-ics" class="office-btn" type="button">Add everything coming up to my calendar</button>
+                <button id="outtray-print" class="office-btn" type="button">Print a prep sheet</button>
+                <label for="outtray-restore" class="office-btn office-file">Restore from a backup</label>
+                <input id="outtray-restore" class="sr-only" type="file" accept="application/json,.json">
+            </div>
+            <p id="outtray-note" class="card-meta" role="status"></p>
+            <div class="card-actions">
+                <button id="outtray-close" class="office-btn" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE PRINTER: a one-page prep sheet for an application. -->
+    <div id="printer" class="card-overlay" hidden>
+        <div id="printer-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="printer-title" aria-describedby="printer-intro" tabindex="-1">
+            <h2 id="printer-title" class="card-title">The printer</h2>
+            <p id="printer-intro" class="card-detail">A one-page prep sheet for an interview: the company, the people you
+                will meet, what has happened so far, your notes, and room for your questions. Your browser's print
+                dialog can also save it as a PDF.</p>
+            <div id="printer-choose" class="form-row">
+                <label for="printer-app">Which application</label>
+                <select id="printer-app" class="office-select"></select>
+            </div>
+            <p id="printer-empty" class="card-meta" hidden>There is nothing to print yet. A prep sheet is made from an
+                application, so add one first and it will be here.</p>
+            <div class="card-actions">
+                <button id="printer-close" class="office-btn" type="button">Close</button>
+                <button id="printer-print" class="office-btn office-btn-primary" type="button">Print</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SETTINGS. -->
+    <div id="settings" class="card-overlay" hidden>
+        <div id="settings-panel" class="card-panel" role="dialog" aria-modal="true"
+            aria-labelledby="settings-title" tabindex="-1">
+            <h2 id="settings-title" class="card-title">Settings</h2>
+            <form id="settings-form" class="office-form" novalidate>
+                <div class="form-row">
+                    <label for="set-goal">Applications to send each week</label>
+                    <input id="set-goal" class="office-input" type="number" inputmode="numeric" required>
+                </div>
+                <div class="form-row">
+                    <label for="set-followup">Days before a follow-up reminder</label>
+                    <input id="set-followup" class="office-input" type="number" inputmode="numeric" required>
+                </div>
+                <div class="form-row">
+                    <label for="set-ghost">Days of silence before an application has gone quiet</label>
+                    <input id="set-ghost" class="office-input" type="number" inputmode="numeric" required>
+                </div>
+                <div class="card-actions">
+                    <button id="settings-save" class="office-btn office-btn-primary" type="submit">Save settings</button>
+                </div>
+            </form>
+            <h3 class="card-subtitle">Sample records</h3>
+            <p class="card-meta">Samples are invented companies and people, there to show the office full.
+                They are marked Sample everywhere, and clearing them leaves your own records alone.</p>
+            <div class="card-actions">
+                <button id="settings-stock" class="office-btn" type="button">Stock the office with samples</button>
+                <button id="settings-clear-samples" class="office-btn" type="button" hidden>Clear the samples</button>
+            </div>
+            <h3 class="card-subtitle">Start over</h3>
+            <div class="card-actions">
+                <button id="settings-clear-all" class="office-btn office-btn-danger" type="button">Clear the whole office</button>
+                <button id="settings-close" class="office-btn" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE APPLICATION FORM. A new application shows only the first two
+         boxes and the follow-up offer, with everything else under More
+         details: two boxes and Enter is the whole of quick add. -->
+    <div id="application-form" class="card-overlay" hidden>
+        <div id="application-form-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="application-form-title" tabindex="-1">
+            <h2 id="application-form-title" class="card-title">New application</h2>
+            <form id="af-form" class="office-form" novalidate>
+                <div class="form-row">
+                    <label for="af-company">Company</label>
+                    <input id="af-company" class="office-input" type="text" autocomplete="organization">
+                </div>
+                <div class="form-row">
+                    <label for="af-role">Role</label>
+                    <input id="af-role" class="office-input" type="text" autocomplete="off">
+                </div>
+                <div id="af-follow-row" class="form-row form-check">
+                    <input id="af-follow" type="checkbox" checked>
+                    <label id="af-follow-text" for="af-follow">Remind me to follow up</label>
+                </div>
+                <details id="af-more" class="form-more">
+                    <summary>More details</summary>
+                    <div id="af-status-row" class="form-row">
+                        <label for="af-status">Status</label>
+                        <select id="af-status" class="office-select"></select>
+                    </div>
+                    <div class="form-row">
+                        <label for="af-applied">Applied on</label>
+                        <input id="af-applied" class="office-input" type="date">
+                    </div>
+                    <div class="form-row">
+                        <label for="af-posting">The job posting</label>
+                        <textarea id="af-posting" class="office-input" rows="4"
+                            placeholder="Paste the whole posting here. It is kept just as it is."></textarea>
+                        <p id="af-found" class="form-found" hidden>
+                            <span id="af-found-text"></span>
+                            <button id="af-use-found" class="office-btn office-btn-small" type="button">Use these</button>
+                        </p>
+                    </div>
+                    <div class="form-row">
+                        <label for="af-url">Link to the posting</label>
+                        <input id="af-url" class="office-input" type="url" inputmode="url" autocomplete="off">
+                    </div>
+                    <div class="form-row">
+                        <label for="af-source">Found through</label>
+                        <input id="af-source" class="office-input" type="text" placeholder="A referral, a job board, a recruiter">
+                    </div>
+                    <div class="form-row">
+                        <label for="af-location">Location</label>
+                        <input id="af-location" class="office-input" type="text">
+                    </div>
+                    <div class="form-row">
+                        <label for="af-workmode">Where the work happens</label>
+                        <select id="af-workmode" class="office-select"></select>
+                    </div>
+                    <fieldset class="form-row form-salary">
+                        <legend>Salary</legend>
+                        <label for="af-salary-min">From</label>
+                        <input id="af-salary-min" class="office-input" type="number" min="0" inputmode="numeric">
+                        <label for="af-salary-max">To</label>
+                        <input id="af-salary-max" class="office-input" type="number" min="0" inputmode="numeric">
+                        <label for="af-period">Per</label>
+                        <select id="af-period" class="office-select"></select>
+                        <label for="af-currency">Currency</label>
+                        <input id="af-currency" class="office-input form-currency" type="text" maxlength="3" autocomplete="off">
+                    </fieldset>
+                    <div class="form-row">
+                        <label for="af-notes">Notes</label>
+                        <textarea id="af-notes" class="office-input" rows="3"></textarea>
+                    </div>
+                </details>
+                <p id="af-error" class="form-error" role="alert" hidden></p>
+                <div class="card-actions">
+                    <button id="af-cancel" class="office-btn" type="button">Cancel</button>
+                    <button id="af-save" class="office-btn office-btn-primary" type="submit">Save application</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- THE EVENT FORM: a call, a screen, an interview, an offer. -->
+    <div id="event-form" class="card-overlay" hidden>
+        <div id="event-form-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="event-form-title" aria-describedby="event-form-about" tabindex="-1">
+            <h2 id="event-form-title" class="card-title">Log an event</h2>
+            <p id="event-form-about" class="card-meta"></p>
+            <form id="ef-form" class="office-form" novalidate>
+                <div class="form-row">
+                    <label for="ef-type">What kind</label>
+                    <select id="ef-type" class="office-select"></select>
+                </div>
+                <div class="form-row">
+                    <label for="ef-at">When</label>
+                    <input id="ef-at" class="office-input" type="datetime-local">
+                </div>
+                <div class="form-row">
+                    <label for="ef-title">A short description</label>
+                    <input id="ef-title" class="office-input" type="text" placeholder="Panel with the design team">
+                </div>
+                <div class="form-row form-pair">
+                    <div>
+                        <label for="ef-duration">Minutes</label>
+                        <input id="ef-duration" class="office-input" type="number" min="1" inputmode="numeric">
+                    </div>
+                    <div>
+                        <label for="ef-round">Round</label>
+                        <input id="ef-round" class="office-input" type="number" min="1" inputmode="numeric">
+                    </div>
+                </div>
+                <fieldset id="ef-with-row" class="form-row form-with" hidden>
+                    <legend>Who was there</legend>
+                    <div id="ef-with" class="form-with-list"></div>
+                </fieldset>
+                <div class="form-row">
+                    <label for="ef-outcome">How it went</label>
+                    <select id="ef-outcome" class="office-select"></select>
+                </div>
+                <div class="form-row">
+                    <label for="ef-notes">Notes</label>
+                    <textarea id="ef-notes" class="office-input" rows="3"></textarea>
+                </div>
+                <p id="ef-error" class="form-error" role="alert" hidden></p>
+                <div class="card-actions">
+                    <button id="ef-cancel" class="office-btn" type="button">Cancel</button>
+                    <button id="ef-save" class="office-btn office-btn-primary" type="submit">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- THE FOLLOW-UP FORM. -->
+    <div id="task-form" class="card-overlay" hidden>
+        <div id="task-form-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="task-form-title" aria-describedby="task-form-about" tabindex="-1">
+            <h2 id="task-form-title" class="card-title">Add a follow-up</h2>
+            <p id="task-form-about" class="card-meta"></p>
+            <form id="tf-form" class="office-form" novalidate>
+                <div class="form-row">
+                    <label for="tf-text">What to do</label>
+                    <input id="tf-text" class="office-input" type="text" placeholder="Send a thank-you note">
+                </div>
+                <div class="form-row">
+                    <label for="tf-due">When</label>
+                    <input id="tf-due" class="office-input" type="date">
+                </div>
+                <p id="tf-error" class="form-error" role="alert" hidden></p>
+                <div class="card-actions">
+                    <button id="tf-cancel" class="office-btn" type="button">Cancel</button>
+                    <button id="tf-save" class="office-btn office-btn-primary" type="submit">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- THE CONTACT FORM. Opened from the Rolodex, a folder's People, or a
+         contact's own card. -->
+    <div id="contact-form" class="card-overlay" hidden>
+        <div id="contact-form-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="contact-form-title" aria-describedby="contact-form-about" tabindex="-1">
+            <h2 id="contact-form-title" class="card-title">New contact</h2>
+            <p id="contact-form-about" class="card-meta"></p>
+            <form id="cf-form" class="office-form" novalidate>
+                <div class="form-row">
+                    <label for="cf-name">Name</label>
+                    <input id="cf-name" class="office-input" type="text" autocomplete="off">
+                </div>
+                <div class="form-row form-pair">
+                    <div>
+                        <label for="cf-title">Title</label>
+                        <input id="cf-title" class="office-input" type="text" placeholder="Recruiter" autocomplete="off">
+                    </div>
+                    <div>
+                        <label for="cf-company">Company</label>
+                        <input id="cf-company" class="office-input" type="text" autocomplete="off">
+                    </div>
+                </div>
+                <div class="form-row form-pair">
+                    <div>
+                        <label for="cf-email">Email</label>
+                        <input id="cf-email" class="office-input" type="email" inputmode="email" autocomplete="off">
+                    </div>
+                    <div>
+                        <label for="cf-phone">Phone</label>
+                        <input id="cf-phone" class="office-input" type="tel" inputmode="tel" autocomplete="off">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label for="cf-linkedin">LinkedIn</label>
+                    <input id="cf-linkedin" class="office-input" type="url" inputmode="url" autocomplete="off">
+                </div>
+                <div class="form-row">
+                    <label for="cf-notes">Notes</label>
+                    <textarea id="cf-notes" class="office-input" rows="3" placeholder="How you met, what you talked about"></textarea>
+                </div>
+                <p id="cf-error" class="form-error" role="alert" hidden></p>
+                <div class="card-actions">
+                    <button id="cf-cancel" class="office-btn" type="button">Cancel</button>
+                    <button id="cf-save" class="office-btn office-btn-primary" type="submit">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- THE CONFIRMATION CARD, last, so it stacks over everything. -->
+    <div id="confirm" class="card-overlay" hidden>
+        <div id="confirm-panel" class="card-panel" role="dialog" aria-modal="true"
+            aria-labelledby="confirm-title" aria-describedby="confirm-detail" tabindex="-1">
+            <h2 id="confirm-title" class="card-title"></h2>
+            <p id="confirm-detail" class="card-detail"></p>
+            <div id="confirm-actions" class="card-actions"></div>
+        </div>
+    </div>
+
+    <!-- THE PREP SHEET, filled by panels.js renderPrintSheet and shown only
+         on paper: a print stylesheet hides everything else. -->
+    <section id="print-sheet" class="print-sheet" aria-hidden="true"></section>
+
+    <script src="../lib/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

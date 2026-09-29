@@ -46,6 +46,7 @@ const PERSISTENT = {
     'www/js/theme.js': 'the light or dark theme choice',
     'www/garden/js/main.js': 'the visitor’s saved garden',
     'www/earthdefense/js/main.js': 'sound and control settings',
+    'www/office/js/store.js': 'the visitor’s job search in Corner Office',
     'www/shared/js/gamestate-1.0.0.js': 'a best score',
     'www/xo/js/audio.js': 'whether sound is muted',
     'www/xo/js/playbook-ui.js': 'the last play called and the chosen defense',
@@ -99,8 +100,12 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // the two experiences whose stores a visitor would actually care about.
     expect(text).toMatch(/Fractal Garden saves your garden/i);
     expect(text).toMatch(/Earth Defense saves your best score/i);
-    // The Auto jump switch in X's and O's (2026-09-23), the newest store.
+    // The Auto jump switch in X's and O's (2026-09-23).
     expect(text).toMatch(/whether you turned on Auto jump/i);
+    // Corner Office (released 2026-09-28): the store a visitor would care
+    // about most, a whole job search, and that none of it is sent.
+    expect(text).toMatch(/Corner Office keeps everything you enter/i);
+    expect(text).toMatch(/never anything you typed/i);
 
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.

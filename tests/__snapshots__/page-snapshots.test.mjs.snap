@@ -2358,42 +2358,48 @@ html [lang="en"]
               {
                 "@type": "ListItem",
                 "position": 1,
+                "url": "https://www.scenexp.com/office/",
+                "name": "Corner Office"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
                 "url": "https://www.scenexp.com/tornado/",
                 "name": "Tornado Alley"
               },
               {
                 "@type": "ListItem",
-                "position": 2,
+                "position": 3,
                 "url": "https://www.scenexp.com/xo/",
                 "name": "X's and O's"
               },
               {
                 "@type": "ListItem",
-                "position": 3,
+                "position": 4,
                 "url": "https://www.scenexp.com/garden/",
                 "name": "Fractal Garden"
               },
               {
                 "@type": "ListItem",
-                "position": 4,
+                "position": 5,
                 "url": "https://www.scenexp.com/highwater/",
                 "name": "High Water"
               },
               {
                 "@type": "ListItem",
-                "position": 5,
+                "position": 6,
                 "url": "https://www.scenexp.com/earthdefense/",
                 "name": "Earth Defense"
               },
               {
                 "@type": "ListItem",
-                "position": 6,
+                "position": 7,
                 "url": "https://www.scenexp.com/mandelbrot/",
                 "name": "The Mandelbrot Set"
               },
               {
                 "@type": "ListItem",
-                "position": 7,
+                "position": 8,
                 "url": "https://www.scenexp.com/steve/",
                 "name": "Steve's Home Office"
               }
@@ -2529,9 +2535,21 @@ html [lang="en"]
             h2#worlds-and-games
               "Worlds and games"
             ul.experience-grid
+              li.experience-card [data-slug="office"]
+                a [href="/office/"]
+                  img [alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." decoding="async" fetchpriority="high" height="630" loading="eager" src="/office/assets/og-office.webp?v=1" width="1200"]
+                  div.experience-card-body
+                    p.experience-eyebrow
+                      "A job search tracker in a 3D office"
+                    h3
+                      "Corner Office"
+                    p
+                      "A working job search tracker in a corner office forty floors above the bay. Your applications, interviews and follow-ups fill the furniture, every application you send earns a firework over the water, and every record stays private in your own browser. Lift the binoculars and you might spot the orcas."
+                    span.experience-cta
+                      "Step into the office →"
               li.experience-card [data-slug="tornado"]
                 a [href="/tornado/"]
-                  img [alt="A pale tornado reaching down from a dark, turning storm base to a cloud of dust and flying debris, just left of a small farm with a red barn, across golden fields with wildflowers in the foreground." decoding="async" fetchpriority="high" height="630" loading="eager" src="/tornado/assets/og-tornado.webp?v=1" width="1200"]
+                  img [alt="A pale tornado reaching down from a dark, turning storm base to a cloud of dust and flying debris, just left of a small farm with a red barn, across golden fields with wildflowers in the foreground." decoding="async" height="630" loading="lazy" src="/tornado/assets/og-tornado.webp?v=1" width="1200"]
                   div.experience-card-body
                     p.experience-eyebrow
                       "A storm chaser's view of a tornado"
@@ -2742,7 +2760,7 @@ html [lang="en"]
                 a [href="#worlds-and-games"]
                   "Worlds and games"
               p
-                "The ones built for their own sake. Call the plays in a game of football, defend Earth from a Martian fleet, dive hundreds of billions of times deep into the Mandelbrot set, watch a modelled ocean shoal and break on a measured beach, or plant a garden of fractal trees and tend it through the seasons."
+                "The ones built for their own sake. Keep your job search in a corner office above the bay, call the plays in a game of football, defend Earth from a Martian fleet, dive hundreds of billions of times deep into the Mandelbrot set, watch a modeled ocean shoal and break on a measured beach, or plant a garden of fractal trees and tend it through the seasons."
             li.audience-card
               h3
                 a [href="#small-business-tributes"]
@@ -3418,6 +3436,651 @@ html [data-ui-theme="ember" lang="en"]
     script [src="js/main.min.js" type="module"]"
 `;
 
+exports[`www/office/index.html 1`] = `
+"<!doctype html>
+html [lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="A job search tracker that lives in a 3D office. Your applications, interviews, contacts and follow-ups fill the furniture, and every record stays private in your own browser." name="description"]
+    meta [content="#141517" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/office/" rel="canonical"]
+    meta [content="Corner Office" property="og:title"]
+    meta [content="A job search tracker that lives in a 3D office, and keeps every record private in your own browser." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/office/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/office/assets/og-office.jpg?v=2" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Corner Office" name="twitter:title"]
+    meta [content="A job search tracker that lives in a 3D office, and keeps every record private in your own browser." name="twitter:description"]
+    meta [content="https://www.scenexp.com/office/assets/og-office.jpg?v=2" name="twitter:image"]
+    meta [content="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "@id": "https://www.scenexp.com/office/#app",
+        "url": "https://www.scenexp.com/office/",
+        "name": "Corner Office",
+        "image": "https://www.scenexp.com/office/assets/og-office.jpg?v=2",
+        "description": "A browser-based job search tracker set in a 3D office. Applications, interviews, contacts and follow-ups are entered, searched, sorted and filtered on screen, and shown in the furniture of the room. Every record stays in the visitor's own browser.",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript and WebGL",
+        "inLanguage": "en-US",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "Steve Noll"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Continuum Commerce LLC"
+        },
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    title
+      "Corner Office"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=4" rel="preload"]
+    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="favicon.svg" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="css/experience.min.css?v=4" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body
+    h1.sr-only
+      "Corner Office"
+    noscript
+      div.noscript-fallback
+        h1
+          "Corner Office"
+        p
+          "This is a job search tracker set in a 3D office, and it needs JavaScript to run. Your applications, interviews, contacts and follow-ups are kept in the furniture of the room, where you can add, search, sort and filter them."
+        p
+          "Everything you enter stays in your own browser and is never sent anywhere."
+        p
+          "SceneXP is a home for 3D experiences that run right in your browser."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/contact.html"]
+                "Contact the developer"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    div#loading-screen
+      div.loader-content
+        div.loader-title
+          "CORNER OFFICE"
+        div.loader-bar [aria-hidden="true"]
+          div.loader-progress#load-progress
+        div.loader-status#load-status [aria-live="polite" role="status"]
+          "Loading…"
+    canvas#game-canvas [aria-label="A corner office forty floors up, walled with windows onto a city by the bay, with an observation wheel turning on the waterfront and snowy mountains beyond, under an exposed concrete ceiling. A slim white desk holds a computer with sticky notes on it, a keyboard and mouse, and a slim lamp, with a wastebasket beside it. A low white filing cabinet of folders stands under the window beside a printer, a fabric pinboard of index cards and a glass whiteboard of numbers hang on the walls, and a pair of binoculars on a tripod stands by the windows beside the chair." role="img"]
+    p#office-live.sr-only [aria-live="polite" role="status"]
+    div#office-hud.ui-float.office-hud [aria-label="Your week" role="group"]
+      span#hud-week.hud-chip
+      button#hud-due.hud-chip.hud-chip-due [hidden type="button"]
+        "Due today"
+      span#hud-clock.hud-chip [aria-hidden="true" hidden]
+    nav#office-bar.ui-float.office-bar [aria-label="The office"]
+      button#bar-binoculars.office-btn.office-btn-primary [hidden title="Put down the binoculars (Escape)" type="button"]
+        "Put down the binoculars"
+      button#bar-new.office-btn.office-btn-primary [title="New application (N)" type="button"]
+        "New application"
+      button#bar-computer.office-btn [title="Open the computer (C)" type="button"]
+        "Computer"
+      button#bar-places.office-btn [aria-controls="places-menu" aria-expanded="false" type="button"]
+        "Places"
+      button#bar-day.office-btn [type="button"]
+        "Watch a day go by"
+      button#bar-outtray.office-btn [title="Backups and exports" type="button"]
+        "Out-tray"
+      button#bar-wastebasket.office-btn [type="button"]
+        "Wastebasket"
+      button#bar-settings.office-btn [type="button"]
+        "Settings"
+      button#bar-undo.office-btn [disabled title="Undo (Ctrl or Command and Z)" type="button"]
+        "Undo"
+    div#places-menu.places-menu [aria-label="Places in the office" hidden role="group"]
+    div#office-toast.office-toast [hidden]
+      span#toast-text
+      button#toast-undo.office-btn.office-btn-small [hidden type="button"]
+        "Undo"
+    div#welcome.card-overlay [hidden]
+      div#welcome-panel.card-panel.welcome-panel [aria-describedby="welcome-intro" aria-labelledby="welcome-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#welcome-title.card-title
+          "Corner Office"
+        p#welcome-intro.card-detail
+          "A job search tracker that lives in a 3D office. Your applications, interviews and follow-ups fill the furniture, and everything you enter stays in this browser and goes nowhere else."
+        p#welcome-look.card-meta
+          "Drag to look around, and scroll or pinch to zoom. The arrow keys and the + and − keys do the same."
+        p#welcome-resume.card-meta [hidden]
+        p#storage-note.storage-note
+        div#welcome-actions.card-actions
+        p.welcome-explore-row
+          a#explore-link.welcome-explore [href="/"]
+            "More 3D worlds to explore at SceneXP.com"
+    div#computer.card-overlay.computer-overlay [hidden]
+      div#computer-panel.card-panel.computer-panel [aria-labelledby="computer-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.computer-head
+          h2#computer-title.card-title
+            "Applications"
+          button#computer-close.office-btn.office-btn-small [type="button"]
+            "Back to the desk"
+        div.grid-summary
+          p#grid-count.grid-count
+          p.grid-week
+            span#grid-week
+            label [for="grid-goal"]
+              "Weekly goal"
+            input#grid-goal.office-input.grid-goal [inputmode="numeric" max="100" min="1" type="number"]
+        div.grid-tools
+          label.sr-only [for="grid-search"]
+            "Search every application"
+          input#grid-search.office-input.grid-search [autocomplete="off" placeholder="Search companies, roles, notes and postings" spellcheck="false" type="search"]
+          label.grid-sort-label [for="grid-sort"]
+            "Sort by"
+          select#grid-sort.office-select
+          button#grid-dir.office-btn.office-btn-small [aria-label="Reverse the order" type="button"]
+            "↓"
+          button#grid-new.office-btn.office-btn-primary.office-btn-small [type="button"]
+            "New application"
+        div.grid-filter-row
+          div#grid-filters.grid-filters [aria-label="Filters" role="group"]
+          button#grid-clear.office-btn.office-btn-small [hidden type="button"]
+            "Clear the search and filters"
+        div.grid-scroll
+          table#grid-table.grid-table
+            caption.sr-only
+              "Your applications"
+            thead
+              tr
+                th#grid-h-company [aria-sort="none" scope="col"]
+                  button#grid-sort-company.grid-sort [type="button"]
+                    "Company"
+                th#grid-h-role [scope="col"]
+                  "Role"
+                th#grid-h-people [scope="col"]
+                  "People"
+                th#grid-h-status [aria-sort="none" scope="col"]
+                  button#grid-sort-status.grid-sort [type="button"]
+                    "Status"
+                th#grid-h-applied [aria-sort="none" scope="col"]
+                  button#grid-sort-applied.grid-sort [type="button"]
+                    "Applied"
+                th#grid-h-next [scope="col"]
+                  "Next up"
+                th#grid-h-salary [aria-sort="none" scope="col"]
+                  button#grid-sort-salary.grid-sort [type="button"]
+                    "Salary"
+                th#grid-h-activity [aria-sort="none" scope="col"]
+                  button#grid-sort-activity.grid-sort [type="button"]
+                    "Last activity"
+            tbody#grid-body
+          div#grid-empty.grid-empty [hidden]
+            p#grid-empty-text
+            div#grid-empty-actions.card-actions
+    div#calendar.card-overlay [hidden]
+      div#calendar-panel.card-panel.calendar-panel [aria-labelledby="calendar-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.computer-head
+          h2#calendar-title.card-title
+            "Calendar"
+          button#calendar-close.office-btn.office-btn-small [type="button"]
+            "Close"
+        div.cal-nav
+          button#cal-prev.office-btn.office-btn-small [type="button"]
+            "Previous month"
+          button#cal-this.office-btn.office-btn-small [type="button"]
+            "This month"
+          button#cal-next.office-btn.office-btn-small [type="button"]
+            "Next month"
+        table.cal-table
+          caption.sr-only
+            "The days of the month. The arrow keys move between days."
+          thead
+            tr
+              th [abbr="Monday" scope="col"]
+                "Mon"
+              th [abbr="Tuesday" scope="col"]
+                "Tue"
+              th [abbr="Wednesday" scope="col"]
+                "Wed"
+              th [abbr="Thursday" scope="col"]
+                "Thu"
+              th [abbr="Friday" scope="col"]
+                "Fri"
+              th [abbr="Saturday" scope="col"]
+                "Sat"
+              th [abbr="Sunday" scope="col"]
+                "Sun"
+          tbody#cal-body
+        p.cal-key [aria-hidden="true"]
+          span.cal-dot
+          "An event"
+          span.cal-ring
+          "A follow-up"
+        h3#cal-day-title.card-subtitle
+        ul#cal-day-list.folder-list
+        div.card-actions
+          button#cal-export.office-btn [type="button"]
+            "Add everything coming up to my calendar"
+    div#cabinet.card-overlay.sheet-overlay [hidden]
+      div#cabinet-panel.card-panel.sheet-panel [aria-labelledby="cabinet-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.computer-head
+          h2#cabinet-title.card-title
+            "The filing cabinet"
+          button#cabinet-close.office-btn.office-btn-small [type="button"]
+            "Back to the desk"
+        div.grid-tools
+          label.sr-only [for="cabinet-search"]
+            "Search the folders"
+          input#cabinet-search.office-input.grid-search [autocomplete="off" placeholder="Search to lift the folders that match" spellcheck="false" type="search"]
+          label.grid-sort-label [for="cabinet-sort"]
+            "File by"
+          select#cabinet-sort.office-select
+        div#cabinet-filters.grid-filters.cabinet-filters [aria-label="Filters" role="group"]
+        p#cabinet-lifted.card-meta.cabinet-lifted [aria-live="polite" role="status"]
+        ul#cabinet-list.cabinet-list
+    div#board.card-overlay.sheet-overlay [hidden]
+      div#board-panel.card-panel.sheet-panel [aria-describedby="board-summary" aria-labelledby="board-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.computer-head
+          h2#board-title.card-title
+            "The pinboard"
+          button#board-close.office-btn.office-btn-small [type="button"]
+            "Back to the desk"
+        p#board-summary.card-meta
+        p.card-meta.board-hint
+          "Drag a card to another column to change its status, or tap or click a card to open its folder."
+        form#board-form.board-move [novalidate]
+          label [for="board-card"]
+            "Card"
+          select#board-card.office-select
+          label [for="board-to"]
+            "Move to"
+          select#board-to.office-select
+          button#board-move.office-btn.office-btn-primary.office-btn-small [type="submit"]
+            "Move"
+    div#rolodex.card-overlay.sheet-overlay [hidden]
+      div#rolodex-panel.card-panel.sheet-panel [aria-describedby="rolodex-count" aria-labelledby="rolodex-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.computer-head
+          h2#rolodex-title.card-title
+            "The Rolodex"
+          button#rolodex-close.office-btn.office-btn-small [type="button"]
+            "Close"
+        div.grid-tools
+          label.sr-only [for="rolodex-search"]
+            "Search the people"
+          input#rolodex-search.office-input.grid-search [autocomplete="off" placeholder="Type a name, a company or a title" spellcheck="false" type="search"]
+          button#rolodex-new.office-btn.office-btn-primary.office-btn-small [type="button"]
+            "New contact"
+        p#rolodex-count.card-meta [aria-live="polite" role="status"]
+        ul#rolodex-list.rolodex-list
+    div#whiteboard.card-overlay.sheet-overlay [hidden]
+      div#whiteboard-panel.card-panel.sheet-panel [aria-labelledby="whiteboard-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.computer-head
+          h2#whiteboard-title.card-title
+            "The whiteboard"
+          button#whiteboard-close.office-btn.office-btn-small [type="button"]
+            "Back to the desk"
+        ul#wb-summary.wb-summary
+        p.grid-week
+          label [for="wb-goal"]
+            "Weekly goal"
+          input#wb-goal.office-input.grid-goal [inputmode="numeric" max="100" min="1" type="number"]
+        details.wb-tables
+          summary
+            "The numbers as tables"
+          table.wb-table
+            caption
+              "How far they got"
+            thead
+              tr
+                th [scope="col"]
+                  "Stage"
+                th [scope="col"]
+                  "Applications"
+            tbody#wb-funnel
+          table.wb-table
+            caption
+              "Sent each week"
+            thead
+              tr
+                th [scope="col"]
+                  "Week of"
+                th [scope="col"]
+                  "Sent"
+            tbody#wb-weeks
+    div#today.card-overlay [hidden]
+      div#today-panel.card-panel.form-panel [aria-describedby="today-note" aria-labelledby="today-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#today-title.card-title
+          "Today"
+        p#today-note.card-meta
+        ul#today-list.folder-list
+        p.card-meta
+          "A calendar file puts every interview and follow-up coming up into the calendar you already use, each with a reminder, so they find you even when the office is closed."
+        div.card-actions
+          button#today-close.office-btn [type="button"]
+            "Close"
+          button#today-calendar.office-btn [type="button"]
+            "Open the calendar"
+          button#today-export.office-btn.office-btn-primary [type="button"]
+            "Add everything coming up to my calendar"
+    div#folder.card-overlay [hidden]
+      div#folder-panel.card-panel.folder-panel [aria-labelledby="folder-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.computer-head
+          h2#folder-title.card-title
+          button#folder-close.office-btn.office-btn-small [type="button"]
+            "Close the folder"
+        div#folder-body.folder-body
+        div#folder-actions.card-actions
+    div#contact.card-overlay [hidden]
+      div#contact-panel.card-panel.folder-panel [aria-labelledby="contact-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.computer-head
+          h2#contact-title.card-title
+          button#contact-close.office-btn.office-btn-small [type="button"]
+            "Close"
+        div#contact-body.folder-body
+        div#contact-actions.card-actions
+    div#wastebasket.card-overlay [hidden]
+      div#wastebasket-panel.card-panel [aria-describedby="wastebasket-note" aria-labelledby="wastebasket-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#wastebasket-title.card-title
+          "The wastebasket"
+        p#wastebasket-note.card-detail
+        ul#wastebasket-list.folder-list
+        div.card-actions
+          button#wastebasket-close.office-btn [type="button"]
+            "Close"
+          button#wastebasket-empty.office-btn.office-btn-danger [type="button"]
+            "Empty the wastebasket"
+    div#outtray.card-overlay [hidden]
+      div#outtray-panel.card-panel [aria-describedby="outtray-intro" aria-labelledby="outtray-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#outtray-title.card-title
+          "The out-tray"
+        p#outtray-intro.card-detail
+          "Your office lives only in this browser. A backup file keeps it safe and carries it to another device."
+        div.outtray-actions
+          button#outtray-backup.office-btn.office-btn-primary [type="button"]
+            "Save a backup"
+          button#outtray-csv.office-btn [type="button"]
+            "Export applications for a spreadsheet"
+          button#outtray-ics.office-btn [type="button"]
+            "Add everything coming up to my calendar"
+          button#outtray-print.office-btn [type="button"]
+            "Print a prep sheet"
+          label.office-btn.office-file [for="outtray-restore"]
+            "Restore from a backup"
+          input#outtray-restore.sr-only [accept="application/json,.json" type="file"]
+        p#outtray-note.card-meta [role="status"]
+        div.card-actions
+          button#outtray-close.office-btn [type="button"]
+            "Close"
+    div#printer.card-overlay [hidden]
+      div#printer-panel.card-panel.form-panel [aria-describedby="printer-intro" aria-labelledby="printer-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#printer-title.card-title
+          "The printer"
+        p#printer-intro.card-detail
+          "A one-page prep sheet for an interview: the company, the people you will meet, what has happened so far, your notes, and room for your questions. Your browser's print dialog can also save it as a PDF."
+        div#printer-choose.form-row
+          label [for="printer-app"]
+            "Which application"
+          select#printer-app.office-select
+        p#printer-empty.card-meta [hidden]
+          "There is nothing to print yet. A prep sheet is made from an application, so add one first and it will be here."
+        div.card-actions
+          button#printer-close.office-btn [type="button"]
+            "Close"
+          button#printer-print.office-btn.office-btn-primary [type="button"]
+            "Print"
+    div#settings.card-overlay [hidden]
+      div#settings-panel.card-panel [aria-labelledby="settings-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#settings-title.card-title
+          "Settings"
+        form#settings-form.office-form [novalidate]
+          div.form-row
+            label [for="set-goal"]
+              "Applications to send each week"
+            input#set-goal.office-input [inputmode="numeric" required type="number"]
+          div.form-row
+            label [for="set-followup"]
+              "Days before a follow-up reminder"
+            input#set-followup.office-input [inputmode="numeric" required type="number"]
+          div.form-row
+            label [for="set-ghost"]
+              "Days of silence before an application has gone quiet"
+            input#set-ghost.office-input [inputmode="numeric" required type="number"]
+          div.card-actions
+            button#settings-save.office-btn.office-btn-primary [type="submit"]
+              "Save settings"
+        h3.card-subtitle
+          "Sample records"
+        p.card-meta
+          "Samples are invented companies and people, there to show the office full. They are marked Sample everywhere, and clearing them leaves your own records alone."
+        div.card-actions
+          button#settings-stock.office-btn [type="button"]
+            "Stock the office with samples"
+          button#settings-clear-samples.office-btn [hidden type="button"]
+            "Clear the samples"
+        h3.card-subtitle
+          "Start over"
+        div.card-actions
+          button#settings-clear-all.office-btn.office-btn-danger [type="button"]
+            "Clear the whole office"
+          button#settings-close.office-btn [type="button"]
+            "Close"
+    div#application-form.card-overlay [hidden]
+      div#application-form-panel.card-panel.form-panel [aria-labelledby="application-form-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#application-form-title.card-title
+          "New application"
+        form#af-form.office-form [novalidate]
+          div.form-row
+            label [for="af-company"]
+              "Company"
+            input#af-company.office-input [autocomplete="organization" type="text"]
+          div.form-row
+            label [for="af-role"]
+              "Role"
+            input#af-role.office-input [autocomplete="off" type="text"]
+          div#af-follow-row.form-row.form-check
+            input#af-follow [checked type="checkbox"]
+            label#af-follow-text [for="af-follow"]
+              "Remind me to follow up"
+          details#af-more.form-more
+            summary
+              "More details"
+            div#af-status-row.form-row
+              label [for="af-status"]
+                "Status"
+              select#af-status.office-select
+            div.form-row
+              label [for="af-applied"]
+                "Applied on"
+              input#af-applied.office-input [type="date"]
+            div.form-row
+              label [for="af-posting"]
+                "The job posting"
+              textarea#af-posting.office-input [placeholder="Paste the whole posting here. It is kept just as it is." rows="4"]
+              p#af-found.form-found [hidden]
+                span#af-found-text
+                button#af-use-found.office-btn.office-btn-small [type="button"]
+                  "Use these"
+            div.form-row
+              label [for="af-url"]
+                "Link to the posting"
+              input#af-url.office-input [autocomplete="off" inputmode="url" type="url"]
+            div.form-row
+              label [for="af-source"]
+                "Found through"
+              input#af-source.office-input [placeholder="A referral, a job board, a recruiter" type="text"]
+            div.form-row
+              label [for="af-location"]
+                "Location"
+              input#af-location.office-input [type="text"]
+            div.form-row
+              label [for="af-workmode"]
+                "Where the work happens"
+              select#af-workmode.office-select
+            fieldset.form-row.form-salary
+              legend
+                "Salary"
+              label [for="af-salary-min"]
+                "From"
+              input#af-salary-min.office-input [inputmode="numeric" min="0" type="number"]
+              label [for="af-salary-max"]
+                "To"
+              input#af-salary-max.office-input [inputmode="numeric" min="0" type="number"]
+              label [for="af-period"]
+                "Per"
+              select#af-period.office-select
+              label [for="af-currency"]
+                "Currency"
+              input#af-currency.office-input.form-currency [autocomplete="off" maxlength="3" type="text"]
+            div.form-row
+              label [for="af-notes"]
+                "Notes"
+              textarea#af-notes.office-input [rows="3"]
+          p#af-error.form-error [hidden role="alert"]
+          div.card-actions
+            button#af-cancel.office-btn [type="button"]
+              "Cancel"
+            button#af-save.office-btn.office-btn-primary [type="submit"]
+              "Save application"
+    div#event-form.card-overlay [hidden]
+      div#event-form-panel.card-panel.form-panel [aria-describedby="event-form-about" aria-labelledby="event-form-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#event-form-title.card-title
+          "Log an event"
+        p#event-form-about.card-meta
+        form#ef-form.office-form [novalidate]
+          div.form-row
+            label [for="ef-type"]
+              "What kind"
+            select#ef-type.office-select
+          div.form-row
+            label [for="ef-at"]
+              "When"
+            input#ef-at.office-input [type="datetime-local"]
+          div.form-row
+            label [for="ef-title"]
+              "A short description"
+            input#ef-title.office-input [placeholder="Panel with the design team" type="text"]
+          div.form-row.form-pair
+            div
+              label [for="ef-duration"]
+                "Minutes"
+              input#ef-duration.office-input [inputmode="numeric" min="1" type="number"]
+            div
+              label [for="ef-round"]
+                "Round"
+              input#ef-round.office-input [inputmode="numeric" min="1" type="number"]
+          fieldset#ef-with-row.form-row.form-with [hidden]
+            legend
+              "Who was there"
+            div#ef-with.form-with-list
+          div.form-row
+            label [for="ef-outcome"]
+              "How it went"
+            select#ef-outcome.office-select
+          div.form-row
+            label [for="ef-notes"]
+              "Notes"
+            textarea#ef-notes.office-input [rows="3"]
+          p#ef-error.form-error [hidden role="alert"]
+          div.card-actions
+            button#ef-cancel.office-btn [type="button"]
+              "Cancel"
+            button#ef-save.office-btn.office-btn-primary [type="submit"]
+              "Save"
+    div#task-form.card-overlay [hidden]
+      div#task-form-panel.card-panel.form-panel [aria-describedby="task-form-about" aria-labelledby="task-form-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#task-form-title.card-title
+          "Add a follow-up"
+        p#task-form-about.card-meta
+        form#tf-form.office-form [novalidate]
+          div.form-row
+            label [for="tf-text"]
+              "What to do"
+            input#tf-text.office-input [placeholder="Send a thank-you note" type="text"]
+          div.form-row
+            label [for="tf-due"]
+              "When"
+            input#tf-due.office-input [type="date"]
+          p#tf-error.form-error [hidden role="alert"]
+          div.card-actions
+            button#tf-cancel.office-btn [type="button"]
+              "Cancel"
+            button#tf-save.office-btn.office-btn-primary [type="submit"]
+              "Save"
+    div#contact-form.card-overlay [hidden]
+      div#contact-form-panel.card-panel.form-panel [aria-describedby="contact-form-about" aria-labelledby="contact-form-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#contact-form-title.card-title
+          "New contact"
+        p#contact-form-about.card-meta
+        form#cf-form.office-form [novalidate]
+          div.form-row
+            label [for="cf-name"]
+              "Name"
+            input#cf-name.office-input [autocomplete="off" type="text"]
+          div.form-row.form-pair
+            div
+              label [for="cf-title"]
+                "Title"
+              input#cf-title.office-input [autocomplete="off" placeholder="Recruiter" type="text"]
+            div
+              label [for="cf-company"]
+                "Company"
+              input#cf-company.office-input [autocomplete="off" type="text"]
+          div.form-row.form-pair
+            div
+              label [for="cf-email"]
+                "Email"
+              input#cf-email.office-input [autocomplete="off" inputmode="email" type="email"]
+            div
+              label [for="cf-phone"]
+                "Phone"
+              input#cf-phone.office-input [autocomplete="off" inputmode="tel" type="tel"]
+          div.form-row
+            label [for="cf-linkedin"]
+              "LinkedIn"
+            input#cf-linkedin.office-input [autocomplete="off" inputmode="url" type="url"]
+          div.form-row
+            label [for="cf-notes"]
+              "Notes"
+            textarea#cf-notes.office-input [placeholder="How you met, what you talked about" rows="3"]
+          p#cf-error.form-error [hidden role="alert"]
+          div.card-actions
+            button#cf-cancel.office-btn [type="button"]
+              "Cancel"
+            button#cf-save.office-btn.office-btn-primary [type="submit"]
+              "Save"
+    div#confirm.card-overlay [hidden]
+      div#confirm-panel.card-panel [aria-describedby="confirm-detail" aria-labelledby="confirm-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#confirm-title.card-title
+        p#confirm-detail.card-detail
+        div#confirm-actions.card-actions
+    section#print-sheet.print-sheet [aria-hidden="true"]
+    script [src="../lib/three.min.js"]
+    script [src="js/main.min.js" type="module"]"
+`;
+
 exports[`www/privacy.html 1`] = `
 "<!doctype html>
 html [lang="en"]
@@ -3549,6 +4212,10 @@ html [lang="en"]
               strong
                 "Your game of X's and O's."
               "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the colors you chose for the teams and the field, whether you turned the sound on or off, and whether you turned on Auto jump, so the game comes back the way you left it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot."
+            li
+              strong
+                "Your job search in Corner Office."
+              "Corner Office keeps everything you enter, your applications, interviews, contacts and follow-ups, along with your settings and which things in the office you have already opened, in your browser's local storage, so your office is just as you left it when you come back. None of it is ever sent anywhere: its usage pings say only what kind of thing you did, such as adding an application, and never anything you typed. Its Out-tray saves a backup you can keep, and its Settings can clear the office on the spot."
             li
               strong
                 "You can remove any of it whenever you like."

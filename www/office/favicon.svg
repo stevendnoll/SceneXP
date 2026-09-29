@@ -1,0 +1,26 @@
+<!-- THE VIEW THE OFFICE IS NAMED FOR, AS A SILHOUETTE (the lesson of High
+     Water's first icon: the only size that matters is 16 pixels). The sun
+     going down into the bay between two dark towers, as on the social card:
+     at tab size that is two dark bars, a bright disc and a line of water,
+     which is all that survives the shrinking. The towers stand in from the
+     edges, so the sky outlines the tile on a dark tab bar. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Corner Office">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5f7296"/>
+      <stop offset="0.55" stop-color="#d99a6c"/>
+      <stop offset="0.66" stop-color="#f2c487"/>
+    </linearGradient>
+    <clipPath id="tile">
+      <rect width="32" height="32" rx="7"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="32" height="32" fill="url(#sky)"/>
+    <circle cx="16.5" cy="21" r="5" fill="#fff0cc"/>
+    <rect y="21" width="32" height="11" fill="#2c425a"/>
+    <path d="M13.5 22.6h6M14.5 25h4M15.5 27.4h2" stroke="#f6d292" stroke-width="1.3" stroke-linecap="round"/>
+    <path d="M4 32V8h2.5V5h3v3H12v24z" fill="#18202b"/>
+    <path d="M21 32V11h7v21z" fill="#18202b"/>
+  </g>
+</svg>
