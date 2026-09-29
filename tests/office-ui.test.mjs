@@ -1841,7 +1841,7 @@ describe('the telemetry beacons (QA, 2026-09-29: "change the place parameter to 
      *  scenexp_api log_format). Anything else is sent and never recorded. */
     const LOGGED = ['action', 'timestamp', 'mobile', 'scene', 'lang', 'hash', 'kind', 'outcome', 'seconds', 'saved', 'destroyed'];
 
-    test('one thing done is one beacon: the way it was reached is its kind, a celebration and a count ride in its outcome', () => {
+    test('one thing done is one beacon, the way it was reached its kind, and nothing of the search itself', () => {
         const sent = [];
         globalThis.Image = class { set src(url) { sent.push(new URL(url, 'http://localhost:8000/office/')); } };
         /** The beacons `act` sends, each as "action kind=... outcome=...". */
@@ -1875,12 +1875,14 @@ describe('the telemetry beacons (QA, 2026-09-29: "change the place parameter to 
             expect(beaconsOf(() => t.actOn('whiteboard'))).toEqual(['open-whiteboard kind=tap']);
             escape();
             expect(beaconsOf(() => t.actOn('lamp'))).toEqual(['tap-lamp']);
-            // A celebration is not a beacon of its own.
-            expect(beaconsOf(() => quickAdd('Acme', 'Designer'))).toEqual(['add-application outcome=celebrated=applied']);
+            // A celebration is no beacon at all, and a status change says
+            // that it happened and how, never which status (privacy.html:
+            // "only what kind of thing you did"; an offer is the search
+            // itself).
+            expect(beaconsOf(() => quickAdd('Acme', 'Designer'))).toEqual(['add-application']);
             const id = live()[0].id;
-            expect(beaconsOf(() => t.changeStatus(id, 'offer'))).toEqual(['change-status kind=offer outcome=celebrated=offer']);
-            // The pinboard's move is the status change, its way in outcome.
-            expect(beaconsOf(() => t.changeStatus(id, 'interviewing', 'board-drag'))).toEqual(['change-status kind=interviewing outcome=via=board-drag']);
+            expect(beaconsOf(() => t.changeStatus(id, 'offer'))).toEqual(['change-status']);
+            expect(beaconsOf(() => t.changeStatus(id, 'interviewing', 'board-drag'))).toEqual(['change-status kind=board-drag']);
             const [stocked] = beaconsOf(() => t.stockOffice());
             expect(stocked).toMatch(/^stock-samples outcome=count=\d+$/);
             t.showWelcome();
@@ -1892,12 +1894,16 @@ describe('the telemetry beacons (QA, 2026-09-29: "change the place parameter to 
 
     test('every beacon in the source names only what the log keeps', () => {
         const source = readFileSync(join(process.cwd(), 'www/office/js/main.js'), 'utf8');
-        expect(source).not.toMatch(/(?:report|track)\([^;]*, \{ (place|how|status|items|count|type)\b/);
-        expect(source).not.toMatch(/report\('(?:board-move|celebrate)'/);
+        expect(source).not.toMatch(/track\([^;]*, \{ (place|how|status|items|count|type)\b/);
+        expect(source).not.toMatch(/track\('(?:board-move|celebrate)'/);
+        // Nothing the records hold: no status, kind of event, celebration
+        // or count of them, in what follows any one-line call's action (the
+        // one multi-line call, session-start, is office-init's to check).
+        expect(source).not.toMatch(/\btrack\((?:'[^']*'|`[^`]*`)[^;\n]*(?:status|fields\.type|party|applications|items\.length)/);
         // The key before each colon in each call's params, but `device`,
         // which every scene's session-start sends and a sitewide pass will
         // settle.
-        const calls = [...source.matchAll(/\b(?:report|track|trackFinal)\(([^;{]*?), \{([^}]*)\}/g)];
+        const calls = [...source.matchAll(/\b(?:track|trackFinal)\(([^;{]*?), \{([^}]*)\}/g)];
         expect(calls.length).toBeGreaterThan(8);
         for (const [call, , body] of calls) {
             for (const [, key] of body.matchAll(/(?:^|,)\s*([a-zA-Z]+)\s*(?::|,|$)/g)) {

@@ -370,12 +370,13 @@ async function init() {
         }
     };
 
-    const s = stats(state.doc, CONFIG, now());
-    // The office's own detail rides in `outcome`, the log's one field for it
-    // (`device` is every scene's, and repeats the `mobile` on every ping).
-    report('session-start', {
+    // Whether the visitor came back to a saved office rides in `outcome`,
+    // the log's one field for detail, and how full it is does not (see
+    // "The beacons"). `device` is every scene's, and repeats the `mobile` on
+    // every ping.
+    track('session-start', {
         device: state.mobile ? 'touch' : 'desktop',
-        outcome: `applications=${s.applications}&returning=${state.storageStatus === 'restored'}`
+        outcome: `returning=${state.storageStatus === 'restored'}`
     });
     sessionStart = Date.now();
 
@@ -668,7 +669,7 @@ function startLook() {
         alwaysOn: true,
         extraClass: 'always-on no-chrome',
         surface: canvas,
-        onFirstUse: (kind) => report(`portrait-${kind}`),
+        onFirstUse: (kind) => track(`portrait-${kind}`),
         signal
     });
 }
@@ -746,36 +747,22 @@ function goTo(station) {
 
 /*
  * ONE THING DONE, ONE BEACON (QA, 2026-09-29: "A single user action should
- * never trigger more than one telemetry call"). Everything the office tells
- * the site's log goes through report(). A thing reached several ways (a tap
- * in the room, a pulsing marker, Places) sends its own beacon with the way
- * as its kind (routed), rather than the way sending a second one, and a
- * celebration rides on the beacon of what earned it, in `outcome`. Names
- * and parameters are the ones the server's log keeps (tests/office-ui).
+ * never trigger more than one telemetry call"). A thing reached several
+ * ways (a tap in the room, a pulsing marker, Places) sends its own beacon
+ * with the way as its kind (routed), rather than the way sending a second
+ * one. Names and parameters are the ones the server's log keeps.
+ *
+ * AND NOTHING OF THE SEARCH ITSELF (privacy.html: the office's pings "say
+ * only what kind of thing you did, such as adding an application"). A
+ * beacon says what was done and how it was reached, never what the records
+ * hold: no status, no kind of event, no celebration (which would tell of
+ * an offer), no count of applications. tests/office-ui holds both rules.
  */
-const beacon = { celebrated: null };
 
 /** How a thing was reached, as its beacon's kind (none from a key or the
  *  toolbar). */
 function routed(via) {
     return via ? { kind: via } : {};
-}
-
-/** A celebration earned by what the visitor is doing: carried on that
- *  action's beacon, and forgotten once the action is over if it sent none. */
-function celebrated(kind) {
-    beacon.celebrated = kind;
-    if (typeof queueMicrotask === 'function') queueMicrotask(() => { beacon.celebrated = null; });
-}
-
-/** Send one beacon, with any celebration the action earned in `outcome`. */
-function report(action, params = {}) {
-    const party = beacon.celebrated;
-    beacon.celebrated = null;
-    if (!party) return track(action, params);
-    const outcome = new URLSearchParams(params.outcome || '');
-    outcome.set('celebrated', party);
-    return track(action, { ...params, outcome: outcome.toString() });
 }
 
 // ---- The pulsing markers (marks.js) ----------------------------------------------
@@ -906,7 +893,7 @@ function raiseBinoculars({ via = null } = {}) {
         const down = el('bar-binoculars');
         if (down && down.focus) down.focus({ preventScroll: true });
     }
-    report('binoculars', routed(via));
+    track('binoculars', routed(via));
     noteOpen('binoculars');
     return true;
 }
@@ -1188,7 +1175,7 @@ function watchDay() {
     }
     showDayButton();
     announce(dayStartLine(new Date(from)));
-    report('day-lapse');
+    track('day-lapse');
     requestRender();
     return true;
 }
@@ -1270,8 +1257,7 @@ const SHOW_RANK = { applied: 1, goal: 2, offer: 3 };
  *  room is in view; never for a visitor who asked for less motion, for
  *  whom the words are the celebration. */
 function celebrate(party) {
-    // Not a beacon of its own: it rides on the beacon of what earned it.
-    celebrated(party.kind);
+    // No beacon: an offer's celebration would tell the log of the offer.
     refreshChampagne();
     if (state.reducedMotion || !world) return false;
     if (!ui.pendingShow || SHOW_RANK[party.kind] > SHOW_RANK[ui.pendingShow]) ui.pendingShow = party.kind;
@@ -1320,7 +1306,7 @@ function undo() {
     hideToast();
     refresh();
     announce(step.label ? `Undone. ${step.label}` : 'Undone.');
-    report('undo');
+    track('undo');
     return step;
 }
 
@@ -1512,7 +1498,7 @@ function openComputer({ armed = false, focusSearch = false, via = null } = {}) {
         onClose: () => goTo('desk')
     });
     goTo('computer');
-    report('open-computer', routed(via));
+    track('open-computer', routed(via));
     noteOpen('computer');
 }
 
@@ -1599,7 +1585,7 @@ function openCabinet({ armed = false, via = null } = {}) {
     });
     if (filing && filing.setOpen(true)) ui.cabinetMoving = true;
     goTo('cabinet');
-    report('open-cabinet', routed(via));
+    track('open-cabinet', routed(via));
     noteOpen('cabinet');
 }
 
@@ -1665,7 +1651,7 @@ function openBoard({ armed = false, via = null } = {}) {
     drawBoardSheet();
     openCard('board', { armed, onClose: () => goTo('desk') });
     goTo('board');
-    report('open-board', routed(via));
+    track('open-board', routed(via));
     noteOpen('board');
 }
 
@@ -1789,7 +1775,7 @@ function openRolodex({ armed = false, via = null } = {}) {
     if (search) search.value = '';
     drawRolodexSheet();
     openCard('rolodex', { armed });
-    report('open-rolodex', routed(via));
+    track('open-rolodex', routed(via));
     noteOpen('rolodex');
 }
 
@@ -1881,7 +1867,7 @@ function submitContactForm(event) {
         return result;
     }
     closeCard('contact-form');
-    report(ui.editingContactId ? 'edit-contact' : 'add-contact');
+    track(ui.editingContactId ? 'edit-contact' : 'add-contact');
     return result;
 }
 
@@ -1990,7 +1976,7 @@ function goToPlace(place) {
     }[place];
     if (!open) return false;
     open();
-    if (['desk', 'window', 'welcome'].includes(place)) report('place', { kind: place });
+    if (['desk', 'window', 'welcome'].includes(place)) track('place', { kind: place });
     return true;
 }
 
@@ -2031,7 +2017,7 @@ function openWhiteboard({ armed = false, goal = false, via = null } = {}) {
     openCard('whiteboard', { armed: armed && !goal, focus: goal ? el('wb-goal') : null, onClose: () => goTo('desk') });
     goTo('whiteboard');
     if (goal) announce(`Your weekly goal is ${state.doc.settings.weeklyGoal}. You can change it here.`);
-    report('open-whiteboard', routed(via));
+    track('open-whiteboard', routed(via));
     noteOpen('whiteboard');
 }
 
@@ -2061,7 +2047,7 @@ function fillPrinterChoices(t = now(), chosen = null) {
 function openPrinter({ armed = false, appId = null, via = null } = {}) {
     fillPrinterChoices(now(), appId || ui.folderId || ui.lastFolderId);
     openCard('printer', { armed });
-    report('open-printer', routed(via));
+    track('open-printer', routed(via));
     noteOpen('printer');
 }
 
@@ -2075,7 +2061,7 @@ function printPrep(appId) {
     renderPrintSheet(sheet, QUESTION_LINES);
     announce(`The prep sheet for ${sheet.title} is ready to print.`);
     if (typeof window.print === 'function') window.print();
-    report('print-prep');
+    track('print-prep');
     return sheet;
 }
 
@@ -2138,7 +2124,7 @@ function openCalendar({ armed = false, via = null } = {}) {
     // Where the visitor stands: the wall calendar gave its wall to the
     // window (QA, 2026-09-25), so there is nothing in the room to go to.
     openCard('calendar', { armed });
-    report('open-calendar', routed(via));
+    track('open-calendar', routed(via));
     noteOpen('calendar');
 }
 
@@ -2155,7 +2141,7 @@ function drawToday(t = now()) {
 function openToday({ armed = false, via = null } = {}) {
     drawToday();
     openCard('today', { armed });
-    report('open-today', routed(via));
+    track('open-today', routed(via));
     noteOpen('today');
 }
 
@@ -2170,9 +2156,9 @@ function exportEvent(id) {
     announce(ok
         ? `Your calendar file for the ${EVENT_LABELS[ev.type].toLowerCase()} on ${displayDateTime(ev.at)} is on its way to your downloads. Opening it adds it to your calendar, with a reminder half an hour before.`
         : 'This browser would not save the file.');
-    // Counts ride in `outcome` as a query string, the one field of the
-    // server's log that holds detail (as www/xo/js/telemetry.js does).
-    report('export-ics', { outcome: 'items=1' });
+    // One event's file, or the upcoming ones' (below): which, never how
+    // many (see "The beacons").
+    track('export-ics', { kind: 'event' });
     return ok;
 }
 
@@ -2192,7 +2178,7 @@ function exportUpcoming() {
         : 'This browser would not save the file.';
     announce(line);
     if (note && isOpen('outtray')) note.textContent = line;
-    report('export-ics', { outcome: `items=${items.length}` });
+    track('export-ics', { kind: 'upcoming' });
     return ok;
 }
 
@@ -2254,14 +2240,14 @@ function openFolder(id, { armed = false } = {}) {
     return true;
 }
 
-/** Move an application to `status`: one beacon, its kind the new status,
- *  and `via` (the pinboard's drag or its keyboard sheet) in its outcome;
- *  none means the folder's own buttons. */
+/** Move an application to `status`: one beacon, its kind the way it was
+ *  moved (`via`, the pinboard's drag or its keyboard sheet; none is the
+ *  folder's own buttons), never the status itself. */
 function changeStatus(id, status, via = null) {
     const app = findApplication(state.doc, id);
     change((doc) => setStatus(doc, id, status, CONFIG, now()),
         `Moved ${applicationName(app)} to ${STATUS_LABELS[status]}`);
-    report('change-status', { kind: status, ...(via ? { outcome: `via=${via}` } : {}) });
+    track('change-status', routed(via));
 }
 
 /** Put a record in the wastebasket, with the undo offered straight away. */
@@ -2311,7 +2297,7 @@ function submitApplicationForm(event) {
         return result;
     }
     closeCard('application-form');
-    report(ui.editingAppId ? 'edit-application' : 'add-application');
+    track(ui.editingAppId ? 'edit-application' : 'add-application');
     return result;
 }
 
@@ -2352,7 +2338,7 @@ function submitEventForm(event) {
         return result;
     }
     closeCard('event-form');
-    report(ui.editingEventId ? 'edit-event' : 'add-event', { kind: fields.type });
+    track(ui.editingEventId ? 'edit-event' : 'add-event');
     return result;
 }
 
@@ -2396,7 +2382,7 @@ function submitTaskForm(event) {
         return result;
     }
     closeCard('task-form');
-    report(ui.editingTaskId ? 'edit-task' : 'add-task');
+    track(ui.editingTaskId ? 'edit-task' : 'add-task');
     return result;
 }
 
@@ -2412,7 +2398,7 @@ function drawWastebasket() {
 function openWastebasket({ armed = false, via = null } = {}) {
     drawWastebasket();
     openCard('wastebasket', { armed });
-    report('open-wastebasket', routed(via));
+    track('open-wastebasket', routed(via));
     noteOpen('wastebasket');
 }
 
@@ -2444,7 +2430,7 @@ function saveBackup() {
     const ok = download(backupFilename(now()), serialize(state.doc));
     const note = el('outtray-note');
     if (note) note.textContent = ok ? 'Your backup is on its way to your downloads.' : 'This browser would not save the file.';
-    report('backup');
+    track('backup');
     return ok;
 }
 
@@ -2456,7 +2442,7 @@ function exportCsv() {
     if (note) {
         note.textContent = ok ? 'Your spreadsheet is on its way to your downloads.' : 'This browser would not save the file.';
     }
-    report('export-csv');
+    track('export-csv');
     return ok;
 }
 
@@ -2499,7 +2485,7 @@ function restoreFromText(textValue) {
                 : 'Restored the backup.';
             announce(line);
             toast(line, { undo, seconds: CONFIG.toastSeconds });
-            report('restore');
+            track('restore');
         }
     });
     return parsed;
@@ -2532,7 +2518,7 @@ function saveGoal(inputId = 'grid-goal') {
 function stockOffice() {
     const result = change((doc) => stockSamples(doc, CONFIG, now()), 'Stocked the office with samples',
         (r) => `Stocked the office with ${count(r.count, 'sample application')}. They are marked Sample, and Settings can clear them.`);
-    if (result.changed) report('stock-samples', { outcome: `count=${result.count}` });
+    if (result.changed) track('stock-samples', { outcome: `count=${result.count}` });
     return result;
 }
 
@@ -2550,7 +2536,7 @@ function clearEverything() {
             change((doc) => ({ doc: { ...emptyDoc(CONFIG, now()), settings: doc.settings }, record: null, error: null }),
                 'Cleared the whole office');
             closeCard('settings');
-            report('clear-all');
+            track('clear-all');
         }
     });
 }
@@ -2577,18 +2563,18 @@ function showWelcome() {
             box.appendChild(button('Add your first application', 'office-btn office-btn-primary', () => {
                 closeCard('welcome');
                 openApplicationForm(null);
-                report('welcome', { kind: 'add-first' });
+                track('welcome', { kind: 'add-first' });
             }));
             // The samples are in Settings and the empty computer, not here
             // (QA, 2026-09-29: Steve asked for the button gone).
             box.appendChild(button('Look around', 'office-btn', () => {
                 closeCard('welcome');
-                report('welcome', { kind: 'look-around' });
+                track('welcome', { kind: 'look-around' });
             }));
         } else {
             box.appendChild(button('Step inside', 'office-btn office-btn-primary', () => {
                 closeCard('welcome');
-                report('welcome', { kind: 'step-inside' });
+                track('welcome', { kind: 'step-inside' });
             }));
             box.appendChild(button('Open the computer', 'office-btn', () => {
                 closeCard('welcome');
@@ -2622,16 +2608,16 @@ function actOn(key, { armed = true, instanceId = -1, uv = null, via = 'tap' } = 
         const id = filing ? filing.idAt(instanceId) : null;
         if (!id) return false;
         openFolder(id, { armed });
-        report(`tap-${key}`);
+        track(`tap-${key}`);
         break;
     }
     case 'computer': openComputer({ armed, via }); break;
     case 'wastebasket': openWastebasket({ armed, via }); break;
-    case 'lamp': toggleLamp(); report(`tap-${key}`); break;
+    case 'lamp': toggleLamp(); track(`tap-${key}`); break;
     case 'binoculars': raiseBinoculars({ via }); break;
     case 'folder':
         if (ui.lastFolderId) openFolder(ui.lastFolderId, { armed });
-        report(`tap-${key}`);
+        track(`tap-${key}`);
         break;
     case 'notes': openToday({ armed, via }); break;
     default: return false;
@@ -2732,7 +2718,7 @@ function setupEventListeners() {
         drawRolodexSheet();
         if (!ui.searchedPeople) {
             ui.searchedPeople = true;
-            report('search-people');
+            track('search-people');
         }
     });
     wire('rolodex-new', 'click', () => openContactForm(null));
@@ -2745,7 +2731,7 @@ function setupEventListeners() {
         queryChanged();
         if (!ui.searched) {
             ui.searched = true;
-            report('search');
+            track('search');
         }
     });
     wire('cabinet-sort', 'change', () => {
@@ -2792,7 +2778,7 @@ function setupEventListeners() {
         queryChanged();
         if (!ui.searched) {
             ui.searched = true;
-            report('search');
+            track('search');
         }
     });
     wire('grid-goal', 'change', () => saveGoal('grid-goal'));
@@ -2868,7 +2854,7 @@ function setupEventListeners() {
             if (top) el('grid-search').focus();
             else openComputer({ focusSearch: true });
         } else if (top) return;
-        else if (key === '?') { event.preventDefault(); showWelcome(); report('place', { kind: 'welcome' }); }
+        else if (key === '?') { event.preventDefault(); showWelcome(); track('place', { kind: 'welcome' }); }
         else if (key === 'c' || key === '2') { event.preventDefault(); openComputer(); }
         else if (key === '3') { event.preventDefault(); openCalendar(); }
         else if (key === '4') { event.preventDefault(); openCabinet(); }
@@ -2881,7 +2867,7 @@ function setupEventListeners() {
         else if (key === 'l') { event.preventDefault(); toggleLamp(); }
         else if (key === 't') { event.preventDefault(); openToday(); }
         else if (key === '1') { event.preventDefault(); goTo('desk'); }
-        else if (key === '9') { event.preventDefault(); goTo('window'); report('place', { kind: 'window' }); }
+        else if (key === '9') { event.preventDefault(); goTo('window'); track('place', { kind: 'window' }); }
     }, { signal });
 
     // A hidden tab saves and stops drawing, and the clock is read again on
