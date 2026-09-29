@@ -37,13 +37,14 @@ import { BAY, HAZE, rippleNormals, meanSquareSlope } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis, sunClear } from './sky.min.js';
 import {
     ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
-    carLightPositions, carYaws, drift, jetsAt, jetFlashing, shipShift, cruiseLane, cruisePier, cruiseAt, LIFE, JET, LIVERIES
+    carLightPositions, carYaws, drift, jetsAt, jetsQuiet, jetFlashing, shipShift, cruiseLane, cruisePier, cruiseAt, LIFE, JET, LIVERIES
 } from './life.min.js';
-import { buildFleet, place, boxesGeometry, jetParts, joinGeometries, buildWashers, buildGulls, lightDot, aimRunningLights, buildOrcas } from './fleet.min.js';
+import { buildFleet, place, boxesGeometry, jetParts, joinGeometries, buildWashers, buildGulls, lightDot, aimRunningLights, buildOrcas, buildWheel } from './fleet.min.js';
 import { WASHERS, washerFaces, washerAt } from './washers.min.js';
 import { flock, gullPose, gullShape, flockTriangles } from './gulls.min.js';
 import { FIREWORKS, MAX_SHELLS, SHELL_SECONDS, shellLights } from './fireworks.min.js';
 import { ORCAS, pod, orcaPose } from './orcas.min.js';
+import { WHEEL, wheelSite, wheelOpen, wheelStart, wheelStep, wheelLit } from './wheel.min.js';
 import { RAIN, rainStreaks, streakPositions } from './weather.min.js';
 
 /** Half the jet's length and a little over, as built (fleet.js jetParts),
@@ -475,6 +476,11 @@ function buildPiers(scene) {
     const shore = route.to - LIFE.ferry.length / 2 - 60;
     boxes.push([route.x, 3, shore + 26, 40, 2, 72, 0x6e6259]);
     boxes.push([route.x, 8, shore - 45, 44, 12, 40, 0x8f9aa3]);
+    // The observation wheel's wide deck (wheel.js) at the end of its pier,
+    // out to just past the wheel: a little above the pier's own deck,
+    // which it overlaps, so the two never fight over the same pixels.
+    const wheel = wheelSite();
+    boxes.push([wheel.x, 3.2, (wheel.start + wheel.end) / 2, WHEEL.pier.width, 2, wheel.start - wheel.end, 0x6e6259]);
     // One mesh for all of them (a draw call each would be eighteen).
     // The cruise terminal pier north of downtown (life.js cruisePier),
     // its deck and the long terminal shed down its far side, leaving the
@@ -1182,6 +1188,14 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const fireworks = buildFireworks(scene);
     // The orcas that visit the bay now and then (orcas.js).
     const orcas = buildOrcas(scene, pod().length, { spoutHeight: ORCAS.spout.height });
+    // The observation wheel on the waterfront (wheel.js), and where it
+    // stands now (setLife: null until the first).
+    const wheel = buildWheel(scene, wheelSite(), WATER_Y);
+    let wheelNow = null;
+    // Each flight's fate, decided by the sky's hour when it is first seen
+    // (life.js jetsQuiet): none arrives in the airport's quiet hours, and
+    // one already coming in when they begin lands.
+    const flights = new Map();
     // The shells in the air, each with the second it was fired on the
     // visitor's clock (launchShow).
     let shells = [];
@@ -1262,6 +1276,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         gulls,
         fireworks,
         orcas,
+        wheel,
+        /** Where the wheel stands now (wheel.js wheelStep), for tests. */
+        wheelNow: () => wheelNow,
         /**
          * Color the outside for a light level (daylight.js `lighting`) and,
          * given the sky at that moment (sky.js `skyAt`), put the sun, the
@@ -1385,6 +1402,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             // a cube face, blurred for the water, spread into a red blot.
             const beaconsShown = beacons.visible;
             beacons.visible = false;
+            // And the wheel's lamps, for the same reason.
+            const wheelShown = wheel.lights.visible;
+            wheel.lights.visible = false;
             // No glitter in the reflections: the water does not see itself.
             const glitter = water.userData.glitter.light.value.clone();
             water.userData.glitter.light.value.setRGB(0, 0, 0);
@@ -1399,6 +1419,7 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             for (const mesh of towers.meshes) mesh.material.envMap = city.texture;
             glow.visible = false;
             beacons.visible = beaconsShown;
+            wheel.lights.visible = wheelShown;
             water.userData.glitter.light.value.copy(glitter);
             if (renderer.shadowMap) renderer.shadowMap.needsUpdate = roomDue;
             shadowsDue = true;
@@ -1455,6 +1476,15 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             // The jets coming in to land, but never one held still in the
             // sky: for less motion there are only those at the gates.
             const jets = still ? [] : jetsAt(seconds, calledJet);
+            const quiet = jetsQuiet(date);
+            jets.forEach((jet, i) => {
+                if (!jet || jet.k == null) return;
+                if (!flights.has(jet.k)) flights.set(jet.k, !quiet);
+                if (!flights.get(jet.k)) jets[i] = null;
+            });
+            // Only the flights that can still be out are worth remembering.
+            const newest = Math.max(...flights.keys());
+            for (const k of flights.keys()) if (k < newest - 2 * JET.fleet) flights.delete(k);
             fleet.flyJets(jets, jetFlashing(real));
             jetsFast = fleet.jets.map((_, i) => Boolean(jets[i] && jets[i].fast));
             // The approach's flashers run by night, and never held still.
@@ -1485,6 +1515,13 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
             // a black sea is nothing), never held still.
             const orcasOut = !still && dark < 0.6;
             orcas.place(orcasOut ? pod().map((o) => orcaPose(o, real)) : null, trueScale ? 1 : ORCAS.scale, WATER_Y);
+            // The wheel: open by the sky's hour, turning on the scenery's
+            // clock and stopping only at the platform, lit by night on the
+            // visitor's own seconds (held still for less motion).
+            const open = wheelOpen(date);
+            wheelNow = wheelNow ? wheelStep(wheelNow, open, seconds, still) : wheelStart(open, seconds);
+            wheel.place(wheelNow.angle);
+            wheel.light(wheelLit(date, dark), still ? 0 : real, 1 - dark);
             const moved = drift(date, seconds, CLOUDS.tile);
             if (clouds.material.map) clouds.material.map.offset.set(moved.clouds[0], moved.clouds[1]);
             water.material.normalMap.offset.set(moved.ripple[0], moved.ripple[1]);

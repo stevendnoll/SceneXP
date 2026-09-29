@@ -18,6 +18,7 @@
 
 import { LIFE, JET, LIVERIES } from './life.min.js';
 import { seeded } from './city.min.js';
+import { WHEEL, wheelSite, seatAt, wheelColors, drawnHeight } from './wheel.min.js';
 
 /**
  * One geometry from a list of boxes, each `[x, y, z, w, h, d, color]` in
@@ -1186,4 +1187,182 @@ export function buildOrcas(scene, count, { spoutHeight = 3.5 } = {}) {
         spray.visible = any;
     };
     return { animals, spray, place };
+}
+
+/** A geometry made unindexed, colored `color` (sRGB) all over, for
+ *  joinGeometries. */
+function solid(geometry, color) {
+    const g = geometry.index ? geometry.toNonIndexed() : geometry;
+    g.deleteAttribute('uv');
+    return painted(g, () => color);
+}
+
+/** A tube from `a` to `b` (each [x, y, z]), `radius` thick, colored. */
+function strut(a, b, radius, color, sides = 8) {
+    const from = new THREE.Vector3(...a);
+    const span = new THREE.Vector3(...b).sub(from);
+    const g = new THREE.CylinderGeometry(radius, radius, span.length(), sides, 1, true);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.clone().normalize()));
+    g.translate(from.x + span.x / 2, from.y + span.y / 2, from.z + span.z / 2);
+    return solid(g, color);
+}
+
+/**
+ * The observation wheel on its pier (wheel.js): in its own frame, its face
+ * across x and y and its axle along z, built at life size about its hub
+ * and drawn `WHEEL.scale` times over, standing on its deck (the hub at
+ * wheel.js drawnHeight).
+ *
+ * - `stand`: the A-frame legs down to the deck either side, the hub, the
+ *   boarding platform and its canopy. Still.
+ * - `frame`: both rims and the tubes between them where the gondolas hang,
+ *   turning about the axle.
+ * - `spokes`: lines from the hub to each rim, a pixel wide at any distance
+ *   (a true-scale spoke is a fifth of a pixel from the desk and shimmers),
+ *   turning with the frame, and colored with the lights by night.
+ * - `gondolas`: forty-two, instanced, hanging level between the rims.
+ * - `lights`: lamps round both rims, round glows a few pixels across,
+ *   colored by the show (wheel.js wheelColors).
+ *
+ * `place(angle)` turns it (degrees), `light(on, t, day)` colors it: the
+ * show at `t` seconds when on, else the spokes a white as bright as the
+ * day. Nothing on it answers a ray (the census counts the wheel by its
+ * solid parts; the lines and lamps are drawn things).
+ */
+export function buildWheel(scene, site = wheelSite(), y0 = 0) {
+    const W = WHEEL;
+    const white = 0xf1f2f0;
+    const steel = 0xd9dcdf;
+    const group = new THREE.Group();
+    group.name = 'wheel';
+    group.position.set(site.x, y0 + drawnHeight(W.hub), site.z);
+    group.rotation.y = site.yaw;
+    group.scale.setScalar(W.scale);
+    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.15 });
+    // The stand: two A-frames outside the rims, each two legs from the deck
+    // to the axle's end, and the axle through the hub.
+    const deck = W.deck - W.hub;
+    const end = W.apart / 2 + 1.2;
+    const stand = [];
+    for (const side of [-1, 1]) {
+        for (const along of [-1, 1]) stand.push(strut([0, 0, side * end], [along * W.legs.spread, deck, side * W.legs.splay], 0.75, white));
+        // A brace across each A, a third of the way up.
+        const brace = deck * 0.62;
+        const reach = W.legs.spread * 0.62;
+        const at = end + (W.legs.splay - end) * 0.62;
+        stand.push(strut([-reach, brace, side * at], [reach, brace, side * at], 0.4, white));
+    }
+    stand.push(strut([0, 0, -end - 0.6], [0, 0, end + 0.6], 1.6, steel, 16));
+    // The boarding platform under the wheel, and its canopy.
+    const platformTop = W.platform - W.hub;
+    stand.push(solid(new THREE.BoxGeometry(16, platformTop - deck, 12).translate(0, (platformTop + deck) / 2, 0), 0xb9bdc1));
+    stand.push(solid(new THREE.BoxGeometry(12, 0.5, 9).translate(0, platformTop + 4.2, -8.5), white));
+    const standMesh = new THREE.Mesh(joinGeometries(stand), material);
+    standMesh.name = 'wheel-stand';
+    group.add(standMesh);
+    // The frame, turning: the rims, the tubes between them, and a ring
+    // round the hub where the spokes start.
+    const frame = new THREE.Group();
+    frame.name = 'wheel-frame';
+    const rims = [];
+    for (const side of [-1, 1]) {
+        rims.push(solid(new THREE.TorusGeometry(W.radius, W.tube, 6, 120).translate(0, 0, (side * W.apart) / 2), white));
+        rims.push(solid(new THREE.TorusGeometry(2.4, 0.35, 6, 24).translate(0, 0, (side * W.apart) / 2), steel));
+    }
+    for (let i = 0; i < W.gondolas; i++) {
+        const a = (i / W.gondolas) * Math.PI * 2;
+        const x = W.radius * Math.cos(a);
+        const y = W.radius * Math.sin(a);
+        rims.push(strut([x, y, -W.apart / 2], [x, y, W.apart / 2], 0.3, steel, 6));
+    }
+    const frameMesh = new THREE.Mesh(joinGeometries(rims), material);
+    frameMesh.name = 'wheel-rims';
+    frame.add(frameMesh);
+    // The spokes, as lines: from the hub ring to each rim, each face.
+    const spokeEnds = [];
+    for (const side of [-1, 1]) {
+        const z = (side * W.apart) / 2;
+        for (let i = 0; i < W.spokes; i++) {
+            const a = ((i + (side > 0 ? 0.5 : 0)) / W.spokes) * Math.PI * 2;
+            spokeEnds.push(2.4 * Math.cos(a), 2.4 * Math.sin(a), z, W.radius * Math.cos(a), W.radius * Math.sin(a), z);
+        }
+    }
+    const spokeGeometry = new THREE.BufferGeometry();
+    spokeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(spokeEnds, 3));
+    spokeGeometry.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(spokeEnds.length), 3));
+    const spokes = new THREE.LineSegments(spokeGeometry, new THREE.LineBasicMaterial({ vertexColors: true, fog: true, toneMapped: false }));
+    spokes.name = 'wheel-spokes';
+    spokes.raycast = () => {};
+    frame.add(spokes);
+    // The lamps round both rims, just outside them.
+    const lampAt = [];
+    for (const side of [-1, 1]) {
+        for (let k = 0; k < W.lamps; k++) {
+            const a = (k / W.lamps) * Math.PI * 2;
+            lampAt.push((W.radius + W.tube) * Math.cos(a), (W.radius + W.tube) * Math.sin(a), (side * W.apart) / 2);
+        }
+    }
+    const lampGeometry = new THREE.BufferGeometry();
+    lampGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lampAt, 3));
+    lampGeometry.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(lampAt.length), 3));
+    const lights = new THREE.Points(lampGeometry, new THREE.PointsMaterial({
+        size: 4, sizeAttenuation: false, vertexColors: true, map: lightDot(), transparent: true, depthWrite: false, fog: true, toneMapped: false
+    }));
+    lights.name = 'wheel-lights';
+    lights.visible = false;
+    lights.raycast = () => {};
+    frame.add(lights);
+    group.add(frame);
+    // The gondolas: a white roof and floor round a band of dark glass,
+    // hanging level between the rims.
+    const { width, height, depth } = W.gondola;
+    const gondolaGeometry = boxesGeometry([
+        [0, height * 0.42, 0, width, height * 0.16, depth, white],
+        [0, 0.05, 0, width * 0.96, height * 0.5, depth * 0.96, 0x2c3a48],
+        [0, -height * 0.38, 0, width, height * 0.24, depth, white]
+    ]);
+    const gondolas = new THREE.InstancedMesh(gondolaGeometry, material, W.gondolas);
+    gondolas.name = 'wheel-gondolas';
+    gondolas.frustumCulled = false;
+    group.add(gondolas);
+    scene.add(group);
+
+    const at = new THREE.Matrix4();
+    const place = (angle) => {
+        frame.rotation.z = (angle * Math.PI) / 180;
+        for (let i = 0; i < W.gondolas; i++) {
+            const { middle } = seatAt(i, angle);
+            gondolas.setMatrixAt(i, at.makeTranslation(middle[0], middle[1], 0));
+        }
+        gondolas.instanceMatrix.needsUpdate = true;
+    };
+    const lamps = new Float32Array(W.lamps * 3);
+    const light = (on, t, day = 1) => {
+        lights.visible = on;
+        const col = spokeGeometry.attributes.color.array;
+        if (on) {
+            wheelColors(t, W.lamps, lamps);
+            const lc = lampGeometry.attributes.color.array;
+            lc.set(lamps, 0);
+            lc.set(lamps, lamps.length);
+            lampGeometry.attributes.color.needsUpdate = true;
+            // Each spoke in the color of the rim where it meets it.
+            for (let s = 0; s < spokeEnds.length / 6; s++) {
+                const i = s % W.spokes;
+                const k = Math.floor(((i + (s >= W.spokes ? 0.5 : 0)) / W.spokes) * W.lamps) % W.lamps;
+                for (let c = 0; c < 3; c++) {
+                    col[s * 6 + c] = lamps[k * 3 + c] * 0.55;
+                    col[s * 6 + 3 + c] = lamps[k * 3 + c];
+                }
+            }
+        } else {
+            // White as the rest of it is, lit as the day lights it.
+            const v = 0.5 * Math.max(0.04, day);
+            col.fill(v);
+        }
+        spokeGeometry.attributes.color.needsUpdate = true;
+    };
+    place(0);
+    light(false, 0, 1);
+    return { group, frame, stand: standMesh, rims: frameMesh, spokes, lights, gondolas, place, light };
 }

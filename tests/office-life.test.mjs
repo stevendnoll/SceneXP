@@ -8,7 +8,7 @@
  * measured through the camera in office-view.
  */
 import {
-    LIFE, minutesOn, minutesOfDay, gently, yawFor, ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt,
+    LIFE, minutesOn, minutesOfDay, gently, yawFor, ferryRoute, ferriesAt, ferryTrips, shipsAt, sailboatCourses, sailboatsAt,
     shipShift, SEAPLANE_START, takeoff, seaplaneAt, carLanes, carFleet, carPositions, carYaws, carLightPositions, CAR, drift,
     TRAFFIC, VEHICLES, SUV, PARKED_Y, pitchOf, cycleOf, slotTimes, distanceAlong, onStreet,
     JET, jetCrossing, jetFlight, jetOnTrack, jetsAt, jetFlashing, jetTimes, glideHeight, approachSpeed, approachLeft,
@@ -105,6 +105,34 @@ describe('the ferries', () => {
         const before = ferriesAt(new Date(2026, 8, 24, 23, 59, 59, 900), route);
         const after = ferriesAt(new Date(2026, 8, 25, 0, 0, 0, 100), route);
         before.forEach((f, i) => expect(gap(f, after[i])).toBeLessThan(5));
+    });
+
+    test('none runs from midnight until four: each waits at the dock it sets out from in the morning (QA, 2026-09-29)', () => {
+        // An even number of crossings a day, so each ends where it began.
+        expect(ferryTrips() % 2).toBe(0);
+        const morning = ferriesAt(new Date(2026, 8, 25, 4, 0, 30), route);
+        for (let m = 0; m < 240; m += 1) {
+            const night = ferriesAt(new Date(2026, 8, 25, 0, m), route);
+            night.forEach((f, i) => {
+                expect(f.speed).toBe(0);
+                expect(Math.abs(f.z - morning[i].z)).toBeLessThan(5);
+            });
+        }
+        // One from each side: the first from the city's dock, the second
+        // from the island's.
+        expect(Math.abs(morning[0].z - route.from)).toBeLessThan(5);
+        expect(Math.abs(morning[1].z - route.to)).toBeLessThan(5);
+        // The last crossing lands before midnight.
+        for (let m = 23 * 60 + 45; m < 24 * 60; m += 1) {
+            ferriesAt(new Date(2026, 8, 25, 0, m), route).forEach((f) => expect(f.speed).toBe(0));
+        }
+        // And from morning to night, never a jump.
+        let prev = ferriesAt(new Date(2026, 8, 25, 0, 0), route);
+        for (let m = 0.25; m < 24 * 60; m += 0.25) {
+            const now = ferriesAt(new Date(2026, 8, 25, 0, 0, m * 60), route);
+            now.forEach((f, i) => expect(gap(f, prev[i])).toBeLessThan(200));
+            prev = now;
+        }
     });
 });
 

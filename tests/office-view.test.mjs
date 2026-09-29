@@ -155,7 +155,7 @@ function seeAlong(origin, direction) {
     // and the stars are all the sky.
     // The hills across the water (land-hills-*) are hills, not the ground
     // of the city: the far shore's stand higher than the office's eye.
-    const kinds = { 'land-hills': 'hills', land: 'land', towers: 'towers', clouds: 'sky', sun: 'sky', moon: 'sky', stars: 'sky' };
+    const kinds = { 'land-hills': 'hills', land: 'land', towers: 'towers', clouds: 'sky', sun: 'sky', moon: 'sky', stars: 'sky', wheel: 'wheel' };
     const kind = Object.keys(kinds).find((k) => name.startsWith(k));
     return { what: kind ? kinds[kind] : name, point: hit.point, name, uv: hit.uv };
 }
@@ -765,7 +765,7 @@ describe('the glass city', () => {
                 const sunAt = new THREE.Vector3().setFromMatrixPosition(lit.sun.matrixWorld);
                 const aimAt = new THREE.Vector3().setFromMatrixPosition(lit.sun.target.matrixWorld);
                 const target = {
-                    shift: scene.position.clone(), glow: lit.glow.visible, beacons: lit.beacons.visible, near, far,
+                    shift: scene.position.clone(), glow: lit.glow.visible, beacons: lit.beacons.visible, wheelLamps: lit.wheel.lights.visible, near, far,
                     towersShow: lit.towers.meshes[0].material.envMap,
                     sunDirection: sunAt.sub(aimAt).normalize(),
                     texture: { id: made.length }, disposed: false, dispose() { this.disposed = true; }
@@ -803,9 +803,14 @@ describe('the glass city', () => {
             // QA, 2026-09-29), and on again after.
             lit.setLight(lighting(lightAt(new Date(2026, 8, 24), 22)));
             expect(lit.beacons.visible).toBe(true);
+            // The wheel's lamps too (at nine, while it is open).
+            lit.setLife(new Date(2026, 8, 24, 21, 0), 100);
+            expect(lit.wheel.lights.visible).toBe(true);
             const night = lit.updateEnvironment({}, lighting(lightAt(new Date(2026, 8, 24), 22)));
             expect(night.bay.beacons || night.city.beacons).toBe(false);
+            expect(night.bay.wheelLamps || night.city.wheelLamps).toBe(false);
             expect(lit.beacons.visible).toBe(true);
+            expect(lit.wheel.lights.visible).toBe(true);
             const second = lit.updateEnvironment({}, dusk);
             expect(night.city.disposed && night.bay.disposed).toBe(true);
             expect(second.city.disposed || second.bay.disposed).toBe(false);
@@ -2166,5 +2171,148 @@ describe('the fifth round of screenshots (2026-09-28)', () => {
         lights.raycast(new THREE.Raycaster(), hits);
         rabbit.raycast(new THREE.Raycaster(), hits);
         expect(hits).toEqual([]);
+    });
+});
+
+describe('the observation wheel on the waterfront (QA, 2026-09-29: "a gap between some buildings to the left of the ferry terminal")', () => {
+    /** A point on the wheel's rims, `deg` round from its right-hand side,
+     *  in the world, as it stands now. */
+    const rimPoint = (deg, side) => {
+        const { WHEEL } = wheelMod;
+        const a = (deg * Math.PI) / 180;
+        world.wheel.group.updateMatrixWorld(true);
+        return new THREE.Vector3(WHEEL.radius * Math.cos(a), WHEEL.radius * Math.sin(a), (side * WHEEL.apart) / 2)
+            .applyMatrix4(world.wheel.group.matrixWorld);
+    };
+    let wheelMod;
+    beforeAll(async () => {
+        wheelMod = await import('../www/office/js/wheel.js');
+    });
+
+    test.each(['wide 21:9', 'laptop 16:10'])('on a %s screen the desk sees the top of it over the waterfront, between the towers left of the printer, and not its lower half', (name) => {
+        const cam = cameraAt('desk', ASPECTS[name]);
+        const seen = (lo, hi) => {
+            let yes = 0;
+            let all = 0;
+            for (let deg = lo; deg <= hi; deg += 4) {
+                for (const side of [-1, 1]) {
+                    const p = rimPoint(deg, side);
+                    const ndc = p.clone().project(cam);
+                    all++;
+                    if (Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1) continue;
+                    // What the eye meets first on the way, a little short of
+                    // the rim (the rim itself is the wheel).
+                    const hit = seeAlong(cam.position, p.clone().sub(cam.position));
+                    if (hit.what === 'wheel') yes++;
+                }
+            }
+            return yes / all;
+        };
+        // At this size, in against the waterfront (QA, 2026-09-29: "closer
+        // to the buildings"), it is wider than the gap between the two
+        // towers in front of it, which take its sides: the top of the rim
+        // in plain sight, and much of the rest of the upper half.
+        expect(seen(65, 115)).toBeGreaterThan(0.85);
+        expect(seen(20, 160)).toBeGreaterThan(0.4);
+        expect(seen(200, 340)).toBeLessThan(0.3);
+        // Left of middle, in the gap left of the printer, a little under the
+        // horizon (the hub projected).
+        world.wheel.group.updateMatrixWorld(true);
+        const hub = new THREE.Vector3().setFromMatrixPosition(world.wheel.group.matrixWorld).project(cam);
+        expect(hub.x).toBeLessThan(-0.4);
+        expect(hub.x).toBeGreaterThan(-0.95);
+        expect(hub.y).toBeGreaterThan(-0.3);
+        expect(hub.y).toBeLessThan(0.2);
+        const printer = new THREE.Box3().setFromObject(room.picks.printer);
+        expect(hub.x).toBeLessThan(printer.getCenter(new THREE.Vector3()).project(cam).x);
+    });
+
+    test('no tower stands in it or on its pier', () => {
+        const site = wheelMod.wheelSite();
+        const { WHEEL } = wheelMod;
+        for (const t of city.cityTowers()) {
+            // The wheel's disc and its pier, as a box along the pier.
+            const reach = WHEEL.radius * WHEEL.scale;
+            const nearX = Math.abs(t.x - site.x) < t.w / 2 + reach + 2;
+            const nearZ = t.z + t.d / 2 > site.end - reach && t.z - t.d / 2 < site.shore - 1;
+            expect({ tower: [t.x, t.z], clear: !(nearX && nearZ) }).toEqual({ tower: [t.x, t.z], clear: true });
+        }
+    });
+
+    test('by day it turns and its lamps are dark; by night, open, they are lit; after eleven it comes to rest, dark', async () => {
+        const { lighting, lightAt } = await import('../www/office/js/daylight.js');
+        const w = buildWorld(CONFIG);
+        const day = new Date(2026, 8, 24, 14, 0);
+        w.setLight(lighting(lightAt(day, 14)));
+        w.setLife(day, 1000);
+        const first = w.wheelNow().angle;
+        w.setLife(day, 1400);
+        expect(w.wheelNow().angle).toBeGreaterThan(first);
+        expect(w.wheel.frame.rotation.z).toBeCloseTo((w.wheelNow().angle * Math.PI) / 180, 9);
+        expect(w.wheel.lights.visible).toBe(false);
+        // Nine at night: lit, the spokes in the show's colors, still turning.
+        w.setLight(lighting(lightAt(new Date(2026, 8, 24), 21)));
+        w.setLife(new Date(2026, 8, 24, 21, 0), 1500);
+        expect(w.wheel.lights.visible).toBe(true);
+        const spokes = w.wheel.spokes.geometry.attributes.color.array;
+        expect(new Set(Array.from(spokes, (v) => v.toFixed(2))).size).toBeGreaterThan(10);
+        // Half past eleven: dark, and at rest within its stop.
+        const late = new Date(2026, 8, 24, 23, 30);
+        w.setLight(lighting(lightAt(late, 23.5)));
+        let t = 1500;
+        for (let k = 0; k < 4000 && w.wheelNow().running; k++) w.setLife(late, (t += 0.25));
+        expect(w.wheelNow().running).toBe(false);
+        expect(t - 1500).toBeLessThanOrEqual(wheelMod.WHEEL.stop + 0.5);
+        expect(w.wheel.lights.visible).toBe(false);
+        const parked = w.wheelNow().angle;
+        w.setLife(late, t + 600);
+        expect(w.wheelNow().angle).toBe(parked);
+        // The gondolas stay where the wheel put them, hanging level.
+        const m = new THREE.Matrix4();
+        w.wheel.gondolas.getMatrixAt(0, m);
+        const seat = wheelMod.seatAt(0, parked);
+        const hung = new THREE.Vector3().setFromMatrixPosition(m);
+        // (A matrix holds 32-bit numbers.)
+        expect(hung.x).toBeCloseTo(seat.middle[0], 4);
+        expect(hung.y).toBeCloseTo(seat.middle[1], 4);
+        expect(hung.z).toBe(0);
+    });
+
+    test('its lines and lamps never answer a ray; its solid parts do', () => {
+        const hits = [];
+        world.wheel.spokes.raycast(new THREE.Raycaster(), hits);
+        world.wheel.lights.raycast(new THREE.Raycaster(), hits);
+        expect(hits).toHaveLength(0);
+        expect(world.wheel.rims.name).toBe('wheel-rims');
+    });
+});
+
+describe('the airport keeps quiet hours (QA, 2026-09-29: "no jets arrive between midnight and 4am")', () => {
+    test('none comes in through the small hours, they come in by day, and one already coming in at midnight lands', () => {
+        const w = buildWorld(CONFIG);
+        const out = () => w.fleet.jets.map((j) => j.group.visible);
+        // Two in the morning: a quarter of an hour of flights, and not one.
+        const night = new Date(2026, 8, 25, 2, 0);
+        let seen = 0;
+        for (let t = 5000; t < 5900; t += 5) {
+            w.setLife(night, t);
+            seen += out().filter(Boolean).length;
+        }
+        expect(seen).toBe(0);
+        // In the afternoon they come in again.
+        const day = new Date(2026, 8, 25, 14, 0);
+        for (let t = 6000; t < 6400; t += 5) {
+            w.setLife(day, t);
+            seen += out().filter(Boolean).length;
+        }
+        expect(seen).toBeGreaterThan(0);
+        // A minute to midnight with one on its way in: after midnight it
+        // flies on, and lands.
+        let t = 20000;
+        w.setLife(new Date(2026, 8, 25, 23, 59), t);
+        while (!out().some(Boolean)) w.setLife(new Date(2026, 8, 25, 23, 59), (t += 1));
+        const slot = out().indexOf(true);
+        w.setLife(new Date(2026, 8, 26, 0, 0, 30), t + 5);
+        expect(out()[slot]).toBe(true);
     });
 });

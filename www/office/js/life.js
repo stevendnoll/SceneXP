@@ -40,7 +40,9 @@ const MINUTE = 60000;
  * a true-size sailboat two kilometers off is a pixel or two.
  */
 export const LIFE = {
-    ferry: { cycle: 100, crossing: 35, lane: 70, length: 140, scale: 1.2 },
+    /** `service`: the hours of the day the boats run (QA, 2026-09-29: none
+     *  between midnight and four). */
+    ferry: { cycle: 100, crossing: 35, lane: 70, length: 140, scale: 1.2, service: [4, 24] },
     ship: {
         every: 75, offset: 20, speed: 7, span: 40000, lanes: { north: -6300, south: -6900 }, length: 290,
         /** Where a ship stands, along each lane, when the visitor arrives
@@ -129,19 +131,35 @@ export function ferryRoute(city = CITY) {
     return { x, from: cityBerth, to: z + LIFE.ferry.length / 2 + 60 };
 }
 
+/** How many crossings each ferry makes in a day's service: a boat leaves
+ *  each side every half `cycle` from the first hour until the last. */
+export function ferryTrips(ferry = LIFE.ferry) {
+    return Math.ceil(((ferry.service[1] - ferry.service[0]) * 60) / (ferry.cycle / 2));
+}
+
 /**
- * Where both ferries are at a moment. Each runs a `cycle`: across to the
- * island, a wait there, back, a wait at the dock; the second runs half a
- * cycle behind the first, so a boat leaves each side every half cycle. Out
- * and back they keep to the right, so they pass each other port to port.
+ * Where both ferries are at a moment. A boat leaves each side every half
+ * `cycle` through the day's `service`: across, then a wait at the far side
+ * until it leaves again. The first leaves the city's dock and the second
+ * the island's, so they cross together and pass port to port, each
+ * keeping to its right. A day's crossings are an even number, so each ends
+ * the evening at the dock it set out from in the morning, and waits there
+ * through the night (QA, 2026-09-29: "have the ferry stop running between
+ * midnight and 4am"); the last lands before midnight. The sky's hour, so a
+ * day going by runs them too.
  */
 export function ferriesAt(date, route = ferryRoute()) {
-    const { cycle, crossing, lane } = LIFE.ferry;
+    const { cycle, crossing, lane, service } = LIFE.ferry;
     const half = cycle / 2;
+    const trips = ferryTrips();
+    const m = minutesOfDay(date) - service[0] * 60;
+    const k = Math.floor(m / half);
+    const resting = k < 0 || k >= trips;
     return [0, 1].map((f) => {
-        const phase = (((minutesOn(date) + f * half) % cycle) + cycle) % cycle;
-        const out = phase < half;
-        const p = (out ? phase : phase - half) / crossing;
+        // Through the night, as its last crossing left it.
+        const trip = resting ? trips - 1 : k;
+        const out = (trip + f) % 2 === 0;
+        const p = resting ? 1 : (m - k * half) / crossing;
         const s = gently(p);
         const along = out ? s : 1 - s;
         // Out is heading west (-z), whose right hand is north (+x).
@@ -736,6 +754,8 @@ export function carLightPositions(cars, lanes, seconds, out = new Float32Array(c
  */
 export const JET = {
     every: 90,
+    /** The hours no new flight arrives (jetsQuiet). */
+    quiet: [0, 4],
     late: 20,
     first: -5,
     fleet: 3,
@@ -951,9 +971,19 @@ export function jetOnTrack(into) {
     return jetAtPoint(a, b, ground, 0, 1, 0, 'taxi', false);
 }
 
+/** Whether no new flight arrives at `date`: the airport's quiet hours, by
+ *  the sky's clock (QA, 2026-09-29: "no jets arrive between midnight and
+ *  4am"). A flight already in when they begin lands; world.js decides it
+ *  by the sky's hour when the flight is first seen (jetsAt `k`). */
+export function jetsQuiet(date) {
+    const h = date.getHours();
+    return h >= JET.quiet[0] && h < JET.quiet[1];
+}
+
 /**
  * Every jet at `seconds`: an array of JET.fleet + 1, each null (not out) or
- * where it is (jetOnTrack) and in which `livery` (liveryOf). Flight k flies
+ * where it is (jetOnTrack), in which `livery` (liveryOf), and its flight's
+ * number `k` (none for one asked for by hand). Flight k flies
  * jet k mod JET.fleet; the last is kept for one asked for by hand
  * (`called`, the start of it, main.js cornerOffice.jet), so it never takes
  * a jet a flight is using.
@@ -963,7 +993,7 @@ export function jetsAt(seconds, called = null) {
     const last = Math.floor((seconds - JET.first) / JET.every);
     for (let k = last - JET.fleet; k <= last; k++) {
         const at = jetOnTrack(seconds - jetFlight(k).start);
-        if (at) slots[((k % JET.fleet) + JET.fleet) % JET.fleet] = { ...at, livery: liveryOf(k) };
+        if (at) slots[((k % JET.fleet) + JET.fleet) % JET.fleet] = { ...at, livery: liveryOf(k), k };
     }
     if (called != null) {
         const at = jetOnTrack(seconds - called);
