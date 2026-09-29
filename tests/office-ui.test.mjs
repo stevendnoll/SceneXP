@@ -1836,6 +1836,77 @@ describe('the pulsing markers (QA, 2026-09-29: "a floating pulsing circle over t
     });
 });
 
+describe('the telemetry beacons (QA, 2026-09-29: "change the place parameter to be kind", and "a single user action should never trigger more than one telemetry call")', () => {
+    /** The parameters the server's log keeps (specs/nginx-config.txt, the
+     *  scenexp_api log_format). Anything else is sent and never recorded. */
+    const LOGGED = ['action', 'timestamp', 'mobile', 'scene', 'lang', 'hash', 'kind', 'outcome', 'seconds', 'saved', 'destroyed'];
+
+    test('one thing done is one beacon: the way it was reached is its kind, a celebration and a count ride in its outcome', () => {
+        const sent = [];
+        globalThis.Image = class { set src(url) { sent.push(new URL(url, 'http://localhost:8000/office/')); } };
+        /** The beacons `act` sends, each as "action kind=... outcome=...". */
+        const beaconsOf = (act) => {
+            const from = sent.length;
+            act();
+            return sent.slice(from).map((u) => {
+                for (const k of u.searchParams.keys()) expect({ k, logged: LOGGED.includes(k) }).toEqual({ k, logged: true });
+                const kind = u.searchParams.get('kind');
+                const outcome = u.searchParams.get('outcome');
+                return [u.searchParams.get('action'), kind && `kind=${kind}`, outcome && `outcome=${outcome}`].filter(Boolean).join(' ');
+            });
+        };
+        const escape = () => fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        const welcomeButton = (label) => el('welcome-actions').children.find((b) => b.textContent === label);
+        try {
+            t.showWelcome();
+            expect(beaconsOf(() => welcomeButton('Look around').click())).toEqual(['welcome kind=look-around']);
+            // The computer four ways: each one beacon, the way as its kind.
+            expect(beaconsOf(() => t.actOn('computer'))).toEqual(['open-computer kind=tap']);
+            escape();
+            expect(beaconsOf(() => t.marks.list.find((m) => m.key === 'computer').btn.click())).toEqual(['open-computer kind=marker']);
+            escape();
+            expect(beaconsOf(() => place('computer'))).toEqual(['open-computer kind=place']);
+            escape();
+            expect(beaconsOf(() => key('c'))).toEqual(['open-computer']);
+            escape();
+            expect(beaconsOf(() => place('desk'))).toEqual(['place kind=desk']);
+            expect(beaconsOf(() => t.actOn('binoculars'))).toEqual(['binoculars kind=tap']);
+            expect(beaconsOf(() => t.putDownBinoculars())).toEqual([]);
+            expect(beaconsOf(() => t.actOn('whiteboard'))).toEqual(['open-whiteboard kind=tap']);
+            escape();
+            expect(beaconsOf(() => t.actOn('lamp'))).toEqual(['tap-lamp']);
+            // A celebration is not a beacon of its own.
+            expect(beaconsOf(() => quickAdd('Acme', 'Designer'))).toEqual(['add-application outcome=celebrated=applied']);
+            const id = live()[0].id;
+            expect(beaconsOf(() => t.changeStatus(id, 'offer'))).toEqual(['change-status kind=offer outcome=celebrated=offer']);
+            // The pinboard's move is the status change, its way in outcome.
+            expect(beaconsOf(() => t.changeStatus(id, 'interviewing', 'board-drag'))).toEqual(['change-status kind=interviewing outcome=via=board-drag']);
+            const [stocked] = beaconsOf(() => t.stockOffice());
+            expect(stocked).toMatch(/^stock-samples outcome=count=\d+$/);
+            t.showWelcome();
+            expect(beaconsOf(() => welcomeButton('Step inside').click())).toEqual(['welcome kind=step-inside']);
+        } finally {
+            delete globalThis.Image;
+        }
+    });
+
+    test('every beacon in the source names only what the log keeps', () => {
+        const source = readFileSync(join(process.cwd(), 'www/office/js/main.js'), 'utf8');
+        expect(source).not.toMatch(/(?:report|track)\([^;]*, \{ (place|how|status|items|count|type)\b/);
+        expect(source).not.toMatch(/report\('(?:board-move|celebrate)'/);
+        // The key before each colon in each call's params, but `device`,
+        // which every scene's session-start sends and a sitewide pass will
+        // settle.
+        const calls = [...source.matchAll(/\b(?:report|track|trackFinal)\(([^;{]*?), \{([^}]*)\}/g)];
+        expect(calls.length).toBeGreaterThan(8);
+        for (const [call, , body] of calls) {
+            for (const [, key] of body.matchAll(/(?:^|,)\s*([a-zA-Z]+)\s*(?::|,|$)/g)) {
+                expect({ call, key, logged: LOGGED.includes(key) || key === 'device' }).toEqual({ call, key, logged: true });
+            }
+        }
+    });
+});
+
 describe('celebrating (QA, 2026-09-29: "the mere act of applying should be cause for a celebration")', () => {
     test('an application sent: a word of it, and a firework over the bay once the room is in view', () => {
         quickAdd('Acme', 'Designer');

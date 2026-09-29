@@ -124,6 +124,22 @@ test('a returning visitor is told what is waiting, in the card and in the title'
     expect(document.title).toBe('(1) Corner Office');
 });
 
+test('the session starts with its detail in `outcome`, which the server logs (QA, 2026-09-29)', async () => {
+    const sent = [];
+    globalThis.Image = class { set src(url) { sent.push(new URL(url, 'http://localhost:8000/office/')); } };
+    try {
+        localStorage.setItem(CONFIG.storage.key, JSON.stringify(savedOffice()));
+        await boot();
+        const start = sent.find((u) => u.searchParams.get('action') === 'session-start');
+        const detail = new URLSearchParams(start.searchParams.get('outcome'));
+        expect(Object.fromEntries(detail)).toEqual({ applications: '1', returning: 'true' });
+        expect(start.searchParams.has('applications')).toBe(false);
+        expect(start.searchParams.has('returning')).toBe(false);
+    } finally {
+        delete globalThis.Image;
+    }
+});
+
 test('a fresh office leads with adding an application, and a returning one with stepping inside', async () => {
     await boot();
     const labels = () => dom.el('welcome-actions').children.map((b) => b.textContent);
