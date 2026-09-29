@@ -23,32 +23,11 @@ import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/office/js/config.js';
 import { emptyDoc, addApplication, addTask, setStatus } from '../www/office/js/store.js';
 import { formatDate } from '../www/office/js/dates.js';
-import { landGrids } from '../www/office/js/city.js';
+import { shareOfficeMath } from './helpers/office-math.mjs';
 
-/**
- * THE LAND, MADE ONCE AND THINNED. Every boot here re-imports the modules,
- * and the land across the bay is ninety thousand points of noise to work
- * out, which Jest's module sandbox runs some sixty times slower than plain
- * Node (800k noise calls: 7 ms in Node, 420 ms here). Thirteen boots of it
- * doubled this file and timed out its first test in a loaded full run
- * (2026-09-25). So the land is made once for the file and every sixth point
- * kept: these tests boot the page and drive it, and the land itself is
- * measured with the real three.js in office-view.
- */
-function thinned({ positions, cols, rows }, every = 6) {
-    const pick = (n) => [...new Set([...Array.from({ length: Math.ceil(n / every) }, (_, i) => i * every), n - 1])];
-    const cs = pick(cols);
-    const rs = pick(rows);
-    const out = new Float32Array(cs.length * rs.length * 3);
-    let k = 0;
-    for (const r of rs) for (const c of cs) for (let a = 0; a < 3; a++) out[k++] = positions[(r * cols + c) * 3 + a];
-    return { positions: out, cols: cs.length, rows: rs.length };
-}
-const LAND = Object.fromEntries(Object.entries(landGrids()).map(([name, grid]) => [name, thinned(grid)]));
-jest.unstable_mockModule('../www/office/js/city.min.js', async () => ({
-    ...(await import('../www/office/js/city.js')),
-    landGrids: () => LAND
-}));
+// The world's heavy pure math worked out once for the file, not at every
+// boot (tests/helpers/office-math).
+shareOfficeMath();
 
 let dom;
 

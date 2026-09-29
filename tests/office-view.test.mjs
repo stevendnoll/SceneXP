@@ -54,14 +54,17 @@ const ASPECTS = { 'wide 21:9': 21 / 9, 'laptop 16:10': 16 / 10, 'phone upright':
  * grid), and three's raycaster tries every one for every ray, which doubled
  * this file's run (107 s to 214 s, 2026-09-25). The page never casts a ray
  * outside (taps test the room), so the census alone gets a faster cast: each
- * land mesh split into tiles, `across` by x and `back` by z, each with its
+ * big mesh split into tiles, `across` by x and `back` by z, each with its
  * own bounds, so a ray tries only the tiles it crosses. The hits are the
- * mesh's own, as three would report them.
+ * mesh's own, as three would report them, with every attribute (a uv too).
+ * Indexed or not: the city's ground and the towers were left out at first,
+ * and every ray from the window tried all of their ~60k triangles
+ * (2026-09-29: raycasting was 165 s of this file's 200).
  */
 function stripCast(mesh, across = 64, back = 12) {
     const g = mesh.geometry;
     const pos = g.attributes.position;
-    const index = g.index.array;
+    const index = g.index ? g.index.array : Array.from({ length: pos.count }, (_, i) => i);
     const span = (get) => {
         let lo = Infinity;
         let hi = -Infinity;
@@ -78,7 +81,7 @@ function stripCast(mesh, across = 64, back = 12) {
     }
     const probes = parts.filter((p) => p.length).map((p) => {
         const part = new THREE.BufferGeometry();
-        part.setAttribute('position', pos);
+        for (const [name, attribute] of Object.entries(g.attributes)) part.setAttribute(name, attribute);
         part.setIndex(p);
         const box = new THREE.Box3();
         const v = new THREE.Vector3();
@@ -103,10 +106,23 @@ function stripCast(mesh, across = 64, back = 12) {
     };
 }
 
-/** A world built for these tests: the land given its strip cast. */
+/** The meshes worth a strip cast: big, plain (not instanced, one
+ *  material, no groups a subset index would lose). */
+const STRIP_FROM = 2000;
+function stripped(scene) {
+    const out = [];
+    scene.traverse((o) => {
+        if (!o.isMesh || o.isInstancedMesh || Array.isArray(o.material) || o.geometry.groups.length) return;
+        const g = o.geometry;
+        if ((g.index ? g.index.count : g.attributes.position.count) / 3 >= STRIP_FROM) out.push(o);
+    });
+    return out;
+}
+
+/** A world built for these tests: its big meshes given their strip cast. */
 function buildWorld(config, options) {
     const w = worldMod.buildWorld(config, options);
-    for (const mesh of [w.mountains, ...w.hills.children]) stripCast(mesh);
+    for (const mesh of stripped(w.scene)) stripCast(mesh);
     return w;
 }
 
@@ -518,6 +534,34 @@ describe('the bay and the air', () => {
             }
         }
         expect(hits).toBeGreaterThan(20);
+    });
+
+    test('and on every other big mesh (the city’s ground, the towers, the sky), with the same point and uv', () => {
+        const meshes = stripped(world.scene);
+        const names = meshes.map((m) => m.name);
+        for (const name of ['land-downtown', 'towers-roofs', 'towers-bands', 'towers-grid', 'sky']) expect(names).toContain(name);
+        const cam = cameraAt('window', 16 / 10);
+        const met = new Set();
+        for (let i = 0; i < 24; i++) {
+            for (let j = 0; j < 16; j++) {
+                const ray = new THREE.Raycaster();
+                ray.setFromCamera(new THREE.Vector2(-1 + (2 * (i + 0.5)) / 24, -1 + (2 * (j + 0.5)) / 16), cam);
+                for (const mesh of meshes) {
+                    const fast = [];
+                    mesh.raycast(ray, fast);
+                    const full = [];
+                    THREE.Mesh.prototype.raycast.call(mesh, ray, full);
+                    const first = (list) => list.slice().sort((a, b) => a.distance - b.distance)[0];
+                    const [f, g] = [first(fast), first(full)];
+                    expect(f ? f.distance : null).toBe(g ? g.distance : null);
+                    if (!f) continue;
+                    met.add(mesh.name);
+                    expect(f.object).toBe(mesh);
+                    if (g.uv) expect([f.uv.x, f.uv.y]).toEqual([g.uv.x, g.uv.y]);
+                }
+            }
+        }
+        for (const name of ['land-downtown', 'towers-bands', 'sky']) expect(met.has(name)).toBe(true);
     });
 
     test('the land across the bay takes less of the haze than the city, a bluer one, and all of it, gray, in the rain', () => {

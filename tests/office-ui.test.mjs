@@ -16,6 +16,12 @@ import { join } from 'node:path';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/office/js/config.js';
+import { shareOfficeMath } from './helpers/office-math.mjs';
+
+// The world's heavy pure math worked out once for the file, not in each of
+// 135 boots, which was most of this file's five minutes
+// (tests/helpers/office-math).
+shareOfficeMath();
 
 // Every test boots the whole page (the room and the world outside), about
 // two seconds alone, and past Jest's five under the full parallel run once
