@@ -1533,3 +1533,13 @@ button.hud-chip:focus-visible {
         font-size: 8.5pt;
     }
 }
+
+/* NO FLOATING LOOK BUTTONS (QA, 2026-09-29: pan and zoom "without any
+   floating arrow/zoom buttons"). The shared pan part builds its row, and
+   the office's reveal adds .visible to every .ui-float, so it is hidden
+   here, as www/automan hides its own. Hidden rather than left out, because
+   the part answers its keys only where its buttons exist. `body` makes this
+   beat the shared sheet's three-class .pan-controls.always-on.visible. */
+body .pan-controls.no-chrome.visible {
+    display: none;
+}

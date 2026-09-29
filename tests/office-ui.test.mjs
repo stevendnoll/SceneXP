@@ -1632,3 +1632,81 @@ describe('the printer', () => {
         expect(said()).toBe('That application is no longer here.');
     });
 });
+
+describe('looking around (QA, 2026-09-29: pan and zoom with no floating buttons)', () => {
+    const canvas = () => el('game-canvas');
+    const frame = (ms = 100) => {
+        t.state.lastTime = performance.now() - ms;
+        t.animate();
+    };
+
+    test('a zoom is a lens: narrowed in tan space, never wider than the widest the view allows', () => {
+        expect(main.zoomedFov(50, 0)).toBeCloseTo(50, 9);
+        const tan = (deg) => Math.tan((deg * Math.PI) / 360);
+        expect(tan(main.zoomedFov(50, 1))).toBeCloseTo(tan(50) / 2, 9);
+        expect(main.zoomedFov(80, -1)).toBe(CONFIG.view.maxFov);
+        const { maxIn, maxOut } = CONFIG.view.look.zoom;
+        expect(t.setZoom(9)).toBe(maxIn);
+        expect(t.setZoom(-9)).toBe(-maxOut);
+    });
+
+    test('the wheel zooms, up for in, a notch at a time; the arrow keys turn the view', async () => {
+        const pan = await import('../www/shared/js/pan-1.0.0.min.js');
+        t.setZoom(0);
+        fire(canvas(), 'wheel', { deltaY: -100, deltaMode: 0, cancelable: true });
+        expect(t.ui.zoom).toBeCloseTo(CONFIG.view.look.zoom.wheel, 9);
+        fire(canvas(), 'wheel', { deltaY: 100, deltaMode: 0, cancelable: true });
+        expect(t.ui.zoom).toBeCloseTo(0, 9);
+        fire(dom.windowStub, 'keydown', { code: 'ArrowLeft', target: dom.documentStub.body });
+        frame(80);
+        fire(dom.windowStub, 'keyup', { code: 'ArrowLeft', target: dom.documentStub.body });
+        expect(pan.getPanAngle()).toBeCloseTo(-CONFIG.view.look.pan.speed * 0.08, 6);
+        // Up and down tilt, and + and - zoom.
+        fire(dom.windowStub, 'keydown', { code: 'ArrowUp', target: dom.documentStub.body });
+        frame(100);
+        fire(dom.windowStub, 'keyup', { code: 'ArrowUp', target: dom.documentStub.body });
+        expect(pan.getTiltAngle()).toBeGreaterThan(0);
+        fire(dom.windowStub, 'keydown', { code: 'Equal', target: dom.documentStub.body });
+        frame(100);
+        fire(dom.windowStub, 'keyup', { code: 'Equal', target: dom.documentStub.body });
+        expect(t.ui.zoom).toBeGreaterThan(0);
+    });
+
+    test('a new station starts from its composed view, and any card holds the look still', async () => {
+        const pan = await import('../www/shared/js/pan-1.0.0.min.js');
+        t.setZoom(0.8);
+        fire(dom.windowStub, 'keydown', { code: 'ArrowRight', target: dom.documentStub.body });
+        frame(200);
+        fire(dom.windowStub, 'keyup', { code: 'ArrowRight', target: dom.documentStub.body });
+        expect(pan.getPanAngle()).toBeGreaterThan(0);
+        expect(t.lookLocked()).toBe(false);
+        key('c');
+        expect(t.lookLocked()).toBe(true);
+        expect(pan.getPanAngle()).toBe(0);
+        expect(t.ui.zoom).toBe(0);
+        // While the card is up, held keys do not turn the room behind it.
+        fire(dom.windowStub, 'keydown', { code: 'ArrowRight', target: dom.documentStub.body });
+        frame(200);
+        fire(dom.windowStub, 'keyup', { code: 'ArrowRight', target: dom.documentStub.body });
+        expect(pan.getPanAngle()).toBe(0);
+    });
+
+    test('no buttons on screen: the part’s row is built, and hidden by the office’s own sheet', () => {
+        let row = null;
+        for (const child of dom.documentStub.body.children || []) {
+            if (String(child.className).includes('pan-controls')) row = child;
+        }
+        expect(row).toBeTruthy();
+        expect(row.className).toContain('no-chrome');
+        const css = readFileSync(join(process.cwd(), 'www/office/css/experience.css'), 'utf8');
+        expect(css).toMatch(/body \.pan-controls\.no-chrome\.visible\s*\{\s*display:\s*none;/);
+        // And the welcome card says how, since nothing on screen does.
+        const html = readFileSync(join(process.cwd(), 'www/office/index.html'), 'utf8');
+        expect(html).toMatch(/Drag to look around, and scroll or pinch to zoom\./);
+    });
+
+    test('a touch on the room is a tap at its end, its click canceled', () => {
+        const ended = fire(canvas(), 'touchend', { cancelable: true, changedTouches: [{ clientX: 640, clientY: 400 }] });
+        expect(ended.defaultPrevented).toBe(true);
+    });
+});

@@ -88,7 +88,7 @@
     <title>Corner Office</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=1" as="style">
+    <link rel="preload" href="css/experience.min.css?v=2" as="style">
     <link rel="preload" href="../lib/three.min.js" as="script">
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -96,7 +96,7 @@
     <!-- The shared sheet, then this scene's, which carries the office's own
          cards. -->
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=1">
+    <link rel="stylesheet" href="css/experience.min.css?v=2">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -206,6 +206,8 @@
             <p id="welcome-intro" class="card-detail">A job search tracker that lives in a 3D office.
                 Your applications, interviews and follow-ups fill the furniture, and everything you
                 enter stays in this browser and goes nowhere else.</p>
+            <p id="welcome-look" class="card-meta">Drag to look around, and scroll or pinch to zoom.
+                The arrow keys and the + and − keys do the same.</p>
 
             <!-- Shown only when a saved office was found. What is waiting
                  today, or that nothing is. -->

@@ -175,6 +175,21 @@ export const CONFIG = deepFreeze({
     view: {
         refAspect: 16 / 10,
         maxFov: 84,
+        /**
+         * Looking around from wherever the visitor stands (QA, 2026-09-29:
+         * pan and zoom "without any floating arrow/zoom buttons"), through
+         * the shared pan part: drag, the arrow keys or WASD turn and tilt
+         * the view, `pan.maxAngle` radians either way and `pan.maxTilt` up
+         * or down, at `pan.speed` radians a second while a key is held; the
+         * wheel, a pinch and + and - zoom, in doublings of magnification,
+         * up to `zoom.maxIn` in and `zoom.maxOut` out, `zoom.speed` a second
+         * while a key is held and `zoom.wheel` a notch. A new station, and
+         * any card, starts from the composed view again.
+         */
+        look: {
+            pan: { speed: 0.7, maxAngle: 0.6, maxTilt: 0.35 },
+            zoom: { speed: 1.2, wheel: 0.15, maxIn: 1.3, maxOut: 0.35 }
+        },
         /** How long a glide between stations takes. Reduced motion cuts. */
         glideSeconds: 0.9,
         /** The narrowest screen a station's `retreat` is sized for: an

@@ -80,6 +80,9 @@ import {
 } from './panels.min.js';
 import { installCardFocusTrap, installCardScrollReset, getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { createResolution } from '../../shared/js/resolution-1.0.0.min.js';
+import {
+    initPortraitControls, updatePortraitControls, resetPortraitAim, gestureClaimedTap, disposePortraitControls
+} from '../../shared/js/pan-1.0.0.min.js';
 import { leatherMaps } from './finishes.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 
@@ -118,6 +121,8 @@ const ui = {
     taskAppId: null,
     editingTaskId: null,
     lampOn: true,
+    /** How far the visitor has zoomed, doublings of magnification (setZoom). */
+    zoom: 0,
     /** The room's tone-mapping exposure (roomExposure), set with the light. */
     roomExposure: 1,
     /** Whether the folder lies open on the desk. Kept here as well as on the
@@ -212,6 +217,12 @@ const mirrors = { targets: [], cams: [], eye: null, lens: null };
 /** The height the sun's beam is aimed at, the room's middle. Meters. */
 const ROOM_MIDDLE = 1.2;
 let glide = null;
+// Where the station's camera aims (applyPose): the point the shared pan
+// part turns the visitor's look around, re-based as the camera glides.
+const viewAim = { x: 0, y: 0, z: 0 };
+// The last camera drawn from (animate): a look that turned it asks for a
+// frame, and takes the world's camera with it.
+const lastLook = { values: null };
 let screenCanvas = null;
 let screenTexture = null;
 let raycaster = null;
@@ -562,9 +573,105 @@ function buildScene() {
     pointer = new THREE.Vector2();
 }
 
+/**
+ * A field of view (degrees) zoomed by `zoom` doublings of magnification:
+ * narrowed in tan space, so the view grows as a lens's does, and never
+ * wider than `widest`.
+ */
+export function zoomedFov(fov, zoom, widest = CONFIG.view.maxFov) {
+    const f = (360 / Math.PI) * Math.atan(Math.tan((fov * Math.PI) / 360) / Math.pow(2, zoom));
+    return Math.min(widest, f);
+}
+
+/** Zoom to `zoom` doublings (clamped to CONFIG.view.look.zoom), from the
+ *  station's own composed lens. */
+function setZoom(zoom) {
+    const { maxIn, maxOut } = CONFIG.view.look.zoom;
+    ui.zoom = Math.min(maxIn, Math.max(-maxOut, zoom));
+    if (!camera || !state.pose) return ui.zoom;
+    camera.fov = zoomedFov(state.pose.fov, ui.zoom);
+    camera.updateProjectionMatrix();
+    if (world) world.follow(camera);
+    state.dirty = true;
+    return ui.zoom;
+}
+
+/** Whether the visitor's look is held still: before the office is ready,
+ *  and while any card is open (each frames its own subject, and the
+ *  pinboard's cards are dragged on the same surface). */
+function lookLocked() {
+    return !state.loaded || anyOpen();
+}
+
+/**
+ * The drag, wheel, pinch and keys that look around (CONFIG.view.look),
+ * through the shared pan part with its buttons hidden (experience.css
+ * .no-chrome): the office owns the zoom (each station and screen shape
+ * composes its own lens), the part the turn and tilt about `viewAim`.
+ * Registered after the office's own pointer handlers, so its guard can
+ * keep the part out while a card is open.
+ */
+function setupLook(signal) {
+    const stopWhileLocked = (event) => {
+        if (lookLocked()) event.stopImmediatePropagation();
+    };
+    canvas.addEventListener('pointerdown', stopWhileLocked, { signal });
+    canvas.addEventListener('wheel', stopWhileLocked, { passive: true, signal });
+    const { pan, zoom } = CONFIG.view.look;
+    initPortraitControls({
+        getCamera: () => camera,
+        lookAt: viewAim,
+        pan,
+        zoom,
+        zoomDelegate: {
+            onDelta: (d) => setZoom(ui.zoom + d),
+            limits: () => ({ atIn: ui.zoom >= zoom.maxIn - 1e-6, atOut: ui.zoom <= -zoom.maxOut + 1e-6 })
+        },
+        // Hidden, but built: the part answers the up and down arrows with
+        // the tilt only where its tilt pair exists.
+        tiltButtons: true,
+        alwaysOn: true,
+        extraClass: 'always-on no-chrome',
+        surface: canvas,
+        onFirstUse: (kind) => track(`portrait-${kind}`),
+        signal
+    });
+}
+
+/** Whether the camera has turned or zoomed since the last time asked: its
+ *  rotation and lens as plain numbers (anything else, as a test's stand-in
+ *  camera gives, is never a change). */
+function lookChanged() {
+    const q = camera.quaternion;
+    const now = [q.x, q.y, q.z, q.w, camera.fov];
+    if (!now.every((v) => typeof v === 'number' && Number.isFinite(v))) return false;
+    const was = lastLook.values;
+    lastLook.values = now;
+    return !was || now.some((v, i) => v !== was[i]);
+}
+
+/** The camera's pose as the visitor now sees it, turned and zoomed: where a
+ *  glide to a station starts, so it never snaps back first. */
+function lookingPose() {
+    const base = state.pose;
+    if (!camera || !base) return base;
+    const reach = Math.hypot(base.aim[0] - base.eye[0], base.aim[1] - base.eye[1], base.aim[2] - base.eye[2]);
+    const dir = camera.getWorldDirection(new THREE.Vector3());
+    const eye = camera.position;
+    return {
+        ...base,
+        eye: [eye.x, eye.y, eye.z],
+        aim: [eye.x + dir.x * reach, eye.y + dir.y * reach, eye.z + dir.z * reach],
+        fov: camera.fov
+    };
+}
+
 function applyPose(pose) {
     camera.position.set(pose.eye[0], pose.eye[1], pose.eye[2]);
-    camera.fov = pose.fov;
+    camera.fov = zoomedFov(pose.fov, ui.zoom || 0);
+    viewAim.x = pose.aim[0];
+    viewAim.y = pose.aim[1];
+    viewAim.z = pose.aim[2];
     camera.aspect = aspect();
     camera.updateProjectionMatrix();
     camera.lookAt(pose.aim[0], pose.aim[1], pose.aim[2]);
@@ -589,7 +696,12 @@ function goTo(station) {
     ui.station = station;
     showDayButton();
     const to = poseFor(station, aspect(), CONFIG);
-    glide = createGlide(state.pose || to, to, state.reducedMotion ? 0 : CONFIG.view.glideSeconds);
+    // From the view as the visitor has turned and zoomed it, and the look
+    // spent on the way: each station starts from its composed view.
+    const from = lookingPose() || to;
+    resetPortraitAim();
+    ui.zoom = 0;
+    glide = createGlide(from, to, state.reducedMotion ? 0 : CONFIG.view.glideSeconds);
     requestRender();
 }
 
@@ -1505,6 +1617,8 @@ function placesKeys(event) {
         togglePlaces(false);
     } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && at >= 0) {
         event.preventDefault();
+        // The menu's own arrows: the view must not tilt behind it.
+        if (event.stopPropagation) event.stopPropagation();
         const next = items[(at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length];
         if (next && next.focus) next.focus();
     }
@@ -2326,9 +2440,20 @@ function setupEventListeners() {
         if (event.key === store.key || event.key === null) followOtherTab();
     }, { signal });
 
-    // Taps on the room. A click is what a tap becomes on a phone too, and the
-    // card it opens is armed against the tap's own echo (cards.js).
-    canvas.addEventListener('click', (event) => handleSceneTap(event.clientX, event.clientY), { signal });
+    // Taps on the room, by a click, or on a touch screen by the touch's end
+    // (the shared pan part cancels touchstart, so a touch makes no click),
+    // and never the end of a drag or a pinch that looked around. The card a
+    // tap opens is armed against the tap's own echo (cards.js).
+    canvas.addEventListener('click', (event) => {
+        if (gestureClaimedTap()) return;
+        handleSceneTap(event.clientX, event.clientY);
+    }, { signal });
+    canvas.addEventListener('touchend', (event) => {
+        if (event.cancelable) event.preventDefault();
+        if (gestureClaimedTap()) return;
+        const touch = event.changedTouches && event.changedTouches[0];
+        if (touch) handleSceneTap(touch.clientX, touch.clientY);
+    }, { passive: false, signal });
     canvas.addEventListener('pointerdown', boardPointerDown, { signal });
     canvas.addEventListener('pointermove', boardPointerMove, { signal });
     canvas.addEventListener('pointerup', boardPointerUp, { signal });
@@ -2338,6 +2463,7 @@ function setupEventListeners() {
     if (anyOpen() && topCard() !== 'cabinet' && topCard() !== 'board') return;
         canvas.style.cursor = pickAt(event.clientX, event.clientY) ? 'pointer' : '';
     }, { signal });
+    setupLook(signal);
 
     // Shortcuts. Undo works anywhere but inside a text box, where the
     // browser's own undo is the one a visitor means.
@@ -2427,6 +2553,13 @@ function animate() {
     if (glide) {
         applyPose(glide.step(delta));
         if (glide.done) glide = null;
+        state.dirty = true;
+    }
+    // The visitor's look (setupLook), and a frame when it has turned or
+    // zoomed the camera, the world's camera with it.
+    if (camera && !lookLocked()) updatePortraitControls(delta);
+    if (camera && lookChanged()) {
+        if (world) world.follow(camera);
         state.dirty = true;
     }
     if (ui.cabinetMoving && filing) {
@@ -2610,6 +2743,7 @@ function cleanup() {
     if (store) store.tearDown();
     stop();
     if (cleanupController) cleanupController.abort();
+    disposePortraitControls();
 }
 
 function endSession() {
@@ -2669,6 +2803,8 @@ if (typeof document !== 'undefined') {
 export const __test__ = {
     state,
     ui,
+    setZoom,
+    lookLocked,
     sceneryClock,
     roomExposure,
     history,

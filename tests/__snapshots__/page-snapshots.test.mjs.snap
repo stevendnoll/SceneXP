@@ -3482,11 +3482,11 @@ html [lang="en"]
     title
       "Corner Office"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=1" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=2" rel="preload"]
     link [as="script" href="../lib/three.min.js" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=1" rel="stylesheet"]
+    link [href="css/experience.min.css?v=2" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -3553,6 +3553,8 @@ html [lang="en"]
           "Corner Office"
         p#welcome-intro.card-detail
           "A job search tracker that lives in a 3D office. Your applications, interviews and follow-ups fill the furniture, and everything you enter stays in this browser and goes nowhere else."
+        p#welcome-look.card-meta
+          "Drag to look around, and scroll or pinch to zoom. The arrow keys and the + and − keys do the same."
         p#welcome-resume.card-meta [hidden]
         p#storage-note.storage-note
         div#welcome-actions.card-actions
