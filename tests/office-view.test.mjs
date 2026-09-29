@@ -1657,9 +1657,13 @@ describe('the second round of screenshots (2026-09-24)', () => {
         const pitches = new Float32Array(cars.length);
         const middles = life.carPositions(cars, lanes, 12, undefined, pitches);
         const yaws = life.carYaws(cars, lanes);
-        const onHill = cars.findIndex((c, i) => life.onStreet(middles[i * 3 + 1]) && Math.abs(pitches[i]) > 0.02);
-        const bus = cars.findIndex((c, i) => c.kind === 'bus' && life.onStreet(middles[i * 3 + 1]));
-        const suv = cars.findIndex((c, i) => c.scale === life.SUV && life.onStreet(middles[i * 3 + 1]));
+        // On the street where its lane puts it, if it is out this lap (the
+        // hour's traffic, life.js trafficStep); parked otherwise.
+        const out = lit.traffic().out;
+        const driving = (i) => out[i] === 1 && life.onStreet(middles[i * 3 + 1]);
+        const onHill = cars.findIndex((c, i) => driving(i) && Math.abs(pitches[i]) > 0.02);
+        const bus = cars.findIndex((c, i) => c.kind === 'bus' && driving(i));
+        const suv = cars.findIndex((c, i) => c.scale === life.SUV && driving(i));
         expect(Math.min(onHill, bus, suv)).toBeGreaterThanOrEqual(0);
         for (const i of [0, 17, 99, onHill, bus, suv, cars.length - 1]) {
             const { paint, trim } = vehicles[cars[i].kind];
@@ -1672,7 +1676,7 @@ describe('the second round of screenshots (2026-09-24)', () => {
             expect(p.x).toBeCloseTo(middles[i * 3], 3);
             expect(p.z).toBeCloseTo(middles[i * 3 + 2], 3);
             expect(s.toArray().map((v) => +v.toFixed(6))).toEqual(cars[i].scale);
-            if (!life.onStreet(middles[i * 3 + 1])) {
+            if (!driving(i)) {
                 expect(p.y).toBeLessThan(-1000);
                 continue;
             }
@@ -2314,5 +2318,48 @@ describe('the airport keeps quiet hours (QA, 2026-09-29: "no jets arrive between
         const slot = out().indexOf(true);
         w.setLife(new Date(2026, 8, 26, 0, 0, 30), t + 5);
         expect(out()[slot]).toBe(true);
+    });
+
+    test('and the streets empty in the small hours: a car or two at three, full in the morning rush (QA, 2026-09-29)', () => {
+        const w = buildWorld(CONFIG);
+        // What is drawn: the vehicles standing on the streets, not parked
+        // under the water.
+        const drawn = () => {
+            const m = new THREE.Matrix4();
+            const p = new THREE.Vector3();
+            let on = 0;
+            let all = 0;
+            for (const kind of ['car', 'bus']) {
+                const mesh = w.fleet.vehicles[kind].paint;
+                for (let i = 0; i < mesh.count; i++) {
+                    mesh.getMatrixAt(i, m);
+                    all++;
+                    if (p.setFromMatrixPosition(m).y > -5000) on++;
+                }
+            }
+            return { on, all };
+        };
+        const outAt = (date, from) => {
+            // A few laps round, so every vehicle has had its say, counting
+            // the whole time (a vehicle is also parked while it is round
+            // the far end of its loop).
+            let on = 0;
+            let all = 0;
+            for (let t = from; t < from + 240; t += 1) {
+                w.setLife(date, t);
+                if (t < from + 60) continue;
+                const d = drawn();
+                on += d.on;
+                all += d.all;
+            }
+            return on / all;
+        };
+        const night = outAt(new Date(2026, 8, 25, 3, 0), 1000);
+        const rush = outAt(new Date(2026, 8, 25, 8, 0), 2000);
+        // In the rush, the share of its loop a vehicle spends on the street;
+        // at three, about a twelfth of that.
+        expect(night).toBeLessThan(rush * 0.15);
+        expect(night).toBeGreaterThan(0);
+        expect(w.carsOut()).toBeGreaterThan(0);
     });
 });

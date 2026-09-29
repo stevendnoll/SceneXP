@@ -36,7 +36,7 @@ import {
 import { BAY, HAZE, rippleNormals, meanSquareSlope } from './bay.min.js';
 import { CLOUDS, POLE, starField, lightFrom, discBasis, sunClear } from './sky.min.js';
 import {
-    ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions,
+    ferryRoute, ferriesAt, shipsAt, sailboatCourses, sailboatsAt, seaplaneAt, carLanes, carFleet, carPositions, trafficAt, trafficStep, parkAbsent,
     carLightPositions, carYaws, drift, jetsAt, jetsQuiet, jetFlashing, shipShift, cruiseLane, cruisePier, cruiseAt, LIFE, JET, LIVERIES
 } from './life.min.js';
 import { buildFleet, place, boxesGeometry, jetParts, joinGeometries, buildWashers, buildGulls, lightDot, aimRunningLights, buildOrcas, buildWheel } from './fleet.min.js';
@@ -1163,6 +1163,9 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
     const fleet = buildFleet(scene, cars);
     const yaws = carYaws(cars, lanes);
     const centers = new Float32Array(cars.length * 3);
+    // Which vehicles are out, lap by lap, as busy as the hour (life.js
+    // trafficStep; null until the first placing).
+    let traffic = null;
     const pitches = new Float32Array(cars.length);
     // A jet asked for by hand (callJet), on the seconds' clock.
     let calledJet = null;
@@ -1277,6 +1280,11 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         fireworks,
         orcas,
         wheel,
+        /** How many vehicles are out on the streets now (trafficStep), for
+         *  tests. */
+        carsOut: () => (traffic ? traffic.out.reduce((n, v) => n + v, 0) : 0),
+        /** Which vehicles are out this lap (trafficStep), for tests. */
+        traffic: () => traffic,
         /** Where the wheel stands now (wheel.js wheelStep), for tests. */
         wheelNow: () => wheelNow,
         /**
@@ -1469,9 +1477,12 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
                 ends.needsUpdate = true;
             }
             // The traffic by day and night, and its lights by night.
-            fleet.moveCars(carPositions(cars, lanes, seconds, centers, pitches), yaws, pitches);
+            // As busy as the hour: a vehicle not out this lap is parked, with
+            // its lights.
+            traffic = trafficStep(cars, lanes, seconds, trafficAt(date), traffic);
+            fleet.moveCars(parkAbsent(carPositions(cars, lanes, seconds, centers, pitches), traffic.out), yaws, pitches);
             const positions = fleet.cars.geometry.attributes.position;
-            carLightPositions(cars, lanes, seconds, positions.array);
+            parkAbsent(carLightPositions(cars, lanes, seconds, positions.array), traffic.out);
             positions.needsUpdate = true;
             // The jets coming in to land, but never one held still in the
             // sky: for less motion there are only those at the gates.

@@ -687,6 +687,74 @@ export function onStreet(y) {
     return y > PARKED_Y / 2;
 }
 
+/**
+ * HOW BUSY THE STREETS ARE THROUGH THE DAY (QA, 2026-09-29: the traffic
+ * "stays at a constant flow 24 hours a day"): the share of the platoons'
+ * vehicles out, at hours of the sky's day, a straight line between. Full in
+ * the morning and evening rushes, a little lighter at midday, thinning
+ * through the evening, and a car or two in the small hours.
+ */
+export const RUSH = [
+    [0, 0.22], [2, 0.1], [4, 0.08], [5, 0.2], [6, 0.55], [7.5, 1], [9, 0.9],
+    [11, 0.75], [15, 0.8], [17, 1], [18.5, 0.85], [20, 0.55], [22, 0.38], [24, 0.22]
+];
+
+/** The share of the vehicles out at `date`, by the sky's hour (RUSH). */
+export function trafficAt(date) {
+    const h = minutesOfDay(date) / 60;
+    for (let i = 1; i < RUSH.length; i++) {
+        const [h1, v1] = RUSH[i];
+        if (h <= h1) {
+            const [h0, v0] = RUSH[i - 1];
+            return v0 + ((v1 - v0) * (h - h0)) / (h1 - h0);
+        }
+    }
+    return RUSH[RUSH.length - 1][1];
+}
+
+/** A number from 0 to 1 for a vehicle and a lap round its loop, the same
+ *  every time it is asked. */
+function lapDraw(i, lap) {
+    let h = Math.imul(i + 1, 0x9e3779b1) ^ Math.imul(lap | 0, 0x85ebca6b);
+    h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
+    h ^= h >>> 12;
+    h = Math.imul(h ^ (h >>> 15), 0x297a2d39);
+    return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
+}
+
+/** Which lap of its loop a vehicle is on at `seconds` (the count goes up as
+ *  it comes round to the start of its street). */
+export function lapOf(car, lane, seconds, city = CITY) {
+    const { meters, seconds: period } = cycleOf(city);
+    const d = meters * (seconds / period - car.slot) + lane.d0 + car.group * meters;
+    return Math.floor(d / lane.loop);
+}
+
+/**
+ * Which vehicles are out, a lap at a time: each decides as it comes round
+ * to the start of its street (out of sight on its loop's stretch past the
+ * end the moment before) whether it drives this lap, by `busy` then
+ * (trafficAt), so none appears or vanishes on the street. `state` carries
+ * each one's `lap` and whether it is `out`; one made fresh decides at once.
+ */
+export function trafficStep(cars, lanes, seconds, busy, state = null) {
+    const s = state || { lap: new Float64Array(cars.length).fill(NaN), out: new Uint8Array(cars.length) };
+    cars.forEach((car, i) => {
+        const lap = lapOf(car, lanes[car.lane], seconds);
+        if (lap === s.lap[i]) return;
+        s.lap[i] = lap;
+        s.out[i] = lapDraw(i, lap) < busy ? 1 : 0;
+    });
+    return s;
+}
+
+/** Park the vehicles not out (trafficStep), and their lights, in positions
+ *  carPositions or carLightPositions wrote. */
+export function parkAbsent(positions, out) {
+    for (let i = 0; i < out.length; i++) if (!out[i]) positions[i * 3 + 1] = PARKED_Y;
+    return positions;
+}
+
 /** How each vehicle faces: along its lane (a yaw, bow toward -z as built). */
 export function carYaws(cars, lanes) {
     return cars.map(({ lane }) => {

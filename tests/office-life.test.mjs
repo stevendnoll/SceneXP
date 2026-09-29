@@ -10,7 +10,7 @@
 import {
     LIFE, minutesOn, minutesOfDay, gently, yawFor, ferryRoute, ferriesAt, ferryTrips, shipsAt, sailboatCourses, sailboatsAt,
     shipShift, SEAPLANE_START, takeoff, seaplaneAt, carLanes, carFleet, carPositions, carYaws, carLightPositions, CAR, drift,
-    TRAFFIC, VEHICLES, SUV, PARKED_Y, pitchOf, cycleOf, slotTimes, distanceAlong, onStreet,
+    TRAFFIC, VEHICLES, SUV, PARKED_Y, pitchOf, cycleOf, slotTimes, distanceAlong, onStreet, RUSH, trafficAt, trafficStep, lapOf, parkAbsent,
     JET, jetCrossing, jetFlight, jetOnTrack, jetsAt, jetFlashing, jetTimes, glideHeight, approachSpeed, approachLeft,
     LIVERIES, liveryOf
 } from '../www/office/js/life.js';
@@ -262,6 +262,81 @@ describe('the seaplane', () => {
             const now = seaplaneAt(new Date(2026, 8, 24, 12, 0, s));
             if (now && last && now.y === WATER_Y && last.y === WATER_Y) expect(gap(now, last)).toBeLessThan(50);
             last = now;
+        }
+    });
+});
+
+describe('the traffic through the day (QA, 2026-09-29: "stays at a constant flow 24 hours a day")', () => {
+    const lanes = carLanes();
+    const cars = carFleet(lanes);
+    const at = (h, m = 0) => new Date(2026, 8, 25, h, m);
+
+    test('full in the rushes, lighter at midday, thinning through the evening, a car or two in the small hours', () => {
+        expect(trafficAt(at(3))).toBeLessThan(0.12);
+        expect(trafficAt(at(8))).toBeGreaterThan(0.9);
+        expect(trafficAt(at(17))).toBe(1);
+        expect(trafficAt(at(12))).toBeGreaterThan(0.6);
+        expect(trafficAt(at(12))).toBeLessThan(trafficAt(at(8)));
+        expect(trafficAt(at(22))).toBeLessThan(trafficAt(at(19)));
+        // The same at both ends of the day, and never a jump in between.
+        expect(RUSH[0][1]).toBe(RUSH[RUSH.length - 1][1]);
+        let last = trafficAt(at(0));
+        for (let m = 1; m < 24 * 60; m++) {
+            const now = trafficAt(at(0, m));
+            expect(now).toBeGreaterThanOrEqual(0);
+            expect(now).toBeLessThanOrEqual(1);
+            expect(Math.abs(now - last)).toBeLessThan(0.01);
+            last = now;
+        }
+    });
+
+    test('as many out as the hour asks: all of them in a rush, about one in twelve at three in the morning', () => {
+        const all = trafficStep(cars, lanes, 1000, 1);
+        expect(all.out.every((v) => v === 1)).toBe(true);
+        // Over a few laps, so the share is the draw's and not one lap's.
+        let out = 0;
+        let seen = 0;
+        let s = null;
+        for (let t = 0; t < 600; t += 1) {
+            s = trafficStep(cars, lanes, t, trafficAt(at(3)), s);
+            out += s.out.reduce((n, v) => n + v, 0);
+            seen += cars.length;
+        }
+        expect(out / seen).toBeGreaterThan(0.04);
+        expect(out / seen).toBeLessThan(0.14);
+    });
+
+    test('none appears or vanishes on the street: each decides only as it comes round to its street’s start', () => {
+        let s = trafficStep(cars, lanes, 0, 1);
+        const dt = 0.2;
+        let changes = 0;
+        for (let t = dt; t < 400; t += dt) {
+            // From the rush to three in the morning, and back, all at once.
+            const busy = Math.floor(t / 100) % 2 ? trafficAt(at(3)) : 1;
+            const before = s.out.slice();
+            s = trafficStep(cars, lanes, t, busy, s);
+            cars.forEach((car, i) => {
+                if (s.out[i] === before[i]) return;
+                changes++;
+                // Just round to the start: a frame's driving along, at most.
+                const lane = lanes[car.lane];
+                expect(distanceAlong(car, lane, t)).toBeLessThanOrEqual(TRAFFIC.speed * dt + 1e-6);
+                expect(lapOf(car, lane, t)).toBe(lapOf(car, lane, t - dt) + 1);
+            });
+        }
+        expect(changes).toBeGreaterThan(cars.length / 2);
+    });
+
+    test('one not out is parked, lights and all', () => {
+        const positions = carPositions(cars, lanes, 50);
+        const lights = carLightPositions(cars, lanes, 50);
+        const out = new Uint8Array(cars.length);
+        out[0] = 1;
+        parkAbsent(positions, out);
+        parkAbsent(lights, out);
+        for (let i = 1; i < cars.length; i++) {
+            expect(onStreet(positions[i * 3 + 1])).toBe(false);
+            expect(onStreet(lights[i * 3 + 1])).toBe(false);
         }
     });
 });
