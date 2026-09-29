@@ -3501,7 +3501,7 @@ html [lang="en"]
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=4" rel="preload"]
     link [as="script" href="../lib/three.min.js" rel="preload"]
-    link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
+    link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=4" rel="stylesheet"]
     noscript
@@ -3963,7 +3963,7 @@ html [lang="en"]
             button#af-cancel.office-btn [type="button"]
               "Cancel"
             button#af-save.office-btn.office-btn-primary [type="submit"]
-              "Add to the office"
+              "Save application"
     div#event-form.card-overlay [hidden]
       div#event-form-panel.card-panel.form-panel [aria-describedby="event-form-about" aria-labelledby="event-form-title" aria-modal="true" role="dialog" tabindex="-1"]
         h2#event-form-title.card-title

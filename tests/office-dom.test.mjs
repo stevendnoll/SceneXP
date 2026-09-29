@@ -177,8 +177,12 @@ describe('forms', () => {
         expect(el('af-follow-row').hidden).toBe(false);
         expect(el('af-follow-text').textContent).toBe('Remind me to follow up in 1 day');
         expect(el('af-applied').value).toBe('');
+        // Saved, not "added to the office" or "submitted" (which reads as
+        // sent to the employer), QA 2026-09-29.
+        expect(el('af-save').textContent).toBe('Save application');
         forms.fillApplicationForm({ company: 'Acme', role: 'Designer', status: 'offer', notes: 'N' }, { followUpDays: 7 });
         expect(el('application-form-title').textContent).toBe('Edit application');
+        expect(el('af-save').textContent).toBe('Save changes');
         expect(el('af-more').open).toBe(true);
         expect(el('af-status-row').hidden).toBe(true);
         expect(el('af-follow-row').hidden).toBe(true);

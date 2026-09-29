@@ -99,7 +99,10 @@ export function fillApplicationForm(app, { followUpDays }) {
     const title = byId('application-form-title');
     if (title) title.textContent = app ? 'Edit application' : 'New application';
     const save = byId('af-save');
-    if (save) save.textContent = app ? 'Save changes' : 'Add to the office';
+    // "Save application", not "Submit": in a job tracker that reads as
+    // sending the application to the employer (QA, 2026-09-29: "Add to the
+    // office" might confuse people).
+    if (save) save.textContent = app ? 'Save changes' : 'Save application';
     // A status is changed from the folder, never from an edit (store.js pins
     // it), so the edit form does not offer one.
     const statusRow = byId('af-status-row');
