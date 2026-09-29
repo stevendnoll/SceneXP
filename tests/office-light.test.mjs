@@ -553,10 +553,14 @@ describe('the gulls’ frame rate (QA, 2026-09-29: gliding gulls looked "laggy")
 describe('through the binoculars', () => {
     test('what is drawn larger than life for the naked eye goes back to life size, and returns', async () => {
         const gulls = await import('../www/office/js/gulls.js');
-        const all = [...lit.fleet.ferries, ...lit.fleet.ships, ...lit.fleet.cruises, ...lit.fleet.sailboats, lit.fleet.seaplane, ...lit.fleet.jets];
+        const all = [...lit.fleet.ferries, ...lit.fleet.ships, ...lit.fleet.cruises, ...lit.fleet.sailboats, lit.fleet.seaplane];
         expect(all.some((c) => c.group.userData.scale > 1)).toBe(true);
         lit.setTrueScale(true);
         for (const c of all) expect(c.group.scale.x).toBe(1);
+        // But not the jets, which keep the size the eye knows (QA, 2026-09-29:
+        // one "looks smaller than it does without binoculars").
+        for (const jet of lit.fleet.jets) expect(jet.group.scale.x).toBe(jet.group.userData.scale);
+        expect(lit.fleet.jets[0].group.userData.scale).toBeGreaterThan(1);
         // The gulls at their next placing, 1.44 m across rather than 5.
         const m = momentAt(11);
         lit.setLight(m.look, m.sky);

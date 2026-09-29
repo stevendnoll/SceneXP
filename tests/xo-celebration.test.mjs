@@ -37,6 +37,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { installThree } from './helpers/three-stub.mjs';
+import { outside } from './helpers/outside.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const scene = join(here, '..', 'www', 'xo', 'js');
@@ -880,68 +881,92 @@ describe('the sounds belong to the moment the play ended', () => {
  * only case here that can catch a celebration that is correct in the abstract
  * and impossible on this field.
  */
-describe('against real interceptions and real fifties', () => {
-    const PLAYS = ['pass1', 'pass2', 'pass3', 'pass4', 'pass5', 'pass6', 'pass7', 'pass8'];
+/**
+ * THE HARVEST, RUN OUTSIDE JEST'S SANDBOX (tests/helpers/outside.mjs): up to
+ * 2,500 whole plays simulated until the endings turn up took a minute of
+ * this file's eighty seconds in the sandbox, and a second in plain Node. It
+ * stands alone, since only its source crosses to the worker: it loads the
+ * game itself, and is handed the plays, the field's bounds and length.
+ */
+async function harvestJob({ want, limit, PLAYS, BOUNDS, FIELD_LEN }, load) {
+    (await load('tests/helpers/three-stub.mjs')).installThree();
+    const { XO_CONFIG: CFG, FIELD, simToWorld } = await load('www/xo/js/config.js');
+    const { chooseCelebration } = await load('www/xo/js/celebration.js');
+    const {
+        createPlay, lineUp, snap, tick, isDone, throwTo, outcome, eligibleReceivers, ballCarrier,
+    } = await load('www/xo/js/play.js');
+    const C = CFG.pose.celebration;
+    // The same repeatable stream as rolls() above.
+    const rolls = (seed) => {
+        let s = seed;
+        return () => {
+            s = (s * 1103515245 + 12345) & 0x7fffffff;
+            return s / 0x7fffffff;
+        };
+    };
 
-    function harvest(want, limit) {
-        const play = createPlay();
-        const out = [];
-        const roll = rolls(20260914);
-        for (let i = 0; i < 2500 && out.length < limit; i += 1) {
-            lineUp(play, PLAYS[i % PLAYS.length], '');
-            snap(play);
-            let thrown = false;
-            const wait = 20 + Math.floor(roll() * 60);
-            for (let f = 0; f < 1200 && !isDone(play); f += 1) {
-                if (!thrown && f >= wait) {
-                    const able = eligibleReceivers(play);
-                    if (able.length) {
-                        throwTo(play, able[Math.floor(roll() * able.length)]);
-                        thrown = true;
-                    }
+    const play = createPlay();
+    const out = [];
+    const roll = rolls(20260914);
+    for (let i = 0; i < 2500 && out.length < limit; i += 1) {
+        lineUp(play, PLAYS[i % PLAYS.length], '');
+        snap(play);
+        let thrown = false;
+        const wait = 20 + Math.floor(roll() * 60);
+        for (let f = 0; f < 1200 && !isDone(play); f += 1) {
+            if (!thrown && f >= wait) {
+                const able = eligibleReceivers(play);
+                if (able.length) {
+                    throwTo(play, able[Math.floor(roll() * able.length)]);
+                    thrown = true;
                 }
-                tick(play);
             }
-            const result = outcome(play);
-            const scored = result.points === 50;
-            const picked = result.result === 'interception';
-            if (want === 'fifty' ? !scored : !picked) continue;
-            const carrier = ballCarrier(play);
-            if (!carrier) continue;
-
-            const at = (o) => {
-                const w = simToWorld(o.coords.x, o.coords.y, 0);
-                return { position: o.settings.position, x: w.x, z: w.z };
-            };
-            const on = play.game.objects.filter((o) => !o.settings.benched
-                && o.settings.position !== 'ball');
-            const side = carrier.settings.team;
-            const qb = play.game.objects.find(
-                (o) => o.settings.position === 'qb' && !o.settings.benched
-            );
-            const hero = at(carrier);
-            const plan = chooseCelebration({
-                hero,
-                mates: on.filter((o) => o !== carrier && o.settings.team === side).map(at),
-                rivals: on.filter((o) => o.settings.team !== side).map(at),
-                homeX: side === 0
-                    ? FIELD_LEN + FIELD.endZone - C.endZoneDepth
-                    : -FIELD.endZone + C.endZoneDepth,
-                toward: side === 0 ? 1 : -1,
-                blameAt: picked && qb ? at(qb) : null,
-                crowdAt: { x: -FIELD.endZone - 8, z: hero.z },
-                bounds: BOUNDS,
-                scored,
-                roll,
-            });
-            if (plan) out.push({ plan, side });
+            tick(play);
         }
-        return out;
+        const result = outcome(play);
+        const scored = result.points === 50;
+        const picked = result.result === 'interception';
+        if (want === 'fifty' ? !scored : !picked) continue;
+        const carrier = ballCarrier(play);
+        if (!carrier) continue;
+
+        const at = (o) => {
+            const w = simToWorld(o.coords.x, o.coords.y, 0);
+            return { position: o.settings.position, x: w.x, z: w.z };
+        };
+        const on = play.game.objects.filter((o) => !o.settings.benched
+            && o.settings.position !== 'ball');
+        const side = carrier.settings.team;
+        const qb = play.game.objects.find(
+            (o) => o.settings.position === 'qb' && !o.settings.benched
+        );
+        const hero = at(carrier);
+        const plan = chooseCelebration({
+            hero,
+            mates: on.filter((o) => o !== carrier && o.settings.team === side).map(at),
+            rivals: on.filter((o) => o.settings.team !== side).map(at),
+            homeX: side === 0
+                ? FIELD_LEN + FIELD.endZone - C.endZoneDepth
+                : -FIELD.endZone + C.endZoneDepth,
+            toward: side === 0 ? 1 : -1,
+            blameAt: picked && qb ? at(qb) : null,
+            crowdAt: { x: -FIELD.endZone - 8, z: hero.z },
+            bounds: BOUNDS,
+            scored,
+            roll,
+        });
+        if (plan) out.push({ plan, side });
     }
+    return out;
+}
 
-    const picks = harvest('pick', 40);
-    const fifties = harvest('fifty', 40);
+const HARVEST = { PLAYS: ['pass1', 'pass2', 'pass3', 'pass4', 'pass5', 'pass6', 'pass7', 'pass8'], BOUNDS, FIELD_LEN };
+const [picks, fifties] = await Promise.all([
+    outside(harvestJob, { ...HARVEST, want: 'pick', limit: 40 }),
+    outside(harvestJob, { ...HARVEST, want: 'fifty', limit: 40 }),
+]);
 
+describe('against real interceptions and real fifties', () => {
     test('the simulation still produces both endings to celebrate', () => {
         // If this ever goes empty the two cases below are passing vacuously,
         // which is how a suite ends up guarding nothing at all.

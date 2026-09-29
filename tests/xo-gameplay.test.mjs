@@ -21,6 +21,11 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { installThree } from './helpers/three-stub.mjs';
+import { outside } from './helpers/outside.mjs';
+
+/** Room for the sweeps run outside the sandbox (outside.mjs): a few seconds
+ *  each in plain Node, and more on a loaded machine. */
+const OUTSIDE_TIMEOUT = 60000;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const scene = join(here, '..', 'www', 'xo', 'js');
@@ -1658,6 +1663,50 @@ describe('a short pass is caught where it is short', () => {
     });
 });
 
+/**
+ * The fifties at a lean of the difficulty dial, measured over 306 seeded
+ * plays in plain Node (tests/helpers/outside.mjs): in Jest's sandbox the
+ * pair of them took half a minute. It stands alone, since only its source
+ * crosses to the worker, and seeds the worker's own Math.random.
+ */
+async function fiftiesJob({ lean }, load) {
+    (await load('tests/helpers/three-stub.mjs')).installThree();
+    const { XO_CONFIG: CFG } = await load('www/xo/js/config.js');
+    const {
+        createPlay, setDifficulty, lineUp, snap, tick, isDone, keepAndRun, outcome, OFFENSIVE_PLAYS,
+    } = await load('www/xo/js/play.js');
+    let seed = 20260911;
+    Math.random = () => {
+        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+    let fifty = 0;
+    let n = 0;
+    for (let rep = 0; rep < 3; rep += 1)
+    for (const slug of OFFENSIVE_PLAYS) {
+        for (const defence of ['cover1', 'cover2', 'cover4',
+            'cover7', 'cover11', 'cover14']) {
+            const play = createPlay();
+            setDifficulty(play, lean);
+            lineUp(play, slug, defence);
+            snap(play);
+            let acted = false;
+            for (let f = 0; f < CFG.simHz * 9 && !isDone(play); f += 1) {
+                tick(play);
+                if (!acted && f === Math.round(CFG.simHz * 1.6)) {
+                    keepAndRun(play);
+                    acted = true;
+                }
+            }
+            n += 1;
+            if ((outcome(play).points || 0) === 50) fifty += 1;
+        }
+    }
+    return fifty / n;
+}
+
 describe('the game leans on a run of plays', () => {
     /**
      * The 2D game kept a count of successful or unsuccessful plays in a row and
@@ -1740,7 +1789,7 @@ describe('the game leans on a run of plays', () => {
      * measure is the FIFTIES: what should become rare when somebody is
      * dominating is the big play, not every play.
      */
-    test('leaning back makes the big play rarer than easing off does', () => {
+    test('leaning back makes the big play rarer than easing off does', async () => {
         /**
          * SEEDED, AND THE SAMPLE IS BIGGER THAN IT WAS, because this test was
          * intermittently red and it was under-powered rather than wrong.
@@ -1756,44 +1805,9 @@ describe('the game leans on a run of plays', () => {
          * Seeding makes it deterministic, and the bigger sample makes the
          * margin mean something rather than being survived.
          */
-        const real = Math.random;
-        let seed = 20260911;
-        const reseed = () => {
-            seed = 20260911;
-            Math.random = () => {
-                seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-                let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-                t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-                return ((t ^ t >>> 14) >>> 0) / 4294967296;
-            };
-        };
-        const fiftiesAt = (lean) => {
-            let fifty = 0;
-            let n = 0;
-            reseed();
-            for (let rep = 0; rep < 3; rep += 1)
-            for (const slug of OFFENSIVE_PLAYS) {
-                for (const defence of ['cover1', 'cover2', 'cover4',
-                    'cover7', 'cover11', 'cover14']) {
-                    const play = createPlayForDifficulty();
-                    setDifficulty(play, lean);
-                    lineUp(play, slug, defence);
-                    snap(play);
-                    let acted = false;
-                    for (let f = 0; f < CFG.simHz * 9 && !isDone(play); f += 1) {
-                        tick(play);
-                        if (!acted && f === Math.round(CFG.simHz * 1.6)) {
-                            keepAndRun(play);
-                            acted = true;
-                        }
-                    }
-                    n += 1;
-                    if ((outcome(play).points || 0) === 50) fifty += 1;
-                }
-            }
-            Math.random = real;
-            return fifty / n;
-        };
+        // The plays are simulated outside Jest's sandbox (fiftiesJob, above):
+        // in it, these 612 plays took half a minute.
+        const [back, off] = await Promise.all([outside(fiftiesJob, { lean: -1 }), outside(fiftiesJob, { lean: 1 })]);
         /**
          * Measured at 1224 plays a side the lean is worth about three points of
          * fifties. The margin has to sit under that and still be far enough from
@@ -1801,8 +1815,8 @@ describe('the game leans on a run of plays', () => {
          * worth having. Seeded, so this is a fixed comparison rather than a
          * sample that happens to land somewhere.
          */
-        expect(fiftiesAt(-1)).toBeGreaterThan(fiftiesAt(1) + 0.015);
-    });
+        expect(back).toBeGreaterThan(off + 0.015);
+    }, OUTSIDE_TIMEOUT);
 });
 
 /**
@@ -2658,6 +2672,45 @@ describe('a covered receiver shoves his man off', () => {
 });
 
 /**
+ * The longest a play runs after a decision at the last legal moment, over
+ * every offensive play against four defenses, seeded, in plain Node
+ * (tests/helpers/outside.mjs): in Jest's sandbox this search took eight
+ * seconds. It stands alone, since only its source crosses to the worker,
+ * and seeds the worker's own Math.random.
+ */
+async function latestRunJob(_, load) {
+    (await load('tests/helpers/three-stub.mjs')).installThree();
+    const { XO_CONFIG: CFG } = await load('www/xo/js/config.js');
+    const { createPlay, lineUp, snap, tick, isDone, keepAndRun, OFFENSIVE_PLAYS } = await load('www/xo/js/play.js');
+    const HZ = CFG.simHz;
+    let seed = 31337;
+    Math.random = () => {
+        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+    let worst = 0;
+    for (const slug of OFFENSIVE_PLAYS) {
+        for (const defence of ['cover2', 'zone2', 'cover7', 'cover11']) {
+            const play = createPlay();
+            lineUp(play, slug, defence);
+            snap(play);
+            let decided = -1;
+            for (let f = 0; f < HZ * 40 && !isDone(play); f += 1) {
+                tick(play);
+                // The latest he can legally decide, then let it run.
+                if (f === Math.round(HZ * CFG.clock.decide) - 2) {
+                    if (keepAndRun(play)) decided = f;
+                }
+            }
+            if (decided >= 0) worst = Math.max(worst, (play.frame - decided) / HZ);
+        }
+    }
+    return worst;
+}
+
+/**
  * THE PLAY CLOCK, WHICH IS A RULE THE GAME ALREADY HAD AND NEVER DREW.
  *
  * QA: holding the ball recorded a SACK with no defender near the quarterback.
@@ -2889,7 +2942,7 @@ describe('the play clock', () => {
      * Asserted as a property against the game's own worst case rather than
      * against the number, so it keeps meaning something if either moves.
      */
-    test('the backstop clears the longest play a late decision can still start', () => {
+    test('the backstop clears the longest play a late decision can still start', async () => {
         /**
          * SEEDED, because this is a worst-case search over random speeds and an
          * unseeded one is a different search every run. It found a 14.00 second
@@ -2898,38 +2951,14 @@ describe('the play clock', () => {
          * safe. Both were true. The backstop was simply sitting ON the worst case
          * instead of clearing it.
          */
-        const real = Math.random;
-        let seed = 31337;
-        Math.random = () => {
-            seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-            let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-            t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-            return ((t ^ t >>> 14) >>> 0) / 4294967296;
-        };
-        let worst = 0;
-        for (const slug of OFFENSIVE_PLAYS) {
-            for (const defence of ['cover2', 'zone2', 'cover7', 'cover11']) {
-                const play = createPlayForDifficulty();
-                lineUp(play, slug, defence);
-                snap(play);
-                let decided = -1;
-                for (let f = 0; f < HZ * 40 && !isDone(play); f += 1) {
-                    tick(play);
-                    // The latest he can legally decide, then let it run.
-                    if (f === Math.round(HZ * CFG.clock.decide) - 2) {
-                        if (keepAndRun(play)) decided = f;
-                    }
-                }
-                if (decided >= 0) worst = Math.max(worst, (play.frame - decided) / HZ);
-            }
-        }
-        Math.random = real;
+        // Searched outside Jest's sandbox (latestRunJob, above the section).
+        const worst = await outside(latestRunJob);
         expect(worst).toBeGreaterThan(1);
         // CLEARS it, with room. A backstop that merely equals the worst case
         // fires on it, and a backstop firing is a play the visitor watched get
         // cut off mid-run.
         expect(CFG.clock.backstop).toBeGreaterThan(worst * 1.15);
-    });
+    }, OUTSIDE_TIMEOUT);
 
     /**
      * THE COPY NAMES THE NUMBER, SO THE COPY IS PINNED TO IT. A count in prose
@@ -3049,6 +3078,54 @@ describe('the ball stops when somebody catches it', () => {
 });
 
 /**
+ * Every offensive play, a decision early, midway and late, four times each,
+ * run out seeded in plain Node (tests/helpers/outside.mjs): whether the
+ * carrier crossed the rung, where he ended and what the play paid. In
+ * Jest's sandbox these took a dozen seconds. It stands alone, since only
+ * its source crosses to the worker, and seeds the worker's own Math.random.
+ */
+async function crossingSweepJob(_, load) {
+    (await load('tests/helpers/three-stub.mjs')).installThree();
+    const { XO_CONFIG: CFG } = await load('www/xo/js/config.js');
+    const {
+        createPlay, lineUp, snap, tick, isDone, keepAndRun, outcome, ballCarrier, OFFENSIVE_PLAYS,
+    } = await load('www/xo/js/play.js');
+    const HZ = CFG.simHz;
+    let seed = 20260912;
+    Math.random = () => {
+        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+    const rows = [];
+    for (const slug of OFFENSIVE_PLAYS) {
+        for (const at of [0.4, 1.0, 2.0]) {
+            for (let k = 0; k < 4; k += 1) {
+                const play = createPlay();
+                lineUp(play, slug, '');
+                snap(play);
+                let decided = false;
+                for (let f = 0; f < HZ * 25 && !isDone(play); f += 1) {
+                    if (!decided && f >= HZ * at) {
+                        decided = keepAndRun(play);
+                    }
+                    tick(play);
+                }
+                const carrier = ballCarrier(play);
+                rows.push({
+                    slug,
+                    crossed: play.playState.state.anim.run50 === true,
+                    x: carrier ? carrier.coords.x : null,
+                    points: outcome(play).points,
+                });
+            }
+        }
+    }
+    return rows;
+}
+
+/**
  * NOTHING SHOVES ANYBODY AFTER THE WHISTLE.
  *
  * `separate` is the port's own addition: the 2D game never needed one, because
@@ -3061,50 +3138,6 @@ describe('a crossing cannot be shoved back over the line', () => {
     const HZ = CFG.simHz;
     const RUNG = -4 + SIM.lineInterval * 4;   // where both routes call a crossing
 
-    /**
-     * SEEDED, so the sweep is the same sweep every run. Every line-up rolls a
-     * fresh set of speeds, and a fault that shows on one crossing in 149 is
-     * exactly the kind that appears and disappears between runs otherwise.
-     */
-    function seeded(run) {
-        const real = Math.random;
-        let seed = 20260912;
-        Math.random = () => {
-            seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-            let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-            t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-            return ((t ^ t >>> 14) >>> 0) / 4294967296;
-        };
-        try { return run(); } finally { Math.random = real; }
-    }
-
-    function sweep() {
-        const rows = [];
-        for (const slug of OFFENSIVE_PLAYS) {
-            for (const at of [0.4, 1.0, 2.0]) {
-                for (let k = 0; k < 4; k += 1) {
-                    const play = createPlayForDifficulty();
-                    lineUp(play, slug, '');
-                    snap(play);
-                    let decided = false;
-                    for (let f = 0; f < HZ * 25 && !isDone(play); f += 1) {
-                        if (!decided && f >= HZ * at) {
-                            decided = keepAndRun(play);
-                        }
-                        tick(play);
-                    }
-                    const carrier = ballCarrier(play);
-                    rows.push({
-                        slug,
-                        crossed: play.playState.state.anim.run50 === true,
-                        x: carrier ? carrier.coords.x : null,
-                        points: outcome(play).points,
-                    });
-                }
-            }
-        }
-        return rows;
-    }
 
     /**
      * THE PLAY THAT ENDED AT THE GOAL LINE IS WORTH THE GOAL LINE. Measured on
@@ -3114,15 +3147,18 @@ describe('a crossing cannot be shoved back over the line', () => {
      * was worth. What the visitor saw was the whistle going with the carrier at
      * full speed, nobody tackling him, and a card reading "+30".
      */
-    test('every carrier who reached the rung is paid for reaching it', () => {
-        const rows = seeded(sweep);
+    test('every carrier who reached the rung is paid for reaching it', async () => {
+        // Seeded, so the sweep is the same sweep every run (a fault that shows
+        // on one crossing in 149 comes and goes otherwise), and swept outside
+        // Jest's sandbox (crossingSweepJob, above the section).
+        const rows = await outside(crossingSweepJob);
         const crossings = rows.filter((r) => r.crossed);
         expect(crossings.length).toBeGreaterThan(20);
         for (const r of crossings) {
             expect({ slug: r.slug, x: r.x >= RUNG, points: r.points })
                 .toEqual({ slug: r.slug, x: true, points: 50 });
         }
-    });
+    }, OUTSIDE_TIMEOUT);
 });
 
 /**

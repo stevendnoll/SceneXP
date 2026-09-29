@@ -1556,13 +1556,21 @@ export function buildWorld(config, { aspect = 16 / 10, textures = {}, anisotropy
         /**
          * Draw what is enlarged for the naked eye (the craft's own `scale`,
          * the gulls' GULLS.scale) at life size, or as it was: through 8x
-         * binoculars a gull 3.5 times life is the size of a glider and a
-         * jet twice life a whale (main.js, while the binoculars are up).
-         * The gulls take it at their next placing (setLife).
+         * binoculars a gull 3.5 times life is the size of a glider (main.js,
+         * while the binoculars are up). The gulls take it at their next
+         * placing (setLife).
+         *
+         * NOT THE JETS (QA, 2026-09-29: "it looks smaller than it does
+         * without binoculars"). Shrunk to life under the binoculars, a jet
+         * drawn 3.5 times life came out smaller against the magnified city
+         * and mountains than the eye had just seen it, a jet that shrank as
+         * the binoculars came up. Binoculars only magnify, so a jet keeps
+         * the size the eye already knows (and matches the jets parked at
+         * the gates, drawn at the same size).
          */
         setTrueScale(on) {
             trueScale = Boolean(on);
-            const all = [...fleet.ferries, ...fleet.ships, ...fleet.cruises, ...fleet.sailboats, fleet.seaplane, ...fleet.jets];
+            const all = [...fleet.ferries, ...fleet.ships, ...fleet.cruises, ...fleet.sailboats, fleet.seaplane];
             for (const c of all) c.group.scale.setScalar(trueScale ? 1 : c.group.userData.scale);
             return trueScale;
         },
