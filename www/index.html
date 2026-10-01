@@ -234,13 +234,16 @@
 
     <title>SceneXP | 3D Worlds, Games, and Experiments</title>
 
-    <link rel="preload" href="/css/site.min.css?v=4" as="style">
+    <link rel="preload" href="/css/site.min.css?v=5" as="style">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="/css/site.min.css?v=4">
+    <link rel="stylesheet" href="/css/site.min.css?v=5">
 
     <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
     <script src="/js/theme.min.js?v=1"></script>
     <script src="/js/nav.min.js?v=1" defer></script>
+    <!-- The spotlight slideshow and the "New" badges. A module, so it runs after
+         the page has parsed, and the page is complete without it. -->
+    <script type="module" src="/js/home.min.js?v=1"></script>
 </head>
 
 <body>
@@ -324,10 +327,88 @@
                     <p>No app, no download, nothing to install.</p>
                 </div>
 
+                <!-- THE SPOTLIGHT: the three newest worlds, one at a time, newest
+                     first, each with the date it was released. A slow cross-fade
+                     with a gentle pan and zoom, from /js/home.js, which also adds
+                     the dots and the pause button (WCAG 2.2.2: anything that moves
+                     on its own for more than five seconds must be pausable). It
+                     holds still for reduced motion, and pauses while the pointer
+                     or keyboard focus is on it.
+
+                     WITHOUT JAVASCRIPT it is simply the newest world: the other two
+                     slides are hidden by the stylesheet (never by `hidden`, which
+                     would be markup waiting on a script), and there are no controls
+                     to sit inert. The first image is the page's Largest Contentful
+                     Paint on every screen, so it is the one eager, high-priority
+                     image on the page. Every card in the grid below is lazy.
+
+                     WHEN A WORLD IS RELEASED, its slide goes first here and the
+                     third one goes. tests/home-dates.test.mjs checks these are the
+                     three newest cards, by date, in order. -->
+                <section class="spotlight" id="spotlight" aria-labelledby="spotlight-heading"
+                    aria-roledescription="carousel">
+                    <h2 id="spotlight-heading">Just released</h2>
+                    <ul class="spotlight-slides">
+                        <li class="spotlight-slide is-active" data-slug="office" aria-roledescription="slide" aria-label="1 of 3">
+                            <a href="/office/">
+                                <div class="spotlight-media">
+                                    <img src="/office/assets/og-office.webp?v=1" width="1200" height="630" loading="eager" fetchpriority="high" decoding="async"
+                                        alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond.">
+                                </div>
+                                <div class="spotlight-body">
+                                    <p class="spotlight-date">Released <time datetime="2026-09-28">September 28, 2026</time></p>
+                                    <p class="experience-eyebrow">A job search tracker in a 3D office</p>
+                                    <h3>Corner Office</h3>
+                                    <p class="spotlight-text">A working job search tracker in a corner office forty floors above the bay. Every application you send earns a firework over the water.</p>
+                                    <span class="experience-cta">Step into the office →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="spotlight-slide" data-slug="tornado" aria-roledescription="slide" aria-label="2 of 3">
+                            <a href="/tornado/">
+                                <div class="spotlight-media">
+                                    <img src="/tornado/assets/og-tornado.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
+                                        alt="A pale tornado reaching down from a dark, turning storm base to a cloud of dust and flying debris, just left of a small farm with a red barn, across golden fields with wildflowers in the foreground.">
+                                </div>
+                                <div class="spotlight-body">
+                                    <p class="spotlight-date">Released <time datetime="2026-09-23">September 23, 2026</time></p>
+                                    <p class="experience-eyebrow">A storm chaser's view of a tornado</p>
+                                    <h3>Tornado Alley</h3>
+                                    <p class="spotlight-text">Thirty seconds on the open prairie. A storm organizes on the horizon, its base begins to turn, and a tornado touches down far out across the fields.</p>
+                                    <span class="experience-cta">Watch the storm roll in →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="spotlight-slide" data-slug="xo" aria-roledescription="slide" aria-label="3 of 3">
+                            <a href="/xo/">
+                                <div class="spotlight-media">
+                                    <img src="/xo/assets/og-xo.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
+                                        alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides.">
+                                </div>
+                                <div class="spotlight-body">
+                                    <p class="spotlight-date">Released <time datetime="2026-09-14">September 14, 2026</time></p>
+                                    <p class="experience-eyebrow">A football game where you call the plays</p>
+                                    <h3>X's and O's</h3>
+                                    <p class="spotlight-text">You are on offense for all ten plays. Pick a play, snap the ball, then throw to an open receiver or keep it and run. 500 is a perfect game.</p>
+                                    <span class="experience-cta">Call the first play →</span>
+                                </div>
+                            </a>
+                        </li>
+                    </ul>
+                </section>
+
                 <!-- THREE CATEGORY GROUPS, newest experience first inside each one.
                      When adding a scene, place its card at the TOP of its category's
                      list here and renumber that category's JSON-LD ItemList in the
                      head. The other two groups do not move.
+
+                     EVERY CARD SAYS WHEN ITS WORLD WAS RELEASED, and the date is the
+                     same one the scene's own page gives search engines as its
+                     datePublished. tests/home-dates.test.mjs holds the two together
+                     and holds each group to newest first by date. The ten July dates
+                     are approximate (Steve, 2026-10-01): those worlds were all built
+                     in July, before this repository began, and were spaced a few days
+                     apart from July 6 in the order the cards already gave them.
 
                      NO SEARCH BOX AND NO FILTER CHIPS, ON PURPOSE. Both were here
                      briefly and both were removed on 2026-09-04: with a dozen scenes
@@ -343,22 +424,7 @@
                     <ul class="experience-grid">
                         <li class="experience-card" data-slug="office">
                             <a href="/office/">
-                                <!-- THE ONLY EAGER IMAGE ON THE PAGE, and it has to stay the
-                                     only one. This is the first card in the first group, so it
-                                     is the Largest Contentful Paint element on any screen wide
-                                     enough to show it. `loading="lazy"` on an LCP element is a
-                                     measurable own goal: the browser will not begin the fetch
-                                     until layout has proved the image is needed, which is late
-                                     by definition. `fetchpriority="high"` then lets it jump the
-                                     queue ahead of the sixteen lazy cards below.
-                                     The other sixteen stay lazy, because eager on all
-                                     seventeen would fetch the card art of a page nobody has
-                                     scrolled yet. If the card order ever changes, these two
-                                     attributes move to whichever card is first. They moved
-                                     here from Tornado Alley on 2026-09-28, when Corner Office
-                                     became the newest world. -->
-                                <img src="/office/assets/og-office.webp?v=1" width="1200" height="630" loading="eager"
-                                    fetchpriority="high" decoding="async"
+                                <img src="/office/assets/og-office.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
                                     alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond.">
                                 <div class="experience-card-body">
                                     <p class="experience-eyebrow">A job search tracker in a 3D office</p>
@@ -368,6 +434,7 @@
                                         furniture, every application you send earns a firework over the
                                         water, and every record stays private in your own browser. Lift
                                         the binoculars and you might spot the orcas.</p>
+                                    <p class="experience-date">Released <time datetime="2026-09-28">September 28, 2026</time></p>
                                     <span class="experience-cta">Step into the office →</span>
                                 </div>
                             </a>
@@ -385,6 +452,7 @@
                                         turn, and a tornado touches down far out across the fields.
                                         Nobody is in its path, though it does pick a few things up
                                         along the way.</p>
+                                    <p class="experience-date">Released <time datetime="2026-09-23">September 23, 2026</time></p>
                                     <span class="experience-cta">Watch the storm roll in →</span>
                                 </div>
                             </a>
@@ -401,6 +469,7 @@
                                         playbook, snap the ball, then throw to an open receiver or keep
                                         it and run. The farther you carry it the more the play is worth,
                                         and 500 is a perfect game.</p>
+                                    <p class="experience-date">Released <time datetime="2026-09-14">September 14, 2026</time></p>
                                     <span class="experience-cta">Call the first play →</span>
                                 </div>
                             </a>
@@ -418,6 +487,7 @@
                                         own seed so no two are alike, then tend them through spring
                                         blossom, summer fruit, autumn color and winter snow. Every tree
                                         you plant is still standing when you come back.</p>
+                                    <p class="experience-date">Released <time datetime="2026-08-26">August 26, 2026</time></p>
                                     <span class="experience-cta">Plant your first tree →</span>
                                 </div>
                             </a>
@@ -434,6 +504,7 @@
                                         bright afternoon. The sky closes over, lightning starts to work
                                         along the cloud base, and the surf keeps rising. Please know
                                         before you start that the sea does not stay where it belongs.</p>
+                                    <p class="experience-date">Released <time datetime="2026-08-21">August 21, 2026</time></p>
                                     <span class="experience-cta">Stand at the shore →</span>
                                 </div>
                             </a>
@@ -450,6 +521,7 @@
                                         Martian raiders close on the installations below. You never
                                         need a fire button: line a raider up in the middle of your
                                         view and your guns take care of the rest.</p>
+                                    <p class="experience-date">Released <time datetime="2026-08-05">August 5, 2026</time></p>
                                     <span class="experience-cta">Take the helm →</span>
                                 </div>
                             </a>
@@ -466,6 +538,7 @@
                                         Choose a destination on its burning edge, press play, and the auto
                                         zoom dives hundreds of billions of times deep, until the numbers
                                         themselves run out.</p>
+                                    <p class="experience-date">Released <time datetime="2026-07-28">July 28, 2026</time></p>
                                     <span class="experience-cta">Begin the dive →</span>
                                 </div>
                             </a>
@@ -481,6 +554,7 @@
                                     <p>Step inside the little office in Steve's house where every one of these
                                         experiences gets built. Peek at the code on the monitor, watch for birds on
                                         the fence, and please mind the sleeping cat.</p>
+                                    <p class="experience-date">Released <time datetime="2026-07-26">July 26, 2026</time></p>
                                     <span class="experience-cta">Step inside →</span>
                                 </div>
                             </a>
@@ -510,6 +584,7 @@
                                         buyer's side of it. Twenty five years of arguing deals down and
                                         more than 2,000 cars, in Baltimore or anywhere by Zoom. Tap
                                         anyone at the desk to hear their side of it.</p>
+                                    <p class="experience-date">Released <time datetime="2026-09-01">September 1, 2026</time></p>
                                     <span class="experience-cta">Take a seat →</span>
                                 </div>
                             </a>
@@ -525,6 +600,7 @@
                                     <p>Walk into a 3D tire shop built for Interstate Tire in historic Cockeysville,
                                         Maryland. See the car up on the lift, catch the waiting room TV, and stroll
                                         Railroad Ave to the 1892 freight depot.</p>
+                                    <p class="experience-date">Released <time datetime="2026-07-23">July 23, 2026</time></p>
                                     <span class="experience-cta">Step inside →</span>
                                 </div>
                             </a>
@@ -540,6 +616,7 @@
                                     <p>Stroll a 3D backyard garden built for Seed to Seed, a home vegetable gardening
                                         company. Wander the raised beds, step inside the greenhouse, and meet the
                                         gardener.</p>
+                                    <p class="experience-date">Released <time datetime="2026-07-21">July 21, 2026</time></p>
                                     <span class="experience-cta">Step inside →</span>
                                 </div>
                             </a>
@@ -557,6 +634,7 @@
                                         founders never find time for. Jenn is at her desk, the week's
                                         plan is on the whiteboard, and the birds keep visiting the
                                         fence.</p>
+                                    <p class="experience-date">Released <time datetime="2026-07-18">July 18, 2026</time></p>
                                     <span class="experience-cta">Step inside →</span>
                                 </div>
                             </a>
@@ -579,6 +657,7 @@
                                     <p>It is karaoke night at the corner bar, and the birthday singer is
                                         Steve's best friend Jamar. Settle in, follow the rolling lyrics
                                         screen, and tap the jukebox to pick what he sings next.</p>
+                                    <p class="experience-date">Released <time datetime="2026-07-16">July 16, 2026</time></p>
                                     <span class="experience-cta">Pull up a stool →</span>
                                 </div>
                             </a>
@@ -594,6 +673,7 @@
                                     <p>Every spring, Steve's son Gavin releases ladybugs and praying mantises into
                                         the patio plants. Settle in for a close-up of the jasmine, watch the garden
                                         change shifts at dusk, and see if you can spot all three mantises.</p>
+                                    <p class="experience-date">Released <time datetime="2026-07-13">July 13, 2026</time></p>
                                     <span class="experience-cta">Look closer →</span>
                                 </div>
                             </a>
@@ -608,6 +688,7 @@
                                     <h3>Zumba with Roqui</h3>
                                     <p>Step into a joyful 3D Zumba class and say hola to Roqui. Catch the beat, fire
                                         up the speakers, and find the disco ball.</p>
+                                    <p class="experience-date">Released <time datetime="2026-07-11">July 11, 2026</time></p>
                                     <span class="experience-cta">Step inside →</span>
                                 </div>
                             </a>
@@ -622,6 +703,7 @@
                                     <h3>Putt Putt with Mom and Dad</h3>
                                     <p>Play a 3D round of pirate mini golf in Ocean City, Maryland, built from a
                                         favorite summer memory. Board the ship and walk the plank hole.</p>
+                                    <p class="experience-date">Released <time datetime="2026-07-08">July 8, 2026</time></p>
                                     <span class="experience-cta">Step inside →</span>
                                 </div>
                             </a>
@@ -637,6 +719,7 @@
                                     <p>Take a quiet walk on a 3D stretch of Maryland's NCR Trail, built for a dad who
                                         rode it nearly every weekend. Find the river and listen for the little
                                         waterfall.</p>
+                                    <p class="experience-date">Released <time datetime="2026-07-06">July 6, 2026</time></p>
                                     <span class="experience-cta">Step inside →</span>
                                 </div>
                             </a>

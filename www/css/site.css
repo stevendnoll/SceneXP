@@ -548,6 +548,253 @@ html {
     color: var(--link);
 }
 
+/* LIVELIER CARDS (2026-10-01). On hover or focus a card already lifts; its
+   picture now leans in a little and the card picks up a soft glow in the
+   site's accent. The zoom grows from the picture's BOTTOM edge, so it spills
+   only into the card's clipped top and sides and never over the text below. */
+.experience-card {
+    position: relative;
+}
+
+.experience-card a {
+    position: relative;
+}
+
+.experience-card img {
+    transform-origin: 50% 100%;
+    transition: transform 0.5s ease;
+}
+
+.experience-card:hover img,
+.experience-card:focus-within img {
+    transform: scale(1.04);
+}
+
+.experience-card:hover,
+.experience-card:focus-within {
+    border-color: color-mix(in srgb, var(--accent-a) 40%, var(--line));
+    box-shadow: var(--shadow-lift),
+        0 14px 40px -16px color-mix(in srgb, var(--accent-glow-a) 60%, transparent);
+}
+
+/* When the world was released. Above the call to action, quieter than it. */
+.experience-card .experience-date {
+    margin: 0.75rem 0 0;
+    font-size: 0.82rem;
+    color: var(--text-soft);
+}
+
+/* "New", for a world released in the last thirty days. Added by /js/home.js
+   from the card's own <time>. FIXED COLORS, not the theme accents: white type
+   this small needs 4.5:1, and the accents fall short of it (the light theme's
+   cyan and the dark theme's violet are both near 3.7:1). These two clear 5:1
+   on every theme. */
+.badge-new {
+    position: absolute;
+    top: 0.8rem;
+    left: 0.8rem;
+    z-index: 1;
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #ffffff;
+    background: linear-gradient(92deg, #4c2fd0, #0e7490);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+    pointer-events: none;
+}
+
+/* ------------------------------------------------------------ spotlight */
+
+/* THE THREE NEWEST WORLDS, ONE AT A TIME (index.html #spotlight, run by
+   /js/home.js). The slides share one grid cell and cross-fade. Without the
+   script only the first, marked .is-active in the markup, is visible, and
+   visibility (not `hidden`) keeps the others out of the tab order and the
+   accessibility tree. */
+.spotlight {
+    margin-top: clamp(1.6rem, 3vw, 2.4rem);
+}
+
+.spotlight > h2 {
+    margin: 0 0 0.8rem;
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--link);
+}
+
+.spotlight-slides {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.spotlight-slide {
+    grid-area: 1 / 1;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.9s ease, visibility 0s linear 0.9s;
+}
+
+.spotlight-slide.is-active {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.9s ease, visibility 0s;
+}
+
+.spotlight-slide a {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    height: 100%;
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    background: var(--bg-raised);
+    overflow: hidden;
+    color: inherit;
+    text-decoration: none;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.spotlight-slide a:hover,
+.spotlight-slide a:focus-visible {
+    border-color: color-mix(in srgb, var(--accent-a) 45%, var(--line));
+    box-shadow: var(--shadow-lift),
+        0 18px 50px -18px color-mix(in srgb, var(--accent-glow-a) 65%, transparent);
+}
+
+.spotlight-media {
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 1200 / 630;
+}
+
+.spotlight-media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform-origin: 62% 42%;
+}
+
+.spotlight-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(1.2rem, 3vw, 2.1rem);
+}
+
+.spotlight-date {
+    margin: 0 0 0.45rem;
+    font-size: 0.85rem;
+    color: var(--text-soft);
+}
+
+.spotlight h3 {
+    margin: 0.35rem 0 0;
+    font-size: clamp(1.5rem, 3vw, 2.05rem);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+}
+
+.spotlight-text {
+    margin: 0.7rem 0 0;
+    color: var(--text-soft);
+}
+
+/* The controls exist only once /js/home.js has run: pause first, then a dot
+   per world. Each a 28px target (WCAG 2.5.8 asks for 24). */
+.spotlight-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.85rem;
+}
+
+.spotlight-toggle,
+.spotlight-dot {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-soft);
+    cursor: pointer;
+}
+
+.spotlight-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+}
+
+.spotlight-toggle:hover,
+.spotlight-dot:hover {
+    color: var(--text);
+}
+
+.spotlight-dot::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--line);
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.spotlight-dot[aria-current="true"]::before {
+    background: linear-gradient(92deg, var(--accent-a), var(--accent-b));
+    transform: scale(1.25);
+}
+
+/* THE SLOW PAN AND ZOOM, only while the slideshow is moving and only for
+   visitors who have not asked for reduced motion. A pause holds the picture
+   where it is rather than snapping it back. */
+@media (prefers-reduced-motion: no-preference) {
+    @keyframes spotlight-drift {
+        from {
+            transform: scale(1.02) translate(0, 0);
+        }
+
+        to {
+            transform: scale(1.12) translate(-2%, -1.5%);
+        }
+    }
+
+    .spotlight.is-enhanced .spotlight-slide.is-active .spotlight-media img {
+        animation: spotlight-drift 9s ease-out both;
+        animation-play-state: paused;
+    }
+
+    .spotlight.is-playing .spotlight-slide.is-active .spotlight-media img {
+        animation-play-state: running;
+    }
+}
+
+/* A phone: the picture above the words, and the blurb left to the card below
+   so the spotlight stays short enough for the page's first card to show. */
+@media (max-width: 760px) {
+    .spotlight-slide a {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 520px) {
+    .spotlight-text {
+        display: none;
+    }
+}
+
 /* ----------------------------------------------------------- step cards */
 
 .step-grid {

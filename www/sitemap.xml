@@ -8,7 +8,7 @@
          restyled. A crawler that trusts a stale date has no reason to come back
          for the new card. Asserted in tests/directory.test.mjs: this date can
          never be older than the newest experience below. -->
-    <lastmod>2026-09-29</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/contact.html</loc>
@@ -16,7 +16,7 @@
   </url>
   <url>
     <loc>https://www.scenexp.com/contribute.html</loc>
-    <lastmod>2026-09-18</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/privacy.html</loc>
@@ -28,70 +28,70 @@
   </url>
   <url>
     <loc>https://www.scenexp.com/sunnyvalejenn/</loc>
-    <lastmod>2026-09-18</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/dad/</loc>
-    <lastmod>2026-09-23</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/family/</loc>
-    <lastmod>2026-09-23</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/roqui/</loc>
-    <lastmod>2026-09-23</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/seedtoseed/</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/interstate/</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/steve/</loc>
-    <lastmod>2026-09-18</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/gavin/</loc>
-    <lastmod>2026-09-23</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/jamar/</loc>
-    <lastmod>2026-09-23</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/mandelbrot/</loc>
-    <lastmod>2026-09-23</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/earthdefense/</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/highwater/</loc>
-    <lastmod>2026-09-23</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/garden/</loc>
-    <lastmod>2026-09-23</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/automan/</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/xo/</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/tornado/</loc>
-    <lastmod>2026-09-23</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/office/</loc>
-    <lastmod>2026-09-29</lastmod>
+    <lastmod>2026-10-01</lastmod>
   </url>
 </urlset>

@@ -15,9 +15,9 @@ html [lang="en"]
     meta [content="Steve Noll" name="author"]
     title
       "Page Not Found | SceneXP"
-    link [as="style" href="/css/site.min.css?v=4" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=4" rel="stylesheet"]
+    link [href="/css/site.min.css?v=5" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -159,6 +159,7 @@ html [lang="en"]
         "url": "https://www.scenexp.com/automan/",
         "name": "John Walker, The Auto Man",
         "description": "A 3D showroom built for John Walker, The Auto Man, who does the negotiating for car buyers so they never have to do it themselves.",
+        "datePublished": "2026-09-01",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -420,9 +421,9 @@ html [lang="en"]
       }
     title
       "Contact | SceneXP"
-    link [as="style" href="/css/site.min.css?v=4" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=4" rel="stylesheet"]
+    link [href="/css/site.min.css?v=5" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
     script [src="/js/contact.min.js?v=1" type="module"]
@@ -626,9 +627,9 @@ html [lang="en"]
       }
     title
       "Contribute | SceneXP"
-    link [as="style" href="/css/site.min.css?v=4" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=4" rel="stylesheet"]
+    link [href="/css/site.min.css?v=5" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -1044,6 +1045,7 @@ html [data-ui-theme="garden" lang="en"]
         "url": "https://www.scenexp.com/dad/",
         "name": "A Ride on the NCR Trail",
         "description": "A walkable 3D stretch of Maryland's NCR Trail, built in loving memory of a dad who loved to ride it.",
+        "datePublished": "2026-07-06",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -1356,6 +1358,7 @@ html [data-ui-theme="ember" lang="en"]
         "gamePlatform": "Web browser",
         "applicationCategory": "Game",
         "operatingSystem": "Any",
+        "datePublished": "2026-08-05",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebPage",
@@ -1751,6 +1754,7 @@ html [data-ui-theme="surf" lang="en"]
         "url": "https://www.scenexp.com/family/",
         "name": "Putt Putt with Mom and Dad",
         "description": "A walkable 3D pirate mini golf course in Ocean City, Maryland, built from a son's favorite summer memory of playing putt putt with his parents.",
+        "datePublished": "2026-07-08",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -2061,6 +2065,7 @@ html [data-ui-theme="garden" lang="en"]
         "url": "https://www.scenexp.com/garden/",
         "name": "Fractal Garden",
         "description": "An interactive 3D scene. Plant fractal trees in an open plot and tend them across the years as the seasons and the weather turn.",
+        "datePublished": "2026-08-26",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -2315,6 +2320,7 @@ html [data-ui-theme="garden" lang="en"]
         "url": "https://www.scenexp.com/gavin/",
         "name": "Gavin's Bug Patrol",
         "description": "A passive 3D close-up of the Confederate Jasmine where Gavin releases his ladybugs and praying mantises every spring.",
+        "datePublished": "2026-07-13",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -2463,6 +2469,7 @@ html [data-ui-theme="surf" lang="en"]
         "url": "https://www.scenexp.com/highwater/",
         "name": "High Water",
         "description": "A passive 3D scene at the water's edge. Sixty seconds that begin on an ordinary bright afternoon and end with the sea closing over the viewer.",
+        "datePublished": "2026-08-21",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -2766,11 +2773,12 @@ html [lang="en"]
       }
     title
       "SceneXP | 3D Worlds, Games, and Experiments"
-    link [as="style" href="/css/site.min.css?v=4" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=4" rel="stylesheet"]
+    link [href="/css/site.min.css?v=5" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
+    script [src="/js/home.min.js?v=1" type="module"]
   body
     a.skip-link [href="#main"]
       "Skip to main content"
@@ -2818,13 +2826,68 @@ html [lang="en"]
               "3D worlds, games, and experiments, right in your browser"
             p
               "No app, no download, nothing to install."
+          section.spotlight#spotlight [aria-labelledby="spotlight-heading" aria-roledescription="carousel"]
+            h2#spotlight-heading
+              "Just released"
+            ul.spotlight-slides
+              li.spotlight-slide.is-active [aria-label="1 of 3" aria-roledescription="slide" data-slug="office"]
+                a [href="/office/"]
+                  div.spotlight-media
+                    img [alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." decoding="async" fetchpriority="high" height="630" loading="eager" src="/office/assets/og-office.webp?v=1" width="1200"]
+                  div.spotlight-body
+                    p.spotlight-date
+                      "Released"
+                      time [datetime="2026-09-28"]
+                        "September 28, 2026"
+                    p.experience-eyebrow
+                      "A job search tracker in a 3D office"
+                    h3
+                      "Corner Office"
+                    p.spotlight-text
+                      "A working job search tracker in a corner office forty floors above the bay. Every application you send earns a firework over the water."
+                    span.experience-cta
+                      "Step into the office →"
+              li.spotlight-slide [aria-label="2 of 3" aria-roledescription="slide" data-slug="tornado"]
+                a [href="/tornado/"]
+                  div.spotlight-media
+                    img [alt="A pale tornado reaching down from a dark, turning storm base to a cloud of dust and flying debris, just left of a small farm with a red barn, across golden fields with wildflowers in the foreground." decoding="async" height="630" loading="lazy" src="/tornado/assets/og-tornado.webp?v=1" width="1200"]
+                  div.spotlight-body
+                    p.spotlight-date
+                      "Released"
+                      time [datetime="2026-09-23"]
+                        "September 23, 2026"
+                    p.experience-eyebrow
+                      "A storm chaser's view of a tornado"
+                    h3
+                      "Tornado Alley"
+                    p.spotlight-text
+                      "Thirty seconds on the open prairie. A storm organizes on the horizon, its base begins to turn, and a tornado touches down far out across the fields."
+                    span.experience-cta
+                      "Watch the storm roll in →"
+              li.spotlight-slide [aria-label="3 of 3" aria-roledescription="slide" data-slug="xo"]
+                a [href="/xo/"]
+                  div.spotlight-media
+                    img [alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." decoding="async" height="630" loading="lazy" src="/xo/assets/og-xo.webp?v=1" width="1200"]
+                  div.spotlight-body
+                    p.spotlight-date
+                      "Released"
+                      time [datetime="2026-09-14"]
+                        "September 14, 2026"
+                    p.experience-eyebrow
+                      "A football game where you call the plays"
+                    h3
+                      "X's and O's"
+                    p.spotlight-text
+                      "You are on offense for all ten plays. Pick a play, snap the ball, then throw to an open receiver or keep it and run. 500 is a perfect game."
+                    span.experience-cta
+                      "Call the first play →"
           section.experience-group [aria-labelledby="worlds-and-games" data-category="worlds"]
             h2#worlds-and-games
               "Worlds and games"
             ul.experience-grid
               li.experience-card [data-slug="office"]
                 a [href="/office/"]
-                  img [alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." decoding="async" fetchpriority="high" height="630" loading="eager" src="/office/assets/og-office.webp?v=1" width="1200"]
+                  img [alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." decoding="async" height="630" loading="lazy" src="/office/assets/og-office.webp?v=1" width="1200"]
                   div.experience-card-body
                     p.experience-eyebrow
                       "A job search tracker in a 3D office"
@@ -2832,6 +2895,10 @@ html [lang="en"]
                       "Corner Office"
                     p
                       "A working job search tracker in a corner office forty floors above the bay. Your applications, interviews and follow-ups fill the furniture, every application you send earns a firework over the water, and every record stays private in your own browser. Lift the binoculars and you might spot the orcas."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-09-28"]
+                        "September 28, 2026"
                     span.experience-cta
                       "Step into the office →"
               li.experience-card [data-slug="tornado"]
@@ -2844,6 +2911,10 @@ html [lang="en"]
                       "Tornado Alley"
                     p
                       "Thirty seconds on the open prairie, beginning on a calm summer evening. A storm organizes on the horizon, its base begins to turn, and a tornado touches down far out across the fields. Nobody is in its path, though it does pick a few things up along the way."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-09-23"]
+                        "September 23, 2026"
                     span.experience-cta
                       "Watch the storm roll in →"
               li.experience-card [data-slug="xo"]
@@ -2856,6 +2927,10 @@ html [lang="en"]
                       "X's and O's"
                     p
                       "You are on offense for all ten plays. Pick a play from the playbook, snap the ball, then throw to an open receiver or keep it and run. The farther you carry it the more the play is worth, and 500 is a perfect game."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-09-14"]
+                        "September 14, 2026"
                     span.experience-cta
                       "Call the first play →"
               li.experience-card [data-slug="garden"]
@@ -2868,6 +2943,10 @@ html [lang="en"]
                       "Fractal Garden"
                     p
                       "Plant a garden of fractal trees, then watch it live through the years. Choose from seventeen species, each one grown from its own seed so no two are alike, then tend them through spring blossom, summer fruit, autumn color and winter snow. Every tree you plant is still standing when you come back."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-08-26"]
+                        "August 26, 2026"
                     span.experience-cta
                       "Plant your first tree →"
               li.experience-card [data-slug="highwater"]
@@ -2880,6 +2959,10 @@ html [lang="en"]
                       "High Water"
                     p
                       "Sixty seconds at the water's edge, beginning on an ordinary bright afternoon. The sky closes over, lightning starts to work along the cloud base, and the surf keeps rising. Please know before you start that the sea does not stay where it belongs."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-08-21"]
+                        "August 21, 2026"
                     span.experience-cta
                       "Stand at the shore →"
               li.experience-card [data-slug="earthdefense"]
@@ -2892,6 +2975,10 @@ html [lang="en"]
                       "Earth Defense"
                     p
                       "Fly a single ship in orbit above a massive Earth while twelve Martian raiders close on the installations below. You never need a fire button: line a raider up in the middle of your view and your guns take care of the rest."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-08-05"]
+                        "August 5, 2026"
                     span.experience-cta
                       "Take the helm →"
               li.experience-card [data-slug="mandelbrot"]
@@ -2904,6 +2991,10 @@ html [lang="en"]
                       "The Mandelbrot Set"
                     p
                       "The most famous shape in mathematics floats in a quiet starfield. Choose a destination on its burning edge, press play, and the auto zoom dives hundreds of billions of times deep, until the numbers themselves run out."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-28"]
+                        "July 28, 2026"
                     span.experience-cta
                       "Begin the dive →"
               li.experience-card [data-slug="steve"]
@@ -2916,6 +3007,10 @@ html [lang="en"]
                       "Steve's Home Office"
                     p
                       "Step inside the little office in Steve's house where every one of these experiences gets built. Peek at the code on the monitor, watch for birds on the fence, and please mind the sleeping cat."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-26"]
+                        "July 26, 2026"
                     span.experience-cta
                       "Step inside →"
           section.experience-group [aria-labelledby="small-business-tributes" data-category="business"]
@@ -2932,6 +3027,10 @@ html [lang="en"]
                       "John Walker, The Auto Man"
                     p
                       "Pull up to a dealership desk where John Walker is sitting on the buyer's side of it. Twenty five years of arguing deals down and more than 2,000 cars, in Baltimore or anywhere by Zoom. Tap anyone at the desk to hear their side of it."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-09-01"]
+                        "September 1, 2026"
                     span.experience-cta
                       "Take a seat →"
               li.experience-card [data-slug="interstate"]
@@ -2944,6 +3043,10 @@ html [lang="en"]
                       "The Interstate Tire Shop"
                     p
                       "Walk into a 3D tire shop built for Interstate Tire in historic Cockeysville, Maryland. See the car up on the lift, catch the waiting room TV, and stroll Railroad Ave to the 1892 freight depot."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-23"]
+                        "July 23, 2026"
                     span.experience-cta
                       "Step inside →"
               li.experience-card [data-slug="seedtoseed"]
@@ -2956,6 +3059,10 @@ html [lang="en"]
                       "The Seed to Seed Garden"
                     p
                       "Stroll a 3D backyard garden built for Seed to Seed, a home vegetable gardening company. Wander the raised beds, step inside the greenhouse, and meet the gardener."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-21"]
+                        "July 21, 2026"
                     span.experience-cta
                       "Step inside →"
               li.experience-card [data-slug="sunnyvalejenn"]
@@ -2968,6 +3075,10 @@ html [lang="en"]
                       "Sunnyvale Jenn Consulting"
                     p
                       "Look in on the sunny home office of Sunnyvale Jenn Consulting, built for a consultant who untangles the operations that busy founders never find time for. Jenn is at her desk, the week's plan is on the whiteboard, and the birds keep visiting the fence."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-18"]
+                        "July 18, 2026"
                     span.experience-cta
                       "Step inside →"
           section.experience-group [aria-labelledby="personal-tributes" data-category="personal"]
@@ -2984,6 +3095,10 @@ html [lang="en"]
                       "Jamar's Karaoke Night"
                     p
                       "It is karaoke night at the corner bar, and the birthday singer is Steve's best friend Jamar. Settle in, follow the rolling lyrics screen, and tap the jukebox to pick what he sings next."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-16"]
+                        "July 16, 2026"
                     span.experience-cta
                       "Pull up a stool →"
               li.experience-card [data-slug="gavin"]
@@ -2996,6 +3111,10 @@ html [lang="en"]
                       "Gavin's Bug Patrol"
                     p
                       "Every spring, Steve's son Gavin releases ladybugs and praying mantises into the patio plants. Settle in for a close-up of the jasmine, watch the garden change shifts at dusk, and see if you can spot all three mantises."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-13"]
+                        "July 13, 2026"
                     span.experience-cta
                       "Look closer →"
               li.experience-card [data-slug="roqui"]
@@ -3008,6 +3127,10 @@ html [lang="en"]
                       "Zumba with Roqui"
                     p
                       "Step into a joyful 3D Zumba class and say hola to Roqui. Catch the beat, fire up the speakers, and find the disco ball."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-11"]
+                        "July 11, 2026"
                     span.experience-cta
                       "Step inside →"
               li.experience-card [data-slug="family"]
@@ -3020,6 +3143,10 @@ html [lang="en"]
                       "Putt Putt with Mom and Dad"
                     p
                       "Play a 3D round of pirate mini golf in Ocean City, Maryland, built from a favorite summer memory. Board the ship and walk the plank hole."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-08"]
+                        "July 8, 2026"
                     span.experience-cta
                       "Step inside →"
               li.experience-card [data-slug="dad"]
@@ -3032,6 +3159,10 @@ html [lang="en"]
                       "A Ride on the NCR Trail"
                     p
                       "Take a quiet walk on a 3D stretch of Maryland's NCR Trail, built for a dad who rode it nearly every weekend. Find the river and listen for the little waterfall."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-06"]
+                        "July 6, 2026"
                     span.experience-cta
                       "Step inside →"
       section.section [aria-labelledby="for-heading"]
@@ -3174,6 +3305,7 @@ html [lang="en"]
             "url": "https://www.scenexp.com/interstate/",
             "name": "Interstate Tire",
             "description": "A walkable 3D tour of the Interstate Tire shop.",
+            "datePublished": "2026-07-23",
             "inLanguage": "en-US",
             "isPartOf": {
               "@type": "WebSite",
@@ -3557,6 +3689,7 @@ html [data-ui-theme="neon" lang="en"]
         "url": "https://www.scenexp.com/jamar/",
         "name": "Jamar's Karaoke Night",
         "description": "A passive 3D visit to karaoke night at the corner bar, built as a birthday present for Jamar: he has the microphone, the lyrics screen is rolling, and his best friends hold down the booth.",
+        "datePublished": "2026-07-16",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -3724,6 +3857,7 @@ html [data-ui-theme="ember" lang="en"]
         "url": "https://www.scenexp.com/mandelbrot/",
         "name": "The Mandelbrot Set",
         "description": "A passive 3D float through deep space beside the Mandelbrot set, its black interior outlined by a neon orange glow, honoring Benoit Mandelbrot.",
+        "datePublished": "2026-07-28",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -3878,6 +4012,7 @@ html [lang="en"]
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "Any",
         "browserRequirements": "Requires JavaScript and WebGL",
+        "datePublished": "2026-09-28",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebPage",
@@ -4599,9 +4734,9 @@ html [lang="en"]
       }
     title
       "Privacy | SceneXP"
-    link [as="style" href="/css/site.min.css?v=4" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=4" rel="stylesheet"]
+    link [href="/css/site.min.css?v=5" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -4804,6 +4939,7 @@ html [data-ui-theme="neon" lang="en"]
         "url": "https://www.scenexp.com/roqui/",
         "name": "Zumba with Roqui",
         "description": "A walkable 3D Zumba class, built with love for a wonderful instructor at the Matt Griffin YMCA.",
+        "datePublished": "2026-07-11",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -5112,6 +5248,7 @@ html [data-ui-theme="garden" lang="en"]
         "url": "https://www.scenexp.com/seedtoseed/",
         "name": "The Seed to Seed Garden",
         "description": "A walkable 3D backyard vegetable garden built to honor Seed to Seed, a home vegetable and edible gardening company.",
+        "datePublished": "2026-07-21",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -5567,6 +5704,7 @@ html [lang="en"]
         "url": "https://www.scenexp.com/steve/",
         "name": "Steve's Home Office",
         "description": "A 3D model of the home office in Steve's house where SceneXP gets built, to look all the way around.",
+        "datePublished": "2026-07-26",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -5924,6 +6062,7 @@ html [lang="en"]
         "url": "https://www.scenexp.com/sunnyvalejenn/",
         "name": "Sunnyvale Jenn Consulting",
         "description": "A passive 3D visit to the sunny home office of Sunnyvale Jenn Consulting, built in tribute to Jenn, a talented entrepreneur and small business operations consultant.",
+        "datePublished": "2026-07-18",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -6114,9 +6253,9 @@ html [lang="en"]
       }
     title
       "Terms | SceneXP"
-    link [as="style" href="/css/site.min.css?v=4" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=4" rel="stylesheet"]
+    link [href="/css/site.min.css?v=5" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -6344,6 +6483,7 @@ html [data-ui-theme="surf" lang="en"]
         "url": "https://www.scenexp.com/tornado/",
         "name": "Tornado Alley",
         "description": "A passive 3D scene on the open prairie. Thirty seconds that begin on a calm summer evening, follow a tornado from its first turning to its last, and end as the storm moves on.",
+        "datePublished": "2026-09-23",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebSite",
@@ -6521,6 +6661,7 @@ html [data-ui-theme="neon" lang="en"]
         "gamePlatform": "Web browser",
         "applicationCategory": "Game",
         "operatingSystem": "Any",
+        "datePublished": "2026-09-14",
         "inLanguage": "en-US",
         "isPartOf": {
           "@type": "WebPage",

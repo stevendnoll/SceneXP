@@ -277,19 +277,28 @@ describe('the search box and the filter chips are gone for good', () => {
 
     test('the home page loads no directory script', () => {
         expect(home).not.toContain('directory.min.js');
-        // Only the two site-wide scripts remain, and both are still wired up.
+        // The two site-wide scripts, plus home.js since 2026-10-01, which runs
+        // the spotlight and the "New" badges and filters nothing.
         expect(home).toContain('/js/theme.min.js');
         expect(home).toContain('/js/nav.min.js');
+        expect(home).toContain('<script type="module" src="/js/home.min.js');
     });
 
-    test('nothing above the first card is progressive enhancement any more', () => {
-        // The section head runs straight into the first group. Anything `hidden`
-        // between them would be a control waiting for a script that no longer
-        // ships, which is a permanently invisible element.
+    test('the spotlight above the first card is complete without its script', () => {
+        // Between the section head and the first group is the spotlight
+        // (2026-10-01), whose slideshow is /js/home.js. Without the script it
+        // must still be a finished thing: the first slide marked active so the
+        // stylesheet shows it, nothing `hidden` waiting to be revealed, and no
+        // controls in the markup (the script builds them), because an inert
+        // pause button or a dot that does nothing is worse than no control.
+        // Comments are not markup, and the spotlight's own explains itself.
         const between = home.slice(
             home.indexOf('</div>', home.indexOf('class="section-head"')),
-            home.indexOf('<section class="experience-group"'));
+            home.indexOf('<section class="experience-group"')).replace(/<!--[\s\S]*?-->/g, '');
         expect(between).not.toMatch(/\shidden(\s|>)/);
+        expect(between).not.toMatch(/<button\b/);
+        const slides = [...between.matchAll(/<li class="spotlight-slide( is-active)?"/g)];
+        expect(slides.map((m) => Boolean(m[1]))).toEqual([true, false, false]);
     });
 });
 
@@ -353,20 +362,21 @@ describe('the directory card image and the social image', () => {
         expect(tag).toMatch(/\bheight="630"/);
     });
 
-    test('the first card is eager and high priority, and it is the only one', () => {
-        // THE FIRST CARD IS THE LCP ELEMENT on any screen wide enough to show
-        // it, and `loading="lazy"` on an LCP element defers the fetch until
-        // layout has proved the image is needed, which is late by definition.
-        // The other fourteen must stay lazy: eager on all fifteen pulls
-        // roughly 780KB of card art nobody has scrolled to.
-        //
-        // This asserts the SPLIT rather than naming garden, so reordering the
-        // grid moves the requirement instead of breaking the test.
-        const eager = cards.filter((c) => /\bloading="eager"/.test(c.tag)).map((c) => c.slug);
-        expect(eager).toEqual([cards[0].slug]);
-        expect(`${cards[0].slug} fetchpriority: ${/\bfetchpriority="high"/.test(cards[0].tag)}`)
-            .toBe(`${cards[0].slug} fetchpriority: true`);
-        for (const c of cards.slice(1)) {
+    test('the first spotlight picture is the one eager, high-priority image, and every card is lazy', () => {
+        // THE FIRST PICTURE ON THE PAGE IS THE LCP ELEMENT, and `loading="lazy"`
+        // on an LCP element defers the fetch until layout has proved the image
+        // is needed, which is late by definition. Until 2026-10-01 that was
+        // the first card in the grid. The spotlight (the three newest worlds)
+        // now sits above the grid, so its first slide's picture is the one,
+        // and every card below stays lazy: eager on all of them pulls the
+        // card art of a page nobody has scrolled yet.
+        const eager = [...home.matchAll(/<img\b[^>]*\bloading="eager"[^>]*>/g)].map((m) => m[0]);
+        expect(eager).toHaveLength(1);
+        expect(eager[0]).toMatch(/\bfetchpriority="high"/);
+        const spotlight = home.slice(home.indexOf('<section class="spotlight"'), home.indexOf('</section>', home.indexOf('<section class="spotlight"')));
+        const firstSlideImg = spotlight.match(/<img\b[\s\S]*?>/)[0];
+        expect(firstSlideImg).toBe(eager[0]);
+        for (const c of cards) {
             expect(`${c.slug}: ${/\bloading="lazy"/.test(c.tag)}`).toBe(`${c.slug}: true`);
             expect(`${c.slug} fetchpriority: ${/\bfetchpriority=/.test(c.tag)}`)
                 .toBe(`${c.slug} fetchpriority: false`);
@@ -406,8 +416,17 @@ test('the outline runs h1, category h2, card h3 with no level skipped', () => {
     // card left behind at h2 reads as a sibling of the category it lives in.
     expect([...home.matchAll(/<h1[ >]/g)]).toHaveLength(1);
     expect(home).not.toMatch(/<div class="experience-card-body">[\s\S]{0,200}?<h2>/);
+    // One h3 per card, plus one per spotlight slide (which sits under its own
+    // h2, "Just released", between the h1 and the first category).
     const titles = [...home.matchAll(/<h3>([^<]+)<\/h3>/g)].map((m) => m[1]);
-    expect(titles).toHaveLength(slugs.length);
+    const slides = [...home.matchAll(/<li class="spotlight-slide/g)].length;
+    expect(slides).toBe(3);
+    expect(titles).toHaveLength(slugs.length + slides);
+    const h1 = home.indexOf('<h1');
+    const spot = home.indexOf('<h2 id="spotlight-heading">');
+    const firstGroup = home.indexOf('<section class="experience-group"');
+    expect(h1).toBeLessThan(spot);
+    expect(spot).toBeLessThan(firstGroup);
 });
 
 /** THE SHARED STYLESHEET'S CACHE BUSTER, ACROSS EVERY PAGE THAT LOADS IT.
