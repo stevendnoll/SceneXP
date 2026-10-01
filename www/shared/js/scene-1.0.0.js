@@ -25,7 +25,6 @@ const SCENE_CONFIG = {
 let scene = null;
 let camera = null;
 let renderer = null;
-let cameraRig = null;
 let cometGroup = null;
 
 // Resting position of the distant comet (it sways gently around this point),
@@ -131,11 +130,7 @@ export function initScene(canvas, options = {}) {
     );
     camera.position.set(0, SCENE_CONFIG.eyeHeight, 0);
 
-    // Create camera rig for VR locomotion (camera is child of rig)
-    cameraRig = new THREE.Group();
-    cameraRig.name = 'cameraRig';
-    cameraRig.add(camera);
-    scene.add(cameraRig);
+    scene.add(camera);
 
     // Create renderer with mobile optimizations
     renderer = new THREE.WebGLRenderer({
@@ -161,9 +156,6 @@ export function initScene(canvas, options = {}) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
-
-    // Enable WebXR for VR headset support (Meta Quest, etc.)
-    renderer.xr.enabled = true;
 
     // Add basic lighting (with mobile-aware shadow settings)
     setupBasicLighting(isMobile, options.shadowRange);
@@ -967,7 +959,6 @@ export function removeTestObjects() {
  */
 export function handleResize() {
     if (!camera || !renderer) return;
-    if (renderer.xr && renderer.xr.isPresenting) return; // XR manages viewport
 
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -992,7 +983,6 @@ export function render() {
 export function getScene() { return scene; }
 export function getCamera() { return camera; }
 export function getRenderer() { return renderer; }
-export function getCameraRig() { return cameraRig; }
 
 export { SCENE_CONFIG };
 

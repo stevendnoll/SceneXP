@@ -107,11 +107,9 @@ describe('pure helpers and getters (parity with the www/js copy)', () => {
     expect(m.getPlayerRadius()).toBeCloseTo(0.4, 10);
   });
 
-  test('VR / gamepad / head-tracking default to inactive', async () => {
+  test('gamepad defaults to inactive', async () => {
     const m = await load();
-    expect(m.isVRActive()).toBe(false);
     expect(m.isGamepadActive()).toBe(false);
-    expect(m.isHeadTrackingActive()).toBe(false);
   });
 });
 
@@ -334,9 +332,8 @@ describe('the remaining setters and getters', () => {
     expect(() => m.setTapCallback(() => {})).not.toThrow();
   });
 
-  test('trigger edge detectors default to released', async () => {
+  test('trigger edge detector defaults to released', async () => {
     const m = await load();
-    expect(m.isVRTriggerJustPressed()).toBe(false);
     expect(m.isGamepadTriggerJustPressed()).toBe(false);
   });
 });

@@ -117,7 +117,7 @@ initControls(CONFIG);        // spawn, bounds, speeds
 | `telemetry.js` | Fire-and-forget usage pings to `../api.html` | `setProofHash`, `setMobile`, `track`, `trackFinal` |
 | `analytics.js` | Visitor-activity dashboard (fetch + DOM). Reads `snaps/index.json` + `snaps/sessions-YYYYMMDD.json` relative to the page, groups a day by visit or by scene, and filters it by scene and by action. Polls every 5 min while the tab is visible | `initAnalytics({ body, dateLabel, status, prevBtn, nextBtn, collapseAllBtn, groupSelect, sceneSelect, actionFilter, filterSummary, selectAllBtn, clearAllBtn, onSummary })`, `loadAnalytics()`, `startAnalyticsAutoRefresh()`. Every element is optional: pass only `onSummary` for a scene that wants the headline without the overlay |
 | `scene.js` | Renderer, camera, sky, sun/moon/stars/clouds, day/night, optional comet | `dayNight: { enabled, cycleDuration }`, `comet: { enabled, base }`; `getCometBase()` for aiming props |
-| `controls.js` | First-person + touch + VR + gamepad input | `initControls({ spawn, rotation, worldBounds, moveSpeed, ... })` |
+| `controls.js` | First-person + touch + gamepad input | `initControls({ spawn, rotation, worldBounds, moveSpeed, ... })` |
 | `world.js` | THE context seam: root group, config, colliders, outdoor props | `initWorld(config)`, `getWorldGroup/Config`, `addCollider(ForMesh)`, `registerOutdoorProp` |
 | `collision.js` | Player AABB + wall-slide | `checkCollision(oldPos, newPos, radius, boxes)` for `setCollisionCallback` |
 | `checklist.js` | Session discovery list + HUD panel | `initChecklist({ items, storageKey })`, `markChecklistItem`, `onChecklistChange` |
