@@ -55,16 +55,42 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/tornado/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/tornado/#webpage",
       "url": "https://www.scenexp.com/tornado/",
       "name": "Tornado Alley",
       "description": "A passive 3D scene on the open prairie. Thirty seconds that begin on a calm summer evening, follow a tornado from its first turning to its last, and end as the storm moves on.",
-      "inLanguage": "en-US"
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Tornado Alley",
+          "item": "https://www.scenexp.com/tornado/"
+        }
+      ]
     }
     </script>
 
-    <title>Tornado Alley</title>
+    <title>Tornado Alley | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="../shared/css/player-1.0.0.min.css" as="style">

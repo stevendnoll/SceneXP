@@ -158,7 +158,7 @@ describe('the page carries the metadata a share and a crawler need', () => {
         expect(meta('og:site_name')).toBe('SceneXP');
         expect(meta('twitter:card')).toBe('summary_large_image');
         expect(meta('twitter:title')).toBe('High Water');
-        expect(html).toMatch(/<title>High Water<\/title>/);
+        expect(html).toMatch(/<title>High Water \| SceneXP<\/title>/);
         expect(meta('author')).toBe('Steve Noll');
         expect(meta('description')).toBeTruthy();
     });

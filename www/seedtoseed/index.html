@@ -62,12 +62,16 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/seedtoseed/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/seedtoseed/#webpage",
       "url": "https://www.scenexp.com/seedtoseed/",
       "name": "The Seed to Seed Garden",
       "description": "A walkable 3D backyard vegetable garden built to honor Seed to Seed, a home vegetable and edible gardening company.",
       "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
       "about": {
         "@type": "LocalBusiness",
         "name": "Seed to Seed",
@@ -77,8 +81,30 @@
       }
     }
     </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "The Seed to Seed Garden",
+          "item": "https://www.scenexp.com/seedtoseed/"
+        }
+      ]
+    }
+    </script>
 
-    <title>The Seed to Seed Garden</title>
+    <title>The Seed to Seed Garden | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">

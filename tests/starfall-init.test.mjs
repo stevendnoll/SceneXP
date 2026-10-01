@@ -199,7 +199,7 @@ describe('the page', () => {
     beforeAll(async () => { html = await readFile(PAGE, 'utf8'); });
 
     test('names itself, and stays out of search until it is released', () => {
-        expect(html).toContain('<title>Starfall</title>');
+        expect(html).toContain('<title>Starfall | SceneXP</title>');
         expect(html).toContain('<link rel="canonical" href="https://www.scenexp.com/starfall/">');
         expect(html).toContain('<meta name="robots" content="noindex, nofollow">');
     });

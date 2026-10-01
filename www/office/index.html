@@ -65,6 +65,10 @@
       "operatingSystem": "Any",
       "browserRequirements": "Requires JavaScript and WebGL",
       "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -80,13 +84,35 @@
         "name": "Continuum Commerce LLC"
       },
       "isPartOf": {
-        "@type": "WebSite",
+        "@type": "WebPage",
         "@id": "https://www.scenexp.com/#website"
       }
     }
     </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Corner Office",
+          "item": "https://www.scenexp.com/office/"
+        }
+      ]
+    }
+    </script>
 
-    <title>Corner Office</title>
+    <title>Corner Office | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="css/experience.min.css?v=4" as="style">

@@ -64,16 +64,42 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/dad/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/dad/#webpage",
       "url": "https://www.scenexp.com/dad/",
       "name": "A Ride on the NCR Trail",
       "description": "A walkable 3D stretch of Maryland's NCR Trail, built in loving memory of a dad who loved to ride it.",
-      "inLanguage": "en-US"
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "A Ride on the NCR Trail",
+          "item": "https://www.scenexp.com/dad/"
+        }
+      ]
     }
     </script>
 
-    <title>A Ride on the NCR Trail</title>
+    <title>A Ride on the NCR Trail | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">

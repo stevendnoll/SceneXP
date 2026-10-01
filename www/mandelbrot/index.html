@@ -64,16 +64,42 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/mandelbrot/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/mandelbrot/#webpage",
       "url": "https://www.scenexp.com/mandelbrot/",
       "name": "The Mandelbrot Set",
       "description": "A passive 3D float through deep space beside the Mandelbrot set, its black interior outlined by a neon orange glow, honoring Benoit Mandelbrot.",
-      "inLanguage": "en-US"
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "The Mandelbrot Set",
+          "item": "https://www.scenexp.com/mandelbrot/"
+        }
+      ]
     }
     </script>
 
-    <title>The Mandelbrot Set</title>
+    <title>The Mandelbrot Set | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="css/experience.min.css?v=2" as="style">

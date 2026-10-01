@@ -99,6 +99,10 @@
       "applicationCategory": "Game",
       "operatingSystem": "Any",
       "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
       "isAccessibleForFree": true,
       "playMode": "SinglePlayer",
       "image": "https://www.scenexp.com/earthdefense/assets/og-earthdefense.jpg?v=3",
@@ -111,13 +115,35 @@
         "name": "Continuum Commerce LLC"
       },
       "isPartOf": {
-        "@type": "WebSite",
+        "@type": "WebPage",
         "@id": "https://www.scenexp.com/#website"
       }
     }
     </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Earth Defense",
+          "item": "https://www.scenexp.com/earthdefense/"
+        }
+      ]
+    }
+    </script>
 
-    <title>Earth Defense</title>
+    <title>Earth Defense | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="css/experience.min.css?v=4" as="style">

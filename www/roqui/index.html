@@ -65,16 +65,42 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/roqui/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/roqui/#webpage",
       "url": "https://www.scenexp.com/roqui/",
       "name": "Zumba with Roqui",
       "description": "A walkable 3D Zumba class, built with love for a wonderful instructor at the Matt Griffin YMCA.",
-      "inLanguage": "en-US"
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Zumba with Roqui",
+          "item": "https://www.scenexp.com/roqui/"
+        }
+      ]
     }
     </script>
 
-    <title>Zumba with Roqui</title>
+    <title>Zumba with Roqui | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">

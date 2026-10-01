@@ -64,16 +64,42 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/garden/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/garden/#webpage",
       "url": "https://www.scenexp.com/garden/",
       "name": "Fractal Garden",
       "description": "An interactive 3D scene. Plant fractal trees in an open plot and tend them across the years as the seasons and the weather turn.",
-      "inLanguage": "en-US"
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Fractal Garden",
+          "item": "https://www.scenexp.com/garden/"
+        }
+      ]
     }
     </script>
 
-    <title>Fractal Garden</title>
+    <title>Fractal Garden | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="css/experience.min.css?v=17" as="style">

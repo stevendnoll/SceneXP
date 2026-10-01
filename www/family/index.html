@@ -65,16 +65,42 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/family/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/family/#webpage",
       "url": "https://www.scenexp.com/family/",
       "name": "Putt Putt with Mom and Dad",
       "description": "A walkable 3D pirate mini golf course in Ocean City, Maryland, built from a son's favorite summer memory of playing putt putt with his parents.",
-      "inLanguage": "en-US"
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Putt Putt with Mom and Dad",
+          "item": "https://www.scenexp.com/family/"
+        }
+      ]
     }
     </script>
 
-    <title>Putt Putt with Mom and Dad</title>
+    <title>Putt Putt with Mom and Dad | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">

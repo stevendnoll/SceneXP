@@ -125,7 +125,7 @@ describe('the page carries what a share, a crawler and the player need', () => {
         expect(html).toContain(`<link rel="canonical" href="${BASE}">`);
         expect(meta('og:url')).toBe(BASE);
         expect(meta('og:title')).toBe('Tornado Alley');
-        expect(html).toContain('<title>Tornado Alley</title>');
+        expect(html).toContain('<title>Tornado Alley | SceneXP</title>');
     });
 
     test('exactly one card image, named the same in both blocks with the same alt', () => {
@@ -141,7 +141,7 @@ describe('the page carries what a share, a crawler and the player need', () => {
         const block = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
         const data = JSON.parse(block[1]);
         expect(data.url).toBe(BASE);
-        expect(data['@id']).toBe(`${BASE}#website`);
+        expect(data['@id']).toBe(`${BASE}#webpage`);
         expect(data.name).toBe('Tornado Alley');
     });
 

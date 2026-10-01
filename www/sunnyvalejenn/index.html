@@ -63,12 +63,16 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/sunnyvalejenn/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/sunnyvalejenn/#webpage",
       "url": "https://www.scenexp.com/sunnyvalejenn/",
       "name": "Sunnyvale Jenn Consulting",
       "description": "A passive 3D visit to the sunny home office of Sunnyvale Jenn Consulting, built in tribute to Jenn, a talented entrepreneur and small business operations consultant.",
       "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
       "about": {
         "@type": "Organization",
         "name": "Sunnyvale Jenn Consulting",
@@ -76,8 +80,30 @@
       }
     }
     </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Sunnyvale Jenn Consulting",
+          "item": "https://www.scenexp.com/sunnyvalejenn/"
+        }
+      ]
+    }
+    </script>
 
-    <title>Sunnyvale Jenn Consulting</title>
+    <title>Sunnyvale Jenn Consulting | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">

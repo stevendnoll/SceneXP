@@ -70,12 +70,16 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/steve/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/steve/#webpage",
       "url": "https://www.scenexp.com/steve/",
       "name": "Steve's Home Office",
       "description": "A 3D model of the home office in Steve's house where SceneXP gets built, to look all the way around.",
       "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
       "author": {
         "@type": "Person",
         "name": "Steve Noll",
@@ -84,8 +88,30 @@
       }
     }
     </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Steve's Home Office",
+          "item": "https://www.scenexp.com/steve/"
+        }
+      ]
+    }
+    </script>
 
-    <title>Steve's Home Office</title>
+    <title>Steve's Home Office | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="css/experience.min.css?v=1" as="style">

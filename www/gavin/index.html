@@ -63,16 +63,42 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/gavin/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/gavin/#webpage",
       "url": "https://www.scenexp.com/gavin/",
       "name": "Gavin's Bug Patrol",
       "description": "A passive 3D close-up of the Confederate Jasmine where Gavin releases his ladybugs and praying mantises every spring.",
-      "inLanguage": "en-US"
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Gavin's Bug Patrol",
+          "item": "https://www.scenexp.com/gavin/"
+        }
+      ]
     }
     </script>
 
-    <title>Gavin's Bug Patrol</title>
+    <title>Gavin's Bug Patrol | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="css/experience.min.css?v=2" as="style">

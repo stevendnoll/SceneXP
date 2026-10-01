@@ -64,12 +64,16 @@
       "@context": "https://schema.org",
       "@graph": [
         {
-          "@type": "WebSite",
-          "@id": "https://www.scenexp.com/interstate/#website",
+          "@type": "WebPage",
+          "@id": "https://www.scenexp.com/interstate/#webpage",
           "url": "https://www.scenexp.com/interstate/",
           "name": "Interstate Tire",
           "description": "A walkable 3D tour of the Interstate Tire shop.",
           "inLanguage": "en-US",
+          "isPartOf": {
+            "@type": "WebSite",
+            "@id": "https://www.scenexp.com/#website"
+          },
           "publisher": { "@id": "https://www.scenexp.com/interstate/#shop" }
         },
         {
@@ -89,8 +93,30 @@
       ]
     }
     </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Interstate Tire",
+          "item": "https://www.scenexp.com/interstate/"
+        }
+      ]
+    }
+    </script>
 
-    <title>Interstate Tire</title>
+    <title>Interstate Tire | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">

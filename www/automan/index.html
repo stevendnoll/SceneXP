@@ -83,12 +83,16 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/automan/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/automan/#webpage",
       "url": "https://www.scenexp.com/automan/",
       "name": "John Walker, The Auto Man",
       "description": "A 3D showroom built for John Walker, The Auto Man, who does the negotiating for car buyers so they never have to do it themselves.",
       "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
       "about": {
         "@type": "ProfessionalService",
         "@id": "https://www.scenexp.com/automan/#business",
@@ -107,8 +111,30 @@
       }
     }
     </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "John Walker, The Auto Man",
+          "item": "https://www.scenexp.com/automan/"
+        }
+      ]
+    }
+    </script>
 
-    <title>John Walker, The Auto Man</title>
+    <title>John Walker, The Auto Man | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">

@@ -154,12 +154,16 @@ html [lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/automan/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/automan/#webpage",
         "url": "https://www.scenexp.com/automan/",
         "name": "John Walker, The Auto Man",
         "description": "A 3D showroom built for John Walker, The Auto Man, who does the negotiating for car buyers so they never have to do it themselves.",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "about": {
           "@type": "ProfessionalService",
           "@id": "https://www.scenexp.com/automan/#business",
@@ -177,8 +181,27 @@ html [lang="en"]
           "slogan": "He does the negotiating, so you never have to."
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "John Walker, The Auto Man",
+            "item": "https://www.scenexp.com/automan/"
+          }
+        ]
+      }
     title
-      "John Walker, The Auto Man"
+      "John Walker, The Auto Man | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
@@ -1016,15 +1039,38 @@ html [data-ui-theme="garden" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/dad/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/dad/#webpage",
         "url": "https://www.scenexp.com/dad/",
         "name": "A Ride on the NCR Trail",
         "description": "A walkable 3D stretch of Maryland's NCR Trail, built in loving memory of a dad who loved to ride it.",
-        "inLanguage": "en-US"
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "A Ride on the NCR Trail",
+            "item": "https://www.scenexp.com/dad/"
+          }
+        ]
       }
     title
-      "A Ride on the NCR Trail"
+      "A Ride on the NCR Trail | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
@@ -1311,6 +1357,10 @@ html [data-ui-theme="ember" lang="en"]
         "applicationCategory": "Game",
         "operatingSystem": "Any",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebPage",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "isAccessibleForFree": true,
         "playMode": "SinglePlayer",
         "image": "https://www.scenexp.com/earthdefense/assets/og-earthdefense.jpg?v=3",
@@ -1321,14 +1371,29 @@ html [data-ui-theme="ember" lang="en"]
         "publisher": {
           "@type": "Organization",
           "name": "Continuum Commerce LLC"
-        },
-        "isPartOf": {
-          "@type": "WebSite",
-          "@id": "https://www.scenexp.com/#website"
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Earth Defense",
+            "item": "https://www.scenexp.com/earthdefense/"
+          }
+        ]
+      }
     title
-      "Earth Defense"
+      "Earth Defense | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=4" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
@@ -1681,15 +1746,38 @@ html [data-ui-theme="surf" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/family/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/family/#webpage",
         "url": "https://www.scenexp.com/family/",
         "name": "Putt Putt with Mom and Dad",
         "description": "A walkable 3D pirate mini golf course in Ocean City, Maryland, built from a son's favorite summer memory of playing putt putt with his parents.",
-        "inLanguage": "en-US"
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Putt Putt with Mom and Dad",
+            "item": "https://www.scenexp.com/family/"
+          }
+        ]
       }
     title
-      "Putt Putt with Mom and Dad"
+      "Putt Putt with Mom and Dad | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
@@ -1968,15 +2056,38 @@ html [data-ui-theme="garden" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/garden/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/garden/#webpage",
         "url": "https://www.scenexp.com/garden/",
         "name": "Fractal Garden",
         "description": "An interactive 3D scene. Plant fractal trees in an open plot and tend them across the years as the seasons and the weather turn.",
-        "inLanguage": "en-US"
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Fractal Garden",
+            "item": "https://www.scenexp.com/garden/"
+          }
+        ]
       }
     title
-      "Fractal Garden"
+      "Fractal Garden | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=17" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
@@ -2199,15 +2310,38 @@ html [data-ui-theme="garden" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/gavin/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/gavin/#webpage",
         "url": "https://www.scenexp.com/gavin/",
         "name": "Gavin's Bug Patrol",
         "description": "A passive 3D close-up of the Confederate Jasmine where Gavin releases his ladybugs and praying mantises every spring.",
-        "inLanguage": "en-US"
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Gavin's Bug Patrol",
+            "item": "https://www.scenexp.com/gavin/"
+          }
+        ]
       }
     title
-      "Gavin's Bug Patrol"
+      "Gavin's Bug Patrol | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=2" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
@@ -2324,15 +2458,38 @@ html [data-ui-theme="surf" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/highwater/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/highwater/#webpage",
         "url": "https://www.scenexp.com/highwater/",
         "name": "High Water",
         "description": "A passive 3D scene at the water's edge. Sixty seconds that begin on an ordinary bright afternoon and end with the sea closing over the viewer.",
-        "inLanguage": "en-US"
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "High Water",
+            "item": "https://www.scenexp.com/highwater/"
+          }
+        ]
       }
     title
-      "High Water"
+      "High Water | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="../shared/css/player-1.0.0.min.css" rel="preload"]
     link [as="style" href="css/experience.min.css?v=5" rel="preload"]
@@ -3012,12 +3169,16 @@ html [lang="en"]
         "@context": "https://schema.org",
         "@graph": [
           {
-            "@type": "WebSite",
-            "@id": "https://www.scenexp.com/interstate/#website",
+            "@type": "WebPage",
+            "@id": "https://www.scenexp.com/interstate/#webpage",
             "url": "https://www.scenexp.com/interstate/",
             "name": "Interstate Tire",
             "description": "A walkable 3D tour of the Interstate Tire shop.",
             "inLanguage": "en-US",
+            "isPartOf": {
+              "@type": "WebSite",
+              "@id": "https://www.scenexp.com/#website"
+            },
             "publisher": {
               "@id": "https://www.scenexp.com/interstate/#shop"
             }
@@ -3038,8 +3199,27 @@ html [lang="en"]
           }
         ]
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Interstate Tire",
+            "item": "https://www.scenexp.com/interstate/"
+          }
+        ]
+      }
     title
-      "Interstate Tire"
+      "Interstate Tire | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
@@ -3372,15 +3552,38 @@ html [data-ui-theme="neon" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/jamar/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/jamar/#webpage",
         "url": "https://www.scenexp.com/jamar/",
         "name": "Jamar's Karaoke Night",
         "description": "A passive 3D visit to karaoke night at the corner bar, built as a birthday present for Jamar: he has the microphone, the lyrics screen is rolling, and his best friends hold down the booth.",
-        "inLanguage": "en-US"
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Jamar's Karaoke Night",
+            "item": "https://www.scenexp.com/jamar/"
+          }
+        ]
       }
     title
-      "Jamar's Karaoke Night"
+      "Jamar's Karaoke Night | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
@@ -3516,15 +3719,38 @@ html [data-ui-theme="ember" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/mandelbrot/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/mandelbrot/#webpage",
         "url": "https://www.scenexp.com/mandelbrot/",
         "name": "The Mandelbrot Set",
         "description": "A passive 3D float through deep space beside the Mandelbrot set, its black interior outlined by a neon orange glow, honoring Benoit Mandelbrot.",
-        "inLanguage": "en-US"
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "The Mandelbrot Set",
+            "item": "https://www.scenexp.com/mandelbrot/"
+          }
+        ]
       }
     title
-      "The Mandelbrot Set"
+      "The Mandelbrot Set | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=2" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
@@ -3653,6 +3879,10 @@ html [lang="en"]
         "operatingSystem": "Any",
         "browserRequirements": "Requires JavaScript and WebGL",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebPage",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "isAccessibleForFree": true,
         "offers": {
           "@type": "Offer",
@@ -3666,14 +3896,29 @@ html [lang="en"]
         "publisher": {
           "@type": "Organization",
           "name": "Continuum Commerce LLC"
-        },
-        "isPartOf": {
-          "@type": "WebSite",
-          "@id": "https://www.scenexp.com/#website"
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Corner Office",
+            "item": "https://www.scenexp.com/office/"
+          }
+        ]
+      }
     title
-      "Corner Office"
+      "Corner Office | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=4" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
@@ -4554,15 +4799,38 @@ html [data-ui-theme="neon" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/roqui/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/roqui/#webpage",
         "url": "https://www.scenexp.com/roqui/",
         "name": "Zumba with Roqui",
         "description": "A walkable 3D Zumba class, built with love for a wonderful instructor at the Matt Griffin YMCA.",
-        "inLanguage": "en-US"
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Zumba with Roqui",
+            "item": "https://www.scenexp.com/roqui/"
+          }
+        ]
       }
     title
-      "Zumba with Roqui"
+      "Zumba with Roqui | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
@@ -4839,12 +5107,16 @@ html [data-ui-theme="garden" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/seedtoseed/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/seedtoseed/#webpage",
         "url": "https://www.scenexp.com/seedtoseed/",
         "name": "The Seed to Seed Garden",
         "description": "A walkable 3D backyard vegetable garden built to honor Seed to Seed, a home vegetable and edible gardening company.",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "about": {
           "@type": "LocalBusiness",
           "name": "Seed to Seed",
@@ -4853,8 +5125,27 @@ html [data-ui-theme="garden" lang="en"]
           "areaServed": "Maryland, Washington DC, Southern Pennsylvania, Northern Virginia"
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "The Seed to Seed Garden",
+            "item": "https://www.scenexp.com/seedtoseed/"
+          }
+        ]
+      }
     title
-      "The Seed to Seed Garden"
+      "The Seed to Seed Garden | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
@@ -5139,15 +5430,38 @@ html [data-ui-theme="ember" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/starfall/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/starfall/#webpage",
         "url": "https://www.scenexp.com/starfall/",
         "name": "Starfall",
         "description": "A spiral galaxy of hundreds of thousands of stars, drawn live in the browser with WebGPU, which visitors can turn with a mouse, a finger, or the arrow keys to see it from any angle.",
-        "inLanguage": "en-US"
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Starfall",
+            "item": "https://www.scenexp.com/starfall/"
+          }
+        ]
       }
     title
-      "Starfall"
+      "Starfall | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=1" rel="preload"]
     link [href="../lib/three/r186/three.webgpu.min.js" rel="modulepreload"]
@@ -5248,12 +5562,16 @@ html [lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/steve/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/steve/#webpage",
         "url": "https://www.scenexp.com/steve/",
         "name": "Steve's Home Office",
         "description": "A 3D model of the home office in Steve's house where SceneXP gets built, to look all the way around.",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "author": {
           "@type": "Person",
           "name": "Steve Noll",
@@ -5263,8 +5581,27 @@ html [lang="en"]
           ]
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Steve's Home Office",
+            "item": "https://www.scenexp.com/steve/"
+          }
+        ]
+      }
     title
-      "Steve's Home Office"
+      "Steve's Home Office | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=1" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
@@ -5582,20 +5919,43 @@ html [lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/sunnyvalejenn/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/sunnyvalejenn/#webpage",
         "url": "https://www.scenexp.com/sunnyvalejenn/",
         "name": "Sunnyvale Jenn Consulting",
         "description": "A passive 3D visit to the sunny home office of Sunnyvale Jenn Consulting, built in tribute to Jenn, a talented entrepreneur and small business operations consultant.",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "about": {
           "@type": "Organization",
           "name": "Sunnyvale Jenn Consulting",
           "url": "https://sunnyvalejenn.com/"
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Sunnyvale Jenn Consulting",
+            "item": "https://www.scenexp.com/sunnyvalejenn/"
+          }
+        ]
+      }
     title
-      "Sunnyvale Jenn Consulting"
+      "Sunnyvale Jenn Consulting | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
@@ -5979,15 +6339,38 @@ html [data-ui-theme="surf" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/tornado/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/tornado/#webpage",
         "url": "https://www.scenexp.com/tornado/",
         "name": "Tornado Alley",
         "description": "A passive 3D scene on the open prairie. Thirty seconds that begin on a calm summer evening, follow a tornado from its first turning to its last, and end as the storm moves on.",
-        "inLanguage": "en-US"
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Tornado Alley",
+            "item": "https://www.scenexp.com/tornado/"
+          }
+        ]
       }
     title
-      "Tornado Alley"
+      "Tornado Alley | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="../shared/css/player-1.0.0.min.css" rel="preload"]
     link [as="style" href="css/experience.min.css" rel="preload"]
@@ -6139,6 +6522,10 @@ html [data-ui-theme="neon" lang="en"]
         "applicationCategory": "Game",
         "operatingSystem": "Any",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebPage",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "isAccessibleForFree": true,
         "playMode": "SinglePlayer",
         "author": {
@@ -6148,14 +6535,29 @@ html [data-ui-theme="neon" lang="en"]
         "publisher": {
           "@type": "Organization",
           "name": "Continuum Commerce LLC"
-        },
-        "isPartOf": {
-          "@type": "WebSite",
-          "@id": "https://www.scenexp.com/#website"
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "X's and O's",
+            "item": "https://www.scenexp.com/xo/"
+          }
+        ]
+      }
     title
-      "X's and O's"
+      "X's and O's | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=18" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
