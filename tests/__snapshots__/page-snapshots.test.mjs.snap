@@ -707,7 +707,7 @@ html [lang="en"]
               "minifies JS and CSS. Every file under"
               code
                 "www/"
-              "is picked up automatically, so there is no build configuration to edit."
+              "is picked up automatically, so there is no build configuration to edit. It also writes each page's list of module preloads, so the browser fetches a scene's modules all at once."
           h2
             "Pick an interaction model"
           p
@@ -843,10 +843,10 @@ html [lang="en"]
                 "Make a social card."
               "A 1200 by 630 capture of your world, saved as"
               code
-                "assets/og-&lt;world&gt;.webp"
+                "assets/og-&lt;world&gt;.jpg"
               "with a"
               code
-                ".jpg"
+                ".webp"
               "beside it. Please read the conversion note in"
               a [href="https://github.com/stevendnoll/SceneXP/blob/main/CONTRIBUTING.md" rel="noopener noreferrer" target="_blank"]
                 "CONTRIBUTING.md"
@@ -860,7 +860,10 @@ html [lang="en"]
               "(your new files are minified automatically), then"
               code
                 "npm test"
-              ". Please include a small unit test for your world, following the"
+              ". Have your scene call"
+              code
+                "warmShaders()"
+              "from the shared warmup part before its loading screen hides, so its first frame does not freeze. Please include a small unit test for your world, following the"
               code
                 "tests"
               "folder's"

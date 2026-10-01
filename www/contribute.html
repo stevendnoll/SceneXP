@@ -148,7 +148,8 @@
                         <code>THREE</code>.</li>
                     <li><strong>esbuild for minification.</strong> <code>npm run build</code> minifies JS and
                         CSS. Every file under <code>www/</code> is picked up automatically, so there is no
-                        build configuration to edit.</li>
+                        build configuration to edit. It also writes each page's list of module preloads,
+                        so the browser fetches a scene's modules all at once.</li>
                 </ul>
 
                 <h2>Pick an interaction model</h2>
@@ -244,14 +245,16 @@ python3 -m http.server 8000
                         same-origin Content Security Policy, full Open Graph and Twitter tags, JSON-LD, and a
                         polite no-JavaScript fallback. Copy the pattern from an existing experience.</li>
                     <li><strong>Make a social card.</strong> A 1200 by 630 capture of your world, saved as
-                        <code>assets/og-&lt;world&gt;.webp</code> with a <code>.jpg</code> beside it. Please
+                        <code>assets/og-&lt;world&gt;.jpg</code> with a <code>.webp</code> beside it. Please
                         read the conversion note in
                         <a href="https://github.com/stevendnoll/SceneXP/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">CONTRIBUTING.md</a>
                         before you make it, because a screenshot taken on a Mac carries the display's color
                         profile and will come out visibly duller than what you were looking at unless you
                         convert it properly.</li>
                     <li><strong>Build and test.</strong> Run <code>npm run build</code> (your new files are
-                        minified automatically), then <code>npm test</code>. Please include a small unit
+                        minified automatically), then <code>npm test</code>. Have your scene call
+                        <code>warmShaders()</code> from the shared warmup part before its loading screen
+                        hides, so its first frame does not freeze. Please include a small unit
                         test for your world, following the <code>tests</code> folder's
                         <code>&lt;experience&gt;-init.test.mjs</code> pattern. Every pull request should
                         bring tests along for the code it adds or changes.</li>

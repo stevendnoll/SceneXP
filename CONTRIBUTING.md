@@ -176,6 +176,34 @@ npm test        # runs the Jest suite
 Node 20 or newer is expected (see `.nvmrc`), and CI runs these same steps on
 every pull request, including a check that the minified assets were rebuilt.
 
+### What the build writes, and the one call every scene makes
+
+Two things keep a scene's first load quick, and both are easy to trip over
+the first time:
+
+- **The build writes a list into your page.** Besides minifying, `npm run
+  build` writes one `<link rel="modulepreload">` line for every module your
+  `index.html` imports, between two `BEGIN`/`END generated modulepreload`
+  comments in the `<head>`. Without it the browser finds each module's imports
+  only once that module arrives, one round trip per level. Leave the block to
+  the build, and keep the three.js `modulepreload` line from the page you
+  copied: the list is placed right after it, and the build stops with an error
+  if that line is missing. Any change to what your page imports changes the
+  list, so update the page snapshot afterwards
+  (`npm test -- -u tests/page-snapshots.test.mjs`).
+  `tests/module-preload.test.mjs` checks every list against the real import
+  graph.
+- **Call `warmShaders()` at the end of your `init()`.** WebGL builds each
+  material's shader the first time it is drawn, and blocks the page while it
+  does, which lands as a freeze on the very first frame. The shared
+  `warmup-1.0.0.js` part builds them behind the loading screen instead:
+  `await warmShaders(renderer, [{ scene, camera }])`, once everything the first
+  frame draws is in the scene and before the loading screen hides. It never
+  holds the page up (a failure or a slow compile just falls through), and
+  `tests/shared-warmup.test.mjs` fails for any WebGL scene that does not call
+  it. A scene on the WebGPU renderer uses that renderer's own
+  `compileAsync` instead (see `www/starfall`).
+
 ### Caching
 
 The web server sets the actual `Cache-Control` headers and lives outside this
@@ -198,32 +226,36 @@ own, arrives through a pull request once the CI checks pass.
 
 ### Social cards, and the Mac screenshot trap
 
-Each experience ships a 1200 by 630 card as `assets/og-<world>.webp` with a
-`.jpg` beside it.
+Each experience ships a 1200 by 630 card as `assets/og-<world>.jpg` with a
+`.webp` beside it, and each file has its own job.
 
-**The WebP is what every page points at, including Twitter.** `og:image`,
-`twitter:image` and the directory card on the home page all name the WebP, on
-every experience in the collection. An earlier version of this note said the JPEG was what
-Twitter used, which was never true of any page in the repository.
+**The JPEG is what a share shows.** Every page's `og:image` and
+`twitter:image` name the JPEG, and have since 2026-09-08. Until then they named
+the WebP, and LinkedIn does not render a WebP link preview at all, so a
+promoted link unfurled with no picture. A heavier file that always shows beats
+a lighter one that sometimes does not. `tests/directory.test.mjs` holds every
+`og:image` to `og-<world>.jpg`. Name exactly one `og:image`: Apple's link
+preview draws every one it finds, so listing both formats puts two identical
+cards in a message thread.
+
+**The WebP is what the directory shows.** The cards on the home page are
+`<img>` tags in a page we control, where every browser renders WebP, so they
+take the smaller file. It is also the file to swap back to on a page if the
+platforms ever all render WebP previews (each page's comment above its
+`og:image` says so).
 
 **One experience splits the two images, and it is worth knowing why before
-you copy it.** The www/automan scene's `og:image` is `og-automan.webp`, his gold W on
-navy, because a wordmark is what names the business instantly in a message
-thread. His directory card is a different file, `card-automan.webp`, a render
-of the showroom, because that same wordmark reads as a broken image in a grid
-of fourteen scene renders. `tests/directory.test.mjs` allows exactly this
-split and still holds the `og:image` to `og-<world>.webp` either way. Split
-them only if your world has a mark worth leading a share with; otherwise one
-image doing both jobs is simpler and is what the other thirteen do.
+you copy it.** The www/automan scene's `og:image` is `og-automan.jpg`, his gold
+W on navy, because a wordmark is what names the business instantly in a
+message thread. His directory card is a different file, `card-automan.webp`, a
+render of the showroom, because that same wordmark reads as a broken image in
+a grid of scene renders. `tests/directory.test.mjs` allows exactly this split
+and still holds the `og:image` to `og-<world>.jpg` either way. Split them only
+if your world has a mark worth leading a share with. Otherwise one picture in
+two formats is simpler, and it is what every other world does.
 
-The JPEG is not referenced by any page. It ships for two reasons:
-
-- **The README embeds the JPEGs.** A README is rendered on hosts we do not
-  control, so the widest-support format is the right one there.
-- **It is the file to swap to** if a platform ever declines to render a WebP
-  preview. Facebook has historically been the one to watch. Swapping means
-  editing the two meta URLs on that page, which is why both files ship even
-  though only one is ever served to a browser.
+The README embeds JPEGs as well. A README is rendered on hosts we do not
+control, so the widest-supported format is the right one there.
 
 **A screenshot taken on a Mac carries the display's colour profile, not sRGB.**
 Convert it without saying so and the tool keeps the raw numbers and drops the
@@ -368,11 +400,15 @@ source of truth either way.
    JSON-LD structured data, and a polite no-JavaScript fallback. Copy the
    pattern from an existing experience's `index.html`.
 4. **Make a social card.** A 1200 by 630 capture of your world, as
-   `assets/og-<world>.webp` with a `.jpg` beside it. See the note below on
+   `assets/og-<world>.jpg` (what a share shows) with a `.webp` beside it (what
+   the directory shows). See the note below on
    converting one, because a screenshot straight off a Mac will not survive
    the trip unless you ask it to.
 5. **Build and test.** Run `npm run build` (your new files are minified
-   automatically) and `npm test`. Please include an init test for your
+   automatically, and your page's module preload list is written for you)
+   and `npm test`. Make sure your `init()` calls `warmShaders()` before the
+   loading screen hides (see "What the build writes" above). Please include
+   an init test for your
    world, following the `tests/<experience>-init.test.mjs` pattern (see the
    Tests section above), and commit the page snapshot the suite writes for
    your `index.html`. Adding your card in the next step changes the
