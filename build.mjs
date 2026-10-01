@@ -50,33 +50,48 @@ await build({ ...common, entryPoints: sources['.css'], outExtension: { '.css': '
 // from npm) is bundled into a single minified three.min.js. That module also
 // sets the global THREE, which every experience and shared part reads, so a
 // page loads it as <script type="module"> ahead of its own main.min.js.
+//
+// A folder that also holds npm's three.webgpu.js gets a second bundle,
+// three.webgpu.min.js, built the same way for pages drawn with the WebGPU
+// renderer and TSL (it carries the TSL functions as THREE.TSL). A page loads
+// one bundle or the other, never both.
 const threeDir = path.join(wwwDir, 'lib', 'three');
 const releases = (await readdir(threeDir, { withFileTypes: true }))
   .filter((d) => d.isDirectory() && /^r\d+$/.test(d.name))
   .map((d) => path.join(threeDir, d.name));
+const BUNDLES = [
+  { entry: 'three.module.js', outfile: 'three.min.js' },
+  { entry: 'three.webgpu.js', outfile: 'three.webgpu.min.js', optional: true },
+];
+let bundled = 0;
 for (const dir of releases) {
-  // Three's own license header leads the bundle (it would otherwise land
-  // mid-file), and the duplicate copies inside the sources are dropped.
-  const source = await readFile(path.join(dir, 'three.module.js'), 'utf8');
-  const header = source.match(/^\/\*\*[\s\S]*?\*\//)[0];
-  await build({
-    stdin: {
-      contents: "import * as THREE from './three.module.js';\n" +
-        "globalThis.THREE = THREE;\n" +
-        "export * from './three.module.js';\n",
-      resolveDir: dir,
-      sourcefile: 'three-global.js',
-    },
-    bundle: true,
-    format: 'esm',
-    minify: true,
-    charset: 'utf8',
-    legalComments: 'none',
-    banner: { js: header },
-    logLevel: 'warning',
-    outfile: path.join(dir, 'three.min.js'),
-  });
+  const present = new Set(await readdir(dir));
+  for (const { entry, outfile, optional } of BUNDLES) {
+    if (optional && !present.has(entry)) continue;
+    // Three's own license header leads the bundle (it would otherwise land
+    // mid-file), and the duplicate copies inside the sources are dropped.
+    const source = await readFile(path.join(dir, entry), 'utf8');
+    const header = source.match(/^\/\*\*[\s\S]*?\*\//)[0];
+    await build({
+      stdin: {
+        contents: `import * as THREE from './${entry}';\n` +
+          'globalThis.THREE = THREE;\n' +
+          `export * from './${entry}';\n`,
+        resolveDir: dir,
+        sourcefile: 'three-global.js',
+      },
+      bundle: true,
+      format: 'esm',
+      minify: true,
+      charset: 'utf8',
+      legalComments: 'none',
+      banner: { js: header },
+      logLevel: 'warning',
+      outfile: path.join(dir, outfile),
+    });
+    bundled++;
+  }
 }
 
 console.log(`Minified ${sources['.js'].length} JS and ${sources['.css'].length} CSS files, ` +
-  `and bundled ${releases.length} Three.js release${releases.length === 1 ? '' : 's'}.`);
+  `and bundled ${bundled} Three.js build${bundled === 1 ? '' : 's'}.`);

@@ -24,10 +24,17 @@
  */
 import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { THREE_RELEASE, loadRealThree } from './helpers/real-three.mjs';
+import { THREE_RELEASE, loadRealThree, loadRealThreeWebGPU } from './helpers/real-three.mjs';
 
 const WWW = new URL('../www/', import.meta.url);
 const BUNDLE = `../lib/three/${THREE_RELEASE}/three.min.js`;
+const WEBGPU_BUNDLE = `../lib/three/${THREE_RELEASE}/three.webgpu.min.js`;
+
+/** Scenes drawn with the WebGPU renderer and TSL, which load the WebGPU
+ *  bundle instead. Named here so neither kind of page can be switched to the
+ *  other bundle by accident: a WebGL page on the WebGPU bundle would find
+ *  every GLSL ShaderMaterial unsupported, and the reverse has no TSL. */
+const WEBGPU_SCENES = ['starfall'];
 
 /** Every experience folder: anything under www with its own index.html and js/. */
 async function scenes() {
@@ -64,31 +71,40 @@ test('the scene pages were found', () => {
   expect(SCENES.length).toBeGreaterThanOrEqual(17);
 });
 
-describe.each(PAGES.map((p) => [p.scene, p]))('%s', (_scene, { html }) => {
-  test(`loads ${BUNDLE} as a module, before its own scene`, () => {
-    const library = html.indexOf(`<script type="module" src="${BUNDLE}"></script>`);
-    const scene = html.indexOf('<script type="module" src="js/main.min.js"></script>');
+describe.each(PAGES.map((p) => [p.scene, p]))('%s', (scene, { html }) => {
+  const bundle = WEBGPU_SCENES.includes(scene) ? WEBGPU_BUNDLE : BUNDLE;
+
+  test('loads its bundle as a module, before its own scene', () => {
+    const library = html.indexOf(`<script type="module" src="${bundle}"></script>`);
+    const main = html.indexOf('<script type="module" src="js/main.min.js"></script>');
     expect(library).toBeGreaterThan(-1);
-    expect(scene).toBeGreaterThan(library);
+    expect(main).toBeGreaterThan(library);
   });
 
   test('preloads the same bundle as a module', () => {
-    expect(html).toContain(`<link rel="modulepreload" href="${BUNDLE}">`);
+    expect(html).toContain(`<link rel="modulepreload" href="${bundle}">`);
   });
 
   test('loads no other three.js build', () => {
     const builds = [...html.matchAll(/(?:src|href)="([^"]*three[^"]*\.js)"/g)].map((m) => m[1]);
-    expect([...new Set(builds)]).toEqual([BUNDLE]);
+    expect([...new Set(builds)]).toEqual([bundle]);
   });
+});
+
+test('every scene named as a WebGPU scene exists', () => {
+  for (const scene of WEBGPU_SCENES) expect(SCENES).toContain(scene);
 });
 
 test('the retired r160 build is gone', () => {
   expect(existsSync(new URL('lib/three.min.js', WWW))).toBe(false);
 });
 
-test(`the ${THREE_RELEASE} folder holds the npm sources, their license, and the bundle`, async () => {
+test(`the ${THREE_RELEASE} folder holds the npm sources, their license, and the two bundles`, async () => {
   const files = (await readdir(new URL(`lib/three/${THREE_RELEASE}/`, WWW))).sort();
-  expect(files).toEqual(['LICENSE', 'three.core.js', 'three.min.js', 'three.module.js']);
+  expect(files).toEqual([
+    'LICENSE', 'three.core.js', 'three.min.js', 'three.module.js',
+    'three.webgpu.js', 'three.webgpu.min.js',
+  ]);
 });
 
 test(`the bundle is ${THREE_RELEASE} and sets the global THREE`, async () => {
@@ -98,9 +114,17 @@ test(`the bundle is ${THREE_RELEASE} and sets the global THREE`, async () => {
   expect(typeof THREE.ShaderChunk.common).toBe('string');
 });
 
+test(`the WebGPU bundle is ${THREE_RELEASE}, with the renderer and TSL`, async () => {
+  const THREE = await loadRealThreeWebGPU();
+  expect(`r${THREE.REVISION}`).toBe(THREE_RELEASE);
+  expect(typeof THREE.WebGPURenderer).toBe('function');
+  expect(typeof THREE.TSL.Fn).toBe('function');
+  expect(typeof THREE.TSL.instancedArray).toBe('function');
+});
+
 test('every WebGL check asks for WebGL 2, which three requires', () => {
   const checks = CODE.filter(({ text }) => /function hasWebGL\(/.test(text));
-  expect(checks.length).toBeGreaterThanOrEqual(14);
+  expect(checks.length).toBeGreaterThanOrEqual(17);
   for (const { rel, text } of checks) {
     expect(`${rel}: ${/getContext\('webgl2'\)/.test(text)}`).toBe(`${rel}: true`);
     expect(`${rel}: ${/getContext\('(?:experimental-)?webgl'\)/.test(text)}`).toBe(`${rel}: false`);

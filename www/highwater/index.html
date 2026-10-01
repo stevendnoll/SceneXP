@@ -217,6 +217,10 @@
                     aria-describedby="player-paused-at">Resume</button>
                 <button id="player-restart" type="button" class="player-btn">Restart</button>
             </div>
+            <!-- Filled in only when this browser cannot draw the scene (no
+                 WebGL 2): main.js hides Begin, says so here, and takes the
+                 visitor to the standard site. -->
+            <p id="load-status" class="lede" role="status" aria-live="polite" hidden></p>
             <p class="note">You can watch it again as many times as you wish.</p>
             <!-- The one link back to the directory, replacing the floating Home
                  button (2026-09-07): Home sat in the corner and read as "reset

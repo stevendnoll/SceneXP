@@ -34,11 +34,21 @@ Three.js.
   `THREE` that experiences and shared parts read, and module scripts run in
   page order, so it is ready before any scene code runs. Three.js requires
   WebGL 2, so a scene's WebGL check should ask for `'webgl2'`.
+- **WebGPU and TSL, for scenes that want them.** A scene drawn with three's
+  `WebGPURenderer` loads `lib/three/r186/three.webgpu.min.js` instead. It sets
+  the same global `THREE`, with the renderer and the TSL shading functions
+  (`THREE.TSL`) on it, and falls back to WebGL 2 by itself where a browser
+  has no WebGPU. No import map is needed, so the Content Security Policy stays
+  as strict as every other page's. GLSL `ShaderMaterial` and `onBeforeCompile`
+  do not run under that renderer, so a scene is one kind or the other.
+  `www/starfall` is the reference, and `tests/three-release.test.mjs` lists
+  the WebGPU scenes by name.
 - **Upgrading Three.js.** npm publishes Three.js as unminified ES modules.
-  To move to a new release, copy `build/three.module.js`, `build/three.core.js`
-  and `LICENSE` from the npm package into a new `www/lib/three/rNNN/`
-  folder, run `npm run build` (it bundles them into that folder's
-  `three.min.js`), then update `THREE_RELEASE` in
+  To move to a new release, copy `build/three.module.js`, `build/three.core.js`,
+  `build/three.webgpu.js` and `LICENSE` from the npm package into a new
+  `www/lib/three/rNNN/` folder, run `npm run build` (it bundles them into
+  that folder's `three.min.js` and `three.webgpu.min.js`), then update
+  `THREE_RELEASE` in
   `tests/helpers/real-three.mjs` and the two tags on every page.
   `tests/three-release.test.mjs` checks that they all agree.
 - **esbuild for minification.** The pages load the `.min.js` and `.min.css`

@@ -57,6 +57,15 @@ const NAMED_BY_SCRIPT = {
  *  would excuse a card somebody simply forgot to commit. */
 const WITHHELD_CARDS = ['www/interstate/index.html', 'www/seedtoseed/index.html'];
 
+/** Scenes still being built in the open, whose social card is captured only
+ *  once the look is approved. Each must carry noindex until then (the
+ *  directory suite holds the same scenes off the directory), so this list can
+ *  never excuse the card of a page anybody can find. Releasing a scene means
+ *  adding its card and taking it off this list. */
+// Starfall is an unlisted proof of concept (2026-10-01), so its card may
+// never be captured, and it stays here for as long as it stays unlisted.
+const PENDING_CARDS = ['www/starfall/index.html'];
+
 // ---- Reading the pages -------------------------------------------------------
 
 async function htmlFiles(dir = 'www') {
@@ -200,6 +209,11 @@ test('the scan finds the site, and each rule group has pages to hold', () => {
     const card = cardPath(page);
     expect(`${card} is git-ignored: ${ignored([card]).has(card)}`).toBe(`${card} is git-ignored: true`);
   });
+  PENDING_CARDS.forEach((rel) => {
+    const page = PAGES.find((p) => p.rel === rel);
+    expect(`${rel} exists: ${Boolean(page)}`).toBe(`${rel} exists: true`);
+    expect(`${rel} robots: ${metas(page, 'robots')[0]}`).toBe(`${rel} robots: noindex, nofollow`);
+  });
 });
 
 // ---- Sharing -----------------------------------------------------------------
@@ -245,9 +259,10 @@ describe('sharing', () => {
     const url = new URL(metas(page, 'og:image')[0]);
     const file = await readFile(new URL(cardPath(page), ROOT)).catch((err) => {
       if (err.code === 'ENOENT' && WITHHELD_CARDS.includes(rel)) return null;
+      if (err.code === 'ENOENT' && PENDING_CARDS.includes(rel)) return null;
       throw err;
     });
-    if (!file) return;   // a withheld card on a fresh clone, see WITHHELD_CARDS
+    if (!file) return;   // a withheld or pending card, see the lists at the top
     const size = imageSize(file);
     expect(`${url.pathname} is a picture: ${size !== null}`).toBe(`${url.pathname} is a picture: true`);
     const [type] = metas(page, 'og:image:type');

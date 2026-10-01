@@ -488,12 +488,13 @@ export function installDom({ innerWidth = 1280, innerHeight = 800 } = {}) {
     globalThis.fetch = fetchStub;
   }
 
-  // Wrap the (already installed) THREE so WebGLRenderer instances capture the
-  // animation loop main.js hands to renderer.setAnimationLoop.
+  // Wrap the (already installed) THREE so renderer instances capture the
+  // animation loop main.js hands to renderer.setAnimationLoop. WebGPURenderer
+  // too, for the scenes drawn with it (www/starfall).
   const baseThree = globalThis.THREE;
   globalThis.THREE = new Proxy({}, {
     get(_t, prop) {
-      if (prop === 'WebGLRenderer') {
+      if (prop === 'WebGLRenderer' || prop === 'WebGPURenderer') {
         return function WebGLRenderer() {
           const body = chainable();
           return new Proxy(function () {}, {

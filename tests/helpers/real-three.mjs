@@ -35,7 +35,23 @@ export const THREE_RELEASE = 'r186';
 export const THREE_BUNDLE = fileURLToPath(
   new URL(`../../www/lib/three/${THREE_RELEASE}/three.min.js`, import.meta.url));
 
-let source = null;
+/** Absolute path of the WebGPU bundle (WebGPURenderer and THREE.TSL), which
+ *  only pages drawn with the WebGPU renderer load. */
+export const THREE_WEBGPU_BUNDLE = fileURLToPath(
+  new URL(`../../www/lib/three/${THREE_RELEASE}/three.webgpu.min.js`, import.meta.url));
+
+const sources = new Map();
+
+async function evaluate(file, globals) {
+  if (!sources.has(file)) sources.set(file, readFileSync(file, 'utf8'));
+  const sandbox = vm.createContext({ self: {}, window: {}, console: { warn() {} }, ...globals });
+  const mod = new vm.SourceTextModule(sources.get(file), { context: sandbox, identifier: file });
+  await mod.link(() => {
+    throw new Error(`${file} is a single bundle and should import nothing`);
+  });
+  await mod.evaluate();
+  return { ...sandbox.THREE };
+}
 
 /**
  * Evaluate the real three.js bundle in a fresh vm context and return a
@@ -44,12 +60,14 @@ let source = null;
  *   quiet by default, since nothing here wants three's warnings)
  */
 export async function loadRealThree(globals = {}) {
-  if (source === null) source = readFileSync(THREE_BUNDLE, 'utf8');
-  const sandbox = vm.createContext({ self: {}, window: {}, console: { warn() {} }, ...globals });
-  const mod = new vm.SourceTextModule(source, { context: sandbox, identifier: THREE_BUNDLE });
-  await mod.link(() => {
-    throw new Error('three.min.js is a single bundle and should import nothing');
-  });
-  await mod.evaluate();
-  return { ...sandbox.THREE };
+  return evaluate(THREE_BUNDLE, globals);
+}
+
+/**
+ * The same, for the WebGPU bundle. Nothing here has a GPU, so this is for
+ * building node graphs and checking that every TSL function a scene calls
+ * exists in this release, not for drawing.
+ */
+export async function loadRealThreeWebGPU(globals = {}) {
+  return evaluate(THREE_WEBGPU_BUNDLE, globals);
 }

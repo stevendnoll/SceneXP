@@ -2269,6 +2269,7 @@ html [data-ui-theme="surf" lang="en"]
             "Resume"
           button#player-restart.player-btn [type="button"]
             "Restart"
+        p#load-status.lede [aria-live="polite" hidden role="status"]
         p.note
           "You can watch it again as many times as you wish."
         a#explore-link.welcome-explore [href="/"]
@@ -4836,6 +4837,110 @@ html [data-ui-theme="garden" lang="en"]
     script [src="js/main.min.js" type="module"]"
 `;
 
+exports[`www/starfall/index.html 1`] = `
+"<!doctype html>
+html [data-ui-theme="ember" lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="noindex, nofollow" name="robots"]
+    meta [content="A spiral galaxy of hundreds of thousands of stars, drawn live in your browser with WebGPU. Drag to turn it and see the spiral from any angle, face on, edge on, or from below." name="description"]
+    meta [content="#02030a" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/starfall/" rel="canonical"]
+    meta [content="Starfall" property="og:title"]
+    meta [content="Hundreds of thousands of stars in a turning spiral galaxy, drawn live with WebGPU. Turn it and see it from every side." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/starfall/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/starfall/assets/og-starfall.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="A spiral galaxy seen from above at an angle: a warm golden core and two blue-white arms of countless glowing stars against black space." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Starfall" name="twitter:title"]
+    meta [content="Hundreds of thousands of stars in a turning spiral galaxy, drawn live with WebGPU. Turn it and see it from every side." name="twitter:description"]
+    meta [content="https://www.scenexp.com/starfall/assets/og-starfall.jpg?v=1" name="twitter:image"]
+    meta [content="A spiral galaxy seen from above at an angle: a warm golden core and two blue-white arms of countless glowing stars against black space." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/starfall/#website",
+        "url": "https://www.scenexp.com/starfall/",
+        "name": "Starfall",
+        "description": "A spiral galaxy of hundreds of thousands of stars, drawn live in the browser with WebGPU, which visitors can turn with a mouse, a finger, or the arrow keys to see it from any angle.",
+        "inLanguage": "en-US"
+      }
+    title
+      "Starfall"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=1" rel="preload"]
+    link [href="../lib/three/r186/three.webgpu.min.js" rel="modulepreload"]
+    link [href="favicon.svg" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="css/experience.min.css?v=1" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body
+    h1.sr-only
+      "Starfall"
+    noscript
+      div.noscript-fallback
+        h1
+          "Starfall"
+        p
+          "This is a spiral galaxy of hundreds of thousands of stars, and it needs JavaScript to run. Every star is placed by your graphics card each frame using WebGPU, the newest way for a browser to draw in 3D, so the galaxy turns slowly with a warm golden core and two blue-white arms. Drag to turn it, or use the arrow keys, and see the spiral face on, edge on, or from below."
+        p
+          "SceneXP is a home for 3D experiences that run right in your browser."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/contact.html"]
+                "Contact the developer"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    div#loading-screen
+      div.loader-content
+        div.loader-title
+          "STARFALL"
+        div.loader-bar [aria-hidden="true"]
+          div.loader-progress#load-progress
+        div.loader-status#load-status [aria-live="polite" role="status"]
+          "Loading…"
+    div#blocker [tabindex="-1"]
+      div#instructions
+        p.title
+          "WELCOME"
+        p.subtitle
+          "A spiral galaxy is turning in the dark, and you are welcome to see it from every side"
+        p.click-prompt
+          "Click to step in"
+        div.controls-hint
+          span
+            "TURN"
+          "Drag to turn the galaxy and see the spiral face on, edge on, or from below. Give it a flick and it keeps turning for a moment. The arrow keys turn it too."
+          span
+            "HELP"
+          "The question mark in the corner, or Escape, brings you back here."
+        p#renderer-note.renderer-note
+        a#explore-link.welcome-explore [href="/"]
+          "More 3D worlds to explore at SceneXP.com"
+    canvas#game-canvas [aria-label="A spiral galaxy turning slowly in black space, with a warm golden core and two blue-white arms of countless glowing stars" role="img"]
+    button#help-btn.ui-float.menu-btn.help-btn [aria-label="Help" title="Help (Esc)" type="button"]
+      svg [aria-hidden="true" viewbox="0 0 24 24"]
+        circle [cx="12" cy="12" fill="none" r="9"]
+        path [d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"]
+        circle [cx="12.1" cy="17.4" fill="currentColor" r="1.05" stroke="none"]
+    script [src="../lib/three/r186/three.webgpu.min.js" type="module"]
+    script [src="js/main.min.js" type="module"]"
+`;
+
 exports[`www/steve/index.html 1`] = `
 "<!doctype html>
 html [lang="en"]
@@ -5617,6 +5722,7 @@ html [data-ui-theme="surf" lang="en"]
             "Resume"
           button#player-restart.player-btn [type="button"]
             "Restart"
+        p#load-status.lede [aria-live="polite" hidden role="status"]
         p.note
           "You can watch it again as many times as you wish."
         a#explore-link.welcome-explore [href="/"]

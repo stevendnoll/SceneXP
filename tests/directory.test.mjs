@@ -100,7 +100,9 @@ const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
 // for Tornado Alley, M1, and emptied when it was released the same day. The
 // list stays, empty, for the next scene built in the open.) Corner Office
 // joined it at M0 on 2026-09-24, and left at its M7 release on 2026-09-28.
-const UNRELEASED = [];
+// Starfall, the first WebGPU scene, joined on 2026-10-01 and stays: Steve
+// kept it as an unlisted proof of concept rather than a directory scene.
+const UNRELEASED = ['starfall'];
 
 const sceneSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true })
     .filter((d) => d.isDirectory() && !IGNORED_DIRS.includes(d.name))

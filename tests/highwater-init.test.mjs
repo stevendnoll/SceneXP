@@ -25,6 +25,7 @@
 import { jest } from '@jest/globals';
 import { readFile } from 'node:fs/promises';
 import { installThree, installCanvas, installBrowserGlobals, uninstallAll } from './helpers/three-stub.mjs';
+import { installDom, flushAsync } from './helpers/dom-stub.mjs';
 
 const PAGE = new URL('../www/highwater/index.html', import.meta.url);
 const ORIGIN = 'https://www.scenexp.com';
@@ -582,5 +583,31 @@ describe('the ending screen', () => {
         // And it stops short of the last twenty seconds, exactly as the
         // og:description does and for the same reason.
         expect(main).not.toMatch(/installShare\([\s\S]{0,400}tsunami/i);
+    });
+});
+
+describe('a browser without WebGL 2', () => {
+    test('is told so on the welcome card and taken to the standard site', async () => {
+        // Three (r163 on) needs WebGL 2. Until 2026-10-01 this page had no
+        // check at all, so a browser without it got a blank canvas behind a
+        // Begin button that did nothing.
+        jest.useFakeTimers();
+        installThree();
+        const dom = installDom();
+        delete dom.windowStub.WebGL2RenderingContext;
+        jest.resetModules();
+        try {
+            await import('../www/highwater/js/main.js');
+            await flushAsync();
+            expect(dom.el('player-begin').hidden).toBe(true);
+            expect(dom.el('load-status').hidden).toBe(false);
+            expect(dom.el('load-status').textContent).toMatch(/can't run the 3D view/);
+            await jest.advanceTimersByTimeAsync(3000);
+            expect(dom.replaced).toEqual(['/']);
+        } finally {
+            dom.uninstall();
+            uninstallAll();
+            jest.useRealTimers();
+        }
     });
 });

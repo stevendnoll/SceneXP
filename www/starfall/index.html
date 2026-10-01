@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-ui-theme="ember">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <!-- AN UNLISTED PROOF OF CONCEPT (2026-10-01): SceneXP's first WebGPU
+         scene, kept in the repository but out of the directory, the sitemap,
+         llms.txt and search. Releasing it would mean a social card, a
+         directory card, and taking this tag off (see tests/directory). -->
+    <meta name="robots" content="noindex, nofollow">
+
+    <meta name="description" content="A spiral galaxy of hundreds of thousands of stars, drawn live in your browser with WebGPU. Drag to turn it and see the spiral from any angle, face on, edge on, or from below.">
+    <meta name="theme-color" content="#02030a">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they stay literal absolute URLs naming where this page is served
+         (www.scenexp.com/starfall). When serving from a new domain, update
+         the canonical, og:url, og:image, twitter:image, and the JSON-LD ids. -->
+    <link rel="canonical" href="https://www.scenexp.com/starfall/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Starfall">
+    <meta property="og:description" content="Hundreds of thousands of stars in a turning spiral galaxy, drawn live with WebGPU. Turn it and see it from every side.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/starfall/">
+    <meta property="og:locale" content="en_US">
+    <!-- THE SOCIAL CARD IS STILL TO COME. og-starfall.jpg will be Steve's
+         capture of the galaxy (1200 by 630, sRGB baked in, see CONTRIBUTING),
+         made once the look is approved. Exactly one og:image, as on every
+         page, since Apple's link preview draws every one it finds. -->
+    <meta property="og:image" content="https://www.scenexp.com/starfall/assets/og-starfall.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A spiral galaxy seen from above at an angle: a warm golden core and two blue-white arms of countless glowing stars against black space.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Starfall">
+    <meta name="twitter:description" content="Hundreds of thousands of stars in a turning spiral galaxy, drawn live with WebGPU. Turn it and see it from every side.">
+    <meta name="twitter:image" content="https://www.scenexp.com/starfall/assets/og-starfall.jpg?v=1">
+    <meta name="twitter:image:alt" content="A spiral galaxy seen from above at an angle: a warm golden core and two blue-white arms of countless glowing stars against black space.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://www.scenexp.com/starfall/#website",
+      "url": "https://www.scenexp.com/starfall/",
+      "name": "Starfall",
+      "description": "A spiral galaxy of hundreds of thousands of stars, drawn live in the browser with WebGPU, which visitors can turn with a mouse, a finger, or the arrow keys to see it from any angle.",
+      "inLanguage": "en-US"
+    }
+    </script>
+
+    <title>Starfall</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
+    <link rel="preload" href="css/experience.min.css?v=1" as="style">
+    <!-- The WebGPU build of three.js, not the three.min.js every other page
+         loads: it carries WebGPURenderer and the TSL shading functions. -->
+    <link rel="modulepreload" href="../lib/three/r186/three.webgpu.min.js">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
+    <link rel="stylesheet" href="css/experience.min.css?v=1">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- The live page's heading, for anybody navigating by heading. The
+         galaxy is the title here, so it stays screen-reader only. -->
+    <h1 class="sr-only">Starfall</h1>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers). -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Starfall</h1>
+            <p>This is a spiral galaxy of hundreds of thousands of stars, and it
+                needs JavaScript to run. Every star is placed by your graphics
+                card each frame using WebGPU, the newest way for a browser to
+                draw in 3D, so the galaxy turns slowly with a warm golden core
+                and two blue-white arms. Drag to turn it, or use the arrow keys,
+                and see the spiral face on, edge on, or from below.</p>
+            <p>SceneXP is a home for 3D experiences that run right in your
+                browser.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">STARFALL</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <!-- The welcome overlay. Steps aside on a click, a tap, Enter, Space, or
+         Escape, and comes back with Escape or the help button. tabindex="-1"
+         so the help button can hand it focus as the button hides. -->
+    <div id="blocker" tabindex="-1">
+        <div id="instructions">
+            <p class="title">WELCOME</p>
+            <p class="subtitle">A spiral galaxy is turning in the dark, and you are welcome to see it from every side</p>
+            <p class="click-prompt">Click to step in</p>
+            <div class="controls-hint">
+                <span>TURN</span> Drag to turn the galaxy and see the spiral face on, edge on, or from below. Give it a flick and it keeps turning for a moment. The arrow keys turn it too.
+                <span>HELP</span> The question mark in the corner, or Escape, brings you back here.
+            </div>
+            <!-- Filled in by main.js once the renderer has started: whether
+                 WebGPU or the WebGL 2 fallback is drawing, and how many stars. -->
+            <p id="renderer-note" class="renderer-note"></p>
+            <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
+        </div>
+    </div>
+
+    <canvas id="game-canvas" role="img" aria-label="A spiral galaxy turning slowly in black space, with a warm golden core and two blue-white arms of countless glowing stars"></canvas>
+
+    <!-- Help: brings the welcome screen back, exactly as Escape does, for
+         anybody without a keyboard. Hidden while the welcome screen is up:
+         .ui-float is display:none until main.js adds .visible. -->
+    <button id="help-btn" class="ui-float menu-btn help-btn" type="button"
+        title="Help (Esc)"
+        aria-label="Help">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" />
+            <path d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" stroke-linecap="round"
+                stroke-linejoin="round" fill="none" />
+            <circle cx="12.1" cy="17.4" r="1.05" stroke="none" fill="currentColor" />
+        </svg>
+    </button>
+
+    <script type="module" src="../lib/three/r186/three.webgpu.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>
