@@ -23,6 +23,7 @@
 
 import { TORNADO_CONFIG as CONFIG, TORNADO_LIGHTNING } from './config.min.js';
 import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
 import { createPlayer } from '../../shared/js/player-1.0.0.min.js';
@@ -330,6 +331,10 @@ async function init() {
     });
     window.addEventListener('pagehide', endSession);
 
+    // Build the shaders now, behind the welcome card, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    await warmShaders(renderer, [{ scene, camera }]);
     player.start();
     track('session-start', { device: mobile ? 'touch' : 'desktop' });
     sessionStart = Date.now();

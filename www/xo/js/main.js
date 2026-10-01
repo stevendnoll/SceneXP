@@ -87,6 +87,7 @@ import {
 import {
     installCardFocusTrap, installCardScrollReset, getProofOfWork,
 } from '../../shared/js/boot-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { report, reportFinal, orientationOf, playRecord } from './telemetry.min.js';
 
@@ -2564,6 +2565,12 @@ async function init() {
     if (explore) explore.addEventListener('click', () => reportFinal('explore-site'), { signal });
 
     installQaHook();
+
+    // Build the shaders now, behind the loading screen, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    setProgress(0.95, 'Preparing the view…');
+    await warmShaders(renderer, [{ scene, camera }]);
 
     state.isLoaded = true;
     state.isRunning = true;

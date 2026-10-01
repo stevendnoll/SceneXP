@@ -33,8 +33,10 @@ import { getProofOfWork, bufToHex, installCardFocusTrap, installCardScrollReset 
 import { initPortraitControls, updatePortraitControls, gestureClaimedTap } from '../../shared/js/pan-1.0.0.min.js';
 import {
     initScene, handleResize, render, getCamera, getRenderer,
-    removeTestObjects, isTouchDevice
+    removeTestObjects, isTouchDevice,
+    getScene
 } from '../../shared/js/scene-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { initStore, updateBar, drawTvTo, setNowPlaying } from './store.min.js';
 import { getOutdoorPropMeshes } from '../../shared/js/world-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
@@ -106,6 +108,12 @@ async function init() {
 
     updateLoadingStatus('Handing Jamar the mic…', 80);
     setupEventListeners();
+
+    // Build the shaders now, behind the loading screen, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    updateLoadingStatus('Preparing the view…', 95);
+    await warmShaders(getRenderer(), [{ scene: getScene(), camera: getCamera() }]);
 
     updateLoadingStatus('Ready', 100);
     setTimeout(() => {

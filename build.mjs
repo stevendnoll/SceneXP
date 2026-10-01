@@ -8,14 +8,18 @@
  * experiences, and new shared module versions are all picked up
  * automatically, so there is no build configuration to edit. The one
  * vendored exception is Three.js: each www/lib/three/rNNN/ release folder is
- * bundled into its own three.min.js (see the end of this file).
+ * bundled into its own three.min.js (see below).
+ *
+ * The build also writes one block of HTML: the list of modulepreload links in
+ * each scene page's <head>, generated from that page's import graph (see the
+ * end of this file). It is the only part of a page the build touches.
  *
  * Run with `npm run build`. CI runs the same command and fails if the
- * committed .min files do not match the freshly built ones.
+ * committed .min files or preload lists do not match the freshly built ones.
  */
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { build } from 'esbuild';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -93,5 +97,97 @@ for (const dir of releases) {
   }
 }
 
+// Every scene page preloads its whole module graph. A browser only finds a
+// module's imports once that module has arrived, so a page whose main.min.js
+// imports a store that imports the shared scene part waits a round trip per
+// level, and these graphs run three to six levels deep (Corner Office's has 52
+// modules). One <link rel="modulepreload"> per module lets the browser fetch
+// them all at once. The list sits between two marker comments in each page's
+// <head>, right after the three.js preload, and is rewritten here from the
+// built files, so it cannot go stale: CI rebuilds and fails on any diff.
+// Static imports only. A dynamic import() is deferred on purpose.
+const PRELOAD_BEGIN = '<!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->';
+const PRELOAD_END = '<!-- END generated modulepreload -->';
+const importCache = new Map();
+
+/** The static imports of one built module, as absolute paths. */
+async function staticImports(file) {
+  if (importCache.has(file)) return importCache.get(file);
+  // An analysis-only build: bundling on so esbuild records every import, and
+  // every import marked external so it records them without following any.
+  const result = await build({
+    entryPoints: [file],
+    bundle: true,
+    write: false,
+    metafile: true,
+    format: 'esm',
+    logLevel: 'silent',
+    plugins: [{
+      name: 'record-imports',
+      setup(b) {
+        b.onResolve({ filter: /.*/ }, (args) => (args.kind === 'entry-point' ? null : { path: args.path, external: true }));
+      },
+    }],
+  });
+  const input = Object.values(result.metafile.inputs)[0];
+  const found = (input ? input.imports : [])
+    .filter((i) => i.kind === 'import-statement' && /^\.\.?\//.test(i.path))
+    .map((i) => path.resolve(path.dirname(file), i.path));
+  importCache.set(file, found);
+  return found;
+}
+
+/** A page's modules, breadth first from its entry, each listed once. */
+async function moduleGraph(entry) {
+  const order = [entry];
+  const seen = new Set(order);
+  for (let i = 0; i < order.length; i++) {
+    for (const dep of await staticImports(order[i])) {
+      if (!seen.has(dep)) {
+        seen.add(dep);
+        order.push(dep);
+      }
+    }
+  }
+  return order;
+}
+
+let preloaded = 0;
+for (const entry of await readdir(wwwDir, { withFileTypes: true })) {
+  if (!entry.isDirectory()) continue;
+  const pageDir = path.join(wwwDir, entry.name);
+  const page = path.join(pageDir, 'index.html');
+  const main = path.join(pageDir, 'js', 'main.min.js');
+  let html;
+  try {
+    html = await readFile(page, 'utf8');
+  } catch {
+    continue;
+  }
+  if (!html.includes('src="js/main.min.js"')) continue;
+
+  const graph = await moduleGraph(main);
+  const links = graph.map((file) =>
+    `    <link rel="modulepreload" href="${path.relative(pageDir, file).split(path.sep).join('/')}">`);
+  const block = [`    ${PRELOAD_BEGIN}`, ...links, `    ${PRELOAD_END}`].join('\n');
+
+  let next;
+  const begin = html.indexOf(PRELOAD_BEGIN);
+  if (begin !== -1) {
+    const lineStart = html.lastIndexOf('\n', begin) + 1;
+    const end = html.indexOf(PRELOAD_END, begin);
+    if (end === -1) throw new Error(`${page}: generated modulepreload block has no end marker`);
+    next = html.slice(0, lineStart) + block + html.slice(end + PRELOAD_END.length);
+  } else {
+    const three = html.match(/^ *<link rel="modulepreload" href="\.\.\/lib\/three\/[^"]+">$/m);
+    if (!three) throw new Error(`${page}: no three.js modulepreload to place the module list after`);
+    const at = three.index + three[0].length;
+    next = `${html.slice(0, at)}\n${block}${html.slice(at)}`;
+  }
+  if (next !== html) await writeFile(page, next);
+  preloaded++;
+}
+
 console.log(`Minified ${sources['.js'].length} JS and ${sources['.css'].length} CSS files, ` +
-  `and bundled ${bundled} Three.js build${bundled === 1 ? '' : 's'}.`);
+  `bundled ${bundled} Three.js build${bundled === 1 ? '' : 's'}, ` +
+  `and listed the modules of ${preloaded} scene page${preloaded === 1 ? '' : 's'} for preload.`);

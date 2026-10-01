@@ -79,6 +79,7 @@ import {
     renderWhiteboardSheet, renderPrintSheet
 } from './panels.min.js';
 import { installCardFocusTrap, installCardScrollReset, getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { createResolution } from '../../shared/js/resolution-1.0.0.min.js';
 import {
     initPortraitControls, updatePortraitControls, resetPortraitAim, gestureClaimedTap, disposePortraitControls
@@ -313,6 +314,18 @@ async function init() {
     setupEventListeners();
     refresh();
     showWelcome();
+
+    // Build the shaders now, behind the loading screen, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    // Two passes, the way draw() draws them: the world outside with tone
+    // mapping off, then the room with ACES. Tone mapping is part of a
+    // program's identity, so compiling either the other way would be wasted.
+    updateLoadingStatus('Preparing the view…', 95);
+    await warmShaders(renderer, [
+        { scene: world && world.scene, camera: world && world.camera, toneMapping: THREE.NoToneMapping },
+        { scene, camera, toneMapping: THREE.ACESFilmicToneMapping }
+    ]);
 
     updateLoadingStatus('Ready', 100);
     setTimeout(() => {

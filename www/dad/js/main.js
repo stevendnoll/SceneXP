@@ -16,6 +16,7 @@ import {
     updateDayNightCycle, removeTestObjects, isTouchDevice,
     getNightFactor, getSun, getMoon
 } from '../../shared/js/scene-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import {
     initControls, updateControls, setCollisionCallback,
     getPlayerPosition, copyPlayerPositionTo, setTapCallback,
@@ -272,6 +273,12 @@ async function init() {
     setupCollision();
     setupEventListeners();
     if (state.isMobile) touchControls.classList.add('visible');
+
+    // Build the shaders now, behind the loading screen, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    updateLoadingStatus('Preparing the view…', 95);
+    await warmShaders(getRenderer(), [{ scene: getScene(), camera: getCamera() }]);
 
     updateLoadingStatus('Ready', 100);
     setTimeout(() => {

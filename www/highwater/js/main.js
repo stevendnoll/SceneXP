@@ -59,6 +59,7 @@ import { OCEAN_CONFIG } from './config.min.js';
 // visit counter and the soft bot deterrent that tags it, and every other
 // experience on the site carries them.
 import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
 import {
@@ -512,6 +513,10 @@ async function init() {
     // want a way out. So the button is there before they decide.
     document.querySelectorAll('.ui-float').forEach((el) => el.classList.add('visible'));
 
+    // Build the shaders now, behind the welcome card, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    await warmShaders(renderer, [{ scene, camera }]);
     start();
 
     // The visit is on the record from here. Recorded at init rather than at

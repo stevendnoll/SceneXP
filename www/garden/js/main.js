@@ -65,6 +65,7 @@ import {
     syncTreeList, setTendPanelHidden, cardLines
 } from './ui.min.js';
 import { getProofOfWork, bufToHex, installCardFocusTrap, shieldOverlayControl, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import {
     initPortraitControls, updatePortraitControls, gestureClaimedTap, resetPortraitAim,
     getPanAngle, getTiltAngle, setPanLimit
@@ -258,6 +259,12 @@ async function init() {
     });
     setupEventListeners();
     installDebugProbe();
+
+    // Build the shaders now, behind the loading screen, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    updateLoadingStatus('Preparing the view…', 95);
+    await warmShaders(renderer, [{ scene, camera }]);
 
     updateLoadingStatus('Ready', 100);
     setTimeout(() => {
