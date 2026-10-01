@@ -10,10 +10,9 @@
  * both arms out the rig's hand settles 1.07m from his middle, not 1.65m.
  */
 import { describe, test, expect, beforeAll } from '@jest/globals';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import vm from 'node:vm';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
@@ -45,9 +44,7 @@ function handsOf(figure) {
 }
 
 beforeAll(async () => {
-    const ctx = vm.createContext({ self: {}, window: {}, console: { warn() {} } });
-    vm.runInContext(readFileSync(join(root, 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+    THREE = await loadRealThree();
     globalThis.THREE = THREE;
     // The jersey letters are drawn on a canvas; nothing here looks at them.
     const quiet = () => new Proxy(function () {}, {

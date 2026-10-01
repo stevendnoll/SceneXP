@@ -87,6 +87,7 @@ import {
 import {
     installCardFocusTrap, installCardScrollReset, getProofOfWork,
 } from '../../shared/js/boot-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { report, reportFinal, orientationOf, playRecord } from './telemetry.min.js';
 
@@ -339,7 +340,8 @@ function initRenderer(canvas) {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
     renderer.shadowMap.enabled = !isTouch();
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // PCFShadowMap is soft from r182 on, which retired PCFSoftShadowMap.
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     return renderer;
 }
 
@@ -2564,6 +2566,12 @@ async function init() {
 
     installQaHook();
 
+    // Build the shaders now, behind the loading screen, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    setProgress(0.95, 'Preparing the view…');
+    await warmShaders(renderer, [{ scene, camera }]);
+
     state.isLoaded = true;
     state.isRunning = true;
     setProgress(1, 'Ready');
@@ -2582,6 +2590,41 @@ export function getState() {
  *  playing needs two fifties in a row, which no test should depend on. */
 export { init, animate, aimPlayCamera, beginMilestone };
 
+// ---- Boot -------------------------------------------------------------------
+
+/** Best-effort check that the browser can create a WebGL 2 context, which
+ *  three.js requires (r163 dropped WebGL 1). */
+function hasWebGL() {
+    try {
+        const c = document.createElement('canvas');
+        return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
+    } catch (e) {
+        return false;
+    }
+}
+
+/** Route visitors whose browser can't run the 3D scene to the 2D site, with a
+ *  brief note, instead of leaving them staring at a blank canvas. */
+function fallbackTo2D() {
+    try {
+        const loading = document.getElementById('loading-screen');
+        if (loading) loading.classList.remove('hidden');
+        setProgress(0, "This browser can't run the 3D view. Taking you to the standard site…");
+    } catch (e) { /* ignore, we're redirecting regardless */ }
+    setTimeout(() => { window.location.replace('/'); }, 2500);
+}
+
+/** Start the game, but fall back to the 2D site if WebGL is unavailable or
+ *  the scene fails to build, so a hard failure never ends in a blank page.
+ *  Errors thrown later inside the render loop are not auto-recovered. */
+function boot() {
+    if (!hasWebGL()) { fallbackTo2D(); return; }
+    init().catch((err) => {
+        console.error("[X's and O's] 3D init failed, falling back to the 2D site:", err);
+        fallbackTo2D();
+    });
+}
+
 if (typeof document !== 'undefined') {
-    init();
+    boot();
 }

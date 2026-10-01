@@ -165,7 +165,7 @@ function installGlobals({ width = 1024, height = 768, dpr = 2, reducedMotion = f
     MeshBasicMaterial: Material, MeshStandardMaterial: Material, PointsMaterial: Material,
     AmbientLight, HemisphereLight, DirectionalLight,
     BackSide: 'back', DoubleSide: 'double',
-    BasicShadowMap: 'basic-shadow', PCFSoftShadowMap: 'pcf-soft',
+    BasicShadowMap: 'basic-shadow', PCFShadowMap: 'pcf',
     SRGBColorSpace: 'srgb', ACESFilmicToneMapping: 'aces',
   };
   const canvases = [];
@@ -224,17 +224,17 @@ afterEach(() => {
 
 // ---- initScene wiring -----------------------------------------------------------
 
-test('desktop init wires the renderer, camera, and rig with the documented caps', async () => {
+test('desktop init wires the renderer and camera with the documented caps', async () => {
   const { scene, camera, renderer, m } = await loadScene();
   expect(renderer.opts.antialias).toBe(true);            // not a touch device
   expect(renderer.sizes[0]).toEqual([1024, 768]);
   expect(renderer.pixelRatios[0]).toBe(1.5);             // devicePixelRatio 2, capped
-  expect(renderer.shadowMap).toMatchObject({ enabled: true, type: 'pcf-soft', autoUpdate: false, needsUpdate: true });
-  expect(renderer.xr.enabled).toBe(true);
+  expect(renderer.shadowMap).toMatchObject({ enabled: true, type: 'pcf', autoUpdate: false, needsUpdate: true });
+  expect(renderer.xr.enabled).toBe(false);               // no WebXR: nothing starts a session
   expect(camera.fov).toBe(75);
   expect(camera.aspect).toBe(1024 / 768);
   expect(camera.position.y).toBe(1.7);
-  expect(m.getCameraRig().children).toContain(camera);   // VR rig owns the camera
+  expect(scene.children).toContain(camera);              // camera sits directly in the scene
   expect(scene.fog.far).toBe(200);
   expect(scene.getObjectByName('clouds').children).toHaveLength(26); // full flotilla
   // The accessors hand back the same instances initScene returned.
@@ -459,20 +459,12 @@ test('handleResize refits the camera and renderer, keeping the 1.5 pixel-ratio c
   expect(renderer.pixelRatios.at(-1)).toBe(1.5); // above the cap: clamped
 });
 
-test('resize defers to XR while presenting, and pre-init calls are safe no-ops', async () => {
+test('pre-init resize and render calls are safe no-ops', async () => {
   // Before initScene nothing exists to resize or render: both must just return.
   installGlobals();
   jest.resetModules();
   const bare = await import('../www/shared/js/scene-1.0.0.js');
   expect(() => { bare.handleResize(); bare.render(); }).not.toThrow();
-
-  const { camera, renderer, m } = await loadScene();
-  renderer.xr.isPresenting = true;
-  const sizeCalls = renderer.sizes.length;
-  globalThis.window.innerWidth = 320;
-  m.handleResize();
-  expect(renderer.sizes).toHaveLength(sizeCalls); // XR owns the viewport
-  expect(camera.aspect).toBe(1024 / 768);
 });
 
 test('render draws the current scene through the renderer', async () => {

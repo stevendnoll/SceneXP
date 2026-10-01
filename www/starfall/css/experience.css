@@ -1,0 +1,23 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+
+/* ============================================================
+   Starfall (www/starfall) experience styles
+   Loaded after the shared stylesheet, so these rules layer on
+   top of ../shared/css/styles-1.0.0.css.
+   ============================================================ */
+
+/* The welcome card's line about what is drawing the galaxy (WebGPU or the
+   WebGL 2 fallback, and how many stars). Quiet, below the controls hint, in
+   the page's ember accent so it reads as a note rather than an instruction. */
+.renderer-note {
+    margin: 1rem auto 0;
+    max-width: 34rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--ui-accent-strong);
+    opacity: 0.85;
+}
+
+.renderer-note:empty {
+    display: none;
+}

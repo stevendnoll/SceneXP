@@ -258,7 +258,7 @@ test('page hide notes the visit, saves, and stops saving after', async () => {
 });
 
 test('without WebGL the page says so and goes to the standard site', async () => {
-    dom.windowStub.WebGLRenderingContext = undefined;
+    dom.windowStub.WebGL2RenderingContext = undefined;
     await import('../www/office/js/main.js');
     await flushAsync();
     jest.advanceTimersByTime(3000);

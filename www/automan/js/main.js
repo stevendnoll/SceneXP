@@ -51,8 +51,10 @@ import { getProofOfWork, bufToHex, installCardScrollReset } from '../../shared/j
 import { initPortraitControls, updatePortraitControls, gestureClaimedTap } from '../../shared/js/pan-1.0.0.min.js';
 import {
     initScene, handleResize, render, getCamera, getRenderer,
-    updateDayNightCycle, removeTestObjects, isTouchDevice
+    updateDayNightCycle, removeTestObjects, isTouchDevice,
+    getScene
 } from '../../shared/js/scene-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import {
     initStore, updateShowroom, updateBackgroundAnimations, updateInteriorAmbientLight,
     getPersonAnchors, requestPersonPortrait
@@ -157,6 +159,12 @@ async function init() {
 
     updateLoadingStatus('Pouring the coffee…', 80);
     setupEventListeners();
+
+    // Build the shaders now, behind the loading screen, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    updateLoadingStatus('Preparing the view…', 95);
+    await warmShaders(getRenderer(), [{ scene: getScene(), camera: getCamera() }]);
 
     updateLoadingStatus('Ready', 100);
     setTimeout(() => {
@@ -1771,12 +1779,12 @@ export function getState() {
 
 // ---- Boot -----------------------------------------------------------------
 
-/** Best-effort check that the browser can create a WebGL context. */
+/** Best-effort check that the browser can create a WebGL 2 context, which
+ *  three.js requires (r163 dropped WebGL 1). */
 function hasWebGL() {
     try {
         const c = document.createElement('canvas');
-        return !!(window.WebGLRenderingContext &&
-            (c.getContext('webgl') || c.getContext('experimental-webgl')));
+        return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
     } catch (e) {
         return false;
     }

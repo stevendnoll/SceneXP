@@ -83,12 +83,17 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/automan/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/automan/#webpage",
       "url": "https://www.scenexp.com/automan/",
       "name": "John Walker, The Auto Man",
       "description": "A 3D showroom built for John Walker, The Auto Man, who does the negotiating for car buyers so they never have to do it themselves.",
+      "datePublished": "2026-09-01",
       "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
       "about": {
         "@type": "ProfessionalService",
         "@id": "https://www.scenexp.com/automan/#business",
@@ -107,11 +112,49 @@
       }
     }
     </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "John Walker, The Auto Man",
+          "item": "https://www.scenexp.com/automan/"
+        }
+      ]
+    }
+    </script>
 
-    <title>John Walker, The Auto Man</title>
+    <title>John Walker, The Auto Man | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="../lib/three.min.js" as="script">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/pan-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/scene-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="js/store.min.js">
+    <link rel="modulepreload" href="../shared/js/world-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/furniture-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/scenery-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/structures-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/lighting-1.0.0.min.js">
+    <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
@@ -857,7 +900,7 @@
          visit (D41), so the keyboard route to John never expires. -->
     <canvas id="game-canvas" role="img" aria-label="A living 3D car dealership desk: John Walker points at a deal sheet and makes his customer's case while she nods along, the dealer listens from across the desk, and cars roll past the lot beyond the glass wall behind them"></canvas>
 
-    <script src="../lib/three.min.js"></script>
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>
 </body>
 

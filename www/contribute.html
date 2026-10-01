@@ -53,9 +53,9 @@
 
     <title>Contribute | SceneXP</title>
 
-    <link rel="preload" href="/css/site.min.css?v=4" as="style">
+    <link rel="preload" href="/css/site.min.css?v=5" as="style">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="/css/site.min.css?v=4">
+    <link rel="stylesheet" href="/css/site.min.css?v=5">
 
     <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
     <script src="/js/theme.min.js?v=1"></script>
@@ -142,11 +142,14 @@
                         general-purpose modules (scene, lighting, controls, people, scenery, and more). An
                         experience keeps its own <code>main.js</code> orchestrator and assembles imported parts
                         driven by one plain config object.</li>
-                    <li><strong>Three.js as a global.</strong> Each experience's <code>index.html</code> loads
-                        <code>lib/three.min.js</code> as a classic script before its module graph.</li>
+                    <li><strong>Three.js as a global.</strong> Every experience runs the same release of
+                        Three.js (r186). Each <code>index.html</code> loads <code>lib/three/r186/three.min.js</code>
+                        as a module script before its own scene, and that bundle sets the global
+                        <code>THREE</code>.</li>
                     <li><strong>esbuild for minification.</strong> <code>npm run build</code> minifies JS and
                         CSS. Every file under <code>www/</code> is picked up automatically, so there is no
-                        build configuration to edit.</li>
+                        build configuration to edit. It also writes each page's list of module preloads,
+                        so the browser fetches a scene's modules all at once.</li>
                 </ul>
 
                 <h2>Pick an interaction model</h2>
@@ -242,14 +245,16 @@ python3 -m http.server 8000
                         same-origin Content Security Policy, full Open Graph and Twitter tags, JSON-LD, and a
                         polite no-JavaScript fallback. Copy the pattern from an existing experience.</li>
                     <li><strong>Make a social card.</strong> A 1200 by 630 capture of your world, saved as
-                        <code>assets/og-&lt;world&gt;.webp</code> with a <code>.jpg</code> beside it. Please
+                        <code>assets/og-&lt;world&gt;.jpg</code> with a <code>.webp</code> beside it. Please
                         read the conversion note in
                         <a href="https://github.com/stevendnoll/SceneXP/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">CONTRIBUTING.md</a>
                         before you make it, because a screenshot taken on a Mac carries the display's color
                         profile and will come out visibly duller than what you were looking at unless you
                         convert it properly.</li>
                     <li><strong>Build and test.</strong> Run <code>npm run build</code> (your new files are
-                        minified automatically), then <code>npm test</code>. Please include a small unit
+                        minified automatically), then <code>npm test</code>. Have your scene call
+                        <code>warmShaders()</code> from the shared warmup part before its loading screen
+                        hides, so its first frame does not freeze. Please include a small unit
                         test for your world, following the <code>tests</code> folder's
                         <code>&lt;experience&gt;-init.test.mjs</code> pattern. Every pull request should
                         bring tests along for the code it adds or changes.</li>
@@ -288,7 +293,7 @@ python3 -m http.server 8000
                     <li><strong>Fast on phones.</strong> Many visitors arrive on mobile, so please keep assets
                         lean and performance in mind.</li>
                     <li><strong>MIT licensed.</strong> Your contribution is published under the project's MIT
-                        license. The bundled <code>three.min.js</code> keeps its own license.</li>
+                        license. The bundled Three.js library keeps its own license.</li>
                 </ul>
 
                 <h2>Ready when you are</h2>

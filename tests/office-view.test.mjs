@@ -14,12 +14,11 @@
  * being on the 40th floor, is what should add the gravitas"; the water only
  * in slivers between the towers; less is more.
  */
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import vm from 'node:vm';
 import { CONFIG } from '../www/office/js/config.js';
 import * as bay from '../www/office/js/bay.js';
 import * as sky from '../www/office/js/sky.js';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 let THREE;
 let room;
@@ -29,9 +28,7 @@ let city;
 let worldMod;
 
 beforeAll(async () => {
-    const ctx = vm.createContext({ self: {}, window: {}, console: { warn() {} } });
-    vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+    THREE = await loadRealThree();
     globalThis.THREE = THREE;
     const { buildRoom } = await import('../www/office/js/room.js');
     worldMod = await import('../www/office/js/world.js');

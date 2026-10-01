@@ -55,21 +55,77 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/tornado/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/tornado/#webpage",
       "url": "https://www.scenexp.com/tornado/",
       "name": "Tornado Alley",
       "description": "A passive 3D scene on the open prairie. Thirty seconds that begin on a calm summer evening, follow a tornado from its first turning to its last, and end as the storm moves on.",
-      "inLanguage": "en-US"
+      "datePublished": "2026-09-23",
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Tornado Alley",
+          "item": "https://www.scenexp.com/tornado/"
+        }
+      ]
     }
     </script>
 
-    <title>Tornado Alley</title>
+    <title>Tornado Alley | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="../shared/css/player-1.0.0.min.css" as="style">
     <link rel="preload" href="css/experience.min.css" as="style">
-    <link rel="preload" href="../lib/three.min.js" as="script">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/player-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/resolution-1.0.0.min.js">
+    <link rel="modulepreload" href="js/funnel.min.js">
+    <link rel="modulepreload" href="js/shells.min.js">
+    <link rel="modulepreload" href="js/world.min.js">
+    <link rel="modulepreload" href="../shared/js/lightning-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/fractaltree-1.0.0.min.js">
+    <link rel="modulepreload" href="js/wind.min.js">
+    <link rel="modulepreload" href="js/farm.min.js">
+    <link rel="modulepreload" href="js/pond.min.js">
+    <link rel="modulepreload" href="js/flora.min.js">
+    <link rel="modulepreload" href="js/cow.min.js">
+    <link rel="modulepreload" href="js/rainbow.min.js">
+    <link rel="modulepreload" href="js/payloads.min.js">
+    <link rel="modulepreload" href="js/tumbleweeds.min.js">
+    <link rel="modulepreload" href="js/witch.min.js">
+    <link rel="modulepreload" href="js/narration.min.js">
+    <link rel="modulepreload" href="js/perf.min.js">
+    <link rel="modulepreload" href="../shared/js/treespecies-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/wildflowers-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/narration-1.0.0.min.js">
+    <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
@@ -147,6 +203,10 @@
                     aria-describedby="player-paused-at">Resume</button>
                 <button id="player-restart" type="button" class="player-btn">Restart</button>
             </div>
+            <!-- Filled in only when this browser cannot draw the scene (no
+                 WebGL 2): main.js hides Begin, says so here, and takes the
+                 visitor to the standard site. -->
+            <p id="load-status" class="lede" role="status" aria-live="polite" hidden></p>
             <p class="note">You can watch it again as many times as you wish.</p>
             <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
         </div>
@@ -188,7 +248,7 @@
         <a class="welcome-explore promo-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
     </div>
 
-    <script src="../lib/three.min.js"></script>
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>
 </body>
 

@@ -15,9 +15,9 @@ html [lang="en"]
     meta [content="Steve Noll" name="author"]
     title
       "Page Not Found | SceneXP"
-    link [as="style" href="/css/site.min.css?v=4" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=4" rel="stylesheet"]
+    link [href="/css/site.min.css?v=5" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -154,12 +154,17 @@ html [lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/automan/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/automan/#webpage",
         "url": "https://www.scenexp.com/automan/",
         "name": "John Walker, The Auto Man",
         "description": "A 3D showroom built for John Walker, The Auto Man, who does the negotiating for car buyers so they never have to do it themselves.",
+        "datePublished": "2026-09-01",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "about": {
           "@type": "ProfessionalService",
           "@id": "https://www.scenexp.com/automan/#business",
@@ -177,10 +182,43 @@ html [lang="en"]
           "slogan": "He does the negotiating, so you never have to."
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "John Walker, The Auto Man",
+            "item": "https://www.scenexp.com/automan/"
+          }
+        ]
+      }
     title
-      "John Walker, The Auto Man"
+      "John Walker, The Auto Man | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/pan-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scene-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/furniture-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scenery-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/structures-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/lighting-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=1" rel="stylesheet"]
@@ -314,7 +352,7 @@ html [lang="en"]
           p.ownership-note
             "The Auto Man name belongs to John Walker and appears here with his blessing."
     canvas#game-canvas [aria-label="A living 3D car dealership desk: John Walker points at a deal sheet and makes his customer's case while she nods along, the dealer listens from across the desk, and cars roll past the lot beyond the glass wall behind them" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -383,9 +421,9 @@ html [lang="en"]
       }
     title
       "Contact | SceneXP"
-    link [as="style" href="/css/site.min.css?v=4" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=4" rel="stylesheet"]
+    link [href="/css/site.min.css?v=5" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
     script [src="/js/contact.min.js?v=1" type="module"]
@@ -589,9 +627,9 @@ html [lang="en"]
       }
     title
       "Contribute | SceneXP"
-    link [as="style" href="/css/site.min.css?v=4" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=4" rel="stylesheet"]
+    link [href="/css/site.min.css?v=5" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -675,13 +713,16 @@ html [lang="en"]
             li
               strong
                 "Three.js as a global."
-              "Each experience's"
+              "Every experience runs the same release of Three.js (r186). Each"
               code
                 "index.html"
               "loads"
               code
-                "lib/three.min.js"
-              "as a classic script before its module graph."
+                "lib/three/r186/three.min.js"
+              "as a module script before its own scene, and that bundle sets the global"
+              code
+                "THREE"
+              "."
             li
               strong
                 "esbuild for minification."
@@ -690,7 +731,7 @@ html [lang="en"]
               "minifies JS and CSS. Every file under"
               code
                 "www/"
-              "is picked up automatically, so there is no build configuration to edit."
+              "is picked up automatically, so there is no build configuration to edit. It also writes each page's list of module preloads, so the browser fetches a scene's modules all at once."
           h2
             "Pick an interaction model"
           p
@@ -826,10 +867,10 @@ html [lang="en"]
                 "Make a social card."
               "A 1200 by 630 capture of your world, saved as"
               code
-                "assets/og-&lt;world&gt;.webp"
+                "assets/og-&lt;world&gt;.jpg"
               "with a"
               code
-                ".jpg"
+                ".webp"
               "beside it. Please read the conversion note in"
               a [href="https://github.com/stevendnoll/SceneXP/blob/main/CONTRIBUTING.md" rel="noopener noreferrer" target="_blank"]
                 "CONTRIBUTING.md"
@@ -843,7 +884,10 @@ html [lang="en"]
               "(your new files are minified automatically), then"
               code
                 "npm test"
-              ". Please include a small unit test for your world, following the"
+              ". Have your scene call"
+              code
+                "warmShaders()"
+              "from the shared warmup part before its loading screen hides, so its first frame does not freeze. Please include a small unit test for your world, following the"
               code
                 "tests"
               "folder's"
@@ -904,10 +948,7 @@ html [lang="en"]
             li
               strong
                 "MIT licensed."
-              "Your contribution is published under the project's MIT license. The bundled"
-              code
-                "three.min.js"
-              "keeps its own license."
+              "Your contribution is published under the project's MIT license. The bundled Three.js library keeps its own license."
           h2
             "Ready when you are"
           p
@@ -999,17 +1040,60 @@ html [data-ui-theme="garden" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/dad/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/dad/#webpage",
         "url": "https://www.scenexp.com/dad/",
         "name": "A Ride on the NCR Trail",
         "description": "A walkable 3D stretch of Maryland's NCR Trail, built in loving memory of a dad who loved to ride it.",
-        "inLanguage": "en-US"
+        "datePublished": "2026-07-06",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "A Ride on the NCR Trail",
+            "item": "https://www.scenexp.com/dad/"
+          }
+        ]
       }
     title
-      "A Ride on the NCR Trail"
+      "A Ride on the NCR Trail | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/collision-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scene-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/controls-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="js/gallery.min.js" rel="modulepreload"]
+    link [href="../shared/js/checklist-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/autopilot-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/listings.min.js" rel="modulepreload"]
+    link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scenery-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/npcs-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/gallery-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     noscript
@@ -1227,7 +1311,7 @@ html [data-ui-theme="garden" lang="en"]
           span.settings-value#look-speed-value
             "1.0"
     canvas#game-canvas [aria-label="A walkable 3D stretch of the NCR trail" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -1274,7 +1358,12 @@ html [data-ui-theme="ember" lang="en"]
         "gamePlatform": "Web browser",
         "applicationCategory": "Game",
         "operatingSystem": "Any",
+        "datePublished": "2026-08-05",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebPage",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "isAccessibleForFree": true,
         "playMode": "SinglePlayer",
         "image": "https://www.scenexp.com/earthdefense/assets/og-earthdefense.jpg?v=3",
@@ -1285,17 +1374,55 @@ html [data-ui-theme="ember" lang="en"]
         "publisher": {
           "@type": "Organization",
           "name": "Continuum Commerce LLC"
-        },
-        "isPartOf": {
-          "@type": "WebSite",
-          "@id": "https://www.scenexp.com/#website"
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Earth Defense",
+            "item": "https://www.scenexp.com/earthdefense/"
+          }
+        ]
+      }
     title
-      "Earth Defense"
+      "Earth Defense | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=4" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/space-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/flight-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/world.min.js" rel="modulepreload"]
+    link [href="../shared/js/bodies-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/targeting-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/weapons-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/gamestate-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/cockpit.min.js" rel="modulepreload"]
+    link [href="js/fleet.min.js" rel="modulepreload"]
+    link [href="js/intro.min.js" rel="modulepreload"]
+    link [href="js/martian.min.js" rel="modulepreload"]
+    link [href="js/hud.min.js" rel="modulepreload"]
+    link [href="js/replay.min.js" rel="modulepreload"]
+    link [href="js/finale.min.js" rel="modulepreload"]
+    link [href="js/audio.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/structures.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=4" rel="stylesheet"]
@@ -1587,7 +1714,7 @@ html [data-ui-theme="ember" lang="en"]
           p#end-status.end-status.sr-only [aria-live="polite" role="status"]
           div#end-promo.end-promo
     canvas#game-canvas [aria-label="The view from a ship in orbit above Earth, with the Moon and Mars in the distance" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -1622,17 +1749,61 @@ html [data-ui-theme="surf" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/family/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/family/#webpage",
         "url": "https://www.scenexp.com/family/",
         "name": "Putt Putt with Mom and Dad",
         "description": "A walkable 3D pirate mini golf course in Ocean City, Maryland, built from a son's favorite summer memory of playing putt putt with his parents.",
-        "inLanguage": "en-US"
+        "datePublished": "2026-07-08",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Putt Putt with Mom and Dad",
+            "item": "https://www.scenexp.com/family/"
+          }
+        ]
       }
     title
-      "Putt Putt with Mom and Dad"
+      "Putt Putt with Mom and Dad | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/collision-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scene-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/controls-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="js/gallery.min.js" rel="modulepreload"]
+    link [href="../shared/js/checklist-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/autopilot-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/listings.min.js" rel="modulepreload"]
+    link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scenery-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/pedestrians-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/npcs-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/gallery-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     noscript
@@ -1854,7 +2025,7 @@ html [data-ui-theme="surf" lang="en"]
           span.settings-value#look-speed-value
             "1.0"
     canvas#game-canvas [aria-label="A walkable 3D pirate mini golf course" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -1889,18 +2060,63 @@ html [data-ui-theme="garden" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/garden/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/garden/#webpage",
         "url": "https://www.scenexp.com/garden/",
         "name": "Fractal Garden",
         "description": "An interactive 3D scene. Plant fractal trees in an open plot and tend them across the years as the seasons and the weather turn.",
-        "inLanguage": "en-US"
+        "datePublished": "2026-08-26",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Fractal Garden",
+            "item": "https://www.scenexp.com/garden/"
+          }
+        ]
       }
     title
-      "Fractal Garden"
+      "Fractal Garden | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=17" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="js/clock.min.js" rel="modulepreload"]
+    link [href="js/sky.min.js" rel="modulepreload"]
+    link [href="js/terrain.min.js" rel="modulepreload"]
+    link [href="js/forest.min.js" rel="modulepreload"]
+    link [href="js/vista.min.js" rel="modulepreload"]
+    link [href="js/wildlife.min.js" rel="modulepreload"]
+    link [href="js/weather.min.js" rel="modulepreload"]
+    link [href="js/precip.min.js" rel="modulepreload"]
+    link [href="../shared/js/treespecies-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/view.min.js" rel="modulepreload"]
+    link [href="js/beds.min.js" rel="modulepreload"]
+    link [href="../shared/js/fractaltree-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/garden.min.js" rel="modulepreload"]
+    link [href="js/ui.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/pan-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/wildflowers-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=17" rel="stylesheet"]
@@ -2064,7 +2280,7 @@ html [data-ui-theme="garden" lang="en"]
           button#reset-cancel.tree-remove [type="button"]
             "Keep my garden"
     canvas#scene [aria-label="A 3D plot of open grassland where fractal trees can be planted and tended through the seasons" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -2099,18 +2315,54 @@ html [data-ui-theme="garden" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/gavin/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/gavin/#webpage",
         "url": "https://www.scenexp.com/gavin/",
         "name": "Gavin's Bug Patrol",
         "description": "A passive 3D close-up of the Confederate Jasmine where Gavin releases his ladybugs and praying mantises every spring.",
-        "inLanguage": "en-US"
+        "datePublished": "2026-07-13",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Gavin's Bug Patrol",
+            "item": "https://www.scenexp.com/gavin/"
+          }
+        ]
       }
     title
-      "Gavin's Bug Patrol"
+      "Gavin's Bug Patrol | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=2" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/pan-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scene-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scenery-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/proplist-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=2" rel="stylesheet"]
@@ -2177,7 +2429,7 @@ html [data-ui-theme="garden" lang="en"]
       p.prop-panel-note
         "Choose anything for a little of its story. The arrow keys move through the list, Escape closes whatever opens, and Tab or Escape puts this list away."
       ul#prop-list.prop-list
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -2212,19 +2464,60 @@ html [data-ui-theme="surf" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/highwater/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/highwater/#webpage",
         "url": "https://www.scenexp.com/highwater/",
         "name": "High Water",
         "description": "A passive 3D scene at the water's edge. Sixty seconds that begin on an ordinary bright afternoon and end with the sea closing over the viewer.",
-        "inLanguage": "en-US"
+        "datePublished": "2026-08-21",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "High Water",
+            "item": "https://www.scenexp.com/highwater/"
+          }
+        ]
       }
     title
-      "High Water"
+      "High Water | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="../shared/css/player-1.0.0.min.css" rel="preload"]
     link [as="style" href="css/experience.min.css?v=5" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/water.min.js" rel="modulepreload"]
+    link [href="js/sky.min.js" rel="modulepreload"]
+    link [href="js/sand.min.js" rel="modulepreload"]
+    link [href="js/storm.min.js" rel="modulepreload"]
+    link [href="js/buoy.min.js" rel="modulepreload"]
+    link [href="js/lightning.min.js" rel="modulepreload"]
+    link [href="../shared/js/player-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/player.min.js" rel="modulepreload"]
+    link [href="../shared/js/narration-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/resolution-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/lightning-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="../shared/css/player-1.0.0.min.css" rel="stylesheet"]
@@ -2269,6 +2562,7 @@ html [data-ui-theme="surf" lang="en"]
             "Resume"
           button#player-restart.player-btn [type="button"]
             "Restart"
+        p#load-status.lede [aria-live="polite" hidden role="status"]
         p.note
           "You can watch it again as many times as you wish."
         a#explore-link.welcome-explore [href="/"]
@@ -2296,7 +2590,7 @@ html [data-ui-theme="surf" lang="en"]
       p#share-status.sr-only [aria-live="polite" role="status"]
       a.welcome-explore.promo-explore [href="/"]
         "More 3D worlds to explore at SceneXP.com"
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -2479,11 +2773,12 @@ html [lang="en"]
       }
     title
       "SceneXP | 3D Worlds, Games, and Experiments"
-    link [as="style" href="/css/site.min.css?v=4" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=4" rel="stylesheet"]
+    link [href="/css/site.min.css?v=5" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
+    script [src="/js/home.min.js?v=1" type="module"]
   body
     a.skip-link [href="#main"]
       "Skip to main content"
@@ -2531,13 +2826,68 @@ html [lang="en"]
               "3D worlds, games, and experiments, right in your browser"
             p
               "No app, no download, nothing to install."
+          section.spotlight#spotlight [aria-labelledby="spotlight-heading" aria-roledescription="carousel"]
+            h2#spotlight-heading
+              "Just released"
+            ul.spotlight-slides
+              li.spotlight-slide.is-active [aria-label="1 of 3" aria-roledescription="slide" data-slug="office"]
+                a [href="/office/"]
+                  div.spotlight-media
+                    img [alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." decoding="async" fetchpriority="high" height="630" loading="eager" src="/office/assets/og-office.webp?v=1" width="1200"]
+                  div.spotlight-body
+                    p.spotlight-date
+                      "Released"
+                      time [datetime="2026-09-28"]
+                        "September 28, 2026"
+                    p.experience-eyebrow
+                      "A job search tracker in a 3D office"
+                    h3
+                      "Corner Office"
+                    p.spotlight-text
+                      "A working job search tracker in a corner office forty floors above the bay. Every application you send earns a firework over the water."
+                    span.experience-cta
+                      "Step into the office →"
+              li.spotlight-slide [aria-label="2 of 3" aria-roledescription="slide" data-slug="tornado"]
+                a [href="/tornado/"]
+                  div.spotlight-media
+                    img [alt="A pale tornado reaching down from a dark, turning storm base to a cloud of dust and flying debris, just left of a small farm with a red barn, across golden fields with wildflowers in the foreground." decoding="async" height="630" loading="lazy" src="/tornado/assets/og-tornado.webp?v=1" width="1200"]
+                  div.spotlight-body
+                    p.spotlight-date
+                      "Released"
+                      time [datetime="2026-09-23"]
+                        "September 23, 2026"
+                    p.experience-eyebrow
+                      "A storm chaser's view of a tornado"
+                    h3
+                      "Tornado Alley"
+                    p.spotlight-text
+                      "Thirty seconds on the open prairie. A storm organizes on the horizon, its base begins to turn, and a tornado touches down far out across the fields."
+                    span.experience-cta
+                      "Watch the storm roll in →"
+              li.spotlight-slide [aria-label="3 of 3" aria-roledescription="slide" data-slug="xo"]
+                a [href="/xo/"]
+                  div.spotlight-media
+                    img [alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." decoding="async" height="630" loading="lazy" src="/xo/assets/og-xo.webp?v=1" width="1200"]
+                  div.spotlight-body
+                    p.spotlight-date
+                      "Released"
+                      time [datetime="2026-09-14"]
+                        "September 14, 2026"
+                    p.experience-eyebrow
+                      "A football game where you call the plays"
+                    h3
+                      "X's and O's"
+                    p.spotlight-text
+                      "You are on offense for all ten plays. Pick a play, snap the ball, then throw to an open receiver or keep it and run. 500 is a perfect game."
+                    span.experience-cta
+                      "Call the first play →"
           section.experience-group [aria-labelledby="worlds-and-games" data-category="worlds"]
             h2#worlds-and-games
               "Worlds and games"
             ul.experience-grid
               li.experience-card [data-slug="office"]
                 a [href="/office/"]
-                  img [alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." decoding="async" fetchpriority="high" height="630" loading="eager" src="/office/assets/og-office.webp?v=1" width="1200"]
+                  img [alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." decoding="async" height="630" loading="lazy" src="/office/assets/og-office.webp?v=1" width="1200"]
                   div.experience-card-body
                     p.experience-eyebrow
                       "A job search tracker in a 3D office"
@@ -2545,6 +2895,10 @@ html [lang="en"]
                       "Corner Office"
                     p
                       "A working job search tracker in a corner office forty floors above the bay. Your applications, interviews and follow-ups fill the furniture, every application you send earns a firework over the water, and every record stays private in your own browser. Lift the binoculars and you might spot the orcas."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-09-28"]
+                        "September 28, 2026"
                     span.experience-cta
                       "Step into the office →"
               li.experience-card [data-slug="tornado"]
@@ -2557,6 +2911,10 @@ html [lang="en"]
                       "Tornado Alley"
                     p
                       "Thirty seconds on the open prairie, beginning on a calm summer evening. A storm organizes on the horizon, its base begins to turn, and a tornado touches down far out across the fields. Nobody is in its path, though it does pick a few things up along the way."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-09-23"]
+                        "September 23, 2026"
                     span.experience-cta
                       "Watch the storm roll in →"
               li.experience-card [data-slug="xo"]
@@ -2569,6 +2927,10 @@ html [lang="en"]
                       "X's and O's"
                     p
                       "You are on offense for all ten plays. Pick a play from the playbook, snap the ball, then throw to an open receiver or keep it and run. The farther you carry it the more the play is worth, and 500 is a perfect game."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-09-14"]
+                        "September 14, 2026"
                     span.experience-cta
                       "Call the first play →"
               li.experience-card [data-slug="garden"]
@@ -2581,6 +2943,10 @@ html [lang="en"]
                       "Fractal Garden"
                     p
                       "Plant a garden of fractal trees, then watch it live through the years. Choose from seventeen species, each one grown from its own seed so no two are alike, then tend them through spring blossom, summer fruit, autumn color and winter snow. Every tree you plant is still standing when you come back."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-08-26"]
+                        "August 26, 2026"
                     span.experience-cta
                       "Plant your first tree →"
               li.experience-card [data-slug="highwater"]
@@ -2593,6 +2959,10 @@ html [lang="en"]
                       "High Water"
                     p
                       "Sixty seconds at the water's edge, beginning on an ordinary bright afternoon. The sky closes over, lightning starts to work along the cloud base, and the surf keeps rising. Please know before you start that the sea does not stay where it belongs."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-08-21"]
+                        "August 21, 2026"
                     span.experience-cta
                       "Stand at the shore →"
               li.experience-card [data-slug="earthdefense"]
@@ -2605,6 +2975,10 @@ html [lang="en"]
                       "Earth Defense"
                     p
                       "Fly a single ship in orbit above a massive Earth while twelve Martian raiders close on the installations below. You never need a fire button: line a raider up in the middle of your view and your guns take care of the rest."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-08-05"]
+                        "August 5, 2026"
                     span.experience-cta
                       "Take the helm →"
               li.experience-card [data-slug="mandelbrot"]
@@ -2617,6 +2991,10 @@ html [lang="en"]
                       "The Mandelbrot Set"
                     p
                       "The most famous shape in mathematics floats in a quiet starfield. Choose a destination on its burning edge, press play, and the auto zoom dives hundreds of billions of times deep, until the numbers themselves run out."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-28"]
+                        "July 28, 2026"
                     span.experience-cta
                       "Begin the dive →"
               li.experience-card [data-slug="steve"]
@@ -2629,6 +3007,10 @@ html [lang="en"]
                       "Steve's Home Office"
                     p
                       "Step inside the little office in Steve's house where every one of these experiences gets built. Peek at the code on the monitor, watch for birds on the fence, and please mind the sleeping cat."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-26"]
+                        "July 26, 2026"
                     span.experience-cta
                       "Step inside →"
           section.experience-group [aria-labelledby="small-business-tributes" data-category="business"]
@@ -2645,6 +3027,10 @@ html [lang="en"]
                       "John Walker, The Auto Man"
                     p
                       "Pull up to a dealership desk where John Walker is sitting on the buyer's side of it. Twenty five years of arguing deals down and more than 2,000 cars, in Baltimore or anywhere by Zoom. Tap anyone at the desk to hear their side of it."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-09-01"]
+                        "September 1, 2026"
                     span.experience-cta
                       "Take a seat →"
               li.experience-card [data-slug="interstate"]
@@ -2657,6 +3043,10 @@ html [lang="en"]
                       "The Interstate Tire Shop"
                     p
                       "Walk into a 3D tire shop built for Interstate Tire in historic Cockeysville, Maryland. See the car up on the lift, catch the waiting room TV, and stroll Railroad Ave to the 1892 freight depot."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-23"]
+                        "July 23, 2026"
                     span.experience-cta
                       "Step inside →"
               li.experience-card [data-slug="seedtoseed"]
@@ -2669,6 +3059,10 @@ html [lang="en"]
                       "The Seed to Seed Garden"
                     p
                       "Stroll a 3D backyard garden built for Seed to Seed, a home vegetable gardening company. Wander the raised beds, step inside the greenhouse, and meet the gardener."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-21"]
+                        "July 21, 2026"
                     span.experience-cta
                       "Step inside →"
               li.experience-card [data-slug="sunnyvalejenn"]
@@ -2681,6 +3075,10 @@ html [lang="en"]
                       "Sunnyvale Jenn Consulting"
                     p
                       "Look in on the sunny home office of Sunnyvale Jenn Consulting, built for a consultant who untangles the operations that busy founders never find time for. Jenn is at her desk, the week's plan is on the whiteboard, and the birds keep visiting the fence."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-18"]
+                        "July 18, 2026"
                     span.experience-cta
                       "Step inside →"
           section.experience-group [aria-labelledby="personal-tributes" data-category="personal"]
@@ -2697,6 +3095,10 @@ html [lang="en"]
                       "Jamar's Karaoke Night"
                     p
                       "It is karaoke night at the corner bar, and the birthday singer is Steve's best friend Jamar. Settle in, follow the rolling lyrics screen, and tap the jukebox to pick what he sings next."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-16"]
+                        "July 16, 2026"
                     span.experience-cta
                       "Pull up a stool →"
               li.experience-card [data-slug="gavin"]
@@ -2709,6 +3111,10 @@ html [lang="en"]
                       "Gavin's Bug Patrol"
                     p
                       "Every spring, Steve's son Gavin releases ladybugs and praying mantises into the patio plants. Settle in for a close-up of the jasmine, watch the garden change shifts at dusk, and see if you can spot all three mantises."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-13"]
+                        "July 13, 2026"
                     span.experience-cta
                       "Look closer →"
               li.experience-card [data-slug="roqui"]
@@ -2721,6 +3127,10 @@ html [lang="en"]
                       "Zumba with Roqui"
                     p
                       "Step into a joyful 3D Zumba class and say hola to Roqui. Catch the beat, fire up the speakers, and find the disco ball."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-11"]
+                        "July 11, 2026"
                     span.experience-cta
                       "Step inside →"
               li.experience-card [data-slug="family"]
@@ -2733,6 +3143,10 @@ html [lang="en"]
                       "Putt Putt with Mom and Dad"
                     p
                       "Play a 3D round of pirate mini golf in Ocean City, Maryland, built from a favorite summer memory. Board the ship and walk the plank hole."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-08"]
+                        "July 8, 2026"
                     span.experience-cta
                       "Step inside →"
               li.experience-card [data-slug="dad"]
@@ -2745,6 +3159,10 @@ html [lang="en"]
                       "A Ride on the NCR Trail"
                     p
                       "Take a quiet walk on a 3D stretch of Maryland's NCR Trail, built for a dad who rode it nearly every weekend. Find the river and listen for the little waterfall."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-07-06"]
+                        "July 6, 2026"
                     span.experience-cta
                       "Step inside →"
       section.section [aria-labelledby="for-heading"]
@@ -2882,12 +3300,17 @@ html [lang="en"]
         "@context": "https://schema.org",
         "@graph": [
           {
-            "@type": "WebSite",
-            "@id": "https://www.scenexp.com/interstate/#website",
+            "@type": "WebPage",
+            "@id": "https://www.scenexp.com/interstate/#webpage",
             "url": "https://www.scenexp.com/interstate/",
             "name": "Interstate Tire",
             "description": "A walkable 3D tour of the Interstate Tire shop.",
+            "datePublished": "2026-07-23",
             "inLanguage": "en-US",
+            "isPartOf": {
+              "@type": "WebSite",
+              "@id": "https://www.scenexp.com/#website"
+            },
             "publisher": {
               "@id": "https://www.scenexp.com/interstate/#shop"
             }
@@ -2908,10 +3331,55 @@ html [lang="en"]
           }
         ]
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Interstate Tire",
+            "item": "https://www.scenexp.com/interstate/"
+          }
+        ]
+      }
     title
-      "Interstate Tire"
+      "Interstate Tire | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/collision-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scene-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/controls-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="js/gallery.min.js" rel="modulepreload"]
+    link [href="../shared/js/checklist-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/autopilot-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/listings.min.js" rel="modulepreload"]
+    link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/textures-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/furniture-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/structures-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/lighting-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/street-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scenery-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/doors-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/npcs-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/pedestrians-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/gallery-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.png" rel="icon" sizes="64x64" type="image/png"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     noscript
@@ -3181,7 +3649,7 @@ html [lang="en"]
           span.settings-value#light-value
             "100%"
     canvas#game-canvas [aria-label="A walkable 3D tour of the Interstate Tire shop" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -3216,18 +3684,53 @@ html [data-ui-theme="neon" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/jamar/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/jamar/#webpage",
         "url": "https://www.scenexp.com/jamar/",
         "name": "Jamar's Karaoke Night",
         "description": "A passive 3D visit to karaoke night at the corner bar, built as a birthday present for Jamar: he has the microphone, the lyrics screen is rolling, and his best friends hold down the booth.",
-        "inLanguage": "en-US"
+        "datePublished": "2026-07-16",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Jamar's Karaoke Night",
+            "item": "https://www.scenexp.com/jamar/"
+          }
+        ]
       }
     title
-      "Jamar's Karaoke Night"
+      "Jamar's Karaoke Night | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/pan-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scene-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/proplist-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css" rel="stylesheet"]
@@ -3314,7 +3817,7 @@ html [data-ui-theme="neon" lang="en"]
       p.prop-panel-note
         "Choose anything for a little of its story. The arrow keys move through the list, Escape closes whatever opens, and Tab or Escape puts this list away."
       ul#prop-list.prop-list
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -3349,18 +3852,51 @@ html [data-ui-theme="ember" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/mandelbrot/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/mandelbrot/#webpage",
         "url": "https://www.scenexp.com/mandelbrot/",
         "name": "The Mandelbrot Set",
         "description": "A passive 3D float through deep space beside the Mandelbrot set, its black interior outlined by a neon orange glow, honoring Benoit Mandelbrot.",
-        "inLanguage": "en-US"
+        "datePublished": "2026-07-28",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "The Mandelbrot Set",
+            "item": "https://www.scenexp.com/mandelbrot/"
+          }
+        ]
       }
     title
-      "The Mandelbrot Set"
+      "The Mandelbrot Set | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=2" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scene-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/proplist-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=2" rel="stylesheet"]
@@ -3432,7 +3968,7 @@ html [data-ui-theme="ember" lang="en"]
         circle [cx="12" cy="12" fill="none" r="9"]
         path [d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"]
         circle [cx="12.1" cy="17.4" fill="currentColor" r="1.05" stroke="none"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -3476,7 +4012,12 @@ html [lang="en"]
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "Any",
         "browserRequirements": "Requires JavaScript and WebGL",
+        "datePublished": "2026-09-28",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebPage",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "isAccessibleForFree": true,
         "offers": {
           "@type": "Offer",
@@ -3490,17 +4031,85 @@ html [lang="en"]
         "publisher": {
           "@type": "Organization",
           "name": "Continuum Commerce LLC"
-        },
-        "isPartOf": {
-          "@type": "WebSite",
-          "@id": "https://www.scenexp.com/#website"
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Corner Office",
+            "item": "https://www.scenexp.com/office/"
+          }
+        ]
+      }
     title
-      "Corner Office"
+      "Corner Office | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=4" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="js/log.min.js" rel="modulepreload"]
+    link [href="js/derive.min.js" rel="modulepreload"]
+    link [href="js/query.min.js" rel="modulepreload"]
+    link [href="js/copy.min.js" rel="modulepreload"]
+    link [href="js/labels.min.js" rel="modulepreload"]
+    link [href="js/dates.min.js" rel="modulepreload"]
+    link [href="js/samples.min.js" rel="modulepreload"]
+    link [href="js/csv.min.js" rel="modulepreload"]
+    link [href="js/stations.min.js" rel="modulepreload"]
+    link [href="js/room.min.js" rel="modulepreload"]
+    link [href="js/interior.min.js" rel="modulepreload"]
+    link [href="js/world.min.js" rel="modulepreload"]
+    link [href="js/paint.min.js" rel="modulepreload"]
+    link [href="js/city.min.js" rel="modulepreload"]
+    link [href="js/sky.min.js" rel="modulepreload"]
+    link [href="js/weather.min.js" rel="modulepreload"]
+    link [href="js/cabinet.min.js" rel="modulepreload"]
+    link [href="js/filing.min.js" rel="modulepreload"]
+    link [href="js/board.min.js" rel="modulepreload"]
+    link [href="js/rolodex.min.js" rel="modulepreload"]
+    link [href="js/pinboard.min.js" rel="modulepreload"]
+    link [href="js/whiteboard.min.js" rel="modulepreload"]
+    link [href="js/prep.min.js" rel="modulepreload"]
+    link [href="js/calendar.min.js" rel="modulepreload"]
+    link [href="js/ics.min.js" rel="modulepreload"]
+    link [href="js/daylight.min.js" rel="modulepreload"]
+    link [href="js/notes.min.js" rel="modulepreload"]
+    link [href="js/files.min.js" rel="modulepreload"]
+    link [href="js/cards.min.js" rel="modulepreload"]
+    link [href="js/forms.min.js" rel="modulepreload"]
+    link [href="js/grid.min.js" rel="modulepreload"]
+    link [href="js/panels.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/resolution-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/pan-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/finishes.min.js" rel="modulepreload"]
+    link [href="js/marks.min.js" rel="modulepreload"]
+    link [href="js/celebrate.min.js" rel="modulepreload"]
+    link [href="js/fireworks.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/ids.min.js" rel="modulepreload"]
+    link [href="js/bay.min.js" rel="modulepreload"]
+    link [href="js/life.min.js" rel="modulepreload"]
+    link [href="js/fleet.min.js" rel="modulepreload"]
+    link [href="js/washers.min.js" rel="modulepreload"]
+    link [href="js/gulls.min.js" rel="modulepreload"]
+    link [href="js/orcas.min.js" rel="modulepreload"]
+    link [href="js/wheel.min.js" rel="modulepreload"]
+    link [href="js/posting.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=4" rel="stylesheet"]
@@ -4077,7 +4686,7 @@ html [lang="en"]
         p#confirm-detail.card-detail
         div#confirm-actions.card-actions
     section#print-sheet.print-sheet [aria-hidden="true"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -4125,9 +4734,9 @@ html [lang="en"]
       }
     title
       "Privacy | SceneXP"
-    link [as="style" href="/css/site.min.css?v=4" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=4" rel="stylesheet"]
+    link [href="/css/site.min.css?v=5" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -4325,17 +4934,64 @@ html [data-ui-theme="neon" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/roqui/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/roqui/#webpage",
         "url": "https://www.scenexp.com/roqui/",
         "name": "Zumba with Roqui",
         "description": "A walkable 3D Zumba class, built with love for a wonderful instructor at the Matt Griffin YMCA.",
-        "inLanguage": "en-US"
+        "datePublished": "2026-07-11",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Zumba with Roqui",
+            "item": "https://www.scenexp.com/roqui/"
+          }
+        ]
       }
     title
-      "Zumba with Roqui"
+      "Zumba with Roqui | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/collision-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scene-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/controls-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="js/gallery.min.js" rel="modulepreload"]
+    link [href="../shared/js/checklist-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/autopilot-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/listings.min.js" rel="modulepreload"]
+    link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scenery-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/npcs-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/structures-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/textures-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/lighting-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/furniture-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/gallery-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     noscript
@@ -4552,7 +5208,7 @@ html [data-ui-theme="neon" lang="en"]
           span.settings-value#settings-light-value
             "100%"
     canvas#game-canvas [aria-label="A walkable 3D Zumba class led by Roqui" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -4587,12 +5243,17 @@ html [data-ui-theme="garden" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/seedtoseed/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/seedtoseed/#webpage",
         "url": "https://www.scenexp.com/seedtoseed/",
         "name": "The Seed to Seed Garden",
         "description": "A walkable 3D backyard vegetable garden built to honor Seed to Seed, a home vegetable and edible gardening company.",
+        "datePublished": "2026-07-21",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "about": {
           "@type": "LocalBusiness",
           "name": "Seed to Seed",
@@ -4601,10 +5262,48 @@ html [data-ui-theme="garden" lang="en"]
           "areaServed": "Maryland, Washington DC, Southern Pennsylvania, Northern Virginia"
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "The Seed to Seed Garden",
+            "item": "https://www.scenexp.com/seedtoseed/"
+          }
+        ]
+      }
     title
-      "The Seed to Seed Garden"
+      "The Seed to Seed Garden | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/collision-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scene-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/controls-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="js/gallery.min.js" rel="modulepreload"]
+    link [href="../shared/js/checklist-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/autopilot-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/listings.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scenery-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/npcs-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/gallery-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     noscript
@@ -4832,7 +5531,140 @@ html [data-ui-theme="garden" lang="en"]
           span.settings-value#look-speed-value
             "1.0"
     canvas#game-canvas [aria-label="A walkable 3D backyard vegetable garden" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
+    script [src="js/main.min.js" type="module"]"
+`;
+
+exports[`www/starfall/index.html 1`] = `
+"<!doctype html>
+html [data-ui-theme="ember" lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="noindex, nofollow" name="robots"]
+    meta [content="A spiral galaxy of hundreds of thousands of stars, drawn live in your browser with WebGPU. Drag to turn it and see the spiral from any angle, face on, edge on, or from below." name="description"]
+    meta [content="#02030a" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/starfall/" rel="canonical"]
+    meta [content="Starfall" property="og:title"]
+    meta [content="Hundreds of thousands of stars in a turning spiral galaxy, drawn live with WebGPU. Turn it and see it from every side." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/starfall/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/starfall/assets/og-starfall.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="A spiral galaxy seen from above at an angle: a warm golden core and two blue-white arms of countless glowing stars against black space." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Starfall" name="twitter:title"]
+    meta [content="Hundreds of thousands of stars in a turning spiral galaxy, drawn live with WebGPU. Turn it and see it from every side." name="twitter:description"]
+    meta [content="https://www.scenexp.com/starfall/assets/og-starfall.jpg?v=1" name="twitter:image"]
+    meta [content="A spiral galaxy seen from above at an angle: a warm golden core and two blue-white arms of countless glowing stars against black space." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/starfall/#webpage",
+        "url": "https://www.scenexp.com/starfall/",
+        "name": "Starfall",
+        "description": "A spiral galaxy of hundreds of thousands of stars, drawn live in the browser with WebGPU, which visitors can turn with a mouse, a finger, or the arrow keys to see it from any angle.",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Starfall",
+            "item": "https://www.scenexp.com/starfall/"
+          }
+        ]
+      }
+    title
+      "Starfall | SceneXP"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=1" rel="preload"]
+    link [href="../lib/three/r186/three.webgpu.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="js/galaxy.min.js" rel="modulepreload"]
+    link [href="js/view.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="favicon.svg" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="css/experience.min.css?v=1" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body
+    h1.sr-only
+      "Starfall"
+    noscript
+      div.noscript-fallback
+        h1
+          "Starfall"
+        p
+          "This is a spiral galaxy of hundreds of thousands of stars, and it needs JavaScript to run. Every star is placed by your graphics card each frame using WebGPU, the newest way for a browser to draw in 3D, so the galaxy turns slowly with a warm golden core and two blue-white arms. Drag to turn it, or use the arrow keys, and see the spiral face on, edge on, or from below."
+        p
+          "SceneXP is a home for 3D experiences that run right in your browser."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/contact.html"]
+                "Contact the developer"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    div#loading-screen
+      div.loader-content
+        div.loader-title
+          "STARFALL"
+        div.loader-bar [aria-hidden="true"]
+          div.loader-progress#load-progress
+        div.loader-status#load-status [aria-live="polite" role="status"]
+          "Loading…"
+    div#blocker [tabindex="-1"]
+      div#instructions
+        p.title
+          "WELCOME"
+        p.subtitle
+          "A spiral galaxy is turning in the dark, and you are welcome to see it from every side"
+        p.click-prompt
+          "Click to step in"
+        div.controls-hint
+          span
+            "TURN"
+          "Drag to turn the galaxy and see the spiral face on, edge on, or from below. Give it a flick and it keeps turning for a moment. The arrow keys turn it too."
+          span
+            "HELP"
+          "The question mark in the corner, or Escape, brings you back here."
+        p#renderer-note.renderer-note
+        a#explore-link.welcome-explore [href="/"]
+          "More 3D worlds to explore at SceneXP.com"
+    canvas#game-canvas [aria-label="A spiral galaxy turning slowly in black space, with a warm golden core and two blue-white arms of countless glowing stars" role="img"]
+    button#help-btn.ui-float.menu-btn.help-btn [aria-label="Help" title="Help (Esc)" type="button"]
+      svg [aria-hidden="true" viewbox="0 0 24 24"]
+        circle [cx="12" cy="12" fill="none" r="9"]
+        path [d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"]
+        circle [cx="12.1" cy="17.4" fill="currentColor" r="1.05" stroke="none"]
+    script [src="../lib/three/r186/three.webgpu.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -4867,12 +5699,17 @@ html [lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/steve/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/steve/#webpage",
         "url": "https://www.scenexp.com/steve/",
         "name": "Steve's Home Office",
         "description": "A 3D model of the home office in Steve's house where SceneXP gets built, to look all the way around.",
+        "datePublished": "2026-07-26",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "author": {
           "@type": "Person",
           "name": "Steve Noll",
@@ -4882,11 +5719,53 @@ html [lang="en"]
           ]
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Steve's Home Office",
+            "item": "https://www.scenexp.com/steve/"
+          }
+        ]
+      }
     title
-      "Steve's Home Office"
+      "Steve's Home Office | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=1" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="js/view.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/pan-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scene-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="js/gallery.min.js" rel="modulepreload"]
+    link [href="../shared/js/checklist-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/analytics-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/proplist-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/listings.min.js" rel="modulepreload"]
+    link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scenery-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/structures-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/textures-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/lighting-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/npcs-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/gallery-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=1" rel="stylesheet"]
@@ -5143,7 +6022,7 @@ html [lang="en"]
       p.prop-panel-note
         "Choose anything for a little of its story. The arrow keys move through the list, Escape closes whatever opens, and Tab or Escape puts this list away."
       ul#prop-list.prop-list
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -5178,22 +6057,61 @@ html [lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/sunnyvalejenn/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/sunnyvalejenn/#webpage",
         "url": "https://www.scenexp.com/sunnyvalejenn/",
         "name": "Sunnyvale Jenn Consulting",
         "description": "A passive 3D visit to the sunny home office of Sunnyvale Jenn Consulting, built in tribute to Jenn, a talented entrepreneur and small business operations consultant.",
+        "datePublished": "2026-07-18",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "about": {
           "@type": "Organization",
           "name": "Sunnyvale Jenn Consulting",
           "url": "https://sunnyvalejenn.com/"
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Sunnyvale Jenn Consulting",
+            "item": "https://www.scenexp.com/sunnyvalejenn/"
+          }
+        ]
+      }
     title
-      "Sunnyvale Jenn Consulting"
+      "Sunnyvale Jenn Consulting | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/pan-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scene-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/proplist-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/scenery-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/structures-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/textures-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/lighting-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     noscript
@@ -5287,7 +6205,7 @@ html [lang="en"]
       p.prop-panel-note
         "Choose anything for a little of its story. The arrow keys move through the list, Escape closes whatever opens, and Tab or Escape puts this list away."
       ul#prop-list.prop-list
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -5335,9 +6253,9 @@ html [lang="en"]
       }
     title
       "Terms | SceneXP"
-    link [as="style" href="/css/site.min.css?v=4" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=4" rel="stylesheet"]
+    link [href="/css/site.min.css?v=5" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -5560,19 +6478,70 @@ html [data-ui-theme="surf" lang="en"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "@id": "https://www.scenexp.com/tornado/#website",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/tornado/#webpage",
         "url": "https://www.scenexp.com/tornado/",
         "name": "Tornado Alley",
         "description": "A passive 3D scene on the open prairie. Thirty seconds that begin on a calm summer evening, follow a tornado from its first turning to its last, and end as the storm moves on.",
-        "inLanguage": "en-US"
+        "datePublished": "2026-09-23",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Tornado Alley",
+            "item": "https://www.scenexp.com/tornado/"
+          }
+        ]
       }
     title
-      "Tornado Alley"
+      "Tornado Alley | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="../shared/css/player-1.0.0.min.css" rel="preload"]
     link [as="style" href="css/experience.min.css" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/player-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/resolution-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/funnel.min.js" rel="modulepreload"]
+    link [href="js/shells.min.js" rel="modulepreload"]
+    link [href="js/world.min.js" rel="modulepreload"]
+    link [href="../shared/js/lightning-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/fractaltree-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/wind.min.js" rel="modulepreload"]
+    link [href="js/farm.min.js" rel="modulepreload"]
+    link [href="js/pond.min.js" rel="modulepreload"]
+    link [href="js/flora.min.js" rel="modulepreload"]
+    link [href="js/cow.min.js" rel="modulepreload"]
+    link [href="js/rainbow.min.js" rel="modulepreload"]
+    link [href="js/payloads.min.js" rel="modulepreload"]
+    link [href="js/tumbleweeds.min.js" rel="modulepreload"]
+    link [href="js/witch.min.js" rel="modulepreload"]
+    link [href="js/narration.min.js" rel="modulepreload"]
+    link [href="js/perf.min.js" rel="modulepreload"]
+    link [href="../shared/js/treespecies-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/wildflowers-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/narration-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="../shared/css/player-1.0.0.min.css" rel="stylesheet"]
@@ -5617,6 +6586,7 @@ html [data-ui-theme="surf" lang="en"]
             "Resume"
           button#player-restart.player-btn [type="button"]
             "Restart"
+        p#load-status.lede [aria-live="polite" hidden role="status"]
         p.note
           "You can watch it again as many times as you wish."
         a#explore-link.welcome-explore [href="/"]
@@ -5643,7 +6613,7 @@ html [data-ui-theme="surf" lang="en"]
       p#share-status.sr-only [aria-live="polite" role="status"]
       a.welcome-explore.promo-explore [href="/"]
         "More 3D worlds to explore at SceneXP.com"
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -5691,7 +6661,12 @@ html [data-ui-theme="neon" lang="en"]
         "gamePlatform": "Web browser",
         "applicationCategory": "Game",
         "operatingSystem": "Any",
+        "datePublished": "2026-09-14",
         "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebPage",
+          "@id": "https://www.scenexp.com/#website"
+        },
         "isAccessibleForFree": true,
         "playMode": "SinglePlayer",
         "author": {
@@ -5701,17 +6676,73 @@ html [data-ui-theme="neon" lang="en"]
         "publisher": {
           "@type": "Organization",
           "name": "Continuum Commerce LLC"
-        },
-        "isPartOf": {
-          "@type": "WebSite",
-          "@id": "https://www.scenexp.com/#website"
         }
       }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "X's and O's",
+            "item": "https://www.scenexp.com/xo/"
+          }
+        ]
+      }
     title
-      "X's and O's"
+      "X's and O's | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=18" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="js/field.min.js" rel="modulepreload"]
+    link [href="js/roster.min.js" rel="modulepreload"]
+    link [href="js/colors.min.js" rel="modulepreload"]
+    link [href="js/ball.min.js" rel="modulepreload"]
+    link [href="js/markers.min.js" rel="modulepreload"]
+    link [href="js/view.min.js" rel="modulepreload"]
+    link [href="js/takedown.min.js" rel="modulepreload"]
+    link [href="js/celebration.min.js" rel="modulepreload"]
+    link [href="js/fireworks.min.js" rel="modulepreload"]
+    link [href="js/play.min.js" rel="modulepreload"]
+    link [href="js/jump.min.js" rel="modulepreload"]
+    link [href="js/progress.min.js" rel="modulepreload"]
+    link [href="js/scoring.min.js" rel="modulepreload"]
+    link [href="js/hud.min.js" rel="modulepreload"]
+    link [href="js/opening.min.js" rel="modulepreload"]
+    link [href="js/colors-ui.min.js" rel="modulepreload"]
+    link [href="js/colors-preview.min.js" rel="modulepreload"]
+    link [href="js/opening-props.min.js" rel="modulepreload"]
+    link [href="js/milestones.min.js" rel="modulepreload"]
+    link [href="js/spectacle.min.js" rel="modulepreload"]
+    link [href="js/stunt.min.js" rel="modulepreload"]
+    link [href="js/summary.min.js" rel="modulepreload"]
+    link [href="js/replay.min.js" rel="modulepreload"]
+    link [href="js/camera.min.js" rel="modulepreload"]
+    link [href="js/audio.min.js" rel="modulepreload"]
+    link [href="js/playbook-ui.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/telemetry.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/arm.min.js" rel="modulepreload"]
+    link [href="js/formations.min.js" rel="modulepreload"]
+    link [href="js/routes.min.js" rel="modulepreload"]
+    link [href="js/motion.min.js" rel="modulepreload"]
+    link [href="js/playstate.min.js" rel="modulepreload"]
+    link [href="js/fans.min.js" rel="modulepreload"]
+    link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/playbook.min.js" rel="modulepreload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=18" rel="stylesheet"]
@@ -5944,6 +6975,6 @@ html [data-ui-theme="neon" lang="en"]
         div#summary-actions.card-actions
         p#summary-status.sr-only [aria-live="polite" role="status"]
         div#summary-promo.summary-promo
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;

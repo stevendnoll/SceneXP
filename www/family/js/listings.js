@@ -13,7 +13,7 @@
 // colliders once at init, so anything built later must either rebuild that
 // snapshot or keep its colliders static.
 //
-// THREE is provided globally by ../lib/three.min.js (same as the rest of the app).
+// THREE is provided globally by ../lib/three/r186/three.min.js (same as the rest of the app).
 
 let container = null;
 

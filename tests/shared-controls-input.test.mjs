@@ -2,20 +2,19 @@
 /**
  * Unit tests for the input pipelines of www/shared/js/controls-1.0.0.js: the
  * dual touch joysticks, the tap zone, pointer-lock mouse look, Quest wheel
- * input, gamepad polling, the immersive-VR path, inline-XR head tracking, and
- * the camera follow that ties them all to the renderer.
+ * input, gamepad polling, the guard that no WebXR session is ever requested,
+ * and the camera follow that ties them all to the renderer.
  *
  * Stubbing approach (extends tests/shared-controls.test.mjs): THREE stays a
- * chainable proxy, but Vector3/Euler/Quaternion are real component-holding
- * stubs so the movement math, the YXZ euler extraction, and the quaternion
- * deltas all run for real. PerspectiveCamera and WebGLRenderer are also
+ * chainable proxy, but Vector3/Euler are real component-holding stubs so the
+ * movement math runs for real. PerspectiveCamera and WebGLRenderer are also
  * overridden so scene-1.0.0.min.js's initScene() hands the controls module a
- * camera we can read and an xr object we can flip between presenting and not.
+ * camera we can read.
  * document/window record their listeners so tests fire synthetic keydown,
  * mousemove, wheel, touch, and gamepad events by hand; requestAnimationFrame
  * queues into an array the tests flush explicitly; performance.now is spied
- * per test, so every timing check (tap duration, wheel staleness, head
- * tracking staleness) is deterministic.
+ * per test, so every timing check (tap duration, wheel staleness) is
+ * deterministic.
  */
 import { jest } from '@jest/globals';
 
@@ -59,12 +58,6 @@ class StubVector3 {
   sub(v) { this.x -= v.x; this.y -= v.y; this.z -= v.z; return this; }
   multiplyScalar(s) { this.x *= s; this.y *= s; this.z *= s; return this; }
   addScaledVector(v, s) { this.x += v.x * s; this.y += v.y * s; this.z += v.z * s; return this; }
-  crossVectors(a, b) {
-    this.x = a.y * b.z - a.z * b.y;
-    this.y = a.z * b.x - a.x * b.z;
-    this.z = a.x * b.y - a.y * b.x;
-    return this;
-  }
   normalize() {
     const l = Math.hypot(this.x, this.y, this.z);
     if (l > 0) { this.x /= l; this.y /= l; this.z /= l; }
@@ -87,49 +80,11 @@ class StubEuler {
   set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
   copy(e) { this.x = e.x; this.y = e.y; this.z = e.z; return this; }
   clone() { return new StubEuler(this.x, this.y, this.z, this.order); }
-  // Real YXZ extraction (the only order the controls module asks for), so the
-  // inline-XR head tracking's quaternion deltas produce true yaw/pitch.
-  setFromQuaternion(q) {
-    const { x, y, z, w } = q;
-    const m11 = 1 - 2 * (y * y + z * z);
-    const m13 = 2 * (x * z + w * y);
-    const m21 = 2 * (x * y + w * z);
-    const m22 = 1 - 2 * (x * x + z * z);
-    const m23 = 2 * (y * z - w * x);
-    const m31 = 2 * (x * z - w * y);
-    const m33 = 1 - 2 * (x * x + y * y);
-    this.x = Math.asin(-Math.max(-1, Math.min(1, m23)));
-    if (Math.abs(m23) < 0.9999999) {
-      this.y = Math.atan2(m13, m33);
-      this.z = Math.atan2(m21, m22);
-    } else {
-      this.y = Math.atan2(-m31, m11);
-      this.z = 0;
-    }
-    return this;
-  }
-}
-
-class StubQuaternion {
-  constructor(x = 0, y = 0, z = 0, w = 1) { this.x = x; this.y = y; this.z = z; this.w = w; }
-  set(x, y, z, w) { this.x = x; this.y = y; this.z = z; this.w = w; return this; }
-  copy(q) { this.x = q.x; this.y = q.y; this.z = q.z; this.w = q.w; return this; }
-  invert() { this.x = -this.x; this.y = -this.y; this.z = -this.z; return this; } // unit quats only
-  multiply(q) {
-    const { x: ax, y: ay, z: az, w: aw } = this;
-    const { x: bx, y: by, z: bz, w: bw } = q;
-    this.x = aw * bx + ax * bw + ay * bz - az * by;
-    this.y = aw * by - ax * bz + ay * bw + az * bx;
-    this.z = aw * bz + ax * by - ay * bx + az * bw;
-    this.w = aw * bw - ax * bx - ay * by - az * bz;
-    return this;
-  }
 }
 
 // ---- Controllable renderer/camera the scene module will construct ----------
 
-// state.xr is handed to the one renderer initScene creates; flipping
-// state.xr.isPresenting / state.session is how tests enter and leave VR.
+// state.cameras records every camera initScene creates.
 let state;
 
 class StubPerspectiveCamera {
@@ -137,7 +92,6 @@ class StubPerspectiveCamera {
     const cam = withChainableFallback({
       position: new StubVector3(),
       rotation: new StubEuler(0, 0, 0, 'YXZ'),
-      getWorldDirection(v) { v.set(0, 0, -1); return v; }, // VR gaze faces -Z
     });
     state.cameras.push(cam);
     return cam;
@@ -157,7 +111,7 @@ class StubWebGLRenderer {
   constructor() {
     return withChainableFallback({
       shadowMap: {},
-      xr: state.xr,
+      xr: { enabled: false },
       setSize() {},
       setPixelRatio() {},
     });
@@ -167,14 +121,11 @@ class StubWebGLRenderer {
 function installThreeStubs() {
   state = {
     cameras: [],
-    session: null,
-    xr: { enabled: false, isPresenting: false, getSession: () => state.session },
   };
   globalThis.THREE = new Proxy({}, {
     get(_t, prop) {
       if (prop === 'Vector3') return StubVector3;
       if (prop === 'Euler') return StubEuler;
-      if (prop === 'Quaternion') return StubQuaternion;
       if (prop === 'PerspectiveCamera') return StubPerspectiveCamera;
       if (prop === 'Group') return StubGroup;
       if (prop === 'WebGLRenderer') return StubWebGLRenderer;
@@ -744,252 +695,18 @@ describe('gamepad polling', () => {
   });
 });
 
-// ---- Immersive VR -----------------------------------------------------------------
+// ---- No WebXR --------------------------------------------------------------------
 
-function makeVRSession(sources) {
-  return { inputSources: sources };
-}
-
-const leftSource = (axes) => ({ handedness: 'left', gamepad: { axes, buttons: [] } });
-const rightSource = (axes, triggerPressed = false) =>
-  ({ handedness: 'right', gamepad: { axes, buttons: [{ pressed: triggerPressed }] } });
-
-describe('immersive VR', () => {
-  test('a presenting headset moves along the gaze with the rig at floor height', async () => {
-    const { m, scene } = await loadWithScene();
-    m.initControls({ spawn: { x: 0, z: 0 } });
-    state.xr.isPresenting = true;
-    state.session = makeVRSession([
-      { handedness: 'left' }, // no gamepad: skipped
-      leftSource([0, 0, 0.5, -1]),
-      rightSource([0, 0, 0, 0], true),
-    ]);
-    m.updateControls(0.1, false);
-    expect(m.isVRActive()).toBe(true);
-    expect(m.isVRTriggerJustPressed()).toBe(true);
-    // moveX 0.5, moveZ 1 along gaze (0,0,-1): direction (0.5, 0, -1) normalized
-    const norm = Math.hypot(0.5, 1);
-    const p = m.getPlayerPosition();
-    expect(p.x).toBeCloseTo((0.5 / norm) * SPEED * 0.1, 6);
-    expect(p.z).toBeCloseTo(-(1 / norm) * SPEED * 0.1, 6);
-    expect(p.y).toBe(0); // rig rides at floor level in VR
-    const rig = scene.getCameraRig();
-    expect(rig.position.x).toBeCloseTo(p.x, 6);
-    expect(rig.position.y).toBe(0);
-    expect(rig.position.z).toBeCloseTo(p.z, 6);
-    m.updateControls(0.1, false); // trigger still held: edge only fires once
-    expect(m.isVRTriggerJustPressed()).toBe(false);
-  });
-
-  test('snap turns rotate the rig 30 degrees with a cooldown', async () => {
-    const { m, scene } = await loadWithScene();
-    m.initControls({ spawn: { x: 0, z: 0 } });
-    state.xr.isPresenting = true;
-    state.session = makeVRSession([rightSource([0, 0, 0.9, 0])]);
-    const rig = scene.getCameraRig();
-    m.updateControls(0.1, false);
-    expect(rig.rotation.y).toBeCloseTo(-Math.PI / 6, 6);
-    m.updateControls(0.1, false); // cooldown still running
-    m.updateControls(0.1, false);
-    expect(rig.rotation.y).toBeCloseTo(-Math.PI / 6, 6);
-    m.updateControls(0.1, false); // cooldown expired: second snap
-    expect(rig.rotation.y).toBeCloseTo(-Math.PI / 3, 6);
-  });
-
-  test('pushing the right stick left snap-turns the other way', async () => {
-    const { m, scene } = await loadWithScene();
-    m.initControls({ spawn: { x: 0, z: 0 } });
-    state.xr.isPresenting = true;
-    state.session = makeVRSession([rightSource([0, 0, -0.9, 0])]);
-    m.updateControls(0.1, false);
-    expect(scene.getCameraRig().rotation.y).toBeCloseTo(Math.PI / 6, 6);
-  });
-
-  test('a two-axis controller falls back to axes[0]/axes[1]', async () => {
+describe('no WebXR', () => {
+  test('a browser that offers XR is never asked for a session', async () => {
     const { m } = await loadWithScene();
+    const xr = { isSessionSupported: jest.fn(async () => true), requestSession: jest.fn() };
+    globalThis.navigator.xr = xr;
     m.initControls({ spawn: { x: 0, z: 0 } });
-    state.xr.isPresenting = true;
-    state.session = makeVRSession([leftSource([0.5, -1])]);
-    m.updateControls(0.1, false);
-    const norm = Math.hypot(0.5, 1);
-    expect(m.getPlayerPosition().x).toBeCloseTo((0.5 / norm) * SPEED * 0.1, 6);
-  });
-
-  test('losing the session mid-frame keeps the last thumbstick input', async () => {
-    const { m } = await loadWithScene();
-    m.initControls({ spawn: { x: 0, z: 0 } });
-    state.xr.isPresenting = true;
-    state.session = makeVRSession([leftSource([0, 0, 0, -1])]);
-    m.updateControls(0.1, false);
-    const p1 = m.getPlayerPosition();
-    state.session = null;
-    m.updateControls(0.1, false);
-    expect(m.isVRActive()).toBe(true);
-    expect(m.getPlayerPosition().z).toBeCloseTo(p1.z * 2, 6);
-  });
-
-  test('leaving VR hands control back to the keyboard at eye height', async () => {
-    const { m } = await loadWithScene();
-    m.initControls({ spawn: { x: 0, z: 0 } });
-    state.xr.isPresenting = true;
-    state.session = makeVRSession([leftSource([0, 0, 0, -1])]);
-    m.updateControls(0.1, false);
-    expect(m.getPlayerPosition().y).toBe(0);
-    state.xr.isPresenting = false;
-    m.updateControls(0.1, false);
-    expect(m.isVRActive()).toBe(false);
-    press('KeyW');
-    m.updateControls(0.1, false);
-    expect(m.getPlayerPosition().y).toBeCloseTo(1.7, 6);
-    release('KeyW');
-  });
-});
-
-// ---- Inline XR head tracking --------------------------------------------------------
-
-const qYaw = (t) => ({ x: 0, y: Math.sin(t / 2), z: 0, w: Math.cos(t / 2) });
-const qPitch = (t) => ({ x: Math.sin(t / 2), y: 0, z: 0, w: Math.cos(t / 2) });
-const qMul = (a, b) => ({
-  x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-  y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-  z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
-  w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
-});
-
-function makeInlineSession() {
-  return {
-    rafCbs: [],
-    listeners: {},
-    requestAnimationFrame(cb) { this.rafCbs.push(cb); },
-    requestReferenceSpace: async () => ({ kind: 'viewer' }),
-    addEventListener(type, fn) { this.listeners[type] = fn; },
-  };
-}
-
-// Drives the module's inline-XR frame loop one frame: pops the pending
-// requestAnimationFrame callback and feeds it a pose with the given quaternion
-// (or a null pose when quat is null).
-function stepXRFrame(session, quat) {
-  const cb = session.rafCbs.shift();
-  cb(0, { getViewerPose: () => (quat ? { transform: { orientation: quat } } : null) });
-}
-
-const flushAsync = () => new Promise((resolve) => setImmediate(resolve));
-
-async function loadWithInlineXR() {
-  const loaded = await loadWithScene();
-  const session = makeInlineSession();
-  globalThis.navigator.xr = {
-    isSessionSupported: async (mode) => mode === 'inline',
-    requestSession: async () => session,
-  };
-  loaded.m.initControls({ spawn: { x: 0, z: 0 } });
-  await flushAsync(); // let tryInlineXR's promise chain settle
-  return { ...loaded, session };
-}
-
-describe('inline XR head tracking', () => {
-  test('headset pose deltas rotate the camera in yaw and pitch', async () => {
-    const { m, session } = await loadWithInlineXR();
-    const now = mockNow(100);
-    expect(session.rafCbs).toHaveLength(1);
-    stepXRFrame(session, qYaw(0)); // first frame only seeds the previous pose
+    await new Promise((resolve) => setImmediate(resolve)); // let any promise chain settle
     m.updateControls(0.016, false);
-    expect(m.isHeadTrackingActive()).toBe(false);
-    stepXRFrame(session, qYaw(0.2)); // turn the head 0.2 rad left-to-right
-    m.updateControls(0.016, false);
-    expect(m.isHeadTrackingActive()).toBe(true);
-    expect(m.getPlayerRotation().y).toBeCloseTo(-0.2, 5);
-    stepXRFrame(session, qMul(qYaw(0.2), qPitch(0.1))); // now nod 0.1 rad
-    m.updateControls(0.016, false);
-    expect(m.getPlayerRotation().x).toBeCloseTo(-0.1, 5);
-    expect(m.getPlayerRotation().y).toBeCloseTo(-0.2, 5);
-    now.mockRestore();
-  });
-
-  test('tracking-loss jumps larger than 0.5 rad are filtered out', async () => {
-    const { m, session } = await loadWithInlineXR();
-    mockNow(100);
-    stepXRFrame(session, qYaw(0));
-    stepXRFrame(session, qYaw(1.4)); // impossible single-frame head turn
-    m.updateControls(0.016, false);
-    expect(m.getPlayerRotation().y).toBeCloseTo(0, 6);
-    stepXRFrame(session, qYaw(1.6)); // small delta from the new baseline is fine
-    m.updateControls(0.016, false);
-    expect(m.getPlayerRotation().y).toBeCloseTo(-0.2, 5);
-  });
-
-  test('stale tracking deactivates after the threshold', async () => {
-    const { m, session } = await loadWithInlineXR();
-    const now = mockNow(100);
-    stepXRFrame(session, qYaw(0));
-    stepXRFrame(session, qYaw(0.1));
-    now.mockReturnValue(5000); // headset went quiet for far over 1000ms
-    m.updateControls(0.016, false);
-    expect(m.getPlayerRotation().y).toBeCloseTo(-0.1, 5); // last delta still lands
-    expect(m.isHeadTrackingActive()).toBe(false);
-  });
-
-  test('an immersive VR session pauses inline pose reads', async () => {
-    const { m, session } = await loadWithInlineXR();
-    mockNow(100);
-    stepXRFrame(session, qYaw(0));
-    state.xr.isPresenting = true;
-    state.session = makeVRSession([]);
-    m.updateControls(0.016, false); // marks vr.isActive
-    stepXRFrame(session, qYaw(0.3)); // ignored while immersive
-    state.xr.isPresenting = false;
-    m.updateControls(0.016, false);
-    expect(m.getPlayerRotation().y).toBeCloseTo(0, 6);
-    stepXRFrame(session, qYaw(0.3)); // re-seeds the previous pose only
-    m.updateControls(0.016, false);
-    expect(m.getPlayerRotation().y).toBeCloseTo(0, 6);
-  });
-
-  test('null poses are skipped without disturbing the delta chain', async () => {
-    const { m, session } = await loadWithInlineXR();
-    mockNow(100);
-    stepXRFrame(session, qYaw(0));
-    stepXRFrame(session, null); // tracking dropout frame
-    stepXRFrame(session, qYaw(0.2));
-    m.updateControls(0.016, false);
-    expect(m.getPlayerRotation().y).toBeCloseTo(-0.2, 5);
-  });
-
-  test('ending the session stops the loop and the tracking', async () => {
-    const { m, session } = await loadWithInlineXR();
-    mockNow(100);
-    stepXRFrame(session, qYaw(0));
-    stepXRFrame(session, qYaw(0.2));
-    m.updateControls(0.016, false);
-    expect(m.isHeadTrackingActive()).toBe(true);
-    session.listeners.end();
-    expect(m.isHeadTrackingActive()).toBe(false);
-    stepXRFrame(session, qYaw(0.4)); // orphaned callback bails out...
-    expect(session.rafCbs).toHaveLength(0); // ...and never re-registers
-  });
-
-  test('unsupported or rejected inline sessions are survived quietly', async () => {
-    // isSessionSupported says no
-    const first = await loadWithScene();
-    globalThis.navigator.xr = {
-      isSessionSupported: async () => false,
-      requestSession: jest.fn(),
-    };
-    first.m.initControls({ spawn: { x: 0, z: 0 } });
-    await flushAsync();
-    expect(globalThis.navigator.xr.requestSession).not.toHaveBeenCalled();
-    expect(first.m.isHeadTrackingActive()).toBe(false);
-
-    // requestSession rejects
-    const second = await loadWithScene();
-    globalThis.navigator.xr = {
-      isSessionSupported: async () => true,
-      requestSession: async () => { throw new Error('nope'); },
-    };
-    second.m.initControls({ spawn: { x: 0, z: 0 } });
-    await flushAsync();
-    expect(second.m.isHeadTrackingActive()).toBe(false);
+    expect(xr.isSessionSupported).not.toHaveBeenCalled();
+    expect(xr.requestSession).not.toHaveBeenCalled();
   });
 });
 

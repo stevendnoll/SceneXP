@@ -59,6 +59,7 @@ import { OCEAN_CONFIG } from './config.min.js';
 // visit counter and the soft bot deterrent that tags it, and every other
 // experience on the site carries them.
 import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
 import {
@@ -512,6 +513,10 @@ async function init() {
     // want a way out. So the button is there before they decide.
     document.querySelectorAll('.ui-float').forEach((el) => el.classList.add('visible'));
 
+    // Build the shaders now, behind the welcome card, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    await warmShaders(renderer, [{ scene, camera }]);
     start();
 
     // The visit is on the record from here. Recorded at init rather than at
@@ -629,11 +634,51 @@ function installTuningAids() {
     window.oceanQuality = () => quality.readout();
 }
 
+// ---- Boot -------------------------------------------------------------------
+
+/** Best-effort check that the browser can create a WebGL 2 context, which
+ *  three.js requires (r163 dropped WebGL 1). */
+function hasWebGL() {
+    try {
+        const c = document.createElement('canvas');
+        return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
+    } catch (e) {
+        return false;
+    }
+}
+
+/** Route visitors whose browser can't run the 3D scene to the 2D site. There
+ *  is no loading screen here, so the note goes on the welcome card they are
+ *  already reading, in place of the Begin button that would do nothing. */
+function fallbackTo2D() {
+    try {
+        const begin = document.getElementById('player-begin');
+        if (begin) begin.hidden = true;
+        const status = document.getElementById('load-status');
+        if (status) {
+            status.textContent = "This browser can't run the 3D view. Taking you to the standard site…";
+            status.hidden = false;
+        }
+    } catch (e) { /* ignore, we're redirecting regardless */ }
+    setTimeout(() => { window.location.replace('/'); }, 2500);
+}
+
+/** Start the scene, but fall back to the 2D site if WebGL is unavailable or
+ *  the scene fails to build, so a hard failure never ends in a blank page.
+ *  Errors thrown later inside the render loop are not auto-recovered. */
+function boot() {
+    if (!hasWebGL()) { fallbackTo2D(); return; }
+    init().catch((err) => {
+        console.error('[High Water] 3D init failed, falling back to the 2D site:', err);
+        fallbackTo2D();
+    });
+}
+
 if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init, { once: true });
+        document.addEventListener('DOMContentLoaded', boot, { once: true });
     } else {
-        init();
+        boot();
     }
 }
 

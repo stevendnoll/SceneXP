@@ -52,7 +52,7 @@ The 3D experiences send anonymized, fire-and-forget usage pings to a static endp
 
 © 2026 Continuum Commerce LLC. Released under the MIT license, see [LICENSE](LICENSE). The license covers the custom code written for this project. A few things are **not** covered by it:
 
-- The bundled `www/lib/three.min.js` is by the Three.js Authors and keeps its own MIT license header.
+- The vendored Three.js release in `www/lib/three/` (r186) is by the Three.js Authors and keeps its own MIT license (its `LICENSE` file sits beside it, and the bundled `three.min.js` carries the license header).
 - The Earth Defense planet and moon textures in `www/earthdefense/assets/` are by Solar System Scope, © 2010-2017, and are used under a Creative Commons license rather than ours:
 
   > Planet and moon textures by Solar System Scope (https://www.solarsystemscope.com/textures), used under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Resized and recompressed for this experience.

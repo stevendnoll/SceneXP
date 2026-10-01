@@ -94,6 +94,22 @@ describe('main.js hands the picture to the shared player', () => {
         expect(window.tornadoArc()).toBe(12);
         expect(window.tornadoState().extent).toBe(1);
     });
+    test('a browser without WebGL 2 is told so on the card and taken to the standard site', async () => {
+        // Three (r163 on) needs WebGL 2. Until 2026-10-01 this page had no
+        // check at all, so a browser without it got a blank canvas behind a
+        // Begin button that did nothing.
+        installThree();
+        dom = installDom();
+        delete dom.windowStub.WebGL2RenderingContext;
+        jest.resetModules();
+        await import('../www/tornado/js/main.js');
+        await flushAsync(30);
+        expect(dom.el('player-begin').hidden).toBe(true);
+        expect(dom.el('load-status').hidden).toBe(false);
+        expect(dom.el('load-status').textContent).toMatch(/can't run the 3D view/);
+        await jest.advanceTimersByTimeAsync(3000);
+        expect(dom.replaced).toEqual(['/']);
+    });
 });
 
 describe('the page carries what a share, a crawler and the player need', () => {
@@ -109,7 +125,7 @@ describe('the page carries what a share, a crawler and the player need', () => {
         expect(html).toContain(`<link rel="canonical" href="${BASE}">`);
         expect(meta('og:url')).toBe(BASE);
         expect(meta('og:title')).toBe('Tornado Alley');
-        expect(html).toContain('<title>Tornado Alley</title>');
+        expect(html).toContain('<title>Tornado Alley | SceneXP</title>');
     });
 
     test('exactly one card image, named the same in both blocks with the same alt', () => {
@@ -125,7 +141,7 @@ describe('the page carries what a share, a crawler and the player need', () => {
         const block = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
         const data = JSON.parse(block[1]);
         expect(data.url).toBe(BASE);
-        expect(data['@id']).toBe(`${BASE}#website`);
+        expect(data['@id']).toBe(`${BASE}#webpage`);
         expect(data.name).toBe('Tornado Alley');
     });
 

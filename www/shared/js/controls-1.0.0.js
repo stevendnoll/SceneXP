@@ -1,7 +1,7 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * controls.js - First-Person Player Controls (shared engine part)
- * Handles keyboard/mouse/touch/VR/gamepad input and player movement.
+ * Handles keyboard/mouse/touch/gamepad input and player movement.
  *
  * Per-experience configuration is passed to initControls(options):
  *   spawn:       { x, z, y? }   player start point (y defaults to eye height)
@@ -12,7 +12,7 @@
  * single primary building, spawning at the origin.
  */
 
-import { getCamera, getRenderer, getCameraRig } from './scene-1.0.0.min.js';
+import { getCamera } from './scene-1.0.0.min.js';
 
 // Control configuration
 const CONTROLS_CONFIG = {
@@ -81,19 +81,6 @@ const touch = {
     tapTouchId: null
 };
 
-// VR controller state
-const vr = {
-    isActive: false,
-    rigRotation: 0,              // Accumulated rig Y rotation (snap turns)
-    moveX: 0,                    // Left thumbstick X input
-    moveZ: 0,                    // Left thumbstick Y input (negated for forward)
-    snapTurnCooldown: 0,         // Cooldown timer to prevent rapid snap turns
-    snapTurnAngle: Math.PI / 6,  // 30 degree snap turns
-    triggerJustPressed: false,    // True for one frame when trigger is first pressed
-    prevTriggerPressed: false,   // Previous frame trigger state
-    deadzone: 0.15               // Thumbstick deadzone
-};
-
 // Standard Gamepad API state (for Quest controllers in 2D browser mode, Xbox/PS gamepads, etc.)
 const gamepadState = {
     active: false,               // True if any gamepad with input is connected
@@ -106,29 +93,6 @@ const gamepadState = {
     deadzone: 0.15,              // Thumbstick deadzone
     connected: false             // True if gamepadconnected event was fired
 };
-
-// Head tracking state (Quest headset in 2D browser mode)
-// Uses a WebXR inline session for the headset pose.
-// Maps physical head rotation to camera rotation for natural VR-like look control.
-const headTracking = {
-    active: false,               // True if any head tracking source is providing data
-    source: null,                // 'xr-inline' or null
-    deltaYaw: 0,                 // Accumulated yaw change in radians (consumed per frame)
-    deltaPitch: 0,               // Accumulated pitch change in radians (consumed per frame)
-    lastEventTime: 0,            // Timestamp of last head tracking update
-    staleThreshold: 1000,        // ms before head tracking is considered unavailable
-    sensitivity: 1.0,            // 1.0 = 1:1 head-to-camera mapping
-    // WebXR inline session state
-    xrSession: null,
-    xrRefSpace: null
-};
-
-// Reusable quaternion objects for WebXR inline head tracking (avoids GC)
-const _xrPrevQuat = new THREE.Quaternion();
-const _xrCurrQuat = new THREE.Quaternion();
-const _xrDeltaQuat = new THREE.Quaternion();
-const _xrEuler = new THREE.Euler(0, 0, 0, 'YXZ');
-let _xrHasPrevQuat = false;
 
 // Wheel event state (Quest browser maps thumbstick to scroll/wheel events in 2D mode)
 // In 2D panel mode, wheel events don't identify which controller generated them,
@@ -168,7 +132,6 @@ const _right = new THREE.Vector3();
 const _rotationY = new THREE.Euler(0, 0, 0, 'YXZ');
 const _movement = new THREE.Vector3();
 const _newPosition = new THREE.Vector3();
-const _up = new THREE.Vector3(0, 1, 0);
 
 // RAF batching for joystick visual updates (avoids per-touchmove DOM writes)
 let joystickVisualDirty = false;
@@ -224,7 +187,6 @@ export function initControls(options = {}) {
     setupTouchListeners();
     setupWheelListener();
     setupGamepadListeners();
-    setupHeadTracking();
 
     // Set initial camera position
     const camera = getCamera();
@@ -232,9 +194,6 @@ export function initControls(options = {}) {
         camera.position.copy(player.position);
         camera.rotation.copy(player.rotation);
     }
-
-    // Initialize VR rig rotation from starting orientation
-    vr.rigRotation = player.rotation.y;
 }
 
 /**
@@ -361,114 +320,6 @@ function setupTouchListeners() {
         tapZone.addEventListener('touchend', handleTapEnd);
         tapZone.addEventListener('touchcancel', handleTapEnd);
     }
-}
-
-/**
- * Setup head tracking for VR headsets in 2D browser mode.
- * Reads the headset pose via a WebXR inline (non-immersive) session and
- * writes to the headTracking.deltaYaw/deltaPitch accumulators.
- */
-function setupHeadTracking() {
-    // Try WebXR inline session for genuine headsets (uses navigator.xr, no
-    // deprecation warnings). Most likely to work on Quest.
-    tryInlineXR();
-
-    // There are no devicemotion/deviceorientation fallbacks: looking is
-    // handled by the mouse (desktop) and the look joystick (touch), so the
-    // motion/orientation sensors are redundant here — and merely adding those
-    // listeners triggers browser deprecation warnings.
-}
-
-/**
- * Attempt to start a WebXR inline (non-immersive) session for head tracking.
- * Inline sessions don't require a user gesture and don't change the display.
- * On Quest browser, this can provide the headset's 6DOF pose in 2D panel mode.
- */
-async function tryInlineXR() {
-    if (!navigator.xr) return;
-
-    try {
-        const supported = await navigator.xr.isSessionSupported('inline');
-        if (!supported) return;
-
-        const session = await navigator.xr.requestSession('inline');
-        headTracking.xrSession = session;
-
-        // Request viewer reference space (device pose relative to initial position)
-        headTracking.xrRefSpace = await session.requestReferenceSpace('viewer');
-
-        // Start the inline XR frame loop (separate from the renderer's loop)
-        session.requestAnimationFrame(onInlineXRFrame);
-
-        session.addEventListener('end', () => {
-            headTracking.xrSession = null;
-            headTracking.xrRefSpace = null;
-            _xrHasPrevQuat = false;
-            if (headTracking.source === 'xr-inline') {
-                headTracking.source = null;
-                headTracking.active = false;
-            }
-        });
-
-        // console.log('[Controls] WebXR inline session started for head tracking');
-    } catch (e) {
-        // Inline XR not available — head tracking simply stays off
-    }
-}
-
-/**
- * WebXR inline session frame callback.
- * Reads the viewer (headset) pose and computes rotation deltas via quaternions.
- */
-function onInlineXRFrame(time, frame) {
-    const session = headTracking.xrSession;
-    if (!session) return;
-
-    // Keep the inline loop going
-    session.requestAnimationFrame(onInlineXRFrame);
-
-    // Don't read inline pose while an immersive VR session is active
-    if (vr.isActive) {
-        _xrHasPrevQuat = false;
-        return;
-    }
-
-    const refSpace = headTracking.xrRefSpace;
-    if (!refSpace) return;
-
-    const pose = frame.getViewerPose(refSpace);
-    if (!pose) return;
-
-    const o = pose.transform.orientation;
-    _xrCurrQuat.set(o.x, o.y, o.z, o.w);
-
-    if (!_xrHasPrevQuat) {
-        // First frame — just store, can't compute delta yet
-        _xrPrevQuat.copy(_xrCurrQuat);
-        _xrHasPrevQuat = true;
-        return;
-    }
-
-    // Compute delta quaternion: deltaQ = inverse(prevQ) * currQ
-    _xrDeltaQuat.copy(_xrPrevQuat).invert().multiply(_xrCurrQuat);
-
-    // Extract yaw and pitch from the delta
-    _xrEuler.setFromQuaternion(_xrDeltaQuat, 'YXZ');
-
-    const dyaw = _xrEuler.y;
-    const dpitch = _xrEuler.x;
-
-    // Filter out large jumps (tracking loss, etc.)
-    if (Math.abs(dyaw) < 0.5 && Math.abs(dpitch) < 0.5) {
-        headTracking.deltaYaw += dyaw * headTracking.sensitivity;
-        headTracking.deltaPitch += dpitch * headTracking.sensitivity;
-
-        headTracking.lastEventTime = performance.now();
-        headTracking.active = true;
-        headTracking.source = 'xr-inline';
-    }
-
-    _xrPrevQuat.copy(_xrCurrQuat);
 }
 
 /**
@@ -902,86 +753,11 @@ function updateGamepadInput() {
 }
 
 /**
- * Poll XR controllers for VR input (thumbsticks and triggers)
- * @param {number} deltaTime - Time since last frame in seconds
- */
-function updateVRInput(deltaTime) {
-    const renderer = getRenderer();
-    if (!renderer || !renderer.xr || !renderer.xr.isPresenting) {
-        vr.isActive = false;
-        return;
-    }
-
-    vr.isActive = true;
-    const session = renderer.xr.getSession();
-    if (!session) return;
-
-    vr.moveX = 0;
-    vr.moveZ = 0;
-    vr.triggerJustPressed = false;
-
-    for (const source of session.inputSources) {
-        if (!source.gamepad) continue;
-
-        const axes = source.gamepad.axes;
-        const buttons = source.gamepad.buttons;
-
-        if (source.handedness === 'left') {
-            // Left thumbstick: movement
-            // XR standard mapping: axes[2]=thumbstick X, axes[3]=thumbstick Y
-            // Fallback to axes[0]/[1] if only 2 axes present
-            const sx = axes.length > 2 ? axes[2] : axes[0];
-            const sy = axes.length > 3 ? axes[3] : axes[1];
-            vr.moveX = Math.abs(sx) > vr.deadzone ? sx : 0;
-            vr.moveZ = Math.abs(sy) > vr.deadzone ? -sy : 0; // Negate: stick forward = negative axis
-        } else if (source.handedness === 'right') {
-            // Right thumbstick: snap turn
-            const rx = axes.length > 2 ? axes[2] : axes[0];
-
-            if (vr.snapTurnCooldown <= 0) {
-                if (rx > 0.6) {
-                    vr.rigRotation -= vr.snapTurnAngle;
-                    vr.snapTurnCooldown = 0.3;
-                } else if (rx < -0.6) {
-                    vr.rigRotation += vr.snapTurnAngle;
-                    vr.snapTurnCooldown = 0.3;
-                }
-            }
-
-            // Right trigger: interaction
-            const triggerPressed = buttons[0] && buttons[0].pressed;
-            vr.triggerJustPressed = triggerPressed && !vr.prevTriggerPressed;
-            vr.prevTriggerPressed = triggerPressed;
-        }
-    }
-
-    if (vr.snapTurnCooldown > 0) {
-        vr.snapTurnCooldown -= deltaTime;
-    }
-}
-
-/**
  * Update player position and camera
  * @param {number} deltaTime - Time since last frame in seconds
  * @param {boolean} isPaused - Whether the game is paused
  */
 export function updateControls(deltaTime, isPaused) {
-    // Poll VR controllers (WebXR immersive mode)
-    updateVRInput(deltaTime);
-
-    if (vr.isActive) {
-        // VR mode: movement from left thumbstick, snap turn from right
-        updateMovement(deltaTime);
-
-        // Update camera rig position and rotation
-        const cameraRig = getCameraRig();
-        if (cameraRig) {
-            cameraRig.position.set(player.position.x, 0, player.position.z);
-            cameraRig.rotation.y = vr.rigRotation;
-        }
-        return;
-    }
-
     // Poll standard gamepads (Quest 2D mode, Xbox, PlayStation, etc.)
     updateGamepadInput();
 
@@ -989,7 +765,7 @@ export function updateControls(deltaTime, isPaused) {
     updateWheelInput();
 
     // Check if any active input source should bypass pause
-    const hasActiveInput = touch.joystickActive || touch.lookJoystickActive || gamepadState.active || wheelInput.active || headTracking.active;
+    const hasActiveInput = touch.joystickActive || touch.lookJoystickActive || gamepadState.active || wheelInput.active;
     if (isPaused && !hasActiveInput) {
         mouse.movementX = 0;
         mouse.movementY = 0;
@@ -1019,34 +795,7 @@ export function updateControls(deltaTime, isPaused) {
  * Update camera rotation based on mouse/touch input
  * @param {number} deltaTime - Time since last frame in seconds
  */
-let _headTrackingLogged = false;
-
 function updateRotation(deltaTime) {
-    // Handle head tracking (Quest headset gyroscope in 2D browser mode)
-    // Highest priority: physical head rotation directly controls camera
-    if (headTracking.active && (headTracking.deltaYaw !== 0 || headTracking.deltaPitch !== 0)) {
-        // Log once when head tracking first activates
-        if (!_headTrackingLogged) {
-            // console.log('[Controls] Head tracking active via:', headTracking.source);
-            _headTrackingLogged = true;
-        }
-
-        // Apply accumulated head rotation deltas
-        player.rotation.y -= headTracking.deltaYaw;
-        player.rotation.x -= headTracking.deltaPitch;
-
-        // Consume the deltas
-        headTracking.deltaYaw = 0;
-        headTracking.deltaPitch = 0;
-
-        // Check if head tracking has gone stale (device stopped sending events)
-        const now = performance.now();
-        if (now - headTracking.lastEventTime > headTracking.staleThreshold) {
-            headTracking.active = false;
-            _headTrackingLogged = false;
-        }
-    }
-
     // Handle gamepad right stick rotation
     if (gamepadState.active && (gamepadState.lookX !== 0 || gamepadState.lookY !== 0)) {
         const sensitivity = CONTROLS_CONFIG.lookJoystickSensitivity;
@@ -1085,15 +834,11 @@ function updateRotation(deltaTime) {
  * Update player movement based on input
  */
 function updateMovement(deltaTime) {
-    // Get input from VR controllers, touch joystick, or keyboard
+    // Get input from a gamepad, Quest thumbstick, touch joystick, or keyboard
     let inputX = 0;
     let inputZ = 0;
 
-    if (vr.isActive) {
-        // VR thumbstick input (WebXR immersive mode)
-        inputX = vr.moveX;
-        inputZ = vr.moveZ;
-    } else if (gamepadState.active && (gamepadState.moveX !== 0 || gamepadState.moveZ !== 0)) {
+    if (gamepadState.active && (gamepadState.moveX !== 0 || gamepadState.moveZ !== 0)) {
         // Standard gamepad left stick (Quest 2D mode, Xbox, PlayStation, etc.)
         inputX = gamepadState.moveX;
         inputZ = gamepadState.moveZ;
@@ -1125,26 +870,14 @@ function updateMovement(deltaTime) {
     // Reset reusable direction vector
     _direction.set(0, 0, 0);
 
-    if (vr.isActive) {
-        // In VR, movement direction is based on where the headset is looking
-        const camera = getCamera();
-        if (camera) {
-            camera.getWorldDirection(_forward);
-            _forward.y = 0;
-            _forward.normalize();
-            _right.crossVectors(_forward, _up);
-            _right.normalize();
-        }
-    } else {
-        // Desktop/mobile: movement based on player rotation
-        _forward.set(0, 0, -1);
-        _right.set(1, 0, 0);
+    // Movement is based on player rotation
+    _forward.set(0, 0, -1);
+    _right.set(1, 0, 0);
 
-        // Apply Y rotation only (keep movement on horizontal plane)
-        _rotationY.set(0, player.rotation.y, 0);
-        _forward.applyEuler(_rotationY);
-        _right.applyEuler(_rotationY);
-    }
+    // Apply Y rotation only (keep movement on horizontal plane)
+    _rotationY.set(0, player.rotation.y, 0);
+    _forward.applyEuler(_rotationY);
+    _right.applyEuler(_rotationY);
 
     // Combine movement directions
     _direction.addScaledVector(_forward, inputZ);
@@ -1162,7 +895,6 @@ function updateMovement(deltaTime) {
     _newPosition.copy(player.position).add(_movement);
 
     // Collision system expects eye-height Y (boxes are positioned relative to floor)
-    // In VR, rig Y is 0 but collision still needs eye-height for proper box intersection
     _newPosition.y = CONTROLS_CONFIG.eyeHeight;
     player.position.y = CONTROLS_CONFIG.eyeHeight;
 
@@ -1179,9 +911,8 @@ function updateMovement(deltaTime) {
     player.position.x = Math.max(bounds.minX, Math.min(bounds.maxX, player.position.x));
     player.position.z = Math.max(bounds.minZ, Math.min(bounds.maxZ, player.position.z));
 
-    // In VR, rig is at floor level (headset provides eye height)
-    // In desktop/mobile, keep player at fixed eye height
-    player.position.y = vr.isActive ? 0 : CONTROLS_CONFIG.eyeHeight;
+    // Keep the player at a fixed eye height
+    player.position.y = CONTROLS_CONFIG.eyeHeight;
 }
 
 /**
@@ -1277,20 +1008,6 @@ export function setLookJoystickSensitivity(sensitivity) {
 }
 
 /**
- * Check if VR mode is currently active
- */
-export function isVRActive() {
-    return vr.isActive;
-}
-
-/**
- * Check if VR trigger was just pressed this frame
- */
-export function isVRTriggerJustPressed() {
-    return vr.triggerJustPressed;
-}
-
-/**
  * Check if a standard gamepad is active
  */
 export function isGamepadActive() {
@@ -1302,13 +1019,6 @@ export function isGamepadActive() {
  */
 export function isGamepadTriggerJustPressed() {
     return gamepadState.triggerJustPressed;
-}
-
-/**
- * Check if head tracking (device orientation) is active
- */
-export function isHeadTrackingActive() {
-    return headTracking.active;
 }
 
 export { CONTROLS_CONFIG };

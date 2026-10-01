@@ -37,9 +37,10 @@
 
 import { EARTHDEFENSE_CONFIG, spawnPosition } from './config.min.js';
 import { getProofOfWork, bufToHex, installCardFocusTrap, shieldOverlayControl, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import {
     initSpace, renderSpace, renderInset, resizeSpace, setMaxPixelRatio,
-    getRenderer, getWorldCamera, isTouchDevice
+    getRenderer, getWorldCamera, getOverlayCamera, isTouchDevice
 } from '../../shared/js/space-1.0.0.min.js';
 import {
     initFlight, updateFlight, getFlightState, setTargetSpeedFraction,
@@ -317,6 +318,16 @@ async function init() {
     applyReducedFx();
 
     setupEventListeners();
+
+    // Build the shaders now, behind the loading screen, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    // The world and then the cockpit drawn over it, as renderSpace does.
+    updateLoadingStatus('Preparing the view…', 95);
+    await warmShaders(getRenderer(), [
+        { scene, camera: getWorldCamera() },
+        { scene: overlayScene, camera: getOverlayCamera() }
+    ]);
 
     updateLoadingStatus('Ready', 100);
     setTimeout(() => {
@@ -2621,11 +2632,12 @@ export function getState() {
 
 // ---- Boot -----------------------------------------------------------------
 
+/** Best-effort check that the browser can create a WebGL 2 context, which
+ *  three.js requires (r163 dropped WebGL 1). */
 function hasWebGL() {
     try {
         const c = document.createElement('canvas');
-        return !!(window.WebGLRenderingContext &&
-            (c.getContext('webgl') || c.getContext('experimental-webgl')));
+        return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
     } catch (e) {
         return false;
     }

@@ -47,6 +47,7 @@ import {
     initScene, handleResize, render, getCamera, getScene, getRenderer,
     updateDayNightCycle, removeTestObjects, isTouchDevice
 } from '../../shared/js/scene-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import {
     initStore,
     updateBackgroundAnimations,
@@ -307,6 +308,12 @@ async function init() {
 
     updateLoadingStatus('Preparing the view…', 90);
     setupEventListeners();
+
+    // Build the shaders now, behind the loading screen, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    updateLoadingStatus('Preparing the view…', 95);
+    await warmShaders(getRenderer(), [{ scene: getScene(), camera: getCamera() }]);
 
     updateLoadingStatus('Ready', 100);
     setTimeout(() => {
@@ -1930,12 +1937,12 @@ export function getState() {
 
 // ---- Boot -----------------------------------------------------------------
 
-/** Best-effort check that the browser can create a WebGL context. */
+/** Best-effort check that the browser can create a WebGL 2 context, which
+ *  three.js requires (r163 dropped WebGL 1). */
 function hasWebGL() {
     try {
         const c = document.createElement('canvas');
-        return !!(window.WebGLRenderingContext &&
-            (c.getContext('webgl') || c.getContext('experimental-webgl')));
+        return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
     } catch (e) {
         return false;
     }

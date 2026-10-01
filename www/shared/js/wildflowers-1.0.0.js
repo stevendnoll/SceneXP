@@ -116,8 +116,9 @@ export function placeWildflowers(mesh, placements, bloom = 1) {
     mesh.instanceMatrix.needsUpdate = true;
 }
 
-// The sway, replacing three's project_vertex chunk (r160) so the offset lands
-// after the instance transform. No backticks in these comments.
+// The sway, replacing three's project_vertex chunk (unchanged from r160 to
+// r186) so the offset lands after the instance transform. No backticks in
+// these comments.
 const SWAY_HEAD = /* glsl */`
 uniform vec3 uWind;
 uniform float uTime;

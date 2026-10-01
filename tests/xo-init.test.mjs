@@ -61,6 +61,17 @@ async function boot({ watch = false } = {}) {
     return main;
 }
 
+test('falls back to the 2D site when WebGL 2 is unavailable', async () => {
+    // Three (r163 on) needs WebGL 2. Until 2026-10-01 this page had no check
+    // at all, so a browser without it got a blank canvas and nothing else.
+    delete dom.windowStub.WebGL2RenderingContext;
+    await import('../www/xo/js/main.js');
+    await flushAsync();
+    expect(dom.el('load-status').textContent).toMatch(/can't run the 3D view/);
+    await jest.advanceTimersByTimeAsync(3000);
+    expect(dom.replaced).toEqual(['/']);
+});
+
 /** Every button currently in the action row, by its visible text. */
 const actionLabels = () => dom.el('hud-actions').children.map((b) => b.textContent);
 

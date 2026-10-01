@@ -5,12 +5,10 @@
  * ship in the distance?"). Their lane, their timetable, and what the desk
  * sees of them when it turns right, measured against the real three.js.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import vm from 'node:vm';
 import { CONFIG } from '../www/office/js/config.js';
 import * as life from '../www/office/js/life.js';
 import * as city from '../www/office/js/city.js';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 let THREE;
 let world;
@@ -22,9 +20,7 @@ const { LIFE, cruiseLane, cruisePier, cruiseDay, cruiseAt, laneAt } = life;
 const DEG = Math.PI / 180;
 
 beforeAll(async () => {
-    const ctx = vm.createContext({ self: {}, window: {}, console: { warn() {} } });
-    vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+    THREE = await loadRealThree();
     globalThis.THREE = THREE;
     world = (await import('../www/office/js/world.js')).buildWorld(CONFIG);
     world.scene.updateMatrixWorld(true);

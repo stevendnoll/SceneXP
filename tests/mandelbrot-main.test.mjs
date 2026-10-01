@@ -525,7 +525,7 @@ test('the list of places to dive launches a ring and follows the rings away', as
 // ---- The 2D fallback -------------------------------------------------------------
 
 test('falls back to the 2D site when WebGL is unavailable', async () => {
-  delete dom.windowStub.WebGLRenderingContext;
+  delete dom.windowStub.WebGL2RenderingContext;
   await import('../www/mandelbrot/js/main.js');
   await flushAsync();
   expect(dom.el('load-status').textContent).toContain("can't run the 3D view");
@@ -535,7 +535,7 @@ test('falls back to the 2D site when WebGL is unavailable', async () => {
 
 test('defers boot until DOMContentLoaded when the document is still loading', async () => {
   dom.documentStub.readyState = 'loading';
-  delete dom.windowStub.WebGLRenderingContext;   // keep the deferred boot cheap
+  delete dom.windowStub.WebGL2RenderingContext;   // keep the deferred boot cheap
   await import('../www/mandelbrot/js/main.js');
   await flushAsync();
   expect(dom.replaced).toHaveLength(0);          // nothing booted yet

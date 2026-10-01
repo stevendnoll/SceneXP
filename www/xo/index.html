@@ -83,7 +83,12 @@
       "gamePlatform": "Web browser",
       "applicationCategory": "Game",
       "operatingSystem": "Any",
+      "datePublished": "2026-09-14",
       "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
       "isAccessibleForFree": true,
       "playMode": "SinglePlayer",
       "author": {
@@ -95,17 +100,82 @@
         "name": "Continuum Commerce LLC"
       },
       "isPartOf": {
-        "@type": "WebSite",
+        "@type": "WebPage",
         "@id": "https://www.scenexp.com/#website"
       }
     }
     </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "X's and O's",
+          "item": "https://www.scenexp.com/xo/"
+        }
+      ]
+    }
+    </script>
 
-    <title>X's and O's</title>
+    <title>X's and O's | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="css/experience.min.css?v=18" as="style">
-    <link rel="preload" href="../lib/three.min.js" as="script">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="js/field.min.js">
+    <link rel="modulepreload" href="js/roster.min.js">
+    <link rel="modulepreload" href="js/colors.min.js">
+    <link rel="modulepreload" href="js/ball.min.js">
+    <link rel="modulepreload" href="js/markers.min.js">
+    <link rel="modulepreload" href="js/view.min.js">
+    <link rel="modulepreload" href="js/takedown.min.js">
+    <link rel="modulepreload" href="js/celebration.min.js">
+    <link rel="modulepreload" href="js/fireworks.min.js">
+    <link rel="modulepreload" href="js/play.min.js">
+    <link rel="modulepreload" href="js/jump.min.js">
+    <link rel="modulepreload" href="js/progress.min.js">
+    <link rel="modulepreload" href="js/scoring.min.js">
+    <link rel="modulepreload" href="js/hud.min.js">
+    <link rel="modulepreload" href="js/opening.min.js">
+    <link rel="modulepreload" href="js/colors-ui.min.js">
+    <link rel="modulepreload" href="js/colors-preview.min.js">
+    <link rel="modulepreload" href="js/opening-props.min.js">
+    <link rel="modulepreload" href="js/milestones.min.js">
+    <link rel="modulepreload" href="js/spectacle.min.js">
+    <link rel="modulepreload" href="js/stunt.min.js">
+    <link rel="modulepreload" href="js/summary.min.js">
+    <link rel="modulepreload" href="js/replay.min.js">
+    <link rel="modulepreload" href="js/camera.min.js">
+    <link rel="modulepreload" href="js/audio.min.js">
+    <link rel="modulepreload" href="js/playbook-ui.min.js">
+    <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="js/telemetry.min.js">
+    <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
+    <link rel="modulepreload" href="js/arm.min.js">
+    <link rel="modulepreload" href="js/formations.min.js">
+    <link rel="modulepreload" href="js/routes.min.js">
+    <link rel="modulepreload" href="js/motion.min.js">
+    <link rel="modulepreload" href="js/playstate.min.js">
+    <link rel="modulepreload" href="js/fans.min.js">
+    <link rel="modulepreload" href="../shared/js/promo-1.0.0.min.js">
+    <link rel="modulepreload" href="js/playbook.min.js">
+    <!-- END generated modulepreload -->
 
     <!-- The 2D game's own favicon from exesnohs.com, the orange X and blue O
          mascots at 16, 32, 48 and 64 pixels, so both versions of the game wear
@@ -515,7 +585,7 @@
         </div>
     </div>
 
-    <script src="../lib/three.min.js"></script>
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>
 </body>
 

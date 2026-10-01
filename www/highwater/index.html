@@ -94,21 +94,67 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/highwater/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/highwater/#webpage",
       "url": "https://www.scenexp.com/highwater/",
       "name": "High Water",
       "description": "A passive 3D scene at the water's edge. Sixty seconds that begin on an ordinary bright afternoon and end with the sea closing over the viewer.",
-      "inLanguage": "en-US"
+      "datePublished": "2026-08-21",
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "High Water",
+          "item": "https://www.scenexp.com/highwater/"
+        }
+      ]
     }
     </script>
 
-    <title>High Water</title>
+    <title>High Water | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
     <link rel="preload" href="../shared/css/player-1.0.0.min.css" as="style">
     <link rel="preload" href="css/experience.min.css?v=5" as="style">
-    <link rel="preload" href="../lib/three.min.js" as="script">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
+    <link rel="modulepreload" href="js/water.min.js">
+    <link rel="modulepreload" href="js/sky.min.js">
+    <link rel="modulepreload" href="js/sand.min.js">
+    <link rel="modulepreload" href="js/storm.min.js">
+    <link rel="modulepreload" href="js/buoy.min.js">
+    <link rel="modulepreload" href="js/lightning.min.js">
+    <link rel="modulepreload" href="../shared/js/player-1.0.0.min.js">
+    <link rel="modulepreload" href="js/player.min.js">
+    <link rel="modulepreload" href="../shared/js/narration-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/resolution-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/lightning-1.0.0.min.js">
+    <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
@@ -217,6 +263,10 @@
                     aria-describedby="player-paused-at">Resume</button>
                 <button id="player-restart" type="button" class="player-btn">Restart</button>
             </div>
+            <!-- Filled in only when this browser cannot draw the scene (no
+                 WebGL 2): main.js hides Begin, says so here, and takes the
+                 visitor to the standard site. -->
+            <p id="load-status" class="lede" role="status" aria-live="polite" hidden></p>
             <p class="note">You can watch it again as many times as you wish.</p>
             <!-- The one link back to the directory, replacing the floating Home
                  button (2026-09-07): Home sat in the corner and read as "reset
@@ -310,7 +360,7 @@
         <a class="welcome-explore promo-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
     </div>
 
-    <script src="../lib/three.min.js"></script>
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>
 </body>
 

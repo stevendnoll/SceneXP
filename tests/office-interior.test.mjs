@@ -7,13 +7,11 @@
  * rounded edges (QA, 2026-09-25: "anything we can do to make the scene
  * look even more realistic?").
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import vm from 'node:vm';
 import { CONFIG } from '../www/office/js/config.js';
 import { skyAt } from '../www/office/js/sky.js';
 import { lightAt, lighting } from '../www/office/js/daylight.js';
 import { weathered } from '../www/office/js/weather.js';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 let THREE;
 let roomMod;
@@ -21,9 +19,7 @@ let interior;
 let room;
 
 beforeAll(async () => {
-    const ctx = vm.createContext({ self: {}, window: {}, console: { warn() {} } });
-    vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+    THREE = await loadRealThree();
     globalThis.THREE = THREE;
     roomMod = await import('../www/office/js/room.js');
     interior = await import('../www/office/js/interior.js');

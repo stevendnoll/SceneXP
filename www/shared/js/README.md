@@ -12,7 +12,8 @@ experiences. Every experience in this repository builds on it.
 ## Ground rules
 
 - `THREE` is a global (each experience's index.html loads
-  `../lib/three.min.js` as a classic script before its module graph).
+  `../lib/three/r186/three.min.js` as a module script before its own
+  `js/main.min.js`, and that bundle sets the global).
 - Modules import each other as `./<name>-<x.y.z>.min.js` (their own version;
   see Versioning below). Browser and Jest both resolve the real built files,
   so after ANY edit here run `npm run build` before `npm test` or a page load.
@@ -115,9 +116,10 @@ initControls(CONFIG);        // spawn, bounds, speeds
 |---|---|---|
 | `boot.js` | Proof-of-work load gate, plus two page-chrome helpers | `getProofOfWork({ prefix, storageKey, maxAgeMs })`, `installCardFocusTrap({ signal })`, `installCardScrollReset({ signal })` — call it once per scene and every `[role="dialog"][aria-modal="true"]` reopens at the top instead of where it was last left, `shieldOverlayControl(el, { signal })` — call the last one for any link or button placed on a welcome overlay, or the overlay's own click-to-start will swallow the tap |
 | `telemetry.js` | Fire-and-forget usage pings to `../api.html` | `setProofHash`, `setMobile`, `track`, `trackFinal` |
+| `warmup.js` | Compiles a scene's shaders behind the loading screen (`renderer.compileAsync`), so the first frame does not freeze while WebGL builds them. Call it last in init, once everything the first frame draws is in the scene. A pass carries its own tone mapping for a scene drawn with a different one (Corner Office's city). Never holds up the page: no `compileAsync`, an error, or `timeoutMs` (4 s) all just return. Added 2026-10-01 for every WebGL scene | `await warmShaders(renderer, [{ scene, camera, toneMapping? }], { timeoutMs })`, resolving to `'compiled'`, `'timed-out'`, `'failed'` or `'skipped'` |
 | `analytics.js` | Visitor-activity dashboard (fetch + DOM). Reads `snaps/index.json` + `snaps/sessions-YYYYMMDD.json` relative to the page, groups a day by visit or by scene, and filters it by scene and by action. Polls every 5 min while the tab is visible | `initAnalytics({ body, dateLabel, status, prevBtn, nextBtn, collapseAllBtn, groupSelect, sceneSelect, actionFilter, filterSummary, selectAllBtn, clearAllBtn, onSummary })`, `loadAnalytics()`, `startAnalyticsAutoRefresh()`. Every element is optional: pass only `onSummary` for a scene that wants the headline without the overlay |
 | `scene.js` | Renderer, camera, sky, sun/moon/stars/clouds, day/night, optional comet | `dayNight: { enabled, cycleDuration }`, `comet: { enabled, base }`; `getCometBase()` for aiming props |
-| `controls.js` | First-person + touch + VR + gamepad input | `initControls({ spawn, rotation, worldBounds, moveSpeed, ... })` |
+| `controls.js` | First-person + touch + gamepad input | `initControls({ spawn, rotation, worldBounds, moveSpeed, ... })` |
 | `world.js` | THE context seam: root group, config, colliders, outdoor props | `initWorld(config)`, `getWorldGroup/Config`, `addCollider(ForMesh)`, `registerOutdoorProp` |
 | `collision.js` | Player AABB + wall-slide | `checkCollision(oldPos, newPos, radius, boxes)` for `setCollisionCallback` |
 | `checklist.js` | Session discovery list + HUD panel | `initChecklist({ items, storageKey })`, `markChecklistItem`, `onChecklistChange` |
@@ -148,8 +150,9 @@ its own.
 
 ## Recipe: a new experience (Phase 5+)
 
-1. `cp -r` the interstate `index.html` shell (keep the CSP, `../lib/three.min.js`,
-   hud/modal markup) and rebrand the copy.
+1. `cp -r` the interstate `index.html` shell (keep the CSP, the
+   `../lib/three/r186/three.min.js` module script and its modulepreload, and
+   the hud/modal markup) and rebrand the copy.
 2. `js/package.json` with `{"type": "module"}`.
 3. `js/config.js`: one frozen object. The minimized-world defaults already
    cover bounds/comet/pedestrians, so a minimal config is ~15 lines: building

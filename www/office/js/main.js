@@ -79,6 +79,7 @@ import {
     renderWhiteboardSheet, renderPrintSheet
 } from './panels.min.js';
 import { installCardFocusTrap, installCardScrollReset, getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
+import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { createResolution } from '../../shared/js/resolution-1.0.0.min.js';
 import {
     initPortraitControls, updatePortraitControls, resetPortraitAim, gestureClaimedTap, disposePortraitControls
@@ -314,6 +315,18 @@ async function init() {
     refresh();
     showWelcome();
 
+    // Build the shaders now, behind the loading screen, rather than on the
+    // first frame where they would freeze the scene the moment it appears
+    // (shared warmup part).
+    // Two passes, the way draw() draws them: the world outside with tone
+    // mapping off, then the room with ACES. Tone mapping is part of a
+    // program's identity, so compiling either the other way would be wasted.
+    updateLoadingStatus('Preparing the view…', 95);
+    await warmShaders(renderer, [
+        { scene: world && world.scene, camera: world && world.camera, toneMapping: THREE.NoToneMapping },
+        { scene, camera, toneMapping: THREE.ACESFilmicToneMapping }
+    ]);
+
     updateLoadingStatus('Ready', 100);
     setTimeout(() => {
         const loading = el('loading-screen');
@@ -409,7 +422,8 @@ function buildRenderer() {
     // when the sun or something in the room has moved (markRoom), never for
     // a frame where only the scenery outside or the camera moved.
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // PCFShadowMap is soft from r182 on, which retired PCFSoftShadowMap.
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.shadowMap.autoUpdate = false;
     renderer.shadowMap.needsUpdate = true;
     // Adaptive resolution (shared resolution-1.0.0): below the device's own
@@ -3160,11 +3174,12 @@ export function getDoc() {
 
 // ---- Boot -------------------------------------------------------------------
 
+/** Best-effort check that the browser can create a WebGL 2 context, which
+ *  three.js requires (r163 dropped WebGL 1). */
 export function hasWebGL() {
     try {
         const c = document.createElement('canvas');
-        return !!(window.WebGLRenderingContext &&
-            (c.getContext('webgl') || c.getContext('experimental-webgl')));
+        return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
     } catch (e) {
         return false;
     }

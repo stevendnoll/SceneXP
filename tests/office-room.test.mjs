@@ -4,18 +4,17 @@
  * camera at each station.
  *
  * The test stub absorbs every assignment, so a room built under it has no
- * children and no positions. three.min.js runs in a node:vm context instead,
- * the way tests/person-rig-seams.test.mjs measures the rig.
+ * children and no positions. The real three.js runs in a node:vm context
+ * instead, the way tests/person-rig-seams.test.mjs measures the rig.
  *
  * COMPOSE AGAINST THE EYE, NOT THE FLOOR PLAN. A tappable thing is only
  * tappable if the eye can see it, so every one is checked the way a tap
  * would find it: in the frame, and the first thing a ray toward it meets,
  * at a wide screen, a laptop, and two phones held upright.
  */
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import vm from 'node:vm';
 import { CONFIG } from '../www/office/js/config.js';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 let THREE;
 let buildRoom;
@@ -29,9 +28,7 @@ let roomMod;
 let room;
 
 beforeAll(async () => {
-    const ctx = vm.createContext({ self: {}, window: {}, console: { warn() {} } });
-    vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+    THREE = await loadRealThree();
     globalThis.THREE = THREE;
     roomMod = await import('../www/office/js/room.js');
     ({ buildRoom, pickOf, windowsOf, setLamp, setNotes } = roomMod);

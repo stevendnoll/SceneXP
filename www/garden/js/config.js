@@ -2819,8 +2819,8 @@ export const GARDEN_CONFIG = deepFreeze({
 
         // ---- Lighting -------------------------------------------------------
         // The rig is two directional lights (sun and moon), a hemisphere fill,
-        // and a small ambient floor. Intensities are for r160, where the legacy
-        // lighting mode is gone and daylight wants numbers around 3.
+        // and a small ambient floor. Intensities are for three's physical
+        // lighting (r155 on), where daylight wants numbers around 3.
         lighting: {
             sunPeak: 3.10,
             // Below this elevation the sun's colour warms toward sunColorLow,

@@ -7,8 +7,8 @@
  * so its shader ran on every pixel on screen before the ground, the ridges,
  * the trees or the sand painted over theirs. Drawn last, with the depth test
  * on, those pixels are rejected before it shades them. Three things make that
- * safe, and each is held here with real three (www/lib/three.min.js in
- * node:vm), not the stub:
+ * safe, and each is held here with real three (tests/helpers/real-three.mjs),
+ * not the stub:
  *
  *   - it draws after every opaque thing in its scene (its renderOrder is
  *     above every other order the scene sets, and the rest default to 0)
@@ -24,7 +24,7 @@
 import { jest } from '@jest/globals';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import vm from 'node:vm';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 const SRC = (scene, name) => `../www/${scene}/js/${name}`;
 for (const [scene, names] of [
@@ -39,10 +39,8 @@ for (const [scene, names] of [
 
 let THREE;
 
-beforeAll(() => {
-    const ctx = vm.createContext({ self: {}, window: {}, console: { warn() {} } });
-    vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+beforeAll(async () => {
+    THREE = await loadRealThree();
     globalThis.THREE = THREE;
     const context = new Proxy({}, {
         get: (_t, p) => (p === 'createLinearGradient' || p === 'createRadialGradient'

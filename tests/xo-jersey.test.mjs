@@ -19,10 +19,9 @@
  * against that.
  */
 import { describe, test, expect, beforeAll } from '@jest/globals';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import vm from 'node:vm';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
@@ -36,9 +35,7 @@ let box;
 const builds = {};
 
 beforeAll(async () => {
-    const ctx = vm.createContext({ self: {}, window: {}, console });
-    vm.runInContext(readFileSync(join(root, 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+    THREE = await loadRealThree({ console });
     globalThis.THREE = THREE;
 
     roster = await import(join(root, 'www/xo/js/roster.js'));

@@ -64,19 +64,67 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "@id": "https://www.scenexp.com/dad/#website",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/dad/#webpage",
       "url": "https://www.scenexp.com/dad/",
       "name": "A Ride on the NCR Trail",
       "description": "A walkable 3D stretch of Maryland's NCR Trail, built in loving memory of a dad who loved to ride it.",
-      "inLanguage": "en-US"
+      "datePublished": "2026-07-06",
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "A Ride on the NCR Trail",
+          "item": "https://www.scenexp.com/dad/"
+        }
+      ]
     }
     </script>
 
-    <title>A Ride on the NCR Trail</title>
+    <title>A Ride on the NCR Trail | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="../lib/three.min.js" as="script">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/collision-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/scene-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/controls-1.0.0.min.js">
+    <link rel="modulepreload" href="js/store.min.js">
+    <link rel="modulepreload" href="js/gallery.min.js">
+    <link rel="modulepreload" href="../shared/js/checklist-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/autopilot-1.0.0.min.js">
+    <link rel="modulepreload" href="js/listings.min.js">
+    <link rel="modulepreload" href="../shared/js/world-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/scenery-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/npcs-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/gallery-1.0.0.min.js">
+    <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
@@ -345,7 +393,7 @@
 
     <canvas id="game-canvas" role="img" aria-label="A walkable 3D stretch of the NCR trail"></canvas>
 
-    <script src="../lib/three.min.js"></script>
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>
 </body>
 

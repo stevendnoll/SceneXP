@@ -16,10 +16,9 @@
  * enlarged a 60-pixel crop, and both are one Box3 away from being obvious.
  */
 import { describe, test, expect, beforeAll } from '@jest/globals';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import vm from 'node:vm';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
@@ -31,11 +30,7 @@ let box;
 let realHead;
 
 beforeAll(async () => {
-    // three.min.js is a UMD bundle that expects a browser global, so it is run
-    // in a context that has one and the namespace is lifted back out.
-    const ctx = vm.createContext({ self: {}, window: {}, console });
-    vm.runInContext(readFileSync(join(root, 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+    THREE = await loadRealThree({ console });
     globalThis.THREE = THREE;
 
     const roster = await import(join(root, 'www/xo/js/roster.js'));
