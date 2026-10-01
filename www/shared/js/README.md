@@ -12,7 +12,8 @@ experiences. Every experience in this repository builds on it.
 ## Ground rules
 
 - `THREE` is a global (each experience's index.html loads
-  `../lib/three.min.js` as a classic script before its module graph).
+  `../lib/three/r186/three.min.js` as a module script before its own
+  `js/main.min.js`, and that bundle sets the global).
 - Modules import each other as `./<name>-<x.y.z>.min.js` (their own version;
   see Versioning below). Browser and Jest both resolve the real built files,
   so after ANY edit here run `npm run build` before `npm test` or a page load.
@@ -148,8 +149,9 @@ its own.
 
 ## Recipe: a new experience (Phase 5+)
 
-1. `cp -r` the interstate `index.html` shell (keep the CSP, `../lib/three.min.js`,
-   hud/modal markup) and rebrand the copy.
+1. `cp -r` the interstate `index.html` shell (keep the CSP, the
+   `../lib/three/r186/three.min.js` module script and its modulepreload, and
+   the hud/modal markup) and rebrand the copy.
 2. `js/package.json` with `{"type": "module"}`.
 3. `js/config.js`: one frozen object. The minimized-world defaults already
    cover bounds/comet/pedestrians, so a minimal config is ~15 lines: building

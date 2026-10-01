@@ -20,9 +20,7 @@
  * Real three runs in a vm context, as in tests/person-rig-seams.test.mjs, so
  * geometry and instance matrices hold real numbers. The canvas is a recorder.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import vm from 'node:vm';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 let THREE;
 let FT;
@@ -45,9 +43,7 @@ function recordingContext() {
 }
 
 beforeAll(async () => {
-    const ctx = vm.createContext({ self: {}, window: {}, console: { warn() {} } });
-    vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+    THREE = await loadRealThree();
     globalThis.THREE = THREE;
     globalThis.document = {
         createElement: () => {

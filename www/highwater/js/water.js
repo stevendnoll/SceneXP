@@ -1167,8 +1167,8 @@ const FRAGMENT_ROUGHNESS = `
  *  the water is facing. That matters on this mesh: it is double sided, and the
  *  strip of sea seen from underneath near the horizon has its normal flipped. */
 const FRAGMENT_REFLECT = `
-    vec3 waterWorldNormal = inverseTransformDirection(geometryNormal, viewMatrix);
-    vec3 waterToEye = inverseTransformDirection(geometryViewDir, viewMatrix);
+    vec3 waterWorldNormal = transformNormalByInverseViewMatrix(geometryNormal, viewMatrix);
+    vec3 waterToEye = transformDirectionByInverseViewMatrix(geometryViewDir, viewMatrix);
     // Schlick, with R0 = 0.020 for air to water at n = 1.33. The constant is
     // not the interesting part. The fifth power is: it holds the reflection
     // near two percent for most of the frame and then runs to one in the last

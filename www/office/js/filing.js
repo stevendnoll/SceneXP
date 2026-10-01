@@ -64,6 +64,14 @@ export function createFiling(cabinet, config, { reducedMotion = false } = {}) {
         cabinet.tabs.count = order.length;
         cabinet.bodies.instanceMatrix.needsUpdate = true;
         cabinet.tabs.instanceMatrix.needsUpdate = true;
+        // An InstancedMesh caches the bounds its raycast tests first. Taken
+        // before any folder was filed, they are empty, and three (r186) then
+        // skips every folder a tap is aimed at. Dropping them makes the next
+        // raycast measure the folders where they are now.
+        cabinet.bodies.boundingSphere = null;
+        cabinet.tabs.boundingSphere = null;
+        cabinet.bodies.boundingBox = null;
+        cabinet.tabs.boundingBox = null;
         if (cabinet.bodies.instanceColor) cabinet.bodies.instanceColor.needsUpdate = true;
         if (cabinet.tabs.instanceColor) cabinet.tabs.instanceColor.needsUpdate = true;
     }

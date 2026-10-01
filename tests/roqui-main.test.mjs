@@ -468,7 +468,7 @@ test('mobile: tap to start, forgiving taps, whiteboard close-up, tucked joystick
 });
 
 test('falls back to the 2D site when WebGL is unavailable', async () => {
-  delete dom.windowStub.WebGLRenderingContext;
+  delete dom.windowStub.WebGL2RenderingContext;
   await import('../www/roqui/js/main.js');
   await flushAsync();
   await jest.advanceTimersByTimeAsync(3000);

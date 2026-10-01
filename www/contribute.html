@@ -142,8 +142,10 @@
                         general-purpose modules (scene, lighting, controls, people, scenery, and more). An
                         experience keeps its own <code>main.js</code> orchestrator and assembles imported parts
                         driven by one plain config object.</li>
-                    <li><strong>Three.js as a global.</strong> Each experience's <code>index.html</code> loads
-                        <code>lib/three.min.js</code> as a classic script before its module graph.</li>
+                    <li><strong>Three.js as a global.</strong> Every experience runs the same release of
+                        Three.js (r186). Each <code>index.html</code> loads <code>lib/three/r186/three.min.js</code>
+                        as a module script before its own scene, and that bundle sets the global
+                        <code>THREE</code>.</li>
                     <li><strong>esbuild for minification.</strong> <code>npm run build</code> minifies JS and
                         CSS. Every file under <code>www/</code> is picked up automatically, so there is no
                         build configuration to edit.</li>
@@ -288,7 +290,7 @@ python3 -m http.server 8000
                     <li><strong>Fast on phones.</strong> Many visitors arrive on mobile, so please keep assets
                         lean and performance in mind.</li>
                     <li><strong>MIT licensed.</strong> Your contribution is published under the project's MIT
-                        license. The bundled <code>three.min.js</code> keeps its own license.</li>
+                        license. The bundled Three.js library keeps its own license.</li>
                 </ul>
 
                 <h2>Ready when you are</h2>

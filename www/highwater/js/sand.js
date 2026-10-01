@@ -355,8 +355,8 @@ const FRAGMENT_ROUGHNESS = `
  *  and by `wetReflect`, because a film over a rough bed is not a body of water.
  *  See the long note in water.js: this has to sit before tone mapping and fog. */
 const FRAGMENT_REFLECT = `
-    vec3 sandNormal = inverseTransformDirection(geometryNormal, viewMatrix);
-    vec3 sandToEye = inverseTransformDirection(geometryViewDir, viewMatrix);
+    vec3 sandNormal = transformNormalByInverseViewMatrix(geometryNormal, viewMatrix);
+    vec3 sandToEye = transformDirectionByInverseViewMatrix(geometryViewDir, viewMatrix);
     float sandCos = clamp(dot(sandToEye, sandNormal), 0.0, 1.0);
     float sandFresnel = (0.020 + 0.980 * pow(1.0 - sandCos, 5.0)) * wet * uWetReflect;
     vec3 sandSky = oceanSkyColor(reflect(-sandToEye, sandNormal), 0.0);

@@ -2,7 +2,7 @@
 /**
  * Tornado Alley's performance pass (M7, 2026-09-24), held.
  *
- * Measured offline first with real three (www/lib/three.min.js in node:vm),
+ * Measured offline first with real three (tests/helpers/real-three.mjs),
  * which is how this suite builds the scene too:
  *
  *   1. THE SKY WAS SHADED ON EVERY PIXEL. It sat at renderOrder -1000, the
@@ -24,7 +24,7 @@
 import { jest } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import vm from 'node:vm';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 for (const name of ['config', 'funnel', 'wind', 'pond']) {
     jest.unstable_mockModule(`../www/tornado/js/${name}.min.js`, async () => (
@@ -39,9 +39,7 @@ let M;
 const perf = await import('../www/tornado/js/perf.js');
 
 beforeAll(async () => {
-    const ctx = vm.createContext({ self: {}, window: {}, console: { warn() {} } });
-    vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+    THREE = await loadRealThree();
     globalThis.THREE = THREE;
     const context = new Proxy({}, {
         get: (_t, p) => (p === 'createLinearGradient' || p === 'createRadialGradient'

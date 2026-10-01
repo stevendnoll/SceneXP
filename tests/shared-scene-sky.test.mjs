@@ -165,7 +165,7 @@ function installGlobals({ width = 1024, height = 768, dpr = 2, reducedMotion = f
     MeshBasicMaterial: Material, MeshStandardMaterial: Material, PointsMaterial: Material,
     AmbientLight, HemisphereLight, DirectionalLight,
     BackSide: 'back', DoubleSide: 'double',
-    BasicShadowMap: 'basic-shadow', PCFSoftShadowMap: 'pcf-soft',
+    BasicShadowMap: 'basic-shadow', PCFShadowMap: 'pcf',
     SRGBColorSpace: 'srgb', ACESFilmicToneMapping: 'aces',
   };
   const canvases = [];
@@ -229,7 +229,7 @@ test('desktop init wires the renderer and camera with the documented caps', asyn
   expect(renderer.opts.antialias).toBe(true);            // not a touch device
   expect(renderer.sizes[0]).toEqual([1024, 768]);
   expect(renderer.pixelRatios[0]).toBe(1.5);             // devicePixelRatio 2, capped
-  expect(renderer.shadowMap).toMatchObject({ enabled: true, type: 'pcf-soft', autoUpdate: false, needsUpdate: true });
+  expect(renderer.shadowMap).toMatchObject({ enabled: true, type: 'pcf', autoUpdate: false, needsUpdate: true });
   expect(renderer.xr.enabled).toBe(false);               // no WebXR: nothing starts a session
   expect(camera.fov).toBe(75);
   expect(camera.aspect).toBe(1024 / 768);

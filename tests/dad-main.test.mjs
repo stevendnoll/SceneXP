@@ -552,7 +552,7 @@ test('mobile boot uses the touch flow: tap to explore, tap targets, joystick tuc
 });
 
 test('falls back to the 2D site when WebGL is unavailable', async () => {
-  delete dom.windowStub.WebGLRenderingContext;
+  delete dom.windowStub.WebGL2RenderingContext;
   await import('../www/dad/js/main.js');
   await flushAsync();
   await jest.advanceTimersByTimeAsync(3000);

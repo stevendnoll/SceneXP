@@ -28,8 +28,19 @@ Three.js.
   experience keeps its own `main.js` orchestrator and assembles imported
   parts driven by one plain config object. See `www/shared/js/README.md` for
   the ground rules and versioning scheme.
-- **Three.js as a global.** Each experience's `index.html` loads
-  `lib/three.min.js` as a classic script before its module graph.
+- **Three.js as a global.** Every experience runs the same vendored
+  release, r186. Each `index.html` loads `lib/three/r186/three.min.js` as a
+  module script before its own `js/main.min.js`. That bundle sets the global
+  `THREE` that experiences and shared parts read, and module scripts run in
+  page order, so it is ready before any scene code runs. Three.js requires
+  WebGL 2, so a scene's WebGL check should ask for `'webgl2'`.
+- **Upgrading Three.js.** npm publishes Three.js as unminified ES modules.
+  To move to a new release, copy `build/three.module.js`, `build/three.core.js`
+  and `LICENSE` from the npm package into a new `www/lib/three/rNNN/`
+  folder, run `npm run build` (it bundles them into that folder's
+  `three.min.js`), then update `THREE_RELEASE` in
+  `tests/helpers/real-three.mjs` and the two tags on every page.
+  `tests/three-release.test.mjs` checks that they all agree.
 - **esbuild for minification.** The pages load the `.min.js` and `.min.css`
   builds, so rebuild after any edit.
 
@@ -416,8 +427,8 @@ source of truth either way.
   polite, warm, and professional. As a small house style, please avoid
   em-dashes and semicolons in user-facing text.
 - **MIT licensed.** Contributions are published under the project's MIT
-  license (see `LICENSE`). The bundled `three.min.js` keeps its own license
-  from the Three.js Authors.
+  license (see `LICENSE`). The vendored Three.js release in `www/lib/three/`
+  keeps its own license from the Three.js Authors.
 
 ## Questions
 

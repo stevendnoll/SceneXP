@@ -13,9 +13,7 @@
  * hold every frame's step to what the fastest rate allows.
  */
 import { jest } from '@jest/globals';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import vm from 'node:vm';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 for (const name of ['config', 'funnel', 'wind']) {
     jest.unstable_mockModule(`../www/tornado/js/${name}.min.js`, async () => (
@@ -31,9 +29,7 @@ let pond;
 let windAt;
 
 beforeAll(async () => {
-    const ctx = vm.createContext({ self: {}, window: {}, console: { warn() {} } });
-    vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+    THREE = await loadRealThree();
     globalThis.THREE = THREE;
     ({ TORNADO_CONFIG: C } = await import('../www/tornado/js/config.js'));
     F = await import('../www/tornado/js/funnel.js');

@@ -270,7 +270,7 @@ test('survives resize, gestures, visibility loss, and page hide', async () => {
 
 test('falls back to the 2D site when WebGL is unavailable', async () => {
   // Break WebGL before import: boot() must route to the fallback.
-  delete dom.windowStub.WebGLRenderingContext;
+  delete dom.windowStub.WebGL2RenderingContext;
   await import('../www/jamar/js/main.js');
   await flushAsync();
   await jest.advanceTimersByTimeAsync(3000);

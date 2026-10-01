@@ -818,7 +818,7 @@ test("Steve's greeting leads on to his portfolio, safely and not under a finger"
 });
 
 test('falls back to the 2D site when WebGL is unavailable', async () => {
-  delete dom.windowStub.WebGLRenderingContext;
+  delete dom.windowStub.WebGL2RenderingContext;
   await import('../www/steve/js/main.js');
   await flushAsync();
   await jest.advanceTimersByTimeAsync(3000);

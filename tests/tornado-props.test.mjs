@@ -16,9 +16,7 @@
  * tests/person-rig-seams.test.mjs, so a windmill really turns.
  */
 import { jest } from '@jest/globals';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import vm from 'node:vm';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 // The scene's sources, not their builds, so coverage measures what was written.
 for (const name of ['config', 'funnel', 'wind', 'pond']) {
@@ -37,9 +35,7 @@ let flora;
 let TS;
 
 beforeAll(async () => {
-    const ctx = vm.createContext({ self: {}, window: {}, console: { warn() {} } });
-    vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+    THREE = await loadRealThree();
     globalThis.THREE = THREE;
     const context = new Proxy({}, {
         get: (_t, p) => (p === 'createLinearGradient' || p === 'createRadialGradient'

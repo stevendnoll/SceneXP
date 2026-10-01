@@ -309,7 +309,8 @@ function buildRenderer() {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = GARDEN_CONFIG.sky.exposure;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // PCFShadowMap is soft from r182 on, which retired PCFSoftShadowMap.
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     // Not automatic: the sun moves slowly, so sky.js refreshes the map a few
     // times a second, which removes a full shadow pass from most frames.
     renderer.shadowMap.autoUpdate = false;
@@ -2476,11 +2477,12 @@ export function getState() {
 
 // ---- Boot ------------------------------------------------------------------
 
+/** Best-effort check that the browser can create a WebGL 2 context, which
+ *  three.js requires (r163 dropped WebGL 1). */
 export function hasWebGL() {
     try {
         const c = document.createElement('canvas');
-        return !!(window.WebGLRenderingContext &&
-            (c.getContext('webgl') || c.getContext('experimental-webgl')));
+        return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
     } catch (e) {
         return false;
     }

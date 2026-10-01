@@ -209,19 +209,8 @@ describe('the rounded torso, measured against real three', () => {
   let square;
 
   beforeAll(async () => {
-    const vm = await import('node:vm');
-    const { readFileSync } = await import('node:fs');
-    const { join } = await import('node:path');
-    const sandbox = {
-      console: { ...console, warn() {} },   // r160 warns about the legacy build
-      document: { createElementNS: () => ({ style: {}, getContext: () => ({}) }) },
-      navigator: { userAgent: 'node' },
-    };
-    sandbox.window = sandbox;
-    sandbox.self = sandbox;
-    vm.createContext(sandbox);
-    vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), sandbox);
-    RealTHREE = sandbox.THREE;
+    const { loadRealThree } = await import('./helpers/real-three.mjs');
+    RealTHREE = await loadRealThree();
 
     // createPerson reads the global THREE at CALL time, so the real build can
     // be swapped in around these two calls. That means this measures the

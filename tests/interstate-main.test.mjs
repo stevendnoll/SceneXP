@@ -557,7 +557,7 @@ test('touch devices get the tap-to-explore flow and joystick takeover', async ()
 
 test('falls back to the 2D site when WebGL is unavailable', async () => {
   // Break WebGL before import: boot() must route to the fallback.
-  delete dom.windowStub.WebGLRenderingContext;
+  delete dom.windowStub.WebGL2RenderingContext;
   await import('../www/interstate/js/main.js');
   await flushAsync();
   await jest.advanceTimersByTimeAsync(3000);

@@ -339,7 +339,8 @@ function initRenderer(canvas) {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
     renderer.shadowMap.enabled = !isTouch();
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // PCFShadowMap is soft from r182 on, which retired PCFSoftShadowMap.
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     return renderer;
 }
 

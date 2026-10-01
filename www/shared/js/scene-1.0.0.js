@@ -147,7 +147,8 @@ export function initScene(canvas, options = {}) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio));
 
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = isMobile ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
+    // PCFShadowMap is soft from r182 on, which retired PCFSoftShadowMap.
+    renderer.shadowMap.type = isMobile ? THREE.BasicShadowMap : THREE.PCFShadowMap;
     // The sun moves slowly, so we don't need to regenerate the shadow map every
     // frame. We disable auto-update and refresh it on a throttle (see
     // updateDayNightCycle), which removes a full per-frame shadow render pass.

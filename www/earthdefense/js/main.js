@@ -2621,11 +2621,12 @@ export function getState() {
 
 // ---- Boot -----------------------------------------------------------------
 
+/** Best-effort check that the browser can create a WebGL 2 context, which
+ *  three.js requires (r163 dropped WebGL 1). */
 function hasWebGL() {
     try {
         const c = document.createElement('canvas');
-        return !!(window.WebGLRenderingContext &&
-            (c.getContext('webgl') || c.getContext('experimental-webgl')));
+        return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
     } catch (e) {
         return false;
     }

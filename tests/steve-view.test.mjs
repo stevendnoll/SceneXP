@@ -31,10 +31,9 @@
  * here, against the real registrations.
  */
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
-import vm from 'node:vm';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
@@ -85,9 +84,7 @@ const ASPECTS = [
 beforeAll(async () => {
   // Real three, lifted out of a browser-shaped sandbox. The renderer is the
   // one piece node cannot provide, and nothing measured here goes through it.
-  const ctx = vm.createContext({ self: {}, window: {}, console });
-  vm.runInContext(readFileSync(join(root, 'www/lib/three.min.js'), 'utf8'), ctx);
-  const REAL = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+  const REAL = await loadRealThree({ console });
   THREE = Object.assign({}, REAL, { WebGLRenderer: function () { return chainable(); } });
 
   for (const k of ['THREE', 'document', 'window', 'navigator', 'sessionStorage', 'localStorage']) {

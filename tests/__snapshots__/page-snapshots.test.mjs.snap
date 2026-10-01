@@ -180,7 +180,7 @@ html [lang="en"]
     title
       "John Walker, The Auto Man"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=1" rel="stylesheet"]
@@ -314,7 +314,7 @@ html [lang="en"]
           p.ownership-note
             "The Auto Man name belongs to John Walker and appears here with his blessing."
     canvas#game-canvas [aria-label="A living 3D car dealership desk: John Walker points at a deal sheet and makes his customer's case while she nods along, the dealer listens from across the desk, and cars roll past the lot beyond the glass wall behind them" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -675,13 +675,16 @@ html [lang="en"]
             li
               strong
                 "Three.js as a global."
-              "Each experience's"
+              "Every experience runs the same release of Three.js (r186). Each"
               code
                 "index.html"
               "loads"
               code
-                "lib/three.min.js"
-              "as a classic script before its module graph."
+                "lib/three/r186/three.min.js"
+              "as a module script before its own scene, and that bundle sets the global"
+              code
+                "THREE"
+              "."
             li
               strong
                 "esbuild for minification."
@@ -904,10 +907,7 @@ html [lang="en"]
             li
               strong
                 "MIT licensed."
-              "Your contribution is published under the project's MIT license. The bundled"
-              code
-                "three.min.js"
-              "keeps its own license."
+              "Your contribution is published under the project's MIT license. The bundled Three.js library keeps its own license."
           h2
             "Ready when you are"
           p
@@ -1009,7 +1009,7 @@ html [data-ui-theme="garden" lang="en"]
     title
       "A Ride on the NCR Trail"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     noscript
@@ -1227,7 +1227,7 @@ html [data-ui-theme="garden" lang="en"]
           span.settings-value#look-speed-value
             "1.0"
     canvas#game-canvas [aria-label="A walkable 3D stretch of the NCR trail" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -1295,7 +1295,7 @@ html [data-ui-theme="ember" lang="en"]
       "Earth Defense"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=4" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=4" rel="stylesheet"]
@@ -1587,7 +1587,7 @@ html [data-ui-theme="ember" lang="en"]
           p#end-status.end-status.sr-only [aria-live="polite" role="status"]
           div#end-promo.end-promo
     canvas#game-canvas [aria-label="The view from a ship in orbit above Earth, with the Moon and Mars in the distance" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -1632,7 +1632,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Putt Putt with Mom and Dad"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     noscript
@@ -1854,7 +1854,7 @@ html [data-ui-theme="surf" lang="en"]
           span.settings-value#look-speed-value
             "1.0"
     canvas#game-canvas [aria-label="A walkable 3D pirate mini golf course" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -1900,7 +1900,7 @@ html [data-ui-theme="garden" lang="en"]
       "Fractal Garden"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=17" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=17" rel="stylesheet"]
@@ -2064,7 +2064,7 @@ html [data-ui-theme="garden" lang="en"]
           button#reset-cancel.tree-remove [type="button"]
             "Keep my garden"
     canvas#scene [aria-label="A 3D plot of open grassland where fractal trees can be planted and tended through the seasons" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -2110,7 +2110,7 @@ html [data-ui-theme="garden" lang="en"]
       "Gavin's Bug Patrol"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=2" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=2" rel="stylesheet"]
@@ -2177,7 +2177,7 @@ html [data-ui-theme="garden" lang="en"]
       p.prop-panel-note
         "Choose anything for a little of its story. The arrow keys move through the list, Escape closes whatever opens, and Tab or Escape puts this list away."
       ul#prop-list.prop-list
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -2224,7 +2224,7 @@ html [data-ui-theme="surf" lang="en"]
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="../shared/css/player-1.0.0.min.css" rel="preload"]
     link [as="style" href="css/experience.min.css?v=5" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="../shared/css/player-1.0.0.min.css" rel="stylesheet"]
@@ -2296,7 +2296,7 @@ html [data-ui-theme="surf" lang="en"]
       p#share-status.sr-only [aria-live="polite" role="status"]
       a.welcome-explore.promo-explore [href="/"]
         "More 3D worlds to explore at SceneXP.com"
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -2911,7 +2911,7 @@ html [lang="en"]
     title
       "Interstate Tire"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.png" rel="icon" sizes="64x64" type="image/png"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     noscript
@@ -3181,7 +3181,7 @@ html [lang="en"]
           span.settings-value#light-value
             "100%"
     canvas#game-canvas [aria-label="A walkable 3D tour of the Interstate Tire shop" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -3227,7 +3227,7 @@ html [data-ui-theme="neon" lang="en"]
       "Jamar's Karaoke Night"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css" rel="stylesheet"]
@@ -3314,7 +3314,7 @@ html [data-ui-theme="neon" lang="en"]
       p.prop-panel-note
         "Choose anything for a little of its story. The arrow keys move through the list, Escape closes whatever opens, and Tab or Escape puts this list away."
       ul#prop-list.prop-list
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -3360,7 +3360,7 @@ html [data-ui-theme="ember" lang="en"]
       "The Mandelbrot Set"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=2" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=2" rel="stylesheet"]
@@ -3432,7 +3432,7 @@ html [data-ui-theme="ember" lang="en"]
         circle [cx="12" cy="12" fill="none" r="9"]
         path [d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"]
         circle [cx="12.1" cy="17.4" fill="currentColor" r="1.05" stroke="none"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -3500,7 +3500,7 @@ html [lang="en"]
       "Corner Office"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=4" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=4" rel="stylesheet"]
@@ -4077,7 +4077,7 @@ html [lang="en"]
         p#confirm-detail.card-detail
         div#confirm-actions.card-actions
     section#print-sheet.print-sheet [aria-hidden="true"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -4335,7 +4335,7 @@ html [data-ui-theme="neon" lang="en"]
     title
       "Zumba with Roqui"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     noscript
@@ -4552,7 +4552,7 @@ html [data-ui-theme="neon" lang="en"]
           span.settings-value#settings-light-value
             "100%"
     canvas#game-canvas [aria-label="A walkable 3D Zumba class led by Roqui" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -4604,7 +4604,7 @@ html [data-ui-theme="garden" lang="en"]
     title
       "The Seed to Seed Garden"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     noscript
@@ -4832,7 +4832,7 @@ html [data-ui-theme="garden" lang="en"]
           span.settings-value#look-speed-value
             "1.0"
     canvas#game-canvas [aria-label="A walkable 3D backyard vegetable garden" role="img"]
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -4886,7 +4886,7 @@ html [lang="en"]
       "Steve's Home Office"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=1" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=1" rel="stylesheet"]
@@ -5143,7 +5143,7 @@ html [lang="en"]
       p.prop-panel-note
         "Choose anything for a little of its story. The arrow keys move through the list, Escape closes whatever opens, and Tab or Escape puts this list away."
       ul#prop-list.prop-list
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -5193,7 +5193,7 @@ html [lang="en"]
     title
       "Sunnyvale Jenn Consulting"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     noscript
@@ -5287,7 +5287,7 @@ html [lang="en"]
       p.prop-panel-note
         "Choose anything for a little of its story. The arrow keys move through the list, Escape closes whatever opens, and Tab or Escape puts this list away."
       ul#prop-list.prop-list
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -5572,7 +5572,7 @@ html [data-ui-theme="surf" lang="en"]
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="../shared/css/player-1.0.0.min.css" rel="preload"]
     link [as="style" href="css/experience.min.css" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="../shared/css/player-1.0.0.min.css" rel="stylesheet"]
@@ -5643,7 +5643,7 @@ html [data-ui-theme="surf" lang="en"]
       p#share-status.sr-only [aria-live="polite" role="status"]
       a.welcome-explore.promo-explore [href="/"]
         "More 3D worlds to explore at SceneXP.com"
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
 
@@ -5711,7 +5711,7 @@ html [data-ui-theme="neon" lang="en"]
       "X's and O's"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
     link [as="style" href="css/experience.min.css?v=18" rel="preload"]
-    link [as="script" href="../lib/three.min.js" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=18" rel="stylesheet"]
@@ -5944,6 +5944,6 @@ html [data-ui-theme="neon" lang="en"]
         div#summary-actions.card-actions
         p#summary-status.sr-only [aria-live="polite" role="status"]
         div#summary-promo.summary-promo
-    script [src="../lib/three.min.js"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;

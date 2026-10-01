@@ -1109,7 +1109,7 @@ describe('the rest of the conductor', () => {
 
     test('a browser with no WebGL is sent to the 2D site rather than a blank canvas', async () => {
         const main = await boot();
-        delete dom.windowStub.WebGLRenderingContext;
+        delete dom.windowStub.WebGL2RenderingContext;
         expect(main.__test__.hasWebGL()).toBe(false);
     });
 });

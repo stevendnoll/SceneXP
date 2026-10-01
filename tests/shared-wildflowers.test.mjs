@@ -15,17 +15,13 @@
  *   3. WITHOUT SWAY NOTHING IS PATCHED, which is why the garden's flowers
  *      are exactly what they were.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import vm from 'node:vm';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 let THREE;
 let WF;
 
 beforeAll(async () => {
-    const ctx = vm.createContext({ self: {}, window: {}, console: { warn() {} } });
-    vm.runInContext(readFileSync(join(process.cwd(), 'www/lib/three.min.js'), 'utf8'), ctx);
-    THREE = ctx.THREE || ctx.self.THREE || ctx.window.THREE;
+    THREE = await loadRealThree();
     globalThis.THREE = THREE;
     const context = new Proxy({}, { get: () => () => {}, set: () => true });
     globalThis.document = {

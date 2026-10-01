@@ -429,7 +429,7 @@ export function installDom({ innerWidth = 1280, innerHeight = 800 } = {}) {
     innerWidth,
     innerHeight,
     devicePixelRatio: 1,
-    WebGLRenderingContext: function WebGLRenderingContext() {},
+    WebGL2RenderingContext: function WebGL2RenderingContext() {},
     isSecureContext: true,
     listeners: windowListeners,
     location: {

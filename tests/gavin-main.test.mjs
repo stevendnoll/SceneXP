@@ -5,7 +5,7 @@
  * Under Node, importing main.js is side-effect-free unless a `document`
  * exists, so this suite installs the browser stand-ins from dom-stub.mjs
  * FIRST and then imports: the module auto-boots exactly the way a real page
- * load does. hasWebGL() passes (the stub canvas yields a truthy 'webgl'
+ * load does. hasWebGL() passes (the stub canvas yields a truthy 'webgl2'
  * context), the proof of work takes its graceful no-crypto path, and
  * renderer.setAnimationLoop lands in dom.loops so the test can step frames
  * by hand. Nothing renders, but every wiring line runs: a missing element
@@ -95,7 +95,7 @@ test('survives resize, taps, visibility loss, and page hide', async () => {
 
 test('falls back to the 2D site when WebGL is unavailable', async () => {
   // Break WebGL before import: boot() must route to the fallback.
-  delete dom.windowStub.WebGLRenderingContext;
+  delete dom.windowStub.WebGL2RenderingContext;
   await import('../www/gavin/js/main.js');
   await flushAsync();
   await jest.advanceTimersByTimeAsync(3000);

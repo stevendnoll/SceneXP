@@ -371,8 +371,8 @@ export function sidesForDepth(depth, settings = TREE_DEFAULTS) {
 /**
  * Write a skeleton into typed arrays.
  *
- * NO BufferGeometryUtils EXISTS IN THIS BUILD (the UMD three.min.js ships no
- * addons), so there is no mergeGeometries to lean on. Counting up front and
+ * NO BufferGeometryUtils EXISTS IN THIS BUILD (the vendored three.min.js
+ * carries no addons), so there is no mergeGeometries to lean on. Counting up front and
  * writing directly into pre-allocated arrays is both the only option and the
  * faster one.
  *
@@ -603,10 +603,9 @@ const LEAF_BODY = `
     mat3 leafIM = mat3(instanceMatrix);
     float leafISC = max(length(leafIM[0]), 0.0001);
     mat3 leafRot = leafIM / leafISC;
-    // Written out rather than using transpose(), which exists only in GLSL ES
-    // 3.00. three emits #version 300 es on a WebGL2 context, so transpose()
-    // would work today, but it would fail on the WebGL1 fallback and the
-    // failure mode is a whole shader that will not compile.
+    // Written out rather than using transpose(). Three (r163 on) is WebGL2
+    // only, so transpose() would compile too, but the written-out form is
+    // exactly equivalent and has been verified on screen.
     mat3 leafRotT = mat3(leafRot[0][0], leafRot[1][0], leafRot[2][0],
                          leafRot[0][1], leafRot[1][1], leafRot[2][1],
                          leafRot[0][2], leafRot[1][2], leafRot[2][2]);

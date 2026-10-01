@@ -409,7 +409,8 @@ function buildRenderer() {
     // when the sun or something in the room has moved (markRoom), never for
     // a frame where only the scenery outside or the camera moved.
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // PCFShadowMap is soft from r182 on, which retired PCFSoftShadowMap.
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.shadowMap.autoUpdate = false;
     renderer.shadowMap.needsUpdate = true;
     // Adaptive resolution (shared resolution-1.0.0): below the device's own
@@ -3160,11 +3161,12 @@ export function getDoc() {
 
 // ---- Boot -------------------------------------------------------------------
 
+/** Best-effort check that the browser can create a WebGL 2 context, which
+ *  three.js requires (r163 dropped WebGL 1). */
 export function hasWebGL() {
     try {
         const c = document.createElement('canvas');
-        return !!(window.WebGLRenderingContext &&
-            (c.getContext('webgl') || c.getContext('experimental-webgl')));
+        return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
     } catch (e) {
         return false;
     }

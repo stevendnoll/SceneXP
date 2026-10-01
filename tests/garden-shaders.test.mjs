@@ -22,6 +22,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { GARDEN_CONFIG } from '../www/garden/js/config.js';
 import { join } from 'node:path';
+import { loadRealThree } from './helpers/real-three.mjs';
 
 const DIR = join(process.cwd(), 'www', 'garden', 'js');
 
@@ -110,28 +111,24 @@ test('no shader uses a GLSL reserved word as a name', () => {
 /**
  * Three's shader chunks, resolved.
  *
- * THE RAW BUNDLE IS NOT ENOUGH, and that mistake cost a second round trip. An
- * earlier version of this check searched three.min.js as plain text and
+ * THE RAW CHUNKS ARE NOT ENOUGH, and that mistake cost a second round trip.
+ * An earlier version of this check searched the bundle as plain text and
  * reported "no collisions" while `mat3 im` sat in `defaultnormal_vertex`
  * waiting to redefine ours. A chunk only becomes part of a shader once its
- * `#include` is expanded, so the includes have to be expanded here too.
+ * `#include` is expanded, so the includes have to be expanded here too. The
+ * chunks come from the real build's THREE.ShaderChunk, so no text format
+ * inside the minified bundle has to be parsed.
  */
+const { ShaderChunk } = await loadRealThree();
+
 function threeShaders() {
-    const bundle = readFileSync(join(process.cwd(), 'www', 'lib', 'three.min.js'), 'utf8');
-    const chunks = new Map();
-    for (const m of bundle.matchAll(/([a-z_0-9]+):"((?:[^"\\]|\\.)*)"/g)) {
-        if (!chunks.has(m[1])) chunks.set(m[1], m[2]);
-    }
-    const unescape = (t) => t
-        .replace(/\\n/g, '\n').replace(/\\t/g, '\t')
-        .replace(/\\"/g, '"').replace(/\\\\/g, '\\');
     const resolve = (src, depth = 0) => depth > 8 ? src : src.replace(
         /#include <([a-z_0-9]+)>/g,
-        (_, name) => resolve(unescape(chunks.get(name) || ''), depth + 1));
+        (_, name) => resolve(ShaderChunk[name] || '', depth + 1));
 
     const out = {};
     for (const name of ['meshphysical_vert', 'meshphysical_frag', 'depth_vert', 'depth_frag']) {
-        if (chunks.has(name)) out[name] = resolve(unescape(chunks.get(name)));
+        if (typeof ShaderChunk[name] === 'string') out[name] = resolve(ShaderChunk[name]);
     }
     return out;
 }
@@ -205,7 +202,7 @@ test('every material modified through onBeforeCompile names its own cache key', 
 test('injected shader bodies target chunks that three actually has', () => {
     // A .replace() whose needle is not in the source fails SILENTLY: the
     // shader compiles perfectly and simply does nothing this scene asked for.
-    const three = readFileSync(join(process.cwd(), 'www', 'lib', 'three.min.js'), 'utf8');
+    const three = Object.values(ShaderChunk).join('\n');
     const targets = new Set();
     for (const name of ['tree.js', 'terrain.js']) {
         const src = source(name);
