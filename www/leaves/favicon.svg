@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Leaves">
+    <!-- A red maple leaf on a soft autumn gold tile. -->
+    <rect width="64" height="64" rx="14" fill="#f3d9a4"/>
+    <path d="M32 7 L36 19 L46 14 L43 26 L55 26 L47 34 L52 40 L40 39 L38 47 L33 42 L33 57 L31 57 L31 42 L26 47 L24 39 L12 40 L17 34 L9 26 L21 26 L18 14 L28 19 Z" fill="#c8321f"/>
+    <path d="M32 44 L32 18 M32 36 L21 28 M32 36 L43 28" stroke="#8e2014" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+</svg>

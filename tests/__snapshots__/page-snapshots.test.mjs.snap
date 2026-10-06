@@ -3821,6 +3821,147 @@ html [data-ui-theme="neon" lang="en"]
     script [src="js/main.min.js" type="module"]"
 `;
 
+exports[`www/leaves/index.html 1`] = `
+"<!doctype html>
+html [data-ui-theme="ember" lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="noindex, nofollow" name="robots"]
+    meta [content="A front yard buried in autumn leaves, and a leaf blower waiting for you. Every leaf tumbles, skids and piles up on its own, live in your browser." name="description"]
+    meta [content="#5d7f3a" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/leaves/" rel="canonical"]
+    meta [content="Leaves" property="og:title"]
+    meta [content="A front yard buried in autumn leaves, and a leaf blower waiting for you." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/leaves/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Leaves" name="twitter:title"]
+    meta [content="A front yard buried in autumn leaves, and a leaf blower waiting for you." name="twitter:description"]
+    meta [content="https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1" name="twitter:image"]
+    meta [content="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "@id": "https://www.scenexp.com/leaves/#webpage",
+        "url": "https://www.scenexp.com/leaves/",
+        "name": "Leaves",
+        "description": "A front yard buried in autumn leaves, drawn live in the browser, where visitors blow the leaves around with a leaf blower and watch every one tumble, skid and pile up.",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Leaves",
+            "item": "https://www.scenexp.com/leaves/"
+          }
+        ]
+      }
+    title
+      "Leaves | SceneXP"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=1" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="js/sim.min.js" rel="modulepreload"]
+    link [href="js/leafmesh.min.js" rel="modulepreload"]
+    link [href="js/yard.min.js" rel="modulepreload"]
+    link [href="js/blower.min.js" rel="modulepreload"]
+    link [href="js/view.min.js" rel="modulepreload"]
+    link [href="js/lab.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="favicon.svg" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="css/experience.min.css?v=1" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body
+    h1.sr-only
+      "Leaves"
+    noscript
+      div.noscript-fallback
+        h1
+          "Leaves"
+        p
+          "This is a front yard buried in autumn leaves, and it needs JavaScript to run. Thousands of red, orange and gold leaves cover the lawn in front of a white house, and a leaf blower is waiting for you. Point it anywhere and every leaf in its path tumbles, skids and piles up on its own, drawn live in your browser."
+        p
+          "SceneXP is a home for 3D experiences that run right in your browser."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/contact.html"]
+                "Contact the developer"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    div#loading-screen
+      div.loader-content
+        div.loader-title
+          "LEAVES"
+        div.loader-bar [aria-hidden="true"]
+          div.loader-progress#load-progress
+        div.loader-status#load-status [aria-live="polite" role="status"]
+          "Loading…"
+    div#blocker [tabindex="-1"]
+      div#instructions
+        p.title
+          "WELCOME"
+        p.subtitle
+          "A front yard buried in autumn leaves, and a leaf blower waiting for you"
+        p.click-prompt
+          "Click to step in"
+        div.controls-hint
+          span
+            "BLOW"
+          "Press and hold on the lawn where you would like the air to go. The leaf blower follows you around the yard."
+          span
+            "KEYS"
+          "WASD or the arrow keys walk, and holding Space runs the blower."
+          span
+            "HELP"
+          "The question mark in the corner, or Escape, brings you back here."
+        a#explore-link.welcome-explore [href="/"]
+          "More 3D worlds to explore at SceneXP.com"
+    canvas#game-canvas [aria-label="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower" role="img"]
+    button#help-btn.ui-float.menu-btn.help-btn [aria-label="Help" title="Help (Esc)" type="button"]
+      svg [aria-hidden="true" viewbox="0 0 24 24"]
+        circle [cx="12" cy="12" fill="none" r="9"]
+        path [d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"]
+        circle [cx="12.1" cy="17.4" fill="currentColor" r="1.05" stroke="none"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
+    script [src="js/main.min.js" type="module"]"
+`;
+
 exports[`www/mandelbrot/index.html 1`] = `
 "<!doctype html>
 html [data-ui-theme="ember" lang="en"]

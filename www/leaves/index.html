@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en" data-ui-theme="ember">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         No media-src: this scene plays no sound. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <!-- BEING BUILT IN THE OPEN (M0, 2026-10-06): the leaf lab, the first step
+         of the leaf blower scene. Kept out of the directory, the sitemap,
+         llms.txt and search until it is released. Releasing it means a social
+         card, a directory card, and taking this tag off (see tests/directory). -->
+    <meta name="robots" content="noindex, nofollow">
+
+    <meta name="description" content="A front yard buried in autumn leaves, and a leaf blower waiting for you. Every leaf tumbles, skids and piles up on its own, live in your browser.">
+    <meta name="theme-color" content="#5d7f3a">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they stay literal absolute URLs naming where this page is served
+         (www.scenexp.com/leaves). When serving from a new domain, update
+         the canonical, og:url, og:image, twitter:image, and the JSON-LD ids. -->
+    <link rel="canonical" href="https://www.scenexp.com/leaves/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Leaves">
+    <meta property="og:description" content="A front yard buried in autumn leaves, and a leaf blower waiting for you.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/leaves/">
+    <meta property="og:locale" content="en_US">
+    <!-- THE SOCIAL CARD IS STILL TO COME. og-leaves.jpg will be Steve's
+         capture of the yard (1200 by 630, sRGB baked in, see CONTRIBUTING),
+         made once the look is approved. Exactly one og:image, as on every
+         page, since Apple's link preview draws every one it finds. -->
+    <meta property="og:image" content="https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Leaves">
+    <meta name="twitter:description" content="A front yard buried in autumn leaves, and a leaf blower waiting for you.">
+    <meta name="twitter:image" content="https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1">
+    <meta name="twitter:image:alt" content="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "@id": "https://www.scenexp.com/leaves/#webpage",
+      "url": "https://www.scenexp.com/leaves/",
+      "name": "Leaves",
+      "description": "A front yard buried in autumn leaves, drawn live in the browser, where visitors blow the leaves around with a leaf blower and watch every one tumble, skid and pile up.",
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Leaves",
+          "item": "https://www.scenexp.com/leaves/"
+        }
+      ]
+    }
+    </script>
+
+    <title>Leaves | SceneXP</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
+    <link rel="preload" href="css/experience.min.css?v=1" as="style">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="js/sim.min.js">
+    <link rel="modulepreload" href="js/leafmesh.min.js">
+    <link rel="modulepreload" href="js/yard.min.js">
+    <link rel="modulepreload" href="js/blower.min.js">
+    <link rel="modulepreload" href="js/view.min.js">
+    <link rel="modulepreload" href="js/lab.min.js">
+    <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
+    <!-- END generated modulepreload -->
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
+    <link rel="stylesheet" href="css/experience.min.css?v=1">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- The live page's heading, for anybody navigating by heading. -->
+    <h1 class="sr-only">Leaves</h1>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers). -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Leaves</h1>
+            <p>This is a front yard buried in autumn leaves, and it needs
+                JavaScript to run. Thousands of red, orange and gold leaves
+                cover the lawn in front of a white house, and a leaf blower is
+                waiting for you. Point it anywhere and every leaf in its path
+                tumbles, skids and piles up on its own, drawn live in your
+                browser.</p>
+            <p>SceneXP is a home for 3D experiences that run right in your
+                browser.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">LEAVES</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <!-- The welcome overlay. Steps aside on a click, a tap, Enter, Space, or
+         Escape, and comes back with Escape or the help button. tabindex="-1"
+         so the help button can hand it focus as the button hides. -->
+    <div id="blocker" tabindex="-1">
+        <div id="instructions">
+            <p class="title">WELCOME</p>
+            <p class="subtitle">A front yard buried in autumn leaves, and a leaf blower waiting for you</p>
+            <p class="click-prompt">Click to step in</p>
+            <div class="controls-hint">
+                <span>BLOW</span> Press and hold on the lawn where you would like the air to go. The leaf blower follows you around the yard.
+                <span>KEYS</span> WASD or the arrow keys walk, and holding Space runs the blower.
+                <span>HELP</span> The question mark in the corner, or Escape, brings you back here.
+            </div>
+            <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
+        </div>
+    </div>
+
+    <canvas id="game-canvas" role="img" aria-label="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower"></canvas>
+
+    <!-- Help: brings the welcome screen back, exactly as Escape does, for
+         anybody without a keyboard. Hidden while the welcome screen is up:
+         .ui-float is display:none until main.js adds .visible. -->
+    <button id="help-btn" class="ui-float menu-btn help-btn" type="button"
+        title="Help (Esc)"
+        aria-label="Help">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" />
+            <path d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" stroke-linecap="round"
+                stroke-linejoin="round" fill="none" />
+            <circle cx="12.1" cy="17.4" r="1.05" stroke="none" fill="currentColor" />
+        </svg>
+    </button>
+
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

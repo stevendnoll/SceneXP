@@ -102,7 +102,9 @@ const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
 // joined it at M0 on 2026-09-24, and left at its M7 release on 2026-09-28.
 // Starfall, the first WebGPU scene, joined on 2026-10-01 and stays: Steve
 // kept it as an unlisted proof of concept rather than a directory scene.
-const UNRELEASED = ['starfall'];
+// The leaf lab (www/leaves), M0 of the leaf blower scene, joined on
+// 2026-10-06 and leaves at its release.
+const UNRELEASED = ['leaves', 'starfall'];
 
 const sceneSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true })
     .filter((d) => d.isDirectory() && !IGNORED_DIRS.includes(d.name))
