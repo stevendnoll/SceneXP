@@ -92,6 +92,39 @@ describe('the round', () => {
     });
 });
 
+describe('the neighbor\'s last word in the round', () => {
+    test('owed as the clock runs out, it holds the result until he has had it', () => {
+        const round = R.createRound(RC);
+        R.stepRound(round, 0.1, { blowing: true, moving: 0 }, RC);
+        expect(R.stepRound(round, RC.seconds, { blowing: false, moving: 0, revenge: true }, RC)).toBe('revenge');
+        expect(round.phase).toBe('revenge');
+        expect(R.isOver(round)).toBe(true);
+        expect(R.canBlow(round)).toBe(false);
+        for (let i = 0; i < 50; i++) expect(R.stepRound(round, 0.1, { moving: 0, revengeDone: false }, RC)).toBe(null);
+        expect(R.stepRound(round, 0.1, { moving: 0, revengeDone: true }, RC)).toBe('time-up');
+        expect(round.phase).toBe('settling');
+        expect(R.stepRound(round, RC.settleMin, { moving: 0 }, RC)).toBe('done');
+    });
+
+    test('never holds the result past its cap, and when it is not owed it never happens', () => {
+        const round = R.createRound(RC);
+        R.stepRound(round, 0.1, { blowing: true, moving: 0 }, RC);
+        R.stepRound(round, RC.seconds, { moving: 0, revenge: true }, RC);
+        let t = 0;
+        let event = null;
+        while (!event) { event = R.stepRound(round, 0.5, { moving: 0, revengeDone: false }, RC); t += 0.5; }
+        expect(event).toBe('time-up');
+        expect(t).toBeGreaterThanOrEqual(RC.revengeMax);
+        expect(t).toBeLessThan(RC.revengeMax + 0.6);
+
+        const fair = R.createRound(RC);
+        R.stepRound(fair, 0.1, { blowing: true, moving: 0 }, RC);
+        expect(R.stepRound(fair, RC.seconds, { moving: 0, revenge: false }, RC)).toBe('time-up');
+        expect(R.isOver(fair)).toBe(true);
+        expect(R.isOver(R.createRound(RC))).toBe(false);
+    });
+});
+
 describe('where the leaves are', () => {
     const Y = C.yard;
 
@@ -110,15 +143,32 @@ describe('where the leaves are', () => {
         const sim = S.createSim(2000, C);
         S.scatterLeaves(sim, C);
         const t = Sc.tally(sim, Y);
-        expect(t).toEqual({ lawn: 2000, tarp: 0, street: 0, neighbor: 0, total: 2000 });
+        expect(t).toMatchObject({ lawn: 2000, tarp: 0, street: 0, neighbor: 0, total: 2000, sent: 0 });
         expect(Sc.clearedShare(t)).toBe(0);
         // Moved leaves are counted where they went.
         sim.px[0] = -7; sim.pz[0] = -4;
         sim.px[1] = 13; sim.pz[1] = 2;
         sim.px[2] = 1; sim.pz[2] = 9;
         const moved = Sc.tally(sim, Y);
-        expect(moved).toEqual({ lawn: 1997, tarp: 1, street: 1, neighbor: 1, total: 2000 });
+        expect(moved).toMatchObject({ lawn: 1997, tarp: 1, street: 1, neighbor: 1, total: 2000 });
+        // Where ours lie on his lawn, for him to aim at.
+        expect(moved).toMatchObject({ nearZ: 2, farZ: 2, deepX: 13 });
         expect(Sc.clearedShare(moved)).toBeCloseTo(3 / 2000, 12);
+    });
+
+    test('every leaf that went over the fence is counted, even once it has been blown back', () => {
+        const sim = S.createSim(500, C);
+        S.scatterLeaves(sim, C);
+        const sent = new Uint8Array(sim.count);
+        sim.px[0] = 12; sim.pz[0] = 1;
+        sim.px[1] = 14; sim.pz[1] = -2;
+        expect(Sc.tally(sim, Y, sent)).toMatchObject({ neighbor: 2, sent: 2 });
+        // He blows one back.
+        sim.px[1] = 3;
+        const after = Sc.tally(sim, Y, sent);
+        expect(after).toMatchObject({ neighbor: 1, sent: 2 });
+        // Without the flags, sent is simply who is over there now.
+        expect(Sc.tally(sim, Y)).toMatchObject({ neighbor: 1, sent: 1 });
     });
 
     test('a new round lays the very same yard back down', () => {
@@ -177,6 +227,16 @@ describe('what the end card says', () => {
         expect(v.title).toBe('The neighbors are talking');
     });
 
+    test('his last word is the headline, and the story the share tells', () => {
+        const t = tallyOf({ lawn: 600, tarp: 300, street: 100, sent: 2500 });
+        expect(Sc.verdict(t, true)).toMatchObject({ key: 'revenge', title: 'The neighbor had the last word' });
+        expect(Sc.shareText(t, 60, true))
+            .toBe('I cleared 40% of my yard in 60 seconds. Then my neighbor blew 2,500 leaves back at me. A leaf blower game on SceneXP.');
+        expect(Sc.resultSentence(t, true)).toMatch(/^The neighbor had the last word\. 40 percent/);
+        // The fence row counts every leaf sent over, not only those still there.
+        expect(Sc.resultRows(t).find((r) => r.key === 'neighbor')).toEqual({ key: 'neighbor', label: 'Sent over the fence', value: '2,500' });
+    });
+
     test('the street shortcut is noticed, kindly', () => {
         const street = Sc.verdict(tallyOf({ lawn: 300, tarp: 100, street: 600 }));
         expect(street.line).toMatch(/into the street/);
@@ -200,7 +260,7 @@ describe('what the end card says', () => {
 
     test('a screen reader hears the whole result in one sentence', () => {
         expect(Sc.resultSentence(tallyOf({ lawn: 500, tarp: 300, street: 199, neighbor: 1 })))
-            .toBe('Respectable work. 50 percent of the lawn cleared, with 300 leaves on the tarp, 199 leaves in the street, and 1 leaf over the fence.');
+            .toBe('Respectable work. 50 percent of the lawn cleared, with 300 leaves on the tarp, 199 leaves in the street, and 1 leaf sent over the fence.');
     });
 
     test('every word keeps the house style: no em dashes, no semicolons, American spelling', () => {
@@ -209,10 +269,10 @@ describe('what the end card says', () => {
             tallyOf({ lawn: 700, tarp: 300 }), tallyOf({ lawn: 900, tarp: 100 }), tallyOf({ tarp: 700, neighbor: 300 }),
             tallyOf({ lawn: 300, tarp: 100, street: 600 })
         ];
-        const copy = tallies.flatMap((t) => {
-            const v = Sc.verdict(t);
-            return [v.title, v.line, Sc.shareText(t, 60), Sc.resultSentence(t), ...Sc.resultRows(t).map((r) => r.label)];
-        });
+        const copy = tallies.flatMap((t) => [false, true].flatMap((revenge) => {
+            const v = Sc.verdict(t, revenge);
+            return [v.title, v.line, Sc.shareText(t, 60, revenge), Sc.resultSentence(t, revenge), ...Sc.resultRows(t).map((r) => r.label)];
+        }));
         for (const text of copy) {
             expect(text).not.toMatch(/[—;]/);
             expect(text).not.toMatch(/\b(colour|neighbour|centre|grey|metre)s?\b/i);

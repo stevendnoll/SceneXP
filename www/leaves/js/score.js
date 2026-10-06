@@ -35,12 +35,36 @@ export function regionOf(x, z, yard) {
     return 'lawn';
 }
 
-/** How many leaves are in each region: { lawn, tarp, street, neighbor,
- *  total }. Walks every leaf, so call it a few times a second, not every
- *  frame. */
-export function tally(sim, yard) {
-    const t = { lawn: 0, tarp: 0, street: 0, neighbor: 0, total: sim.count };
-    for (let i = 0; i < sim.count; i++) t[regionOf(sim.px[i], sim.pz[i], yard)]++;
+/**
+ * How many leaves are in each region: { lawn, tarp, street, neighbor,
+ * total }, plus where on the neighbor's lawn ours lie (`nearZ`, `farZ`
+ * along the fence and `deepX` the farthest in, for him to aim at). Walks
+ * every leaf, so call it a few times a second, not every frame.
+ *
+ * `sent`, if given, is one flag per leaf, set here for every leaf found on
+ * the neighbor's lawn and never cleared, and its count comes back as
+ * `sent`: every leaf that went over the fence this round, even the ones he
+ * has since blown back.
+ */
+export function tally(sim, yard, sent = null) {
+    const t = {
+        lawn: 0, tarp: 0, street: 0, neighbor: 0, total: sim.count,
+        sent: 0, nearZ: Infinity, farZ: -Infinity, deepX: -Infinity
+    };
+    for (let i = 0; i < sim.count; i++) {
+        const x = sim.px[i];
+        const z = sim.pz[i];
+        const where = regionOf(x, z, yard);
+        t[where]++;
+        if (where === 'neighbor') {
+            if (z < t.nearZ) t.nearZ = z;
+            if (z > t.farZ) t.farZ = z;
+            if (x > t.deepX) t.deepX = x;
+            if (sent) sent[i] = 1;
+        }
+        if (sent && sent[i]) t.sent++;
+    }
+    if (!sent) t.sent = t.neighbor;
     return t;
 }
 
@@ -73,12 +97,16 @@ export function clockText(seconds) {
 
 /**
  * The end card's headline and its line, by how the round went. Each has a
- * `key` for the usage log. The neighbor comes first: sending him a quarter
- * of the yard is the story, however clean the lawn is.
+ * `key` for the usage log. The neighbor comes first: his last word (`revenge`)
+ * is the story, and so is sending him a quarter of the yard, however clean
+ * the lawn is.
  */
-export function verdict(t) {
+export function verdict(t, revenge = false) {
     const cleared = clearedShare(t);
     const share = (n) => (t.total > 0 ? n / t.total : 0);
+    if (revenge) {
+        return { key: 'revenge', title: 'The neighbor had the last word', line: 'Leave a pile on his lawn and he sends it all back, with interest.' };
+    }
     if (share(t.neighbor) >= 0.25) {
         return { key: 'neighbor', title: 'The neighbors are talking', line: 'A good share of your yard is now in theirs. They noticed.' };
     }
@@ -100,24 +128,27 @@ export function resultRows(t) {
     return [
         { key: 'tarp', label: 'On the tarp', value: formatCount(t.tarp) },
         { key: 'street', label: 'In the street', value: formatCount(t.street) },
-        { key: 'neighbor', label: 'Over the fence', value: formatCount(t.neighbor) },
+        { key: 'neighbor', label: 'Sent over the fence', value: formatCount(t.sent ?? t.neighbor) },
         { key: 'lawn', label: 'Still on the lawn', value: formatCount(t.lawn) }
     ];
 }
 
 /** The sentence a visitor posts. The neighbor makes the better story when
- *  there is one, and the pile on the tarp otherwise. */
-export function shareText(t, seconds) {
+ *  there is one (best of all when he had the last word), and the pile on the
+ *  tarp otherwise. */
+export function shareText(t, seconds, revenge = false) {
     const head = `I cleared ${percent(clearedShare(t))}% of my yard in ${seconds} seconds.`;
+    const sent = t.sent ?? t.neighbor;
     let tail = '';
-    if (t.neighbor > 0) tail = ` ${leaves(t.neighbor)} went to the neighbor.`;
+    if (revenge) tail = ` Then my neighbor blew ${leaves(sent)} back at me.`;
+    else if (sent > 0) tail = ` ${leaves(sent)} went to the neighbor.`;
     else if (t.tarp > 0) tail = ` ${leaves(t.tarp)} made it onto the tarp.`;
     return `${head}${tail} A leaf blower game on SceneXP.`;
 }
 
 /** The result in one sentence, for a screen reader. */
-export function resultSentence(t) {
-    const v = verdict(t);
+export function resultSentence(t, revenge = false) {
+    const v = verdict(t, revenge);
     return `${v.title}. ${percent(clearedShare(t))} percent of the lawn cleared, with ${leaves(t.tarp)} on the tarp, `
-        + `${leaves(t.street)} in the street, and ${leaves(t.neighbor)} over the fence.`;
+        + `${leaves(t.street)} in the street, and ${leaves(t.sent ?? t.neighbor)} sent over the fence.`;
 }

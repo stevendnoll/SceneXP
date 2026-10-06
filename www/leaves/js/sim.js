@@ -186,6 +186,8 @@ export function createSim(count, config) {
         random: makeRandom((config.leaves.seed || 1) + 7),
         stats: { woken: 0, slept: 0, steps: 0 },
         air: new Float32Array(3),
+        air2: new Float32Array(3),
+        airJet: null,
         // Which cell boundaries a wall stands on (see wallGrid).
         blockE: new Uint8Array(nx * nz),
         blockN: new Uint8Array(nx * nz)
@@ -723,6 +725,24 @@ export function airAt(jet, x, y, z, ground, out) {
     return best;
 }
 
+/** The fastest air any of `jets` blows at (x, y, z), left in `sim.air`,
+ *  with the jet it came from in `sim.airJet`. Returns its speed. */
+function airOf(sim, jets, x, y, z, ground) {
+    const out = sim.air;
+    out[0] = 0; out[1] = 0; out[2] = 0;
+    sim.airJet = null;
+    let best = 0;
+    for (let k = 0; k < jets.length; k++) {
+        const u = airAt(jets[k], x, y, z, ground, sim.air2);
+        if (u > best) {
+            best = u;
+            out[0] = sim.air2[0]; out[1] = sim.air2[1]; out[2] = sim.air2[2];
+            sim.airJet = jets[k];
+        }
+    }
+    return best;
+}
+
 /** Wake the sleeping leaves the jet reaches: the buckets under its
  *  footprint, and in them the leaves near the surface in fast enough air.
  *
@@ -779,9 +799,8 @@ function wakeUnderJet(sim, jet) {
 // ---- Stepping -------------------------------------------------------------------
 
 /** One step of one awake leaf. Returns true if it went back to sleep. */
-function stepLeaf(sim, i, h, jet) {
+function stepLeaf(sim, i, h, jets) {
     const P = sim.P;
-    const B = jet ? jet.B : null;
     const air = sim.air;
     let x = sim.px[i];
     let y = sim.py[i];
@@ -795,7 +814,8 @@ function stepLeaf(sim, i, h, jet) {
     // and hangs there awake.
     const onGround = y <= ground + sim.lift[i] + 0.003;
 
-    let u = airAt(jet, x, y, z, ground, air);
+    const u = airOf(sim, jets, x, y, z, ground);
+    const B = sim.airJet ? sim.airJet.B : null;
     let ax = air[0];
     let ay = air[1];
     let az = air[2];
@@ -957,19 +977,23 @@ function stepLeaf(sim, i, h, jet) {
 }
 
 /**
- * Advance the yard by `dt` seconds with this frame's jet (or null for still
- * air). Long frames are cut into steps no longer than physics.maxStep.
+ * Advance the yard by `dt` seconds with this frame's jets: one jet, a list
+ * of them, or null for still air. Where two blow on the same leaf, it feels
+ * the faster air. Long frames are cut into steps no longer than
+ * physics.maxStep.
  */
-export function stepSim(sim, dt, jet) {
+export function stepSim(sim, dt, jets) {
     if (!(dt > 0)) return;
-    if (jet && jet.on) wakeUnderJet(sim, jet);
+    // One jet, a list of them (the visitor's and the neighbor's), or none.
+    const list = Array.isArray(jets) ? jets.filter((j) => j && j.on) : (jets && jets.on ? [jets] : []);
+    for (let k = 0; k < list.length; k++) wakeUnderJet(sim, list[k]);
     const n = Math.max(1, Math.ceil(dt / sim.P.maxStep));
     const h = dt / n;
     for (let s = 0; s < n; s++) {
         sim.time += h;
         // Backwards, because a leaf that sleeps is swapped out for the last.
         for (let a = sim.activeCount - 1; a >= 0; a--) {
-            stepLeaf(sim, sim.active[a], h, jet);
+            stepLeaf(sim, sim.active[a], h, list);
         }
         sim.stats.steps++;
     }

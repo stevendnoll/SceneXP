@@ -189,6 +189,39 @@ describe('the blower\'s air', () => {
         expect(out[0]).toBeGreaterThan(0);
     });
 
+    test('one jet in a list blows exactly as the jet alone, and an idle second jet changes nothing', () => {
+        const a = yard(1500).sim;
+        const b = yard(1500).sim;
+        const c = yard(1500).sim;
+        const ours = S.makeJet(C.blower, 0, 3, 0, -1, true);
+        const idle = S.makeJet(C.blower, 14, 0, -1, 0, false);
+        for (let f = 0; f < 60; f++) {
+            S.stepSim(a, 1 / 60, ours);
+            S.stepSim(b, 1 / 60, [ours]);
+            S.stepSim(c, 1 / 60, [ours, idle, null]);
+        }
+        expect(Array.from(b.pose)).toEqual(Array.from(a.pose));
+        expect(Array.from(c.pose)).toEqual(Array.from(a.pose));
+    });
+
+    test('where two blowers reach the same leaf, it feels the faster air', () => {
+        const sim = yard(10).sim;
+        const strong = S.makeJet(C.blower, 0, 3, 0, -1, true);
+        const weak = S.makeJet({ ...C.blower, speed: 5 }, 0, 3, 0, -1, true);
+        const x = strong.ix;
+        const z = strong.iz - 1;
+        const out = new Float32Array(3);
+        const fast = S.airAt(strong, x, 0.01, z, 0, out);
+        // Stepped with both, a resting leaf there is driven as by the strong one.
+        S.dropLeaf(sim, 0, x, 0.004, z);
+        const twin = yard(10).sim;
+        S.dropLeaf(twin, 0, x, 0.004, z);
+        S.stepSim(sim, 1 / 60, [weak, strong]);
+        S.stepSim(twin, 1 / 60, strong);
+        expect(fast).toBeGreaterThan(S.airAt(weak, x, 0.01, z, 0, out));
+        expect(sim.vz[0]).toBeCloseTo(twin.vz[0], 9);
+    });
+
     test('a switched-off blower moves nothing', () => {
         const off = S.makeJet(C.blower, 0, 2, 0, -1, false);
         expect(S.airAt(off, off.ix, 0.01, off.iz - 1, 0, out)).toBe(0);

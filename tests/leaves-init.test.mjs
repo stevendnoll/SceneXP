@@ -378,6 +378,56 @@ describe('the round', () => {
     });
 });
 
+describe('the neighbor', () => {
+    /** Lay `n` of the yard's leaves on the neighbor's lawn, by the fence. */
+    function sendOver(main, n) {
+        const sim = main.__test__.sim();
+        for (let i = 0; i < n; i++) {
+            sim.px[i] = 10.4 + (i % 10) * 0.3;
+            sim.pz[i] = -1 + Math.floor(i / 10) * 0.3;
+        }
+    }
+
+    test('leaves on his lawn bring him out, and the visitor hears about it', async () => {
+        const main = await boot();
+        fire(dom.el('blocker'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 1, 20);
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        expect(main.getState().neighbor.state).toBe('inside');
+        sendOver(main, 80);
+        frames(main, 1, 20);
+        expect(main.getState().neighbor.state).not.toBe('inside');
+        expect(dom.el('round-status').textContent).toMatch(/neighbor has noticed/);
+        // He goes about his visit without anything throwing.
+        expect(() => frames(main, 15, 20)).not.toThrow();
+        expect(main.getState().counted.sent).toBeGreaterThanOrEqual(80);
+    });
+
+    test('too much left on his lawn as the clock runs out, and he has the last word', async () => {
+        const main = await boot();
+        fire(dom.el('blocker'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 0.2, 20);
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        frames(main, 59, 20);
+        // A quarter of this small yard, put over just before the end.
+        sendOver(main, 150);
+        frames(main, 1.5, 20);
+        expect(main.getState().round.phase).toBe('revenge');
+        expect(dom.el('round-status').textContent).toMatch(/not having it/);
+        frames(main, 25, 20);
+        const s = main.getState();
+        expect(s.endShown).toBe(true);
+        expect(s.result.revenge).toBe(true);
+        expect(dom.el('end-title').textContent).toBe('The neighbor had the last word');
+        // Play again puts him back inside and forgets the round.
+        fire(dom.el('end-again'), 'click');
+        expect(main.getState().neighbor.state).toBe('inside');
+        expect(main.getState().counted.sent).toBe(0);
+    });
+});
+
 describe('the page', () => {
     let html;
     beforeAll(async () => { html = await readFile(PAGE, 'utf8'); });

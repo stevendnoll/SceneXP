@@ -201,6 +201,54 @@ export const LEAVES_CONFIG = Object.freeze({
         keyAim: 3
     },
 
+    // THE NEIGHBOR (M2). He is inside until enough of our leaves land on his
+    // lawn, then he comes out through his front door, walks to the fence,
+    // blows them back over it, stands with his arms folded watching us for
+    // a moment, and goes back in. Each visit comes sooner and lasts longer,
+    // and from the third he brings a bigger blower. Lists are by visit, the
+    // last entry holding for every visit after.
+    //
+    // HE CAN WIN. If `winShare` of the yard is lying on his lawn when the
+    // clock runs out, he comes out with the big blower and sends it all
+    // back before the result is counted (Steve, 2026-10-06: "a penalty for
+    // the user being a bad neighbor").
+    //
+    // A visitor aiming at the fence from 4 m sends about 1,500 leaves over
+    // in five seconds (measured), so these are small numbers on purpose.
+    neighbor: {
+        door: { x: 15.1, z: -6 },
+        doorSeconds: 0.7,
+        walkSpeed: 1.4,
+        // He blows facing our yard along two lines (see neighbor.js): first
+        // `behind` meters beyond the farthest of our leaves on his lawn
+        // (between lineMin and lineMax), then `nearLine`, close enough to
+        // the fence that his air lands just short of it and lifts the leaves
+        // over. `line` stands in for the farthest leaf when there is none.
+        line: 13.6,
+        nearLine: 12.6,
+        behind: 1.2,
+        lineMin: 12.2,
+        lineMax: 17.4,
+        sweepSpeed: 1.1,
+        zMin: -4.8,
+        zMax: 6.4,
+        visitAt: [60, 40, 25],
+        passes: [1, 2, 2],
+        watchSeconds: [3, 4, 5],
+        cooldown: [8, 6, 4],
+        bigFrom: 2,
+        winShare: 0.12,
+        // His last word sweeps at `revengeSweep` m/s, and ends when this few
+        // are left on his lawn, or after this long.
+        revengeSweep: 2.2,
+        revengeLeft: 10,
+        revengeSeconds: 14,
+        // His blowers, as changes to ours (config.blower).
+        blower: { speed: 26 },
+        bigBlower: { speed: 38, spread: 0.36, wallSpread: 0.7, range: 9 },
+        look: { shirt: 0x3f5f7a, pants: 0xb5a58a, skin: 0xc68a5e, hair: 0x9a9a9a, blower: 0x3d7a3a, bigBlower: 0xc0392b, door: 0x24476b }
+    },
+
     // THE ROUND (M1). The clock starts with the first blow, not when the
     // welcome card closes, so nobody loses time reading. When it runs out the
     // blower stops and the leaves are given a moment to land before the
@@ -213,7 +261,9 @@ export const LEAVES_CONFIG = Object.freeze({
         settleMin: 1.2,
         settleMax: 4,
         hurry: 10,
-        tallyHz: 4
+        tallyHz: 4,
+        // The longest the neighbor's last word may hold up the result.
+        revengeMax: 18
     },
 
     camera: {
@@ -230,7 +280,12 @@ export const LEAVES_CONFIG = Object.freeze({
         // ground the view is fitted to.
         wideSpan: 23,
         narrowSpan: 11,
-        follow: 2.5
+        follow: 2.5,
+        // With the neighbor out, the view widens (up to `maxSpan` meters) to
+        // keep him and the visitor in frame, with this much ground to spare
+        // beyond each.
+        includeMargin: 2.2,
+        maxSpan: 30
     },
 
     look: {

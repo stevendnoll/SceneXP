@@ -3892,6 +3892,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/config.min.js" rel="modulepreload"]
     link [href="js/sim.min.js" rel="modulepreload"]
     link [href="js/round.min.js" rel="modulepreload"]
+    link [href="js/neighbor.min.js" rel="modulepreload"]
     link [href="js/score.min.js" rel="modulepreload"]
     link [href="js/leafmesh.min.js" rel="modulepreload"]
     link [href="js/yard.min.js" rel="modulepreload"]
@@ -4009,7 +4010,7 @@ html [data-ui-theme="ember" lang="en"]
                 "0"
             div.end-stat
               dt
-                "Over the fence"
+                "Sent over the fence"
               dd#end-neighbor
                 "0"
             div.end-stat

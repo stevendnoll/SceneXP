@@ -32,19 +32,31 @@ export function distanceFor(span, aspect, fovDegrees) {
  * (x, z): the view slides toward them, as far as keeps the lawn in frame,
  * and a wide view barely moves at all.
  */
-export function cameraFor(aspect, C, lawn, follow) {
-    const span = spanFor(aspect, C);
+export function cameraFor(aspect, C, lawn, follow, include = null) {
+    let span = spanFor(aspect, C);
+    let region = lawn;
+    let focus = follow;
+    // SOMEBODY ELSE IN THE SCENE (the neighbor, out on his lawn): the view
+    // widens, up to `maxSpan`, and slides to keep them both in frame, and
+    // the region it may slide over takes in their side of the fence.
+    if (include && follow) {
+        const lo = Math.min(follow.x, include.x) - C.includeMargin;
+        const hi = Math.max(follow.x, include.x) + C.includeMargin;
+        span = clamp(hi - lo, span, C.maxSpan);
+        focus = { x: (lo + hi) / 2, z: follow.z };
+        region = { minX: lawn.minX, maxX: Math.max(lawn.maxX, hi) };
+    }
     const dist = distanceFor(span, aspect, C.fovDegrees);
     const len = Math.hypot(C.height, C.back);
     const up = C.height / len;
     const back = C.back / len;
-    // How far the target may slide before the frame runs off the lawn.
-    const slack = Math.max(0, (lawn.maxX - lawn.minX) / 2 - span / 2 + 1);
-    const cx = (lawn.minX + lawn.maxX) / 2;
+    // How far the target may slide before the frame runs off the region.
+    const slack = Math.max(0, (region.maxX - region.minX) / 2 - span / 2 + 1);
+    const cx = (region.minX + region.maxX) / 2;
     let tx = C.target.x;
     let tz = C.target.z;
-    if (follow) {
-        tx = clamp(follow.x, cx - slack, cx + slack);
+    if (focus) {
+        tx = clamp(focus.x, cx - slack, cx + slack);
         // Depth follows gently, and only on the narrow view.
         const narrow = 1 - clamp((aspect - 0.5) / 0.8, 0, 1);
         tz = C.target.z + (follow.z - C.target.z) * 0.5 * narrow;

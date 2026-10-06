@@ -4,6 +4,8 @@
  *
  *   ready     the yard is fresh and the clock is waiting for the first blow
  *   playing   the clock is running
+ *   revenge   time is up, and the neighbor is having the last word: too
+ *             much of the yard was left on his lawn (M2)
  *   settling  time is up: the blower is off and the leaves are landing
  *   done      the result is counted and the end card is up
  *   free      no clock at all, for anybody who only wants to blow leaves
@@ -42,6 +44,11 @@ export function freePlay(round) {
     return round;
 }
 
+/** Whether the clock has run out (the result is being made or shown). */
+export function isOver(round) {
+    return round.phase === 'revenge' || round.phase === 'settling' || round.phase === 'done';
+}
+
 /** Whether the blower may run in this phase. */
 export function canBlow(round) {
     return round.phase === 'ready' || round.phase === 'playing' || round.phase === 'free';
@@ -53,9 +60,11 @@ export function timeLeft(round) {
 }
 
 /**
- * Advance the round by `dt` seconds. `input` is { blowing, moving }: whether
- * the blower is held this frame, and how many leaves are awake. Returns
- * 'start', 'time-up', 'done' or null.
+ * Advance the round by `dt` seconds. `input` is { blowing, moving, revenge,
+ * revengeDone }: whether the blower is held this frame, how many leaves are
+ * awake, whether the neighbor is owed his last word as the clock runs out,
+ * and whether he has had it. Returns 'start', 'revenge', 'time-up', 'done'
+ * or null ('time-up' marks the start of settling, after any revenge).
  */
 export function stepRound(round, dt, input, R) {
     const step = dt > 0 ? dt : 0;
@@ -70,6 +79,20 @@ export function stepRound(round, dt, input, R) {
         round.elapsed += step;
         if (round.elapsed >= round.seconds) {
             round.elapsed = round.seconds;
+            round.settled = 0;
+            if (input.revenge) {
+                round.phase = 'revenge';
+                return 'revenge';
+            }
+            round.phase = 'settling';
+            return 'time-up';
+        }
+        return null;
+    }
+    if (round.phase === 'revenge') {
+        // He takes as long as he takes, up to `revengeMax`.
+        round.settled += step;
+        if (input.revengeDone || round.settled >= R.revengeMax) {
             round.phase = 'settling';
             round.settled = 0;
             return 'time-up';

@@ -138,9 +138,33 @@ function picketFence(wall, look) {
     return group;
 }
 
+/** The neighbor's front door (M2), between his two windows: a frame, a
+ *  dark hall behind, a step, and the door itself hung on a hinge at its
+ *  left edge. Returns the hinge, which main.js swings open (rotation.y down
+ *  to about -1.7, the door swinging out toward the street). */
+function buildNeighborDoor(scene, config) {
+    const N = config.neighbor;
+    const front = config.yard.neighbor.minZ;
+    const width = 1.0;
+    const tall = 2.1;
+    scene.add(box(1.3, 2.3, 0.06, config.look.trim, N.door.x, 1.15, front + 0.03));
+    scene.add(box(width, tall, 0.02, 0x15110d, N.door.x, tall / 2, front + 0.065));
+    const step = box(2.0, 0.18, 0.9, 0xbdb7ad, N.door.x, 0.09, front + 0.45);
+    step.receiveShadow = true;
+    scene.add(step);
+    const hinge = new THREE.Group();
+    hinge.name = 'neighbor-door';
+    hinge.position.set(N.door.x - width / 2, 0, front + 0.08);
+    const door = box(width, tall, 0.06, N.look.door, width / 2, tall / 2, 0);
+    door.castShadow = true;
+    hinge.add(door);
+    scene.add(hinge);
+    return hinge;
+}
+
 /**
- * Build the yard into `scene`. Returns { sun } so main.js can size its
- * shadows.
+ * Build the yard into `scene`. Returns { sun, neighborDoor }: the sun for
+ * its shadows, and the hinge of the neighbor's door for main.js to swing.
  */
 export function buildYard(scene, config, { shadows = true, mobile = false } = {}) {
     const Y = config.yard;
@@ -168,6 +192,7 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
 
     scene.add(house(Y.house, Y.lawn.minZ, look, look.siding, true));
     scene.add(house(Y.neighborHouse, Y.neighbor.minZ, look, look.neighborSiding, false));
+    const neighborDoor = buildNeighborDoor(scene, config);
     // The gap between the two houses is a side fence.
     const gate = box(Y.neighborHouse.minX - Y.house.maxX, 1.8, 0.08, look.fence,
         (Y.house.maxX + Y.neighborHouse.minX) / 2, 0.9, Y.lawn.minZ - 0.05);
@@ -213,5 +238,5 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     }
     scene.add(sun);
     scene.add(new THREE.HemisphereLight(L.sky.color, L.sky.ground, L.sky.intensity));
-    return { sun };
+    return { sun, neighborDoor };
 }

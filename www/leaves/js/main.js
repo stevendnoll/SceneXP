@@ -13,6 +13,12 @@
  * card that says where the leaves went (score.js) with Play again, Share and
  * Keep blowing, and free play with no clock from the welcome card.
  *
+ * M2, THE NEIGHBOR (2026-10-06): leaves blown over the picket fence bring
+ * him out to blow them back (neighbor.js), with his own jet in the same sim,
+ * his figure and his front door, a camera that widens to keep him in frame,
+ * and his last word when too much of the yard is left on his lawn as the
+ * clock runs out.
+ *
  * UNLISTED. The page carries noindex and is in no directory, sitemap or
  * llms.txt until the scene it grows into is released.
  */
@@ -20,6 +26,7 @@
 import { LEAVES_CONFIG } from './config.min.js';
 import { createSim, resetSim, scatterLeaves, stepSim, makeJet } from './sim.min.js';
 import { createRound, resetRound, freePlay, canBlow, timeLeft, stepRound } from './round.min.js';
+import { createNeighbor, resetNeighbor, stepNeighbor, isOut, neighborBlower } from './neighbor.min.js';
 import {
     tally, clearedShare, percent, clockText, verdict, resultRows, shareText, resultSentence
 } from './score.min.js';
@@ -38,6 +45,7 @@ import { createPromoCard, createDirectoryLink } from '../../shared/js/promo-1.0.
 
 const CONFIG = LEAVES_CONFIG;
 const B = CONFIG.blower;
+const N = CONFIG.neighbor;
 
 const state = {
     isLoaded: false,
@@ -78,6 +86,13 @@ let counted = { lawn: 0, tarp: 0, street: 0, neighbor: 0, total: 0 };
 let countedAgo = Infinity;
 // The last result, for the share button.
 let result = null;
+// The neighbor, his figure and his door; which leaves have been over the
+// fence this round; and whether he had the last word this round.
+const neighbor = createNeighbor(N);
+let neighborFigure = null;
+let neighborDoor = null;
+let sent = null;
+const lastWord = { had: false };
 // What the HUD last showed, so it is only written when it changes.
 const hudShown = { clock: '', cleared: '', phase: '' };
 
@@ -171,7 +186,8 @@ async function init() {
     const C = CONFIG.camera;
     camera = new THREE.PerspectiveCamera(C.fovDegrees, window.innerWidth / window.innerHeight, C.near, C.far);
 
-    buildYard(scene, CONFIG, { shadows: state.shadows, mobile: state.isMobile });
+    const yard = buildYard(scene, CONFIG, { shadows: state.shadows, mobile: state.isMobile });
+    neighborDoor = yard.neighborDoor;
 
     updateLoadingStatus(`Letting ${shortCount(state.count)} leaves fall…`, 55);
     sim = createSim(state.count, CONFIG);
@@ -184,11 +200,24 @@ async function init() {
     });
     leaves.update();
     scene.add(leaves.mesh);
+    sent = new Uint8Array(state.count);
 
     operator = createOperator(B);
     figure = createOperatorFigure(B, CONFIG.look);
     figure.update(operator, false, 0);
     scene.add(figure.group);
+    neighborFigure = createOperatorFigure(B, CONFIG.look, {
+        name: 'neighbor',
+        person: {
+            role: 'neighbor', shirtColor: N.look.shirt, sleeveColor: N.look.shirt,
+            pantsColor: N.look.pants, skinTone: N.look.skin, hairColor: N.look.hair
+        },
+        blower: N.look.blower,
+        bigBlower: N.look.bigBlower
+    });
+    neighborFigure.update(neighbor, false, 0);
+    neighborFigure.group.visible = false;
+    scene.add(neighborFigure.group);
     marker = buildMarker();
     scene.add(marker);
 
@@ -241,7 +270,7 @@ function placeCamera(snap) {
     const aspect = window.innerWidth / window.innerHeight;
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
-    const want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator);
+    const want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null);
     if (snap || !view.position) {
         view.position = { ...want.position };
         view.target = { ...want.target };
@@ -252,7 +281,8 @@ function placeCamera(snap) {
 
 /** Ease the camera toward where it wants to be this frame. */
 function followCamera(dt) {
-    const want = cameraFor(window.innerWidth / window.innerHeight, CONFIG.camera, CONFIG.yard.lawn, operator);
+    const want = cameraFor(window.innerWidth / window.innerHeight, CONFIG.camera, CONFIG.yard.lawn, operator,
+        isOut(neighbor) ? neighbor : null);
     const rate = CONFIG.camera.follow;
     ['x', 'y', 'z'].forEach((k) => {
         view.position[k] = ease(view.position[k], want.position[k], rate, dt);
@@ -592,7 +622,10 @@ function installRoundControls() {
     on('hud-new', () => playAgain('hud'));
     installShare(
         document.getElementById('end-share'),
-        () => ({ title: 'Leaves', text: shareText(result ? result.tally : counted, CONFIG.round.seconds) }),
+        () => ({
+            title: 'Leaves',
+            text: shareText(result ? result.tally : counted, CONFIG.round.seconds, Boolean(result && result.revenge))
+        }),
         {
             status: document.getElementById('end-status'),
             onShare: (how) => track('share', { method: how }),
@@ -602,7 +635,7 @@ function installRoundControls() {
 
 /** Count where the leaves are now. */
 function recount() {
-    counted = tally(sim, CONFIG.yard);
+    counted = tally(sim, CONFIG.yard, sent);
     countedAgo = 0;
     return counted;
 }
@@ -617,10 +650,16 @@ function onRoundEvent(event) {
     if (event === 'start') {
         announce('The clock is running. You have one minute.');
         track('round-start');
+    } else if (event === 'revenge') {
+        // The blower stops with the clock, and the neighbor has his say.
+        releaseInput();
+        lastWord.had = true;
+        announce('Time is up, and your neighbor is not having it.');
+        track('neighbor', { outcome: 'revenge' });
     } else if (event === 'time-up') {
         // The blower stops with the clock, whatever is still held.
         releaseInput();
-        announce('Time is up.');
+        if (!lastWord.had) announce('Time is up.');
     } else if (event === 'done') {
         showEnd();
     }
@@ -631,8 +670,8 @@ function onRoundEvent(event) {
  *  focused. */
 function showEnd() {
     const t = recount();
-    const v = verdict(t);
-    result = { tally: t, verdict: v };
+    const v = verdict(t, lastWord.had);
+    result = { tally: t, verdict: v, revenge: lastWord.had };
     const set = (id, text) => {
         const el = document.getElementById(id);
         if (el) el.textContent = text;
@@ -645,7 +684,7 @@ function showEnd() {
     releaseInput();
     if (endModal) endModal.classList.remove('hidden');
     setChromeVisible(false);
-    announce(resultSentence(t));
+    announce(resultSentence(t, lastWord.had));
     const again = document.getElementById('end-again');
     if (again) {
         try { again.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
@@ -698,6 +737,9 @@ function resetYard() {
     scatterLeaves(sim, CONFIG);
     leaves.update();
     Object.assign(operator, createOperator(B));
+    resetNeighbor(neighbor, N);
+    if (sent) sent.fill(0);
+    lastWord.had = false;
     shade.owed = true;
     recount();
 }
@@ -809,6 +851,30 @@ function updateLab(delta) {
     lab.uploaded = 0;
 }
 
+// ---- The neighbor -----------------------------------------------------------
+
+/** One frame of the neighbor, from the latest count of our leaves on his
+ *  lawn. He comes out in a round or in free play, has his last word when
+ *  the round says so, and waves once it is over. */
+function stepTheNeighbor(dt) {
+    const event = stepNeighbor(neighbor, dt, {
+        leaves: counted.neighbor,
+        minZ: counted.nearZ,
+        maxZ: counted.farZ,
+        maxX: counted.deepX,
+        active: round.phase === 'playing' || round.phase === 'free',
+        revenge: round.phase === 'revenge',
+        over: round.phase === 'settling' || round.phase === 'done'
+    }, N);
+    if (event === 'out' && !neighbor.revenge) {
+        announce(neighbor.visits === 0
+            ? 'Your neighbor has noticed the leaves on his lawn.'
+            : 'Your neighbor is back, and he has noticed more leaves.');
+        track('neighbor', { outcome: `visit-${neighbor.visits + 1}` });
+    }
+    return event;
+}
+
 // ---- Render loop ----------------------------------------------------------
 
 function animate() {
@@ -832,20 +898,33 @@ function animate() {
     const f = facing(operator.heading);
     const jet = makeJet(B, operator.x, operator.z, f.x, f.z, blowing);
     if (inYard) {
-        const event = stepRound(round, dt, { blowing, moving: sim.activeCount }, CONFIG.round);
+        // His last word is owed if too much of the yard is on his lawn as
+        // the clock runs out.
+        const owed = counted.neighbor >= N.winShare * counted.total;
+        const event = stepRound(round, dt, {
+            blowing, moving: sim.activeCount, revenge: owed, revengeDone: neighbor.revengeDone
+        }, CONFIG.round);
         if (event) onRoundEvent(event);
     }
+    // The neighbor carries on behind the end card (he waves), and holds
+    // still behind the welcome card with everything else.
+    if (!welcomeShown()) stepTheNeighbor(dt);
+    const his = makeJet(neighborBlower(B, N, neighbor.big), neighbor.x, neighbor.z,
+        Math.sin(neighbor.heading), Math.cos(neighbor.heading), neighbor.blowing && !welcomeShown());
     countedAgo += delta;
     if (inYard && countedAgo >= 1 / CONFIG.round.tallyHz) recount();
     if (inYard) updateHud();
 
     const t0 = performance.now();
-    stepSim(sim, dt, jet);
+    stepSim(sim, dt, [jet, his]);
     const uploaded = leaves.update();
     lab.simMs += performance.now() - t0;
     lab.uploaded += uploaded;
 
     figure.update(operator, blowing, state.time);
+    neighborFigure.group.visible = isOut(neighbor);
+    neighborFigure.update(neighbor, neighbor.blowing, state.time, neighbor.arms, neighbor.big);
+    if (neighborDoor) neighborDoor.rotation.y = -1.7 * neighbor.door;
     const marked = free && steer === 'point' && Boolean(pointer.aim);
     marker.visible = marked;
     if (marked) marker.position.set(pointer.aim.x, 0.05, pointer.aim.z);
@@ -854,7 +933,7 @@ function animate() {
     // Shadows: owed by any frame that moved a leaf or the person, paid at
     // most `hz` times a second.
     if (state.shadows) {
-        if (uploaded > 0 || operator.speed > 0) shade.owed = true;
+        if (uploaded > 0 || operator.speed > 0 || neighbor.speed > 0 || (neighbor.door > 0 && neighbor.door < 1)) shade.owed = true;
         shade.since += delta;
         if (shade.owed && shade.since >= 1 / CONFIG.shadows.hz) {
             renderer.shadowMap.needsUpdate = true;
@@ -900,7 +979,8 @@ export function getState() {
         blowing: isBlowing(!welcomeShown() && !endShown() && canBlow(round), pointer, keys, blowHold),
         round: { ...round },
         counted: { ...counted },
-        result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict } } : null,
+        result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict }, revenge: result.revenge } : null,
+        neighbor: { ...neighbor },
         endShown: endShown()
     };
 }
