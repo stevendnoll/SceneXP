@@ -93,12 +93,14 @@
     <title>Leaves | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=2" as="style">
+    <link rel="preload" href="css/experience.min.css?v=3" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
     <link rel="modulepreload" href="js/config.min.js">
     <link rel="modulepreload" href="js/sim.min.js">
+    <link rel="modulepreload" href="js/round.min.js">
+    <link rel="modulepreload" href="js/score.min.js">
     <link rel="modulepreload" href="js/leafmesh.min.js">
     <link rel="modulepreload" href="js/yard.min.js">
     <link rel="modulepreload" href="js/blower.min.js">
@@ -107,13 +109,15 @@
     <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/promo-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
     <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=2">
+    <link rel="stylesheet" href="css/experience.min.css?v=3">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -165,11 +169,18 @@
             <p class="title">WELCOME</p>
             <p class="subtitle">A front yard buried in autumn leaves, and a leaf blower waiting for you</p>
             <p class="click-prompt">Click to step in</p>
+            <!-- The round, in one line. The clock waits for the first blow
+                 (js/round.js), which is worth saying, since it means there is
+                 no hurry to read the rest of this card. -->
+            <p class="tour-note">You have one minute to clear the lawn, and the clock starts with your first blow.</p>
             <div class="controls-hint">
                 <span>WALK</span> Point at the lawn with the mouse, or drag a finger across it, and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too.
                 <span>BLOW</span> Hold the mouse button or Space. On a touch screen, hold the blow button in the corner.
                 <span>HELP</span> The question mark in the corner, or Escape, brings you back here.
             </div>
+            <!-- Free blow: the yard with no clock. Shielded from the overlay's
+                 own click-to-start by main.js, so it does its own job. -->
+            <button id="free-btn" class="welcome-free" type="button">Or just play with the leaves, with no clock</button>
             <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
         </div>
     </div>
@@ -205,6 +216,63 @@
         </svg>
         <span class="blow-label" aria-hidden="true">BLOW</span>
     </button>
+
+    <!-- The round's readout: the clock and the share of the lawn cleared, or
+         in free play a way back to a round. Shown with the rest of the chrome
+         (.visible), never over the welcome card. The clock is not a live
+         region, since a second-by-second countdown read aloud would drown out
+         everything else. The beats are told in #round-status instead. -->
+    <div id="round-hud" class="round-hud">
+        <span id="hud-clock" class="hud-clock">1:00</span>
+        <span id="hud-cleared" class="hud-cleared">0% cleared</span>
+        <span id="hud-hint" class="hud-hint">Blow to start the clock</span>
+        <button id="hud-new" class="hud-btn" type="button" hidden>New round</button>
+    </div>
+    <p id="round-status" class="sr-only" role="status" aria-live="polite"></p>
+
+    <!-- The end of a round. No close button and no backdrop dismissal: the
+         ways on are Play again (which takes focus), Keep blowing, or Escape,
+         which keeps blowing. Share sends the result sentence. -->
+    <div id="end-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="end-title" aria-describedby="end-line">
+        <div class="modal-backdrop"></div>
+        <div class="modal-container piece-card">
+            <div class="piece-card-content">
+                <p class="end-kicker">Time is up</p>
+                <h2 id="end-title" class="piece-title">Respectable work</h2>
+                <p class="end-score"><span id="end-percent">0%</span> of the lawn cleared</p>
+                <p id="end-line" class="piece-subtitle end-line"></p>
+                <dl class="end-stats">
+                    <div class="end-stat">
+                        <dt>On the tarp</dt>
+                        <dd id="end-tarp">0</dd>
+                    </div>
+                    <div class="end-stat">
+                        <dt>In the street</dt>
+                        <dd id="end-street">0</dd>
+                    </div>
+                    <div class="end-stat">
+                        <dt>Over the fence</dt>
+                        <dd id="end-neighbor">0</dd>
+                    </div>
+                    <div class="end-stat">
+                        <dt>Still on the lawn</dt>
+                        <dd id="end-lawn">0</dd>
+                    </div>
+                </dl>
+                <div class="end-actions">
+                    <button id="end-again" class="piece-enter" type="button">Play again</button>
+                    <button id="end-share" class="end-share" type="button">Share</button>
+                </div>
+                <button id="end-free" class="piece-cancel" type="button">Keep blowing leaves</button>
+                <!-- Inside the dialog on purpose: content outside an aria-modal
+                     dialog may not be announced at all. -->
+                <p id="end-status" class="sr-only" role="status" aria-live="polite"></p>
+                <!-- Built by shared/js/promo-1.0.0.js: the next experience to
+                     try (once this one is in its catalog) and the directory. -->
+                <div id="end-promo" class="end-promo"></div>
+            </div>
+        </div>
+    </div>
 
     <script type="module" src="../lib/three/r186/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

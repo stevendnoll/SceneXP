@@ -3886,11 +3886,13 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Leaves | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=2" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=3" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
     link [href="js/sim.min.js" rel="modulepreload"]
+    link [href="js/round.min.js" rel="modulepreload"]
+    link [href="js/score.min.js" rel="modulepreload"]
     link [href="js/leafmesh.min.js" rel="modulepreload"]
     link [href="js/yard.min.js" rel="modulepreload"]
     link [href="js/blower.min.js" rel="modulepreload"]
@@ -3899,10 +3901,12 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=2" rel="stylesheet"]
+    link [href="css/experience.min.css?v=3" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -3940,6 +3944,8 @@ html [data-ui-theme="ember" lang="en"]
           "A front yard buried in autumn leaves, and a leaf blower waiting for you"
         p.click-prompt
           "Click to step in"
+        p.tour-note
+          "You have one minute to clear the lawn, and the clock starts with your first blow."
         div.controls-hint
           span
             "WALK"
@@ -3950,6 +3956,8 @@ html [data-ui-theme="ember" lang="en"]
           span
             "HELP"
           "The question mark in the corner, or Escape, brings you back here."
+        button#free-btn.welcome-free [type="button"]
+          "Or just play with the leaves, with no clock"
         a#explore-link.welcome-explore [href="/"]
           "More 3D worlds to explore at SceneXP.com"
     canvas#game-canvas [aria-label="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower" role="img"]
@@ -3965,6 +3973,59 @@ html [data-ui-theme="ember" lang="en"]
         path [d="M3 16h7"]
       span.blow-label [aria-hidden="true"]
         "BLOW"
+    div#round-hud.round-hud
+      span#hud-clock.hud-clock
+        "1:00"
+      span#hud-cleared.hud-cleared
+        "0% cleared"
+      span#hud-hint.hud-hint
+        "Blow to start the clock"
+      button#hud-new.hud-btn [hidden type="button"]
+        "New round"
+    p#round-status.sr-only [aria-live="polite" role="status"]
+    div#end-modal.hidden [aria-describedby="end-line" aria-labelledby="end-title" aria-modal="true" role="dialog"]
+      div.modal-backdrop
+      div.modal-container.piece-card
+        div.piece-card-content
+          p.end-kicker
+            "Time is up"
+          h2#end-title.piece-title
+            "Respectable work"
+          p.end-score
+            span#end-percent
+              "0%"
+            "of the lawn cleared"
+          p#end-line.piece-subtitle.end-line
+          dl.end-stats
+            div.end-stat
+              dt
+                "On the tarp"
+              dd#end-tarp
+                "0"
+            div.end-stat
+              dt
+                "In the street"
+              dd#end-street
+                "0"
+            div.end-stat
+              dt
+                "Over the fence"
+              dd#end-neighbor
+                "0"
+            div.end-stat
+              dt
+                "Still on the lawn"
+              dd#end-lawn
+                "0"
+          div.end-actions
+            button#end-again.piece-enter [type="button"]
+              "Play again"
+            button#end-share.end-share [type="button"]
+              "Share"
+          button#end-free.piece-cancel [type="button"]
+            "Keep blowing leaves"
+          p#end-status.sr-only [aria-live="polite" role="status"]
+          div#end-promo.end-promo
     script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;

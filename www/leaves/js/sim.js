@@ -162,6 +162,26 @@ export function createSim(count, config) {
     return sim;
 }
 
+/** Empty the yard in place, so scatterLeaves() can lay the same leaves down
+ *  again for a new round. The arrays are kept, because the leaf mesh draws
+ *  straight from `pose`, and a new sim would leave it drawing the old one. */
+export function resetSim(sim) {
+    sim.height.fill(0);
+    sim.head.fill(-1);
+    sim.next.fill(-1);
+    sim.prev.fill(-1);
+    sim.bucketOf.fill(-1);
+    sim.deposit.fill(-1);
+    ['vx', 'vy', 'vz', 'wyaw', 'wpitch', 'wroll', 'still'].forEach((k) => sim[k].fill(0));
+    sim.awake.fill(0);
+    sim.activeAt.fill(-1);
+    sim.activeCount = 0;
+    sim.time = 0;
+    sim.random = makeRandom((sim.config.leaves.seed || 1) + 7);
+    sim.stats = { woken: 0, slept: 0, steps: 0 };
+    clearDirty(sim);
+}
+
 // ---- The grids ------------------------------------------------------------
 
 export function cellIndex(sim, x, z) {

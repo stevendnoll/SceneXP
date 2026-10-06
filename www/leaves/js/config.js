@@ -64,8 +64,13 @@ export const LEAVES_CONFIG = Object.freeze({
         // The neighbor's lawn, past the picket fence.
         neighbor: { minX: 10.1, maxX: 18, minZ: -6, maxZ: 7 },
         sidewalk: { minZ: 7.4, maxZ: 9 },
-        // A tarp on the lawn to blow the leaves onto.
-        tarp: { minX: -8, maxX: -4.6, minZ: 2.6, maxZ: 5.8 },
+        // A tarp to blow the leaves onto, IN THE BACK-LEFT CORNER, against
+        // the house and the hedge (moved there at M1, 2026-10-06). Out on the
+        // open lawn it caught almost nothing: leaves stop wherever the air
+        // gives out, so they blew across it and on past. With two walls
+        // behind it they bank up on it, and a bot sweeping toward the corner
+        // piled 3,500 leaves 1.3 meters high in a minute.
+        tarp: { minX: -9.95, maxX: -5, minZ: -5.95, maxZ: -1.5 },
         walls: [
             // The picket fence between the two yards.
             { axis: 'x', at: 10, from: -6, to: 7.2, height: 0.95 },
@@ -174,6 +179,21 @@ export const LEAVES_CONFIG = Object.freeze({
         start: { x: 2, z: 5.2 },
         // Keyboard aiming: how far ahead of the person the aim point sits.
         keyAim: 3
+    },
+
+    // THE ROUND (M1). The clock starts with the first blow, not when the
+    // welcome card closes, so nobody loses time reading. When it runs out the
+    // blower stops and the leaves are given a moment to land before the
+    // result is counted: at least `settleMin` seconds, and until nothing is
+    // moving or `settleMax` seconds have passed. The clock turns the accent
+    // color for the last `hurry` seconds, and the cleared share on the HUD is
+    // counted `tallyHz` times a second (counting walks every leaf).
+    round: {
+        seconds: 60,
+        settleMin: 1.2,
+        settleMax: 4,
+        hurry: 10,
+        tallyHz: 4
     },
 
     camera: {

@@ -79,6 +79,236 @@
     }
 }
 
+/* ---- The welcome card's free play ----
+   A quiet text button under the controls: the round is what the card is
+   offering, and this is the other door. Light ink on the dark overlay. */
+
+#instructions .welcome-free {
+    display: inline-block;
+    margin: 1.25rem auto 0;
+    padding: 0.5rem 0.75rem;
+    border: none;
+    background: none;
+    color: var(--ui-accent);
+    font: inherit;
+    font-size: 0.95rem;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+#instructions .welcome-free:hover,
+#instructions .welcome-free:focus-visible {
+    color: var(--ui-title);
+}
+
+#instructions .welcome-free:focus-visible {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+
+/* ---- The round's HUD ----
+   One pill at the top middle: the clock, the share cleared, and a hint or a
+   button. It never takes a tap except on its button, so the lawn under it
+   still steers. */
+
+.round-hud {
+    position: fixed;
+    top: max(18px, calc(env(safe-area-inset-top) + 8px));
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    align-items: center;
+    gap: 0.85rem;
+    max-width: calc(100vw - 160px);
+    padding: 0.45rem 1.1rem;
+    border-radius: 999px;
+    background: rgba(20, 20, 20, 0.62);
+    color: #fff;
+    z-index: 105;
+    pointer-events: none;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.round-hud.visible {
+    display: flex;
+}
+
+.hud-clock {
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.hud-clock.hurry {
+    color: var(--ui-accent);
+}
+
+.hud-cleared {
+    font-size: 0.95rem;
+}
+
+.hud-hint {
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+.hud-btn {
+    pointer-events: auto;
+    padding: 0.3rem 0.75rem;
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.7);
+    border-radius: 999px;
+    background: transparent;
+    color: #fff;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.hud-btn:hover,
+.hud-btn:focus-visible {
+    background: rgba(var(--ui-accent-rgb), 0.25);
+}
+
+.round-hud [hidden] {
+    display: none;
+}
+
+@media (max-width: 480px) {
+    .round-hud {
+        gap: 0.6rem;
+        padding: 0.4rem 0.9rem;
+    }
+
+    .hud-hint {
+        display: none;
+    }
+}
+
+/* ---- The end of a round ----
+   The shared warm paper card (.piece-card), held by an id of its own, since
+   the shared sheet styles its modals by id. No backdrop dismissal: the ways
+   on are the buttons, or Escape (keep blowing). */
+
+#end-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#end-modal.hidden {
+    display: none;
+}
+
+#end-modal .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(18, 14, 8, 0.5);
+    backdrop-filter: blur(3px);
+    pointer-events: none;
+}
+
+.end-kicker {
+    margin: 0 0 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #9a3412;
+}
+
+/* The number a visitor came for, in a deep autumn orange that holds its
+   contrast on the paper. */
+.end-score {
+    margin: 0.35rem 0 0.4rem;
+    font-size: 1rem;
+    color: var(--gallery-muted);
+}
+
+.end-score span {
+    display: block;
+    font-size: 2.6rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: #9a3412;
+    font-variant-numeric: tabular-nums;
+}
+
+.end-line {
+    margin-bottom: 1.1rem;
+}
+
+.end-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem 1rem;
+    margin: 0 0 1.25rem;
+    padding: 0;
+}
+
+.end-stat dt {
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--gallery-muted);
+}
+
+.end-stat dd {
+    margin: 0.15rem 0 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.end-actions {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.end-actions .piece-enter {
+    flex: 2;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.end-share {
+    flex: 1;
+    padding: 0.85rem 1rem;
+    border: 1.5px solid var(--gallery-accent);
+    border-radius: 10px;
+    background: none;
+    color: var(--gallery-accent);
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.end-share:hover {
+    background: rgba(61, 90, 128, 0.08);
+}
+
+.end-share:focus-visible {
+    outline: 3px solid #9db4d0;
+    outline-offset: 2px;
+}
+
+.end-promo {
+    margin-top: 0.4rem;
+}
+
+/* The directory link is styled for the dark welcome overlay. On the paper
+   card it takes the card's own accent. */
+#end-modal .promo-explore {
+    color: var(--gallery-accent);
+    text-decoration-color: rgba(61, 90, 128, 0.45);
+}
+
 /* ---- The lab panel (QA hosts only, built by main.js) ---- */
 
 .lab-panel {

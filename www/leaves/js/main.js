@@ -8,20 +8,33 @@
  * count, so a phone can be measured at several counts in one sitting. The
  * leaves are sim.js (where they are) and leafmesh.js (how they are drawn).
  *
+ * M1, THE ROUND (2026-10-06): a minute to clear the lawn, starting with the
+ * first blow (round.js), a HUD with the clock and the share cleared, an end
+ * card that says where the leaves went (score.js) with Play again, Share and
+ * Keep blowing, and free play with no clock from the welcome card.
+ *
  * UNLISTED. The page carries noindex and is in no directory, sitemap or
  * llms.txt until the scene it grows into is released.
  */
 
 import { LEAVES_CONFIG } from './config.min.js';
-import { createSim, scatterLeaves, stepSim, makeJet, countIn } from './sim.min.js';
+import { createSim, resetSim, scatterLeaves, stepSim, makeJet } from './sim.min.js';
+import { createRound, resetRound, freePlay, canBlow, timeLeft, stepRound } from './round.min.js';
+import {
+    tally, clearedShare, percent, clockText, verdict, resultRows, shareText, resultSentence
+} from './score.min.js';
 import { createLeafMesh } from './leafmesh.min.js';
 import { buildYard } from './yard.min.js';
 import { createOperator, stepOperator, facing, createOperatorFigure } from './blower.min.js';
 import { cameraFor, rayToGround, ease } from './view.min.js';
 import { isQaHost, labOptions, labSearch, statsLines, fpsOf, shortCount } from './lab.min.js';
-import { getProofOfWork, bufToHex, shieldOverlayControl } from '../../shared/js/boot-1.0.0.min.js';
+import {
+    getProofOfWork, bufToHex, shieldOverlayControl, installCardFocusTrap, installCardScrollReset
+} from '../../shared/js/boot-1.0.0.min.js';
 import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import { installShare } from '../../shared/js/share-1.0.0.min.js';
+import { createPromoCard, createDirectoryLink } from '../../shared/js/promo-1.0.0.min.js';
 
 const CONFIG = LEAVES_CONFIG;
 const B = CONFIG.blower;
@@ -55,7 +68,18 @@ let marker = null;
 let blocker = null;
 let helpBtn = null;
 let blowBtn = null;
+let endModal = null;
 let cleanupController = null;
+
+// The round, and the count of where the leaves are, refreshed a few times a
+// second (counting walks every leaf).
+const round = createRound(CONFIG.round);
+let counted = { lawn: 0, tarp: 0, street: 0, neighbor: 0, total: 0 };
+let countedAgo = Infinity;
+// The last result, for the share button.
+let result = null;
+// What the HUD last showed, so it is only written when it changes.
+const hudShown = { clock: '', cleared: '', phase: '' };
 
 let welcomed = false;
 let welcomeReturn = null;
@@ -78,7 +102,7 @@ const view = { position: null, target: null };
 // anything moves, and a frame that moved something is owed one.
 const shade = { owed: true, since: 0 };
 // The lab's measurements.
-const lab = { el: null, frames: 0, seconds: 0, simMs: 0, uploaded: 0, scoreAt: 0, cleared: 0, tarp: 0, start: 0 };
+const lab = { el: null, frames: 0, seconds: 0, simMs: 0, uploaded: 0, start: 0 };
 
 // ---- Initialization -------------------------------------------------------
 
@@ -103,7 +127,11 @@ async function init() {
     blocker = document.getElementById('blocker');
     helpBtn = document.getElementById('help-btn');
     blowBtn = document.getElementById('blow-btn');
+    endModal = document.getElementById('end-modal');
     if (!canvas || typeof THREE === 'undefined') return;
+    // The markup starts it hidden. Said again here so the round never begins
+    // believing a card is up.
+    if (endModal) endModal.classList.add('hidden');
 
     state.isMobile = detectMobile();
     state.touch = state.isMobile;
@@ -166,7 +194,10 @@ async function init() {
 
     placeCamera(true);
     setupEventListeners();
+    installRoundControls();
     if (state.qa) installLab();
+    recount();
+    updateHud();
 
     // Compile the shaders behind the loading screen rather than on the first
     // visible frame, where the hitch would be the visitor's first impression.
@@ -264,8 +295,14 @@ function setupEventListeners() {
         blocker.addEventListener('click', dismiss, { signal });
         blocker.addEventListener('touchend', dismiss, { signal });
         shieldOverlayControl(document.getElementById('explore-link'), { signal });
+        const freeBtn = document.getElementById('free-btn');
+        if (shieldOverlayControl(freeBtn, { signal })) {
+            freeBtn.addEventListener('click', startFreePlay, { signal });
+        }
     }
     if (helpBtn) helpBtn.addEventListener('click', () => returnToWelcome('help'), { signal });
+    installCardFocusTrap({ signal });
+    installCardScrollReset({ signal });
 
     document.addEventListener('keydown', onKeyDown, { signal });
     document.addEventListener('keyup', onKeyUp, { signal });
@@ -324,7 +361,7 @@ function installBlowButton(btn, signal) {
     // Called before the hold is recorded, so a blow is counted once however
     // many ways the button is held at the same moment.
     const press = () => {
-        if (welcomeShown()) return false;
+        if (welcomeShown() || endShown() || !canBlow(round)) return false;
         if (!blowHeld()) noteBlow();
         btn.classList.add('held');
         return true;
@@ -380,6 +417,12 @@ const WALK_KEYS = {
 };
 
 function onKeyDown(event) {
+    // The end card keeps its keys: its buttons take Enter and Space, Tab is
+    // the focus trap's, and Escape keeps blowing.
+    if (endShown()) {
+        if (event.code === 'Escape') keepBlowing();
+        return;
+    }
     if (event.code === 'Escape') {
         if (!state.isLoaded) return;
         if (welcomeShown()) beginPlaying();
@@ -466,11 +509,26 @@ function welcomeShown() {
     return Boolean(blocker) && !blocker.classList.contains('hidden');
 }
 
-/** The help button follows the welcome screen: nothing to press until the
- *  visitor is in, and no help button over the help. */
+/** The help button, the blow button and the HUD follow the welcome screen
+ *  and the end card: nothing to press until the visitor is in, and nothing
+ *  over a card. */
 function setChromeVisible(on) {
-    if (helpBtn) helpBtn.classList.toggle('visible', on);
-    if (blowBtn) blowBtn.classList.toggle('visible', on && state.touch && !welcomeShown());
+    const shown = on && !welcomeShown() && !endShown();
+    if (helpBtn) helpBtn.classList.toggle('visible', shown);
+    if (blowBtn) blowBtn.classList.toggle('visible', shown && state.touch);
+    const hud = document.getElementById('round-hud');
+    if (hud) hud.classList.toggle('visible', shown);
+}
+
+/** The welcome card's "just play with the leaves": the yard with no clock. */
+function startFreePlay() {
+    if (!state.isLoaded) return;
+    if (round.phase !== 'free') {
+        freePlay(round);
+        track('free-blow', { outcome: 'welcome' });
+    }
+    updateHud();
+    beginPlaying();
 }
 
 function beginPlaying() {
@@ -516,6 +574,171 @@ function applySiteLinks() {
     if (explore) explore.href = CONFIG.site.home.path;
 }
 
+// ---- The round ------------------------------------------------------------
+
+function endShown() {
+    return Boolean(endModal) && !endModal.classList.contains('hidden');
+}
+
+/** The end card's buttons, the HUD's New round, and the share. */
+function installRoundControls() {
+    const signal = cleanupController ? cleanupController.signal : undefined;
+    const on = (id, fn) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', fn, { signal });
+    };
+    on('end-again', () => playAgain('end-card'));
+    on('end-free', keepBlowing);
+    on('hud-new', () => playAgain('hud'));
+    installShare(
+        document.getElementById('end-share'),
+        () => ({ title: 'Leaves', text: shareText(result ? result.tally : counted, CONFIG.round.seconds) }),
+        {
+            status: document.getElementById('end-status'),
+            onShare: (how) => track('share', { method: how }),
+            signal
+        });
+}
+
+/** Count where the leaves are now. */
+function recount() {
+    counted = tally(sim, CONFIG.yard);
+    countedAgo = 0;
+    return counted;
+}
+
+/** Say a beat of the round to a screen reader. */
+function announce(text) {
+    const el = document.getElementById('round-status');
+    if (el) el.textContent = text;
+}
+
+function onRoundEvent(event) {
+    if (event === 'start') {
+        announce('The clock is running. You have one minute.');
+        track('round-start');
+    } else if (event === 'time-up') {
+        // The blower stops with the clock, whatever is still held.
+        releaseInput();
+        announce('Time is up.');
+    } else if (event === 'done') {
+        showEnd();
+    }
+    updateHud();
+}
+
+/** Count the result, fill the end card and open it, with Play again
+ *  focused. */
+function showEnd() {
+    const t = recount();
+    const v = verdict(t);
+    result = { tally: t, verdict: v };
+    const set = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    };
+    set('end-title', v.title);
+    set('end-line', v.line);
+    set('end-percent', `${percent(clearedShare(t))}%`);
+    resultRows(t).forEach((row) => set(`end-${row.key}`, row.value));
+    fillEndPromo();
+    releaseInput();
+    if (endModal) endModal.classList.remove('hidden');
+    setChromeVisible(false);
+    announce(resultSentence(t));
+    const again = document.getElementById('end-again');
+    if (again) {
+        try { again.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
+    }
+    track('round-end', { outcome: v.key });
+}
+
+/** The next experience to try and the directory, under the end card. Built
+ *  once: the recommendation does not depend on how the round went. Until
+ *  this scene is in the promo catalog, only the directory link appears. */
+function fillEndPromo() {
+    const host = document.getElementById('end-promo');
+    if (!host || (host.children && host.children.length)) return false;
+    const card = createPromoCard('leaves');
+    if (card) host.appendChild(card);
+    const link = createDirectoryLink();
+    if (link) host.appendChild(link);
+    return true;
+}
+
+function hideEnd() {
+    if (endModal) endModal.classList.add('hidden');
+    const el = document.activeElement;
+    if (el && el !== document.body && typeof el.blur === 'function') el.blur();
+    setChromeVisible(true);
+}
+
+/** A fresh yard and a fresh round, waiting for the first blow. */
+function playAgain(from) {
+    hideEnd();
+    resetYard();
+    resetRound(round);
+    announce('A fresh yard. The clock starts with your first blow.');
+    track('play-again', { outcome: from });
+    updateHud();
+}
+
+/** The end card's Keep blowing (or Escape): the same yard, no clock. */
+function keepBlowing() {
+    hideEnd();
+    freePlay(round);
+    track('free-blow', { outcome: 'end-card' });
+    updateHud();
+}
+
+/** Lay every leaf back down where it started, and the person back where
+ *  they started. */
+function resetYard() {
+    resetSim(sim);
+    scatterLeaves(sim, CONFIG);
+    leaves.update();
+    Object.assign(operator, createOperator(B));
+    shade.owed = true;
+    recount();
+}
+
+/** The HUD: the clock (or, in free play, a way back to a round) and the
+ *  share cleared. Each part is written only when it changes. */
+function updateHud() {
+    const R = CONFIG.round;
+    const phase = round.phase;
+    let clock;
+    if (phase === 'ready') clock = clockText(round.seconds);
+    else if (phase === 'playing') clock = clockText(timeLeft(round));
+    else clock = clockText(0);
+    const cleared = `${percent(clearedShare(counted))}% cleared`;
+    const el = (id) => document.getElementById(id);
+    if (clock !== hudShown.clock) {
+        hudShown.clock = clock;
+        if (el('hud-clock')) el('hud-clock').textContent = clock;
+    }
+    if (cleared !== hudShown.cleared) {
+        hudShown.cleared = cleared;
+        if (el('hud-cleared')) el('hud-cleared').textContent = cleared;
+    }
+    const hurry = phase === 'playing' && timeLeft(round) <= R.hurry;
+    const key = `${phase}:${hurry}`;
+    if (key === hudShown.phase) return;
+    hudShown.phase = key;
+    const clockEl = el('hud-clock');
+    if (clockEl) {
+        clockEl.hidden = phase === 'free';
+        clockEl.classList.toggle('hurry', hurry);
+    }
+    const hint = el('hud-hint');
+    if (hint) {
+        const text = { ready: 'Blow to start the clock', settling: 'Time is up', done: 'Time is up', free: 'No clock, just leaves' }[phase];
+        hint.hidden = !text;
+        if (text) hint.textContent = text;
+    }
+    if (el('hud-new')) el('hud-new').hidden = phase !== 'free';
+}
+
 // ---- The lab --------------------------------------------------------------
 
 /** The QA panel: the readout, a button per leaf count, and the shadows
@@ -559,16 +782,12 @@ function installLab() {
     lab.start = performance.now();
 }
 
-/** Twice a second, what the last frames cost. The lawn's score is counted
- *  at the same rate, since it walks every leaf. */
+/** Twice a second, what the last frames cost, and the round's own count of
+ *  where the leaves are. */
 function updateLab(delta) {
     lab.frames += 1;
     lab.seconds += Math.max(0, delta);
     if (lab.seconds < 0.5) return;
-    const lawn = CONFIG.yard.lawn;
-    const onLawn = countIn(sim, lawn);
-    lab.tarp = countIn(sim, CONFIG.yard.tarp);
-    lab.cleared = 1 - Math.max(0, onLawn - lab.tarp) / Math.max(1, state.count);
     const info = renderer.info && renderer.info.render ? renderer.info.render : { calls: 0, triangles: 0 };
     lab.el.textContent = statsLines({
         fps: fpsOf(lab.frames, lab.seconds),
@@ -581,8 +800,8 @@ function updateLab(delta) {
         triangles: info.triangles,
         ratio: renderer.getPixelRatio ? renderer.getPixelRatio() : 1,
         shadows: state.shadows,
-        cleared: lab.cleared,
-        tarp: lab.tarp
+        cleared: clearedShare(counted),
+        tarp: counted.tarp
     }).join('\n');
     lab.frames = 0;
     lab.seconds = 0;
@@ -602,12 +821,23 @@ function animate() {
     // that, a stalled tab would throw every moving leaf across the yard.
     const dt = Math.min(delta, 0.05);
 
-    const playing = !welcomeShown();
-    const aim = playing ? aimFor(steer, pointer, keys) : null;
+    // In the yard (no card up), and free to move and blow (the round is not
+    // over). Behind a card the round holds still: the clock pauses for the
+    // welcome card, and nothing moves under the end card.
+    const inYard = !welcomeShown() && !endShown();
+    const free = inYard && canBlow(round);
+    const aim = free ? aimFor(steer, pointer, keys) : null;
     stepOperator(operator, aim, dt, B, walkArea());
-    const blowing = isBlowing(playing, pointer, keys, blowHold);
+    const blowing = isBlowing(free, pointer, keys, blowHold);
     const f = facing(operator.heading);
     const jet = makeJet(B, operator.x, operator.z, f.x, f.z, blowing);
+    if (inYard) {
+        const event = stepRound(round, dt, { blowing, moving: sim.activeCount }, CONFIG.round);
+        if (event) onRoundEvent(event);
+    }
+    countedAgo += delta;
+    if (inYard && countedAgo >= 1 / CONFIG.round.tallyHz) recount();
+    if (inYard) updateHud();
 
     const t0 = performance.now();
     stepSim(sim, dt, jet);
@@ -616,7 +846,7 @@ function animate() {
     lab.uploaded += uploaded;
 
     figure.update(operator, blowing, state.time);
-    const marked = playing && steer === 'point' && Boolean(pointer.aim);
+    const marked = free && steer === 'point' && Boolean(pointer.aim);
     marker.visible = marked;
     if (marked) marker.position.set(pointer.aim.x, 0.05, pointer.aim.z);
     followCamera(dt);
@@ -667,7 +897,11 @@ export function getState() {
         operator: operator ? { ...operator } : null,
         steer,
         aim: pointer.aim ? { ...pointer.aim } : null,
-        blowing: isBlowing(!welcomeShown(), pointer, keys, blowHold)
+        blowing: isBlowing(!welcomeShown() && !endShown() && canBlow(round), pointer, keys, blowHold),
+        round: { ...round },
+        counted: { ...counted },
+        result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict } } : null,
+        endShown: endShown()
     };
 }
 

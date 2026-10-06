@@ -256,6 +256,128 @@ test('a browser without WebGL 2 is told so and taken to the standard site', asyn
     expect(dom.replaced).toEqual(['/']);
 });
 
+describe('the round', () => {
+    /** Step in, start the clock with Space, and play the minute through at a
+     *  low frame rate (the sandbox is slow) until the end card is up. */
+    async function playARound(main) {
+        fire(dom.el('blocker'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 0.2, 20);
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        expect(main.getState().round.phase).toBe('playing');
+        frames(main, 66, 20);
+        expect(main.getState().endShown).toBe(true);
+    }
+
+    test('the HUD waits for the first blow, and the clock starts with it', async () => {
+        const main = await boot();
+        fire(dom.el('blocker'), 'click');
+        expect(dom.el('round-hud').classList.contains('visible')).toBe(true);
+        frames(main, 2, 20);
+        expect(main.getState().round.phase).toBe('ready');
+        expect(dom.el('hud-clock').textContent).toBe('1:00');
+        expect(dom.el('hud-hint').hidden).toBe(false);
+        expect(dom.el('hud-hint').textContent).toBe('Blow to start the clock');
+
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        // The frame that starts the clock does not count toward it, so 2.5
+        // seconds of frames leaves 57.55 seconds, which the clock rounds up.
+        frames(main, 2.5, 20);
+        expect(main.getState().round.phase).toBe('playing');
+        expect(dom.el('hud-clock').textContent).toBe('0:58');
+        expect(dom.el('hud-hint').hidden).toBe(true);
+        expect(dom.el('round-status').textContent).toMatch(/clock is running/);
+    });
+
+    test('the clock holds still behind the welcome card', async () => {
+        const main = await boot();
+        fire(dom.el('blocker'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 1, 20);
+        const before = main.getState().round.elapsed;
+        fire(dom.documentStub, 'keydown', { code: 'Escape' });
+        expect(dom.el('round-hud').classList.contains('visible')).toBe(false);
+        frames(main, 5, 20);
+        expect(main.getState().round.elapsed).toBe(before);
+    });
+
+    test('at the end of the minute the blower stops and the end card says how it went', async () => {
+        const main = await boot();
+        await playARound(main);
+        const s = main.getState();
+        expect(s.round.phase).toBe('done');
+        expect(s.blowing).toBe(false);
+        expect(dom.el('end-modal').classList.contains('hidden')).toBe(false);
+        expect(dom.el('end-title').textContent).toBe(s.result.verdict.title);
+        expect(dom.el('end-percent').textContent).toMatch(/^\d{1,3}%$/);
+        const t = s.result.tally;
+        expect(t.lawn + t.tarp + t.street + t.neighbor).toBe(t.total);
+        expect(dom.el('end-lawn').textContent).toBe(String(t.lawn).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+        // The chrome steps aside for the card, and Play again has focus.
+        expect(dom.el('round-hud').classList.contains('visible')).toBe(false);
+        expect(dom.el('help-btn').classList.contains('visible')).toBe(false);
+        expect(dom.documentStub.activeElement).toBe(dom.el('end-again'));
+        // Space on the card does not reach the blower.
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        expect(main.getState().blowing).toBe(false);
+        // The directory link is under the card.
+        expect(dom.el('end-promo').children.length).toBeGreaterThan(0);
+    });
+
+    test('Play again lays the yard back down and waits for the first blow', async () => {
+        const main = await boot();
+        await playARound(main);
+        fire(dom.el('end-again'), 'click');
+        const s = main.getState();
+        expect(s.endShown).toBe(false);
+        expect(s.round.phase).toBe('ready');
+        expect(s.counted.lawn).toBe(s.counted.total);
+        expect(dom.el('round-hud').classList.contains('visible')).toBe(true);
+        expect(dom.el('hud-clock').textContent).toBe('1:00');
+    });
+
+    test('Keep blowing (or Escape) leaves the yard as it is, with no clock and a way back to a round', async () => {
+        const main = await boot();
+        await playARound(main);
+        fire(dom.documentStub, 'keydown', { code: 'Escape' });
+        expect(main.getState().endShown).toBe(false);
+        expect(main.getState().round.phase).toBe('free');
+        expect(dom.el('hud-clock').hidden).toBe(true);
+        expect(dom.el('hud-new').hidden).toBe(false);
+        expect(dom.el('hud-hint').textContent).toBe('No clock, just leaves');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        expect(main.getState().blowing).toBe(true);
+        frames(main, 3, 20);
+        expect(main.getState().round.phase).toBe('free');
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        fire(dom.el('hud-new'), 'click');
+        expect(main.getState().round.phase).toBe('ready');
+        expect(dom.el('hud-new').hidden).toBe(true);
+    });
+
+    test('the welcome card offers the yard with no clock', async () => {
+        const main = await boot();
+        fire(dom.el('free-btn'), 'click');
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
+        expect(main.getState().round.phase).toBe('free');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 70, 20);
+        expect(main.getState().endShown).toBe(false);
+    });
+
+    test('Share sends the result sentence', async () => {
+        const main = await boot();
+        await playARound(main);
+        fire(dom.el('end-share'), 'click');
+        await flushAsync();
+        // No share sheet and no clipboard here, so the ladder ends at a mail.
+        const sent = decodeURIComponent(dom.windowStub.location.href);
+        expect(sent).toMatch(/^mailto:/);
+        expect(sent).toMatch(/I cleared \d{1,3}% of my yard in 60 seconds\./);
+        expect(main.getState().result).not.toBe(null);
+    });
+});
+
 describe('the page', () => {
     let html;
     beforeAll(async () => { html = await readFile(PAGE, 'utf8'); });
