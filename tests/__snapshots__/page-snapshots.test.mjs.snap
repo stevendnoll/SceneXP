@@ -3886,11 +3886,12 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Leaves | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=3" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=4" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
     link [href="js/sim.min.js" rel="modulepreload"]
+    link [href="js/finale.min.js" rel="modulepreload"]
     link [href="js/round.min.js" rel="modulepreload"]
     link [href="js/neighbor.min.js" rel="modulepreload"]
     link [href="js/score.min.js" rel="modulepreload"]
@@ -3907,7 +3908,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=3" rel="stylesheet"]
+    link [href="css/experience.min.css?v=4" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -3997,6 +3998,7 @@ html [data-ui-theme="ember" lang="en"]
               "0%"
             "of the lawn cleared"
           p#end-line.piece-subtitle.end-line
+          p#end-dive.end-dive
           dl.end-stats
             div.end-stat
               dt

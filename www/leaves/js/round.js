@@ -7,6 +7,8 @@
  *   revenge   time is up, and the neighbor is having the last word: too
  *             much of the yard was left on his lawn (M2)
  *   settling  time is up: the blower is off and the leaves are landing
+ *   finale    the result is counted, and the person dives into the pile
+ *             before the end card (M3)
  *   done      the result is counted and the end card is up
  *   free      no clock at all, for anybody who only wants to blow leaves
  *
@@ -46,7 +48,7 @@ export function freePlay(round) {
 
 /** Whether the clock has run out (the result is being made or shown). */
 export function isOver(round) {
-    return round.phase === 'revenge' || round.phase === 'settling' || round.phase === 'done';
+    return round.phase === 'revenge' || round.phase === 'settling' || round.phase === 'finale' || round.phase === 'done';
 }
 
 /** Whether the blower may run in this phase. */
@@ -63,8 +65,9 @@ export function timeLeft(round) {
  * Advance the round by `dt` seconds. `input` is { blowing, moving, revenge,
  * revengeDone }: whether the blower is held this frame, how many leaves are
  * awake, whether the neighbor is owed his last word as the clock runs out,
- * and whether he has had it. Returns 'start', 'revenge', 'time-up', 'done'
- * or null ('time-up' marks the start of settling, after any revenge).
+ * and whether he has had it, and `finaleDone` once the dive is over. Returns
+ * 'start', 'revenge', 'time-up', 'finale', 'done' or null ('time-up' marks
+ * the start of settling, after any revenge).
  */
 export function stepRound(round, dt, input, R) {
     const step = dt > 0 ? dt : 0;
@@ -103,6 +106,18 @@ export function stepRound(round, dt, input, R) {
         round.settled += step;
         const still = input.moving === 0 && round.settled >= R.settleMin;
         if (still || round.settled >= R.settleMax) {
+            round.settled = 0;
+            if (R.finale) {
+                round.phase = 'finale';
+                return 'finale';
+            }
+            round.phase = 'done';
+            return 'done';
+        }
+    }
+    if (round.phase === 'finale') {
+        round.settled += step;
+        if (input.finaleDone || round.settled >= R.finaleMax) {
             round.phase = 'done';
             return 'done';
         }

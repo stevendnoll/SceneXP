@@ -93,12 +93,13 @@
     <title>Leaves | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=3" as="style">
+    <link rel="preload" href="css/experience.min.css?v=4" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
     <link rel="modulepreload" href="js/config.min.js">
     <link rel="modulepreload" href="js/sim.min.js">
+    <link rel="modulepreload" href="js/finale.min.js">
     <link rel="modulepreload" href="js/round.min.js">
     <link rel="modulepreload" href="js/neighbor.min.js">
     <link rel="modulepreload" href="js/score.min.js">
@@ -118,7 +119,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=3">
+    <link rel="stylesheet" href="css/experience.min.css?v=4">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -242,6 +243,9 @@
                 <h2 id="end-title" class="piece-title">Respectable work</h2>
                 <p class="end-score"><span id="end-percent">0%</span> of the lawn cleared</p>
                 <p id="end-line" class="piece-subtitle end-line"></p>
+                <!-- How the dive into the pile went (M3), empty when there
+                     was none. -->
+                <p id="end-dive" class="end-dive"></p>
                 <dl class="end-stats">
                     <div class="end-stat">
                         <dt>On the tarp</dt>

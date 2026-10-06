@@ -188,6 +188,9 @@ export function createSim(count, config) {
         air: new Float32Array(3),
         air2: new Float32Array(3),
         airJet: null,
+        // Gusts from a body landing in a pile (burst), each { x, z, radius,
+        // speed, born }: up and out for `physics.gust.life` seconds.
+        gusts: [],
         // Which cell boundaries a wall stands on (see wallGrid).
         blockE: new Uint8Array(nx * nz),
         blockN: new Uint8Array(nx * nz)
@@ -267,6 +270,7 @@ export function resetSim(sim) {
     sim.time = 0;
     sim.random = makeRandom((sim.config.leaves.seed || 1) + 7);
     sim.stats = { woken: 0, slept: 0, steps: 0 };
+    sim.gusts = [];
     clearDirty(sim);
 }
 
@@ -740,6 +744,27 @@ function airOf(sim, jets, x, y, z, ground) {
             sim.airJet = jets[k];
         }
     }
+    // A landing's gust: straight up over the middle, leaning outward toward
+    // the edge, fading with height above the pile and with time.
+    const G = sim.P.gust;
+    for (let k = 0; k < sim.gusts.length; k++) {
+        const g = sim.gusts[k];
+        const dx = x - g.x;
+        const dz = z - g.z;
+        const d = Math.hypot(dx, dz);
+        const age = (sim.time - g.born) / G.life;
+        if (d >= g.radius || age >= 1 || age < 0) continue;
+        const above = y - ground > 0 ? y - ground : 0;
+        const u = g.speed * (1 - d / g.radius) * (1 - age) * Math.exp(-above / G.height);
+        if (u > best) {
+            best = u;
+            const lean = d > 1e-3 ? G.spread / d : 0;
+            out[0] = dx * lean * u;
+            out[1] = u;
+            out[2] = dz * lean * u;
+            sim.airJet = null;
+        }
+    }
     return best;
 }
 
@@ -989,6 +1014,7 @@ export function stepSim(sim, dt, jets) {
     for (let k = 0; k < list.length; k++) wakeUnderJet(sim, list[k]);
     const n = Math.max(1, Math.ceil(dt / sim.P.maxStep));
     const h = dt / n;
+    if (sim.gusts.length) sim.gusts = sim.gusts.filter((g) => sim.time - g.born < sim.P.gust.life);
     for (let s = 0; s < n; s++) {
         sim.time += h;
         // Backwards, because a leaf that sleeps is swapped out for the last.
@@ -1010,6 +1036,76 @@ export function dropLeaf(sim, i, x, y, z) {
     sim.vy[i] = 0;
     sim.vz[i] = 0;
     writePose(sim, i);
+}
+
+/** The top of the pile inside rectangle `r`: { x, z, height } at the
+ *  middle of its highest cell, or the rectangle's middle and 0 where
+ *  nothing lies (M3: what the dive aims at). */
+export function pilePeak(sim, r) {
+    const b = sim.bounds;
+    const x0 = clamp(Math.floor((r.minX - b.minX) / sim.cell), 0, sim.nx - 1);
+    const x1 = clamp(Math.floor((r.maxX - b.minX) / sim.cell), 0, sim.nx - 1);
+    const z0 = clamp(Math.floor((r.minZ - b.minZ) / sim.cell), 0, sim.nz - 1);
+    const z1 = clamp(Math.floor((r.maxZ - b.minZ) / sim.cell), 0, sim.nz - 1);
+    let best = -1;
+    let top = 0;
+    for (let iz = z0; iz <= z1; iz++) {
+        for (let ix = x0; ix <= x1; ix++) {
+            const c = iz * sim.nx + ix;
+            if (sim.height[c] > top) { top = sim.height[c]; best = c; }
+        }
+    }
+    if (best < 0) return { x: (r.minX + r.maxX) / 2, z: (r.minZ + r.maxZ) / 2, height: 0 };
+    const ix = best % sim.nx;
+    const iz = (best - ix) / sim.nx;
+    return { x: b.minX + (ix + 0.5) * sim.cell, z: b.minZ + (iz + 0.5) * sim.cell, height: top };
+}
+
+/**
+ * Throw the leaves around (x, z) into the air, the way a body landing in a
+ * pile does (M3): every sleeping leaf within `radius` is woken and sent up
+ * at up to `speed` m/s and out from the middle, hardest near the middle.
+ * Returns how many went up.
+ */
+export function burst(sim, x, z, radius, speed) {
+    const b = sim.bounds;
+    const q = sim.K.bucket;
+    const x0 = clamp(Math.floor((x - radius - b.minX) / q), 0, sim.bnx - 1);
+    const x1 = clamp(Math.floor((x + radius - b.minX) / q), 0, sim.bnx - 1);
+    const z0 = clamp(Math.floor((z - radius - b.minZ) / q), 0, sim.bnz - 1);
+    const z1 = clamp(Math.floor((z + radius - b.minZ) / q), 0, sim.bnz - 1);
+    const pending = sim.pending;
+    let n = 0;
+    for (let bz = z0; bz <= z1; bz++) {
+        for (let bx = x0; bx <= x1; bx++) {
+            for (let i = sim.head[bz * sim.bnx + bx]; i !== -1; i = sim.next[i]) {
+                if (Math.hypot(sim.px[i] - x, sim.pz[i] - z) < radius) pending[n++] = i;
+            }
+        }
+    }
+    for (let k = 0; k < n; k++) wake(sim, pending[k], true);
+    settleMarked(sim);
+    // THE AIR GOES UP WITH THEM. Thrown alone, a leaf's drag stops it within
+    // a few centimeters (measured: 20 cm at 5.5 m/s), so the landing also
+    // pushes a gust of air up and out, and the leaves ride it.
+    sim.gusts.push({ x, z, radius: radius * 1.15, speed, born: sim.time });
+    for (let k = 0; k < n; k++) {
+        const i = pending[k];
+        const dx = sim.px[i] - x;
+        const dz = sim.pz[i] - z;
+        const d = Math.hypot(dx, dz);
+        const near = 1 - d / radius;
+        const a = d > 1e-3 ? Math.atan2(dz, dx) : sim.random() * Math.PI * 2;
+        const out = speed * 0.45 * (0.4 + near) * (0.6 + 0.8 * sim.random());
+        sim.vx[i] = Math.cos(a) * out;
+        sim.vz[i] = Math.sin(a) * out;
+        sim.vy[i] = speed * (0.35 + 0.65 * near) * (0.7 + 0.6 * sim.random());
+        sim.py[i] += 0.01;
+        sim.wpitch[i] = (sim.random() - 0.5) * 24;
+        sim.wroll[i] = (sim.random() - 0.5) * 24;
+        writePose(sim, i);
+    }
+    return n;
 }
 
 /** How many leaves lie inside a rectangle, asleep or awake. */

@@ -19,21 +19,28 @@
  * and his last word when too much of the yard is left on his lawn as the
  * clock runs out.
  *
+ * M3, THE FINALE (2026-10-07): once the leaves land and the result is
+ * counted, the person takes a running dive into the tarp's pile (finale.js),
+ * landing in it in a burst of leaves (burst in sim.js), or, for a pile too
+ * small, on the lawn, getting up slowly with a hand on their back. A tap or
+ * a key skips it.
+ *
  * UNLISTED. The page carries noindex and is in no directory, sitemap or
  * llms.txt until the scene it grows into is released.
  */
 
 import { LEAVES_CONFIG } from './config.min.js';
-import { createSim, resetSim, scatterLeaves, stepSim, makeJet } from './sim.min.js';
+import { createSim, resetSim, scatterLeaves, stepSim, makeJet, pilePeak, burst } from './sim.min.js';
+import { planFinale, finaleAt } from './finale.min.js';
 import { createRound, resetRound, freePlay, canBlow, timeLeft, stepRound } from './round.min.js';
 import { createNeighbor, resetNeighbor, stepNeighbor, isOut, neighborBlower } from './neighbor.min.js';
 import {
-    tally, clearedShare, percent, clockText, verdict, resultRows, shareText, resultSentence
+    tally, clearedShare, percent, clockText, verdict, resultRows, shareText, resultSentence, diveLine
 } from './score.min.js';
 import { createLeafMesh } from './leafmesh.min.js';
 import { buildYard } from './yard.min.js';
 import { createOperator, stepOperator, facing, createOperatorFigure } from './blower.min.js';
-import { cameraFor, rayToGround, ease } from './view.min.js';
+import { cameraFor, cameraOn, rayToGround, ease } from './view.min.js';
 import { isQaHost, labOptions, labSearch, statsLines, fpsOf, shortCount } from './lab.min.js';
 import {
     getProofOfWork, bufToHex, shieldOverlayControl, installCardFocusTrap, installCardScrollReset
@@ -93,6 +100,11 @@ let neighborFigure = null;
 let neighborDoor = null;
 let sent = null;
 const lastWord = { had: false };
+// The finale: its plan, how far into it we are, whether the burst has gone
+// off, the arms it left the person in, and the result as it stood before
+// the dive (the burst throws leaves off the tarp, and a dive should not
+// lower the score it celebrates).
+const finale = { plan: null, t: 0, burst: false, arms: 'carry', tally: null };
 // What the HUD last showed, so it is only written when it changes.
 const hudShown = { clock: '', cleared: '', phase: '' };
 
@@ -281,8 +293,13 @@ function placeCamera(snap) {
 
 /** Ease the camera toward where it wants to be this frame. */
 function followCamera(dt) {
-    const want = cameraFor(window.innerWidth / window.innerHeight, CONFIG.camera, CONFIG.yard.lawn, operator,
-        isOut(neighbor) ? neighbor : null);
+    const aspect = window.innerWidth / window.innerHeight;
+    // The finale's view: in close on the pile, the house behind it, held
+    // through the end card. Reduced motion keeps the usual view.
+    const onPile = finale.plan && !state.reducedMotion && (round.phase === 'finale' || round.phase === 'done');
+    const want = onPile
+        ? cameraOn(finale.plan.land, aspect, CONFIG.camera, CONFIG.finale.span)
+        : cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null);
     const rate = CONFIG.camera.follow;
     ['x', 'y', 'z'].forEach((k) => {
         view.position[k] = ease(view.position[k], want.position[k], rate, dt);
@@ -341,6 +358,7 @@ function setupEventListeners() {
 
     // Steering by pointer events, so a mouse, a pen and a finger are one path.
     canvas.addEventListener('pointerdown', (event) => {
+        if (skipFinale()) return;
         if (welcomeShown() || (pointer.id !== null && pointer.id !== event.pointerId)) return;
         pointer.id = event.pointerId;
         pointer.down = true;
@@ -451,6 +469,11 @@ function onKeyDown(event) {
     // the focus trap's, and Escape keeps blowing.
     if (endShown()) {
         if (event.code === 'Escape') keepBlowing();
+        return;
+    }
+    if (round.phase === 'finale' && ['Space', 'Enter', 'Escape'].includes(event.code)) {
+        event.preventDefault();
+        skipFinale();
         return;
     }
     if (event.code === 'Escape') {
@@ -624,7 +647,8 @@ function installRoundControls() {
         document.getElementById('end-share'),
         () => ({
             title: 'Leaves',
-            text: shareText(result ? result.tally : counted, CONFIG.round.seconds, Boolean(result && result.revenge))
+            text: shareText(result ? result.tally : counted, CONFIG.round.seconds,
+                Boolean(result && result.revenge), result ? result.landed : null)
         }),
         {
             status: document.getElementById('end-status'),
@@ -660,31 +684,107 @@ function onRoundEvent(event) {
         // The blower stops with the clock, whatever is still held.
         releaseInput();
         if (!lastWord.had) announce('Time is up.');
+    } else if (event === 'finale') {
+        startFinale();
     } else if (event === 'done') {
         showEnd();
     }
     updateHud();
 }
 
+// ---- The finale -----------------------------------------------------------
+
+/** The leaves are down and the result is counted: plan the dive at the
+ *  peak of the tarp's pile. */
+function startFinale() {
+    finale.tally = { ...recount() };
+    const peak = pilePeak(sim, CONFIG.yard.tarp);
+    finale.plan = planFinale(operator, peak, CONFIG.finale, walkArea(), { reduced: state.reducedMotion });
+    finale.t = 0;
+    finale.burst = false;
+    operator.hideBlower = true;
+    announce('You set the blower down and take a running dive at the pile.');
+    track('dive', { outcome: finale.plan.success ? 'landed' : 'flop' });
+}
+
+/** Where they land, the leaves go up: the whole pile for a good dive, a
+ *  puff for a flop, less of either under reduced motion. */
+function fireBurst() {
+    if (finale.burst || !finale.plan) return;
+    finale.burst = true;
+    const F = CONFIG.finale;
+    const plan = finale.plan;
+    const size = (plan.success ? 1 : F.flopBurst) * (state.reducedMotion ? F.reducedBurst : 1);
+    burst(sim, plan.land.x, plan.land.z, F.burstRadius * (plan.success ? 1 : 0.6), F.burstSpeed * size);
+    announce(plan.success ? 'You land in the pile, and the leaves go everywhere.' : 'You land on the lawn. Ouch.');
+}
+
+/** One frame of the finale: the person where the plan says, the burst on
+ *  landing. Returns whether it is over. */
+function stepFinale(dt) {
+    const plan = finale.plan;
+    if (!plan) return true;
+    finale.t += dt;
+    const pose = finaleAt(plan, finale.t);
+    operator.x = pose.x;
+    operator.z = pose.z;
+    operator.heading = pose.heading;
+    operator.speed = pose.speed;
+    operator.stride = pose.stride;
+    operator.pitch = pose.pitch;
+    operator.lift = pose.lift;
+    finale.arms = pose.arms;
+    if (finale.t >= plan.t.air) fireBurst();
+    return finale.t >= plan.total;
+}
+
+/** Back on their feet with the blower, wherever the finale left them (Keep
+ *  blowing): the dive is over and the yard is theirs again. */
+function standUp() {
+    const area = walkArea();
+    operator.x = Math.min(area.maxX, Math.max(area.minX, operator.x));
+    operator.z = Math.min(area.maxZ, Math.max(area.minZ, operator.z));
+    operator.pitch = 0;
+    operator.lift = 0;
+    operator.speed = 0;
+    operator.hideBlower = false;
+    finale.plan = null;
+    finale.arms = 'carry';
+    finale.tally = null;
+}
+
+/** A tap or a key during the finale: straight to the end of it, burst and
+ *  all. */
+function skipFinale() {
+    if (!finale.plan || round.phase !== 'finale') return false;
+    finale.t = Math.max(finale.t, finale.plan.total);
+    fireBurst();
+    stepFinale(0);
+    track('dive-skip');
+    return true;
+}
+
 /** Count the result, fill the end card and open it, with Play again
  *  focused. */
 function showEnd() {
-    const t = recount();
+    const t = finale.tally || recount();
     const v = verdict(t, lastWord.had);
-    result = { tally: t, verdict: v, revenge: lastWord.had };
+    const landed = finale.plan ? finale.plan.success : null;
+    result = { tally: t, verdict: v, revenge: lastWord.had, landed };
     const set = (id, text) => {
         const el = document.getElementById(id);
         if (el) el.textContent = text;
     };
     set('end-title', v.title);
     set('end-line', v.line);
+    set('end-dive', diveLine(landed));
     set('end-percent', `${percent(clearedShare(t))}%`);
     resultRows(t).forEach((row) => set(`end-${row.key}`, row.value));
     fillEndPromo();
     releaseInput();
     if (endModal) endModal.classList.remove('hidden');
     setChromeVisible(false);
-    announce(resultSentence(t, lastWord.had));
+    announce(resultSentence(t, lastWord.had, landed));
     const again = document.getElementById('end-again');
     if (again) {
         try { again.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
@@ -725,6 +825,7 @@ function playAgain(from) {
 /** The end card's Keep blowing (or Escape): the same yard, no clock. */
 function keepBlowing() {
     hideEnd();
+    standUp();
     freePlay(round);
     track('free-blow', { outcome: 'end-card' });
     updateHud();
@@ -739,6 +840,11 @@ function resetYard() {
     Object.assign(operator, createOperator(B));
     resetNeighbor(neighbor, N);
     if (sent) sent.fill(0);
+    finale.plan = null;
+    finale.t = 0;
+    finale.burst = false;
+    finale.arms = 'carry';
+    finale.tally = null;
     lastWord.had = false;
     shade.owed = true;
     recount();
@@ -774,7 +880,14 @@ function updateHud() {
     }
     const hint = el('hud-hint');
     if (hint) {
-        const text = { ready: 'Blow to start the clock', settling: 'Time is up', done: 'Time is up', free: 'No clock, just leaves' }[phase];
+        const text = {
+            ready: 'Blow to start the clock',
+            revenge: 'Your neighbor is having the last word',
+            finale: 'Here goes nothing',
+            settling: 'Time is up',
+            done: 'Time is up',
+            free: 'No clock, just leaves'
+        }[phase];
         hint.hidden = !text;
         if (text) hint.textContent = text;
     }
@@ -864,7 +977,7 @@ function stepTheNeighbor(dt) {
         maxX: counted.deepX,
         active: round.phase === 'playing' || round.phase === 'free',
         revenge: round.phase === 'revenge',
-        over: round.phase === 'settling' || round.phase === 'done'
+        over: round.phase === 'settling' || round.phase === 'finale' || round.phase === 'done'
     }, N);
     if (event === 'out' && !neighbor.revenge) {
         announce(neighbor.visits === 0
@@ -893,7 +1006,8 @@ function animate() {
     const inYard = !welcomeShown() && !endShown();
     const free = inYard && canBlow(round);
     const aim = free ? aimFor(steer, pointer, keys) : null;
-    stepOperator(operator, aim, dt, B, walkArea());
+    const diving = round.phase === 'finale';
+    if (!diving && !finale.plan) stepOperator(operator, aim, dt, B, walkArea());
     const blowing = isBlowing(free, pointer, keys, blowHold);
     const f = facing(operator.heading);
     const jet = makeJet(B, operator.x, operator.z, f.x, f.z, blowing);
@@ -901,8 +1015,9 @@ function animate() {
         // His last word is owed if too much of the yard is on his lawn as
         // the clock runs out.
         const owed = counted.neighbor >= N.winShare * counted.total;
+        const finaleDone = diving ? stepFinale(dt) : false;
         const event = stepRound(round, dt, {
-            blowing, moving: sim.activeCount, revenge: owed, revengeDone: neighbor.revengeDone
+            blowing, moving: sim.activeCount, revenge: owed, revengeDone: neighbor.revengeDone, finaleDone
         }, CONFIG.round);
         if (event) onRoundEvent(event);
     }
@@ -921,7 +1036,7 @@ function animate() {
     lab.simMs += performance.now() - t0;
     lab.uploaded += uploaded;
 
-    figure.update(operator, blowing, state.time);
+    figure.update(operator, blowing, state.time, finale.plan ? finale.arms : 'carry');
     neighborFigure.group.visible = isOut(neighbor);
     neighborFigure.update(neighbor, neighbor.blowing, state.time, neighbor.arms, neighbor.big);
     if (neighborDoor) neighborDoor.rotation.y = -1.7 * neighbor.door;
@@ -979,9 +1094,10 @@ export function getState() {
         blowing: isBlowing(!welcomeShown() && !endShown() && canBlow(round), pointer, keys, blowHold),
         round: { ...round },
         counted: { ...counted },
-        result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict }, revenge: result.revenge } : null,
+        result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict }, revenge: result.revenge, landed: result.landed } : null,
         neighbor: { ...neighbor },
-        endShown: endShown()
+        endShown: endShown(),
+        finale: finale.plan ? { t: finale.t, total: finale.plan.total, success: finale.plan.success, burst: finale.burst, arms: finale.arms } : null
     };
 }
 

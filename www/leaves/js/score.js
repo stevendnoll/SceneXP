@@ -133,22 +133,35 @@ export function resultRows(t) {
     ];
 }
 
+/** The end card's line about the dive (M3): `landed` true, false, or null
+ *  for no dive at all. */
+export function diveLine(landed) {
+    if (landed === null || landed === undefined) return '';
+    return landed
+        ? 'You took a running dive into the pile, and it caught you.'
+        : 'You dove for the pile and found the lawn. Your back would like a word.';
+}
+
 /** The sentence a visitor posts. The neighbor makes the better story when
  *  there is one (best of all when he had the last word), and the pile on the
- *  tarp otherwise. */
-export function shareText(t, seconds, revenge = false) {
+ *  tarp otherwise. Then the dive, landed or not (`landed` null for none). */
+export function shareText(t, seconds, revenge = false, landed = null) {
     const head = `I cleared ${percent(clearedShare(t))}% of my yard in ${seconds} seconds.`;
     const sent = t.sent ?? t.neighbor;
     let tail = '';
     if (revenge) tail = ` Then my neighbor blew ${leaves(sent)} back at me.`;
     else if (sent > 0) tail = ` ${leaves(sent)} went to the neighbor.`;
-    else if (t.tarp > 0) tail = ` ${leaves(t.tarp)} made it onto the tarp.`;
+    else if (t.tarp > 0 && landed !== true) tail = ` ${leaves(t.tarp)} made it onto the tarp.`;
+    if (landed === true) tail += ` I landed the dive into a pile of ${leaves(t.tarp)}.`;
+    if (landed === false) tail += ' I threw my back out diving into the pile.';
     return `${head}${tail} A leaf blower game on SceneXP.`;
 }
 
 /** The result in one sentence, for a screen reader. */
-export function resultSentence(t, revenge = false) {
+export function resultSentence(t, revenge = false, landed = null) {
     const v = verdict(t, revenge);
+    const dive = diveLine(landed);
     return `${v.title}. ${percent(clearedShare(t))} percent of the lawn cleared, with ${leaves(t.tarp)} on the tarp, `
-        + `${leaves(t.street)} in the street, and ${leaves(t.sent ?? t.neighbor)} sent over the fence.`;
+        + `${leaves(t.street)} in the street, and ${leaves(t.sent ?? t.neighbor)} sent over the fence.`
+        + (dive ? ` ${dive}` : '');
 }

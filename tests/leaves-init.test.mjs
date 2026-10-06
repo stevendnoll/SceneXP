@@ -21,6 +21,7 @@ import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 
 const PAGE = new URL('../www/leaves/index.html', import.meta.url);
+const { LEAVES_CONFIG: C0 } = await import('../www/leaves/js/config.js');
 
 let dom;
 
@@ -265,7 +266,8 @@ describe('the round', () => {
         frames(main, 0.2, 20);
         fire(dom.documentStub, 'keyup', { code: 'Space' });
         expect(main.getState().round.phase).toBe('playing');
-        frames(main, 66, 20);
+        // The minute, the leaves landing, and the dive into the pile.
+        frames(main, 60 + C0.round.settleMax + C0.round.finaleMax, 20);
         expect(main.getState().endShown).toBe(true);
     }
 
@@ -416,7 +418,14 @@ describe('the neighbor', () => {
         frames(main, 1.5, 20);
         expect(main.getState().round.phase).toBe('revenge');
         expect(dom.el('round-status').textContent).toMatch(/not having it/);
-        frames(main, 25, 20);
+        expect(dom.el('hud-hint').hidden).toBe(false);
+        expect(dom.el('hud-hint').textContent).toBe('Your neighbor is having the last word');
+        // STEVE'S M2 QA: the end card "did not appear when the time ran
+        // out". His last word ran its full 14 seconds every time and the card
+        // waited 20 behind it. However long he takes, the card is up within
+        // the round's caps of the clock running out.
+        const { LEAVES_CONFIG: C } = await import('../www/leaves/js/config.js');
+        frames(main, C.round.revengeMax + C.round.settleMax + C.round.finaleMax, 20);
         const s = main.getState();
         expect(s.endShown).toBe(true);
         expect(s.result.revenge).toBe(true);
@@ -425,6 +434,88 @@ describe('the neighbor', () => {
         fire(dom.el('end-again'), 'click');
         expect(main.getState().neighbor.state).toBe('inside');
         expect(main.getState().counted.sent).toBe(0);
+    });
+});
+
+describe('the finale (M3)', () => {
+    /** Step in, blow once, and run the clock out, stopping at the finale. */
+    async function toTheFinale(main) {
+        fire(dom.el('blocker'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 0.2, 20);
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        for (let s = 0; s < 70 && main.getState().round.phase !== 'finale'; s++) frames(main, 1, 20);
+        expect(main.getState().round.phase).toBe('finale');
+    }
+
+    test('with nothing on the tarp, the dive finds the lawn, and the card and the share say so', async () => {
+        const main = await boot();
+        await toTheFinale(main);
+        expect(main.getState().finale.success).toBe(false);
+        expect(dom.el('hud-hint').textContent).toBe('Here goes nothing');
+        expect(main.getState().endShown).toBe(false);
+        frames(main, C0.round.finaleMax, 20);
+        const s = main.getState();
+        expect(s.endShown).toBe(true);
+        expect(s.finale.burst).toBe(true);
+        expect(s.result.landed).toBe(false);
+        expect(dom.el('end-dive').textContent).toMatch(/found the lawn/);
+        fire(dom.el('end-share'), 'click');
+        await flushAsync();
+        expect(decodeURIComponent(dom.windowStub.location.href)).toMatch(/I threw my back out diving into the pile\./);
+    });
+
+    test('a key skips straight to the end of it, burst and all', async () => {
+        const main = await boot();
+        await toTheFinale(main);
+        expect(main.getState().finale.burst).toBe(false);
+        const down = fire(dom.documentStub, 'keydown', { code: 'Space' });
+        expect(down.defaultPrevented).toBe(true);
+        const f = main.getState().finale;
+        expect(f.t).toBeGreaterThanOrEqual(f.total);
+        expect(f.burst).toBe(true);
+        frames(main, 0.5, 20);
+        expect(main.getState().endShown).toBe(true);
+        // The blower never ran during it.
+        expect(main.getState().blowing).toBe(false);
+    });
+
+    test('a tall pile on the tarp is landed in, and Keep blowing stands them back up', async () => {
+        const main = await boot();
+        // Heap the yard's leaves in the tarp's corner before the clock runs out.
+        fire(dom.el('blocker'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 0.2, 20);
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        const Sim = await import('../www/leaves/js/sim.min.js');
+        const sim = main.__test__.sim();
+        // Heap them leaf on leaf, the way leaves arriving one after another
+        // build a pile. (Dropped all at once they would all land on the bare
+        // tarp together and come to rest as one flat mat, since a leaf only
+        // joins the pile's surface once it is still.) At about 1.4 cm a
+        // leaf, a pile 35 cm tall at its natural slope takes some 460.
+        for (let s = 0; s < 10 && sim.activeCount > 0; s++) frames(main, 1, 20);
+        expect(sim.activeCount).toBe(0);
+        for (let i = 0; i < 560; i++) Sim.wake(sim, i);
+        sim.activeCount = 0;
+        sim.activeAt.fill(-1);
+        for (let i = 0; i < 560; i++) Sim.layDown(sim, i, -9.55, -5.55);
+        for (let s = 0; s < 70 && main.getState().round.phase !== 'finale'; s++) frames(main, 1, 20);
+        expect(main.getState().finale.success).toBe(true);
+        frames(main, C0.round.finaleMax, 20);
+        expect(main.getState().result.landed).toBe(true);
+        expect(dom.el('end-dive').textContent).toMatch(/it caught you/);
+        // The score was counted before the dive scattered the pile.
+        expect(main.getState().result.tally.tarp).toBeGreaterThanOrEqual(450);
+        fire(dom.el('end-free'), 'click');
+        const op = main.getState().operator;
+        expect(op.pitch).toBe(0);
+        expect(op.lift).toBe(0);
+        expect(op.hideBlower).toBe(false);
+        // And they can walk again.
+        fire(dom.documentStub, 'keydown', { code: 'KeyD' });
+        frames(main, 1, 20);
+        expect(main.getState().operator.x).toBeGreaterThan(op.x + 1);
     });
 });
 

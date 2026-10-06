@@ -69,6 +69,19 @@ export function cameraFor(aspect, C, lawn, follow, include = null) {
     };
 }
 
+/** The camera's usual angle, looking straight at `point` from far enough
+ *  back to fit `span` meters across: the finale's view of the pile. */
+export function cameraOn(point, aspect, C, span) {
+    const dist = distanceFor(span, aspect, C.fovDegrees);
+    const len = Math.hypot(C.height, C.back);
+    return {
+        position: { x: point.x, y: C.target.y + (C.height / len) * dist, z: point.z + (C.back / len) * dist },
+        target: { x: point.x, y: C.target.y, z: point.z },
+        span,
+        distance: dist
+    };
+}
+
 /** Where a ray from `origin` along `dir` meets the ground (y = 0), or null if
  *  it points at the sky. */
 export function rayToGround(origin, dir) {

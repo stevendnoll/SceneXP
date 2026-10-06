@@ -17,8 +17,10 @@
  * `bigFrom` (counting from 0) he brings the big blower.
  *
  * HIS LAST WORD. When the round says so (`input.revenge`), he comes out (or
- * carries on) with the big blower and sweeps his whole lawn until it is
- * nearly clear or `revengeSeconds` have passed, and answers 'revenge-done'.
+ * carries on) with the big blower, quicker on his feet, and sweeps his whole
+ * lawn until most of it is clear (`revengeKeep` of it left) or
+ * `revengeSeconds` have passed, and answers 'revenge-done'. Short, so the
+ * result is not kept waiting behind him.
  *
  * A GOOD-NATURED RIVAL: he never sets foot in our yard, never touches the
  * visitor, and waves when the round is over.
@@ -53,7 +55,8 @@ export function createNeighbor(N) {
         revenge: false,
         revengeDone: false,
         segs: [],
-        seg: 0
+        seg: 0,
+        revengeFrom: 0
     };
 }
 
@@ -92,8 +95,9 @@ function turnTo(nb, heading, dt) {
 }
 
 /** Out he comes. */
-function start(nb, N, revenge) {
+function start(nb, N, revenge, leaves = 0) {
     nb.state = 'door-open';
+    nb.revengeFrom = leaves;
     nb.t = 0;
     nb.revenge = revenge;
     nb.big = revenge || nb.visits >= N.bigFrom;
@@ -158,11 +162,12 @@ export function stepNeighbor(nb, dt, input, N) {
     // The last word, whatever he was doing.
     if (input.revenge && !nb.revengeDone && !nb.revenge) {
         if (nb.state === 'inside' || nb.state === 'door-close') {
-            start(nb, N, true);
+            start(nb, N, true, input.leaves);
             return 'out';
         }
         nb.revenge = true;
         nb.big = true;
+        nb.revengeFrom = input.leaves;
         if (nb.state === 'walk-out' || nb.state === 'blow' || nb.state === 'watch' || nb.state === 'walk-in') {
             planSweep(nb, input, N);
             nb.state = 'walk-out';
@@ -189,7 +194,7 @@ export function stepNeighbor(nb, dt, input, N) {
         case 'walk-out': {
             nb.blowing = false;
             const first = nb.segs[0];
-            if (walkTo(nb, first.x, first.z, N.walkSpeed, step)) {
+            if (walkTo(nb, first.x, first.z, nb.revenge ? N.revengeWalk : N.walkSpeed, step)) {
                 nb.state = 'blow';
                 nb.t = 0;
                 nb.seg = 1;
@@ -218,7 +223,8 @@ export function stepNeighbor(nb, dt, input, N) {
                 if (nb.seg >= nb.segs.length && nb.revenge) nb.seg = 0;
             }
             const doneRevenge = nb.revenge
-                && (input.leaves <= N.revengeLeft || nb.t >= N.revengeSeconds);
+                && (input.leaves <= Math.max(N.revengeLeft, nb.revengeFrom * N.revengeKeep)
+                    || nb.t >= N.revengeSeconds);
             if ((!nb.revenge && nb.seg >= nb.segs.length) || doneRevenge) {
                 nb.blowing = false;
                 nb.state = 'watch';

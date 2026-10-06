@@ -120,6 +120,16 @@ describe('his last word', () => {
         expect(nb.revengeDone).toBe(true);
     });
 
+    test('he stops once his lawn is down to a fifth of what was on it', () => {
+        const nb = Nb.createNeighbor(N);
+        const input = { ...quiet, leaves: 1000, minZ: 0, maxZ: 1, maxX: 12, revenge: true };
+        Nb.stepNeighbor(nb, 1 / 30, input, N);
+        expect(nb.revengeFrom).toBe(1000);
+        while (nb.state !== 'blow') Nb.stepNeighbor(nb, 1 / 30, input, N);
+        expect(drive(nb, { ...input, leaves: 1000 * N.revengeKeep + 1 }, 0.5)).toEqual([]);
+        expect(drive(nb, { ...input, leaves: 1000 * N.revengeKeep }, 0.5)).toEqual(['revenge-done']);
+    });
+
     test('he gives up after his time, however many are left', () => {
         const nb = Nb.createNeighbor(N);
         const input = { ...quiet, leaves: 3000, minZ: 0, maxZ: 1, maxX: 12, revenge: true };

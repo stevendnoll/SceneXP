@@ -123,7 +123,12 @@ export const LEAVES_CONFIG = Object.freeze({
         // The longest step the integrator takes. A slow frame takes several.
         maxStep: 1 / 90,
         // How hard a wall stops a leaf (0 dead, 1 bouncing).
-        wallBounce: 0.15
+        wallBounce: 0.15,
+        // A body landing in a pile pushes a gust of air up through it (see
+        // burst in sim.js): it lasts `life` seconds, fades over `height`
+        // meters above the pile, and leans outward `spread` per meter from
+        // the middle.
+        gust: { life: 1, height: 2, spread: 0.6 }
     },
 
     // THE PILES. The surface over each `cell` meter square is the top of the
@@ -238,15 +243,67 @@ export const LEAVES_CONFIG = Object.freeze({
         cooldown: [8, 6, 4],
         bigFrom: 2,
         winShare: 0.12,
-        // His last word sweeps at `revengeSweep` m/s, and ends when this few
-        // are left on his lawn, or after this long.
-        revengeSweep: 2.2,
+        // His last word: he walks out at `revengeWalk` m/s, sweeps at
+        // `revengeSweep`, and stops once his lawn is down to `revengeKeep` of
+        // what was on it (or `revengeLeft` leaves), or after `revengeSeconds`
+        // of blowing. KEPT SHORT ON PURPOSE (Steve's M2 QA: the end card "did
+        // not appear when the time ran out"): it used to stop only at 10
+        // leaves, which a sweep never reached, so it always ran its full 14
+        // seconds and the result waited 20 seconds behind it.
+        revengeWalk: 2.4,
+        revengeSweep: 3,
+        revengeKeep: 0.2,
         revengeLeft: 10,
-        revengeSeconds: 14,
+        revengeSeconds: 8,
         // His blowers, as changes to ours (config.blower).
         blower: { speed: 26 },
         bigBlower: { speed: 38, spread: 0.36, wallSpread: 0.7, range: 9 },
         look: { shirt: 0x3f5f7a, pants: 0xb5a58a, skin: 0xc68a5e, hair: 0x9a9a9a, blower: 0x3d7a3a, bigBlower: 0xc0392b, door: 0x24476b }
+    },
+
+    // THE FINALE (M3): the dive into the tarp's pile once the round is
+    // counted. See finale.js. Seconds and meters. KEPT TO ABOUT SEVEN
+    // SECONDS, since it stands between the clock and the end card (and,
+    // after the neighbor's last word, after that too). A tap or a key skips
+    // it.
+    finale: {
+        // The pile's peak must be this tall to land in it. Below it, the
+        // dive finds the lawn. A minute of steady work toward the corner
+        // built about 0.6 m in the bot runs.
+        diveHeight: 0.35,
+        // Setting the blower down, then the walk to the run-up spot (at
+        // `walkSpeed`, but never shorter than `minWalk` or longer than
+        // `maxWalk`, so someone far away jogs over).
+        pause: 0.3,
+        walkSpeed: 3,
+        minWalk: 0.6,
+        maxWalk: 2,
+        // The run-up: from `runUp` meters out, the leap at `takeoff` meters,
+        // landing with the hips `landOut` short of the peak.
+        runUp: 3.4,
+        takeoff: 1.1,
+        landOut: 0.5,
+        runTime: 0.9,
+        airTime: 0.75,
+        // How high the leap rises above a straight line, plus half the pile.
+        arc: 0.7,
+        // How far into a good pile the body sinks.
+        sink: 0.3,
+        lieTime: 0.8,
+        popTime: 1.4,
+        flopLie: 1.0,
+        getUpTime: 2.0,
+        // The burst where they land: leaves within `burstRadius` go up at up
+        // to `burstSpeed` m/s, and a flop throws `flopBurst` as much.
+        // Measured with 600 leaves in a 0.36 m pile: they go up to about 2 m
+        // and rain down for about 2.3 seconds.
+        burstRadius: 1.8,
+        burstSpeed: 9,
+        flopBurst: 0.3,
+        // Reduced motion keeps the camera where it is and throws this much.
+        reducedBurst: 0.4,
+        // The camera comes in to this many meters across around the pile.
+        span: 9
     },
 
     // THE ROUND (M1). The clock starts with the first blow, not when the
@@ -262,8 +319,13 @@ export const LEAVES_CONFIG = Object.freeze({
         settleMax: 4,
         hurry: 10,
         tallyHz: 4,
-        // The longest the neighbor's last word may hold up the result.
-        revengeMax: 18
+        // The longest the neighbor's last word may hold up the result, from
+        // the moment the clock runs out (his walk out included).
+        revengeMax: 12,
+        // The finale (M3) runs between the leaves landing and the end card,
+        // and never holds the card up longer than this.
+        finale: true,
+        finaleMax: 14
     },
 
     camera: {

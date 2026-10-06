@@ -14,13 +14,16 @@
  * figure is the shared person rig with a blower in the right hand.
  */
 import { createPerson } from '../../shared/js/people-1.0.0.min.js';
+import { PIVOT } from './finale.min.js';
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const wrap = (a) => a - Math.PI * 2 * Math.floor((a + Math.PI) / (Math.PI * 2));
 
 /** A person at `start`, facing the house (-z). */
 export function createOperator(B) {
-    return { x: B.start.x, z: B.start.z, heading: Math.PI, speed: 0, stride: 0 };
+    // pitch, lift and hideBlower are the finale's (finale.js): the body tipped
+    // forward about the hips, raised or lowered, and the blower set aside.
+    return { x: B.start.x, z: B.start.z, heading: Math.PI, speed: 0, stride: 0, pitch: 0, lift: 0, hideBlower: false };
 }
 
 /** The unit direction a heading faces: 0 is +z, PI / 2 is +x. */
@@ -78,10 +81,16 @@ export function stepOperator(op, aim, dt, B, area) {
 //   carry   the right hand down at the blower's handle (the left hangs)
 //   folded  both hands crossed in front of the chest, at 1.08 m
 //   wave    the right hand up beside the head, at 1.71 m, swinging
+//   up      both arms straight overhead, hands at 1.87 m (the dive, M3)
+//   back    the right hand on the small of the back, 0.92 m up and 17 cm
+//           behind (the flop, M3)
+//   down    both arms hanging (no blower)
 export const ARM_POSES = Object.freeze({
     carry: { right: { arm: [-0.55, 0, -0.25], fore: -0.45 }, left: null },
     folded: { arm: [-0.6, -1.6], fore: -1.5 },
-    wave: { right: { arm: [0, 0, -2], fore: [0, 0, -1.2] }, swing: 0.5 }
+    wave: { right: { arm: [0, 0, -2], fore: [0, 0, -1.2] }, swing: 0.5 },
+    up: { arm: [-3.08, 0, -0.04] },
+    back: { right: { arm: [0.94, 0.95, -0.15], fore: -1.25 } }
 });
 
 /**
@@ -90,6 +99,8 @@ export const ARM_POSES = Object.freeze({
  * update(op, blowing, time, arms, big) }: `arms` is a pose from ARM_POSES
  * ('carry' when absent), and `big` swaps in the big blower (a backpack
  * model). Away from 'carry' the blower is set down on the grass beside them.
+ * `op.pitch` tips the whole body forward about the hips, `op.lift` raises
+ * it, and `op.hideBlower` puts the blower away (the finale's dive).
  *
  * `options` dresses them: { person } for createPerson, { blower, bigBlower }
  * for the blowers' colors. The visitor's defaults are a flannel shirt and
@@ -98,6 +109,14 @@ export const ARM_POSES = Object.freeze({
 export function createOperatorFigure(B, look, options = {}) {
     const group = new THREE.Group();
     group.name = options.name || 'operator';
+    // The body tips about the hips: a pivot `PIVOT` up, holding everything
+    // else lowered by as much, so with no tip the figure stands as before.
+    const tilt = new THREE.Group();
+    tilt.position.y = PIVOT;
+    group.add(tilt);
+    const holder = new THREE.Group();
+    holder.position.y = -PIVOT;
+    tilt.add(holder);
     const person = createPerson({
         role: 'operator',
         shirtColor: 0x9c2b25,
@@ -108,7 +127,7 @@ export function createOperatorFigure(B, look, options = {}) {
         sleeveColor: 0x9c2b25,
         ...(options.person || {})
     });
-    group.add(person);
+    holder.add(person);
 
     const arms = [];
     const legs = [];
@@ -121,7 +140,7 @@ export function createOperatorFigure(B, look, options = {}) {
     // The blower, in the figure's own frame: a body at the right hip and a
     // tube down to the nozzle. The big one is a backpack with a longer tube.
     const carried = new THREE.Group();
-    group.add(carried);
+    holder.add(carried);
     const tubeTo = new THREE.Vector3(-B.side, B.height, B.reach);
     function blowerModel(color, backpack) {
         const model = new THREE.Group();
@@ -169,7 +188,17 @@ export function createOperatorFigure(B, look, options = {}) {
                 right.userData.forearm.rotation.set(P.right.fore[0], P.right.fore[1],
                     P.right.fore[2] + P.swing * 0.5 * (1 + Math.sin(time * 7)));
             }
-        } else if (right) {
+        } else if (name === 'up') {
+            const P = ARM_POSES.up;
+            arms.forEach((a) => {
+                const s = a.userData.armSide;
+                a.rotation.set(P.arm[0], P.arm[1], s * P.arm[2]);
+            });
+        } else if (name === 'back' && right) {
+            const P = ARM_POSES.back.right;
+            right.rotation.set(...P.arm);
+            if (right.userData.forearm) right.userData.forearm.rotation.x = P.fore;
+        } else if (name === 'carry' && right) {
             const P = ARM_POSES.carry.right;
             right.rotation.set(...P.arm);
             if (right.userData.forearm) right.userData.forearm.rotation.x = P.fore;
@@ -177,8 +206,10 @@ export function createOperatorFigure(B, look, options = {}) {
     }
 
     function update(op, blowing, time, armsName = 'carry', big = false) {
-        group.position.set(op.x, 0, op.z);
+        group.position.set(op.x, op.lift || 0, op.z);
         group.rotation.y = op.heading;
+        tilt.rotation.x = op.pitch || 0;
+        carried.visible = !op.hideBlower;
         // A walk: legs swing with the distance walked, and settle when still.
         const swing = Math.min(1, op.speed / 1.2) * 0.5 * Math.sin(op.stride * 4.2);
         legs.forEach((l, i) => { l.rotation.x = base[i] + (l.userData.legSide === 1 ? swing : -swing); });

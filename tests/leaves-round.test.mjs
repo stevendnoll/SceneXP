@@ -54,8 +54,8 @@ describe('the round', () => {
         expect(round.phase).toBe('settling');
         // Still, but not yet for the minimum.
         expect(R.stepRound(round, RC.settleMin / 2, { blowing: false, moving: 0 }, RC)).toBe(null);
-        expect(R.stepRound(round, RC.settleMin / 2, { blowing: false, moving: 0 }, RC)).toBe('done');
-        expect(round.phase).toBe('done');
+        expect(R.stepRound(round, RC.settleMin / 2, { blowing: false, moving: 0 }, RC)).toBe('finale');
+        expect(round.phase).toBe('finale');
 
         // Leaves that never stop moving still get a result at the cap.
         const busy = R.createRound(RC);
@@ -67,7 +67,7 @@ describe('the round', () => {
             event = R.stepRound(busy, 0.1, { blowing: false, moving: 300 }, RC);
             t += 0.1;
         }
-        expect(event).toBe('done');
+        expect(event).toBe('finale');
         expect(t).toBeGreaterThan(RC.settleMax - 1e-9);
         expect(t).toBeLessThan(RC.settleMax + 0.15);
     });
@@ -80,6 +80,9 @@ describe('the round', () => {
         R.stepRound(round, RC.seconds + 1, { blowing: true, moving: 0 }, RC);
         expect(R.canBlow(round)).toBe(false);
         R.stepRound(round, RC.settleMax, { blowing: true, moving: 0 }, RC);
+        expect(round.phase).toBe('finale');
+        expect(R.canBlow(round)).toBe(false);
+        R.stepRound(round, 0.1, { moving: 0, finaleDone: true }, RC);
         expect(round.phase).toBe('done');
         expect(R.canBlow(round)).toBe(false);
         R.freePlay(round);
@@ -89,6 +92,35 @@ describe('the round', () => {
         expect(round.phase).toBe('free');
         R.resetRound(round);
         expect(round).toEqual(R.createRound(RC));
+    });
+});
+
+describe('the finale in the round (M3)', () => {
+    test('comes between the leaves landing and the end card, and waits for the dive', () => {
+        const round = R.createRound(RC);
+        R.stepRound(round, 0.1, { blowing: true, moving: 0 }, RC);
+        R.stepRound(round, RC.seconds, { moving: 0 }, RC);
+        expect(R.stepRound(round, RC.settleMin, { moving: 0 }, RC)).toBe('finale');
+        expect(R.isOver(round)).toBe(true);
+        expect(R.canBlow(round)).toBe(false);
+        for (let i = 0; i < 40; i++) expect(R.stepRound(round, 0.1, { moving: 50, finaleDone: false }, RC)).toBe(null);
+        expect(R.stepRound(round, 0.1, { moving: 50, finaleDone: true }, RC)).toBe('done');
+    });
+
+    test('never holds the end card past its cap, and a round without one goes straight to it', () => {
+        const round = R.createRound(RC);
+        R.stepRound(round, 0.1, { blowing: true, moving: 0 }, RC);
+        R.stepRound(round, RC.seconds, { moving: 0 }, RC);
+        R.stepRound(round, RC.settleMin, { moving: 0 }, RC);
+        let t = 0;
+        let event = null;
+        while (!event) { event = R.stepRound(round, 0.5, { moving: 0, finaleDone: false }, RC); t += 0.5; }
+        expect(event).toBe('done');
+        expect(t).toBeLessThan(RC.finaleMax + 0.6);
+        const plain = R.createRound({ ...RC, finale: false });
+        R.stepRound(plain, 0.1, { blowing: true, moving: 0 }, RC);
+        R.stepRound(plain, RC.seconds, { moving: 0 }, { ...RC, finale: false });
+        expect(R.stepRound(plain, RC.settleMin, { moving: 0 }, { ...RC, finale: false })).toBe('done');
     });
 });
 
@@ -103,7 +135,7 @@ describe('the neighbor\'s last word in the round', () => {
         for (let i = 0; i < 50; i++) expect(R.stepRound(round, 0.1, { moving: 0, revengeDone: false }, RC)).toBe(null);
         expect(R.stepRound(round, 0.1, { moving: 0, revengeDone: true }, RC)).toBe('time-up');
         expect(round.phase).toBe('settling');
-        expect(R.stepRound(round, RC.settleMin, { moving: 0 }, RC)).toBe('done');
+        expect(R.stepRound(round, RC.settleMin, { moving: 0 }, RC)).toBe('finale');
     });
 
     test('never holds the result past its cap, and when it is not owed it never happens', () => {

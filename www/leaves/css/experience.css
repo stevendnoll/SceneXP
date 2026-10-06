@@ -240,7 +240,19 @@
 }
 
 .end-line {
-    margin-bottom: 1.1rem;
+    margin-bottom: 0.6rem;
+}
+
+/* How the dive went: a quieter second line under the verdict's. */
+.end-dive {
+    margin: 0 0 1.1rem;
+    font-size: 0.9rem;
+    font-style: italic;
+    color: var(--gallery-muted);
+}
+
+.end-dive:empty {
+    display: none;
 }
 
 .end-stats {
