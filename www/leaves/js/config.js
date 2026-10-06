@@ -70,7 +70,10 @@ export const LEAVES_CONFIG = Object.freeze({
         // gives out, so they blew across it and on past. With two walls
         // behind it they bank up on it, and a bot sweeping toward the corner
         // piled 3,500 leaves 1.3 meters high in a minute.
-        tarp: { minX: -9.95, maxX: -5, minZ: -5.95, maxZ: -1.5 },
+        // It runs right up to both walls: leaves banked against the house
+        // or the hedge on it are on it (they rest within a centimeter of the
+        // wall, and a tarp edge 5 cm short missed them all).
+        tarp: { minX: -10, maxX: -5, minZ: -6, maxZ: -1.5 },
         walls: [
             // The picket fence between the two yards.
             { axis: 'x', at: 10, from: -6, to: 7.2, height: 0.95 },
@@ -111,41 +114,42 @@ export const LEAVES_CONFIG = Object.freeze({
         // A leaf that has been this slow for this long goes back to sleep.
         sleepSpeed: 0.14,
         sleepSeconds: 0.25,
-        // A leaf on a slope steeper than the pile's angle of repose slides
-        // down it (instead of feeling friction), gathering `accel` m/s^2 up
-        // to `maxSpeed`, and may not sleep there unless it has been stuck
-        // for `giveUp` seconds. Added 2026-10-06: before it, the slide
-        // happened in one frame as the leaf fell asleep, and a drift against
-        // a wall visibly jumped outward ("suddenly puff up").
-        // It starts sliding only past `start` times the repose slope, so a
-        // finished pile sitting at its angle stays put rather than creeping.
-        slide: { accel: 3.5, maxSpeed: 0.9, giveUp: 1.5, start: 1.25 },
+        // A slow leaf (under this speed) that other leaves come to rest
+        // around stays where it is rather than being lifted onto them.
+        settleSpeed: 0.45,
+        // A leaf in the blower's air can be pushed up a pile face this many
+        // times steeper than the angle of repose (see sim.js).
+        pushClimb: 3,
         // The longest step the integrator takes. A slow frame takes several.
         maxStep: 1 / 90,
         // How hard a wall stops a leaf (0 dead, 1 bouncing).
         wallBounce: 0.15
     },
 
-    // THE PILES. Resting leaves deposit their volume into a heightfield of
-    // `cell` meter squares, spread over the 3 by 3 cells around them.
+    // THE PILES. The surface over each `cell` meter square is the top of the
+    // sleeping leaves that cover it. See sim.js.
     pile: {
         cell: 0.1,
-        // How deep a layer of loosely fallen leaves is, per leaf (per the
-        // leaf's square, so per leaf of the leaf itself it is about twice
-        // this). HALVED FROM 0.012 ON 2026-10-06: a moving leaf lies flat on
-        // the pile and takes up no room until it settles, so the fluffier
-        // the settled leaves, the more a drift grows the moment its leaves
-        // come to rest. At 0.012 a drift against the house rose from a flat
-        // mat to 38 cm as it settled (leaves jumping up 4.5 cm at the 90th
-        // percentile), and at 0.006 to 26 cm (2.5 cm).
-        loft: 0.006,
+        // How much a leaf adds on top of whatever it lands on. Tuned so the
+        // first scatter's drifts match the carpet Steve approved at M0 (the
+        // 90th percentile of resting leaves 5.5 cm up, the 99th 10 cm, made
+        // by the old volume model with `loft` 0.012): 4.3 cm and 8.4 cm.
+        thick: 0.014,
+        // How many cells around its own a leaf covers. 0, its own cell only:
+        // at 1 every leaf rode on top of any leaf within 20 cm and the lawn
+        // stacked five times deeper than the approved carpet. Neighbors at
+        // the same height are kept apart by each leaf's fixed `lift`.
+        reach: 0,
+        // Up to this much more than 2 mm each leaf rests above the surface,
+        // fixed per leaf (see sim.js `lift`).
+        lift: 0.004,
         // A leaf only feels the wind while it lies within this many leaves'
-        // depth of the surface, so a pile is blown away from the top down.
-        // In leaves rather than meters, because a leaf's depth in the pile
-        // follows its size, and the size follows the count.
+        // thickness of the surface, so a pile is blown away from the top
+        // down.
         shieldLeaves: 2.5,
-        // The steepest slope a pile keeps. A leaf landing on a steeper one
-        // slides down until it finds a place it can stay.
+        // The steepest slope a pile keeps. A moving leaf cannot climb a step
+        // steeper than this from one cell to the next, so a drift builds out
+        // from a wall at this slope as its leaves arrive.
         reposeDegrees: 40,
         // The spatial buckets resting leaves are filed in, for finding the
         // ones the blower reaches.

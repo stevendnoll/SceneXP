@@ -135,17 +135,24 @@ describe('a single leaf in still air', () => {
         expect(sim.activeCount).toBe(0);
     });
 
-    test('waking a leaf takes its volume out of the pile, and sleeping puts it back', () => {
-        const { sim } = yard(600);
-        const before = S.pileVolume(sim);
-        const i = 100;
-        const own = sim.size[i] * sim.size[i] * C.pile.loft;
-        S.wake(sim, i);
-        expect(S.pileVolume(sim)).toBeCloseTo(before - own, 6);
-        expect(sim.bucketOf[i]).toBe(-1);
-        run(sim, 1.5);
-        expect(sim.awake[i]).toBe(0);
-        expect(S.pileVolume(sim)).toBeCloseTo(before, 6);
+    test('waking a leaf takes it off the pile, and the surface drops back to what lay under it', () => {
+        const sim = S.createSim(20, C);
+        S.scatterLeaves(sim, C);
+        for (let i = 0; i < sim.count; i++) S.wake(sim, i);
+        sim.activeCount = 0;
+        sim.activeAt.fill(-1);
+        sim.height.fill(0);
+        S.layDown(sim, 0, 1.05, 1.05);
+        const under = S.surfaceAt(sim, 1.05, 1.05);
+        S.layDown(sim, 1, 1.05, 1.05);
+        // The second lies on the first, and the surface is the second's top.
+        expect(sim.py[1]).toBeGreaterThan(sim.py[0]);
+        expect(S.surfaceAt(sim, 1.05, 1.05)).toBeCloseTo(sim.py[1] + C.pile.thick, 6);
+        S.wake(sim, 1);
+        expect(sim.bucketOf[1]).toBe(-1);
+        expect(S.surfaceAt(sim, 1.05, 1.05)).toBeCloseTo(under, 6);
+        S.wake(sim, 0);
+        expect(S.surfaceAt(sim, 1.05, 1.05)).toBe(0);
     });
 });
 
@@ -231,7 +238,7 @@ describe('the blower\'s air', () => {
 });
 
 describe('piles', () => {
-    test('a heap dropped on one spot keeps its angle of repose', () => {
+    test('the first scatter heaps its drifts no steeper than the angle of repose', () => {
         const sim = S.createSim(600, C);
         S.scatterLeaves(sim, C);
         // Wake every leaf and lay them all down on the same spot.
@@ -239,11 +246,11 @@ describe('piles', () => {
         sim.activeCount = 0;
         sim.activeAt.fill(-1);
         for (let i = 0; i < sim.count; i++) S.layDown(sim, i, 0.05, 0.05);
-        // The deepest cell, and how steep the pile is anywhere: never steeper
-        // than the repose slope, give or take the last leaf's own deposit.
+        // How steep the heap is anywhere: never steeper than the repose
+        // slope, give or take the last leaf's own thickness and lift.
         let top = 0;
         let steepest = 0;
-        const deposit = (C.pile.loft * 4 * Math.max(...sim.size) ** 2) / (16 * sim.cell * sim.cell);
+        const leaf = C.pile.thick + 0.002 + C.pile.lift;
         for (let z = 1; z < sim.nz - 1; z++) {
             for (let x = 1; x < sim.nx - 1; x++) {
                 const c = z * sim.nx + x;
@@ -252,7 +259,7 @@ describe('piles', () => {
             }
         }
         expect(top).toBeGreaterThan(0.06);
-        expect(steepest).toBeLessThanOrEqual(sim.maxStep * C.physics.slide.start + deposit * 1.01);
+        expect(steepest).toBeLessThanOrEqual(sim.maxStep + leaf);
         // And it really is a heap: wider than one cell.
         let covered = 0;
         for (const h of sim.height) if (h > 0.02) covered++;
@@ -265,7 +272,7 @@ describe('piles', () => {
         for (let i = 0; i < sim.count; i++) S.wake(sim, i);
         sim.activeCount = 0;
         sim.activeAt.fill(-1);
-        // A stack of 60 on one spot (the rest far away), bottom leaf first.
+        // A heap of 60 on one spot (the rest far away), bottom leaf first.
         for (let i = 0; i < 60; i++) S.layDown(sim, i, 4.05, 3.05);
         for (let i = 60; i < sim.count; i++) S.layDown(sim, i, -8 + (i % 30) * 0.3, -5 + Math.floor(i / 30) * 0.3);
         // FAILED BEFORE THE FIX OF 2026-10-06, when each leaf woken uncovered
@@ -279,78 +286,107 @@ describe('piles', () => {
         // The bottom leaf is still there.
         expect(sim.awake[0]).toBe(0);
     });
+
+    test('a moving leaf stops against a face too steep to climb, unless the blower pushes it', () => {
+        const sim = S.createSim(10, C);
+        S.scatterLeaves(sim, C);
+        for (let i = 0; i < sim.count; i++) S.wake(sim, i);
+        sim.height.fill(0);
+        // A face 15 cm high across the lawn at x = 1: steeper than a leaf
+        // climbs on its own, gentler than a pushed one does.
+        for (let z = 0; z < sim.nz; z++) for (let x = 0; x < sim.nx; x++) {
+            if (-10 + (x + 0.5) * sim.cell > 1) sim.height[z * sim.nx + x] = 0.15;
+        }
+        S.dropLeaf(sim, 0, 0.6, 0.004, 0.05);
+        sim.vx[0] = 2.5;
+        run(sim, 1);
+        expect(sim.awake[0]).toBe(0);
+        expect(sim.px[0]).toBeLessThan(1);
+        // A leaf in the blower's air goes up and over. The person stands
+        // back so the air lands short of the leaf and runs along the lawn
+        // into it (facing +x, the nozzle is to their right, at +z, so they
+        // stand that far to the -z side of the leaf's line).
+        S.dropLeaf(sim, 1, 0.2, 0.004, 0.5);
+        const push = S.makeJet(C.blower, -3, 0.5 - C.blower.side, 1, 0, true);
+        expect(push.nz).toBeCloseTo(0.5, 9);
+        run(sim, 1, push);
+        expect(sim.px[1]).toBeGreaterThan(1);
+    });
 });
 
-describe('settling (Steve\'s QA, 2026-10-06: drifts "suddenly puff up")', () => {
-    // FAILED BEFORE THE FIX. A leaf falling asleep on a slope steeper than
-    // the pile holds was moved to the foot of it in one frame, so a drift
-    // banked against the house jumped outward as it settled, one leaf in
-    // ten by a quarter meter or more.
-    test('a drift blown against the house settles without any leaf jumping sideways', () => {
+describe('settling (Steve\'s QA, 2026-10-06: drifts "puff up" and "keep moving")', () => {
+    // FAILED BEFORE THE FIRST FIX. A leaf falling asleep on a slope steeper
+    // than the pile held was moved to the foot of it in one frame, so a
+    // drift banked against the house jumped outward as it settled, one leaf
+    // in ten by a quarter meter or more.
+    //
+    // THEN STEVE ASKED FOR MORE: "if the leaves could just stay still where
+    // they initially land". So a leaf now comes to rest exactly where it is,
+    // and these hold it to that: no sideways jump, no rise, and no motion of
+    // any kind afterwards.
+    test('a drift blown against the house comes to rest exactly where it landed, and stays there', () => {
         const { sim } = yard(6000);
         const prev = new Float32Array(sim.count * 6);
         const was = new Uint8Array(sim.count);
-        let settled = 0;
-        let worst = 0;
-        for (let f = 0; f < 150 + 240; f++) {
+        const restedAt = new Map();
+        let worstSide = 0;
+        let worstRise = 0;
+        for (let f = 0; f < 150 + 300; f++) {
             prev.set(sim.pose);
             was.set(sim.awake);
             S.stepSim(sim, 1 / 60, S.makeJet(C.blower, 2 + Math.min(f, 150) * 0.02, -1.6, 0, -1, f < 150));
             for (let i = 0; i < sim.count; i++) {
                 if (!was[i] || sim.awake[i] || sim.pz[i] > -4) continue;
-                settled++;
                 const o = i * 6;
-                worst = Math.max(worst, Math.hypot(sim.pose[o] - prev[o], sim.pose[o + 2] - prev[o + 2]));
+                worstSide = Math.max(worstSide, Math.hypot(sim.pose[o] - prev[o], sim.pose[o + 2] - prev[o + 2]));
+                worstRise = Math.max(worstRise, sim.pose[o + 1] - prev[o + 1]);
+                restedAt.set(i, Array.from(sim.pose.subarray(o, o + 6)));
             }
         }
-        expect(settled).toBeGreaterThan(50);
-        expect(worst).toBeLessThan(0.03);
-    });
-
-    test('a leaf landing on a slope too steep for a pile slides down it before it sleeps', () => {
-        const sim = S.createSim(10, C);
-        S.scatterLeaves(sim, C);
-        for (let i = 0; i < sim.count; i++) S.wake(sim, i);
-        sim.height.fill(0);
-        // A column of leaves half a meter high on one cell.
-        const c = S.cellIndex(sim, 0.05, 0.05);
-        sim.height[c] = 0.5;
-        S.dropLeaf(sim, 0, 0.05, 0.6, 0.05);
-        let biggestStep = 0;
-        let x = sim.px[0];
-        let z = sim.pz[0];
-        for (let f = 0; f < 240 && sim.awake[0]; f++) {
-            S.stepSim(sim, 1 / 60, null);
-            biggestStep = Math.max(biggestStep, Math.hypot(sim.px[0] - x, sim.pz[0] - z));
-            x = sim.px[0];
-            z = sim.pz[0];
+        expect(restedAt.size).toBeGreaterThan(50);
+        expect(worstSide).toBeLessThan(0.005);
+        expect(worstRise).toBeLessThan(0.005);
+        // Every leaf that came to rest is still exactly where it came to rest,
+        // turned exactly as it was, five seconds later.
+        let moved = 0;
+        for (const [i, pose] of restedAt) {
+            if (sim.awake[i]) continue;
+            const now = Array.from(sim.pose.subarray(i * 6, i * 6 + 6));
+            if (now.some((v, k) => Math.abs(v - pose[k]) > 1e-6)) moved++;
         }
-        expect(sim.awake[0]).toBe(0);
-        // It came to rest off the column, having got there a little at a time.
-        expect(S.cellIndex(sim, sim.px[0], sim.pz[0])).not.toBe(c);
-        expect(biggestStep).toBeLessThan(0.05);
+        expect(moved).toBe(0);
+        // And nothing is left moving.
+        expect(sim.activeCount).toBe(0);
     });
 
-    test('a pile never spreads across the picket fence, and nothing slides through it', () => {
+    test('the surface is always the top of the leaves lying there', () => {
+        const { sim } = yard(3000);
+        run(sim, 1.5, S.makeJet(C.blower, -2, -2, -1, -0.6, true));
+        run(sim, 5, null);
+        // Worked out from scratch, every cell agrees with the grid.
+        const top = new Float32Array(sim.height.length);
+        for (let i = 0; i < sim.count; i++) {
+            if (sim.awake[i]) continue;
+            const c = S.cellIndex(sim, sim.px[i], sim.pz[i]);
+            top[c] = Math.max(top[c], sim.py[i] + C.pile.thick);
+        }
+        let worst = 0;
+        for (let c = 0; c < top.length; c++) worst = Math.max(worst, Math.abs(top[c] - sim.height[c]));
+        expect(worst).toBeLessThan(1e-6);
+    });
+
+    test('the scatter never slides a drift through the picket fence', () => {
         const sim = S.createSim(10, C);
         S.scatterLeaves(sim, C);
-        for (let i = 0; i < sim.count; i++) S.wake(sim, i);
-        sim.height.fill(0);
+        sim.height.fill(0.4);
         const west = S.cellIndex(sim, 9.95, 0.05);
         const east = S.cellIndex(sim, 10.05, 0.05);
         expect(east).toBe(west + 1);
-        S.layDown(sim, 1, 9.95, 0.05);
-        expect(sim.height[west]).toBeGreaterThan(0);
-        expect(sim.height[east]).toBe(0);
-        // Waking it takes back exactly what it put down.
-        S.wake(sim, 1);
-        expect(sim.height.every((h) => Math.abs(h) < 1e-9)).toBe(true);
-        // A tall cell against the fence finds no way down through it.
-        sim.height.fill(0.4);
         sim.height[west] = 0.9;
-        sim.height[east] = 0;
-        expect(S.steepestDrop(sim, west)).toBeCloseTo(0.5, 6);
-        expect(sim.low).not.toBe(east);
+        for (const n of [east, east - sim.nx, east + sim.nx]) sim.height[n] = 0;
+        const down = S.lowestNeighbor(sim, west);
+        expect([east, east - sim.nx, east + sim.nx]).not.toContain(down.cell);
+        expect(down.drop).toBeCloseTo(0.5, 6);
     });
 });
 

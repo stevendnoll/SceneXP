@@ -9,20 +9,29 @@
  *
  * A yard holds tens of thousands of leaves and the blower moves a few
  * hundred at a time, so a leaf is either ASLEEP, filed in a spatial bucket
- * and pressed into the heightfield, or AWAKE, on the active list and stepped
- * every frame. The blower wakes the sleeping leaves its air reaches (one scan
- * of the buckets under the jet per frame), and an awake leaf that has been
- * still for a moment goes back to sleep where it lies.
+ * and a cell, or AWAKE, on the active list and stepped every frame. The
+ * blower wakes the sleeping leaves its air reaches (one scan of the buckets
+ * under the jet per frame), and an awake leaf that has been still for a
+ * moment goes to sleep EXACTLY WHERE IT LIES.
  *
- * ---- PILES ARE A HEIGHTFIELD ----
+ * ---- THE PILE'S SURFACE IS THE TOP OF THE LEAVES IN IT ----
  *
- * A sleeping leaf adds its volume to a grid of small cells (spread over the
- * 3 by 3 around it, so the surface is smooth), and a leaf landing on top of
- * others rests on that surface. A leaf that lands on a slope steeper than the
- * angle of repose slides down to where it can stay, so piles grow as cones
- * and drifts bank against the fences. A sleeping leaf only feels the wind
- * while it lies within `shield` of the surface: a pile is blown away from the
- * top down, and the leaves underneath wait their turn.
+ * A grid of small cells holds the height of the top of the sleeping leaves
+ * over each one (each leaf covers its own cell, a leaf's thickness above
+ * where it lies), and a leaf arriving rests on that surface.
+ * So the surface always matches what is drawn, and a leaf that comes to rest
+ * never moves again until the air wakes it: no slide, no restack, no turn.
+ * Steve's QA asked for exactly that on 2026-10-06 ("if the leaves could just
+ * stay still where they initially land"). The model before it summed leaf
+ * VOLUME into the grid and moved each leaf onto that sum as it fell asleep,
+ * so a flat mat of leaves fluffed up a moment after it settled.
+ *
+ * Piles keep a slope because a MOVING leaf cannot climb a step steeper than
+ * the angle of repose: it stops against it as it would against a wall, so a
+ * drift builds outward from the wall as its leaves arrive. A sleeping leaf
+ * only feels the wind while it lies within `shield` of the surface: a pile
+ * is blown away from the top down, and the leaves underneath wait their
+ * turn.
  *
  * ---- THE AIR ----
  *
@@ -125,21 +134,40 @@ export function createSim(count, config) {
         nx,
         nz,
         height: new Float32Array(nx * nz),
+        // The tallest step a moving leaf can climb onto, from one cell to the
+        // next: the slope of the angle of repose.
         maxStep: cell * Math.tan((K.reposeDegrees * Math.PI) / 180),
-        // Set from the leaves' size by scatterLeaves().
-        shield: 0.02,
+        thick: K.thick,
+        reach: K.reach,
+        shield: K.shieldLeaves * K.thick,
         bnx,
         bnz,
         head: new Int32Array(bnx * bnz).fill(-1),
         next: new Int32Array(count).fill(-1),
         prev: new Int32Array(count).fill(-1),
         bucketOf: new Int32Array(count).fill(-1),
-        deposit: new Int32Array(count).fill(-1),
+        // The cell a sleeping leaf is filed in (-1 while awake), and the
+        // cells' own lists, for working out a surface again when a leaf
+        // leaves it.
+        restCell: new Int32Array(count).fill(-1),
+        cellHead: new Int32Array(nx * nz).fill(-1),
+        cellNext: new Int32Array(count).fill(-1),
+        cellPrev: new Int32Array(count).fill(-1),
+        // Cells whose surface needs working out again, gathered while the
+        // blower wakes leaves and settled once after (see wakeUnderJet).
+        dirtyCells: new Int32Array(nx * nz),
+        dirtyStamp: new Uint32Array(nx * nz),
+        stamp: 1,
+        dirtyCount: 0,
         px: f32(), py: f32(), pz: f32(),
         vx: f32(), vy: f32(), vz: f32(),
         yaw: f32(), pitch: f32(), roll: f32(),
         wyaw: f32(), wpitch: f32(), wroll: f32(),
         size: f32(),
+        // A few millimeters each leaf rests above the surface, fixed for the
+        // leaf, so leaves overlapping at the same height draw in a settled
+        // order instead of flickering, and nothing shifts when one rests.
+        lift: f32(),
         dragK: f32(),
         wakeK: f32(),
         flutterHz: f32(),
@@ -160,8 +188,7 @@ export function createSim(count, config) {
         air: new Float32Array(3),
         // Which cell boundaries a wall stands on (see wallGrid).
         blockE: new Uint8Array(nx * nz),
-        blockN: new Uint8Array(nx * nz),
-        low: -1
+        blockN: new Uint8Array(nx * nz)
     };
     wallGrid(sim);
     return sim;
@@ -170,10 +197,10 @@ export function createSim(count, config) {
 /**
  * Mark the cell boundaries the walls stand on: blockE[c] is the boundary
  * between cell c and the cell east of it (+x), blockN[c] between c and the
- * cell north of it (+z). A leaf never slides across one, and a pile's
- * footprint never spreads across one, so a drift banked against the picket
- * fence stays on its own side instead of raising a phantom bump on the
- * neighbor's lawn. Walls on the grid's own edge need no marks.
+ * cell north of it (+z). A leaf's cover never reaches across one, so a
+ * drift banked against the picket fence stays on its own side instead of
+ * raising a phantom bump on the neighbor's lawn. Walls on the grid's own
+ * edge need no marks.
  */
 function wallGrid(sim) {
     const b = sim.bounds;
@@ -197,22 +224,25 @@ function wallGrid(sim) {
 }
 
 /**
- * How far the surface drops from cell `c` to its lowest neighbor that no
- * wall stands between (0 if none is lower). The neighbor is left in
- * `sim.low`. Kept allocation-free, since a sliding leaf asks every step.
+ * Whether cells `a` and `b` (neighbors, diagonals included) see each other,
+ * with no wall on the boundaries between them. Asked the same way from
+ * either side, so a leaf's cover and the working out of a surface agree.
  */
-export function steepestDrop(sim, c) {
-    const ix = c % sim.nx;
-    const iz = (c - ix) / sim.nx;
-    const h = sim.height;
-    let low = c;
-    let lowH = h[c];
-    if (ix > 0 && !sim.blockE[c - 1] && h[c - 1] < lowH) { low = c - 1; lowH = h[low]; }
-    if (ix < sim.nx - 1 && !sim.blockE[c] && h[c + 1] < lowH) { low = c + 1; lowH = h[low]; }
-    if (iz > 0 && !sim.blockN[c - sim.nx] && h[c - sim.nx] < lowH) { low = c - sim.nx; lowH = h[low]; }
-    if (iz < sim.nz - 1 && !sim.blockN[c] && h[c + sim.nx] < lowH) { low = c + sim.nx; lowH = h[low]; }
-    sim.low = low;
-    return h[c] - lowH;
+function open(sim, a, b) {
+    const nx = sim.nx;
+    const ax = a % nx;
+    const az = (a - ax) / nx;
+    const bx = b % nx;
+    const bz = (b - bx) / nx;
+    if (ax !== bx) {
+        const west = Math.min(ax, bx);
+        if (sim.blockE[az * nx + west] || sim.blockE[bz * nx + west]) return false;
+    }
+    if (az !== bz) {
+        const south = Math.min(az, bz);
+        if (sim.blockN[south * nx + ax] || sim.blockN[south * nx + bx]) return false;
+    }
+    return true;
 }
 
 /** Empty the yard in place, so scatterLeaves() can lay the same leaves down
@@ -224,7 +254,10 @@ export function resetSim(sim) {
     sim.next.fill(-1);
     sim.prev.fill(-1);
     sim.bucketOf.fill(-1);
-    sim.deposit.fill(-1);
+    sim.restCell.fill(-1);
+    sim.cellHead.fill(-1);
+    sim.cellNext.fill(-1);
+    sim.cellPrev.fill(-1);
     ['vx', 'vy', 'vz', 'wyaw', 'wpitch', 'wroll', 'still'].forEach((k) => sim[k].fill(0));
     sim.awake.fill(0);
     sim.activeAt.fill(-1);
@@ -265,6 +298,13 @@ function file(sim, i) {
     if (first !== -1) sim.prev[first] = i;
     sim.head[k] = i;
     sim.bucketOf[i] = k;
+    const c = cellIndex(sim, sim.px[i], sim.pz[i]);
+    const top = sim.cellHead[c];
+    sim.cellNext[i] = top;
+    sim.cellPrev[i] = -1;
+    if (top !== -1) sim.cellPrev[top] = i;
+    sim.cellHead[c] = i;
+    sim.restCell[i] = c;
 }
 
 function unfile(sim, i) {
@@ -277,35 +317,88 @@ function unfile(sim, i) {
     sim.next[i] = -1;
     sim.prev[i] = -1;
     sim.bucketOf[i] = -1;
+    const c = sim.restCell[i];
+    if (c < 0) return;
+    const cp = sim.cellPrev[i];
+    const cn = sim.cellNext[i];
+    if (cp !== -1) sim.cellNext[cp] = cn; else sim.cellHead[c] = cn;
+    if (cn !== -1) sim.cellPrev[cn] = cp;
+    sim.cellNext[i] = -1;
+    sim.cellPrev[i] = -1;
+    sim.restCell[i] = -1;
 }
 
-// The 3 by 3 spread of a leaf's volume, summing to 16.
-const SPREAD = [1, 2, 1, 2, 4, 2, 1, 2, 1];
-
-/** Press a leaf's volume into the heightfield at cell `c` (sign 1), or take
- *  it back out (sign -1). Cells past the grid's edge, and cells across a
- *  wall from `c`, are skipped both ways, so a take always undoes its press
- *  exactly. */
-function press(sim, i, c, sign) {
-    const volume = sim.size[i] * sim.size[i] * sim.K.loft;
-    const per = (sign * volume) / (16 * sim.cell * sim.cell);
+/** Raise the surface over the cells a sleeping leaf covers (its own, and
+ *  `reach` cells around it) to its own top, a leaf's thickness above where
+ *  it lies. */
+function cover(sim, i) {
+    const c = sim.restCell[i];
+    const top = sim.py[i] + sim.thick;
     const ix = c % sim.nx;
     const iz = (c - ix) / sim.nx;
-    // Which side of the center cell a wall closes off.
-    const westShut = ix > 0 && sim.blockE[c - 1];
-    const eastShut = sim.blockE[c];
-    const southShut = iz > 0 && sim.blockN[c - sim.nx];
-    const northShut = sim.blockN[c];
-    let w = 0;
-    for (let dz = -1; dz <= 1; dz++) {
-        for (let dx = -1; dx <= 1; dx++, w++) {
+    const r = sim.reach;
+    for (let dz = -r; dz <= r; dz++) {
+        const z = iz + dz;
+        if (z < 0 || z >= sim.nz) continue;
+        for (let dx = -r; dx <= r; dx++) {
             const x = ix + dx;
-            const z = iz + dz;
-            if (x < 0 || z < 0 || x >= sim.nx || z >= sim.nz) continue;
-            if ((dx < 0 && westShut) || (dx > 0 && eastShut) || (dz < 0 && southShut) || (dz > 0 && northShut)) continue;
-            sim.height[z * sim.nx + x] += per * SPREAD[w];
+            if (x < 0 || x >= sim.nx) continue;
+            const n = z * sim.nx + x;
+            if (n !== c && !open(sim, c, n)) continue;
+            if (sim.height[n] < top) sim.height[n] = top;
         }
     }
+}
+
+/** Work out the surface over cell `c` again from the sleeping leaves that
+ *  cover it, after one of them has gone. */
+function settleCell(sim, c) {
+    const ix = c % sim.nx;
+    const iz = (c - ix) / sim.nx;
+    const r = sim.reach;
+    let top = 0;
+    for (let dz = -r; dz <= r; dz++) {
+        const z = iz + dz;
+        if (z < 0 || z >= sim.nz) continue;
+        for (let dx = -r; dx <= r; dx++) {
+            const x = ix + dx;
+            if (x < 0 || x >= sim.nx) continue;
+            const n = z * sim.nx + x;
+            if (n !== c && !open(sim, c, n)) continue;
+            for (let j = sim.cellHead[n]; j !== -1; j = sim.cellNext[j]) {
+                const t = sim.py[j] + sim.thick;
+                if (t > top) top = t;
+            }
+        }
+    }
+    sim.height[c] = top;
+}
+
+/** Note the 3 by 3 cells around `c` as needing their surface worked out
+ *  again, once each. */
+function markCells(sim, c) {
+    const ix = c % sim.nx;
+    const iz = (c - ix) / sim.nx;
+    const r = sim.reach;
+    for (let dz = -r; dz <= r; dz++) {
+        const z = iz + dz;
+        if (z < 0 || z >= sim.nz) continue;
+        for (let dx = -r; dx <= r; dx++) {
+            const x = ix + dx;
+            if (x < 0 || x >= sim.nx) continue;
+            const n = z * sim.nx + x;
+            if (sim.dirtyStamp[n] === sim.stamp) continue;
+            sim.dirtyStamp[n] = sim.stamp;
+            sim.dirtyCells[sim.dirtyCount++] = n;
+        }
+    }
+}
+
+/** Work out every noted cell's surface again, and start a fresh note. */
+function settleMarked(sim) {
+    for (let k = 0; k < sim.dirtyCount; k++) settleCell(sim, sim.dirtyCells[k]);
+    sim.dirtyCount = 0;
+    sim.stamp++;
 }
 
 // ---- Writing what is drawn -------------------------------------------------
@@ -344,26 +437,58 @@ function writePose(sim, i, swing = 0) {
 
 // ---- Sleeping and waking ---------------------------------------------------
 
-/** Lay leaf `i` down at (x, z): it settles flat (face up, or face down if
- *  it landed that way), presses into the heightfield and is filed in its
- *  bucket.
+/** Put leaf `i` to sleep exactly where it is, as it is: filed in its bucket
+ *  and cell, its velocity gone, and the surface raised over it. Its pose is
+ *  not touched, so a leaf that came to rest is drawn exactly where it came
+ *  to rest. */
+function rest(sim, i) {
+    sim.vx[i] = 0;
+    sim.vy[i] = 0;
+    sim.vz[i] = 0;
+    sim.wyaw[i] = 0;
+    sim.wpitch[i] = 0;
+    sim.wroll[i] = 0;
+    file(sim, i);
+    cover(sim, i);
+    sim.awake[i] = 0;
+    sim.still[i] = 0;
+}
+
+/** The lowest neighbor of cell `c` that no wall stands between, and how far
+ *  below `c` it is (0 and `c` itself if none is lower). */
+export function lowestNeighbor(sim, c) {
+    const ix = c % sim.nx;
+    const iz = (c - ix) / sim.nx;
+    let low = c;
+    for (let dz = -1; dz <= 1; dz++) {
+        const z = iz + dz;
+        if (z < 0 || z >= sim.nz) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+            const x = ix + dx;
+            if (x < 0 || x >= sim.nx || (dx === 0 && dz === 0)) continue;
+            const n = z * sim.nx + x;
+            if (sim.height[n] < sim.height[low] && open(sim, c, n)) low = n;
+        }
+    }
+    return { cell: low, drop: sim.height[c] - sim.height[low] };
+}
+
+/** Lay leaf `i` down at (x, z) on top of whatever is there, settled flat
+ *  (face up, or face down if it was that way) with a little tilt: the first
+ *  scatter, and the tests.
  *
  *  A leaf laid on a slope steeper than the angle of repose is moved down it
- *  first. THAT MOVE IS INSTANT, so it is the last resort: an awake leaf on a
- *  steep slope slides down it under the physics before it is allowed to
- *  sleep (stepLeaf), and this only catches what is laid down directly (the
- *  first scatter, the tests) or a leaf that could not slide. Until
- *  2026-10-06 it was the only way down, and a drift settling against a wall
- *  jumped outward in one frame, one leaf in ten by a quarter meter or more
- *  (Steve's QA: the leaves "suddenly puff up"). */
+ *  first, so the drifts the scatter heaps against the house and the hedge
+ *  are banks rather than towers. THIS IS NEVER USED ON A LEAF ANYBODY HAS
+ *  SEEN: it happens before the first frame, and a leaf in play comes to rest
+ *  exactly where it is (rest). */
 export function layDown(sim, i, x, z) {
     const b = sim.bounds;
     let c = cellIndex(sim, x, z);
-    for (let n = 0; n < 32; n++) {
-        // The same line stepLeaf slides at, or a leaf allowed to sleep on a
-        // slope would be moved off it here in one frame.
-        if (steepestDrop(sim, c) <= sim.maxStep * sim.P.slide.start) break;
-        c = sim.low;
+    for (let n = 0; n < 64; n++) {
+        const down = lowestNeighbor(sim, c);
+        if (down.drop <= sim.maxStep) break;
+        c = down.cell;
         const lx = c % sim.nx;
         const lz = (c - lx) / sim.nx;
         x = b.minX + (lx + 0.2 + 0.6 * sim.random()) * sim.cell;
@@ -371,38 +496,24 @@ export function layDown(sim, i, x, z) {
     }
     sim.px[i] = x;
     sim.pz[i] = z;
-    sim.py[i] = Math.max(0, sim.height[c]) + 0.003;
-    sim.vx[i] = 0;
-    sim.vy[i] = 0;
-    sim.vz[i] = 0;
-    sim.wyaw[i] = 0;
-    sim.wpitch[i] = 0;
-    sim.wroll[i] = 0;
-    // Settle flat, keeping which face is up, with a little tilt.
+    sim.py[i] = surfaceAt(sim, x, z) + sim.lift[i];
     sim.pitch[i] = nearestFlat(sim.pitch[i]) + (sim.random() - 0.5) * 0.3;
     sim.roll[i] = nearestFlat(sim.roll[i]) + (sim.random() - 0.5) * 0.3;
-    sim.deposit[i] = c;
-    press(sim, i, c, 1);
-    file(sim, i);
-    sim.awake[i] = 0;
-    sim.still[i] = 0;
+    rest(sim, i);
     writePose(sim, i);
 }
 
-/** Whether an awake leaf at cell `c` is on a slope it must slide down: past
- *  the angle of repose by `slide.start`, so a pile sitting right at its
- *  angle does not creep for seconds as tiny bumps tip over the line. Leaves
- *  `sim.low` set. The sleep and layDown() ask the same question, so no leaf
- *  is laid down on a slope it would then be moved off in one frame. */
-function mustSlide(sim, c) {
-    return steepestDrop(sim, c) > sim.maxStep * sim.P.slide.start;
-}
-
-export function wake(sim, i) {
+/** Wake leaf `i`: off its bucket and cell, onto the active list. The surface
+ *  it covered is worked out again now, or, with `later`, noted for
+ *  settleMarked() (the blower wakes many at once). */
+export function wake(sim, i, later = false) {
     if (sim.awake[i]) return;
+    const c = sim.restCell[i];
     unfile(sim, i);
-    if (sim.deposit[i] >= 0) press(sim, i, sim.deposit[i], -1);
-    sim.deposit[i] = -1;
+    if (c >= 0) {
+        markCells(sim, c);
+        if (!later) settleMarked(sim);
+    }
     sim.awake[i] = 1;
     sim.still[i] = 0;
     sim.activeAt[i] = sim.activeCount;
@@ -417,7 +528,7 @@ function sleep(sim, i) {
     sim.activeAt[last] = at;
     sim.activeAt[i] = -1;
     sim.stats.slept++;
-    layDown(sim, i, sim.px[i], sim.pz[i]);
+    rest(sim, i);
 }
 
 // ---- The yard's leaf fall ----------------------------------------------------
@@ -450,9 +561,6 @@ export function scatterLeaves(sim, config) {
     const random = makeRandom(L.seed);
     const lawn = Y.lawn;
     const base = leafSize(sim.count, areaOf(lawn), L);
-    // How deep one leaf of the usual size stacks where it lies (the middle of
-    // its 3 by 3 spread), and so how deep the wind reaches.
-    sim.shield = sim.K.shieldLeaves * (base * base * sim.K.loft * 4) / (16 * sim.cell * sim.cell);
     const kinds = Object.keys(look.palettes);
     const leaves = new Array(sim.count);
 
@@ -501,6 +609,7 @@ export function scatterLeaves(sim, config) {
     const out = new Float32Array(sim.count * 6);
     leaves.forEach((leaf, i) => {
         sim.size[i] = leaf.size;
+        sim.lift[i] = 0.002 + leaf.r[4] * sim.K.lift;
         sim.dragK[i] = P.drag * (1 + (leaf.r[0] * 2 - 1) * P.dragJitter);
         sim.wakeK[i] = 1 + (leaf.r[1] * 2 - 1) * P.wakeJitter;
         sim.flutterHz[i] = P.flutter.minHz + leaf.r[2] * (P.flutter.maxHz - P.flutter.minHz);
@@ -663,7 +772,8 @@ function wakeUnderJet(sim, jet) {
             }
         }
     }
-    for (let k = 0; k < n; k++) wake(sim, pending[k]);
+    for (let k = 0; k < n; k++) wake(sim, pending[k], true);
+    settleMarked(sim);
 }
 
 // ---- Stepping -------------------------------------------------------------------
@@ -680,7 +790,10 @@ function stepLeaf(sim, i, h, jet) {
     let vy = sim.vy[i];
     let vz = sim.vz[i];
     const ground = surfaceAt(sim, x, z);
-    const onGround = y <= ground + 0.006;
+    // The same line the landing below uses (the leaf's own resting height,
+    // and 3 mm), or a leaf between two lines feels no gravity, never lands,
+    // and hangs there awake.
+    const onGround = y <= ground + sim.lift[i] + 0.003;
 
     let u = airAt(jet, x, y, z, ground, air);
     let ax = air[0];
@@ -711,29 +824,9 @@ function stepLeaf(sim, i, h, jet) {
     const hs = Math.hypot(vx, vz);
     if (onGround) {
         if (vy < 0) vy = 0;
-        if (mustSlide(sim, cellIndex(sim, x, z))) {
-            // ON A SLOPE STEEPER THAN A PILE HOLDS, the leaf slides down it
-            // toward the lowest neighboring cell, in place of friction, at no
-            // more than a slide's speed unless the air is driving it.
-            const S = P.slide;
-            const low = sim.low;
-            const lx = low % sim.nx;
-            const lz = (low - lx) / sim.nx;
-            const tx = sim.bounds.minX + (lx + 0.5) * sim.cell - x;
-            const tz = sim.bounds.minZ + (lz + 0.5) * sim.cell - z;
-            const len = Math.hypot(tx, tz) || 1;
-            vx += (tx / len) * S.accel * h;
-            vz += (tz / len) * S.accel * h;
-            const now = Math.hypot(vx, vz);
-            if (now > S.maxSpeed && u < P.wakeSpeed) {
-                vx *= S.maxSpeed / now;
-                vz *= S.maxSpeed / now;
-            }
-        } else {
-            // Friction.
-            const drop = P.friction * h;
-            if (hs <= drop) { vx = 0; vz = 0; } else { vx *= 1 - drop / hs; vz *= 1 - drop / hs; }
-        }
+        // Friction.
+        const drop = P.friction * h;
+        if (hs <= drop) { vx = 0; vz = 0; } else { vx *= 1 - drop / hs; vz *= 1 - drop / hs; }
         // A hop up into fast air.
         const flow = Math.hypot(ax, az);
         if (flow > P.liftSpeed && sim.random() < P.hopRate * (flow / P.liftSpeed - 1) * h) {
@@ -775,12 +868,40 @@ function stepLeaf(sim, i, h, jet) {
     if (x > b.maxX) { x = b.maxX - 0.01; vx = -vx * P.wallBounce; }
     if (z < b.minZ) { z = b.minZ + 0.01; vz = -vz * P.wallBounce; }
     if (z > b.maxZ) { z = b.maxZ - 0.01; vz = -vz * P.wallBounce; }
-    // On the ground is within the same band onGround used above, and a leaf
-    // in it is set down on the surface, so it can come to rest.
-    const floor = surfaceAt(sim, x, z) + 0.003;
+    // A STEP TOO TALL TO CLIMB STOPS A LEAF like a wall: a face of the pile
+    // higher above it than the angle of repose allows from one cell to the
+    // next, unless the blower is pushing it. That is what gives a drift its slope, built as its leaves come
+    // in, with nothing moved after they land.
+    // The blower can push a leaf up a steeper face than it would climb on
+    // its own (`pushClimb` times as steep), or a pile would stop growing the
+    // moment its foot became a step.
+    let floor = surfaceAt(sim, x, z) + sim.lift[i];
+    const climb = sim.maxStep * (u > P.wakeSpeed ? P.pushClimb : 1);
+    if (y < floor - climb) {
+        // Blocked: keep whichever half of the move still clears the face,
+        // so a leaf pushed along a drift slides along it (as along a wall)
+        // instead of stopping dead.
+        const alongX = surfaceAt(sim, x, oz) + sim.lift[i];
+        const alongZ = surfaceAt(sim, ox, z) + sim.lift[i];
+        if (y >= alongX - climb) { z = oz; vz = 0; floor = alongX; }
+        else if (y >= alongZ - climb) { x = ox; vx = 0; floor = alongZ; }
+        else {
+            x = ox;
+            z = oz;
+            vx = 0;
+            vz = 0;
+            floor = surfaceAt(sim, x, z) + sim.lift[i];
+        }
+    }
+    // On the ground is within the same band onGround used above. A leaf
+    // arriving is set down on the surface. A slow leaf the surface rose
+    // around (other leaves coming to rest beside it, in the same cell) stays
+    // where it is rather than being lifted onto them.
     let landed = false;
     if (y <= floor + 0.003) {
-        y = floor;
+        const sameCell = cellIndex(sim, ox, oz) === cellIndex(sim, x, z);
+        const speedNow = Math.sqrt(vx * vx + vy * vy + vz * vz);
+        if (!(y < floor && sameCell && speedNow < P.settleSpeed && onGround)) y = floor;
         if (vy < 0) vy = 0;
         landed = true;
     }
@@ -820,12 +941,11 @@ function stepLeaf(sim, i, h, jet) {
 
 
     // Back to sleep once it has been still a moment and the air has let go,
-    // and only where the pile can hold it: a leaf on a slope too steep keeps
-    // sliding instead, unless it has been stuck there for `slide.giveUp`.
+    // exactly where it is.
     if (landed && speed < P.sleepSpeed && u < P.wakeSpeed * sim.wakeK[i]) {
         sim.still[i] += h;
-        if (sim.still[i] >= P.sleepSeconds
-            && (sim.still[i] >= P.slide.giveUp || !mustSlide(sim, cellIndex(sim, x, z)))) {
+        if (sim.still[i] >= P.sleepSeconds) {
+            writePose(sim, i, swing);
             sleep(sim, i);
             return true;
         }
@@ -877,7 +997,7 @@ export function countIn(sim, r) {
     return n;
 }
 
-/** The total volume pressed into the heightfield, in cubic meters. */
+/** The volume under the pile's surface, in cubic meters. */
 export function pileVolume(sim) {
     let v = 0;
     for (let c = 0; c < sim.height.length; c++) v += sim.height[c];
