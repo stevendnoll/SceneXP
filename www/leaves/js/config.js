@@ -111,6 +111,15 @@ export const LEAVES_CONFIG = Object.freeze({
         // A leaf that has been this slow for this long goes back to sleep.
         sleepSpeed: 0.14,
         sleepSeconds: 0.25,
+        // A leaf on a slope steeper than the pile's angle of repose slides
+        // down it (instead of feeling friction), gathering `accel` m/s^2 up
+        // to `maxSpeed`, and may not sleep there unless it has been stuck
+        // for `giveUp` seconds. Added 2026-10-06: before it, the slide
+        // happened in one frame as the leaf fell asleep, and a drift against
+        // a wall visibly jumped outward ("suddenly puff up").
+        // It starts sliding only past `start` times the repose slope, so a
+        // finished pile sitting at its angle stays put rather than creeping.
+        slide: { accel: 3.5, maxSpeed: 0.9, giveUp: 1.5, start: 1.25 },
         // The longest step the integrator takes. A slow frame takes several.
         maxStep: 1 / 90,
         // How hard a wall stops a leaf (0 dead, 1 bouncing).
@@ -121,8 +130,15 @@ export const LEAVES_CONFIG = Object.freeze({
     // `cell` meter squares, spread over the 3 by 3 cells around them.
     pile: {
         cell: 0.1,
-        // How deep a layer of loosely fallen leaves is, per leaf.
-        loft: 0.012,
+        // How deep a layer of loosely fallen leaves is, per leaf (per the
+        // leaf's square, so per leaf of the leaf itself it is about twice
+        // this). HALVED FROM 0.012 ON 2026-10-06: a moving leaf lies flat on
+        // the pile and takes up no room until it settles, so the fluffier
+        // the settled leaves, the more a drift grows the moment its leaves
+        // come to rest. At 0.012 a drift against the house rose from a flat
+        // mat to 38 cm as it settled (leaves jumping up 4.5 cm at the 90th
+        // percentile), and at 0.006 to 26 cm (2.5 cm).
+        loft: 0.006,
         // A leaf only feels the wind while it lies within this many leaves'
         // depth of the surface, so a pile is blown away from the top down.
         // In leaves rather than meters, because a leaf's depth in the pile

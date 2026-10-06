@@ -251,8 +251,8 @@ describe('piles', () => {
                 steepest = Math.max(steepest, sim.height[c] - sim.height[c + 1], sim.height[c] - sim.height[c + sim.nx]);
             }
         }
-        expect(top).toBeGreaterThan(0.1);
-        expect(steepest).toBeLessThanOrEqual(sim.maxStep + deposit * 1.01);
+        expect(top).toBeGreaterThan(0.06);
+        expect(steepest).toBeLessThanOrEqual(sim.maxStep * C.physics.slide.start + deposit * 1.01);
         // And it really is a heap: wider than one cell.
         let covered = 0;
         for (const h of sim.height) if (h > 0.02) covered++;
@@ -278,6 +278,79 @@ describe('piles', () => {
         expect(woke.length).toBeLessThan(60);
         // The bottom leaf is still there.
         expect(sim.awake[0]).toBe(0);
+    });
+});
+
+describe('settling (Steve\'s QA, 2026-10-06: drifts "suddenly puff up")', () => {
+    // FAILED BEFORE THE FIX. A leaf falling asleep on a slope steeper than
+    // the pile holds was moved to the foot of it in one frame, so a drift
+    // banked against the house jumped outward as it settled, one leaf in
+    // ten by a quarter meter or more.
+    test('a drift blown against the house settles without any leaf jumping sideways', () => {
+        const { sim } = yard(6000);
+        const prev = new Float32Array(sim.count * 6);
+        const was = new Uint8Array(sim.count);
+        let settled = 0;
+        let worst = 0;
+        for (let f = 0; f < 150 + 240; f++) {
+            prev.set(sim.pose);
+            was.set(sim.awake);
+            S.stepSim(sim, 1 / 60, S.makeJet(C.blower, 2 + Math.min(f, 150) * 0.02, -1.6, 0, -1, f < 150));
+            for (let i = 0; i < sim.count; i++) {
+                if (!was[i] || sim.awake[i] || sim.pz[i] > -4) continue;
+                settled++;
+                const o = i * 6;
+                worst = Math.max(worst, Math.hypot(sim.pose[o] - prev[o], sim.pose[o + 2] - prev[o + 2]));
+            }
+        }
+        expect(settled).toBeGreaterThan(50);
+        expect(worst).toBeLessThan(0.03);
+    });
+
+    test('a leaf landing on a slope too steep for a pile slides down it before it sleeps', () => {
+        const sim = S.createSim(10, C);
+        S.scatterLeaves(sim, C);
+        for (let i = 0; i < sim.count; i++) S.wake(sim, i);
+        sim.height.fill(0);
+        // A column of leaves half a meter high on one cell.
+        const c = S.cellIndex(sim, 0.05, 0.05);
+        sim.height[c] = 0.5;
+        S.dropLeaf(sim, 0, 0.05, 0.6, 0.05);
+        let biggestStep = 0;
+        let x = sim.px[0];
+        let z = sim.pz[0];
+        for (let f = 0; f < 240 && sim.awake[0]; f++) {
+            S.stepSim(sim, 1 / 60, null);
+            biggestStep = Math.max(biggestStep, Math.hypot(sim.px[0] - x, sim.pz[0] - z));
+            x = sim.px[0];
+            z = sim.pz[0];
+        }
+        expect(sim.awake[0]).toBe(0);
+        // It came to rest off the column, having got there a little at a time.
+        expect(S.cellIndex(sim, sim.px[0], sim.pz[0])).not.toBe(c);
+        expect(biggestStep).toBeLessThan(0.05);
+    });
+
+    test('a pile never spreads across the picket fence, and nothing slides through it', () => {
+        const sim = S.createSim(10, C);
+        S.scatterLeaves(sim, C);
+        for (let i = 0; i < sim.count; i++) S.wake(sim, i);
+        sim.height.fill(0);
+        const west = S.cellIndex(sim, 9.95, 0.05);
+        const east = S.cellIndex(sim, 10.05, 0.05);
+        expect(east).toBe(west + 1);
+        S.layDown(sim, 1, 9.95, 0.05);
+        expect(sim.height[west]).toBeGreaterThan(0);
+        expect(sim.height[east]).toBe(0);
+        // Waking it takes back exactly what it put down.
+        S.wake(sim, 1);
+        expect(sim.height.every((h) => Math.abs(h) < 1e-9)).toBe(true);
+        // A tall cell against the fence finds no way down through it.
+        sim.height.fill(0.4);
+        sim.height[west] = 0.9;
+        sim.height[east] = 0;
+        expect(S.steepestDrop(sim, west)).toBeCloseTo(0.5, 6);
+        expect(sim.low).not.toBe(east);
     });
 });
 

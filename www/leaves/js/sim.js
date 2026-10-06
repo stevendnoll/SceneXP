@@ -157,9 +157,62 @@ export function createSim(count, config) {
         time: 0,
         random: makeRandom((config.leaves.seed || 1) + 7),
         stats: { woken: 0, slept: 0, steps: 0 },
-        air: new Float32Array(3)
+        air: new Float32Array(3),
+        // Which cell boundaries a wall stands on (see wallGrid).
+        blockE: new Uint8Array(nx * nz),
+        blockN: new Uint8Array(nx * nz),
+        low: -1
     };
+    wallGrid(sim);
     return sim;
+}
+
+/**
+ * Mark the cell boundaries the walls stand on: blockE[c] is the boundary
+ * between cell c and the cell east of it (+x), blockN[c] between c and the
+ * cell north of it (+z). A leaf never slides across one, and a pile's
+ * footprint never spreads across one, so a drift banked against the picket
+ * fence stays on its own side instead of raising a phantom bump on the
+ * neighbor's lawn. Walls on the grid's own edge need no marks.
+ */
+function wallGrid(sim) {
+    const b = sim.bounds;
+    for (const w of sim.walls) {
+        if (w.axis === 'x') {
+            const ix = Math.round((w.at - b.minX) / sim.cell) - 1;
+            if (ix < 0 || ix >= sim.nx - 1) continue;
+            for (let iz = 0; iz < sim.nz; iz++) {
+                const z = b.minZ + (iz + 0.5) * sim.cell;
+                if (z >= w.from && z <= w.to) sim.blockE[iz * sim.nx + ix] = 1;
+            }
+        } else {
+            const iz = Math.round((w.at - b.minZ) / sim.cell) - 1;
+            if (iz < 0 || iz >= sim.nz - 1) continue;
+            for (let ix = 0; ix < sim.nx; ix++) {
+                const x = b.minX + (ix + 0.5) * sim.cell;
+                if (x >= w.from && x <= w.to) sim.blockN[iz * sim.nx + ix] = 1;
+            }
+        }
+    }
+}
+
+/**
+ * How far the surface drops from cell `c` to its lowest neighbor that no
+ * wall stands between (0 if none is lower). The neighbor is left in
+ * `sim.low`. Kept allocation-free, since a sliding leaf asks every step.
+ */
+export function steepestDrop(sim, c) {
+    const ix = c % sim.nx;
+    const iz = (c - ix) / sim.nx;
+    const h = sim.height;
+    let low = c;
+    let lowH = h[c];
+    if (ix > 0 && !sim.blockE[c - 1] && h[c - 1] < lowH) { low = c - 1; lowH = h[low]; }
+    if (ix < sim.nx - 1 && !sim.blockE[c] && h[c + 1] < lowH) { low = c + 1; lowH = h[low]; }
+    if (iz > 0 && !sim.blockN[c - sim.nx] && h[c - sim.nx] < lowH) { low = c - sim.nx; lowH = h[low]; }
+    if (iz < sim.nz - 1 && !sim.blockN[c] && h[c + sim.nx] < lowH) { low = c + sim.nx; lowH = h[low]; }
+    sim.low = low;
+    return h[c] - lowH;
 }
 
 /** Empty the yard in place, so scatterLeaves() can lay the same leaves down
@@ -230,19 +283,26 @@ function unfile(sim, i) {
 const SPREAD = [1, 2, 1, 2, 4, 2, 1, 2, 1];
 
 /** Press a leaf's volume into the heightfield at cell `c` (sign 1), or take
- *  it back out (sign -1). Cells past the grid's edge are skipped both ways,
- *  so a take always undoes its press exactly. */
+ *  it back out (sign -1). Cells past the grid's edge, and cells across a
+ *  wall from `c`, are skipped both ways, so a take always undoes its press
+ *  exactly. */
 function press(sim, i, c, sign) {
     const volume = sim.size[i] * sim.size[i] * sim.K.loft;
     const per = (sign * volume) / (16 * sim.cell * sim.cell);
     const ix = c % sim.nx;
     const iz = (c - ix) / sim.nx;
+    // Which side of the center cell a wall closes off.
+    const westShut = ix > 0 && sim.blockE[c - 1];
+    const eastShut = sim.blockE[c];
+    const southShut = iz > 0 && sim.blockN[c - sim.nx];
+    const northShut = sim.blockN[c];
     let w = 0;
     for (let dz = -1; dz <= 1; dz++) {
         for (let dx = -1; dx <= 1; dx++, w++) {
             const x = ix + dx;
             const z = iz + dz;
             if (x < 0 || z < 0 || x >= sim.nx || z >= sim.nz) continue;
+            if ((dx < 0 && westShut) || (dx > 0 && eastShut) || (dz < 0 && southShut) || (dz > 0 && northShut)) continue;
             sim.height[z * sim.nx + x] += per * SPREAD[w];
         }
     }
@@ -284,25 +344,26 @@ function writePose(sim, i, swing = 0) {
 
 // ---- Sleeping and waking ---------------------------------------------------
 
-/** Lay leaf `i` down at (x, z): it slides off any slope too steep to hold
- *  it, settles flat (face up, or face down if it landed that way), presses
- *  into the heightfield and is filed in its bucket. */
+/** Lay leaf `i` down at (x, z): it settles flat (face up, or face down if
+ *  it landed that way), presses into the heightfield and is filed in its
+ *  bucket.
+ *
+ *  A leaf laid on a slope steeper than the angle of repose is moved down it
+ *  first. THAT MOVE IS INSTANT, so it is the last resort: an awake leaf on a
+ *  steep slope slides down it under the physics before it is allowed to
+ *  sleep (stepLeaf), and this only catches what is laid down directly (the
+ *  first scatter, the tests) or a leaf that could not slide. Until
+ *  2026-10-06 it was the only way down, and a drift settling against a wall
+ *  jumped outward in one frame, one leaf in ten by a quarter meter or more
+ *  (Steve's QA: the leaves "suddenly puff up"). */
 export function layDown(sim, i, x, z) {
     const b = sim.bounds;
     let c = cellIndex(sim, x, z);
-    // Slide down a slope steeper than the angle of repose.
     for (let n = 0; n < 32; n++) {
-        const ix = c % sim.nx;
-        const iz = (c - ix) / sim.nx;
-        const here = sim.height[c];
-        let low = c;
-        let lowH = here;
-        if (ix > 0 && sim.height[c - 1] < lowH) { low = c - 1; lowH = sim.height[low]; }
-        if (ix < sim.nx - 1 && sim.height[c + 1] < lowH) { low = c + 1; lowH = sim.height[low]; }
-        if (iz > 0 && sim.height[c - sim.nx] < lowH) { low = c - sim.nx; lowH = sim.height[low]; }
-        if (iz < sim.nz - 1 && sim.height[c + sim.nx] < lowH) { low = c + sim.nx; lowH = sim.height[low]; }
-        if (low === c || here - lowH <= sim.maxStep) break;
-        c = low;
+        // The same line stepLeaf slides at, or a leaf allowed to sleep on a
+        // slope would be moved off it here in one frame.
+        if (steepestDrop(sim, c) <= sim.maxStep * sim.P.slide.start) break;
+        c = sim.low;
         const lx = c % sim.nx;
         const lz = (c - lx) / sim.nx;
         x = b.minX + (lx + 0.2 + 0.6 * sim.random()) * sim.cell;
@@ -326,6 +387,15 @@ export function layDown(sim, i, x, z) {
     sim.awake[i] = 0;
     sim.still[i] = 0;
     writePose(sim, i);
+}
+
+/** Whether an awake leaf at cell `c` is on a slope it must slide down: past
+ *  the angle of repose by `slide.start`, so a pile sitting right at its
+ *  angle does not creep for seconds as tiny bumps tip over the line. Leaves
+ *  `sim.low` set. The sleep and layDown() ask the same question, so no leaf
+ *  is laid down on a slope it would then be moved off in one frame. */
+function mustSlide(sim, c) {
+    return steepestDrop(sim, c) > sim.maxStep * sim.P.slide.start;
 }
 
 export function wake(sim, i) {
@@ -641,9 +711,29 @@ function stepLeaf(sim, i, h, jet) {
     const hs = Math.hypot(vx, vz);
     if (onGround) {
         if (vy < 0) vy = 0;
-        // Friction.
-        const drop = P.friction * h;
-        if (hs <= drop) { vx = 0; vz = 0; } else { vx *= 1 - drop / hs; vz *= 1 - drop / hs; }
+        if (mustSlide(sim, cellIndex(sim, x, z))) {
+            // ON A SLOPE STEEPER THAN A PILE HOLDS, the leaf slides down it
+            // toward the lowest neighboring cell, in place of friction, at no
+            // more than a slide's speed unless the air is driving it.
+            const S = P.slide;
+            const low = sim.low;
+            const lx = low % sim.nx;
+            const lz = (low - lx) / sim.nx;
+            const tx = sim.bounds.minX + (lx + 0.5) * sim.cell - x;
+            const tz = sim.bounds.minZ + (lz + 0.5) * sim.cell - z;
+            const len = Math.hypot(tx, tz) || 1;
+            vx += (tx / len) * S.accel * h;
+            vz += (tz / len) * S.accel * h;
+            const now = Math.hypot(vx, vz);
+            if (now > S.maxSpeed && u < P.wakeSpeed) {
+                vx *= S.maxSpeed / now;
+                vz *= S.maxSpeed / now;
+            }
+        } else {
+            // Friction.
+            const drop = P.friction * h;
+            if (hs <= drop) { vx = 0; vz = 0; } else { vx *= 1 - drop / hs; vz *= 1 - drop / hs; }
+        }
         // A hop up into fast air.
         const flow = Math.hypot(ax, az);
         if (flow > P.liftSpeed && sim.random() < P.hopRate * (flow / P.liftSpeed - 1) * h) {
@@ -728,10 +818,14 @@ function stepLeaf(sim, i, h, jet) {
     sim.px[i] = x; sim.py[i] = y; sim.pz[i] = z;
     sim.vx[i] = vx; sim.vy[i] = vy; sim.vz[i] = vz;
 
-    // Back to sleep once it has been still a moment and the air has let go.
+
+    // Back to sleep once it has been still a moment and the air has let go,
+    // and only where the pile can hold it: a leaf on a slope too steep keeps
+    // sliding instead, unless it has been stuck there for `slide.giveUp`.
     if (landed && speed < P.sleepSpeed && u < P.wakeSpeed * sim.wakeK[i]) {
         sim.still[i] += h;
-        if (sim.still[i] >= P.sleepSeconds) {
+        if (sim.still[i] >= P.sleepSeconds
+            && (sim.still[i] >= P.slide.giveUp || !mustSlide(sim, cellIndex(sim, x, z)))) {
             sleep(sim, i);
             return true;
         }
