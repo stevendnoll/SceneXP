@@ -12,6 +12,73 @@
     touch-action: none;
 }
 
+/* ---- The blow button (touch screens) ----
+   Low in the right corner, under the thumb. It rests dark and neutral, and
+   fills with the accent only while it is held: a tinted resting button reads
+   as one already pressed. Long-press menus, text selection and the browser's
+   own gestures are all turned off, since holding it is the whole point. */
+
+.blow-btn {
+    position: fixed;
+    right: max(20px, calc(env(safe-area-inset-right) + 12px));
+    bottom: max(28px, calc(env(safe-area-inset-bottom) + 16px));
+    width: 88px;
+    height: 88px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: 2px solid rgba(var(--ui-accent-rgb), 0.7);
+    border-radius: 50%;
+    background: rgba(20, 20, 20, 0.62);
+    color: #fff;
+    z-index: 110;
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.12s ease, transform 0.12s ease;
+}
+
+.blow-btn svg {
+    width: 30px;
+    height: 30px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.blow-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+}
+
+.blow-btn.held {
+    background: rgba(var(--ui-accent-rgb), 0.9);
+    color: #1a1208;
+    transform: scale(0.94);
+}
+
+.blow-btn:focus-visible {
+    outline: 3px solid rgba(var(--ui-accent-rgb), 0.9);
+    outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .blow-btn {
+        transition: none;
+    }
+
+    .blow-btn.held {
+        transform: none;
+    }
+}
+
 /* ---- The lab panel (QA hosts only, built by main.js) ---- */
 
 .lab-panel {

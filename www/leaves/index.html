@@ -93,7 +93,7 @@
     <title>Leaves | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=1" as="style">
+    <link rel="preload" href="css/experience.min.css?v=2" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -113,7 +113,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=1">
+    <link rel="stylesheet" href="css/experience.min.css?v=2">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -166,8 +166,8 @@
             <p class="subtitle">A front yard buried in autumn leaves, and a leaf blower waiting for you</p>
             <p class="click-prompt">Click to step in</p>
             <div class="controls-hint">
-                <span>BLOW</span> Press and hold on the lawn where you would like the air to go. The leaf blower follows you around the yard.
-                <span>KEYS</span> WASD or the arrow keys walk, and holding Space runs the blower.
+                <span>WALK</span> Point at the lawn with the mouse, or drag a finger across it, and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too.
+                <span>BLOW</span> Hold the mouse button or Space. On a touch screen, hold the blow button in the corner.
                 <span>HELP</span> The question mark in the corner, or Escape, brings you back here.
             </div>
             <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
@@ -188,6 +188,22 @@
                 stroke-linejoin="round" fill="none" />
             <circle cx="12.1" cy="17.4" r="1.05" stroke="none" fill="currentColor" />
         </svg>
+    </button>
+
+    <!-- The blow button, for touch screens, where a finger on the lawn walks
+         and aims and this button runs the blower (two thumbs, the way a
+         mouse has a pointer and a button). Hidden until main.js knows the
+         screen is touched: .ui-float is display:none until it adds .visible.
+         It answers a held Space or Enter as well, for anybody who tabs to it. -->
+    <button id="blow-btn" class="ui-float blow-btn" type="button"
+        title="Hold to blow"
+        aria-label="Hold to run the leaf blower">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 8h10.5a2.75 2.75 0 1 0-2.75-2.75" />
+            <path d="M3 12h15a3 3 0 1 1-3 3" />
+            <path d="M3 16h7" />
+        </svg>
+        <span class="blow-label" aria-hidden="true">BLOW</span>
     </button>
 
     <script type="module" src="../lib/three/r186/three.min.js"></script>

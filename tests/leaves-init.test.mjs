@@ -91,23 +91,105 @@ test('Escape and the help button bring the welcome card back, and Escape steps b
     expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
 });
 
-test('a finger on the lawn runs the blower, and only once the welcome card is out of the way', async () => {
+test('a mouse pressed on the lawn runs the blower, and only once the welcome card is out of the way', async () => {
     const main = await boot();
     const canvas = dom.el('game-canvas');
-    fire(canvas, 'pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 500 });
+    fire(canvas, 'pointerdown', { pointerId: 1, pointerType: 'mouse', clientX: 200, clientY: 500 });
     expect(main.getState().blowing).toBe(false);
     expect(main.__test__.pointer.id).toBe(null);
 
     fire(dom.el('blocker'), 'click');
-    fire(canvas, 'pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 500 });
+    fire(canvas, 'pointerdown', { pointerId: 1, pointerType: 'mouse', clientX: 200, clientY: 500 });
     expect(main.getState().blowing).toBe(true);
     expect(main.getState().blows).toBe(1);
-    // A second finger does not take the blower from the first.
-    fire(canvas, 'pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 10, clientY: 10 });
-    expect(main.__test__.pointer.id).toBe(1);
     expect(() => frames(main, 0.5)).not.toThrow();
     fire(canvas, 'pointerup', { pointerId: 1 });
     expect(main.getState().blowing).toBe(false);
+});
+
+// STEVE'S PHONE QA, 2026-10-06: a finger on the lawn both walked and blew,
+// so a visitor could not move without scattering the leaves they meant to
+// reach. A finger now only steers, and the blow button blows.
+test('on a touch screen a finger walks without blowing, and the blow button blows', async () => {
+    const main = await boot();
+    const canvas = dom.el('game-canvas');
+    const btn = dom.el('blow-btn');
+    fire(dom.el('blocker'), 'click');
+    // The suite's window is phone-sized, so the button is up from the start.
+    expect(btn.classList.contains('visible')).toBe(true);
+
+    fire(canvas, 'pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 500 });
+    expect(main.__test__.pointer.id).toBe(1);
+    expect(main.getState().blowing).toBe(false);
+    expect(main.getState().blows).toBe(0);
+    // A second finger on the lawn does not take the steering from the first.
+    fire(canvas, 'pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 10, clientY: 10 });
+    expect(main.__test__.pointer.id).toBe(1);
+
+    // A thumb on the blow button runs the blower while the finger steers.
+    fire(btn, 'pointerdown', { pointerId: 3, pointerType: 'touch' });
+    expect(main.getState().blowing).toBe(true);
+    expect(btn.classList.contains('held')).toBe(true);
+    expect(main.getState().blows).toBe(1);
+    expect(() => frames(main, 0.5)).not.toThrow();
+    // Lifting the steering finger leaves the blower running.
+    fire(canvas, 'pointerup', { pointerId: 1 });
+    expect(main.getState().blowing).toBe(true);
+    // Another finger's lift is not this one's.
+    fire(btn, 'pointerup', { pointerId: 9 });
+    expect(main.getState().blowing).toBe(true);
+    fire(btn, 'pointercancel', { pointerId: 3 });
+    expect(main.getState().blowing).toBe(false);
+    expect(btn.classList.contains('held')).toBe(false);
+
+    // The welcome card takes the button away, and lets go of a held one.
+    fire(btn, 'pointerdown', { pointerId: 4, pointerType: 'touch' });
+    fire(dom.documentStub, 'keydown', { code: 'Escape' });
+    expect(btn.classList.contains('visible')).toBe(false);
+    expect(main.getState().blowing).toBe(false);
+});
+
+test('the blow button answers a held Space or Enter, for anybody who tabs to it', async () => {
+    const main = await boot();
+    const btn = dom.el('blow-btn');
+    fire(dom.el('blocker'), 'click');
+    const down = fire(btn, 'keydown', { code: 'Enter', target: btn });
+    expect(down.defaultPrevented).toBe(true);
+    expect(main.getState().blowing).toBe(true);
+    fire(btn, 'keyup', { code: 'Enter', target: btn });
+    expect(main.getState().blowing).toBe(false);
+    // Holding it down repeats the key, and that is still one blow.
+    fire(btn, 'keydown', { code: 'Space', target: btn });
+    fire(btn, 'keydown', { code: 'Space', target: btn, repeat: true });
+    expect(main.getState().blows).toBe(2);
+    fire(btn, 'keyup', { code: 'Space', target: btn });
+    expect(main.getState().blowing).toBe(false);
+});
+
+test('a desktop screen shows no blow button until a finger touches the lawn', async () => {
+    dom.uninstall();
+    installThree();
+    dom = installDom({ innerWidth: 1280, innerHeight: 800 });
+    dom.windowStub.location.search = '?leaves=600';
+    const main = await boot();
+    fire(dom.el('blocker'), 'click');
+    expect(dom.el('blow-btn').classList.contains('visible')).toBe(false);
+    fire(dom.el('game-canvas'), 'pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 500 });
+    expect(dom.el('blow-btn').classList.contains('visible')).toBe(true);
+    expect(main.getState().blowing).toBe(false);
+});
+
+test('the blower runs for a pressed mouse, Space or the button, and never behind the welcome card', async () => {
+    const main = await import('../www/leaves/js/main.js');
+    const idle = { down: false, blows: false };
+    const none = { id: null, key: false };
+    expect(main.isBlowing(true, idle, { blow: false }, none)).toBe(false);
+    expect(main.isBlowing(true, { down: true, blows: false }, { blow: false }, none)).toBe(false);
+    expect(main.isBlowing(true, { down: true, blows: true }, { blow: false }, none)).toBe(true);
+    expect(main.isBlowing(true, idle, { blow: true }, none)).toBe(true);
+    expect(main.isBlowing(true, idle, { blow: false }, { id: 5, key: false })).toBe(true);
+    expect(main.isBlowing(true, idle, { blow: false }, { id: null, key: true })).toBe(true);
+    expect(main.isBlowing(false, { down: true, blows: true }, { blow: true }, { id: 5, key: true })).toBe(false);
 });
 
 test('the keys walk the person and Space runs the blower, never while the welcome card is up', async () => {

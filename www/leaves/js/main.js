@@ -30,6 +30,9 @@ const state = {
     isLoaded: false,
     isRunning: false,
     isMobile: false,
+    // Whether this screen is touched, so the blow button belongs on it: a
+    // coarse pointer from the start, or the first finger on the lawn.
+    touch: false,
     reducedMotion: false,
     qa: false,
     count: 0,
@@ -51,14 +54,21 @@ let figure = null;
 let marker = null;
 let blocker = null;
 let helpBtn = null;
+let blowBtn = null;
 let cleanupController = null;
 
 let welcomed = false;
 let welcomeReturn = null;
 
 // The pointer that is steering, if any. A mouse steers by hovering and blows
-// while a button is held; a finger steers and blows while it is down.
-const pointer = { id: null, down: false, mouse: false, aim: null, seen: false };
+// while a button is held. A finger on the lawn only steers (it walks the
+// person over and aims), and the blow button runs the blower, since one
+// finger doing both made the leaves impossible to place (Steve's phone QA,
+// 2026-10-06).
+const pointer = { id: null, down: false, mouse: false, blows: false, aim: null, seen: false };
+// The blow button, held by a finger (by pointer id) or by Space or Enter
+// while it has focus.
+const blowHold = { id: null, key: false };
 // Keys held: the walk, and Space for the blower.
 const keys = { left: false, right: false, up: false, down: false, blow: false };
 let steer = 'point';
@@ -92,9 +102,11 @@ async function init() {
     canvas = document.getElementById('game-canvas');
     blocker = document.getElementById('blocker');
     helpBtn = document.getElementById('help-btn');
+    blowBtn = document.getElementById('blow-btn');
     if (!canvas || typeof THREE === 'undefined') return;
 
     state.isMobile = detectMobile();
+    state.touch = state.isMobile;
     state.reducedMotion = prefersReducedMotion();
     state.qa = isQaHost();
     // The address only steers the lab on a QA host. Anywhere else the page
@@ -266,12 +278,18 @@ function setupEventListeners() {
         pointer.id = event.pointerId;
         pointer.down = true;
         pointer.mouse = event.pointerType === 'mouse';
+        // A mouse or a pen presses to blow. A finger only walks and aims.
+        pointer.blows = event.pointerType !== 'touch';
+        if (event.pointerType === 'touch' && !state.touch) {
+            state.touch = true;
+            setChromeVisible(true);
+        }
         steer = 'point';
         aimAt(event.clientX, event.clientY);
         if (canvas.setPointerCapture) {
             try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* not capturable */ }
         }
-        noteBlow();
+        if (pointer.blows) noteBlow();
     }, { signal });
     canvas.addEventListener('pointermove', (event) => {
         if (welcomeShown()) return;
@@ -286,6 +304,7 @@ function setupEventListeners() {
         if (event.pointerId !== pointer.id) return;
         pointer.id = null;
         pointer.down = false;
+        pointer.blows = false;
         // A finger lifted leaves nothing to steer by. A mouse still hovers.
         if (!pointer.mouse) pointer.aim = null;
     };
@@ -294,6 +313,54 @@ function setupEventListeners() {
     canvas.addEventListener('pointerleave', (event) => {
         if (event.pointerType === 'mouse' && pointer.id === null) pointer.aim = null;
     }, { signal });
+
+    if (blowBtn) installBlowButton(blowBtn, signal);
+}
+
+/** The blow button runs the blower while it is held, by a finger or by
+ *  Space or Enter while it has focus. Its own pointer, so a second thumb can
+ *  hold it while the first one steers. */
+function installBlowButton(btn, signal) {
+    // Called before the hold is recorded, so a blow is counted once however
+    // many ways the button is held at the same moment.
+    const press = () => {
+        if (welcomeShown()) return false;
+        if (!blowHeld()) noteBlow();
+        btn.classList.add('held');
+        return true;
+    };
+    btn.addEventListener('pointerdown', (event) => {
+        if (event.cancelable) event.preventDefault();
+        if (!press()) return;
+        blowHold.id = event.pointerId;
+        if (btn.setPointerCapture) {
+            try { btn.setPointerCapture(event.pointerId); } catch (e) { /* not capturable */ }
+        }
+    }, { signal });
+    const lift = (event) => {
+        if (event.pointerId !== blowHold.id) return;
+        blowHold.id = null;
+        if (!blowHeld()) btn.classList.remove('held');
+    };
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((type) =>
+        btn.addEventListener(type, lift, { signal }));
+    // A long press must not open the browser's menu over the button.
+    btn.addEventListener('contextmenu', (event) => event.preventDefault(), { signal });
+    btn.addEventListener('keydown', (event) => {
+        if (event.code !== 'Space' && event.code !== 'Enter') return;
+        event.preventDefault();
+        if (event.repeat || !press()) return;
+        blowHold.key = true;
+    }, { signal });
+    btn.addEventListener('keyup', (event) => {
+        if (event.code !== 'Space' && event.code !== 'Enter') return;
+        blowHold.key = false;
+        if (!blowHeld()) btn.classList.remove('held');
+    }, { signal });
+}
+
+function blowHeld() {
+    return blowHold.id !== null || blowHold.key;
 }
 
 /** Aim at the spot of lawn under a screen point. */
@@ -362,6 +429,16 @@ function releaseInput() {
     Object.keys(keys).forEach((k) => { keys[k] = false; });
     pointer.id = null;
     pointer.down = false;
+    pointer.blows = false;
+    blowHold.id = null;
+    blowHold.key = false;
+    if (blowBtn) blowBtn.classList.remove('held');
+}
+
+/** Whether the blower is running: a mouse or pen pressed on the lawn, Space,
+ *  or the blow button held. Never behind the welcome card. */
+export function isBlowing(playing, ptr, held, button) {
+    return playing && ((ptr.down && ptr.blows) || held.blow || button.id !== null || button.key);
 }
 
 /** Count the visit's blows, and log only the first, so the log can tell
@@ -393,6 +470,7 @@ function welcomeShown() {
  *  visitor is in, and no help button over the help. */
 function setChromeVisible(on) {
     if (helpBtn) helpBtn.classList.toggle('visible', on);
+    if (blowBtn) blowBtn.classList.toggle('visible', on && state.touch && !welcomeShown());
 }
 
 function beginPlaying() {
@@ -527,7 +605,7 @@ function animate() {
     const playing = !welcomeShown();
     const aim = playing ? aimFor(steer, pointer, keys) : null;
     stepOperator(operator, aim, dt, B, walkArea());
-    const blowing = playing && (pointer.down || keys.blow);
+    const blowing = isBlowing(playing, pointer, keys, blowHold);
     const f = facing(operator.heading);
     const jet = makeJet(B, operator.x, operator.z, f.x, f.z, blowing);
 
@@ -589,7 +667,7 @@ export function getState() {
         operator: operator ? { ...operator } : null,
         steer,
         aim: pointer.aim ? { ...pointer.aim } : null,
-        blowing: !welcomeShown() && (pointer.down || keys.blow)
+        blowing: isBlowing(!welcomeShown(), pointer, keys, blowHold)
     };
 }
 
@@ -639,4 +717,4 @@ if (typeof document !== 'undefined') {
 }
 
 // Exposed for unit tests only.
-export const __test__ = { bufToHex, keys, pointer, aimAt, walkArea, sim: () => sim };
+export const __test__ = { bufToHex, keys, pointer, blowHold, aimAt, walkArea, sim: () => sim };
