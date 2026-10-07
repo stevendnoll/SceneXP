@@ -129,6 +129,77 @@ describe('the trick-or-treaters', () => {
     });
 });
 
+describe('blown at by the leaf blower', () => {
+    const B = C.blower;
+    /** The blower's air, as main.js gives it them. */
+    const windOf = (jet) => (x, y, z) => {
+        const out = new Float32Array(3);
+        const speed = S.airAt(jet, x, y, z, 0, out);
+        return { x: out[0], z: out[2], speed };
+    };
+
+    /** A pair walking, `x` along the sidewalk. */
+    function walking(x, dir = 1) {
+        const tr = H.createTreaters(HW, S.makeRandom(1));
+        Object.assign(tr, { state: 'walk', x, dir, heading: dir * Math.PI / 2, paused: true });
+        return tr;
+    }
+
+    test('the real blower aimed at them from a few meters staggers them along with it, and they hurry off that way', () => {
+        // The person on the lawn, aiming down the sidewalk at them (+x).
+        const tr = walking(4, -1);
+        const jet = S.makeJet(B, 1, HW.z, 1, 0, true);
+        const input = { active: true, person: { x: 1, z: 6 }, walkX: -0.5, random: S.makeRandom(2), wind: windOf(jet) };
+        const events = [];
+        const x0 = tr.x;
+        let leaned = 0;
+        for (let t = 0; t < 0.6; t += 1 / 30) {
+            const e = H.stepTreaters(tr, 1 / 30, input, HW);
+            if (e) events.push(e);
+            leaned = Math.max(leaned, tr.blown);
+        }
+        expect(events).toEqual(['blown']);
+        expect(tr.state).toBe('blown');
+        expect(leaned).toBeGreaterThan(0.3);
+        // Pushed the way the air blows, though they were walking into it.
+        expect(tr.x).toBeGreaterThan(x0 + 0.1);
+        // Backs to the air: facing +x, down the wind.
+        expect(Math.sin(tr.heading)).toBeGreaterThan(0.9);
+        // The blower off, they recover and hurry off the way it sent them.
+        input.wind = windOf(S.makeJet(B, 1, HW.z, 1, 0, false));
+        for (let t = 0; t < HW.blownTime + 0.2; t += 1 / 30) H.stepTreaters(tr, 1 / 30, input, HW);
+        expect(tr.state).toBe('walk');
+        expect(tr.dir).toBe(1);
+        expect(tr.hurrying).toBe(true);
+        const x1 = tr.x;
+        H.stepTreaters(tr, 1, input, HW);
+        expect(tr.x - x1).toBeCloseTo(HW.speed * HW.hurry, 5);
+        // And they stay on the sidewalk, however hard it blew.
+        for (const p of H.treaterSpots(tr)) {
+            expect(p.z).toBeGreaterThan(C.yard.sidewalk.minZ);
+            expect(p.z).toBeLessThan(C.yard.sidewalk.maxZ);
+        }
+    });
+
+    test('the air of a blower aimed elsewhere, or too far off, does not bother them', () => {
+        const tr = walking(4);
+        const away = S.makeJet(B, 1, 2, 0, -1, true);
+        const far = S.makeJet(B, -12, HW.z, 1, 0, true);
+        for (const jet of [away, far]) {
+            const input = { active: true, person: { x: 1, z: 2 }, walkX: -0.5, random: S.makeRandom(2), wind: windOf(jet) };
+            for (let t = 0; t < 1; t += 1 / 30) expect(H.stepTreaters(tr, 1 / 30, input, HW)).toBe(null);
+            expect(tr.blown).toBe(0);
+        }
+    });
+
+    test('a hard gust toward the street cannot push them off the sidewalk', () => {
+        const tr = walking(0);
+        const input = { active: true, person: null, walkX: 50, random: S.makeRandom(2), wind: () => ({ x: 0, z: 1, speed: 30 }) };
+        for (let t = 0; t < 5; t += 1 / 30) H.stepTreaters(tr, 1 / 30, input, HW);
+        for (const p of H.treaterSpots(tr)) expect(p.z).toBeLessThan(C.yard.sidewalk.maxZ);
+    });
+});
+
 describe('the drawing, on the real three.js', () => {
     let THREE;
     let Dc;
@@ -204,7 +275,11 @@ describe('the drawing, on the real three.js', () => {
             const onAHouse = box.max.z <= Y.lawn.minZ + 0.6;
             const overhead = box.min.y >= 2;
             const pastTheSim = box.min.x > Y.bounds.maxX || box.max.x < Y.bounds.minX;
-            expect({ name: o.name || o.type, ok: onAHouse || overhead || pastTheSim }).toEqual({ name: o.name || o.type, ok: true });
+            // Wound round something the sim already treats as solid (a porch
+            // post), within a few centimeters of it and no taller.
+            const onSolid = S.solidBoxes(Y).some((b) => box.min.x >= b.minX - 0.06 && box.max.x <= b.maxX + 0.06
+                && box.min.z >= b.minZ - 0.06 && box.max.z <= b.maxZ + 0.06 && box.max.y <= b.height + 0.05);
+            expect({ name: o.name || o.type, ok: onAHouse || overhead || pastTheSim || onSolid }).toEqual({ name: o.name || o.type, ok: true });
         });
         expect(meshes).toBeGreaterThan(20);
     });
@@ -267,15 +342,16 @@ describe('the drawing, on the real three.js', () => {
             && Math.abs((box.min.z + box.max.z) / 2 - tree.z) < 1.2 && box.min.y > 1.5);
         expect(near.length).toBeGreaterThan(10);
         for (const { box } of near) {
-            // Above the hedge top, where the street can see them.
-            expect(box.min.y).toBeGreaterThan(hedge.height);
+            // On or above the hedge top, where the street can see them.
+            expect(box.min.y).toBeGreaterThanOrEqual(hedge.height - 1e-3);
             expect(box.max.x).toBeLessThan(hedge.at);
         }
     });
 
     test('the giant spider stands on the neighbor\'s roof, on its front slope, and not inside it', () => {
         const NH = C.yard.neighborHouse;
-        const front = C.yard.neighbor.minZ + 0.4;
+        // The eave stands out 0.4 m from his set back face (house.js).
+        const front = C.yard.neighbor.minZ - NH.setBack + 0.4;
         const rise = NH.ridge - NH.wall + 0.05;
         const roofAt = (z) => NH.wall - 0.05 + ((front - z) / 4.4) * rise;
         const S = HW.decor.roofSpider;
@@ -304,6 +380,40 @@ describe('the drawing, on the real three.js', () => {
         const top = Math.max(...lounger.map(({ box }) => box.max.y));
         expect(top).toBeGreaterThan(1.2);
         expect(top).toBeLessThan(1.6);
+    });
+
+    test('blown at, the witch holds her hat with both hands, and the ghost\'s sheet billows out', () => {
+        const figs = H.createTreaterFigures(HW);
+        // Facing the street (+z), so her left and right are along x.
+        const tr = { ...H.createTreaters(HW, S.makeRandom(1)), state: 'walk', x: 0, dir: 1, heading: 0, blown: 0 };
+        const witch = figs.group.children[1];
+        const ghost = figs.group.children[0];
+        const hands = () => {
+            const out = [];
+            witch.updateMatrixWorld(true);
+            witch.traverse((o) => { if (o.userData && o.userData.isArm) out.push(o); });
+            return out.map((arm) => {
+                // The far end of the arm: its lowest point at rest.
+                const box = new THREE.Box3().setFromObject(arm);
+                return box;
+            });
+        };
+        figs.update(tr, 0);
+        const restTop = Math.max(...hands().map((b) => b.max.y));
+        const ghostRest = new THREE.Box3().setFromObject(ghost);
+        figs.update({ ...tr, blown: 1 }, 0.3);
+        witch.updateMatrixWorld(true);
+        const hatBox = new THREE.Box3().setFromObject(witch.getObjectByName('witch-hat'));
+        const up = hands();
+        // Both hands up, meeting over her middle at the brim of her hat.
+        const middle = (hatBox.min.x + hatBox.max.x) / 2;
+        for (const b of up) {
+            expect(b.max.y).toBeGreaterThan(restTop + 0.2);
+            expect(b.max.y).toBeGreaterThan(hatBox.min.y);
+            expect(Math.min(Math.abs(b.min.x - middle), Math.abs(b.max.x - middle))).toBeLessThan(0.06);
+        }
+        const ghostBlown = new THREE.Box3().setFromObject(ghost);
+        expect(ghostBlown.max.x - ghostBlown.min.x).toBeGreaterThan(ghostRest.max.x - ghostRest.min.x);
     });
 });
 

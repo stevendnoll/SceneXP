@@ -40,7 +40,7 @@ class FakeAudioContext {
         this.currentTime = 10;
         this.sampleRate = 48000;
         this.destination = { kind: 'destination' };
-        this.state = 'running';
+        this.state = 'suspended';
     }
     createGain() { const n = node('gain'); n.gain = param(1); return n; }
     createBiquadFilter() {
@@ -62,7 +62,8 @@ class FakeAudioContext {
         built.buffers.push({ channels, frames, rate, data });
         return { length: frames, getChannelData: () => data };
     }
-    resume() { built.resumed++; return Promise.resolve(); }
+    // Like a browser, the context runs a moment after it is asked to.
+    resume() { built.resumed++; return Promise.resolve().then(() => { this.state = 'running'; }); }
     suspend() { built.suspended++; return Promise.resolve(); }
     close() { built.closed++; return Promise.resolve(); }
 }
@@ -85,19 +86,27 @@ const filters = () => built.nodes.filter((n) => n.kind === 'filter');
 /** The two voices' output gains (each feeds a panner). */
 const voiceGains = () => gains().filter((g) => g.to.some((t) => t.kind === 'panner'));
 
-describe('silent until asked', () => {
-    test('no AudioContext at all until the sound is turned on, however much the blower runs', () => {
+describe('on, but silent until the visitor acts', () => {
+    // Steve's M6 QA, 2026-10-07: "Let's have the sound on by default."
+    test('on from the start, and still no AudioContext before a gesture, however much the blower runs', () => {
+        expect(S.startOn).toBe(true);
         const sound = createSound(S);
+        expect(sound.isOn()).toBe(true);
         for (let k = 0; k < 120; k++) sound.update(1 / 60, { blowing: true }, { blowing: true, pan: 0 });
         expect(built.contexts).toBe(0);
-        expect(sound.isOn()).toBe(false);
     });
 
-    test('turned on, one context, and only ever one, however often it is toggled', () => {
+    test('the first gesture makes one context, and only ever one, however often it is toggled', async () => {
         const sound = createSound(S);
-        expect(sound.toggle()).toBe(true);
+        // An iPhone's pointerdown makes it but cannot start it, so the next
+        // gesture is still wanted, and once it runs no more are.
+        expect(sound.unlock()).toBe(false);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(sound.unlock()).toBe(true);
         expect(sound.toggle()).toBe(false);
         expect(sound.toggle()).toBe(true);
+        expect(sound.toggle()).toBe(false);
         expect(built.contexts).toBe(1);
         // Two seconds of noise, made here, not loaded.
         expect(built.buffers).toHaveLength(1);
@@ -109,7 +118,7 @@ describe('silent until asked', () => {
 
     test('turned off, the master falls to nothing', () => {
         const sound = createSound(S);
-        sound.setOn(true);
+        sound.unlock();
         const master = gains().find((g) => g.to.some((t) => t.kind === 'destination'));
         sound.setOn(false);
         expect(master.gain.calls[master.gain.calls.length - 1][1]).toBe(0);
@@ -136,14 +145,25 @@ describe('silent until asked', () => {
         expect(source).not.toMatch(/createElement\(\s*['"]audio|new Audio\(|createObjectURL/);
     });
 
-    test('on an iPhone it asks to play through the ring switch only while it is on', () => {
+    test('on an iPhone, on by default respects the ring switch, and only the visitor turning it on plays through it', () => {
         const session = { type: 'auto' };
         Object.defineProperty(globalThis, 'navigator', { value: { audioSession: session }, configurable: true, writable: true });
         const sound = createSound(S);
+        sound.unlock();
+        expect(session.type).toBe('auto');
+        sound.setOn(false);
+        expect(session.type).toBe('auto');
         sound.setOn(true);
         expect(session.type).toBe('playback');
         sound.setOn(false);
         expect(session.type).toBe('auto');
+    });
+
+    test('off by default, a gesture makes nothing', () => {
+        const sound = createSound({ ...S, startOn: false });
+        expect(sound.isOn()).toBe(false);
+        sound.unlock();
+        expect(built.contexts).toBe(0);
     });
 });
 

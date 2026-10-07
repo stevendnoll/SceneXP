@@ -14,6 +14,14 @@
  *
  * A VISIT LASTS UNTIL HIS LAWN IS CLEAR (`clearLeft`, or `visitMax` seconds).
  *
+ * ONLY NEW LEAVES BRING HIM OUT (Steve's M6 QA: "The neighbor seems to keep
+ * coming out even when there are no visible leaves in his lawn"). Leaves his
+ * air pins against his side of the pickets stay there, hidden from the
+ * street by the fence, and a visit ends when a pass cannot shift them. They
+ * were still counted, so he was straight back out every twenty seconds for
+ * leaves nobody could see. Now he counts from what he left behind when he
+ * went in (`leftBehind`), and only our next leaves bring him back.
+ *
  * A VISIT ESCALATES: each comes sooner (a lower `visitAt` and a shorter
  * `cooldown`), watches longer, and from visit
  * `bigFrom` (counting from 0) he brings the big blower.
@@ -50,6 +58,9 @@ export function createNeighbor(N) {
         arms: 'carry',
         segs: [],
         seg: 0,
+        // How many of our leaves were on his lawn when he last went in: the
+        // ones he could not shift. Only leaves beyond these bring him out.
+        leftBehind: 0,
         // How many were on his lawn when he last planned his sweep, to tell
         // whether a pass made any difference.
         lastCount: 0
@@ -157,7 +168,10 @@ export function stepNeighbor(nb, dt, input, N) {
     switch (nb.state) {
         case 'inside':
             nb.cooldown -= step;
-            if (input.active && nb.cooldown <= 0 && input.leaves >= pick(N.visitAt, nb.visits)) {
+            // Fewer than he left (we blew some back, or they blew off): the
+            // ones still there are what he left.
+            if (input.leaves < nb.leftBehind) nb.leftBehind = input.leaves;
+            if (input.active && nb.cooldown <= 0 && input.leaves - nb.leftBehind >= pick(N.visitAt, nb.visits)) {
                 start(nb, N);
                 return 'out';
             }
@@ -247,6 +261,7 @@ export function stepNeighbor(nb, dt, input, N) {
             if (nb.door <= 0) {
                 nb.state = 'inside';
                 nb.visits += 1;
+                nb.leftBehind = input.leaves;
                 nb.cooldown = pick(N.cooldown, nb.visits);
                 return 'in';
             }

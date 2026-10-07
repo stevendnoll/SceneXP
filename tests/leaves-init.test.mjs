@@ -610,28 +610,29 @@ describe('delights and surprises (M6)', () => {
         return made;
     }
 
-    test('the sound starts off, the speaker in the corner or M turns it on and off, and nothing is kept', async () => {
+    // STEVE'S M6 QA, 2026-10-07: "Let's have the sound on by default."
+    test('the sound is on from the start, begins with the first key or tap, and the speaker or M turns it off and on', async () => {
         const made = installAudio();
         const main = await boot();
         const btn = dom.el('sound-btn');
-        expect(btn.classList.contains('visible')).toBe(false);
-        fire(dom.el('blocker'), 'click');
-        expect(btn.classList.contains('visible')).toBe(true);
-        expect(main.getState().sound).toBe(false);
-        expect(made).toHaveLength(0);
-        fire(btn, 'click');
         expect(main.getState().sound).toBe(true);
         expect(btn.getAttribute('aria-pressed')).toBe('true');
         expect(btn.title).toBe('Sound on (M)');
-        expect(dom.el('round-status').textContent).toBe('Sound on.');
-        expect(made).toHaveLength(1);
-        // Blowing with the sound on runs without a hitch.
+        expect(btn.classList.contains('visible')).toBe(false);
+        // Nothing is made before a gesture: a browser would refuse it.
+        expect(made).toHaveLength(0);
+        fire(dom.el('blocker'), 'click');
+        expect(btn.classList.contains('visible')).toBe(true);
+        // The first key anywhere starts it.
         fire(dom.documentStub, 'keydown', { code: 'Space' });
+        expect(made).toHaveLength(1);
         expect(() => frames(main, 0.5, 20)).not.toThrow();
         fire(dom.documentStub, 'keyup', { code: 'Space' });
-        fire(dom.documentStub, 'keydown', { code: 'KeyM' });
+        fire(btn, 'click');
         expect(main.getState().sound).toBe(false);
         expect(btn.getAttribute('aria-pressed')).toBe('false');
+        expect(btn.title).toBe('Sound off (M)');
+        expect(dom.el('round-status').textContent).toBe('Sound off.');
         // A browser shortcut with M in it is the browser's.
         fire(dom.documentStub, 'keydown', { code: 'KeyM', metaKey: true });
         expect(main.getState().sound).toBe(false);
@@ -639,6 +640,7 @@ describe('delights and surprises (M6)', () => {
         fire(dom.documentStub, 'keydown', { code: 'Escape' });
         fire(dom.documentStub, 'keydown', { code: 'KeyM' });
         expect(main.getState().sound).toBe(true);
+        expect(btn.getAttribute('aria-pressed')).toBe('true');
         expect(made).toHaveLength(1);
         // The only thing this scene keeps is the character.
         expect(globalThis.localStorage.length || 0).toBe(0);

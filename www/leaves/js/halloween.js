@@ -10,7 +10,9 @@
  * pair of trick-or-treaters, a little ghost and a little witch with their
  * pumpkin pails, walks the sidewalk and stops at the end of our walk to look
  * at the house before going on. They wait politely for anybody standing in
- * their way.
+ * their way. Blown at with the leaf blower (Steve's M6 QA), they stagger
+ * along with the air, backs to it, the ghost's sheet billowing and the
+ * witch holding onto her hat, then hurry off the way it sent them.
  *
  * The scene has no dusk (its light is a fixed autumn afternoon), so the
  * jack-o-lanterns glow all day: their faces are drawn unlit, which reads as
@@ -59,7 +61,25 @@ export function seasonFor(search, date, H, qa) {
 
 /** The trick-or-treaters, out of sight, the first pair a little way off. */
 export function createTreaters(H, random) {
-    return { state: 'wait', t: 0, timer: between(H.first, random()), dir: 1, x: H.fromX, z: H.z, heading: Math.PI / 2, speed: 0, stride: 0, paused: false, walks: 0 };
+    return {
+        state: 'wait', t: 0, timer: between(H.first, random()), dir: 1, x: H.fromX, z: H.z, heading: Math.PI / 2, speed: 0, stride: 0, paused: false, walks: 0,
+        // Blown: how hard (0 to 1, fading), which way, how far off the
+        // sidewalk's middle it has pushed them, whether they are hurrying
+        // off, and whether this walk has been blown yet (for the event).
+        blown: 0, gust: { x: 0, z: 0 }, dz: 0, hurrying: false, blownThisWalk: false
+    };
+}
+
+/** The strongest air at either of them, at a child's middle: { x, z,
+ *  speed } with (x, z) the way it blows, or null. */
+function windAt(tr, input, H) {
+    if (!input.wind) return null;
+    let best = null;
+    for (const p of treaterSpots(tr)) {
+        const w = input.wind(p.x, H.blowHeight, p.z);
+        if (w && w.speed > (best ? best.speed : 0)) best = w;
+    }
+    return best;
 }
 
 /**
@@ -68,11 +88,45 @@ export function createTreaters(H, random) {
  *   person   { x, z }: they wait rather than walk through them
  *   walkX    where our front walk meets the sidewalk
  *   random   () => 0..1
- * Returns 'start', 'pause', 'gone' or null.
+ *   wind     (x, y, z) => { x, z, speed }: the blowers' air there (optional)
+ * Returns 'start', 'pause', 'blown' (the first time a walk is), 'gone' or
+ * null.
  */
 export function stepTreaters(tr, dt, input, H) {
     const step = dt > 0 && input.active ? dt : 0;
     tr.t += step;
+    // BLOWN AT, walking or paused: they stagger with the air, backs to it.
+    if (tr.state !== 'wait' && step > 0) {
+        const w = windAt(tr, input, H);
+        if (w && w.speed >= H.blownAir) {
+            const len = Math.hypot(w.x, w.z) || 1;
+            const first = !tr.blownThisWalk;
+            tr.gust = { x: w.x / len, z: w.z / len };
+            tr.blown = Math.max(tr.blown, Math.min(1, w.speed / H.blownFull));
+            tr.state = 'blown';
+            tr.t = 0;
+            tr.blownThisWalk = true;
+            if (first) return 'blown';
+        }
+    }
+    if (tr.state === 'blown') {
+        const push = H.push * tr.blown * Math.max(0, 1 - tr.t / H.blownTime);
+        tr.x += tr.gust.x * push * step;
+        tr.dz = Math.min(H.drift.max, Math.max(H.drift.min, tr.dz + tr.gust.z * push * step));
+        tr.speed = push;
+        tr.stride += push * step;
+        tr.heading = Math.atan2(tr.gust.x, tr.gust.z);
+        if (tr.t >= H.blownTime) {
+            // Off they go, the way it sent them, and no stopping at our walk.
+            if (Math.abs(tr.gust.x) > 0.2) tr.dir = tr.gust.x > 0 ? 1 : -1;
+            tr.heading = tr.dir * Math.PI / 2;
+            tr.state = 'walk';
+            tr.hurrying = true;
+            tr.paused = true;
+        }
+        return null;
+    }
+    tr.blown = Math.max(0, tr.blown - step * 1.5);
     if (tr.state === 'wait') {
         tr.timer -= step;
         tr.speed = 0;
@@ -83,6 +137,7 @@ export function stepTreaters(tr, dt, input, H) {
         tr.paused = false;
         tr.state = 'walk';
         tr.walks += 1;
+        Object.assign(tr, { blown: 0, dz: 0, hurrying: false, blownThisWalk: false });
         return 'start';
     }
     if (tr.state === 'pause') {
@@ -102,9 +157,12 @@ export function stepTreaters(tr, dt, input, H) {
         return null;
     }
     const before = tr.x;
-    tr.x += tr.dir * H.speed * step;
-    tr.speed = step > 0 ? H.speed : 0;
-    tr.stride += H.speed * step;
+    const pace = H.speed * (tr.hurrying ? H.hurry : 1);
+    tr.x += tr.dir * pace * step;
+    tr.speed = step > 0 ? pace : 0;
+    tr.stride += pace * step;
+    // Back toward the middle of the sidewalk as they go.
+    tr.dz *= Math.max(0, 1 - step * 0.8);
     if (!tr.paused && (before - input.walkX) * (tr.x - input.walkX) <= 0 && step > 0) {
         tr.paused = true;
         tr.x = input.walkX;
@@ -116,6 +174,7 @@ export function stepTreaters(tr, dt, input, H) {
         tr.state = 'wait';
         tr.timer = between(H.every, input.random());
         tr.speed = 0;
+        tr.hurrying = false;
         return 'gone';
     }
     return null;
@@ -124,9 +183,10 @@ export function stepTreaters(tr, dt, input, H) {
 /** Where each of the pair stands: the second a step behind the first and
  *  a little to the side. */
 export function treaterSpots(tr) {
+    const z = tr.z + (tr.dz || 0);
     return [
-        { x: tr.x, z: tr.z - 0.15 },
-        { x: tr.x - tr.dir * 0.85, z: tr.z + 0.3 }
+        { x: tr.x, z: z - 0.15 },
+        { x: tr.x - tr.dir * 0.85, z: z + 0.3 }
     ];
 }
 
@@ -245,6 +305,7 @@ function ghost() {
         .map(([r, y]) => new THREE.Vector2(r, y));
     const sheet = mesh(new THREE.LatheGeometry(profile, 18), new THREE.MeshLambertMaterial({ color: 0xf4f3ee, side: THREE.DoubleSide }), 0, 0, 0);
     group.add(sheet);
+    group.userData.sheet = sheet;
     const dark = lambert(0x16161a);
     for (const s of [-1, 1]) {
         const eye = mesh(new THREE.SphereGeometry(0.028, 8, 6), dark, s * 0.06, 0.93, 0.172, false);
@@ -274,6 +335,7 @@ function witch(scale) {
     const cone = mesh(new THREE.ConeGeometry(0.12, 0.34, 14), black, 0, 1.93, -0.02);
     cone.rotation.x = -0.18;
     const hat = new THREE.Group();
+    hat.name = 'witch-hat';
     hat.add(brim, cone);
     hat.scale.setScalar(scale);
     group.add(hat);
@@ -281,8 +343,12 @@ function witch(scale) {
     bucket.position.set(-0.17, 0.3, 0.05);
     group.add(bucket);
     const legs = [];
-    person.traverse((o) => { if (o.userData && o.userData.isLeg) legs.push(o); });
-    return { group, legs, base: legs.map((l) => l.rotation.x), bob: false };
+    const arms = [];
+    person.traverse((o) => {
+        if (o.userData && o.userData.isLeg) legs.push(o);
+        if (o.userData && o.userData.isArm) arms.push(o);
+    });
+    return { group, legs, base: legs.map((l) => l.rotation.x), arms, armRest: arms.map((a) => a.rotation.clone()), bob: false };
 }
 
 /**
@@ -292,7 +358,11 @@ export function createTreaterFigures(H) {
     const group = new THREE.Group();
     group.name = 'trick-or-treaters';
     const kids = [ghost(), witch(H.scale)];
-    kids.forEach((k) => group.add(k.group));
+    kids.forEach((k) => {
+        // Turned first, then leaned, so a lean is always forward or back.
+        k.group.rotation.order = 'YXZ';
+        group.add(k.group);
+    });
     group.visible = false;
 
     function update(tr, time) {
@@ -305,6 +375,22 @@ export function createTreaterFigures(H) {
             const swing = tr.speed > 0 ? 0.45 * Math.sin(tr.stride * 5 + k) : 0;
             kid.legs.forEach((l, i) => { l.rotation.x = kid.base[i] + (l.userData.legSide === 1 ? swing : -swing); });
             if (kid.bob) kid.group.position.y = tr.speed > 0 ? 0.015 * Math.abs(Math.sin(tr.stride * 5)) : 0.005 * Math.sin(time * 2);
+            // Blown at: leaning with the air (their backs are to it), the
+            // ghost's sheet billowing, the witch holding onto her hat.
+            const b = tr.blown || 0;
+            kid.group.rotation.x = 0.22 * b;
+            const sheet = kid.group.userData.sheet;
+            if (sheet) {
+                const flap = 1 + 0.2 * b * (0.6 + 0.4 * Math.sin(time * 15 + k));
+                sheet.scale.set(flap, 1 - 0.06 * b, flap);
+            }
+            if (kid.arms) {
+                kid.arms.forEach((a, i) => {
+                    const rest = kid.armRest[i];
+                    const s = a.userData.armSide || 1;
+                    a.rotation.set(rest.x + (-2.7 - rest.x) * b, rest.y, rest.z + (-s * 0.3 - rest.z) * b);
+                });
+            }
         });
     }
     return { group, update };

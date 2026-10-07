@@ -71,19 +71,40 @@ describe('when he comes out', () => {
         expect(N.visitAt[1]).toBeLessThan(N.visitAt[0]);
         expect(N.cooldown[1]).toBeLessThan(N.cooldown[0]);
         const nb = Nb.createNeighbor(N);
+        // While he is in, we send more over the fence, a few a second.
         const input = { ...quiet, leaves: 100, minZ: 0, maxZ: 3, maxX: 12 };
         const bigOnVisit = [];
         for (let t = 0; t < 200 && bigOnVisit.length < 3; t += 1 / 30) {
+            if (nb.state === 'inside') input.leaves += 0.2;
             if (Nb.stepNeighbor(nb, 1 / 30, input, N) === 'out') bigOnVisit.push(nb.big);
         }
         expect(bigOnVisit).toEqual([false, false, true]);
-        // After a visit he waits his cooldown, however many leaves there are.
+        // After a visit he waits his cooldown, however many new leaves come.
         const fresh = Nb.createNeighbor(N);
-        drive(fresh, input, 0);
-        while (fresh.visits === 0) Nb.stepNeighbor(fresh, 1 / 30, input, N);
+        const more = { ...input, leaves: 100 };
+        while (fresh.visits === 0) Nb.stepNeighbor(fresh, 1 / 30, more, N);
         expect(fresh.state).toBe('inside');
-        expect(drive(fresh, input, N.cooldown[1] - 0.2)).toEqual([]);
-        expect(drive(fresh, input, 0.5)).toEqual(['out']);
+        more.leaves += 200;
+        expect(drive(fresh, more, N.cooldown[1] - 0.2)).toEqual([]);
+        expect(drive(fresh, more, 0.5)).toEqual(['out']);
+    });
+
+    // STEVE'S M6 QA: "The neighbor seems to keep coming out even when there
+    // are no visible leaves in his lawn." Leaves pinned to his side of the
+    // pickets, which he cannot shift and the street cannot see, brought him
+    // out every twenty seconds (measured: six visits in two minutes).
+    test('leaves he could not shift never bring him back on their own, but new ones do', () => {
+        const nb = Nb.createNeighbor(N);
+        // Seventy he cannot move: every pass leaves them where they are.
+        const input = { ...quiet, leaves: 70, minZ: 0, maxZ: 3, maxX: 10.2 };
+        expect(drive(nb, input, 120).filter((e) => e === 'out')).toEqual(['out']);
+        expect(nb.state).toBe('inside');
+        expect(nb.leftBehind).toBe(70);
+        // We blow some back: what is left is what he left.
+        expect(drive(nb, { ...input, leaves: 60 }, 5)).toEqual([]);
+        expect(nb.leftBehind).toBe(60);
+        // And a fresh lot over the fence brings him out again.
+        expect(drive(nb, { ...input, leaves: 60 + N.visitAt[1] }, 10)).toContain('out');
     });
 
     // STEVE'S M3 QA: he went back in with "a lot of leaves in his yard", then

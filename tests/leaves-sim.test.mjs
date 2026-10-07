@@ -508,9 +508,15 @@ describe('the houses and the street, drawn from the same boxes (house.js)', () =
     test('every solid box in the config is drawn exactly where the leaves meet it', () => {
         const boxes = drawn();
         const near = (a, b) => Math.abs(a - b) < 1e-4;
+        // A box against a house (the porch, a step) is drawn reaching back to
+        // the house's set back face (M6 QA), behind the sim's wall where no
+        // leaf goes. Every face a leaf can meet is exact.
+        const edges = [C.yard.lawn.minZ, C.yard.neighbor.minZ];
         for (const b of C.yard.boxes) {
+            const back = edges.some((e) => near(b.minZ, e));
             const match = boxes.find((m) => near(m.min.x, b.minX) && near(m.max.x, b.maxX)
-                && near(m.min.z, b.minZ) && near(m.max.z, b.maxZ) && near(m.max.y, b.height));
+                && (back ? m.min.z <= b.minZ + 1e-4 && m.min.z > b.minZ - 0.5 : near(m.min.z, b.minZ))
+                && near(m.max.z, b.maxZ) && near(m.max.y, b.height));
             expect({ box: b.name, at: b.minX, drawn: Boolean(match) }).toEqual({ box: b.name, at: b.minX, drawn: true });
         }
     });

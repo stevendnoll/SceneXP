@@ -87,8 +87,16 @@ export const LEAVES_CONFIG = Object.freeze({
             { axis: 'x', at: -10, from: -6, to: 12, height: 1.8 }
         ],
         // `door` is our front door's middle, in x (house.js).
-        house: { minX: -9, maxX: 9, depth: 8, wall: 3.2, ridge: 6.2, door: -0.5 },
-        neighborHouse: { minX: 11.5, maxX: 22, depth: 8, wall: 3.2, ridge: 6 },
+        // `setBack` (M6 QA): how far behind the line the leaves rest against
+        // (lawn.minZ, the sim's wall) each house is drawn, so nothing on its
+        // face stands in front of them. Our stone base is 12 cm proud of the
+        // wall, and a leaf is up to 17 cm across, so a leaf banked against
+        // the house lay inside the stone (Steve: "the exterior facade of the
+        // houses overlap with some of the leaves on the ground"). His
+        // window mullions stand as proud. The strip between is a gravel drip
+        // edge along ours and a mulch bed along his.
+        house: { minX: -9, maxX: 9, depth: 8, wall: 3.2, ridge: 6.2, door: -0.5, setBack: 0.28 },
+        neighborHouse: { minX: 11.5, maxX: 22, depth: 8, wall: 3.2, ridge: 6, setBack: 0.28 },
         // Down the block (M6 QA): a sage house past the hedge and a warm
         // gray one past the neighbor's, set back a little, each with its
         // garage on the far side from us (`garage` -1 left, 1 right). The
@@ -512,6 +520,17 @@ export const LEAVES_CONFIG = Object.freeze({
             // The maple's trunk is 0.11 m across there (measured on the
             // real tree), so her skirt's waist meets the bark.
             witch: { facing: 1.15, out: 0.14, y: 2.25 },
+            // Third round (Steve's M6 QA, "could we please add more"): a flock
+            // of bats circling over the neighbor's roof, a giant inflatable
+            // ghost beside his pumpkin, stretchy cobweb along the top of our
+            // hedge, lights spiraling up our porch posts, a scarecrow at the
+            // sage house and little ghosts along the gray house's eave.
+            flock: { x: 15.4, y: 7.7, z: -9.4, r: 1.5, bats: 6, speed: 0.8 },
+            ghostInflatable: { x: 23.5, z: -0.6, tall: 2.3, turn: -0.35 },
+            hedgeWeb: { from: -2.5, to: 5.5, strands: 90, spiders: 2 },
+            postLights: { turns: 6, bulbs: 26, r: 0.075 },
+            scarecrow: { x: -21.2, z: -4.6, turn: 0.5, shirt: 0x8c3b2a, pants: 0x3f5670, burlap: 0xc9a76a, hat: 0xd8bb6f },
+            streetGhosts: [-3.6, -1.4, 0.8],
             // Pumpkins by each door down the street.
             streetPumpkins: [
                 { dx: -1.0, dz: 0.5, r: 0.22, color: 0xe0701f },
@@ -539,13 +558,29 @@ export const LEAVES_CONFIG = Object.freeze({
         pause: 1.6,
         // They wait for a person standing in their way.
         room: 0.8,
-        scale: 0.62
+        scale: 0.62,
+        // BLOWN AT (Steve's M6 QA: "It would be cool if they reacted to
+        // being blown by the leaf blower"): air faster than `blownAir` m/s
+        // at `blowHeight` (a child's middle) staggers them along with it for
+        // `blownTime` seconds, at up to `push` m/s, their backs to it, and
+        // then they hurry off the way it sent them, `hurry` times as fast.
+        blowHeight: 0.5,
+        blownAir: 1.6,
+        blownFull: 5,
+        blownTime: 1.1,
+        push: 1.4,
+        hurry: 2,
+        // How far off the middle of the sidewalk a gust can push them.
+        drift: { min: -0.55, max: 0.3 }
     },
 
     // THE SOUND (M6, sound.js): a whoosh while the blower runs, made with
-    // Web Audio from noise, OFF until the visitor turns it on (the button,
-    // or M). Nothing is remembered: it starts off on every visit.
+    // Web Audio from noise. ON BY DEFAULT since Steve's M6 QA (2026-10-07,
+    // "Let's have the sound on by default"; it was off at first), starting
+    // with the visitor's first click, tap or key, as browsers require. The
+    // button or M turns it off. Nothing is remembered.
     sound: {
+        startOn: true,
         master: 0.22,
         // The air: noise through a lowpass that spools up from `idleHz` to
         // `fullHz` when the blower starts, and a band for its body.
@@ -635,6 +670,9 @@ export const LEAVES_CONFIG = Object.freeze({
         aluminum: 0xc4c7cb,
         wreath: 0x9a4a22,
         walk: 0xc2bdb3,
+        // The beds along the house fronts (M6 QA).
+        gravel: 0x5d5e5f,
+        mulch: 0x5a4030,
         // The neighbor's: butter yellow lap siding, white trim, navy shutters
         // to go with his navy door, a brick chimney.
         neighborSiding: 0xe3d3a1,

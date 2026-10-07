@@ -28,6 +28,38 @@
 
 const material = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
 
+/** Where a house's front wall is drawn: `setBack` behind the line its
+ *  lawn's leaves rest against (`edge`, the sim's wall), so nothing on its
+ *  face stands in front of a leaf (M6 QA). */
+export function facadeZ(edge, H) {
+    return edge - (H.setBack || 0);
+}
+
+/** A config box drawn reaching back to the house's face where it stands
+ *  against the sim's wall at `edge` (the porch, a step), so no gap shows
+ *  between it and the set back wall. */
+const toFace = (b, edge, face) => (b.minZ <= edge + 1e-6 ? { ...b, minZ: face } : b);
+
+/** The bed along a house's foot, from its face out to where the lawn
+ *  starts, a hair over the ground under it. */
+function bed(minX, maxX, face, edge, color) {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(maxX - minX, edge - face),
+        material(color, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set((minX + maxX) / 2, 0.002, (face + edge) / 2);
+    mesh.receiveShadow = true;
+    return mesh;
+}
+
+/** Mark a mesh drawn from a config box the leaves already treat as solid
+ *  (the porch, a step, a post, a pumpkin), for the test that nothing else
+ *  stands where a leaf can lie. */
+function solidMark(mesh) {
+    mesh.userData.solid = true;
+    mesh.traverse((o) => { o.userData.solid = true; });
+    return mesh;
+}
+
 /** Our house's front windows: their middles in x from the house's middle,
  *  how high, and how big (decorations.js puts silhouettes in two). */
 export const OUR_WINDOWS = Object.freeze({ xs: [-6.4, -3.6, 3.2, 6.0], y: 1.75, w: 1.3, h: 1.7 });
@@ -109,12 +141,14 @@ export function pumpkin(p) {
 }
 
 /**
- * Our house, its front wall at z = Y.lawn.minZ. `L` is config.look. Returns
+ * Our house, its front wall `setBack` behind z = Y.lawn.minZ (where the
+ * leaves rest against it). `L` is config.look. Returns
  * the group.
  */
 export function buildOurHouse(Y, L) {
     const H = Y.house;
-    const front = Y.lawn.minZ;
+    const edge = Y.lawn.minZ;
+    const front = facadeZ(edge, H);
     const group = new THREE.Group();
     group.name = 'our-house';
     const w = H.maxX - H.minX;
@@ -143,10 +177,11 @@ export function buildOurHouse(Y, L) {
     // The porch, its step and posts, and a flat roof over them all.
     const stone = material(L.porch);
     for (const b of [...named(Y, 'porch'), ...named(Y, 'step')]) {
-        if (b.maxX <= H.maxX) group.add(solid(b, stone));
+        if (b.maxX <= H.maxX) group.add(solidMark(solid(toFace(b, edge, front), stone)));
     }
     const posts = named(Y, 'post');
-    for (const b of posts) group.add(solid(b, black));
+    for (const b of posts) group.add(solidMark(solid(b, black)));
+    group.add(bed(H.minX, H.maxX, front, edge, L.gravel));
     const porch = named(Y, 'porch')[0];
     if (porch) {
         const top = posts.length ? posts[0].height : 2.8;
@@ -165,7 +200,7 @@ export function buildOurHouse(Y, L) {
     wreath.position.set(door, 1.8, front + 0.14);
     wreath.castShadow = true;
     group.add(wreath);
-    for (const p of Y.pumpkins || []) group.add(pumpkin(p));
+    for (const p of Y.pumpkins || []) group.add(solidMark(pumpkin(p)));
 
     // The stone walk from the step to the sidewalk, laid flat on the lawn,
     // a hair above it and drawn over it.
@@ -182,14 +217,16 @@ export function buildOurHouse(Y, L) {
 }
 
 /**
- * The neighbor's house, its front wall at z = Y.neighbor.minZ, with room
+ * The neighbor's house, its front wall `setBack` behind z = Y.neighbor.minZ,
+ * with room
  * left for the door yard.js hangs at `doorX`.
  */
 export function buildNeighborHouse(Y, L, doorX) {
     const H = Y.neighborHouse;
-    const front = Y.neighbor.minZ;
+    const front = facadeZ(Y.neighbor.minZ, H);
     const group = new THREE.Group();
     group.name = 'neighbor-house';
+    group.add(bed(H.minX, H.maxX, front, Y.neighbor.minZ, L.mulch));
     const w = H.maxX - H.minX;
     const cx = (H.minX + H.maxX) / 2;
     const cz = front - H.depth / 2;

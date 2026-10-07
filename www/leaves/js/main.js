@@ -48,7 +48,7 @@
 
 import { LEAVES_CONFIG } from './config.min.js';
 import {
-    createSim, resetSim, scatterLeaves, stepSim, makeJet, pilePeak, burst, solidBoxes, makeRandom
+    createSim, resetSim, scatterLeaves, stepSim, makeJet, airAt, pilePeak, burst, solidBoxes, makeRandom
 } from './sim.min.js';
 import { buildTrees, updateTrees, createCrowns, stepCrowns } from './trees.min.js';
 import { planFinale, finaleAt } from './finale.min.js';
@@ -166,6 +166,7 @@ let soundBtn = null;
 const toast = { el: null, until: 0 };
 // What has been said once this visit, so the live region is not flooded.
 const told = new Set();
+const airTmp = new Float32Array(3);
 
 // What the HUD last showed, so it is only written when it changes.
 const hudShown = { clock: '', cleared: '', phase: '' };
@@ -223,6 +224,7 @@ async function init() {
     castModal = document.getElementById('cast-modal');
     soundBtn = document.getElementById('sound-btn');
     toast.el = document.getElementById('find-toast');
+    markSound();
     if (!canvas || typeof THREE === 'undefined') return;
     // The markup starts it hidden. Said again here so the round never begins
     // believing a card is up.
@@ -477,6 +479,17 @@ function setupEventListeners() {
     installCardFocusTrap({ signal });
     installCardScrollReset({ signal });
 
+    // The sound is on by default (M6), and starts with the first click, tap
+    // or key anywhere, the gesture a browser waits for before audio.
+    // Listened for until the audio is running, since an iPhone does not let
+    // a pointerdown start it.
+    const unlockSound = () => {
+        if (!sound.unlock()) return;
+        ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'].forEach((type) =>
+            document.removeEventListener(type, unlockSound, true));
+    };
+    ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'].forEach((type) =>
+        document.addEventListener(type, unlockSound, { capture: true, signal }));
     document.addEventListener('keydown', onKeyDown, { signal });
     document.addEventListener('keyup', onKeyUp, { signal });
     // A key released while the window was elsewhere never sends its keyup.
@@ -706,17 +719,22 @@ export function aimFor(steerBy, ptr, held) {
 
 // ---- The sound (M6) -------------------------------------------------------
 
-/** The button or M: the whoosh on or off. Off on every visit to begin with,
- *  and never remembered. */
+/** The button or M: the whoosh on or off. On by default, and never
+ *  remembered. */
 function toggleSound(how) {
     const on = sound.toggle();
-    if (soundBtn) {
-        soundBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-        soundBtn.title = on ? 'Sound on (M)' : 'Sound off (M)';
-    }
+    markSound();
     announce(on ? 'Sound on.' : 'Sound off.');
     track('sound', { outcome: on ? 'on' : 'off', kind: how });
     return on;
+}
+
+/** The speaker button says whether the sound is on. */
+function markSound() {
+    if (!soundBtn) return;
+    const on = sound.isOn();
+    soundBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    soundBtn.title = on ? 'Sound on (M)' : 'Sound off (M)';
 }
 
 /** The neighbor's side of the view, -1 (left) to 1 (right), for his
@@ -1391,13 +1409,29 @@ function announceOnce(key, text) {
 
 // ---- Halloween (M6) -----------------------------------------------------------
 
-function stepTheTreaters(dt) {
+/** One frame of the trick-or-treaters, who feel the blowers' air (`jets`). */
+function stepTheTreaters(dt, jets) {
     if (!treaters) return null;
     const event = stepTreaters(treaters, dt, {
-        active: true, person: operator, walkX: CONFIG.yard.house.door, random: treatRandom
+        active: true, person: operator, walkX: CONFIG.yard.house.door, random: treatRandom, wind: (x, y, z) => windAt(jets, x, y, z)
     }, CONFIG.halloween);
     if (event === 'start') announceOnce('treaters', 'Trick-or-treaters are coming along the sidewalk.');
+    if (event === 'blown') {
+        announceOnce('treaters-blown', 'The trick-or-treaters squeal, hold onto their costumes, and hurry off down the sidewalk.');
+        track('treaters', { outcome: 'blown' });
+    }
     return event;
+}
+
+/** The fastest of the blowers' air at (x, y, z), over open ground: { x, z,
+ *  speed }, (x, z) the way it blows. */
+function windAt(jets, x, y, z) {
+    let best = { x: 0, z: 0, speed: 0 };
+    for (const j of jets) {
+        const speed = airAt(j, x, y, z, 0, airTmp);
+        if (speed > best.speed) best = { x: airTmp[0], z: airTmp[2], speed };
+    }
+    return best;
 }
 
 // ---- Render loop ----------------------------------------------------------
@@ -1450,7 +1484,7 @@ function animate() {
     // The trick-or-treaters (M6) hold still behind the welcome card with
     // everything else.
     const yardInView = !welcomeShown() && !castShown();
-    if (yardInView) stepTheTreaters(dt);
+    if (yardInView) stepTheTreaters(dt, [jet, his]);
     const rising = riseFinds(delta);
     if (toast.until && state.time >= toast.until) hideToast();
     sound.update(delta, { blowing }, {

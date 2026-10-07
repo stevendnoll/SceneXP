@@ -188,7 +188,7 @@
             <div class="controls-hint">
                 <span>WALK</span> Point at the lawn with the mouse, or drag a finger across it, and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too.
                 <span>BLOW</span> Hold the mouse button or Space. On a touch screen, hold the blow button in the corner.
-                <span>SOUND</span> The leaf blower is quiet until you press M or the speaker in the corner.
+                <span>SOUND</span> The leaf blower makes a whoosh. M or the speaker in the corner turns it off.
                 <span>HELP</span> The question mark in the corner, or Escape, brings you back here.
             </div>
             <!-- Who is on leaf duty (M4): the line names the character, and
@@ -219,13 +219,13 @@
         </svg>
     </button>
 
-    <!-- The sound (M6): the blower's whoosh, off on every visit until the
-         visitor turns it on here or with M. A toggle, so its name stays
-         "Sound" and aria-pressed says which. Top left, opposite the help
-         button, and hidden with it (.ui-float). -->
+    <!-- The sound (M6): the blower's whoosh, on by default (it starts with
+         the first click, tap or key) and turned off here or with M. A
+         toggle, so its name stays "Sound" and aria-pressed says which. Top
+         left, opposite the help button, and hidden with it (.ui-float). -->
     <button id="sound-btn" class="ui-float menu-btn sound-btn" type="button"
-        title="Sound off (M)"
-        aria-label="Sound" aria-pressed="false">
+        title="Sound on (M)"
+        aria-label="Sound" aria-pressed="true">
         <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" stroke-linejoin="round" />
             <path class="sound-waves" d="M15.5 9a4 4 0 0 1 0 6M18.2 6.6a7.4 7.4 0 0 1 0 10.8" />

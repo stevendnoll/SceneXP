@@ -8,7 +8,7 @@
  * sim already knows about (config.yard.walls). The houses and the street
  * are house.js's (M5), the trees trees.js's.
  */
-import { buildOurHouse, buildNeighborHouse, buildStreet, buildStreetHouse } from './house.min.js';
+import { buildOurHouse, buildNeighborHouse, buildStreet, buildStreetHouse, facadeZ } from './house.min.js';
 
 /** A grassy canvas texture: mottled greens with short strokes for blades. */
 function lawnTexture(base, dark, seed = 1) {
@@ -127,17 +127,22 @@ function picketFence(wall, look) {
  *  to about -1.7, the door swinging out toward the street). */
 function buildNeighborDoor(scene, config) {
     const N = config.neighbor;
-    const front = config.yard.neighbor.minZ;
+    // On his set back front wall (house.js facadeZ), his step reaching
+    // back to meet it.
+    const edge = config.yard.neighbor.minZ;
+    const front = facadeZ(edge, config.yard.neighborHouse);
     const width = 1.0;
     const tall = 2.1;
     scene.add(box(1.3, 2.3, 0.06, config.look.trim, N.door.x, 1.15, front + 0.03));
     scene.add(box(width, tall, 0.02, 0x15110d, N.door.x, tall / 2, front + 0.065));
     for (const b of config.yard.boxes || []) {
         if (b.name !== 'step' || N.door.x < b.minX || N.door.x > b.maxX) continue;
-        const step = box(b.maxX - b.minX, b.height, b.maxZ - b.minZ, config.look.porch,
-            (b.minX + b.maxX) / 2, b.height / 2, (b.minZ + b.maxZ) / 2);
+        const minZ = b.minZ <= edge + 1e-6 ? front : b.minZ;
+        const step = box(b.maxX - b.minX, b.height, b.maxZ - minZ, config.look.porch,
+            (b.minX + b.maxX) / 2, b.height / 2, (minZ + b.maxZ) / 2);
         step.castShadow = true;
         step.receiveShadow = true;
+        step.userData.solid = true;
         scene.add(step);
     }
     const hinge = new THREE.Group();
@@ -221,14 +226,20 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     for (const h of Y.street || []) scene.add(buildStreetHouse(h, look, Y));
     const sky = skyTexture(look.sky);
     if (sky) scene.background = sky;
-    // The gap between the two houses is a side fence.
+    // The gap between the two houses is a side fence, set back with them so
+    // it stands behind the leaves resting against the sim's wall there.
     const gate = box(Y.neighborHouse.minX - Y.house.maxX, 1.8, 0.08, look.fence,
-        (Y.house.maxX + Y.neighborHouse.minX) / 2, 0.9, Y.lawn.minZ - 0.05);
+        (Y.house.maxX + Y.neighborHouse.minX) / 2, 0.9, Y.lawn.minZ - Y.neighborHouse.setBack);
+    gate.name = 'side-gate';
     gate.castShadow = true;
     scene.add(gate);
 
     Y.walls.forEach((wall) => {
-        if (wall.axis === 'x' && wall.height < 1.2) scene.add(picketFence(wall, look));
+        if (wall.axis === 'x' && wall.height < 1.2) {
+            const fence = picketFence(wall, look);
+            fence.name = 'fence';
+            scene.add(fence);
+        }
     });
     const hedgeWall = Y.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
     if (hedgeWall) {
@@ -237,6 +248,7 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
         hedge.scale.z = (Y.sidewalk.minZ - hedgeWall.from) / (hedgeWall.to - hedgeWall.from);
         hedge.castShadow = true;
         hedge.receiveShadow = true;
+        hedge.name = 'hedge';
         scene.add(hedge);
     }
 

@@ -2,17 +2,17 @@
 /**
  * sound.js - the leaf blower's whoosh (M6).
  *
- * OFF UNTIL THE VISITOR TURNS IT ON. A leaf blower is famously annoying, and
- * a page that roars the moment somebody taps it in a quiet room is a page
- * closed in a hurry, so the sound starts off on every visit (Steve,
- * 2026-10-06: "mutable and muted by default"). The button in the corner or
- * the M key turns it on. Nothing is remembered: the only thing this scene
- * keeps past a visit is the character choice.
+ * ON BY DEFAULT (`startOn`). It began muted by default (Steve, 2026-10-06:
+ * "mutable and muted by default"), and after hearing it Steve asked for it
+ * on (2026-10-07: "Let's have the sound on by default"). The button in the
+ * corner or the M key turns it off. Nothing is remembered: the only thing
+ * this scene keeps past a visit is the character choice.
  *
- * NOTHING EXISTS UNTIL THEN. No AudioContext is made until the visitor turns
- * the sound on, which is always a click or a key, the gesture a browser
- * wants before it will play anything. A browser with no Web Audio, or one
- * that refuses, simply stays quiet.
+ * NOTHING EXISTS UNTIL THE VISITOR'S FIRST GESTURE. A browser will not start
+ * audio before a click, a tap or a key, so no AudioContext is made until
+ * main.js calls unlock() from the first one (or the visitor presses the
+ * button or M, which is one). A browser with no Web Audio, or one that
+ * refuses, simply stays quiet.
  *
  * EVERY SOUND IS MADE HERE, from two seconds of noise. No audio file, so
  * the page's Content Security Policy needs no media-src. Each blower is a
@@ -21,9 +21,10 @@
  * gain and a pan. The visitor's blower is one voice and the neighbor's is
  * another, quieter, from where he stands, and louder with the big blower.
  *
- * ON AN iPHONE plain Web Audio is muted by the ring switch. A visitor who
- * has turned the sound on has asked for it, so where Safari offers
- * navigator.audioSession it is set to playback while the sound is on.
+ * ON AN iPHONE plain Web Audio is muted by the ring switch, and on by
+ * default it stays that way: a phone set to silent stays silent. A visitor
+ * who turns the sound on themselves has asked for it, so then, where Safari
+ * offers navigator.audioSession, it is set to playback.
  *
  * Every call is safe before the context exists, after it has gone, and in a
  * browser with no Web Audio at all.
@@ -55,8 +56,10 @@ export function createSound(S) {
     let ctx = null;
     let master = null;
     let failed = false;
-    let on = false;
+    let on = Boolean(S.startOn);
     let paused = false;
+    // Whether a gesture has happened, so a context may be made.
+    let unlocked = false;
     const voices = {};
     let wobble = 0;
 
@@ -133,10 +136,15 @@ export function createSound(S) {
         param.setTargetAtTime(value, ctx.currentTime + S.ahead, tau);
     }
 
-    function setOn(next) {
+    /** The visitor's own choice, from the button or M (a gesture). Only
+     *  that asks an iPhone to play through its ring switch. */
+    function setOn(next, { chosen = true } = {}) {
         on = Boolean(next);
-        audioSession(on);
-        if (on && !ctx && !failed) build();
+        if (chosen) {
+            unlocked = true;
+            audioSession(on);
+        }
+        if (on && unlocked && !ctx && !failed) build();
         if (!ctx) return on;
         if (on) {
             if (!paused && ctx.resume) quietly(ctx.resume());
@@ -180,6 +188,17 @@ export function createSound(S) {
         }
     }
 
+    /** A click, a tap or a key: audio may start now. Returns whether there
+     *  is nothing more a gesture can do (it is running, or cannot be). An
+     *  iPhone does not count a pointerdown, so a context made on one waits,
+     *  suspended, for the touchend that follows. */
+    function unlock() {
+        unlocked = true;
+        if (on && !ctx && !failed) build();
+        if (ctx && on && !paused && ctx.resume && ctx.state !== 'running') quietly(ctx.resume());
+        return failed || Boolean(ctx && ctx.state === 'running');
+    }
+
     /** The page is hidden: let the audio clock rest. */
     function pause() {
         paused = true;
@@ -202,6 +221,7 @@ export function createSound(S) {
     return {
         isOn: () => on,
         setOn,
+        unlock,
         toggle: () => setOn(!on),
         update,
         pause,
