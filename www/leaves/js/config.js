@@ -519,7 +519,7 @@ export const LEAVES_CONFIG = Object.freeze({
             crows: [{ x: 2.4, turn: 0.35 }, { x: 3.15, turn: -0.5 }, { x: -6.2, turn: 0.15 }],
             // The neighbor's ghost, hung from his eave by his windows.
             sheet: 0xf4f3ee,
-            ghost: { x: 12.35, tall: 0.62, string: 0.25 },
+            ghost: { x: 14.32, tall: 0.62, string: 0.25 },
             // His inflatable jack-o-lantern and his foam graveyard, both past
             // the sim's ground (x beyond yard.bounds.maxX), so no leaf ever
             // blows through them.
@@ -572,6 +572,23 @@ export const LEAVES_CONFIG = Object.freeze({
             hats: [{ x: 5.4, y: 3.25, z: -2.5 }, { x: 7.7, y: 3.55, z: -2.9 }, { x: 6.5, y: 2.95, z: -4.5 }],
             hatString: 1.3,
             mummy: 0xece6d6,
+            // A masked figure standing still in the neighbor's left window
+            // (Steve's M6 QA: "something that looks like Jason or Michael
+            // Meyers"). Kept generic on purpose: a blank pale mask and dark
+            // coveralls, the genre, not either film's character (both are
+            // trademarked). He is there for `seen` seconds, then the room is
+            // empty for `gone`, then he is back.
+            watcher: { window: 0, seen: 16, gone: 6, room: 0x161b21, roomLight: 0x2a3440, coveralls: 0x2b3038, mask: 0xe9e4d8, hair: 0x2a2420 },
+            // A clown in our far right window (Steve's M6 QA: "a monster or
+            // something... a witch, scary clown, or another skull"): a dim
+            // lamp lit room, and a clown who slides in from the window's
+            // edge, peeks for `stay` seconds and slides away again, gone for
+            // `hidden`. Generic, not any film's clown.
+            clown: {
+                window: 3, hidden: 7, slide: 1.1, stay: 5,
+                room: 0x1d1612, roomLight: 0x5a3a24, face: 0xf4f0e6, nose: 0xd0281e, hair: 0xe8761f,
+                suit: 0x5b2c83, dots: 0xf0c94a, hat: 0x2f8f6a
+            },
             // Skeletons (Steve's M6 QA: "Maybe a skeleton or two (or three)?"):
             // one breaking out of the lawn by the front left corner, one still
             // raking leaves on the right (the rake ahead of it, toward the
@@ -604,10 +621,26 @@ export const LEAVES_CONFIG = Object.freeze({
         // pausing at the end of our walk to look at the house, whenever the
         // decorations are up (Steve's M6 QA).
         first: [3, 6],
-        every: [14, 24],
+        every: [8, 14],
+        // THE GROUPS (Steve's M6 QA: "maybe a few more trick-or-treaters?"):
+        // a little ghost and a little witch, and a little pumpkin and a
+        // little vampire with a parent behind them. EACH WALKS ITS OWN HALF
+        // OF THE SIDEWALK (`z`, the middle of its lane; the sidewalk runs
+        // 7.4 to 9), so both can be out at once and pass side by side. They
+        // used to take turns, and the second came too late (Steve's QA).
+        // `lanes` is each one's place across the lane, `drift` how far a
+        // gust can push the group within it, `first` when it first comes.
+        groups: [
+            { kinds: ['ghost', 'witch'], z: 7.82, lanes: [-0.12, 0.16], drift: { min: -0.14, max: 0.05 }, first: [3, 6] },
+            { kinds: ['pumpkin', 'vampire', 'parent'], z: 8.55, lanes: [-0.1, 0.18, 0.04], drift: { min: -0.05, max: 0.06 }, first: [8, 12] }
+        ],
+        // How far apart they walk, one behind the other.
+        spacing: 0.85,
         speed: 1.15,
-        fromX: -24,
-        toX: 26,
+        // They come and go just past the edge of the view (at the sidewalk,
+        // close to the camera, it is only about 14 m across).
+        fromX: -17,
+        toX: 18,
         z: 8.25,
         pause: 1.6,
         // They wait for a person standing in their way.
@@ -629,8 +662,9 @@ export const LEAVES_CONFIG = Object.freeze({
         // them in and out of it), and they turn at most this fast.
         keepAir: 0.6,
         turnRate: 5,
-        // How far off the middle of the sidewalk a gust can push them.
-        drift: { min: -0.55, max: 0.3 }
+        // How far off the middle of its lane a gust can push a group with no
+        // lane of its own.
+        drift: { min: -0.3, max: 0.3 }
     },
 
     // THE SOUND (M6, sound.js): a whoosh while the blower runs, made with
@@ -655,9 +689,13 @@ export const LEAVES_CONFIG = Object.freeze({
         spool: 0.12,
         // A slow wander in the air's pitch, so it breathes.
         wobble: { hz: 0.7, depth: 0.08 },
-        // The neighbor's blower, quieter, from where he stands.
-        neighbor: 0.45,
-        big: 1.3,
+        // The neighbor's blower, a little quieter, from where he stands, but
+        // only so far to one side: hard right on a laptop is one small
+        // speaker, and at 0.45 he went unheard (Steve's M6 QA, "I didn't hear
+        // the blowing sound while the neighbor was outside blowing").
+        neighbor: 0.8,
+        big: 1.25,
+        pan: 0.45,
         // Scheduled this far ahead of the audio clock.
         ahead: 0.03,
         // The dive's landing (M6 QA): a falling thump from hz[0] to hz[1], a

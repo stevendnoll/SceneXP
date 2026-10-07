@@ -37,7 +37,7 @@
  */
 import { faceTexture, faceOnPumpkin } from './halloween.min.js';
 import { makeRandom } from './sim.min.js';
-import { pumpkin, streetHouseParts, OUR_WINDOWS, facadeZ, MAILBOX, mailboxSpot, mailboxShape } from './house.min.js';
+import { pumpkin, streetHouseParts, OUR_WINDOWS, facadeZ, MAILBOX, mailboxSpot, mailboxShape, neighborWindows } from './house.min.js';
 
 const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
 
@@ -104,6 +104,35 @@ export function yardDecorBoxes(config) {
  *  the sim is built from while they are up. */
 export function decoratedConfig(config) {
     return { ...config, yard: { ...config.yard, boxes: [...config.yard.boxes, ...yardDecorBoxes(config)] } };
+}
+
+/** How far into our window the clown has slid at `time`, 0 (out of sight)
+ *  to 1: hidden, sliding in, staying, sliding out, round again. Pure. */
+export function clownPeek(time, P) {
+    const cycle = P.hidden + P.slide * 2 + P.stay;
+    const t = ((time % cycle) + cycle) % cycle;
+    const ease = (u) => u * u * (3 - 2 * u);
+    if (t < P.hidden) return 0;
+    if (t < P.hidden + P.slide) return ease((t - P.hidden) / P.slide);
+    if (t < P.hidden + P.slide + P.stay) return 1;
+    return ease(1 - (t - P.hidden - P.slide - P.stay) / P.slide);
+}
+
+/** Where on the window figures' canvases the faces are drawn, in pixels:
+ *  the middle, the whole head (hair and hat too) as [x0, y0, x1, y1], the
+ *  canvas's size, and the pane's in meters. The watcher's in the upper left
+ *  pane, the clown's in the upper right, each clear of the window's cross
+ *  of mullions (tests/leaves-halloween). */
+export const WINDOW_FACES = Object.freeze({
+    watcher: { cx: 33, cy: 50, box: [12, 19, 54, 72], w: 128, h: 176, pane: [0.96, 1.36] },
+    clown: { cx: 104, cy: 48, box: [68, 6, 128, 72], w: 128, h: 172, pane: [1.16, 1.56] }
+});
+
+/** Whether the figure in the window is there at `time`: `seen` seconds of
+ *  every `seen + gone`, starting there. Pure. */
+export function watcherThere(time, W) {
+    const cycle = W.seen + W.gone;
+    return ((time % cycle) + cycle) % cycle < W.seen;
 }
 
 /** A bat cut out of black paper, a wingspan of 1, facing +z: ears, a body,
@@ -678,6 +707,150 @@ function peekingSkeleton(D) {
     return group;
 }
 
+/** A window's view into a dim room, with or without a still figure in it:
+ *  dark coveralls, a blank pale mask with dark eye holes. Null where there
+ *  is no document (under test). */
+function watcherTexture(W, withFigure) {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 176;
+    const ctx = canvas.getContext && canvas.getContext('2d');
+    if (!ctx) return null;
+    const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
+    const room = ctx.createLinearGradient(0, 0, 0, 176);
+    room.addColorStop(0, hex(W.roomLight));
+    room.addColorStop(1, hex(W.room));
+    ctx.fillStyle = room;
+    ctx.fillRect(0, 0, 128, 176);
+    if (withFigure) {
+        // In the upper left pane, his face clear of the window's cross of
+        // mullions (centered, they covered most of it: Steve's M6 QA). The
+        // vertical bar is at x 64 and the crossbar at y 88, so the mask sits
+        // up and to the left of both, and his shoulders run behind them.
+        const { cx, cy } = WINDOW_FACES.watcher;
+        ctx.fillStyle = hex(W.coveralls);
+        ctx.beginPath();
+        ctx.moveTo(cx - 40, 176);
+        ctx.quadraticCurveTo(cx - 34, cy + 36, cx, cy + 32);
+        ctx.quadraticCurveTo(cx + 34, cy + 36, cx + 40, 176);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillRect(cx - 8, cy + 20, 16, 16);
+        // Dark hair, and the mask over the face.
+        ctx.fillStyle = hex(W.hair);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy - 6, 21, 25, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = hex(W.mask);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 17, 22, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = hex(W.room);
+        for (const x of [cx - 7, cx + 7]) {
+            ctx.beginPath();
+            ctx.ellipse(x, cy - 4, 4, 2.6, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 0.25;
+        ctx.fillRect(cx - 2, cy, 4, 9);
+        ctx.globalAlpha = 1;
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+/** A lamp lit room seen through a window, `h` pixels tall. Null where there
+ *  is no document. */
+function roomTexture(P, h) {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = h;
+    const ctx = canvas.getContext && canvas.getContext('2d');
+    if (!ctx) return null;
+    const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
+    const glow = ctx.createRadialGradient(40, h * 0.3, 6, 64, h * 0.5, 120);
+    glow.addColorStop(0, hex(P.roomLight));
+    glow.addColorStop(1, hex(P.room));
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, 128, h);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+/** A clown on a clear canvas, peeking in from its right edge: a white face,
+ *  a red nose and grin, wild orange hair, a little hat, a ruff, a dotted
+ *  suit, a gloved hand on the frame. Its left column is left clear, so a
+ *  texture slid to the right shows nothing past its edge. Null where there
+ *  is no document. */
+function clownTexture(P) {
+    if (typeof document === 'undefined') return null;
+    const { cx, cy, h } = WINDOW_FACES.clown;
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = h;
+    const ctx = canvas.getContext && canvas.getContext('2d');
+    if (!ctx) return null;
+    const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
+    const disc = (x, y, r, color) => {
+        ctx.fillStyle = hex(color);
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+    };
+    ctx.clearRect(0, 0, 128, h);
+    // The suit, its dots, and the ruff, below the window's crossbar.
+    ctx.fillStyle = hex(P.suit);
+    ctx.fillRect(cx - 28, cy + 38, 128 - (cx - 28), h - (cy + 38));
+    for (let y = cy + 50; y < h; y += 18) for (let x = cx - 20; x < 128; x += 18) disc(x + ((y / 18) % 2) * 9, y, 3.5, P.dots);
+    for (let k = 0; k < 7; k++) disc(cx - 24 + k * 9, cy + 36, 6, k % 2 ? P.nose : P.face);
+    // Wild hair either side, the face, a little hat.
+    disc(cx - 24, cy - 6, 12, P.hair);
+    disc(cx + 24, cy - 6, 12, P.hair);
+    disc(cx - 18, cy + 8, 9, P.hair);
+    disc(cx + 18, cy + 8, 9, P.hair);
+    disc(cx, cy, 20, P.face);
+    ctx.fillStyle = hex(P.hat);
+    ctx.beginPath();
+    ctx.moveTo(cx - 10, cy - 17);
+    ctx.lineTo(cx + 10, cy - 17);
+    ctx.lineTo(cx + 3, cy - 38);
+    ctx.closePath();
+    ctx.fill();
+    disc(cx + 3, cy - 39, 3.5, P.dots);
+    // Eyes under arched brows, the nose, the grin with its teeth.
+    ctx.fillStyle = '#16161a';
+    for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(cx + s * 8, cy - 11);
+        ctx.lineTo(cx + s * 12, cy - 5);
+        ctx.lineTo(cx + s * 8, cy + 1);
+        ctx.lineTo(cx + s * 4, cy - 5);
+        ctx.closePath();
+        ctx.fill();
+    }
+    disc(cx, cy + 3, 5, P.nose);
+    ctx.fillStyle = hex(P.nose);
+    ctx.beginPath();
+    ctx.moveTo(cx - 14, cy + 9);
+    ctx.quadraticCurveTo(cx, cy + 24, cx + 14, cy + 9);
+    ctx.quadraticCurveTo(cx, cy + 15, cx - 14, cy + 9);
+    ctx.fill();
+    ctx.fillStyle = hex(P.face);
+    for (let k = -2; k <= 2; k++) ctx.fillRect(cx + k * 4 - 1.2, cy + 12 + Math.abs(k) * -0.6, 2.4, 3);
+    // A white glove on the window frame.
+    disc(124, cy + 30, 7, P.face);
+    ctx.clearRect(0, 0, 2, h);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    // Clamped, so sliding it right shows the clear left column, not a wrap.
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    return texture;
+}
+
 /** A black lantern `size` square and `height` tall: a base, four corner
  *  posts, a warm light inside its glass, a pointed cap and a ring. */
 function lantern(Ln, black) {
@@ -839,6 +1012,20 @@ export function buildDecorations(config) {
         towerStack(t, D).forEach((p) => stack.add(pumpkin(p)));
         group.add(stack);
     }
+    // A clown in our far right window, peeking in from its edge.
+    let clown = null;
+    const P = D.clown;
+    const clownRoom = P && roomTexture(P, WINDOW_FACES.clown.h);
+    const clownMap = P && clownTexture(P);
+    if (clownRoom && clownMap) {
+        const x = (H.minX + H.maxX) / 2 + OUR_WINDOWS.xs[P.window];
+        const pane = (material, z) => mesh(new THREE.PlaneGeometry(OUR_WINDOWS.w - 0.14, OUR_WINDOWS.h - 0.14), material, x, OUR_WINDOWS.y, z);
+        group.add(pane(new THREE.MeshBasicMaterial({ map: clownRoom }), front + 0.098));
+        clown = pane(new THREE.MeshBasicMaterial({ map: clownMap, alphaTest: 0.5 }), front + 0.1);
+        clown.name = 'clown';
+        group.add(clown);
+    }
+
     // The skeletons: breaking out of the lawn, raking, and peeking over the
     // hedge.
     const SK = D.skeletons || {};
@@ -896,6 +1083,22 @@ export function buildDecorations(config) {
     const his = stringLights(anchors, D.sag * 0.8, D.bulbEvery);
     group.add(wireLine(his.wire, D.black));
     bulbMeshes(his.bulbs, [D.bulb, D.purple]).forEach((b) => group.add(b));
+
+    // A masked figure standing still in his left window, now and then gone.
+    let watcher = null;
+    const W = D.watcher;
+    const room = W && watcherTexture(W, false);
+    const figure = W && watcherTexture(W, true);
+    if (room && figure) {
+        const at = neighborWindows(config.neighbor.door.x)[W.window];
+        const pane = (map, z) => mesh(new THREE.PlaneGeometry(0.96, 1.36), new THREE.MeshBasicMaterial({ map }), at, 1.75, z);
+        const empty = pane(room, hisFront + 0.098);
+        empty.name = 'watcher-room';
+        group.add(empty);
+        watcher = pane(figure, hisFront + 0.1);
+        watcher.name = 'watcher';
+        group.add(watcher);
+    }
 
     // A little ghost by his windows.
     const ghost = hangingGhost(D.ghost.tall, black, D.sheet, D.webColor, D.ghost.string);
@@ -1006,6 +1209,15 @@ export function buildDecorations(config) {
         inflatable.rotation.z = 0.025 * motion * Math.sin(time * 0.8);
         inflatable.rotation.x = 0.018 * motion * Math.sin(time * 0.63 + 1);
         lounger.wave.rotation.z = 0.5 * motion * Math.sin(time * 4);
+        if (watcher) watcher.visible = watcherThere(time, W);
+        // Sliding the clown's picture to the right puts him out past the
+        // window's edge; under reduced motion he simply comes and goes.
+        if (clown) {
+            const peek = clownPeek(time, P);
+            const shown = motion < 0.5 ? (peek > 0.5 ? 1 : 0) : peek;
+            clown.material.map.offset.x = -0.55 * (1 - shown);
+            clown.visible = shown > 0;
+        }
         hats.forEach(({ hat, h, k }) => {
             hat.position.y = h.y + 0.06 * motion * Math.sin(time * 0.9 + k * 2);
             hat.rotation.y = k * 1.3 + 0.2 * motion * Math.sin(time * 0.5 + k);

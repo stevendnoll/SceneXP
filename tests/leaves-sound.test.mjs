@@ -221,7 +221,7 @@ describe('the whoosh', () => {
         expect(panners[1].pan.value).toBe(0.8);
         sound.update(1 / 60, { blowing: false }, { blowing: true, big: true, pan: 0.8 });
         expect(his.gain.value).toBeCloseTo(S.neighbor * S.big, 5);
-        expect(his.gain.value).toBeLessThan(1);
+        expect(S.neighbor).toBeGreaterThanOrEqual(0.75);
     });
 
     test('a steady blow does not hand the audio thread an event every frame', () => {

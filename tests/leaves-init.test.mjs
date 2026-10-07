@@ -596,14 +596,17 @@ describe('the character card (M4)', () => {
 });
 
 describe('delights and surprises (M6)', () => {
-    /** A recording AudioContext: just enough for sound.js to build on. */
+    /** A recording AudioContext: just enough for sound.js to build on. Its
+     *  gains are kept in `made.gains`, in the order they were made. */
     function installAudio() {
         const made = [];
-        const param = () => ({ value: 0, setTargetAtTime(v) { this.value = v; } });
-        const node = () => ({ connect: (t) => t, disconnect() {} });
+        made.gains = [];
+        const param = () => ({ value: 0, setTargetAtTime(v) { this.value = v; }, setValueAtTime(v) { this.value = v; }, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} });
+        const node = () => ({ connect: (t) => t, disconnect() {}, addEventListener() {} });
         dom.windowStub.AudioContext = class {
             constructor() { made.push(this); this.currentTime = 0; this.sampleRate = 8000; this.destination = node(); }
-            createGain() { return { ...node(), gain: param() }; }
+            createGain() { const g = { ...node(), gain: param() }; made.gains.push(g); return g; }
+            createOscillator() { return { ...node(), frequency: param(), start() {}, stop() {} }; }
             createBiquadFilter() { return { ...node(), frequency: param(), Q: param() }; }
             createStereoPanner() { return { ...node(), pan: param() }; }
             createBufferSource() { return { ...node(), start() {}, stop() {} }; }
@@ -651,6 +654,41 @@ describe('delights and surprises (M6)', () => {
         expect(globalThis.localStorage.length || 0).toBe(0);
     });
 
+    // Steve's M6 QA: "I didn't hear the blowing sound while the neighbor was
+    // outside blowing."
+    test('with the neighbor out blowing and us not, his blower is heard', async () => {
+        const made = installAudio();
+        const main = await boot();
+        fire(dom.el('blocker'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 0.3, 20);
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        expect(made).toHaveLength(1);
+        // Our leaves on his lawn, by the fence.
+        const Sim = await import('../www/leaves/js/sim.min.js');
+        const sim = main.__test__.sim();
+        let k = 0;
+        for (let i = 0; i < sim.count && k < 80; i++) {
+            if (sim.awake[i] || sim.hanging[i]) continue;
+            Sim.hangLeaf(sim, i, 0, 5, 0);
+            Sim.layDown(sim, i, 10.4 + (k % 10) * 0.3, -1 + Math.floor(k / 10) * 0.3);
+            k++;
+        }
+        let heard = 0;
+        for (let t = 0; t < 15 && !heard; t += 0.25) {
+            frames(main, 0.25, 20);
+            if (main.getState().neighbor.blowing) {
+                // The gains are made master first, then each voice's body
+                // and output: ours at 2, his at 4.
+                heard = made.gains[4].gain.value;
+                expect(made.gains[2].gain.value).toBe(0);
+            }
+        }
+        expect(main.getState().neighbor.state).not.toBe('inside');
+        // Nearly as loud as ours.
+        expect(heard).toBeGreaterThanOrEqual(0.75);
+    });
+
     test('it is Halloween week from October 24 by the date, with trick-or-treaters on the sidewalk', async () => {
         jest.setSystemTime(new Date(2026, 9, 28, 15));
         const main = await boot();
@@ -659,8 +697,16 @@ describe('delights and surprises (M6)', () => {
         expect(s.decor).toBe(true);
         expect(s.treaters).not.toBe(null);
         fire(dom.el('free-btn'), 'click');
-        frames(main, 30, 10);
-        expect(main.getState().treaters.walks).toBeGreaterThanOrEqual(1);
+        // Both groups come by early, each in its own lane, both out at once.
+        let most = 0;
+        for (let k = 0; k < 4; k++) {
+            // 20 frames a second: the scene steps them by the sim's step,
+            // which is never more than a twentieth of a second.
+            frames(main, 5, 20);
+            most = Math.max(most, main.getState().treaters.out);
+        }
+        expect(main.getState().treaters.walks).toBeGreaterThanOrEqual(2);
+        expect(most).toBe(2);
         expect(dom.el('round-status').textContent.length).toBeGreaterThan(0);
     });
 

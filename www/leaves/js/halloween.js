@@ -63,12 +63,19 @@ export function seasonFor(search, date, H, qa) {
     return { decor: week || isDecorated(date, H), week };
 }
 
-/** The trick-or-treaters, out of sight, the first pair a little way off. */
-export function createTreaters(H, random) {
+/** A group of trick-or-treaters (one of `H.groups`, the first by default),
+ *  out of sight, coming a little way off. */
+export function createTreaters(H, random, group = H.groups[0]) {
     return {
-        state: 'wait', t: 0, timer: between(H.first, random()), dir: 1, x: H.fromX, z: H.z, heading: Math.PI / 2, speed: 0, stride: 0, paused: false, walks: 0,
-        // Which of the two is out in front (0 the ghost, 1 the witch).
-        lead: 0,
+        state: 'wait', t: 0, timer: between(group.first || H.first, random()), dir: 1, x: H.fromX, heading: Math.PI / 2, speed: 0, stride: 0, paused: false, walks: 0,
+        // Its own lane on the sidewalk, and how far a gust can push it in it.
+        z: group.z ?? H.z,
+        drift: group.drift || H.drift,
+        // Each one's place across the sidewalk, and the order they walk in
+        // (by their index in the group): order[0] is out in front.
+        lanes: group.lanes.slice(),
+        order: group.lanes.map((_, k) => k),
+        spacing: H.spacing || 0.85,
         // Blown: how hard (0 to 1, eased), which way (eased), how far off the
         // sidewalk's middle it has pushed them, whether they are hurrying
         // off, and whether this walk has been blown yet (for the event).
@@ -105,14 +112,14 @@ function windAt(tr, input, H) {
     return speed > 0 ? { x, z, speed } : null;
 }
 
-/** Walking the other way: the one behind becomes the one in front, so
- *  neither of them moves (a turn about the leader put the other 1.7 m away
+/** Walking the other way: the last in line becomes the one in front, so
+ *  none of them moves (a turn about the leader put the others meters away
  *  in one frame, Steve's M6 QA: "glitchy"). */
 function turnAround(tr, dir) {
     if (dir === tr.dir) return;
-    tr.x -= tr.dir * 0.85;
+    tr.x -= tr.dir * tr.spacing * (tr.order.length - 1);
     tr.dir = dir;
-    tr.lead = 1 - tr.lead;
+    tr.order.reverse();
 }
 
 /**
@@ -122,6 +129,7 @@ function turnAround(tr, dir) {
  *   walkX    where they stop to look at the house
  *   random   () => 0..1
  *   wind     (x, y, z) => { x, z, speed }: the blowers' air there (optional)
+ *   busy     (optional) somewhere else needs them to wait their turn
  * Returns 'start', 'pause', 'blown' (the first time a walk is), 'gone' or
  * null.
  *
@@ -157,7 +165,7 @@ export function stepTreaters(tr, dt, input, H) {
         tr.blown = ease(tr.blown, tr.t < H.blownTime * 0.5 ? tr.blownTarget || 0 : 0, tr.t < H.blownTime * 0.5 ? 6 : 2);
         const push = H.push * tr.blown;
         tr.x += tr.gust.x * push * step;
-        tr.dz = Math.min(H.drift.max, Math.max(H.drift.min, tr.dz + tr.gust.z * push * step));
+        tr.dz = Math.min(tr.drift.max, Math.max(tr.drift.min, tr.dz + tr.gust.z * push * step));
         tr.speed = push;
         tr.stride += push * step;
         turnTo(tr, Math.atan2(tr.gust.x, tr.gust.z), H.turnRate, step);
@@ -174,14 +182,14 @@ export function stepTreaters(tr, dt, input, H) {
     if (tr.state === 'wait') {
         tr.timer -= step;
         tr.speed = 0;
-        if (tr.timer > 0 || !input.active) return null;
+        if (tr.timer > 0 || !input.active || input.busy) return null;
         tr.dir = input.random() < 0.5 ? 1 : -1;
         tr.x = tr.dir > 0 ? H.fromX : H.toX;
         tr.heading = tr.dir * Math.PI / 2;
         tr.paused = false;
         tr.state = 'walk';
         tr.walks += 1;
-        Object.assign(tr, { blown: 0, dz: 0, hurrying: false, blownThisWalk: false, lead: 0 });
+        Object.assign(tr, { blown: 0, dz: 0, hurrying: false, blownThisWalk: false, order: tr.lanes.map((_, k) => k) });
         return 'start';
     }
     if (tr.state === 'pause') {
@@ -222,17 +230,12 @@ export function stepTreaters(tr, dt, input, H) {
     return null;
 }
 
-/** Where each of the pair stands, the ghost first and the witch second:
- *  whichever leads (`lead`) is at `x`, the other a step behind, each always
- *  on its own side of the sidewalk. */
+/** Where each of the group stands, by their index in it: whoever is first
+ *  in `order` at `x`, each after a step behind the one before, each always
+ *  in their own lane across the sidewalk. */
 export function treaterSpots(tr) {
     const z = tr.z + (tr.dz || 0);
-    const lead = tr.lead || 0;
-    const behind = tr.x - tr.dir * 0.85;
-    return [
-        { x: lead === 0 ? tr.x : behind, z: z - 0.15 },
-        { x: lead === 1 ? tr.x : behind, z: z + 0.3 }
-    ];
+    return tr.lanes.map((lane, k) => ({ x: tr.x - tr.dir * tr.spacing * tr.order.indexOf(k), z: z + lane }));
 }
 
 // ---- Drawing -----------------------------------------------------------------
@@ -367,14 +370,10 @@ function ghost() {
 /** A little witch: the person rig at a child's size, a purple dress, a
  *  pointed hat. */
 function witch(scale) {
-    const group = new THREE.Group();
-    group.name = 'witch';
-    const person = createPerson({
-        role: 'trick-or-treater', shirtColor: 0x5b2c83, pantsColor: 0x1d1d1f, hasSkirt: true,
-        skinTone: 0xc68a5e, hairColor: 0xb4532a, hairStyle: 'long', shoulderRound: 0.4, sleeveColor: 0x5b2c83
+    const kid = rigged('witch', scale, {
+        shirtColor: 0x5b2c83, pantsColor: 0x1d1d1f, hasSkirt: true,
+        skinTone: 0xc68a5e, hairColor: 0xb4532a, hairStyle: 'long', sleeveColor: 0x5b2c83
     });
-    person.scale.setScalar(scale);
-    group.add(person);
     const black = lambert(0x1c1d1f);
     const brim = mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.015, 18), black, 0, 1.76, 0);
     const cone = mesh(new THREE.ConeGeometry(0.12, 0.34, 14), black, 0, 1.93, -0.02);
@@ -383,26 +382,87 @@ function witch(scale) {
     hat.name = 'witch-hat';
     hat.add(brim, cone);
     hat.scale.setScalar(scale);
-    group.add(hat);
+    kid.group.add(hat);
     const bucket = pail();
     bucket.position.set(-0.17, 0.3, 0.05);
-    group.add(bucket);
+    kid.group.add(bucket);
+    return kid;
+}
+
+/** The person rig at `scale`, dressed as `person`, with its legs and arms
+ *  found for the walk and for being blown at. */
+function rigged(name, scale, person) {
+    const group = new THREE.Group();
+    group.name = name;
+    const body = createPerson({ role: 'trick-or-treater', shoulderRound: 0.4, ...person });
+    body.scale.setScalar(scale);
+    group.add(body);
     const legs = [];
     const arms = [];
-    person.traverse((o) => {
+    body.traverse((o) => {
         if (o.userData && o.userData.isLeg) legs.push(o);
         if (o.userData && o.userData.isArm) arms.push(o);
     });
-    return { group, legs, base: legs.map((l) => l.rotation.x), arms, armRest: arms.map((a) => a.rotation.clone()), bob: false };
+    return { group, body, legs, base: legs.map((l) => l.rotation.x), arms, armRest: arms.map((a) => a.rotation.clone()), bob: false };
 }
 
+/** A little pumpkin: green tights and sleeves, a round orange costume, a
+ *  stem for a hat. (Inside the rig's own frame, so it scales with it.) */
+function pumpkinKid(scale) {
+    const kid = rigged('pumpkin', scale, { shirtColor: 0x3d7a3a, pantsColor: 0x3d7a3a, sleeveColor: 0x3d7a3a, skinTone: 0xe0ac86, hairColor: 0x3b2a1e });
+    const suit = mesh(new THREE.SphereGeometry(0.34, 18, 12), lambert(0xe0701f), 0, 1.15, 0);
+    suit.scale.set(1, 0.86, 0.9);
+    kid.body.add(suit);
+    kid.body.add(mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.16, 8), lambert(0x4f6b2a), 0, 1.83, 0));
+    const bucket = pail();
+    bucket.position.set(0.2, 0.3, 0.05);
+    kid.group.add(bucket);
+    return kid;
+}
+
+/** A little vampire: a dark suit, a cape black outside and red within, its
+ *  collar up behind the head. */
+function vampireKid(scale) {
+    const kid = rigged('vampire', scale, { shirtColor: 0x1c1d1f, pantsColor: 0x1c1d1f, hasSuit: true, tieColor: 0xb3261e, skinTone: 0xf0d2b6, hairColor: 0x16161a });
+    const cape = new THREE.Group();
+    cape.add(mesh(new THREE.BoxGeometry(0.62, 1.0, 0.02), lambert(0x16161a), 0, 1.0, -0.16));
+    cape.add(mesh(new THREE.BoxGeometry(0.56, 0.94, 0.01), lambert(0x8e1b1b), 0, 1.02, -0.145));
+    for (const s of [-1, 1]) {
+        const collar = mesh(new THREE.BoxGeometry(0.2, 0.22, 0.02), lambert(0x16161a), s * 0.13, 1.6, -0.12);
+        collar.rotation.set(-0.3, s * 0.5, 0);
+        cape.add(collar);
+    }
+    kid.body.add(cape);
+    kid.group.userData.cape = cape;
+    const bucket = pail();
+    bucket.position.set(-0.18, 0.3, 0.05);
+    kid.group.add(bucket);
+    return kid;
+}
+
+/** A grown-up walking them round: a jacket and jeans, a flashlight. */
+function parent() {
+    const grown = rigged('parent', 1, { shirtColor: 0x4a6b8a, pantsColor: 0x34495e, sleeveColor: 0x4a6b8a, skinTone: 0xc68a5e, hairColor: 0x3b2a1e });
+    grown.group.add(mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.18, 8), lambert(0x1c1d1f), 0.27, 0.82, 0.08));
+    return grown;
+}
+
+const KINDS = {
+    ghost: () => ghost(),
+    witch: (H) => witch(H.scale),
+    pumpkin: (H) => pumpkinKid(H.scale * 0.92),
+    vampire: (H) => vampireKid(H.scale),
+    parent: () => parent()
+};
+
 /**
- * The pair of trick-or-treaters. Returns { group, update(tr, time) }.
+ * A group of trick-or-treaters, by `kinds` (the first group's by default).
+ * Returns { group, update(tr, time) }.
  */
-export function createTreaterFigures(H) {
+export function createTreaterFigures(H, kinds = H.groups[0].kinds) {
     const group = new THREE.Group();
     group.name = 'trick-or-treaters';
-    const kids = [ghost(), witch(H.scale)];
+    const kids = kinds.map((k) => KINDS[k](H));
     kids.forEach((k) => {
         // Turned first, then leaned, so a lean is always forward or back.
         k.group.rotation.order = 'YXZ';
@@ -430,6 +490,9 @@ export function createTreaterFigures(H) {
                 const flap = 1 + 0.12 * b * (0.7 + 0.3 * Math.sin(time * 9 + k));
                 sheet.scale.set(flap, 1 - 0.05 * b, flap);
             }
+            // A cape streams out behind.
+            const cape = kid.group.userData.cape;
+            if (cape) cape.rotation.x = -0.6 * b * (0.85 + 0.15 * Math.sin(time * 8));
             if (kid.arms) {
                 kid.arms.forEach((a, i) => {
                     const rest = kid.armRest[i];

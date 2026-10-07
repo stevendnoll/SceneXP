@@ -28,6 +28,12 @@
 
 const material = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
 
+/** The neighbor's front windows' middles in x, either side of his door
+ *  (decorations.js puts a figure in one): 1.1 wide, 1.5 tall, at 1.75. */
+export function neighborWindows(doorX) {
+    return [doorX - 1.9, doorX + 1.9, doorX + 4.6];
+}
+
 /** Where a house's front wall is drawn: `setBack` behind the line its
  *  lawn's leaves rest against (`edge`, the sim's wall), so nothing on its
  *  face stands in front of a leaf (M6 QA). */
@@ -244,7 +250,7 @@ export function buildNeighborHouse(Y, L, doorX) {
     // White windows with navy shutters either side of his door.
     const glass = new THREE.MeshStandardMaterial({ color: L.glass, metalness: 0.35, roughness: 0.15 });
     const shutter = material(L.shutter);
-    for (const x of [doorX - 1.9, doorX + 1.9, doorX + 4.6]) {
+    for (const x of neighborWindows(doorX)) {
         windowAt(group, x, 1.75, front, { w: 1.1, h: 1.5, frame: trim, glass });
         for (const s of [-1, 1]) group.add(box(0.4, 1.5, 0.05, shutter, x + s * 0.8, 1.75, front + 0.04));
     }

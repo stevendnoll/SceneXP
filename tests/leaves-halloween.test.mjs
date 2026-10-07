@@ -129,6 +129,75 @@ describe('the trick-or-treaters', () => {
     });
 });
 
+// Steve's M6 QA: "maybe a few more trick-or-treaters?"
+describe('more trick-or-treaters', () => {
+    // Steve's M6 QA: "The second group of trick-or-treaters arrive too
+    // late." They used to wait their turn behind a walk of 50 m.
+    test('both groups come early, each in its own half of the sidewalk, and never meet, blown about or not', () => {
+        const random = S.makeRandom(11);
+        const groups = HW.groups.map((g) => H.createTreaters(HW, random, g));
+        const firstWalk = [null, null];
+        let closest = Infinity;
+        let k = 0;
+        // A gust now and then, across the sidewalk both ways.
+        const wind = () => (Math.floor(k / 90) % 3 === 0 ? { x: 0.3, z: (Math.floor(k / 270) % 2 ? 1 : -1), speed: 6 } : null);
+        for (let t = 0; t < 240; t += 1 / 15, k++) {
+            groups.forEach((tr, g) => {
+                if (H.stepTreaters(tr, 1 / 15, { active: true, person: null, walkX: -0.5, random, wind }, HW) === 'start' && firstWalk[g] === null) firstWalk[g] = t;
+            });
+            if (groups.every((tr) => tr.state !== 'wait')) {
+                for (const a of H.treaterSpots(groups[0])) {
+                    for (const b of H.treaterSpots(groups[1])) closest = Math.min(closest, Math.abs(a.z - b.z));
+                }
+            }
+        }
+        expect(firstWalk[0]).toBeLessThan(8);
+        expect(firstWalk[1]).toBeLessThan(15);
+        // A child is about 0.3 m across: never within reach of the other
+        // group, side by side.
+        expect(closest).toBeGreaterThan(0.35);
+        // And both lanes, every child, on the sidewalk.
+        for (const tr of groups) {
+            for (const p of H.treaterSpots(tr)) {
+                expect(p.z - 0.15).toBeGreaterThan(C.yard.sidewalk.minZ);
+                expect(p.z + 0.15).toBeLessThan(C.yard.sidewalk.maxZ);
+            }
+        }
+    });
+
+    test('they come and go just past the edge of the view, not far down the street', () => {
+        // At the sidewalk the default view is about 14 m across; a walk of
+        // 35 m is mostly on screen.
+        expect(HW.toX - HW.fromX).toBeLessThan(40);
+        expect(HW.fromX).toBeLessThan(-12);
+        expect(HW.toX).toBeGreaterThan(12);
+    });
+
+    test('a group of three walks single file in its lanes, and turns back without anybody jumping', () => {
+        const tr = H.createTreaters(HW, S.makeRandom(3), HW.groups[1]);
+        Object.assign(tr, { state: 'walk', x: 2, dir: 1, heading: Math.PI / 2, paused: true });
+        const spots = H.treaterSpots(tr);
+        expect(spots).toHaveLength(3);
+        // One behind the other, a step apart.
+        const xs = spots.map((p) => p.x).sort((a, b) => b - a);
+        expect(xs[0] - xs[1]).toBeCloseTo(HW.spacing, 6);
+        expect(xs[1] - xs[2]).toBeCloseTo(HW.spacing, 6);
+        // Blown back the other way: once they turn, nobody has moved.
+        const input = { active: true, person: null, walkX: -40, random: S.makeRandom(2), wind: () => ({ x: -1, z: 0, speed: 6 }) };
+        let worst = 0;
+        let before = H.treaterSpots(tr);
+        for (let t = 0; t < 3; t += 1 / 30) {
+            if (t > 0.5) input.wind = () => null;
+            H.stepTreaters(tr, 1 / 30, input, HW);
+            const after = H.treaterSpots(tr);
+            after.forEach((p, k) => { worst = Math.max(worst, Math.hypot(p.x - before[k].x, p.z - before[k].z)); });
+            before = after;
+        }
+        expect(tr.dir).toBe(-1);
+        expect(worst).toBeLessThan((HW.speed * HW.hurry + HW.push) / 30 * 1.05);
+    });
+});
+
 describe('blown at by the leaf blower', () => {
     const B = C.blower;
     /** The blower's air, as main.js gives it them. */
@@ -528,6 +597,83 @@ describe('the drawing, on the real three.js', () => {
         expect(raker.max.y).toBeGreaterThan(1.6);
         const riser = new THREE.Box3().setFromObject(skeletons[0], true);
         expect(riser.max.y).toBeLessThan(1);
+    });
+
+    test('the second group: a little pumpkin and a little vampire, child-sized, and a grown-up behind them', () => {
+        const figs = H.createTreaterFigures(HW, HW.groups[1].kinds);
+        const tr = { ...H.createTreaters(HW, S.makeRandom(1), HW.groups[1]), state: 'walk', x: 0, heading: 0 };
+        figs.update(tr, 0);
+        expect(figs.group.children.map((c) => c.name)).toEqual(['pumpkin', 'vampire', 'parent']);
+        const tall = figs.group.children.map((c) => {
+            c.updateMatrixWorld(true);
+            const b = new THREE.Box3().setFromObject(c, true);
+            return b.max.y - b.min.y;
+        });
+        expect(tall[0]).toBeGreaterThan(0.9);
+        expect(tall[0]).toBeLessThan(1.45);
+        expect(tall[1]).toBeGreaterThan(0.9);
+        expect(tall[1]).toBeLessThan(1.45);
+        expect(tall[2]).toBeGreaterThan(1.6);
+        expect(tall[2]).toBeLessThan(1.95);
+    });
+
+    // Steve's M6 QA: "something that looks like Jason or Michael Meyers -
+    // maybe in one of the house's windows on the right".
+    test('a masked figure stands in the neighbor\'s left window, now and then gone, and the ghost hangs clear of it', async () => {
+        const Ho = await import('../www/leaves/js/house.js');
+        const W = HW.decor.watcher;
+        const window = Ho.neighborWindows(C.neighbor.door.x)[W.window];
+        // The ghost (0.62 tall, about 0.45 across) hangs beside, not over it.
+        expect(Math.abs(HW.decor.ghost.x - window)).toBeGreaterThan(0.55 + 0.22);
+        // There for `seen` seconds, gone for `gone`, and back.
+        expect(Dc.watcherThere(0, W)).toBe(true);
+        expect(Dc.watcherThere(W.seen - 0.1, W)).toBe(true);
+        expect(Dc.watcherThere(W.seen + 0.1, W)).toBe(false);
+        expect(Dc.watcherThere(W.seen + W.gone + 0.1, W)).toBe(true);
+        // Visible from the street at the start: the window is in the
+        // default wide view.
+        const V = await import('../www/leaves/js/view.js');
+        const v = V.cameraFor(1.6, C.camera, C.yard.lawn, C.blower.start);
+        const cam = new THREE.PerspectiveCamera(C.camera.fovDegrees, 1.6, 0.3, 200);
+        cam.position.set(v.position.x, v.position.y, v.position.z);
+        cam.lookAt(v.target.x, v.target.y, v.target.z);
+        cam.updateMatrixWorld(true);
+        const p = new THREE.Vector3(window, 1.75, C.yard.neighbor.minZ - C.yard.neighborHouse.setBack).project(cam);
+        expect(Math.abs(p.x)).toBeLessThan(1);
+        expect(Math.abs(p.y)).toBeLessThan(1);
+    });
+
+    // Steve's M6 QA: the watcher, centered, had "the window frames cover up
+    // most of his face".
+    test('both faces in the windows are clear of the window\'s cross of mullions', () => {
+        for (const f of Object.values(Dc.WINDOW_FACES)) {
+            // The mullions are 5 cm bars through the pane's middle, both ways.
+            const halfX = (0.05 / f.pane[0]) * f.w / 2;
+            const halfY = (0.05 / f.pane[1]) * f.h / 2;
+            const [x0, y0, x1, y1] = f.box;
+            const crossesUpright = x0 < f.w / 2 + halfX && x1 > f.w / 2 - halfX;
+            const crossesBar = y0 < f.h / 2 + halfY && y1 > f.h / 2 - halfY;
+            expect({ upright: crossesUpright, bar: crossesBar }).toEqual({ upright: false, bar: false });
+            expect(x0).toBeGreaterThanOrEqual(0);
+            expect(y0).toBeGreaterThanOrEqual(0);
+        }
+    });
+
+    // Steve's M6 QA: "Could we add a monster or something to the main
+    // character's house's furthest right window?"
+    test('the clown in our far right window slides in, peeks, and slides away, round and round', () => {
+        const P = HW.decor.clown;
+        expect(P.window).toBe(3);
+        expect(Dc.clownPeek(0, P)).toBe(0);
+        expect(Dc.clownPeek(P.hidden + P.slide / 2, P)).toBeCloseTo(0.5, 5);
+        expect(Dc.clownPeek(P.hidden + P.slide + 1, P)).toBe(1);
+        expect(Dc.clownPeek(P.hidden + P.slide * 1.5 + P.stay, P)).toBeCloseTo(0.5, 5);
+        const cycle = P.hidden + P.slide * 2 + P.stay;
+        expect(Dc.clownPeek(cycle + P.hidden + P.slide + 1, P)).toBe(1);
+        // Smoothly: no step jumps more than a frame's worth.
+        let worst = 0;
+        for (let t = 0; t < cycle * 2; t += 1 / 60) worst = Math.max(worst, Math.abs(Dc.clownPeek(t + 1 / 60, P) - Dc.clownPeek(t, P)));
+        expect(worst).toBeLessThan(0.03);
     });
 });
 

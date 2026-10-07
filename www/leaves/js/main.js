@@ -164,8 +164,8 @@ let found = [];
 let findRounds = 0;
 let decorations = null;
 let backyard = null;
-let treaters = null;
-let treaterFigures = null;
+// Each group of trick-or-treaters: { tr, figs } (halloween.js).
+let treaterGroups = [];
 const treatRandom = makeRandom(4049);
 const sound = createSound(CONFIG.sound);
 let soundBtn = null;
@@ -335,9 +335,11 @@ async function init() {
     // decorations are up (Steve's QA, 2026-10-07: "I didn't see the
     // trick-or-treaters in this last run". They were Halloween week's only).
     if (state.decor) {
-        treaters = createTreaters(CONFIG.halloween, treatRandom);
-        treaterFigures = createTreaterFigures(CONFIG.halloween);
-        scene.add(treaterFigures.group);
+        treaterGroups = CONFIG.halloween.groups.map((g) => {
+            const figs = createTreaterFigures(CONFIG.halloween, g.kinds);
+            scene.add(figs.group);
+            return { tr: createTreaters(CONFIG.halloween, treatRandom, g), figs };
+        });
     }
 
     placeCamera(true);
@@ -374,7 +376,7 @@ async function init() {
 async function warmUp() {
     const hidden = [
         ...Object.values(findModels).map((m) => m.group),
-        treaterFigures && treaterFigures.group
+        ...treaterGroups.map((g) => g.figs.group)
     ].filter(Boolean);
     const was = hidden.map((g) => ({ g, visible: g.visible, y: g.position.y }));
     hidden.forEach((g) => {
@@ -749,11 +751,12 @@ function markSound() {
     soundBtn.title = on ? 'Sound on (M)' : 'Sound off (M)';
 }
 
-/** The neighbor's side of the view, -1 (left) to 1 (right), for his
- *  blower's pan. */
+/** The neighbor's side of the view, for his blower's pan: no further
+ *  either way than `sound.pan`, so both speakers carry him. */
 function panOf(x) {
     const at = view.target ? view.target.x : 0;
-    return Math.max(-1, Math.min(1, (x - at) / 12));
+    const most = CONFIG.sound.pan;
+    return Math.max(-most, Math.min(most, (x - at) / 12));
 }
 
 // ---- The welcome screen ---------------------------------------------------
@@ -1424,22 +1427,35 @@ function announceOnce(key, text) {
 
 // ---- Halloween (M6) -----------------------------------------------------------
 
-/** One frame of the trick-or-treaters, who feel the blowers' air (`jets`). */
+/** One frame of each group of trick-or-treaters, who feel the blowers' air
+ *  (`jets`), each in its own lane on the sidewalk. */
 function stepTheTreaters(dt, jets) {
-    if (!treaters) return null;
-    const event = stepTreaters(treaters, dt, {
-        active: true,
-        person: operator,
-        walkX: CONFIG.yard.house.door,
-        random: treatRandom,
-        wind: (x, y, z) => windAt(jets, x, y, z)
-    }, CONFIG.halloween);
-    if (event === 'start') announceOnce('treaters', 'Trick-or-treaters are coming along the sidewalk.');
-    if (event === 'blown') {
-        announceOnce('treaters-blown', 'The trick-or-treaters squeal, hold onto their costumes, and hurry off down the sidewalk.');
-        track('treaters', { outcome: 'blown' });
+    for (const g of treaterGroups) {
+        const event = stepTreaters(g.tr, dt, {
+            active: true,
+            person: operator,
+            walkX: CONFIG.yard.house.door,
+            random: treatRandom,
+            wind: (x, y, z) => windAt(jets, x, y, z)
+        }, CONFIG.halloween);
+        if (event === 'start') announceOnce('treaters', 'Trick-or-treaters are coming along the sidewalk.');
+        if (event === 'blown') {
+            announceOnce('treaters-blown', 'The trick-or-treaters squeal, hold onto their costumes, and hurry off down the sidewalk.');
+            track('treaters', { outcome: 'blown' });
+        }
     }
-    return event;
+}
+
+/** The trick-or-treaters for the state: the group out (or the first), and
+ *  how many walks they have all made. */
+function treatersState() {
+    if (!treaterGroups.length) return null;
+    const out = treaterGroups.find((g) => g.tr.state !== 'wait') || treaterGroups[0];
+    return {
+        state: out.tr.state, x: out.tr.x,
+        walks: treaterGroups.reduce((n, g) => n + g.tr.walks, 0),
+        out: treaterGroups.filter((g) => g.tr.state !== 'wait').length
+    };
 }
 
 /** The fastest of the blowers' air at (x, y, z), over open ground: { x, z,
@@ -1522,7 +1538,7 @@ function animate() {
     if (neighborDoor) neighborDoor.rotation.y = -1.7 * neighbor.door;
     if (decorations) decorations.update(state.time, state.reducedMotion ? 0.3 : 1);
     if (backyard) backyard.update(state.time, state.reducedMotion ? 0.3 : 1);
-    if (treaterFigures) treaterFigures.update(treaters, state.time);
+    treaterGroups.forEach((g) => g.figs.update(g.tr, state.time));
     const marked = free && steer === 'point' && Boolean(pointer.aim);
     marker.visible = marked;
     if (marked) marker.position.set(pointer.aim.x, 0.05, pointer.aim.z);
@@ -1532,7 +1548,7 @@ function animate() {
     // most `hz` times a second.
     if (state.shadows) {
         if (uploaded > 0 || operator.speed > 0 || neighbor.speed > 0 || (neighbor.door > 0 && neighbor.door < 1)) shade.owed = true;
-        if (rising || (treaters && treaters.speed > 0)) shade.owed = true;
+        if (rising || treaterGroups.some((g) => g.tr.speed > 0)) shade.owed = true;
         shade.since += delta;
         if (shade.owed && shade.since >= 1 / CONFIG.shadows.hz) {
             renderer.shadowMap.needsUpdate = true;
@@ -1587,7 +1603,7 @@ export function getState() {
         finale: finale.plan ? { t: finale.t, total: finale.plan.total, success: finale.plan.success, burst: finale.burst, arms: finale.arms } : null,
         finds: finds.map((f) => ({ id: f.id, x: f.x, z: f.z, found: f.found, shown: f.shown })),
         found: [...found],
-        treaters: treaters ? { state: treaters.state, x: treaters.x, walks: treaters.walks } : null,
+        treaters: treatersState(),
         sound: sound.isOn(),
         toast: toast.until > 0
     };
