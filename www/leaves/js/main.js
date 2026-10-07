@@ -16,26 +16,32 @@
  * M2, THE NEIGHBOR (2026-10-06): leaves blown over the picket fence bring
  * him out to blow them back (neighbor.js), with his own jet in the same sim,
  * his figure and his front door, a camera that widens to keep him in frame,
- * and his last word when too much of the yard is left on his lawn as the
- * clock runs out.
+ * and, when the round is over, a wave.
  *
- * M3, THE FINALE (2026-10-07): once the leaves land and the result is
- * counted, the person takes a running dive into the tarp's pile (finale.js),
- * landing in it in a burst of leaves (burst in sim.js), or, for a pile too
- * small, on the lawn, getting up slowly with a hand on their back. A tap or
- * a key skips it.
+ * M3, THE FINALE (2026-10-06): the moment the clock runs out the result is
+ * counted and the person takes a running dive into the tarp's pile
+ * (finale.js), landing in it in a burst of leaves (burst in sim.js), or,
+ * for a pile too small, flopping on the lawn and hurting their back, then
+ * rolling over a little to look at the camera. A tap or a key skips it.
  *
- * M4, THE CHARACTER (2026-10-07): the welcome card's "Change your character"
+ * M4, THE CHARACTER (2026-10-06): the welcome card's "Change your character"
  * opens a card beside the yard (cast.js for the choices) with the camera in
  * close on the person, who changes as each choice is made. The choice is
  * kept in this browser.
+ *
+ * M5, THE ENVIRONMENT (2026-10-06): the yard's trees (trees.js), whose
+ * crowns hold some of the yard's leaves and keep letting them go, the trees
+ * down the block, the two houses and the street (house.js, through
+ * yard.js), with a porch, pumpkins and a parked car leaves can land on
+ * (platforms in sim.js), and the sky.
  *
  * UNLISTED. The page carries noindex and is in no directory, sitemap or
  * llms.txt until the scene it grows into is released.
  */
 
 import { LEAVES_CONFIG } from './config.min.js';
-import { createSim, resetSim, scatterLeaves, stepSim, makeJet, pilePeak, burst } from './sim.min.js';
+import { createSim, resetSim, scatterLeaves, stepSim, makeJet, pilePeak, burst, solidBoxes } from './sim.min.js';
+import { buildTrees, updateTrees, createCrowns, stepCrowns } from './trees.min.js';
 import { planFinale, finaleAt } from './finale.min.js';
 import { createRound, resetRound, freePlay, canBlow, timeLeft, stepRound } from './round.min.js';
 import { createNeighbor, resetNeighbor, stepNeighbor, isOut, neighborBlower } from './neighbor.min.js';
@@ -94,6 +100,10 @@ let helpBtn = null;
 let blowBtn = null;
 let endModal = null;
 let castModal = null;
+// The trees, their crowns' leaves, and every solid box on the ground (M5).
+let trees = [];
+let crowns = [];
+const solids = solidBoxes(CONFIG.yard);
 // Who is on leaf duty (cast.js), the choice as it was when the card opened
 // (to tell whether it changed), and the radio buttons the card is built of.
 let castChoice = { ...DEFAULT_CHOICE };
@@ -109,12 +119,11 @@ let countedAgo = Infinity;
 // The last result, for the share button.
 let result = null;
 // The neighbor, his figure and his door; which leaves have been over the
-// fence this round; and whether he had the last word this round.
+// fence this round.
 const neighbor = createNeighbor(N);
 let neighborFigure = null;
 let neighborDoor = null;
 let sent = null;
-const lastWord = { had: false };
 // The finale: its plan, how far into it we are, whether the burst has gone
 // off, the arms it left the person in, and the result as it stood before
 // the dive (the burst throws leaves off the tarp, and a dive should not
@@ -223,6 +232,8 @@ async function init() {
     updateLoadingStatus(`Letting ${shortCount(state.count)} leaves fall…`, 55);
     sim = createSim(state.count, CONFIG);
     const { look } = scatterLeaves(sim, CONFIG);
+    trees = buildTrees(scene, CONFIG, { mobile: state.isMobile, shadows: state.shadows });
+    crowns = createCrowns(sim, CONFIG);
     leaves = createLeafMesh(sim, look, {
         shadows: state.shadows,
         underside: CONFIG.look.underside,
@@ -817,8 +828,7 @@ function installRoundControls() {
         document.getElementById('end-share'),
         () => ({
             title: 'Leaves',
-            text: shareText(result ? result.tally : counted, CONFIG.round.seconds,
-                Boolean(result && result.revenge), result ? result.landed : null)
+            text: shareText(result ? result.tally : counted, CONFIG.round.seconds, result ? result.landed : null)
         }),
         {
             status: document.getElementById('end-status'),
@@ -844,17 +854,11 @@ function onRoundEvent(event) {
     if (event === 'start') {
         announce('The clock is running. You have one minute.');
         track('round-start');
-    } else if (event === 'revenge') {
-        // The blower stops with the clock, and the neighbor has his say.
-        releaseInput();
-        lastWord.had = true;
-        announce('Time is up, and your neighbor is not having it.');
-        track('neighbor', { outcome: 'revenge' });
-    } else if (event === 'time-up') {
-        // The blower stops with the clock, whatever is still held.
-        releaseInput();
-        if (!lastWord.had) announce('Time is up.');
     } else if (event === 'finale') {
+        // The clock has run out: the blower stops, whatever is still held,
+        // the result is counted, and the dive begins.
+        releaseInput();
+        announce('Time is up.');
         startFinale();
     } else if (event === 'done') {
         showEnd();
@@ -940,9 +944,9 @@ function skipFinale() {
  *  focused. */
 function showEnd() {
     const t = finale.tally || recount();
-    const v = verdict(t, lastWord.had);
+    const v = verdict(t);
     const landed = finale.plan ? finale.plan.success : null;
-    result = { tally: t, verdict: v, revenge: lastWord.had, landed };
+    result = { tally: t, verdict: v, landed };
     const set = (id, text) => {
         const el = document.getElementById(id);
         if (el) el.textContent = text;
@@ -956,7 +960,7 @@ function showEnd() {
     releaseInput();
     if (endModal) endModal.classList.remove('hidden');
     setChromeVisible(false);
-    announce(resultSentence(t, lastWord.had, landed));
+    announce(resultSentence(t, landed));
     const again = document.getElementById('end-again');
     if (again) {
         try { again.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
@@ -1011,6 +1015,7 @@ function keepBlowing() {
 function resetYard() {
     resetSim(sim);
     scatterLeaves(sim, CONFIG);
+    crowns = createCrowns(sim, CONFIG);
     leaves.update();
     Object.assign(operator, createOperator(B));
     resetNeighbor(neighbor, N);
@@ -1020,7 +1025,6 @@ function resetYard() {
     finale.burst = false;
     finale.arms = 'carry';
     finale.tally = null;
-    lastWord.had = false;
     shade.owed = true;
     recount();
 }
@@ -1057,9 +1061,7 @@ function updateHud() {
     if (hint) {
         const text = {
             ready: 'Blow to start the clock',
-            revenge: 'Your neighbor is having the last word',
             finale: 'Here goes nothing',
-            settling: 'Time is up',
             done: 'Time is up',
             free: 'No clock, just leaves'
         }[phase];
@@ -1142,8 +1144,8 @@ function updateLab(delta) {
 // ---- The neighbor -----------------------------------------------------------
 
 /** One frame of the neighbor, from the latest count of our leaves on his
- *  lawn. He comes out in a round or in free play, has his last word when
- *  the round says so, and waves once it is over. */
+ *  lawn. He comes out in a round or in free play, and waves once it is
+ *  over. */
 function stepTheNeighbor(dt) {
     const event = stepNeighbor(neighbor, dt, {
         leaves: counted.neighbor,
@@ -1151,10 +1153,9 @@ function stepTheNeighbor(dt) {
         maxZ: counted.farZ,
         maxX: counted.deepX,
         active: round.phase === 'playing' || round.phase === 'free',
-        revenge: round.phase === 'revenge',
-        over: round.phase === 'settling' || round.phase === 'finale' || round.phase === 'done'
+        over: round.phase === 'finale' || round.phase === 'done'
     }, N);
-    if (event === 'out' && !neighbor.revenge) {
+    if (event === 'out') {
         announce(neighbor.visits === 0
             ? 'Your neighbor has noticed the leaves on his lawn.'
             : 'Your neighbor is back, and he has noticed more leaves.');
@@ -1182,18 +1183,16 @@ function animate() {
     const free = inYard && canBlow(round);
     const aim = free ? aimFor(steer, pointer, keys) : null;
     const diving = round.phase === 'finale';
-    if (!diving && !finale.plan) stepOperator(operator, aim, dt, B, walkArea());
+    if (!diving && !finale.plan) stepOperator(operator, aim, dt, B, walkArea(), solids);
+    // The crowns let their leaves go whenever the yard is in view.
+    if (!welcomeShown() && !castShown()) stepCrowns(crowns, sim, dt, CONFIG);
+    updateTrees(trees, state.time, state.reducedMotion ? 0.3 : 1);
     const blowing = isBlowing(free, pointer, keys, blowHold);
     const f = facing(operator.heading);
     const jet = makeJet(B, operator.x, operator.z, f.x, f.z, blowing);
     if (inYard) {
-        // His last word is owed if too much of the yard is on his lawn as
-        // the clock runs out.
-        const owed = counted.neighbor >= N.winShare * counted.total;
         const finaleDone = diving ? stepFinale(dt) : false;
-        const event = stepRound(round, dt, {
-            blowing, moving: sim.activeCount, revenge: owed, revengeDone: neighbor.revengeDone, finaleDone
-        }, CONFIG.round);
+        const event = stepRound(round, dt, { blowing, finaleDone }, CONFIG.round);
         if (event) onRoundEvent(event);
     }
     // The neighbor carries on behind the end card (he waves), and holds
@@ -1269,7 +1268,7 @@ export function getState() {
         blowing: isBlowing(!welcomeShown() && !endShown() && canBlow(round), pointer, keys, blowHold),
         round: { ...round },
         counted: { ...counted },
-        result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict }, revenge: result.revenge, landed: result.landed } : null,
+        result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict }, landed: result.landed } : null,
         neighbor: { ...neighbor },
         endShown: endShown(),
         castShown: castShown(),

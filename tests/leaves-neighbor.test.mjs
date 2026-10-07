@@ -6,7 +6,7 @@
  * His rules are a pure state machine, so they are checked by driving it: he
  * stays in until enough of our leaves are on his lawn, comes out, blows,
  * watches, goes back in, comes out sooner each time with the big blower
- * from his third visit, has his last word when told to, and never sets foot
+ * from his third visit, waves when the round is over, and never sets foot
  * in our yard. Then the real sim, to show that what he does actually sends
  * the leaves back over the fence, and the real three.js, to show that his
  * folded arms and his wave put his hands where the poses say.
@@ -19,7 +19,7 @@ const Sc = await import('../www/leaves/js/score.js');
 const { LEAVES_CONFIG: C } = await import('../www/leaves/js/config.js');
 
 const N = C.neighbor;
-const quiet = { leaves: 0, minZ: Infinity, maxZ: -Infinity, maxX: -Infinity, active: true, revenge: false, over: false };
+const quiet = { leaves: 0, minZ: Infinity, maxZ: -Infinity, maxX: -Infinity, active: true, over: false };
 
 /** Step him until an event (or `seconds` run out), returning the events. */
 function drive(nb, input, seconds, dt = 1 / 30) {
@@ -146,62 +146,13 @@ describe('when he comes out', () => {
     });
 });
 
-describe('his last word', () => {
-    test('called while he is in, he comes out with the big blower and sweeps until his lawn is nearly clear', () => {
-        const nb = Nb.createNeighbor(N);
-        const input = { ...quiet, leaves: 3000, minZ: 0, maxZ: 1, maxX: 12, revenge: true };
-        expect(Nb.stepNeighbor(nb, 1 / 30, input, N)).toBe('out');
-        expect(nb.big).toBe(true);
-        expect(nb.revenge).toBe(true);
-        // The whole lawn along the fence, not only where the leaves were.
-        drive(nb, input, 3);
-        expect(nb.segs.some((p) => p.z === N.zMin)).toBe(true);
-        expect(nb.segs.some((p) => p.z === N.zMax)).toBe(true);
-        const events = drive(nb, { ...input, leaves: N.revengeLeft }, 30);
-        expect(events[0]).toBe('revenge-done');
-        expect(nb.revengeDone).toBe(true);
-    });
-
-    test('he stops once his lawn is down to a fifth of what was on it', () => {
-        const nb = Nb.createNeighbor(N);
-        const input = { ...quiet, leaves: 1000, minZ: 0, maxZ: 1, maxX: 12, revenge: true };
-        Nb.stepNeighbor(nb, 1 / 30, input, N);
-        expect(nb.revengeFrom).toBe(1000);
-        while (nb.state !== 'blow') Nb.stepNeighbor(nb, 1 / 30, input, N);
-        expect(drive(nb, { ...input, leaves: 1000 * N.revengeKeep + 1 }, 0.5)).toEqual([]);
-        expect(drive(nb, { ...input, leaves: 1000 * N.revengeKeep }, 0.5)).toEqual(['revenge-done']);
-    });
-
-    test('he gives up after his time, however many are left', () => {
-        const nb = Nb.createNeighbor(N);
-        const input = { ...quiet, leaves: 3000, minZ: 0, maxZ: 1, maxX: 12, revenge: true };
-        let at = null;
-        for (let t = 0; t < 60 && at === null; t += 1 / 30) {
-            if (Nb.stepNeighbor(nb, 1 / 30, input, N) === 'revenge-done') at = t;
-        }
-        expect(at).not.toBe(null);
-        expect(at).toBeLessThan(N.doorSeconds + 12 + N.revengeSeconds);
-    });
-
-    test('called mid-visit, he switches to the big blower and the whole lawn', () => {
-        const nb = Nb.createNeighbor(N);
-        const input = { ...quiet, leaves: 100, minZ: 0, maxZ: 1, maxX: 12 };
-        while (nb.state !== 'blow') Nb.stepNeighbor(nb, 1 / 30, input, N);
-        expect(nb.big).toBe(false);
-        Nb.stepNeighbor(nb, 1 / 30, { ...input, revenge: true }, N);
-        expect(nb.big).toBe(true);
-        expect(nb.revenge).toBe(true);
-        expect(nb.state).toBe('walk-out');
-    });
-
-    test('when the round is over he stays out and waves', () => {
-        const nb = Nb.createNeighbor(N);
-        const input = { ...quiet, leaves: 100, minZ: 0, maxZ: 1, maxX: 12 };
-        while (nb.state !== 'watch') Nb.stepNeighbor(nb, 1 / 30, input, N);
-        drive(nb, { ...input, over: true }, 20);
-        expect(nb.state).toBe('watch');
-        expect(nb.arms).toBe('wave');
-    });
+test('when the round is over he stays out and waves', () => {
+    const nb = Nb.createNeighbor(N);
+    const input = { ...quiet, leaves: 100, minZ: 0, maxZ: 1, maxX: 12 };
+    while (nb.state !== 'watch') Nb.stepNeighbor(nb, 1 / 30, input, N);
+    drive(nb, { ...input, over: true }, 20);
+    expect(nb.state).toBe('watch');
+    expect(nb.arms).toBe('wave');
 });
 
 test('he never sets foot in our yard, whatever our leaves do', () => {
@@ -213,7 +164,7 @@ test('he never sets foot in our yard, whatever our leaves do', () => {
         const a = -6 + random() * 13;
         const input = {
             leaves: Math.floor(random() * 400), minZ: a, maxZ: a + random() * 6, maxX: 10 + random() * 8,
-            active: random() > 0.1, revenge: random() > 0.995, over: false
+            active: random() > 0.1, over: false
         };
         Nb.stepNeighbor(nb, 1 / 30, input, N);
         if (Nb.isOut(nb)) westmost = Math.min(westmost, nb.x);
@@ -244,7 +195,7 @@ test('in the real sim, a visit sends our leaves back over the fence', () => {
     const nb = Nb.createNeighbor(N);
     for (let f = 0; f < 60 * 70 && nb.visits === 0; f++) {
         const t = Sc.tally(sim, C.yard);
-        Nb.stepNeighbor(nb, 1 / 60, { leaves: t.neighbor, minZ: t.nearZ, maxZ: t.farZ, maxX: t.deepX, active: true, revenge: false, over: false }, N);
+        Nb.stepNeighbor(nb, 1 / 60, { leaves: t.neighbor, minZ: t.nearZ, maxZ: t.farZ, maxX: t.deepX, active: true, over: false }, N);
         const his = S.makeJet(Nb.neighborBlower(C.blower, N, nb.big), nb.x, nb.z, Math.sin(nb.heading), Math.cos(nb.heading), nb.blowing);
         S.stepSim(sim, 1 / 60, his);
     }

@@ -3891,6 +3891,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
     link [href="js/sim.min.js" rel="modulepreload"]
+    link [href="js/trees.min.js" rel="modulepreload"]
     link [href="js/finale.min.js" rel="modulepreload"]
     link [href="js/round.min.js" rel="modulepreload"]
     link [href="js/neighbor.min.js" rel="modulepreload"]
@@ -3906,6 +3907,9 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/treespecies-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/fractaltree-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/house.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
@@ -5101,7 +5105,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated October 7, 2026."
+              "Last updated October 6, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand

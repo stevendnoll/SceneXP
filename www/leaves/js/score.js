@@ -41,6 +41,8 @@ export function regionOf(x, z, yard) {
  * along the fence and `deepX` the farthest in, for him to aim at). Walks
  * every leaf, so call it a few times a second, not every frame.
  *
+ * Leaves still hanging in a tree's crown (M5) are left out, total and all.
+ *
  * `sent`, if given, is one flag per leaf, set here for every leaf found on
  * the neighbor's lawn and never cleared, and its count comes back as
  * `sent`: every leaf that went over the fence this round, even the ones he
@@ -52,6 +54,11 @@ export function tally(sim, yard, sent = null) {
         sent: 0, nearZ: Infinity, farZ: -Infinity, deepX: -Infinity
     };
     for (let i = 0; i < sim.count; i++) {
+        // A leaf still up in a tree's crown is not in the yard yet (M5).
+        if (sim.hanging && sim.hanging[i]) {
+            t.total--;
+            continue;
+        }
         const x = sim.px[i];
         const z = sim.pz[i];
         const where = regionOf(x, z, yard);
@@ -97,16 +104,12 @@ export function clockText(seconds) {
 
 /**
  * The end card's headline and its line, by how the round went. Each has a
- * `key` for the usage log. The neighbor comes first: his last word (`revenge`)
- * is the story, and so is sending him a quarter of the yard, however clean
- * the lawn is.
+ * `key` for the usage log. The neighbor comes first: sending him a quarter
+ * of the yard is the story, however clean the lawn is.
  */
-export function verdict(t, revenge = false) {
+export function verdict(t) {
     const cleared = clearedShare(t);
     const share = (n) => (t.total > 0 ? n / t.total : 0);
-    if (revenge) {
-        return { key: 'revenge', title: 'The neighbor had the last word', line: 'Leave a pile on his lawn and he sends it all back, with interest.' };
-    }
     if (share(t.neighbor) >= 0.25) {
         return { key: 'neighbor', title: 'The neighbors are talking', line: 'A good share of your yard is now in theirs. They noticed.' };
     }
@@ -143,14 +146,13 @@ export function diveLine(landed) {
 }
 
 /** The sentence a visitor posts. The neighbor makes the better story when
- *  there is one (best of all when he had the last word), and the pile on the
- *  tarp otherwise. Then the dive, landed or not (`landed` null for none). */
-export function shareText(t, seconds, revenge = false, landed = null) {
+ *  there is one, and the pile on the tarp otherwise. Then the dive, landed
+ *  or not (`landed` null for none). */
+export function shareText(t, seconds, landed = null) {
     const head = `I cleared ${percent(clearedShare(t))}% of my yard in ${seconds} seconds.`;
     const sent = t.sent ?? t.neighbor;
     let tail = '';
-    if (revenge) tail = ` Then my neighbor blew ${leaves(sent)} back at me.`;
-    else if (sent > 0) tail = ` ${leaves(sent)} went to the neighbor.`;
+    if (sent > 0) tail = ` ${leaves(sent)} went to the neighbor.`;
     else if (t.tarp > 0 && landed !== true) tail = ` ${leaves(t.tarp)} made it onto the tarp.`;
     if (landed === true) tail += ` I landed the dive into a pile of ${leaves(t.tarp)}.`;
     if (landed === false) tail += ' I threw my back out diving into the pile.';
@@ -158,8 +160,8 @@ export function shareText(t, seconds, revenge = false, landed = null) {
 }
 
 /** The result in one sentence, for a screen reader. */
-export function resultSentence(t, revenge = false, landed = null) {
-    const v = verdict(t, revenge);
+export function resultSentence(t, landed = null) {
+    const v = verdict(t);
     const dive = diveLine(landed);
     return `${v.title}. ${percent(clearedShare(t))} percent of the lawn cleared, with ${leaves(t.tarp)} on the tarp, `
         + `${leaves(t.street)} in the street, and ${leaves(t.sent ?? t.neighbor)} sent over the fence.`

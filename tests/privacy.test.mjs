@@ -107,7 +107,7 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // about most, a whole job search, and that none of it is sent.
     expect(text).toMatch(/Corner Office keeps everything you enter/i);
     expect(text).toMatch(/never anything you typed/i);
-    // The character chosen in Leaves (M4, 2026-10-07), and how to clear it.
+    // The character chosen in Leaves (M4, 2026-10-06), and how to clear it.
     expect(text).toMatch(/keeps the character you choose/i);
     expect(text).toMatch(/Forget my choice button/i);
 

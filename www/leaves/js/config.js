@@ -82,8 +82,68 @@ export const LEAVES_CONFIG = Object.freeze({
             // A tall hedge down the left side.
             { axis: 'x', at: -10, from: -6, to: 12, height: 1.8 }
         ],
-        house: { minX: -9, maxX: 9, depth: 8, wall: 3.2, ridge: 6.2 },
-        neighborHouse: { minX: 11.5, maxX: 22, depth: 8, wall: 3.2, ridge: 6 }
+        // `door` is our front door's middle, in x (house.js).
+        house: { minX: -9, maxX: 9, depth: 8, wall: 3.2, ridge: 6.2, door: -0.5 },
+        neighborHouse: { minX: 11.5, maxX: 22, depth: 8, wall: 3.2, ridge: 6 },
+        // SOLID THINGS ON THE GROUND (M5): boxes a leaf bumps into below
+        // `height` and the person walks round. A `platform` is one a leaf can
+        // land on and lie on top of (sim.floorGrid). The trees' trunks and
+        // the pumpkins are added to these from `trees` and `pumpkins` below.
+        // house.js draws the porch, the posts and the car from these, so what
+        // is drawn and what is solid can never disagree. Edges sit on the
+        // 10 cm grid, where the sim's walls go.
+        boxes: [
+            // Our porch, and the step down from it. A pushed leaf climbs the
+            // step and then the porch a stair at a time.
+            { name: 'porch', minX: -2.4, maxX: 1.4, minZ: -6, maxZ: -4.1, height: 0.28, platform: true },
+            { name: 'step', minX: -1.7, maxX: 0.7, minZ: -4.1, maxZ: -3.6, height: 0.14, platform: true },
+            // The black steel posts that hold up the porch roof.
+            { name: 'post', minX: -2.3, maxX: -2.2, minZ: -4.4, maxZ: -4.3, height: 2.8 },
+            { name: 'post', minX: 1.2, maxX: 1.3, minZ: -4.4, maxZ: -4.3, height: 2.8 },
+            // The neighbor's front step, under his door (yard.js).
+            { name: 'step', minX: 14.1, maxX: 16.1, minZ: -6, maxZ: -5.1, height: 0.18, platform: true },
+            // The mailbox post, at the end of our walk.
+            { name: 'mailbox', minX: 0.2, maxX: 0.4, minZ: 7.1, maxZ: 7.3, height: 1.1 },
+            // A car parked at the curb: its body to the hood's height, and
+            // the cabin on top, both platforms, so a leaf blown into the
+            // street can come to rest on the hood or the roof.
+            { name: 'car', minX: -6.2, maxX: -1.8, minZ: 9.6, maxZ: 11.4, height: 0.85, platform: true },
+            { name: 'cabin', minX: -5.1, maxX: -2.8, minZ: 9.7, maxZ: 11.3, height: 1.42, platform: true }
+        ],
+        // Pumpkins on the porch and its step: where each sits, how big, and
+        // what it sits on (`y`). Solid, and a leaf can land on one.
+        pumpkins: [
+            { x: -1.8, z: -4.6, y: 0.28, r: 0.24, color: 0xe0701f },
+            { x: -1.35, z: -4.35, y: 0.28, r: 0.17, color: 0xd9832a },
+            { x: 0.85, z: -4.55, y: 0.28, r: 0.2, color: 0xefe3c4 },
+            { x: 0.4, z: -3.85, y: 0.14, r: 0.14, color: 0xe0701f }
+        ],
+        // THE TREES (M5): the garden's fractal trees (shared parts), in full
+        // autumn color, placed where their crowns never hide the lawn from
+        // the camera (it looks from the street, so nothing stands in front).
+        // Each holds `hanging` of the yard's leaves up in its crown, dropped
+        // a few at a time (see trees.js).
+        // `hanging` is how many leaves its crown holds (only the part of the
+        // crown over the sim's ground can drop any, so the tree past the
+        // neighbor's yard holds none).
+        trees: [
+            // Our sugar maple, in the back right corner by the house.
+            { species: 'sugar-maple', x: 6.6, z: -3.4, height: 10, seed: 1101, trunk: 0.22, crown: { y: 5.5, radius: 2.8 }, hanging: 70 },
+            // The one on the other side of the hedge, overhanging our lawn.
+            { species: 'sugar-maple', x: -11.4, z: 0.5, height: 11, seed: 2207, trunk: 0.24, crown: { y: 6, radius: 3.2 }, hanging: 50 },
+            // Past the neighbor's yard.
+            { species: 'quaking-aspen', x: 20.2, z: 1.5, height: 9, seed: 3313, trunk: 0.18, crown: { y: 5, radius: 2.4 }, hanging: 0 },
+            // Down the block, behind the houses, their crowns over the roofs.
+            { species: 'bur-oak', x: -3.5, z: -17, height: 12, seed: 4409, trunk: 0.3, crown: { y: 7, radius: 3.6 }, hanging: 0 },
+            { species: 'sugar-maple', x: 5.5, z: -18.5, height: 12, seed: 5501, trunk: 0.26, crown: { y: 7, radius: 3.4 }, hanging: 0 },
+            { species: 'paper-birch', x: 16, z: -16.5, height: 11, seed: 6607, trunk: 0.18, crown: { y: 6, radius: 2.6 }, hanging: 0 },
+            { species: 'sugar-maple', x: -17.5, z: -8, height: 11, seed: 7703, trunk: 0.24, crown: { y: 6, radius: 3.2 }, hanging: 0 }
+        ],
+        // How fast the crowns let their leaves go, per tree per second, and
+        // how often an empty crown takes a leaf back from the street.
+        // At 0.9 a second a tree and about three seconds down from the crown,
+        // three or four are in the air at any moment.
+        fall: { rate: 0.9, refill: 0.9 }
     },
 
     // THE SIM, in SI units. See sim.js for how each one is used.
@@ -217,11 +277,6 @@ export const LEAVES_CONFIG = Object.freeze({
     // and from the third he brings a bigger blower. Lists are by visit, the
     // last entry holding for every visit after.
     //
-    // HE CAN WIN. If `winShare` of the yard is lying on his lawn when the
-    // clock runs out, he comes out with the big blower and sends it all
-    // back before the result is counted (Steve, 2026-10-06: "a penalty for
-    // the user being a bad neighbor").
-    //
     // A visitor aiming at the fence from 4 m sends about 1,500 leaves over
     // in five seconds (measured), so these are small numbers on purpose.
     neighbor: {
@@ -253,36 +308,19 @@ export const LEAVES_CONFIG = Object.freeze({
         watchSeconds: [3, 4, 5],
         cooldown: [8, 6, 4],
         bigFrom: 2,
-        winShare: 0.12,
-        // His last word: he walks out at `revengeWalk` m/s, sweeps at
-        // `revengeSweep`, and stops once his lawn is down to `revengeKeep` of
-        // what was on it (or `revengeLeft` leaves), or after `revengeSeconds`
-        // of blowing. KEPT SHORT ON PURPOSE (Steve's M2 QA: the end card "did
-        // not appear when the time ran out"): it used to stop only at 10
-        // leaves, which a sweep never reached, so it always ran its full 14
-        // seconds and the result waited 20 seconds behind it.
-        revengeWalk: 3.5,
-        revengeSweep: 3.5,
-        revengeKeep: 0.2,
-        revengeLeft: 10,
-        // SHORTER STILL after Steve's M3 QA (the end of the round "shows the
-        // neighbor for several seconds which feels too long"): an outburst,
-        // with the big blower, of about four seconds.
-        revengeSeconds: 4,
         // His blowers, as changes to ours (config.blower).
         blower: { speed: 26 },
-        // The big one's air carries farther and lifts longer: his four-second
-        // last word sent back 63% of a lawn of 3,500 leaves, where a merely
-        // faster blower (speed 38, range 9) sent back 9%.
+        // The big one's air carries farther and lifts longer: four seconds of
+        // it sent back 63% of a lawn of 3,500 leaves, where a merely faster
+        // blower (speed 38, range 9) sent back 9%.
         bigBlower: { speed: 45, spread: 0.36, wallSpread: 0.7, range: 12, wallDecay: 4, updraftLength: 5 },
         look: { shirt: 0x3f5f7a, pants: 0xb5a58a, skin: 0xc68a5e, hair: 0x9a9a9a, blower: 0x3d7a3a, bigBlower: 0xc0392b, door: 0x24476b }
     },
 
     // THE FINALE (M3): the dive into the tarp's pile once the round is
     // counted. See finale.js. Seconds and meters. KEPT TO ABOUT SEVEN
-    // SECONDS, since it stands between the clock and the end card (and,
-    // after the neighbor's last word, after that too). A tap or a key skips
-    // it.
+    // SECONDS, since it stands between the clock and the end card. A tap or
+    // a key skips it.
     finale: {
         // The pile's peak must be this tall to land in it. Below it, the
         // dive finds the lawn. A minute of steady work toward the corner
@@ -336,22 +374,16 @@ export const LEAVES_CONFIG = Object.freeze({
 
     // THE ROUND (M1). The clock starts with the first blow, not when the
     // welcome card closes, so nobody loses time reading. When it runs out the
-    // blower stops and the leaves are given a moment to land before the
-    // result is counted: at least `settleMin` seconds, and until nothing is
-    // moving or `settleMax` seconds have passed. The clock turns the accent
-    // color for the last `hurry` seconds, and the cleared share on the HUD is
-    // counted `tallyHz` times a second (counting walks every leaf).
+    // blower stops, the result is counted, and the dive begins (round.js).
+    // The clock turns the accent color for the last `hurry` seconds, and the
+    // cleared share on the HUD is counted `tallyHz` times a second (counting
+    // walks every leaf).
     round: {
         seconds: 60,
-        settleMin: 0.6,
-        settleMax: 2,
         hurry: 10,
         tallyHz: 4,
-        // The longest the neighbor's last word may hold up the result, from
-        // the moment the clock runs out (his walk out included).
-        revengeMax: 7,
-        // The finale (M3) runs between the leaves landing and the end card,
-        // and never holds the card up longer than this.
+        // The finale (M3) runs between the clock and the end card, and never
+        // holds the card up longer than this.
         finale: true,
         finaleMax: 14
     },
@@ -387,12 +419,33 @@ export const LEAVES_CONFIG = Object.freeze({
         sidewalk: 0xb9b4aa,
         street: 0x45474a,
         tarp: 0x2f6aa6,
+        // The sky (M5): deeper blue overhead, paling to a warm haze at the
+        // horizon, drawn behind everything.
+        sky: { top: 0x6f9fd3, horizon: 0xe4e2d8 },
+        // Our house (house.js): white board and batten, black frames, stone.
         siding: 0xf2efe8,
         trim: 0xffffff,
-        roof: 0x4a4d52,
-        door: 0x7a2f2a,
-        window: 0x2d3a46,
-        neighborSiding: 0xd9d4c4,
+        frame: 0x1c1d1f,
+        glass: 0x3a4a56,
+        stone: 0x8f8a82,
+        roofModern: 0x2e3033,
+        porch: 0xc9c4ba,
+        aluminum: 0xc4c7cb,
+        wreath: 0x9a4a22,
+        walk: 0xc2bdb3,
+        // The neighbor's: butter yellow lap siding, white trim, navy shutters
+        // to go with his navy door, a brick chimney.
+        neighborSiding: 0xe3d3a1,
+        neighborLap: 0xc4b483,
+        neighborRoof: 0x6e6458,
+        shutter: 0x24476b,
+        brick: 0x8c4a3a,
+        // The street (M5).
+        curb: 0xcfcac0,
+        centerLine: 0xe2b83a,
+        car: 0x9aa1a8,
+        carGlass: 0x26303a,
+        tire: 0x1d1e20,
         fence: 0xf4f1ea,
         hedge: 0x2f4a26,
         blower: 0xe0661f,

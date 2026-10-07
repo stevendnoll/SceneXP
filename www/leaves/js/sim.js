@@ -129,11 +129,17 @@ export function createSim(count, config) {
         P: config.physics,
         K,
         bounds: b,
-        walls: Y.walls,
+        // The fences and houses, and the four sides of every solid box (the
+        // trees' trunks, M5).
+        walls: [...Y.walls, ...solidBoxes(Y).flatMap(boxWalls)],
         cell,
         nx,
         nz,
         height: new Float32Array(nx * nz),
+        // The ground under the leaves (M5): 0 on the lawn, and the top of any
+        // solid box a leaf can land on (a `platform`: the porch, its step,
+        // a pumpkin, the car). The surface never drops below it.
+        floor: new Float32Array(nx * nz),
         // The tallest step a moving leaf can climb onto, from one cell to the
         // next: the slope of the angle of repose.
         maxStep: cell * Math.tan((K.reposeDegrees * Math.PI) / 180),
@@ -175,6 +181,9 @@ export function createSim(count, config) {
         still: f32(),
         cartwheel: new Uint8Array(count),
         awake: new Uint8Array(count),
+        // Leaves up in a tree's crown (M5): out of the yard, out of the
+        // blower's reach and out of the count, until they are let go.
+        hanging: new Uint8Array(count),
         active: new Int32Array(count),
         activeAt: new Int32Array(count).fill(-1),
         pending: new Int32Array(count),
@@ -196,7 +205,32 @@ export function createSim(count, config) {
         blockN: new Uint8Array(nx * nz)
     };
     wallGrid(sim);
+    floorGrid(sim, solidBoxes(Y));
     return sim;
+}
+
+/**
+ * Raise the floor under every platform box to its top, over the cells whose
+ * middles it covers, so a leaf blown up onto the porch rests on the porch
+ * rather than inside it. The box's own walls keep the lawn's leaves out
+ * below its top, and a step low enough to climb (a pushed leaf climbs
+ * maxStep * pushClimb) lets them up it a stair at a time.
+ */
+function floorGrid(sim, boxes) {
+    const b = sim.bounds;
+    for (const box of boxes) {
+        if (!box.platform) continue;
+        for (let iz = 0; iz < sim.nz; iz++) {
+            const z = b.minZ + (iz + 0.5) * sim.cell;
+            if (z < box.minZ || z > box.maxZ) continue;
+            for (let ix = 0; ix < sim.nx; ix++) {
+                const x = b.minX + (ix + 0.5) * sim.cell;
+                const c = iz * sim.nx + ix;
+                if (x >= box.minX && x <= box.maxX && sim.floor[c] < box.height) sim.floor[c] = box.height;
+            }
+        }
+    }
+    sim.height.set(sim.floor);
 }
 
 /**
@@ -228,6 +262,42 @@ function wallGrid(sim) {
     }
 }
 
+/** A box on the ground as four walls of its height, one along each side:
+ *  { minX, maxX, minZ, maxZ, height, platform }. */
+export function boxWalls(box) {
+    const h = box.height;
+    return [
+        { axis: 'x', at: box.minX, from: box.minZ, to: box.maxZ, height: h },
+        { axis: 'x', at: box.maxX, from: box.minZ, to: box.maxZ, height: h },
+        { axis: 'z', at: box.minZ, from: box.minX, to: box.maxX, height: h },
+        { axis: 'z', at: box.maxZ, from: box.minX, to: box.maxX, height: h }
+    ];
+}
+
+/** Every solid box on the ground: the yard's own (`yard.boxes`), the
+ *  trunk of each tree that stands on the sim's ground (M5), three meters
+ *  tall, so no leaf goes through a trunk, and each pumpkin, as a platform
+ *  as tall as the pumpkin over the square inside its belly. */
+export function solidBoxes(Y) {
+    const b = Y.bounds;
+    const trunks = (Y.trees || [])
+        .filter((t) => t.x > b.minX && t.x < b.maxX && t.z > b.minZ && t.z < b.maxZ)
+        .map((t) => ({ minX: t.x - t.trunk, maxX: t.x + t.trunk, minZ: t.z - t.trunk, maxZ: t.z + t.trunk, height: 3 }));
+    const pumpkins = (Y.pumpkins || []).map((p) => {
+        const half = p.r * 0.75;
+        return { minX: p.x - half, maxX: p.x + half, minZ: p.z - half, maxZ: p.z + half, height: p.y + p.r * 1.44, platform: true };
+    });
+    return [...(Y.boxes || []), ...trunks, ...pumpkins];
+}
+
+/** Whether (x, z) is inside any of `boxes`, grown by `margin`. */
+export function inBox(boxes, x, z, margin = 0) {
+    for (const b of boxes || []) {
+        if (x > b.minX - margin && x < b.maxX + margin && z > b.minZ - margin && z < b.maxZ + margin) return true;
+    }
+    return false;
+}
+
 /**
  * Whether cells `a` and `b` (neighbors, diagonals included) see each other,
  * with no wall on the boundaries between them. Asked the same way from
@@ -254,7 +324,7 @@ function open(sim, a, b) {
  *  again for a new round. The arrays are kept, because the leaf mesh draws
  *  straight from `pose`, and a new sim would leave it drawing the old one. */
 export function resetSim(sim) {
-    sim.height.fill(0);
+    sim.height.set(sim.floor);
     sim.head.fill(-1);
     sim.next.fill(-1);
     sim.prev.fill(-1);
@@ -265,6 +335,7 @@ export function resetSim(sim) {
     sim.cellPrev.fill(-1);
     ['vx', 'vy', 'vz', 'wyaw', 'wpitch', 'wroll', 'still'].forEach((k) => sim[k].fill(0));
     sim.awake.fill(0);
+    sim.hanging.fill(0);
     sim.activeAt.fill(-1);
     sim.activeCount = 0;
     sim.time = 0;
@@ -362,7 +433,7 @@ function settleCell(sim, c) {
     const ix = c % sim.nx;
     const iz = (c - ix) / sim.nx;
     const r = sim.reach;
-    let top = 0;
+    let top = sim.floor[c];
     for (let dz = -r; dz <= r; dz++) {
         const z = iz + dz;
         if (z < 0 || z >= sim.nz) continue;
@@ -490,6 +561,8 @@ export function lowestNeighbor(sim, c) {
  *  exactly where it is (rest). */
 export function layDown(sim, i, x, z) {
     const b = sim.bounds;
+    // Laid down, it is in the yard (and no longer up in a crown, M5).
+    sim.hanging[i] = 0;
     let c = cellIndex(sim, x, z);
     for (let n = 0; n < 64; n++) {
         const down = lowestNeighbor(sim, c);
@@ -567,6 +640,7 @@ export function scatterLeaves(sim, config) {
     const random = makeRandom(L.seed);
     const lawn = Y.lawn;
     const base = leafSize(sim.count, areaOf(lawn), L);
+    const solids = solidBoxes(Y);
     const kinds = Object.keys(look.palettes);
     const leaves = new Array(sim.count);
 
@@ -588,7 +662,7 @@ export function scatterLeaves(sim, config) {
             }
             x = clamp(x, lawn.minX + 0.05, lawn.maxX - 0.05);
             z = clamp(z, lawn.minZ + 0.05, lawn.maxZ - 0.05);
-            if (!inRect(Y.tarp, x, z)) break;
+            if (!inRect(Y.tarp, x, z) && !inBox(solids, x, z, 0.05)) break;
         }
         const kind = pickWeighted(look.kinds, random());
         const palette = look.palettes[kind];
@@ -1038,6 +1112,7 @@ export function stepSim(sim, dt, jets) {
 /** Drop a leaf from height `y` at (x, z): for tests, and for leaves that
  *  fall from the trees later on. */
 export function dropLeaf(sim, i, x, y, z) {
+    sim.hanging[i] = 0;
     wake(sim, i);
     sim.px[i] = x;
     sim.py[i] = y;
@@ -1062,7 +1137,8 @@ export function pilePeak(sim, r) {
     for (let iz = z0; iz <= z1; iz++) {
         for (let ix = x0; ix <= x1; ix++) {
             const c = iz * sim.nx + ix;
-            if (sim.height[c] > top) { top = sim.height[c]; best = c; }
+            const h = sim.height[c] - sim.floor[c];
+            if (h > top) { top = h; best = c; }
         }
     }
     if (best < 0) return { x: (r.minX + r.maxX) / 2, z: (r.minZ + r.maxZ) / 2, height: 0 };
@@ -1118,6 +1194,31 @@ export function burst(sim, x, z, radius, speed) {
     return n;
 }
 
+/**
+ * Take leaf `i` out of the yard and hang it at (x, y, z), up in a tree's
+ * crown (M5): off the pile (the surface under it is worked out again), out
+ * of the blower's reach, and out of the count, turned however `random` says,
+ * until dropLeaf() lets it go. Only a sleeping leaf can be hung.
+ */
+export function hangLeaf(sim, i, x, y, z, random = sim.random) {
+    if (sim.awake[i] || sim.hanging[i]) return false;
+    const c = sim.restCell[i];
+    unfile(sim, i);
+    if (c >= 0) {
+        markCells(sim, c);
+        settleMarked(sim);
+    }
+    sim.hanging[i] = 1;
+    sim.px[i] = x;
+    sim.py[i] = y;
+    sim.pz[i] = z;
+    sim.yaw[i] = random() * TAU;
+    sim.pitch[i] = (random() - 0.5) * 1.6;
+    sim.roll[i] = (random() - 0.5) * 1.6;
+    writePose(sim, i);
+    return true;
+}
+
 /** How many leaves lie inside a rectangle, asleep or awake. */
 export function countIn(sim, r) {
     let n = 0;
@@ -1130,6 +1231,6 @@ export function countIn(sim, r) {
 /** The volume under the pile's surface, in cubic meters. */
 export function pileVolume(sim) {
     let v = 0;
-    for (let c = 0; c < sim.height.length; c++) v += sim.height[c];
+    for (let c = 0; c < sim.height.length; c++) v += sim.height[c] - sim.floor[c];
     return v * sim.cell * sim.cell;
 }

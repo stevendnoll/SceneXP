@@ -4,11 +4,11 @@
  * neighbor's yard past a picket fence, the hedge, the sidewalk and the
  * street, the tarp, and the low autumn sun.
  *
- * A STAND-IN FOR M0. The lab is about the leaves, so the yard is plain
- * boxes and planes in the right places, sized to the walls the sim already
- * knows about (config.yard.walls). The real street is built once the leaves
- * have passed their test.
+ * The ground is plain planes in the right places, sized to the walls the
+ * sim already knows about (config.yard.walls). The houses and the street
+ * are house.js's (M5), the trees trees.js's.
  */
+import { buildOurHouse, buildNeighborHouse, buildStreet } from './house.min.js';
 
 /** A grassy canvas texture: mottled greens with short strokes for blades. */
 function lawnTexture(base, dark, seed = 1) {
@@ -71,46 +71,29 @@ function ground(r, color, y, map) {
     return mesh;
 }
 
-/** A house whose front wall stands at z = front, reaching back `depth`,
- *  with a gable roof whose ridge runs along x. */
-function house(h, front, look, siding, withDoor) {
-    const group = new THREE.Group();
-    const w = h.maxX - h.minX;
-    const cx = (h.minX + h.maxX) / 2;
-    const cz = front - h.depth / 2;
-    const body = box(w, h.wall, h.depth, siding, cx, h.wall / 2, cz);
-    body.castShadow = true;
-    body.receiveShadow = true;
-    group.add(body);
-
-    // The roof: a triangular prism over the walls, with a little overhang.
-    const over = 0.35;
-    const shape = new THREE.Shape();
-    shape.moveTo(-h.depth / 2 - over, 0);
-    shape.lineTo(h.depth / 2 + over, 0);
-    shape.lineTo(0, h.ridge - h.wall);
-    shape.closePath();
-    const roofGeo = new THREE.ExtrudeGeometry(shape, { depth: w + over * 2, bevelEnabled: false });
-    const roof = new THREE.Mesh(roofGeo, new THREE.MeshLambertMaterial({ color: look.roof }));
-    roof.rotation.y = Math.PI / 2;
-    roof.position.set(h.minX - over, h.wall, cz);
-    roof.castShadow = true;
-    group.add(roof);
-
-    // Windows along the front, each with a white frame.
-    const windows = withDoor ? [-6.2, -3.4, 2.4, 5.2] : [h.minX + 2.2 - cx, h.minX + 5 - cx];
-    windows.forEach((wx) => {
-        group.add(box(1.5, 1.3, 0.06, look.trim, cx + wx, 1.75, front + 0.03));
-        group.add(box(1.3, 1.1, 0.08, look.window, cx + wx, 1.75, front + 0.04));
-    });
-    if (withDoor) {
-        group.add(box(1.3, 2.3, 0.06, look.trim, cx - 0.5, 1.15, front + 0.03));
-        group.add(box(1.0, 2.1, 0.09, look.door, cx - 0.5, 1.05, front + 0.05));
-        const step = box(2.2, 0.18, 0.9, 0xbdb7ad, cx - 0.5, 0.09, front + 0.45);
-        step.receiveShadow = true;
-        group.add(step);
-    }
-    return group;
+/** The sky (M5): a tall strip, deeper blue at the top of the view and
+ *  paling to a warm haze by a little under halfway down, which three
+ *  stretches over the background. The camera looks down from the street,
+ *  so the sky it shows is only the band over the roofs, at the top of the
+ *  view: a dome in the world would show one color there, so the fade is
+ *  the screen's. */
+function skyTexture(sky) {
+    if (typeof document === 'undefined' || !sky) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 2;
+    canvas.height = 256;
+    const ctx = canvas.getContext && canvas.getContext('2d');
+    if (!ctx) return null;
+    const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
+    const fade = ctx.createLinearGradient(0, 0, 0, 256);
+    fade.addColorStop(0, hex(sky.top));
+    fade.addColorStop(0.45, hex(sky.horizon));
+    fade.addColorStop(1, hex(sky.horizon));
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, 0, 2, 256);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
 }
 
 /** The picket fence along a wall at x = at, from z = from to z = to. */
@@ -138,9 +121,9 @@ function picketFence(wall, look) {
     return group;
 }
 
-/** The neighbor's front door (M2), between his two windows: a frame, a
- *  dark hall behind, a step, and the door itself hung on a hinge at its
- *  left edge. Returns the hinge, which main.js swings open (rotation.y down
+/** The neighbor's front door (M2), between his windows: a frame, a dark
+ *  hall behind, his step (a platform in config.yard.boxes), and the door
+ *  itself hung on a hinge at its left edge. Returns the hinge, which main.js swings open (rotation.y down
  *  to about -1.7, the door swinging out toward the street). */
 function buildNeighborDoor(scene, config) {
     const N = config.neighbor;
@@ -149,9 +132,14 @@ function buildNeighborDoor(scene, config) {
     const tall = 2.1;
     scene.add(box(1.3, 2.3, 0.06, config.look.trim, N.door.x, 1.15, front + 0.03));
     scene.add(box(width, tall, 0.02, 0x15110d, N.door.x, tall / 2, front + 0.065));
-    const step = box(2.0, 0.18, 0.9, 0xbdb7ad, N.door.x, 0.09, front + 0.45);
-    step.receiveShadow = true;
-    scene.add(step);
+    for (const b of config.yard.boxes || []) {
+        if (b.name !== 'step' || N.door.x < b.minX || N.door.x > b.maxX) continue;
+        const step = box(b.maxX - b.minX, b.height, b.maxZ - b.minZ, config.look.porch,
+            (b.minX + b.maxX) / 2, b.height / 2, (b.minZ + b.maxZ) / 2);
+        step.castShadow = true;
+        step.receiveShadow = true;
+        scene.add(step);
+    }
     const hinge = new THREE.Group();
     hinge.name = 'neighbor-door';
     hinge.position.set(N.door.x - width / 2, 0, front + 0.08);
@@ -190,9 +178,12 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     tarp.name = 'tarp';
     scene.add(tarp);
 
-    scene.add(house(Y.house, Y.lawn.minZ, look, look.siding, true));
-    scene.add(house(Y.neighborHouse, Y.neighbor.minZ, look, look.neighborSiding, false));
+    scene.add(buildOurHouse(Y, look));
+    scene.add(buildNeighborHouse(Y, look, config.neighbor.door.x));
     const neighborDoor = buildNeighborDoor(scene, config);
+    scene.add(buildStreet(Y, look));
+    const sky = skyTexture(look.sky);
+    if (sky) scene.background = sky;
     // The gap between the two houses is a side fence.
     const gate = box(Y.neighborHouse.minX - Y.house.maxX, 1.8, 0.08, look.fence,
         (Y.house.maxX + Y.neighborHouse.minX) / 2, 0.9, Y.lawn.minZ - 0.05);

@@ -267,7 +267,7 @@ describe('the round', () => {
         fire(dom.documentStub, 'keyup', { code: 'Space' });
         expect(main.getState().round.phase).toBe('playing');
         // The minute, the leaves landing, and the dive into the pile.
-        frames(main, 60 + C0.round.settleMax + C0.round.finaleMax, 20);
+        frames(main, 60 + C0.round.finaleMax, 20);
         expect(main.getState().endShown).toBe(true);
     }
 
@@ -381,12 +381,18 @@ describe('the round', () => {
 });
 
 describe('the neighbor', () => {
-    /** Lay `n` of the yard's leaves on the neighbor's lawn, by the fence. */
-    function sendOver(main, n) {
+    /** Lay `n` of the yard's resting leaves on the neighbor's lawn, by the
+     *  fence: each lifted out of the yard (hangLeaf) and laid down there, so
+     *  the sim files it where it now lies. */
+    async function sendOver(main, n) {
+        const Sim = await import('../www/leaves/js/sim.min.js');
         const sim = main.__test__.sim();
-        for (let i = 0; i < n; i++) {
-            sim.px[i] = 10.4 + (i % 10) * 0.3;
-            sim.pz[i] = -1 + Math.floor(i / 10) * 0.3;
+        let k = 0;
+        for (let i = 0; i < sim.count && k < n; i++) {
+            if (sim.awake[i] || sim.hanging[i]) continue;
+            Sim.hangLeaf(sim, i, 0, 5, 0);
+            Sim.layDown(sim, i, 10.4 + (k % 10) * 0.3, -1 + Math.floor(k / 10) * 0.3);
+            k++;
         }
     }
 
@@ -397,43 +403,13 @@ describe('the neighbor', () => {
         frames(main, 1, 20);
         fire(dom.documentStub, 'keyup', { code: 'Space' });
         expect(main.getState().neighbor.state).toBe('inside');
-        sendOver(main, 80);
+        await sendOver(main, 80);
         frames(main, 1, 20);
         expect(main.getState().neighbor.state).not.toBe('inside');
         expect(dom.el('round-status').textContent).toMatch(/neighbor has noticed/);
         // He goes about his visit without anything throwing.
         expect(() => frames(main, 15, 20)).not.toThrow();
         expect(main.getState().counted.sent).toBeGreaterThanOrEqual(80);
-    });
-
-    test('too much left on his lawn as the clock runs out, and he has the last word', async () => {
-        const main = await boot();
-        fire(dom.el('blocker'), 'click');
-        fire(dom.documentStub, 'keydown', { code: 'Space' });
-        frames(main, 0.2, 20);
-        fire(dom.documentStub, 'keyup', { code: 'Space' });
-        frames(main, 59, 20);
-        // A quarter of this small yard, put over just before the end.
-        sendOver(main, 150);
-        frames(main, 1.5, 20);
-        expect(main.getState().round.phase).toBe('revenge');
-        expect(dom.el('round-status').textContent).toMatch(/not having it/);
-        expect(dom.el('hud-hint').hidden).toBe(false);
-        expect(dom.el('hud-hint').textContent).toBe('Your neighbor is having the last word');
-        // STEVE'S M2 QA: the end card "did not appear when the time ran
-        // out". His last word ran its full 14 seconds every time and the card
-        // waited 20 behind it. However long he takes, the card is up within
-        // the round's caps of the clock running out.
-        const { LEAVES_CONFIG: C } = await import('../www/leaves/js/config.js');
-        frames(main, C.round.revengeMax + C.round.settleMax + C.round.finaleMax, 20);
-        const s = main.getState();
-        expect(s.endShown).toBe(true);
-        expect(s.result.revenge).toBe(true);
-        expect(dom.el('end-title').textContent).toBe('The neighbor had the last word');
-        // Play again puts him back inside and forgets the round.
-        fire(dom.el('end-again'), 'click');
-        expect(main.getState().neighbor.state).toBe('inside');
-        expect(main.getState().counted.sent).toBe(0);
     });
 });
 
@@ -494,12 +470,13 @@ describe('the finale (M3)', () => {
         // tarp together and come to rest as one flat mat, since a leaf only
         // joins the pile's surface once it is still.) At about 1.4 cm a
         // leaf, a pile 35 cm tall at its natural slope takes some 460.
-        for (let s = 0; s < 10 && sim.activeCount > 0; s++) frames(main, 1, 20);
-        expect(sim.activeCount).toBe(0);
-        for (let i = 0; i < 560; i++) Sim.wake(sim, i);
-        sim.activeCount = 0;
-        sim.activeAt.fill(-1);
-        for (let i = 0; i < 560; i++) Sim.layDown(sim, i, -9.55, -5.55);
+        let laid = 0;
+        for (let i = 0; i < sim.count && laid < 560; i++) {
+            if (sim.awake[i] || sim.hanging[i]) continue;
+            Sim.hangLeaf(sim, i, 0, 5, 0);
+            Sim.layDown(sim, i, -9.55, -5.55);
+            laid++;
+        }
         for (let s = 0; s < 70 && main.getState().round.phase !== 'finale'; s++) frames(main, 1, 20);
         expect(main.getState().finale.success).toBe(true);
         frames(main, C0.round.finaleMax, 20);

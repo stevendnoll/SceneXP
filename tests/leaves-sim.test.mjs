@@ -281,14 +281,17 @@ describe('piles', () => {
         for (let i = 0; i < sim.count; i++) S.layDown(sim, i, 0.05, 0.05);
         // How steep the heap is anywhere: never steeper than the repose
         // slope, give or take the last leaf's own thickness and lift.
+        // (Measured as the leaves' depth over the ground, so the porch's and
+        // the car's own edges are not counted as slopes.)
         let top = 0;
         let steepest = 0;
         const leaf = C.pile.thick + 0.002 + C.pile.lift;
+        const depth = (c) => sim.height[c] - sim.floor[c];
         for (let z = 1; z < sim.nz - 1; z++) {
             for (let x = 1; x < sim.nx - 1; x++) {
                 const c = z * sim.nx + x;
-                top = Math.max(top, sim.height[c]);
-                steepest = Math.max(steepest, sim.height[c] - sim.height[c + 1], sim.height[c] - sim.height[c + sim.nx]);
+                top = Math.max(top, depth(c));
+                steepest = Math.max(steepest, depth(c) - depth(c + 1), depth(c) - depth(c + sim.nx));
             }
         }
         expect(top).toBeGreaterThan(0.06);
@@ -396,8 +399,9 @@ describe('settling (Steve\'s QA, 2026-10-06: drifts "puff up" and "keep moving")
         const { sim } = yard(3000);
         run(sim, 1.5, S.makeJet(C.blower, -2, -2, -1, -0.6, true));
         run(sim, 5, null);
-        // Worked out from scratch, every cell agrees with the grid.
-        const top = new Float32Array(sim.height.length);
+        // Worked out from scratch, every cell agrees with the grid (the
+        // ground under a cell with no leaf is the lawn, or a platform's top).
+        const top = Float32Array.from(sim.floor);
         for (let i = 0; i < sim.count; i++) {
             if (sim.awake[i]) continue;
             const c = S.cellIndex(sim, sim.px[i], sim.pz[i]);
@@ -420,6 +424,106 @@ describe('settling (Steve\'s QA, 2026-10-06: drifts "puff up" and "keep moving")
         const down = S.lowestNeighbor(sim, west);
         expect([east, east - sim.nx, east + sim.nx]).not.toContain(down.cell);
         expect(down.drop).toBeCloseTo(0.5, 6);
+    });
+});
+
+describe('platforms (M5: the porch, its step, the pumpkins, the car)', () => {
+    const porch = C.yard.boxes.find((b) => b.name === 'porch');
+    const mid = (b) => ({ x: (b.minX + b.maxX) / 2, z: (b.minZ + b.maxZ) / 2 });
+
+    test('the ground under a platform is its top, and a fresh yard has no pile', () => {
+        const { sim } = yard(400);
+        const p = mid(porch);
+        expect(S.surfaceAt(sim, p.x, p.z)).toBeCloseTo(porch.height, 6);
+        const step = C.yard.boxes.find((b) => b.name === 'step' && b.minZ === porch.maxZ);
+        expect(sim.floor[S.cellIndex(sim, p.x, porch.maxZ + 0.25)]).toBeCloseTo(step.height, 6);
+        expect(sim.floor[S.cellIndex(sim, p.x, step.maxZ + 0.25)]).toBe(0);
+        S.resetSim(sim);
+        expect(S.surfaceAt(sim, p.x, p.z)).toBeCloseTo(porch.height, 6);
+        expect(S.pileVolume(sim)).toBe(0);
+    });
+
+    test('a leaf that falls on the porch lies on top of it, not inside it', () => {
+        const { sim } = yard(400);
+        const p = mid(porch);
+        S.dropLeaf(sim, 3, p.x + 0.3, 1.5, p.z);
+        run(sim, 3);
+        expect(sim.awake[3]).toBe(0);
+        expect(sim.py[3]).toBeGreaterThan(porch.height);
+        expect(sim.py[3]).toBeLessThan(porch.height + 0.03);
+        // And the porch stays the ground when the leaf is blown off again.
+        S.wake(sim, 3);
+        expect(S.surfaceAt(sim, p.x + 0.3, p.z)).toBeCloseTo(porch.height, 6);
+    });
+
+    test('a pumpkin is solid to the height of its top, and a leaf lands on it', () => {
+        const { sim } = yard(400);
+        const pk = C.yard.pumpkins[0];
+        const box = S.solidBoxes(C.yard).find((b) => b.platform && Math.abs(b.minX + b.maxX - 2 * pk.x) < 1e-9);
+        expect(box.height).toBeCloseTo(pk.y + pk.r * 1.44, 9);
+        S.dropLeaf(sim, 4, pk.x, 2, pk.z);
+        run(sim, 3);
+        expect(sim.py[4]).toBeGreaterThan(box.height);
+    });
+
+    test('leaves blown at the porch bank against it, and none ends up inside a platform', () => {
+        const { sim } = yard(3000);
+        const p = mid(porch);
+        run(sim, 2, S.makeJet(C.blower, p.x, porch.maxZ + 4, 0, -1, true));
+        run(sim, 4, null);
+        const platforms = S.solidBoxes(C.yard).filter((b) => b.platform);
+        for (let i = 0; i < sim.count; i++) {
+            if (sim.hanging[i]) continue;
+            for (const b of platforms) {
+                if (S.inBox([b], sim.px[i], sim.pz[i], -0.06)) expect(sim.py[i]).toBeGreaterThan(b.height - 0.01);
+            }
+        }
+    });
+});
+
+describe('the houses and the street, drawn from the same boxes (house.js)', () => {
+    let THREE;
+    let saved;
+    let scene;
+    beforeAll(async () => {
+        saved = globalThis.THREE;
+        THREE = await loadRealThree();
+        globalThis.THREE = THREE;
+        const Yard = await import('../www/leaves/js/yard.js');
+        scene = new THREE.Scene();
+        Yard.buildYard(scene, C, { shadows: false });
+        scene.updateMatrixWorld(true);
+    });
+    afterAll(() => { globalThis.THREE = saved; });
+
+    /** The boxes round every visible mesh in the scene. */
+    function drawn() {
+        const out = [];
+        scene.traverse((o) => {
+            if (o.isMesh && !o.isInstancedMesh && o.visible) out.push(new THREE.Box3().setFromObject(o));
+        });
+        return out;
+    }
+
+    test('every solid box in the config is drawn exactly where the leaves meet it', () => {
+        const boxes = drawn();
+        const near = (a, b) => Math.abs(a - b) < 1e-4;
+        for (const b of C.yard.boxes) {
+            const match = boxes.find((m) => near(m.min.x, b.minX) && near(m.max.x, b.maxX)
+                && near(m.min.z, b.minZ) && near(m.max.z, b.maxZ) && near(m.max.y, b.height));
+            expect({ box: b.name, at: b.minX, drawn: Boolean(match) }).toEqual({ box: b.name, at: b.minX, drawn: true });
+        }
+    });
+
+    test('every pumpkin is drawn where it is solid, sitting on what it sits on', () => {
+        const boxes = drawn();
+        for (const p of C.yard.pumpkins) {
+            const body = boxes.find((m) => Math.abs((m.min.x + m.max.x) / 2 - p.x) < 1e-4
+                && Math.abs((m.min.z + m.max.z) / 2 - p.z) < 1e-4 && Math.abs(m.max.x - m.min.x - 2 * p.r) < 1e-3);
+            expect(body).toBeTruthy();
+            expect(body.min.y).toBeCloseTo(p.y, 4);
+            expect(body.max.y).toBeCloseTo(p.y + p.r * 1.44, 4);
+        }
     });
 });
 

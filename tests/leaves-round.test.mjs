@@ -30,130 +30,70 @@ describe('the round', () => {
         expect(round.phase).toBe('playing');
     });
 
-    test('runs for exactly its minute, blowing or not', () => {
+    test('runs for exactly its minute, blowing or not, then goes straight to the dive', () => {
         const round = R.createRound(RC);
-        R.stepRound(round, 1 / 60, { blowing: true, moving: 0 }, RC);
+        R.stepRound(round, 1 / 60, { blowing: true }, RC);
         let event = null;
         let frames = 0;
         while (!event && frames < 100000) {
-            event = R.stepRound(round, 1 / 60, { blowing: frames % 2 === 0, moving: 50 }, RC);
+            event = R.stepRound(round, 1 / 60, { blowing: frames % 2 === 0 }, RC);
             frames++;
         }
-        expect(event).toBe('time-up');
+        // STEVE'S M4 QA: "once the time runs out, we can just start the dive
+        // celebration". No wait for the leaves, and no last word.
+        expect(event).toBe('finale');
         // Sixty seconds of frames, give or take the one a float sum lands on.
         expect(Math.abs(frames - RC.seconds * 60)).toBeLessThanOrEqual(1);
         expect(R.timeLeft(round)).toBe(0);
-        expect(round.phase).toBe('settling');
-        expect(R.canBlow(round)).toBe(false);
-    });
-
-    test('counts the result only once the leaves have landed, and never waits forever', () => {
-        const round = R.createRound(RC);
-        R.stepRound(round, 0.1, { blowing: true, moving: 0 }, RC);
-        R.stepRound(round, RC.seconds, { blowing: false, moving: 0 }, RC);
-        expect(round.phase).toBe('settling');
-        // Still, but not yet for the minimum.
-        expect(R.stepRound(round, RC.settleMin / 2, { blowing: false, moving: 0 }, RC)).toBe(null);
-        expect(R.stepRound(round, RC.settleMin / 2, { blowing: false, moving: 0 }, RC)).toBe('finale');
         expect(round.phase).toBe('finale');
-
-        // Leaves that never stop moving still get a result at the cap.
-        const busy = R.createRound(RC);
-        R.stepRound(busy, 0.1, { blowing: true, moving: 0 }, RC);
-        R.stepRound(busy, RC.seconds, { blowing: false, moving: 0 }, RC);
-        let t = 0;
-        let event = null;
-        while (!event) {
-            event = R.stepRound(busy, 0.1, { blowing: false, moving: 300 }, RC);
-            t += 0.1;
-        }
-        expect(event).toBe('finale');
-        expect(t).toBeGreaterThan(RC.settleMax - 1e-9);
-        expect(t).toBeLessThan(RC.settleMax + 0.15);
+        expect(R.isOver(round)).toBe(true);
+        expect(R.canBlow(round)).toBe(false);
     });
 
     test('the blower runs before and during the round and in free play, never after', () => {
         const round = R.createRound(RC);
         expect(R.canBlow(round)).toBe(true);
-        R.stepRound(round, 0.1, { blowing: true, moving: 0 }, RC);
+        R.stepRound(round, 0.1, { blowing: true }, RC);
         expect(R.canBlow(round)).toBe(true);
-        R.stepRound(round, RC.seconds + 1, { blowing: true, moving: 0 }, RC);
-        expect(R.canBlow(round)).toBe(false);
-        R.stepRound(round, RC.settleMax, { blowing: true, moving: 0 }, RC);
+        R.stepRound(round, RC.seconds + 1, { blowing: true }, RC);
         expect(round.phase).toBe('finale');
         expect(R.canBlow(round)).toBe(false);
-        R.stepRound(round, 0.1, { moving: 0, finaleDone: true }, RC);
+        R.stepRound(round, 0.1, { finaleDone: true }, RC);
         expect(round.phase).toBe('done');
         expect(R.canBlow(round)).toBe(false);
         R.freePlay(round);
         expect(R.canBlow(round)).toBe(true);
         // Free play has no clock to run out.
-        expect(R.stepRound(round, 1000, { blowing: true, moving: 0 }, RC)).toBe(null);
+        expect(R.stepRound(round, 1000, { blowing: true }, RC)).toBe(null);
         expect(round.phase).toBe('free');
+        expect(R.isOver(round)).toBe(false);
         R.resetRound(round);
         expect(round).toEqual(R.createRound(RC));
     });
 });
 
 describe('the finale in the round (M3)', () => {
-    test('comes between the leaves landing and the end card, and waits for the dive', () => {
+    test('waits for the dive before the end card', () => {
         const round = R.createRound(RC);
-        R.stepRound(round, 0.1, { blowing: true, moving: 0 }, RC);
-        R.stepRound(round, RC.seconds, { moving: 0 }, RC);
-        expect(R.stepRound(round, RC.settleMin, { moving: 0 }, RC)).toBe('finale');
-        expect(R.isOver(round)).toBe(true);
-        expect(R.canBlow(round)).toBe(false);
-        for (let i = 0; i < 40; i++) expect(R.stepRound(round, 0.1, { moving: 50, finaleDone: false }, RC)).toBe(null);
-        expect(R.stepRound(round, 0.1, { moving: 50, finaleDone: true }, RC)).toBe('done');
+        R.stepRound(round, 0.1, { blowing: true }, RC);
+        expect(R.stepRound(round, RC.seconds, {}, RC)).toBe('finale');
+        for (let i = 0; i < 40; i++) expect(R.stepRound(round, 0.1, { finaleDone: false }, RC)).toBe(null);
+        expect(R.stepRound(round, 0.1, { finaleDone: true }, RC)).toBe('done');
     });
 
     test('never holds the end card past its cap, and a round without one goes straight to it', () => {
         const round = R.createRound(RC);
-        R.stepRound(round, 0.1, { blowing: true, moving: 0 }, RC);
-        R.stepRound(round, RC.seconds, { moving: 0 }, RC);
-        R.stepRound(round, RC.settleMin, { moving: 0 }, RC);
+        R.stepRound(round, 0.1, { blowing: true }, RC);
+        R.stepRound(round, RC.seconds, {}, RC);
         let t = 0;
         let event = null;
-        while (!event) { event = R.stepRound(round, 0.5, { moving: 0, finaleDone: false }, RC); t += 0.5; }
+        while (!event) { event = R.stepRound(round, 0.5, { finaleDone: false }, RC); t += 0.5; }
         expect(event).toBe('done');
         expect(t).toBeLessThan(RC.finaleMax + 0.6);
-        const plain = R.createRound({ ...RC, finale: false });
-        R.stepRound(plain, 0.1, { blowing: true, moving: 0 }, RC);
-        R.stepRound(plain, RC.seconds, { moving: 0 }, { ...RC, finale: false });
-        expect(R.stepRound(plain, RC.settleMin, { moving: 0 }, { ...RC, finale: false })).toBe('done');
-    });
-});
-
-describe('the neighbor\'s last word in the round', () => {
-    test('owed as the clock runs out, it holds the result until he has had it', () => {
-        const round = R.createRound(RC);
-        R.stepRound(round, 0.1, { blowing: true, moving: 0 }, RC);
-        expect(R.stepRound(round, RC.seconds, { blowing: false, moving: 0, revenge: true }, RC)).toBe('revenge');
-        expect(round.phase).toBe('revenge');
-        expect(R.isOver(round)).toBe(true);
-        expect(R.canBlow(round)).toBe(false);
-        for (let i = 0; i < 50; i++) expect(R.stepRound(round, 0.1, { moving: 0, revengeDone: false }, RC)).toBe(null);
-        expect(R.stepRound(round, 0.1, { moving: 0, revengeDone: true }, RC)).toBe('time-up');
-        expect(round.phase).toBe('settling');
-        expect(R.stepRound(round, RC.settleMin, { moving: 0 }, RC)).toBe('finale');
-    });
-
-    test('never holds the result past its cap, and when it is not owed it never happens', () => {
-        const round = R.createRound(RC);
-        R.stepRound(round, 0.1, { blowing: true, moving: 0 }, RC);
-        R.stepRound(round, RC.seconds, { moving: 0, revenge: true }, RC);
-        let t = 0;
-        let event = null;
-        while (!event) { event = R.stepRound(round, 0.5, { moving: 0, revengeDone: false }, RC); t += 0.5; }
-        expect(event).toBe('time-up');
-        expect(t).toBeGreaterThanOrEqual(RC.revengeMax);
-        expect(t).toBeLessThan(RC.revengeMax + 0.6);
-
-        const fair = R.createRound(RC);
-        R.stepRound(fair, 0.1, { blowing: true, moving: 0 }, RC);
-        expect(R.stepRound(fair, RC.seconds, { moving: 0, revenge: false }, RC)).toBe('time-up');
-        expect(R.isOver(fair)).toBe(true);
-        expect(R.isOver(R.createRound(RC))).toBe(false);
+        const plain = { ...RC, finale: false };
+        const quick = R.createRound(plain);
+        R.stepRound(quick, 0.1, { blowing: true }, plain);
+        expect(R.stepRound(quick, RC.seconds, {}, plain)).toBe('done');
     });
 });
 
@@ -259,16 +199,6 @@ describe('what the end card says', () => {
         expect(v.title).toBe('The neighbors are talking');
     });
 
-    test('his last word is the headline, and the story the share tells', () => {
-        const t = tallyOf({ lawn: 600, tarp: 300, street: 100, sent: 2500 });
-        expect(Sc.verdict(t, true)).toMatchObject({ key: 'revenge', title: 'The neighbor had the last word' });
-        expect(Sc.shareText(t, 60, true))
-            .toBe('I cleared 40% of my yard in 60 seconds. Then my neighbor blew 2,500 leaves back at me. A leaf blower game on SceneXP.');
-        expect(Sc.resultSentence(t, true)).toMatch(/^The neighbor had the last word\. 40 percent/);
-        // The fence row counts every leaf sent over, not only those still there.
-        expect(Sc.resultRows(t).find((r) => r.key === 'neighbor')).toEqual({ key: 'neighbor', label: 'Sent over the fence', value: '2,500' });
-    });
-
     test('the street shortcut is noticed, kindly', () => {
         const street = Sc.verdict(tallyOf({ lawn: 300, tarp: 100, street: 600 }));
         expect(street.line).toMatch(/into the street/);
@@ -301,9 +231,10 @@ describe('what the end card says', () => {
             tallyOf({ lawn: 700, tarp: 300 }), tallyOf({ lawn: 900, tarp: 100 }), tallyOf({ tarp: 700, neighbor: 300 }),
             tallyOf({ lawn: 300, tarp: 100, street: 600 })
         ];
-        const copy = tallies.flatMap((t) => [false, true].flatMap((revenge) => {
-            const v = Sc.verdict(t, revenge);
-            return [v.title, v.line, Sc.shareText(t, 60, revenge), Sc.resultSentence(t, revenge), ...Sc.resultRows(t).map((r) => r.label)];
+        const copy = tallies.flatMap((t) => [null, true, false].flatMap((landed) => {
+            const v = Sc.verdict(t);
+            return [v.title, v.line, Sc.shareText(t, 60, landed), Sc.resultSentence(t, landed), Sc.diveLine(landed),
+                ...Sc.resultRows(t).map((r) => r.label)];
         }));
         for (const text of copy) {
             expect(text).not.toMatch(/[—;]/);

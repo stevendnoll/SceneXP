@@ -15,7 +15,7 @@
  *   the back. Steve's note, 2026-10-06: "a small penalty for doing a lousy
  *   job".
  *
- *   NOBODY STANDS BACK UP (Steve's M3 QA, 2026-10-07): the roll toward the
+ *   NOBODY STANDS BACK UP (Steve's M3 QA, 2026-10-06): the roll toward the
  *   camera is the last beat, and it keeps the finale short.
  *
  * PURE. planFinale() decides everything once, from where the pile's peak is
@@ -61,7 +61,7 @@ export function planFinale(person, peak, F, area, { reduced = false } = {}) {
     // toward the pile (-u), so the hands reach `reachFront` past the hips that
     // way and the feet `reachBack` the other, and both must stay inside the
     // area (itself kept clear of the house, the hedge and the fence). Steve's
-    // QA, 2026-10-07: aimed only by the hips, the dive into a pile in the
+    // QA, 2026-10-06: aimed only by the hips, the dive into a pile in the
     // corner "dove through the corner of the house".
     const land = { x: peak.x + ux * F.landOut, z: peak.z + uz * F.landOut };
     const fit = (v, d, lo, hi) => {

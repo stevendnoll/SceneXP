@@ -36,9 +36,11 @@ export function facing(heading) {
  *   { mode: 'point', x, z }       walk toward a spot and point at it
  *   { mode: 'keys', x, z }        walk along (x, z), a vector of length 0 to 1
  *   null                          stand still
- * `area` is the rectangle the person can walk in. Mutates and returns `op`.
+ * `area` is the rectangle the person can walk in, and `boxes` the solid
+ * things in it (the trees' trunks, M5), which they walk round. Mutates and
+ * returns `op`.
  */
-export function stepOperator(op, aim, dt, B, area) {
+export function stepOperator(op, aim, dt, B, area, boxes = []) {
     let want = op.heading;
     let vx = 0;
     let vz = 0;
@@ -65,8 +67,18 @@ export function stepOperator(op, aim, dt, B, area) {
     const turn = wrap(want - op.heading);
     const step = B.turnRate * dt;
     op.heading = wrap(op.heading + clamp(turn, -step, step));
-    const nx = clamp(op.x + vx * dt, area.minX, area.maxX);
-    const nz = clamp(op.z + vz * dt, area.minZ, area.maxZ);
+    let nx = clamp(op.x + vx * dt, area.minX, area.maxX);
+    let nz = clamp(op.z + vz * dt, area.minZ, area.maxZ);
+    // Out of any box, by the shortest way, a body's width clear of it.
+    const r = 0.3;
+    for (const b of boxes) {
+        if (nx <= b.minX - r || nx >= b.maxX + r || nz <= b.minZ - r || nz >= b.maxZ + r) continue;
+        const out = [
+            [b.minX - r - nx, 0], [b.maxX + r - nx, 0], [0, b.minZ - r - nz], [0, b.maxZ + r - nz]
+        ].sort((p, q) => Math.hypot(...p) - Math.hypot(...q))[0];
+        nx += out[0];
+        nz += out[1];
+    }
     op.speed = dt > 0 ? Math.hypot(nx - op.x, nz - op.z) / dt : 0;
     op.x = nx;
     op.z = nz;

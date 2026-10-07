@@ -160,7 +160,7 @@ describe('the pile and the burst, in the real sim', () => {
         const sim = heap(400);
         const peak = S.pilePeak(sim, C.yard.tarp);
         let tallest = 0;
-        for (const h of sim.height) tallest = Math.max(tallest, h);
+        for (let c = 0; c < sim.height.length; c++) tallest = Math.max(tallest, sim.height[c] - sim.floor[c]);
         expect(peak.height).toBeCloseTo(tallest, 9);
         expect(peak.x).toBeLessThan(-8);
         const bare = S.createSim(10, C);
@@ -277,7 +277,7 @@ describe('the dive poses, on the real three.js', () => {
         }
     });
 
-    // STEVE'S QA, 2026-10-07: the dive into a corner pile "dove through the
+    // STEVE'S QA, 2026-10-06: the dive into a corner pile "dove through the
     // corner of the house". FAILED BEFORE THE FIX, aimed only by the hips.
     test('diving at the corner pile, no part of the body ever goes into the house or the hedge', () => {
         const wallX = C.yard.lawn.minX;   // the hedge

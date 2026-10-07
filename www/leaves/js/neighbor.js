@@ -18,12 +18,6 @@
  * `cooldown`), watches longer, and from visit
  * `bigFrom` (counting from 0) he brings the big blower.
  *
- * HIS LAST WORD. When the round says so (`input.revenge`), he comes out (or
- * carries on) with the big blower, quicker on his feet, and sweeps his whole
- * lawn until most of it is clear (`revengeKeep` of it left) or
- * `revengeSeconds` have passed, and answers 'revenge-done'. Short, so the
- * result is not kept waiting behind him.
- *
  * A GOOD-NATURED RIVAL: he never sets foot in our yard, never touches the
  * visitor, and waves when the round is over.
  *
@@ -54,11 +48,8 @@ export function createNeighbor(N) {
         blowing: false,
         big: false,
         arms: 'carry',
-        revenge: false,
-        revengeDone: false,
         segs: [],
         seg: 0,
-        revengeFrom: 0,
         // How many were on his lawn when he last planned his sweep, to tell
         // whether a pass made any difference.
         lastCount: 0
@@ -100,12 +91,10 @@ function turnTo(nb, heading, dt) {
 }
 
 /** Out he comes. */
-function start(nb, N, revenge, leaves = 0) {
+function start(nb, N) {
     nb.state = 'door-open';
-    nb.revengeFrom = leaves;
     nb.t = 0;
-    nb.revenge = revenge;
-    nb.big = revenge || nb.visits >= N.bigFrom;
+    nb.big = nb.visits >= N.bigFrom;
     nb.x = N.door.x;
     nb.z = N.door.z + 0.6;
     nb.heading = 0;
@@ -120,24 +109,16 @@ function start(nb, N, revenge, leaves = 0) {
  * to the fence, then close to the fence, where the air landing just short of
  * it lifts them over (measured: from the far line alone they piled against
  * the pickets and stayed). Along the fence each line runs from the nearest
- * of them to the farthest, at least a couple of meters. His last word
- * sweeps the whole lawn.
+ * of them to the farthest, at least a couple of meters.
  */
 function planSweep(nb, input, N) {
     const fence = (z) => ({ x: N.nearLine, z });
-    let a;
-    let b;
-    if (nb.revenge) {
-        a = N.zMin;
-        b = N.zMax;
-    } else {
-        a = clamp(Number.isFinite(input.minZ) ? input.minZ : N.zMin, N.zMin, N.zMax);
-        b = clamp(Number.isFinite(input.maxZ) ? input.maxZ : N.zMax, N.zMin, N.zMax);
-        if (b - a < 2) {
-            const mid = (a + b) / 2;
-            a = clamp(mid - 1, N.zMin, N.zMax - 2);
-            b = a + 2;
-        }
+    let a = clamp(Number.isFinite(input.minZ) ? input.minZ : N.zMin, N.zMin, N.zMax);
+    let b = clamp(Number.isFinite(input.maxZ) ? input.maxZ : N.zMax, N.zMin, N.zMax);
+    if (b - a < 2) {
+        const mid = (a + b) / 2;
+        a = clamp(mid - 1, N.zMin, N.zMax - 2);
+        b = a + 2;
     }
     const reach = Number.isFinite(input.maxX) ? input.maxX : N.line;
     const far = clamp(reach + N.behind, N.lineMin, N.lineMax);
@@ -155,34 +136,17 @@ function planSweep(nb, input, N) {
  *   minZ/maxZ where along the fence they lie
  *   maxX      how far into his yard the farthest one lies
  *   active    whether the round lets him come out (playing, or free play)
- *   revenge   whether he is to have the last word now
  *   over      whether the round is over (he waves, and stays out to do it)
- * Returns 'out', 'blow', 'watch', 'in', 'revenge-done' or null.
+ * Returns 'out', 'blow', 'watch', 'in' or null.
  */
 export function stepNeighbor(nb, dt, input, N) {
     const step = dt > 0 ? dt : 0;
     nb.t += step;
 
-    // The last word, whatever he was doing.
-    if (input.revenge && !nb.revengeDone && !nb.revenge) {
-        if (nb.state === 'inside' || nb.state === 'door-close') {
-            start(nb, N, true, input.leaves);
-            return 'out';
-        }
-        nb.revenge = true;
-        nb.big = true;
-        nb.revengeFrom = input.leaves;
-        if (nb.state === 'walk-out' || nb.state === 'blow' || nb.state === 'watch' || nb.state === 'walk-in') {
-            planSweep(nb, input, N);
-            nb.state = 'walk-out';
-            nb.t = 0;
-        }
-    }
-
     // THE ROUND IS OVER: a visit in progress stops where it is and he waves,
     // so the end of the round is not kept waiting on him (Steve's M3 QA:
     // after the clock ran out it "shows the neighbor for several seconds").
-    if (input.over && !nb.revenge && (nb.state === 'door-open' || nb.state === 'walk-out' || nb.state === 'blow')) {
+    if (input.over && (nb.state === 'door-open' || nb.state === 'walk-out' || nb.state === 'blow')) {
         nb.state = 'watch';
         nb.t = 0;
         nb.blowing = false;
@@ -194,13 +158,12 @@ export function stepNeighbor(nb, dt, input, N) {
         case 'inside':
             nb.cooldown -= step;
             if (input.active && nb.cooldown <= 0 && input.leaves >= pick(N.visitAt, nb.visits)) {
-                start(nb, N, false);
+                start(nb, N);
                 return 'out';
             }
             return null;
         case 'door-open':
-            // He is in a hurry for his last word.
-            nb.door = Math.min(1, nb.door + step / (N.doorSeconds * (nb.revenge ? 0.5 : 1)));
+            nb.door = Math.min(1, nb.door + step / N.doorSeconds);
             if (nb.door >= 1) {
                 planSweep(nb, input, N);
                 nb.state = 'walk-out';
@@ -210,7 +173,7 @@ export function stepNeighbor(nb, dt, input, N) {
         case 'walk-out': {
             nb.blowing = false;
             const first = nb.segs[0];
-            if (walkTo(nb, first.x, first.z, nb.revenge ? N.revengeWalk : N.walkSpeed, step)) {
+            if (walkTo(nb, first.x, first.z, N.walkSpeed, step)) {
                 nb.state = 'blow';
                 nb.t = 0;
                 nb.seg = 1;
@@ -225,7 +188,7 @@ export function stepNeighbor(nb, dt, input, N) {
             const dx = target.x - nb.x;
             const dz = target.z - nb.z;
             const d = Math.hypot(dx, dz);
-            const move = Math.min(d, (nb.revenge ? N.revengeSweep : N.sweepSpeed) * step);
+            const move = Math.min(d, N.sweepSpeed * step);
             if (d > 0) {
                 nb.x += (dx / d) * move;
                 nb.z += (dz / d) * move;
@@ -245,24 +208,16 @@ export function stepNeighbor(nb, dt, input, N) {
                 nb.seg += 1;
                 if (nb.seg >= nb.segs.length) {
                     const stuck = input.leaves <= nb.lastCount && input.leaves > nb.lastCount * (1 - N.progress);
-                    if (nb.revenge) nb.seg = 0;
-                    else if (input.leaves <= N.clearLeft || stuck || nb.t >= N.visitMax) cleared = true;
+                    if (input.leaves <= N.clearLeft || stuck || nb.t >= N.visitMax) cleared = true;
                     else planSweep(nb, input, N);
                 }
             }
-            const doneRevenge = nb.revenge
-                && (input.leaves <= Math.max(N.revengeLeft, nb.revengeFrom * N.revengeKeep)
-                    || nb.t >= N.revengeSeconds);
-            if (cleared || doneRevenge) {
+            if (cleared) {
                 nb.blowing = false;
                 nb.state = 'watch';
                 nb.t = 0;
                 nb.speed = 0;
                 nb.arms = 'folded';
-                if (nb.revenge) {
-                    nb.revengeDone = true;
-                    return 'revenge-done';
-                }
                 return 'watch';
             }
             return null;
@@ -293,7 +248,6 @@ export function stepNeighbor(nb, dt, input, N) {
                 nb.state = 'inside';
                 nb.visits += 1;
                 nb.cooldown = pick(N.cooldown, nb.visits);
-                nb.revenge = false;
                 return 'in';
             }
             return null;
