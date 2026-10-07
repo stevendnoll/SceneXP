@@ -82,6 +82,41 @@ export function cameraOn(point, aspect, C, span) {
     };
 }
 
+/**
+ * The character card's view (M4): in close on the person at `point`, a
+ * little above eye level, from the street side, far enough back that a body
+ * `tall` meters high fills `share` of the part of the screen left visible
+ * beside the card. `fit` is that part: { width, height } as shares of the
+ * screen (the panel takes the right of a wide screen, and the bottom of a
+ * narrow one).
+ */
+export function cameraCast(point, aspect, C, fit, tall = 2.2) {
+    const tan = Math.tan((C.fovDegrees * Math.PI) / 360);
+    const byHeight = tall / fit.height / (2 * tan);
+    const byWidth = 1.4 / fit.width / (2 * tan * aspect);
+    const dist = Math.max(byHeight, byWidth);
+    const up = 0.3;
+    const len = Math.hypot(up, 1);
+    const target = { x: point.x, y: 0.95, z: point.z };
+    return {
+        position: { x: target.x, y: target.y + (up / len) * dist, z: target.z + dist / len },
+        target,
+        distance: dist
+    };
+}
+
+/** How much of the screen the character card leaves visible, and how far to
+ *  shift the view so the person sits in the middle of it: a panel 412 pixels
+ *  wide down the right of a wide screen, a sheet over the bottom 56% of a
+ *  narrow one (experience.css). Shifts are in pixels, for setViewOffset. */
+export function castFrame(width, height) {
+    if (width >= 720) {
+        const panel = Math.min(380, width - 32) + 32;
+        return { width: (width - panel) / width, height: 1, shiftX: panel / 2, shiftY: 0 };
+    }
+    return { width: 1, height: 0.44, shiftX: 0, shiftY: height * 0.28 };
+}
+
 /** Where a ray from `origin` along `dir` meets the ground (y = 0), or null if
  *  it points at the sky. */
 export function rayToGround(origin, dir) {

@@ -519,6 +519,73 @@ describe('the finale (M3)', () => {
     });
 });
 
+describe('the character card (M4)', () => {
+    /** The radio button for `id` in the group hosted by `host`. */
+    function option(host, id) {
+        const label = dom.el(host).children.find((l) => l.children[0].value === id);
+        return label.children[0];
+    }
+
+    test('opens from the welcome card, beside a paused yard, with the current choice ticked', async () => {
+        const main = await boot();
+        expect(dom.el('cast-name').textContent).toBe('Playing as the weekend warrior.');
+        fire(dom.el('cast-btn'), 'click');
+        const s = main.getState();
+        expect(s.castShown).toBe(true);
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
+        expect(dom.el('round-hud').classList.contains('visible')).toBe(false);
+        expect(dom.el('cast-presets').children).toHaveLength(6);
+        expect(dom.el('cast-length').children).toHaveLength(4);
+        expect(option('cast-presets', 'weekend').checked).toBe(true);
+        // Nothing moves and no clock runs while it is open.
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 1, 20);
+        expect(main.getState().round.phase).toBe('ready');
+        expect(main.getState().blowing).toBe(false);
+    });
+
+    test('each choice changes the person at once, and Done keeps it and goes back to the welcome card', async () => {
+        const main = await boot();
+        fire(dom.el('cast-btn'), 'click');
+        const runner = option('cast-presets', 'runner');
+        runner.checked = true;
+        fire(runner, 'change');
+        const gray = option('cast-hair', 'gray');
+        gray.checked = true;
+        fire(gray, 'change');
+        expect(main.getState().cast).toMatchObject({ preset: 'runner', hair: 'gray' });
+        expect(dom.el('cast-status').textContent).toBe('Gray');
+        expect(() => frames(main, 0.5, 20)).not.toThrow();
+        fire(dom.el('cast-done'), 'click');
+        expect(main.getState().castShown).toBe(false);
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+        expect(dom.el('cast-name').textContent).toBe('Playing as the runner.');
+        expect(JSON.parse(globalThis.localStorage.getItem('leaves-character'))).toMatchObject({ preset: 'runner', hair: 'gray' });
+    });
+
+    test('a kept choice is who turns up next visit, and Escape is Done', async () => {
+        globalThis.localStorage.setItem('leaves-character', JSON.stringify({ preset: 'gardener', skin: 'brown', hair: 'blond', length: 'bald' }));
+        const main = await boot();
+        expect(main.getState().cast).toEqual({ preset: 'gardener', skin: 'brown', hair: 'blond', length: 'bald' });
+        expect(dom.el('cast-name').textContent).toBe('Playing as the gardener.');
+        fire(dom.el('cast-btn'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Escape' });
+        expect(main.getState().castShown).toBe(false);
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+    });
+
+    test('Forget my choice clears what was kept and brings back the default person', async () => {
+        globalThis.localStorage.setItem('leaves-character', JSON.stringify({ preset: 'executive', skin: 'deep', hair: 'gray', length: 'long' }));
+        const main = await boot();
+        fire(dom.el('cast-btn'), 'click');
+        fire(dom.el('cast-forget'), 'click');
+        expect(globalThis.localStorage.getItem('leaves-character')).toBe(null);
+        expect(main.getState().cast).toEqual({ preset: 'weekend', skin: 'fair', hair: 'darkBrown', length: 'short' });
+        expect(option('cast-presets', 'weekend').checked).toBe(true);
+        expect(dom.el('cast-status').textContent).toMatch(/forgotten/);
+    });
+});
+
 describe('the page', () => {
     let html;
     beforeAll(async () => { html = await readFile(PAGE, 'utf8'); });

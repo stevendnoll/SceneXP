@@ -3886,7 +3886,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Leaves | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=4" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=5" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -3899,6 +3899,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/yard.min.js" rel="modulepreload"]
     link [href="js/blower.min.js" rel="modulepreload"]
     link [href="js/view.min.js" rel="modulepreload"]
+    link [href="js/cast.min.js" rel="modulepreload"]
     link [href="js/lab.min.js" rel="modulepreload"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
@@ -3908,7 +3909,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=4" rel="stylesheet"]
+    link [href="css/experience.min.css?v=5" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -3958,6 +3959,11 @@ html [data-ui-theme="ember" lang="en"]
           span
             "HELP"
           "The question mark in the corner, or Escape, brings you back here."
+        p.cast-line
+          span#cast-name
+            "Playing as the weekend warrior."
+          button#cast-btn.welcome-free.cast-btn [type="button"]
+            "Change your character"
         button#free-btn.welcome-free [type="button"]
           "Or just play with the leaves, with no clock"
         a#explore-link.welcome-explore [href="/"]
@@ -3985,6 +3991,33 @@ html [data-ui-theme="ember" lang="en"]
       button#hud-new.hud-btn [hidden type="button"]
         "New round"
     p#round-status.sr-only [aria-live="polite" role="status"]
+    div#cast-modal.hidden [aria-labelledby="cast-title" aria-modal="true" role="dialog"]
+      div.cast-panel
+        h2#cast-title.cast-title
+          "Who is on leaf duty?"
+        fieldset.cast-group
+          legend
+            "Outfit"
+          div#cast-presets.cast-options
+        fieldset.cast-group
+          legend
+            "Skin tone"
+          div#cast-skins.cast-options.cast-swatches
+        fieldset.cast-group
+          legend
+            "Hair color"
+          div#cast-hair.cast-options.cast-swatches
+        fieldset.cast-group
+          legend
+            "Hair"
+          div#cast-length.cast-options
+        button#cast-done.piece-enter.cast-done [type="button"]
+          "Done"
+        button#cast-forget.cast-forget [type="button"]
+          "Forget my choice"
+        p.cast-note
+          "Your choice is kept in this browser, so they are waiting for you next time."
+        p#cast-status.sr-only [aria-live="polite" role="status"]
     div#end-modal.hidden [aria-describedby="end-line" aria-labelledby="end-title" aria-modal="true" role="dialog"]
       div.modal-backdrop
       div.modal-container.piece-card
@@ -5039,6 +5072,10 @@ html [lang="en"]
               "Corner Office keeps everything you enter, your applications, interviews, contacts and follow-ups, along with your settings and which things in the office you have already opened, in your browser's local storage, so your office is just as you left it when you come back. None of it is ever sent anywhere: its usage pings say only what kind of thing you did, such as adding an application, and never anything you typed. Its Out-tray saves a backup you can keep, and its Settings can clear the office on the spot."
             li
               strong
+                "Your character in Leaves."
+              "The leaf blower game keeps the character you choose, their outfit, skin tone, hair color and hair length, in your browser's local storage, so they are waiting for you when you come back. The Forget my choice button on the character card clears it on the spot."
+            li
+              strong
                 "You can remove any of it whenever you like."
               "Apart from that puzzle token, everything above stays on your device and is never sent to us or to anyone else. Clearing this site's data in your browser settings removes all of it at once."
           h2
@@ -5064,7 +5101,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated September 18, 2026."
+              "Last updated October 7, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand

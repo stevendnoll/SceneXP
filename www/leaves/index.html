@@ -93,7 +93,7 @@
     <title>Leaves | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=4" as="style">
+    <link rel="preload" href="css/experience.min.css?v=5" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -107,6 +107,7 @@
     <link rel="modulepreload" href="js/yard.min.js">
     <link rel="modulepreload" href="js/blower.min.js">
     <link rel="modulepreload" href="js/view.min.js">
+    <link rel="modulepreload" href="js/cast.min.js">
     <link rel="modulepreload" href="js/lab.min.js">
     <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
@@ -119,7 +120,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=4">
+    <link rel="stylesheet" href="css/experience.min.css?v=5">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -180,6 +181,11 @@
                 <span>BLOW</span> Hold the mouse button or Space. On a touch screen, hold the blow button in the corner.
                 <span>HELP</span> The question mark in the corner, or Escape, brings you back here.
             </div>
+            <!-- Who is on leaf duty (M4): the line names the character, and
+                 the button opens the character card. Shielded from the
+                 overlay's click-to-start by main.js. -->
+            <p class="cast-line"><span id="cast-name">Playing as the weekend warrior.</span>
+                <button id="cast-btn" class="welcome-free cast-btn" type="button">Change your character</button></p>
             <!-- Free blow: the yard with no clock. Shielded from the overlay's
                  own click-to-start by main.js, so it does its own job. -->
             <button id="free-btn" class="welcome-free" type="button">Or just play with the leaves, with no clock</button>
@@ -231,6 +237,38 @@
         <button id="hud-new" class="hud-btn" type="button" hidden>New round</button>
     </div>
     <p id="round-status" class="sr-only" role="status" aria-live="polite"></p>
+
+    <!-- The character card (M4), opened from the welcome card. It sits
+         beside the yard (a sheet along the bottom on a phone) rather than over
+         it, with the camera in close on the character, so every choice shows
+         on them as it is made. The choices are radio buttons, built by
+         main.js from js/cast.js. Done (or Escape) goes back to the welcome
+         card, and the choice is kept in this browser. -->
+    <div id="cast-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="cast-title">
+        <div class="cast-panel">
+            <h2 id="cast-title" class="cast-title">Who is on leaf duty?</h2>
+            <fieldset class="cast-group">
+                <legend>Outfit</legend>
+                <div id="cast-presets" class="cast-options"></div>
+            </fieldset>
+            <fieldset class="cast-group">
+                <legend>Skin tone</legend>
+                <div id="cast-skins" class="cast-options cast-swatches"></div>
+            </fieldset>
+            <fieldset class="cast-group">
+                <legend>Hair color</legend>
+                <div id="cast-hair" class="cast-options cast-swatches"></div>
+            </fieldset>
+            <fieldset class="cast-group">
+                <legend>Hair</legend>
+                <div id="cast-length" class="cast-options"></div>
+            </fieldset>
+            <button id="cast-done" class="piece-enter cast-done" type="button">Done</button>
+            <button id="cast-forget" class="cast-forget" type="button">Forget my choice</button>
+            <p class="cast-note">Your choice is kept in this browser, so they are waiting for you next time.</p>
+            <p id="cast-status" class="sr-only" role="status" aria-live="polite"></p>
+        </div>
+    </div>
 
     <!-- The end of a round. No close button and no backdrop dismissal: the
          ways on are Play again (which takes focus), Keep blowing, or Escape,

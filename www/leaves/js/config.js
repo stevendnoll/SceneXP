@@ -300,6 +300,10 @@ export const LEAVES_CONFIG = Object.freeze({
         runUp: 3.4,
         takeoff: 1.1,
         landOut: 0.5,
+        // How far the body reaches past the hips, lying: the hands overhead
+        // ahead (measured 0.92 m, plus a hand), and the feet behind.
+        reachFront: 1.05,
+        reachBack: 1.0,
         runTime: 0.9,
         airTime: 0.75,
         // How high the leap rises above a straight line, plus half the pile.

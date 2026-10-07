@@ -57,7 +57,20 @@ export function planFinale(person, peak, F, area, { reduced = false } = {}) {
     const uz = dz / d;
     const inArea = (p) => ({ x: clamp(p.x, area.minX, area.maxX), z: clamp(p.z, area.minZ, area.maxZ) });
     // Hips land `land` meters out from the peak, so the head and arms reach it.
+    // THE WHOLE BODY LANDS ON THE LAWN, fingertips to feet. The dive is
+    // toward the pile (-u), so the hands reach `reachFront` past the hips that
+    // way and the feet `reachBack` the other, and both must stay inside the
+    // area (itself kept clear of the house, the hedge and the fence). Steve's
+    // QA, 2026-10-07: aimed only by the hips, the dive into a pile in the
+    // corner "dove through the corner of the house".
     const land = { x: peak.x + ux * F.landOut, z: peak.z + uz * F.landOut };
+    const fit = (v, d, lo, hi) => {
+        const min = lo - Math.min(-d * F.reachFront, d * F.reachBack);
+        const max = hi - Math.max(-d * F.reachFront, d * F.reachBack);
+        return min <= max ? clamp(v, min, max) : (min + max) / 2;
+    };
+    land.x = fit(land.x, ux, area.minX, area.maxX);
+    land.z = fit(land.z, uz, area.minZ, area.maxZ);
     const takeoff = inArea({ x: land.x + ux * F.takeoff, z: land.z + uz * F.takeoff });
     const runFrom = inArea({ x: land.x + ux * F.runUp, z: land.z + uz * F.runUp });
     const walkTime = clamp(Math.hypot(runFrom.x - person.x, runFrom.z - person.z) / F.walkSpeed, F.minWalk, F.maxWalk);

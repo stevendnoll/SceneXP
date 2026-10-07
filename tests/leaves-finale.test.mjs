@@ -277,6 +277,33 @@ describe('the dive poses, on the real three.js', () => {
         }
     });
 
+    // STEVE'S QA, 2026-10-07: the dive into a corner pile "dove through the
+    // corner of the house". FAILED BEFORE THE FIX, aimed only by the hips.
+    test('diving at the corner pile, no part of the body ever goes into the house or the hedge', () => {
+        const wallX = C.yard.lawn.minX;   // the hedge
+        const wallZ = C.yard.lawn.minZ;   // the house front
+        const inPark = { minX: C.yard.lawn.minX + 0.5, maxX: C.yard.lawn.maxX - 0.4, minZ: C.yard.lawn.minZ + 0.6, maxZ: C.yard.sidewalk.maxZ };
+        for (const from of [{ x: 2, z: 3 }, { x: -9, z: 6 }, { x: 8, z: -4 }, { x: -9.4, z: -2 }, { x: -3, z: -5.3 }]) {
+            const plan = Fn.planFinale(from, { x: -9.95, z: -5.95, height: 0.7 }, F, inPark);
+            const fig = Op.createOperatorFigure(C.blower, C.look, { person: { shoulderRound: 0.4 } });
+            for (let t = plan.t.run; t <= plan.total + 0.2; t += 0.05) {
+                const pose = Fn.finaleAt(plan, t);
+                fig.update({ ...pose, hideBlower: true }, false, t, pose.arms);
+                fig.group.updateMatrixWorld(true);
+                const box = new THREE.Box3();
+                fig.group.traverse((o) => {
+                    if (!o.isMesh) return;
+                    for (let q = o; q; q = q.parent) if (!q.visible) return;
+                    box.expandByObject(o);
+                });
+                expect(`${JSON.stringify(from)} t ${t.toFixed(2)} x ${box.min.x.toFixed(2)}`).toBe(
+                    `${JSON.stringify(from)} t ${t.toFixed(2)} x ${Math.max(box.min.x, wallX).toFixed(2)}`);
+                expect(`${JSON.stringify(from)} t ${t.toFixed(2)} z ${box.min.z.toFixed(2)}`).toBe(
+                    `${JSON.stringify(from)} t ${t.toFixed(2)} z ${Math.max(box.min.z, wallZ).toFixed(2)}`);
+            }
+        }
+    });
+
     test('tipped face down and lowered, the body lies flat at the height the finale asks for', () => {
         const surface = 0.3;
         const { box } = measure({ pitch: Math.PI / 2, lift: surface + 0.12 - Fn.PIVOT, hideBlower: true }, 'up');

@@ -25,6 +25,11 @@
  * small, on the lawn, getting up slowly with a hand on their back. A tap or
  * a key skips it.
  *
+ * M4, THE CHARACTER (2026-10-07): the welcome card's "Change your character"
+ * opens a card beside the yard (cast.js for the choices) with the camera in
+ * close on the person, who changes as each choice is made. The choice is
+ * kept in this browser.
+ *
  * UNLISTED. The page carries noindex and is in no directory, sitemap or
  * llms.txt until the scene it grows into is released.
  */
@@ -40,7 +45,11 @@ import {
 import { createLeafMesh } from './leafmesh.min.js';
 import { buildYard } from './yard.min.js';
 import { createOperator, stepOperator, facing, createOperatorFigure } from './blower.min.js';
-import { cameraFor, cameraOn, rayToGround, ease } from './view.min.js';
+import { cameraFor, cameraOn, cameraCast, castFrame, rayToGround, ease } from './view.min.js';
+import {
+    PRESETS, SKINS, HAIR_COLORS, HAIR_LENGTHS, DEFAULT_CHOICE,
+    loadChoice, saveChoice, forgetChoice, personConfig, castLine
+} from './cast.min.js';
 import { isQaHost, labOptions, labSearch, statsLines, fpsOf, shortCount } from './lab.min.js';
 import {
     getProofOfWork, bufToHex, shieldOverlayControl, installCardFocusTrap, installCardScrollReset
@@ -84,6 +93,12 @@ let blocker = null;
 let helpBtn = null;
 let blowBtn = null;
 let endModal = null;
+let castModal = null;
+// Who is on leaf duty (cast.js), the choice as it was when the card opened
+// (to tell whether it changed), and the radio buttons the card is built of.
+let castChoice = { ...DEFAULT_CHOICE };
+let castBefore = null;
+const castInputs = [];
 let cleanupController = null;
 
 // The round, and the count of where the leaves are, refreshed a few times a
@@ -155,10 +170,14 @@ async function init() {
     helpBtn = document.getElementById('help-btn');
     blowBtn = document.getElementById('blow-btn');
     endModal = document.getElementById('end-modal');
+    castModal = document.getElementById('cast-modal');
     if (!canvas || typeof THREE === 'undefined') return;
     // The markup starts it hidden. Said again here so the round never begins
     // believing a card is up.
     if (endModal) endModal.classList.add('hidden');
+    if (castModal) castModal.classList.add('hidden');
+    castChoice = loadChoice();
+    setText('cast-name', castLine(castChoice));
 
     state.isMobile = detectMobile();
     state.touch = state.isMobile;
@@ -215,7 +234,7 @@ async function init() {
     sent = new Uint8Array(state.count);
 
     operator = createOperator(B);
-    figure = createOperatorFigure(B, CONFIG.look);
+    figure = createOperatorFigure(B, CONFIG.look, { person: personConfig(castChoice) });
     figure.update(operator, false, 0);
     scene.add(figure.group);
     neighborFigure = createOperatorFigure(B, CONFIG.look, {
@@ -297,9 +316,10 @@ function followCamera(dt) {
     // The finale's view: in close on the pile, the house behind it, held
     // through the end card. Reduced motion keeps the usual view.
     const onPile = finale.plan && !state.reducedMotion && (round.phase === 'finale' || round.phase === 'done');
-    const want = onPile
-        ? cameraOn(finale.plan.land, aspect, CONFIG.camera, CONFIG.finale.span)
-        : cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null);
+    let want;
+    if (castShown()) want = cameraCast(operator, aspect, CONFIG.camera, castFrame(window.innerWidth, window.innerHeight));
+    else if (onPile) want = cameraOn(finale.plan.land, aspect, CONFIG.camera, CONFIG.finale.span);
+    else want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null);
     const rate = CONFIG.camera.follow;
     ['x', 'y', 'z'].forEach((k) => {
         view.position[k] = ease(view.position[k], want.position[k], rate, dt);
@@ -322,6 +342,7 @@ function setupEventListeners() {
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
         placeCamera(true);
+        if (castShown()) frameCast();
     }, { signal });
 
     // Keep the view from being pinch-zoomed by iOS Safari, which ignores
@@ -342,6 +363,10 @@ function setupEventListeners() {
         blocker.addEventListener('click', dismiss, { signal });
         blocker.addEventListener('touchend', dismiss, { signal });
         shieldOverlayControl(document.getElementById('explore-link'), { signal });
+        const castBtn = document.getElementById('cast-btn');
+        if (shieldOverlayControl(castBtn, { signal })) {
+            castBtn.addEventListener('click', openCast, { signal });
+        }
         const freeBtn = document.getElementById('free-btn');
         if (shieldOverlayControl(freeBtn, { signal })) {
             freeBtn.addEventListener('click', startFreePlay, { signal });
@@ -465,6 +490,12 @@ const WALK_KEYS = {
 };
 
 function onKeyDown(event) {
+    // The character card keeps its keys too (its radio buttons take the
+    // arrows), and Escape is Done.
+    if (castShown()) {
+        if (event.code === 'Escape') closeCast();
+        return;
+    }
     // The end card keeps its keys: its buttons take Enter and Space, Tab is
     // the focus trap's, and Escape keeps blowing.
     if (endShown()) {
@@ -566,7 +597,7 @@ function welcomeShown() {
  *  and the end card: nothing to press until the visitor is in, and nothing
  *  over a card. */
 function setChromeVisible(on) {
-    const shown = on && !welcomeShown() && !endShown();
+    const shown = on && !welcomeShown() && !endShown() && !castShown();
     if (helpBtn) helpBtn.classList.toggle('visible', shown);
     if (blowBtn) blowBtn.classList.toggle('visible', shown && state.touch);
     const hud = document.getElementById('round-hud');
@@ -627,6 +658,143 @@ function applySiteLinks() {
     if (explore) explore.href = CONFIG.site.home.path;
 }
 
+// ---- The character card (M4) ------------------------------------------------
+
+function castShown() {
+    return Boolean(castModal) && !castModal.classList.contains('hidden');
+}
+
+function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+
+/** The card's radio buttons, one group per part of the choice, built once.
+ *  Swatches are colored through the CSSOM, which the page's CSP allows
+ *  where a style attribute it would not. */
+function buildCast() {
+    if (castInputs.length) return;
+    const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
+    [
+        { host: 'cast-presets', key: 'preset', list: PRESETS },
+        { host: 'cast-skins', key: 'skin', list: SKINS, swatch: true },
+        { host: 'cast-hair', key: 'hair', list: HAIR_COLORS, swatch: true },
+        { host: 'cast-length', key: 'length', list: HAIR_LENGTHS }
+    ].forEach((group) => {
+        const host = document.getElementById(group.host);
+        if (!host) return;
+        group.list.forEach((option) => {
+            const label = document.createElement('label');
+            label.className = 'cast-option';
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = `cast-${group.key}`;
+            input.value = option.id;
+            label.appendChild(input);
+            const text = document.createElement('span');
+            text.textContent = option.label;
+            if (group.swatch) {
+                const dot = document.createElement('span');
+                dot.className = 'cast-swatch';
+                dot.style.backgroundColor = hex(option.color);
+                label.appendChild(dot);
+                text.className = 'sr-only';
+                label.title = option.label;
+            }
+            label.appendChild(text);
+            input.addEventListener('change', () => chooseCast(group.key, option.id, option.label));
+            host.appendChild(label);
+            castInputs.push({ key: group.key, id: option.id, input, label });
+        });
+    });
+}
+
+/** Tick the chosen option in each group. */
+function markCast() {
+    castInputs.forEach(({ key, id, input, label }) => {
+        const on = castChoice[key] === id;
+        input.checked = on;
+        label.classList.toggle('chosen', on);
+    });
+}
+
+/** The person, dressed as the choice says: a new figure in place of the old,
+ *  in whatever pose the old one held. */
+function dressFigure() {
+    if (figure) {
+        scene.remove(figure.group);
+        figure.group.traverse((o) => {
+            if (o.geometry) o.geometry.dispose();
+            if (o.material) o.material.dispose();
+        });
+    }
+    figure = createOperatorFigure(B, CONFIG.look, { person: personConfig(castChoice) });
+    figure.update(operator, false, state.time, finale.plan ? finale.arms : 'carry');
+    scene.add(figure.group);
+    shade.owed = true;
+}
+
+function chooseCast(key, id, label) {
+    if (castChoice[key] === id) return;
+    castChoice = { ...castChoice, [key]: id };
+    markCast();
+    dressFigure();
+    setText('cast-status', label);
+}
+
+/** Shift the view so the person sits in the middle of what the card leaves
+ *  visible. */
+function frameCast() {
+    if (!camera || !camera.setViewOffset) return;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const f = castFrame(W, H);
+    camera.setViewOffset(W, H, f.shiftX, f.shiftY, W, H);
+}
+
+/** "Change your character": the welcome card steps aside for the character
+ *  card, and the person turns to face the camera as it comes in close. */
+function openCast() {
+    if (!state.isLoaded || castShown()) return;
+    buildCast();
+    markCast();
+    castBefore = { ...castChoice };
+    if (blocker) blocker.classList.add('hidden');
+    castModal.classList.remove('hidden');
+    setChromeVisible(false);
+    operator.heading = 0;
+    operator.speed = 0;
+    frameCast();
+    const chosen = castInputs.find((c) => c.input.checked) || castInputs[0];
+    if (chosen) {
+        try { chosen.input.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
+    }
+}
+
+/** Done (or Escape): keep the choice, and back to the welcome card. */
+function closeCast() {
+    if (!castShown()) return;
+    castModal.classList.add('hidden');
+    if (camera && camera.clearViewOffset) camera.clearViewOffset();
+    saveChoice(castChoice);
+    setText('cast-name', castLine(castChoice));
+    if (castBefore && castBefore.preset !== castChoice.preset) track('character', { outcome: castChoice.preset });
+    if (blocker) blocker.classList.remove('hidden');
+    const btn = document.getElementById('cast-btn');
+    if (btn) {
+        try { btn.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
+    }
+}
+
+/** "Forget my choice": nothing kept, and back to the default person. */
+function forgetCast() {
+    forgetChoice();
+    castChoice = { ...DEFAULT_CHOICE };
+    markCast();
+    dressFigure();
+    setText('cast-status', 'Your choice is forgotten.');
+}
+
 // ---- The round ------------------------------------------------------------
 
 function endShown() {
@@ -641,6 +809,8 @@ function installRoundControls() {
         if (el) el.addEventListener('click', fn, { signal });
     };
     on('end-again', () => playAgain('end-card'));
+    on('cast-done', closeCast);
+    on('cast-forget', forgetCast);
     on('end-free', keepBlowing);
     on('hud-new', () => playAgain('hud'));
     installShare(
@@ -809,6 +979,9 @@ function fillEndPromo() {
 
 function hideEnd() {
     if (endModal) endModal.classList.add('hidden');
+    if (castModal) castModal.classList.add('hidden');
+    castChoice = loadChoice();
+    setText('cast-name', castLine(castChoice));
     const el = document.activeElement;
     if (el && el !== document.body && typeof el.blur === 'function') el.blur();
     setChromeVisible(true);
@@ -1005,7 +1178,7 @@ function animate() {
     // In the yard (no card up), and free to move and blow (the round is not
     // over). Behind a card the round holds still: the clock pauses for the
     // welcome card, and nothing moves under the end card.
-    const inYard = !welcomeShown() && !endShown();
+    const inYard = !welcomeShown() && !endShown() && !castShown();
     const free = inYard && canBlow(round);
     const aim = free ? aimFor(steer, pointer, keys) : null;
     const diving = round.phase === 'finale';
@@ -1025,9 +1198,9 @@ function animate() {
     }
     // The neighbor carries on behind the end card (he waves), and holds
     // still behind the welcome card with everything else.
-    if (!welcomeShown()) stepTheNeighbor(dt);
+    if (!welcomeShown() && !castShown()) stepTheNeighbor(dt);
     const his = makeJet(neighborBlower(B, N, neighbor.big), neighbor.x, neighbor.z,
-        Math.sin(neighbor.heading), Math.cos(neighbor.heading), neighbor.blowing && !welcomeShown());
+        Math.sin(neighbor.heading), Math.cos(neighbor.heading), neighbor.blowing && !welcomeShown() && !castShown());
     countedAgo += delta;
     if (inYard && countedAgo >= 1 / CONFIG.round.tallyHz) recount();
     if (inYard) updateHud();
@@ -1099,6 +1272,8 @@ export function getState() {
         result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict }, revenge: result.revenge, landed: result.landed } : null,
         neighbor: { ...neighbor },
         endShown: endShown(),
+        castShown: castShown(),
+        cast: { ...castChoice },
         finale: finale.plan ? { t: finale.t, total: finale.plan.total, success: finale.plan.success, burst: finale.burst, arms: finale.arms } : null
     };
 }
