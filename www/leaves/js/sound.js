@@ -20,6 +20,15 @@
  * and down when it stops (the "whoosh"), and a band for its body, through a
  * gain and a pan. The visitor's blower is one voice and the neighbor's is
  * another, quieter, from where he stands, and louder with the big blower.
+ * ONE BLOWER AT A TIME (Steve's M6 QA: "there is no need for 2 simultaneous
+ * blowing sounds - enough is enough"): his is heard only while ours is off.
+ *
+ * AND THE DIVE'S LANDING (M6 QA: "a 'thud' sound when the character lands on
+ * the ground"): a thud for a flop onto the lawn, and for a landing in the
+ * pile a crunch of leaves. Each is a one-shot, its nodes let go when it
+ * ends, so nothing piles up. The thud has a body in the low mids as well as
+ * its low thump, since a phone's speaker plays next to nothing below about
+ * 500 Hz.
  *
  * ON AN iPHONE plain Web Audio is muted by the ring switch, and on by
  * default it stays that way: a phone set to silent stays silent. A visitor
@@ -62,6 +71,7 @@ export function createSound(S) {
     let unlocked = false;
     const voices = {};
     let wobble = 0;
+    let noise = null;
 
     /** A voice: looped noise, a spooling lowpass and a body band, summed
      *  into a gain, through a pan. */
@@ -110,7 +120,7 @@ export function createSound(S) {
             master.gain.value = S.master;
             master.connect(ctx.destination);
             const frames = Math.floor(ctx.sampleRate * 2);
-            const noise = ctx.createBuffer(1, frames, ctx.sampleRate);
+            noise = ctx.createBuffer(1, frames, ctx.sampleRate);
             const data = noise.getChannelData(0);
             // Slightly pinked white noise: a one-pole lowpass takes the hiss
             // off the top, where a phone speaker is harshest.
@@ -166,7 +176,8 @@ export function createSound(S) {
         const breathe = 1 + S.wobble.depth * Math.sin(wobble);
         const want = [
             [voices.mine, mine && mine.blowing ? 1 : 0, 0],
-            [voices.his, his && his.blowing ? S.neighbor * (his.big ? S.big : 1) : 0, his ? his.pan || 0 : 0]
+            // His, only while ours is quiet.
+            [voices.his, his && his.blowing && !(mine && mine.blowing) ? S.neighbor * (his.big ? S.big : 1) : 0, his ? his.pan || 0 : 0]
         ];
         for (const [v, level, side] of want) {
             if (!v) continue;
@@ -186,6 +197,84 @@ export function createSound(S) {
                 v.side = side;
             }
         }
+    }
+
+    /** A one-shot burst of the noise through a band, `peak` loud, gone in
+     *  `decay` seconds, starting at `t`. Its nodes let go when it ends. */
+    function burstOf(t, hz, q, peak, decay) {
+        const source = ctx.createBufferSource();
+        source.buffer = noise;
+        const band = ctx.createBiquadFilter();
+        band.type = 'bandpass';
+        band.frequency.value = hz;
+        band.Q.value = q;
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(peak, t + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+        source.connect(band);
+        band.connect(gain);
+        gain.connect(master);
+        source.addEventListener('ended', () => { source.disconnect(); band.disconnect(); gain.disconnect(); });
+        // A random start in the buffer, so no two sound alike.
+        source.start(t, Math.random() * 1.5, decay + 0.05);
+        return source;
+    }
+
+    /** A falling sine, `peak` loud, from hz0 to hz1, gone in `decay`. */
+    function thump(t, hz0, hz1, peak, decay) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(hz0, t);
+        osc.frequency.exponentialRampToValueAtTime(hz1, t + decay * 0.6);
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(peak, t + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+        osc.connect(gain);
+        gain.connect(master);
+        osc.addEventListener('ended', () => { osc.disconnect(); gain.disconnect(); });
+        osc.start(t);
+        osc.stop(t + decay + 0.05);
+        return osc;
+    }
+
+    /** A body hitting the lawn: a low thump, an "oof" of a body in the low
+     *  mids a phone can play, and the crackle of the leaves it lands on.
+     *  `size` 0 to 1. Returns whether it sounded. */
+    function thud(size = 1) {
+        if (!ctx || !on || paused || !noise) return false;
+        const T = S.thud;
+        const t = ctx.currentTime + S.ahead;
+        const k = T.level * Math.max(0.2, Math.min(1, size));
+        // A sound is never worth breaking the dive over.
+        try {
+            thump(t, T.hz[0], T.hz[1], k, T.decay);
+            burstOf(t, T.bodyHz, T.bodyQ, k * 0.9, T.decay * 0.6);
+            burstOf(t + 0.01, T.leafHz, 0.7, k * 0.25, 0.12);
+        } catch (e) {
+            return false;
+        }
+        return true;
+    }
+
+    /** A body landing in a pile of leaves: a soft whump and a long crunch
+     *  of leaves, louder for a bigger pile. Returns whether it sounded. */
+    function crunch(size = 1) {
+        if (!ctx || !on || paused || !noise) return false;
+        const T = S.thud;
+        const t = ctx.currentTime + S.ahead;
+        const k = T.level * Math.max(0.2, Math.min(1, size));
+        try {
+            thump(t, T.hz[0] * 0.8, T.hz[1], k * 0.4, T.decay);
+            burstOf(t, T.leafHz, 0.6, k * 0.8, 0.45);
+            burstOf(t + 0.07, T.leafHz * 0.6, 0.8, k * 0.5, 0.6);
+        } catch (e) {
+            return false;
+        }
+        return true;
     }
 
     /** A click, a tap or a key: audio may start now. Returns whether there
@@ -222,6 +311,8 @@ export function createSound(S) {
         isOn: () => on,
         setOn,
         unlock,
+        thud,
+        crunch,
         toggle: () => setOn(!on),
         update,
         pause,

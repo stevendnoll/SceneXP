@@ -243,9 +243,13 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     });
     const hedgeWall = Y.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
     if (hedgeWall) {
-        const hedge = box(0.9, hedgeWall.height, hedgeWall.to - hedgeWall.from, look.hedge,
-            hedgeWall.at - 0.45, hedgeWall.height / 2, (hedgeWall.from + Y.sidewalk.minZ) / 2);
-        hedge.scale.z = (Y.sidewalk.minZ - hedgeWall.from) / (hedgeWall.to - hedgeWall.from);
+        // From the sidewalk all the way back along the property line, past
+        // the backs of the houses (Steve's M6 QA: it "ended pretty abruptly"
+        // at the front of the house). The sim's wall only needs the part
+        // beside the lawn.
+        const back = Y.hedgeBack ?? hedgeWall.from;
+        const hedge = box(0.9, hedgeWall.height, Y.sidewalk.minZ - back, look.hedge,
+            hedgeWall.at - 0.45, hedgeWall.height / 2, (back + Y.sidewalk.minZ) / 2);
         hedge.castShadow = true;
         hedge.receiveShadow = true;
         hedge.name = 'hedge';

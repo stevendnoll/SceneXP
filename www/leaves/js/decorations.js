@@ -37,7 +37,7 @@
  */
 import { faceTexture, faceOnPumpkin } from './halloween.min.js';
 import { makeRandom } from './sim.min.js';
-import { pumpkin, streetHouseParts, OUR_WINDOWS, facadeZ } from './house.min.js';
+import { pumpkin, streetHouseParts, OUR_WINDOWS, facadeZ, MAILBOX, mailboxSpot, mailboxShape } from './house.min.js';
 
 const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
 
@@ -64,7 +64,7 @@ export function towerStack(t, D) {
 
 /**
  * The boxes our yard's decorations stand on, as config.yard.boxes entries:
- * the cauldron, each lantern, each pumpkin stack. Main.js adds them to the
+ * each lantern, each pumpkin stack, each skeleton on the lawn. Main.js adds them to the
  * yard the sim is built from while the decorations are up, and draws the
  * decorations from the same numbers, so the leaves meet what is drawn.
  * Each is a platform: a leaf blown onto one lies on top.
@@ -72,8 +72,6 @@ export function towerStack(t, D) {
 export function yardDecorBoxes(config) {
     const D = config.halloween.decor;
     const out = [];
-    const C = D.cauldron;
-    if (C) out.push({ name: 'cauldron', minX: C.x - C.r, maxX: C.x + C.r, minZ: C.z - C.r, maxZ: C.z + C.r, height: C.height, platform: true });
     const Ln = D.lanterns;
     if (Ln) {
         for (const x of Ln.xs) {
@@ -87,6 +85,17 @@ export function yardDecorBoxes(config) {
         const top = stack[stack.length - 1];
         const half = stack[0].r * 0.75;
         out.push({ name: 'pumpkins', minX: t.x - half, maxX: t.x + half, minZ: t.z - half, maxZ: t.z + half, height: top.y + top.r * 1.44, platform: true });
+    }
+    // The skeletons on the lawn: walls a leaf meets, not shelves it lies on
+    // (a leaf on a 1.7 m shelf over the raker would hang in the air).
+    const K = D.skeletons || {};
+    if (K.riser) {
+        const b = K.riser.box;
+        out.push({ name: 'skeleton', minX: K.riser.x - b.x, maxX: K.riser.x + b.x, minZ: K.riser.z - b.z, maxZ: K.riser.z + b.z, height: b.height });
+    }
+    if (K.raker) {
+        const b = K.raker.box;
+        out.push({ name: 'skeleton', minX: K.raker.x - b.x, maxX: K.raker.x + b.x, minZ: K.raker.z + b.minZ, maxZ: K.raker.z + b.maxZ, height: b.height });
     }
     return out;
 }
@@ -586,30 +595,85 @@ function scarecrow(K, D) {
     return group;
 }
 
-/** The cauldron of candy at (x, z): a round iron pot on three stubby legs,
- *  a rim, and a heap of wrapped candy, its top at `height`. */
-function cauldron(C, black, random) {
+/** A standing skeleton, 1.7 m, feet on y = 0, facing +z, holding a rake
+ *  out in front of it, its tines on the lawn. */
+function rakingSkeleton(D) {
     const group = new THREE.Group();
-    const iron = new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 0.55, metalness: 0.35 });
-    const h = C.height;
-    const profile = [[0.001, 0.1], [C.r * 0.6, 0.1], [C.r * 0.93, 0.18], [C.r, h * 0.45], [C.r * 0.93, h * 0.75], [C.r * 0.8, h - 0.03], [C.r * 0.82, h - 0.03]]
-        .map(([r, y]) => new THREE.Vector2(r, y));
-    group.add(mesh(new THREE.LatheGeometry(profile, 20), iron, 0, 0, 0, true));
-    const rim = mesh(new THREE.TorusGeometry(C.r * 0.82, 0.025, 6, 20), iron, 0, h - 0.025, 0, true);
-    rim.rotation.x = Math.PI / 2;
-    group.add(rim);
-    for (let k = 0; k < 3; k++) {
-        const a = (k / 3) * Math.PI * 2;
-        group.add(bone([Math.cos(a) * C.r * 0.5, 0.12, Math.sin(a) * C.r * 0.5], [Math.cos(a) * C.r * 0.7, 0, Math.sin(a) * C.r * 0.7], 0.022, iron));
+    const bones = lambert(D.bone);
+    const dark = lambert(D.black);
+    group.add(mesh(new THREE.SphereGeometry(0.11, 14, 10), bones, 0, 1.6, 0.01, true));
+    group.add(mesh(new THREE.BoxGeometry(0.1, 0.045, 0.09), bones, 0, 1.49, 0.04, true));
+    for (const s of [-1, 1]) group.add(mesh(new THREE.SphereGeometry(0.026, 6, 5), dark, s * 0.04, 1.62, 0.1));
+    group.add(bone([0, 0.95, -0.02], [0, 1.47, -0.02], 0.02, bones, true));
+    for (let k = 0; k < 5; k++) {
+        const rib = mesh(new THREE.TorusGeometry(0.13 - k * 0.008, 0.012, 4, 14), bones, 0, 1.12 + k * 0.06, 0, true);
+        rib.rotation.x = Math.PI / 2;
+        rib.scale.set(1, 0.7, 1);
+        group.add(rib);
     }
-    const candy = C.candy.map((c) => lambert(c));
-    for (let k = 0; k < 14; k++) {
-        const a = random() * Math.PI * 2;
-        const r = Math.sqrt(random()) * C.r * 0.65;
-        const piece = mesh(new THREE.SphereGeometry(0.03, 6, 5), candy[k % candy.length], Math.cos(a) * r, h - 0.07 + random() * 0.04, Math.sin(a) * r);
-        piece.scale.set(1.4, 0.8, 0.9);
-        piece.rotation.y = random() * 3;
-        group.add(piece);
+    group.add(bone([-0.18, 1.42, -0.01], [0.18, 1.42, -0.01], 0.014, bones, true));
+    group.add(mesh(new THREE.BoxGeometry(0.26, 0.09, 0.13), bones, 0, 0.95, 0, true));
+    for (const s of [-1, 1]) {
+        group.add(bone([s * 0.09, 0.93, 0], [s * 0.1, 0.5, 0.03], 0.022, bones, true), bone([s * 0.1, 0.5, 0.03], [s * 0.1, 0.07, 0], 0.018, bones, true));
+        group.add(mesh(new THREE.BoxGeometry(0.08, 0.04, 0.17), bones, s * 0.1, 0.03, 0.05, true));
+    }
+    // The rake, from high at its chest to its tines on the lawn ahead.
+    const A = [0.02, 1.3, 0.2];
+    const B = [0.02, 0.05, 0.78];
+    const on = (t) => A.map((v, i) => v + (B[i] - v) * t);
+    group.add(bone(A, B, 0.016, lambert(0x8a6748), true));
+    group.add(mesh(new THREE.BoxGeometry(0.46, 0.03, 0.04), lambert(D.black), B[0], B[1], B[2], true));
+    for (let k = -4; k <= 4; k++) group.add(mesh(new THREE.BoxGeometry(0.012, 0.06, 0.012), lambert(D.black), B[0] + k * 0.055, 0.02, B[2] + 0.02));
+    // Both hands on the handle, the elbows out.
+    [[1, 0.18], [-1, 0.42]].forEach(([s, t]) => {
+        const hand = on(t);
+        const elbow = [s * 0.24, (1.42 + hand[1]) / 2, 0.12];
+        group.add(bone([s * 0.17, 1.42, -0.01], elbow, 0.016, bones, true), bone(elbow, hand, 0.014, bones, true));
+        group.add(mesh(new THREE.SphereGeometry(0.03, 6, 5), bones, ...hand));
+    });
+    return group;
+}
+
+/** A skeleton breaking out of the lawn: a mound of earth, the top of its
+ *  ribs and its skull out of it, one hand on the ground and one reaching
+ *  up. Built about its middle, facing +z. */
+function risingSkeleton(D) {
+    const group = new THREE.Group();
+    const bones = lambert(D.bone);
+    const mound = mesh(new THREE.SphereGeometry(0.45, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), lambert(D.soil), 0, 0, 0, true);
+    mound.scale.y = 0.35;
+    group.add(mound);
+    for (let k = 0; k < 3; k++) {
+        const rib = mesh(new THREE.TorusGeometry(0.12 - k * 0.01, 0.012, 4, 14), bones, 0, 0.18 + k * 0.06, 0, true);
+        rib.rotation.x = Math.PI / 2 + 0.25;
+        rib.scale.set(1, 0.7, 1);
+        group.add(rib);
+    }
+    group.add(bone([0, 0.1, -0.05], [0, 0.42, 0.02], 0.02, bones, true));
+    const skull = mesh(new THREE.SphereGeometry(0.11, 14, 10), bones, 0, 0.53, 0.05, true);
+    group.add(skull);
+    for (const s of [-1, 1]) group.add(mesh(new THREE.SphereGeometry(0.026, 6, 5), lambert(D.black), s * 0.04, 0.55, 0.14));
+    group.add(mesh(new THREE.BoxGeometry(0.09, 0.04, 0.08), bones, 0, 0.43, 0.09, true));
+    // Reaching up, and pushing itself out.
+    group.add(bone([0.16, 0.36, 0], [0.27, 0.6, 0.08], 0.016, bones, true), bone([0.27, 0.6, 0.08], [0.24, 0.84, 0.14], 0.014, bones, true));
+    group.add(mesh(new THREE.SphereGeometry(0.035, 6, 5), bones, 0.24, 0.86, 0.15));
+    group.add(bone([-0.16, 0.36, 0], [-0.3, 0.24, 0.1], 0.016, bones, true), bone([-0.3, 0.24, 0.1], [-0.3, 0.08, 0.24], 0.014, bones, true));
+    group.add(mesh(new THREE.BoxGeometry(0.07, 0.02, 0.09), bones, -0.3, 0.07, 0.27));
+    return group;
+}
+
+/** A skeleton peeking over a hedge toward +x: its skull resting on the top,
+ *  the fingers of both hands curled over the edge. */
+function peekingSkeleton(D) {
+    const group = new THREE.Group();
+    const bones = lambert(D.bone);
+    group.add(mesh(new THREE.SphereGeometry(0.11, 14, 10), bones, -0.2, 0.08, 0, true));
+    for (const s of [-1, 1]) group.add(mesh(new THREE.SphereGeometry(0.026, 6, 5), lambert(D.black), -0.11, 0.1, s * 0.04));
+    for (const s of [-1, 1]) {
+        for (let k = 0; k < 4; k++) {
+            const z = s * 0.22 + (k - 1.5) * 0.03;
+            group.add(bone([-0.12, 0.01, z], [0.05, 0.02, z], 0.008, bones), bone([0.05, 0.02, z], [0.09, -0.05, z], 0.007, bones));
+        }
     }
     return group;
 }
@@ -646,24 +710,22 @@ function floatingHat(D, black) {
     return group;
 }
 
-/** Mummy wrappings for our mailbox (its body as house.js draws it: 0.26
- *  wide, 0.24 tall, 0.5 deep, 0.1 over the post's top and 0.1 toward the
- *  street), with googly eyes on its front. */
+/** Mummy wrappings for our mailbox (house.js draws its arched box on the
+ *  post's plank), round its arch, with googly eyes on its door. */
 function mummyMailbox(m, D) {
     const group = new THREE.Group();
-    const cx = (m.minX + m.maxX) / 2;
-    const cy = m.height + 0.1;
-    const cz = (m.minZ + m.maxZ) / 2 + 0.1;
+    const at = mailboxSpot(m);
     const gauze = lambert(D.mummy);
-    [-0.2, -0.1, 0, 0.1, 0.2].forEach((dz, k) => {
-        const band = mesh(new THREE.BoxGeometry(0.285, 0.265, 0.035), gauze, cx, cy, cz + dz);
-        band.rotation.z = (k % 2 ? 1 : -1) * 0.12;
-        band.rotation.x = (k - 2) * 0.05;
+    [-0.19, -0.09, 0.01, 0.11, 0.2].forEach((dz, k) => {
+        const band = new THREE.Mesh(new THREE.ExtrudeGeometry(mailboxShape(0.012), { depth: 0.035, bevelEnabled: false, curveSegments: 10 }), gauze);
+        band.position.set(at.x, at.y, at.z + dz - 0.0175);
+        band.rotation.z = (k % 2 ? 1 : -1) * 0.07;
         group.add(band);
     });
+    const front = at.z + MAILBOX.long / 2 + 0.02;
     for (const s of [-1, 1]) {
-        group.add(mesh(new THREE.SphereGeometry(0.035, 10, 8), lambert(0xffffff), cx + s * 0.055, cy + 0.03, cz + 0.27));
-        group.add(mesh(new THREE.SphereGeometry(0.017, 8, 6), lambert(D.black), cx + s * 0.055 + 0.008, cy + 0.02, cz + 0.3));
+        group.add(mesh(new THREE.SphereGeometry(0.032, 10, 8), lambert(0xffffff), at.x + s * 0.05, at.y + MAILBOX.side - 0.01, front));
+        group.add(mesh(new THREE.SphereGeometry(0.016, 8, 6), lambert(D.black), at.x + s * 0.05 + 0.008, at.y + MAILBOX.side - 0.02, front + 0.025));
     }
     return group;
 }
@@ -760,14 +822,7 @@ export function buildDecorations(config) {
     }
 
     // ON OUR LAWN, each on the box the sim knows it by (yardDecorBoxes): the
-    // cauldron of candy, the lanterns along the walk, the pumpkin stacks.
-    const random = makeRandom(53);
-    if (D.cauldron) {
-        const pot = cauldron(D.cauldron, black, random);
-        pot.position.set(D.cauldron.x, 0, D.cauldron.z);
-        pot.name = 'cauldron';
-        group.add(pot);
-    }
+    // lanterns along the walk and the pumpkin stacks.
     if (D.lanterns) {
         for (const x of D.lanterns.xs) {
             for (const z of D.lanterns.zs) {
@@ -784,6 +839,31 @@ export function buildDecorations(config) {
         towerStack(t, D).forEach((p) => stack.add(pumpkin(p)));
         group.add(stack);
     }
+    // The skeletons: breaking out of the lawn, raking, and peeking over the
+    // hedge.
+    const SK = D.skeletons || {};
+    if (SK.riser) {
+        const riser = risingSkeleton(D);
+        riser.position.set(SK.riser.x, 0, SK.riser.z);
+        riser.rotation.y = SK.riser.turn || 0;
+        riser.name = 'skeleton';
+        group.add(riser);
+    }
+    if (SK.raker) {
+        const raker = rakingSkeleton(D);
+        raker.position.set(SK.raker.x, 0, SK.raker.z);
+        raker.name = 'skeleton';
+        group.add(raker);
+    }
+    const hedgeLine = Y.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
+    if (SK.peeker && hedgeLine) {
+        const peeker = peekingSkeleton(D);
+        // Its fingers just short of the sim's edge, over our lawn's side.
+        peeker.position.set(hedgeLine.at - 0.12, hedgeLine.height, SK.peeker.z);
+        peeker.name = 'skeleton';
+        group.add(peeker);
+    }
+
     // Witch hats floating under our maple, each with a candle.
     const hats = (D.hats || []).map((h, k) => {
         const hat = floatingHat(D, black);

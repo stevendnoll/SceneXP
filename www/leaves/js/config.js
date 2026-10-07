@@ -64,6 +64,9 @@ export const LEAVES_CONFIG = Object.freeze({
         // The neighbor's lawn, past the picket fence.
         neighbor: { minX: 10.1, maxX: 18, minZ: -6, maxZ: 7 },
         sidewalk: { minZ: 7.4, maxZ: 9 },
+        // How far back the hedge down our left side is drawn (M6 QA), along
+        // the property line past the backs of the houses.
+        hedgeBack: -15,
         // The rest of the block (M6 QA): lawn under everything, well past
         // both neighbors and back behind the houses, so no view the camera
         // can take shows the sky through the ground.
@@ -177,7 +180,8 @@ export const LEAVES_CONFIG = Object.freeze({
         // when the visitor walks over to it (tests/leaves-backyard).
         backyard: {
             shed: { x: -13.7, z: -10.6, w: 2.6, d: 2.0, wall: 2.1, ridge: 2.8, siding: 0x6f8a7a, roof: 0x3c3f44, door: 0x3f4f46 },
-            fence: { z: -13.6, from: -19.4, to: -9.25, height: 1.8, color: 0x9a7b5c },
+            // The back fence runs to the hedge.
+            fence: { z: -13.6, from: -19.4, to: -10.92, height: 1.8, color: 0x9a7b5c },
             beds: [{ x: -12.8, z: -2.8, w: 2.2, d: 0.9 }, { x: -12.8, z: -1.1, w: 2.2, d: 0.9 }],
             patch: { x: -13.3, z: -4.9, w: 2.2, d: 1.3 },
             firePit: { x: -13.2, z: -7.6, r: 0.5 },
@@ -483,10 +487,11 @@ export const LEAVES_CONFIG = Object.freeze({
         ]
     },
 
-    // HALLOWEEN WEEK (M6, halloween.js): from October 24 to 31 by the
-    // visitor's own calendar, the porch pumpkins are carved and lit, a
-    // plastic skeleton hand is under the leaves, and trick-or-treaters walk
-    // the sidewalk. Kind spooky, never scary. `?halloween=1` on a QA host.
+    // HALLOWEEN (M6, halloween.js and decorations.js): the decorations and
+    // the trick-or-treaters from October 1st through November 1st, and in
+    // Halloween week (October 24 to 31, by the visitor's own calendar) the
+    // porch pumpkins carved and lit and a plastic skeleton hand under the
+    // leaves. Kind spooky, never scary. `?halloween=1` on a QA host.
     halloween: {
         // October (months count from 0), the 24th to the 31st. The
         // decorations are up all month and through November 1st
@@ -555,19 +560,30 @@ export const LEAVES_CONFIG = Object.freeze({
             // main user's yard - instead of focusing on the surrounding
             // yards"). These stand on our lawn, so each is a box the sim
             // knows (decorations.js yardDecorBoxes): the leaves bank against
-            // them, the person walks round them, and so does the dive. A
-            // cauldron of candy where our walk meets the sidewalk (the
-            // trick-or-treaters stop at it and reach in), black lanterns
-            // lining the walk, a stack of pumpkins either side of the porch
-            // step, witch hats floating under our maple with a candle under
-            // each, and the mailbox wrapped as a mummy.
-            cauldron: { x: -1.65, z: 7.6, r: 0.24, height: 0.62, candy: [0xe0701f, 0x7a2fbf, 0xf4f1ea, 0x3d7a3a] },
+            // them, the person walks round them, and so does the dive. Black
+            // lanterns lining the walk, a stack of pumpkins either side of
+            // the porch step, witch hats floating under our maple with a
+            // candle under each, and the mailbox wrapped as a mummy. (A
+            // cauldron of candy by the sidewalk was built and taken out at
+            // Steve's QA, 2026-10-07.)
             lanterns: { xs: [-1.35, 0.35], zs: [0.6, 2.9, 5.2], size: 0.2, height: 0.55, glow: 0xffb04a },
             towers: [{ x: -1.95, z: -3.35 }, { x: 0.95, z: -3.35 }],
             towerPumpkins: [{ r: 0.28, color: 0xefe8d8 }, { r: 0.2, color: 0xe0701f }, { r: 0.13, color: 0x26262a }],
             hats: [{ x: 5.4, y: 3.25, z: -2.5 }, { x: 7.7, y: 3.55, z: -2.9 }, { x: 6.5, y: 2.95, z: -4.5 }],
             hatString: 1.3,
             mummy: 0xece6d6,
+            // Skeletons (Steve's M6 QA: "Maybe a skeleton or two (or three)?"):
+            // one breaking out of the lawn by the front left corner, one still
+            // raking leaves on the right (the rake ahead of it, toward the
+            // street), and one peeking over our hedge from the side yard.
+            // The first two stand on boxes the sim knows (`box`, around their
+            // middles), the third is past the sim's ground.
+            skeletons: {
+                riser: { x: -7.8, z: 5.6, turn: 0.5, box: { x: 0.35, z: 0.35, height: 0.9 } },
+                raker: { x: 7.9, z: 4.9, box: { x: 0.3, minZ: -0.22, maxZ: 0.88, height: 1.72 } },
+                peeker: { z: 5.2 }
+            },
+            soil: 0x4a3626,
             // Pumpkins by each door down the street.
             streetPumpkins: [
                 { dx: -1.0, dz: 0.5, r: 0.22, color: 0xe0701f },
@@ -585,7 +601,8 @@ export const LEAVES_CONFIG = Object.freeze({
         carved: [0, 1, 3],
         glow: 0xffb53a,
         // Trick-or-treaters: a pair every so often, along the sidewalk,
-        // pausing at the end of our walk to look at the house.
+        // pausing at the end of our walk to look at the house, whenever the
+        // decorations are up (Steve's M6 QA).
         first: [3, 6],
         every: [14, 24],
         speed: 1.15,
@@ -642,7 +659,11 @@ export const LEAVES_CONFIG = Object.freeze({
         neighbor: 0.45,
         big: 1.3,
         // Scheduled this far ahead of the audio clock.
-        ahead: 0.03
+        ahead: 0.03,
+        // The dive's landing (M6 QA): a falling thump from hz[0] to hz[1], a
+        // body band in the low mids (a phone plays little below 500 Hz), and
+        // the leaves' crackle, gone in `decay` seconds.
+        thud: { level: 0.9, hz: [120, 45], decay: 0.32, bodyHz: 520, bodyQ: 0.9, leafHz: 2400 }
     },
 
     // THE ROUND (M1). The clock starts with the first blow, not when the
@@ -712,6 +733,9 @@ export const LEAVES_CONFIG = Object.freeze({
         aluminum: 0xc4c7cb,
         wreath: 0x9a4a22,
         walk: 0xc2bdb3,
+        // Our mailbox's cedar post and its red flag (M6 QA).
+        cedar: 0x8a6748,
+        flag: 0xb3261e,
         // The beds along the house fronts (M6 QA).
         gravel: 0x5d5e5f,
         mulch: 0x5a4030,

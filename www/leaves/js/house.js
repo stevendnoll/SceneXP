@@ -251,6 +251,30 @@ export function buildNeighborHouse(Y, L, doorX) {
     return group;
 }
 
+/** OUR MAILBOX (M6 QA: "more like a real mailbox - maybe with a wooden
+ *  post"): a classic arched box on a plank on a cedar post. Its size, and
+ *  where it sits on the post (`m`, the config box): its floor on the plank
+ *  and its middle a little toward the street. decorations.js wraps the
+ *  mummy round the same arch. */
+export const MAILBOX = Object.freeze({ w: 0.23, side: 0.13, long: 0.48, plank: 0.04, out: 0.1 });
+
+export function mailboxSpot(m) {
+    return { x: (m.minX + m.maxX) / 2, y: m.height + MAILBOX.plank, z: (m.minZ + m.maxZ) / 2 + MAILBOX.out };
+}
+
+/** The mailbox's end-on outline, `grow` bigger all round: straight sides
+ *  and a half round top, its floor at y = -grow. */
+export function mailboxShape(grow = 0) {
+    const r = MAILBOX.w / 2 + grow;
+    const s = new THREE.Shape();
+    s.moveTo(-r, -grow);
+    s.lineTo(r, -grow);
+    s.lineTo(r, MAILBOX.side);
+    s.absarc(0, MAILBOX.side, r, 0, Math.PI, false);
+    s.lineTo(-r, -grow);
+    return s;
+}
+
 /** A rectangle with rounded corners, in the plane of a car's side. */
 function roundedRect(x0, y0, x1, y1, r) {
     const s = new THREE.Shape();
@@ -305,11 +329,31 @@ export function buildStreet(Y, L) {
     const line = Y.sidewalk.maxZ + 4.2;
     for (const dz of [-0.07, 0.07]) group.add(flat(length, 0.08, L.centerLine, mid, -0.015, line + dz));
 
-    // Our mailbox: a black box on a black post.
+    // Our mailbox: a cedar post (the box the leaves meet), a plank on top,
+    // and an arched black box on it, its door toward the street, a red flag
+    // down on its side.
     const black = material(L.frame);
+    const cedar = material(L.cedar);
     for (const m of named(Y, 'mailbox')) {
-        group.add(solid(m, black));
-        group.add(box(0.26, 0.24, 0.5, black, (m.minX + m.maxX) / 2, m.height + 0.1, (m.minZ + m.maxZ) / 2 + 0.1));
+        group.add(solid(m, cedar));
+        const at = mailboxSpot(m);
+        group.add(box(MAILBOX.w + 0.03, MAILBOX.plank, MAILBOX.long + 0.06, cedar, at.x, m.height + MAILBOX.plank / 2, at.z));
+        const steel = new THREE.MeshStandardMaterial({ color: L.frame, metalness: 0.5, roughness: 0.45 });
+        const body = new THREE.Mesh(new THREE.ExtrudeGeometry(mailboxShape(), { depth: MAILBOX.long, bevelEnabled: false, curveSegments: 12 }), steel);
+        body.position.set(at.x, at.y, at.z - MAILBOX.long / 2);
+        body.castShadow = true;
+        group.add(body);
+        // The door: a lip a hair proud of the front, and a little pull.
+        const door = new THREE.Mesh(new THREE.ExtrudeGeometry(mailboxShape(0.008), { depth: 0.012, bevelEnabled: false, curveSegments: 12 }), steel);
+        door.position.set(at.x, at.y, at.z + MAILBOX.long / 2 - 0.004);
+        group.add(door);
+        group.add(box(0.04, 0.02, 0.02, material(L.aluminum), at.x, at.y + MAILBOX.side, at.z + MAILBOX.long / 2 + 0.015));
+        // The flag, down, on the side away from the walk.
+        const red = material(L.flag);
+        group.add(box(0.012, 0.025, 0.2, red, at.x + MAILBOX.w / 2 + 0.008, at.y + 0.07, at.z - 0.04));
+        group.add(box(0.012, 0.08, 0.07, red, at.x + MAILBOX.w / 2 + 0.008, at.y + 0.07, at.z + 0.07));
+        // A house number plaque on the post.
+        group.add(box(0.12, 0.16, 0.012, material(L.trim), at.x, m.height - 0.3, m.maxZ + 0.006));
     }
 
     // The car (rounded at M6 QA: "Could we make the car's edges a little

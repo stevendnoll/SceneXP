@@ -88,3 +88,25 @@ test('each house\'s face is set back, with a bed along its foot, and its porch o
     const beds = all.filter((m) => m.box.max.y < 0.01 && m.box.max.z <= edge + 1e-3 && m.box.min.z < edge - 0.1 && m.box.max.z > edge - 0.01);
     expect(beds.length).toBeGreaterThanOrEqual(2);
 });
+
+// Steve's M6 QA: "Can we make the mailbox look more like a real mailbox -
+// maybe with a wooden post?"
+test('the mailbox is a real one: a cedar post where the leaves meet it, a plank, an arched box with a flag', async () => {
+    const Ho = await import('../www/leaves/js/house.js');
+    const street = Ho.buildStreet(Y, C.look);
+    street.updateMatrixWorld(true);
+    const m = Y.boxes.find((b) => b.name === 'mailbox');
+    const near = [];
+    street.traverse((o) => {
+        if (!o.isMesh) return;
+        const box = new THREE.Box3().setFromObject(o, true);
+        if (box.max.x > m.minX - 0.3 && box.min.x < m.maxX + 0.3 && box.max.z > m.minZ - 0.1 && box.min.z < m.maxZ + 0.6) near.push({ o, box });
+    });
+    const post = near.find(({ box }) => Math.abs(box.min.y) < 1e-4 && Math.abs(box.max.y - m.height) < 1e-4);
+    expect(post.o.material.color.getHex()).toBe(C.look.cedar);
+    // The box's arched top, a half round over straight sides, on the plank.
+    const top = Math.max(...near.map(({ box }) => box.max.y));
+    expect(top).toBeCloseTo(m.height + Ho.MAILBOX.plank + Ho.MAILBOX.side + Ho.MAILBOX.w / 2 + 0.008, 2);
+    expect(near.some(({ o }) => o.geometry.type === 'ExtrudeGeometry')).toBe(true);
+    expect(near.some(({ o }) => o.material.color && o.material.color.getHex() === C.look.flag)).toBe(true);
+});

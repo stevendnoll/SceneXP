@@ -4,12 +4,16 @@
  * week itself, from October 24 to 31 by the visitor's own calendar. (The
  * decorations that are up all October are decorations.js.)
  *
- * Three things, all kind spooky and never scary: the porch pumpkins are
- * carved into jack-o-lanterns lit from inside, a plastic skeleton hand is
- * hidden under the leaves (one of the finds, finds.js), and every so often a
- * pair of trick-or-treaters, a little ghost and a little witch with their
- * pumpkin pails, walks the sidewalk and stops at the end of our walk to look
- * at the house before going on. They wait politely for anybody standing in
+ * Halloween week's two extras, kind spooky and never scary: the porch
+ * pumpkins are carved into jack-o-lanterns lit from inside, and a plastic
+ * skeleton hand is hidden under the leaves (one of the finds, finds.js).
+ *
+ * The trick-or-treaters are here too, though they walk WHENEVER THE
+ * DECORATIONS ARE UP, not only that week (Steve's M6 QA: "I didn't see the
+ * trick-or-treaters in this last run"): every so often a pair of them, a
+ * little ghost and a little witch with their pumpkin pails, walks the
+ * sidewalk and stops at the end of our walk to look at the house before
+ * going on. They wait politely for anybody standing in
  * their way. Blown at with the leaf blower (Steve's M6 QA), they stagger
  * along with the air, backs to it, the ghost's sheet billowing and the
  * witch holding onto her hat, then hurry off the way it sent them.
@@ -68,9 +72,7 @@ export function createTreaters(H, random) {
         // Blown: how hard (0 to 1, eased), which way (eased), how far off the
         // sidewalk's middle it has pushed them, whether they are hurrying
         // off, and whether this walk has been blown yet (for the event).
-        blown: 0, gust: { x: 0, z: 0 }, dz: 0, hurrying: false, blownThisWalk: false,
-        // Reaching into the candy cauldron while they pause (0 to 1).
-        reach: 0
+        blown: 0, gust: { x: 0, z: 0 }, dz: 0, hurrying: false, blownThisWalk: false
     };
 }
 
@@ -117,11 +119,9 @@ function turnAround(tr, dir) {
  * Advance them by `dt`. `input`:
  *   active   the yard is in view
  *   person   { x, z }: they wait rather than walk through them
- *   walkX    where they stop to look at the house (and, with candy, where
- *            the cauldron stands)
+ *   walkX    where they stop to look at the house
  *   random   () => 0..1
  *   wind     (x, y, z) => { x, z, speed }: the blowers' air there (optional)
- *   candy    whether there is a cauldron of candy to reach into
  * Returns 'start', 'pause', 'blown' (the first time a walk is), 'gone' or
  * null.
  *
@@ -147,10 +147,7 @@ export function stepTreaters(tr, dt, input, H) {
             const g = Math.hypot(gx, gz) || 1;
             tr.gust = { x: gx / g, z: gz / g };
             tr.blownTarget = Math.min(1, w.speed / H.blownFull);
-            if (tr.state !== 'blown') {
-                tr.state = 'blown';
-                tr.reach = 0;
-            }
+            tr.state = 'blown';
             tr.t = 0;
             if (!tr.blownThisWalk) event = 'blown';
             tr.blownThisWalk = true;
@@ -184,18 +181,13 @@ export function stepTreaters(tr, dt, input, H) {
         tr.paused = false;
         tr.state = 'walk';
         tr.walks += 1;
-        Object.assign(tr, { blown: 0, dz: 0, hurrying: false, blownThisWalk: false, reach: 0, lead: 0 });
+        Object.assign(tr, { blown: 0, dz: 0, hurrying: false, blownThisWalk: false, lead: 0 });
         return 'start';
     }
     if (tr.state === 'pause') {
         tr.speed = 0;
         turnTo(tr, Math.PI, H.turnRate, step);
-        // With a cauldron there, a hand into it and out again.
-        tr.reach = input.candy ? Math.max(0, Math.sin((Math.PI * tr.t) / H.pause)) : 0;
-        if (tr.t >= H.pause) {
-            tr.state = 'walk';
-            tr.reach = 0;
-        }
+        if (tr.t >= H.pause) tr.state = 'walk';
         return null;
     }
     turnTo(tr, tr.dir * Math.PI / 2, H.turnRate, step);
@@ -431,9 +423,8 @@ export function createTreaterFigures(H) {
             // Blown at: leaning with the air (their backs are to it), the
             // ghost's sheet billowing, the witch holding onto her hat.
             const b = tr.blown || 0;
-            const reach = tr.reach || 0;
-            // Leaning with the air, or over the cauldron.
-            kid.group.rotation.x = 0.22 * b + 0.18 * reach;
+            // Leaning with the air.
+            kid.group.rotation.x = 0.22 * b;
             const sheet = kid.group.userData.sheet;
             if (sheet) {
                 const flap = 1 + 0.12 * b * (0.7 + 0.3 * Math.sin(time * 9 + k));
@@ -443,10 +434,8 @@ export function createTreaterFigures(H) {
                 kid.arms.forEach((a, i) => {
                     const rest = kid.armRest[i];
                     const s = a.userData.armSide || 1;
-                    // Holding her hat in the wind, and her right hand into
-                    // the candy.
-                    const into = s < 0 ? reach : 0;
-                    a.rotation.set(rest.x + (-2.7 - rest.x) * b + (-1.1) * into, rest.y, rest.z + (-s * 0.3 - rest.z) * b);
+                    // Holding her hat in the wind.
+                    a.rotation.set(rest.x + (-2.7 - rest.x) * b, rest.y, rest.z + (-s * 0.3 - rest.z) * b);
                 });
             }
         });

@@ -342,7 +342,7 @@ describe('round what is solid', () => {
         return worst;
     }
 
-    test('from all over the yard, nobody walks or runs through the porch, a post, a lantern, the cauldron or the pumpkins', () => {
+    test('from all over the yard, nobody walks or runs through the porch, a post, a lantern, a skeleton or the pumpkins', () => {
         const starts = [];
         for (const x of [-6, -3, 0, 2, 3, 6, 9]) for (const z of [-5.2, -3, 0, 3, 6, 8.6]) starts.push({ x, z });
         // Off anything solid to begin with.

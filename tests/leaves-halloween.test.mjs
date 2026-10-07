@@ -240,23 +240,6 @@ describe('blown at by the leaf blower', () => {
         expect(jump).toBeLessThan(0.25);
     });
 
-    test('with a cauldron of candy at the walk, they pause there and reach in', () => {
-        const tr = walking(4, -1);
-        tr.paused = false;
-        const input = { active: true, person: null, walkX: 1, random: S.makeRandom(2), candy: true };
-        let reached = 0;
-        for (let t = 0; t < 8; t += 1 / 30) {
-            H.stepTreaters(tr, 1 / 30, input, HW);
-            reached = Math.max(reached, tr.reach);
-        }
-        expect(reached).toBeGreaterThan(0.95);
-        expect(tr.reach).toBe(0);
-        const none = walking(4, -1);
-        none.paused = false;
-        for (let t = 0; t < 8; t += 1 / 30) H.stepTreaters(none, 1 / 30, { ...input, candy: false }, HW);
-        expect(none.reach).toBe(0);
-    });
-
     test('the air of a blower aimed elsewhere, or too far off, does not bother them', () => {
         const tr = walking(4);
         const away = S.makeJet(B, 1, 2, 0, -1, true);
@@ -356,7 +339,7 @@ describe('the drawing, on the real three.js', () => {
             const overhead = box.min.y >= 2;
             const pastTheSim = box.min.x > Y.bounds.maxX || box.max.x < Y.bounds.minX;
             // On or wound round something the sim treats as solid (a porch
-            // post, a lantern, the cauldron, a pumpkin stack, whose bellies
+            // post, a lantern, a skeleton, a pumpkin stack, whose bellies
             // bulge past their boxes as the porch pumpkins' always have),
             // within a few centimeters of it and no taller than its stem.
             const onSolid = S.solidBoxes(Dc.decoratedConfig(C).yard).some((b) => box.min.x >= b.minX - 0.1 && box.max.x <= b.maxX + 0.1
@@ -507,7 +490,7 @@ describe('the drawing, on the real three.js', () => {
         expect(ghostBlown.max.x - ghostBlown.min.x).toBeGreaterThan(ghostRest.max.x - ghostRest.min.x);
     });
 
-    test('our yard\'s decorations are drawn on the boxes the leaves meet: the cauldron, every lantern, both pumpkin stacks', () => {
+    test('our yard\'s decorations are drawn on the boxes the leaves meet: every lantern, both pumpkin stacks, the skeletons', () => {
         const all = boxes();
         for (const b of Dc.yardDecorBoxes(C)) {
             const near = all.filter(({ box }) => box.max.x > b.minX - 0.05 && box.min.x < b.maxX + 0.05
@@ -528,6 +511,23 @@ describe('the drawing, on the real three.js', () => {
             const T = C.yard.tarp;
             expect(b.minX > T.maxX || b.minZ > T.maxZ).toBe(true);
         }
+    });
+
+    // Steve's M6 QA: "Maybe a skeleton or two (or three)?"
+    test('three skeletons: one breaking out of the lawn, one raking, and one peeking over our hedge from past the sim', () => {
+        const { group } = Dc.buildDecorations(C);
+        group.updateMatrixWorld(true);
+        const skeletons = group.children.filter((c) => c.name === 'skeleton');
+        expect(skeletons).toHaveLength(3);
+        const hedge = C.yard.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
+        const peeker = new THREE.Box3().setFromObject(skeletons[2], true);
+        expect(peeker.max.x).toBeLessThan(C.yard.bounds.minX);
+        expect(peeker.min.y).toBeGreaterThan(hedge.height - 0.1);
+        // The raker stands as tall as a person, the riser low in its mound.
+        const raker = new THREE.Box3().setFromObject(skeletons[1], true);
+        expect(raker.max.y).toBeGreaterThan(1.6);
+        const riser = new THREE.Box3().setFromObject(skeletons[0], true);
+        expect(riser.max.y).toBeLessThan(1);
     });
 });
 

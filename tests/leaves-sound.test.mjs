@@ -24,12 +24,19 @@ function param(initial = 0) {
         value: initial,
         calls: [],
         setValueAtTime(v, t) { this.value = v; this.calls.push(['set', v, t]); return this; },
-        setTargetAtTime(v, t, c) { this.value = v; this.calls.push(['target', v, t, c]); return this; }
+        setTargetAtTime(v, t, c) { this.value = v; this.calls.push(['target', v, t, c]); return this; },
+        linearRampToValueAtTime(v, t) { this.value = v; this.calls.push(['linear', v, t]); return this; },
+        exponentialRampToValueAtTime(v, t) { this.value = v; this.calls.push(['exp', v, t]); return this; }
     };
 }
 
 function node(kind) {
-    const n = { kind, to: [], connect(target) { this.to.push(target); return target; }, disconnect() {} };
+    const n = {
+        kind, to: [], disconnected: false, listeners: {},
+        connect(target) { this.to.push(target); return target; },
+        disconnect() { this.disconnected = true; },
+        addEventListener(type, fn) { this.listeners[type] = fn; }
+    };
     built.nodes.push(n);
     return n;
 }
@@ -51,6 +58,13 @@ class FakeAudioContext {
         return n;
     }
     createStereoPanner() { const n = node('panner'); n.pan = param(0); return n; }
+    createOscillator() {
+        const n = node('oscillator');
+        n.frequency = param(440);
+        n.start = (t) => { n.started = t; };
+        n.stop = (t) => { n.stopped = t; };
+        return n;
+    }
     createBufferSource() {
         const n = node('source');
         n.start = (t) => { n.started = t; };
@@ -236,4 +250,69 @@ describe('the whoosh', () => {
         expect(built.closed).toBe(1);
         expect(built.nodes.filter((n) => n.kind === 'source').every((n) => n.stopped)).toBe(true);
     });
+
+    // Steve's M6 QA: "If the user is blowing, then there is no need for 2
+    // simultaneous blowing sounds - enough is enough."
+    test('the neighbor\'s blower is heard only while ours is quiet', () => {
+        const sound = createSound(S);
+        sound.unlock();
+        const [, his] = voiceGains();
+        sound.update(1 / 60, { blowing: true }, { blowing: true, big: false, pan: 0.5 });
+        expect(his.gain.value).toBe(0);
+        sound.update(1 / 60, { blowing: false }, { blowing: true, big: false, pan: 0.5 });
+        expect(his.gain.value).toBeCloseTo(S.neighbor, 5);
+        sound.update(1 / 60, { blowing: true }, { blowing: true, big: true, pan: 0.5 });
+        expect(his.gain.value).toBe(0);
+    });
 });
+
+// Steve's M6 QA: "During the dive celebration, could we have a 'thud' sound
+// when the character lands on the ground?"
+describe('the landing', () => {
+    test('a flop onto the lawn thuds: a low thump with a body a phone can play, and the leaves\' crackle', () => {
+        const sound = createSound(S);
+        sound.unlock();
+        const before = built.nodes.length;
+        expect(sound.thud(1)).toBe(true);
+        const made = built.nodes.slice(before);
+        const osc = made.find((n) => n.kind === 'oscillator');
+        expect(osc).toBeTruthy();
+        // It falls in pitch, a body coming to rest.
+        const ramp = osc.frequency.calls.find((c) => c[0] === 'exp');
+        expect(ramp[1]).toBeLessThan(osc.frequency.calls[0][1]);
+        // A band at or above 500 Hz carries it on a phone's small speaker.
+        const bands = made.filter((n) => n.kind === 'filter').map((f) => f.frequency.value);
+        expect(Math.max(...bands)).toBeGreaterThanOrEqual(500);
+        expect(bands.some((hz) => hz >= 400 && hz <= 900)).toBe(true);
+        // Scheduled ahead of the audio clock, never at it.
+        expect(osc.started).toBeGreaterThan(10);
+    });
+
+    test('a landing in the pile crunches instead, and nothing it made is left connected once it ends', () => {
+        const sound = createSound(S);
+        sound.unlock();
+        const before = built.nodes.length;
+        expect(sound.crunch(0.8)).toBe(true);
+        const made = built.nodes.slice(before);
+        expect(made.filter((n) => n.kind === 'source').length).toBeGreaterThanOrEqual(2);
+        for (const n of made) if (n.listeners.ended) n.listeners.ended();
+        const players = made.filter((n) => n.kind === 'source' || n.kind === 'oscillator');
+        expect(players.length).toBeGreaterThan(0);
+        expect(made.every((n) => n.disconnected)).toBe(true);
+    });
+
+    test('silent with the sound off, before any gesture, and in a browser with no Web Audio', () => {
+        const before = createSound(S);
+        expect(before.thud()).toBe(false);
+        const off = createSound(S);
+        off.unlock();
+        off.setOn(false);
+        expect(off.thud()).toBe(false);
+        expect(off.crunch()).toBe(false);
+        globalThis.window = {};
+        const none = createSound(S);
+        none.unlock();
+        expect(none.thud()).toBe(false);
+    });
+});
+

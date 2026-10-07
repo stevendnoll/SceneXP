@@ -167,7 +167,6 @@ let backyard = null;
 let treaters = null;
 let treaterFigures = null;
 const treatRandom = makeRandom(4049);
-const D_CAULDRON = CONFIG.halloween.decor.cauldron;
 const sound = createSound(CONFIG.sound);
 let soundBtn = null;
 const toast = { el: null, until: 0 };
@@ -332,9 +331,10 @@ async function init() {
     scene.add(neighborFigure.group);
     marker = buildMarker();
     scene.add(marker);
-    // In Halloween week the trick-or-treaters (M6), out of sight to begin
-    // with.
-    if (state.halloween) {
+    // The trick-or-treaters (M6), out of sight to begin with: whenever the
+    // decorations are up (Steve's QA, 2026-10-07: "I didn't see the
+    // trick-or-treaters in this last run". They were Halloween week's only).
+    if (state.decor) {
         treaters = createTreaters(CONFIG.halloween, treatRandom);
         treaterFigures = createTreaterFigures(CONFIG.halloween);
         scene.add(treaterFigures.group);
@@ -1050,6 +1050,9 @@ function fireBurst() {
     const plan = finale.plan;
     const size = (plan.success ? 1 : F.flopBurst) * (state.reducedMotion ? F.reducedBurst : 1);
     burst(sim, plan.land.x, plan.land.z, F.burstRadius * (plan.success ? 1 : 0.6), F.burstSpeed * size);
+    // A crunch of leaves into a good pile, a thud onto the lawn (M6 QA).
+    if (plan.success) sound.crunch(Math.min(1, plan.peak.height / 1.2 + 0.4));
+    else sound.thud(1);
     announce(plan.success ? 'You land in the pile, and the leaves go everywhere.' : 'You land on the lawn. Ouch.');
 }
 
@@ -1425,12 +1428,9 @@ function announceOnce(key, text) {
 function stepTheTreaters(dt, jets) {
     if (!treaters) return null;
     const event = stepTreaters(treaters, dt, {
-        // With the decorations up they stop at the cauldron of candy, and
-        // reach in.
         active: true,
         person: operator,
-        walkX: state.decor && D_CAULDRON ? D_CAULDRON.x : CONFIG.yard.house.door,
-        candy: Boolean(state.decor && D_CAULDRON),
+        walkX: CONFIG.yard.house.door,
         random: treatRandom,
         wind: (x, y, z) => windAt(jets, x, y, z)
     }, CONFIG.halloween);

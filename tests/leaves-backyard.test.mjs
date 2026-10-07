@@ -36,8 +36,9 @@ const overlaps = (box, r) => box.max.x > r.minX && box.min.x < r.maxX && box.max
 
 test('all of it is past the sim\'s ground, behind the hedge or behind the houses', () => {
     const wall = Y.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
-    // The hedge as drawn: 0.9 m thick behind its wall, back to the houses.
-    const hedge = { minX: wall.at - 0.9, maxX: wall.at, minZ: wall.from, maxZ: Y.sidewalk.minZ };
+    // The hedge as drawn: 0.9 m thick behind its wall, back along the
+    // property line to `hedgeBack`.
+    const hedge = { minX: wall.at - 0.9, maxX: wall.at, minZ: Y.hedgeBack, maxZ: Y.sidewalk.minZ };
     const { out } = pieces();
     expect(out.length).toBeGreaterThan(40);
     for (const { box } of out) {
@@ -79,4 +80,19 @@ test('a visitor who walks over to the hedge sees the shed, the beds, the fire pi
         });
         expect(seen.length).toBe(things.length);
     }
+});
+
+// Steve's M6 QA: the hedge "ended pretty abruptly" at the front of the house.
+test('the hedge runs back along the property line past the houses, and the side yard\'s fence meets it', async () => {
+    const Yd = await import('../www/leaves/js/yard.js');
+    const scene = new THREE.Scene();
+    Yd.buildYard(scene, C, { shadows: false });
+    scene.updateMatrixWorld(true);
+    const hedge = new THREE.Box3().setFromObject(scene.getObjectByName('hedge'));
+    // Past the back of our house.
+    expect(hedge.min.z).toBeLessThan(Y.lawn.minZ - Y.house.setBack - Y.house.depth + 0.5);
+    expect(hedge.max.z).toBeCloseTo(Y.sidewalk.minZ, 5);
+    const F = Y.backyard.fence;
+    expect(F.z).toBeGreaterThan(hedge.min.z);
+    expect(Math.abs(F.to - hedge.min.x)).toBeLessThan(0.05);
 });

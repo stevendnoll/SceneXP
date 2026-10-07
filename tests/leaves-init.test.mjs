@@ -28,6 +28,11 @@ let dom;
 beforeEach(() => {
     jest.resetModules();
     jest.useFakeTimers({ doNotFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'queueMicrotask', 'nextTick', 'setImmediate'] });
+    // A fixed day outside the Halloween season (M6): the decorations and the
+    // trick-or-treaters follow the visitor's calendar, so a suite run on the
+    // real date would change with the time of year. Tests of the season set
+    // their own day.
+    jest.setSystemTime(new Date(2026, 8, 15, 12));
     installThree();
     dom = installDom({ innerWidth: 390, innerHeight: 844 });
     dom.windowStub.location.search = '?leaves=600';
@@ -664,7 +669,8 @@ describe('delights and surprises (M6)', () => {
         let main = await boot();
         expect(main.getState().decor).toBe(true);
         expect(main.getState().halloween).toBe(false);
-        expect(main.getState().treaters).toBe(null);
+        // The trick-or-treaters come with the decorations (M6 QA).
+        expect(main.getState().treaters).not.toBe(null);
         fire(dom.el('blocker'), 'click');
         expect(() => frames(main, 1, 20)).not.toThrow();
         dom.uninstall();
