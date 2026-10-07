@@ -63,70 +63,117 @@ export function seasonFor(search, date, H, qa) {
 export function createTreaters(H, random) {
     return {
         state: 'wait', t: 0, timer: between(H.first, random()), dir: 1, x: H.fromX, z: H.z, heading: Math.PI / 2, speed: 0, stride: 0, paused: false, walks: 0,
-        // Blown: how hard (0 to 1, fading), which way, how far off the
+        // Which of the two is out in front (0 the ghost, 1 the witch).
+        lead: 0,
+        // Blown: how hard (0 to 1, eased), which way (eased), how far off the
         // sidewalk's middle it has pushed them, whether they are hurrying
         // off, and whether this walk has been blown yet (for the event).
-        blown: 0, gust: { x: 0, z: 0 }, dz: 0, hurrying: false, blownThisWalk: false
+        blown: 0, gust: { x: 0, z: 0 }, dz: 0, hurrying: false, blownThisWalk: false,
+        // Reaching into the candy cauldron while they pause (0 to 1).
+        reach: 0
     };
 }
 
-/** The strongest air at either of them, at a child's middle: { x, z,
- *  speed } with (x, z) the way it blows, or null. */
+const wrap = (a) => a - Math.PI * 2 * Math.floor((a + Math.PI) / (Math.PI * 2));
+
+/** Turn toward `want` at no more than `rate` radians a second. */
+function turnTo(tr, want, rate, step) {
+    const d = wrap(want - tr.heading);
+    const max = rate * step;
+    tr.heading = wrap(tr.heading + (d < -max ? -max : d > max ? max : d));
+}
+
+/** The blowers' air at the pair, at a child's middle: the way it blows,
+ *  averaged over both of them by how hard it blows on each (so it does not
+ *  flick between them), and the hardest it blows on either. { x, z, speed }
+ *  or null. */
 function windAt(tr, input, H) {
     if (!input.wind) return null;
-    let best = null;
+    let x = 0;
+    let z = 0;
+    let speed = 0;
     for (const p of treaterSpots(tr)) {
         const w = input.wind(p.x, H.blowHeight, p.z);
-        if (w && w.speed > (best ? best.speed : 0)) best = w;
+        if (!w || !(w.speed > 0)) continue;
+        const len = Math.hypot(w.x, w.z) || 1;
+        x += (w.x / len) * w.speed;
+        z += (w.z / len) * w.speed;
+        speed = Math.max(speed, w.speed);
     }
-    return best;
+    return speed > 0 ? { x, z, speed } : null;
+}
+
+/** Walking the other way: the one behind becomes the one in front, so
+ *  neither of them moves (a turn about the leader put the other 1.7 m away
+ *  in one frame, Steve's M6 QA: "glitchy"). */
+function turnAround(tr, dir) {
+    if (dir === tr.dir) return;
+    tr.x -= tr.dir * 0.85;
+    tr.dir = dir;
+    tr.lead = 1 - tr.lead;
 }
 
 /**
  * Advance them by `dt`. `input`:
  *   active   the yard is in view
  *   person   { x, z }: they wait rather than walk through them
- *   walkX    where our front walk meets the sidewalk
+ *   walkX    where they stop to look at the house (and, with candy, where
+ *            the cauldron stands)
  *   random   () => 0..1
  *   wind     (x, y, z) => { x, z, speed }: the blowers' air there (optional)
+ *   candy    whether there is a cauldron of candy to reach into
  * Returns 'start', 'pause', 'blown' (the first time a walk is), 'gone' or
  * null.
+ *
+ * EVERYTHING EASES (Steve's M6 QA: the blown animation was "glitchy"). They
+ * turn at `turnRate`, the wind's direction and how hard they are blown ease
+ * in and out, and once blown they stay blown until the air drops well below
+ * what started it (`keepAir` of it), so the edge of the blower's reach does
+ * not flick them in and out of it.
  */
 export function stepTreaters(tr, dt, input, H) {
     const step = dt > 0 && input.active ? dt : 0;
     tr.t += step;
+    const ease = (from, to, rate) => from + (to - from) * Math.min(1, rate * step);
     // BLOWN AT, walking or paused: they stagger with the air, backs to it.
+    let event = null;
     if (tr.state !== 'wait' && step > 0) {
         const w = windAt(tr, input, H);
-        if (w && w.speed >= H.blownAir) {
+        const enough = tr.state === 'blown' ? H.blownAir * H.keepAir : H.blownAir;
+        if (w && w.speed >= enough) {
             const len = Math.hypot(w.x, w.z) || 1;
-            const first = !tr.blownThisWalk;
-            tr.gust = { x: w.x / len, z: w.z / len };
-            tr.blown = Math.max(tr.blown, Math.min(1, w.speed / H.blownFull));
-            tr.state = 'blown';
+            const gx = tr.state === 'blown' ? ease(tr.gust.x, w.x / len, 4) : w.x / len;
+            const gz = tr.state === 'blown' ? ease(tr.gust.z, w.z / len, 4) : w.z / len;
+            const g = Math.hypot(gx, gz) || 1;
+            tr.gust = { x: gx / g, z: gz / g };
+            tr.blownTarget = Math.min(1, w.speed / H.blownFull);
+            if (tr.state !== 'blown') {
+                tr.state = 'blown';
+                tr.reach = 0;
+            }
             tr.t = 0;
+            if (!tr.blownThisWalk) event = 'blown';
             tr.blownThisWalk = true;
-            if (first) return 'blown';
         }
     }
     if (tr.state === 'blown') {
-        const push = H.push * tr.blown * Math.max(0, 1 - tr.t / H.blownTime);
+        tr.blown = ease(tr.blown, tr.t < H.blownTime * 0.5 ? tr.blownTarget || 0 : 0, tr.t < H.blownTime * 0.5 ? 6 : 2);
+        const push = H.push * tr.blown;
         tr.x += tr.gust.x * push * step;
         tr.dz = Math.min(H.drift.max, Math.max(H.drift.min, tr.dz + tr.gust.z * push * step));
         tr.speed = push;
         tr.stride += push * step;
-        tr.heading = Math.atan2(tr.gust.x, tr.gust.z);
+        turnTo(tr, Math.atan2(tr.gust.x, tr.gust.z), H.turnRate, step);
         if (tr.t >= H.blownTime) {
             // Off they go, the way it sent them, and no stopping at our walk.
-            if (Math.abs(tr.gust.x) > 0.2) tr.dir = tr.gust.x > 0 ? 1 : -1;
-            tr.heading = tr.dir * Math.PI / 2;
+            if (Math.abs(tr.gust.x) > 0.2) turnAround(tr, tr.gust.x > 0 ? 1 : -1);
             tr.state = 'walk';
             tr.hurrying = true;
             tr.paused = true;
         }
-        return null;
+        return event;
     }
-    tr.blown = Math.max(0, tr.blown - step * 1.5);
+    tr.blown = ease(tr.blown, 0, 2);
     if (tr.state === 'wait') {
         tr.timer -= step;
         tr.speed = 0;
@@ -137,18 +184,21 @@ export function stepTreaters(tr, dt, input, H) {
         tr.paused = false;
         tr.state = 'walk';
         tr.walks += 1;
-        Object.assign(tr, { blown: 0, dz: 0, hurrying: false, blownThisWalk: false });
+        Object.assign(tr, { blown: 0, dz: 0, hurrying: false, blownThisWalk: false, reach: 0, lead: 0 });
         return 'start';
     }
     if (tr.state === 'pause') {
         tr.speed = 0;
-        tr.heading = Math.PI;
+        turnTo(tr, Math.PI, H.turnRate, step);
+        // With a cauldron there, a hand into it and out again.
+        tr.reach = input.candy ? Math.max(0, Math.sin((Math.PI * tr.t) / H.pause)) : 0;
         if (tr.t >= H.pause) {
             tr.state = 'walk';
-            tr.heading = tr.dir * Math.PI / 2;
+            tr.reach = 0;
         }
         return null;
     }
+    turnTo(tr, tr.dir * Math.PI / 2, H.turnRate, step);
     // Walking. Somebody in the way, and they wait.
     const p = input.person;
     const ahead = p ? (p.x - tr.x) * tr.dir : Infinity;
@@ -180,13 +230,16 @@ export function stepTreaters(tr, dt, input, H) {
     return null;
 }
 
-/** Where each of the pair stands: the second a step behind the first and
- *  a little to the side. */
+/** Where each of the pair stands, the ghost first and the witch second:
+ *  whichever leads (`lead`) is at `x`, the other a step behind, each always
+ *  on its own side of the sidewalk. */
 export function treaterSpots(tr) {
     const z = tr.z + (tr.dz || 0);
+    const lead = tr.lead || 0;
+    const behind = tr.x - tr.dir * 0.85;
     return [
-        { x: tr.x, z: z - 0.15 },
-        { x: tr.x - tr.dir * 0.85, z: z + 0.3 }
+        { x: lead === 0 ? tr.x : behind, z: z - 0.15 },
+        { x: lead === 1 ? tr.x : behind, z: z + 0.3 }
     ];
 }
 
@@ -378,17 +431,22 @@ export function createTreaterFigures(H) {
             // Blown at: leaning with the air (their backs are to it), the
             // ghost's sheet billowing, the witch holding onto her hat.
             const b = tr.blown || 0;
-            kid.group.rotation.x = 0.22 * b;
+            const reach = tr.reach || 0;
+            // Leaning with the air, or over the cauldron.
+            kid.group.rotation.x = 0.22 * b + 0.18 * reach;
             const sheet = kid.group.userData.sheet;
             if (sheet) {
-                const flap = 1 + 0.2 * b * (0.6 + 0.4 * Math.sin(time * 15 + k));
-                sheet.scale.set(flap, 1 - 0.06 * b, flap);
+                const flap = 1 + 0.12 * b * (0.7 + 0.3 * Math.sin(time * 9 + k));
+                sheet.scale.set(flap, 1 - 0.05 * b, flap);
             }
             if (kid.arms) {
                 kid.arms.forEach((a, i) => {
                     const rest = kid.armRest[i];
                     const s = a.userData.armSide || 1;
-                    a.rotation.set(rest.x + (-2.7 - rest.x) * b, rest.y, rest.z + (-s * 0.3 - rest.z) * b);
+                    // Holding her hat in the wind, and her right hand into
+                    // the candy.
+                    const into = s < 0 ? reach : 0;
+                    a.rotation.set(rest.x + (-2.7 - rest.x) * b + (-1.1) * into, rest.y, rest.z + (-s * 0.3 - rest.z) * b);
                 });
             }
         });

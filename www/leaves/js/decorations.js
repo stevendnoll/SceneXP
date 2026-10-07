@@ -18,10 +18,12 @@
  * skeleton lounging on a hay bale, waving. Those last are the reward for the
  * view widening when he comes out.
  *
+ * A WITCH flew headfirst into our hedge: her striped legs and boots kick up
+ * out of its top, her broom stuck in beside her.
+ *
  * DOWN THE BLOCK the street joins in (Steve's M6 QA: "could we please add
- * more decorations?"): a witch who flew into the maple over the hedge (her
- * striped legs and boots are all that show), and pumpkins, lights and a web
- * at the two houses down the street.
+ * more decorations?"): pumpkins, lights, a scarecrow and little ghosts at
+ * the two houses down the street.
  *
  * NOTHING HERE IS ON OUR LAWN. The leaves would blow through it (the sim
  * knows only the boxes in config.yard), and the dive runs straight at the
@@ -45,6 +47,54 @@ function mesh(geometry, material, x, y, z, shadow = false) {
     m.castShadow = shadow;
     m.receiveShadow = shadow;
     return m;
+}
+
+// ---- What stands on our lawn (pure) ---------------------------------------------
+
+/** The stack of pumpkins at `t`: each pumpkin's middle and radius, bottom up,
+ *  each sitting on the one below (house.js draws one 0.72 as tall as wide). */
+export function towerStack(t, D) {
+    let y = 0;
+    return D.towerPumpkins.map((p) => {
+        const at = { x: t.x, z: t.z, y, r: p.r, color: p.color };
+        y += p.r * 1.44 * 0.92;
+        return at;
+    });
+}
+
+/**
+ * The boxes our yard's decorations stand on, as config.yard.boxes entries:
+ * the cauldron, each lantern, each pumpkin stack. Main.js adds them to the
+ * yard the sim is built from while the decorations are up, and draws the
+ * decorations from the same numbers, so the leaves meet what is drawn.
+ * Each is a platform: a leaf blown onto one lies on top.
+ */
+export function yardDecorBoxes(config) {
+    const D = config.halloween.decor;
+    const out = [];
+    const C = D.cauldron;
+    if (C) out.push({ name: 'cauldron', minX: C.x - C.r, maxX: C.x + C.r, minZ: C.z - C.r, maxZ: C.z + C.r, height: C.height, platform: true });
+    const Ln = D.lanterns;
+    if (Ln) {
+        for (const x of Ln.xs) {
+            for (const z of Ln.zs) {
+                out.push({ name: 'lantern', minX: x - Ln.size / 2, maxX: x + Ln.size / 2, minZ: z - Ln.size / 2, maxZ: z + Ln.size / 2, height: Ln.height, platform: true });
+            }
+        }
+    }
+    for (const t of D.towers || []) {
+        const stack = towerStack(t, D);
+        const top = stack[stack.length - 1];
+        const half = stack[0].r * 0.75;
+        out.push({ name: 'pumpkins', minX: t.x - half, maxX: t.x + half, minZ: t.z - half, maxZ: t.z + half, height: top.y + top.r * 1.44, platform: true });
+    }
+    return out;
+}
+
+/** The config with our yard's decorations among its solid boxes: the world
+ *  the sim is built from while they are up. */
+export function decoratedConfig(config) {
+    return { ...config, yard: { ...config.yard, boxes: [...config.yard.boxes, ...yardDecorBoxes(config)] } };
 }
 
 /** A bat cut out of black paper, a wingspan of 1, facing +z: ears, a body,
@@ -340,32 +390,44 @@ function silhouetteTexture(kind, D) {
     return texture;
 }
 
-/** A witch who flew into a tree: a scrap of black skirt at the trunk and
- *  her striped legs and pointed boots sticking out of it, along +z. */
-function crashedWitch(D) {
+/** A witch who flew headfirst into a hedge: a flare of black skirt on its
+ *  top, her striped legs kicking up out of it in a V, pointed boots, and her
+ *  broom stuck in beside her. Built at the hedge top's middle, the street
+ *  toward +z, the V across x. */
+function hedgeWitch(D) {
     const group = new THREE.Group();
-    // The skirt's waist is in the bark and its hem flares over her legs.
-    const skirt = mesh(new THREE.ConeGeometry(0.17, 0.26, 10, 1, true), lambert(D.black, { side: THREE.DoubleSide }), 0, 0, 0.1);
-    skirt.rotation.x = -Math.PI / 2;
-    group.add(skirt);
-    const stripes = [lambert(D.stocking), lambert(D.black)];
+    const black = lambert(D.black);
+    // Upside down, her skirt falls into the hedge: what shows is its flare.
+    group.add(mesh(new THREE.ConeGeometry(0.22, 0.2, 12, 1, true), lambert(D.black, { side: THREE.DoubleSide }), 0, 0.08, 0));
+    const stripes = [lambert(D.stocking), black];
     for (const s of [-1, 1]) {
-        const hip = [s * 0.05, 0, 0.12];
-        const foot = [s * 0.16, -0.22, 0.85];
-        const n = 7;
-        for (let k = 0; k < n; k++) {
-            const a = hip.map((v, i) => v + ((foot[i] - v) * k) / n);
-            const b = hip.map((v, i) => v + ((foot[i] - v) * (k + 1)) / n);
-            group.add(bone(a, b, 0.032 - k * 0.002, stripes[k % 2], true));
-        }
+        const hip = [s * 0.05, 0.1, 0];
+        const knee = [s * 0.13, 0.42, 0.05];
+        const foot = [s * 0.2, 0.74, 0.02];
+        const n = 4;
+        [[hip, knee], [knee, foot]].forEach(([from, to], part) => {
+            for (let k = 0; k < n; k++) {
+                const a = from.map((v, i) => v + ((to[i] - v) * k) / n);
+                const b2 = from.map((v, i) => v + ((to[i] - v) * (k + 1)) / n);
+                group.add(bone(a, b2, 0.032 - (part * n + k) * 0.0015, stripes[(part * n + k) % 2], true));
+            }
+        });
+        // A pointed boot, sole to the sky, toe toward the street.
         const boot = new THREE.Group();
         boot.position.set(...foot);
-        boot.add(mesh(new THREE.BoxGeometry(0.08, 0.16, 0.08), lambert(D.black), 0, 0.02, 0.02, true));
-        const toe = mesh(new THREE.ConeGeometry(0.035, 0.14, 6), lambert(D.black), 0, -0.04, 0.1, true);
-        toe.rotation.x = Math.PI / 2 - 0.5;
+        boot.add(mesh(new THREE.BoxGeometry(0.075, 0.15, 0.08), black, 0, 0.05, 0, true));
+        const toe = mesh(new THREE.ConeGeometry(0.035, 0.15, 6), black, 0, 0.1, 0.1, true);
+        toe.rotation.x = Math.PI / 2 - 0.35;
         boot.add(toe);
         group.add(boot);
     }
+    // Her broom, handle down in the hedge, bristles up.
+    const handleFrom = [-0.15, -0.25, 0.5];
+    const handleTo = [-0.05, 0.75, 0.62];
+    group.add(bone(handleFrom, handleTo, 0.018, lambert(0x6b4f33), true));
+    const bristles = mesh(new THREE.ConeGeometry(0.11, 0.32, 10), lambert(D.straw), handleTo[0], handleTo[1] + 0.12, handleTo[2], true);
+    bristles.rotation.x = 0.12;
+    group.add(bristles);
     return group;
 }
 
@@ -478,25 +540,6 @@ function inflatableGhost(tall, D) {
     return group;
 }
 
-/** Stretchy cobweb pulled over the top of the hedge (the box `hedge`, x
- *  from minX to maxX, top at `top`), between z `from` and `to`: strands
- *  between random points just over its top, kept off our side of it. */
-function hedgeWeb(hedge, W, color, seed = 17) {
-    const random = makeRandom(seed);
-    const at = () => [hedge.minX + 0.04 + random() * (hedge.maxX - hedge.minX - 0.08),
-        hedge.top + 0.01 + random() * 0.05, W.from + random() * (W.to - W.from)];
-    const points = [];
-    for (let k = 0; k < W.strands; k++) {
-        const a = at();
-        // Short strands, mostly along the hedge, as stretched web lies.
-        const b = [Math.min(hedge.maxX - 0.03, Math.max(hedge.minX + 0.03, a[0] + (random() - 0.5) * 0.5)),
-            hedge.top + 0.01 + random() * 0.05, a[2] + (random() - 0.5) * 1.1];
-        points.push(new THREE.Vector3(...a), new THREE.Vector3(...b));
-    }
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color }));
-}
-
 /** A string of lights wound up a post (box `p`) from `from` to `to` high,
  *  `turns` times round at radius `r` from its middle. Pure. */
 export function postSpiral(p, from, to, P) {
@@ -540,6 +583,88 @@ function scarecrow(K, D) {
     for (let k = -2; k <= 2; k++) group.add(mesh(new THREE.BoxGeometry(0.02, 0.012, 0.02), ink, k * 0.03, 1.62 - Math.abs(k) * -0.006, 0.155));
     group.add(mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.02, 18), lambert(K.hat), 0, 1.83, 0, true));
     group.add(mesh(new THREE.CylinderGeometry(0.14, 0.17, 0.16, 14), lambert(K.hat), 0, 1.92, 0, true));
+    return group;
+}
+
+/** The cauldron of candy at (x, z): a round iron pot on three stubby legs,
+ *  a rim, and a heap of wrapped candy, its top at `height`. */
+function cauldron(C, black, random) {
+    const group = new THREE.Group();
+    const iron = new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 0.55, metalness: 0.35 });
+    const h = C.height;
+    const profile = [[0.001, 0.1], [C.r * 0.6, 0.1], [C.r * 0.93, 0.18], [C.r, h * 0.45], [C.r * 0.93, h * 0.75], [C.r * 0.8, h - 0.03], [C.r * 0.82, h - 0.03]]
+        .map(([r, y]) => new THREE.Vector2(r, y));
+    group.add(mesh(new THREE.LatheGeometry(profile, 20), iron, 0, 0, 0, true));
+    const rim = mesh(new THREE.TorusGeometry(C.r * 0.82, 0.025, 6, 20), iron, 0, h - 0.025, 0, true);
+    rim.rotation.x = Math.PI / 2;
+    group.add(rim);
+    for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2;
+        group.add(bone([Math.cos(a) * C.r * 0.5, 0.12, Math.sin(a) * C.r * 0.5], [Math.cos(a) * C.r * 0.7, 0, Math.sin(a) * C.r * 0.7], 0.022, iron));
+    }
+    const candy = C.candy.map((c) => lambert(c));
+    for (let k = 0; k < 14; k++) {
+        const a = random() * Math.PI * 2;
+        const r = Math.sqrt(random()) * C.r * 0.65;
+        const piece = mesh(new THREE.SphereGeometry(0.03, 6, 5), candy[k % candy.length], Math.cos(a) * r, h - 0.07 + random() * 0.04, Math.sin(a) * r);
+        piece.scale.set(1.4, 0.8, 0.9);
+        piece.rotation.y = random() * 3;
+        group.add(piece);
+    }
+    return group;
+}
+
+/** A black lantern `size` square and `height` tall: a base, four corner
+ *  posts, a warm light inside its glass, a pointed cap and a ring. */
+function lantern(Ln, black) {
+    const group = new THREE.Group();
+    const s = Ln.size;
+    const h = Ln.height;
+    group.add(mesh(new THREE.BoxGeometry(s, 0.04, s), black, 0, 0.02, 0, true));
+    for (const x of [-1, 1]) for (const z of [-1, 1]) group.add(mesh(new THREE.BoxGeometry(0.02, h * 0.62, 0.02), black, x * (s / 2 - 0.01), 0.04 + h * 0.31, z * (s / 2 - 0.01), true));
+    group.add(mesh(new THREE.BoxGeometry(s * 0.86, h * 0.6, s * 0.86), new THREE.MeshBasicMaterial({ color: Ln.glow }), 0, 0.04 + h * 0.31, 0));
+    group.add(mesh(new THREE.BoxGeometry(s, 0.03, s), black, 0, 0.04 + h * 0.62, 0, true));
+    const cap = mesh(new THREE.ConeGeometry(s * 0.72, h * 0.22, 4), black, 0, 0.04 + h * 0.62 + h * 0.11, 0, true);
+    cap.rotation.y = Math.PI / 4;
+    group.add(cap);
+    const ring = mesh(new THREE.TorusGeometry(0.03, 0.006, 4, 10), black, 0, h - 0.03, 0);
+    group.add(ring);
+    return group;
+}
+
+/** A witch's hat floating on a thread, a lit candle hanging under it. */
+function floatingHat(D, black) {
+    const group = new THREE.Group();
+    group.add(mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.015, 18), black, 0, 0, 0));
+    const cone = mesh(new THREE.ConeGeometry(0.12, 0.32, 14), black, 0, 0.16, 0);
+    cone.rotation.z = 0.12;
+    group.add(cone);
+    group.add(mesh(new THREE.CylinderGeometry(0.122, 0.122, 0.035, 14), lambert(D.stocking), 0, 0.03, 0));
+    group.add(mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.12, 8), lambert(0xf4f1ea), 0, -0.2, 0));
+    group.add(mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: D.lanterns.glow }), 0, -0.12, 0));
+    group.add(wireLine([[0, 0.3, 0], [0, 0.3 + D.hatString, 0]], D.webColor));
+    return group;
+}
+
+/** Mummy wrappings for our mailbox (its body as house.js draws it: 0.26
+ *  wide, 0.24 tall, 0.5 deep, 0.1 over the post's top and 0.1 toward the
+ *  street), with googly eyes on its front. */
+function mummyMailbox(m, D) {
+    const group = new THREE.Group();
+    const cx = (m.minX + m.maxX) / 2;
+    const cy = m.height + 0.1;
+    const cz = (m.minZ + m.maxZ) / 2 + 0.1;
+    const gauze = lambert(D.mummy);
+    [-0.2, -0.1, 0, 0.1, 0.2].forEach((dz, k) => {
+        const band = mesh(new THREE.BoxGeometry(0.285, 0.265, 0.035), gauze, cx, cy, cz + dz);
+        band.rotation.z = (k % 2 ? 1 : -1) * 0.12;
+        band.rotation.x = (k - 2) * 0.05;
+        group.add(band);
+    });
+    for (const s of [-1, 1]) {
+        group.add(mesh(new THREE.SphereGeometry(0.035, 10, 8), lambert(0xffffff), cx + s * 0.055, cy + 0.03, cz + 0.27));
+        group.add(mesh(new THREE.SphereGeometry(0.017, 8, 6), lambert(D.black), cx + s * 0.055 + 0.008, cy + 0.02, cz + 0.3));
+    }
     return group;
 }
 
@@ -624,15 +749,55 @@ export function buildDecorations(config) {
         }
     }
 
-    // Stretchy cobweb along the top of our hedge, and a spider or two in it.
+    // A witch who flew headfirst into our hedge (Steve's M6 QA: her legs
+    // out of the maple's trunk were "in a weird spot"). The stretchy cobweb
+    // that was along the hedge's top is gone too ("don't look right").
     const hedgeWall = Y.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
     if (hedgeWall) {
-        const hedge = { minX: hedgeWall.at - 0.9, maxX: hedgeWall.at, top: hedgeWall.height };
-        group.add(hedgeWeb(hedge, D.hedgeWeb, D.webColor));
-        for (let k = 0; k < D.hedgeWeb.spiders; k++) {
-            const z = D.hedgeWeb.from + ((k + 0.6) / (D.hedgeWeb.spiders + 0.2)) * (D.hedgeWeb.to - D.hedgeWeb.from);
-            group.add(mesh(new THREE.SphereGeometry(0.05, 8, 6), black, hedge.minX + 0.3 + k * 0.25, hedge.top + 0.05, z));
+        const witch = hedgeWitch(D);
+        witch.position.set(hedgeWall.at - 0.45, hedgeWall.height, D.witch.z);
+        group.add(witch);
+    }
+
+    // ON OUR LAWN, each on the box the sim knows it by (yardDecorBoxes): the
+    // cauldron of candy, the lanterns along the walk, the pumpkin stacks.
+    const random = makeRandom(53);
+    if (D.cauldron) {
+        const pot = cauldron(D.cauldron, black, random);
+        pot.position.set(D.cauldron.x, 0, D.cauldron.z);
+        pot.name = 'cauldron';
+        group.add(pot);
+    }
+    if (D.lanterns) {
+        for (const x of D.lanterns.xs) {
+            for (const z of D.lanterns.zs) {
+                const lamp = lantern(D.lanterns, black);
+                lamp.position.set(x, 0, z);
+                lamp.name = 'lantern';
+                group.add(lamp);
+            }
         }
+    }
+    for (const t of D.towers || []) {
+        const stack = new THREE.Group();
+        stack.name = 'pumpkins';
+        towerStack(t, D).forEach((p) => stack.add(pumpkin(p)));
+        group.add(stack);
+    }
+    // Witch hats floating under our maple, each with a candle.
+    const hats = (D.hats || []).map((h, k) => {
+        const hat = floatingHat(D, black);
+        hat.position.set(h.x, h.y, h.z);
+        hat.rotation.y = k * 1.3;
+        group.add(hat);
+        return { hat, h, k };
+    });
+    // The mailbox, wrapped as a mummy.
+    const mailbox = (Y.boxes || []).find((b) => b.name === 'mailbox');
+    if (mailbox) {
+        const mummy = mummyMailbox(mailbox, D);
+        mummy.name = 'mummy-mailbox';
+        group.add(mummy);
     }
 
     // Crows along our ridge, looking about.
@@ -715,16 +880,6 @@ export function buildDecorations(config) {
     crawler.group.rotation.set(slope, S.turn, 0, 'XYZ');
     group.add(crawler.group);
 
-    // The witch who flew into the maple over the hedge.
-    const tree = Y.trees.find((t) => t.x < Y.bounds.minX && t.z > Y.lawn.minZ && t.z < Y.lawn.maxZ);
-    if (tree) {
-        const witch = crashedWitch(D);
-        const a = D.witch.facing;
-        witch.position.set(tree.x + Math.sin(a) * D.witch.out, D.witch.y, tree.z + Math.cos(a) * D.witch.out);
-        witch.rotation.y = a;
-        group.add(witch);
-    }
-
     // Down the street: pumpkins by each door, lights along the sage house's
     // eave and a scarecrow in its yard, and on the gray one a web across the
     // garage's corner and little ghosts along its eave.
@@ -771,6 +926,10 @@ export function buildDecorations(config) {
         inflatable.rotation.z = 0.025 * motion * Math.sin(time * 0.8);
         inflatable.rotation.x = 0.018 * motion * Math.sin(time * 0.63 + 1);
         lounger.wave.rotation.z = 0.5 * motion * Math.sin(time * 4);
+        hats.forEach(({ hat, h, k }) => {
+            hat.position.y = h.y + 0.06 * motion * Math.sin(time * 0.9 + k * 2);
+            hat.rotation.y = k * 1.3 + 0.2 * motion * Math.sin(time * 0.5 + k);
+        });
         bigGhost.rotation.z = 0.04 * motion * Math.sin(time * 0.7 + 2);
         littleGhosts.forEach((g, k) => { g.rotation.z = 0.15 * motion * Math.sin(time * (0.8 + k * 0.17) + k); });
         // The flock wheels over his roof, wings beating, each a little apart.

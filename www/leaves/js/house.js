@@ -251,6 +251,39 @@ export function buildNeighborHouse(Y, L, doorX) {
     return group;
 }
 
+/** A rectangle with rounded corners, in the plane of a car's side. */
+function roundedRect(x0, y0, x1, y1, r) {
+    const s = new THREE.Shape();
+    s.moveTo(x0 + r, y0);
+    s.lineTo(x1 - r, y0);
+    s.quadraticCurveTo(x1, y0, x1, y0 + r);
+    s.lineTo(x1, y1 - r);
+    s.quadraticCurveTo(x1, y1, x1 - r, y1);
+    s.lineTo(x0 + r, y1);
+    s.quadraticCurveTo(x0, y1, x0, y1 - r);
+    s.lineTo(x0, y0 + r);
+    s.quadraticCurveTo(x0, y0, x0 + r, y0);
+    return s;
+}
+
+/**
+ * A side profile (a Shape in x and y) extruded across a car from z0 to z1,
+ * with a bevel `bt` that rounds every edge along its length. The profile is
+ * drawn `bt` inside the box it fills, since a bevel grows a shape outward by
+ * as much, so the panel's bounds are exactly the box's (M6 QA, after the
+ * extruded panels in www/interstate's SUV).
+ */
+function carPanel(shape, z0, z1, bt, mat) {
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth: z1 - z0 - 2 * bt, bevelEnabled: bt > 0, bevelThickness: bt, bevelSize: bt, bevelSegments: 3, curveSegments: 10
+    });
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.position.z = z0 + bt;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+}
+
 /**
  * The street (M5): a curb along the sidewalk, a double yellow line down the
  * middle, our mailbox, and a car parked at the curb. Returns the group.
@@ -279,19 +312,61 @@ export function buildStreet(Y, L) {
         group.add(box(0.26, 0.24, 0.5, black, (m.minX + m.maxX) / 2, m.height + 0.1, (m.minZ + m.maxZ) / 2 + 0.1));
     }
 
-    // The car: an aluminum body and a cabin with dark glass, and four tires.
+    // The car (rounded at M6 QA: "Could we make the car's edges a little
+    // more rounded"): an aluminum body with soft corners and rounded long
+    // edges, a cabin with a raked windshield (it faces +x) and a sloped back,
+    // dark glass all round under a painted roof, lights and mirrors, and four
+    // tires. The body and the cabin fill their config boxes exactly, so what
+    // a leaf lands on is what is drawn.
     const car = named(Y, 'car')[0];
     const cabin = named(Y, 'cabin')[0];
     if (car) {
         const paint = new THREE.MeshStandardMaterial({ color: L.car, metalness: 0.6, roughness: 0.35 });
-        group.add(solid(car, paint, 0.3));
+        const bt = 0.06;
+        group.add(carPanel(roundedRect(car.minX + bt, 0.3 + bt, car.maxX - bt, car.height - bt, 0.18), car.minZ, car.maxZ, bt, paint));
         if (cabin) {
-            group.add(solid(cabin, paint, car.height));
+            const h0 = car.height;
+            const h1 = cabin.height;
+            const c = 0.05;
+            // The cabin's side: the windshield raked back from the front (+x),
+            // the back window less so, the roof's corners rounded. A short
+            // upright at the belt line each end keeps the corners square, so
+            // the bevel cannot poke out past the box like a mitre.
+            const rake = 0.6;
+            const back = 0.35;
+            const profile = (x0, x1, y0, y1, inset) => {
+                const s = new THREE.Shape();
+                s.moveTo(x0 + inset, y0 + inset);
+                s.lineTo(x1 - inset, y0 + inset);
+                s.lineTo(x1 - inset, y0 + 0.07);
+                s.lineTo(x1 - rake - inset * 0.5, y1 - 0.1 - inset);
+                s.quadraticCurveTo(x1 - rake - 0.05, y1 - inset, x1 - rake - 0.2, y1 - inset);
+                s.lineTo(x0 + back + 0.2, y1 - inset);
+                s.quadraticCurveTo(x0 + back + 0.05, y1 - inset, x0 + back + inset * 0.5, y1 - 0.1 - inset);
+                s.lineTo(x0 + inset, y0 + 0.07);
+                s.closePath();
+                return s;
+            };
+            const shell = carPanel(profile(cabin.minX, cabin.maxX, h0, h1, c), cabin.minZ, cabin.maxZ, c, paint);
+            group.add(shell);
+            // Dark glass, a hair proud of the shell on every side, from the
+            // belt line to just under the roof.
             const tinted = new THREE.MeshStandardMaterial({ color: L.carGlass, metalness: 0.4, roughness: 0.1 });
-            const glassBox = solid({ ...cabin, minX: cabin.minX - 0.02, maxX: cabin.maxX + 0.02,
-                minZ: cabin.minZ - 0.02, maxZ: cabin.maxZ + 0.02, height: cabin.height - 0.08 }, tinted, car.height + 0.08);
-            glassBox.castShadow = false;
-            group.add(glassBox);
+            const glass = carPanel(profile(cabin.minX - 0.012, cabin.maxX + 0.012, h0 + 0.06, h1 - 0.07, 0.01),
+                cabin.minZ - 0.012, cabin.maxZ + 0.012, 0.01, tinted);
+            glass.castShadow = false;
+            group.add(glass);
+            // A pillar between the doors, in the paint.
+            group.add(box(0.08, h1 - h0 - 0.12, cabin.maxZ - cabin.minZ + 0.03, paint, (cabin.minX + cabin.maxX) / 2 - 0.1, (h0 + h1) / 2 - 0.02, (cabin.minZ + cabin.maxZ) / 2));
+        }
+        // Lights at each end, and a mirror each side ahead of the cabin.
+        const midZ = (car.minZ + car.maxZ) / 2;
+        const lamp = (color, emissive) => new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: 0.4, roughness: 0.3 });
+        for (const s of [-1, 1]) {
+            const z = midZ + s * ((car.maxZ - car.minZ) / 2 - 0.3);
+            group.add(box(0.04, 0.1, 0.32, lamp(0xeef4ff, 0x334455), car.maxX + 0.005, car.height - 0.17, z));
+            group.add(box(0.04, 0.1, 0.36, lamp(0x8e1b1b, 0x330a0a), car.minX - 0.005, car.height - 0.17, z));
+            if (cabin) group.add(box(0.14, 0.09, 0.06, paint, cabin.maxX - 0.15, car.height + 0.1, s > 0 ? car.maxZ + 0.04 : car.minZ - 0.04));
         }
         const tire = material(L.tire);
         const wheel = new THREE.CylinderGeometry(0.32, 0.32, 0.22, 14);

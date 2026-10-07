@@ -163,8 +163,30 @@ export const LEAVES_CONFIG = Object.freeze({
             { species: 'bur-oak', x: -3.5, z: -17, height: 12, seed: 4409, trunk: 0.3, crown: { y: 7, radius: 3.6 }, hanging: 0 },
             { species: 'sugar-maple', x: 5.5, z: -18.5, height: 12, seed: 5501, trunk: 0.26, crown: { y: 7, radius: 3.4 }, hanging: 0 },
             { species: 'paper-birch', x: 16, z: -16.5, height: 11, seed: 6607, trunk: 0.18, crown: { y: 6, radius: 2.6 }, hanging: 0 },
-            { species: 'sugar-maple', x: -17.5, z: -8, height: 11, seed: 7703, trunk: 0.24, crown: { y: 6, radius: 3.2 }, hanging: 0 }
+            { species: 'sugar-maple', x: -17.5, z: -8, height: 11, seed: 7703, trunk: 0.24, crown: { y: 6, radius: 3.2 }, hanging: 0 },
+            // A blue spruce in the side yard behind our hedge (backyard.js).
+            { species: 'blue-spruce', x: -18.6, z: -1.6, height: 7, seed: 8801, trunk: 0.2, crown: { y: 3.6, radius: 1.8 }, hanging: 0 }
         ],
+        // BEHIND OUR HEDGE (Steve's M6 QA: "more environment details to the
+        // back left of the scene behind the row of hedges"): the sage house's
+        // side yard, between the hedge and its garage, all of it past the
+        // sim's ground. A garden shed, a privacy fence along the back, raised
+        // beds and a pumpkin patch, a fire pit with two Adirondack chairs, a
+        // birdbath, a wheelbarrow of leaves, stepping stones (backyard.js).
+        // Packed into the 4 m or so behind the hedge that a wide screen shows
+        // when the visitor walks over to it (tests/leaves-backyard).
+        backyard: {
+            shed: { x: -13.7, z: -10.6, w: 2.6, d: 2.0, wall: 2.1, ridge: 2.8, siding: 0x6f8a7a, roof: 0x3c3f44, door: 0x3f4f46 },
+            fence: { z: -13.6, from: -19.4, to: -9.25, height: 1.8, color: 0x9a7b5c },
+            beds: [{ x: -12.8, z: -2.8, w: 2.2, d: 0.9 }, { x: -12.8, z: -1.1, w: 2.2, d: 0.9 }],
+            patch: { x: -13.3, z: -4.9, w: 2.2, d: 1.3 },
+            firePit: { x: -13.2, z: -7.6, r: 0.5 },
+            chairs: [{ x: -14.5, z: -7.0, turn: 2.0 }, { x: -11.9, z: -6.9, turn: -2.0 }],
+            birdbath: { x: -12.3, z: 3.6 },
+            wheelbarrow: { x: -11.85, z: 2.0, turn: 0.7 },
+            stones: { from: { x: -18.6, z: -6.2 }, to: { x: -14.2, z: -9.4 }, count: 6 },
+            look: { cedar: 0x8a5a3a, soil: 0x3b2a1e, vine: 0x3f6a2a, stone: 0x8e8a82, chair: 0xf2efe8, iron: 0x2a2b2d, ember: 0xff7a2a, wood: 0x6b4f33 }
+        },
         // How fast the crowns let their leaves go, per tree per second, and
         // how often an empty crown takes a leaf back from the street.
         // At 0.9 a second a tree and about three seconds down from the crown,
@@ -517,20 +539,35 @@ export const LEAVES_CONFIG = Object.freeze({
             stocking: 0x6a3a9a,
             skeleton: { x: 21.9, z: 5.6, turn: -0.45 },
             roofSpider: { x: 13.9, along: 0.42, turn: 0.35 },
-            // The maple's trunk is 0.11 m across there (measured on the
-            // real tree), so her skirt's waist meets the bark.
-            witch: { facing: 1.15, out: 0.14, y: 2.25 },
+            // Where along our hedge the witch dove into it.
+            witch: { z: 2.6 },
             // Third round (Steve's M6 QA, "could we please add more"): a flock
             // of bats circling over the neighbor's roof, a giant inflatable
-            // ghost beside his pumpkin, stretchy cobweb along the top of our
-            // hedge, lights spiraling up our porch posts, a scarecrow at the
-            // sage house and little ghosts along the gray house's eave.
+            // ghost beside his pumpkin, lights spiraling up our porch posts, a
+            // scarecrow at the sage house and little ghosts along the gray
+            // house's eave.
             flock: { x: 15.4, y: 7.7, z: -9.4, r: 1.5, bats: 6, speed: 0.8 },
             ghostInflatable: { x: 23.5, z: -0.6, tall: 2.3, turn: -0.35 },
-            hedgeWeb: { from: -2.5, to: 5.5, strands: 90, spiders: 2 },
             postLights: { turns: 6, bulbs: 26, r: 0.075 },
             scarecrow: { x: -21.2, z: -4.6, turn: 0.5, shirt: 0x8c3b2a, pants: 0x3f5670, burlap: 0xc9a76a, hat: 0xd8bb6f },
             streetGhosts: [-3.6, -1.4, 0.8],
+            // OUR YARD (Steve's M6 QA: "add more Halloween decorations to the
+            // main user's yard - instead of focusing on the surrounding
+            // yards"). These stand on our lawn, so each is a box the sim
+            // knows (decorations.js yardDecorBoxes): the leaves bank against
+            // them, the person walks round them, and so does the dive. A
+            // cauldron of candy where our walk meets the sidewalk (the
+            // trick-or-treaters stop at it and reach in), black lanterns
+            // lining the walk, a stack of pumpkins either side of the porch
+            // step, witch hats floating under our maple with a candle under
+            // each, and the mailbox wrapped as a mummy.
+            cauldron: { x: -1.65, z: 7.6, r: 0.24, height: 0.62, candy: [0xe0701f, 0x7a2fbf, 0xf4f1ea, 0x3d7a3a] },
+            lanterns: { xs: [-1.35, 0.35], zs: [0.6, 2.9, 5.2], size: 0.2, height: 0.55, glow: 0xffb04a },
+            towers: [{ x: -1.95, z: -3.35 }, { x: 0.95, z: -3.35 }],
+            towerPumpkins: [{ r: 0.28, color: 0xefe8d8 }, { r: 0.2, color: 0xe0701f }, { r: 0.13, color: 0x26262a }],
+            hats: [{ x: 5.4, y: 3.25, z: -2.5 }, { x: 7.7, y: 3.55, z: -2.9 }, { x: 6.5, y: 2.95, z: -4.5 }],
+            hatString: 1.3,
+            mummy: 0xece6d6,
             // Pumpkins by each door down the street.
             streetPumpkins: [
                 { dx: -1.0, dz: 0.5, r: 0.22, color: 0xe0701f },
@@ -570,6 +607,11 @@ export const LEAVES_CONFIG = Object.freeze({
         blownTime: 1.1,
         push: 1.4,
         hurry: 2,
+        // Once blown, the air has to drop below this share of `blownAir`
+        // before they recover (so the edge of a blower's reach does not flick
+        // them in and out of it), and they turn at most this fast.
+        keepAir: 0.6,
+        turnRate: 5,
         // How far off the middle of the sidewalk a gust can push them.
         drift: { min: -0.55, max: 0.3 }
     },

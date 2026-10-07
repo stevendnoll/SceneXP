@@ -18,6 +18,12 @@
  *   NOBODY STANDS BACK UP (Steve's M3 QA, 2026-10-06): the roll toward the
  *   camera is the last beat, and it keeps the finale short.
  *
+ * ROUND WHAT IS SOLID (M6, with our yard's decorations on the lawn, and the
+ * old edge where a person right of the porch ran through its corner). The
+ * approach swings, a little at a time either way, until the run-up and the
+ * landing are clear of every box, and the walk to the run-up spot goes
+ * round any box in its way by its nearest corner.
+ *
  * PURE. planFinale() decides everything once, from where the pile's peak is
  * and where the person stands, and finaleAt() says where they are and how
  * they hold themselves at any moment of it, so the whole thing is measured
@@ -45,35 +51,149 @@ const BODY = 0.12;
  * `peak` is { x, z, height }, the top of the pile on the tarp (pilePeak in
  * sim.js), `F` is config.finale and `area` the rectangle they can walk in.
  */
-export function planFinale(person, peak, F, area, { reduced = false } = {}) {
-    const success = peak.height >= F.diveHeight;
-    // The run comes at the pile from the person's side of it, so the run-up
-    // is out on the open lawn (the tarp is in a corner).
-    let dx = person.x - peak.x;
-    let dz = person.z - peak.z;
-    let d = Math.hypot(dx, dz);
-    if (d < 0.5) { dx = 1; dz = 1; d = Math.SQRT2; }
-    const ux = dx / d;
-    const uz = dz / d;
+/** Whether the segment from a to b passes within `m` of the box (a slab
+ *  test on the box grown by m). */
+export function segmentHitsBox(a, b, box, m) {
+    let t0 = 0;
+    let t1 = 1;
+    for (const [p, d, lo, hi] of [[a.x, b.x - a.x, box.minX - m, box.maxX + m], [a.z, b.z - a.z, box.minZ - m, box.maxZ + m]]) {
+        if (Math.abs(d) < 1e-9) {
+            if (p < lo || p > hi) return false;
+            continue;
+        }
+        let ta = (lo - p) / d;
+        let tb = (hi - p) / d;
+        if (ta > tb) [ta, tb] = [tb, ta];
+        t0 = Math.max(t0, ta);
+        t1 = Math.min(t1, tb);
+        if (t0 > t1) return false;
+    }
+    return true;
+}
+
+const inside = (p, box, m) => p.x > box.minX - m && p.x < box.maxX + m && p.z > box.minZ - m && p.z < box.maxZ + m;
+
+/** Whether a to b is clear of every box (any box `a` already stands in is
+ *  let off: they are walking out of it). */
+function clearOf(a, b, boxes, m) {
+    return boxes.every((box) => inside(a, box, m) || !segmentHitsBox(a, b, box, m));
+}
+
+/**
+ * A walk from a to b round whatever is in the way: straight if it is clear,
+ * otherwise the shortest way through the corners of the boxes (each grown by
+ * `m`, and a little more), the corners inside `area` that no box covers. A
+ * small visibility graph, searched once when the dive is planned: boxes can
+ * stand close together (the porch, its step, a post, a pumpkin stack), and
+ * going round one at a time found no way through them. Returns [a,
+ * ...corners, b], or the straight [a, b] if there is no way round.
+ */
+export function routeAround(a, b, boxes, m, area) {
+    if (clearOf(a, b, boxes, m)) return [a, b];
+    const g = m + 0.05;
+    const nodes = [a, b];
+    for (const box of boxes) {
+        for (const [x, z] of [[box.minX - g, box.minZ - g], [box.maxX + g, box.minZ - g], [box.minX - g, box.maxZ + g], [box.maxX + g, box.maxZ + g]]) {
+            if (x < area.minX || x > area.maxX || z < area.minZ || z > area.maxZ) continue;
+            if (boxes.some((o) => inside({ x, z }, o, m))) continue;
+            nodes.push({ x, z });
+        }
+    }
+    const n = nodes.length;
+    const dist = new Array(n).fill(Infinity);
+    const prev = new Array(n).fill(-1);
+    const done = new Array(n).fill(false);
+    dist[0] = 0;
+    for (let round = 0; round < n; round++) {
+        let u = -1;
+        for (let k = 0; k < n; k++) if (!done[k] && (u < 0 || dist[k] < dist[u])) u = k;
+        if (u < 0 || dist[u] === Infinity) break;
+        done[u] = true;
+        if (u === 1) break;
+        for (let v = 0; v < n; v++) {
+            if (done[v]) continue;
+            const d = dist[u] + Math.hypot(nodes[v].x - nodes[u].x, nodes[v].z - nodes[u].z);
+            if (d < dist[v] && clearOf(nodes[u], nodes[v], boxes, m)) {
+                dist[v] = d;
+                prev[v] = u;
+            }
+        }
+    }
+    if (prev[1] < 0) return [a, b];
+    const path = [];
+    for (let k = 1; k >= 0; k = prev[k]) path.unshift(nodes[k]);
+    return path;
+}
+
+const pathLength = (path) => path.reduce((n, p, k) => (k ? n + Math.hypot(p.x - path[k - 1].x, p.z - path[k - 1].z) : 0), 0);
+
+/**
+ * Where the dive lands, takes off and runs from, for an approach along the
+ * unit direction (ux, uz) from the pile's peak toward the person.
+ *
+ * Hips land `landOut` meters out from the peak, so the head and arms reach
+ * it. THE WHOLE BODY LANDS ON THE LAWN, fingertips to feet. The dive is
+ * toward the pile (-u), so the hands reach `reachFront` past the hips that
+ * way and the feet `reachBack` the other, and both must stay inside the
+ * area (itself kept clear of the house, the hedge and the fence). Steve's
+ * QA, 2026-10-06: aimed only by the hips, the dive into a pile in the corner
+ * "dove through the corner of the house".
+ */
+function placeRun(peak, F, area, ux, uz) {
     const inArea = (p) => ({ x: clamp(p.x, area.minX, area.maxX), z: clamp(p.z, area.minZ, area.maxZ) });
-    // Hips land `land` meters out from the peak, so the head and arms reach it.
-    // THE WHOLE BODY LANDS ON THE LAWN, fingertips to feet. The dive is
-    // toward the pile (-u), so the hands reach `reachFront` past the hips that
-    // way and the feet `reachBack` the other, and both must stay inside the
-    // area (itself kept clear of the house, the hedge and the fence). Steve's
-    // QA, 2026-10-06: aimed only by the hips, the dive into a pile in the
-    // corner "dove through the corner of the house".
-    const land = { x: peak.x + ux * F.landOut, z: peak.z + uz * F.landOut };
     const fit = (v, d, lo, hi) => {
         const min = lo - Math.min(-d * F.reachFront, d * F.reachBack);
         const max = hi - Math.max(-d * F.reachFront, d * F.reachBack);
         return min <= max ? clamp(v, min, max) : (min + max) / 2;
     };
+    const land = { x: peak.x + ux * F.landOut, z: peak.z + uz * F.landOut };
     land.x = fit(land.x, ux, area.minX, area.maxX);
     land.z = fit(land.z, uz, area.minZ, area.maxZ);
     const takeoff = inArea({ x: land.x + ux * F.takeoff, z: land.z + uz * F.takeoff });
     const runFrom = inArea({ x: land.x + ux * F.runUp, z: land.z + uz * F.runUp });
-    const walkTime = clamp(Math.hypot(runFrom.x - person.x, runFrom.z - person.z) / F.walkSpeed, F.minWalk, F.maxWalk);
+    return { ux, uz, land, takeoff, runFrom };
+}
+
+/** How far a box must be from the run and the walk. */
+const CLEARANCE = 0.35;
+
+/** Whether an approach's run-up, leap and landed body are clear of every
+ *  box. */
+function runClear(run, F, boxes) {
+    const head = { x: run.land.x - run.ux * F.reachFront, z: run.land.z - run.uz * F.reachFront };
+    const feet = { x: run.land.x + run.ux * F.reachBack, z: run.land.z + run.uz * F.reachBack };
+    return clearOf(run.runFrom, run.takeoff, boxes, CLEARANCE) && clearOf(run.takeoff, run.land, boxes, CLEARANCE)
+        && clearOf(head, feet, boxes, 0.05);
+}
+
+/**
+ * Plan the dive. `person` is { x, z } where they stand when the round ends,
+ * `peak` is { x, z, height }, the top of the pile on the tarp (pilePeak in
+ * sim.js), `F` is config.finale, `area` the rectangle they can walk in, and
+ * `boxes` the solid things on it (M6) to keep the run and the walk clear of.
+ */
+export function planFinale(person, peak, F, area, { reduced = false, boxes = [] } = {}) {
+    const success = peak.height >= F.diveHeight;
+    // The run comes at the pile from the person's side of it, so the run-up
+    // is out on the open lawn (the tarp is in a corner), swung a little
+    // either way, as little as will do, until it is clear of every box.
+    let dx = person.x - peak.x;
+    let dz = person.z - peak.z;
+    if (Math.hypot(dx, dz) < 0.5) { dx = 1; dz = 1; }
+    const base = Math.atan2(dz, dx);
+    let run = null;
+    for (const swing of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2, 1.5, -1.5]) {
+        const tried = placeRun(peak, F, area, Math.cos(base + swing), Math.sin(base + swing));
+        if (!run) run = tried;
+        if (runClear(tried, F, boxes)) {
+            run = tried;
+            break;
+        }
+    }
+    const { ux, uz, land, takeoff, runFrom } = run;
+    // The walk to the run-up spot, round anything in the way.
+    const path = routeAround({ x: person.x, z: person.z }, runFrom, boxes, CLEARANCE, area);
+    const walkTime = clamp(pathLength(path) / F.walkSpeed, F.minWalk, F.maxWalk);
     // What they land on: into a pile, sunk part way, or flat on the lawn.
     const surface = success ? Math.max(0, peak.height - F.sink) : Math.max(0, peak.height);
     const t = {};
@@ -94,6 +214,7 @@ export function planFinale(person, peak, F, area, { reduced = false } = {}) {
         success,
         reduced,
         start: { x: person.x, z: person.z },
+        path,
         runFrom,
         takeoff,
         land: { x: land.x, z: land.z },
@@ -106,6 +227,25 @@ export function planFinale(person, peak, F, area, { reduced = false } = {}) {
         t,
         total: t.end
     };
+}
+
+/** Where along `path` (a list of points) a share `u` of its length lands,
+ *  and which way that stretch heads. */
+function along(path, u) {
+    const total = pathLength(path);
+    let left = u * total;
+    for (let k = 1; k < path.length; k++) {
+        const a = path[k - 1];
+        const b = path[k];
+        const len = Math.hypot(b.x - a.x, b.z - a.z);
+        if (left <= len || k === path.length - 1) {
+            const s = len > 0 ? Math.min(1, left / len) : 1;
+            return { x: a.x + (b.x - a.x) * s, z: a.z + (b.z - a.z) * s, heading: Math.atan2(b.x - a.x, b.z - a.z), total };
+        }
+        left -= len;
+    }
+    const last = path[path.length - 1];
+    return { x: last.x, z: last.z, heading: 0, total };
 }
 
 /** The lift that puts a body lying face down on a surface of height `y`. */
@@ -122,20 +262,20 @@ function lyingLift(y) {
 export function finaleAt(plan, time) {
     const t = plan.t;
     const p = { x: plan.start.x, z: plan.start.z, heading: plan.heading, lift: 0, pitch: 0, roll: 0, arms: 'down', speed: 0, stride: 0, phase: 'pause' };
-    const walkHeading = Math.atan2(plan.runFrom.x - plan.start.x, plan.runFrom.z - plan.start.z);
+    const path = plan.path || [plan.start, plan.runFrom];
     if (time < t.pause) {
-        p.heading = walkHeading;
+        p.heading = along(path, 0).heading;
         return p;
     }
     if (time < t.walk) {
         const u = (time - t.pause) / (t.walk - t.pause);
+        const at = along(path, u);
         p.phase = 'walk';
-        p.x = lerp(plan.start.x, plan.runFrom.x, u);
-        p.z = lerp(plan.start.z, plan.runFrom.z, u);
-        p.heading = walkHeading;
-        const dist = Math.hypot(plan.runFrom.x - plan.start.x, plan.runFrom.z - plan.start.z);
-        p.speed = dist / Math.max(0.001, t.walk - t.pause);
-        p.stride = dist * u;
+        p.x = at.x;
+        p.z = at.z;
+        p.heading = at.heading;
+        p.speed = at.total / Math.max(0.001, t.walk - t.pause);
+        p.stride = at.total * u;
         return p;
     }
     const runDist = Math.hypot(plan.takeoff.x - plan.runFrom.x, plan.takeoff.z - plan.runFrom.z);

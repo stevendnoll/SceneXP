@@ -55,7 +55,8 @@ import { planFinale, finaleAt } from './finale.min.js';
 import { createRound, resetRound, freePlay, canBlow, timeLeft, stepRound } from './round.min.js';
 import { findsFor, placeFinds, stepFinds, buildFindModels } from './finds.min.js';
 import { seasonFor, carvePumpkins, createTreaters, stepTreaters, createTreaterFigures } from './halloween.min.js';
-import { buildDecorations } from './decorations.min.js';
+import { buildDecorations, decoratedConfig } from './decorations.min.js';
+import { buildBackyard } from './backyard.min.js';
 import { createSound } from './sound.min.js';
 import { createNeighbor, resetNeighbor, stepNeighbor, isOut, neighborBlower } from './neighbor.min.js';
 import {
@@ -121,7 +122,11 @@ let castModal = null;
 // The trees, their crowns' leaves, and every solid box on the ground (M5).
 let trees = [];
 let crowns = [];
-const solids = solidBoxes(CONFIG.yard);
+// THE WORLD THE LEAVES ARE IN: the config, and while the decorations are up
+// (M6) the ones on our lawn among its solid boxes, so the leaves bank against
+// them and the person and the dive go round them. Set in init().
+let WORLD = CONFIG;
+let solids = solidBoxes(CONFIG.yard);
 // Who is on leaf duty (cast.js), the choice as it was when the card opened
 // (to tell whether it changed), and the radio buttons the card is built of.
 let castChoice = { ...DEFAULT_CHOICE };
@@ -158,9 +163,11 @@ let findModels = {};
 let found = [];
 let findRounds = 0;
 let decorations = null;
+let backyard = null;
 let treaters = null;
 let treaterFigures = null;
 const treatRandom = makeRandom(4049);
+const D_CAULDRON = CONFIG.halloween.decor.cauldron;
 const sound = createSound(CONFIG.sound);
 let soundBtn = null;
 const toast = { el: null, until: 0 };
@@ -277,17 +284,22 @@ async function init() {
 
     const yard = buildYard(scene, CONFIG, { shadows: state.shadows, mobile: state.isMobile });
     neighborDoor = yard.neighborDoor;
+    // The side yard behind our hedge (M6).
+    backyard = buildBackyard(CONFIG);
+    scene.add(backyard.group);
     if (state.decor) {
         decorations = buildDecorations(CONFIG);
         scene.add(decorations.group);
+        WORLD = decoratedConfig(CONFIG);
+        solids = solidBoxes(WORLD.yard);
     }
     if (state.halloween) scene.add(carvePumpkins(CONFIG.yard.pumpkins, CONFIG.halloween));
 
     updateLoadingStatus(`Letting ${shortCount(state.count)} leaves fall…`, 55);
-    sim = createSim(state.count, CONFIG);
-    const { look } = scatterLeaves(sim, CONFIG);
+    sim = createSim(state.count, WORLD);
+    const { look } = scatterLeaves(sim, WORLD);
     trees = buildTrees(scene, CONFIG, { mobile: state.isMobile, shadows: state.shadows });
-    crowns = createCrowns(sim, CONFIG);
+    crowns = createCrowns(sim, WORLD);
     leaves = createLeafMesh(sim, look, {
         shadows: state.shadows,
         underside: CONFIG.look.underside,
@@ -1021,7 +1033,7 @@ function onRoundEvent(event) {
 function startFinale() {
     finale.tally = { ...recount() };
     const peak = pilePeak(sim, CONFIG.yard.tarp);
-    finale.plan = planFinale(operator, peak, CONFIG.finale, walkArea(), { reduced: state.reducedMotion });
+    finale.plan = planFinale(operator, peak, CONFIG.finale, walkArea(), { reduced: state.reducedMotion, boxes: solids });
     finale.t = 0;
     finale.burst = false;
     operator.hideBlower = true;
@@ -1163,8 +1175,8 @@ function keepBlowing() {
  *  they started. */
 function resetYard() {
     resetSim(sim);
-    scatterLeaves(sim, CONFIG);
-    crowns = createCrowns(sim, CONFIG);
+    scatterLeaves(sim, WORLD);
+    crowns = createCrowns(sim, WORLD);
     leaves.update();
     Object.assign(operator, createOperator(B));
     resetNeighbor(neighbor, N);
@@ -1338,7 +1350,7 @@ function stepTheNeighbor(dt) {
  *  model waiting under the lawn. The lab's ?finds=1 shows them all. */
 function layFinds() {
     findRounds += 1;
-    finds = placeFinds(sim, CONFIG, findList, CONFIG.leaves.seed + 101 * findRounds);
+    finds = placeFinds(sim, WORLD, findList, CONFIG.leaves.seed + 101 * findRounds);
     found = [];
     Object.values(findModels).forEach((m) => { m.group.visible = false; });
     for (const f of finds) {
@@ -1413,7 +1425,14 @@ function announceOnce(key, text) {
 function stepTheTreaters(dt, jets) {
     if (!treaters) return null;
     const event = stepTreaters(treaters, dt, {
-        active: true, person: operator, walkX: CONFIG.yard.house.door, random: treatRandom, wind: (x, y, z) => windAt(jets, x, y, z)
+        // With the decorations up they stop at the cauldron of candy, and
+        // reach in.
+        active: true,
+        person: operator,
+        walkX: state.decor && D_CAULDRON ? D_CAULDRON.x : CONFIG.yard.house.door,
+        candy: Boolean(state.decor && D_CAULDRON),
+        random: treatRandom,
+        wind: (x, y, z) => windAt(jets, x, y, z)
     }, CONFIG.halloween);
     if (event === 'start') announceOnce('treaters', 'Trick-or-treaters are coming along the sidewalk.');
     if (event === 'blown') {
@@ -1502,6 +1521,7 @@ function animate() {
     neighborFigure.update(neighbor, neighbor.blowing, state.time, neighbor.arms, neighbor.big);
     if (neighborDoor) neighborDoor.rotation.y = -1.7 * neighbor.door;
     if (decorations) decorations.update(state.time, state.reducedMotion ? 0.3 : 1);
+    if (backyard) backyard.update(state.time, state.reducedMotion ? 0.3 : 1);
     if (treaterFigures) treaterFigures.update(treaters, state.time);
     const marked = free && steer === 'point' && Boolean(pointer.aim);
     marker.visible = marked;

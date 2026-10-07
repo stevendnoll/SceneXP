@@ -181,6 +181,82 @@ describe('blown at by the leaf blower', () => {
         }
     });
 
+    // Steve's M6 QA: the blown animation was "glitchy". Headings snapped
+    // round, the second child jumped 1.7 m when they turned back, and the
+    // edge of the blower's reach flicked them in and out of it.
+    test('SMOOTH: through a whole blow and recovery, nobody jumps and nobody snaps round', () => {
+        const tr = walking(4, -1);
+        const on = S.makeJet(B, 1, HW.z, 1, 0, true);
+        const off = S.makeJet(B, 1, HW.z, 1, 0, false);
+        const input = { active: true, person: { x: 1, z: 6 }, walkX: -40, random: S.makeRandom(2), wind: windOf(on) };
+        const dt = 1 / 30;
+        let worstStep = 0;
+        let worstTurn = 0;
+        let turnedBack = false;
+        let before = H.treaterSpots(tr);
+        let heading = tr.heading;
+        for (let t = 0; t < 5; t += dt) {
+            if (t > 0.8) input.wind = windOf(off);
+            const dir = tr.dir;
+            H.stepTreaters(tr, dt, input, HW);
+            if (tr.dir !== dir) turnedBack = true;
+            const after = H.treaterSpots(tr);
+            after.forEach((p, k) => { worstStep = Math.max(worstStep, Math.hypot(p.x - before[k].x, p.z - before[k].z)); });
+            const d = Math.abs(Math.atan2(Math.sin(tr.heading - heading), Math.cos(tr.heading - heading)));
+            worstTurn = Math.max(worstTurn, d);
+            before = after;
+            heading = tr.heading;
+        }
+        // They did turn back (the wind sent them the other way).
+        expect(turnedBack).toBe(true);
+        // At most a hurried stride's worth a frame, and a turn no faster
+        // than turnRate.
+        expect(worstStep).toBeLessThan((HW.speed * HW.hurry + HW.push) * dt * 1.05);
+        expect(worstTurn).toBeLessThanOrEqual(HW.turnRate * dt + 1e-9);
+    });
+
+    test('air hovering at the edge of the threshold does not flick them in and out of it', () => {
+        const tr = walking(4);
+        let k = 0;
+        // Just over, then just under, frame after frame.
+        const input = { active: true, person: null, walkX: -40, random: S.makeRandom(2),
+            wind: () => ({ x: 1, z: 0, speed: (k++ % 2 ? 0.95 : 1.05) * HW.blownAir }) };
+        const states = [];
+        for (let t = 0; t < 3; t += 1 / 30) {
+            H.stepTreaters(tr, 1 / 30, input, HW);
+            if (states[states.length - 1] !== tr.state) states.push(tr.state);
+        }
+        expect(states).toEqual(['blown']);
+        // How hard they are blown eases: no frame jumps it by much.
+        const eased = walking(4);
+        const strong = { ...input, wind: () => ({ x: 1, z: 0, speed: 20 }) };
+        let last = 0;
+        let jump = 0;
+        for (let t = 0; t < 1; t += 1 / 30) {
+            H.stepTreaters(eased, 1 / 30, strong, HW);
+            jump = Math.max(jump, Math.abs(eased.blown - last));
+            last = eased.blown;
+        }
+        expect(jump).toBeLessThan(0.25);
+    });
+
+    test('with a cauldron of candy at the walk, they pause there and reach in', () => {
+        const tr = walking(4, -1);
+        tr.paused = false;
+        const input = { active: true, person: null, walkX: 1, random: S.makeRandom(2), candy: true };
+        let reached = 0;
+        for (let t = 0; t < 8; t += 1 / 30) {
+            H.stepTreaters(tr, 1 / 30, input, HW);
+            reached = Math.max(reached, tr.reach);
+        }
+        expect(reached).toBeGreaterThan(0.95);
+        expect(tr.reach).toBe(0);
+        const none = walking(4, -1);
+        none.paused = false;
+        for (let t = 0; t < 8; t += 1 / 30) H.stepTreaters(none, 1 / 30, { ...input, candy: false }, HW);
+        expect(none.reach).toBe(0);
+    });
+
     test('the air of a blower aimed elsewhere, or too far off, does not bother them', () => {
         const tr = walking(4);
         const away = S.makeJet(B, 1, 2, 0, -1, true);
@@ -262,7 +338,10 @@ describe('the drawing, on the real three.js', () => {
         });
     });
 
-    test('NOTHING IS ON OUR LAWN: every decoration hangs on a house, sits up high, or stands past the sim\'s ground on either side', () => {
+    // Our yard's own decorations (M6 QA: "add more Halloween decorations to
+    // the main user's yard") stand on the lawn, each on a box the sim knows,
+    // so the leaves meet them. Nothing else may.
+    test('NOTHING STANDS ON OUR LAWN UNSEEN BY THE LEAVES: every decoration hangs on a house, sits up high, stands past the sim\'s ground, or stands on a box the sim knows', () => {
         const { group } = Dc.buildDecorations(C);
         group.updateMatrixWorld(true);
         const Y = C.yard;
@@ -271,15 +350,23 @@ describe('the drawing, on the real three.js', () => {
         group.traverse((o) => {
             if (!o.isMesh && !o.isLine) return;
             meshes++;
-            box.setFromObject(o);
+            // Precise: a box turned 45 degrees is not boxed twice over.
+            box.setFromObject(o, true);
             const onAHouse = box.max.z <= Y.lawn.minZ + 0.6;
             const overhead = box.min.y >= 2;
             const pastTheSim = box.min.x > Y.bounds.maxX || box.max.x < Y.bounds.minX;
-            // Wound round something the sim already treats as solid (a porch
-            // post), within a few centimeters of it and no taller.
-            const onSolid = S.solidBoxes(Y).some((b) => box.min.x >= b.minX - 0.06 && box.max.x <= b.maxX + 0.06
-                && box.min.z >= b.minZ - 0.06 && box.max.z <= b.maxZ + 0.06 && box.max.y <= b.height + 0.05);
-            expect({ name: o.name || o.type, ok: onAHouse || overhead || pastTheSim || onSolid }).toEqual({ name: o.name || o.type, ok: true });
+            // On or wound round something the sim treats as solid (a porch
+            // post, a lantern, the cauldron, a pumpkin stack, whose bellies
+            // bulge past their boxes as the porch pumpkins' always have),
+            // within a few centimeters of it and no taller than its stem.
+            const onSolid = S.solidBoxes(Dc.decoratedConfig(C).yard).some((b) => box.min.x >= b.minX - 0.1 && box.max.x <= b.maxX + 0.1
+                && box.min.z >= b.minZ - 0.1 && box.max.z <= b.maxZ + 0.1 && box.max.y <= b.height + 0.12);
+            // The mummy's wrappings, on the mailbox's body, over its post.
+            const mail = Y.boxes.find((b) => b.name === 'mailbox');
+            const onMailbox = box.min.y >= mail.height - 0.05 && box.min.x >= mail.minX - 0.15 && box.max.x <= mail.maxX + 0.15
+                && box.min.z >= mail.minZ - 0.2 && box.max.z <= mail.maxZ + 0.4;
+            expect({ name: o.name || o.type, ok: onAHouse || overhead || pastTheSim || onSolid || onMailbox })
+                .toEqual({ name: o.name || o.type, ok: true });
         });
         expect(meshes).toBeGreaterThan(20);
     });
@@ -335,17 +422,21 @@ describe('the drawing, on the real three.js', () => {
         return out;
     }
 
-    test('the witch who flew into the maple shows her legs and boots over the hedge, past our lawn', () => {
-        const tree = C.yard.trees.find((t) => t.x < C.yard.bounds.minX && t.z > C.yard.lawn.minZ);
+    // Steve's M6 QA: her legs out of the maple's trunk were "in a weird
+    // spot". She dove headfirst into the top of our hedge instead.
+    test('the witch who dove into our hedge kicks her legs up out of its top, all of her past our lawn', () => {
         const hedge = C.yard.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
-        const near = boxes().filter(({ box }) => box.max.x < C.yard.bounds.minX
-            && Math.abs((box.min.z + box.max.z) / 2 - tree.z) < 1.2 && box.min.y > 1.5);
-        expect(near.length).toBeGreaterThan(10);
-        for (const { box } of near) {
-            // On or above the hedge top, where the street can see them.
-            expect(box.min.y).toBeGreaterThanOrEqual(hedge.height - 1e-3);
+        const her = boxes().filter(({ box }) => box.max.x < C.yard.bounds.minX && Math.abs((box.min.z + box.max.z) / 2 - HW.decor.witch.z) < 0.9);
+        expect(her.length).toBeGreaterThan(15);
+        for (const { box } of her) {
+            // Over the hedge, inside its width, on our side of nothing.
+            expect(box.min.x).toBeGreaterThan(hedge.at - 0.9);
             expect(box.max.x).toBeLessThan(hedge.at);
         }
+        // Her boots kick up well over the hedge top, where the street sees them.
+        const top = Math.max(...her.map(({ box }) => box.max.y));
+        expect(top).toBeGreaterThan(hedge.height + 0.7);
+        expect(top).toBeLessThan(hedge.height + 1.3);
     });
 
     test('the giant spider stands on the neighbor\'s roof, on its front slope, and not inside it', () => {
@@ -414,6 +505,29 @@ describe('the drawing, on the real three.js', () => {
         }
         const ghostBlown = new THREE.Box3().setFromObject(ghost);
         expect(ghostBlown.max.x - ghostBlown.min.x).toBeGreaterThan(ghostRest.max.x - ghostRest.min.x);
+    });
+
+    test('our yard\'s decorations are drawn on the boxes the leaves meet: the cauldron, every lantern, both pumpkin stacks', () => {
+        const all = boxes();
+        for (const b of Dc.yardDecorBoxes(C)) {
+            const near = all.filter(({ box }) => box.max.x > b.minX - 0.05 && box.min.x < b.maxX + 0.05
+                && box.max.z > b.minZ - 0.05 && box.min.z < b.maxZ + 0.05 && box.min.y < b.height);
+            expect({ box: b.name, x: b.minX, drawn: near.length > 0 }).toEqual({ box: b.name, x: b.minX, drawn: true });
+            const top = Math.max(...near.map(({ box }) => box.max.y));
+            expect(Math.abs(top - b.height)).toBeLessThan(0.13);
+        }
+        // Where the walk meets the sidewalk, and clear of the walk and the
+        // mailbox, and never on the tarp.
+        const placed = Dc.yardDecorBoxes(C);
+        const solid = C.yard.boxes;
+        for (const b of placed) {
+            for (const o of solid) {
+                const overlap = b.minX < o.maxX && b.maxX > o.minX && b.minZ < o.maxZ && b.maxZ > o.minZ;
+                expect({ b: b.name, o: o.name, overlap }).toEqual({ b: b.name, o: o.name, overlap: false });
+            }
+            const T = C.yard.tarp;
+            expect(b.minX > T.maxX || b.minZ > T.maxZ).toBe(true);
+        }
     });
 });
 

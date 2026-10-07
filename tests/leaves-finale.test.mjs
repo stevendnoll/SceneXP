@@ -314,3 +314,66 @@ describe('the dive poses, on the real three.js', () => {
         expect(Math.abs(box.min.y - surface)).toBeLessThan(0.12);
     });
 });
+
+// M6: our yard's decorations stand on the lawn (each a solid box), and M5
+// left an edge open: a person standing right of the porch ran through its
+// corner on the way to the pile. The walk goes round anything in its way,
+// and the run-up swings until it is clear.
+describe('round what is solid', () => {
+    let boxes;
+    beforeAll(async () => {
+        globalThis.THREE = await loadRealThree();
+        const Dc = await import('../www/leaves/js/decorations.js');
+        boxes = S.solidBoxes(Dc.decoratedConfig(C).yard);
+    });
+    afterAll(() => { delete globalThis.THREE; });
+
+    /** The deepest any point of the walk and the run goes into a solid box
+     *  (grown by a body's half width), sampled through the plan. */
+    function deepest(plan, half = 0.2) {
+        let worst = 0;
+        for (let t = 0; t < plan.t.run; t += 0.02) {
+            const p = Fn.finaleAt(plan, t);
+            for (const b of boxes) {
+                const into = Math.min(p.x - (b.minX - half), b.maxX + half - p.x, p.z - (b.minZ - half), b.maxZ + half - p.z);
+                if (into > worst) worst = into;
+            }
+        }
+        return worst;
+    }
+
+    test('from all over the yard, nobody walks or runs through the porch, a post, a lantern, the cauldron or the pumpkins', () => {
+        const starts = [];
+        for (const x of [-6, -3, 0, 2, 3, 6, 9]) for (const z of [-5.2, -3, 0, 3, 6, 8.6]) starts.push({ x, z });
+        // Off anything solid to begin with.
+        const free = starts.filter((p) => !S.inBox(boxes, p.x, p.z, 0.3));
+        expect(free.length).toBeGreaterThan(30);
+        for (const start of free) {
+            for (const height of [0.6, 0.12]) {
+                const plan = Fn.planFinale(start, { ...corner, height }, F, area, { boxes });
+                expect({ start, depth: deepest(plan) }).toEqual({ start, depth: 0 });
+            }
+        }
+    });
+
+    test('the old edge: standing right of the porch by the house, the walk goes round the porch', () => {
+        const start = { x: 3, z: -5.2 };
+        const plain = Fn.planFinale(start, { ...corner, height: 0.6 }, F, area);
+        // Without the boxes it walks straight through the porch.
+        expect(deepest(plain)).toBeGreaterThan(0.3);
+        const routed = Fn.planFinale(start, { ...corner, height: 0.6 }, F, area, { boxes });
+        expect(routed.path.length).toBeGreaterThan(2);
+        expect(deepest(routed)).toBe(0);
+        // And it is still about the same length of finale.
+        expect(routed.total - plain.total).toBeLessThan(F.maxWalk);
+    });
+
+    test('with nothing in the way, the plan is exactly the straight one', () => {
+        const start = { x: -3, z: 2 };
+        const plain = Fn.planFinale(start, { ...corner, height: 0.6 }, F, area);
+        const routed = Fn.planFinale(start, { ...corner, height: 0.6 }, F, area, { boxes });
+        expect(routed.path).toEqual([start, routed.runFrom]);
+        expect(routed.land).toEqual(plain.land);
+        expect(routed.total).toBe(plain.total);
+    });
+});
