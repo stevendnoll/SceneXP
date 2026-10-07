@@ -226,6 +226,29 @@ test('Space on the welcome card steps in rather than blowing', async () => {
     expect(main.getState().blowing).toBe(false);
 });
 
+// STEVE'S M6 QA: with the neighbor out he could not walk to the hedge. The
+// zoomed out lawn sits higher on the screen, and a cursor crossing the lab's
+// panel (or any button) left the lawn, which dropped the aim and stopped the
+// person dead. Now the person still goes where it last pointed.
+test('a mouse leaving the lawn stops steering from the screen, but the person still goes where it pointed', async () => {
+    const main = await boot();
+    const canvas = dom.el('game-canvas');
+    fire(dom.el('blocker'), 'click');
+    fire(canvas, 'pointermove', { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 600 });
+    expect(main.__test__.pointer.client).toEqual({ x: 100, y: 600 });
+    // The stub's camera meets no ground (tests/leaves-view does that on the
+    // real three.js), so the spot it pointed at is set here.
+    const aim = { x: -6, z: 2 };
+    main.__test__.pointer.aim = { ...aim };
+    fire(canvas, 'pointerleave', { pointerId: 1, pointerType: 'mouse' });
+    expect(main.getState().aim).toEqual(aim);
+    expect(main.__test__.pointer.client).toBe(null);
+    // A finger lifted still leaves nothing to steer by.
+    fire(canvas, 'pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 600 });
+    fire(canvas, 'pointerup', { pointerId: 2 });
+    expect(main.getState().aim).toBe(null);
+});
+
 test('the aim follows the keys or the pointer, whichever moved last', async () => {
     const main = await import('../www/leaves/js/main.js');
     const held = { left: false, right: true, up: true, down: false };
@@ -315,7 +338,7 @@ describe('the round', () => {
         expect(dom.el('end-title').textContent).toBe(s.result.verdict.title);
         expect(dom.el('end-percent').textContent).toMatch(/^\d{1,3}%$/);
         const t = s.result.tally;
-        expect(t.lawn + t.tarp + t.street + t.neighbor).toBe(t.total);
+        expect(t.lawn + t.tarp + t.street + t.neighbor + t.porch).toBe(t.total);
         expect(dom.el('end-lawn').textContent).toBe(String(t.lawn).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
         // The chrome steps aside for the card, and Play again has focus.
         expect(dom.el('round-hud').classList.contains('visible')).toBe(false);
@@ -484,8 +507,10 @@ describe('the finale (M3)', () => {
         frames(main, C0.round.finaleMax, 20);
         expect(main.getState().result.landed).toBe(true);
         expect(dom.el('end-dive').textContent).toMatch(/it caught you/);
-        // The score was counted before the dive scattered the pile.
-        expect(main.getState().result.tally.tarp).toBeGreaterThanOrEqual(450);
+        // The score was counted before the dive scattered the pile. (A few
+        // of the 560 slid off, and a tree's leaf in the air over the tarp is
+        // not counted until it lands, M6.)
+        expect(main.getState().result.tally.tarp).toBeGreaterThanOrEqual(440);
         fire(dom.el('end-free'), 'click');
         const op = main.getState().operator;
         expect(op.pitch).toBe(0);

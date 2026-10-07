@@ -178,7 +178,10 @@ let welcomeReturn = null;
 // person over and aims), and the blow button runs the blower, since one
 // finger doing both made the leaves impossible to place (Steve's phone QA,
 // 2026-10-06).
-const pointer = { id: null, down: false, mouse: false, blows: false, aim: null, seen: false };
+// `client` is where on the screen a mouse last pointed: the aim is worked out
+// from it again every frame, so it stays on whatever is under the cursor as
+// the view slides (M6 QA).
+const pointer = { id: null, down: false, mouse: false, blows: false, aim: null, seen: false, client: null };
 // The blow button, held by a finger (by pointer id) or by Space or Enter
 // while it has focus.
 const blowHold = { id: null, key: false };
@@ -514,12 +517,21 @@ function setupEventListeners() {
         pointer.down = false;
         pointer.blows = false;
         // A finger lifted leaves nothing to steer by. A mouse still hovers.
-        if (!pointer.mouse) pointer.aim = null;
+        if (!pointer.mouse) {
+            pointer.aim = null;
+            pointer.client = null;
+        }
     };
     canvas.addEventListener('pointerup', release, { signal });
     canvas.addEventListener('pointercancel', release, { signal });
+    // A mouse leaving the lawn (off the window, or over the lab's panel)
+    // stops steering from the screen, but the person still goes where it
+    // last pointed. Dropping the aim stopped them dead whenever the cursor
+    // crossed the panel (Steve's M6 QA: "I can't walk all the way to the
+    // row of hedges" with the neighbor out, when the zoomed out lawn sits
+    // higher on the screen, under the panel).
     canvas.addEventListener('pointerleave', (event) => {
-        if (event.pointerType === 'mouse' && pointer.id === null) pointer.aim = null;
+        if (event.pointerType === 'mouse' && pointer.id === null) pointer.client = null;
     }, { signal });
 
     if (blowBtn) installBlowButton(blowBtn, signal);
@@ -580,6 +592,7 @@ function aimAt(clientX, clientY) {
     const hit = rayToGround(camera.position, dir);
     if (hit) pointer.aim = hit;
     pointer.seen = true;
+    pointer.client = { x: clientX, y: clientY };
 }
 
 const WALK_KEYS = {
@@ -1404,6 +1417,10 @@ function animate() {
     // welcome card, and nothing moves under the end card.
     const inYard = !welcomeShown() && !endShown() && !castShown();
     const free = inYard && canBlow(round);
+    // A mouse held still still steers by what is under it, as the view
+    // slides: at the screen's edge the person keeps going to the hedge (M6
+    // QA). A finger only re-aims when it moves.
+    if (free && steer === 'point' && pointer.mouse && pointer.client) aimAt(pointer.client.x, pointer.client.y);
     const aim = free ? aimFor(steer, pointer, keys) : null;
     const diving = round.phase === 'finale';
     if (!diving && !finale.plan) stepOperator(operator, aim, dt, B, walkArea(), solids);

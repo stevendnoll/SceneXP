@@ -62,13 +62,14 @@ function groundAt(camera, nx, ny) {
 }
 
 describe('walking to the edges of the yard with a pointer', () => {
-    /** Hold a pointer at the screen's edge (`side` -1 left, 1 right) on the
-     *  person's own row, for `seconds`, the camera following. Returns the
-     *  person. */
-    function holdAtEdge(aspect, start, side, seconds = 14) {
+    /** Hold a mouse at the screen's edge (`side` -1 left, 1 right) on the
+     *  person's own row, for `seconds`, the camera following, the aim worked
+     *  out again each frame from what is under the cursor (main.js), with
+     *  the neighbor out at `nb` if given. Returns the person. */
+    function holdAtEdge(aspect, start, side, seconds = 14, nb = null) {
         const op = { ...Op.createOperator(B), x: start.x, z: start.z };
         for (let t = 0; t < seconds; t += 1 / 30) {
-            const camera = cameraAt(V.cameraFor(aspect, cam, lawn, op), aspect);
+            const camera = cameraAt(V.cameraFor(aspect, cam, lawn, op, nb), aspect);
             const row = new THREE.Vector3(op.x, 0, op.z).project(camera).y;
             const aim = groundAt(camera, side * 0.97, row);
             Op.stepOperator(op, aim && { mode: 'point', x: aim.x, z: aim.z }, 1 / 30, B, area, solids);
@@ -88,6 +89,17 @@ describe('walking to the edges of the yard with a pointer', () => {
             }
         });
     }
+
+    test('with the neighbor out and the view widened for him, the person still reaches the hedge', () => {
+        const visits = [{ x: C.neighbor.nearLine, z: 0 }, { x: C.neighbor.lineMax, z: -4.8 }, { x: C.neighbor.door.x, z: -5.4 }];
+        for (const aspect of ASPECTS) {
+            for (const nb of visits) {
+                for (const z of [-2.4, 2, area.maxZ - 0.2]) {
+                    expect(holdAtEdge(aspect, { x: 0, z }, -1, 14, nb).x).toBeLessThan(area.minX + 0.05);
+                }
+            }
+        }
+    });
 
     test('a wide screen still holds steady while the person is out in the middle', () => {
         for (const aspect of [1.6, 1.78]) {

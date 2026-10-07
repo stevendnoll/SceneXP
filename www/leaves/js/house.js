@@ -28,6 +28,10 @@
 
 const material = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
 
+/** Our house's front windows: their middles in x from the house's middle,
+ *  how high, and how big (decorations.js puts silhouettes in two). */
+export const OUR_WINDOWS = Object.freeze({ xs: [-6.4, -3.6, 3.2, 6.0], y: 1.75, w: 1.3, h: 1.7 });
+
 function box(w, h, d, mat, x, y, z) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     mesh.position.set(x, y, z);
@@ -88,7 +92,7 @@ function windowAt(group, x, y, front, { w = 1.3, h = 1.7, frame, glass }) {
 }
 
 /** A pumpkin ({ x, z, y, r, color }): a squashed sphere and a stem. */
-function pumpkin(p) {
+export function pumpkin(p) {
     const group = new THREE.Group();
     const body = new THREE.Mesh(new THREE.SphereGeometry(p.r, 16, 10), material(p.color));
     body.scale.set(1, 0.72, 1);
@@ -133,7 +137,8 @@ export function buildOurHouse(Y, L) {
 
     // Windows: two each side of the porch, black framed.
     const door = H.door;
-    for (const x of [-6.4, -3.6, 3.2, 6.0]) windowAt(group, cx + x, 1.75, front, { frame: black, glass });
+    const W = OUR_WINDOWS;
+    for (const x of W.xs) windowAt(group, cx + x, W.y, front, { w: W.w, h: W.h, frame: black, glass });
 
     // The porch, its step and posts, and a flat roof over them all.
     const stone = material(L.porch);
@@ -266,6 +271,16 @@ export function buildStreet(Y, L) {
     return group;
 }
 
+/** Where a street house's garage (`gx`, `gw` wide) and front door
+ *  (`doorX`) are, and the stretch of front the door shares with the windows
+ *  (`rest`). Pure: decorations.js dresses its step from it. */
+export function streetHouseParts(h) {
+    const gw = 3.2;
+    const gx = h.garage > 0 ? h.maxX - 0.4 - gw / 2 : h.minX + 0.4 + gw / 2;
+    const rest = h.garage > 0 ? { from: h.minX, to: gx - gw / 2 } : { from: gx + gw / 2, to: h.maxX };
+    return { gw, gx, rest, doorX: (rest.from + rest.to) / 2 };
+}
+
 /**
  * A house down the block (M6), from `h` in config.yard.street: its front
  * wall at z = h.front, lap siding, white trim and windows, a front door and
@@ -279,6 +294,7 @@ export function buildStreetHouse(h, L, Y) {
     const cx = (h.minX + h.maxX) / 2;
     const cz = h.front - h.depth / 2;
     const trim = material(L.trim);
+    const { gw, gx, rest, doorX } = streetHouseParts(h);
     group.add(box(w, h.wall, h.depth, material(h.siding), cx, h.wall / 2, cz));
     const laps = [];
     for (let y = 0.2; y < h.wall - 0.1; y += 0.22) laps.push([cx, y, h.front + 0.012]);
@@ -287,15 +303,11 @@ export function buildStreetHouse(h, L, Y) {
     group.add(box(w + 0.8, 0.18, 0.12, trim, cx, h.wall - 0.05, h.front + 0.38));
     group.add(gableRoof(h, cz, material(h.roof)));
     // The garage at one end, the door and windows across the rest.
-    const gw = 3.2;
-    const gx = h.garage > 0 ? h.maxX - 0.4 - gw / 2 : h.minX + 0.4 + gw / 2;
     group.add(box(gw + 0.2, 2.35, 0.06, trim, gx, 1.175, h.front + 0.03));
     group.add(box(gw, 2.2, 0.06, material(h.garageDoor), gx, 1.1, h.front + 0.05));
     const panels = [];
     for (let y = 0.45; y < 2.1; y += 0.5) panels.push([gx, y, h.front + 0.085]);
     group.add(rows(new THREE.BoxGeometry(gw - 0.1, 0.03, 0.02), material(h.lap), panels));
-    const rest = h.garage > 0 ? { from: h.minX, to: gx - gw / 2 } : { from: gx + gw / 2, to: h.maxX };
-    const doorX = (rest.from + rest.to) / 2;
     group.add(box(1.0, 2.1, 0.06, material(h.door), doorX, 1.05 + 0.15, h.front + 0.05));
     group.add(box(1.6, 0.15, 0.7, material(L.porch), doorX, 0.075, h.front + 0.35));
     const glass = new THREE.MeshStandardMaterial({ color: L.glass, metalness: 0.35, roughness: 0.15 });

@@ -19,6 +19,12 @@
  * toward the tarp in the corner about 16%, with a pile 1.3 meters high. A
  * visitor who knows what they are doing will beat both.
  *
+ * ON THE PORCH IS NOT ON THE LAWN (M6 QA). The porch, its step and the
+ * pumpkins stand inside the lawn's rectangle, and a leaf blown up onto one
+ * cannot be blown back off (nobody can stand behind it), so it counted
+ * against the lawn forever. A leaf on anything raised there (`sim.floor`)
+ * is counted `porch`, off the lawn.
+ *
  * PURE: the copy lives here so the house style is tested (no em dashes, no
  * semicolons, American spelling).
  */
@@ -35,13 +41,23 @@ export function regionOf(x, z, yard) {
     return 'lawn';
 }
 
+/** Whether the ground at (x, z) is raised: the porch, a step, a pumpkin. */
+function raised(sim, x, z) {
+    const b = sim.bounds;
+    const ix = Math.min(sim.nx - 1, Math.max(0, Math.floor((x - b.minX) / sim.cell)));
+    const iz = Math.min(sim.nz - 1, Math.max(0, Math.floor((z - b.minZ) / sim.cell)));
+    return sim.floor[iz * sim.nx + ix] > 0;
+}
+
 /**
  * How many leaves are in each region: { lawn, tarp, street, neighbor,
- * total }, plus where on the neighbor's lawn ours lie (`nearZ`, `farZ`
+ * porch, total }, plus where on the neighbor's lawn ours lie (`nearZ`, `farZ`
  * along the fence and `deepX` the farthest in, for him to aim at). Walks
  * every leaf, so call it a few times a second, not every frame.
  *
- * Leaves still hanging in a tree's crown (M5) are left out, total and all.
+ * Leaves still hanging in a tree's crown (M5) are left out, total and all,
+ * and so are leaves let go of by a crown and still on their way down (M6).
+ * A leaf on the porch, its step or a pumpkin is `porch`.
  *
  * `sent`, if given, is one flag per leaf, set here for every leaf found on
  * the neighbor's lawn and never cleared, and its count comes back as
@@ -50,18 +66,19 @@ export function regionOf(x, z, yard) {
  */
 export function tally(sim, yard, sent = null) {
     const t = {
-        lawn: 0, tarp: 0, street: 0, neighbor: 0, total: sim.count,
+        lawn: 0, tarp: 0, street: 0, neighbor: 0, porch: 0, total: sim.count,
         sent: 0, nearZ: Infinity, farZ: -Infinity, deepX: -Infinity
     };
     for (let i = 0; i < sim.count; i++) {
         // A leaf still up in a tree's crown is not in the yard yet (M5).
-        if (sim.hanging && sim.hanging[i]) {
+        if ((sim.hanging && sim.hanging[i]) || (sim.falling && sim.falling[i])) {
             t.total--;
             continue;
         }
         const x = sim.px[i];
         const z = sim.pz[i];
-        const where = regionOf(x, z, yard);
+        let where = regionOf(x, z, yard);
+        if (where === 'lawn' && sim.floor && raised(sim, x, z)) where = 'porch';
         t[where]++;
         if (where === 'neighbor') {
             if (z < t.nearZ) t.nearZ = z;

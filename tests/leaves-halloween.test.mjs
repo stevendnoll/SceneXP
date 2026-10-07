@@ -34,7 +34,9 @@ describe('when it is Halloween week', () => {
         expect(H.seasonFor('', new Date(2026, 9, 1), HW, false)).toEqual({ decor: true, week: false });
         expect(H.seasonFor('', new Date(2026, 9, 7), HW, false)).toEqual({ decor: true, week: false });
         expect(H.seasonFor('', new Date(2026, 9, 24), HW, false)).toEqual({ decor: true, week: true });
-        expect(H.seasonFor('', new Date(2026, 10, 1), HW, false)).toEqual({ decor: false, week: false });
+        // Still up on November 1st, the morning after, and down on the 2nd.
+        expect(H.seasonFor('', new Date(2026, 10, 1, 20), HW, false)).toEqual({ decor: true, week: false });
+        expect(H.seasonFor('', new Date(2026, 10, 2), HW, false)).toEqual({ decor: false, week: false });
     });
 
     test('the lab\'s address decides it on a QA host, and nowhere else', () => {
@@ -189,7 +191,7 @@ describe('the drawing, on the real three.js', () => {
         });
     });
 
-    test('NOTHING IS ON OUR LAWN: every decoration hangs on a house, sits up high, or stands past the sim\'s ground', () => {
+    test('NOTHING IS ON OUR LAWN: every decoration hangs on a house, sits up high, or stands past the sim\'s ground on either side', () => {
         const { group } = Dc.buildDecorations(C);
         group.updateMatrixWorld(true);
         const Y = C.yard;
@@ -201,7 +203,7 @@ describe('the drawing, on the real three.js', () => {
             box.setFromObject(o);
             const onAHouse = box.max.z <= Y.lawn.minZ + 0.6;
             const overhead = box.min.y >= 2;
-            const pastTheSim = box.min.x > Y.bounds.maxX;
+            const pastTheSim = box.min.x > Y.bounds.maxX || box.max.x < Y.bounds.minX;
             expect({ name: o.name || o.type, ok: onAHouse || overhead || pastTheSim }).toEqual({ name: o.name || o.type, ok: true });
         });
         expect(meshes).toBeGreaterThan(20);
@@ -247,6 +249,61 @@ describe('the drawing, on the real three.js', () => {
             expect(Math.hypot(t.x - aspen.x, t.z - aspen.z)).toBeGreaterThan(t.r + 0.5);
         }
         expect(D.inflatable.x).toBeLessThan(NH.maxX);
+    });
+
+    /** The decorations' meshes, each with its world box. */
+    function boxes() {
+        const { group } = Dc.buildDecorations(C);
+        group.updateMatrixWorld(true);
+        const out = [];
+        group.traverse((o) => { if (o.isMesh) out.push({ o, box: new THREE.Box3().setFromObject(o) }); });
+        return out;
+    }
+
+    test('the witch who flew into the maple shows her legs and boots over the hedge, past our lawn', () => {
+        const tree = C.yard.trees.find((t) => t.x < C.yard.bounds.minX && t.z > C.yard.lawn.minZ);
+        const hedge = C.yard.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
+        const near = boxes().filter(({ box }) => box.max.x < C.yard.bounds.minX
+            && Math.abs((box.min.z + box.max.z) / 2 - tree.z) < 1.2 && box.min.y > 1.5);
+        expect(near.length).toBeGreaterThan(10);
+        for (const { box } of near) {
+            // Above the hedge top, where the street can see them.
+            expect(box.min.y).toBeGreaterThan(hedge.height);
+            expect(box.max.x).toBeLessThan(hedge.at);
+        }
+    });
+
+    test('the giant spider stands on the neighbor\'s roof, on its front slope, and not inside it', () => {
+        const NH = C.yard.neighborHouse;
+        const front = C.yard.neighbor.minZ + 0.4;
+        const rise = NH.ridge - NH.wall + 0.05;
+        const roofAt = (z) => NH.wall - 0.05 + ((front - z) / 4.4) * rise;
+        const S = HW.decor.roofSpider;
+        const spider = boxes().filter(({ box }) => Math.abs((box.min.x + box.max.x) / 2 - S.x) < 1.3 && box.min.y > NH.wall - 0.5 && box.max.z < front);
+        expect(spider.length).toBeGreaterThan(15);
+        // Every piece of it is above the roof's surface where it stands
+        // (a leg's thickness allowed), and none floats far off it.
+        let lowestGap = Infinity;
+        for (const { box } of spider) {
+            const gap = box.min.y - roofAt(box.max.z);
+            lowestGap = Math.min(lowestGap, gap);
+            expect(gap).toBeGreaterThan(-0.08);
+        }
+        expect(lowestGap).toBeLessThan(0.1);
+    });
+
+    test('the houses down the street have their pumpkins by the door, and the skeleton sits on its bale past his lawn', () => {
+        const all = boxes();
+        for (const h of C.yard.street) {
+            const by = all.filter(({ box }) => box.min.x > h.minX - 1 && box.max.x < h.maxX + 1 && box.max.y < 0.5 && box.min.z > h.front);
+            expect(by.length).toBeGreaterThanOrEqual(HW.decor.streetPumpkins.length);
+        }
+        const K = HW.decor.skeleton;
+        const lounger = all.filter(({ box }) => Math.hypot((box.min.x + box.max.x) / 2 - K.x, (box.min.z + box.max.z) / 2 - K.z) < 0.9);
+        expect(lounger.length).toBeGreaterThan(20);
+        const top = Math.max(...lounger.map(({ box }) => box.max.y));
+        expect(top).toBeGreaterThan(1.2);
+        expect(top).toBeLessThan(1.6);
     });
 });
 

@@ -161,7 +161,12 @@ export const LEAVES_CONFIG = Object.freeze({
         // how often an empty crown takes a leaf back from the street.
         // At 0.9 a second a tree and about three seconds down from the crown,
         // three or four are in the air at any moment.
-        fall: { rate: 0.9, refill: 0.9 }
+        // NO REFILL (Steve's M6 QA, 2026-10-07: "I can never get to 100%").
+        // Taking leaves back from the street kept the trees dropping onto a
+        // cleared lawn forever. Without it each crown lets go of what it
+        // holds (the sugar maple's 70 last about 78 seconds, longer than a
+        // round) and then is done, so a lawn can be finished.
+        fall: { rate: 0.9, refill: 0 }
     },
 
     // THE SIM, in SI units. See sim.js for how each one is used.
@@ -454,10 +459,12 @@ export const LEAVES_CONFIG = Object.freeze({
     // the sidewalk. Kind spooky, never scary. `?halloween=1` on a QA host.
     halloween: {
         // October (months count from 0), the 24th to the 31st. The
-        // decorations are up all month (decorations.js).
+        // decorations are up all month and through November 1st
+        // (decorations.js).
         month: 9,
         firstDay: 24,
         lastDay: 31,
+        decorUntil: { month: 10, day: 1 },
         decor: {
             black: 0x1c1d1f,
             beak: 0x3a3b3d,
@@ -486,6 +493,31 @@ export const LEAVES_CONFIG = Object.freeze({
             ink: 0x1d140a,
             inflatable: { x: 20.2, z: -3.4, r: 1.05, turn: -0.45 },
             foam: 0x9d9c96,
+            // More (Steve's M6 QA): silhouettes in two of our windows (by
+            // their index in house.js OUR_WINDOWS), lamp lit behind.
+            windows: [{ index: 0, kind: 'witch' }, { index: 1, kind: 'cat' }],
+            lamp: 0xffc46b,
+            lampEdge: 0xd9792a,
+            moon: 0xfff1c7,
+            // A skeleton on a hay bale in his graveyard, a giant spider on
+            // his roof (`along` its front slope, eave to ridge), and a witch
+            // who flew into the maple over the hedge, `out` from its middle.
+            bone: 0xeee8d8,
+            straw: 0xd2b46a,
+            twine: 0x8a6a3a,
+            eyes: 0xd9531e,
+            stocking: 0x6a3a9a,
+            skeleton: { x: 21.9, z: 5.6, turn: -0.45 },
+            roofSpider: { x: 13.9, along: 0.42, turn: 0.35 },
+            // The maple's trunk is 0.11 m across there (measured on the
+            // real tree), so her skirt's waist meets the bark.
+            witch: { facing: 1.15, out: 0.14, y: 2.25 },
+            // Pumpkins by each door down the street.
+            streetPumpkins: [
+                { dx: -1.0, dz: 0.5, r: 0.22, color: 0xe0701f },
+                { dx: 1.0, dz: 0.45, r: 0.18, color: 0xd9832a },
+                { dx: 1.3, dz: 0.78, r: 0.13, color: 0xefe3c4 }
+            ],
             graves: [
                 { kind: 'round', x: 18.9, z: 3.1, tilt: 0.07, turn: -0.2 },
                 { kind: 'cross', x: 20.1, z: 4.2, tilt: -0.1, turn: 0.1 },

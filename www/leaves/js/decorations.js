@@ -6,14 +6,22 @@
  *
  * OURS ARE TASTEFUL, in the house's own black, white and stone: a flight of
  * black paper bats up the white siding beside the porch, warm orange string
- * lights along the porch roof, a cobweb in the porch's corner with a spider
- * on a thread, and three crows on the ridge.
+ * lights along the porch roof, a cobweb in each of the porch's corners with
+ * a spider on a thread, three crows on the ridge, and in two windows a lamp
+ * lit behind a silhouette, a cat in one and a witch across the moon in the
+ * other.
  *
  * THE NEIGHBOR GOES ALL OUT, on purpose, the way his butter yellow house is
  * traditional to our modern one: orange and purple lights along his eaves,
- * a little ghost hanging by his windows, a big inflatable jack-o-lantern
- * and a foam graveyard past his lawn. Those two are the reward for the view
- * widening when he comes out.
+ * a little ghost hanging by his windows, a giant spider on his roof, a big
+ * inflatable jack-o-lantern, and a foam graveyard past his lawn with a
+ * skeleton lounging on a hay bale, waving. Those last are the reward for the
+ * view widening when he comes out.
+ *
+ * DOWN THE BLOCK the street joins in (Steve's M6 QA: "could we please add
+ * more decorations?"): a witch who flew into the maple over the hedge (her
+ * striped legs and boots are all that show), and pumpkins, lights and a web
+ * at the two houses down the street.
  *
  * NOTHING HERE IS ON OUR LAWN. The leaves would blow through it (the sim
  * knows only the boxes in config.yard), and the dive runs straight at the
@@ -27,6 +35,7 @@
  */
 import { faceTexture, faceOnPumpkin } from './halloween.min.js';
 import { makeRandom } from './sim.min.js';
+import { pumpkin, streetHouseParts, OUR_WINDOWS } from './house.min.js';
 
 const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
 
@@ -120,13 +129,14 @@ function wireLine(points, color) {
 }
 
 /** A quarter cobweb in a corner at (x, y, z), spokes fanning from along
- *  the roof (+x) to down the post (-y), and threads across them. */
-function cobweb(x, y, z, size, color) {
+ *  the roof (toward `side`, +1 for +x) to down the post (-y), and threads
+ *  across them. */
+function cobweb(x, y, z, size, color, side = 1) {
     const spokes = 6;
     const rings = [0.18, 0.34, 0.52, 0.7, 0.88];
     const at = (r, k) => {
         const a = (k / (spokes - 1)) * (Math.PI / 2);
-        return [x + Math.cos(a) * r * size, y - Math.sin(a) * r * size, z];
+        return [x + side * Math.cos(a) * r * size, y - Math.sin(a) * r * size, z];
     };
     const points = [];
     for (let k = 0; k < spokes; k++) points.push([x, y, z], at(1, k));
@@ -239,6 +249,188 @@ function ripTexture(ink) {
     return texture;
 }
 
+/** A round bone (or a leg, a strut) from point a to point b, as a
+ *  cylinder of radius r. */
+function bone(a, b, r, material, shadow = false) {
+    const from = new THREE.Vector3(...a);
+    const span = new THREE.Vector3(...b).sub(from);
+    const m = mesh(new THREE.CylinderGeometry(r, r, span.length(), 6), material, 0, 0, 0, shadow);
+    m.position.copy(from).addScaledVector(span, 0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.normalize());
+    return m;
+}
+
+/** A window's silhouette, lamp lit behind it: 'cat' (a cat on the sill,
+ *  its back arched) or 'witch' (a witch on her broom across the moon), or
+ *  null where there is no document. */
+function silhouetteTexture(kind, D) {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 176;
+    const ctx = canvas.getContext && canvas.getContext('2d');
+    if (!ctx) return null;
+    const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
+    const glow = ctx.createRadialGradient(64, 80, 10, 64, 88, 110);
+    glow.addColorStop(0, hex(D.lamp));
+    glow.addColorStop(1, hex(D.lampEdge));
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, 128, 176);
+    ctx.fillStyle = hex(D.black);
+    if (kind === 'cat') {
+        ctx.fillRect(0, 160, 128, 16);
+        ctx.beginPath();
+        ctx.ellipse(62, 132, 30, 24, 0, Math.PI, 0);
+        ctx.lineTo(92, 160);
+        ctx.lineTo(32, 160);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(88, 112, 13, 0, Math.PI * 2);
+        ctx.fill();
+        for (const x of [80, 94]) {
+            ctx.beginPath();
+            ctx.moveTo(x - 6, 104);
+            ctx.lineTo(x, 90);
+            ctx.lineTo(x + 6, 104);
+            ctx.fill();
+        }
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = hex(D.black);
+        ctx.beginPath();
+        ctx.moveTo(34, 150);
+        ctx.quadraticCurveTo(8, 140, 18, 104);
+        ctx.stroke();
+    } else {
+        ctx.fillStyle = hex(D.moon);
+        ctx.beginPath();
+        ctx.arc(70, 70, 38, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = hex(D.black);
+        ctx.strokeStyle = hex(D.black);
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(18, 96);
+        ctx.lineTo(112, 72);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(18, 96);
+        ctx.lineTo(4, 92);
+        ctx.lineTo(6, 108);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(48, 90);
+        ctx.lineTo(80, 82);
+        ctx.lineTo(70, 56);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(70, 52, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(56, 48);
+        ctx.lineTo(84, 46);
+        ctx.lineTo(66, 22);
+        ctx.closePath();
+        ctx.fill();
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+/** A witch who flew into a tree: a scrap of black skirt at the trunk and
+ *  her striped legs and pointed boots sticking out of it, along +z. */
+function crashedWitch(D) {
+    const group = new THREE.Group();
+    // The skirt's waist is in the bark and its hem flares over her legs.
+    const skirt = mesh(new THREE.ConeGeometry(0.17, 0.26, 10, 1, true), lambert(D.black, { side: THREE.DoubleSide }), 0, 0, 0.1);
+    skirt.rotation.x = -Math.PI / 2;
+    group.add(skirt);
+    const stripes = [lambert(D.stocking), lambert(D.black)];
+    for (const s of [-1, 1]) {
+        const hip = [s * 0.05, 0, 0.12];
+        const foot = [s * 0.16, -0.22, 0.85];
+        const n = 7;
+        for (let k = 0; k < n; k++) {
+            const a = hip.map((v, i) => v + ((foot[i] - v) * k) / n);
+            const b = hip.map((v, i) => v + ((foot[i] - v) * (k + 1)) / n);
+            group.add(bone(a, b, 0.032 - k * 0.002, stripes[k % 2], true));
+        }
+        const boot = new THREE.Group();
+        boot.position.set(...foot);
+        boot.add(mesh(new THREE.BoxGeometry(0.08, 0.16, 0.08), lambert(D.black), 0, 0.02, 0.02, true));
+        const toe = mesh(new THREE.ConeGeometry(0.035, 0.14, 6), lambert(D.black), 0, -0.04, 0.1, true);
+        toe.rotation.x = Math.PI / 2 - 0.5;
+        boot.add(toe);
+        group.add(boot);
+    }
+    return group;
+}
+
+/** A giant black spider, its feet on y = 0, its head toward +z. Returns
+ *  { group, legs } for a little twitch of its front legs. */
+function giantSpider(D) {
+    const group = new THREE.Group();
+    const black = lambert(D.black);
+    const abdomen = mesh(new THREE.SphereGeometry(0.42, 16, 12), black, 0, 0.34, -0.4, true);
+    abdomen.scale.set(1, 0.8, 1.1);
+    group.add(abdomen);
+    group.add(mesh(new THREE.SphereGeometry(0.24, 12, 10), black, 0, 0.26, 0.2, true));
+    for (const s of [-1, 1]) group.add(mesh(new THREE.SphereGeometry(0.035, 8, 6), lambert(D.eyes), s * 0.08, 0.34, 0.42));
+    const legs = [];
+    for (const s of [-1, 1]) {
+        [0.32, 0.12, -0.08, -0.28].forEach((z, k) => {
+            const leg = new THREE.Group();
+            leg.position.set(s * 0.18, 0.26, 0.2 + z * 0.4);
+            const spread = 1 + (k === 0 || k === 3 ? 0.25 : 0);
+            const knee = [s * 0.55, 0.42, z * 1.6 * spread];
+            const foot = [s * 1.0, -0.26, z * 2.6 * spread];
+            leg.add(bone([0, 0, 0], knee, 0.035, black, true), bone(knee, foot, 0.028, black, true));
+            group.add(leg);
+            legs.push(leg);
+        });
+    }
+    return { group, legs };
+}
+
+/** A skeleton lounging on a hay bale, one hand on its knee and the other
+ *  up in a wave. Returns { group, wave } (the waving forearm). */
+function skeletonOnBale(D) {
+    const group = new THREE.Group();
+    const straw = lambert(D.straw);
+    group.add(mesh(new THREE.BoxGeometry(1.0, 0.45, 0.55), straw, 0, 0.225, 0, true));
+    for (const x of [-0.25, 0.25]) group.add(mesh(new THREE.BoxGeometry(0.02, 0.46, 0.56), lambert(D.twine), x, 0.225, 0));
+    const bones = lambert(D.bone);
+    const dark = lambert(D.black);
+    group.add(mesh(new THREE.BoxGeometry(0.24, 0.08, 0.13), bones, 0, 0.5, -0.05));
+    group.add(bone([0, 0.5, -0.06], [0, 1.0, -0.1], 0.02, bones));
+    for (let k = 0; k < 4; k++) {
+        const rib = mesh(new THREE.TorusGeometry(0.115 - k * 0.012, 0.012, 4, 14), bones, 0, 0.72 + k * 0.065, -0.07);
+        rib.rotation.x = Math.PI / 2;
+        rib.scale.set(1, 0.7, 1);
+        group.add(rib);
+    }
+    group.add(mesh(new THREE.SphereGeometry(0.1, 12, 10), bones, 0, 1.12, -0.08));
+    group.add(mesh(new THREE.BoxGeometry(0.1, 0.04, 0.08), bones, 0, 1.03, -0.04));
+    for (const s of [-1, 1]) group.add(mesh(new THREE.SphereGeometry(0.025, 6, 5), dark, s * 0.038, 1.13, 0.008));
+    group.add(bone([-0.17, 0.96, -0.08], [0.17, 0.96, -0.08], 0.014, bones));
+    // One hand on its knee.
+    group.add(bone([0.17, 0.96, -0.08], [0.22, 0.72, 0.08], 0.017, bones), bone([0.22, 0.72, 0.08], [0.13, 0.57, 0.33], 0.014, bones));
+    // The other up in a wave, the forearm swinging.
+    group.add(bone([-0.17, 0.96, -0.08], [-0.34, 1.12, -0.02], 0.017, bones));
+    const wave = new THREE.Group();
+    wave.position.set(-0.34, 1.12, -0.02);
+    wave.add(bone([0, 0, 0], [-0.04, 0.24, 0.02], 0.014, bones));
+    group.add(wave);
+    for (const s of [-1, 1]) {
+        group.add(bone([s * 0.08, 0.5, 0], [s * 0.12, 0.53, 0.4], 0.02, bones), bone([s * 0.12, 0.53, 0.4], [s * 0.13, 0.08, 0.46], 0.017, bones));
+        group.add(mesh(new THREE.BoxGeometry(0.07, 0.04, 0.14), bones, s * 0.13, 0.04, 0.51));
+    }
+    return { group, wave };
+}
+
 /**
  * Every decoration, from config. Returns { group, update(time, motion) }.
  */
@@ -285,15 +477,28 @@ export function buildDecorations(config) {
         bulbMeshes(lights.bulbs, [D.bulb]).forEach((b) => group.add(b));
     }
 
-    // A cobweb in the corner of the left post and the porch roof, and a
-    // spider on a thread beside it.
+    // A cobweb in each corner of the posts and the porch roof, and a spider
+    // on a thread beside the left one.
     let hanging = null;
     if (posts.length) {
         const left = posts.reduce((a, b) => (a.minX < b.minX ? a : b));
+        const right = posts.reduce((a, b) => (a.maxX > b.maxX ? a : b));
         const z = (left.minZ + left.maxZ) / 2;
         group.add(cobweb(left.maxX, roofY - 0.01, z, D.web, D.webColor));
+        if (right !== left) group.add(cobweb(right.minX, roofY - 0.01, (right.minZ + right.maxZ) / 2, D.web * 0.8, D.webColor, -1));
         hanging = spider(left.maxX + D.web * 0.85, roofY - 0.01, roofY - 0.55, z + 0.05, black, D.webColor);
         group.add(hanging.group);
+    }
+
+    // A lamp lit behind a silhouette in two of our windows: just behind the
+    // mullions, in front of the glass.
+    for (const w of D.windows || []) {
+        const map = silhouetteTexture(w.kind, D);
+        if (!map) continue;
+        const pane = mesh(new THREE.PlaneGeometry(OUR_WINDOWS.w - 0.14, OUR_WINDOWS.h - 0.14), new THREE.MeshBasicMaterial({ map }),
+            (H.minX + H.maxX) / 2 + OUR_WINDOWS.xs[w.index], OUR_WINDOWS.y, front + 0.1);
+        pane.name = `window-${w.kind}`;
+        group.add(pane);
     }
 
     // Crows along our ridge, looking about.
@@ -336,7 +541,7 @@ export function buildDecorations(config) {
     }
     group.add(inflatable);
 
-    // And his foam graveyard.
+    // And his foam graveyard, with a skeleton taking it easy on a hay bale.
     const rip = ripTexture(D.ink);
     const foam = lambert(D.foam);
     for (const g of D.graves || []) {
@@ -344,6 +549,45 @@ export function buildDecorations(config) {
         stone.position.set(g.x, 0, g.z);
         stone.rotation.set(g.lean || 0, g.turn || 0, g.tilt || 0);
         group.add(stone);
+    }
+    const lounger = skeletonOnBale(D);
+    lounger.group.position.set(D.skeleton.x, 0, D.skeleton.z);
+    lounger.group.rotation.y = D.skeleton.turn;
+    group.add(lounger.group);
+
+    // A giant spider on his roof, laid on the front slope, head down it.
+    const S = D.roofSpider;
+    const slope = Math.atan2(NH.ridge - NH.wall + 0.05, 4.4);
+    const along = S.along;
+    const crawler = giantSpider(D);
+    crawler.group.position.set(S.x, NH.wall - 0.05 + along * (NH.ridge - NH.wall + 0.05), Y.neighbor.minZ + 0.4 - along * 4.4);
+    crawler.group.rotation.set(slope, S.turn, 0, 'XYZ');
+    group.add(crawler.group);
+
+    // The witch who flew into the maple over the hedge.
+    const tree = Y.trees.find((t) => t.x < Y.bounds.minX && t.z > Y.lawn.minZ && t.z < Y.lawn.maxZ);
+    if (tree) {
+        const witch = crashedWitch(D);
+        const a = D.witch.facing;
+        witch.position.set(tree.x + Math.sin(a) * D.witch.out, D.witch.y, tree.z + Math.cos(a) * D.witch.out);
+        witch.rotation.y = a;
+        group.add(witch);
+    }
+
+    // Down the street: pumpkins by each door, lights along the sage house's
+    // eave, and a web across the corner of the gray one's garage.
+    for (const h of Y.street || []) {
+        const parts = streetHouseParts(h);
+        D.streetPumpkins.forEach((p) => group.add(pumpkin({ ...p, x: parts.doorX + p.dx, z: h.front + p.dz, y: 0 })));
+        if (h.garage < 0) {
+            const row = [];
+            for (let x = h.minX - 0.3; x <= h.maxX + 0.31; x += (h.maxX - h.minX + 0.6) / 5) row.push({ x, y: h.wall - 0.17, z: h.front + 0.42 });
+            const lit = stringLights(row, D.sag * 0.8, D.bulbEvery);
+            group.add(wireLine(lit.wire, D.black));
+            bulbMeshes(lit.bulbs, [D.bulb]).forEach((b) => group.add(b));
+        } else {
+            group.add(cobweb(parts.gx - parts.gw / 2, 2.2, h.front + 0.1, 1.1, D.webColor));
+        }
     }
 
     function update(time, motion = 1) {
@@ -357,6 +601,10 @@ export function buildDecorations(config) {
         ghost.rotation.y = 0.3 * motion * Math.sin(time * 0.4);
         inflatable.rotation.z = 0.025 * motion * Math.sin(time * 0.8);
         inflatable.rotation.x = 0.018 * motion * Math.sin(time * 0.63 + 1);
+        lounger.wave.rotation.z = 0.5 * motion * Math.sin(time * 4);
+        // Now and then the spider's front legs twitch.
+        const twitch = motion * 0.12 * Math.max(0, Math.sin(time * 0.7)) * Math.sin(time * 9);
+        crawler.legs.forEach((leg, k) => { leg.rotation.y = k % 4 === 0 ? twitch : 0; });
     }
     return { group, update };
 }

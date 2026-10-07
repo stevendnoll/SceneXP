@@ -12,9 +12,15 @@
  * reach, out of the count) and lets them go a few at a time, so from the
  * first second something is falling, and every leaf that falls lands in the
  * yard to be blown like the rest. A crown only holds leaves over the sim's
- * ground, since a leaf let go anywhere else would have nowhere to land. When
- * a crown runs low it takes a leaf back from the street, so the yard's leaf
- * count, and with it the cost, never changes.
+ * ground, since a leaf let go anywhere else would have nowhere to land. The
+ * yard's leaf count, and with it the cost, never changes. A crown can take
+ * leaves back from the street as it runs low (`fall.refill`), which is off:
+ * it kept a cleared lawn from ever staying clear (M6 QA).
+ *
+ * A LEAF ON ITS WAY DOWN IS NOT YET IN THE YARD. Each one let go is marked
+ * in `sim.falling` until it comes to rest, and the score leaves it out until
+ * then, as it does a leaf still up in a crown (Steve's M6 QA: "I can never
+ * get to 100%", with three or four always in the air over the lawn).
  *
  * The crowns' part is pure (createCrowns, stepCrowns) and measured under
  * Node with the real sim. buildTrees() and updateTrees() are the drawing.
@@ -59,8 +65,10 @@ export function createCrowns(sim, config, seed = 77) {
     const step = total > 0 ? Math.max(1, Math.floor(sim.count / total)) : 1;
     let next = Math.floor(step / 2);
     const crowns = [];
+    if (!sim.falling || sim.falling.length !== sim.count) sim.falling = new Uint8Array(sim.count);
+    sim.falling.fill(0);
     for (const entry of Y.trees) {
-        const crown = { entry, leaves: [], owed: random(), refill: 0, random };
+        const crown = { entry, leaves: [], falling: [], owed: random(), refill: 0, random };
         for (let k = 0; k < (entry.hanging || 0) && next < sim.count; k++, next += step) {
             const p = crownPoint(entry, sim.bounds, random);
             if (p && hangLeaf(sim, next, p.x, p.y, p.z, random)) crown.leaves.push(next);
@@ -92,6 +100,14 @@ export function stepCrowns(crowns, sim, dt, config) {
     for (const crown of crowns) {
         const want = crown.entry.hanging || 0;
         if (!want) continue;
+        // The ones that have come to rest have arrived.
+        if (crown.falling.length) {
+            crown.falling = crown.falling.filter((i) => {
+                if (sim.awake[i]) return true;
+                sim.falling[i] = 0;
+                return false;
+            });
+        }
         crown.owed += dt * F.rate * (0.6 + 0.8 * crown.random());
         while (crown.owed >= 1 && crown.leaves.length) {
             crown.owed -= 1;
@@ -100,10 +116,12 @@ export function stepCrowns(crowns, sim, dt, config) {
             crown.leaves[at] = crown.leaves[crown.leaves.length - 1];
             crown.leaves.pop();
             dropLeaf(sim, i, sim.px[i], sim.py[i], sim.pz[i]);
+            if (sim.falling) sim.falling[i] = 1;
+            crown.falling.push(i);
             fell++;
         }
         if (!crown.leaves.length) crown.owed = Math.min(crown.owed, 1);
-        if (crown.leaves.length < want) {
+        if (crown.leaves.length < want && F.refill > 0) {
             crown.refill += dt * F.refill;
             if (crown.refill >= 1) {
                 crown.refill -= 1;

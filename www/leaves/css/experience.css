@@ -546,7 +546,9 @@
 }
 
 /* ---- The lab panel (QA hosts only, built by main.js) ----
-   Under the sound button, which has the top left corner (M6). */
+   Under the sound button, which has the top left corner (M6). Only its
+   buttons take the pointer, so a cursor crossing the readout still steers
+   the person on the lawn beneath it. */
 
 .lab-panel {
     position: fixed;
@@ -559,7 +561,7 @@
     background: rgba(12, 16, 20, 0.62);
     color: #f4efe6;
     font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    pointer-events: auto;
+    pointer-events: none;
 }
 
 .lab-readout {
@@ -584,6 +586,7 @@
     color: inherit;
     font: inherit;
     cursor: pointer;
+    pointer-events: auto;
 }
 
 .lab-btn:hover,

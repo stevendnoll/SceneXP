@@ -32,14 +32,19 @@ export function isHalloweenWeek(date, H) {
     return date.getMonth() === H.month && day >= H.firstDay && day <= H.lastDay;
 }
 
-/** Whether the decorations are up: all of October (M6 QA). */
+/** Whether the decorations are up: all of October, and still on November
+ *  1st, the morning after (Steve's M6 QA: "displayed until November 1st"). */
 export function isDecorated(date, H) {
-    return Boolean(date && typeof date.getMonth === 'function' && date.getMonth() === H.month);
+    if (!date || typeof date.getMonth !== 'function') return false;
+    const m = date.getMonth();
+    const U = H.decorUntil;
+    return m === H.month || (m === U.month && date.getDate() <= U.day);
 }
 
 /**
- * The season for this visit: { decor, week }. The decorations are up all
- * October and Halloween week's extras come on the 24th, by the date, or on
+ * The season for this visit: { decor, week }. The decorations are up from
+ * October 1st through November 1st and Halloween week's extras come on the
+ * 24th, by the date, or on
  * a QA host by the address: `?halloween=1` for everything, `0` for none.
  */
 export function seasonFor(search, date, H, qa) {
