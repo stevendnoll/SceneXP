@@ -167,9 +167,26 @@ export const LEAVES_CONFIG = Object.freeze({
             { species: 'sugar-maple', x: 5.5, z: -18.5, height: 12, seed: 5501, trunk: 0.26, crown: { y: 7, radius: 3.4 }, hanging: 0 },
             { species: 'paper-birch', x: 16, z: -16.5, height: 11, seed: 6607, trunk: 0.18, crown: { y: 6, radius: 2.6 }, hanging: 0 },
             { species: 'sugar-maple', x: -17.5, z: -8, height: 11, seed: 7703, trunk: 0.24, crown: { y: 6, radius: 3.2 }, hanging: 0 },
+            // A Japanese maple behind the houses, framed by the gap between
+            // them (gap.js): too wide for the gap itself (about 3.6 m).
+            { species: 'japanese-maple', x: 10.25, z: -16.4, height: 4, seed: 9907, trunk: 0.14, crown: { y: 3, radius: 1.8 }, hanging: 0 },
             // A blue spruce in the side yard behind our hedge (backyard.js).
             { species: 'blue-spruce', x: -18.6, z: -1.6, height: 7, seed: 8801, trunk: 0.2, crown: { y: 3.6, radius: 1.8 }, hanging: 0 }
         ],
+        // BETWEEN THE HOUSES (Steve's M6 QA: "more environment details to the
+        // area between the main house and the neighbor's house"), behind the
+        // side gate (gap.js). From the street only what stands above about
+        // 2.5 m shows over the gate, so: an arbor over the gate climbing with
+        // autumn ivy, cafe lights strung across between the eaves, and on
+        // the neighbor's side wall (which faces us) a little shuttered
+        // window, a downspout and ivy.
+        gap: {
+            arbor: { depth: 0.6, height: 2.45, post: 0.09, color: 0xf4f1ea },
+            ivy: [0x9c2b25, 0xc8501f, 0xb87a2a, 0x6e2a1e, 0x4f6b2a],
+            lights: { rows: [-6.7, -7.6, -8.5], y: 3.0, sag: 0.25, bulb: 0xffcf7a },
+            sideWindow: { z: -9.2, y: 2.25, w: 0.7, h: 0.8 },
+            downspout: 0xf4f1ea
+        },
         // BEHIND OUR HEDGE (Steve's M6 QA: "more environment details to the
         // back left of the scene behind the row of hedges"): the sage house's
         // side yard, between the hedge and its garage, all of it past the
@@ -584,10 +601,13 @@ export const LEAVES_CONFIG = Object.freeze({
             // lamp lit room, and a clown who slides in from the window's
             // edge, peeks for `stay` seconds and slides away again, gone for
             // `hidden`. Generic, not any film's clown.
+            // Darker since Steve's QA ("too bright and takes away from the
+            // Halloween aesthetic"): a dim room, a dingy face, dark reds, a
+            // sinister grin, and the whole of him in shadow (`shade`).
             clown: {
-                window: 3, hidden: 7, slide: 1.1, stay: 5,
-                room: 0x1d1612, roomLight: 0x5a3a24, face: 0xf4f0e6, nose: 0xd0281e, hair: 0xe8761f,
-                suit: 0x5b2c83, dots: 0xf0c94a, hat: 0x2f8f6a
+                window: 3, hidden: 7, slide: 1.1, stay: 5, shade: 0.45,
+                room: 0x0b0908, roomLight: 0x2b1b12, face: 0xb9b19e, nose: 0x7a1410, hair: 0x6e2612,
+                suit: 0x231a2c, dots: 0x5a4e30, hat: 0x1d3a30, socket: 0x0a0808, pupil: 0xd8d2b8
             },
             // Skeletons (Steve's M6 QA: "Maybe a skeleton or two (or three)?"):
             // one breaking out of the lawn by the front left corner, one still
@@ -654,9 +674,10 @@ export const LEAVES_CONFIG = Object.freeze({
         blowHeight: 0.5,
         blownAir: 1.6,
         blownFull: 5,
-        blownTime: 1.1,
+        blownTime: 0.9,
         push: 1.4,
-        hurry: 2,
+        // Running off: a run, not a brisk walk.
+        hurry: 2.4,
         // Once blown, the air has to drop below this share of `blownAir`
         // before they recover (so the edge of a blower's reach does not flick
         // them in and out of it), and they turn at most this fast.
@@ -664,7 +685,22 @@ export const LEAVES_CONFIG = Object.freeze({
         turnRate: 5,
         // How far off the middle of its lane a gust can push a group with no
         // lane of its own.
-        drift: { min: -0.3, max: 0.3 }
+        drift: { min: -0.3, max: 0.3 },
+        // KICKING THE LEAVES (Steve's M6 QA: "If there are leaves on the
+        // sidewalk when a trick-or-treater walks by, could we have the
+        // trick-or-treater kick the leaves back into the yard?"): every
+        // `every` meters each one walks, a foot comes down `ahead` of them,
+        // and if leaves lie within `radius` of it, a short flick of air
+        // (`air`, as changes to our blower, for `time` seconds) sends them
+        // toward the lawn, a little forward.
+        kick: {
+            every: 0.7, ahead: 0.18, radius: 0.35, time: 0.35, forward: 0.35,
+            air: {
+                reach: 0, height: 0.14, side: 0, pitch: 0.35, speed: 9, core: 0.3, width: 0.1, spread: 0.35,
+                wallDecay: 0.8, wallSpread: 0.6, wallDepth: 0.3, wallThicken: 0.4, updraft: 1.1, updraftLength: 0.6,
+                range: 2.2, turbulence: 0.4
+            }
+        }
     },
 
     // THE SOUND (M6, sound.js): a whoosh while the blower runs, made with
@@ -760,6 +796,11 @@ export const LEAVES_CONFIG = Object.freeze({
         // The sky (M5): deeper blue overhead, paling to a warm haze at the
         // horizon, drawn behind everything.
         sky: { top: 0x6f9fd3, horizon: 0xe4e2d8 },
+        // Clouds in it (M6 QA), on a sky picture 512 by 256: how many, how
+        // high (pixels from the top; the haze starts about 115), how big,
+        // how white, and how fast they drift (the picture's widths a
+        // second).
+        clouds: { count: 9, top: 22, bottom: 92, size: [16, 30], alpha: 0.85, seed: 7, drift: 0.003 },
         // Our house (house.js): white board and batten, black frames, stone.
         siding: 0xf2efe8,
         trim: 0xffffff,

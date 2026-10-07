@@ -198,6 +198,73 @@ describe('more trick-or-treaters', () => {
     });
 });
 
+// Steve's M6 QA: "If there are leaves on the sidewalk when a trick-or-treater
+// walks by, could we have the trick-or-treater kick the leaves back into the
+// yard?"
+describe('kicking the leaves', () => {
+    test('each one puts a kicking foot down every `kick.every` meters, staggered, ahead of them', () => {
+        const tr = H.createTreaters(HW, S.makeRandom(1), HW.groups[1]);
+        Object.assign(tr, { state: 'walk', x: 0, dir: 1, heading: Math.PI / 2, paused: true });
+        const count = [0, 0, 0];
+        let together = 0;
+        const input = { active: true, person: null, walkX: -40, random: S.makeRandom(2) };
+        const meters = 7;
+        for (let t = 0; t < meters / HW.speed; t += 1 / 60) {
+            H.stepTreaters(tr, 1 / 60, input, HW);
+            const feet = H.footfalls(tr, HW);
+            if (feet.length > 1) together++;
+            for (const f of feet) {
+                count[f.k]++;
+                expect(f.x).toBeCloseTo(H.treaterSpots(tr)[f.k].x + HW.kick.ahead, 6);
+            }
+        }
+        for (const n of count) expect(Math.abs(n - meters / HW.kick.every)).toBeLessThanOrEqual(1);
+        expect(together).toBe(0);
+    });
+
+    test('on the real sim, a group walking past leaves on the sidewalk kicks a good share of them back onto the lawn', () => {
+        const sim = S.createSim(3000, C);
+        S.scatterLeaves(sim, C);
+        // Real leaves (scattered, so they have their size and drag), laid in
+        // rows across the sidewalk.
+        const ids = [];
+        for (let i = 0; i < sim.count && ids.length < 300; i += 7) ids.push(i);
+        ids.forEach((i, k) => {
+            S.hangLeaf(sim, i, 0, 5, 0);
+            S.layDown(sim, i, -5 + (k % 100) * 0.1, 7.55 + Math.floor(k / 100) * 0.45);
+        });
+        const tr = H.createTreaters(HW, S.makeRandom(1), HW.groups[1]);
+        Object.assign(tr, { state: 'walk', x: -7, dir: 1, heading: Math.PI / 2, paused: true });
+        const air = { ...C.blower, ...HW.kick.air };
+        let kicks = [];
+        let kicked = 0;
+        const input = { active: true, person: null, walkX: -40, random: S.makeRandom(2) };
+        for (let t = 0; t < 12; t += 1 / 30) {
+            H.stepTreaters(tr, 1 / 30, input, HW);
+            for (const f of H.footfalls(tr, HW)) {
+                if (!S.restingNear(sim, f.x, f.z, HW.kick.radius)) continue;
+                const len = Math.hypot(HW.kick.forward, 1);
+                kicks.push({ jet: S.makeJet(air, f.x, f.z, (f.dir * HW.kick.forward) / len, -1 / len, true), until: t + HW.kick.time });
+                kicked++;
+            }
+            kicks = kicks.filter((k) => k.until > t);
+            S.stepSim(sim, 1 / 30, kicks.map((k) => k.jet));
+        }
+        for (let k = 0; k < 60; k++) S.stepSim(sim, 1 / 30, null);
+        const back = ids.filter((i) => sim.pz[i] < C.yard.lawn.maxZ).length;
+        expect(kicked).toBeGreaterThan(10);
+        expect(back / ids.length).toBeGreaterThan(0.25);
+        // Into the yard, not across it.
+        for (const i of ids) expect(sim.pz[i]).toBeGreaterThan(C.yard.lawn.maxZ - 4);
+    });
+
+    test('a clear sidewalk is never kicked: there is nothing near their feet', () => {
+        const sim = S.createSim(3000, C);
+        S.scatterLeaves(sim, C);
+        for (let x = -12; x < 12; x += 0.5) expect(S.restingNear(sim, x, HW.groups[0].z, HW.kick.radius)).toBe(0);
+    });
+});
+
 describe('blown at by the leaf blower', () => {
     const B = C.blower;
     /** The blower's air, as main.js gives it them. */
@@ -295,7 +362,8 @@ describe('blown at by the leaf blower', () => {
             H.stepTreaters(tr, 1 / 30, input, HW);
             if (states[states.length - 1] !== tr.state) states.push(tr.state);
         }
-        expect(states).toEqual(['blown']);
+        // One stagger, then off they run: never back and forth.
+        expect(states).toEqual(['blown', 'walk']);
         // How hard they are blown eases: no frame jumps it by much.
         const eased = walking(4);
         const strong = { ...input, wind: () => ({ x: 1, z: 0, speed: 20 }) };
@@ -307,6 +375,24 @@ describe('blown at by the leaf blower', () => {
             last = eased.blown;
         }
         expect(jump).toBeLessThan(0.25);
+    });
+
+    // Steve's M6 QA: "The trick-or-treaters turn away when they're blown, but
+    // they don't run away until I stop blowing."
+    test('kept blowing at, they stagger a moment and then run off anyway, and keep running', () => {
+        const tr = walking(4, -1);
+        const input = { active: true, person: null, walkX: -40, random: S.makeRandom(2), wind: () => ({ x: 1, z: 0, speed: 8 }) };
+        const states = [];
+        for (let t = 0; t < 3; t += 1 / 30) {
+            H.stepTreaters(tr, 1 / 30, input, HW);
+            if (states[states.length - 1] !== tr.state) states.push(tr.state);
+        }
+        // Still in the air, and running: the way it blows, at a run.
+        expect(states).toEqual(['blown', 'walk']);
+        expect(tr.hurrying).toBe(true);
+        expect(tr.dir).toBe(1);
+        expect(tr.speed).toBeCloseTo(HW.speed * HW.hurry, 5);
+        expect(HW.speed * HW.hurry).toBeGreaterThan(2.5);
     });
 
     test('the air of a blower aimed elsewhere, or too far off, does not bother them', () => {
@@ -674,6 +760,39 @@ describe('the drawing, on the real three.js', () => {
         let worst = 0;
         for (let t = 0; t < cycle * 2; t += 1 / 60) worst = Math.max(worst, Math.abs(Dc.clownPeek(t + 1 / 60, P) - Dc.clownPeek(t, P)));
         expect(worst).toBeLessThan(0.03);
+    });
+
+    // Steve's M6 QA: the cape was "floating far away from his body".
+    test('the vampire\'s cape hangs from his shoulders, blown or not', () => {
+        const figs = H.createTreaterFigures(HW, HW.groups[1].kinds);
+        const tr = { ...H.createTreaters(HW, S.makeRandom(1), HW.groups[1]), state: 'walk', x: 0, heading: 0, blown: 0 };
+        const vampire = figs.group.children[1];
+        const cape = vampire.userData.cape;
+        for (const blown of [0, 1]) {
+            figs.update({ ...tr, blown }, 0.3);
+            vampire.updateMatrixWorld(true);
+            const c = new THREE.Box3().setFromObject(cape, true);
+            const body = new THREE.Box3();
+            vampire.children[0].traverse((o) => { if (o.isMesh && !cape.getObjectById(o.id)) body.expandByObject(o, true); });
+            // Touching his back at the top, wherever its hem goes.
+            expect(c.max.z).toBeGreaterThan(body.min.z - 0.03);
+            expect(c.max.y).toBeGreaterThan(body.max.y - 0.25);
+        }
+    });
+
+    // Steve's M6 QA: the clown was "too bright and takes away from the
+    // Halloween aesthetic".
+    test('the clown is in shadow: a dark room and dark colors, his face the palest thing and still dim', () => {
+        const P = HW.decor.clown;
+        const lum = (c) => {
+            const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+            return 0.2126 * lin((c >> 16) & 255) + 0.7152 * lin((c >> 8) & 255) + 0.0722 * lin(c & 255);
+        };
+        expect(lum(P.room)).toBeLessThan(0.01);
+        expect(lum(P.roomLight)).toBeLessThan(0.05);
+        for (const k of ['nose', 'hair', 'suit', 'dots', 'hat']) expect(lum(P[k])).toBeLessThan(0.1);
+        expect(lum(P.face)).toBeLessThan(0.5);
+        expect(P.shade).toBeGreaterThan(0.3);
     });
 });
 

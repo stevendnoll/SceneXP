@@ -79,8 +79,22 @@ export function createTreaters(H, random, group = H.groups[0]) {
         // Blown: how hard (0 to 1, eased), which way (eased), how far off the
         // sidewalk's middle it has pushed them, whether they are hurrying
         // off, and whether this walk has been blown yet (for the event).
-        blown: 0, gust: { x: 0, z: 0 }, dz: 0, hurrying: false, blownThisWalk: false
+        blown: 0, gust: { x: 0, z: 0 }, dz: 0, hurrying: false, blownThisWalk: false,
+        // Footfalls that kick: which of them put a foot down this step (by
+        // index), and how far each had walked at its last one (staggered, so
+        // they do not all kick at once).
+        steps: [],
+        lastKick: group.lanes.map((_, k) => (k / group.lanes.length) * ((H.kick && H.kick.every) || 0.7))
     };
+}
+
+/** Where each one's kicking foot came down this step: { k, x, z, dir }, a
+ *  little ahead of them along the way they walk. */
+export function footfalls(tr, H) {
+    if (!tr.steps.length) return [];
+    const spots = treaterSpots(tr);
+    const ahead = (H.kick && H.kick.ahead) || 0.18;
+    return tr.steps.map((k) => ({ k, x: spots[k].x + tr.dir * ahead, z: spots[k].z, dir: tr.dir }));
 }
 
 const wrap = (a) => a - Math.PI * 2 * Math.floor((a + Math.PI) / (Math.PI * 2));
@@ -131,7 +145,7 @@ function turnAround(tr, dir) {
  *   wind     (x, y, z) => { x, z, speed }: the blowers' air there (optional)
  *   busy     (optional) somewhere else needs them to wait their turn
  * Returns 'start', 'pause', 'blown' (the first time a walk is), 'gone' or
- * null.
+ * null. Who put a foot down this step is in `tr.steps` (see footfalls()).
  *
  * EVERYTHING EASES (Steve's M6 QA: the blown animation was "glitchy"). They
  * turn at `turnRate`, the wind's direction and how hard they are blown ease
@@ -142,19 +156,28 @@ function turnAround(tr, dir) {
 export function stepTreaters(tr, dt, input, H) {
     const step = dt > 0 && input.active ? dt : 0;
     tr.t += step;
+    tr.steps = [];
     const ease = (from, to, rate) => from + (to - from) * Math.min(1, rate * step);
-    // BLOWN AT, walking or paused: they stagger with the air, backs to it.
+    // BLOWN AT, walking or paused: they stagger with the air, backs to it,
+    // for `blownTime`, and then they run, whether the air keeps coming or
+    // not (Steve's M6 QA: "they don't run away until I stop blowing"). More
+    // air during the stagger steers it but does not start it over, and once
+    // they are running they keep running.
     let event = null;
     if (tr.state !== 'wait' && step > 0) {
         const w = windAt(tr, input, H);
-        const enough = tr.state === 'blown' ? H.blownAir * H.keepAir : H.blownAir;
-        if (w && w.speed >= enough) {
+        const aim = (keep) => {
             const len = Math.hypot(w.x, w.z) || 1;
-            const gx = tr.state === 'blown' ? ease(tr.gust.x, w.x / len, 4) : w.x / len;
-            const gz = tr.state === 'blown' ? ease(tr.gust.z, w.z / len, 4) : w.z / len;
+            const gx = keep ? ease(tr.gust.x, w.x / len, 4) : w.x / len;
+            const gz = keep ? ease(tr.gust.z, w.z / len, 4) : w.z / len;
             const g = Math.hypot(gx, gz) || 1;
             tr.gust = { x: gx / g, z: gz / g };
             tr.blownTarget = Math.min(1, w.speed / H.blownFull);
+        };
+        if (tr.state === 'blown') {
+            if (w && w.speed >= H.blownAir * H.keepAir) aim(true);
+        } else if (!tr.hurrying && w && w.speed >= H.blownAir) {
+            aim(false);
             tr.state = 'blown';
             tr.t = 0;
             if (!tr.blownThisWalk) event = 'blown';
@@ -211,6 +234,15 @@ export function stepTreaters(tr, dt, input, H) {
     tr.x += tr.dir * pace * step;
     tr.speed = step > 0 ? pace : 0;
     tr.stride += pace * step;
+    // A foot down every `kick.every` meters each.
+    if (H.kick) {
+        tr.lastKick.forEach((last, k) => {
+            if (tr.stride - last >= H.kick.every) {
+                tr.lastKick[k] = tr.stride;
+                tr.steps.push(k);
+            }
+        });
+    }
     // Back toward the middle of the sidewalk as they go.
     tr.dz *= Math.max(0, 1 - step * 0.8);
     if (!tr.paused && (before - input.walkX) * (tr.x - input.walkX) <= 0 && step > 0) {
@@ -424,11 +456,15 @@ function pumpkinKid(scale) {
  *  collar up behind the head. */
 function vampireKid(scale) {
     const kid = rigged('vampire', scale, { shirtColor: 0x1c1d1f, pantsColor: 0x1c1d1f, hasSuit: true, tieColor: 0xb3261e, skinTone: 0xf0d2b6, hairColor: 0x16161a });
+    // Hung from his shoulders at the neck, so it swings from there: hung from
+    // his feet, a lean of the cape in the wind swung all of it away from him
+    // (Steve's M6 QA: "floating far away from his body").
     const cape = new THREE.Group();
-    cape.add(mesh(new THREE.BoxGeometry(0.62, 1.0, 0.02), lambert(0x16161a), 0, 1.0, -0.16));
-    cape.add(mesh(new THREE.BoxGeometry(0.56, 0.94, 0.01), lambert(0x8e1b1b), 0, 1.02, -0.145));
+    cape.position.set(0, 1.5, -0.13);
+    cape.add(mesh(new THREE.BoxGeometry(0.62, 1.0, 0.02), lambert(0x16161a), 0, -0.5, -0.02));
+    cape.add(mesh(new THREE.BoxGeometry(0.56, 0.94, 0.01), lambert(0x8e1b1b), 0, -0.48, -0.005));
     for (const s of [-1, 1]) {
-        const collar = mesh(new THREE.BoxGeometry(0.2, 0.22, 0.02), lambert(0x16161a), s * 0.13, 1.6, -0.12);
+        const collar = mesh(new THREE.BoxGeometry(0.2, 0.22, 0.02), lambert(0x16161a), s * 0.13, 0.1, 0.01);
         collar.rotation.set(-0.3, s * 0.5, 0);
         cape.add(collar);
     }
@@ -490,9 +526,9 @@ export function createTreaterFigures(H, kinds = H.groups[0].kinds) {
                 const flap = 1 + 0.12 * b * (0.7 + 0.3 * Math.sin(time * 9 + k));
                 sheet.scale.set(flap, 1 - 0.05 * b, flap);
             }
-            // A cape streams out behind.
+            // A cape streams out behind, from the neck.
             const cape = kid.group.userData.cape;
-            if (cape) cape.rotation.x = -0.6 * b * (0.85 + 0.15 * Math.sin(time * 8));
+            if (cape) cape.rotation.x = 0.6 * b * (0.85 + 0.15 * Math.sin(time * 8));
             if (kid.arms) {
                 kid.arms.forEach((a, i) => {
                     const rest = kid.armRest[i];

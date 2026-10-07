@@ -125,7 +125,7 @@ export function clownPeek(time, P) {
  *  of mullions (tests/leaves-halloween). */
 export const WINDOW_FACES = Object.freeze({
     watcher: { cx: 33, cy: 50, box: [12, 19, 54, 72], w: 128, h: 176, pane: [0.96, 1.36] },
-    clown: { cx: 104, cy: 48, box: [68, 6, 128, 72], w: 128, h: 172, pane: [1.16, 1.56] }
+    clown: { cx: 104, cy: 48, box: [68, 6, 128, 76], w: 128, h: 172, pane: [1.16, 1.56] }
 });
 
 /** Whether the figure in the window is there at `time`: `seen` seconds of
@@ -821,28 +821,60 @@ function clownTexture(P) {
     ctx.closePath();
     ctx.fill();
     disc(cx + 3, cy - 39, 3.5, P.dots);
-    // Eyes under arched brows, the nose, the grin with its teeth.
-    ctx.fillStyle = '#16161a';
+    // Hollow eyes with a pale pinprick in each, sharp brows, red streaks
+    // run down from them, a dark nose, and a wide grin full of points.
     for (const s of [-1, 1]) {
+        ctx.fillStyle = hex(P.socket);
         ctx.beginPath();
-        ctx.moveTo(cx + s * 8, cy - 11);
-        ctx.lineTo(cx + s * 12, cy - 5);
-        ctx.lineTo(cx + s * 8, cy + 1);
-        ctx.lineTo(cx + s * 4, cy - 5);
+        ctx.ellipse(cx + s * 8, cy - 5, 5.5, 7, s * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+        disc(cx + s * 8, cy - 4, 1.4, P.pupil);
+        ctx.strokeStyle = hex(P.socket);
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(cx + s * 2, cy - 11);
+        ctx.lineTo(cx + s * 15, cy - 17);
+        ctx.stroke();
+        ctx.strokeStyle = hex(P.nose);
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(cx + s * 8, cy + 2);
+        ctx.lineTo(cx + s * 9, cy + 13);
+        ctx.stroke();
+    }
+    disc(cx, cy + 3, 4.5, P.nose);
+    ctx.fillStyle = hex(P.socket);
+    ctx.beginPath();
+    ctx.moveTo(cx - 17, cy + 6);
+    ctx.quadraticCurveTo(cx, cy + 27, cx + 17, cy + 6);
+    ctx.quadraticCurveTo(cx, cy + 15, cx - 17, cy + 6);
+    ctx.fill();
+    ctx.strokeStyle = hex(P.nose);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Pointed teeth along the top of the grin.
+    ctx.fillStyle = hex(P.pupil);
+    for (let k = -3; k <= 3; k++) {
+        const x = cx + k * 4.2;
+        const y = cy + 11.5 + Math.abs(k) * -0.9;
+        ctx.beginPath();
+        ctx.moveTo(x - 1.8, y);
+        ctx.lineTo(x + 1.8, y);
+        ctx.lineTo(x, y + 3.6);
         ctx.closePath();
         ctx.fill();
     }
-    disc(cx, cy + 3, 5, P.nose);
-    ctx.fillStyle = hex(P.nose);
-    ctx.beginPath();
-    ctx.moveTo(cx - 14, cy + 9);
-    ctx.quadraticCurveTo(cx, cy + 24, cx + 14, cy + 9);
-    ctx.quadraticCurveTo(cx, cy + 15, cx - 14, cy + 9);
-    ctx.fill();
-    ctx.fillStyle = hex(P.face);
-    for (let k = -2; k <= 2; k++) ctx.fillRect(cx + k * 4 - 1.2, cy + 12 + Math.abs(k) * -0.6, 2.4, 3);
     // A white glove on the window frame.
     disc(124, cy + 30, 7, P.face);
+    // All of him in shadow, deepest at the bottom: only painted pixels are
+    // darkened, so what is clear stays clear.
+    ctx.globalCompositeOperation = 'source-atop';
+    const dusk = ctx.createLinearGradient(0, 0, 0, h);
+    dusk.addColorStop(0, `rgba(0, 0, 0, ${P.shade * 0.6})`);
+    dusk.addColorStop(1, `rgba(0, 0, 0, ${Math.min(0.9, P.shade * 1.6)})`);
+    ctx.fillStyle = dusk;
+    ctx.fillRect(0, 0, 128, h);
+    ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, 2, h);
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;

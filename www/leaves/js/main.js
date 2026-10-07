@@ -48,15 +48,16 @@
 
 import { LEAVES_CONFIG } from './config.min.js';
 import {
-    createSim, resetSim, scatterLeaves, stepSim, makeJet, airAt, pilePeak, burst, solidBoxes, makeRandom
+    createSim, resetSim, scatterLeaves, stepSim, makeJet, airAt, pilePeak, burst, solidBoxes, makeRandom, restingNear
 } from './sim.min.js';
 import { buildTrees, updateTrees, createCrowns, stepCrowns } from './trees.min.js';
 import { planFinale, finaleAt } from './finale.min.js';
 import { createRound, resetRound, freePlay, canBlow, timeLeft, stepRound } from './round.min.js';
 import { findsFor, placeFinds, stepFinds, buildFindModels } from './finds.min.js';
-import { seasonFor, carvePumpkins, createTreaters, stepTreaters, createTreaterFigures } from './halloween.min.js';
+import { seasonFor, carvePumpkins, createTreaters, stepTreaters, createTreaterFigures, footfalls } from './halloween.min.js';
 import { buildDecorations, decoratedConfig } from './decorations.min.js';
 import { buildBackyard } from './backyard.min.js';
+import { buildGap } from './gap.min.js';
 import { createSound } from './sound.min.js';
 import { createNeighbor, resetNeighbor, stepNeighbor, isOut, neighborBlower } from './neighbor.min.js';
 import {
@@ -164,8 +165,13 @@ let found = [];
 let findRounds = 0;
 let decorations = null;
 let backyard = null;
-// Each group of trick-or-treaters: { tr, figs } (halloween.js).
+// The sky's picture, its clouds drifting (M6).
+let skyMap = null;
+// Each group of trick-or-treaters: { tr, figs } (halloween.js), and the
+// kicks their feet are giving the leaves on the sidewalk: { jet, until }.
 let treaterGroups = [];
+let kicks = [];
+let kickBlower = null;
 const treatRandom = makeRandom(4049);
 const sound = createSound(CONFIG.sound);
 let soundBtn = null;
@@ -283,9 +289,12 @@ async function init() {
 
     const yard = buildYard(scene, CONFIG, { shadows: state.shadows, mobile: state.isMobile });
     neighborDoor = yard.neighborDoor;
-    // The side yard behind our hedge (M6).
+    skyMap = yard.sky;
+    fitSky();
+    // The side yard behind our hedge, and between the houses (M6).
     backyard = buildBackyard(CONFIG);
     scene.add(backyard.group);
+    scene.add(buildGap(CONFIG));
     if (state.decor) {
         decorations = buildDecorations(CONFIG);
         scene.add(decorations.group);
@@ -421,6 +430,14 @@ function placeCamera(snap) {
     camera.lookAt(view.target.x, view.target.y, view.target.z);
 }
 
+/** How much of the sky's picture a screen's width shows: half of it on a
+ *  screen twice as wide as tall, so a cloud keeps its shape on any screen
+ *  (the picture is twice as wide as tall). */
+function fitSky() {
+    if (!skyMap || !skyMap.repeat) return;
+    skyMap.repeat.x = (window.innerWidth / window.innerHeight) / 2;
+}
+
 /** Ease the camera toward where it wants to be this frame. */
 function followCamera(dt) {
     const aspect = window.innerWidth / window.innerHeight;
@@ -453,6 +470,7 @@ function setupEventListeners() {
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
         placeCamera(true);
+        fitSky();
         if (castShown()) frameCast();
     }, { signal });
 
@@ -1439,10 +1457,24 @@ function stepTheTreaters(dt, jets) {
             wind: (x, y, z) => windAt(jets, x, y, z)
         }, CONFIG.halloween);
         if (event === 'start') announceOnce('treaters', 'Trick-or-treaters are coming along the sidewalk.');
+        kickLeaves(g.tr);
         if (event === 'blown') {
             announceOnce('treaters-blown', 'The trick-or-treaters squeal, hold onto their costumes, and hurry off down the sidewalk.');
             track('treaters', { outcome: 'blown' });
         }
+    }
+}
+
+/** Where a foot came down by leaves lying on the sidewalk, a short flick of
+ *  air sends them back toward the yard, a little forward (M6). */
+function kickLeaves(tr) {
+    const K = CONFIG.halloween.kick;
+    if (!K) return;
+    if (!kickBlower) kickBlower = { ...B, ...K.air };
+    for (const f of footfalls(tr, CONFIG.halloween)) {
+        if (!restingNear(sim, f.x, f.z, K.radius)) continue;
+        const len = Math.hypot(K.forward, 1);
+        kicks.push({ jet: makeJet(kickBlower, f.x, f.z, (f.dir * K.forward) / len, -1 / len, true), until: state.time + K.time });
     }
 }
 
@@ -1527,7 +1559,8 @@ function animate() {
     });
 
     const t0 = performance.now();
-    stepSim(sim, dt, [jet, his]);
+    if (kicks.length) kicks = kicks.filter((k) => k.until > state.time);
+    stepSim(sim, dt, kicks.length ? [jet, his, ...kicks.map((k) => k.jet)] : [jet, his]);
     const uploaded = leaves.update();
     lab.simMs += performance.now() - t0;
     lab.uploaded += uploaded;
@@ -1538,6 +1571,8 @@ function animate() {
     if (neighborDoor) neighborDoor.rotation.y = -1.7 * neighbor.door;
     if (decorations) decorations.update(state.time, state.reducedMotion ? 0.3 : 1);
     if (backyard) backyard.update(state.time, state.reducedMotion ? 0.3 : 1);
+    // The clouds drift (held still under reduced motion).
+    if (skyMap && skyMap.offset && !state.reducedMotion) skyMap.offset.x = (state.time * CONFIG.look.clouds.drift) % 1;
     treaterGroups.forEach((g) => g.figs.update(g.tr, state.time));
     const marked = free && steer === 'point' && Boolean(pointer.aim);
     marker.visible = marked;

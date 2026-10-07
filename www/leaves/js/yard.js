@@ -71,28 +71,65 @@ function ground(r, color, y, map) {
     return mesh;
 }
 
-/** The sky (M5): a tall strip, deeper blue at the top of the view and
- *  paling to a warm haze by a little under halfway down, which three
- *  stretches over the background. The camera looks down from the street,
- *  so the sky it shows is only the band over the roofs, at the top of the
- *  view: a dome in the world would show one color there, so the fade is
- *  the screen's. */
-function skyTexture(sky) {
+/** The sky (M5): deeper blue at the top of the view and paling to a warm
+ *  haze by a little under halfway down, stretched over the background. The
+ *  camera looks down from the street, so the sky it shows is only the band
+ *  over the roofs, at the top of the view: a dome in the world would show
+ *  one color there, so the fade is the screen's.
+ *
+ *  WITH CLOUDS (M6, Steve's QA: "Could we add some clouds to the sky?"):
+ *  soft heaps of white in the blue, thinning toward the haze, drawn twice
+ *  across the seam so the picture repeats sideways and can drift
+ *  (main.js slides it, and sets how much of it a screen's width shows, so
+ *  a cloud keeps its shape on any screen). */
+function skyTexture(sky, clouds) {
     if (typeof document === 'undefined' || !sky) return null;
+    const W = 512;
+    const H = 256;
     const canvas = document.createElement('canvas');
-    canvas.width = 2;
-    canvas.height = 256;
+    canvas.width = W;
+    canvas.height = H;
     const ctx = canvas.getContext && canvas.getContext('2d');
     if (!ctx) return null;
     const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
-    const fade = ctx.createLinearGradient(0, 0, 0, 256);
+    const fade = ctx.createLinearGradient(0, 0, 0, H);
     fade.addColorStop(0, hex(sky.top));
     fade.addColorStop(0.45, hex(sky.horizon));
     fade.addColorStop(1, hex(sky.horizon));
     ctx.fillStyle = fade;
-    ctx.fillRect(0, 0, 2, 256);
+    ctx.fillRect(0, 0, W, H);
+    if (clouds) {
+        let seed = clouds.seed;
+        const random = () => {
+            seed = (seed * 16807) % 2147483647;
+            return seed / 2147483647;
+        };
+        for (let c = 0; c < clouds.count; c++) {
+            const x0 = random() * W;
+            const y0 = clouds.top + random() * (clouds.bottom - clouds.top);
+            const size = clouds.size[0] + random() * (clouds.size[1] - clouds.size[0]);
+            // Paler and thinner the lower it is, into the haze.
+            const alpha = clouds.alpha * (1 - 0.6 * (y0 - clouds.top) / (clouds.bottom - clouds.top));
+            const puffs = 6 + Math.floor(random() * 5);
+            for (let k = 0; k < puffs; k++) {
+                const px = x0 + (random() - 0.5) * size * 2.6;
+                // A flat underside, heaped on top.
+                const py = y0 - random() * size * 0.7;
+                const r = size * (0.45 + random() * 0.55);
+                for (const dx of [-W, 0, W]) {
+                    const puff = ctx.createRadialGradient(px + dx, py, 0, px + dx, py, r);
+                    puff.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
+                    puff.addColorStop(0.6, `rgba(255, 255, 255, ${alpha * 0.55})`);
+                    puff.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                    ctx.fillStyle = puff;
+                    ctx.fillRect(px + dx - r, py - r, r * 2, r * 2);
+                }
+            }
+        }
+    }
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
     return texture;
 }
 
@@ -200,8 +237,9 @@ function sidewalkJoints(Y, look, every = 1.6) {
 }
 
 /**
- * Build the yard into `scene`. Returns { sun, neighborDoor }: the sun for
- * its shadows, and the hinge of the neighbor's door for main.js to swing.
+ * Build the yard into `scene`. Returns { sun, neighborDoor, sky }: the sun
+ * for its shadows, the hinge of the neighbor's door for main.js to swing,
+ * and the sky's picture (or null), for its clouds to drift.
  */
 export function buildYard(scene, config, { shadows = true, mobile = false } = {}) {
     const Y = config.yard;
@@ -224,7 +262,7 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     const neighborDoor = buildNeighborDoor(scene, config);
     scene.add(buildStreet(Y, look));
     for (const h of Y.street || []) scene.add(buildStreetHouse(h, look, Y));
-    const sky = skyTexture(look.sky);
+    const sky = skyTexture(look.sky, look.clouds);
     if (sky) scene.background = sky;
     // The gap between the two houses is a side fence, set back with them so
     // it stands behind the leaves resting against the sim's wall there.
@@ -282,5 +320,5 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     }
     scene.add(sun);
     scene.add(new THREE.HemisphereLight(L.sky.color, L.sky.ground, L.sky.intensity));
-    return { sun, neighborDoor };
+    return { sun, neighborDoor, sky };
 }

@@ -96,3 +96,38 @@ test('the hedge runs back along the property line past the houses, and the side 
     expect(F.z).toBeGreaterThan(hedge.min.z);
     expect(Math.abs(F.to - hedge.min.x)).toBeLessThan(0.05);
 });
+
+// Steve's M6 QA: "Could we add more environment details to the area between
+// the main house and the neighbor's house?"
+describe('between the houses', () => {
+    test('behind the sim\'s wall, inside the gap, and seen over the gate from the street', async () => {
+        const Gp = await import('../www/leaves/js/gap.js');
+        const group = Gp.buildGap(C);
+        group.updateMatrixWorld(true);
+        const left = Y.house.maxX;
+        const right = Y.neighborHouse.minX;
+        let pieces = 0;
+        const all = new THREE.Box3();
+        group.traverse((o) => {
+            if (!o.isMesh && !o.isLine) return;
+            const box = new THREE.Box3().setFromObject(o, true);
+            pieces++;
+            all.union(box);
+            expect(box.max.z).toBeLessThan(Y.bounds.minZ);
+            expect(box.min.x).toBeGreaterThan(left - 0.05);
+            expect(box.max.x).toBeLessThan(right + 0.05);
+        });
+        expect(pieces).toBeGreaterThan(15);
+        // Its top shows over the gate in the view a visitor starts with.
+        const aspect = 1.6;
+        const view = V.cameraFor(aspect, C.camera, Y.lawn, C.blower.start);
+        const camera = new THREE.PerspectiveCamera(C.camera.fovDegrees, aspect, C.camera.near, C.camera.far);
+        camera.position.set(view.position.x, view.position.y, view.position.z);
+        camera.lookAt(view.target.x, view.target.y, view.target.z);
+        camera.updateMatrixWorld(true);
+        const top = new THREE.Vector3((left + right) / 2, all.max.y, all.max.z).project(camera);
+        expect(Math.abs(top.x)).toBeLessThan(1);
+        expect(Math.abs(top.y)).toBeLessThan(1);
+        expect(all.max.y).toBeGreaterThan(2.5);
+    });
+});

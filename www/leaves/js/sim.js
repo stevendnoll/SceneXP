@@ -1219,6 +1219,29 @@ export function hangLeaf(sim, i, x, y, z, random = sim.random) {
     return true;
 }
 
+/** How many leaves are lying still within `r` of (x, z): a look through
+ *  the buckets there, changing nothing (M6: a trick-or-treater only kicks
+ *  where there are leaves to kick). */
+export function restingNear(sim, x, z, r) {
+    const b = sim.bounds;
+    const q = sim.K.bucket;
+    const x0 = clamp(Math.floor((x - r - b.minX) / q), 0, sim.bnx - 1);
+    const x1 = clamp(Math.floor((x + r - b.minX) / q), 0, sim.bnx - 1);
+    const z0 = clamp(Math.floor((z - r - b.minZ) / q), 0, sim.bnz - 1);
+    const z1 = clamp(Math.floor((z + r - b.minZ) / q), 0, sim.bnz - 1);
+    let n = 0;
+    for (let bz = z0; bz <= z1; bz++) {
+        for (let bx = x0; bx <= x1; bx++) {
+            for (let i = sim.head[bz * sim.bnx + bx]; i !== -1; i = sim.next[i]) {
+                const dx = sim.px[i] - x;
+                const dz = sim.pz[i] - z;
+                if (dx * dx + dz * dz < r * r) n++;
+            }
+        }
+    }
+    return n;
+}
+
 /** How many leaves lie inside a rectangle, asleep or awake. */
 export function countIn(sim, r) {
     let n = 0;
