@@ -6,7 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
-         No media-src: this scene plays no sound. -->
+         No media-src: the only sound is the blower's whoosh, made with Web Audio
+         from noise (js/sound.js), which loads no media at all. -->
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -93,7 +94,7 @@
     <title>Leaves | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=5" as="style">
+    <link rel="preload" href="css/experience.min.css?v=6" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -102,6 +103,10 @@
     <link rel="modulepreload" href="js/trees.min.js">
     <link rel="modulepreload" href="js/finale.min.js">
     <link rel="modulepreload" href="js/round.min.js">
+    <link rel="modulepreload" href="js/finds.min.js">
+    <link rel="modulepreload" href="js/critters.min.js">
+    <link rel="modulepreload" href="js/halloween.min.js">
+    <link rel="modulepreload" href="js/sound.min.js">
     <link rel="modulepreload" href="js/neighbor.min.js">
     <link rel="modulepreload" href="js/score.min.js">
     <link rel="modulepreload" href="js/leafmesh.min.js">
@@ -117,14 +122,14 @@
     <link rel="modulepreload" href="../shared/js/promo-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/treespecies-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/fractaltree-1.0.0.min.js">
-    <link rel="modulepreload" href="js/house.min.js">
     <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
+    <link rel="modulepreload" href="js/house.min.js">
     <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=5">
+    <link rel="stylesheet" href="css/experience.min.css?v=6">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -183,6 +188,7 @@
             <div class="controls-hint">
                 <span>WALK</span> Point at the lawn with the mouse, or drag a finger across it, and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too.
                 <span>BLOW</span> Hold the mouse button or Space. On a touch screen, hold the blow button in the corner.
+                <span>SOUND</span> The leaf blower is quiet until you press M or the speaker in the corner.
                 <span>HELP</span> The question mark in the corner, or Escape, brings you back here.
             </div>
             <!-- Who is on leaf duty (M4): the line names the character, and
@@ -210,6 +216,20 @@
             <path d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" stroke-linecap="round"
                 stroke-linejoin="round" fill="none" />
             <circle cx="12.1" cy="17.4" r="1.05" stroke="none" fill="currentColor" />
+        </svg>
+    </button>
+
+    <!-- The sound (M6): the blower's whoosh, off on every visit until the
+         visitor turns it on here or with M. A toggle, so its name stays
+         "Sound" and aria-pressed says which. Top left, opposite the help
+         button, and hidden with it (.ui-float). -->
+    <button id="sound-btn" class="ui-float menu-btn sound-btn" type="button"
+        title="Sound off (M)"
+        aria-label="Sound" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" stroke-linejoin="round" />
+            <path class="sound-waves" d="M15.5 9a4 4 0 0 1 0 6M18.2 6.6a7.4 7.4 0 0 1 0 10.8" />
+            <path class="sound-off" d="M16 9.5l5 5M21 9.5l-5 5" />
         </svg>
     </button>
 
@@ -241,6 +261,9 @@
         <button id="hud-new" class="hud-btn" type="button" hidden>New round</button>
     </div>
     <p id="round-status" class="sr-only" role="status" aria-live="polite"></p>
+    <!-- What a visitor just found under the leaves (M6), under the HUD for a
+         few seconds. A screen reader hears it through #round-status. -->
+    <p id="find-toast" class="find-toast" aria-hidden="true"></p>
 
     <!-- The character card (M4), opened from the welcome card. It sits
          beside the yard (a sheet along the bottom on a phone) rather than over
@@ -288,6 +311,9 @@
                 <!-- How the dive into the pile went (M3), empty when there
                      was none. -->
                 <p id="end-dive" class="end-dive"></p>
+                <!-- What turned up under the leaves (M6), empty when nothing
+                     did. -->
+                <p id="end-finds" class="end-dive end-finds"></p>
                 <dl class="end-stats">
                     <div class="end-stat">
                         <dt>On the tarp</dt>

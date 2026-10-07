@@ -145,10 +145,25 @@ export function diveLine(landed) {
         : 'You dove for the pile and found the lawn. Your back would like a word.';
 }
 
+/** "a", "a and b", "a, b, and c". */
+export function listOf(names) {
+    const list = (names || []).filter(Boolean);
+    if (list.length <= 1) return list.join('');
+    if (list.length === 2) return `${list[0]} and ${list[1]}`;
+    return `${list.slice(0, -1).join(', ')}, and ${list[list.length - 1]}`;
+}
+
+/** The end card's line about what turned up under the leaves (M6), by
+ *  name, or nothing when nothing did. */
+export function findsLine(names) {
+    const list = listOf(names);
+    return list ? `Under the leaves you found ${list}.` : '';
+}
+
 /** The sentence a visitor posts. The neighbor makes the better story when
  *  there is one, and the pile on the tarp otherwise. Then the dive, landed
- *  or not (`landed` null for none). */
-export function shareText(t, seconds, landed = null) {
+ *  or not (`landed` null for none), and anything found under the leaves. */
+export function shareText(t, seconds, landed = null, found = []) {
     const head = `I cleared ${percent(clearedShare(t))}% of my yard in ${seconds} seconds.`;
     const sent = t.sent ?? t.neighbor;
     let tail = '';
@@ -156,14 +171,17 @@ export function shareText(t, seconds, landed = null) {
     else if (t.tarp > 0 && landed !== true) tail = ` ${leaves(t.tarp)} made it onto the tarp.`;
     if (landed === true) tail += ` I landed the dive into a pile of ${leaves(t.tarp)}.`;
     if (landed === false) tail += ' I threw my back out diving into the pile.';
+    const finds = listOf(found);
+    if (finds) tail += ` I found ${finds} under the leaves.`;
     return `${head}${tail} A leaf blower game on SceneXP.`;
 }
 
 /** The result in one sentence, for a screen reader. */
-export function resultSentence(t, landed = null) {
+export function resultSentence(t, landed = null, found = []) {
     const v = verdict(t);
     const dive = diveLine(landed);
+    const finds = findsLine(found);
     return `${v.title}. ${percent(clearedShare(t))} percent of the lawn cleared, with ${leaves(t.tarp)} on the tarp, `
         + `${leaves(t.street)} in the street, and ${leaves(t.sent ?? t.neighbor)} sent over the fence.`
-        + (dive ? ` ${dive}` : '');
+        + (dive ? ` ${dive}` : '') + (finds ? ` ${finds}` : '');
 }

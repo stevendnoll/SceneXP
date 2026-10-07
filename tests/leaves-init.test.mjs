@@ -234,7 +234,7 @@ test('the aim follows the keys or the pointer, whichever moved last', async () =
     expect(main.aimFor('point', { aim: null }, held)).toBe(null);
 });
 
-test('on a QA host the lab panel offers each leaf count and the shadows switch', async () => {
+test('on a QA host the lab panel offers each leaf count, the shadows switch, and the M6 switches', async () => {
     await boot();
     const panel = dom.el('lab-panel');
     // The panel is built by script, so find it among the body's children.
@@ -242,7 +242,9 @@ test('on a QA host the lab panel offers each leaf count and the shadows switch',
     expect(built).toBeTruthy();
     const row = built.children.find((c) => c.className === 'lab-buttons');
     const { LEAVES_CONFIG: C } = await import('../www/leaves/js/config.js');
-    expect(row.children).toHaveLength(C.leaves.labCounts.length + 1);
+    // The counts, shadows, Halloween week, the finds showing, and the cat.
+    expect(row.children).toHaveLength(C.leaves.labCounts.length + 4);
+    expect(row.children.map((b) => b.textContent).slice(-3)).toEqual(['Halloween off', 'Finds hidden', 'Cat now']);
     fire(row.children[2], 'click');
     expect(dom.windowStub.location.search).toBe(`?leaves=${C.leaves.labCounts[2]}`);
     expect(panel).toBeTruthy();
@@ -560,6 +562,178 @@ describe('the character card (M4)', () => {
         expect(main.getState().cast).toEqual({ preset: 'weekend', skin: 'fair', hair: 'darkBrown', length: 'short' });
         expect(option('cast-presets', 'weekend').checked).toBe(true);
         expect(dom.el('cast-status').textContent).toMatch(/forgotten/);
+    });
+});
+
+describe('delights and surprises (M6)', () => {
+    /** A recording AudioContext: just enough for sound.js to build on. */
+    function installAudio() {
+        const made = [];
+        const param = () => ({ value: 0, setTargetAtTime(v) { this.value = v; } });
+        const node = () => ({ connect: (t) => t, disconnect() {} });
+        dom.windowStub.AudioContext = class {
+            constructor() { made.push(this); this.currentTime = 0; this.sampleRate = 8000; this.destination = node(); }
+            createGain() { return { ...node(), gain: param() }; }
+            createBiquadFilter() { return { ...node(), frequency: param(), Q: param() }; }
+            createStereoPanner() { return { ...node(), pan: param() }; }
+            createBufferSource() { return { ...node(), start() {}, stop() {} }; }
+            createBuffer(c, frames) { const d = new Float32Array(frames); return { getChannelData: () => d }; }
+            resume() { return Promise.resolve(); }
+            suspend() { return Promise.resolve(); }
+            close() { return Promise.resolve(); }
+        };
+        return made;
+    }
+
+    test('the sound starts off, the speaker in the corner or M turns it on and off, and nothing is kept', async () => {
+        const made = installAudio();
+        const main = await boot();
+        const btn = dom.el('sound-btn');
+        expect(btn.classList.contains('visible')).toBe(false);
+        fire(dom.el('blocker'), 'click');
+        expect(btn.classList.contains('visible')).toBe(true);
+        expect(main.getState().sound).toBe(false);
+        expect(made).toHaveLength(0);
+        fire(btn, 'click');
+        expect(main.getState().sound).toBe(true);
+        expect(btn.getAttribute('aria-pressed')).toBe('true');
+        expect(btn.title).toBe('Sound on (M)');
+        expect(dom.el('round-status').textContent).toBe('Sound on.');
+        expect(made).toHaveLength(1);
+        // Blowing with the sound on runs without a hitch.
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        expect(() => frames(main, 0.5, 20)).not.toThrow();
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        fire(dom.documentStub, 'keydown', { code: 'KeyM' });
+        expect(main.getState().sound).toBe(false);
+        expect(btn.getAttribute('aria-pressed')).toBe('false');
+        // A browser shortcut with M in it is the browser's.
+        fire(dom.documentStub, 'keydown', { code: 'KeyM', metaKey: true });
+        expect(main.getState().sound).toBe(false);
+        // M works on the welcome card too, and still makes only one context.
+        fire(dom.documentStub, 'keydown', { code: 'Escape' });
+        fire(dom.documentStub, 'keydown', { code: 'KeyM' });
+        expect(main.getState().sound).toBe(true);
+        expect(made).toHaveLength(1);
+        // The only thing this scene keeps is the character.
+        expect(globalThis.localStorage.length || 0).toBe(0);
+    });
+
+    test('it is Halloween week from October 24 by the date, with trick-or-treaters on the sidewalk', async () => {
+        jest.setSystemTime(new Date(2026, 9, 28, 15));
+        const main = await boot();
+        const s = main.getState();
+        expect(s.halloween).toBe(true);
+        expect(s.treaters).not.toBe(null);
+        fire(dom.el('free-btn'), 'click');
+        frames(main, 30, 10);
+        expect(main.getState().treaters.walks).toBeGreaterThanOrEqual(1);
+        expect(dom.el('round-status').textContent.length).toBeGreaterThan(0);
+    });
+
+    test('and not on any other day, unless the lab asks for it', async () => {
+        jest.setSystemTime(new Date(2026, 9, 7, 15));
+        let main = await boot();
+        expect(main.getState().halloween).toBe(false);
+        expect(main.getState().treaters).toBe(null);
+        dom.uninstall();
+        jest.resetModules();
+        installThree();
+        dom = installDom({ innerWidth: 390, innerHeight: 844 });
+        dom.windowStub.location.search = '?leaves=600&halloween=1';
+        main = await boot();
+        expect(main.getState().halloween).toBe(true);
+    });
+
+    test('the lab\'s Cat now sends the cat into a pile, out it bursts, and off it goes', async () => {
+        const main = await boot();
+        fire(dom.el('free-btn'), 'click');
+        expect(main.__test__.catNow()).toBe(true);
+        let out = false;
+        for (let k = 0; k < 40 && !out; k++) {
+            frames(main, 0.1, 20);
+            out = main.getState().cat.visible;
+        }
+        expect(out).toBe(true);
+        expect(main.getState().cat.visits).toBe(1);
+        expect(dom.el('round-status').textContent).toMatch(/cat bursts out/);
+        frames(main, 15, 20);
+        expect(main.getState().cat.visible).toBe(false);
+        expect(main.getState().cat.state).toBe('away');
+    });
+
+    test('the squirrel comes along the fence on its own', async () => {
+        const main = await boot();
+        fire(dom.el('free-btn'), 'click');
+        frames(main, C0.squirrel.first[1] + 4, 10);
+        expect(main.getState().squirrel.visible).toBe(true);
+    });
+
+    describe('a find', () => {
+        // Enough leaves to bury the lawn, so the finds can be hidden.
+        beforeEach(() => { dom.windowStub.location.search = '?leaves=9000'; });
+
+        /** Move every resting leaf near (x, z) onto the tarp, as a blower
+         *  would, so the lawn there shows. */
+        async function clearAround(main, x, z, r) {
+            const Sim = await import('../www/leaves/js/sim.min.js');
+            const sim = main.__test__.sim();
+            for (let i = 0; i < sim.count; i++) {
+                if (sim.awake[i] || sim.hanging[i]) continue;
+                if (Math.hypot(sim.px[i] - x, sim.pz[i] - z) > r) continue;
+                Sim.hangLeaf(sim, i, 0, 5, 0);
+                Sim.layDown(sim, i, -9 + (i % 30) * 0.12, -5.5 + (i % 7) * 0.4);
+            }
+        }
+
+        test('is hidden under the leaves, found by clearing it, named on the end card and in the share', async () => {
+            const main = await boot();
+            const hidden = main.getState().finds;
+            expect(hidden.map((f) => f.id)).toEqual(['keys', 'gnome', 'ball', 'bill']);
+            expect(hidden.every((f) => !f.found)).toBe(true);
+            fire(dom.el('blocker'), 'click');
+            fire(dom.documentStub, 'keydown', { code: 'Space' });
+            frames(main, 0.2, 20);
+            fire(dom.documentStub, 'keyup', { code: 'Space' });
+            // A few seconds of play, and nothing turns up by itself.
+            frames(main, 2, 20);
+            expect(main.getState().found).toEqual([]);
+            const bill = hidden.find((f) => f.id === 'bill');
+            await clearAround(main, bill.x, bill.z, 0.5);
+            frames(main, 0.5, 20);
+            expect(main.getState().found).toEqual(['a $20 bill']);
+            expect(dom.el('find-toast').classList.contains('visible')).toBe(true);
+            expect(dom.el('find-toast').textContent).toMatch(/\$20 bill/);
+            expect(dom.el('round-status').textContent).toMatch(/You found a \$20 bill/);
+            expect(main.getState().finds.find((f) => f.id === 'bill').found).toBe(true);
+            // The line under the HUD goes after a few seconds.
+            frames(main, C0.finds.toastSeconds + 0.5, 20);
+            expect(dom.el('find-toast').classList.contains('visible')).toBe(false);
+            // Through the round to the end card.
+            for (let k = 0; k < 90 && !main.getState().endShown; k++) frames(main, 1, 20);
+            expect(dom.el('end-finds').textContent).toBe('Under the leaves you found a $20 bill.');
+            expect(main.getState().result.found).toEqual(['a $20 bill']);
+            fire(dom.el('end-share'), 'click');
+            await flushAsync();
+            expect(decodeURIComponent(dom.windowStub.location.href)).toMatch(/I found a \$20 bill under the leaves\./);
+            // Play again hides them all again, somewhere new, and forgets them.
+            const before = main.getState().finds.map((f) => [f.x, f.z]);
+            fire(dom.el('end-again'), 'click');
+            const after = main.getState();
+            expect(after.found).toEqual([]);
+            expect(after.finds.every((f) => !f.found)).toBe(true);
+            expect(after.finds.map((f) => [f.x, f.z])).not.toEqual(before);
+        });
+
+        test('the lab\'s ?finds=1 shows every one from the start, for a look at them', async () => {
+            dom.windowStub.location.search = '?leaves=9000&finds=1';
+            const main = await boot();
+            // (The models' visibility is measured on the real three.js in
+            // tests/leaves-finds; the stub absorbs the assignment.)
+            expect(main.getState().finds.map((f) => f.found)).toEqual([true, true, true, true]);
+            // Shown is not found: nothing is claimed on the end card.
+            expect(main.getState().found).toEqual([]);
+        });
     });
 });
 

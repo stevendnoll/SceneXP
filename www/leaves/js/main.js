@@ -35,18 +35,33 @@
  * yard.js), with a porch, pumpkins and a parked car leaves can land on
  * (platforms in sim.js), and the sky.
  *
+ * M6, DELIGHTS AND SURPRISES (2026-10-07): things lost under the leaves,
+ * found only by clearing the lawn over them (finds.js), a cat that bursts
+ * out of a pile and a squirrel on the fence (critters.js), Halloween week's
+ * jack-o-lanterns and trick-or-treaters (halloween.js), and the blower's
+ * whoosh, off until the visitor turns it on (sound.js).
+ *
  * UNLISTED. The page carries noindex and is in no directory, sitemap or
  * llms.txt until the scene it grows into is released.
  */
 
 import { LEAVES_CONFIG } from './config.min.js';
-import { createSim, resetSim, scatterLeaves, stepSim, makeJet, pilePeak, burst, solidBoxes } from './sim.min.js';
+import {
+    createSim, resetSim, scatterLeaves, stepSim, makeJet, airAt, pilePeak, burst, solidBoxes, cellIndex, makeRandom
+} from './sim.min.js';
 import { buildTrees, updateTrees, createCrowns, stepCrowns } from './trees.min.js';
 import { planFinale, finaleAt } from './finale.min.js';
 import { createRound, resetRound, freePlay, canBlow, timeLeft, stepRound } from './round.min.js';
+import { findsFor, placeFinds, stepFinds, buildFindModels } from './finds.min.js';
+import {
+    createCat, resetCat, stepCat, catPile, forceCat, createCatFigure,
+    createSquirrel, stepSquirrel, leavesNear, createSquirrelFigure
+} from './critters.min.js';
+import { halloweenFor, carvePumpkins, createTreaters, stepTreaters, createTreaterFigures } from './halloween.min.js';
+import { createSound } from './sound.min.js';
 import { createNeighbor, resetNeighbor, stepNeighbor, isOut, neighborBlower } from './neighbor.min.js';
 import {
-    tally, clearedShare, percent, clockText, verdict, resultRows, shareText, resultSentence, diveLine
+    tally, clearedShare, percent, clockText, verdict, resultRows, shareText, resultSentence, diveLine, findsLine
 } from './score.min.js';
 import { createLeafMesh } from './leafmesh.min.js';
 import { buildYard } from './yard.min.js';
@@ -81,6 +96,10 @@ const state = {
     count: 0,
     shadows: true,
     ratio: 1,
+    // Halloween week (M6), by the date or the lab's address, and the lab's
+    // every-find-showing.
+    halloween: false,
+    showFinds: false,
     lastTime: 0,
     time: 0,
     blows: 0
@@ -129,6 +148,31 @@ let sent = null;
 // the dive (the burst throws leaves off the tarp, and a dive should not
 // lower the score it celebrates).
 const finale = { plan: null, t: 0, burst: false, arms: 'carry', tally: null };
+// THE DELIGHTS (M6). The finds hidden this round, their models, and the
+// names of the ones found (for the end card), with the count of rounds so
+// each hides them somewhere new. The cat, the squirrel and Halloween's
+// trick-or-treaters, with their figures. The sound, and the find's name
+// under the HUD until `until`.
+let findList = [];
+let finds = [];
+let findModels = {};
+let found = [];
+let findRounds = 0;
+const cat = createCat();
+let catFigure = null;
+let catBlower = null;
+let squirrel = null;
+let squirrelFigure = null;
+let treaters = null;
+let treaterFigures = null;
+const critterRandom = makeRandom(4049);
+const sound = createSound(CONFIG.sound);
+let soundBtn = null;
+const toast = { el: null, until: 0 };
+// What has been said once this visit, so the live region is not flooded.
+const told = new Set();
+const airTmp = new Float32Array(3);
+
 // What the HUD last showed, so it is only written when it changes.
 const hudShown = { clock: '', cleared: '', phase: '' };
 
@@ -180,6 +224,8 @@ async function init() {
     blowBtn = document.getElementById('blow-btn');
     endModal = document.getElementById('end-modal');
     castModal = document.getElementById('cast-modal');
+    soundBtn = document.getElementById('sound-btn');
+    toast.el = document.getElementById('find-toast');
     if (!canvas || typeof THREE === 'undefined') return;
     // The markup starts it hidden. Said again here so the round never begins
     // believing a card is up.
@@ -198,6 +244,8 @@ async function init() {
     state.count = options.count;
     state.shadows = options.shadows;
     state.ratio = options.ratio;
+    state.showFinds = options.finds;
+    state.halloween = halloweenFor(window.location.search, new Date(), CONFIG.halloween, state.qa);
     setMobile(state.isMobile);
     applySiteLinks();
 
@@ -205,7 +253,7 @@ async function init() {
     const proof = await getProofOfWork(CONFIG.proofOfWork);
     setProofHash(proof && proof.hash);
 
-    updateLoadingStatus('Raking the yard…', 30);
+    updateLoadingStatus(state.halloween ? 'Carving the pumpkins…' : 'Raking the yard…', 30);
     renderer = new THREE.WebGLRenderer({ canvas, antialias: !state.isMobile, powerPreference: 'high-performance' });
     renderer.toneMapping = THREE.NeutralToneMapping || THREE.NoToneMapping;
     renderer.toneMappingExposure = CONFIG.lights.exposure;
@@ -228,6 +276,7 @@ async function init() {
 
     const yard = buildYard(scene, CONFIG, { shadows: state.shadows, mobile: state.isMobile });
     neighborDoor = yard.neighborDoor;
+    if (state.halloween) scene.add(carvePumpkins(CONFIG.yard.pumpkins, CONFIG.halloween));
 
     updateLoadingStatus(`Letting ${shortCount(state.count)} leaves fall…`, 55);
     sim = createSim(state.count, CONFIG);
@@ -243,6 +292,10 @@ async function init() {
     leaves.update();
     scene.add(leaves.mesh);
     sent = new Uint8Array(state.count);
+    findList = findsFor(CONFIG.finds, state.halloween);
+    findModels = buildFindModels(findList);
+    Object.values(findModels).forEach((m) => scene.add(m.group));
+    layFinds();
 
     operator = createOperator(B);
     figure = createOperatorFigure(B, CONFIG.look, { person: personConfig(castChoice) });
@@ -262,6 +315,19 @@ async function init() {
     scene.add(neighborFigure.group);
     marker = buildMarker();
     scene.add(marker);
+    // The cat, the squirrel, and in Halloween week the trick-or-treaters
+    // (M6), all out of sight to begin with.
+    catBlower = { ...B, ...CONFIG.cat.plough };
+    catFigure = createCatFigure(CONFIG.cat);
+    scene.add(catFigure.group);
+    squirrel = createSquirrel(CONFIG.squirrel, critterRandom);
+    squirrelFigure = createSquirrelFigure(CONFIG.squirrel);
+    scene.add(squirrelFigure.group);
+    if (state.halloween) {
+        treaters = createTreaters(CONFIG.halloween, critterRandom);
+        treaterFigures = createTreaterFigures(CONFIG.halloween);
+        scene.add(treaterFigures.group);
+    }
 
     placeCamera(true);
     setupEventListeners();
@@ -273,7 +339,7 @@ async function init() {
     // Compile the shaders behind the loading screen rather than on the first
     // visible frame, where the hitch would be the visitor's first impression.
     updateLoadingStatus('Warming up the blower…', 85);
-    await warmShaders(renderer, [{ scene, camera }]);
+    await warmUp();
 
     updateLoadingStatus('Ready', 100);
     setTimeout(() => {
@@ -288,6 +354,29 @@ async function init() {
     state.isRunning = true;
     state.lastTime = performance.now();
     renderer.setAnimationLoop(animate);
+}
+
+/** Compile the shaders behind the loading screen, the hidden things too:
+ *  the finds, the cat, the squirrel and the trick-or-treaters are shown
+ *  for the compile, under the lawn where nothing sees them, so the first
+ *  one to appear does not stall a frame building its programs. */
+async function warmUp() {
+    const hidden = [
+        ...Object.values(findModels).map((m) => m.group),
+        catFigure && catFigure.group,
+        squirrelFigure && squirrelFigure.group,
+        treaterFigures && treaterFigures.group
+    ].filter(Boolean);
+    const was = hidden.map((g) => ({ g, visible: g.visible, y: g.position.y }));
+    hidden.forEach((g) => {
+        g.visible = true;
+        g.position.y = -20;
+    });
+    await warmShaders(renderer, [{ scene, camera }]);
+    was.forEach(({ g, visible, y }) => {
+        g.visible = visible;
+        g.position.y = y;
+    });
 }
 
 function updateLoadingStatus(message, progress) {
@@ -362,7 +451,12 @@ function setupEventListeners() {
         document.addEventListener(type, (e) => e.preventDefault(), { passive: false, signal }));
 
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') endSession();
+        if (document.visibilityState === 'hidden') {
+            endSession();
+            sound.pause();
+        } else {
+            sound.resume();
+        }
     });
     window.addEventListener('pagehide', endSession);
 
@@ -384,6 +478,7 @@ function setupEventListeners() {
         }
     }
     if (helpBtn) helpBtn.addEventListener('click', () => returnToWelcome('help'), { signal });
+    if (soundBtn) soundBtn.addEventListener('click', () => toggleSound('button'), { signal });
     installCardFocusTrap({ signal });
     installCardScrollReset({ signal });
 
@@ -501,6 +596,12 @@ const WALK_KEYS = {
 };
 
 function onKeyDown(event) {
+    // M turns the sound on or off wherever the visitor is, unless they are
+    // typing, or holding a modifier (the browser's own shortcuts).
+    if (event.code === 'KeyM' && !event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey && !isTextEntry(event.target)) {
+        if (state.isLoaded) toggleSound('key');
+        return;
+    }
     // The character card keeps its keys too (its radio buttons take the
     // arrows), and Escape is Done.
     if (castShown()) {
@@ -598,6 +699,28 @@ export function aimFor(steerBy, ptr, held) {
     return null;
 }
 
+// ---- The sound (M6) -------------------------------------------------------
+
+/** The button or M: the whoosh on or off. Off on every visit to begin with,
+ *  and never remembered. */
+function toggleSound(how) {
+    const on = sound.toggle();
+    if (soundBtn) {
+        soundBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        soundBtn.title = on ? 'Sound on (M)' : 'Sound off (M)';
+    }
+    announce(on ? 'Sound on.' : 'Sound off.');
+    track('sound', { outcome: on ? 'on' : 'off', kind: how });
+    return on;
+}
+
+/** The neighbor's side of the view, -1 (left) to 1 (right), for his
+ *  blower's pan. */
+function panOf(x) {
+    const at = view.target ? view.target.x : 0;
+    return Math.max(-1, Math.min(1, (x - at) / 12));
+}
+
 // ---- The welcome screen ---------------------------------------------------
 
 function welcomeShown() {
@@ -610,6 +733,8 @@ function welcomeShown() {
 function setChromeVisible(on) {
     const shown = on && !welcomeShown() && !endShown() && !castShown();
     if (helpBtn) helpBtn.classList.toggle('visible', shown);
+    if (soundBtn) soundBtn.classList.toggle('visible', shown);
+    if (!shown) hideToast();
     if (blowBtn) blowBtn.classList.toggle('visible', shown && state.touch);
     const hud = document.getElementById('round-hud');
     if (hud) hud.classList.toggle('visible', shown);
@@ -828,7 +953,7 @@ function installRoundControls() {
         document.getElementById('end-share'),
         () => ({
             title: 'Leaves',
-            text: shareText(result ? result.tally : counted, CONFIG.round.seconds, result ? result.landed : null)
+            text: shareText(result ? result.tally : counted, CONFIG.round.seconds, result ? result.landed : null, result ? result.found : found)
         }),
         {
             status: document.getElementById('end-status'),
@@ -946,7 +1071,7 @@ function showEnd() {
     const t = finale.tally || recount();
     const v = verdict(t);
     const landed = finale.plan ? finale.plan.success : null;
-    result = { tally: t, verdict: v, landed };
+    result = { tally: t, verdict: v, landed, found: [...found] };
     const set = (id, text) => {
         const el = document.getElementById(id);
         if (el) el.textContent = text;
@@ -954,13 +1079,14 @@ function showEnd() {
     set('end-title', v.title);
     set('end-line', v.line);
     set('end-dive', diveLine(landed));
+    set('end-finds', findsLine(result.found));
     set('end-percent', `${percent(clearedShare(t))}%`);
     resultRows(t).forEach((row) => set(`end-${row.key}`, row.value));
     fillEndPromo();
     releaseInput();
     if (endModal) endModal.classList.remove('hidden');
     setChromeVisible(false);
-    announce(resultSentence(t, landed));
+    announce(resultSentence(t, landed, result.found));
     const again = document.getElementById('end-again');
     if (again) {
         try { again.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
@@ -1019,6 +1145,9 @@ function resetYard() {
     leaves.update();
     Object.assign(operator, createOperator(B));
     resetNeighbor(neighbor, N);
+    resetCat(cat);
+    layFinds();
+    hideToast();
     if (sent) sent.fill(0);
     finale.plan = null;
     finale.t = 0;
@@ -1108,6 +1237,25 @@ function installLab() {
     shadowBtn.setAttribute('aria-label', state.shadows ? 'Reload with shadows off' : 'Reload with shadows on');
     shadowBtn.addEventListener('click', go({ shadows: state.shadows ? 0 : 1 }));
     row.appendChild(shadowBtn);
+    // M6: Halloween week whatever the date, every find out on the lawn, and
+    // the cat into the deepest pile there is, now.
+    const labButton = (text, label, fn) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'lab-btn';
+        btn.textContent = text;
+        btn.setAttribute('aria-label', label);
+        btn.addEventListener('click', fn);
+        row.appendChild(btn);
+        return btn;
+    };
+    labButton(state.halloween ? 'Halloween on' : 'Halloween off',
+        state.halloween ? 'Reload without Halloween week' : 'Reload in Halloween week',
+        go({ halloween: state.halloween ? 0 : 1 }));
+    labButton(state.showFinds ? 'Finds shown' : 'Finds hidden',
+        state.showFinds ? 'Reload with the finds hidden' : 'Reload with every find showing',
+        go({ finds: state.showFinds ? null : 1 }));
+    labButton('Cat now', 'Send the cat into the deepest pile now', catNow);
     panel.appendChild(row);
     document.body.appendChild(panel);
     lab.el = readout;
@@ -1164,6 +1312,148 @@ function stepTheNeighbor(dt) {
     return event;
 }
 
+// ---- The finds (M6) ---------------------------------------------------------
+
+/** Hide this round's finds: each at a fresh spot under the leaves, its
+ *  model waiting under the lawn. The lab's ?finds=1 shows them all. */
+function layFinds() {
+    findRounds += 1;
+    finds = placeFinds(sim, CONFIG, findList, CONFIG.leaves.seed + 101 * findRounds);
+    found = [];
+    Object.values(findModels).forEach((m) => { m.group.visible = false; });
+    for (const f of finds) {
+        const model = findModels[f.id];
+        if (!model) continue;
+        model.group.position.set(f.x, -model.depth, f.z);
+        model.group.rotation.y = f.yaw;
+        f.rise = 0;
+        if (state.showFinds) {
+            f.found = true;
+            f.rise = 1;
+            model.group.visible = true;
+            model.group.position.y = 0;
+        }
+    }
+}
+
+/** A few times a second: any find the leaves no longer hide is found. It
+ *  rises out of the lawn, its name shows under the HUD, and a screen reader
+ *  hears it. */
+function lookForFinds() {
+    for (const f of stepFinds(finds, sim, CONFIG.finds)) {
+        const model = findModels[f.id];
+        if (model) model.group.visible = true;
+        f.rise = state.reducedMotion ? 1 : 0;
+        found.push(f.def.name);
+        showToast(f.def.toast);
+        announce(f.def.toast);
+        track('find', { outcome: f.id });
+    }
+}
+
+/** Each found find rising out of the lawn. Returns whether any moved. */
+function riseFinds(dt) {
+    let moved = false;
+    for (const f of finds) {
+        const model = findModels[f.id];
+        if (!f.found || !model) continue;
+        if (f.rise < 1) {
+            f.rise = Math.min(1, f.rise + dt / CONFIG.finds.rise);
+            moved = true;
+        }
+        const e = 1 - (1 - f.rise) * (1 - f.rise);
+        model.group.position.y = -model.depth * (1 - e);
+    }
+    return moved;
+}
+
+/** The find's line under the HUD, for `toastSeconds`. */
+function showToast(text) {
+    if (!toast.el) return;
+    toast.el.textContent = text;
+    toast.el.classList.add('visible');
+    toast.until = state.time + CONFIG.finds.toastSeconds;
+}
+
+function hideToast() {
+    if (toast.el) toast.el.classList.remove('visible');
+    toast.until = 0;
+}
+
+/** Say something to a screen reader once a visit. */
+function announceOnce(key, text) {
+    if (told.has(key)) return;
+    told.add(key);
+    announce(text);
+}
+
+// ---- The cat, the squirrel, the trick-or-treaters (M6) ------------------------
+
+/** Whether the cat may come: any time in free play, and in a round once,
+ *  after the first seconds and not near the end. */
+function catActive() {
+    const K = CONFIG.cat;
+    if (round.phase === 'free') return true;
+    if (round.phase !== 'playing') return false;
+    return round.elapsed >= K.notBefore && round.elapsed <= round.seconds - 4 && cat.visits < K.perRound;
+}
+
+/** How deep the leaves are at (x, z), over whatever they lie on. */
+function depthAt(x, z) {
+    const c = cellIndex(sim, x, z);
+    return sim.height[c] - sim.floor[c];
+}
+
+/** One frame of the cat: the pile twitching and bursting are the sim's. */
+function stepTheCat(dt) {
+    const K = CONFIG.cat;
+    const event = stepCat(cat, dt, {
+        active: catActive(),
+        findPile: () => catPile(sim, CONFIG.yard, operator, K, solids),
+        depthAt,
+        random: critterRandom
+    }, K, CONFIG.yard, solids);
+    if (event === 'twitch') burst(sim, cat.x, cat.z, K.twitchRadius, K.twitch);
+    if (event === 'out') {
+        burst(sim, cat.x, cat.z, K.burstRadius, K.burst * (state.reducedMotion ? 0.6 : 1));
+        announceOnce('cat', 'A cat bursts out of a pile of leaves and trots away.');
+        track('cat', { outcome: round.phase });
+    }
+    return event;
+}
+
+/** The lab's "Cat now": into the deepest pile there is, at once. */
+function catNow() {
+    const pile = catPile(sim, CONFIG.yard, null, { ...CONFIG.cat, pile: 0.005, shy: 0 }, solids);
+    if (pile && cat.state === 'away') forceCat(cat, pile);
+    return Boolean(pile);
+}
+
+/** One frame of the squirrel, from the air the blowers make at it and the
+ *  leaves going past it. */
+function stepTheSquirrel(dt, jets) {
+    const Q = CONFIG.squirrel;
+    const event = stepSquirrel(squirrel, dt, {
+        active: true,
+        airAt: (x, y, z) => jets.reduce((top, j) => Math.max(top, airAt(j, x, y, z, 0, airTmp)), 0),
+        leavesPast: () => leavesNear(sim, squirrel.x, squirrel.y + 0.1, squirrel.z, Q.near, Q.fast),
+        people: [operator, isOut(neighbor) ? neighbor : null],
+        random: critterRandom
+    }, Q);
+    if (event === 'arrive') announceOnce('squirrel', 'A squirrel runs along the top of the fence and sits down to watch.');
+    if (event === 'chatter') announceOnce('chatter', 'The squirrel on the fence chatters at the flying leaves.');
+    return event;
+}
+
+function stepTheTreaters(dt) {
+    if (!treaters) return null;
+    const event = stepTreaters(treaters, dt, {
+        active: true, person: operator, walkX: CONFIG.yard.house.door, random: critterRandom
+    }, CONFIG.halloween);
+    if (event === 'start') announceOnce('treaters', 'Trick-or-treaters are coming along the sidewalk.');
+    return event;
+}
+
 // ---- Render loop ----------------------------------------------------------
 
 function animate() {
@@ -1201,11 +1491,30 @@ function animate() {
     const his = makeJet(neighborBlower(B, N, neighbor.big), neighbor.x, neighbor.z,
         Math.sin(neighbor.heading), Math.cos(neighbor.heading), neighbor.blowing && !welcomeShown() && !castShown());
     countedAgo += delta;
-    if (inYard && countedAgo >= 1 / CONFIG.round.tallyHz) recount();
+    if (inYard && countedAgo >= 1 / CONFIG.round.tallyHz) {
+        recount();
+        lookForFinds();
+    }
     if (inYard) updateHud();
 
+    // The cat, the squirrel and the trick-or-treaters (M6) hold still behind
+    // the welcome card with everything else. The cat ploughs through the
+    // leaves with a little jet of its own.
+    const yardInView = !welcomeShown() && !castShown();
+    if (yardInView) {
+        stepTheCat(dt);
+        stepTheSquirrel(dt, [jet, his]);
+        stepTheTreaters(dt);
+    }
+    const plough = makeJet(catBlower, cat.x, cat.z, Math.sin(cat.heading), Math.cos(cat.heading), cat.ploughing && yardInView);
+    const rising = riseFinds(delta);
+    if (toast.until && state.time >= toast.until) hideToast();
+    sound.update(delta, { blowing }, {
+        blowing: neighbor.blowing && yardInView, big: neighbor.big, pan: panOf(neighbor.x)
+    });
+
     const t0 = performance.now();
-    stepSim(sim, dt, [jet, his]);
+    stepSim(sim, dt, [jet, his, plough]);
     const uploaded = leaves.update();
     lab.simMs += performance.now() - t0;
     lab.uploaded += uploaded;
@@ -1214,6 +1523,9 @@ function animate() {
     neighborFigure.group.visible = isOut(neighbor);
     neighborFigure.update(neighbor, neighbor.blowing, state.time, neighbor.arms, neighbor.big);
     if (neighborDoor) neighborDoor.rotation.y = -1.7 * neighbor.door;
+    catFigure.update(cat, state.time);
+    squirrelFigure.update(squirrel, state.time);
+    if (treaterFigures) treaterFigures.update(treaters, state.time);
     const marked = free && steer === 'point' && Boolean(pointer.aim);
     marker.visible = marked;
     if (marked) marker.position.set(pointer.aim.x, 0.05, pointer.aim.z);
@@ -1223,6 +1535,7 @@ function animate() {
     // most `hz` times a second.
     if (state.shadows) {
         if (uploaded > 0 || operator.speed > 0 || neighbor.speed > 0 || (neighbor.door > 0 && neighbor.door < 1)) shade.owed = true;
+        if (rising || (cat.visible && cat.speed > 0) || (squirrel.visible && squirrel.speed > 0) || (treaters && treaters.speed > 0)) shade.owed = true;
         shade.since += delta;
         if (shade.owed && shade.since >= 1 / CONFIG.shadows.hz) {
             renderer.shadowMap.needsUpdate = true;
@@ -1247,6 +1560,7 @@ function cleanup() {
     state.isRunning = false;
     if (renderer) renderer.setAnimationLoop(null);
     if (cleanupController) cleanupController.abort();
+    sound.dispose();
 }
 
 let sessionStart = 0;
@@ -1268,12 +1582,19 @@ export function getState() {
         blowing: isBlowing(!welcomeShown() && !endShown() && canBlow(round), pointer, keys, blowHold),
         round: { ...round },
         counted: { ...counted },
-        result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict }, landed: result.landed } : null,
+        result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict }, landed: result.landed, found: [...result.found] } : null,
         neighbor: { ...neighbor },
         endShown: endShown(),
         castShown: castShown(),
         cast: { ...castChoice },
-        finale: finale.plan ? { t: finale.t, total: finale.plan.total, success: finale.plan.success, burst: finale.burst, arms: finale.arms } : null
+        finale: finale.plan ? { t: finale.t, total: finale.plan.total, success: finale.plan.success, burst: finale.burst, arms: finale.arms } : null,
+        finds: finds.map((f) => ({ id: f.id, x: f.x, z: f.z, found: f.found, shown: f.shown })),
+        found: [...found],
+        cat: { state: cat.state, visible: cat.visible, visits: cat.visits, x: cat.x, z: cat.z },
+        squirrel: squirrel ? { state: squirrel.state, pose: squirrel.pose, visible: squirrel.visible, z: squirrel.z, chatters: squirrel.chatters } : null,
+        treaters: treaters ? { state: treaters.state, x: treaters.x, walks: treaters.walks } : null,
+        sound: sound.isOn(),
+        toast: toast.until > 0
     };
 }
 
@@ -1323,4 +1644,6 @@ if (typeof document !== 'undefined') {
 }
 
 // Exposed for unit tests only.
-export const __test__ = { bufToHex, keys, pointer, blowHold, aimAt, walkArea, sim: () => sim };
+export const __test__ = {
+    bufToHex, keys, pointer, blowHold, aimAt, walkArea, catNow, sim: () => sim
+};

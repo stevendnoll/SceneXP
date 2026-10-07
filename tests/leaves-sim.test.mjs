@@ -669,9 +669,10 @@ describe('the lab', () => {
     });
 
     test('the address picks the count and the shadows, within the config\'s range', () => {
-        expect(Lab.labOptions('', C, false)).toEqual({ count: C.leaves.desktop, shadows: true, ratio: null });
+        expect(Lab.labOptions('', C, false)).toEqual({ count: C.leaves.desktop, shadows: true, ratio: null, finds: false });
         expect(Lab.labOptions('', C, true).count).toBe(C.leaves.mobile);
-        expect(Lab.labOptions('?leaves=36000&shadows=0', C, true)).toEqual({ count: 36000, shadows: false, ratio: null });
+        expect(Lab.labOptions('?leaves=36000&shadows=0', C, true)).toEqual({ count: 36000, shadows: false, ratio: null, finds: false });
+        expect(Lab.labOptions('?finds=1', C, false).finds).toBe(true);
         expect(Lab.labOptions('?leaves=5', C, false).count).toBe(C.leaves.minCount);
         expect(Lab.labOptions('?leaves=9999999', C, false).count).toBe(C.leaves.maxCount);
         expect(Lab.labOptions('?leaves=', C, false).count).toBe(C.leaves.desktop);

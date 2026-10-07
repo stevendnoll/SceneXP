@@ -79,6 +79,63 @@
     }
 }
 
+/* ---- The sound button (M6) ----
+   Top left, opposite the help button, in the same neutral circle. Its
+   speaker shows waves when the sound is on and a cross when it is off, and
+   it never fills: a tinted resting button reads as one already pressed. */
+
+.sound-btn {
+    top: max(20px, env(safe-area-inset-top));
+    left: max(20px, env(safe-area-inset-left));
+    right: auto;
+}
+
+.sound-btn[aria-pressed="false"] .sound-waves,
+.sound-btn[aria-pressed="true"] .sound-off {
+    display: none;
+}
+
+.sound-btn:focus-visible {
+    outline: 3px solid rgba(var(--ui-accent-rgb), 0.9);
+    outline-offset: 3px;
+}
+
+/* ---- What was just found (M6) ----
+   A line under the HUD for a few seconds, never in the way of a tap. */
+
+.find-toast {
+    position: fixed;
+    top: max(68px, calc(env(safe-area-inset-top) + 58px));
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 32px);
+    margin: 0;
+    padding: 0.4rem 0.95rem;
+    border-radius: 999px;
+    background: rgba(20, 20, 20, 0.62);
+    color: #fff;
+    font-size: 0.9rem;
+    text-align: center;
+    z-index: 105;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.35s ease, visibility 0s linear 0.35s;
+}
+
+.find-toast.visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.35s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .find-toast,
+    .find-toast.visible {
+        transition: none;
+    }
+}
+
 /* ---- The welcome card's free play ----
    A quiet text button under the controls: the round is what the card is
    offering, and this is the other door. Light ink on the dark overlay. */
@@ -488,11 +545,12 @@
     text-align: center;
 }
 
-/* ---- The lab panel (QA hosts only, built by main.js) ---- */
+/* ---- The lab panel (QA hosts only, built by main.js) ----
+   Under the sound button, which has the top left corner (M6). */
 
 .lab-panel {
     position: fixed;
-    top: max(10px, env(safe-area-inset-top));
+    top: max(80px, calc(env(safe-area-inset-top) + 70px));
     left: max(10px, env(safe-area-inset-left));
     z-index: 40;
     max-width: calc(100vw - 20px);

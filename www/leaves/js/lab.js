@@ -14,6 +14,10 @@
  *   ?leaves=24000    how many leaves (clamped to the config's range)
  *   ?shadows=0       the sun's shadows off
  *   ?ratio=1         a pixel ratio cap below the device's own
+ *   ?finds=1         every find out on the lawn from the start (M6), to
+ *                    look at them without hunting for them
+ *   ?halloween=1     Halloween week whatever the date (or 0 for none),
+ *                    read by halloween.js
  *
  * PURE, so all of it is tested without a browser; main.js does the wiring.
  */
@@ -32,7 +36,8 @@ export function isQaHost(location = (typeof window !== 'undefined' ? window.loca
 }
 
 /** What the address asks for, with the device's defaults for the rest:
- *  { count, shadows, ratio }. `ratio` is null unless one is asked for. */
+ *  { count, shadows, ratio, finds }. `ratio` is null unless one is asked
+ *  for. */
 export function labOptions(search, config, mobile) {
     const L = config.leaves;
     const params = new URLSearchParams(search || '');
@@ -49,7 +54,7 @@ export function labOptions(search, config, mobile) {
     let ratio = null;
     const r = params.get('ratio');
     if (r !== null && /^\d+(\.\d+)?$/.test(r) && Number(r) >= 0.5 && Number(r) <= 3) ratio = Number(r);
-    return { count, shadows, ratio };
+    return { count, shadows, ratio, finds: params.get('finds') === '1' };
 }
 
 /** The address for the same page with some settings changed. */

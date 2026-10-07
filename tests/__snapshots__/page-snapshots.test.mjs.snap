@@ -3886,7 +3886,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Leaves | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=5" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=6" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -3894,6 +3894,10 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/trees.min.js" rel="modulepreload"]
     link [href="js/finale.min.js" rel="modulepreload"]
     link [href="js/round.min.js" rel="modulepreload"]
+    link [href="js/finds.min.js" rel="modulepreload"]
+    link [href="js/critters.min.js" rel="modulepreload"]
+    link [href="js/halloween.min.js" rel="modulepreload"]
+    link [href="js/sound.min.js" rel="modulepreload"]
     link [href="js/neighbor.min.js" rel="modulepreload"]
     link [href="js/score.min.js" rel="modulepreload"]
     link [href="js/leafmesh.min.js" rel="modulepreload"]
@@ -3909,11 +3913,11 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/treespecies-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/fractaltree-1.0.0.min.js" rel="modulepreload"]
-    link [href="js/house.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/house.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=5" rel="stylesheet"]
+    link [href="css/experience.min.css?v=6" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -3961,6 +3965,9 @@ html [data-ui-theme="ember" lang="en"]
             "BLOW"
           "Hold the mouse button or Space. On a touch screen, hold the blow button in the corner."
           span
+            "SOUND"
+          "The leaf blower is quiet until you press M or the speaker in the corner."
+          span
             "HELP"
           "The question mark in the corner, or Escape, brings you back here."
         p.cast-line
@@ -3978,6 +3985,11 @@ html [data-ui-theme="ember" lang="en"]
         circle [cx="12" cy="12" fill="none" r="9"]
         path [d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"]
         circle [cx="12.1" cy="17.4" fill="currentColor" r="1.05" stroke="none"]
+    button#sound-btn.ui-float.menu-btn.sound-btn [aria-label="Sound" aria-pressed="false" title="Sound off (M)" type="button"]
+      svg [aria-hidden="true" viewbox="0 0 24 24"]
+        path [d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" stroke-linejoin="round"]
+        path.sound-waves [d=#839f041928]
+        path.sound-off [d="M16 9.5l5 5M21 9.5l-5 5"]
     button#blow-btn.ui-float.blow-btn [aria-label="Hold to run the leaf blower" title="Hold to blow" type="button"]
       svg [aria-hidden="true" viewbox="0 0 24 24"]
         path [d="M3 8h10.5a2.75 2.75 0 1 0-2.75-2.75"]
@@ -3995,6 +4007,7 @@ html [data-ui-theme="ember" lang="en"]
       button#hud-new.hud-btn [hidden type="button"]
         "New round"
     p#round-status.sr-only [aria-live="polite" role="status"]
+    p#find-toast.find-toast [aria-hidden="true"]
     div#cast-modal.hidden [aria-labelledby="cast-title" aria-modal="true" role="dialog"]
       div.cast-panel
         h2#cast-title.cast-title
@@ -4036,6 +4049,7 @@ html [data-ui-theme="ember" lang="en"]
             "of the lawn cleared"
           p#end-line.piece-subtitle.end-line
           p#end-dive.end-dive
+          p#end-finds.end-dive.end-finds
           dl.end-stats
             div.end-stat
               dt

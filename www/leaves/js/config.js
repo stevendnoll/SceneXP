@@ -372,6 +372,193 @@ export const LEAVES_CONFIG = Object.freeze({
         span: 9
     },
 
+    // THE FINDS (M6): things lost under the leaves (finds.js). Each round
+    // hides every one at a fresh spot in its `areas` where the leaves cover
+    // it, and it is found once enough of it shows. Nothing points at them:
+    // a visitor finds one by clearing the lawn over it. Sizes are meters,
+    // a little larger than life so each reads at a few pixels on a phone.
+    finds: {
+        // Found once this share of its footprint can be seen, and only ever
+        // hidden where no more than `hidden` of it shows.
+        seen: 0.6,
+        hidden: 0.1,
+        // A resting leaf hides the ground within this share of its size of
+        // its middle: its outline fills 0.55 of its square, about a disc
+        // of 0.42.
+        leafReach: 0.42,
+        // Kept this far from each other and from anything solid.
+        apart: 1.2,
+        clear: 0.35,
+        // Never where the first blow from where the person starts (facing
+        // the house) clears the lawn: its air wakes leaves out to about
+        // 1.8 m either side for some 6 m. A find there would turn up in the
+        // opening second, before anybody went looking.
+        avoid: [{ minX: -0.2, maxX: 4.2, minZ: -2.5, maxZ: 7 }],
+        // Uncovered, it rises out of the lawn over this many seconds, and
+        // its name shows under the HUD for `toastSeconds`.
+        rise: 0.3,
+        toastSeconds: 3.5,
+        // `r` is the footprint's radius, `name` how the end card lists it,
+        // and `areas` where it may be hidden. `halloween` ones are only out
+        // during Halloween week.
+        list: [
+            {
+                id: 'keys', r: 0.12, name: 'a set of car keys',
+                toast: 'You found a set of car keys. Somebody will be relieved.',
+                areas: [{ minX: -2.6, maxX: 2.2, minZ: -3.2, maxZ: 2.5 }]
+            },
+            {
+                id: 'gnome', r: 0.25, name: 'a garden gnome',
+                toast: 'You found a garden gnome, napping under the leaves.',
+                areas: [{ minX: 2.2, maxX: 8.6, minZ: -5.6, maxZ: -4.4 }, { minX: -9.6, maxX: -8.6, minZ: 0, maxZ: 6 }]
+            },
+            {
+                id: 'ball', r: 0.07, name: "a dog's tennis ball",
+                toast: "You found a dog's tennis ball. Good find.",
+                areas: [{ minX: -4, maxX: 8, minZ: -1, maxZ: 5 }]
+            },
+            {
+                id: 'bill', r: 0.13, name: 'a $20 bill',
+                toast: 'You found a $20 bill! Finders keepers.',
+                areas: [{ minX: -9, maxX: 9.4, minZ: -1, maxZ: 6.5 }]
+            },
+            {
+                id: 'hand', r: 0.14, name: 'a plastic skeleton hand', halloween: true,
+                toast: 'You found a plastic skeleton hand. Somebody started Halloween early.',
+                areas: [{ minX: -9.6, maxX: -6, minZ: 0, maxZ: 6.2 }, { minX: 2, maxX: 8.6, minZ: -5.6, maxZ: -4.6 }]
+            }
+        ]
+    },
+
+    // THE CAT (M6, critters.js). Now and then a cat curls up in a pile off
+    // the tarp, the pile twitches, and the cat bursts out and trots off into
+    // the hedge, or over the picket fence and the side gate, ploughing
+    // through the leaves as it goes. Never in the tarp's pile, which the
+    // dive needs.
+    cat: {
+        // A pile this deep (above whatever it lies on) can hide a cat, and
+        // one this far from the person is somewhere a cat would go.
+        pile: 0.2,
+        shy: 3,
+        // How often it looks for a pile, how long it lies in one before
+        // the twitches, and how long between visits.
+        look: 2,
+        wait: [4, 9],
+        cooldown: [30, 50],
+        // A round sees it at most once, and not in the first `notBefore`
+        // seconds of the clock.
+        perRound: 1,
+        notBefore: 10,
+        // Two twitches (bursts of `twitch` m/s, `twitchRadius` across),
+        // then out it comes (`burst` m/s over `burstRadius`). Blowing the
+        // pile it is in sends it out at once.
+        twitchAt: [0, 0.8],
+        outAt: 1.6,
+        twitch: 1.6,
+        twitchRadius: 0.35,
+        burst: 4.5,
+        burstRadius: 0.7,
+        // Its trot, its hops (meters high), and the lane it keeps to, clear
+        // of the porch and the maple's trunk.
+        speed: 2.6,
+        laneZ: -2.6,
+        fenceHop: 1.25,
+        gateHop: 2.1,
+        // As it trots it ploughs through the leaves: a little jet from its
+        // chest, as changes to ours (config.blower).
+        plough: {
+            reach: 0.25, height: 0.12, side: 0, pitch: 0.6, speed: 4.5, core: 0.35,
+            width: 0.1, spread: 0.3, wallDecay: 0.5, wallSpread: 0.6, wallDepth: 0.15,
+            wallThicken: 0, updraft: 0.9, updraftLength: 0.4, range: 0.9, turbulence: 0.5
+        },
+        colors: { fur: 0x1d1d1f, chest: 0xf2efe8, eyes: 0xc8d23a, nose: 0xd98a8a },
+        // A little larger than life, to read from the street.
+        scale: 1.3
+    },
+
+    // THE SQUIRREL (M6, critters.js): along the top of the picket fence.
+    // It comes over the side gate, runs to a spot on the fence and sits,
+    // chatters when leaves fly past it, and runs back over the gate when the
+    // air reaches it or somebody comes too close.
+    squirrel: {
+        fence: { x: 10, top: 0.95 },
+        // Where it comes from (behind the side gate, out of sight) and where
+        // it gets onto the fence.
+        home: { z: -6.5 },
+        onto: -5.6,
+        gateHop: 2.05,
+        perch: [-3.5, 5.5],
+        speed: 3.2,
+        // The first visit comes this soon, the next after a cooldown.
+        first: [6, 12],
+        cooldown: [18, 35],
+        // Sitting, it moves along now and then.
+        restless: [6, 14],
+        // Leaves within `near` meters, faster than `fast` m/s, at least
+        // `many` of them, make it chatter for `chatter` seconds.
+        near: 1.3,
+        fast: 1.5,
+        many: 3,
+        chatter: 1.6,
+        // Air faster than this at it, or a person this close, and it is off.
+        air: 5,
+        personNear: 1.6,
+        colors: { fur: 0x8a837b, belly: 0xd9d1c4, tail: 0x9b938a, eyes: 0x111111 },
+        scale: 1.5
+    },
+
+    // HALLOWEEN WEEK (M6, halloween.js): from October 24 to 31 by the
+    // visitor's own calendar, the porch pumpkins are carved and lit, a
+    // plastic skeleton hand is under the leaves, and trick-or-treaters walk
+    // the sidewalk. Kind spooky, never scary. `?halloween=1` on a QA host.
+    halloween: {
+        // October (months count from 0), the 24th to the 31st.
+        month: 9,
+        firstDay: 24,
+        lastDay: 31,
+        // The pumpkins (by their index in yard.pumpkins) that are carved.
+        carved: [0, 1, 3],
+        glow: 0xffb53a,
+        // Trick-or-treaters: a pair every so often, along the sidewalk,
+        // pausing at the end of our walk to look at the house.
+        first: [3, 6],
+        every: [14, 24],
+        speed: 1.15,
+        fromX: -24,
+        toX: 26,
+        z: 8.25,
+        pause: 1.6,
+        // They wait for a person standing in their way.
+        room: 0.8,
+        scale: 0.62
+    },
+
+    // THE SOUND (M6, sound.js): a whoosh while the blower runs, made with
+    // Web Audio from noise, OFF until the visitor turns it on (the button,
+    // or M). Nothing is remembered: it starts off on every visit.
+    sound: {
+        master: 0.22,
+        // The air: noise through a lowpass that spools up from `idleHz` to
+        // `fullHz` when the blower starts, and a band for its body.
+        idleHz: 450,
+        fullHz: 1700,
+        bodyHz: 650,
+        bodyQ: 0.8,
+        airQ: 0.6,
+        bodyGain: 0.6,
+        // How fast it spools up and down (time constants, seconds).
+        attack: 0.07,
+        release: 0.18,
+        spool: 0.12,
+        // A slow wander in the air's pitch, so it breathes.
+        wobble: { hz: 0.7, depth: 0.08 },
+        // The neighbor's blower, quieter, from where he stands.
+        neighbor: 0.45,
+        big: 1.3,
+        // Scheduled this far ahead of the audio clock.
+        ahead: 0.03
+    },
+
     // THE ROUND (M1). The clock starts with the first blow, not when the
     // welcome card closes, so nobody loses time reading. When it runs out the
     // blower stops, the result is counted, and the dive begins (round.js).
