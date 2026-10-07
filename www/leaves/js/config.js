@@ -64,6 +64,10 @@ export const LEAVES_CONFIG = Object.freeze({
         // The neighbor's lawn, past the picket fence.
         neighbor: { minX: 10.1, maxX: 18, minZ: -6, maxZ: 7 },
         sidewalk: { minZ: 7.4, maxZ: 9 },
+        // The rest of the block (M6 QA): lawn under everything, well past
+        // both neighbors and back behind the houses, so no view the camera
+        // can take shows the sky through the ground.
+        block: { minX: -50, maxX: 70, minZ: -20 },
         // A tarp to blow the leaves onto, IN THE BACK-LEFT CORNER, against
         // the house and the hedge (moved there at M1, 2026-10-06). Out on the
         // open lawn it caught almost nothing: leaves stop wherever the air
@@ -85,6 +89,20 @@ export const LEAVES_CONFIG = Object.freeze({
         // `door` is our front door's middle, in x (house.js).
         house: { minX: -9, maxX: 9, depth: 8, wall: 3.2, ridge: 6.2, door: -0.5 },
         neighborHouse: { minX: 11.5, maxX: 22, depth: 8, wall: 3.2, ridge: 6 },
+        // Down the block (M6 QA): a sage house past the hedge and a warm
+        // gray one past the neighbor's, set back a little, each with its
+        // garage on the far side from us (`garage` -1 left, 1 right). The
+        // left one stands clear of the maple in its side yard.
+        street: [
+            {
+                name: 'left', minX: -31.5, maxX: -19.5, front: -7.2, depth: 9, wall: 3, ridge: 5.8, garage: -1,
+                siding: 0xa3ae98, lap: 0x86917c, roof: 0x4a4d52, door: 0x7a2e2a, garageDoor: 0xf2efe8
+            },
+            {
+                name: 'right', minX: 25.5, maxX: 37.5, front: -6.8, depth: 9, wall: 3.1, ridge: 6.1, garage: 1,
+                siding: 0xbdb7ad, lap: 0x9f998f, roof: 0x3c3f44, door: 0x2c3e35, garageDoor: 0xf2efe8
+            }
+        ],
         // SOLID THINGS ON THE GROUND (M5): boxes a leaf bumps into below
         // `height` and the person walks round. A `platform` is one a leaf can
         // land on and lie on top of (sim.floorGrid). The trees' trunks and
@@ -430,92 +448,51 @@ export const LEAVES_CONFIG = Object.freeze({
         ]
     },
 
-    // THE CAT (M6, critters.js). Now and then a cat curls up in a pile off
-    // the tarp, the pile twitches, and the cat bursts out and trots off into
-    // the hedge, or over the picket fence and the side gate, ploughing
-    // through the leaves as it goes. Never in the tarp's pile, which the
-    // dive needs.
-    cat: {
-        // A pile this deep (above whatever it lies on) can hide a cat, and
-        // one this far from the person is somewhere a cat would go.
-        pile: 0.2,
-        shy: 3,
-        // How often it looks for a pile, how long it lies in one before
-        // the twitches, and how long between visits.
-        look: 2,
-        wait: [4, 9],
-        cooldown: [30, 50],
-        // A round sees it at most once, and not in the first `notBefore`
-        // seconds of the clock.
-        perRound: 1,
-        notBefore: 10,
-        // Two twitches (bursts of `twitch` m/s, `twitchRadius` across),
-        // then out it comes (`burst` m/s over `burstRadius`). Blowing the
-        // pile it is in sends it out at once.
-        twitchAt: [0, 0.8],
-        outAt: 1.6,
-        twitch: 1.6,
-        twitchRadius: 0.35,
-        burst: 4.5,
-        burstRadius: 0.7,
-        // Its trot, its hops (meters high), and the lane it keeps to, clear
-        // of the porch and the maple's trunk.
-        speed: 2.6,
-        laneZ: -2.6,
-        fenceHop: 1.25,
-        gateHop: 2.1,
-        // As it trots it ploughs through the leaves: a little jet from its
-        // chest, as changes to ours (config.blower).
-        plough: {
-            reach: 0.25, height: 0.12, side: 0, pitch: 0.6, speed: 4.5, core: 0.35,
-            width: 0.1, spread: 0.3, wallDecay: 0.5, wallSpread: 0.6, wallDepth: 0.15,
-            wallThicken: 0, updraft: 0.9, updraftLength: 0.4, range: 0.9, turbulence: 0.5
-        },
-        colors: { fur: 0x1d1d1f, chest: 0xf2efe8, eyes: 0xc8d23a, nose: 0xd98a8a },
-        // A little larger than life, to read from the street.
-        scale: 1.3
-    },
-
-    // THE SQUIRREL (M6, critters.js): along the top of the picket fence.
-    // It comes over the side gate, runs to a spot on the fence and sits,
-    // chatters when leaves fly past it, and runs back over the gate when the
-    // air reaches it or somebody comes too close.
-    squirrel: {
-        fence: { x: 10, top: 0.95 },
-        // Where it comes from (behind the side gate, out of sight) and where
-        // it gets onto the fence.
-        home: { z: -6.5 },
-        onto: -5.6,
-        gateHop: 2.05,
-        perch: [-3.5, 5.5],
-        speed: 3.2,
-        // The first visit comes this soon, the next after a cooldown.
-        first: [6, 12],
-        cooldown: [18, 35],
-        // Sitting, it moves along now and then.
-        restless: [6, 14],
-        // Leaves within `near` meters, faster than `fast` m/s, at least
-        // `many` of them, make it chatter for `chatter` seconds.
-        near: 1.3,
-        fast: 1.5,
-        many: 3,
-        chatter: 1.6,
-        // Air faster than this at it, or a person this close, and it is off.
-        air: 5,
-        personNear: 1.6,
-        colors: { fur: 0x8a837b, belly: 0xd9d1c4, tail: 0x9b938a, eyes: 0x111111 },
-        scale: 1.5
-    },
-
     // HALLOWEEN WEEK (M6, halloween.js): from October 24 to 31 by the
     // visitor's own calendar, the porch pumpkins are carved and lit, a
     // plastic skeleton hand is under the leaves, and trick-or-treaters walk
     // the sidewalk. Kind spooky, never scary. `?halloween=1` on a QA host.
     halloween: {
-        // October (months count from 0), the 24th to the 31st.
+        // October (months count from 0), the 24th to the 31st. The
+        // decorations are up all month (decorations.js).
         month: 9,
         firstDay: 24,
         lastDay: 31,
+        decor: {
+            black: 0x1c1d1f,
+            beak: 0x3a3b3d,
+            // Our porch's lights, warm orange, and the neighbor's, orange
+            // and purple.
+            bulb: 0xffa53d,
+            purple: 0x9b5fd0,
+            sag: 0.13,
+            bulbEvery: 0.3,
+            // Paper bats up our wall, a cobweb this wide in the porch's
+            // corner.
+            bats: 15,
+            web: 0.7,
+            webColor: 0xeeece6,
+            // Crows on our ridge, each turned its own way (0 faces the
+            // street).
+            crows: [{ x: 2.4, turn: 0.35 }, { x: 3.15, turn: -0.5 }, { x: -6.2, turn: 0.15 }],
+            // The neighbor's ghost, hung from his eave by his windows.
+            sheet: 0xf4f3ee,
+            ghost: { x: 12.35, tall: 0.62, string: 0.25 },
+            // His inflatable jack-o-lantern and his foam graveyard, both past
+            // the sim's ground (x beyond yard.bounds.maxX), so no leaf ever
+            // blows through them.
+            orange: 0xe9781f,
+            stem: 0x4f6b2a,
+            ink: 0x1d140a,
+            inflatable: { x: 20.2, z: -3.4, r: 1.05, turn: -0.45 },
+            foam: 0x9d9c96,
+            graves: [
+                { kind: 'round', x: 18.9, z: 3.1, tilt: 0.07, turn: -0.2 },
+                { kind: 'cross', x: 20.1, z: 4.2, tilt: -0.1, turn: 0.1 },
+                { kind: 'square', x: 21.4, z: 3.3, tilt: 0.04, turn: -0.35, lean: -0.08 },
+                { kind: 'round', x: 19.5, z: 5.5, tilt: -0.06, turn: 0.15 }
+            ]
+        },
         // The pumpkins (by their index in yard.pumpkins) that are carved.
         carved: [0, 1, 3],
         glow: 0xffb53a,
@@ -590,6 +567,11 @@ export const LEAVES_CONFIG = Object.freeze({
         wideSpan: 23,
         narrowSpan: 11,
         follow: 2.5,
+        // The ground this far either side of the person, at their depth,
+        // stays on screen: the blower's standoff (2.4) and a meter more, so
+        // a pointer can always aim past the hedge or the fence and walk
+        // them all the way to it (Steve's M6 QA).
+        reach: 3.4,
         // With the neighbor out, the view widens (up to `maxSpan` meters) to
         // keep him and the visitor in frame, with this much ground to spare
         // beyond each.
@@ -604,6 +586,7 @@ export const LEAVES_CONFIG = Object.freeze({
         lawnDark: 0x46652b,
         neighborLawn: 0x6a8f3f,
         sidewalk: 0xb9b4aa,
+        sidewalkJoint: 0x8f8a80,
         street: 0x45474a,
         tarp: 0x2f6aa6,
         // The sky (M5): deeper blue overhead, paling to a warm haze at the

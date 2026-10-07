@@ -36,10 +36,11 @@
  * (platforms in sim.js), and the sky.
  *
  * M6, DELIGHTS AND SURPRISES (2026-10-07): things lost under the leaves,
- * found only by clearing the lawn over them (finds.js), a cat that bursts
- * out of a pile and a squirrel on the fence (critters.js), Halloween week's
+ * found only by clearing the lawn over them (finds.js), Halloween
+ * decorations all October (decorations.js), Halloween week's
  * jack-o-lanterns and trick-or-treaters (halloween.js), and the blower's
- * whoosh, off until the visitor turns it on (sound.js).
+ * whoosh, off until the visitor turns it on (sound.js). A cat and a
+ * squirrel were built and taken out at Steve's QA.
  *
  * UNLISTED. The page carries noindex and is in no directory, sitemap or
  * llms.txt until the scene it grows into is released.
@@ -47,17 +48,14 @@
 
 import { LEAVES_CONFIG } from './config.min.js';
 import {
-    createSim, resetSim, scatterLeaves, stepSim, makeJet, airAt, pilePeak, burst, solidBoxes, cellIndex, makeRandom
+    createSim, resetSim, scatterLeaves, stepSim, makeJet, pilePeak, burst, solidBoxes, makeRandom
 } from './sim.min.js';
 import { buildTrees, updateTrees, createCrowns, stepCrowns } from './trees.min.js';
 import { planFinale, finaleAt } from './finale.min.js';
 import { createRound, resetRound, freePlay, canBlow, timeLeft, stepRound } from './round.min.js';
 import { findsFor, placeFinds, stepFinds, buildFindModels } from './finds.min.js';
-import {
-    createCat, resetCat, stepCat, catPile, forceCat, createCatFigure,
-    createSquirrel, stepSquirrel, leavesNear, createSquirrelFigure
-} from './critters.min.js';
-import { halloweenFor, carvePumpkins, createTreaters, stepTreaters, createTreaterFigures } from './halloween.min.js';
+import { seasonFor, carvePumpkins, createTreaters, stepTreaters, createTreaterFigures } from './halloween.min.js';
+import { buildDecorations } from './decorations.min.js';
 import { createSound } from './sound.min.js';
 import { createNeighbor, resetNeighbor, stepNeighbor, isOut, neighborBlower } from './neighbor.min.js';
 import {
@@ -96,8 +94,9 @@ const state = {
     count: 0,
     shadows: true,
     ratio: 1,
-    // Halloween week (M6), by the date or the lab's address, and the lab's
-    // every-find-showing.
+    // October's decorations and Halloween week (M6), by the date or the
+    // lab's address, and the lab's every-find-showing.
+    decor: false,
     halloween: false,
     showFinds: false,
     lastTime: 0,
@@ -150,28 +149,23 @@ let sent = null;
 const finale = { plan: null, t: 0, burst: false, arms: 'carry', tally: null };
 // THE DELIGHTS (M6). The finds hidden this round, their models, and the
 // names of the ones found (for the end card), with the count of rounds so
-// each hides them somewhere new. The cat, the squirrel and Halloween's
-// trick-or-treaters, with their figures. The sound, and the find's name
-// under the HUD until `until`.
+// each hides them somewhere new. October's decorations and Halloween week's
+// trick-or-treaters. The sound, and the find's name under the HUD until
+// `until`.
 let findList = [];
 let finds = [];
 let findModels = {};
 let found = [];
 let findRounds = 0;
-const cat = createCat();
-let catFigure = null;
-let catBlower = null;
-let squirrel = null;
-let squirrelFigure = null;
+let decorations = null;
 let treaters = null;
 let treaterFigures = null;
-const critterRandom = makeRandom(4049);
+const treatRandom = makeRandom(4049);
 const sound = createSound(CONFIG.sound);
 let soundBtn = null;
 const toast = { el: null, until: 0 };
 // What has been said once this visit, so the live region is not flooded.
 const told = new Set();
-const airTmp = new Float32Array(3);
 
 // What the HUD last showed, so it is only written when it changes.
 const hudShown = { clock: '', cleared: '', phase: '' };
@@ -245,7 +239,9 @@ async function init() {
     state.shadows = options.shadows;
     state.ratio = options.ratio;
     state.showFinds = options.finds;
-    state.halloween = halloweenFor(window.location.search, new Date(), CONFIG.halloween, state.qa);
+    const season = seasonFor(window.location.search, new Date(), CONFIG.halloween, state.qa);
+    state.decor = season.decor;
+    state.halloween = season.week;
     setMobile(state.isMobile);
     applySiteLinks();
 
@@ -276,6 +272,10 @@ async function init() {
 
     const yard = buildYard(scene, CONFIG, { shadows: state.shadows, mobile: state.isMobile });
     neighborDoor = yard.neighborDoor;
+    if (state.decor) {
+        decorations = buildDecorations(CONFIG);
+        scene.add(decorations.group);
+    }
     if (state.halloween) scene.add(carvePumpkins(CONFIG.yard.pumpkins, CONFIG.halloween));
 
     updateLoadingStatus(`Letting ${shortCount(state.count)} leaves fall…`, 55);
@@ -315,16 +315,10 @@ async function init() {
     scene.add(neighborFigure.group);
     marker = buildMarker();
     scene.add(marker);
-    // The cat, the squirrel, and in Halloween week the trick-or-treaters
-    // (M6), all out of sight to begin with.
-    catBlower = { ...B, ...CONFIG.cat.plough };
-    catFigure = createCatFigure(CONFIG.cat);
-    scene.add(catFigure.group);
-    squirrel = createSquirrel(CONFIG.squirrel, critterRandom);
-    squirrelFigure = createSquirrelFigure(CONFIG.squirrel);
-    scene.add(squirrelFigure.group);
+    // In Halloween week the trick-or-treaters (M6), out of sight to begin
+    // with.
     if (state.halloween) {
-        treaters = createTreaters(CONFIG.halloween, critterRandom);
+        treaters = createTreaters(CONFIG.halloween, treatRandom);
         treaterFigures = createTreaterFigures(CONFIG.halloween);
         scene.add(treaterFigures.group);
     }
@@ -357,14 +351,12 @@ async function init() {
 }
 
 /** Compile the shaders behind the loading screen, the hidden things too:
- *  the finds, the cat, the squirrel and the trick-or-treaters are shown
- *  for the compile, under the lawn where nothing sees them, so the first
- *  one to appear does not stall a frame building its programs. */
+ *  the finds and the trick-or-treaters are shown for the compile, under
+ *  the lawn where nothing sees them, so the first one to appear does not
+ *  stall a frame building its programs. */
 async function warmUp() {
     const hidden = [
         ...Object.values(findModels).map((m) => m.group),
-        catFigure && catFigure.group,
-        squirrelFigure && squirrelFigure.group,
         treaterFigures && treaterFigures.group
     ].filter(Boolean);
     const was = hidden.map((g) => ({ g, visible: g.visible, y: g.position.y }));
@@ -1145,7 +1137,6 @@ function resetYard() {
     leaves.update();
     Object.assign(operator, createOperator(B));
     resetNeighbor(neighbor, N);
-    resetCat(cat);
     layFinds();
     hideToast();
     if (sent) sent.fill(0);
@@ -1237,8 +1228,7 @@ function installLab() {
     shadowBtn.setAttribute('aria-label', state.shadows ? 'Reload with shadows off' : 'Reload with shadows on');
     shadowBtn.addEventListener('click', go({ shadows: state.shadows ? 0 : 1 }));
     row.appendChild(shadowBtn);
-    // M6: Halloween week whatever the date, every find out on the lawn, and
-    // the cat into the deepest pile there is, now.
+    // M6: Halloween week whatever the date, and every find out on the lawn.
     const labButton = (text, label, fn) => {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -1249,13 +1239,12 @@ function installLab() {
         row.appendChild(btn);
         return btn;
     };
-    labButton(state.halloween ? 'Halloween on' : 'Halloween off',
-        state.halloween ? 'Reload without Halloween week' : 'Reload in Halloween week',
+    labButton(state.halloween ? 'Halloween week on' : 'Halloween week off',
+        state.halloween ? 'Reload with no Halloween, decorations and all' : 'Reload in Halloween week',
         go({ halloween: state.halloween ? 0 : 1 }));
     labButton(state.showFinds ? 'Finds shown' : 'Finds hidden',
         state.showFinds ? 'Reload with the finds hidden' : 'Reload with every find showing',
         go({ finds: state.showFinds ? null : 1 }));
-    labButton('Cat now', 'Send the cat into the deepest pile now', catNow);
     panel.appendChild(row);
     document.body.appendChild(panel);
     lab.el = readout;
@@ -1387,68 +1376,12 @@ function announceOnce(key, text) {
     announce(text);
 }
 
-// ---- The cat, the squirrel, the trick-or-treaters (M6) ------------------------
-
-/** Whether the cat may come: any time in free play, and in a round once,
- *  after the first seconds and not near the end. */
-function catActive() {
-    const K = CONFIG.cat;
-    if (round.phase === 'free') return true;
-    if (round.phase !== 'playing') return false;
-    return round.elapsed >= K.notBefore && round.elapsed <= round.seconds - 4 && cat.visits < K.perRound;
-}
-
-/** How deep the leaves are at (x, z), over whatever they lie on. */
-function depthAt(x, z) {
-    const c = cellIndex(sim, x, z);
-    return sim.height[c] - sim.floor[c];
-}
-
-/** One frame of the cat: the pile twitching and bursting are the sim's. */
-function stepTheCat(dt) {
-    const K = CONFIG.cat;
-    const event = stepCat(cat, dt, {
-        active: catActive(),
-        findPile: () => catPile(sim, CONFIG.yard, operator, K, solids),
-        depthAt,
-        random: critterRandom
-    }, K, CONFIG.yard, solids);
-    if (event === 'twitch') burst(sim, cat.x, cat.z, K.twitchRadius, K.twitch);
-    if (event === 'out') {
-        burst(sim, cat.x, cat.z, K.burstRadius, K.burst * (state.reducedMotion ? 0.6 : 1));
-        announceOnce('cat', 'A cat bursts out of a pile of leaves and trots away.');
-        track('cat', { outcome: round.phase });
-    }
-    return event;
-}
-
-/** The lab's "Cat now": into the deepest pile there is, at once. */
-function catNow() {
-    const pile = catPile(sim, CONFIG.yard, null, { ...CONFIG.cat, pile: 0.005, shy: 0 }, solids);
-    if (pile && cat.state === 'away') forceCat(cat, pile);
-    return Boolean(pile);
-}
-
-/** One frame of the squirrel, from the air the blowers make at it and the
- *  leaves going past it. */
-function stepTheSquirrel(dt, jets) {
-    const Q = CONFIG.squirrel;
-    const event = stepSquirrel(squirrel, dt, {
-        active: true,
-        airAt: (x, y, z) => jets.reduce((top, j) => Math.max(top, airAt(j, x, y, z, 0, airTmp)), 0),
-        leavesPast: () => leavesNear(sim, squirrel.x, squirrel.y + 0.1, squirrel.z, Q.near, Q.fast),
-        people: [operator, isOut(neighbor) ? neighbor : null],
-        random: critterRandom
-    }, Q);
-    if (event === 'arrive') announceOnce('squirrel', 'A squirrel runs along the top of the fence and sits down to watch.');
-    if (event === 'chatter') announceOnce('chatter', 'The squirrel on the fence chatters at the flying leaves.');
-    return event;
-}
+// ---- Halloween (M6) -----------------------------------------------------------
 
 function stepTheTreaters(dt) {
     if (!treaters) return null;
     const event = stepTreaters(treaters, dt, {
-        active: true, person: operator, walkX: CONFIG.yard.house.door, random: critterRandom
+        active: true, person: operator, walkX: CONFIG.yard.house.door, random: treatRandom
     }, CONFIG.halloween);
     if (event === 'start') announceOnce('treaters', 'Trick-or-treaters are coming along the sidewalk.');
     return event;
@@ -1497,16 +1430,10 @@ function animate() {
     }
     if (inYard) updateHud();
 
-    // The cat, the squirrel and the trick-or-treaters (M6) hold still behind
-    // the welcome card with everything else. The cat ploughs through the
-    // leaves with a little jet of its own.
+    // The trick-or-treaters (M6) hold still behind the welcome card with
+    // everything else.
     const yardInView = !welcomeShown() && !castShown();
-    if (yardInView) {
-        stepTheCat(dt);
-        stepTheSquirrel(dt, [jet, his]);
-        stepTheTreaters(dt);
-    }
-    const plough = makeJet(catBlower, cat.x, cat.z, Math.sin(cat.heading), Math.cos(cat.heading), cat.ploughing && yardInView);
+    if (yardInView) stepTheTreaters(dt);
     const rising = riseFinds(delta);
     if (toast.until && state.time >= toast.until) hideToast();
     sound.update(delta, { blowing }, {
@@ -1514,7 +1441,7 @@ function animate() {
     });
 
     const t0 = performance.now();
-    stepSim(sim, dt, [jet, his, plough]);
+    stepSim(sim, dt, [jet, his]);
     const uploaded = leaves.update();
     lab.simMs += performance.now() - t0;
     lab.uploaded += uploaded;
@@ -1523,8 +1450,7 @@ function animate() {
     neighborFigure.group.visible = isOut(neighbor);
     neighborFigure.update(neighbor, neighbor.blowing, state.time, neighbor.arms, neighbor.big);
     if (neighborDoor) neighborDoor.rotation.y = -1.7 * neighbor.door;
-    catFigure.update(cat, state.time);
-    squirrelFigure.update(squirrel, state.time);
+    if (decorations) decorations.update(state.time, state.reducedMotion ? 0.3 : 1);
     if (treaterFigures) treaterFigures.update(treaters, state.time);
     const marked = free && steer === 'point' && Boolean(pointer.aim);
     marker.visible = marked;
@@ -1535,7 +1461,7 @@ function animate() {
     // most `hz` times a second.
     if (state.shadows) {
         if (uploaded > 0 || operator.speed > 0 || neighbor.speed > 0 || (neighbor.door > 0 && neighbor.door < 1)) shade.owed = true;
-        if (rising || (cat.visible && cat.speed > 0) || (squirrel.visible && squirrel.speed > 0) || (treaters && treaters.speed > 0)) shade.owed = true;
+        if (rising || (treaters && treaters.speed > 0)) shade.owed = true;
         shade.since += delta;
         if (shade.owed && shade.since >= 1 / CONFIG.shadows.hz) {
             renderer.shadowMap.needsUpdate = true;
@@ -1590,8 +1516,6 @@ export function getState() {
         finale: finale.plan ? { t: finale.t, total: finale.plan.total, success: finale.plan.success, burst: finale.burst, arms: finale.arms } : null,
         finds: finds.map((f) => ({ id: f.id, x: f.x, z: f.z, found: f.found, shown: f.shown })),
         found: [...found],
-        cat: { state: cat.state, visible: cat.visible, visits: cat.visits, x: cat.x, z: cat.z },
-        squirrel: squirrel ? { state: squirrel.state, pose: squirrel.pose, visible: squirrel.visible, z: squirrel.z, chatters: squirrel.chatters } : null,
         treaters: treaters ? { state: treaters.state, x: treaters.x, walks: treaters.walks } : null,
         sound: sound.isOn(),
         toast: toast.until > 0
@@ -1645,5 +1569,5 @@ if (typeof document !== 'undefined') {
 
 // Exposed for unit tests only.
 export const __test__ = {
-    bufToHex, keys, pointer, blowHold, aimAt, walkArea, catNow, sim: () => sim
+    bufToHex, keys, pointer, blowHold, aimAt, walkArea, sim: () => sim
 };

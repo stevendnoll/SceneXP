@@ -30,7 +30,8 @@ export function distanceFor(span, aspect, fovDegrees) {
 /**
  * The camera's position and the point it looks at. `follow` is the person's
  * (x, z): the view slides toward them, as far as keeps the lawn in frame,
- * and a wide view barely moves at all.
+ * and a wide view barely moves, except to keep `C.reach` meters of ground
+ * either side of them on screen.
  */
 export function cameraFor(aspect, C, lawn, follow, include = null) {
     let span = spanFor(aspect, C);
@@ -60,6 +61,19 @@ export function cameraFor(aspect, C, lawn, follow, include = null) {
         // Depth follows gently, and only on the narrow view.
         const narrow = 1 - clamp((aspect - 0.5) / 0.8, 0, 1);
         tz = C.target.z + (follow.z - C.target.z) * 0.5 * narrow;
+    }
+    // ROOM TO AIM ON EITHER SIDE OF THE PERSON (Steve's M6 QA: he could not
+    // walk to the hedge). The span is fitted at the target, but the view
+    // narrows toward the camera, so near the front of the lawn the yard's
+    // sides were off screen, and a pointer has to aim `standoff` past where
+    // the person should stop. So the view slides until the ground `reach`
+    // meters either side of the person, at their own depth, is on screen.
+    // Nobody walks off the lawn's width, so nor does the slide.
+    if (follow && C.reach) {
+        const px = clamp(follow.x, lawn.minX, lawn.maxX);
+        const depth = dist + back * (tz - follow.z);
+        const half = depth * Math.tan((C.fovDegrees * Math.PI) / 360) * aspect;
+        if (half > C.reach) tx = clamp(tx, px + C.reach - half, px - C.reach + half);
     }
     return {
         position: { x: tx, y: C.target.y + up * dist, z: tz + back * dist },

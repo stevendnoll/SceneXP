@@ -242,9 +242,9 @@ test('on a QA host the lab panel offers each leaf count, the shadows switch, and
     expect(built).toBeTruthy();
     const row = built.children.find((c) => c.className === 'lab-buttons');
     const { LEAVES_CONFIG: C } = await import('../www/leaves/js/config.js');
-    // The counts, shadows, Halloween week, the finds showing, and the cat.
-    expect(row.children).toHaveLength(C.leaves.labCounts.length + 4);
-    expect(row.children.map((b) => b.textContent).slice(-3)).toEqual(['Halloween off', 'Finds hidden', 'Cat now']);
+    // The counts, shadows, Halloween week, and the finds showing.
+    expect(row.children).toHaveLength(C.leaves.labCounts.length + 3);
+    expect(row.children.map((b) => b.textContent).slice(-2)).toEqual(['Halloween week off', 'Finds hidden']);
     fire(row.children[2], 'click');
     expect(dom.windowStub.location.search).toBe(`?leaves=${C.leaves.labCounts[2]}`);
     expect(panel).toBeTruthy();
@@ -624,6 +624,7 @@ describe('delights and surprises (M6)', () => {
         const main = await boot();
         const s = main.getState();
         expect(s.halloween).toBe(true);
+        expect(s.decor).toBe(true);
         expect(s.treaters).not.toBe(null);
         fire(dom.el('free-btn'), 'click');
         frames(main, 30, 10);
@@ -631,11 +632,14 @@ describe('delights and surprises (M6)', () => {
         expect(dom.el('round-status').textContent.length).toBeGreaterThan(0);
     });
 
-    test('and not on any other day, unless the lab asks for it', async () => {
+    test('the decorations are up all October, the week\'s extras are not, and the lab can ask for either', async () => {
         jest.setSystemTime(new Date(2026, 9, 7, 15));
         let main = await boot();
+        expect(main.getState().decor).toBe(true);
         expect(main.getState().halloween).toBe(false);
         expect(main.getState().treaters).toBe(null);
+        fire(dom.el('blocker'), 'click');
+        expect(() => frames(main, 1, 20)).not.toThrow();
         dom.uninstall();
         jest.resetModules();
         installThree();
@@ -643,30 +647,22 @@ describe('delights and surprises (M6)', () => {
         dom.windowStub.location.search = '?leaves=600&halloween=1';
         main = await boot();
         expect(main.getState().halloween).toBe(true);
-    });
-
-    test('the lab\'s Cat now sends the cat into a pile, out it bursts, and off it goes', async () => {
-        const main = await boot();
-        fire(dom.el('free-btn'), 'click');
-        expect(main.__test__.catNow()).toBe(true);
-        let out = false;
-        for (let k = 0; k < 40 && !out; k++) {
-            frames(main, 0.1, 20);
-            out = main.getState().cat.visible;
-        }
-        expect(out).toBe(true);
-        expect(main.getState().cat.visits).toBe(1);
-        expect(dom.el('round-status').textContent).toMatch(/cat bursts out/);
-        frames(main, 15, 20);
-        expect(main.getState().cat.visible).toBe(false);
-        expect(main.getState().cat.state).toBe('away');
-    });
-
-    test('the squirrel comes along the fence on its own', async () => {
-        const main = await boot();
-        fire(dom.el('free-btn'), 'click');
-        frames(main, C0.squirrel.first[1] + 4, 10);
-        expect(main.getState().squirrel.visible).toBe(true);
+        dom.uninstall();
+        jest.resetModules();
+        installThree();
+        dom = installDom({ innerWidth: 390, innerHeight: 844 });
+        dom.windowStub.location.search = '?leaves=600&halloween=0';
+        main = await boot();
+        expect(main.getState().decor).toBe(false);
+        // And come November they are down.
+        dom.uninstall();
+        jest.resetModules();
+        installThree();
+        dom = installDom({ innerWidth: 390, innerHeight: 844 });
+        dom.windowStub.location.search = '?leaves=600';
+        jest.setSystemTime(new Date(2026, 10, 3, 15));
+        main = await boot();
+        expect(main.getState().decor).toBe(false);
     });
 
     describe('a find', () => {

@@ -1,7 +1,8 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * halloween.js - Halloween week in the yard (M6), from October 24 to 31 by
- * the visitor's own calendar.
+ * halloween.js - Halloween in the yard (M6): when it is, and Halloween
+ * week itself, from October 24 to 31 by the visitor's own calendar. (The
+ * decorations that are up all October are decorations.js.)
  *
  * Three things, all kind spooky and never scary: the porch pumpkins are
  * carved into jack-o-lanterns lit from inside, a plastic skeleton hand is
@@ -31,15 +32,24 @@ export function isHalloweenWeek(date, H) {
     return date.getMonth() === H.month && day >= H.firstDay && day <= H.lastDay;
 }
 
-/** Halloween week from the address on a QA host (`?halloween=1` or `0`),
- *  or else from the date. */
-export function halloweenFor(search, date, H, qa) {
+/** Whether the decorations are up: all of October (M6 QA). */
+export function isDecorated(date, H) {
+    return Boolean(date && typeof date.getMonth === 'function' && date.getMonth() === H.month);
+}
+
+/**
+ * The season for this visit: { decor, week }. The decorations are up all
+ * October and Halloween week's extras come on the 24th, by the date, or on
+ * a QA host by the address: `?halloween=1` for everything, `0` for none.
+ */
+export function seasonFor(search, date, H, qa) {
     if (qa) {
         const ask = new URLSearchParams(search || '').get('halloween');
-        if (ask === '1') return true;
-        if (ask === '0') return false;
+        if (ask === '1') return { decor: true, week: true };
+        if (ask === '0') return { decor: false, week: false };
     }
-    return isHalloweenWeek(date, H);
+    const week = isHalloweenWeek(date, H);
+    return { decor: week || isDecorated(date, H), week };
 }
 
 /** The trick-or-treaters, out of sight, the first pair a little way off. */
@@ -126,9 +136,11 @@ function mesh(geometry, material, x, y, z, shadow = true) {
     return m;
 }
 
-/** A carved face, drawn in glow on a clear canvas (eyes, a nose, a grin
- *  with two teeth), or null where there is no document (under test). */
-function faceTexture(glow) {
+/** A jack-o-lantern's face, drawn in `color` on a clear canvas (eyes, a
+ *  nose, a grin with two teeth), or null where there is no document (under
+ *  test). Carved and lit on the porch, printed on the neighbor's inflatable
+ *  (decorations.js). */
+export function faceTexture(color) {
     if (typeof document === 'undefined') return null;
     const canvas = document.createElement('canvas');
     canvas.width = 128;
@@ -136,7 +148,7 @@ function faceTexture(glow) {
     const ctx = canvas.getContext && canvas.getContext('2d');
     if (!ctx) return null;
     ctx.clearRect(0, 0, 128, 96);
-    ctx.fillStyle = `#${glow.toString(16).padStart(6, '0')}`;
+    ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
     const tri = (a, b, c) => {
         ctx.beginPath();
         ctx.moveTo(...a);
@@ -184,23 +196,31 @@ export function carvePumpkins(pumpkins, H, map = faceTexture(H.glow)) {
     for (const k of H.carved) {
         const p = pumpkins[k];
         if (!p) continue;
-        const squash = 0.72;
-        const geometry = new THREE.PlaneGeometry(1.4 * p.r, 1.05 * p.r * squash, 14, 10);
-        const at = geometry.attributes && geometry.attributes.position;
-        if (at && typeof at.count === 'number') {
-            for (let v = 0; v < at.count; v++) {
-                const x = at.getX(v);
-                const y = at.getY(v);
-                const inside = 1 - (x * x) / (p.r * p.r) - (y * y) / (squash * squash * p.r * p.r);
-                at.setXYZ(v, x, y, p.r * Math.sqrt(Math.max(0, inside)) + 0.003);
-            }
-            at.needsUpdate = true;
-        }
-        const face = new THREE.Mesh(geometry, glow);
-        face.position.set(p.x, p.y + p.r * squash, p.z);
+        const face = faceOnPumpkin(p.r, 0.72, glow);
+        face.position.set(p.x, p.y + p.r * 0.72, p.z);
         group.add(face);
     }
     return group;
+}
+
+/**
+ * A face patch for the front (+z) of a sphere of radius `r` squashed to
+ * `squash` as tall as wide, centered on its middle: finely divided and laid
+ * onto the skin, a few millimeters proud of it.
+ */
+export function faceOnPumpkin(r, squash, material, proud = 0.003) {
+    const geometry = new THREE.PlaneGeometry(1.4 * r, 1.05 * r * squash, 14, 10);
+    const at = geometry.attributes && geometry.attributes.position;
+    if (at && typeof at.count === 'number') {
+        for (let v = 0; v < at.count; v++) {
+            const x = at.getX(v);
+            const y = at.getY(v);
+            const inside = 1 - (x * x) / (r * r) - (y * y) / (squash * squash * r * r);
+            at.setXYZ(v, x, y, r * Math.sqrt(Math.max(0, inside)) + proud);
+        }
+        at.needsUpdate = true;
+    }
+    return new THREE.Mesh(geometry, material);
 }
 
 /** A pumpkin pail with a handle, its bottom at the origin. */

@@ -8,7 +8,7 @@
  * sim already knows about (config.yard.walls). The houses and the street
  * are house.js's (M5), the trees trees.js's.
  */
-import { buildOurHouse, buildNeighborHouse, buildStreet } from './house.min.js';
+import { buildOurHouse, buildNeighborHouse, buildStreet, buildStreetHouse } from './house.min.js';
 
 /** A grassy canvas texture: mottled greens with short strokes for blades. */
 function lawnTexture(base, dark, seed = 1) {
@@ -151,6 +151,50 @@ function buildNeighborDoor(scene, config) {
 }
 
 /**
+ * Every flat piece of ground, as { name, rect, color, y, grass }: our lawn,
+ * the neighbor's, the strip along the sidewalk, the sidewalk, the street,
+ * and UNDER ALL OF IT THE REST OF THE BLOCK, a lawn reaching well past both
+ * neighbors and back behind the houses. The camera slides to keep the
+ * person's sides in view and widens to keep the neighbor in frame, and
+ * where the ground stopped it showed the sky through the lawn (Steve's M6
+ * QA: "an empty blue void around the halfway point of his yard"). Pure, so
+ * a test checks the ground covers every view the camera can take.
+ */
+export function groundRects(config) {
+    const Y = config.yard;
+    const L = config.look;
+    const b = Y.bounds;
+    const block = Y.block;
+    return [
+        { name: 'block', rect: { minX: block.minX, maxX: block.maxX, minZ: block.minZ, maxZ: Y.sidewalk.minZ }, color: L.neighborLawn, y: -0.01, grass: 17 },
+        { name: 'lawn', rect: Y.lawn, color: L.lawn, y: 0, grass: 7 },
+        { name: 'neighbor-lawn', rect: Y.neighbor, color: L.neighborLawn, y: 0, grass: 11 },
+        // The strip of lawn between the yards' edge and the sidewalk.
+        { name: 'strip', rect: { minX: b.minX, maxX: b.maxX, minZ: Y.lawn.maxZ, maxZ: Y.sidewalk.minZ }, color: L.lawn, y: 0, grass: 13 },
+        { name: 'sidewalk', rect: { minX: block.minX, maxX: block.maxX, minZ: Y.sidewalk.minZ, maxZ: Y.sidewalk.maxZ }, color: L.sidewalk, y: 0.01 },
+        { name: 'street', rect: { minX: block.minX - 30, maxX: block.maxX + 30, minZ: Y.sidewalk.maxZ, maxZ: b.maxZ + 40 }, color: L.street, y: -0.02 }
+    ];
+}
+
+/** The sidewalk's expansion joints: a thin dark line across it every
+ *  `every` meters, one instanced mesh. */
+function sidewalkJoints(Y, look, every = 1.6) {
+    const span = Y.sidewalk.maxZ - Y.sidewalk.minZ;
+    const xs = [];
+    for (let x = Y.block.minX + every; x < Y.block.maxX; x += every) xs.push(x);
+    const mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.03, span),
+        new THREE.MeshLambertMaterial({ color: look.sidewalkJoint }), xs.length);
+    const m = new THREE.Matrix4();
+    const turn = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
+    xs.forEach((x, k) => {
+        m.makeTranslation(x, 0.012, (Y.sidewalk.minZ + Y.sidewalk.maxZ) / 2).multiply(turn);
+        mesh.setMatrixAt(k, m);
+    });
+    mesh.receiveShadow = true;
+    return mesh;
+}
+
+/**
  * Build the yard into `scene`. Returns { sun, neighborDoor }: the sun for
  * its shadows, and the hinge of the neighbor's door for main.js to swing.
  */
@@ -159,20 +203,12 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     const look = config.look;
     const b = Y.bounds;
 
-    const lawn = ground(Y.lawn, look.lawn, 0, lawnTexture(look.lawn, look.lawnDark, 7));
-    lawn.name = 'lawn';
-    scene.add(lawn);
-    scene.add(ground(Y.neighbor, look.neighborLawn, 0, lawnTexture(look.neighborLawn, look.lawnDark, 11)));
-    // The strip of lawn between the yards' edge and the sidewalk.
-    scene.add(ground({ minX: b.minX, maxX: b.maxX, minZ: Y.lawn.maxZ, maxZ: Y.sidewalk.minZ },
-        look.lawn, 0, lawnTexture(look.lawn, look.lawnDark, 13)));
-    scene.add(ground({ minX: b.minX - 20, maxX: b.maxX + 20, minZ: Y.sidewalk.minZ, maxZ: Y.sidewalk.maxZ },
-        look.sidewalk, 0.01, null));
-    scene.add(ground({ minX: b.minX - 60, maxX: b.maxX + 60, minZ: Y.sidewalk.maxZ, maxZ: b.maxZ + 40 },
-        look.street, -0.02, null));
-    // Lawn beyond the hedge, so the left edge of the view is not a cliff.
-    scene.add(ground({ minX: b.minX - 30, maxX: b.minX, minZ: b.minZ - 20, maxZ: Y.sidewalk.minZ },
-        look.neighborLawn, -0.005, null));
+    for (const g of groundRects(config)) {
+        const mesh = ground(g.rect, g.color, g.y, g.grass ? lawnTexture(g.color, look.lawnDark, g.grass) : null);
+        mesh.name = g.name;
+        scene.add(mesh);
+    }
+    scene.add(sidewalkJoints(Y, look));
 
     const tarp = ground(Y.tarp, look.tarp, 0.004, null);
     tarp.name = 'tarp';
@@ -182,6 +218,7 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     scene.add(buildNeighborHouse(Y, look, config.neighbor.door.x));
     const neighborDoor = buildNeighborDoor(scene, config);
     scene.add(buildStreet(Y, look));
+    for (const h of Y.street || []) scene.add(buildStreetHouse(h, look, Y));
     const sky = skyTexture(look.sky);
     if (sky) scene.background = sky;
     // The gap between the two houses is a side fence.

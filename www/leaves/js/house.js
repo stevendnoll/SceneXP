@@ -18,6 +18,10 @@
  * config.yard.pumpkins, the same boxes the sim's leaves land on and the
  * person walks round, so the two can never disagree.
  *
+ * DOWN THE BLOCK (M6 QA), a house past the hedge and one past the
+ * neighbor's, each with a garage and a driveway, so a view that slides or
+ * widens shows a street rather than the edge of the world.
+ *
  * Plain boxes and a few spheres and tori. Battens and siding lines are each
  * one instanced mesh.
  */
@@ -259,5 +263,50 @@ export function buildStreet(Y, L) {
             }
         }
     }
+    return group;
+}
+
+/**
+ * A house down the block (M6), from `h` in config.yard.street: its front
+ * wall at z = h.front, lap siding, white trim and windows, a front door and
+ * step, a garage door on the side `h.garage` names (-1 left, 1 right), and a
+ * driveway from it to the sidewalk. Returns the group.
+ */
+export function buildStreetHouse(h, L, Y) {
+    const group = new THREE.Group();
+    group.name = `house-${h.name}`;
+    const w = h.maxX - h.minX;
+    const cx = (h.minX + h.maxX) / 2;
+    const cz = h.front - h.depth / 2;
+    const trim = material(L.trim);
+    group.add(box(w, h.wall, h.depth, material(h.siding), cx, h.wall / 2, cz));
+    const laps = [];
+    for (let y = 0.2; y < h.wall - 0.1; y += 0.22) laps.push([cx, y, h.front + 0.012]);
+    group.add(rows(new THREE.BoxGeometry(w, 0.025, 0.025), material(h.lap), laps));
+    for (const x of [h.minX + 0.08, h.maxX - 0.08]) group.add(box(0.16, h.wall, 0.06, trim, x, h.wall / 2, h.front + 0.03));
+    group.add(box(w + 0.8, 0.18, 0.12, trim, cx, h.wall - 0.05, h.front + 0.38));
+    group.add(gableRoof(h, cz, material(h.roof)));
+    // The garage at one end, the door and windows across the rest.
+    const gw = 3.2;
+    const gx = h.garage > 0 ? h.maxX - 0.4 - gw / 2 : h.minX + 0.4 + gw / 2;
+    group.add(box(gw + 0.2, 2.35, 0.06, trim, gx, 1.175, h.front + 0.03));
+    group.add(box(gw, 2.2, 0.06, material(h.garageDoor), gx, 1.1, h.front + 0.05));
+    const panels = [];
+    for (let y = 0.45; y < 2.1; y += 0.5) panels.push([gx, y, h.front + 0.085]);
+    group.add(rows(new THREE.BoxGeometry(gw - 0.1, 0.03, 0.02), material(h.lap), panels));
+    const rest = h.garage > 0 ? { from: h.minX, to: gx - gw / 2 } : { from: gx + gw / 2, to: h.maxX };
+    const doorX = (rest.from + rest.to) / 2;
+    group.add(box(1.0, 2.1, 0.06, material(h.door), doorX, 1.05 + 0.15, h.front + 0.05));
+    group.add(box(1.6, 0.15, 0.7, material(L.porch), doorX, 0.075, h.front + 0.35));
+    const glass = new THREE.MeshStandardMaterial({ color: L.glass, metalness: 0.35, roughness: 0.15 });
+    for (const x of [(rest.from + doorX) / 2, (doorX + rest.to) / 2]) windowAt(group, x, 1.75, h.front, { w: 1.2, h: 1.5, frame: trim, glass });
+    // The driveway, from the garage to the sidewalk, a hair over the lawn.
+    const len = Y.sidewalk.minZ - h.front;
+    const drive = new THREE.Mesh(new THREE.PlaneGeometry(gw + 0.4, len),
+        material(L.walk, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+    drive.rotation.x = -Math.PI / 2;
+    drive.position.set(gx, 0.004, h.front + len / 2);
+    drive.receiveShadow = true;
+    group.add(drive);
     return group;
 }

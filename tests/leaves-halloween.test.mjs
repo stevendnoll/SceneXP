@@ -29,14 +29,22 @@ describe('when it is Halloween week', () => {
         expect(H.isHalloweenWeek(null, HW)).toBe(false);
     });
 
+    test('the decorations are up all October, and the week\'s extras from the 24th', () => {
+        expect(H.seasonFor('', new Date(2026, 8, 30), HW, false)).toEqual({ decor: false, week: false });
+        expect(H.seasonFor('', new Date(2026, 9, 1), HW, false)).toEqual({ decor: true, week: false });
+        expect(H.seasonFor('', new Date(2026, 9, 7), HW, false)).toEqual({ decor: true, week: false });
+        expect(H.seasonFor('', new Date(2026, 9, 24), HW, false)).toEqual({ decor: true, week: true });
+        expect(H.seasonFor('', new Date(2026, 10, 1), HW, false)).toEqual({ decor: false, week: false });
+    });
+
     test('the lab\'s address decides it on a QA host, and nowhere else', () => {
         const july = new Date(2026, 6, 4);
         const oct28 = new Date(2026, 9, 28);
-        expect(H.halloweenFor('?halloween=1', july, HW, true)).toBe(true);
-        expect(H.halloweenFor('?halloween=0', oct28, HW, true)).toBe(false);
-        expect(H.halloweenFor('?halloween=1', july, HW, false)).toBe(false);
-        expect(H.halloweenFor('?halloween=0', oct28, HW, false)).toBe(true);
-        expect(H.halloweenFor('', oct28, HW, true)).toBe(true);
+        expect(H.seasonFor('?halloween=1', july, HW, true)).toEqual({ decor: true, week: true });
+        expect(H.seasonFor('?halloween=0', oct28, HW, true)).toEqual({ decor: false, week: false });
+        expect(H.seasonFor('?halloween=1', july, HW, false)).toEqual({ decor: false, week: false });
+        expect(H.seasonFor('?halloween=0', oct28, HW, false)).toEqual({ decor: true, week: true });
+        expect(H.seasonFor('', oct28, HW, true)).toEqual({ decor: true, week: true });
     });
 });
 
@@ -121,9 +129,11 @@ describe('the trick-or-treaters', () => {
 
 describe('the drawing, on the real three.js', () => {
     let THREE;
+    let Dc;
     beforeAll(async () => {
         THREE = await loadRealThree();
         globalThis.THREE = THREE;
+        Dc = await import('../www/leaves/js/decorations.js');
     });
     afterAll(() => { delete globalThis.THREE; });
 
@@ -178,4 +188,65 @@ describe('the drawing, on the real three.js', () => {
             expect(worst).toBeLessThan(0.006);
         });
     });
+
+    test('NOTHING IS ON OUR LAWN: every decoration hangs on a house, sits up high, or stands past the sim\'s ground', () => {
+        const { group } = Dc.buildDecorations(C);
+        group.updateMatrixWorld(true);
+        const Y = C.yard;
+        const box = new THREE.Box3();
+        let meshes = 0;
+        group.traverse((o) => {
+            if (!o.isMesh && !o.isLine) return;
+            meshes++;
+            box.setFromObject(o);
+            const onAHouse = box.max.z <= Y.lawn.minZ + 0.6;
+            const overhead = box.min.y >= 2;
+            const pastTheSim = box.min.x > Y.bounds.maxX;
+            expect({ name: o.name || o.type, ok: onAHouse || overhead || pastTheSim }).toEqual({ name: o.name || o.type, ok: true });
+        });
+        expect(meshes).toBeGreaterThan(20);
+    });
+
+    test('the bats fly up our white wall beside the porch, under the eave, clear of the stone base', () => {
+        const porch = C.yard.boxes.find((b) => b.name === 'porch');
+        const H = C.yard.house;
+        const flight = Dc.batFlight(HW.decor, H, porch.maxX);
+        expect(flight.length).toBeGreaterThanOrEqual(HW.decor.bats - 2);
+        for (const b of flight) {
+            expect(b.x - b.size / 2).toBeGreaterThan(porch.maxX + 0.1);
+            expect(b.x + b.size / 2).toBeLessThan(H.maxX);
+            expect(b.y - b.size * 0.2).toBeGreaterThan(0.6);
+            expect(b.y + b.size * 0.2).toBeLessThan(H.wall - 0.1);
+        }
+        // Rising as they go, and larger.
+        expect(flight[flight.length - 1].y).toBeGreaterThan(flight[0].y + 1.2);
+        expect(flight[flight.length - 1].size).toBeGreaterThan(flight[0].size);
+    });
+
+    test('string lights hang in scallops below their anchors, a bulb about every 30 cm', () => {
+        const anchors = [{ x: 0, y: 3, z: 0 }, { x: 2, y: 3, z: 0 }, { x: 4, y: 3, z: 0 }];
+        const { bulbs, wire } = Dc.stringLights(anchors, 0.13, 0.3);
+        expect(bulbs.length).toBeGreaterThanOrEqual(12);
+        expect(bulbs.length).toBeLessThanOrEqual(14);
+        for (const b of bulbs) expect(b.y).toBeLessThan(3);
+        const lowest = Math.min(...wire.map((p) => p[1]));
+        expect(lowest).toBeCloseTo(3 - 0.13, 2);
+        expect(wire[0][1]).toBe(3);
+    });
+
+    test('the neighbor\'s inflatable and graveyard stand on his side, clear of his house, his tree and his path', () => {
+        const D = HW.decor;
+        const NH = C.yard.neighborHouse;
+        const aspen = C.yard.trees.find((t) => t.species === 'quaking-aspen');
+        const things = [{ x: D.inflatable.x, z: D.inflatable.z, r: D.inflatable.r }, ...D.graves.map((g) => ({ x: g.x, z: g.z, r: 0.35 }))];
+        for (const t of things) {
+            expect(t.x - t.r).toBeGreaterThan(C.yard.bounds.maxX);
+            expect(t.x - t.r).toBeGreaterThan(C.neighbor.lineMax);
+            expect(t.z - t.r).toBeGreaterThan(C.yard.neighbor.minZ);
+            expect(t.z + t.r).toBeLessThan(C.yard.sidewalk.minZ);
+            expect(Math.hypot(t.x - aspen.x, t.z - aspen.z)).toBeGreaterThan(t.r + 0.5);
+        }
+        expect(D.inflatable.x).toBeLessThan(NH.maxX);
+    });
 });
+
