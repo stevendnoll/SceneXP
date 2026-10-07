@@ -12,8 +12,10 @@
  *   walk-in      back to his door
  *   door-close   and in
  *
+ * A VISIT LASTS UNTIL HIS LAWN IS CLEAR (`clearLeft`, or `visitMax` seconds).
+ *
  * A VISIT ESCALATES: each comes sooner (a lower `visitAt` and a shorter
- * `cooldown`), blows longer (`passes`), watches longer, and from visit
+ * `cooldown`), watches longer, and from visit
  * `bigFrom` (counting from 0) he brings the big blower.
  *
  * HIS LAST WORD. When the round says so (`input.revenge`), he comes out (or
@@ -56,7 +58,10 @@ export function createNeighbor(N) {
         revengeDone: false,
         segs: [],
         seg: 0,
-        revengeFrom: 0
+        revengeFrom: 0,
+        // How many were on his lawn when he last planned his sweep, to tell
+        // whether a pass made any difference.
+        lastCount: 0
     };
 }
 
@@ -115,8 +120,8 @@ function start(nb, N, revenge, leaves = 0) {
  * to the fence, then close to the fence, where the air landing just short of
  * it lifts them over (measured: from the far line alone they piled against
  * the pickets and stayed). Along the fence each line runs from the nearest
- * of them to the farthest, at least a couple of meters. A visit repeats the
- * pair `passes` times. His last word sweeps the whole lawn.
+ * of them to the farthest, at least a couple of meters. His last word
+ * sweeps the whole lawn.
  */
 function planSweep(nb, input, N) {
     const fence = (z) => ({ x: N.nearLine, z });
@@ -139,10 +144,9 @@ function planSweep(nb, input, N) {
     const pair = far > N.nearLine + 0.8
         ? [{ x: far, z: a }, { x: far, z: b }, fence(b), fence(a)]
         : [fence(a), fence(b)];
-    const passes = nb.revenge ? 1 : pick(N.passes, nb.visits);
-    nb.segs = [];
-    for (let p = 0; p < passes; p++) nb.segs.push(...pair);
+    nb.segs = pair;
     nb.seg = 0;
+    nb.lastCount = input.leaves;
 }
 
 /**
@@ -175,6 +179,17 @@ export function stepNeighbor(nb, dt, input, N) {
         }
     }
 
+    // THE ROUND IS OVER: a visit in progress stops where it is and he waves,
+    // so the end of the round is not kept waiting on him (Steve's M3 QA:
+    // after the clock ran out it "shows the neighbor for several seconds").
+    if (input.over && !nb.revenge && (nb.state === 'door-open' || nb.state === 'walk-out' || nb.state === 'blow')) {
+        nb.state = 'watch';
+        nb.t = 0;
+        nb.blowing = false;
+        nb.speed = 0;
+        nb.door = 1;
+    }
+
     switch (nb.state) {
         case 'inside':
             nb.cooldown -= step;
@@ -184,7 +199,8 @@ export function stepNeighbor(nb, dt, input, N) {
             }
             return null;
         case 'door-open':
-            nb.door = Math.min(1, nb.door + step / N.doorSeconds);
+            // He is in a hurry for his last word.
+            nb.door = Math.min(1, nb.door + step / (N.doorSeconds * (nb.revenge ? 0.5 : 1)));
             if (nb.door >= 1) {
                 planSweep(nb, input, N);
                 nb.state = 'walk-out';
@@ -217,15 +233,27 @@ export function stepNeighbor(nb, dt, input, N) {
             nb.speed = step > 0 ? move / step : 0;
             nb.stride += move;
             turnTo(nb, FACING_YARD, step);
+            // HE KEEPS AT IT UNTIL HIS LAWN IS CLEAR (Steve's M3 QA: he went
+            // back in with "a lot of leaves in his yard", then came out again
+            // a few seconds later). Each time round his path he plans it
+            // again from where the leaves are now, and stops when no more
+            // than `clearLeft` are left, or when a whole pass got him nowhere
+            // (a few leaves he cannot reach), but never while we are still
+            // sending them over. `visitMax` is only a backstop.
+            let cleared = false;
             if (move >= d - 1e-9) {
                 nb.seg += 1;
-                // His last word goes round again until it is done.
-                if (nb.seg >= nb.segs.length && nb.revenge) nb.seg = 0;
+                if (nb.seg >= nb.segs.length) {
+                    const stuck = input.leaves <= nb.lastCount && input.leaves > nb.lastCount * (1 - N.progress);
+                    if (nb.revenge) nb.seg = 0;
+                    else if (input.leaves <= N.clearLeft || stuck || nb.t >= N.visitMax) cleared = true;
+                    else planSweep(nb, input, N);
+                }
             }
             const doneRevenge = nb.revenge
                 && (input.leaves <= Math.max(N.revengeLeft, nb.revengeFrom * N.revengeKeep)
                     || nb.t >= N.revengeSeconds);
-            if ((!nb.revenge && nb.seg >= nb.segs.length) || doneRevenge) {
+            if (cleared || doneRevenge) {
                 nb.blowing = false;
                 nb.state = 'watch';
                 nb.t = 0;

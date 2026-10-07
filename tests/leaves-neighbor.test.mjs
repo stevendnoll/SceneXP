@@ -67,10 +67,9 @@ describe('when he comes out', () => {
         expect(again.state).toBe('inside');
     });
 
-    test('each visit comes sooner and blows longer, and the third brings the big blower', () => {
+    test('each visit comes sooner, and the third brings the big blower', () => {
         expect(N.visitAt[1]).toBeLessThan(N.visitAt[0]);
         expect(N.cooldown[1]).toBeLessThan(N.cooldown[0]);
-        expect(N.passes[1]).toBeGreaterThanOrEqual(N.passes[0]);
         const nb = Nb.createNeighbor(N);
         const input = { ...quiet, leaves: 100, minZ: 0, maxZ: 3, maxX: 12 };
         const bigOnVisit = [];
@@ -85,6 +84,49 @@ describe('when he comes out', () => {
         expect(fresh.state).toBe('inside');
         expect(drive(fresh, input, N.cooldown[1] - 0.2)).toEqual([]);
         expect(drive(fresh, input, 0.5)).toEqual(['out']);
+    });
+
+    // STEVE'S M3 QA: he went back in with "a lot of leaves in his yard", then
+    // came out again a few seconds later.
+    test('he keeps at it while his lawn is clearing, and while we keep sending more', () => {
+        const nb = Nb.createNeighbor(N);
+        const input = { ...quiet, leaves: 400, minZ: 0, maxZ: 2, maxX: 12 };
+        while (nb.state !== 'blow') Nb.stepNeighbor(nb, 1 / 30, input, N);
+        // Clearing steadily (a good share every pass), he goes round again
+        // and again.
+        let leaves = 400;
+        for (let t = 0; t < 40 && leaves > 60; t += 1 / 30) {
+            leaves *= 0.995;
+            Nb.stepNeighbor(nb, 1 / 30, { ...input, leaves: Math.round(leaves) }, N);
+            expect(nb.state).toBe('blow');
+        }
+        // And while we pile more on, he stays out however long it takes.
+        for (let t = 0; t < 30; t += 1 / 30) {
+            leaves += 1;
+            Nb.stepNeighbor(nb, 1 / 30, { ...input, leaves }, N);
+        }
+        expect(nb.state).toBe('blow');
+        // Down to a few, he is done.
+        expect(drive(nb, { ...input, leaves: N.clearLeft }, 30)[0]).toBe('watch');
+    });
+
+    test('a pass that gets nowhere ends the visit, so a few leaves he cannot reach do not keep him out', () => {
+        const nb = Nb.createNeighbor(N);
+        const input = { ...quiet, leaves: 80, minZ: 0, maxZ: 2, maxX: 12 };
+        expect(drive(nb, input, 30)).toEqual(expect.arrayContaining(['out', 'blow', 'watch']));
+        expect(nb.state).not.toBe('blow');
+    });
+
+    test('when the round ends mid-visit, he stops blowing and waves', () => {
+        const nb = Nb.createNeighbor(N);
+        const input = { ...quiet, leaves: 300, minZ: 0, maxZ: 2, maxX: 12 };
+        while (nb.state !== 'blow') Nb.stepNeighbor(nb, 1 / 30, input, N);
+        Nb.stepNeighbor(nb, 1 / 30, { ...input, over: true }, N);
+        expect(nb.blowing).toBe(false);
+        expect(nb.state).toBe('watch');
+        drive(nb, { ...input, over: true }, 5);
+        expect(nb.arms).toBe('wave');
+        expect(nb.state).toBe('watch');
     });
 
     test('he blows from beyond the farthest of our leaves, then close to the fence', () => {
@@ -200,7 +242,7 @@ test('in the real sim, a visit sends our leaves back over the fence', () => {
     const before = Sc.tally(sim, C.yard);
     expect(before.neighbor).toBe(300);
     const nb = Nb.createNeighbor(N);
-    for (let f = 0; f < 60 * 40 && nb.visits === 0; f++) {
+    for (let f = 0; f < 60 * 70 && nb.visits === 0; f++) {
         const t = Sc.tally(sim, C.yard);
         Nb.stepNeighbor(nb, 1 / 60, { leaves: t.neighbor, minZ: t.nearZ, maxZ: t.farZ, maxX: t.deepX, active: true, revenge: false, over: false }, N);
         const his = S.makeJet(Nb.neighborBlower(C.blower, N, nb.big), nb.x, nb.z, Math.sin(nb.heading), Math.cos(nb.heading), nb.blowing);
@@ -208,7 +250,8 @@ test('in the real sim, a visit sends our leaves back over the fence', () => {
     }
     const after = Sc.tally(sim, C.yard);
     expect(nb.visits).toBe(1);
-    expect(after.neighbor).toBeLessThan(before.neighbor * 0.5);
+    // He went in with his lawn all but clear.
+    expect(after.neighbor).toBeLessThanOrEqual(N.clearLeft + 10);
     // They went back to us, not into his house or off the map.
     expect(after.lawn + after.tarp + after.street).toBeGreaterThan(800 - 300 + 150);
 });

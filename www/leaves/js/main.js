@@ -732,6 +732,7 @@ function stepFinale(dt) {
     operator.speed = pose.speed;
     operator.stride = pose.stride;
     operator.pitch = pose.pitch;
+    operator.roll = pose.roll;
     operator.lift = pose.lift;
     finale.arms = pose.arms;
     if (finale.t >= plan.t.air) fireBurst();
@@ -745,6 +746,7 @@ function standUp() {
     operator.x = Math.min(area.maxX, Math.max(area.minX, operator.x));
     operator.z = Math.min(area.maxZ, Math.max(area.minZ, operator.z));
     operator.pitch = 0;
+    operator.roll = 0;
     operator.lift = 0;
     operator.speed = 0;
     operator.hideBlower = false;

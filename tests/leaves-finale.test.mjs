@@ -71,7 +71,7 @@ describe('the motion', () => {
     test('goes through every phase in order, and never jumps', () => {
         for (const plan of [good, flop]) {
             const poses = sample(plan);
-            const order = ['pause', 'walk', 'run', 'air', 'down', 'up', 'end'];
+            const order = ['pause', 'walk', 'run', 'air', 'down', 'roll', 'end'];
             const seen = [...new Set(poses.map((p) => p.phase))];
             expect(seen).toEqual(order);
             let worst = 0;
@@ -96,31 +96,46 @@ describe('the motion', () => {
         expect(air[air.length - 1].pitch).toBeGreaterThan(Math.PI / 2 - 0.05);
     });
 
-    test('a good dive sinks into the pile, then pops up waist-deep, waving', () => {
+    test('a good dive sinks into the pile and rolls part way over, arms still overhead', () => {
         const down = Fn.finaleAt(good, good.t.air + 0.1);
         // Lying face down, the hips on the surface it landed on, sunk in.
         expect(down.pitch).toBeCloseTo(Math.PI / 2, 9);
+        expect(down.roll).toBe(0);
         expect(down.lift + Fn.PIVOT).toBeCloseTo(good.surface + 0.12, 9);
         expect(good.surface).toBeLessThan(0.6);
         const end = Fn.finaleAt(good, good.total + 1);
         expect(end.phase).toBe('end');
-        expect(end.pitch).toBe(0);
-        expect(end.arms).toBe('wave');
-        // Waist (a meter up from the feet) about level with the pile's top.
-        expect(end.lift + 1.05).toBeCloseTo(0.6, 6);
+        expect(Math.abs(end.roll)).toBeCloseTo(F.roll, 9);
+        expect(end.arms).toBe('up');
     });
 
-    test('a flop lies on the lawn, then gets up slowly, bent, a hand on the back, feet on the ground', () => {
+    // STEVE'S M3 QA: "we don't need the character to stand back up".
+    test('nobody stands back up: from the landing on they stay lying where they landed', () => {
+        for (const plan of [good, flop]) {
+            const after = sample(plan).filter((p) => p.t >= plan.t.air);
+            for (const p of after) {
+                expect(p.pitch).toBeCloseTo(Math.PI / 2, 9);
+                expect(p.lift).toBeCloseTo(after[0].lift, 9);
+                expect(p.x).toBe(plan.land.x);
+                expect(p.z).toBe(plan.land.z);
+            }
+        }
+    });
+
+    test('a flop lies on the lawn and rolls over with a hand on the back', () => {
         const down = Fn.finaleAt(flop, flop.t.air + 0.1);
         expect(down.lift + Fn.PIVOT).toBeCloseTo(0.12 + 0.12, 6);
         const end = Fn.finaleAt(flop, flop.total + 1);
         expect(end.arms).toBe('back');
-        expect(end.pitch).toBeGreaterThan(0.3);
-        // Tipped about the hips, the feet are where the hips' lean put them.
-        const feet = end.lift + Fn.PIVOT - Fn.PIVOT * Math.cos(end.pitch);
-        expect(Math.abs(feet)).toBeLessThan(1e-9);
-        // And it takes longer than popping out of a good pile.
-        expect(flop.t.end - flop.t.down).toBeGreaterThan(good.t.end - good.t.down);
+        expect(Math.abs(end.roll)).toBeCloseTo(F.roll, 9);
+    });
+
+    test('it is short: well under the round\'s cap, wherever they finished', () => {
+        for (const from of [{ x: -5, z: -1 }, { x: 9, z: 9 }]) {
+            for (const height of [0.6, 0.1]) {
+                expect(Fn.planFinale(from, { ...corner, height }, F, area).total).toBeLessThan(6.5);
+            }
+        }
     });
 
     test('reduced motion makes it a gentle hop', () => {
@@ -228,6 +243,38 @@ describe('the dive poses, on the real three.js', () => {
         expect(right.z).toBeLessThan(-0.1);
         expect(right.y).toBeGreaterThan(0.8);
         expect(right.y).toBeLessThan(1.05);
+    });
+
+    test('rolled over at the end, the face turns toward the camera, whichever way the run came in', () => {
+        // The camera looks at the pile from the street and above (view.cameraOn).
+        const len = Math.hypot(C.camera.height, C.camera.back);
+        const toCamera = new THREE.Vector3(0, C.camera.height / len, C.camera.back / len);
+        for (const from of [{ x: 2, z: 3 }, { x: -9, z: 6 }, { x: 8, z: -4 }, { x: -6, z: -5 }]) {
+            const plan = Fn.planFinale(from, { ...corner, height: 0.6 }, F, area);
+            const end = Fn.finaleAt(plan, plan.total + 1);
+            const fig = Op.createOperatorFigure(C.blower, C.look, { person: { shoulderRound: 0.4 } });
+            fig.update({ ...end, hideBlower: true }, false, 0, end.arms);
+            fig.group.updateMatrixWorld(true);
+            // The face: from the head's middle out through the nose.
+            let head = null;
+            let nose = null;
+            fig.group.traverse((o) => {
+                if (!o.isMesh || !o.geometry || !o.geometry.parameters) return;
+                const p = o.geometry.parameters;
+                if (o.geometry.type === 'SphereGeometry' && Math.abs(p.radius - 0.12) < 1e-9) head = o;
+            });
+            fig.group.traverse((o) => {
+                if (!o.isMesh || !head || o.parent !== head.parent) return;
+                const local = o.position;
+                if (Math.abs(local.x) < 1e-6 && local.z > 0.1 && Math.abs(local.y - head.position.y) < 0.05 && o !== head) nose = o;
+            });
+            expect(head).not.toBe(null);
+            expect(nose).not.toBe(null);
+            const a = new THREE.Vector3().setFromMatrixPosition(head.matrixWorld);
+            const b = new THREE.Vector3().setFromMatrixPosition(nose.matrixWorld);
+            const face = b.sub(a).normalize();
+            expect(face.dot(toCamera)).toBeGreaterThan(0.3);
+        }
     });
 
     test('tipped face down and lowered, the body lies flat at the height the finale asks for', () => {

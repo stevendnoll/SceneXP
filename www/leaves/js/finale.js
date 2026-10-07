@@ -8,12 +8,15 @@
  *
  *   A PILE WORTH DIVING INTO (as tall as `diveHeight` at its peak): they
  *   land in it, the leaves burst up and flutter down around them, and they
- *   pop up waist-deep, waving.
+ *   roll part way over in the pile to look at the camera, arms overhead.
  *
  *   ANYTHING LESS: they find the lawn. A small puff of leaves, a moment
- *   flat on their face, and a slow climb to their feet with a hand on the
- *   small of the back. Steve's note, 2026-10-06: "a small penalty for doing
- *   a lousy job".
+ *   flat on their face, and a roll part way over with a hand on the small of
+ *   the back. Steve's note, 2026-10-06: "a small penalty for doing a lousy
+ *   job".
+ *
+ *   NOBODY STANDS BACK UP (Steve's M3 QA, 2026-10-07): the roll toward the
+ *   camera is the last beat, and it keeps the finale short.
  *
  * PURE. planFinale() decides everything once, from where the pile's peak is
  * and where the person stands, and finaleAt() says where they are and how
@@ -22,9 +25,9 @@
  * moves the camera.
  *
  * THE FIGURE'S POSE. `pitch` tips the whole body forward about the hips
- * (0 upright, PI / 2 face down), and `lift` raises the figure, so a body
- * lying flat is `pivot` above its feet and has to be lowered to lie on
- * anything.
+ * (0 upright, PI / 2 face down), `roll` turns a lying body about its own
+ * length, and `lift` raises the figure, so a body lying flat is `pivot`
+ * above its feet and has to be lowered to lie on anything.
  */
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
@@ -66,7 +69,14 @@ export function planFinale(person, peak, F, area, { reduced = false } = {}) {
     t.run = t.walk + F.runTime;
     t.air = t.run + F.airTime;
     t.down = t.air + (success ? F.lieTime : F.flopLie);
-    t.end = t.down + (success ? F.popTime : F.getUpTime);
+    t.roll = t.down + F.rollTime;
+    t.end = t.roll + F.hold;
+    // WHICH WAY TO ROLL to face the camera, which looks at the pile from the
+    // street (+z) and above (view.cameraOn). In the body's own frame the
+    // camera's side is -sin(heading), and a roll that way turns the face up
+    // toward it.
+    const heading = Math.atan2(-ux, -uz);
+    const side = -Math.sin(heading) >= 0 ? 1 : -1;
     return {
         success,
         reduced,
@@ -78,7 +88,8 @@ export function planFinale(person, peak, F, area, { reduced = false } = {}) {
         surface,
         // A gentle hop under reduced motion, a real leap otherwise.
         arc: (reduced ? 0.3 : 1) * (F.arc + (success ? peak.height * 0.5 : 0)),
-        heading: Math.atan2(-ux, -uz),
+        heading,
+        roll: side * F.roll,
         t,
         total: t.end
     };
@@ -91,13 +102,13 @@ function lyingLift(y) {
 
 /**
  * Where the person is at `time` seconds into the finale, and how they hold
- * themselves: { x, z, heading, lift, pitch, arms, speed, stride, phase }.
- * Phases: 'pause' (setting the blower down), 'walk', 'run', 'air', 'down'
- * (lying there), 'up' (popping up, or getting up slowly), 'end'.
+ * themselves: { x, z, heading, lift, pitch, roll, arms, speed, stride,
+ * phase }. Phases: 'pause' (setting the blower down), 'walk', 'run', 'air',
+ * 'down' (lying there), 'roll' (part way over, toward the camera), 'end'.
  */
 export function finaleAt(plan, time) {
     const t = plan.t;
-    const p = { x: plan.start.x, z: plan.start.z, heading: plan.heading, lift: 0, pitch: 0, arms: 'down', speed: 0, stride: 0, phase: 'pause' };
+    const p = { x: plan.start.x, z: plan.start.z, heading: plan.heading, lift: 0, pitch: 0, roll: 0, arms: 'down', speed: 0, stride: 0, phase: 'pause' };
     const walkHeading = Math.atan2(plan.runFrom.x - plan.start.x, plan.runFrom.z - plan.start.z);
     if (time < t.pause) {
         p.heading = walkHeading;
@@ -145,23 +156,13 @@ export function finaleAt(plan, time) {
         p.arms = 'up';
         return p;
     }
-    const u = Math.min(1, (time - t.down) / (t.end - t.down));
-    p.phase = time < t.end ? 'up' : 'end';
-    if (plan.success) {
-        // Up out of the pile in a hurry, waist-deep in leaves, waving.
-        const k = ease(Math.min(1, u / 0.45));
-        p.pitch = lerp(Math.PI / 2, 0, k);
-        p.lift = lerp(lying, plan.peak.height - 1.05, k);
-        p.arms = k < 1 ? 'up' : 'wave';
-    } else {
-        // Slowly, bent over, a hand on the small of the back. Tipped about
-        // the hips, a standing body lifts its feet off the ground, so it is
-        // lowered by as much.
-        const k = ease(u);
-        const bent = 0.45;
-        p.pitch = lerp(Math.PI / 2, bent, k);
-        p.lift = lerp(lying, -PIVOT * (1 - Math.cos(bent)), k);
-        p.arms = 'back';
-    }
+    // Lying there, then rolling part way over to look at the camera, and
+    // staying put: arms still overhead in a good pile, a hand on the small
+    // of the back after a flop.
+    p.phase = time < t.roll ? 'roll' : 'end';
+    p.lift = lying;
+    p.pitch = Math.PI / 2;
+    p.roll = plan.roll * ease(Math.min(1, (time - t.down) / (t.roll - t.down)));
+    p.arms = plan.success ? 'up' : 'back';
     return p;
 }

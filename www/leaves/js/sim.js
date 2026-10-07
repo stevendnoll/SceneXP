@@ -895,16 +895,26 @@ function stepLeaf(sim, i, h, jets) {
     x += vx * h;
     y += vy * h;
     z += vz * h;
+    // A wall stops a leaf below its top. AIR DRIVEN INTO A WALL GOES UP IT,
+    // and a leaf the air pins there rides it upward. Built for M2, measured
+    // as adding next to nothing to the visitor's blowing (the updraft where
+    // the air lands already carries leaves over the fence), and removed.
+    // Restored after Steve's M3 QA: leaves the NEIGHBOR's air pinned against
+    // the pickets on his side stayed there by the hundred, and he went back
+    // in with his lawn full of them.
+    const lift = u > P.wallLift.air ? P.wallLift.share : 0;
     for (let w = 0; w < sim.walls.length; w++) {
         const wall = sim.walls[w];
         if (y >= wall.height) continue;
         if (wall.axis === 'x') {
             if ((ox < wall.at) !== (x < wall.at) && z >= wall.from && z <= wall.to) {
                 x = ox < wall.at ? wall.at - 0.01 : wall.at + 0.01;
+                if (lift) vy = Math.max(vy, lift * Math.abs(vx));
                 vx = -vx * P.wallBounce;
             }
         } else if ((oz < wall.at) !== (z < wall.at) && x >= wall.from && x <= wall.to) {
             z = oz < wall.at ? wall.at - 0.01 : wall.at + 0.01;
+            if (lift) vy = Math.max(vy, lift * Math.abs(vz));
             vz = -vz * P.wallBounce;
         }
     }

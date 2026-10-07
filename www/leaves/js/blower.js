@@ -23,7 +23,7 @@ const wrap = (a) => a - Math.PI * 2 * Math.floor((a + Math.PI) / (Math.PI * 2));
 export function createOperator(B) {
     // pitch, lift and hideBlower are the finale's (finale.js): the body tipped
     // forward about the hips, raised or lowered, and the blower set aside.
-    return { x: B.start.x, z: B.start.z, heading: Math.PI, speed: 0, stride: 0, pitch: 0, lift: 0, hideBlower: false };
+    return { x: B.start.x, z: B.start.z, heading: Math.PI, speed: 0, stride: 0, pitch: 0, roll: 0, lift: 0, hideBlower: false };
 }
 
 /** The unit direction a heading faces: 0 is +z, PI / 2 is +x. */
@@ -99,8 +99,9 @@ export const ARM_POSES = Object.freeze({
  * update(op, blowing, time, arms, big) }: `arms` is a pose from ARM_POSES
  * ('carry' when absent), and `big` swaps in the big blower (a backpack
  * model). Away from 'carry' the blower is set down on the grass beside them.
- * `op.pitch` tips the whole body forward about the hips, `op.lift` raises
- * it, and `op.hideBlower` puts the blower away (the finale's dive).
+ * `op.pitch` tips the whole body forward about the hips, `op.roll` turns a
+ * lying body about its length, `op.lift` raises it, and `op.hideBlower`
+ * puts the blower away (the finale's dive).
  *
  * `options` dresses them: { person } for createPerson, { blower, bigBlower }
  * for the blowers' colors. The visitor's defaults are a flannel shirt and
@@ -111,9 +112,13 @@ export function createOperatorFigure(B, look, options = {}) {
     group.name = options.name || 'operator';
     // The body tips about the hips: a pivot `PIVOT` up, holding everything
     // else lowered by as much, so with no tip the figure stands as before.
+    // And a lying body rolls about its own length: the roll joint, at the
+    // hips, outside the tip, so it turns the body that the tip laid down.
+    const roller = new THREE.Group();
+    roller.position.y = PIVOT;
+    group.add(roller);
     const tilt = new THREE.Group();
-    tilt.position.y = PIVOT;
-    group.add(tilt);
+    roller.add(tilt);
     const holder = new THREE.Group();
     holder.position.y = -PIVOT;
     tilt.add(holder);
@@ -209,6 +214,7 @@ export function createOperatorFigure(B, look, options = {}) {
         group.position.set(op.x, op.lift || 0, op.z);
         group.rotation.y = op.heading;
         tilt.rotation.x = op.pitch || 0;
+        roller.rotation.z = op.roll || 0;
         carried.visible = !op.hideBlower;
         // A walk: legs swing with the distance walked, and settle when still.
         const swing = Math.min(1, op.speed / 1.2) * 0.5 * Math.sin(op.stride * 4.2);
