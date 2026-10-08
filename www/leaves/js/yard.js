@@ -9,6 +9,7 @@
  * are house.js's (M5), the trees trees.js's.
  */
 import { buildOurHouse, buildNeighborHouse, buildStreet, buildStreetHouse, facadeZ } from './house.min.js';
+import { buildHedge } from './hedge.min.js';
 
 /** A grassy canvas texture: mottled greens with short strokes for blades. */
 function lawnTexture(base, dark, seed = 1) {
@@ -236,6 +237,126 @@ function sidewalkJoints(Y, look, every = 1.6) {
     return mesh;
 }
 
+/** A lattice of crossed white slats on clear, for the top of the side gate:
+ *  one tile, repeated along it. Null where there is no canvas. */
+function latticeTexture() {
+    if (typeof document === 'undefined') return null;
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext && canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.clearRect(0, 0, size, size);
+    ctx.lineCap = 'square';
+    // Each slat drawn twice, offset by a tile, so the tile repeats cleanly.
+    const slat = (x0, y0, x1, y1) => {
+        for (const d of [-size, 0, size]) {
+            ctx.strokeStyle = 'rgba(150,146,138,1)';
+            ctx.lineWidth = 9;
+            ctx.beginPath();
+            ctx.moveTo(x0 + d, y0);
+            ctx.lineTo(x1 + d, y1);
+            ctx.stroke();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 7;
+            ctx.beginPath();
+            ctx.moveTo(x0 + d, y0);
+            ctx.lineTo(x1 + d, y1);
+            ctx.stroke();
+        }
+    };
+    slat(0, 0, size, size);
+    slat(size, 0, 0, size);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    return texture;
+}
+
+/**
+ * The side gate between the houses (Steve's QA, 2026-10-08: the fence "just
+ * looks like a white rectangle"). White posts with caps at each end and
+ * where the picket fence meets it, a run of boards with narrow gaps, a rail,
+ * a band of lattice under a capped top rail, and in our half a gate with
+ * black strap hinges and a latch. All of it behind the line the leaves bank
+ * against (the neighbor's set back face), so it hides none of them. Named
+ * 'side-gate'.
+ */
+export function sideGate(Y, look) {
+    const G = Y.gate;
+    const group = new THREE.Group();
+    group.name = 'side-gate';
+    const x0 = Y.house.maxX;
+    const x1 = Y.neighborHouse.minX;
+    const z = facadeZ(Y.neighbor.minZ, Y.neighborHouse) - G.back;
+    const white = new THREE.MeshLambertMaterial({ color: look.fence });
+    const black = new THREE.MeshLambertMaterial({ color: look.frame });
+    const add = (geometry, material, x, y, zz, shadow = true) => {
+        const m = new THREE.Mesh(geometry, material);
+        m.position.set(x, y, zz);
+        m.castShadow = shadow;
+        m.receiveShadow = true;
+        group.add(m);
+        return m;
+    };
+    // The middle post stands where the picket fence between the yards ends.
+    const picket = Y.walls.find((w) => w.axis === 'x' && w.height < 1.2);
+    const mid = picket ? picket.at : (x0 + x1) / 2;
+    const p = G.post;
+    // The end posts' caps (4 cm wider) stop at the house walls.
+    const posts = [x0 + p / 2 + 0.02, mid, x1 - p / 2 - 0.02];
+    for (const x of posts) {
+        add(new THREE.BoxGeometry(p, G.height + 0.06, p), white, x, (G.height + 0.06) / 2, z);
+        add(new THREE.BoxGeometry(p + 0.04, 0.035, p + 0.04), white, x, G.height + 0.075, z);
+        const point = add(new THREE.ConeGeometry(p * 0.62, 0.07, 4), white, x, G.height + 0.125, z);
+        point.rotation.y = Math.PI / 4;
+    }
+    // The bands, bottom to top: boards, a rail, lattice, the top rail.
+    const boardTop = G.height - G.lattice - G.rail * 2;
+    const latticeMap = latticeTexture();
+    const panels = [[posts[0] + p / 2, posts[1] - p / 2], [posts[1] + p / 2, posts[2] - p / 2]];
+    for (const [a, b] of panels) {
+        const w = b - a;
+        const n = Math.max(1, Math.round(w / (G.board + G.gap)));
+        const bw = w / n - G.gap;
+        const boards = new THREE.InstancedMesh(new THREE.BoxGeometry(bw, boardTop - G.lift, G.thick), white, n);
+        const m = new THREE.Matrix4();
+        for (let k = 0; k < n; k++) {
+            m.makeTranslation(a + (k + 0.5) * (w / n), (boardTop + G.lift) / 2, z);
+            boards.setMatrixAt(k, m);
+        }
+        boards.castShadow = true;
+        boards.receiveShadow = true;
+        group.add(boards);
+        add(new THREE.BoxGeometry(w, G.rail, G.thick + 0.02), white, (a + b) / 2, boardTop + G.rail / 2, z);
+        add(new THREE.BoxGeometry(w, G.rail, G.thick + 0.02), white, (a + b) / 2, G.height - G.rail / 2, z);
+        add(new THREE.BoxGeometry(w + 0.02, 0.025, G.thick + 0.05), white, (a + b) / 2, G.height + 0.0125, z);
+        // The lattice, or slats where there is no canvas to draw it.
+        const lh = G.height - G.rail - (boardTop + G.rail);
+        const ly = boardTop + G.rail + lh / 2;
+        if (latticeMap) {
+            const tile = latticeMap.clone();
+            tile.needsUpdate = true;
+            tile.repeat.set(w / lh, 1);
+            add(new THREE.PlaneGeometry(w, lh), new THREE.MeshLambertMaterial({ color: look.fence, map: tile, alphaTest: 0.5, side: THREE.DoubleSide }), (a + b) / 2, ly, z, true);
+        }
+    }
+    // The gate is our half: two black strap hinges by the house, a latch
+    // and a ring pull by the middle post.
+    const [ga, gb] = panels[0];
+    const face = z + G.thick / 2 + 0.006;
+    for (const y of [G.lift + 0.3, boardTop - 0.3]) {
+        add(new THREE.BoxGeometry(0.3, 0.035, 0.012), black, ga + 0.15, y, face, false);
+        add(new THREE.BoxGeometry(0.03, 0.08, 0.016), black, ga + 0.01, y, face, false);
+    }
+    add(new THREE.BoxGeometry(0.12, 0.03, 0.014), black, gb - 0.1, boardTop - 0.45, face, false);
+    const ring = add(new THREE.TorusGeometry(0.035, 0.006, 6, 14), black, gb - 0.16, boardTop - 0.52, face + 0.004, false);
+    ring.rotation.x = 0.2;
+    return group;
+}
+
 /**
  * Build the yard into `scene`. Returns { sun, neighborDoor, sky }: the sun
  * for its shadows, the hinge of the neighbor's door for main.js to swing,
@@ -264,13 +385,9 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     for (const h of Y.street || []) scene.add(buildStreetHouse(h, look, Y));
     const sky = skyTexture(look.sky, look.clouds);
     if (sky) scene.background = sky;
-    // The gap between the two houses is a side fence, set back with them so
-    // it stands behind the leaves resting against the sim's wall there.
-    const gate = box(Y.neighborHouse.minX - Y.house.maxX, 1.8, 0.08, look.fence,
-        (Y.house.maxX + Y.neighborHouse.minX) / 2, 0.9, Y.lawn.minZ - Y.neighborHouse.setBack);
-    gate.name = 'side-gate';
-    gate.castShadow = true;
-    scene.add(gate);
+    // The gap between the two houses is a side fence and gate, set back with
+    // them so it stands behind the leaves resting against the sim's wall.
+    scene.add(sideGate(Y, look));
 
     Y.walls.forEach((wall) => {
         if (wall.axis === 'x' && wall.height < 1.2) {
@@ -285,13 +402,9 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
         // the backs of the houses (Steve's M6 QA: it "ended pretty abruptly"
         // at the front of the house). The sim's wall only needs the part
         // beside the lawn.
+        // A clipped hedge, rounded and leafy (hedge.js), no longer a box.
         const back = Y.hedgeBack ?? hedgeWall.from;
-        const hedge = box(0.9, hedgeWall.height, Y.sidewalk.minZ - back, look.hedge,
-            hedgeWall.at - 0.45, hedgeWall.height / 2, (back + Y.sidewalk.minZ) / 2);
-        hedge.castShadow = true;
-        hedge.receiveShadow = true;
-        hedge.name = 'hedge';
-        scene.add(hedge);
+        scene.add(buildHedge(hedgeWall, Y.hedgeShape, back, Y.sidewalk.minZ, look));
     }
 
     // The low autumn sun, and the sky's fill.

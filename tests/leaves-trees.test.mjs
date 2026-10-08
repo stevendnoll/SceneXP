@@ -89,11 +89,18 @@ describe('a leaf on its way down from a tree', () => {
         expect(run(sim, crowns, 30)).toBe(0);
     });
 
-    test('the sugar maple still has leaves falling at the end of a round', () => {
+    // The round was a minute, and the maple dropped leaves all through it.
+    // At three minutes (Steve's QA, 2026-10-08, so a visitor can win) it
+    // still drops them through the first minute, and every crown is bare
+    // well before the clock runs out, so a lawn cleared at the end stays
+    // clear.
+    test('the sugar maple still has leaves falling a minute in, and every tree is bare before the clock runs out', () => {
         const { sim, crowns } = yard();
-        run(sim, crowns, C.round.seconds);
+        run(sim, crowns, 60);
         const maple = crowns.find((c) => c.entry.species === 'sugar-maple' && c.entry.x > Y.lawn.minX);
         expect(maple.leaves.length).toBeGreaterThan(0);
+        run(sim, crowns, C.round.seconds - 60 - 20);
+        expect(crowns.every((c) => c.leaves.length === 0)).toBe(true);
     });
 });
 

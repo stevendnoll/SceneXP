@@ -42,7 +42,9 @@ const B = C.blower;
 // main.js's walkArea().
 const area = { minX: lawn.minX + 0.5, maxX: lawn.maxX - 0.4, minZ: lawn.minZ + 0.6, maxZ: C.yard.sidewalk.maxZ };
 const solids = S.solidBoxes(C.yard);
-const ASPECTS = [0.46, 0.75, 1.33, 1.6, 1.78, 2.2];
+const ASPECTS = [0.46, 0.75, 1.33, 1.6, 1.78, 2.2, 2.4, 3.56];
+// The visitor's zoom: all the way out, the usual view, halfway, all the way in.
+const ZOOMS = [cam.zoom.min, 1, 1.8, cam.zoom.max];
 
 /** A real camera standing where cameraFor() says. */
 function cameraAt(view, aspect) {
@@ -66,10 +68,10 @@ describe('walking to the edges of the yard with a pointer', () => {
      *  person's own row, for `seconds`, the camera following, the aim worked
      *  out again each frame from what is under the cursor (main.js), with
      *  the neighbor out at `nb` if given. Returns the person. */
-    function holdAtEdge(aspect, start, side, seconds = 14, nb = null) {
+    function holdAtEdge(aspect, start, side, seconds = 14, nb = null, zoom = 1) {
         const op = { ...Op.createOperator(B), x: start.x, z: start.z };
         for (let t = 0; t < seconds; t += 1 / 30) {
-            const camera = cameraAt(V.cameraFor(aspect, cam, lawn, op, nb), aspect);
+            const camera = cameraAt(V.cameraFor(aspect, cam, lawn, op, nb, zoom), aspect);
             const row = new THREE.Vector3(op.x, 0, op.z).project(camera).y;
             const aim = groundAt(camera, side * 0.97, row);
             Op.stepOperator(op, aim && { mode: 'point', x: aim.x, z: aim.z }, 1 / 30, B, area, solids);
@@ -101,10 +103,100 @@ describe('walking to the edges of the yard with a pointer', () => {
         }
     });
 
+    test('zoomed all the way in or out, the person still reaches the hedge and the fence', () => {
+        for (const aspect of [0.46, 1.33, 1.78, 2.4]) {
+            for (const zoom of [cam.zoom.min, cam.zoom.max]) {
+                for (const z of [-2.4, area.maxZ - 0.2]) {
+                    expect(holdAtEdge(aspect, { x: 0, z }, -1, 14, null, zoom).x).toBeLessThan(area.minX + 0.05);
+                    expect(holdAtEdge(aspect, { x: 0, z }, 1, 14, null, zoom).x).toBeGreaterThan(area.maxX - 0.05);
+                }
+            }
+        }
+    });
+
     test('a wide screen still holds steady while the person is out in the middle', () => {
         for (const aspect of [1.6, 1.78]) {
             const v = V.cameraFor(aspect, cam, lawn, { x: 3, z: 2 });
             expect(Math.abs(v.target.x - cam.target.x)).toBeLessThan(1.5);
+        }
+    });
+});
+
+describe('the frame on any screen, at any zoom (Steve\'s QA, 2026-10-08)', () => {
+    /** Where the bottom middle of the screen meets the ground. */
+    function bottomZ(aspect, person = null, nb = null, zoom = 1) {
+        const camera = cameraAt(V.cameraFor(aspect, cam, lawn, person, nb, zoom), aspect);
+        return groundAt(camera, 0, -1).z;
+    }
+
+    test('"the street isn\'t visible": every landscape screen shows the sidewalk and the curb', () => {
+        // Before: the bottom edge sat at z 8.1 on 16:9 (mid-sidewalk) and 6.3
+        // on 21:9, the sidewalk gone. The street starts at the sidewalk's
+        // far edge.
+        for (const aspect of [1.33, 1.6, 1.78, 2.2, 2.4, 3.56]) {
+            for (const person of [null, { x: 0, z: 2 }, { x: -8, z: -4 }, { x: 8, z: 8 }]) {
+                expect(bottomZ(aspect, person)).toBeGreaterThan(C.yard.sidewalk.maxZ + 1);
+            }
+        }
+    });
+
+    test('a 4:3 screen and a phone held upright frame just as they did', () => {
+        const before = (aspect) => {
+            const noFront = { ...cam, frontZ: undefined };
+            return V.cameraFor(aspect, noFront, lawn, { x: 0, z: 2 });
+        };
+        for (const aspect of [0.46, 0.75, 1.0, 1.33]) {
+            const now = V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 });
+            expect(now.distance).toBeCloseTo(before(aspect).distance, 1);
+        }
+    });
+
+    test('the person stays well on screen at every zoom, anywhere they stand', () => {
+        const off = [];
+        for (const aspect of ASPECTS) {
+            for (const zoom of ZOOMS) {
+                for (const person of [{ x: 0, z: 2 }, { x: area.minX, z: area.minZ }, { x: area.maxX, z: area.maxZ }, { x: area.minX, z: area.maxZ }]) {
+                    const camera = cameraAt(V.cameraFor(aspect, cam, lawn, person, null, zoom), aspect);
+                    // Their feet and their head.
+                    for (const y of [0, 1.8]) {
+                        const p = new THREE.Vector3(person.x, y, person.z).project(camera);
+                        if (Math.abs(p.x) > 0.95 || Math.abs(p.y) > 0.95) off.push({ aspect, zoom, person, y, x: p.x, sy: p.y });
+                    }
+                }
+            }
+        }
+        expect(off).toEqual([]);
+    });
+
+    test('zooming in comes closer and zooming out stands back, within the range', () => {
+        for (const aspect of [0.46, 1.33, 1.78, 2.4]) {
+            const at = (zoom) => V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, zoom).distance;
+            expect(at(1.8)).toBeLessThan(at(1));
+            expect(at(cam.zoom.max)).toBeLessThanOrEqual(at(1.8));
+            expect(at(cam.zoom.min)).toBeGreaterThan(at(1));
+            // Past the ends of the range is the ends of the range.
+            expect(at(cam.zoom.max * 4)).toBeCloseTo(at(cam.zoom.max), 6);
+            expect(at(0.01)).toBeCloseTo(at(cam.zoom.min), 6);
+            expect(at(NaN)).toBeCloseTo(at(1), 6);
+            // Never narrower than minSpan across.
+            expect(V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, cam.zoom.max).span).toBeGreaterThan(cam.zoom.minSpan - 1e-6);
+        }
+    });
+
+    test('a visitor who has zoomed keeps their view when the neighbor comes out', () => {
+        const nb = { x: C.neighbor.lineMax, z: 0 };
+        const person = { x: 0, z: 2 };
+        for (const aspect of [0.75, 1.33, 1.78]) {
+            // The usual view slides (and on a narrow screen widens) for him.
+            const usual = V.cameraFor(aspect, cam, lawn, person, nb);
+            expect(usual.target.x).toBeGreaterThan(V.cameraFor(aspect, cam, lawn, person).target.x + 0.5);
+            // A zoomed one does not move at all.
+            for (const zoom of [cam.zoom.min, 1.5, cam.zoom.max]) {
+                const alone = V.cameraFor(aspect, cam, lawn, person, null, zoom);
+                const withHim = V.cameraFor(aspect, cam, lawn, person, nb, zoom);
+                expect(withHim.position).toEqual(alone.position);
+                expect(withHim.target).toEqual(alone.target);
+            }
         }
     });
 });
@@ -136,6 +228,22 @@ describe('the ground under every view', () => {
                             if (!p || p.z < block.minZ) continue;
                             rays++;
                             if (!covered(p, rects)) holes.push({ aspect, person, nb, p });
+                        }
+                    }
+                }
+            }
+        }
+        // And every zoom, which never widens for the neighbor.
+        for (const aspect of ASPECTS) {
+            for (const person of people) {
+                for (const zoom of [cam.zoom.min, cam.zoom.max]) {
+                    const camera = cameraAt(V.cameraFor(aspect, cam, lawn, person, null, zoom), aspect);
+                    for (let i = 0; i <= 16; i++) {
+                        for (let j = 0; j <= 16; j++) {
+                            const p = groundAt(camera, -1 + i / 8, -1 + j / 8);
+                            if (!p || p.z < block.minZ) continue;
+                            rays++;
+                            if (!covered(p, rects)) holes.push({ aspect, person, zoom, p });
                         }
                     }
                 }

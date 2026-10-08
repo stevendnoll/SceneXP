@@ -166,9 +166,9 @@ describe('what the visitor reads', () => {
 
     test('the share and the screen reader sentence add them at the end', () => {
         const t = { lawn: 600, tarp: 400, street: 0, neighbor: 0, total: 1000, sent: 0 };
-        expect(Sc.shareText(t, 60, null, ['a $20 bill', 'a garden gnome']))
-            .toBe('I cleared 40% of my yard in 60 seconds. 400 leaves made it onto the tarp. I found a $20 bill and a garden gnome under the leaves. A leaf blower game on SceneXP.');
-        expect(Sc.shareText(t, 60)).not.toMatch(/found/);
+        expect(Sc.shareText(t, 180, null, ['a $20 bill', 'a garden gnome']))
+            .toBe('I cleared 40% of my yard in 3 minutes. 400 leaves made it onto the tarp. I found a $20 bill and a garden gnome under the leaves. A leaf blower game on SceneXP.');
+        expect(Sc.shareText(t, 180)).not.toMatch(/found/);
         expect(Sc.resultSentence(t, null, ['a set of car keys'])).toMatch(/ Under the leaves you found a set of car keys\.$/);
     });
 

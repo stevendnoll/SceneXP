@@ -27,41 +27,85 @@ export function distanceFor(span, aspect, fovDegrees) {
     return span / 2 / Math.tan(half);
 }
 
+/** How far back the camera must stand, looking at ground depth `tz`, for the
+ *  bottom edge of the screen to reach ground depth `frontZ` (toward the
+ *  camera). The camera's angle is C.height over C.back. */
+export function distanceForFront(frontZ, tz, C) {
+    const len = Math.hypot(C.height, C.back);
+    const pitch = Math.atan2(C.height, C.back);
+    const low = pitch + (C.fovDegrees * Math.PI) / 360;
+    // From the target, the bottom edge's ground point moves toward the camera
+    // this many meters for every meter the camera stands back.
+    const gain = C.back / len - C.height / len / Math.tan(low);
+    return gain > 1e-6 ? Math.max(0, (frontZ - tz) / gain) : 0;
+}
+
+/** The zoom a visitor may choose, clamped to its range. 1 is the usual
+ *  view, more is closer. */
+export function clampZoom(zoom, C) {
+    const z = Number.isFinite(zoom) ? zoom : 1;
+    return clamp(z, C.zoom.min, C.zoom.max);
+}
+
 /**
  * The camera's position and the point it looks at. `follow` is the person's
  * (x, z): the view slides toward them, as far as keeps the lawn in frame,
  * and a wide view barely moves, except to keep `C.reach` meters of ground
  * either side of them on screen.
+ *
+ * `zoom` is the visitor's own (the wheel, a pinch, + and -), 1 for the usual
+ * view. A zoomed view is the visitor's choice, so the neighbor coming out no
+ * longer widens it (Steve's QA, 2026-10-08: he "really competes for the
+ * camera"), and the closer it comes the more it follows them in depth too.
  */
-export function cameraFor(aspect, C, lawn, follow, include = null) {
+export function cameraFor(aspect, C, lawn, follow, include = null, zoom = 1) {
+    const zf = C.zoom ? clampZoom(zoom, C) : 1;
+    const zoomed = Math.abs(zf - 1) > 1e-6;
     let span = spanFor(aspect, C);
     let region = lawn;
     let focus = follow;
     // SOMEBODY ELSE IN THE SCENE (the neighbor, out on his lawn): the view
     // widens, up to `maxSpan`, and slides to keep them both in frame, and
     // the region it may slide over takes in their side of the fence.
-    if (include && follow) {
+    if (include && follow && !zoomed) {
         const lo = Math.min(follow.x, include.x) - C.includeMargin;
         const hi = Math.max(follow.x, include.x) + C.includeMargin;
         span = clamp(hi - lo, span, C.maxSpan);
         focus = { x: (lo + hi) / 2, z: follow.z };
         region = { minX: lawn.minX, maxX: Math.max(lawn.maxX, hi) };
     }
-    const dist = distanceFor(span, aspect, C.fovDegrees);
     const len = Math.hypot(C.height, C.back);
     const up = C.height / len;
     const back = C.back / len;
-    // How far the target may slide before the frame runs off the region.
-    const slack = Math.max(0, (region.maxX - region.minX) / 2 - span / 2 + 1);
-    const cx = (region.minX + region.maxX) / 2;
-    let tx = C.target.x;
     let tz = C.target.z;
     if (focus) {
-        tx = clamp(focus.x, cx - slack, cx + slack);
-        // Depth follows gently, and only on the narrow view.
+        // Depth follows gently, and only on the narrow view, or a view the
+        // visitor has brought in close, which follows fully.
         const narrow = 1 - clamp((aspect - 0.5) / 0.8, 0, 1);
-        tz = C.target.z + (follow.z - C.target.z) * 0.5 * narrow;
+        const close = clamp(zf - 1, 0, 1);
+        const share = 0.5 * narrow + (1 - 0.5 * narrow) * close;
+        tz = C.target.z + (follow.z - C.target.z) * share;
     }
+    // THE WIDTH AND THE DEPTH (Steve's QA, 2026-10-08: on a wide screen "the
+    // street isn't visible, and the sidewalk is barely visible"). Fitting
+    // the yard's width alone brought a wider screen's camera in closer, so
+    // the bottom of the frame crept up the lawn: mid-sidewalk at 16:9, the
+    // sidewalk gone at 21:9. So the camera also stands far enough back for
+    // the frame to reach `frontZ`, as much of the street as a 4:3 screen
+    // shows, and a wide screen shows more of the block either side instead.
+    let dist = distanceFor(span, aspect, C.fovDegrees);
+    if (C.frontZ !== undefined) dist = Math.max(dist, distanceForFront(C.frontZ, tz, C));
+    // In close, never narrower than minSpan (the reach either side of the
+    // person) nor nearer than minDistance (the person's height, top to
+    // bottom, on a screen much wider than tall).
+    if (zoomed) dist = Math.max(dist / zf, distanceFor(C.zoom.minSpan, aspect, C.fovDegrees), C.zoom.minDistance || 0);
+    // The width of ground actually shown at the target.
+    const shown = 2 * dist * Math.tan(Math.atan(Math.tan((C.fovDegrees * Math.PI) / 360) * aspect));
+    // How far the target may slide before the frame runs off the region.
+    const slack = Math.max(0, (region.maxX - region.minX) / 2 - shown / 2 + 1);
+    const cx = (region.minX + region.maxX) / 2;
+    let tx = C.target.x;
+    if (focus) tx = clamp(focus.x, cx - slack, cx + slack);
     // ROOM TO AIM ON EITHER SIDE OF THE PERSON (Steve's M6 QA: he could not
     // walk to the hedge). The span is fitted at the target, but the view
     // narrows toward the camera, so near the front of the lawn the yard's
@@ -78,7 +122,7 @@ export function cameraFor(aspect, C, lawn, follow, include = null) {
     return {
         position: { x: tx, y: C.target.y + up * dist, z: tz + back * dist },
         target: { x: tx, y: C.target.y, z: tz },
-        span,
+        span: shown,
         distance: dist
     };
 }

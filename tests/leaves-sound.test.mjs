@@ -316,3 +316,38 @@ describe('the landing', () => {
     });
 });
 
+// Steve's QA, 2026-10-08: a celebration when every last leaf is off the lawn.
+describe('the chime', () => {
+    test('rising bells, one after another, scheduled ahead, and nothing left connected once they ring out', () => {
+        const sound = createSound(S);
+        sound.unlock();
+        const before = built.nodes.length;
+        expect(sound.chime()).toBe(true);
+        const made = built.nodes.slice(before);
+        const oscs = made.filter((n) => n.kind === 'oscillator');
+        // A sine and a partial for each note.
+        expect(oscs.length).toBe(S.chime.notes.length * 2);
+        const fundamentals = oscs.filter((_, k) => k % 2 === 0);
+        const pitches = fundamentals.map((o) => o.frequency.calls[0][1]);
+        expect(pitches).toEqual(S.chime.notes);
+        const starts = fundamentals.map((o) => o.started);
+        expect(starts[0]).toBeGreaterThan(10);
+        for (let k = 1; k < starts.length; k++) expect(starts[k]).toBeCloseTo(starts[k - 1] + S.chime.gap, 6);
+        // Each rings out to nothing, and lets go.
+        for (const g of made.filter((n) => n.kind === 'gain')) expect(g.gain.calls.at(-1)).toEqual(['exp', 0.0001, expect.any(Number)]);
+        for (const n of made) if (n.listeners.ended) n.listeners.ended();
+        expect(made.every((n) => n.disconnected)).toBe(true);
+    });
+
+    test('silent with the sound off, before any gesture, and in a browser with no Web Audio', () => {
+        expect(createSound(S).chime()).toBe(false);
+        const off = createSound(S);
+        off.unlock();
+        off.setOn(false);
+        expect(off.chime()).toBe(false);
+        globalThis.window = {};
+        const none = createSound(S);
+        none.unlock();
+        expect(none.chime()).toBe(false);
+    });
+});

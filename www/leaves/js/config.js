@@ -67,10 +67,38 @@ export const LEAVES_CONFIG = Object.freeze({
         // How far back the hedge down our left side is drawn (M6 QA), along
         // the property line past the backs of the houses.
         hedgeBack: -15,
+        // The hedge's shape (Steve's QA, 2026-10-08: "very sharp 90 degree
+        // corners", "a green rectangle"): a clipped boxwood `width` across
+        // at the foot, `taper` narrower each side at the top, its shoulders
+        // rounded at `shoulder`, its ends rounded off over `round`. Its
+        // clumps stand out up to `bump` + `fine`, `clump` to the meter, and
+        // its lawn face stands `inset` behind the sim's wall, so no clump
+        // hides a leaf banked against it (hedge.js). Rings `spacing` apart,
+        // and the leafy grain repeats every `texture` meters.
+        // The side gate between the houses (yard.js sideGate, Steve's QA,
+        // 2026-10-08: "just looks like a white rectangle"): `height` to its
+        // top rail, posts `post` square, boards `board` wide with `gap`
+        // between and `thick` deep, a band of `lattice` under the top rail,
+        // `lift` off the ground, and `back` behind the neighbor's face.
+        gate: { height: 1.8, post: 0.1, board: 0.13, gap: 0.014, thick: 0.022, rail: 0.06, lattice: 0.32, lift: 0.05, back: 0.02 },
+        // LEAVES RESTING WHERE THE BLOWER NEVER REACHES (Steve's QA,
+        // 2026-10-08: "a few more resting leaves to the houses' roofs"):
+        // how many on each roof's front slope (`slope` for the houses down
+        // the block), on our porch's roof and along the hedge's top, laid
+        // `lift` off the surface, their colors `weathered` a little darker
+        // than the lawn's. Decoration only, never in the sim (rooftops.js).
+        resting: {
+            counts: { ours: 380, neighbor: 300, slope: 160, porch: 60, hedge: 90 },
+            seed: 6151, lift: 0.012, weathered: 0.85
+        },
+        hedgeShape: {
+            width: 0.78, taper: 0.06, shoulder: 0.2, round: 0.38, inset: 0.07,
+            bump: 0.045, fine: 0.015, clump: 2.4, spacing: 0.12, texture: 0.55, seed: 41
+        },
         // The rest of the block (M6 QA): lawn under everything, well past
         // both neighbors and back behind the houses, so no view the camera
-        // can take shows the sky through the ground.
-        block: { minX: -50, maxX: 70, minZ: -20 },
+        // can take shows the sky through the ground, even on a 32:9 screen.
+        block: { minX: -70, maxX: 90, minZ: -20 },
         // A tarp to blow the leaves onto, IN THE BACK-LEFT CORNER, against
         // the house and the hedge (moved there at M1, 2026-10-06). Out on the
         // open lawn it caught almost nothing: leaves stop wherever the air
@@ -215,8 +243,9 @@ export const LEAVES_CONFIG = Object.freeze({
         // NO REFILL (Steve's M6 QA, 2026-10-07: "I can never get to 100%").
         // Taking leaves back from the street kept the trees dropping onto a
         // cleared lawn forever. Without it each crown lets go of what it
-        // holds (the sugar maple's 70 last about 78 seconds, longer than a
-        // round) and then is done, so a lawn can be finished.
+        // holds (the sugar maple's 70 last about 78 seconds, the first half
+        // of a three minute round) and then is done, so a lawn can be
+        // finished and stay that way.
         fall: { rate: 0.9, refill: 0 }
     },
 
@@ -737,8 +766,20 @@ export const LEAVES_CONFIG = Object.freeze({
         // The dive's landing (M6 QA): a falling thump from hz[0] to hz[1], a
         // body band in the low mids (a phone plays little below 500 Hz), and
         // the leaves' crackle, gone in `decay` seconds.
-        thud: { level: 0.9, hz: [120, 45], decay: 0.32, bodyHz: 520, bodyQ: 0.9, leafHz: 2400 }
+        thud: { level: 0.9, hz: [120, 45], decay: 0.32, bodyHz: 520, bodyQ: 0.9, leafHz: 2400 },
+        // Every last leaf off the lawn: G5, B5, D6 and G6 struck `gap`
+        // seconds apart, each ringing out over `decay`.
+        chime: { level: 0.55, notes: [784, 988, 1175, 1568], gap: 0.12, decay: 1.2 }
     },
+
+    // THE CELEBRATION (Steve's QA, 2026-10-08: "Should we add a celebration
+    // if a user clears 100% of the yard? ... we should show it even if there
+    // is no time limit"). In a round the dive is the celebration. In free
+    // play (celebrate.js), for `seconds`: the blower set down, both arms up
+    // and `hops` hops `hop` meters high, facing the street, the view easing
+    // in to `span` meters across on them and the clean lawn, a chime and a
+    // line on screen for `toastSeconds`. Never the neighbor.
+    cheer: { seconds: 3.4, span: 16, hops: 2, hopTime: 0.42, hop: 0.16, toastSeconds: 4.5 },
 
     // THE ROUND (M1). The clock starts with the first blow, not when the
     // welcome card closes, so nobody loses time reading. When it runs out the
@@ -746,8 +787,11 @@ export const LEAVES_CONFIG = Object.freeze({
     // The clock turns the accent color for the last `hurry` seconds, and the
     // cleared share on the HUD is counted `tallyHz` times a second (counting
     // walks every leaf).
+    // Three minutes since Steve's QA (2026-10-08): a minute was "way too
+    // hard", and a visitor should be able to win, by clearing every leaf,
+    // which ends the round early (round.js).
     round: {
-        seconds: 60,
+        seconds: 180,
         hurry: 10,
         tallyHz: 4,
         // The finale (M3) runs between the clock and the end card, and never
@@ -770,6 +814,18 @@ export const LEAVES_CONFIG = Object.freeze({
         // ground the view is fitted to.
         wideSpan: 23,
         narrowSpan: 11,
+        // However wide the screen, the bottom of the frame reaches this far
+        // toward the street (the sidewalk, the curb and the parked car, as
+        // a 4:3 screen shows them). Steve's QA, 2026-10-08: a wide screen
+        // had lost the street and most of the sidewalk.
+        frontZ: 10.6,
+        // The visitor's zoom: the wheel or a trackpad pinch, + and - (0 to
+        // reset), or a pinch on a phone. 1 is the usual view and `max` the
+        // closest, but never narrower than `minSpan` meters across, which
+        // keeps `reach` on screen either side of the person, nor nearer than
+        // `minDistance`, which keeps all of them on a very wide screen. A
+        // wheel notch or a key press is one `step`.
+        zoom: { min: 0.8, max: 3, minSpan: 8.5, minDistance: 8, step: 1.25, wheel: 0.0015, pinchWheel: 0.01 },
         follow: 2.5,
         // The ground this far either side of the person, at their depth,
         // stays on screen: the blower's standoff (2.4) and a meter more, so
@@ -833,6 +889,9 @@ export const LEAVES_CONFIG = Object.freeze({
         tire: 0x1d1e20,
         fence: 0xf4f1ea,
         hedge: 0x2f4a26,
+        // The hedge in its hollows and at its foot, and its sunlit top.
+        hedgeShade: 0x1b2c16,
+        hedgeSun: 0x617f36,
         blower: 0xe0661f,
         // The leaves' palette, by kind. Display colors (sRGB).
         palettes: {

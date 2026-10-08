@@ -15,7 +15,8 @@
  * the bad-neighbor shortcut, and the neighbor notices (M2).
  *
  * Measured with a bot on 2026-10-06, for a sense of the numbers: sweeping
- * everything into the street cleared about 53% in sixty seconds, and sweeping
+ * everything into the street cleared about 53% in sixty seconds (the round was a
+ * minute then, three minutes since Steve's QA of 2026-10-08), and sweeping
  * toward the tarp in the corner about 16%, with a pile 1.3 meters high. A
  * visitor who knows what they are doing will beat both.
  *
@@ -97,6 +98,12 @@ export function clearedShare(t) {
     return t.total > 0 ? 1 - t.lawn / t.total : 0;
 }
 
+/** Whether every leaf in the yard is off the open lawn: 100%, the round's
+ *  early finish and the free yard's celebration. */
+export function isSpotless(t) {
+    return t.total > 0 && t.lawn === 0;
+}
+
 /** A share as a whole percent, rounded DOWN, so 100% means every leaf. */
 export function percent(share) {
     return Math.max(0, Math.min(100, Math.floor(share * 100 + 1e-9)));
@@ -105,6 +112,17 @@ export function percent(share) {
 /** 4210 as "4,210". */
 export function formatCount(n) {
     return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+/** 180 as "3 minutes", 167 as "2 minutes and 47 seconds", 47 as "47
+ *  seconds", for the share sentence. Whole seconds. */
+export function durationText(seconds) {
+    const s = Math.max(0, Math.round(seconds));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    const unit = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
+    if (!m) return unit(r, 'second');
+    return r ? `${unit(m, 'minute')} and ${unit(r, 'second')}` : unit(m, 'minute');
 }
 
 /** "1 leaf", "312 leaves". */
@@ -127,6 +145,15 @@ export function clockText(seconds) {
 export function verdict(t) {
     const cleared = clearedShare(t);
     const share = (n) => (t.total > 0 ? n / t.total : 0);
+    // EVERY LAST LEAF (Steve's QA, 2026-10-08: "We want the user to be able
+    // to win"). A clear lawn is the headline, wherever the leaves went, and
+    // the neighbor's share still gets its word.
+    if (isSpotless(t)) {
+        const line = share(t.neighbor) >= 0.25
+            ? 'Every last leaf is off the lawn, and a good share of it is in the yard next door. They noticed.'
+            : 'Every last leaf is off the lawn. The whole street will want to know your secret.';
+        return { key: 'perfect', title: 'Not a leaf in sight', line };
+    }
     if (share(t.neighbor) >= 0.25) {
         return { key: 'neighbor', title: 'The neighbors are talking', line: 'A good share of your yard is now in theirs. They noticed.' };
     }
@@ -135,7 +162,7 @@ export function verdict(t) {
     else if (cleared >= 0.7) base = { key: 'great', title: 'Curb appeal restored', line: 'The grass can see the sky again. Well done.' };
     else if (cleared >= 0.45) base = { key: 'good', title: 'Respectable work', line: 'More lawn than leaves. That is a good afternoon.' };
     else if (cleared >= 0.2) base = { key: 'start', title: 'A solid start', line: 'The leaves are on notice. Another round should finish the job.' };
-    else base = { key: 'leaves', title: 'The leaves win this round', line: 'They have the numbers. You have a leaf blower and another minute.' };
+    else base = { key: 'leaves', title: 'The leaves win this round', line: 'They have the numbers. You have a leaf blower and another round.' };
     // The street shortcut, noticed kindly.
     if (t.street > t.tarp * 2 && share(t.street) >= 0.2) {
         base = { ...base, line: `${base.line} Most of it went into the street, which the street did not ask for.` };
@@ -181,7 +208,7 @@ export function findsLine(names) {
  *  there is one, and the pile on the tarp otherwise. Then the dive, landed
  *  or not (`landed` null for none), and anything found under the leaves. */
 export function shareText(t, seconds, landed = null, found = []) {
-    const head = `I cleared ${percent(clearedShare(t))}% of my yard in ${seconds} seconds.`;
+    const head = `I cleared ${percent(clearedShare(t))}% of my yard in ${durationText(seconds)}.`;
     const sent = t.sent ?? t.neighbor;
     let tail = '';
     if (sent > 0) tail = ` ${leaves(sent)} went to the neighbor.`;

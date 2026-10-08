@@ -20,12 +20,16 @@
  * result is counted the instant the clock runs out, any leaf still in the
  * air counted where it is.
  *
+ * EVERY LEAF OFF THE LAWN ENDS THE ROUND EARLY (Steve's QA, 2026-10-08), into
+ * the same dive, with the time it took (`spotless`, `elapsed`) for the share
+ * to brag about. The round is three minutes now, so a visitor can win.
+ *
  * PURE. main.js steps it with the frame's time and tells it whether the
  * blower is held. It answers with what just happened, if anything.
  */
 
 export function createRound(R) {
-    return { phase: 'ready', elapsed: 0, settled: 0, seconds: R.seconds };
+    return { phase: 'ready', elapsed: 0, settled: 0, seconds: R.seconds, spotless: false };
 }
 
 /** Back to a fresh, waiting round. */
@@ -33,6 +37,7 @@ export function resetRound(round) {
     round.phase = 'ready';
     round.elapsed = 0;
     round.settled = 0;
+    round.spotless = false;
     return round;
 }
 
@@ -41,6 +46,7 @@ export function freePlay(round) {
     round.phase = 'free';
     round.elapsed = 0;
     round.settled = 0;
+    round.spotless = false;
     return round;
 }
 
@@ -60,8 +66,9 @@ export function timeLeft(round) {
 }
 
 /**
- * Advance the round by `dt` seconds. `input` is { blowing, finaleDone }:
- * whether the blower is held this frame, and whether the dive is over.
+ * Advance the round by `dt` seconds. `input` is { blowing, finaleDone,
+ * spotless }: whether the blower is held this frame, whether the dive is
+ * over, and whether every leaf is off the lawn (which ends the round early).
  * Returns 'start', 'finale' (the clock has run out and the dive begins),
  * 'done' or null. A round without a finale (R.finale false) goes from the
  * clock straight to 'done'.
@@ -77,6 +84,12 @@ export function stepRound(round, dt, input, R) {
     }
     if (round.phase === 'playing') {
         round.elapsed += step;
+        if (input.spotless && round.elapsed < round.seconds) {
+            round.spotless = true;
+            round.settled = 0;
+            round.phase = R.finale ? 'finale' : 'done';
+            return round.phase;
+        }
         if (round.elapsed >= round.seconds) {
             round.elapsed = round.seconds;
             round.settled = 0;

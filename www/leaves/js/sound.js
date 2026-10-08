@@ -23,6 +23,9 @@
  * ONE BLOWER AT A TIME (Steve's M6 QA: "there is no need for 2 simultaneous
  * blowing sounds - enough is enough"): his is heard only while ours is off.
  *
+ * A CHIME when every last leaf is off the lawn (2026-10-08), a few bells
+ * rising.
+ *
  * AND THE DIVE'S LANDING (M6 QA: "a 'thud' sound when the character lands on
  * the ground"): a thud for a flop onto the lawn, and for a landing in the
  * pile a crunch of leaves. Each is a one-shot, its nodes let go when it
@@ -277,6 +280,40 @@ export function createSound(S) {
         return true;
     }
 
+    /** A bell-like note: a sine and a quieter partial a little over an
+     *  octave up, struck at `t` and ringing out over `decay` seconds. */
+    function bell(t, hz, peak, decay) {
+        for (const [mult, share, length] of [[1, 1, 1], [2.76, 0.18, 0.45]]) {
+            const osc = ctx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(hz * mult, t);
+            const gain = ctx.createGain();
+            gain.gain.value = 0;
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(peak * share, t + 0.008);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + decay * length);
+            osc.connect(gain);
+            gain.connect(master);
+            osc.addEventListener('ended', () => { osc.disconnect(); gain.disconnect(); });
+            osc.start(t);
+            osc.stop(t + decay * length + 0.05);
+        }
+    }
+
+    /** Every last leaf off the lawn (2026-10-08): a rising chime, one bell
+     *  after another. Returns whether it sounded. */
+    function chime() {
+        if (!ctx || !on || paused) return false;
+        const K = S.chime;
+        const t = ctx.currentTime + S.ahead;
+        try {
+            K.notes.forEach((hz, k) => bell(t + k * K.gap, hz, K.level, K.decay));
+        } catch (e) {
+            return false;
+        }
+        return true;
+    }
+
     /** A click, a tap or a key: audio may start now. Returns whether there
      *  is nothing more a gesture can do (it is running, or cannot be). An
      *  iPhone does not count a pointerdown, so a context made on one waits,
@@ -313,6 +350,7 @@ export function createSound(S) {
         unlock,
         thud,
         crunch,
+        chime,
         toggle: () => setOn(!on),
         update,
         pause,

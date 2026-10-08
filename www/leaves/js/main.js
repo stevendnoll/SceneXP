@@ -8,7 +8,8 @@
  * count, so a phone can be measured at several counts in one sitting. The
  * leaves are sim.js (where they are) and leafmesh.js (how they are drawn).
  *
- * M1, THE ROUND (2026-10-06): a minute to clear the lawn, starting with the
+ * M1, THE ROUND (2026-10-06): a minute to clear the lawn (three since Steve's
+ * QA of 2026-10-08, and every leaf off it ends the round early), starting with the
  * first blow (round.js), a HUD with the clock and the share cleared, an end
  * card that says where the leaves went (score.js) with Play again, Share and
  * Keep blowing, and free play with no clock from the welcome card.
@@ -48,7 +49,8 @@
 
 import { LEAVES_CONFIG } from './config.min.js';
 import {
-    createSim, resetSim, scatterLeaves, stepSim, makeJet, airAt, pilePeak, burst, solidBoxes, makeRandom, restingNear
+    createSim, resetSim, scatterLeaves, stepSim, makeJet, airAt, pilePeak, burst, solidBoxes, makeRandom, restingNear,
+    wrapAngle
 } from './sim.min.js';
 import { buildTrees, updateTrees, createCrowns, stepCrowns } from './trees.min.js';
 import { planFinale, finaleAt } from './finale.min.js';
@@ -58,15 +60,18 @@ import { seasonFor, carvePumpkins, createTreaters, stepTreaters, createTreaterFi
 import { buildDecorations, decoratedConfig } from './decorations.min.js';
 import { buildBackyard } from './backyard.min.js';
 import { buildGap } from './gap.min.js';
+import { buildResting } from './rooftops.min.js';
+import { createCheer, resetCheer, stepCheer, skipCheer, isCheering, cheerLift, cheerFocus, CHEER_LINE } from './celebrate.min.js';
 import { createSound } from './sound.min.js';
 import { createNeighbor, resetNeighbor, stepNeighbor, isOut, neighborBlower } from './neighbor.min.js';
 import {
-    tally, clearedShare, percent, clockText, verdict, resultRows, shareText, resultSentence, diveLine, findsLine
+    tally, clearedShare, percent, clockText, verdict, resultRows, shareText, resultSentence, diveLine, findsLine,
+    isSpotless, durationText
 } from './score.min.js';
 import { createLeafMesh } from './leafmesh.min.js';
 import { buildYard } from './yard.min.js';
 import { createOperator, stepOperator, facing, createOperatorFigure } from './blower.min.js';
-import { cameraFor, cameraOn, cameraCast, castFrame, rayToGround, ease } from './view.min.js';
+import { cameraFor, cameraOn, cameraCast, castFrame, rayToGround, ease, clampZoom } from './view.min.js';
 import {
     PRESETS, SKINS, HAIR_COLORS, HAIR_LENGTHS, DEFAULT_CHOICE,
     loadChoice, saveChoice, forgetChoice, personConfig, castLine
@@ -103,7 +108,9 @@ const state = {
     showFinds: false,
     lastTime: 0,
     time: 0,
-    blows: 0
+    blows: 0,
+    // Whether the visitor has zoomed yet this visit (logged once).
+    zoomed: false
 };
 
 let canvas = null;
@@ -153,6 +160,8 @@ let sent = null;
 // the dive (the burst throws leaves off the tarp, and a dive should not
 // lower the score it celebrates).
 const finale = { plan: null, t: 0, burst: false, arms: 'carry', tally: null };
+// Every last leaf off the lawn in free play (celebrate.js).
+const cheer = createCheer();
 // THE DELIGHTS (M6). The finds hidden this round, their models, and the
 // names of the ones found (for the end card), with the count of rounds so
 // each hides them somewhere new. October's decorations and Halloween week's
@@ -203,6 +212,12 @@ const keys = { left: false, right: false, up: false, down: false, blow: false };
 let steer = 'point';
 // The camera's eased position and target.
 const view = { position: null, target: null };
+// The visitor's zoom (view.js): 1 is the usual view, more is closer. Kept
+// for the visit, not stored. `pinch` is a two-finger pinch under way: the
+// fingers' spread and the zoom when it began. `touches` is every finger on
+// the lawn, by pointer id.
+const zoom = { value: 1, pinch: null };
+const touches = new Map();
 // Shadows are redrawn at most config.shadows.hz times a second while
 // anything moves, and a frame that moved something is owed one.
 const shade = { owed: true, since: 0 };
@@ -305,7 +320,7 @@ async function init() {
 
     updateLoadingStatus(`Letting ${shortCount(state.count)} leaves fall…`, 55);
     sim = createSim(state.count, WORLD);
-    const { look } = scatterLeaves(sim, WORLD);
+    const { look, size: leafBase } = scatterLeaves(sim, WORLD);
     trees = buildTrees(scene, CONFIG, { mobile: state.isMobile, shadows: state.shadows });
     crowns = createCrowns(sim, WORLD);
     leaves = createLeafMesh(sim, look, {
@@ -316,6 +331,8 @@ async function init() {
     });
     leaves.update();
     scene.add(leaves.mesh);
+    // Leaves resting on the roofs and the hedge (2026-10-08), never blown.
+    scene.add(buildResting(CONFIG, leafBase, { shadows: state.shadows, underside: CONFIG.look.underside }).mesh);
     sent = new Uint8Array(state.count);
     findList = findsFor(CONFIG.finds, state.halloween);
     findModels = buildFindModels(findList);
@@ -421,7 +438,7 @@ function placeCamera(snap) {
     const aspect = window.innerWidth / window.innerHeight;
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
-    const want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null);
+    const want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null, zoom.value);
     if (snap || !view.position) {
         view.position = { ...want.position };
         view.target = { ...want.target };
@@ -445,9 +462,13 @@ function followCamera(dt) {
     // through the end card. Reduced motion keeps the usual view.
     const onPile = finale.plan && !state.reducedMotion && (round.phase === 'finale' || round.phase === 'done');
     let want;
+    // The celebration's view: in on the person and the clean lawn, and
+    // never the neighbor. Reduced motion keeps the usual view.
+    const cheering = isCheering(cheer) && !state.reducedMotion;
     if (castShown()) want = cameraCast(operator, aspect, CONFIG.camera, castFrame(window.innerWidth, window.innerHeight));
     else if (onPile) want = cameraOn(finale.plan.land, aspect, CONFIG.camera, CONFIG.finale.span);
-    else want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null);
+    else if (cheering) want = cameraOn(cheerFocus(operator, CONFIG.yard.lawn), aspect, CONFIG.camera, CONFIG.cheer.span);
+    else want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null, zoom.value);
     const rate = CONFIG.camera.follow;
     ['x', 'y', 'z'].forEach((k) => {
         view.position[k] = ease(view.position[k], want.position[k], rate, dt);
@@ -529,8 +550,21 @@ function setupEventListeners() {
 
     // Steering by pointer events, so a mouse, a pen and a finger are one path.
     canvas.addEventListener('pointerdown', (event) => {
-        if (skipFinale()) return;
-        if (welcomeShown() || (pointer.id !== null && pointer.id !== event.pointerId)) return;
+        if (skipFinale() || endCheer()) return;
+        if (welcomeShown()) return;
+        // A second finger on the lawn is a pinch: the first stops steering,
+        // and neither steers again until it is lifted.
+        if (event.pointerType === 'touch') {
+            touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+            if (touches.size >= 2) {
+                startPinch();
+                if (canvas.setPointerCapture) {
+                    try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* not capturable */ }
+                }
+                return;
+            }
+        }
+        if (pointer.id !== null && pointer.id !== event.pointerId) return;
         pointer.id = event.pointerId;
         pointer.down = true;
         pointer.mouse = event.pointerType === 'mouse';
@@ -549,6 +583,13 @@ function setupEventListeners() {
     }, { signal });
     canvas.addEventListener('pointermove', (event) => {
         if (welcomeShown()) return;
+        if (touches.has(event.pointerId)) {
+            touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+            if (zoom.pinch) {
+                stepPinch();
+                return;
+            }
+        }
         // A mouse steers by hovering. A finger only while it is down.
         const hovering = event.pointerType === 'mouse' && pointer.id === null;
         if (event.pointerId !== pointer.id && !hovering) return;
@@ -557,6 +598,8 @@ function setupEventListeners() {
         aimAt(event.clientX, event.clientY);
     }, { signal });
     const release = (event) => {
+        touches.delete(event.pointerId);
+        if (touches.size < 2) zoom.pinch = null;
         if (event.pointerId !== pointer.id) return;
         pointer.id = null;
         pointer.down = false;
@@ -579,7 +622,60 @@ function setupEventListeners() {
         if (event.pointerType === 'mouse' && pointer.id === null) pointer.client = null;
     }, { signal });
 
+    // The wheel zooms, and so does a trackpad's pinch, which a browser sends
+    // as a wheel with the Control key held. Not passive, so the page itself
+    // never scrolls or zooms instead.
+    canvas.addEventListener('wheel', (event) => {
+        if (!canZoom()) return;
+        if (event.cancelable) event.preventDefault();
+        const Z = CONFIG.camera.zoom;
+        const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
+        const delta = Math.max(-300, Math.min(300, event.deltaY * unit));
+        setZoom(zoom.value * Math.exp(-delta * (event.ctrlKey ? Z.pinchWheel : Z.wheel)));
+    }, { passive: false, signal });
+
     if (blowBtn) installBlowButton(blowBtn, signal);
+}
+
+// ---- Zoom -----------------------------------------------------------------
+
+/** The visitor may zoom while in the yard, but not over a card or during
+ *  the dive, which has its own view. */
+function canZoom() {
+    return state.isLoaded && !welcomeShown() && !endShown() && !castShown() && round.phase !== 'finale';
+}
+
+/** Set the zoom, within its range. The camera eases there (followCamera). */
+function setZoom(value) {
+    const before = zoom.value;
+    zoom.value = clampZoom(value, CONFIG.camera);
+    if (zoom.value !== before && !state.zoomed) {
+        state.zoomed = true;
+        track('zoom');
+    }
+    return zoom.value;
+}
+
+/** The spread of the first two fingers on the lawn, in pixels. */
+function fingerSpread() {
+    const [a, b] = [...touches.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+}
+
+/** Two fingers down: steering stops and the pinch begins. */
+function startPinch() {
+    pointer.id = null;
+    pointer.down = false;
+    pointer.blows = false;
+    pointer.aim = null;
+    pointer.client = null;
+    zoom.pinch = canZoom() ? { spread: Math.max(1, fingerSpread()), from: zoom.value } : null;
+}
+
+/** The fingers moved: the zoom follows their spread. */
+function stepPinch() {
+    if (!zoom.pinch || touches.size < 2) return;
+    setZoom(zoom.pinch.from * (fingerSpread() / zoom.pinch.spread));
 }
 
 /** The blow button runs the blower while it is held, by a finger or by
@@ -664,6 +760,11 @@ function onKeyDown(event) {
         if (event.code === 'Escape') keepBlowing();
         return;
     }
+    if (isCheering(cheer) && ['Space', 'Enter', 'Escape'].includes(event.code)) {
+        event.preventDefault();
+        endCheer();
+        return;
+    }
     if (round.phase === 'finale' && ['Space', 'Enter', 'Escape'].includes(event.code)) {
         event.preventDefault();
         skipFinale();
@@ -685,6 +786,16 @@ function onKeyDown(event) {
     }
     // A button with focus keeps Enter and Space for itself.
     if (isButton(event.target) && (event.code === 'Enter' || event.code === 'Space')) return;
+    // + and - zoom, and 0 is the usual view. Not with Control or Command,
+    // which zoom the browser itself.
+    const zoomKey = zoomKeyOf(event);
+    if (zoomKey) {
+        event.preventDefault();
+        if (!canZoom()) return;
+        const step = CONFIG.camera.zoom.step;
+        setZoom(zoomKey === 'in' ? zoom.value * step : zoomKey === 'out' ? zoom.value / step : 1);
+        return;
+    }
     const walk = WALK_KEYS[event.code];
     if (walk) {
         event.preventDefault();
@@ -695,6 +806,16 @@ function onKeyDown(event) {
         if (!keys.blow) noteBlow();
         keys.blow = true;
     }
+}
+
+/** 'in', 'out', 'reset' or null for a key press. By the character typed, so
+ *  any keyboard layout's + and - work, and by the number pad's keys. */
+export function zoomKeyOf(event) {
+    if (event.metaKey || event.ctrlKey || event.altKey) return null;
+    if (event.key === '+' || event.key === '=' || event.code === 'NumpadAdd') return 'in';
+    if (event.key === '-' || event.key === '_' || event.code === 'NumpadSubtract') return 'out';
+    if (event.key === '0' || event.code === 'Numpad0') return 'reset';
+    return null;
 }
 
 function onKeyUp(event) {
@@ -722,6 +843,8 @@ function releaseInput() {
     blowHold.id = null;
     blowHold.key = false;
     if (blowBtn) blowBtn.classList.remove('held');
+    touches.clear();
+    zoom.pinch = null;
 }
 
 /** Whether the blower is running: a mouse or pen pressed on the lawn, Space,
@@ -801,6 +924,7 @@ function startFreePlay() {
     if (!state.isLoaded) return;
     if (round.phase !== 'free') {
         freePlay(round);
+        resetCheer(cheer);
         track('free-blow', { outcome: 'welcome' });
     }
     updateHud();
@@ -1009,7 +1133,7 @@ function installRoundControls() {
         document.getElementById('end-share'),
         () => ({
             title: 'Leaves',
-            text: shareText(result ? result.tally : counted, CONFIG.round.seconds, result ? result.landed : null, result ? result.found : found)
+            text: shareText(result ? result.tally : counted, result ? result.seconds : CONFIG.round.seconds, result ? result.landed : null, result ? result.found : found)
         }),
         {
             status: document.getElementById('end-status'),
@@ -1033,13 +1157,17 @@ function announce(text) {
 
 function onRoundEvent(event) {
     if (event === 'start') {
-        announce('The clock is running. You have one minute.');
+        announce(`The clock is running. You have ${durationText(CONFIG.round.seconds)}.`);
         track('round-start');
     } else if (event === 'finale') {
         // The clock has run out: the blower stops, whatever is still held,
         // the result is counted, and the dive begins.
         releaseInput();
         announce('Time is up.');
+        if (round.spotless) {
+            sound.chime();
+            track('spotless', { outcome: 'round', seconds: Math.round(round.elapsed) });
+        }
         startFinale();
     } else if (event === 'done') {
         showEnd();
@@ -1058,7 +1186,8 @@ function startFinale() {
     finale.t = 0;
     finale.burst = false;
     operator.hideBlower = true;
-    announce('You set the blower down and take a running dive at the pile.');
+    const early = round.spotless ? 'Every last leaf is off the lawn, with time to spare. ' : '';
+    announce(`${early}You set the blower down and take a running dive at the pile.`);
     track('dive', { outcome: finale.plan.success ? 'landed' : 'flop' });
 }
 
@@ -1124,13 +1253,49 @@ function skipFinale() {
     return true;
 }
 
+// ---- Every last leaf, with no clock (celebrate.js) -------------------------
+
+/** The last leaf is off the lawn in free play: the blower down, arms up,
+ *  a chime and a line on screen. */
+function startCheer() {
+    releaseInput();
+    operator.speed = 0;
+    sound.chime();
+    showToast(CHEER_LINE, CONFIG.cheer.toastSeconds);
+    announce(`Every last leaf is off the lawn. ${CHEER_LINE}`);
+    track('spotless', { outcome: 'free' });
+}
+
+/** One frame of it: turning to face the street, and the hops. */
+function stepCheerPose(dt) {
+    operator.speed = 0;
+    const step = B.turnRate * dt;
+    const turn = wrapAngle(0 - operator.heading);
+    operator.heading = wrapAngle(operator.heading + Math.max(-step, Math.min(step, turn)));
+    operator.lift = cheerLift(cheer.t, CONFIG.cheer, state.reducedMotion);
+}
+
+/** Back on the lawn with the blower, the yard theirs again. */
+function finishCheer() {
+    operator.lift = 0;
+}
+
+/** A tap or a key: the celebration ends now. Returns whether one was on. */
+function endCheer() {
+    if (!skipCheer(cheer)) return false;
+    finishCheer();
+    return true;
+}
+
 /** Count the result, fill the end card and open it, with Play again
  *  focused. */
 function showEnd() {
     const t = finale.tally || recount();
     const v = verdict(t);
     const landed = finale.plan ? finale.plan.success : null;
-    result = { tally: t, verdict: v, landed, found: [...found] };
+    // An early finish brags about the time it took, in whole seconds.
+    const seconds = round.spotless ? Math.max(1, Math.round(round.elapsed)) : CONFIG.round.seconds;
+    result = { tally: t, verdict: v, landed, found: [...found], seconds };
     const set = (id, text) => {
         const el = document.getElementById(id);
         if (el) el.textContent = text;
@@ -1191,6 +1356,7 @@ function keepBlowing() {
     hideEnd();
     standUp();
     freePlay(round);
+    resetCheer(cheer);
     track('free-blow', { outcome: 'end-card' });
     updateHud();
 }
@@ -1212,6 +1378,7 @@ function resetYard() {
     finale.burst = false;
     finale.arms = 'carry';
     finale.tally = null;
+    resetCheer(cheer);
     shade.owed = true;
     recount();
 }
@@ -1356,7 +1523,8 @@ function stepTheNeighbor(dt) {
         minZ: counted.nearZ,
         maxZ: counted.farZ,
         maxX: counted.deepX,
-        active: round.phase === 'playing' || round.phase === 'free',
+        // He stays in while every last leaf is being celebrated.
+        active: (round.phase === 'playing' || round.phase === 'free') && !isCheering(cheer),
         over: round.phase === 'finale' || round.phase === 'done'
     }, N);
     if (event === 'out') {
@@ -1424,11 +1592,11 @@ function riseFinds(dt) {
 }
 
 /** The find's line under the HUD, for `toastSeconds`. */
-function showToast(text) {
+function showToast(text, seconds = CONFIG.finds.toastSeconds) {
     if (!toast.el) return;
     toast.el.textContent = text;
     toast.el.classList.add('visible');
-    toast.until = state.time + CONFIG.finds.toastSeconds;
+    toast.until = state.time + seconds;
 }
 
 function hideToast() {
@@ -1517,14 +1685,20 @@ function animate() {
     // over). Behind a card the round holds still: the clock pauses for the
     // welcome card, and nothing moves under the end card.
     const inYard = !welcomeShown() && !endShown() && !castShown();
-    const free = inYard && canBlow(round);
+    // While every last leaf is celebrated nobody steers or blows.
+    const cheering = isCheering(cheer);
+    const free = inYard && canBlow(round) && !cheering;
     // A mouse held still still steers by what is under it, as the view
     // slides: at the screen's edge the person keeps going to the hedge (M6
     // QA). A finger only re-aims when it moves.
     if (free && steer === 'point' && pointer.mouse && pointer.client) aimAt(pointer.client.x, pointer.client.y);
     const aim = free ? aimFor(steer, pointer, keys) : null;
     const diving = round.phase === 'finale';
-    if (!diving && !finale.plan) stepOperator(operator, aim, dt, B, walkArea(), solids);
+    if (cheering) {
+        if (inYard) stepCheerPose(dt);
+    } else if (!diving && !finale.plan) {
+        stepOperator(operator, aim, dt, B, walkArea(), solids);
+    }
     // The crowns let their leaves go whenever the yard is in view.
     if (!welcomeShown() && !castShown()) stepCrowns(crowns, sim, dt, CONFIG);
     updateTrees(trees, state.time, state.reducedMotion ? 0.3 : 1);
@@ -1533,7 +1707,7 @@ function animate() {
     const jet = makeJet(B, operator.x, operator.z, f.x, f.z, blowing);
     if (inYard) {
         const finaleDone = diving ? stepFinale(dt) : false;
-        const event = stepRound(round, dt, { blowing, finaleDone }, CONFIG.round);
+        const event = stepRound(round, dt, { blowing, finaleDone, spotless: isSpotless(counted) }, CONFIG.round);
         if (event) onRoundEvent(event);
     }
     // The neighbor carries on behind the end card (he waves), and holds
@@ -1545,6 +1719,11 @@ function animate() {
     if (inYard && countedAgo >= 1 / CONFIG.round.tallyHz) {
         recount();
         lookForFinds();
+    }
+    if (inYard) {
+        const ev = stepCheer(cheer, dt, { free: round.phase === 'free', spotless: isSpotless(counted) }, CONFIG.cheer);
+        if (ev === 'start') startCheer();
+        else if (ev === 'end') finishCheer();
     }
     if (inYard) updateHud();
 
@@ -1565,7 +1744,7 @@ function animate() {
     lab.simMs += performance.now() - t0;
     lab.uploaded += uploaded;
 
-    figure.update(operator, blowing, state.time, finale.plan ? finale.arms : 'carry');
+    figure.update(operator, blowing, state.time, finale.plan ? finale.arms : isCheering(cheer) ? 'up' : 'carry');
     neighborFigure.group.visible = isOut(neighbor);
     neighborFigure.update(neighbor, neighbor.blowing, state.time, neighbor.arms, neighbor.big);
     if (neighborDoor) neighborDoor.rotation.y = -1.7 * neighbor.door;
@@ -1630,7 +1809,7 @@ export function getState() {
         blowing: isBlowing(!welcomeShown() && !endShown() && canBlow(round), pointer, keys, blowHold),
         round: { ...round },
         counted: { ...counted },
-        result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict }, landed: result.landed, found: [...result.found] } : null,
+        result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict }, landed: result.landed, found: [...result.found], seconds: result.seconds } : null,
         neighbor: { ...neighbor },
         endShown: endShown(),
         castShown: castShown(),
@@ -1640,7 +1819,11 @@ export function getState() {
         found: [...found],
         treaters: treatersState(),
         sound: sound.isOn(),
-        toast: toast.until > 0
+        toast: toast.until > 0,
+        cheer: { ...cheer },
+        zoom: zoom.value,
+        pinching: Boolean(zoom.pinch),
+        camera: view.position ? { position: { ...view.position }, target: { ...view.target } } : null
     };
 }
 

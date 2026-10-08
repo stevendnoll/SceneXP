@@ -128,10 +128,6 @@ test('on a touch screen a finger walks without blowing, and the blow button blow
     expect(main.__test__.pointer.id).toBe(1);
     expect(main.getState().blowing).toBe(false);
     expect(main.getState().blows).toBe(0);
-    // A second finger on the lawn does not take the steering from the first.
-    fire(canvas, 'pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 10, clientY: 10 });
-    expect(main.__test__.pointer.id).toBe(1);
-
     // A thumb on the blow button runs the blower while the finger steers.
     fire(btn, 'pointerdown', { pointerId: 3, pointerType: 'touch' });
     expect(main.getState().blowing).toBe(true);
@@ -254,6 +250,103 @@ test('a mouse leaving the lawn stops steering from the screen, but the person st
     expect(main.getState().aim).toBe(null);
 });
 
+// STEVE'S QA, 2026-10-08: "Could we add zoom support so the user can zoom in
+// and out while playing?" The framing itself is measured on the real
+// three.js in tests/leaves-view.
+describe('zoom', () => {
+    const Z = C0.camera.zoom;
+
+    test('the wheel zooms the yard, not the page, and never behind the welcome card', async () => {
+        const main = await boot();
+        const canvas = dom.el('game-canvas');
+        const before = fire(canvas, 'wheel', { deltaY: -100, deltaMode: 0, cancelable: true });
+        expect(before.defaultPrevented).toBe(false);
+        expect(main.getState().zoom).toBe(1);
+
+        fire(dom.el('blocker'), 'click');
+        const wheel = fire(canvas, 'wheel', { deltaY: -100, deltaMode: 0, cancelable: true });
+        expect(wheel.defaultPrevented).toBe(true);
+        expect(main.getState().zoom).toBeGreaterThan(1);
+        // A wheel that counts in lines, rolled back the same way, comes back.
+        fire(canvas, 'wheel', { deltaY: 100 / 16, deltaMode: 1, cancelable: true });
+        expect(main.getState().zoom).toBeCloseTo(1, 6);
+        // A trackpad's pinch (a wheel with Control) moves faster.
+        fire(canvas, 'wheel', { deltaY: -20, deltaMode: 0, ctrlKey: true, cancelable: true });
+        expect(main.getState().zoom).toBeCloseTo(Math.exp(20 * Z.pinchWheel), 6);
+        // However far it is rolled, it stops at the ends of the range.
+        for (let i = 0; i < 40; i++) fire(canvas, 'wheel', { deltaY: -300, deltaMode: 0, cancelable: true });
+        expect(main.getState().zoom).toBe(Z.max);
+        for (let i = 0; i < 40; i++) fire(canvas, 'wheel', { deltaY: 300, deltaMode: 0, cancelable: true });
+        expect(main.getState().zoom).toBe(Z.min);
+        expect(() => frames(main, 0.5)).not.toThrow();
+    });
+
+    test('+ and - zoom a step at a time and 0 goes back, leaving Control and Command to the browser', async () => {
+        const main = await boot();
+        fire(dom.documentStub, 'keydown', { key: '+', code: 'Equal' });
+        expect(main.getState().zoom).toBe(1);
+        fire(dom.el('blocker'), 'click');
+        const press = fire(dom.documentStub, 'keydown', { key: '=', code: 'Equal' });
+        expect(press.defaultPrevented).toBe(true);
+        expect(main.getState().zoom).toBeCloseTo(Z.step, 6);
+        fire(dom.documentStub, 'keydown', { key: '+', code: 'NumpadAdd' });
+        expect(main.getState().zoom).toBeCloseTo(Z.step * Z.step, 6);
+        fire(dom.documentStub, 'keydown', { key: '-', code: 'Minus' });
+        expect(main.getState().zoom).toBeCloseTo(Z.step, 6);
+        fire(dom.documentStub, 'keydown', { key: '0', code: 'Digit0' });
+        expect(main.getState().zoom).toBe(1);
+        const browsers = fire(dom.documentStub, 'keydown', { key: '=', code: 'Equal', ctrlKey: true });
+        expect(browsers.defaultPrevented).toBe(false);
+        const mac = fire(dom.documentStub, 'keydown', { key: '-', code: 'Minus', metaKey: true });
+        expect(mac.defaultPrevented).toBe(false);
+        expect(main.getState().zoom).toBe(1);
+        // And below the usual view, standing back.
+        fire(dom.documentStub, 'keydown', { key: '-', code: 'Minus' });
+        expect(main.getState().zoom).toBeCloseTo(1 / Z.step, 6);
+    });
+
+    test('two fingers on the lawn pinch, the steering finger stops steering, and neither steers again until lifted', async () => {
+        const main = await boot();
+        const canvas = dom.el('game-canvas');
+        fire(dom.el('blocker'), 'click');
+        fire(canvas, 'pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 150, clientY: 500 });
+        expect(main.__test__.pointer.id).toBe(1);
+        fire(canvas, 'pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 250, clientY: 500 });
+        expect(main.__test__.pointer.id).toBe(null);
+        expect(main.getState().aim).toBe(null);
+        expect(main.getState().pinching).toBe(true);
+        // Spread from 100 to 150 pixels apart: half again as close.
+        fire(canvas, 'pointermove', { pointerId: 2, pointerType: 'touch', clientX: 300, clientY: 500 });
+        expect(main.getState().zoom).toBeCloseTo(1.5, 6);
+        // Together again to 75 apart, from 1 when the pinch began.
+        fire(canvas, 'pointermove', { pointerId: 1, pointerType: 'touch', clientX: 225, clientY: 500 });
+        expect(main.getState().zoom).toBeCloseTo(Math.max(Z.min, 0.75), 6);
+        // One finger lifted ends the pinch, and the other does not steer.
+        fire(canvas, 'pointerup', { pointerId: 2 });
+        expect(main.getState().pinching).toBe(false);
+        fire(canvas, 'pointermove', { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 400 });
+        expect(main.__test__.pointer.id).toBe(null);
+        expect(main.__test__.pointer.client).toBe(null);
+        fire(canvas, 'pointerup', { pointerId: 1 });
+        // A fresh finger steers as before.
+        fire(canvas, 'pointerdown', { pointerId: 3, pointerType: 'touch', clientX: 150, clientY: 500 });
+        expect(main.__test__.pointer.id).toBe(3);
+        expect(main.getState().blowing).toBe(false);
+    });
+
+    test('a key press is read as zoom by the character typed or the number pad', async () => {
+        const main = await import('../www/leaves/js/main.js');
+        expect(main.zoomKeyOf({ key: '+', code: 'Equal' })).toBe('in');
+        expect(main.zoomKeyOf({ key: '+', code: 'BracketRight' })).toBe('in');
+        expect(main.zoomKeyOf({ key: '+', code: 'NumpadAdd' })).toBe('in');
+        expect(main.zoomKeyOf({ key: '_', code: 'Minus' })).toBe('out');
+        expect(main.zoomKeyOf({ key: '-', code: 'NumpadSubtract' })).toBe('out');
+        expect(main.zoomKeyOf({ key: '0', code: 'Numpad0' })).toBe('reset');
+        expect(main.zoomKeyOf({ key: '=', code: 'Equal', altKey: true })).toBe(null);
+        expect(main.zoomKeyOf({ key: 'd', code: 'KeyD' })).toBe(null);
+    });
+});
+
 test('the aim follows the keys or the pointer, whichever moved last', async () => {
     const main = await import('../www/leaves/js/main.js');
     const held = { left: false, right: true, up: true, down: false };
@@ -296,8 +389,8 @@ describe('the round', () => {
         frames(main, 0.2, 20);
         fire(dom.documentStub, 'keyup', { code: 'Space' });
         expect(main.getState().round.phase).toBe('playing');
-        // The minute, the leaves landing, and the dive into the pile.
-        frames(main, 60 + C0.round.finaleMax, 20);
+        // The clock, and the dive into the pile.
+        frames(main, C0.round.seconds + C0.round.finaleMax, 20);
         expect(main.getState().endShown).toBe(true);
     }
 
@@ -307,18 +400,18 @@ describe('the round', () => {
         expect(dom.el('round-hud').classList.contains('visible')).toBe(true);
         frames(main, 2, 20);
         expect(main.getState().round.phase).toBe('ready');
-        expect(dom.el('hud-clock').textContent).toBe('1:00');
+        expect(dom.el('hud-clock').textContent).toBe('3:00');
         expect(dom.el('hud-hint').hidden).toBe(false);
         expect(dom.el('hud-hint').textContent).toBe('Blow to start the clock');
 
         fire(dom.documentStub, 'keydown', { code: 'Space' });
         // The frame that starts the clock does not count toward it, so 2.5
-        // seconds of frames leaves 57.55 seconds, which the clock rounds up.
+        // seconds of frames leaves 177.55 seconds, which the clock rounds up.
         frames(main, 2.5, 20);
         expect(main.getState().round.phase).toBe('playing');
-        expect(dom.el('hud-clock').textContent).toBe('0:58');
+        expect(dom.el('hud-clock').textContent).toBe('2:58');
         expect(dom.el('hud-hint').hidden).toBe(true);
-        expect(dom.el('round-status').textContent).toMatch(/clock is running/);
+        expect(dom.el('round-status').textContent).toBe('The clock is running. You have 3 minutes.');
     });
 
     test('the clock holds still behind the welcome card', async () => {
@@ -365,7 +458,7 @@ describe('the round', () => {
         expect(s.round.phase).toBe('ready');
         expect(s.counted.lawn).toBe(s.counted.total);
         expect(dom.el('round-hud').classList.contains('visible')).toBe(true);
-        expect(dom.el('hud-clock').textContent).toBe('1:00');
+        expect(dom.el('hud-clock').textContent).toBe('3:00');
     });
 
     test('Keep blowing (or Escape) leaves the yard as it is, with no clock and a way back to a round', async () => {
@@ -387,6 +480,70 @@ describe('the round', () => {
         expect(dom.el('hud-new').hidden).toBe(true);
     });
 
+    // STEVE'S QA, 2026-10-08: a celebration at 100% "even if there is no
+    // time limit", focused on the person and the clean yard, not the neighbor.
+    test('in free play, the last leaf off the lawn is celebrated: arms up, the blower stopped, the neighbor kept in, a line on screen', async () => {
+        const main = await boot();
+        fire(dom.el('free-btn'), 'click');
+        frames(main, 1, 20);
+        expect(main.getState().cheer.armed).toBe(true);
+        // Holding the blower as the last leaf goes.
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        const Sim = await import('../www/leaves/js/sim.min.js');
+        const sim = main.__test__.sim();
+        let k = 0;
+        for (let i = 0; i < sim.count; i++) {
+            if (sim.hanging[i] || sim.falling[i]) continue;
+            Sim.hangLeaf(sim, i, 0, 5, 0);
+            Sim.layDown(sim, i, -8 + (k % 60) * 0.3, 9.6 + Math.floor(k / 60) * 0.3);
+            k++;
+        }
+        frames(main, 0.5, 20);
+        let s = main.getState();
+        expect(s.cheer.phase).toBe('cheer');
+        expect(s.blowing).toBe(false);
+        expect(main.__test__.keys.blow).toBe(false);
+        expect(dom.el('find-toast').textContent).toBe('Not a leaf in sight. The lawn is spotless.');
+        expect(dom.el('round-status').textContent).toMatch(/Every last leaf is off the lawn/);
+        // The neighbor stays in, whatever is on his lawn.
+        expect(s.neighbor.state).toBe('inside');
+        // A hop, and turned toward the street.
+        frames(main, 0.3, 20);
+        s = main.getState();
+        expect(s.operator.lift).toBeGreaterThan(0);
+        expect(Math.abs(s.operator.heading)).toBeLessThan(0.05);
+        // It ends by itself, back on the lawn, and does not come again.
+        frames(main, C0.cheer.seconds, 20);
+        s = main.getState();
+        expect(s.cheer.phase).toBe('idle');
+        expect(s.cheer.done).toBe(true);
+        expect(s.operator.lift).toBe(0);
+        frames(main, 2, 20);
+        expect(main.getState().cheer.phase).toBe('idle');
+        expect(main.getState().round.phase).toBe('free');
+    });
+
+    test('a key ends the celebration early, and the yard is theirs again', async () => {
+        const main = await boot();
+        fire(dom.el('free-btn'), 'click');
+        frames(main, 1, 20);
+        const Sim = await import('../www/leaves/js/sim.min.js');
+        const sim = main.__test__.sim();
+        for (let i = 0; i < sim.count; i++) {
+            if (sim.hanging[i] || sim.falling[i]) continue;
+            Sim.hangLeaf(sim, i, 0, 5, 0);
+            Sim.layDown(sim, i, -8 + (i % 60) * 0.3, 9.6 + Math.floor(i / 60) * 0.3);
+        }
+        frames(main, 0.5, 20);
+        expect(main.getState().cheer.phase).toBe('cheer');
+        const press = fire(dom.documentStub, 'keydown', { code: 'Enter' });
+        expect(press.defaultPrevented).toBe(true);
+        expect(main.getState().cheer.phase).toBe('idle');
+        expect(main.getState().operator.lift).toBe(0);
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        expect(main.getState().blowing).toBe(true);
+    });
+
     test('the welcome card offers the yard with no clock', async () => {
         const main = await boot();
         fire(dom.el('free-btn'), 'click');
@@ -405,8 +562,47 @@ describe('the round', () => {
         // No share sheet and no clipboard here, so the ladder ends at a mail.
         const sent = decodeURIComponent(dom.windowStub.location.href);
         expect(sent).toMatch(/^mailto:/);
-        expect(sent).toMatch(/I cleared \d{1,3}% of my yard in 60 seconds\./);
+        expect(sent).toMatch(/I cleared \d{1,3}% of my yard in 3 minutes\./);
         expect(main.getState().result).not.toBe(null);
+    });
+
+    // STEVE'S QA, 2026-10-08: "a timed round should end early if the user
+    // reaches 100%".
+    test('every leaf off the lawn ends the round early, into the dive, and the share says how fast', async () => {
+        const main = await boot();
+        fire(dom.el('blocker'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 0.2, 20);
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        frames(main, 10, 20);
+        expect(main.getState().round.phase).toBe('playing');
+        // Every leaf lifted out of the yard and laid in the street, as a
+        // visitor's blower would leave them (never teleported).
+        const Sim = await import('../www/leaves/js/sim.min.js');
+        const sim = main.__test__.sim();
+        let k = 0;
+        for (let i = 0; i < sim.count; i++) {
+            if (sim.hanging[i] || sim.falling[i]) continue;
+            Sim.hangLeaf(sim, i, 0, 5, 0);
+            Sim.layDown(sim, i, -8 + (k % 60) * 0.3, 9.6 + Math.floor(k / 60) * 0.3);
+            k++;
+        }
+        for (let s = 0; s < 5 && main.getState().round.phase === 'playing'; s++) frames(main, 0.5, 20);
+        const s = main.getState();
+        expect(s.round.phase).toBe('finale');
+        expect(s.round.spotless).toBe(true);
+        expect(s.round.elapsed).toBeLessThan(15);
+        expect(dom.el('round-status').textContent).toMatch(/Every last leaf is off the lawn/);
+        frames(main, C0.round.finaleMax, 20);
+        const end = main.getState();
+        expect(end.endShown).toBe(true);
+        expect(end.result.verdict.key).toBe('perfect');
+        expect(dom.el('end-title').textContent).toBe('Not a leaf in sight');
+        expect(dom.el('end-percent').textContent).toBe('100%');
+        expect(end.result.seconds).toBe(Math.round(s.round.elapsed));
+        fire(dom.el('end-share'), 'click');
+        await flushAsync();
+        expect(decodeURIComponent(dom.windowStub.location.href)).toMatch(/I cleared 100% of my yard in 1\d seconds\./);
     });
 });
 
@@ -450,7 +646,7 @@ describe('the finale (M3)', () => {
         fire(dom.documentStub, 'keydown', { code: 'Space' });
         frames(main, 0.2, 20);
         fire(dom.documentStub, 'keyup', { code: 'Space' });
-        for (let s = 0; s < 70 && main.getState().round.phase !== 'finale'; s++) frames(main, 1, 20);
+        for (let s = 0; s < C0.round.seconds + 10 && main.getState().round.phase !== 'finale'; s++) frames(main, 1, 20);
         expect(main.getState().round.phase).toBe('finale');
     }
 
@@ -507,7 +703,7 @@ describe('the finale (M3)', () => {
             Sim.layDown(sim, i, -9.55, -5.55);
             laid++;
         }
-        for (let s = 0; s < 70 && main.getState().round.phase !== 'finale'; s++) frames(main, 1, 20);
+        for (let s = 0; s < C0.round.seconds + 10 && main.getState().round.phase !== 'finale'; s++) frames(main, 1, 20);
         expect(main.getState().finale.success).toBe(true);
         frames(main, C0.round.finaleMax, 20);
         expect(main.getState().result.landed).toBe(true);
@@ -785,7 +981,7 @@ describe('delights and surprises (M6)', () => {
             frames(main, C0.finds.toastSeconds + 0.5, 20);
             expect(dom.el('find-toast').classList.contains('visible')).toBe(false);
             // Through the round to the end card.
-            for (let k = 0; k < 90 && !main.getState().endShown; k++) frames(main, 1, 20);
+            for (let k = 0; k < C0.round.seconds + 30 && !main.getState().endShown; k++) frames(main, 1, 20);
             expect(dom.el('end-finds').textContent).toBe('Under the leaves you found a $20 bill.');
             expect(main.getState().result.found).toEqual(['a $20 bill']);
             fire(dom.el('end-share'), 'click');

@@ -612,7 +612,9 @@ function sleep(sim, i) {
 
 // ---- The yard's leaf fall ----------------------------------------------------
 
-function pickWeighted(weights, r) {
+/** A key of `weights` ({ key: weight }), picked by `r` (0 to 1) in
+ *  proportion to its weight. Also rooftops.js's, for its leaves' kinds. */
+export function pickWeighted(weights, r) {
     const keys = Object.keys(weights);
     const total = keys.reduce((s, k) => s + weights[k], 0);
     let t = r * total;

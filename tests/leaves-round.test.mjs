@@ -4,7 +4,8 @@
  * (www/leaves/js/score.js), measured.
  *
  * The round is a pure state machine, so its rules are checked by driving
- * it: the clock waits for the first blow, runs out at exactly sixty seconds,
+ * it: the clock waits for the first blow, runs out at exactly three minutes
+ * (or the moment every leaf is off the lawn),
  * and the result waits for the leaves to land. The score is checked on real
  * yards: a fresh one is all lawn, every leaf is counted once, and the words
  * on the end card keep the house style.
@@ -30,7 +31,7 @@ describe('the round', () => {
         expect(round.phase).toBe('playing');
     });
 
-    test('runs for exactly its minute, blowing or not, then goes straight to the dive', () => {
+    test('runs for exactly its three minutes, blowing or not, then goes straight to the dive', () => {
         const round = R.createRound(RC);
         R.stepRound(round, 1 / 60, { blowing: true }, RC);
         let event = null;
@@ -42,7 +43,7 @@ describe('the round', () => {
         // STEVE'S M4 QA: "once the time runs out, we can just start the dive
         // celebration". No wait for the leaves, and no last word.
         expect(event).toBe('finale');
-        // Sixty seconds of frames, give or take the one a float sum lands on.
+        // Three minutes of frames, give or take the one a float sum lands on.
         expect(Math.abs(frames - RC.seconds * 60)).toBeLessThanOrEqual(1);
         expect(R.timeLeft(round)).toBe(0);
         expect(round.phase).toBe('finale');
@@ -69,6 +70,79 @@ describe('the round', () => {
         expect(R.isOver(round)).toBe(false);
         R.resetRound(round);
         expect(round).toEqual(R.createRound(RC));
+    });
+});
+
+// STEVE'S QA, 2026-10-08: "a timed round should end early if the user reaches
+// 100%", and the round is three minutes so that they can.
+describe('every leaf off the lawn (2026-10-08)', () => {
+    test('the round is three minutes', () => {
+        expect(RC.seconds).toBe(180);
+    });
+
+    test('ends the round early, into the dive, with the time it took', () => {
+        const round = R.createRound(RC);
+        R.stepRound(round, 0.1, { blowing: true, spotless: false }, RC);
+        for (let i = 0; i < 100; i++) expect(R.stepRound(round, 0.5, { blowing: true, spotless: false }, RC)).toBe(null);
+        expect(R.stepRound(round, 0.5, { blowing: true, spotless: true }, RC)).toBe('finale');
+        expect(round.spotless).toBe(true);
+        expect(round.elapsed).toBeCloseTo(50.5, 6);
+        expect(R.timeLeft(round)).toBeCloseTo(RC.seconds - 50.5, 6);
+        expect(R.stepRound(round, 0.1, { finaleDone: true }, RC)).toBe('done');
+        // A round without a dive goes straight to the card.
+        const plain = { ...RC, finale: false };
+        const quick = R.createRound(plain);
+        R.stepRound(quick, 0.1, { blowing: true }, plain);
+        expect(R.stepRound(quick, 1, { spotless: true }, plain)).toBe('done');
+    });
+
+    test('only a running clock ends early: not before the first blow, not in free play', () => {
+        const round = R.createRound(RC);
+        expect(R.stepRound(round, 1, { blowing: false, spotless: true }, RC)).toBe(null);
+        expect(round.phase).toBe('ready');
+        R.freePlay(round);
+        expect(R.stepRound(round, 1, { blowing: true, spotless: true }, RC)).toBe(null);
+        expect(round.phase).toBe('free');
+        expect(round.spotless).toBe(false);
+    });
+
+    test('a new round, or free play, forgets the early finish', () => {
+        const round = R.createRound(RC);
+        R.stepRound(round, 0.1, { blowing: true }, RC);
+        R.stepRound(round, 1, { spotless: true }, RC);
+        expect(round.spotless).toBe(true);
+        R.resetRound(round);
+        expect(round).toEqual(R.createRound(RC));
+        R.stepRound(round, 0.1, { blowing: true }, RC);
+        R.stepRound(round, 1, { spotless: true }, RC);
+        R.freePlay(round);
+        expect(round.spotless).toBe(false);
+    });
+
+    test('spotless means not one leaf left on the open lawn', () => {
+        expect(Sc.isSpotless(tallyOf({ lawn: 0, tarp: 1000 }))).toBe(true);
+        expect(Sc.isSpotless(tallyOf({ lawn: 1, tarp: 999 }))).toBe(false);
+        expect(Sc.isSpotless({ lawn: 0, total: 0 })).toBe(false);
+        // The HUD reads 99% until then, and 100% only then.
+        expect(Sc.percent(Sc.clearedShare(tallyOf({ lawn: 1, tarp: 999 })))).toBe(99);
+    });
+
+    test('the end card and the share brag about it', () => {
+        const v = Sc.verdict(tallyOf({ lawn: 0, tarp: 700, street: 300 }));
+        expect(v.key).toBe('perfect');
+        expect(v.title).toBe('Not a leaf in sight');
+        expect(v.line).not.toMatch(/next door/);
+        expect(Sc.shareText(tallyOf({ lawn: 0, tarp: 1000 }), 167, true))
+            .toBe('I cleared 100% of my yard in 2 minutes and 47 seconds. I landed the dive into a pile of 1,000 leaves. A leaf blower game on SceneXP.');
+    });
+
+    test('times read the way people say them', () => {
+        expect(Sc.durationText(180)).toBe('3 minutes');
+        expect(Sc.durationText(60)).toBe('1 minute');
+        expect(Sc.durationText(61)).toBe('1 minute and 1 second');
+        expect(Sc.durationText(167.4)).toBe('2 minutes and 47 seconds');
+        expect(Sc.durationText(47)).toBe('47 seconds');
+        expect(Sc.durationText(1)).toBe('1 second');
     });
 });
 
@@ -194,9 +268,14 @@ describe('what the end card says', () => {
     });
 
     test('sending the neighbor a quarter of the yard is the story, however clean the lawn', () => {
-        const v = Sc.verdict(tallyOf({ lawn: 0, tarp: 700, neighbor: 300 }));
+        const v = Sc.verdict(tallyOf({ lawn: 1, tarp: 699, neighbor: 300 }));
         expect(v.key).toBe('neighbor');
         expect(v.title).toBe('The neighbors are talking');
+        // Until it is every last leaf: then that is the headline, and the
+        // neighbor gets the line (2026-10-08).
+        const all = Sc.verdict(tallyOf({ lawn: 0, tarp: 700, neighbor: 300 }));
+        expect(all.key).toBe('perfect');
+        expect(all.line).toMatch(/yard next door/);
     });
 
     test('the street shortcut is noticed, kindly', () => {
@@ -207,12 +286,12 @@ describe('what the end card says', () => {
     });
 
     test('the share sentence leads with the result and tells the better story', () => {
-        expect(Sc.shareText(tallyOf({ lawn: 190, tarp: 498, street: 0, neighbor: 312 }), 60))
-            .toBe('I cleared 81% of my yard in 60 seconds. 312 leaves went to the neighbor. A leaf blower game on SceneXP.');
-        expect(Sc.shareText(tallyOf({ lawn: 600, tarp: 400 }), 60))
-            .toBe('I cleared 40% of my yard in 60 seconds. 400 leaves made it onto the tarp. A leaf blower game on SceneXP.');
-        expect(Sc.shareText(tallyOf({ lawn: 1000 }), 60))
-            .toBe('I cleared 0% of my yard in 60 seconds. A leaf blower game on SceneXP.');
+        expect(Sc.shareText(tallyOf({ lawn: 190, tarp: 498, street: 0, neighbor: 312 }), 180))
+            .toBe('I cleared 81% of my yard in 3 minutes. 312 leaves went to the neighbor. A leaf blower game on SceneXP.');
+        expect(Sc.shareText(tallyOf({ lawn: 600, tarp: 400 }), 180))
+            .toBe('I cleared 40% of my yard in 3 minutes. 400 leaves made it onto the tarp. A leaf blower game on SceneXP.');
+        expect(Sc.shareText(tallyOf({ lawn: 1000 }), 180))
+            .toBe('I cleared 0% of my yard in 3 minutes. A leaf blower game on SceneXP.');
     });
 
     test('the rows read tarp, street, fence, lawn', () => {
@@ -229,11 +308,12 @@ describe('what the end card says', () => {
         const tallies = [
             tallyOf({ lawn: 50, tarp: 950 }), tallyOf({ lawn: 250, tarp: 750 }), tallyOf({ lawn: 500, tarp: 500 }),
             tallyOf({ lawn: 700, tarp: 300 }), tallyOf({ lawn: 900, tarp: 100 }), tallyOf({ tarp: 700, neighbor: 300 }),
-            tallyOf({ lawn: 300, tarp: 100, street: 600 })
+            tallyOf({ lawn: 300, tarp: 100, street: 600 }), tallyOf({ lawn: 0, tarp: 1000 }),
+            tallyOf({ lawn: 0, tarp: 600, neighbor: 400 })
         ];
         const copy = tallies.flatMap((t) => [null, true, false].flatMap((landed) => {
             const v = Sc.verdict(t);
-            return [v.title, v.line, Sc.shareText(t, 60, landed), Sc.resultSentence(t, landed), Sc.diveLine(landed),
+            return [v.title, v.line, Sc.shareText(t, 167, landed), Sc.resultSentence(t, landed), Sc.diveLine(landed),
                 ...Sc.resultRows(t).map((r) => r.label)];
         }));
         for (const text of copy) {
