@@ -314,6 +314,24 @@ export function createSound(S) {
         return true;
     }
 
+    /** A fanfare for a clear lawn (2026-10-08): bells rising, then a chord
+     *  ringing out, and for a clear lawn inside the time (`big`) a shimmer of
+     *  high bells over it. Returns whether it sounded. */
+    function fanfare(big = false) {
+        if (!ctx || !on || paused) return false;
+        const K = S.fanfare;
+        const t = ctx.currentTime + S.ahead;
+        try {
+            K.rise.forEach((hz, k) => bell(t + k * K.gap, hz, K.level, K.decay));
+            const at = t + K.rise.length * K.gap + K.hold;
+            K.chord.forEach((hz) => bell(at, hz, K.level * 0.8, K.decay * 1.8));
+            if (big) K.shimmer.forEach((hz, k) => bell(at + 0.15 + k * K.gap * 0.6, hz, K.level * 0.35, K.decay * 0.8));
+        } catch (e) {
+            return false;
+        }
+        return true;
+    }
+
     /** A click, a tap or a key: audio may start now. Returns whether there
      *  is nothing more a gesture can do (it is running, or cannot be). An
      *  iPhone does not count a pointerdown, so a context made on one waits,
@@ -351,6 +369,7 @@ export function createSound(S) {
         thud,
         crunch,
         chime,
+        fanfare,
         toggle: () => setOn(!on),
         update,
         pause,

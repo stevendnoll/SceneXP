@@ -85,3 +85,108 @@ describe('what it shows', () => {
         expect(Ch.CHEER_LINE).toMatch(/spotless/);
     });
 });
+
+// Steve's QA, 2026-10-08: "Could we increase the celebration/animation if the
+// user clears 100% of the lawn?" and "a separate and more elaborate
+// celebration if they clear 100% within the given time".
+describe('bigger', () => {
+    test('a whole spin, after the hops, eased, and none under reduced motion', () => {
+        expect(Ch.cheerSpin(0, K)).toBe(0);
+        expect(Ch.cheerSpin(K.spin.from, K)).toBe(0);
+        expect(Ch.cheerSpin(K.spin.from + K.spin.time / 2, K)).toBeCloseTo(Math.PI, 6);
+        expect(Ch.cheerSpin(K.spin.from + K.spin.time, K)).toBeCloseTo(Math.PI * 2, 6);
+        expect(Ch.cheerSpin(K.seconds, K)).toBeCloseTo(Math.PI * 2, 6);
+        expect(Ch.cheerSpin(K.spin.from + 0.3, K, true)).toBe(0);
+        // After the hops, not in the air.
+        expect(K.spin.from).toBeGreaterThanOrEqual(K.hops * K.hopTime - 1e-9);
+        expect(K.spin.from + K.spin.time).toBeLessThan(K.seconds);
+    });
+
+    test('the view swings out and back, handing back where it took over', () => {
+        expect(Ch.cheerOrbit(0, K)).toBe(0);
+        expect(Ch.cheerOrbit(K.seconds / 2, K)).toBeCloseTo(K.orbit, 6);
+        expect(Ch.cheerOrbit(K.seconds, K)).toBeCloseTo(0, 6);
+        expect(Ch.cheerOrbit(K.seconds / 2, K, true)).toBe(0);
+    });
+
+    test('the banner: spotless with no clock, the time inside it, a first clear or a new best', () => {
+        expect(Ch.bannerFor('free')).toEqual({ big: 'Spotless!', small: Ch.CHEER_LINE, extra: '' });
+        expect(Ch.bannerFor('timed', 167.4, null)).toEqual({ big: 'Lawn clear!', small: 'in 2:47', extra: 'Your first clear!' });
+        expect(Ch.bannerFor('timed', 150, 167).extra).toBe('A new best time!');
+        expect(Ch.bannerFor('timed', 170, 167).extra).toBe('');
+        for (const b of [Ch.bannerFor('free'), Ch.bannerFor('timed', 99, 120)]) {
+            for (const line of Object.values(b)) expect(line).not.toMatch(/[—;]/);
+        }
+    });
+
+    test('a clear lawn inside the time gets more of everything than one with no clock', () => {
+        expect(K.timed.confetti).toBeGreaterThan(K.confetti.count);
+        expect(K.timed.gold).toBeGreaterThan(0);
+        expect(K.timed.confetti).toBeLessThanOrEqual(K.confetti.max);
+        // But it stands between the clock and the dive, so it is short.
+        expect(K.timed.beat).toBeLessThan(3);
+        expect(K.timed.reducedBeat).toBeLessThan(K.timed.beat);
+    });
+});
+
+describe('the leaves thrown up (confetti.js)', () => {
+    let Cf;
+    beforeAll(async () => {
+        const { loadRealThree } = await import('./helpers/real-three.mjs');
+        globalThis.THREE = await loadRealThree();
+        Cf = await import('../www/leaves/js/confetti.js');
+    });
+    afterAll(() => { delete globalThis.THREE; });
+    const F = C.cheer.confetti;
+
+    test('up and out all round from over the head, and all down within the celebration', () => {
+        const list = Cf.burstOf(300, { x: 2, y: 1.9, z: 3 }, F, 7);
+        expect(list).toHaveLength(300);
+        let top = 0;
+        let t = 0;
+        const angles = new Set();
+        for (const p of list) angles.add(Math.floor((Math.atan2(p.vz, p.vx) + Math.PI) / (Math.PI / 4)));
+        expect(angles.size).toBe(8);
+        while (t < 10 && Cf.stepConfetti(list, 1 / 60, F, t) > 0) {
+            for (const p of list) if (!p.gone) top = Math.max(top, p.y);
+            t += 1 / 60;
+        }
+        // Well over the person's head, and down in under the celebration.
+        expect(top).toBeGreaterThan(3);
+        expect(t).toBeGreaterThan(1.8);
+        expect(t).toBeLessThan(C.cheer.seconds);
+        expect(list.every((p) => p.gone)).toBe(true);
+    });
+
+    test('never on the lawn: each shrinks to nothing over its last half meter, and is gone at the grass', () => {
+        expect(Cf.confettiScale({ y: 2, vy: -1, gone: false }, F)).toBe(1);
+        expect(Cf.confettiScale({ y: 0.3, vy: 2, gone: false }, F)).toBe(1);
+        const low = Cf.confettiScale({ y: F.fadeAbove / 2, vy: -1, gone: false }, F);
+        expect(low).toBeGreaterThan(0);
+        expect(low).toBeLessThan(1);
+        expect(Cf.confettiScale({ y: 0.001, vy: -1, gone: false }, F)).toBeLessThan(0.01);
+        expect(Cf.confettiScale({ y: 1, vy: -1, gone: true }, F)).toBe(0);
+        const list = Cf.burstOf(50, { x: 0, y: 1.9, z: 0 }, F, 3);
+        for (let t = 0; t < 6; t += 1 / 60) {
+            Cf.stepConfetti(list, 1 / 60, F, t);
+            for (const p of list) if (!p.gone) expect(p.y).toBeGreaterThan(0.01);
+        }
+    });
+
+    test('the mesh: drawn while they fly, some gold for a clear lawn inside the time, hidden once all are down', () => {
+        const c = Cf.createConfetti(C, 0.12, F.max);
+        expect(c.mesh.visible).toBe(false);
+        c.burst({ x: 0, y: 1.9, z: 0 }, C.cheer.timed.confetti, C.cheer.timed.gold, 5);
+        expect(c.mesh.visible).toBe(true);
+        expect(c.flying()).toBe(C.cheer.timed.confetti);
+        const look = c.mesh.geometry.getAttribute('iLook');
+        let gold = 0;
+        for (let i = 0; i < C.cheer.timed.confetti; i++) {
+            if (look.getX(i) === F.goldColor[0] && look.getY(i) === Math.fround(F.goldColor[1])) gold++;
+        }
+        expect(gold).toBe(Math.round(C.cheer.timed.confetti * C.cheer.timed.gold));
+        for (let t = 0; t < 6 && c.flying(); t += 1 / 30) c.step(1 / 30, t);
+        expect(c.flying()).toBe(0);
+        expect(c.mesh.visible).toBe(false);
+    });
+});

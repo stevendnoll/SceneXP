@@ -64,7 +64,10 @@ import { buildBackdrop } from './backdrop.min.js';
 import { createTrophy } from './trophy.min.js';
 import { loadBest, recordBest, forgetBest, bestWelcomeLine, bestEndLine, bestShareNote } from './best.min.js';
 import { buildResting } from './rooftops.min.js';
-import { createCheer, resetCheer, stepCheer, skipCheer, isCheering, cheerLift, cheerFocus, CHEER_LINE } from './celebrate.min.js';
+import {
+    createCheer, resetCheer, stepCheer, skipCheer, isCheering, cheerLift, cheerFocus, cheerSpin, cheerOrbit, bannerFor, CHEER_LINE
+} from './celebrate.min.js';
+import { createConfetti } from './confetti.min.js';
 import { createSound } from './sound.min.js';
 import { createNeighbor, resetNeighbor, stepNeighbor, isOut, neighborBlower } from './neighbor.min.js';
 import {
@@ -73,13 +76,14 @@ import {
 } from './score.min.js';
 import { createLeafMesh } from './leafmesh.min.js';
 import { buildYard } from './yard.min.js';
+import { rakeFootprint } from './house.min.js';
 import { createOperator, stepOperator, facing, createOperatorFigure } from './blower.min.js';
-import { cameraFor, cameraOn, cameraCast, castFrame, rayToGround, ease, clampZoom } from './view.min.js';
+import { cameraFor, cameraOn, cameraCast, castFrame, rayToGround, ease, clampZoom, orbitView } from './view.min.js';
 import {
     SHIRTS, PANTS, SKINS, HAIR_COLORS, HAIR_LENGTHS, DEFAULT_CHOICE,
     loadChoice, saveChoice, forgetChoice, personConfig, castLine
 } from './cast.min.js';
-import { isQaHost, labOptions, labSearch, statsLines, fpsOf, shortCount } from './lab.min.js';
+import { isQaHost, labOptions, shortCount } from './lab.min.js';
 import {
     getProofOfWork, bufToHex, shieldOverlayControl, installCardFocusTrap, installCardScrollReset
 } from '../../shared/js/boot-1.0.0.min.js';
@@ -162,7 +166,7 @@ let sent = null;
 // off, the arms it left the person in, and the result as it stood before
 // the dive (the burst throws leaves off the tarp, and a dive should not
 // lower the score it celebrates).
-const finale = { plan: null, t: 0, burst: false, arms: 'carry', tally: null };
+const finale = { plan: null, t: 0, burst: false, arms: 'carry', tally: null, beat: 0 };
 // Every last leaf off the lawn in free play (celebrate.js).
 const cheer = createCheer();
 // The pile on the results card (trophy.js), made the first time the card
@@ -172,6 +176,10 @@ let trophyTried = false;
 const endCount = { target: 0, shown: -1 };
 // The yard's leaf size, for the pile's leaves.
 let leafSize = 0.12;
+// A clear lawn's leaves thrown up (confetti.js), and its banner, up until
+// `until` (state.time).
+let confetti = null;
+const banner = { until: 0 };
 // THE DELIGHTS (M6). The finds hidden this round, their models, and the
 // names of the ones found (for the end card), with the count of rounds so
 // each hides them somewhere new. October's decorations and Halloween week's
@@ -231,8 +239,6 @@ const touches = new Map();
 // Shadows are redrawn at most config.shadows.hz times a second while
 // anything moves, and a frame that moved something is owed one.
 const shade = { owed: true, since: 0 };
-// The lab's measurements.
-const lab = { el: null, frames: 0, seconds: 0, simMs: 0, uploaded: 0, start: 0 };
 
 // ---- Initialization -------------------------------------------------------
 
@@ -347,6 +353,9 @@ async function init() {
     });
     leaves.update();
     scene.add(leaves.mesh);
+    // Leaves thrown up when the lawn is clear (2026-10-08), never in the sim.
+    confetti = createConfetti(CONFIG, leafBase, CONFIG.cheer.confetti.max);
+    scene.add(confetti.mesh);
     // Leaves resting on the roofs and the hedge (2026-10-08), never blown.
     scene.add(buildResting(CONFIG, leafBase, { shadows: state.shadows, underside: CONFIG.look.underside }).mesh);
     sent = new Uint8Array(state.count);
@@ -387,7 +396,6 @@ async function init() {
     placeCamera(true);
     setupEventListeners();
     installRoundControls();
-    if (state.qa) installLab();
     recount();
     updateHud();
 
@@ -478,12 +486,20 @@ function followCamera(dt) {
     // through the end card. Reduced motion keeps the usual view.
     const onPile = finale.plan && !state.reducedMotion && (round.phase === 'finale' || round.phase === 'done');
     let want;
-    // The celebration's view: in on the person and the clean lawn, and
-    // never the neighbor. Reduced motion keeps the usual view.
+    // The celebration's view: in on the person and the clean lawn, swinging
+    // part way round them, and never the neighbor. Before the dive on a clear
+    // lawn inside the time, the same. Reduced motion keeps the usual view.
     const cheering = isCheering(cheer) && !state.reducedMotion;
+    const beating = inBeat() && !state.reducedMotion;
     if (castShown()) want = cameraCast(operator, aspect, CONFIG.camera, castFrame(window.innerWidth, window.innerHeight));
-    else if (onPile) want = cameraOn(finale.plan.land, aspect, CONFIG.camera, CONFIG.finale.span);
-    else if (cheering) want = cameraOn(cheerFocus(operator, CONFIG.yard.lawn), aspect, CONFIG.camera, CONFIG.cheer.span);
+    else if (beating) {
+        want = orbitView(cameraOn(cheerFocus(operator, CONFIG.yard.lawn), aspect, CONFIG.camera, CONFIG.cheer.span),
+            cheerOrbit(finale.t, { ...CONFIG.cheer, seconds: finale.beat }));
+    } else if (onPile) want = cameraOn(finale.plan.land, aspect, CONFIG.camera, CONFIG.finale.span);
+    else if (cheering) {
+        want = orbitView(cameraOn(cheerFocus(operator, CONFIG.yard.lawn), aspect, CONFIG.camera, CONFIG.cheer.span),
+            cheerOrbit(cheer.t, CONFIG.cheer));
+    }
     else want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null, zoom.value);
     const rate = CONFIG.camera.follow;
     ['x', 'y', 'z'].forEach((k) => {
@@ -649,12 +665,11 @@ function setupEventListeners() {
     };
     canvas.addEventListener('pointerup', release, { signal });
     canvas.addEventListener('pointercancel', release, { signal });
-    // A mouse leaving the lawn (off the window, or over the lab's panel)
-    // stops steering from the screen, but the person still goes where it
-    // last pointed. Dropping the aim stopped them dead whenever the cursor
-    // crossed the panel (Steve's M6 QA: "I can't walk all the way to the
-    // row of hedges" with the neighbor out, when the zoomed out lawn sits
-    // higher on the screen, under the panel).
+    // A mouse leaving the lawn (off the window, or over a button) stops
+    // steering from the screen, but the person still goes where it last
+    // pointed. Dropping the aim stopped them dead whenever the cursor
+    // crossed the lab's old panel (Steve's M6 QA: "I can't walk all the way
+    // to the row of hedges").
     canvas.addEventListener('pointerleave', (event) => {
         if (event.pointerType === 'mouse' && pointer.id === null) pointer.client = null;
     }, { signal });
@@ -1233,10 +1248,7 @@ function onRoundEvent(event) {
         // the result is counted, and the dive begins.
         releaseInput();
         announce('Time is up.');
-        if (round.spotless) {
-            sound.chime();
-            track('spotless', { outcome: 'round', seconds: Math.round(round.elapsed) });
-        }
+        if (round.spotless) track('spotless', { outcome: 'round', seconds: Math.round(round.elapsed) });
         startFinale();
     } else if (event === 'done') {
         showEnd();
@@ -1251,10 +1263,28 @@ function onRoundEvent(event) {
 function startFinale() {
     finale.tally = { ...recount() };
     const peak = pilePeak(sim, CONFIG.yard.tarp);
-    finale.plan = planFinale(operator, peak, CONFIG.finale, walkArea(), { reduced: state.reducedMotion, boxes: solids });
+    // The rake on the tarp is not solid to the leaves, but the dive keeps
+    // off it.
+    const rake = rakeFootprint(CONFIG.yard);
+    // A CLEAR LAWN INSIDE THE TIME (Steve's QA, 2026-10-08: "a separate and
+    // more elaborate celebration"): its own beat before the dive, the
+    // dance, the time on the banner, a fanfare and leaves thrown up, some of
+    // them gold. The dive's opening pause is that much longer.
+    const K = CONFIG.cheer;
+    finale.beat = round.spotless ? (state.reducedMotion ? K.timed.reducedBeat : K.timed.beat) : 0;
+    const F = finale.beat ? { ...CONFIG.finale, pause: CONFIG.finale.pause + finale.beat } : CONFIG.finale;
+    finale.plan = planFinale(operator, peak, F, walkArea(), { reduced: state.reducedMotion, boxes: rake ? [...solids, rake] : solids });
     finale.t = 0;
     finale.burst = false;
     operator.hideBlower = true;
+    if (finale.beat) {
+        const seconds = Math.max(1, Math.round(round.elapsed));
+        showBanner(bannerFor('timed', seconds, loadBest(state.count)), 'timed');
+        sound.fanfare(true);
+        if (!state.reducedMotion) confetti.burst({ x: operator.x, y: 1.9, z: operator.z }, K.timed.confetti, K.timed.gold, 31 + findRounds);
+        const clock = document.getElementById('hud-clock');
+        if (clock) clock.classList.add('clear');
+    }
     const early = round.spotless ? 'The lawn is clear, with time to spare. ' : '';
     announce(`${early}You set the blower down and take a running dive at the pile.`);
     track('dive', { outcome: finale.plan.success ? 'landed' : 'flop' });
@@ -1291,6 +1321,11 @@ function stepFinale(dt) {
     operator.roll = pose.roll;
     operator.lift = pose.lift;
     finale.arms = pose.arms;
+    // The celebration's beat before the dive: where they stand, the dance.
+    if (inBeat()) {
+        cheerPose(finale.t, dt);
+        finale.arms = 'up';
+    }
     if (finale.t >= plan.t.air) fireBurst();
     return finale.t >= plan.total;
 }
@@ -1315,6 +1350,7 @@ function standUp() {
  *  all. */
 function skipFinale() {
     if (!finale.plan || round.phase !== 'finale') return false;
+    hideBanner();
     finale.t = Math.max(finale.t, finale.plan.total);
     fireBurst();
     stepFinale(0);
@@ -1329,19 +1365,36 @@ function skipFinale() {
 function startCheer() {
     releaseInput();
     operator.speed = 0;
-    sound.chime();
-    showToast(CHEER_LINE, CONFIG.cheer.toastSeconds);
+    sound.fanfare(false);
+    showBanner(bannerFor('free'), 'free');
+    if (!state.reducedMotion) confetti.burst({ x: operator.x, y: 1.9, z: operator.z }, CONFIG.cheer.confetti.count, 0, 17 + findRounds);
     announce(`The lawn is clear. ${CHEER_LINE}`);
     track('spotless', { outcome: 'free' });
 }
 
-/** One frame of it: turning to face the street, and the hops. */
+/** One frame of it. */
 function stepCheerPose(dt) {
+    cheerPose(cheer.t, dt);
+}
+
+/** The dance, `t` seconds in: turning to face the street, three hops, then
+ *  a whole spin. Under reduced motion, only the turn. */
+function cheerPose(t, dt) {
+    const K = CONFIG.cheer;
     operator.speed = 0;
-    const step = B.turnRate * dt;
-    const turn = wrapAngle(0 - operator.heading);
-    operator.heading = wrapAngle(operator.heading + Math.max(-step, Math.min(step, turn)));
-    operator.lift = cheerLift(cheer.t, CONFIG.cheer, state.reducedMotion);
+    if (state.reducedMotion || t < K.spin.from) {
+        const step = B.turnRate * dt;
+        const turn = wrapAngle(0 - operator.heading);
+        operator.heading = wrapAngle(operator.heading + Math.max(-step, Math.min(step, turn)));
+    } else {
+        operator.heading = wrapAngle(cheerSpin(t, K));
+    }
+    operator.lift = cheerLift(t, K, state.reducedMotion);
+}
+
+/** Whether the dive is still in its celebration's beat. */
+function inBeat() {
+    return Boolean(finale.plan && finale.beat && round.phase === 'finale' && finale.t < finale.beat);
 }
 
 /** Back on the lawn with the blower, the yard theirs again. */
@@ -1349,10 +1402,30 @@ function finishCheer() {
     operator.lift = 0;
 }
 
+/** The banner's words (celebrate.js bannerFor) big across the screen, gold
+ *  for `kind` 'timed', for config.cheer.banner seconds. */
+function showBanner(words, kind) {
+    const el = document.getElementById('cheer-banner');
+    if (!el) return;
+    setText('cheer-big', words.big);
+    setText('cheer-small', words.small);
+    setText('cheer-extra', words.extra);
+    el.classList.toggle('timed', kind === 'timed');
+    el.classList.add('visible');
+    banner.until = state.time + CONFIG.cheer.banner;
+}
+
+function hideBanner() {
+    const el = document.getElementById('cheer-banner');
+    if (el) el.classList.remove('visible');
+    banner.until = 0;
+}
+
 /** A tap or a key: the celebration ends now. Returns whether one was on. */
 function endCheer() {
     if (!skipCheer(cheer)) return false;
     finishCheer();
+    hideBanner();
     return true;
 }
 
@@ -1377,6 +1450,13 @@ function showEnd() {
     set('end-finds', findsLine(result.found));
     set('end-best', bestEndLine(record, loadBest(state.count)));
     set('end-kicker', round.spotless ? 'The lawn is clear' : 'Time is up');
+    // A clear lawn inside the time: the gold card, the time on its ribbon.
+    if (endModal) endModal.classList.toggle('perfect', round.spotless);
+    const ribbon = document.getElementById('end-ribbon');
+    if (ribbon) {
+        ribbon.hidden = !round.spotless;
+        ribbon.textContent = round.spotless ? `Lawn clear in ${clockText(seconds)}` : '';
+    }
     showBest();
     set('end-percent', `${clearedPercent(t)}%`);
     showPile(t);
@@ -1406,7 +1486,7 @@ function showPile(t) {
     }
     if (!trophy) return;
     const models = buildFindModels(findList.filter((f) => found.includes(f.name)));
-    trophy.show(endCount.target / 100, leafSize, Object.values(models), state.reducedMotion);
+    trophy.show(endCount.target / 100, leafSize, Object.values(models), state.reducedMotion, round.spotless);
 }
 
 /** One frame of the pile, while the card is up, and the count up with it. */
@@ -1481,7 +1561,12 @@ function resetYard() {
     finale.burst = false;
     finale.arms = 'carry';
     finale.tally = null;
+    finale.beat = 0;
     resetCheer(cheer);
+    if (confetti) confetti.clear();
+    hideBanner();
+    const clock = document.getElementById('hud-clock');
+    if (clock) clock.classList.remove('clear');
     shade.owed = true;
     recount();
 }
@@ -1521,7 +1606,7 @@ function updateHud() {
     if (hint) {
         const text = {
             ready: 'Blow to start the clock',
-            finale: 'Here goes nothing',
+            finale: round.spotless ? 'Lawn clear!' : 'Here goes nothing',
             done: 'Time is up',
             free: 'No clock, just leaves'
         }[phase];
@@ -1529,93 +1614,6 @@ function updateHud() {
         if (text) hint.textContent = text;
     }
     if (el('hud-new')) el('hud-new').hidden = phase !== 'free';
-}
-
-// ---- The lab --------------------------------------------------------------
-
-/** The QA panel: the readout, a button per leaf count, and the shadows
- *  switch. Each button reloads the page with the new setting in the
- *  address. Built here rather than in the markup, since only a QA host ever
- *  sees it, and styled by class from experience.css (the page's CSP allows
- *  no style attributes). */
-function installLab() {
-    const panel = document.createElement('div');
-    panel.className = 'lab-panel';
-    panel.id = 'lab-panel';
-    const readout = document.createElement('pre');
-    readout.className = 'lab-readout';
-    readout.setAttribute('aria-hidden', 'true');
-    readout.textContent = 'Measuring…';
-    panel.appendChild(readout);
-    const row = document.createElement('div');
-    row.className = 'lab-buttons';
-    const search = window.location.search;
-    const go = (changes) => () => { window.location.search = labSearch(search, changes); };
-    CONFIG.leaves.labCounts.forEach((n) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'lab-btn';
-        if (n === state.count) btn.classList.add('active');
-        btn.textContent = shortCount(n);
-        btn.setAttribute('aria-label', `Reload with ${shortCount(n)} leaves`);
-        btn.addEventListener('click', go({ leaves: n }));
-        row.appendChild(btn);
-    });
-    const shadowBtn = document.createElement('button');
-    shadowBtn.type = 'button';
-    shadowBtn.className = 'lab-btn';
-    shadowBtn.textContent = state.shadows ? 'Shadows on' : 'Shadows off';
-    shadowBtn.setAttribute('aria-label', state.shadows ? 'Reload with shadows off' : 'Reload with shadows on');
-    shadowBtn.addEventListener('click', go({ shadows: state.shadows ? 0 : 1 }));
-    row.appendChild(shadowBtn);
-    // M6: Halloween week whatever the date, and every find out on the lawn.
-    const labButton = (text, label, fn) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'lab-btn';
-        btn.textContent = text;
-        btn.setAttribute('aria-label', label);
-        btn.addEventListener('click', fn);
-        row.appendChild(btn);
-        return btn;
-    };
-    labButton(state.halloween ? 'Halloween week on' : 'Halloween week off',
-        state.halloween ? 'Reload with no Halloween, decorations and all' : 'Reload in Halloween week',
-        go({ halloween: state.halloween ? 0 : 1 }));
-    labButton(state.showFinds ? 'Finds shown' : 'Finds hidden',
-        state.showFinds ? 'Reload with the finds hidden' : 'Reload with every find showing',
-        go({ finds: state.showFinds ? null : 1 }));
-    panel.appendChild(row);
-    document.body.appendChild(panel);
-    lab.el = readout;
-    lab.start = performance.now();
-}
-
-/** Twice a second, what the last frames cost, and the round's own count of
- *  where the leaves are. */
-function updateLab(delta) {
-    lab.frames += 1;
-    lab.seconds += Math.max(0, delta);
-    if (lab.seconds < 0.5) return;
-    const info = renderer.info && renderer.info.render ? renderer.info.render : { calls: 0, triangles: 0 };
-    lab.el.textContent = statsLines({
-        fps: fpsOf(lab.frames, lab.seconds),
-        frameMs: (lab.seconds * 1000) / lab.frames,
-        simMs: lab.simMs / lab.frames,
-        count: state.count,
-        active: sim.activeCount,
-        uploaded: Math.round(lab.uploaded / lab.frames),
-        calls: info.calls,
-        triangles: info.triangles,
-        ratio: renderer.getPixelRatio ? renderer.getPixelRatio() : 1,
-        shadows: state.shadows,
-        cleared: clearedShare(counted),
-        tarp: counted.tarp
-    }).join('\n');
-    lab.frames = 0;
-    lab.seconds = 0;
-    lab.simMs = 0;
-    lab.uploaded = 0;
 }
 
 // ---- The neighbor -----------------------------------------------------------
@@ -1839,16 +1837,15 @@ function animate() {
     if (yardInView) stepTheTreaters(dt, [jet, his]);
     const rising = riseFinds(delta);
     if (toast.until && state.time >= toast.until) hideToast();
+    if (banner.until && state.time >= banner.until) hideBanner();
+    if (confetti) confetti.step(Math.min(delta, 0.05), state.time);
     sound.update(delta, { blowing }, {
         blowing: neighbor.blowing && yardInView, big: neighbor.big, pan: panOf(neighbor.x)
     });
 
-    const t0 = performance.now();
     if (kicks.length) kicks = kicks.filter((k) => k.until > state.time);
     stepSim(sim, dt, kicks.length ? [jet, his, ...kicks.map((k) => k.jet)] : [jet, his]);
     const uploaded = leaves.update();
-    lab.simMs += performance.now() - t0;
-    lab.uploaded += uploaded;
 
     figure.update(operator, blowing, state.time, finale.plan ? finale.arms : isCheering(cheer) ? 'up' : 'carry');
     neighborFigure.group.visible = isOut(neighbor);
@@ -1878,7 +1875,6 @@ function animate() {
     }
     renderer.render(scene, camera);
     stepPile(delta);
-    if (lab.el) updateLab(delta);
 }
 
 /** Where the person can walk: our lawn and the sidewalk, short of the
@@ -1921,7 +1917,9 @@ export function getState() {
             seconds: result.seconds, record: result.record, bestNote: result.bestNote
         } : null,
         best: loadBest(state.count),
-        pile: trophy && trophy.pile() ? { count: trophy.pile().size.count, radius: trophy.pile().size.radius } : null,
+        confetti: confetti ? confetti.flying() : 0,
+        banner: banner.until > 0,
+        pile: trophy && trophy.pile() ? { count: trophy.pile().size.count, radius: trophy.pile().size.radius, glints: Boolean(trophy.pile().glints) } : null,
         endPercent: endCount.shown,
         neighbor: { ...neighbor },
         endShown: endShown(),

@@ -237,6 +237,7 @@ export function buildOurHouse(Y, L) {
     wreath.castShadow = true;
     group.add(wreath);
     for (const p of Y.pumpkins || []) group.add(solidMark(pumpkin(p)));
+    if (Y.rake) group.add(buildRake(Y, L));
 
     // The stone walk from the step to the sidewalk, laid flat on the lawn,
     // a hair above it and drawn over it.
@@ -251,6 +252,69 @@ export function buildOurHouse(Y, L) {
     path.position.set(door, 0.002, from + len / 2);
     path.receiveShadow = true;
     group.add(path);
+    return group;
+}
+
+/**
+ * Where the rake's fan of tines lies on the tarp, as a box ({ minX, maxX,
+ * minZ, maxZ, height }): the dive keeps the person's body off it (main.js),
+ * though the leaves do not meet it, and heap round it. Null with no rake.
+ */
+export function rakeFootprint(Y) {
+    const R = Y.rake;
+    if (!R) return null;
+    const face = facadeZ(Y.lawn.minZ, Y.house);
+    return { name: 'rake', minX: R.x - R.width / 2, maxX: R.x + R.width / 2, minZ: face, maxZ: face + R.reach, height: 0.15 };
+}
+
+/**
+ * A leaf rake leaning against our house's left end (Steve's QA, 2026-10-08:
+ * "the rake's teeth would be resting on the tarp. We just want to make sure
+ * the rake's handle isn't resting against a window"): an ash handle from the
+ * wall down to a steel collar, and a fan of steel tines spreading from it
+ * across the tarp, a spring bar across them. Named 'rake'.
+ */
+export function buildRake(Y, L) {
+    const R = Y.rake;
+    const group = new THREE.Group();
+    group.name = 'rake';
+    const face = facadeZ(Y.lawn.minZ, Y.house);
+    // The handle, from the wall to the collar low over the tarp.
+    const top = new THREE.Vector3(R.x, R.top, face + 0.03);
+    const collar = new THREE.Vector3(R.x, 0.12, face + R.reach * 0.55);
+    const span = collar.clone().sub(top);
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, span.length(), 8), material(R.handle));
+    handle.position.copy(top).addScaledVector(span, 0.5);
+    handle.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.clone().normalize());
+    handle.castShadow = true;
+    group.add(handle);
+    const steel = new THREE.MeshStandardMaterial({ color: R.steel, metalness: 0.6, roughness: 0.45 });
+    const ferrule = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.09, 8), steel);
+    ferrule.position.copy(collar).addScaledVector(span.clone().normalize(), -0.03);
+    ferrule.quaternion.copy(handle.quaternion);
+    group.add(ferrule);
+    // The fan: tines from the collar to their tips on the tarp, spread
+    // across `width`, each tip turned down a little.
+    const tine = new THREE.BoxGeometry(0.008, 0.004, 1);
+    const tines = new THREE.InstancedMesh(tine, steel, R.tines);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const along = new THREE.Vector3(0, 0, 1);
+    for (let k = 0; k < R.tines; k++) {
+        const u = R.tines > 1 ? k / (R.tines - 1) - 0.5 : 0;
+        const tip = new THREE.Vector3(R.x + u * R.width, 0.006, face + R.reach - Math.abs(u) * 0.12);
+        const d = tip.clone().sub(collar);
+        q.setFromUnitVectors(along, d.clone().normalize());
+        m.compose(collar.clone().addScaledVector(d, 0.5), q, new THREE.Vector3(1, 1, d.length()));
+        tines.setMatrixAt(k, m);
+    }
+    tines.castShadow = true;
+    group.add(tines);
+    // The spring bar across the fan, two thirds of the way out.
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(R.width * 0.62, 0.006, 0.012), steel);
+    bar.position.set(R.x, 0.12 * 0.33 + 0.006, collar.z + (face + R.reach - collar.z) * 0.62);
+    bar.rotation.x = Math.atan2(0.12, R.reach * 0.45) * 0.9;
+    group.add(bar);
     return group;
 }
 

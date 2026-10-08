@@ -266,3 +266,98 @@ describe('the leaves resting on the roofs and the hedge', () => {
         expect(built.mesh.castShadow).toBe(true);
     });
 });
+
+// Steve's QA, 2026-10-08: "add a small bush/shrub on the left side of the
+// house between the house and the row of hedges? There's currently an open
+// space with an invisible wall", and "a rake leaning against the house... so
+// the rake's teeth would be resting on the tarp... make sure the rake's
+// handle isn't resting against a window".
+describe('the corner by the hedge', () => {
+    const halfLeaf = 0.5 * S.leafSize(12000, S.areaOf(Y.lawn), C.leaves) * (1 + C.leaves.sizeJitter);
+
+    test('a shrub fills the gap between the house and the hedge, behind the line the leaves bank against, its foot on the lawn', () => {
+        const scene = new THREE.Scene();
+        Yd.buildYard(scene, C, { shadows: false });
+        scene.updateMatrixWorld(true);
+        const shrub = new THREE.Box3().setFromObject(scene.getObjectByName('corner-shrub'), true);
+        const hedge = new THREE.Box3().setFromObject(scene.getObjectByName('hedge'), true);
+        // From the hedge's face to the house's corner.
+        expect(shrub.min.x).toBeLessThan(hedge.max.x + 0.05);
+        expect(shrub.max.x).toBeGreaterThan(Y.house.minX);
+        expect(shrub.max.z).toBeLessThan(Y.lawn.minZ - halfLeaf);
+        expect(shrub.min.y).toBeCloseTo(0, 2);
+        expect(shrub.max.y).toBeGreaterThan(0.9);
+        expect(shrub.max.y).toBeLessThan(wall.height);
+    });
+
+    test('his boxwoods sit on his lawn, not a quarter meter over it', () => {
+        const fence = Yd.hisSideFence(Y, C.look);
+        fence.updateMatrixWorld(true);
+        fence.traverse((o) => {
+            if (!o.isMesh || o.geometry.type !== 'IcosahedronGeometry') return;
+            expect(new THREE.Box3().setFromObject(o, true).min.y).toBeCloseTo(0, 2);
+        });
+    });
+
+    test('the rake leans on bare wall clear of the windows, its tines on the tarp', async () => {
+        const Ho = await import('../www/leaves/js/house.js');
+        const rake = Ho.buildRake(Y, C.look);
+        rake.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(rake, true);
+        const face = Ho.facadeZ(Y.lawn.minZ, Y.house);
+        // Its handle's top at the wall, between the house's end and the
+        // first window, a good way from the window's frame.
+        const cx = (Y.house.minX + Y.house.maxX) / 2;
+        const firstWindow = cx + Math.min(...Ho.OUR_WINDOWS.xs) - Ho.OUR_WINDOWS.w / 2;
+        expect(box.min.x).toBeGreaterThan(Y.house.minX);
+        expect(box.max.x).toBeLessThan(firstWindow - 0.8);
+        expect(box.min.z).toBeGreaterThan(face - 0.01);
+        expect(box.max.y).toBeLessThan(Ho.OUR_WINDOWS.y + Ho.OUR_WINDOWS.h / 2);
+        // The tines on the tarp: low, inside it.
+        const T = Y.tarp;
+        const tines = rake.children.find((o) => o.isInstancedMesh);
+        const m = new THREE.Matrix4();
+        const tip = new THREE.Vector3();
+        for (let i = 0; i < tines.count; i++) {
+            tines.getMatrixAt(i, m);
+            tip.set(0, 0, 0.5).applyMatrix4(m);
+            expect(tip.y).toBeLessThan(0.02);
+            expect(tip.x).toBeGreaterThan(T.minX);
+            expect(tip.x).toBeLessThan(T.maxX);
+            expect(tip.z).toBeGreaterThan(T.minZ);
+            expect(tip.z).toBeLessThan(T.maxZ);
+        }
+        // Its footprint, which the dive keeps off, is where it lies.
+        const foot = Ho.rakeFootprint(Y);
+        expect(foot.minX).toBeLessThanOrEqual(box.min.x + 0.02);
+        expect(foot.maxX).toBeGreaterThanOrEqual(box.max.x - 0.02);
+        expect(foot.maxZ).toBeGreaterThanOrEqual(box.max.z - 0.02);
+    });
+
+    test('a dive into a pile beside the rake lands clear of it', async () => {
+        const Fi = await import('../www/leaves/js/finale.js');
+        const Ho = await import('../www/leaves/js/house.js');
+        const D = await import('../www/leaves/js/decorations.js');
+        const L = Y.lawn;
+        const area = { minX: L.minX + 0.5, maxX: L.maxX - 0.4, minZ: L.minZ + 0.6, maxZ: Y.sidewalk.maxZ };
+        const rake = Ho.rakeFootprint(Y);
+        const boxes = [...S.solidBoxes(D.decoratedConfig(C).yard), rake];
+        const F = C.finale;
+        // Piles in the corner by the hedge and out along the tarp, not on
+        // the rake itself (a pile heaped on it buries it).
+        for (const peak of [{ x: -9.5, z: -5.6 }, { x: -9.4, z: -4.5 }, { x: -6.2, z: -5.5 }, { x: -7, z: -3 }]) {
+            for (const person of [{ x: 0, z: 2 }, { x: -6, z: 5 }, { x: 5, z: -3 }, { x: -9, z: 0 }]) {
+                const plan = Fi.planFinale(person, { ...peak, height: 0.6 }, F, area, { boxes });
+                const dx = plan.land.x - plan.takeoff.x;
+                const dz = plan.land.z - plan.takeoff.z;
+                const d = Math.hypot(dx, dz) || 1;
+                for (let t = -F.reachBack; t <= F.reachFront; t += 0.05) {
+                    const x = plan.land.x + (dx / d) * t;
+                    const z = plan.land.z + (dz / d) * t;
+                    const on = x > rake.minX && x < rake.maxX && z > rake.minZ && z < rake.maxZ;
+                    expect({ peak, person, on }).toEqual({ peak, person, on: false });
+                }
+            }
+        }
+    });
+});

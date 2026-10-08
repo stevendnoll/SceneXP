@@ -11,7 +11,8 @@
  * heap for a clear lawn. The size is exaggerated on purpose, so a glance
  * tells 10% from 50% from 100%. When the card opens the leaves rain down
  * onto it, bottom first so it builds up, while the card's percent counts up
- * to the score, and anything found under the leaves sits on top. Under
+ * to the score, and anything found under the leaves sits on top. A clear
+ * lawn inside the time gets golden glints drifting down over it. Under
  * reduced motion it is simply there, finished, still.
  *
  * ITS OWN SMALL CANVAS AND RENDERER, made the first time the card opens and
@@ -76,6 +77,22 @@ export function rainAt(p, t, T) {
     return { y: p.y + T.drop * (1 - ease), landed: u >= 1, turn: (1 - ease) * 2.5, shown: t >= start };
 }
 
+/** The glints' starting heights and places, and where each is `t` seconds
+ *  on: drifting down `G.fall` meters a second, from `G.height` back to the
+ *  top when they reach the lawn. [{ x, y, z }]. */
+export function glintsAt(G, radius, t, seed = 5) {
+    const random = makeRandom(seed);
+    const out = [];
+    for (let i = 0; i < G.count; i++) {
+        const a = random() * TAU;
+        const r = radius * 1.2 * Math.sqrt(random());
+        const y0 = random() * G.height;
+        const y = (((y0 - t * G.fall) % G.height) + G.height) % G.height;
+        out.push({ x: Math.sin(a) * r, y: y + 0.05, z: Math.cos(a) * r });
+    }
+    return out;
+}
+
 /** How long the whole rain takes, in seconds. */
 export function rainSeconds(T) {
     return T.rain + T.fall;
@@ -113,7 +130,7 @@ function lawnRound(color, radius) {
  * Returns { scene, group, leaves, mesh, size, place(t) }: place(t) lays the
  * leaves where the rain has them at `t` seconds (Infinity for done).
  */
-export function buildPile(config, share, base, finds = []) {
+export function buildPile(config, share, base, finds = [], { glints = false } = {}) {
     const T = config.trophy;
     const size = pileSize(share, T);
     const leaves = pileLeaves(size, T, T.seed);
@@ -172,9 +189,27 @@ export function buildPile(config, share, base, finds = []) {
         model.group.rotation.y = 0.4 + k;
         group.add(model.group);
     });
+    // Golden glints for a clear lawn inside the time.
+    let sparkle = null;
+    if (glints) {
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(T.glints.count * 3), 3));
+        sparkle = new THREE.Points(geometry, new THREE.PointsMaterial({
+            color: T.glints.color, size: T.glints.size, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending
+        }));
+        sparkle.name = 'glints';
+        group.add(sparkle);
+    }
+    function drift(t) {
+        if (!sparkle) return;
+        const pos = sparkle.geometry.getAttribute('position');
+        glintsAt(T.glints, T.radius, t).forEach((p, i) => pos.setXYZ(i, p.x, p.y, p.z));
+        pos.needsUpdate = true;
+    }
+    drift(0);
     scene.add(group);
     place(Infinity);
-    return { scene, group, leaves, mesh: leafMesh.mesh, size, place, dispose: leafMesh.dispose };
+    return { scene, group, leaves, mesh: leafMesh.mesh, size, place, drift, glints: sparkle, dispose: leafMesh.dispose };
 }
 
 /**
@@ -198,6 +233,7 @@ export function createTrophy(canvas, config, { exposure = 1 } = {}) {
     const camera = new THREE.PerspectiveCamera(T.fov, 2, 0.1, 30);
     let pile = null;
     let t = 0;
+    let clock = 0;
     let turn = 0;
     let reduced = false;
     let share = 0;
@@ -221,14 +257,15 @@ export function createTrophy(canvas, config, { exposure = 1 } = {}) {
     }
 
     return {
-        show(nextShare, base, finds = [], reducedMotion = false) {
+        show(nextShare, base, finds = [], reducedMotion = false, glints = false) {
             if (pile) {
                 pile.dispose();
                 pile = null;
             }
             share = clamp(nextShare, 0, 1);
             reduced = reducedMotion;
-            pile = buildPile(config, share, base, finds);
+            pile = buildPile(config, share, base, finds, { glints });
+            clock = 0;
             t = reduced ? Infinity : 0;
             turn = 0.6;
             pile.place(t);
@@ -245,8 +282,10 @@ export function createTrophy(canvas, config, { exposure = 1 } = {}) {
             if (!pile) return 1;
             if (!reduced) {
                 t += dt;
+                clock += dt;
                 turn += dt * T.spin;
                 pile.place(t);
+                pile.drift(clock);
             }
             pile.group.rotation.y = turn;
             renderer.render(pile.scene, camera);

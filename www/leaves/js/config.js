@@ -30,12 +30,11 @@ export const LEAVES_CONFIG = Object.freeze({
         home: { path: '/' }
     },
 
-    // How many leaves, by device, and what the lab's buttons offer. A count
-    // from the lab (?leaves=n on a QA host) wins over both.
+    // How many leaves, by device. A count from the address (?leaves=n on a
+    // QA host) wins over both.
     leaves: {
         desktop: 24000,
         mobile: 12000,
-        labCounts: [6000, 12000, 24000, 36000, 48000],
         minCount: 500,
         maxCount: 96000,
         seed: 1031,
@@ -83,6 +82,14 @@ export const LEAVES_CONFIG = Object.freeze({
         gate: { height: 1.8, post: 0.1, board: 0.13, gap: 0.014, thick: 0.022, rail: 0.06, lattice: 0.32, lift: 0.05, back: 0.02 },
         // His striped lawn runs past the sim's ground to his side fence
         // (yard.js groundRects), clear of his inflatable ghost's arms.
+        // A shrub in the gap between our house and the hedge (yard.js),
+        // its front just behind the line the leaves bank against.
+        cornerShrub: { x: -9.5, z: -6.8, r: 0.55, tall: 1.6 },
+        // A leaf rake leaning on our house's bare left end, left of the first
+        // window, its fan of tines on the tarp (house.js buildRake): the
+        // handle's top `top` meters up the wall at `x`, its tines reaching
+        // `reach` meters out from the wall, `width` across.
+        rake: { x: -8.3, top: 1.45, reach: 1.15, width: 0.56, tines: 15, handle: 0xc8a878, steel: 0x8a8d90 },
         // His side fence stands at maxX (yard.js hisSideFence), boxwoods in
         // its front corner.
         neighborYard: {
@@ -829,7 +836,14 @@ export const LEAVES_CONFIG = Object.freeze({
         thud: { level: 0.9, hz: [120, 45], decay: 0.32, bodyHz: 520, bodyQ: 0.9, leafHz: 2400 },
         // Every last leaf off the lawn: G5, B5, D6 and G6 struck `gap`
         // seconds apart, each ringing out over `decay`.
-        chime: { level: 0.55, notes: [784, 988, 1175, 1568], gap: 0.12, decay: 1.2 }
+        chime: { level: 0.55, notes: [784, 988, 1175, 1568], gap: 0.12, decay: 1.2 },
+        // A clear lawn's fanfare: C, E, G and C rising `gap` apart, a C major
+        // chord `hold` after them, and for one inside the time a shimmer of
+        // high notes over it.
+        fanfare: {
+            level: 0.5, gap: 0.11, hold: 0.08, decay: 1.4,
+            rise: [523, 659, 784, 1047], chord: [1047, 1319, 1568], shimmer: [2093, 2637, 3136, 2637, 3136, 4186]
+        }
     },
 
     // THE PILE ON THE RESULTS CARD (trophy.js, Steve's QA, 2026-10-08: "a
@@ -843,6 +857,9 @@ export const LEAVES_CONFIG = Object.freeze({
     trophy: {
         radius: 0.85, slope: 33, grow: 0.7, least: 0.03, max: 1400, min: 12, leafScale: 1.3, seed: 7121,
         rain: 1.3, fall: 0.5, drop: 1.4, spin: 0.35, fov: 30,
+        // A clear lawn inside the time: `count` golden glints drifting down
+        // `fall` m/s from `height`.
+        glints: { count: 46, height: 1.7, fall: 0.22, size: 0.05, color: 0xffd76a },
         view: { above: 0.3, back: 1.05, up: 0.42 }
     },
 
@@ -852,8 +869,24 @@ export const LEAVES_CONFIG = Object.freeze({
     // play (celebrate.js), for `seconds`: the blower set down, both arms up
     // and `hops` hops `hop` meters high, facing the street, the view easing
     // in to `span` meters across on them and the clean lawn, a chime and a
-    // line on screen for `toastSeconds`. Never the neighbor.
-    cheer: { seconds: 3.4, span: 16, hops: 2, hopTime: 0.42, hop: 0.16, toastSeconds: 4.5 },
+    // line on screen. Never the neighbor.
+    // BIGGER since Steve's next QA ("Could we increase the
+    // celebration/animation"): `hops` hops, a whole spin from `spin.from`
+    // over `spin.time`, the view swinging `orbit` radians round and back,
+    // `confetti` (confetti.js: leaves thrown up at `speed` m/s, `up` radians
+    // above level, slowed by `drag`, swinging `swing` m/s, gone over their
+    // last `fadeAbove` meters, `size` times a yard leaf), and the banner up
+    // for `banner` seconds. `timed`: a clear lawn inside the time, `beat`
+    // seconds of it before the dive (`reducedBeat` under reduced motion),
+    // `confetti` leaves, `gold` of them gold.
+    cheer: {
+        seconds: 4.4, span: 14, hops: 3, hopTime: 0.4, hop: 0.22, spin: { from: 1.3, time: 0.9 }, orbit: 0.55, banner: 3.4,
+        confetti: {
+            count: 300, max: 560, speed: [8, 14], up: [0.7, 1.35], gravity: 9.8, drag: 6, swing: 0.5, fadeAbove: 0.6,
+            size: 1.5, seed: 9091, goldColor: [1.0, 0.6, 0.1]
+        },
+        timed: { beat: 2.6, reducedBeat: 1.2, confetti: 520, gold: 0.35 }
+    },
 
     // THE ROUND (M1). The clock starts with the first blow, not when the
     // welcome card closes, so nobody loses time reading. When it runs out the

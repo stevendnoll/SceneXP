@@ -3886,7 +3886,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Leaves | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=7" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=8" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -3904,11 +3904,13 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/best.min.js" rel="modulepreload"]
     link [href="js/rooftops.min.js" rel="modulepreload"]
     link [href="js/celebrate.min.js" rel="modulepreload"]
+    link [href="js/confetti.min.js" rel="modulepreload"]
     link [href="js/sound.min.js" rel="modulepreload"]
     link [href="js/neighbor.min.js" rel="modulepreload"]
     link [href="js/score.min.js" rel="modulepreload"]
     link [href="js/leafmesh.min.js" rel="modulepreload"]
     link [href="js/yard.min.js" rel="modulepreload"]
+    link [href="js/house.min.js" rel="modulepreload"]
     link [href="js/blower.min.js" rel="modulepreload"]
     link [href="js/view.min.js" rel="modulepreload"]
     link [href="js/cast.min.js" rel="modulepreload"]
@@ -3921,12 +3923,11 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/treespecies-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/fractaltree-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
-    link [href="js/house.min.js" rel="modulepreload"]
     link [href="js/hedge.min.js" rel="modulepreload"]
     link [href="js/surfaces.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=7" rel="stylesheet"]
+    link [href="css/experience.min.css?v=8" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -4024,6 +4025,10 @@ html [data-ui-theme="ember" lang="en"]
         "New round"
     p#round-status.sr-only [aria-live="polite" role="status"]
     p#find-toast.find-toast [aria-hidden="true"]
+    div#cheer-banner.cheer-banner [aria-hidden="true"]
+      p#cheer-big.cheer-big
+      p#cheer-small.cheer-small
+      p#cheer-extra.cheer-extra
     div#cast-modal.hidden [aria-labelledby="cast-title" aria-modal="true" role="dialog"]
       div.cast-panel
         h2#cast-title.cast-title
@@ -4057,21 +4062,23 @@ html [data-ui-theme="ember" lang="en"]
         p#cast-status.sr-only [aria-live="polite" role="status"]
     div#end-modal.hidden [aria-describedby="end-line" aria-labelledby="end-title" aria-modal="true" role="dialog"]
       div.modal-backdrop
-      div.modal-container.piece-card
-        div.piece-card-content
+      div.end-card
+        div.end-hero
           canvas#end-pile.end-pile [aria-hidden="true"]
+          p#end-ribbon.end-ribbon [hidden]
+        div.end-body
           p#end-kicker.end-kicker
             "Time is up"
-          h2#end-title.piece-title
+          h2#end-title.end-title
             "Respectable work"
           p.end-score
             span#end-percent
               "0%"
             "of the lawn cleared"
-          p#end-line.piece-subtitle.end-line
-          p#end-dive.end-dive
-          p#end-finds.end-dive.end-finds
-          p#end-best.end-dive.end-best
+          p#end-line.end-line
+          p#end-dive.end-note
+          p#end-finds.end-note.end-finds
+          p#end-best.end-note.end-best
           dl.end-stats
             div.end-stat
               dt
@@ -4094,14 +4101,16 @@ html [data-ui-theme="ember" lang="en"]
               dd#end-lawn
                 "0"
           div.end-actions
-            button#end-again.piece-enter [type="button"]
+            button#end-again.end-again [type="button"]
               "Play again"
             button#end-share.end-share [type="button"]
               "Share"
-          button#end-free.piece-cancel [type="button"]
+          button#end-free.end-free [type="button"]
             "Keep blowing leaves"
           p#end-status.sr-only [aria-live="polite" role="status"]
           div#end-promo.end-promo
+          p.end-mark [aria-hidden="true"]
+            "Leaves &middot; SceneXP.com"
     script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;

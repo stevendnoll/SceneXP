@@ -6,7 +6,7 @@
  * Under the chainable THREE proxy nothing renders, but every line of a real
  * page load runs: the proof of work, the yard, the leaves and their mesh, the
  * person with the blower, the welcome card, steering by pointer and by keys,
- * the blower running, Escape and the help button, the lab panel, and the 2D
+ * the blower running, Escape and the help button, the address options, and the 2D
  * fallback. A missing import or a reference left behind by a refactor fails
  * here instead of on the site. The leaves themselves are measured for real in
  * tests/leaves-sim.test.mjs.
@@ -391,20 +391,19 @@ test('the aim follows the keys or the pointer, whichever moved last', async () =
     expect(main.aimFor('point', { aim: null }, held)).toBe(null);
 });
 
-test('on a QA host the lab panel offers each leaf count, the shadows switch, and the M6 switches', async () => {
-    await boot();
-    const panel = dom.el('lab-panel');
-    // The panel is built by script, so find it among the body's children.
-    const built = dom.documentStub.body.children.find((c) => c.className === 'lab-panel');
-    expect(built).toBeTruthy();
-    const row = built.children.find((c) => c.className === 'lab-buttons');
-    const { LEAVES_CONFIG: C } = await import('../www/leaves/js/config.js');
-    // The counts, shadows, Halloween week, and the finds showing.
-    expect(row.children).toHaveLength(C.leaves.labCounts.length + 3);
-    expect(row.children.map((b) => b.textContent).slice(-2)).toEqual(['Halloween week off', 'Finds hidden']);
-    fire(row.children[2], 'click');
-    expect(dom.windowStub.location.search).toBe(`?leaves=${C.leaves.labCounts[2]}`);
-    expect(panel).toBeTruthy();
+// STEVE'S QA, 2026-10-08: "Can we please remove the control panel that lets
+// me adjust the environment? I think we're set on the current settings." The
+// address options stay, with no panel (Steve: "please keep the hidden
+// address options").
+test('on a QA host there is no lab panel, and the address still sets the leaves, the clock and the finds', async () => {
+    dom.windowStub.location.search = '?leaves=600&clock=45&finds=1';
+    const main = await boot();
+    expect(dom.documentStub.body.children.some((c) => /lab/.test(c.className || ''))).toBe(false);
+    const s = main.getState();
+    expect(s.qa).toBe(true);
+    expect(s.count).toBe(600);
+    expect(s.round.seconds).toBe(45);
+    expect(s.showFinds).toBe(true);
 });
 
 test('a browser without WebGL 2 is told so and taken to the standard site', async () => {
@@ -520,7 +519,9 @@ describe('the round', () => {
 
     // STEVE'S QA, 2026-10-08: a celebration at 100% "even if there is no
     // time limit", focused on the person and the clean yard, not the neighbor.
-    test('in free play, the last leaf off the lawn is celebrated: arms up, the blower stopped, the neighbor kept in, a line on screen', async () => {
+    // And bigger since (2026-10-08: "Could we increase the celebration"): a
+    // banner, leaves thrown up, three hops and a spin.
+    test('in free play, the last leaf off the lawn is celebrated: arms up, the blower stopped, the neighbor kept in, a banner, leaves thrown up, hops and a spin', async () => {
         const main = await boot();
         fire(dom.el('free-btn'), 'click');
         frames(main, 1, 20);
@@ -541,8 +542,13 @@ describe('the round', () => {
         expect(s.cheer.phase).toBe('cheer');
         expect(s.blowing).toBe(false);
         expect(main.__test__.keys.blow).toBe(false);
-        expect(dom.el('find-toast').textContent).toBe('Not a leaf in sight. The lawn is spotless.');
+        expect(dom.el('cheer-banner').classList.contains('visible')).toBe(true);
+        expect(dom.el('cheer-banner').classList.contains('timed')).toBe(false);
+        expect(dom.el('cheer-big').textContent).toBe('Spotless!');
+        expect(dom.el('cheer-small').textContent).toBe('Not a leaf in sight. The lawn is spotless.');
         expect(dom.el('round-status').textContent).toMatch(/The lawn is clear/);
+        // Leaves thrown up all round (never in the sim: tests/leaves-celebrate).
+        expect(s.confetti).toBeGreaterThan(C0.cheer.confetti.count * 0.9);
         // The neighbor stays in, whatever is on his lawn.
         expect(s.neighbor.state).toBe('inside');
         // A hop, and turned toward the street.
@@ -550,8 +556,15 @@ describe('the round', () => {
         s = main.getState();
         expect(s.operator.lift).toBeGreaterThan(0);
         expect(Math.abs(s.operator.heading)).toBeLessThan(0.05);
+        // Part way through the spin, turned well away from the street.
+        const mid = C0.cheer.spin.from + C0.cheer.spin.time / 2;
+        for (let k = 0; k < 100 && main.getState().cheer.t < mid; k++) frames(main, 0.05, 20);
+        expect(Math.abs(main.getState().operator.heading)).toBeGreaterThan(2.5);
         // It ends by itself, back on the lawn, and does not come again.
         frames(main, C0.cheer.seconds, 20);
+        // The banner gone, and every leaf thrown up.
+        expect(dom.el('cheer-banner').classList.contains('visible')).toBe(false);
+        expect(main.getState().confetti).toBe(0);
         s = main.getState();
         expect(s.cheer.phase).toBe('idle');
         expect(s.cheer.done).toBe(true);
@@ -705,6 +718,9 @@ describe('the round', () => {
         frames(main, SHORT + C0.round.finaleMax, 20);
         expect(main.getState().endShown).toBe(true);
         expect(dom.el('end-kicker').textContent).toBe('Time is up');
+        // The plain card: no gold, no ribbon.
+        expect(dom.el('end-modal').classList.contains('perfect')).toBe(false);
+        expect(dom.el('end-ribbon').hidden).toBe(true);
         expect(dom.el('end-best').textContent).toBe('');
         expect(globalThis.localStorage.getItem('leaves-best')).toBe(null);
     });
@@ -765,8 +781,30 @@ describe('the round', () => {
         expect(s.round.spotless).toBe(true);
         expect(s.round.elapsed).toBeLessThan(15);
         expect(dom.el('round-status').textContent).toMatch(/The lawn is clear/);
+        // ITS OWN CELEBRATION before the dive (Steve's QA, 2026-10-08: "a
+        // separate and more elaborate celebration"): the gold banner with the
+        // time, the clock stopped and flashing, leaves thrown up, the dance.
+        const time = `0:${String(Math.round(s.round.elapsed)).padStart(2, '0')}`;
+        expect(dom.el('cheer-banner').classList.contains('visible')).toBe(true);
+        expect(dom.el('cheer-banner').classList.contains('timed')).toBe(true);
+        expect(dom.el('cheer-big').textContent).toBe('Lawn clear!');
+        expect(dom.el('cheer-small').textContent).toBe(`in ${time}`);
+        expect(dom.el('cheer-extra').textContent).toBe('Your first clear!');
+        expect(dom.el('hud-clock').classList.contains('clear')).toBe(true);
+        expect(dom.el('hud-hint').textContent).toBe('Lawn clear!');
+        expect(s.confetti).toBeGreaterThan(C0.cheer.confetti.count);
+        frames(main, 0.3, 20);
+        expect(main.getState().finale.arms).toBe('up');
+        // The dive after it, within the finale's cap.
+        frames(main, C0.cheer.timed.beat, 20);
+        expect(main.getState().finale.t).toBeGreaterThan(C0.cheer.timed.beat);
         frames(main, C0.round.finaleMax, 20);
         const end = main.getState();
+        // The gold card, the time on its ribbon, glints over the pile.
+        expect(dom.el('end-modal').classList.contains('perfect')).toBe(true);
+        expect(dom.el('end-ribbon').hidden).toBe(false);
+        expect(dom.el('end-ribbon').textContent).toBe(`Lawn clear in ${time}`);
+        expect(end.pile.glints).toBe(true);
         expect(end.endShown).toBe(true);
         expect(end.result.verdict.key).toBe('perfect');
         expect(dom.el('end-title').textContent).toBe('Not a leaf in sight');

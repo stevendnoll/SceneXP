@@ -175,6 +175,20 @@ export function castFrame(width, height) {
     return { width: 1, height: 0.44, shiftX: 0, shiftY: height * 0.28 };
 }
 
+/** A view (`cameraFor`'s or `cameraOn`'s) swung `angle` radians round its
+ *  target, about the upright: the celebration's orbit. */
+export function orbitView(view, angle) {
+    const dx = view.position.x - view.target.x;
+    const dz = view.position.z - view.target.z;
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    return {
+        ...view,
+        position: { x: view.target.x + dx * c + dz * s, y: view.position.y, z: view.target.z - dx * s + dz * c },
+        target: { ...view.target }
+    };
+}
+
 /** Where a ray from `origin` along `dir` meets the ground (y = 0), or null if
  *  it points at the sky. */
 export function rayToGround(origin, dir) {

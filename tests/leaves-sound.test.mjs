@@ -351,3 +351,26 @@ describe('the chime', () => {
         expect(none.chime()).toBe(false);
     });
 });
+
+// Steve's QA, 2026-10-08: a bigger celebration for a clear lawn.
+describe('the fanfare', () => {
+    test('bells rising, then a chord, and a shimmer over it for a clear lawn inside the time', () => {
+        const sound = createSound(S);
+        sound.unlock();
+        let before = built.nodes.length;
+        expect(sound.fanfare(false)).toBe(true);
+        const small = built.nodes.slice(before).filter((n) => n.kind === 'oscillator');
+        expect(small.length).toBe((S.fanfare.rise.length + S.fanfare.chord.length) * 2);
+        // The chord rings together, after the rise.
+        const starts = small.filter((_, k) => k % 2 === 0).map((o) => o.started);
+        const chord = starts.slice(S.fanfare.rise.length);
+        expect(new Set(chord).size).toBe(1);
+        expect(chord[0]).toBeGreaterThan(starts[S.fanfare.rise.length - 1]);
+        before = built.nodes.length;
+        expect(sound.fanfare(true)).toBe(true);
+        const big = built.nodes.slice(before).filter((n) => n.kind === 'oscillator');
+        expect(big.length).toBe(small.length + S.fanfare.shimmer.length * 2);
+        const off = createSound(S);
+        expect(off.fanfare(true)).toBe(false);
+    });
+});

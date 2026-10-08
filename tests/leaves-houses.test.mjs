@@ -59,6 +59,12 @@ test('nothing on either house stands where a leaf banked against it lies, below 
     const inFront = [];
     for (const { o, named, fenced, box } of meshesOf(scene)) {
         if (o.userData.solid || fenced) continue;
+        // The rake leans on the wall with its tines on the tarp on purpose
+        // (Steve's QA, 2026-10-08): the leaves heap round it, which a rake
+        // in a pile of leaves should show (tests/leaves-dressing).
+        let raked = false;
+        for (let p = o; p; p = p.parent) if (p.name === 'rake') raked = true;
+        if (raked) continue;
         // Behind the porch or a step, which no leaf gets past.
         const behind = Y.boxes.some((b) => b.minZ <= edge + 1e-6 && box.min.x >= b.minX - 0.01 && box.max.x <= b.maxX + 0.01);
         if (behind) continue;

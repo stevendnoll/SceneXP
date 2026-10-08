@@ -1,12 +1,15 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * lab.js - what the leaf lab needs to measure a phone: which leaf count and
- * which options to run with, and a readout to photograph.
+ * lab.js - which leaf count and options a QA host runs with, from the
+ * address. The lab's panel and readout were removed at Steve's QA of
+ * 2026-10-08 ("I think we're set on the current settings"), and the address
+ * options kept, with no visible panel: they are how Steve tries the finish
+ * in a short round, and how the page tests do.
  *
  * A PHONE IS NOT LOCALHOST. Steve's phone reaches the Mac over the house
  * network at an address like 192.168.1.20, so the private ranges (and a
  * .local name) count as a QA host too, the rule Tornado Alley's performance
- * pass settled on (www/tornado/js/perf.js). The lab panel only ever appears
+ * pass settled on (www/tornado/js/perf.js). The address options only work
  * on a QA host.
  *
  * THE ADDRESS CARRIES THE SETTINGS, so a reload keeps them and a screenshot
@@ -62,17 +65,6 @@ export function labOptions(search, config, mobile) {
     return { count, shadows, ratio, finds: params.get('finds') === '1', clock };
 }
 
-/** The address for the same page with some settings changed. */
-export function labSearch(search, changes) {
-    const params = new URLSearchParams(search || '');
-    Object.entries(changes).forEach(([key, value]) => {
-        if (value === null || value === undefined) params.delete(key);
-        else params.set(key, String(value));
-    });
-    const out = params.toString();
-    return out ? `?${out}` : '';
-}
-
 /** 24000 as "24k", 1500 as "1.5k", 800 as "800". */
 export function shortCount(n) {
     if (n < 1000) return String(Math.round(n));
@@ -80,18 +72,3 @@ export function shortCount(n) {
     return `${Number.isInteger(k) ? k : k.toFixed(1)}k`;
 }
 
-/** The readout's lines, from what main.js measured over the last half second. */
-export function statsLines(m) {
-    const ms = (v) => (Number.isFinite(v) ? v.toFixed(1) : '-');
-    return [
-        `${m.fps.toFixed(1)} fps · frame ${ms(m.frameMs)} ms · sim ${ms(m.simMs)} ms`,
-        `${shortCount(m.count)} leaves · ${m.active} moving · ${m.uploaded} sent`,
-        `${m.calls} draws · ${Math.round(m.triangles / 1000)}k tris · ratio ${m.ratio.toFixed(2)} · shadows ${m.shadows ? 'on' : 'off'}`,
-        `lawn ${Math.round(m.cleared * 100)}% clear · ${m.tarp} on the tarp`
-    ];
-}
-
-/** Frames per second over a window of `frames` frames taking `seconds`. */
-export function fpsOf(frames, seconds) {
-    return seconds > 0 ? frames / seconds : 0;
-}

@@ -262,3 +262,17 @@ describe('the ground under every view', () => {
         for (const h of [C.yard.house, C.yard.neighborHouse]) expect(C.yard.lawn.minZ - h.depth).toBeGreaterThan(block.minZ);
     });
 });
+
+describe('the celebration\'s orbit (2026-10-08)', () => {
+    test('swings the camera round its target, the same distance off and as high, still looking at it', () => {
+        const v = V.cameraOn({ x: 2, z: 1 }, 1.6, cam, 14);
+        const o = V.orbitView(v, 0.5);
+        expect(o.target).toEqual(v.target);
+        expect(o.position.y).toBe(v.position.y);
+        const d = (p) => Math.hypot(p.x - v.target.x, p.z - v.target.z);
+        expect(d(o.position)).toBeCloseTo(d(v.position), 9);
+        const angle = Math.atan2(o.position.x - v.target.x, o.position.z - v.target.z) - Math.atan2(v.position.x - v.target.x, v.position.z - v.target.z);
+        expect(angle).toBeCloseTo(0.5, 9);
+        expect(V.orbitView(v, 0).position).toEqual(v.position);
+    });
+});

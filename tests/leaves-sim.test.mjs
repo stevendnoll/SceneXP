@@ -692,25 +692,10 @@ describe('the lab', () => {
         expect(Lab.labOptions('?clock=soon', C, false).clock).toBe(C.round.seconds);
     });
 
-    test('a lab button changes one setting and keeps the rest', () => {
-        expect(Lab.labSearch('?leaves=12000&shadows=0', { leaves: 24000 })).toBe('?leaves=24000&shadows=0');
-        expect(Lab.labSearch('', { shadows: 0 })).toBe('?shadows=0');
-        expect(Lab.labSearch('?shadows=0', { shadows: null })).toBe('');
-    });
-
-    test('the readout says what was measured', () => {
-        const lines = Lab.statsLines({
-            fps: 59.94, frameMs: 16.7, simMs: 2.04, count: 24000, active: 812, uploaded: 9000,
-            calls: 31, triangles: 120400, ratio: 2, shadows: true, cleared: 0.123, tarp: 450
-        });
-        expect(lines[0]).toBe('59.9 fps · frame 16.7 ms · sim 2.0 ms');
-        expect(lines[1]).toBe('24k leaves · 812 moving · 9000 sent');
-        expect(lines[2]).toBe('31 draws · 120k tris · ratio 2.00 · shadows on');
-        expect(lines[3]).toBe('lawn 12% clear · 450 on the tarp');
+    test('the loading screen says how many leaves, shortly', () => {
+        expect(Lab.shortCount(24000)).toBe('24k');
         expect(Lab.shortCount(1500)).toBe('1.5k');
         expect(Lab.shortCount(800)).toBe('800');
-        expect(Lab.fpsOf(30, 0.5)).toBe(60);
-        expect(Lab.fpsOf(30, 0)).toBe(0);
     });
 });
 

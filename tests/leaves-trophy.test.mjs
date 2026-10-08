@@ -127,6 +127,28 @@ describe('the scene', () => {
     });
 });
 
+describe('a clear lawn inside the time', () => {
+    test('golden glints drift down over the pile, round its middle, back to the top at the lawn', () => {
+        const G = T.glints;
+        const at0 = Tr.glintsAt(G, T.radius, 0);
+        const at1 = Tr.glintsAt(G, T.radius, 1);
+        expect(at0).toHaveLength(G.count);
+        let fell = 0;
+        at0.forEach((p, i) => {
+            expect(Math.hypot(p.x, p.z)).toBeLessThanOrEqual(T.radius * 1.2 + 1e-9);
+            expect(p.y).toBeGreaterThan(0);
+            expect(p.y).toBeLessThanOrEqual(G.height + 0.05);
+            if (Math.abs(at0[i].y - at1[i].y - G.fall) < 1e-6) fell++;
+        });
+        // Each falls `fall` a second, but for those that wrapped to the top.
+        expect(fell).toBeGreaterThan(G.count * 0.6);
+        // Only on a pile asked for them.
+        expect(Tr.buildPile(C, 1, base).glints).toBe(null);
+        const pile = Tr.buildPile(C, 1, base, [], { glints: true });
+        expect(pile.glints.geometry.getAttribute('position').count).toBe(G.count);
+    });
+});
+
 describe('the card\'s view', () => {
     /** A renderer that records what it is asked to do (Node has no WebGL). */
     function fakeRenderer() {

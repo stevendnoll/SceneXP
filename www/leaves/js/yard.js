@@ -367,19 +367,23 @@ function gateAcross(x0, x1, mid, z, G, look, name) {
     return group;
 }
 
-/** A clipped boxwood ball `r` across at (x, z), lumpy like the hedge. */
-function boxwood(x, z, r, look, seed) {
+/** A clipped boxwood `r` in radius at (x, z), lumpy like the hedge, `tall`
+ *  times as tall as round (under 1 a squat ball, over 1 an upright shrub),
+ *  its flattened foot on the lawn. */
+export function boxwood(x, z, r, look, seed, tall = 0.85) {
     const geometry = new THREE.IcosahedronGeometry(r, 3);
     const pos = geometry.getAttribute('position');
     const v = new THREE.Vector3();
     for (let i = 0; i < pos.count; i++) {
         v.fromBufferAttribute(pos, i);
         const k = 1 + 0.08 * noise3(v.x * 6 + seed, v.y * 6, v.z * 6, 41);
-        pos.setXYZ(i, v.x * k, Math.max(-r * 0.15, v.y * k * 0.85), v.z * k);
+        pos.setXYZ(i, v.x * k, Math.max(-r * 0.15, v.y * k * tall), v.z * k);
     }
     geometry.computeVertexNormals();
     const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ color: look.hedge }));
-    mesh.position.set(x, r * 0.8, z);
+    // Its flat foot (cut at -0.15 r) on the lawn. It stood at 0.8 r, which
+    // floated his boxwoods a quarter meter up (found 2026-10-08).
+    mesh.position.set(x, r * 0.15, z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     return mesh;
@@ -442,6 +446,15 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     // them so it stands behind the leaves resting against the sim's wall.
     scene.add(sideGate(Y, look));
     if (Y.neighborYard) scene.add(hisSideFence(Y, look));
+    // A shrub in the gap between our house's left end and the hedge (Steve's
+    // QA, 2026-10-08: "an open space with an invisible wall"), standing just
+    // behind the line the leaves bank against there.
+    const S = Y.cornerShrub;
+    if (S) {
+        const shrub = boxwood(S.x, S.z, S.r, look, 7, S.tall);
+        shrub.name = 'corner-shrub';
+        scene.add(shrub);
+    }
 
     Y.walls.forEach((wall) => {
         if (wall.axis === 'x' && wall.height < 1.2) {

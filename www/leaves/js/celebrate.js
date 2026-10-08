@@ -19,8 +19,17 @@
  * for the same clean lawn, and a trick-or-treater kicking a leaf back in and
  * the visitor blowing it out again is not a second party.
  *
+ * BIGGER SINCE STEVE'S NEXT QA (2026-10-08: "Could we increase the
+ * celebration/animation"): three hops, a full spin, the view swinging part
+ * way round them, leaves thrown up all round (confetti.js), a fanfare, and a
+ * banner across the screen. And a clear lawn inside the time gets its own,
+ * bigger still, before the dive (main.js): the time on the banner, a new
+ * best if it is one, more leaves, some of them gold, and a gold results
+ * card. Under reduced motion: the banner and the sound, nothing that moves.
+ *
  * PURE: main.js steps it and draws what it says.
  */
+import { clockText } from './score.min.js';
 
 /** The line on screen when it happens (house style: no em dashes, no
  *  semicolons). */
@@ -86,6 +95,38 @@ export function cheerLift(t, K, reduced = false) {
     if (reduced || t < 0 || t >= K.hops * K.hopTime) return 0;
     const u = (t % K.hopTime) / K.hopTime;
     return K.hop * 4 * u * (1 - u);
+}
+
+/** How far round the person has spun at `t` seconds in: nothing, then one
+ *  whole turn over `K.spin.time` from `K.spin.from`, eased in and out. None
+ *  under reduced motion. */
+export function cheerSpin(t, K, reduced = false) {
+    if (reduced) return 0;
+    const u = Math.min(1, Math.max(0, (t - K.spin.from) / K.spin.time));
+    return Math.PI * 2 * u * u * (3 - 2 * u);
+}
+
+/** How far round the view has swung at `t` seconds in: out to `K.orbit`
+ *  radians and back by the end, so it hands back to the usual view where it
+ *  took over. None under reduced motion. */
+export function cheerOrbit(t, K, reduced = false) {
+    if (reduced) return 0;
+    const u = Math.min(1, Math.max(0, t / K.seconds));
+    return K.orbit * Math.sin(Math.PI * u);
+}
+
+/**
+ * The banner's words: `kind` 'free' (a clear lawn with no clock) or 'timed'
+ * (inside the time, `seconds` it took, `previous` the best before or null).
+ * Returns { big, small, extra }.
+ */
+export function bannerFor(kind, seconds = 0, previous = null) {
+    if (kind !== 'timed') return { big: 'Spotless!', small: CHEER_LINE, extra: '' };
+    const time = Math.max(1, Math.round(seconds));
+    let extra = '';
+    if (previous === null) extra = 'Your first clear!';
+    else if (time < previous) extra = 'A new best time!';
+    return { big: 'Lawn clear!', small: `in ${clockText(time)}`, extra };
 }
 
 /** Where the view looks while it plays: between the person and the middle

@@ -154,6 +154,103 @@
     }
 }
 
+/* ---- A clear lawn's banner (2026-10-08) ----
+   Big words across the upper middle of the screen for a few seconds, never
+   in the way of a tap. Gold for a clear lawn inside the time. */
+
+.cheer-banner {
+    position: fixed;
+    top: 16vh;
+    left: 50%;
+    width: min(92vw, 720px);
+    transform: translateX(-50%);
+    z-index: 106;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s ease, visibility 0s linear 0.4s;
+}
+
+.cheer-banner.visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s ease;
+}
+
+.cheer-banner.visible .cheer-big {
+    animation: cheer-pop 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.cheer-big {
+    margin: 0;
+    font-size: clamp(2.8rem, 9vw, 5.2rem);
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    color: #fff4dc;
+    text-shadow: 0 4px 0 rgba(120, 50, 10, 0.55), 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+
+.cheer-banner.timed .cheer-big {
+    color: #ffe08a;
+    text-shadow: 0 4px 0 rgba(120, 70, 0, 0.6), 0 0 40px rgba(255, 200, 80, 0.55), 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+
+.cheer-small {
+    margin: 0.5rem 0 0;
+    font-size: clamp(1.1rem, 3.6vw, 1.6rem);
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.cheer-extra {
+    display: inline-block;
+    margin: 0.7rem 0 0;
+    padding: 0.35rem 1rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #f6c14a, #ffe39a, #f6c14a);
+    color: #2a1c05;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.cheer-extra:empty {
+    display: none;
+}
+
+@keyframes cheer-pop {
+    0% { transform: scale(0.4); opacity: 0; }
+    60% { transform: scale(1.12); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* The clock, stopped on a clear lawn, flashing gold. */
+.hud-clock.clear {
+    color: #ffd76a;
+    animation: clock-flash 0.45s ease-in-out 5 alternate;
+}
+
+@keyframes clock-flash {
+    from { opacity: 1; }
+    to { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cheer-banner,
+    .cheer-banner.visible {
+        transition: none;
+    }
+
+    .cheer-banner.visible .cheer-big,
+    .hud-clock.clear {
+        animation: none;
+    }
+}
+
 /* ---- The welcome card's free play ----
    A quiet text button under the controls: the round is what the card is
    offering, and this is the other door. Light ink on the dark overlay. */
@@ -263,9 +360,8 @@
 }
 
 /* ---- The end of a round ----
-   The shared warm paper card (.piece-card), held by an id of its own, since
-   the shared sheet styles its modals by id. No backdrop dismissal: the ways
-   on are the buttons, or Escape (keep blowing). */
+   Its own card (below), held by an id of its own. No backdrop dismissal:
+   the ways on are the buttons, or Escape (keep blowing). */
 
 #end-modal {
     position: fixed;
@@ -274,97 +370,190 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    /* The card's own accent: autumn amber, gold for a clear lawn. Both hold
+       4.5:1 over the glass even with white sky behind it. */
+    --end-accent: #ffc27a;
+    --end-ink: #fbf6ec;
+    --end-muted: rgba(251, 246, 236, 0.8);
 }
 
 #end-modal.hidden {
     display: none;
 }
 
+#end-modal.perfect {
+    --end-accent: #ffd76a;
+}
+
+/* Light enough that the yard shows round the card in a screenshot. */
 #end-modal .modal-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(18, 14, 8, 0.5);
-    backdrop-filter: blur(3px);
+    background: radial-gradient(ellipse at center, rgba(12, 10, 6, 0.18), rgba(12, 10, 6, 0.5));
     pointer-events: none;
 }
 
-.end-kicker {
-    margin: 0 0 0.5rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: #9a3412;
+/* ---- The results card (Steve's QA, 2026-10-08: "more transparent and
+   screenshot-able", "very narrow even on a wide screen") ----
+   Frosted glass: a dark warm tint over the blurred yard, the white text on
+   it holding its contrast over any part of the scene. The pile beside the
+   result on a wide screen, above it on a narrow one. */
+.end-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    width: min(940px, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid rgba(255, 236, 200, 0.2);
+    border-radius: 24px;
+    background: linear-gradient(155deg, rgba(40, 32, 22, 0.72), rgba(16, 14, 10, 0.8));
+    -webkit-backdrop-filter: blur(18px) saturate(1.25);
+    backdrop-filter: blur(18px) saturate(1.25);
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    color: var(--end-ink);
+    font-family: var(--font-system);
+    text-align: left;
 }
 
-/* The number a visitor came for, in a deep autumn orange that holds its
-   contrast on the paper. */
+#end-modal.perfect .end-card {
+    border-color: rgba(255, 215, 106, 0.55);
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5), 0 0 60px rgba(255, 196, 80, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* The pile, on a warm glow, filling its half. */
+.end-hero {
+    position: relative;
+    min-height: 360px;
+    background: radial-gradient(ellipse at 50% 72%, rgba(255, 190, 110, 0.22), transparent 66%);
+}
+
+.end-pile {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* The time a clear lawn took, pinned over the pile. */
+.end-ribbon {
+    position: absolute;
+    top: 1.2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 0.4rem 1.1rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #f6c14a, #ffe39a, #f6c14a);
+    color: #2a1c05;
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    box-shadow: 0 6px 20px rgba(246, 193, 74, 0.35);
+}
+
+.end-ribbon[hidden] {
+    display: none;
+}
+
+.end-body {
+    padding: 2.1rem 2.1rem 1.6rem 0.6rem;
+}
+
+.end-kicker {
+    margin: 0 0 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--end-accent);
+}
+
+.end-title {
+    margin: 0 0 0.2rem;
+    font-size: 1.9rem;
+    font-weight: 800;
+    line-height: 1.15;
+    color: var(--end-ink);
+}
+
+/* The number a visitor came for, big. */
 .end-score {
-    margin: 0.35rem 0 0.4rem;
+    margin: 0.2rem 0 0.5rem;
     font-size: 1rem;
-    color: var(--gallery-muted);
+    color: var(--end-muted);
 }
 
 .end-score span {
     display: block;
-    font-size: 2.6rem;
-    font-weight: 800;
-    line-height: 1.1;
-    color: #9a3412;
+    font-size: 4.4rem;
+    font-weight: 900;
+    line-height: 1;
+    color: var(--end-accent);
     font-variant-numeric: tabular-nums;
+    text-shadow: 0 4px 24px rgba(255, 170, 70, 0.35);
 }
 
 .end-line {
-    margin-bottom: 0.6rem;
+    margin: 0 0 0.7rem;
+    font-size: 1rem;
+    line-height: 1.45;
+    color: var(--end-ink);
 }
 
-/* The pile of leaves at the top of the results card (2026-10-08), its own
-   little 3D view on the card's paper. */
-.end-pile {
-    display: block;
-    width: 100%;
-    height: 160px;
-    margin: -0.25rem 0 0.5rem;
-}
-
-@media (max-width: 480px), (max-height: 600px) {
-    .end-pile {
-        height: 120px;
-    }
-}
-
-/* How the dive went: a quieter second line under the verdict's. */
-.end-dive {
-    margin: 0 0 1.1rem;
+/* How the dive went, what was found, the best time: quieter lines. */
+.end-note {
+    margin: 0 0 0.5rem;
     font-size: 0.9rem;
     font-style: italic;
-    color: var(--gallery-muted);
+    color: var(--end-muted);
 }
 
-.end-dive:empty {
+.end-note:empty {
     display: none;
 }
 
+.end-best {
+    font-style: normal;
+    font-weight: 700;
+    color: var(--end-accent);
+}
+
+/* Where the leaves went, as four tiles. */
 .end-stats {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.6rem 1rem;
-    margin: 0 0 1.25rem;
+    gap: 0.5rem;
+    margin: 0.9rem 0 1.1rem;
     padding: 0;
 }
 
+.end-stat {
+    padding: 0.55rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.07);
+}
+
 .end-stat dt {
-    font-size: 0.7rem;
-    letter-spacing: 0.06em;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--gallery-muted);
+    color: var(--end-muted);
 }
 
 .end-stat dd {
-    margin: 0.15rem 0 0;
-    font-size: 1.2rem;
-    font-weight: 600;
+    margin: 0.1rem 0 0;
+    font-size: 1.25rem;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
+    color: var(--end-ink);
 }
 
 .end-actions {
@@ -372,43 +561,127 @@
     gap: 0.6rem;
 }
 
-.end-actions .piece-enter {
+.end-again,
+.end-share {
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.end-again {
     flex: 2;
     border: none;
-    cursor: pointer;
-    font-size: 1rem;
+    background: var(--end-accent);
+    color: #2a1c05;
+}
+
+.end-again:hover {
+    background: #ffd29a;
+}
+
+#end-modal.perfect .end-again:hover {
+    background: #ffe39a;
 }
 
 .end-share {
     flex: 1;
-    padding: 0.85rem 1rem;
-    border: 1.5px solid var(--gallery-accent);
-    border-radius: 10px;
-    background: none;
-    color: var(--gallery-accent);
-    font-weight: 600;
-    font-size: 1rem;
-    cursor: pointer;
+    border: 1.5px solid rgba(251, 246, 236, 0.6);
+    background: transparent;
+    color: var(--end-ink);
 }
 
 .end-share:hover {
-    background: rgba(61, 90, 128, 0.08);
+    background: rgba(255, 255, 255, 0.1);
 }
 
-.end-share:focus-visible {
-    outline: 3px solid #9db4d0;
+.end-again:focus-visible,
+.end-share:focus-visible,
+.end-free:focus-visible {
+    outline: 3px solid #fff;
     outline-offset: 2px;
 }
 
-.end-promo {
-    margin-top: 0.4rem;
+.end-free {
+    display: block;
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.6rem;
+    border: none;
+    background: none;
+    color: var(--end-muted);
+    font: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
 }
 
-/* The directory link is styled for the dark welcome overlay. On the paper
-   card it takes the card's own accent. */
+.end-free:hover {
+    color: var(--end-ink);
+}
+
+.end-promo {
+    margin-top: 0.3rem;
+}
+
 #end-modal .promo-explore {
-    color: var(--gallery-accent);
-    text-decoration-color: rgba(61, 90, 128, 0.45);
+    color: var(--end-ink);
+    text-decoration-color: rgba(251, 246, 236, 0.45);
+}
+
+/* The scene's name at the card's foot, so a screenshot says where it is
+   from. */
+.end-mark {
+    margin: 0.8rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(251, 246, 236, 0.65);
+}
+
+/* A narrow screen: one column, the pile on top, centered. */
+@media (max-width: 720px) {
+    .end-card {
+        grid-template-columns: 1fr;
+        border-radius: 20px;
+        text-align: center;
+    }
+
+    .end-hero {
+        min-height: 200px;
+    }
+
+    .end-body {
+        padding: 0.4rem 1.25rem 1.25rem;
+    }
+
+    .end-title {
+        font-size: 1.5rem;
+    }
+
+    .end-score span {
+        font-size: 3.4rem;
+    }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+    .end-hero {
+        min-height: 240px;
+    }
+
+    .end-score span {
+        font-size: 3rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .end-again,
+    .end-share {
+        transition: none;
+    }
 }
 
 /* ---- The welcome card's character line (M4) ---- */
@@ -588,62 +861,3 @@
     text-align: center;
 }
 
-/* ---- The lab panel (QA hosts only, built by main.js) ----
-   Under the sound button, which has the top left corner (M6). Only its
-   buttons take the pointer, so a cursor crossing the readout still steers
-   the person on the lawn beneath it. */
-
-.lab-panel {
-    position: fixed;
-    top: max(80px, calc(env(safe-area-inset-top) + 70px));
-    left: max(10px, env(safe-area-inset-left));
-    z-index: 40;
-    max-width: calc(100vw - 20px);
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: rgba(12, 16, 20, 0.62);
-    color: #f4efe6;
-    font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    pointer-events: none;
-}
-
-.lab-readout {
-    margin: 0 0 6px;
-    white-space: pre;
-    font: inherit;
-}
-
-.lab-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.lab-btn {
-    min-width: 44px;
-    min-height: 32px;
-    padding: 4px 10px;
-    border: 1px solid rgba(244, 239, 230, 0.35);
-    border-radius: 8px;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-    pointer-events: auto;
-}
-
-.lab-btn:hover,
-.lab-btn:focus-visible {
-    border-color: rgba(244, 239, 230, 0.8);
-}
-
-.lab-btn.active {
-    border-color: #f0a032;
-    color: #f0a032;
-}
-
-@media (max-width: 480px) {
-    .lab-panel {
-        font-size: 11px;
-    }
-}
