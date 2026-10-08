@@ -54,7 +54,8 @@ const PERSISTENT = {
     'www/xo/js/progress.js': 'a game of X’s and O’s that has not finished yet',
     'www/xo/js/colors.js': 'the team and field colors chosen in X’s and O’s',
     'www/xo/js/jump.js': 'whether Auto jump is on in X’s and O’s',
-    'www/leaves/js/cast.js': 'the character chosen in Leaves'
+    'www/leaves/js/cast.js': 'the character chosen in Leaves',
+    'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaves'
 };
 
 /** Source files only. The built .min copies are the same code twice. */
@@ -110,6 +111,10 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // The character chosen in Leaves (M4, 2026-10-06), and how to clear it.
     expect(text).toMatch(/keeps the character you choose/i);
     expect(text).toMatch(/Forget my choice button/i);
+    // And its best time to clear the lawn (2026-10-08): only the seconds,
+    // and how to clear that too.
+    expect(text).toMatch(/keeps your fastest time, just the number of seconds/i);
+    expect(text).toMatch(/Forget my best time button/i);
 
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.

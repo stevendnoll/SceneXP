@@ -94,7 +94,7 @@
     <title>Leaves | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=6" as="style">
+    <link rel="preload" href="css/experience.min.css?v=7" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -109,6 +109,8 @@
     <link rel="modulepreload" href="js/backyard.min.js">
     <link rel="modulepreload" href="js/gap.min.js">
     <link rel="modulepreload" href="js/backdrop.min.js">
+    <link rel="modulepreload" href="js/trophy.min.js">
+    <link rel="modulepreload" href="js/best.min.js">
     <link rel="modulepreload" href="js/rooftops.min.js">
     <link rel="modulepreload" href="js/celebrate.min.js">
     <link rel="modulepreload" href="js/sound.min.js">
@@ -136,7 +138,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=6">
+    <link rel="stylesheet" href="css/experience.min.css?v=7">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -191,7 +193,7 @@
             <!-- The round, in one line. The clock waits for the first blow
                  (js/round.js), which is worth saying, since it means there is
                  no hurry to read the rest of this card. -->
-            <p class="tour-note">You have three minutes to clear the lawn, and the clock starts with your first blow. Clear the whole lawn and you finish early.</p>
+            <p class="tour-note">You have five minutes to clear the lawn, and the clock starts with your first blow. Clear the whole lawn and you finish early.</p>
             <div class="controls-hint">
                 <span>WALK</span> Point at the lawn with the mouse, or drag a finger across it, and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too.
                 <span>BLOW</span> Hold the mouse button or Space. On a touch screen, hold the blow button in the corner.
@@ -204,6 +206,11 @@
                  overlay's click-to-start by main.js. -->
             <p class="cast-line"><span id="cast-name">Playing as the weekend warrior.</span>
                 <button id="cast-btn" class="welcome-free cast-btn" type="button">Change your character</button></p>
+            <!-- The visitor's best time to clear the lawn (js/best.js), once
+                 they have one, and a way to forget it. Hidden until then, and
+                 shielded from the overlay's click-to-start by main.js. -->
+            <p id="best-line" class="cast-line best-line" hidden><span id="best-text"></span>
+                <button id="best-forget" class="welcome-free cast-btn" type="button">Forget my best time</button></p>
             <!-- Free blow: the yard with no clock. Shielded from the overlay's
                  own click-to-start by main.js, so it does its own job. -->
             <button id="free-btn" class="welcome-free" type="button">Or just play with the leaves, with no clock</button>
@@ -312,7 +319,12 @@
         <div class="modal-backdrop"></div>
         <div class="modal-container piece-card">
             <div class="piece-card-content">
-                <p class="end-kicker">Time is up</p>
+                <!-- The pile of leaves the round made (js/trophy.js): its own
+                     little 3D view, bigger the more of the lawn was cleared.
+                     Decoration, so hidden from screen readers, which hear
+                     the result in words. -->
+                <canvas id="end-pile" class="end-pile" aria-hidden="true"></canvas>
+                <p id="end-kicker" class="end-kicker">Time is up</p>
                 <h2 id="end-title" class="piece-title">Respectable work</h2>
                 <p class="end-score"><span id="end-percent">0%</span> of the lawn cleared</p>
                 <p id="end-line" class="piece-subtitle end-line"></p>
@@ -322,6 +334,9 @@
                 <!-- What turned up under the leaves (M6), empty when nothing
                      did. -->
                 <p id="end-finds" class="end-dive end-finds"></p>
+                <!-- The best time to clear the lawn (js/best.js): a first
+                     clear, a new best, or the time to beat. -->
+                <p id="end-best" class="end-dive end-best"></p>
                 <dl class="end-stats">
                     <div class="end-stat">
                         <dt>On the tarp</dt>

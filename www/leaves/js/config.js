@@ -697,6 +697,25 @@ export const LEAVES_CONFIG = Object.freeze({
                 { dx: 1.0, dz: 0.45, r: 0.18, color: 0xd9832a },
                 { dx: 1.3, dz: 0.78, r: 0.13, color: 0xefe3c4 }
             ],
+            // OUR GRAVES (Steve's QA, 2026-10-08: "in front of the windows on
+            // the right... a couple of tombstones and grave plots"): three
+            // slate stones before the window right of the porch (the one
+            // without the clown), each with its mound of earth toward the
+            // street. A good step out from the house, with gaps between, so
+            // the person can walk behind them and blow out the drift there.
+            // Each stone is a wall the leaves meet, each mound a low
+            // platform they can lie on (decorations.js yardDecorBoxes).
+            ourGraves: {
+                stone: 0x77766f,
+                // Each plot a long low mound of earth (Steve: "extend the
+                // grave plots. Right now they're just circles").
+                mound: { w: 0.56, d: 1.7, height: 0.12 },
+                list: [
+                    { kind: 'round', x: 2.45, z: -4.25, tilt: 0.05, turn: 0.08 },
+                    { kind: 'cross', x: 3.25, z: -4.3, tilt: -0.07, turn: -0.05 },
+                    { kind: 'square', x: 4.05, z: -4.22, tilt: 0.03, turn: 0.12 }
+                ]
+            },
             graves: [
                 { kind: 'round', x: 18.9, z: 3.1, tilt: 0.07, turn: -0.2 },
                 { kind: 'cross', x: 20.1, z: 4.2, tilt: -0.1, turn: 0.1 },
@@ -813,6 +832,20 @@ export const LEAVES_CONFIG = Object.freeze({
         chime: { level: 0.55, notes: [784, 988, 1175, 1568], gap: 0.12, decay: 1.2 }
     },
 
+    // THE PILE ON THE RESULTS CARD (trophy.js, Steve's QA, 2026-10-08: "a
+    // rotating 3D view of a pile of leaves, and the pile's size is dynamic
+    // based on how the user did"). The heap's radius is `radius` times the
+    // cleared share to the `grow` (never under `least`), so small results
+    // look small, its sides at `slope` degrees, `max` leaves at full size
+    // (`min` at the least), `leafScale` times the yard's leaf. They rain
+    // down `drop` meters, each taking `fall` seconds, over `rain` seconds,
+    // and it turns `spin` radians a second. `view` frames the biggest heap.
+    trophy: {
+        radius: 0.85, slope: 33, grow: 0.7, least: 0.03, max: 1400, min: 12, leafScale: 1.3, seed: 7121,
+        rain: 1.3, fall: 0.5, drop: 1.4, spin: 0.35, fov: 30,
+        view: { above: 0.3, back: 1.05, up: 0.42 }
+    },
+
     // THE CELEBRATION (Steve's QA, 2026-10-08: "Should we add a celebration
     // if a user clears 100% of the yard? ... we should show it even if there
     // is no time limit"). In a round the dive is the celebration. In free
@@ -828,11 +861,13 @@ export const LEAVES_CONFIG = Object.freeze({
     // The clock turns the accent color for the last `hurry` seconds, and the
     // cleared share on the HUD is counted `tallyHz` times a second (counting
     // walks every leaf).
-    // Three minutes since Steve's QA (2026-10-08): a minute was "way too
-    // hard", and a visitor should be able to win, by clearing every leaf,
-    // which ends the round early (round.js).
+    // Five minutes since Steve's QA (2026-10-08): a minute was "way too
+    // hard", three still a stretch, and "The goal is for the user to
+    // finish, not for it to be super challenging. If they want to speed run
+    // they can always try to beat their best score" (best.js). A clear lawn
+    // ends the round early (round.js).
     round: {
-        seconds: 180,
+        seconds: 300,
         hurry: 10,
         tallyHz: 4,
         // The finale (M3) runs between the clock and the end card, and never

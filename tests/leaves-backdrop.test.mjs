@@ -74,6 +74,51 @@ describe('the next street', () => {
     });
 });
 
+// Steve's QA, 2026-10-08: "there seems to be an extra fence between the
+// trampoline and swingset, and the house to which they belong".
+describe('the play yard', () => {
+    test('the back lot line\'s fence is open across the lot of the house behind the swing set and the trampoline', () => {
+        const H = B.houses;
+        const playX = (B.swingSet.x + B.trampoline.x) / 2;
+        const runs = Bd.lotLineRuns(H, playX);
+        expect(runs.length).toBe(2);
+        const [gap0, gap1] = [runs[0][1], runs[1][0]];
+        expect(gap1 - gap0).toBeCloseTo(H.lot, 6);
+        // Both of them within the open stretch, and the house behind them
+        // standing in that lot.
+        for (const x of [B.swingSet.x, B.trampoline.x]) {
+            expect(x).toBeGreaterThan(gap0 + 1);
+            expect(x).toBeLessThan(gap1 - 1);
+        }
+        const house = Bd.backHouses(H).find((h) => h.x > gap0 && h.x < gap1);
+        expect(house).toBeTruthy();
+        // The rest of the line is fenced, end to end.
+        expect(runs[0][0]).toBe(H.minX);
+        expect(runs[1][1]).toBe(H.maxX);
+        expect(Bd.lotLineRuns(H)).toEqual([[H.minX, H.maxX]]);
+    });
+
+    test('as built: no fence panel along the line in that stretch', () => {
+        const group = Bd.buildBackdrop(C);
+        const panels = group.getObjectByName('fence-panels');
+        const playX = (B.swingSet.x + B.trampoline.x) / 2;
+        const [[, gap0], [gap1]] = Bd.lotLineRuns(B.houses, playX);
+        const m = new THREE.Matrix4();
+        const p = new THREE.Vector3();
+        let inGap = 0;
+        let onLine = 0;
+        for (let i = 0; i < panels.count; i++) {
+            panels.getMatrixAt(i, m);
+            p.setFromMatrixPosition(m);
+            if (Math.abs(p.z - B.fence.z) > 0.01) continue;
+            onLine++;
+            if (p.x > gap0 + 0.1 && p.x < gap1 - 0.1) inGap++;
+        }
+        expect(onLine).toBeGreaterThan(40);
+        expect(inGap).toBe(0);
+    });
+});
+
 describe('the poles and their wires', () => {
     test('each wire runs pole to pole, sagging lowest in its middle, over the fence and under the poles\' tops', () => {
         const P = B.poles;

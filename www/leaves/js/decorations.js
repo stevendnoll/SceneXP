@@ -86,6 +86,15 @@ export function yardDecorBoxes(config) {
         const half = stack[0].r * 0.75;
         out.push({ name: 'pumpkins', minX: t.x - half, maxX: t.x + half, minZ: t.z - half, maxZ: t.z + half, height: top.y + top.r * 1.44, platform: true });
     }
+    // Our graves (2026-10-08): each stone a wall, each mound a low platform.
+    for (const g of (D.ourGraves && D.ourGraves.list) || []) {
+        const t = STONE[g.kind];
+        out.push({ name: 'tombstone', minX: g.x - t.w / 2 - 0.03, maxX: g.x + t.w / 2 + 0.03, minZ: g.z - 0.08, maxZ: g.z + 0.08, height: t.h });
+        const M = D.ourGraves.mound;
+        // A hand's width of lawn between the stone and its mound.
+        const front = g.z + 0.16;
+        out.push({ name: 'grave', minX: g.x - M.w / 2, maxX: g.x + M.w / 2, minZ: front, maxZ: front + M.d, height: M.height, platform: true });
+    }
     // The skeletons on the lawn: walls a leaf meets, not shelves it lies on
     // (a leaf on a 1.7 m shelf over the raker would hang in the air).
     const K = D.skeletons || {};
@@ -294,6 +303,14 @@ function hangingGhost(tall, ink, sheetColor, thread, stringLength) {
     return group;
 }
 
+/** Each tombstone's width and full height (a round one's to the top of its
+ *  arch), for drawing it and for its box. */
+const STONE = Object.freeze({
+    round: { w: 0.55, h: 0.775, body: 0.5 },
+    square: { w: 0.5, h: 0.68, body: 0.68 },
+    cross: { w: 0.46, h: 0.85, body: 0.85 }
+});
+
 /** A foam tombstone: 'round' (a rounded top), 'square', or a 'cross', its
  *  front toward +z, `rip` a texture for the front or null. */
 function tombstone(kind, foam, rip) {
@@ -303,8 +320,8 @@ function tombstone(kind, foam, rip) {
         group.add(mesh(new THREE.BoxGeometry(0.46, 0.12, 0.1), foam, 0, 0.6, 0, true));
         return group;
     }
-    const w = kind === 'round' ? 0.55 : 0.5;
-    const h = kind === 'round' ? 0.5 : 0.68;
+    const w = STONE[kind].w;
+    const h = STONE[kind].body;
     group.add(mesh(new THREE.BoxGeometry(w, h, 0.1), foam, 0, h / 2, 0, true));
     if (kind === 'round') {
         const top = mesh(new THREE.CylinderGeometry(w / 2, w / 2, 0.1, 20, 1, false, 0, Math.PI), foam, 0, h, 0, true);
@@ -316,6 +333,36 @@ function tombstone(kind, foam, rip) {
         group.add(label);
     }
     return group;
+}
+
+/** A grave plot: a long, low mound of earth, `w` by `d` meters and
+ *  `height` tall, its corners and top edges rounded, its foot at y = 0 and
+ *  its middle at the origin. Drawn a bevel inside its outline, since a bevel
+ *  grows a shape outward by as much, so it fills its box exactly. */
+function gravePlot(M) {
+    const bt = 0.04;
+    const r = 0.1;
+    const x0 = -M.w / 2 + bt;
+    const x1 = M.w / 2 - bt;
+    const y0 = -M.d / 2 + bt;
+    const y1 = M.d / 2 - bt;
+    const shape = new THREE.Shape();
+    shape.moveTo(x0 + r, y0);
+    shape.lineTo(x1 - r, y0);
+    shape.absarc(x1 - r, y0 + r, r, -Math.PI / 2, 0, false);
+    shape.lineTo(x1, y1 - r);
+    shape.absarc(x1 - r, y1 - r, r, 0, Math.PI / 2, false);
+    shape.lineTo(x0 + r, y1);
+    shape.absarc(x0 + r, y1 - r, r, Math.PI / 2, Math.PI, false);
+    shape.lineTo(x0, y0 + r);
+    shape.absarc(x0 + r, y0 + r, r, Math.PI, Math.PI * 1.5, false);
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth: Math.max(0.01, M.height - 2 * bt), bevelEnabled: true, bevelThickness: bt, bevelSize: bt, bevelSegments: 3, curveSegments: 6
+    });
+    // Lying down: its extrusion up, its foot on the lawn.
+    geometry.rotateX(-Math.PI / 2);
+    geometry.translate(0, bt, 0);
+    return geometry;
 }
 
 /** "R.I.P." carved into the foam, or null where there is no document. */
@@ -1043,6 +1090,24 @@ export function buildDecorations(config) {
         stack.name = 'pumpkins';
         towerStack(t, D).forEach((p) => stack.add(pumpkin(p)));
         group.add(stack);
+    }
+    // Our graves before the window right of the porch (2026-10-08): slate
+    // stones, each with a mound of earth, on their boxes.
+    if (D.ourGraves) {
+        const slate = lambert(D.ourGraves.stone);
+        const earth = lambert(D.soil);
+        const ourRip = ripTexture(D.ink);
+        const M = D.ourGraves.mound;
+        for (const g of D.ourGraves.list) {
+            const stone = tombstone(g.kind, slate, ourRip);
+            stone.position.set(g.x, 0, g.z);
+            stone.rotation.set(0, g.turn || 0, g.tilt || 0);
+            stone.name = 'tombstone';
+            group.add(stone);
+            const mound = mesh(gravePlot(M), earth, g.x, 0, g.z + 0.16 + M.d / 2, true);
+            mound.name = 'grave';
+            group.add(mound);
+        }
     }
     // A clown in our far right window, peeking in from its edge.
     let clown = null;

@@ -61,6 +61,8 @@ import { buildDecorations, decoratedConfig } from './decorations.min.js';
 import { buildBackyard } from './backyard.min.js';
 import { buildGap } from './gap.min.js';
 import { buildBackdrop } from './backdrop.min.js';
+import { createTrophy } from './trophy.min.js';
+import { loadBest, recordBest, forgetBest, bestWelcomeLine, bestEndLine, bestShareNote } from './best.min.js';
 import { buildResting } from './rooftops.min.js';
 import { createCheer, resetCheer, stepCheer, skipCheer, isCheering, cheerLift, cheerFocus, CHEER_LINE } from './celebrate.min.js';
 import { createSound } from './sound.min.js';
@@ -163,6 +165,13 @@ let sent = null;
 const finale = { plan: null, t: 0, burst: false, arms: 'carry', tally: null };
 // Every last leaf off the lawn in free play (celebrate.js).
 const cheer = createCheer();
+// The pile on the results card (trophy.js), made the first time the card
+// opens, and the card's percent counting up to the score as it builds.
+let trophy = null;
+let trophyTried = false;
+const endCount = { target: 0, shown: -1 };
+// The yard's leaf size, for the pile's leaves.
+let leafSize = 0.12;
 // THE DELIGHTS (M6). The finds hidden this round, their models, and the
 // names of the ones found (for the end card), with the count of rounds so
 // each hides them somewhere new. October's decorations and Halloween week's
@@ -272,6 +281,9 @@ async function init() {
     state.shadows = options.shadows;
     state.ratio = options.ratio;
     state.showFinds = options.finds;
+    // The round's length: five minutes, or the lab's ?clock= on a QA host.
+    round.seconds = options.clock;
+    showBest();
     const season = seasonFor(window.location.search, new Date(), CONFIG.halloween, state.qa);
     state.decor = season.decor;
     state.halloween = season.week;
@@ -324,6 +336,7 @@ async function init() {
     updateLoadingStatus(`Letting ${shortCount(state.count)} leaves fall…`, 55);
     sim = createSim(state.count, WORLD);
     const { look, size: leafBase } = scatterLeaves(sim, WORLD);
+    leafSize = leafBase;
     trees = buildTrees(scene, CONFIG, { mobile: state.isMobile, shadows: state.shadows });
     crowns = createCrowns(sim, WORLD);
     leaves = createLeafMesh(sim, look, {
@@ -518,12 +531,33 @@ function setupEventListeners() {
             if (e) e.preventDefault();
             beginPlaying();
         };
+        // THE CARD SCROLLS on a short screen (Steve's QA, 2026-10-08: "I
+        // can't scroll vertically"), so a finger that moved is a scroll,
+        // not a tap, and lifting it must not step in.
+        const touch = { x: 0, y: 0, moved: false };
+        blocker.addEventListener('touchstart', (e) => {
+            const t = e.touches && e.touches[0];
+            touch.x = t ? t.clientX : 0;
+            touch.y = t ? t.clientY : 0;
+            touch.moved = false;
+        }, { passive: true, signal });
+        blocker.addEventListener('touchmove', (e) => {
+            const t = e.touches && e.touches[0];
+            if (t && !isTap(touch, { x: t.clientX, y: t.clientY })) touch.moved = true;
+        }, { passive: true, signal });
         blocker.addEventListener('click', dismiss, { signal });
-        blocker.addEventListener('touchend', dismiss, { signal });
+        blocker.addEventListener('touchend', (e) => {
+            if (touch.moved) return;
+            dismiss(e);
+        }, { signal });
         shieldOverlayControl(document.getElementById('explore-link'), { signal });
         const castBtn = document.getElementById('cast-btn');
         if (shieldOverlayControl(castBtn, { signal })) {
             castBtn.addEventListener('click', openCast, { signal });
+        }
+        const bestBtn = document.getElementById('best-forget');
+        if (shieldOverlayControl(bestBtn, { signal })) {
+            bestBtn.addEventListener('click', forgetBestTime, { signal });
         }
         const freeBtn = document.getElementById('free-btn');
         if (shieldOverlayControl(freeBtn, { signal })) {
@@ -827,6 +861,12 @@ function onKeyUp(event) {
     if (event.code === 'Space') keys.blow = false;
 }
 
+/** Whether a finger from `a` to `b` ({ x, y }, pixels) is a tap rather than
+ *  a scroll: it moved no more than `slop` pixels. */
+export function isTap(a, b, slop = 10) {
+    return Math.hypot(b.x - a.x, b.y - a.y) <= slop;
+}
+
 /** Arrow keys inside a text field move its caret, not the person. */
 function isTextEntry(target) {
     const tag = target && target.tagName ? String(target.tagName).toLowerCase() : '';
@@ -1114,6 +1154,29 @@ function forgetCast() {
     setText('cast-status', 'Your choice is forgotten.');
 }
 
+// ---- The best time (best.js) -----------------------------------------------
+
+/** The welcome card's best time, once there is one, with its Forget
+ *  button. */
+function showBest() {
+    const line = bestWelcomeLine(loadBest(state.count));
+    const el = document.getElementById('best-line');
+    setText('best-text', line);
+    if (el) el.hidden = !line;
+}
+
+/** "Forget my best time": nothing kept. The button hides with its line, so
+ *  focus moves on to the welcome card. */
+function forgetBestTime() {
+    forgetBest();
+    showBest();
+    announce('Your best time is forgotten.');
+    track('best-forget');
+    if (blocker) {
+        try { blocker.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
+    }
+}
+
 // ---- The round ------------------------------------------------------------
 
 function endShown() {
@@ -1136,7 +1199,8 @@ function installRoundControls() {
         document.getElementById('end-share'),
         () => ({
             title: 'Leaves',
-            text: shareText(result ? result.tally : counted, result ? result.seconds : CONFIG.round.seconds, result ? result.landed : null, result ? result.found : found)
+            text: shareText(result ? result.tally : counted, result ? result.seconds : round.seconds, result ? result.landed : null,
+                result ? result.found : found, result ? result.bestNote : '')
         }),
         {
             status: document.getElementById('end-status'),
@@ -1160,7 +1224,7 @@ function announce(text) {
 
 function onRoundEvent(event) {
     if (event === 'start') {
-        announce(`The clock is running. You have ${durationText(CONFIG.round.seconds)}.`);
+        announce(`The clock is running. You have ${durationText(round.seconds)}.`);
         track('round-start');
     } else if (event === 'finale') {
         // The clock has run out: the blower stops, whatever is still held,
@@ -1296,9 +1360,11 @@ function showEnd() {
     const t = finale.tally || recount();
     const v = verdict(t);
     const landed = finale.plan ? finale.plan.success : null;
-    // An early finish brags about the time it took, in whole seconds.
-    const seconds = round.spotless ? Math.max(1, Math.round(round.elapsed)) : CONFIG.round.seconds;
-    result = { tally: t, verdict: v, landed, found: [...found], seconds };
+    // An early finish brags about the time it took, in whole seconds, and
+    // is kept if it is the visitor's best (best.js).
+    const seconds = round.spotless ? Math.max(1, Math.round(round.elapsed)) : round.seconds;
+    const record = round.spotless ? recordBest(state.count, seconds) : null;
+    result = { tally: t, verdict: v, landed, found: [...found], seconds, record, bestNote: bestShareNote(record) };
     const set = (id, text) => {
         const el = document.getElementById(id);
         if (el) el.textContent = text;
@@ -1307,7 +1373,11 @@ function showEnd() {
     set('end-line', v.line);
     set('end-dive', diveLine(landed));
     set('end-finds', findsLine(result.found));
+    set('end-best', bestEndLine(record, loadBest(state.count)));
+    set('end-kicker', round.spotless ? 'The lawn is clear' : 'Time is up');
+    showBest();
     set('end-percent', `${clearedPercent(t)}%`);
+    showPile(t);
     resultRows(t).forEach((row) => set(`end-${row.key}`, row.value));
     fillEndPromo();
     releaseInput();
@@ -1319,6 +1389,33 @@ function showEnd() {
         try { again.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
     }
     track('round-end', { outcome: v.key });
+}
+
+/** The pile on the results card, sized by the share cleared, with what was
+ *  found on top. The card's percent counts up from 0 as it rains down. */
+function showPile(t) {
+    endCount.target = clearedPercent(t);
+    endCount.shown = -1;
+    if (!trophyTried) {
+        trophyTried = true;
+        const canvas = document.getElementById('end-pile');
+        trophy = canvas ? createTrophy(canvas, CONFIG, { exposure: CONFIG.lights.exposure }) : null;
+        if (!trophy && canvas) canvas.hidden = true;
+    }
+    if (!trophy) return;
+    const models = buildFindModels(findList.filter((f) => found.includes(f.name)));
+    trophy.show(endCount.target / 100, leafSize, Object.values(models), state.reducedMotion);
+}
+
+/** One frame of the pile, while the card is up, and the count up with it. */
+function stepPile(delta) {
+    if (!trophy || !endShown()) return;
+    const k = trophy.step(delta);
+    const shown = Math.round(endCount.target * (1 - (1 - k) * (1 - k)));
+    if (shown !== endCount.shown) {
+        endCount.shown = shown;
+        setText('end-percent', `${shown}%`);
+    }
 }
 
 /** The next experience to try and the directory, under the end card. Built
@@ -1336,6 +1433,7 @@ function fillEndPromo() {
 
 function hideEnd() {
     if (endModal) endModal.classList.add('hidden');
+    if (trophy) trophy.hide();
     if (castModal) castModal.classList.add('hidden');
     castChoice = loadChoice();
     setText('cast-name', castLine(castChoice));
@@ -1777,6 +1875,7 @@ function animate() {
         }
     }
     renderer.render(scene, camera);
+    stepPile(delta);
     if (lab.el) updateLab(delta);
 }
 
@@ -1815,7 +1914,13 @@ export function getState() {
         blowing: isBlowing(!welcomeShown() && !endShown() && canBlow(round), pointer, keys, blowHold),
         round: { ...round },
         counted: { ...counted },
-        result: result ? { tally: { ...result.tally }, verdict: { ...result.verdict }, landed: result.landed, found: [...result.found], seconds: result.seconds } : null,
+        result: result ? {
+            tally: { ...result.tally }, verdict: { ...result.verdict }, landed: result.landed, found: [...result.found],
+            seconds: result.seconds, record: result.record, bestNote: result.bestNote
+        } : null,
+        best: loadBest(state.count),
+        pile: trophy && trophy.pile() ? { count: trophy.pile().size.count, radius: trophy.pile().size.radius } : null,
+        endPercent: endCount.shown,
         neighbor: { ...neighbor },
         endShown: endShown(),
         castShown: castShown(),

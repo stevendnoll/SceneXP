@@ -246,9 +246,26 @@ function buildHouses(B, look) {
     return group;
 }
 
-/** Board fences: along the back lot line, and between the next street's
- *  lots back to their houses. Panels `F.panel` meters long, a post at each. */
-function buildFences(B, F) {
+/**
+ * Where the back lot line's fence runs, as [[x0, x1], ...]: from B.minX to
+ * B.maxX, except across the next street's lot that `openAt` (an x) falls
+ * in. The swing set and the trampoline stand in front of that lot's house,
+ * and a fence between them and it read as an extra fence (Steve's QA,
+ * 2026-10-08), so that yard runs open up to them, between its side fences.
+ */
+export function lotLineRuns(B, openAt = null) {
+    if (openAt === null) return [[B.minX, B.maxX]];
+    const first = B.from - B.lot / 2;
+    const k = Math.floor((openAt - first) / B.lot);
+    const x0 = first + k * B.lot;
+    const x1 = x0 + B.lot;
+    return [[B.minX, x0], [x1, B.maxX]].filter(([a, b]) => b > a);
+}
+
+/** Board fences: along the back lot line (open behind `openAt`), and
+ *  between the next street's lots back to their houses. Panels `F.panel`
+ *  meters long, a post at each. */
+function buildFences(B, F, openAt = null) {
     const random = makeRandom(B.seed + 5);
     const panels = [];
     const posts = [];
@@ -267,7 +284,7 @@ function buildFences(B, F) {
             posts.push({ x: x0 + (x1 - x0) * u, y: (F.height + 0.1) / 2, z: z0 + (z1 - z0) * u, w: 0.1, h: F.height + 0.1, d: 0.1, color: new THREE.Color(F.color).multiplyScalar(0.8).getHex() });
         }
     };
-    run(B.minX, F.z, B.maxX, F.z);
+    for (const [x0, x1] of lotLineRuns(B, openAt)) run(x0, F.z, x1, F.z);
     for (let x = B.from - B.lot / 2; x <= B.to + B.lot / 2 + 1e-6; x += B.lot) run(x, F.z, x, B.backZ - 1);
     const group = new THREE.Group();
     group.name = 'back-fences';
@@ -405,7 +422,9 @@ export function buildBackdrop(config) {
     const group = new THREE.Group();
     group.name = 'backdrop';
     group.add(buildHouses(B.houses, look));
-    group.add(buildFences(B.houses, B.fence));
+    // Open behind the swing set and the trampoline, which belong to the
+    // house there.
+    group.add(buildFences(B.houses, B.fence, (B.swingSet.x + B.trampoline.x) / 2));
     group.add(buildPoles(B.poles));
     group.add(buildTreeline(B.treeline));
     const play = new THREE.Group();

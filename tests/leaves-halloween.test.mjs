@@ -668,6 +668,51 @@ describe('the drawing, on the real three.js', () => {
         }
     });
 
+    // Steve's QA, 2026-10-08: "in front of the windows on the right (in front
+    // of or near the window without the clown) we add a couple of tombstones
+    // and grave plots".
+    test('three graves before the window right of the porch, not the clown\'s, with room to walk behind them', async () => {
+        const Ho = await import('../www/leaves/js/house.js');
+        const { group } = Dc.buildDecorations(C);
+        group.updateMatrixWorld(true);
+        const stones = group.children.filter((c) => c.name === 'tombstone');
+        const mounds = group.children.filter((c) => c.name === 'grave');
+        expect(stones).toHaveLength(3);
+        expect(mounds).toHaveLength(3);
+        const W = Ho.OUR_WINDOWS;
+        const porch = C.yard.boxes.find((b) => b.name === 'porch');
+        // The window right of the porch that the clown is not in.
+        const right = W.xs.map((x, i) => ({ x, i })).filter((w) => w.x > porch.maxX && w.i !== HW.decor.clown.window);
+        expect(right.length).toBeGreaterThan(0);
+        const window = right[0];
+        const all = new THREE.Box3();
+        stones.forEach((st) => all.union(new THREE.Box3().setFromObject(st, true)));
+        expect(Math.abs((all.min.x + all.max.x) / 2 - window.x)).toBeLessThan(0.3);
+        // Clear of the clown's window.
+        expect(all.max.x).toBeLessThan(W.xs[HW.decor.clown.window] - W.w / 2);
+        // Each mound in front of its stone, toward the street, low.
+        mounds.forEach((m, k) => {
+            const b = new THREE.Box3().setFromObject(m, true);
+            const st = new THREE.Box3().setFromObject(stones[k], true);
+            expect(b.min.z).toBeGreaterThan(st.max.z - 0.01);
+            expect(b.max.y).toBeLessThan(0.15);
+            // A grave's length, not a round (Steve: "Right now they're just
+            // circles"), filling the box the leaves meet.
+            expect((b.max.z - b.min.z) / (b.max.x - b.min.x)).toBeGreaterThan(2.5);
+            const plot = Dc.yardDecorBoxes(C).filter((x) => x.name === 'grave')[k];
+            expect(b.min.x).toBeCloseTo(plot.minX, 2);
+            expect(b.max.z).toBeCloseTo(plot.maxZ, 2);
+        });
+        // A strip behind them the person fits along (a body is 0.3 either
+        // side of its middle), short of the house where they cannot walk.
+        const boxes = Dc.yardDecorBoxes(C).filter((b) => b.name === 'tombstone');
+        const walkMinZ = C.yard.lawn.minZ + 0.6;
+        for (const b of boxes) expect(b.minZ - walkMinZ).toBeGreaterThanOrEqual(0.6);
+        // Gaps between the stones for the air to blow through.
+        const sorted = [...boxes].sort((a, b) => a.minX - b.minX);
+        for (let k = 1; k < sorted.length; k++) expect(sorted[k].minX - sorted[k - 1].maxX).toBeGreaterThan(0.2);
+    });
+
     // Steve's M6 QA: "Maybe a skeleton or two (or three)?"
     test('three skeletons: one breaking out of the lawn, one raking, and one peeking over our hedge from past the sim', () => {
         const { group } = Dc.buildDecorations(C);

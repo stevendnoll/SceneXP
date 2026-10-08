@@ -3886,7 +3886,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Leaves | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=6" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=7" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -3900,6 +3900,8 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/backyard.min.js" rel="modulepreload"]
     link [href="js/gap.min.js" rel="modulepreload"]
     link [href="js/backdrop.min.js" rel="modulepreload"]
+    link [href="js/trophy.min.js" rel="modulepreload"]
+    link [href="js/best.min.js" rel="modulepreload"]
     link [href="js/rooftops.min.js" rel="modulepreload"]
     link [href="js/celebrate.min.js" rel="modulepreload"]
     link [href="js/sound.min.js" rel="modulepreload"]
@@ -3924,7 +3926,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/surfaces.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=6" rel="stylesheet"]
+    link [href="css/experience.min.css?v=7" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -3963,7 +3965,7 @@ html [data-ui-theme="ember" lang="en"]
         p.click-prompt
           "Click to step in"
         p.tour-note
-          "You have three minutes to clear the lawn, and the clock starts with your first blow. Clear the whole lawn and you finish early."
+          "You have five minutes to clear the lawn, and the clock starts with your first blow. Clear the whole lawn and you finish early."
         div.controls-hint
           span
             "WALK"
@@ -3985,6 +3987,10 @@ html [data-ui-theme="ember" lang="en"]
             "Playing as the weekend warrior."
           button#cast-btn.welcome-free.cast-btn [type="button"]
             "Change your character"
+        p#best-line.cast-line.best-line [hidden]
+          span#best-text
+          button#best-forget.welcome-free.cast-btn [type="button"]
+            "Forget my best time"
         button#free-btn.welcome-free [type="button"]
           "Or just play with the leaves, with no clock"
         a#explore-link.welcome-explore [href="/"]
@@ -4049,7 +4055,8 @@ html [data-ui-theme="ember" lang="en"]
       div.modal-backdrop
       div.modal-container.piece-card
         div.piece-card-content
-          p.end-kicker
+          canvas#end-pile.end-pile [aria-hidden="true"]
+          p#end-kicker.end-kicker
             "Time is up"
           h2#end-title.piece-title
             "Respectable work"
@@ -4060,6 +4067,7 @@ html [data-ui-theme="ember" lang="en"]
           p#end-line.piece-subtitle.end-line
           p#end-dive.end-dive
           p#end-finds.end-dive.end-finds
+          p#end-best.end-dive.end-best
           dl.end-stats
             div.end-stat
               dt
@@ -5100,8 +5108,8 @@ html [lang="en"]
               "Corner Office keeps everything you enter, your applications, interviews, contacts and follow-ups, along with your settings and which things in the office you have already opened, in your browser's local storage, so your office is just as you left it when you come back. None of it is ever sent anywhere: its usage pings say only what kind of thing you did, such as adding an application, and never anything you typed. Its Out-tray saves a backup you can keep, and its Settings can clear the office on the spot."
             li
               strong
-                "Your character in Leaves."
-              "The leaf blower game keeps the character you choose, their outfit, skin tone, hair color and hair length, in your browser's local storage, so they are waiting for you when you come back. The Forget my choice button on the character card clears it on the spot."
+                "Your character and best time in Leaves."
+              "The leaf blower game keeps the character you choose, their outfit, skin tone, hair color and hair length, in your browser's local storage, so they are waiting for you when you come back. When you clear the whole lawn before the clock runs out, it also keeps your fastest time, just the number of seconds, so you have a time to beat. The Forget my choice button on the character card and the Forget my best time button on the welcome card clear them on the spot."
             li
               strong
                 "You can remove any of it whenever you like."
@@ -5129,7 +5137,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated October 6, 2026."
+              "Last updated October 8, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand

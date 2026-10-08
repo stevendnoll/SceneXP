@@ -236,9 +236,10 @@ export function findsLine(names) {
 
 /** The sentence a visitor posts. The neighbor makes the better story when
  *  there is one, and the pile on the tarp otherwise. Then the dive, landed
- *  or not (`landed` null for none), and anything found under the leaves. */
-export function shareText(t, seconds, landed = null, found = []) {
-    const head = `I cleared ${clearedPercent(t)}% of my yard in ${durationText(seconds)}.`;
+ *  or not (`landed` null for none), and anything found under the leaves.
+ *  `note` follows the time ("a new personal best", best.js). */
+export function shareText(t, seconds, landed = null, found = [], note = '') {
+    const head = `I cleared ${clearedPercent(t)}% of my yard in ${durationText(seconds)}${note ? `, ${note}` : ''}.`;
     const sent = t.sent ?? t.neighbor;
     let tail = '';
     if (sent > 0) tail = ` ${leaves(sent)} went to the neighbor.`;

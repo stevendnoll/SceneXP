@@ -675,9 +675,9 @@ describe('the lab', () => {
     });
 
     test('the address picks the count and the shadows, within the config\'s range', () => {
-        expect(Lab.labOptions('', C, false)).toEqual({ count: C.leaves.desktop, shadows: true, ratio: null, finds: false });
+        expect(Lab.labOptions('', C, false)).toEqual({ count: C.leaves.desktop, shadows: true, ratio: null, finds: false, clock: C.round.seconds });
         expect(Lab.labOptions('', C, true).count).toBe(C.leaves.mobile);
-        expect(Lab.labOptions('?leaves=36000&shadows=0', C, true)).toEqual({ count: 36000, shadows: false, ratio: null, finds: false });
+        expect(Lab.labOptions('?leaves=36000&shadows=0', C, true)).toEqual({ count: 36000, shadows: false, ratio: null, finds: false, clock: C.round.seconds });
         expect(Lab.labOptions('?finds=1', C, false).finds).toBe(true);
         expect(Lab.labOptions('?leaves=5', C, false).count).toBe(C.leaves.minCount);
         expect(Lab.labOptions('?leaves=9999999', C, false).count).toBe(C.leaves.maxCount);
@@ -685,6 +685,11 @@ describe('the lab', () => {
         expect(Lab.labOptions('?leaves=lots', C, false).count).toBe(C.leaves.desktop);
         expect(Lab.labOptions('?ratio=1', C, false).ratio).toBe(1);
         expect(Lab.labOptions('?ratio=9', C, false).ratio).toBe(null);
+        // A short round, to try the finish without the whole five minutes.
+        expect(Lab.labOptions('?clock=30', C, false).clock).toBe(30);
+        expect(Lab.labOptions('?clock=1', C, false).clock).toBe(5);
+        expect(Lab.labOptions('?clock=99999', C, false).clock).toBe(600);
+        expect(Lab.labOptions('?clock=soon', C, false).clock).toBe(C.round.seconds);
     });
 
     test('a lab button changes one setting and keeps the rest', () => {

@@ -124,6 +124,28 @@ export function slopeTilt(s) {
     return Math.atan2(s.ridgeY - s.eaveY, s.eaveZ - s.ridgeZ);
 }
 
+/**
+ * One leaf's look, picked as the yard's are (sim.js scatterLeaves): its kind
+ * by the config's weights, a color from that kind's palette, `shade` times
+ * as bright (under 1 for weathered), in linear light, a size about `base`,
+ * and its cup. Returns { rgb, kind (its index), size, cup }. Also the
+ * results card's pile's (trophy.js).
+ */
+export function leafLook(config, base, random, shade = 1) {
+    const look = config.look;
+    const kinds = Object.keys(look.palettes);
+    const kind = pickWeighted(look.kinds, random());
+    const palette = look.palettes[kind];
+    const hex = palette[Math.floor(random() * palette.length) % palette.length];
+    const j = (1 + (random() * 2 - 1) * look.colorJitter) * shade;
+    return {
+        rgb: [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255].map((v) => srgbToLinear(clamp((v / 255) * j, 0, 1))),
+        kind: kinds.indexOf(kind),
+        size: base * (1 + (random() * 2 - 1) * config.leaves.sizeJitter),
+        cup: look.curl.min + random() * (look.curl.max - look.curl.min)
+    };
+}
+
 const inRect = (r, x, z) => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ;
 
 /** How likely a leaf is to have come to rest at (x, z) on a surface, 0 to
@@ -146,12 +168,9 @@ function shelter(trees, x, z, seed) {
  */
 export function scatterResting(config, base) {
     const R = config.yard.resting;
-    const look = config.look;
-    const L = config.leaves;
     const random = makeRandom(R.seed);
     const surfaces = restingSurfaces(config);
     const trees = config.yard.trees || [];
-    const kinds = Object.keys(look.palettes);
     const leaves = [];
     surfaces.forEach((s, si) => {
         const n = R.counts[s.name] ?? R.counts[s.kind] ?? 0;
@@ -190,19 +209,9 @@ export function scatterResting(config, base) {
                 p = { x, y: hedgeTopAt(s.wall, config.yard.hedgeShape, x, z) + R.lift, z };
                 turn = slopeTurn((random() - 0.5) * 0.5, random() * TAU, random() < 0.3, (random() - 0.5) * 0.5);
             }
-            const kind = pickWeighted(look.kinds, random());
-            const palette = look.palettes[kind];
-            const hex = palette[Math.floor(random() * palette.length) % palette.length];
             // A little browner and duller than the lawn's: they have been up
             // there a while.
-            const j = (1 + (random() * 2 - 1) * look.colorJitter) * R.weathered;
-            const rgb = [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255].map((v) => srgbToLinear(clamp((v / 255) * j, 0, 1)));
-            leaves.push({
-                p, turn, rgb, si,
-                kind: kinds.indexOf(kind),
-                size: base * (1 + (random() * 2 - 1) * L.sizeJitter),
-                cup: look.curl.min + random() * (look.curl.max - look.curl.min)
-            });
+            leaves.push({ p, turn, si, ...leafLook(config, base, random, R.weathered) });
             placed++;
         }
     });

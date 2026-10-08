@@ -44,8 +44,15 @@ afterEach(() => {
     dom.uninstall();
 });
 
-/** Boot the page and let the loading screen step aside. */
-async function boot() {
+// THE ROUND IS FIVE MINUTES (2026-10-08), far too long to play through in
+// the sandbox, so suites that play one to its end ask for the lab's short
+// clock (?clock=, a QA host's address), as Steve can to try the finish.
+const SHORT = 20;
+
+/** Boot the page and let the loading screen step aside. `clock` asks for a
+ *  round that many seconds long. */
+async function boot({ clock = null } = {}) {
+    if (clock) dom.windowStub.location.search += `&clock=${clock}`;
     const main = await import('../www/leaves/js/main.js');
     await flushAsync(30);
     await jest.advanceTimersByTimeAsync(500);
@@ -84,6 +91,35 @@ test('the welcome card steps aside on a click and brings the help button with it
     fire(dom.el('blocker'), 'click');
     expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
     expect(dom.el('help-btn').classList.contains('visible')).toBe(true);
+});
+
+// STEVE'S QA, 2026-10-08: "The initial Welcome card screen is not
+// responsive - I can't scroll vertically." The card scrolls (experience.css),
+// and a finger that scrolls it must not step in when it lifts.
+test('a finger scrolling the welcome card does not step in, and a tap still does', async () => {
+    const main = await boot();
+    const blocker = dom.el('blocker');
+    fire(blocker, 'touchstart', { touches: [{ clientX: 200, clientY: 600 }] });
+    fire(blocker, 'touchmove', { touches: [{ clientX: 202, clientY: 520 }] });
+    fire(blocker, 'touchend', { touches: [] });
+    expect(blocker.classList.contains('hidden')).toBe(false);
+    // A tap, a few pixels of wobble at most.
+    fire(blocker, 'touchstart', { touches: [{ clientX: 200, clientY: 600 }] });
+    fire(blocker, 'touchmove', { touches: [{ clientX: 203, clientY: 604 }] });
+    const lift = fire(blocker, 'touchend', { touches: [], cancelable: true });
+    expect(lift.defaultPrevented).toBe(true);
+    expect(blocker.classList.contains('hidden')).toBe(true);
+    expect(main.isTap({ x: 0, y: 0 }, { x: 6, y: 8 })).toBe(true);
+    expect(main.isTap({ x: 0, y: 0 }, { x: 0, y: 11 })).toBe(false);
+});
+
+test('the welcome card scrolls when it is taller than the screen, and centers when it fits', async () => {
+    const css = await readFile(new URL('../www/leaves/css/experience.css', import.meta.url), 'utf8');
+    const rule = (sel) => (css.match(new RegExp(`${sel.replace(/[#]/g, '\\$&')}\\s*\\{([^}]*)\\}`)) || [])[1] || '';
+    expect(rule('#blocker')).toMatch(/overflow-y:\s*auto/);
+    expect(rule('#blocker')).toMatch(/align-items:\s*flex-start/);
+    expect(rule('#blocker')).toMatch(/touch-action:\s*pan-y/);
+    expect(rule('#blocker #instructions')).toMatch(/margin:\s*auto 0/);
 });
 
 test('Escape and the help button bring the welcome card back, and Escape steps back in', async () => {
@@ -381,8 +417,9 @@ test('a browser without WebGL 2 is told so and taken to the standard site', asyn
 });
 
 describe('the round', () => {
-    /** Step in, start the clock with Space, and play the minute through at a
-     *  low frame rate (the sandbox is slow) until the end card is up. */
+    /** Step in, start the clock with Space, and play the round through at a
+     *  low frame rate (the sandbox is slow) until the end card is up. Boot
+     *  with the short clock first. */
     async function playARound(main) {
         fire(dom.el('blocker'), 'click');
         fire(dom.documentStub, 'keydown', { code: 'Space' });
@@ -390,7 +427,7 @@ describe('the round', () => {
         fire(dom.documentStub, 'keyup', { code: 'Space' });
         expect(main.getState().round.phase).toBe('playing');
         // The clock, and the dive into the pile.
-        frames(main, C0.round.seconds + C0.round.finaleMax, 20);
+        frames(main, SHORT + C0.round.finaleMax, 20);
         expect(main.getState().endShown).toBe(true);
     }
 
@@ -400,18 +437,18 @@ describe('the round', () => {
         expect(dom.el('round-hud').classList.contains('visible')).toBe(true);
         frames(main, 2, 20);
         expect(main.getState().round.phase).toBe('ready');
-        expect(dom.el('hud-clock').textContent).toBe('3:00');
+        expect(dom.el('hud-clock').textContent).toBe('5:00');
         expect(dom.el('hud-hint').hidden).toBe(false);
         expect(dom.el('hud-hint').textContent).toBe('Blow to start the clock');
 
         fire(dom.documentStub, 'keydown', { code: 'Space' });
         // The frame that starts the clock does not count toward it, so 2.5
-        // seconds of frames leaves 177.55 seconds, which the clock rounds up.
+        // seconds of frames leaves 297.55 seconds, which the clock rounds up.
         frames(main, 2.5, 20);
         expect(main.getState().round.phase).toBe('playing');
-        expect(dom.el('hud-clock').textContent).toBe('2:58');
+        expect(dom.el('hud-clock').textContent).toBe('4:58');
         expect(dom.el('hud-hint').hidden).toBe(true);
-        expect(dom.el('round-status').textContent).toBe('The clock is running. You have 3 minutes.');
+        expect(dom.el('round-status').textContent).toBe('The clock is running. You have 5 minutes.');
     });
 
     test('the clock holds still behind the welcome card', async () => {
@@ -427,7 +464,7 @@ describe('the round', () => {
     });
 
     test('at the end of the minute the blower stops and the end card says how it went', async () => {
-        const main = await boot();
+        const main = await boot({ clock: SHORT });
         await playARound(main);
         const s = main.getState();
         expect(s.round.phase).toBe('done');
@@ -450,7 +487,7 @@ describe('the round', () => {
     });
 
     test('Play again lays the yard back down and waits for the first blow', async () => {
-        const main = await boot();
+        const main = await boot({ clock: SHORT });
         await playARound(main);
         fire(dom.el('end-again'), 'click');
         const s = main.getState();
@@ -458,11 +495,12 @@ describe('the round', () => {
         expect(s.round.phase).toBe('ready');
         expect(s.counted.lawn).toBe(s.counted.total);
         expect(dom.el('round-hud').classList.contains('visible')).toBe(true);
-        expect(dom.el('hud-clock').textContent).toBe('3:00');
+        // The clock back at the round's whole length (the short one here).
+        expect(dom.el('hud-clock').textContent).toBe('0:20');
     });
 
     test('Keep blowing (or Escape) leaves the yard as it is, with no clock and a way back to a round', async () => {
-        const main = await boot();
+        const main = await boot({ clock: SHORT });
         await playARound(main);
         fire(dom.documentStub, 'keydown', { code: 'Escape' });
         expect(main.getState().endShown).toBe(false);
@@ -564,6 +602,120 @@ describe('the round', () => {
         expect(main.getState().blowing).toBe(true);
     });
 
+    // STEVE'S QA, 2026-10-08: "Are we recording the user's fastest time in
+    // localStorage? I think we should", with a Forget button, and "a new
+    // personal best" in the share.
+    test('a clear keeps the best time, the cards say so, a faster one is shared as a new personal best, and Forget clears it', async () => {
+        const main = await boot();
+        const Sim = await import('../www/leaves/js/sim.min.js');
+        expect(dom.el('best-line').hidden).toBe(true);
+        /** Blow once, wait `wait` seconds, clear the lawn, and see the dive through. */
+        const clearIn = (wait) => {
+            fire(dom.documentStub, 'keydown', { code: 'Space' });
+            frames(main, 0.2, 20);
+            fire(dom.documentStub, 'keyup', { code: 'Space' });
+            frames(main, wait, 20);
+            const sim = main.__test__.sim();
+            for (let i = 0; i < sim.count; i++) {
+                if (sim.hanging[i] || sim.falling[i]) continue;
+                Sim.hangLeaf(sim, i, 0, 5, 0);
+                Sim.layDown(sim, i, -8 + (i % 60) * 0.3, 9.6 + Math.floor(i / 60) * 0.3);
+            }
+            for (let k = 0; k < 6 && main.getState().round.phase === 'playing'; k++) frames(main, 0.5, 20);
+            frames(main, C0.round.finaleMax, 20);
+            expect(main.getState().endShown).toBe(true);
+        };
+        fire(dom.el('blocker'), 'click');
+        clearIn(6);
+        let s = main.getState();
+        const first = s.result.seconds;
+        expect(dom.el('end-kicker').textContent).toBe('The lawn is clear');
+        expect(dom.el('end-best').textContent).toMatch(/^Your first clear, in 0:0\d\. Now you have a time to beat\.$/);
+        expect(JSON.parse(globalThis.localStorage.getItem('leaves-best'))).toEqual({ 600: first });
+        expect(s.best).toBe(first);
+        // No brag for a first clear.
+        fire(dom.el('end-share'), 'click');
+        await flushAsync();
+        expect(decodeURIComponent(dom.windowStub.location.href)).not.toMatch(/personal best/);
+
+        // Faster the second time.
+        fire(dom.el('end-again'), 'click');
+        clearIn(1);
+        s = main.getState();
+        expect(s.result.seconds).toBeLessThan(first);
+        expect(dom.el('end-best').textContent).toMatch(/^A new best time, 0:0\d, down from 0:0\d\.$/);
+        fire(dom.el('end-share'), 'click');
+        await flushAsync();
+        expect(decodeURIComponent(dom.windowStub.location.href)).toMatch(/I cleared 100% of my yard in \d seconds?, a new personal best\./);
+
+        // The welcome card shows it, and forgets it.
+        fire(dom.el('end-again'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Escape' });
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+        expect(dom.el('best-line').hidden).toBe(false);
+        expect(dom.el('best-text').textContent).toMatch(/^Your best time to clear the lawn is 0:0\d\. Can you beat it\?$/);
+        fire(dom.el('best-forget'), 'click');
+        expect(dom.el('best-line').hidden).toBe(true);
+        expect(globalThis.localStorage.getItem('leaves-best')).toBe(null);
+        expect(dom.el('round-status').textContent).toBe('Your best time is forgotten.');
+        // Forgetting does not start the round behind the card.
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+    });
+
+    // STEVE'S QA, 2026-10-08: "a rotating 3D view of a pile of leaves, and
+    // the pile's size is dynamic based on how the user did". The pile itself
+    // is measured in tests/leaves-trophy.
+    test('the results card raises a pile as big as the result, and its percent counts up to the score', async () => {
+        const main = await boot();
+        const Sim = await import('../www/leaves/js/sim.min.js');
+        fire(dom.el('blocker'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 0.2, 20);
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        const sim = main.__test__.sim();
+        for (let i = 0; i < sim.count; i++) {
+            if (sim.hanging[i] || sim.falling[i]) continue;
+            Sim.hangLeaf(sim, i, 0, 5, 0);
+            Sim.layDown(sim, i, -8 + (i % 60) * 0.3, 9.6 + Math.floor(i / 60) * 0.3);
+        }
+        for (let k = 0; k < 400 && !main.getState().endShown; k++) frames(main, 0.05, 20);
+        expect(main.getState().endShown).toBe(true);
+        frames(main, 0.1, 20);
+        let s = main.getState();
+        expect(s.pile.count).toBe(C0.trophy.max);
+        // Counting up, not there yet.
+        expect(s.endPercent).toBeGreaterThanOrEqual(0);
+        expect(s.endPercent).toBeLessThan(100);
+        expect(dom.el('end-percent').textContent).toBe(`${s.endPercent}%`);
+        frames(main, C0.trophy.rain + C0.trophy.fall + 0.2, 20);
+        s = main.getState();
+        expect(s.endPercent).toBe(100);
+        expect(dom.el('end-percent').textContent).toBe('100%');
+        // Play again puts it away.
+        fire(dom.el('end-again'), 'click');
+        expect(main.getState().pile).toBe(null);
+    });
+
+    test('a round the clock runs out on keeps no time, and its card says so plainly', async () => {
+        const main = await boot({ clock: SHORT });
+        fire(dom.el('blocker'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 0.2, 20);
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        frames(main, SHORT + C0.round.finaleMax, 20);
+        expect(main.getState().endShown).toBe(true);
+        expect(dom.el('end-kicker').textContent).toBe('Time is up');
+        expect(dom.el('end-best').textContent).toBe('');
+        expect(globalThis.localStorage.getItem('leaves-best')).toBe(null);
+    });
+
+    test('the lab\'s short clock is the round\'s length on a QA host', async () => {
+        const main = await boot({ clock: 30 });
+        fire(dom.el('blocker'), 'click');
+        expect(main.getState().round.seconds).toBe(30);
+        expect(dom.el('hud-clock').textContent).toBe('0:30');
+    });
+
     test('the welcome card offers the yard with no clock', async () => {
         const main = await boot();
         fire(dom.el('free-btn'), 'click');
@@ -575,14 +727,14 @@ describe('the round', () => {
     });
 
     test('Share sends the result sentence', async () => {
-        const main = await boot();
+        const main = await boot({ clock: SHORT });
         await playARound(main);
         fire(dom.el('end-share'), 'click');
         await flushAsync();
         // No share sheet and no clipboard here, so the ladder ends at a mail.
         const sent = decodeURIComponent(dom.windowStub.location.href);
         expect(sent).toMatch(/^mailto:/);
-        expect(sent).toMatch(/I cleared \d{1,3}% of my yard in 3 minutes\./);
+        expect(sent).toMatch(/I cleared \d{1,3}% of my yard in 20 seconds\./);
         expect(main.getState().result).not.toBe(null);
     });
 
@@ -666,12 +818,12 @@ describe('the finale (M3)', () => {
         fire(dom.documentStub, 'keydown', { code: 'Space' });
         frames(main, 0.2, 20);
         fire(dom.documentStub, 'keyup', { code: 'Space' });
-        for (let s = 0; s < C0.round.seconds + 10 && main.getState().round.phase !== 'finale'; s++) frames(main, 1, 20);
+        for (let s = 0; s < SHORT + 10 && main.getState().round.phase !== 'finale'; s++) frames(main, 1, 20);
         expect(main.getState().round.phase).toBe('finale');
     }
 
     test('with nothing on the tarp, the dive finds the lawn, and the card and the share say so', async () => {
-        const main = await boot();
+        const main = await boot({ clock: SHORT });
         await toTheFinale(main);
         expect(main.getState().finale.success).toBe(false);
         expect(dom.el('hud-hint').textContent).toBe('Here goes nothing');
@@ -688,7 +840,7 @@ describe('the finale (M3)', () => {
     });
 
     test('a key skips straight to the end of it, burst and all', async () => {
-        const main = await boot();
+        const main = await boot({ clock: SHORT });
         await toTheFinale(main);
         expect(main.getState().finale.burst).toBe(false);
         const down = fire(dom.documentStub, 'keydown', { code: 'Space' });
@@ -703,7 +855,7 @@ describe('the finale (M3)', () => {
     });
 
     test('a tall pile on the tarp is landed in, and Keep blowing stands them back up', async () => {
-        const main = await boot();
+        const main = await boot({ clock: SHORT });
         // Heap the yard's leaves in the tarp's corner before the clock runs out.
         fire(dom.el('blocker'), 'click');
         fire(dom.documentStub, 'keydown', { code: 'Space' });
@@ -723,7 +875,7 @@ describe('the finale (M3)', () => {
             Sim.layDown(sim, i, -9.55, -5.55);
             laid++;
         }
-        for (let s = 0; s < C0.round.seconds + 10 && main.getState().round.phase !== 'finale'; s++) frames(main, 1, 20);
+        for (let s = 0; s < SHORT + 10 && main.getState().round.phase !== 'finale'; s++) frames(main, 1, 20);
         expect(main.getState().finale.success).toBe(true);
         frames(main, C0.round.finaleMax, 20);
         expect(main.getState().result.landed).toBe(true);
@@ -980,7 +1132,7 @@ describe('delights and surprises (M6)', () => {
         }
 
         test('is hidden under the leaves, found by clearing it, named on the end card and in the share', async () => {
-            const main = await boot();
+            const main = await boot({ clock: SHORT });
             const hidden = main.getState().finds;
             expect(hidden.map((f) => f.id)).toEqual(['keys', 'gnome', 'ball', 'bill']);
             expect(hidden.every((f) => !f.found)).toBe(true);
@@ -1003,7 +1155,7 @@ describe('delights and surprises (M6)', () => {
             frames(main, C0.finds.toastSeconds + 0.5, 20);
             expect(dom.el('find-toast').classList.contains('visible')).toBe(false);
             // Through the round to the end card.
-            for (let k = 0; k < C0.round.seconds + 30 && !main.getState().endShown; k++) frames(main, 1, 20);
+            for (let k = 0; k < SHORT + 30 && !main.getState().endShown; k++) frames(main, 1, 20);
             expect(dom.el('end-finds').textContent).toBe('Under the leaves you found a $20 bill.');
             expect(main.getState().result.found).toEqual(['a $20 bill']);
             fire(dom.el('end-share'), 'click');

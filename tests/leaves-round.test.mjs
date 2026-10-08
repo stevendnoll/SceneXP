@@ -4,7 +4,7 @@
  * (www/leaves/js/score.js), measured.
  *
  * The round is a pure state machine, so its rules are checked by driving
- * it: the clock waits for the first blow, runs out at exactly three minutes
+ * it: the clock waits for the first blow, runs out at exactly five minutes
  * (or the moment every leaf is off the lawn),
  * and the result waits for the leaves to land. The score is checked on real
  * yards: a fresh one is all lawn, every leaf is counted once, and the words
@@ -31,7 +31,7 @@ describe('the round', () => {
         expect(round.phase).toBe('playing');
     });
 
-    test('runs for exactly its three minutes, blowing or not, then goes straight to the dive', () => {
+    test('runs for exactly its five minutes, blowing or not, then goes straight to the dive', () => {
         const round = R.createRound(RC);
         R.stepRound(round, 1 / 60, { blowing: true }, RC);
         let event = null;
@@ -43,7 +43,7 @@ describe('the round', () => {
         // STEVE'S M4 QA: "once the time runs out, we can just start the dive
         // celebration". No wait for the leaves, and no last word.
         expect(event).toBe('finale');
-        // Three minutes of frames, give or take the one a float sum lands on.
+        // Five minutes of frames, give or take the one a float sum lands on.
         expect(Math.abs(frames - RC.seconds * 60)).toBeLessThanOrEqual(1);
         expect(R.timeLeft(round)).toBe(0);
         expect(round.phase).toBe('finale');
@@ -76,8 +76,10 @@ describe('the round', () => {
 // STEVE'S QA, 2026-10-08: "a timed round should end early if the user reaches
 // 100%", and the round is three minutes so that they can.
 describe('every leaf off the lawn (2026-10-08)', () => {
-    test('the round is three minutes', () => {
-        expect(RC.seconds).toBe(180);
+    // Five minutes since Steve's next QA (2026-10-08): "The goal is for the
+    // user to finish, not for it to be super challenging."
+    test('the round is five minutes', () => {
+        expect(RC.seconds).toBe(300);
     });
 
     test('ends the round early, into the dive, with the time it took', () => {

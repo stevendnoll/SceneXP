@@ -6,6 +6,24 @@
    top of ../shared/css/styles-1.0.0.css.
    ============================================================ */
 
+/* THE WELCOME CARD SCROLLS when it is taller than the screen (Steve's QA,
+   2026-10-08: "I can't scroll vertically"). The shared overlay centers the
+   card and clips it, top and bottom, on a short screen. Here it scrolls,
+   and the card's auto margins center it while it fits and start it at the
+   top when it does not. A finger that moves is a scroll, not a tap
+   (main.js), so scrolling never steps in by accident. */
+#blocker {
+    align-items: flex-start;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+}
+
+#blocker #instructions {
+    margin: auto 0;
+}
+
 /* The canvas takes every gesture itself: a drag on the lawn steers the
    blower, so the browser must not scroll or zoom the page under it. */
 #game-canvas {
@@ -300,6 +318,21 @@
     margin-bottom: 0.6rem;
 }
 
+/* The pile of leaves at the top of the results card (2026-10-08), its own
+   little 3D view on the card's paper. */
+.end-pile {
+    display: block;
+    width: 100%;
+    height: 160px;
+    margin: -0.25rem 0 0.5rem;
+}
+
+@media (max-width: 480px), (max-height: 600px) {
+    .end-pile {
+        height: 120px;
+    }
+}
+
 /* How the dive went: a quieter second line under the verdict's. */
 .end-dive {
     margin: 0 0 1.1rem;
@@ -390,6 +423,16 @@
 #instructions .cast-btn {
     margin: 0 0 0 0.25rem;
     padding: 0.25rem 0.5rem;
+}
+
+/* The best time to clear the lawn, under the character line (2026-10-08),
+   only once there is one. */
+#instructions .best-line {
+    margin-top: 0.5rem;
+}
+
+#instructions .best-line[hidden] {
+    display: none;
 }
 
 /* ---- The character card (M4) ----
