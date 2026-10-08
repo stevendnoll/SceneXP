@@ -50,10 +50,10 @@
 import { LEAVES_CONFIG } from './config.min.js';
 import {
     createSim, resetSim, scatterLeaves, stepSim, makeJet, airAt, pilePeak, burst, solidBoxes, makeRandom, restingNear,
-    wrapAngle
+    wrapAngle, cellIndex
 } from './sim.min.js';
 import { buildTrees, updateTrees, createCrowns, stepCrowns } from './trees.min.js';
-import { planFinale, finaleAt } from './finale.min.js';
+import { planFinale, finaleAt, diveTarget } from './finale.min.js';
 import { createRound, resetRound, freePlay, canBlow, timeLeft, stepRound } from './round.min.js';
 import { findsFor, placeFinds, stepFinds, buildFindModels } from './finds.min.js';
 import { seasonFor, carvePumpkins, createTreaters, stepTreaters, createTreaterFigures, footfalls } from './halloween.min.js';
@@ -1226,6 +1226,13 @@ function installRoundControls() {
         });
 }
 
+/** How deep the leaves lie at (x, z): the pile's surface over the ground
+ *  (or the porch) under it. */
+function pileDepth(x, z) {
+    const c = cellIndex(sim, x, z);
+    return Math.max(0, sim.height[c] - sim.floor[c]);
+}
+
 /** Count where the leaves are now. */
 function recount() {
     counted = tally(sim, CONFIG.yard, sent);
@@ -1266,7 +1273,10 @@ function startFinale() {
     // read 99% on a round that had just ended for being clear (found
     // 2026-10-08, a test that failed now and then).
     finale.tally = round.spotless ? { ...counted } : { ...recount() };
-    const peak = pilePeak(sim, CONFIG.yard.tarp);
+    // Into the middle of the tarp, toward the pile, clear of the house, the
+    // hedge and the rake (finale.js diveTarget).
+    const top = pilePeak(sim, CONFIG.yard.tarp);
+    const peak = diveTarget(top, CONFIG.yard.tarp, CONFIG.finale.target, (x, z) => pileDepth(x, z));
     // The rake on the tarp is not solid to the leaves, but the dive keeps
     // off it.
     const rake = rakeFootprint(CONFIG.yard);

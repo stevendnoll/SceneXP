@@ -46,11 +46,6 @@ export const PIVOT = 0.95;
  *  lies on. */
 const BODY = 0.12;
 
-/**
- * Plan the dive. `person` is { x, z } where they stand when the round ends,
- * `peak` is { x, z, height }, the top of the pile on the tarp (pilePeak in
- * sim.js), `F` is config.finale and `area` the rectangle they can walk in.
- */
 /** Whether the segment from a to b passes within `m` of the box (a slab
  *  test on the box grown by m). */
 export function segmentHitsBox(a, b, box, m) {
@@ -167,9 +162,28 @@ function runClear(run, F, boxes) {
 }
 
 /**
+ * Where on the tarp the dive goes (Steve's QA, 2026-10-08: the character
+ * "dove through the rake and the house on different occasions. Can we try to
+ * keep the dive centered in the middle of the tarp?"). The pile is usually
+ * heaped against the house and the hedge, where leaves stop, so aiming at
+ * its peak put a body beside them. Now the dive aims at the tarp's middle,
+ * drawn `T.toPile` of the way toward the peak, and kept inside the tarp by
+ * `T.inset` on each side (a body's reach from the house, the hedge and the
+ * rake). `height` is the pile's own, for whether the dive lands in it, and
+ * `local` the leaves' depth where it goes, for how deep the body sinks.
+ */
+export function diveTarget(peak, tarp, T, localAt = () => peak.height) {
+    const mid = { x: (tarp.minX + tarp.maxX) / 2, z: (tarp.minZ + tarp.maxZ) / 2 };
+    const x = clamp(mid.x + (peak.x - mid.x) * T.toPile, tarp.minX + T.inset.left, tarp.maxX - T.inset.right);
+    const z = clamp(mid.z + (peak.z - mid.z) * T.toPile, tarp.minZ + T.inset.back, tarp.maxZ - T.inset.front);
+    return { x, z, height: peak.height, local: localAt(x, z) };
+}
+
+/**
  * Plan the dive. `person` is { x, z } where they stand when the round ends,
  * `peak` is { x, z, height }, the top of the pile on the tarp (pilePeak in
- * sim.js), `F` is config.finale, `area` the rectangle they can walk in, and
+ * sim.js) or where on the tarp to go (diveTarget, with `local`), `F` is
+ * config.finale, `area` the rectangle they can walk in, and
  * `boxes` the solid things on it (M6) to keep the run and the walk clear of.
  */
 export function planFinale(person, peak, F, area, { reduced = false, boxes = [] } = {}) {
@@ -195,7 +209,10 @@ export function planFinale(person, peak, F, area, { reduced = false, boxes = [] 
     const path = routeAround({ x: person.x, z: person.z }, runFrom, boxes, CLEARANCE, area);
     const walkTime = clamp(pathLength(path) / F.walkSpeed, F.minWalk, F.maxWalk);
     // What they land on: into a pile, sunk part way, or flat on the lawn.
-    const surface = success ? Math.max(0, peak.height - F.sink) : Math.max(0, peak.height);
+    // How deep the leaves are where they land (diveTarget's `local`), or the
+    // peak's height when that is all there is.
+    const depth = peak.local ?? peak.height;
+    const surface = success ? Math.max(0, depth - F.sink) : Math.max(0, depth);
     const t = {};
     t.pause = F.pause;
     t.walk = t.pause + walkTime;

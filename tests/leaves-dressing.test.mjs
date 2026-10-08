@@ -334,30 +334,72 @@ describe('the corner by the hedge', () => {
         expect(foot.maxZ).toBeGreaterThanOrEqual(box.max.z - 0.02);
     });
 
-    test('a dive into a pile beside the rake lands clear of it', async () => {
+    // Steve's QA, 2026-10-08: the character "dove through the rake and the
+    // house on different occasions. Can we try to keep the dive centered in
+    // the middle of the tarp?" Wherever the pile is, the house, the hedge and
+    // the rake are clear of the landed body and of the run-up.
+    test('wherever the pile is on the tarp, the dive lands in its middle, clear of the house, the hedge and the rake', async () => {
         const Fi = await import('../www/leaves/js/finale.js');
         const Ho = await import('../www/leaves/js/house.js');
         const D = await import('../www/leaves/js/decorations.js');
         const L = Y.lawn;
+        const T = Y.tarp;
         const area = { minX: L.minX + 0.5, maxX: L.maxX - 0.4, minZ: L.minZ + 0.6, maxZ: Y.sidewalk.maxZ };
         const rake = Ho.rakeFootprint(Y);
         const boxes = [...S.solidBoxes(D.decoratedConfig(C).yard), rake];
         const F = C.finale;
-        // Piles in the corner by the hedge and out along the tarp, not on
-        // the rake itself (a pile heaped on it buries it).
-        for (const peak of [{ x: -9.5, z: -5.6 }, { x: -9.4, z: -4.5 }, { x: -6.2, z: -5.5 }, { x: -7, z: -3 }]) {
-            for (const person of [{ x: 0, z: 2 }, { x: -6, z: 5 }, { x: 5, z: -3 }, { x: -9, z: 0 }]) {
-                const plan = Fi.planFinale(person, { ...peak, height: 0.6 }, F, area, { boxes });
-                const dx = plan.land.x - plan.takeoff.x;
-                const dz = plan.land.z - plan.takeoff.z;
-                const d = Math.hypot(dx, dz) || 1;
-                for (let t = -F.reachBack; t <= F.reachFront; t += 0.05) {
-                    const x = plan.land.x + (dx / d) * t;
-                    const z = plan.land.z + (dz / d) * t;
-                    const on = x > rake.minX && x < rake.maxX && z > rake.minZ && z < rake.maxZ;
-                    expect({ peak, person, on }).toEqual({ peak, person, on: false });
+        const face = Ho.facadeZ(Y.lawn.minZ, Y.house);
+        const hedge = wall.at - H.inset;
+        // A body is about half a meter across.
+        const half = 0.25;
+        const clear = [];
+        let dives = 0;
+        for (let px = T.minX + 0.05; px <= T.maxX - 0.05; px += 0.45) {
+            for (let pz = T.minZ + 0.05; pz <= T.maxZ - 0.05; pz += 0.45) {
+                for (const person of [{ x: 0, z: 2 }, { x: -6, z: 5 }, { x: 5, z: -3 }, { x: -9, z: 0 }, { x: -9.4, z: -5.3 }, { x: -4.5, z: -5.3 }]) {
+                    const target = Fi.diveTarget({ x: px, z: pz, height: 0.6 }, T, F.target);
+                    const plan = Fi.planFinale(person, target, F, area, { boxes });
+                    dives++;
+                    const dx = plan.land.x - plan.takeoff.x;
+                    const dz = plan.land.z - plan.takeoff.z;
+                    const d = Math.hypot(dx, dz) || 1;
+                    for (let t = -F.reachBack; t <= F.reachFront; t += 0.05) {
+                        const x = plan.land.x + (dx / d) * t;
+                        const z = plan.land.z + (dz / d) * t;
+                        const bad = z - half < face + 0.1 || x - half < hedge + 0.1
+                            || (x + half > rake.minX && x - half < rake.maxX && z + half > rake.minZ && z - half < rake.maxZ);
+                        if (bad) clear.push({ peak: [px, pz], person, at: [x.toFixed(2), z.toFixed(2)] });
+                    }
+                    // The run-up, too, stays on the lawn in front of the house.
+                    for (const p of [plan.runFrom, plan.takeoff]) {
+                        if (p.z < face + 0.3 || p.x < hedge + 0.2) clear.push({ peak: [px, pz], person, run: p });
+                    }
+                    // And it lands within the tarp.
+                    if (plan.land.x < T.minX || plan.land.x > T.maxX || plan.land.z < T.minZ || plan.land.z > T.maxZ) clear.push({ peak: [px, pz], person, land: plan.land });
                 }
             }
         }
+        expect(dives).toBeGreaterThan(500);
+        expect(clear.slice(0, 3)).toEqual([]);
+    });
+
+    test('the dive goes toward the pile, from the tarp\'s middle, and sinks as deep as the leaves are there', async () => {
+        const Fi = await import('../www/leaves/js/finale.js');
+        const T = Y.tarp;
+        const mid = { x: (T.minX + T.maxX) / 2, z: (T.minZ + T.maxZ) / 2 };
+        const toCorner = Fi.diveTarget({ x: T.minX, z: T.minZ, height: 1 }, T, C.finale.target, () => 0.4);
+        expect(toCorner.x).toBeLessThan(mid.x);
+        expect(toCorner.z).toBeLessThan(mid.z);
+        expect(toCorner.height).toBe(1);
+        expect(toCorner.local).toBe(0.4);
+        const atMiddle = Fi.diveTarget({ ...mid, height: 1 }, T, C.finale.target);
+        expect(atMiddle.x).toBeCloseTo(mid.x, 9);
+        expect(atMiddle.z).toBeCloseTo(mid.z, 9);
+        // Lands in the pile by its height, sunk by the depth where it goes.
+        const L = Y.lawn;
+        const area = { minX: L.minX + 0.5, maxX: L.maxX - 0.4, minZ: L.minZ + 0.6, maxZ: Y.sidewalk.maxZ };
+        const plan = Fi.planFinale({ x: 0, z: 2 }, toCorner, C.finale, area);
+        expect(plan.success).toBe(true);
+        expect(plan.surface).toBeCloseTo(Math.max(0, 0.4 - C.finale.sink), 9);
     });
 });

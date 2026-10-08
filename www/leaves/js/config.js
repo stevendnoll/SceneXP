@@ -473,6 +473,12 @@ export const LEAVES_CONFIG = Object.freeze({
     // SECONDS, since it stands between the clock and the end card. A tap or
     // a key skips it.
     finale: {
+        // Where the dive goes (finale.js diveTarget): the tarp's middle,
+        // drawn `toPile` of the way toward the pile's peak, never nearer its
+        // sides than `inset` (meters: back is the house, left the hedge and
+        // the rake). Steve's QA, 2026-10-08: "keep the dive centered in the
+        // middle of the tarp".
+        target: { toPile: 0.35, inset: { left: 1.3, right: 0.7, back: 1.65, front: 0.8 } },
         // The pile's peak must be this tall to land in it. Below it, the
         // dive finds the lawn. A minute of steady work toward the corner
         // built about 0.6 m in the bot runs.
