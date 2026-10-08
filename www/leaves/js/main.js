@@ -76,7 +76,7 @@ import { buildYard } from './yard.min.js';
 import { createOperator, stepOperator, facing, createOperatorFigure } from './blower.min.js';
 import { cameraFor, cameraOn, cameraCast, castFrame, rayToGround, ease, clampZoom } from './view.min.js';
 import {
-    PRESETS, SKINS, HAIR_COLORS, HAIR_LENGTHS, DEFAULT_CHOICE,
+    SHIRTS, PANTS, SKINS, HAIR_COLORS, HAIR_LENGTHS, DEFAULT_CHOICE,
     loadChoice, saveChoice, forgetChoice, personConfig, castLine
 } from './cast.min.js';
 import { isQaHost, labOptions, labSearch, statsLines, fpsOf, shortCount } from './lab.min.js';
@@ -1035,7 +1035,8 @@ function buildCast() {
     if (castInputs.length) return;
     const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
     [
-        { host: 'cast-presets', key: 'preset', list: PRESETS },
+        { host: 'cast-shirts', key: 'shirt', list: SHIRTS, swatch: true },
+        { host: 'cast-pants', key: 'pants', list: PANTS, swatch: true },
         { host: 'cast-skins', key: 'skin', list: SKINS, swatch: true },
         { host: 'cast-hair', key: 'hair', list: HAIR_COLORS, swatch: true },
         { host: 'cast-length', key: 'length', list: HAIR_LENGTHS }
@@ -1137,7 +1138,8 @@ function closeCast() {
     if (camera && camera.clearViewOffset) camera.clearViewOffset();
     saveChoice(castChoice);
     setText('cast-name', castLine(castChoice));
-    if (castBefore && castBefore.preset !== castChoice.preset) track('character', { outcome: castChoice.preset });
+    // Only that the character changed, not to what.
+    if (castBefore && Object.keys(castChoice).some((k) => castBefore[k] !== castChoice[k])) track('character', { outcome: 'changed' });
     if (blocker) blocker.classList.remove('hidden');
     const btn = document.getElementById('cast-btn');
     if (btn) {

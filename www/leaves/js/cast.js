@@ -1,22 +1,24 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * cast.js - who is on leaf duty (M4): the outfits, the skin tones, the hair,
- * and the visitor's choice, kept in this browser for next time.
+ * cast.js - who is on leaf duty (M4): the shirt and pants colors, the skin
+ * tones, the hair, and the visitor's choice, kept in this browser for next
+ * time.
  *
- * STEVE'S ANSWERS (PRD, 2026-10-06): the outfits suggested in the PRD, none
- * of the figures from the personal tribute scenes (they are real people),
- * and three things to choose beyond the outfit, because they matter more to
- * a visitor than height or build: SKIN TONE, HAIR COLOR and HAIR LENGTH.
- * They are independent of the outfit: picking a different outfit keeps the
- * same person in it.
+ * STEVE'S ANSWERS (PRD, 2026-10-06): none of the figures from the personal
+ * tribute scenes (they are real people), and SKIN TONE, HAIR COLOR and HAIR
+ * LENGTH to choose, because they matter more to a visitor than height or
+ * build. The named outfits of M4 (the weekend warrior, the retiree...) gave
+ * way at Steve's QA of 2026-10-08 to a SHIRT COLOR and a PANTS COLOR,
+ * chosen freely, always with long sleeves ("it looks chilly outside").
  *
- * KEPT IN LOCAL STORAGE under STORAGE_KEY, and nothing else: four short ids.
+ * KEPT IN LOCAL STORAGE under STORAGE_KEY, and nothing else: five short ids.
  * Disclosed in www/privacy.html (tests/privacy.test.mjs holds this file to
  * that), and "Forget my choice" on the character card clears it. Every read
- * goes through normalizeChoice(), so a stored value from an older version,
- * or one somebody edited by hand, comes back as a valid choice rather than
- * a broken figure, and a browser that refuses storage (a private window)
- * simply gets the default each visit.
+ * goes through normalizeChoice(), so a stored value from an older version
+ * (an outfit becomes its nearest shirt and pants), or one somebody edited by
+ * hand, comes back as a valid choice rather than a broken figure, and a
+ * browser that refuses storage (a private window) simply gets the default
+ * each visit.
  *
  * PURE apart from the three storage calls: the lists, the validation and the
  * figure's settings are all checked under Node.
@@ -24,16 +26,56 @@
 
 export const STORAGE_KEY = 'leaves-character';
 
-/** The outfits. `name` is how the welcome card says it ("Playing as the
- *  retiree"), `label` is the button. Colors are display (sRGB) values. */
-export const PRESETS = Object.freeze([
-    { id: 'weekend', label: 'Weekend warrior', name: 'the weekend warrior', shirt: 0x9c2b25, sleeves: 0x9c2b25, pants: 0x34495e },
-    { id: 'hoodie', label: 'Hoodie teen', name: 'the hoodie teen', shirt: 0x55705e, sleeves: 0x55705e, pants: 0x2c3440 },
-    { id: 'retiree', label: 'Retiree', name: 'the retiree', shirt: 0x8a6e4b, sleeves: 0x8a6e4b, pants: 0xb5a58a },
-    { id: 'executive', label: 'Executive', name: 'the executive', shirt: 0xf2f2f2, sleeves: null, pants: 0x2f3236, dressShirt: true },
-    { id: 'runner', label: 'Runner', name: 'the runner', shirt: 0x1f8a8a, sleeves: null, pants: 0x1c1c1c },
-    { id: 'gardener', label: 'Gardener', name: 'the gardener', shirt: 0xd8b445, sleeves: null, pants: 0x5a4632, apron: 0x3e6b3a }
+/** The shirts. `name` is how the welcome card says it ("Playing in a rust
+ *  red shirt"), `label` the swatch's. Colors are display (sRGB) values. */
+export const SHIRTS = Object.freeze([
+    { id: 'rust', label: 'Rust red', name: 'rust red', color: 0x9c2b25 },
+    { id: 'pumpkin', label: 'Pumpkin orange', name: 'pumpkin orange', color: 0xd2691e },
+    { id: 'forest', label: 'Forest green', name: 'forest green', color: 0x3f6b3a },
+    { id: 'mustard', label: 'Mustard', name: 'mustard', color: 0xd8b445 },
+    { id: 'teal', label: 'Teal', name: 'teal', color: 0x1f8a8a },
+    { id: 'navy', label: 'Navy', name: 'navy', color: 0x2f4a6d },
+    { id: 'charcoal', label: 'Charcoal', name: 'charcoal', color: 0x3a3d42 },
+    { id: 'white', label: 'White', name: 'white', color: 0xf2f2f2 }
 ]);
+
+/** The pants, the same way. */
+export const PANTS = Object.freeze([
+    { id: 'navy', label: 'Navy', name: 'navy', color: 0x34495e },
+    { id: 'denim', label: 'Denim blue', name: 'denim blue', color: 0x4a6f9a },
+    { id: 'khaki', label: 'Khaki', name: 'khaki', color: 0xb5a58a },
+    { id: 'brown', label: 'Brown', name: 'brown', color: 0x5a4632 },
+    { id: 'charcoal', label: 'Charcoal', name: 'charcoal', color: 0x2f3236 },
+    { id: 'black', label: 'Black', name: 'black', color: 0x1c1c1c }
+]);
+
+/** The named outfits a choice kept before 2026-10-08, by their shirt and
+ *  pants, so a stored one comes back as the nearest colors. */
+const OUTFITS = Object.freeze({
+    weekend: [0x9c2b25, 0x34495e],
+    hoodie: [0x55705e, 0x2c3440],
+    retiree: [0x8a6e4b, 0xb5a58a],
+    executive: [0xf2f2f2, 0x2f3236],
+    runner: [0x1f8a8a, 0x1c1c1c],
+    gardener: [0xd8b445, 0x5a4632]
+});
+
+/** The option in `list` whose color is nearest `hex`. */
+function nearest(list, hex) {
+    const rgb = (c) => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+    const [r, g, b] = rgb(hex);
+    let best = list[0];
+    let bestD = Infinity;
+    for (const o of list) {
+        const [r2, g2, b2] = rgb(o.color);
+        const d = (r - r2) ** 2 + (g - g2) ** 2 + (b - b2) ** 2;
+        if (d < bestD) {
+            bestD = d;
+            best = o;
+        }
+    }
+    return best.id;
+}
 
 export const SKINS = Object.freeze([
     { id: 'light', label: 'Light', color: 0xf3d3bd },
@@ -62,19 +104,26 @@ export const HAIR_LENGTHS = Object.freeze([
     { id: 'long', label: 'Long' }
 ]);
 
-/** The figure M0 to M3 shipped with: the weekend warrior, fair, dark brown
- *  hair, short. */
-export const DEFAULT_CHOICE = Object.freeze({ preset: 'weekend', skin: 'fair', hair: 'darkBrown', length: 'short' });
+/** The figure M0 to M3 shipped with: a rust red shirt and navy pants (the
+ *  weekend warrior's), fair, dark brown hair, short. */
+export const DEFAULT_CHOICE = Object.freeze({ shirt: 'rust', pants: 'navy', skin: 'fair', hair: 'darkBrown', length: 'short' });
 
 const byId = (list, id) => list.find((o) => o.id === id) || null;
 
 /** A choice made valid: each part kept if it names a real option, the
  *  default's otherwise. Takes anything (null, a string, a stale object). */
 export function normalizeChoice(raw) {
-    const r = raw && typeof raw === 'object' ? raw : {};
+    const r = raw && typeof raw === 'object' ? { ...raw } : {};
+    // An outfit kept before 2026-10-08: its nearest shirt and pants.
+    const old = OUTFITS[r.preset];
+    if (old) {
+        if (r.shirt === undefined) r.shirt = nearest(SHIRTS, old[0]);
+        if (r.pants === undefined) r.pants = nearest(PANTS, old[1]);
+    }
     const pick = (list, key) => (byId(list, r[key]) ? r[key] : DEFAULT_CHOICE[key]);
     return {
-        preset: pick(PRESETS, 'preset'),
+        shirt: pick(SHIRTS, 'shirt'),
+        pants: pick(PANTS, 'pants'),
         skin: pick(SKINS, 'skin'),
         hair: pick(HAIR_COLORS, 'hair'),
         length: pick(HAIR_LENGTHS, 'length')
@@ -84,29 +133,25 @@ export function normalizeChoice(raw) {
 /** The settings createPerson() needs for a choice. */
 export function personConfig(choice) {
     const c = normalizeChoice(choice);
-    const p = byId(PRESETS, c.preset);
-    const config = {
+    const shirt = byId(SHIRTS, c.shirt).color;
+    return {
         role: 'operator',
-        shirtColor: p.shirt,
-        sleeveColor: p.sleeves,
-        pantsColor: p.pants,
+        shirtColor: shirt,
+        // Long sleeves, always: "it looks chilly outside".
+        sleeveColor: shirt,
+        pantsColor: byId(PANTS, c.pants).color,
         skinTone: byId(SKINS, c.skin).color,
         hairColor: byId(HAIR_COLORS, c.hair).color,
         hairStyle: c.length === 'bald' ? 'short' : c.length,
         bald: c.length === 'bald',
         shoulderRound: 0.4
     };
-    if (p.dressShirt) config.dressShirt = true;
-    if (p.apron) {
-        config.hasApron = true;
-        config.apronColor = p.apron;
-    }
-    return config;
 }
 
-/** The welcome card's line: "Playing as the retiree." */
+/** The welcome card's line: "Playing in a rust red shirt and navy pants." */
 export function castLine(choice) {
-    return `Playing as ${byId(PRESETS, normalizeChoice(choice).preset).name}.`;
+    const c = normalizeChoice(choice);
+    return `Playing in a ${byId(SHIRTS, c.shirt).name} shirt and ${byId(PANTS, c.pants).name} pants.`;
 }
 
 /** The saved choice, or the default where there is none or storage is
