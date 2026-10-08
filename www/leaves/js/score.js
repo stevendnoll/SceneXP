@@ -98,13 +98,43 @@ export function clearedShare(t) {
     return t.total > 0 ? 1 - t.lawn / t.total : 0;
 }
 
-/** Whether every leaf in the yard is off the open lawn: 100%, the round's
- *  early finish and the free yard's celebration. */
-export function isSpotless(t) {
-    return t.total > 0 && t.lawn === 0;
+/** A CLEAR LAWN HAS A SMALL MARGIN (Steve's QA, 2026-10-08: "1 single leaf
+ *  will keep the score at 99%"). No more than this share of the yard's
+ *  leaves left on it is clear: 24 of 24,000 on a desktop, 12 of 12,000 on a
+ *  phone, scattered over 260 square meters. */
+export const SPOTLESS_SHARE = 0.001;
+
+/** How many leaves may still lie on a clear lawn, for a yard of `total`. */
+export function leavesAllowed(total) {
+    return Math.floor(Math.max(0, total) * SPOTLESS_SHARE);
 }
 
-/** A share as a whole percent, rounded DOWN, so 100% means every leaf. */
+/** Whether the lawn is clear, within the margin: 100%, the round's early
+ *  finish and the free yard's celebration. */
+export function isSpotless(t) {
+    return t.total > 0 && t.lawn <= leavesAllowed(t.total);
+}
+
+/** How many more leaves must come off the lawn before it is clear. */
+export function leavesToGo(t) {
+    return t.total > 0 ? Math.max(0, t.lawn - leavesAllowed(t.total)) : 0;
+}
+
+/** The whole percent the HUD, the end card and the share show: 100 once
+ *  the lawn is clear, and never 100 before. */
+export function clearedPercent(t) {
+    return isSpotless(t) ? 100 : Math.min(99, percent(clearedShare(t)));
+}
+
+/** At 99% the HUD counts down the last few (Steve's QA, 2026-10-08):
+ *  "12 leaves to go". Empty otherwise. */
+export function toGoText(t) {
+    const n = leavesToGo(t);
+    return n > 0 && clearedPercent(t) === 99 ? `${leaves(n)} to go` : '';
+}
+
+/** A share as a whole percent, rounded DOWN (clearedPercent adds the clear
+ *  lawn's margin). */
 export function percent(share) {
     return Math.max(0, Math.min(100, Math.floor(share * 100 + 1e-9)));
 }
@@ -150,8 +180,8 @@ export function verdict(t) {
     // the neighbor's share still gets its word.
     if (isSpotless(t)) {
         const line = share(t.neighbor) >= 0.25
-            ? 'Every last leaf is off the lawn, and a good share of it is in the yard next door. They noticed.'
-            : 'Every last leaf is off the lawn. The whole street will want to know your secret.';
+            ? 'The lawn is clear, and a good share of it is in the yard next door. They noticed.'
+            : 'The lawn is clear. The whole street will want to know your secret.';
         return { key: 'perfect', title: 'Not a leaf in sight', line };
     }
     if (share(t.neighbor) >= 0.25) {
@@ -208,7 +238,7 @@ export function findsLine(names) {
  *  there is one, and the pile on the tarp otherwise. Then the dive, landed
  *  or not (`landed` null for none), and anything found under the leaves. */
 export function shareText(t, seconds, landed = null, found = []) {
-    const head = `I cleared ${percent(clearedShare(t))}% of my yard in ${durationText(seconds)}.`;
+    const head = `I cleared ${clearedPercent(t)}% of my yard in ${durationText(seconds)}.`;
     const sent = t.sent ?? t.neighbor;
     let tail = '';
     if (sent > 0) tail = ` ${leaves(sent)} went to the neighbor.`;
@@ -225,7 +255,7 @@ export function resultSentence(t, landed = null, found = []) {
     const v = verdict(t);
     const dive = diveLine(landed);
     const finds = findsLine(found);
-    return `${v.title}. ${percent(clearedShare(t))} percent of the lawn cleared, with ${leaves(t.tarp)} on the tarp, `
+    return `${v.title}. ${clearedPercent(t)} percent of the lawn cleared, with ${leaves(t.tarp)} on the tarp, `
         + `${leaves(t.street)} in the street, and ${leaves(t.sent ?? t.neighbor)} sent over the fence.`
         + (dive ? ` ${dive}` : '') + (finds ? ` ${finds}` : '');
 }

@@ -26,7 +26,32 @@
  * one instanced mesh.
  */
 
+import { paving } from './surfaces.min.js';
+
 const material = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
+
+/** A material showing `pave` (surfaces.js: { map, tileX, tileZ }) over a
+ *  flat w by d, or plain `color` with no picture to show. */
+function paved(pave, color, w, d, extra = {}) {
+    if (!pave || !pave.map) return material(color, extra);
+    const map = pave.map.clone();
+    map.repeat.set(w / pave.tileX, d / pave.tileZ);
+    map.needsUpdate = true;
+    return material(0xffffff, { map, ...extra });
+}
+
+/** A flat paved top laid on a box (the porch, a step), a hair over it, so
+ *  the box keeps its plain sides and only what a leaf lands on is paved. */
+function pavedTop(minX, maxX, minZ, maxZ, y, pave, color) {
+    const w = maxX - minX;
+    const d = maxZ - minZ;
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(w, d),
+        paved(pave, color, w, d, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+    top.rotation.x = -Math.PI / 2;
+    top.position.set((minX + maxX) / 2, y + 0.0005, (minZ + maxZ) / 2);
+    top.receiveShadow = true;
+    return top;
+}
 
 /** The neighbor's front windows' middles in x, either side of his door
  *  (decorations.js puts a figure in one): 1.1 wide, 1.5 tall, at 1.75. */
@@ -182,8 +207,13 @@ export function buildOurHouse(Y, L) {
 
     // The porch, its step and posts, and a flat roof over them all.
     const stone = material(L.porch);
+    const pave = paving(L);
     for (const b of [...named(Y, 'porch'), ...named(Y, 'step')]) {
-        if (b.maxX <= H.maxX) group.add(solidMark(solid(toFace(b, edge, front), stone)));
+        if (b.maxX > H.maxX) continue;
+        const drawn = toFace(b, edge, front);
+        group.add(solidMark(solid(drawn, stone)));
+        // Smooth large pavers on top (2026-10-08), where the leaves land.
+        group.add(pavedTop(drawn.minX, drawn.maxX, drawn.minZ, drawn.maxZ, b.height, pave.porch, L.porch));
     }
     const posts = named(Y, 'post');
     for (const b of posts) group.add(solidMark(solid(b, black)));
@@ -213,8 +243,10 @@ export function buildOurHouse(Y, L) {
     const step = named(Y, 'step').find((b) => b.maxX <= H.maxX);
     const from = step ? step.maxZ : front;
     const len = Y.sidewalk.minZ - from;
+    // Poured concrete, slab by slab, a crack or two (surfaces.js, Steve's
+    // QA 2026-10-08: "It just looks a little too flat").
     const path = new THREE.Mesh(new THREE.PlaneGeometry(1.1, len),
-        material(L.walk, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+        paved(pave.walk(len), L.walk, 1.1, len, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
     path.rotation.x = -Math.PI / 2;
     path.position.set(door, 0.002, from + len / 2);
     path.receiveShadow = true;
@@ -477,7 +509,7 @@ export function buildStreetHouse(h, L, Y) {
     // The driveway, from the garage to the sidewalk, a hair over the lawn.
     const len = Y.sidewalk.minZ - h.front;
     const drive = new THREE.Mesh(new THREE.PlaneGeometry(gw + 0.4, len),
-        material(L.walk, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+        paved(paving(L).drive, L.walk, gw + 0.4, len, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
     drive.rotation.x = -Math.PI / 2;
     drive.position.set(gx, 0.004, h.front + len / 2);
     drive.receiveShadow = true;

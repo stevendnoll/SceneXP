@@ -60,13 +60,14 @@ import { seasonFor, carvePumpkins, createTreaters, stepTreaters, createTreaterFi
 import { buildDecorations, decoratedConfig } from './decorations.min.js';
 import { buildBackyard } from './backyard.min.js';
 import { buildGap } from './gap.min.js';
+import { buildBackdrop } from './backdrop.min.js';
 import { buildResting } from './rooftops.min.js';
 import { createCheer, resetCheer, stepCheer, skipCheer, isCheering, cheerLift, cheerFocus, CHEER_LINE } from './celebrate.min.js';
 import { createSound } from './sound.min.js';
 import { createNeighbor, resetNeighbor, stepNeighbor, isOut, neighborBlower } from './neighbor.min.js';
 import {
-    tally, clearedShare, percent, clockText, verdict, resultRows, shareText, resultSentence, diveLine, findsLine,
-    isSpotless, durationText
+    tally, clearedShare, clockText, verdict, resultRows, shareText, resultSentence, diveLine, findsLine,
+    isSpotless, durationText, clearedPercent, toGoText
 } from './score.min.js';
 import { createLeafMesh } from './leafmesh.min.js';
 import { buildYard } from './yard.min.js';
@@ -310,6 +311,8 @@ async function init() {
     backyard = buildBackyard(CONFIG);
     scene.add(backyard.group);
     scene.add(buildGap(CONFIG));
+    // The rest of the neighborhood, behind the block (2026-10-08).
+    scene.add(buildBackdrop(CONFIG));
     if (state.decor) {
         decorations = buildDecorations(CONFIG);
         scene.add(decorations.group);
@@ -1186,7 +1189,7 @@ function startFinale() {
     finale.t = 0;
     finale.burst = false;
     operator.hideBlower = true;
-    const early = round.spotless ? 'Every last leaf is off the lawn, with time to spare. ' : '';
+    const early = round.spotless ? 'The lawn is clear, with time to spare. ' : '';
     announce(`${early}You set the blower down and take a running dive at the pile.`);
     track('dive', { outcome: finale.plan.success ? 'landed' : 'flop' });
 }
@@ -1262,7 +1265,7 @@ function startCheer() {
     operator.speed = 0;
     sound.chime();
     showToast(CHEER_LINE, CONFIG.cheer.toastSeconds);
-    announce(`Every last leaf is off the lawn. ${CHEER_LINE}`);
+    announce(`The lawn is clear. ${CHEER_LINE}`);
     track('spotless', { outcome: 'free' });
 }
 
@@ -1304,7 +1307,7 @@ function showEnd() {
     set('end-line', v.line);
     set('end-dive', diveLine(landed));
     set('end-finds', findsLine(result.found));
-    set('end-percent', `${percent(clearedShare(t))}%`);
+    set('end-percent', `${clearedPercent(t)}%`);
     resultRows(t).forEach((row) => set(`end-${row.key}`, row.value));
     fillEndPromo();
     releaseInput();
@@ -1392,7 +1395,10 @@ function updateHud() {
     if (phase === 'ready') clock = clockText(round.seconds);
     else if (phase === 'playing') clock = clockText(timeLeft(round));
     else clock = clockText(0);
-    const cleared = `${percent(clearedShare(counted))}% cleared`;
+    // At 99% the last few are counted down, in place of "cleared" so the
+    // pill still fits a phone: "99%, 12 leaves to go".
+    const toGo = toGoText(counted);
+    const cleared = toGo ? `${clearedPercent(counted)}%, ${toGo}` : `${clearedPercent(counted)}% cleared`;
     const el = (id) => document.getElementById(id);
     if (clock !== hudShown.clock) {
         hudShown.clock = clock;

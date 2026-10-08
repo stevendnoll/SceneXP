@@ -504,7 +504,7 @@ describe('the round', () => {
         expect(s.blowing).toBe(false);
         expect(main.__test__.keys.blow).toBe(false);
         expect(dom.el('find-toast').textContent).toBe('Not a leaf in sight. The lawn is spotless.');
-        expect(dom.el('round-status').textContent).toMatch(/Every last leaf is off the lawn/);
+        expect(dom.el('round-status').textContent).toMatch(/The lawn is clear/);
         // The neighbor stays in, whatever is on his lawn.
         expect(s.neighbor.state).toBe('inside');
         // A hop, and turned toward the street.
@@ -521,6 +521,26 @@ describe('the round', () => {
         frames(main, 2, 20);
         expect(main.getState().cheer.phase).toBe('idle');
         expect(main.getState().round.phase).toBe('free');
+    });
+
+    test('at 99% the HUD counts down the last few leaves', async () => {
+        const main = await boot();
+        fire(dom.el('free-btn'), 'click');
+        frames(main, 0.5, 20);
+        const Sim = await import('../www/leaves/js/sim.min.js');
+        const sim = main.__test__.sim();
+        // All but three into the street (600 leaves allow none on a clear lawn).
+        let kept = 0;
+        for (let i = 0; i < sim.count; i++) {
+            if (sim.hanging[i] || sim.falling[i]) continue;
+            if (kept < 3) { kept++; continue; }
+            Sim.hangLeaf(sim, i, 0, 5, 0);
+            Sim.layDown(sim, i, -8 + (i % 60) * 0.3, 9.6 + Math.floor(i / 60) * 0.3);
+        }
+        frames(main, 0.5, 20);
+        expect(main.getState().counted.lawn).toBe(3);
+        expect(dom.el('hud-cleared').textContent).toBe('99%, 3 leaves to go');
+        expect(main.getState().cheer.phase).toBe('idle');
     });
 
     test('a key ends the celebration early, and the yard is theirs again', async () => {
@@ -592,7 +612,7 @@ describe('the round', () => {
         expect(s.round.phase).toBe('finale');
         expect(s.round.spotless).toBe(true);
         expect(s.round.elapsed).toBeLessThan(15);
-        expect(dom.el('round-status').textContent).toMatch(/Every last leaf is off the lawn/);
+        expect(dom.el('round-status').textContent).toMatch(/The lawn is clear/);
         frames(main, C0.round.finaleMax, 20);
         const end = main.getState();
         expect(end.endShown).toBe(true);
@@ -906,6 +926,8 @@ describe('delights and surprises (M6)', () => {
         expect(dom.el('round-status').textContent.length).toBeGreaterThan(0);
     });
 
+    // It boots the page four times, each a whole yard: slow in the sandbox
+    // with coverage on, so it has longer than the usual five seconds.
     test('the decorations are up all October, the week\'s extras are not, and the lab can ask for either', async () => {
         jest.setSystemTime(new Date(2026, 9, 7, 15));
         let main = await boot();
@@ -938,7 +960,7 @@ describe('delights and surprises (M6)', () => {
         jest.setSystemTime(new Date(2026, 10, 3, 15));
         main = await boot();
         expect(main.getState().decor).toBe(false);
-    });
+    }, 20000);
 
     describe('a find', () => {
         // Enough leaves to bury the lawn, so the finds can be hidden.

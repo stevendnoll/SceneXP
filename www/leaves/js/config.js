@@ -81,6 +81,14 @@ export const LEAVES_CONFIG = Object.freeze({
         // between and `thick` deep, a band of `lattice` under the top rail,
         // `lift` off the ground, and `back` behind the neighbor's face.
         gate: { height: 1.8, post: 0.1, board: 0.13, gap: 0.014, thick: 0.022, rail: 0.06, lattice: 0.32, lift: 0.05, back: 0.02 },
+        // His striped lawn runs past the sim's ground to his side fence
+        // (yard.js groundRects), clear of his inflatable ghost's arms.
+        // His side fence stands at maxX (yard.js hisSideFence), boxwoods in
+        // its front corner.
+        neighborYard: {
+            maxX: 24.9,
+            boxwoods: [{ x: 24.35, z: 6.55, r: 0.42 }, { x: 24.4, z: 5.7, r: 0.36 }, { x: 23.65, z: 6.75, r: 0.32 }]
+        },
         // LEAVES RESTING WHERE THE BLOWER NEVER REACHES (Steve's QA,
         // 2026-10-08: "a few more resting leaves to the houses' roofs"):
         // how many on each roof's front slope (`slope` for the houses down
@@ -98,7 +106,9 @@ export const LEAVES_CONFIG = Object.freeze({
         // The rest of the block (M6 QA): lawn under everything, well past
         // both neighbors and back behind the houses, so no view the camera
         // can take shows the sky through the ground, even on a 32:9 screen.
-        block: { minX: -70, maxX: 90, minZ: -20 },
+        // Back to -70 since the backdrop (2026-10-08): the view's top looks
+        // some 45 m back, past the next street's houses.
+        block: { minX: -120, maxX: 140, minZ: -70 },
         // A tarp to blow the leaves onto, IN THE BACK-LEFT CORNER, against
         // the house and the hedge (moved there at M1, 2026-10-06). Out on the
         // open lawn it caught almost nothing: leaves stop wherever the air
@@ -199,8 +209,39 @@ export const LEAVES_CONFIG = Object.freeze({
             // them (gap.js): too wide for the gap itself (about 3.6 m).
             { species: 'japanese-maple', x: 10.25, z: -16.4, height: 4, seed: 9907, trunk: 0.14, crown: { y: 3, radius: 1.8 }, hanging: 0 },
             // A blue spruce in the side yard behind our hedge (backyard.js).
-            { species: 'blue-spruce', x: -18.6, z: -1.6, height: 7, seed: 8801, trunk: 0.2, crown: { y: 3.6, radius: 1.8 }, hanging: 0 }
+            { species: 'blue-spruce', x: -18.6, z: -1.6, height: 7, seed: 8801, trunk: 0.2, crown: { y: 3.6, radius: 1.8 }, hanging: 0 },
+            // A tall pine in the sage house's back yard, over the green
+            // shed's fence (backdrop.js, 2026-10-08).
+            { species: 'scots-pine', x: -14.6, z: -20.1, height: 13, seed: 9311, trunk: 0.28, crown: { y: 9, radius: 2.6 }, hanging: 0 }
         ],
+        // THE REST OF THE NEIGHBORHOOD (backdrop.js, Steve's QA, 2026-10-08:
+        // behind the green shed and fence "the area still looks too empty",
+        // and "make the rest of the environment feel as real and life-like
+        // as possible"). The next street's houses, their backs to us, one a
+        // `lot` from `from` to `to`, `backZ` give or take `jitter`; a board
+        // fence along the back lot line at `fence.z` and between their lots;
+        // utility poles along it with wires; a swing set and a trampoline in
+        // the sage house's back yard; and a treeline in the fog.
+        backdrop: {
+            houses: {
+                seed: 4421, lot: 15, from: -60, to: 75, minX: -70, maxX: 90, width: [9.5, 12], backZ: -29.5, jitter: 1.3,
+                sidings: [0xd9d4c7, 0x8a9aa5, 0xb7a68c, 0x7f8b76, 0xe8e6e0, 0x9c5b45, 0xa8a29a],
+                roofs: [0x3c3f44, 0x4a4d52, 0x5a4a3e, 0x2e3033],
+                deck: 0x8a6a4c, door: 0x3a4a5a
+            },
+            fence: { z: -21, height: 1.8, panel: 2.4, color: 0x8f7458 },
+            poles: {
+                z: -21.6, xs: [-52, -16, 20, 56], height: 10.5, arm: 2.4, cable: 7.2, sag: 0.7, transformer: 1,
+                wood: 0x5e4a3a, insulator: 0x8fa3a0, can: 0x8a8d8f, wire: 0x2a2b2d
+            },
+            swingSet: { x: -12.6, z: -17.2, turn: 0.25, width: 2.6, height: 2.3, frame: 0x3f6b4a, seat: 0x2a2b2d },
+            trampoline: { x: -16.9, z: -18.2, r: 1.6, pad: 0x2f6aa6 },
+            treeline: {
+                seed: 5813, count: 260, near: -42, far: -56, minX: -100, maxX: 120, size: [3, 5.5], trunk: 0.8, evergreens: 0.3,
+                greens: [0x2f4a2a, 0x3a5530, 0x29402a],
+                autumn: [0xb5532a, 0xc9782e, 0xd49a3a, 0x9c3b25, 0xa8742f, 0x7d6a33]
+            }
+        },
         // BETWEEN THE HOUSES (Steve's M6 QA: "more environment details to the
         // area between the main house and the neighbor's house"), behind the
         // side gate (gap.js). From the street only what stands above about
@@ -844,7 +885,13 @@ export const LEAVES_CONFIG = Object.freeze({
         fog: { color: 0xc9d6df, near: 30, far: 90 },
         lawn: 0x5d7f3a,
         lawnDark: 0x46652b,
-        neighborLawn: 0x6a8f3f,
+        // His lawn deeper and healthier than ours (Steve's QA, 2026-10-08),
+        // mowed in stripes a meter wide (how strongly), and the rest of the
+        // block's lawns as his once were.
+        neighborLawn: 0x4a7a2e,
+        neighborLawnDark: 0x386224,
+        stripes: 0.07,
+        blockLawn: 0x6a8f3f,
         sidewalk: 0xb9b4aa,
         sidewalkJoint: 0x8f8a80,
         street: 0x45474a,

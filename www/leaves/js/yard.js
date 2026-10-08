@@ -9,10 +9,14 @@
  * are house.js's (M5), the trees trees.js's.
  */
 import { buildOurHouse, buildNeighborHouse, buildStreet, buildStreetHouse, facadeZ } from './house.min.js';
-import { buildHedge } from './hedge.min.js';
+import { buildHedge, noise3 } from './hedge.min.js';
+import { paving } from './surfaces.min.js';
 
-/** A grassy canvas texture: mottled greens with short strokes for blades. */
-function lawnTexture(base, dark, seed = 1) {
+/** A grassy canvas texture: mottled greens with short strokes for blades.
+ *  `stripes` paints the neighbor's mowing stripes (2026-10-08): the
+ *  picture's two halves a shade apart, so each repeat lays down one light
+ *  and one dark stripe a meter wide. */
+function lawnTexture(base, dark, seed = 1, stripes = 0) {
     if (typeof document === 'undefined') return null;
     const size = 256;
     const canvas = document.createElement('canvas');
@@ -28,6 +32,12 @@ function lawnTexture(base, dark, seed = 1) {
     const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
     ctx.fillStyle = hex(base);
     ctx.fillRect(0, 0, size, size);
+    if (stripes) {
+        ctx.fillStyle = `rgba(255,255,240,${stripes})`;
+        ctx.fillRect(0, 0, size / 2, size);
+        ctx.fillStyle = `rgba(0,20,0,${stripes * 0.8})`;
+        ctx.fillRect(size / 2, 0, size / 2, size);
+    }
     ctx.fillStyle = hex(dark);
     for (let i = 0; i < 900; i++) {
         ctx.globalAlpha = 0.15 + random() * 0.25;
@@ -59,16 +69,25 @@ function box(w, h, d, color, x, y, z) {
     return mesh;
 }
 
-/** A flat rectangle lying on the ground at height y. */
-function ground(r, color, y, map) {
+/** A flat rectangle lying on the ground at height y, its picture (if any)
+ *  repeating every `tileX` by `tileZ` meters from its corner. */
+function ground(r, color, y, map, { tileX = 2, tileZ = 2 } = {}) {
     const w = r.maxX - r.minX;
     const d = r.maxZ - r.minZ;
+    const cx = (r.minX + r.maxX) / 2;
+    const cz = (r.minZ + r.maxZ) / 2;
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d),
         new THREE.MeshLambertMaterial({ color: map ? 0xffffff : color, map }));
     mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set((r.minX + r.maxX) / 2, y, (r.minZ + r.maxZ) / 2);
+    mesh.position.set(cx, y, cz);
     mesh.receiveShadow = true;
-    if (map) map.repeat.set(w / 2, d / 2);
+    if (map) {
+        // A shared picture repeats per mesh, so each takes its own copy.
+        const own = map.isTexture && map.clone ? map.clone() : map;
+        own.repeat.set(w / tileX, d / tileZ);
+        own.needsUpdate = true;
+        mesh.material.map = own;
+    }
     return mesh;
 }
 
@@ -209,32 +228,19 @@ export function groundRects(config) {
     const b = Y.bounds;
     const block = Y.block;
     return [
-        { name: 'block', rect: { minX: block.minX, maxX: block.maxX, minZ: block.minZ, maxZ: Y.sidewalk.minZ }, color: L.neighborLawn, y: -0.01, grass: 17 },
+        { name: 'block', rect: { minX: block.minX, maxX: block.maxX, minZ: block.minZ, maxZ: Y.sidewalk.minZ }, color: L.blockLawn, y: -0.01, grass: 17 },
         { name: 'lawn', rect: Y.lawn, color: L.lawn, y: 0, grass: 7 },
-        { name: 'neighbor-lawn', rect: Y.neighbor, color: L.neighborLawn, y: 0, grass: 11 },
-        // The strip of lawn between the yards' edge and the sidewalk.
-        { name: 'strip', rect: { minX: b.minX, maxX: b.maxX, minZ: Y.lawn.maxZ, maxZ: Y.sidewalk.minZ }, color: L.lawn, y: 0, grass: 13 },
-        { name: 'sidewalk', rect: { minX: block.minX, maxX: block.maxX, minZ: Y.sidewalk.minZ, maxZ: Y.sidewalk.maxZ }, color: L.sidewalk, y: 0.01 },
-        { name: 'street', rect: { minX: block.minX - 30, maxX: block.maxX + 30, minZ: Y.sidewalk.maxZ, maxZ: b.maxZ + 40 }, color: L.street, y: -0.02 }
+        // His: a deeper, healthier green than ours, mowed in stripes
+        // (Steve's QA, 2026-10-08), from the fence all the way to his side
+        // fence and the sidewalk (past the sim's ground, which ends at his
+        // lawn's middle).
+        { name: 'neighbor-lawn', rect: { ...Y.neighbor, maxX: Math.max(Y.neighbor.maxX, Y.neighborYard?.maxX ?? 0), maxZ: Y.sidewalk.minZ }, color: L.neighborLawn, dark: L.neighborLawnDark, y: 0, grass: 11, stripes: L.stripes },
+        // The strip of our lawn between the yard's edge and the sidewalk.
+        { name: 'strip', rect: { minX: b.minX, maxX: Y.neighbor.minX, minZ: Y.lawn.maxZ, maxZ: Y.sidewalk.minZ }, color: L.lawn, y: 0, grass: 13 },
+        // Concrete and asphalt (surfaces.js, 2026-10-08).
+        { name: 'sidewalk', rect: { minX: block.minX, maxX: block.maxX, minZ: Y.sidewalk.minZ, maxZ: Y.sidewalk.maxZ }, color: L.sidewalk, y: 0.01, surface: 'sidewalk' },
+        { name: 'street', rect: { minX: block.minX - 30, maxX: block.maxX + 30, minZ: Y.sidewalk.maxZ, maxZ: b.maxZ + 40 }, color: L.street, y: -0.02, surface: 'street' }
     ];
-}
-
-/** The sidewalk's expansion joints: a thin dark line across it every
- *  `every` meters, one instanced mesh. */
-function sidewalkJoints(Y, look, every = 1.6) {
-    const span = Y.sidewalk.maxZ - Y.sidewalk.minZ;
-    const xs = [];
-    for (let x = Y.block.minX + every; x < Y.block.maxX; x += every) xs.push(x);
-    const mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.03, span),
-        new THREE.MeshLambertMaterial({ color: look.sidewalkJoint }), xs.length);
-    const m = new THREE.Matrix4();
-    const turn = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
-    xs.forEach((x, k) => {
-        m.makeTranslation(x, 0.012, (Y.sidewalk.minZ + Y.sidewalk.maxZ) / 2).multiply(turn);
-        mesh.setMatrixAt(k, m);
-    });
-    mesh.receiveShadow = true;
-    return mesh;
 }
 
 /** A lattice of crossed white slats on clear, for the top of the side gate:
@@ -285,12 +291,19 @@ function latticeTexture() {
  * 'side-gate'.
  */
 export function sideGate(Y, look) {
-    const G = Y.gate;
-    const group = new THREE.Group();
-    group.name = 'side-gate';
+    // The middle post stands where the picket fence between the yards ends.
+    const picket = Y.walls.find((w) => w.axis === 'x' && w.height < 1.2);
     const x0 = Y.house.maxX;
     const x1 = Y.neighborHouse.minX;
-    const z = facadeZ(Y.neighbor.minZ, Y.neighborHouse) - G.back;
+    const mid = picket ? picket.at : (x0 + x1) / 2;
+    return gateAcross(x0, x1, mid, facadeZ(Y.neighbor.minZ, Y.neighborHouse) - Y.gate.back, Y.gate, look, 'side-gate');
+}
+
+/** The same gate and fence across any gap between two houses, from x0 to
+ *  x1 at z, its middle post at `mid`, the gate in the half from x0. */
+function gateAcross(x0, x1, mid, z, G, look, name) {
+    const group = new THREE.Group();
+    group.name = name;
     const white = new THREE.MeshLambertMaterial({ color: look.fence });
     const black = new THREE.MeshLambertMaterial({ color: look.frame });
     const add = (geometry, material, x, y, zz, shadow = true) => {
@@ -301,9 +314,6 @@ export function sideGate(Y, look) {
         group.add(m);
         return m;
     };
-    // The middle post stands where the picket fence between the yards ends.
-    const picket = Y.walls.find((w) => w.axis === 'x' && w.height < 1.2);
-    const mid = picket ? picket.at : (x0 + x1) / 2;
     const p = G.post;
     // The end posts' caps (4 cm wider) stop at the house walls.
     const posts = [x0 + p / 2 + 0.02, mid, x1 - p / 2 - 0.02];
@@ -357,6 +367,47 @@ export function sideGate(Y, look) {
     return group;
 }
 
+/** A clipped boxwood ball `r` across at (x, z), lumpy like the hedge. */
+function boxwood(x, z, r, look, seed) {
+    const geometry = new THREE.IcosahedronGeometry(r, 3);
+    const pos = geometry.getAttribute('position');
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        const k = 1 + 0.08 * noise3(v.x * 6 + seed, v.y * 6, v.z * 6, 41);
+        pos.setXYZ(i, v.x * k, Math.max(-r * 0.15, v.y * k * 0.85), v.z * k);
+    }
+    geometry.computeVertexNormals();
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ color: look.hedge }));
+    mesh.position.set(x, r * 0.8, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+}
+
+/**
+ * The far side of the neighbor's yard (Steve's QA, 2026-10-08: "It looks a
+ * little bare when it's visible"), as between our houses: the same side
+ * gate across the gap between his house and the next, and a white picket
+ * fence like ours from it along his side to the sidewalk, with a few
+ * boxwoods in the front corner. All of it past the sim's ground. Named
+ * 'his-side-fence'.
+ */
+export function hisSideFence(Y, look) {
+    const group = new THREE.Group();
+    group.name = 'his-side-fence';
+    const at = Y.neighborYard.maxX;
+    const next = (Y.street || []).filter((h) => h.minX > Y.neighborHouse.maxX).sort((a, b) => a.minX - b.minX)[0];
+    const x1 = next ? next.minX : at + 1;
+    const z = facadeZ(Y.neighbor.minZ, Y.neighborHouse) - Y.gate.back;
+    group.add(gateAcross(Y.neighborHouse.maxX, x1, at, z, Y.gate, look, 'his-gate'));
+    const picket = picketFence({ axis: 'x', at, from: z + Y.gate.post / 2, to: Y.sidewalk.minZ - 0.2, height: 0.95 }, look);
+    picket.name = 'his-picket';
+    group.add(picket);
+    for (const b of Y.neighborYard.boxwoods || []) group.add(boxwood(b.x, b.z, b.r, look, b.x));
+    return group;
+}
+
 /**
  * Build the yard into `scene`. Returns { sun, neighborDoor, sky }: the sun
  * for its shadows, the hinge of the neighbor's door for main.js to swing,
@@ -366,13 +417,15 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     const Y = config.yard;
     const look = config.look;
     const b = Y.bounds;
+    const surfaces = paving(look, mobile);
 
     for (const g of groundRects(config)) {
-        const mesh = ground(g.rect, g.color, g.y, g.grass ? lawnTexture(g.color, look.lawnDark, g.grass) : null);
+        const pave = g.surface ? surfaces[g.surface] : null;
+        const map = pave ? pave.map : g.grass ? lawnTexture(g.color, g.dark ?? look.lawnDark, g.grass, g.stripes || 0) : null;
+        const mesh = ground(g.rect, g.color, g.y, map, { tileX: pave ? pave.tileX : 2, tileZ: pave ? pave.tileZ : 2 });
         mesh.name = g.name;
         scene.add(mesh);
     }
-    scene.add(sidewalkJoints(Y, look));
 
     const tarp = ground(Y.tarp, look.tarp, 0.004, null);
     tarp.name = 'tarp';
@@ -388,6 +441,7 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     // The gap between the two houses is a side fence and gate, set back with
     // them so it stands behind the leaves resting against the sim's wall.
     scene.add(sideGate(Y, look));
+    if (Y.neighborYard) scene.add(hisSideFence(Y, look));
 
     Y.walls.forEach((wall) => {
         if (wall.axis === 'x' && wall.height < 1.2) {

@@ -155,6 +155,8 @@ export function hedgeSurface(wall, H, z0, z1) {
     const tint = new Float32Array(zs.length * n);
     zs.forEach((z, j) => {
         const sc = endScale(Math.min(z - z0, z1 - z), H.round);
+        // The slow drift of shade along the length, once a ring.
+        const drift = noise3(z * 0.35, 0.5, 0.5, H.seed + 3) * 0.08;
         profile.forEach((p, i) => {
             const k = j * n + i;
             const off = hedgeOffset(H, p.u, p.y, z) * sc;
@@ -168,7 +170,6 @@ export function hedgeSurface(wall, H, z0, z1) {
             // Dark at the foot and in a hollow, sunlit on top, drifting
             // slowly along the length.
             const up = clamp(p.y / F.height, 0, 1);
-            const drift = noise3(z * 0.35, 0.5, 0.5, H.seed + 3) * 0.08;
             light[k] = clamp(0.42 + 0.48 * smooth(up) + off * 3 + drift + Math.max(0, p.ny) * 0.12, 0, 1);
             tint[k] = clamp(Math.max(0, p.ny) * 0.8 + drift * 2, 0, 1);
         });

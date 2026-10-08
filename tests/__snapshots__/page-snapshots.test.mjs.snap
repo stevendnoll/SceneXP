@@ -3899,6 +3899,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/decorations.min.js" rel="modulepreload"]
     link [href="js/backyard.min.js" rel="modulepreload"]
     link [href="js/gap.min.js" rel="modulepreload"]
+    link [href="js/backdrop.min.js" rel="modulepreload"]
     link [href="js/rooftops.min.js" rel="modulepreload"]
     link [href="js/celebrate.min.js" rel="modulepreload"]
     link [href="js/sound.min.js" rel="modulepreload"]
@@ -3920,6 +3921,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="js/house.min.js" rel="modulepreload"]
     link [href="js/hedge.min.js" rel="modulepreload"]
+    link [href="js/surfaces.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=6" rel="stylesheet"]
@@ -3961,7 +3963,7 @@ html [data-ui-theme="ember" lang="en"]
         p.click-prompt
           "Click to step in"
         p.tour-note
-          "You have three minutes to clear the lawn, and the clock starts with your first blow. Clear every last leaf and you finish early."
+          "You have three minutes to clear the lawn, and the clock starts with your first blow. Clear the whole lawn and you finish early."
         div.controls-hint
           span
             "WALK"

@@ -119,12 +119,38 @@ describe('every leaf off the lawn (2026-10-08)', () => {
         expect(round.spotless).toBe(false);
     });
 
-    test('spotless means not one leaf left on the open lawn', () => {
-        expect(Sc.isSpotless(tallyOf({ lawn: 0, tarp: 1000 }))).toBe(true);
-        expect(Sc.isSpotless(tallyOf({ lawn: 1, tarp: 999 }))).toBe(false);
+    // STEVE'S QA, 2026-10-08: "1 single leaf will keep the score at 99%.
+    // Maybe we can have a slight margin of error where a few leaves don't
+    // block 100%?" A tenth of a percent, with a countdown at 99%.
+    test('clear means no more than a tenth of a percent of the leaves left on the lawn', () => {
+        const yard = (lawn, total) => ({ lawn, tarp: total - lawn, street: 0, neighbor: 0, total });
+        expect(Sc.SPOTLESS_SHARE).toBe(0.001);
+        expect(Sc.leavesAllowed(24000)).toBe(24);
+        expect(Sc.leavesAllowed(12000)).toBe(12);
+        expect(Sc.leavesAllowed(600)).toBe(0);
+        expect(Sc.isSpotless(yard(24, 24000))).toBe(true);
+        expect(Sc.isSpotless(yard(25, 24000))).toBe(false);
+        expect(Sc.isSpotless(yard(12, 12000))).toBe(true);
+        expect(Sc.isSpotless(yard(0, 600))).toBe(true);
+        expect(Sc.isSpotless(yard(1, 600))).toBe(false);
         expect(Sc.isSpotless({ lawn: 0, total: 0 })).toBe(false);
-        // The HUD reads 99% until then, and 100% only then.
-        expect(Sc.percent(Sc.clearedShare(tallyOf({ lawn: 1, tarp: 999 })))).toBe(99);
+        // 100% exactly when it is clear, and never before.
+        expect(Sc.clearedPercent(yard(24, 24000))).toBe(100);
+        expect(Sc.clearedPercent(yard(0, 24000))).toBe(100);
+        expect(Sc.clearedPercent(yard(25, 24000))).toBe(99);
+        expect(Sc.clearedPercent(yard(240, 24000))).toBe(99);
+        expect(Sc.clearedPercent(yard(241, 24000))).toBe(98);
+        expect(Sc.clearedPercent(yard(24000, 24000))).toBe(0);
+    });
+
+    test('at 99% the last few are counted down, and not before or after', () => {
+        const yard = (lawn, total) => ({ lawn, tarp: total - lawn, street: 0, neighbor: 0, total });
+        expect(Sc.leavesToGo(yard(36, 24000))).toBe(12);
+        expect(Sc.toGoText(yard(36, 24000))).toBe('12 leaves to go');
+        expect(Sc.toGoText(yard(25, 24000))).toBe('1 leaf to go');
+        expect(Sc.toGoText(yard(24, 24000))).toBe('');
+        expect(Sc.toGoText(yard(241, 24000))).toBe('');
+        expect(Sc.toGoText(yard(1, 600))).toBe('1 leaf to go');
     });
 
     test('the end card and the share brag about it', () => {
@@ -132,6 +158,8 @@ describe('every leaf off the lawn (2026-10-08)', () => {
         expect(v.key).toBe('perfect');
         expect(v.title).toBe('Not a leaf in sight');
         expect(v.line).not.toMatch(/next door/);
+        // A few may be left within the margin, so it never says every last one.
+        expect(v.line).not.toMatch(/every last/i);
         expect(Sc.shareText(tallyOf({ lawn: 0, tarp: 1000 }), 167, true))
             .toBe('I cleared 100% of my yard in 2 minutes and 47 seconds. I landed the dive into a pile of 1,000 leaves. A leaf blower game on SceneXP.');
     });
@@ -268,7 +296,7 @@ describe('what the end card says', () => {
     });
 
     test('sending the neighbor a quarter of the yard is the story, however clean the lawn', () => {
-        const v = Sc.verdict(tallyOf({ lawn: 1, tarp: 699, neighbor: 300 }));
+        const v = Sc.verdict(tallyOf({ lawn: 2, tarp: 698, neighbor: 300 }));
         expect(v.key).toBe('neighbor');
         expect(v.title).toBe('The neighbors are talking');
         // Until it is every last leaf: then that is the headline, and the
