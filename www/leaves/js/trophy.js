@@ -39,25 +39,48 @@ export function pileSize(share, T) {
     return { radius, height, count };
 }
 
+/** How far the heap reaches at angle `a` (radians about y), as a share of
+ *  its radius: lumpy, not a perfect round (Steve's QA, 2026-10-08: a smooth
+ *  cone "almost like a large pile of poop"). Its height follows. */
+export function heapEdge(a, T) {
+    return 1 + T.lumps * (0.6 * Math.sin(3 * a + 0.7) + 0.4 * Math.sin(5 * a + 2.1));
+}
+
 /**
- * Where each leaf of the heap lies: on a cone of `size`, thickest at its
- * foot, each tipped to the slope where it lies and spun its own way, some
- * face down. Sorted from the bottom up, the order they land in. Returns
- * [{ x, y, z, face, tilt, spin, flip, delay }], `face` the way its slope
- * faces (radians about y), `delay` 0 to 1 through the rain.
+ * Where each leaf of the heap lies: on a lumpy heap of `size` (heapEdge),
+ * thickest at its foot, each tipped to the slope where it lies, more or less,
+ * and spun its own way, some face down, and a share (`T.spill`) blown off
+ * onto the lawn round its foot. Sorted from the bottom up, the order they
+ * land in. Returns [{ x, y, z, face, tilt, spin, flip, delay, edge, top,
+ * spill }]: `face` the way its slope faces (radians about y), `edge` and
+ * `top` the heap's reach and height where it lies, `delay` 0 to 1 through
+ * the rain.
  */
 export function pileLeaves(size, T, seed = 1) {
     const random = makeRandom(seed);
     const out = [];
-    const tilt = Math.atan2(size.height, size.radius);
     for (let i = 0; i < size.count; i++) {
-        // More leaves nearer the foot, where a heap's surface is widest.
-        const r = size.radius * Math.sqrt(random());
         const a = random() * TAU;
-        const y = size.height * (1 - r / size.radius) + random() * 0.02;
+        const k = heapEdge(a, T);
+        const edge = size.radius * k;
+        const top = size.height * (0.85 + 0.15 * k);
+        const tilt = Math.atan2(top, edge);
+        if (random() < T.spill) {
+            // Blown off the heap, lying on the lawn round its foot.
+            const r = edge * (1 + random() * 0.45);
+            out.push({
+                x: Math.sin(a) * r, y: 0.01, z: Math.cos(a) * r, face: a, tilt: (random() - 0.5) * 0.3,
+                spin: random() * TAU, flip: random() < 0.3, edge, top, spill: true
+            });
+            continue;
+        }
+        // More leaves nearer the foot, where a heap's surface is widest.
+        const r = edge * Math.sqrt(random());
+        const y = top * (1 - r / edge) + random() * 0.02;
         out.push({
             x: Math.sin(a) * r, y, z: Math.cos(a) * r,
-            face: a, tilt: tilt + (random() - 0.5) * 0.5, spin: random() * TAU, flip: random() < 0.3
+            // Tipped to the slope, but every which way, as leaves lie.
+            face: a, tilt: tilt + (random() - 0.5) * 0.9, spin: random() * TAU, flip: random() < 0.3, edge, top, spill: false
         });
     }
     out.sort((p, q) => p.y - q.y);
@@ -171,9 +194,15 @@ export function buildPile(config, share, base, finds = [], { glints = false } = 
     }
 
     const scene = new THREE.Scene();
-    scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x6b5a3a, 1.1));
-    const sun = new THREE.DirectionalLight(0xfff1dc, 1.6);
-    sun.position.set(2, 4, 3);
+    // Lit as the yard is, the sun from the front and above so the faces we
+    // see are bright, and a warm light behind to edge the heap's top.
+    const L = config.lights;
+    scene.add(new THREE.HemisphereLight(L.sky.color, L.sky.ground, L.sky.intensity));
+    const sun = new THREE.DirectionalLight(L.sun.color, L.sun.intensity);
+    sun.position.set(1.5, 4, 3.5);
+    const rim = new THREE.DirectionalLight(0xffc58a, L.sun.intensity * 0.5);
+    rim.position.set(-2, 2.5, -3);
+    scene.add(rim);
     scene.add(sun);
     const group = new THREE.Group();
     group.name = 'pile';
@@ -238,9 +267,17 @@ export function createTrophy(canvas, config, { exposure = 1 } = {}) {
     let reduced = false;
     let share = 0;
 
+    // The size it was last drawn at: the card is still hidden when the pile
+    // is made, and a canvas laid out at nothing was drawn at a fallback size
+    // and stretched (blurry, squashed: Steve's QA, 2026-10-08). So it fits
+    // again whenever its size on screen changes.
+    const drawn = { w: 0, h: 0 };
+
     function fit() {
         const w = canvas.clientWidth || 360;
         const h = canvas.clientHeight || 160;
+        drawn.w = canvas.clientWidth || 0;
+        drawn.h = canvas.clientHeight || 0;
         const ratio = typeof window !== 'undefined' ? Math.min(2, window.devicePixelRatio || 1) : 1;
         renderer.setPixelRatio(ratio);
         renderer.setSize(w, h, false);
@@ -280,6 +317,7 @@ export function createTrophy(canvas, config, { exposure = 1 } = {}) {
         /** One frame. Returns how far the count up is, 0 to 1. */
         step(dt) {
             if (!pile) return 1;
+            if ((canvas.clientWidth || 0) !== drawn.w || (canvas.clientHeight || 0) !== drawn.h) fit();
             if (!reduced) {
                 t += dt;
                 clock += dt;

@@ -855,7 +855,10 @@ export const LEAVES_CONFIG = Object.freeze({
     // down `drop` meters, each taking `fall` seconds, over `rain` seconds,
     // and it turns `spin` radians a second. `view` frames the biggest heap.
     trophy: {
-        radius: 0.85, slope: 33, grow: 0.7, least: 0.03, max: 1400, min: 12, leafScale: 1.3, seed: 7121,
+        // Bigger leaves and fewer (Steve's QA, 2026-10-08: "blurry, and
+        // almost like a large pile of poop"), so each reads at card size, on
+        // a heap `lumps` uneven, `spill` of them blown onto the lawn.
+        radius: 0.85, slope: 33, grow: 0.7, least: 0.03, max: 800, min: 12, leafScale: 1.9, lumps: 0.16, spill: 0.12, seed: 7121,
         rain: 1.3, fall: 0.5, drop: 1.4, spin: 0.35, fov: 30,
         // A clear lawn inside the time: `count` golden glints drifting down
         // `fall` m/s from `height`.

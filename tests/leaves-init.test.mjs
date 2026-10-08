@@ -48,6 +48,10 @@ afterEach(() => {
 // the sandbox, so suites that play one to its end ask for the lab's short
 // clock (?clock=, a QA host's address), as Steve can to try the finish.
 const SHORT = 20;
+// A test that plays a whole round, a dive or a clear lawn through, frame by
+// frame, gets this long rather than Jest's five seconds: a busy machine, or
+// coverage's instrumentation, can take twice as long as a quiet run.
+const LONG = 20000;
 
 /** Boot the page and let the loading screen step aside. `clock` asks for a
  *  round that many seconds long. */
@@ -523,6 +527,8 @@ describe('the round', () => {
     // banner, leaves thrown up, three hops and a spin.
     test('in free play, the last leaf off the lawn is celebrated: arms up, the blower stopped, the neighbor kept in, a banner, leaves thrown up, hops and a spin', async () => {
         const main = await boot();
+        // Bare trees first: no leaf still to come down to spoil a clear lawn.
+        main.__test__.bareTrees();
         fire(dom.el('free-btn'), 'click');
         frames(main, 1, 20);
         expect(main.getState().cheer.armed).toBe(true);
@@ -576,6 +582,8 @@ describe('the round', () => {
 
     test('at 99% the HUD counts down the last few leaves', async () => {
         const main = await boot();
+        // Bare trees first: no leaf still to come down to spoil a clear lawn.
+        main.__test__.bareTrees();
         fire(dom.el('free-btn'), 'click');
         frames(main, 0.5, 20);
         const Sim = await import('../www/leaves/js/sim.min.js');
@@ -596,6 +604,8 @@ describe('the round', () => {
 
     test('a key ends the celebration early, and the yard is theirs again', async () => {
         const main = await boot();
+        // Bare trees first: no leaf still to come down to spoil a clear lawn.
+        main.__test__.bareTrees();
         fire(dom.el('free-btn'), 'click');
         frames(main, 1, 20);
         const Sim = await import('../www/leaves/js/sim.min.js');
@@ -620,6 +630,8 @@ describe('the round', () => {
     // personal best" in the share.
     test('a clear keeps the best time, the cards say so, a faster one is shared as a new personal best, and Forget clears it', async () => {
         const main = await boot();
+        // Bare trees first: no leaf still to come down to spoil a clear lawn.
+        main.__test__.bareTrees();
         const Sim = await import('../www/leaves/js/sim.min.js');
         expect(dom.el('best-line').hidden).toBe(true);
         /** Blow once, wait `wait` seconds, clear the lawn, and see the dive through. */
@@ -635,7 +647,10 @@ describe('the round', () => {
                 Sim.layDown(sim, i, -8 + (i % 60) * 0.3, 9.6 + Math.floor(i / 60) * 0.3);
             }
             for (let k = 0; k < 6 && main.getState().round.phase === 'playing'; k++) frames(main, 0.5, 20);
-            frames(main, C0.round.finaleMax, 20);
+            // Straight past the celebration and the dive (a key skips them).
+            fire(dom.documentStub, 'keydown', { code: 'Space' });
+            fire(dom.documentStub, 'keyup', { code: 'Space' });
+            frames(main, 0.5, 20);
             expect(main.getState().endShown).toBe(true);
         };
         fire(dom.el('blocker'), 'click');
@@ -673,13 +688,15 @@ describe('the round', () => {
         expect(dom.el('round-status').textContent).toBe('Your best time is forgotten.');
         // Forgetting does not start the round behind the card.
         expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
-    });
+    }, LONG);
 
     // STEVE'S QA, 2026-10-08: "a rotating 3D view of a pile of leaves, and
     // the pile's size is dynamic based on how the user did". The pile itself
     // is measured in tests/leaves-trophy.
     test('the results card raises a pile as big as the result, and its percent counts up to the score', async () => {
         const main = await boot();
+        // Bare trees first: no leaf still to come down to spoil a clear lawn.
+        main.__test__.bareTrees();
         const Sim = await import('../www/leaves/js/sim.min.js');
         fire(dom.el('blocker'), 'click');
         fire(dom.documentStub, 'keydown', { code: 'Space' });
@@ -707,6 +724,45 @@ describe('the round', () => {
         // Play again puts it away.
         fire(dom.el('end-again'), 'click');
         expect(main.getState().pile).toBe(null);
+    }, LONG);
+
+    // Found 2026-10-08 by a test that failed now and then: the round ended
+    // on a clear count, the dive counted again, and a leaf landing between
+    // the two made the result 99%.
+    test('a round that ended on a clear lawn keeps that count, whatever lands a moment later', async () => {
+        const main = await boot();
+        // Bare trees first: no leaf still to come down to spoil a clear lawn.
+        main.__test__.bareTrees();
+        const Sim = await import('../www/leaves/js/sim.min.js');
+        fire(dom.el('blocker'), 'click');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 0.2, 20);
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        const sim = main.__test__.sim();
+        let spare = -1;
+        for (let i = 0; i < sim.count; i++) {
+            if (sim.hanging[i] || sim.falling[i]) continue;
+            Sim.hangLeaf(sim, i, 0, 5, 0);
+            Sim.layDown(sim, i, -8 + (i % 60) * 0.3, 9.6 + Math.floor(i / 60) * 0.3);
+            spare = i;
+        }
+        // Frame by frame to the one whose count first reads clear, the round
+        // still running (it ends on the next).
+        for (let k = 0; k < 40 && main.getState().counted.lawn > 0; k++) frames(main, 0.05, 20);
+        expect(main.getState().counted.lawn).toBe(0);
+        expect(main.getState().round.phase).toBe('playing');
+        // A leaf comes down on the lawn in that moment.
+        Sim.hangLeaf(sim, spare, 0, 5, 0);
+        Sim.layDown(sim, spare, 0, 2);
+        frames(main, 0.05, 20);
+        expect(main.getState().round.phase).toBe('finale');
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        // The card's percent counts up as its pile rains down.
+        frames(main, 0.5 + C0.trophy.rain + C0.trophy.fall, 20);
+        const end = main.getState();
+        expect(end.result.tally.lawn).toBe(0);
+        expect(end.result.verdict.key).toBe('perfect');
+        expect(dom.el('end-percent').textContent).toBe('100%');
     });
 
     test('a round the clock runs out on keeps no time, and its card says so plainly', async () => {
@@ -740,7 +796,7 @@ describe('the round', () => {
         fire(dom.documentStub, 'keydown', { code: 'Space' });
         frames(main, 70, 20);
         expect(main.getState().endShown).toBe(false);
-    });
+    }, LONG);
 
     test('Share sends the result sentence', async () => {
         const main = await boot({ clock: SHORT });
@@ -758,6 +814,8 @@ describe('the round', () => {
     // reaches 100%".
     test('every leaf off the lawn ends the round early, into the dive, and the share says how fast', async () => {
         const main = await boot();
+        // Bare trees first: no leaf still to come down to spoil a clear lawn.
+        main.__test__.bareTrees();
         fire(dom.el('blocker'), 'click');
         fire(dom.documentStub, 'keydown', { code: 'Space' });
         frames(main, 0.2, 20);
@@ -798,7 +856,10 @@ describe('the round', () => {
         // The dive after it, within the finale's cap.
         frames(main, C0.cheer.timed.beat, 20);
         expect(main.getState().finale.t).toBeGreaterThan(C0.cheer.timed.beat);
-        frames(main, C0.round.finaleMax, 20);
+        // A key skips the rest of the dive, and the card's percent counts up
+        // as its pile rains down.
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        frames(main, 0.5 + C0.trophy.rain + C0.trophy.fall, 20);
         const end = main.getState();
         // The gold card, the time on its ribbon, glints over the pile.
         expect(dom.el('end-modal').classList.contains('perfect')).toBe(true);
@@ -813,7 +874,7 @@ describe('the round', () => {
         fire(dom.el('end-share'), 'click');
         await flushAsync();
         expect(decodeURIComponent(dom.windowStub.location.href)).toMatch(/I cleared 100% of my yard in 1\d seconds\./);
-    });
+    }, LONG);
 });
 
 describe('the neighbor', () => {
@@ -846,7 +907,7 @@ describe('the neighbor', () => {
         // He goes about his visit without anything throwing.
         expect(() => frames(main, 15, 20)).not.toThrow();
         expect(main.getState().counted.sent).toBeGreaterThanOrEqual(80);
-    });
+    }, LONG);
 });
 
 describe('the finale (M3)', () => {
@@ -931,7 +992,7 @@ describe('the finale (M3)', () => {
         fire(dom.documentStub, 'keydown', { code: 'KeyD' });
         frames(main, 1, 20);
         expect(main.getState().operator.x).toBeGreaterThan(op.x + 1);
-    });
+    }, LONG);
 });
 
 describe('the character card (M4)', () => {
@@ -1216,7 +1277,7 @@ describe('delights and surprises (M6)', () => {
             expect(after.found).toEqual([]);
             expect(after.finds.every((f) => !f.found)).toBe(true);
             expect(after.finds.map((f) => [f.x, f.z])).not.toEqual(before);
-        });
+        }, LONG);
 
         test('the lab\'s ?finds=1 shows every one from the start, for a look at them', async () => {
             dom.windowStub.location.search = '?leaves=9000&finds=1';

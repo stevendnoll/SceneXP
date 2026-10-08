@@ -53,15 +53,24 @@ describe('how big', () => {
         }
     });
 
-    test('every leaf lies on the heap, from the foot up in the order they land', () => {
+    test('every leaf lies on the heap or blown off it onto the lawn, from the foot up in the order they land', () => {
         const size = Tr.pileSize(1, T);
         const leaves = Tr.pileLeaves(size, T, 3);
         expect(leaves).toHaveLength(size.count);
+        let spilled = 0;
         for (const p of leaves) {
             const r = Math.hypot(p.x, p.z);
-            expect(r).toBeLessThanOrEqual(size.radius + 1e-9);
-            expect(p.y).toBeCloseTo(size.height * (1 - r / size.radius), 1);
+            if (p.spill) {
+                spilled++;
+                expect(p.y).toBeLessThan(0.03);
+                expect(r).toBeGreaterThanOrEqual(p.edge - 1e-9);
+                expect(r).toBeLessThanOrEqual(p.edge * 1.45 + 1e-9);
+                continue;
+            }
+            expect(r).toBeLessThanOrEqual(p.edge + 1e-9);
+            expect(p.y).toBeCloseTo(p.top * (1 - r / p.edge), 1);
         }
+        expect(spilled / leaves.length).toBeCloseTo(T.spill, 1);
         for (let i = 1; i < leaves.length; i++) expect(leaves[i].y).toBeGreaterThanOrEqual(leaves[i - 1].y);
         // The last to land is near the top, the first near the foot.
         const mean = (list) => list.reduce((a, p) => a + p.delay, 0) / list.length;
@@ -84,23 +93,36 @@ describe('how big', () => {
     });
 });
 
+// Steve's QA, 2026-10-08: "almost like a large pile of poop". A heap of
+// leaves is lumpy, not a smooth cone, and some lie loose round its foot.
+describe('not a smooth cone', () => {
+    test('its reach and height vary round it by a good margin, and it stays a heap', () => {
+        const ks = [];
+        for (let a = 0; a < Math.PI * 2; a += 0.05) ks.push(Tr.heapEdge(a, T));
+        expect(Math.max(...ks) - Math.min(...ks)).toBeGreaterThan(0.2);
+        expect(Math.min(...ks)).toBeGreaterThan(0.7);
+        expect(Math.max(...ks)).toBeLessThan(1.3);
+    });
+});
+
 describe('the scene', () => {
     test('the yard\'s own leaves, every one landed at the end, turned to the heap\'s slope', () => {
         const pile = Tr.buildPile(C, 1, base);
         expect(pile.mesh.geometry.instanceCount).toBe(pile.size.count);
         const pos = pile.mesh.geometry.getAttribute('iPos');
         const rot = pile.mesh.geometry.getAttribute('iRot');
-        const tilt = Math.atan2(pile.size.height, pile.size.radius);
-        let steep = 0;
+        let off = 0;
         for (let i = 0; i < pile.size.count; i++) {
             const leaf = pile.leaves[i];
             expect(pos.getY(i)).toBeCloseTo(leaf.y, 5);
-            // Its face, through three's own Euler, against the slope it lies on.
+            // Its face, through three's own Euler, against the slope it lies
+            // on (or the lawn), give or take how leaves lie every which way.
             const n = new THREE.Vector3(0, 1, 0).applyEuler(new THREE.Euler(rot.getX(i), pos.getW(i), rot.getY(i), 'YXZ'));
+            const tilt = leaf.spill ? 0 : Math.atan2(leaf.top, leaf.edge);
             const slope = new THREE.Vector3(Math.sin(leaf.face) * Math.sin(tilt), Math.cos(tilt), Math.cos(leaf.face) * Math.sin(tilt));
-            if (Math.abs(n.dot(slope)) < Math.cos(0.4)) steep++;
+            if (Math.abs(n.dot(slope)) < Math.cos(0.5)) off++;
         }
-        expect(steep / pile.size.count).toBeLessThan(0.05);
+        expect(off / pile.size.count).toBeLessThan(0.02);
     });
 
     test('before the rain the leaves are out of sight, and the finds sit on top of a big heap', async () => {
@@ -197,6 +219,28 @@ describe('the card\'s view', () => {
         expect(view.step(0.1)).toBe(1);
         view.dispose();
         expect(made[0].disposed).toBe(true);
+    });
+
+    // Steve's QA, 2026-10-08: the pile "looks kind of blurry". It was made
+    // while the card was still hidden, laid out at nothing, drawn at a
+    // fallback size and stretched to fill its half of the card.
+    test('drawn at the size it is shown at, made while the card is hidden or not', () => {
+        const { FakeRenderer, made } = fakeRenderer();
+        THREE.WebGLRenderer = FakeRenderer;
+        const canvas = { clientWidth: 0, clientHeight: 0 };
+        const view = Tr.createTrophy(canvas, C);
+        view.show(0.8, base, [], false);
+        // The card opens: laid out at last.
+        canvas.clientWidth = 470;
+        canvas.clientHeight = 360;
+        view.step(1 / 60);
+        expect(made[0].size).toEqual([470, 360]);
+        expect(made[0].last.camera.aspect).toBeCloseTo(470 / 360, 9);
+        // And again if the window changes.
+        canvas.clientWidth = 340;
+        canvas.clientHeight = 200;
+        view.step(1 / 60);
+        expect(made[0].size).toEqual([340, 200]);
     });
 
     test('under reduced motion it is simply there, finished and still', () => {

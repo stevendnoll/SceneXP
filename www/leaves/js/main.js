@@ -1261,7 +1261,11 @@ function onRoundEvent(event) {
 /** The leaves are down and the result is counted: plan the dive at the
  *  peak of the tarp's pile. */
 function startFinale() {
-    finale.tally = { ...recount() };
+    // A round that ended on a clear lawn keeps the count that said so: a
+    // tree's leaf landing in the moment between that count and a fresh one
+    // read 99% on a round that had just ended for being clear (found
+    // 2026-10-08, a test that failed now and then).
+    finale.tally = round.spotless ? { ...counted } : { ...recount() };
     const peak = pilePeak(sim, CONFIG.yard.tarp);
     // The rake on the tarp is not solid to the leaves, but the dive keeps
     // off it.
@@ -1985,5 +1989,8 @@ if (typeof document !== 'undefined') {
 
 // Exposed for unit tests only.
 export const __test__ = {
-    bufToHex, keys, pointer, blowHold, aimAt, walkArea, sim: () => sim
+    bufToHex, keys, pointer, blowHold, aimAt, walkArea, sim: () => sim,
+    // Strips the trees bare, for a test that clears the lawn and must not
+    // race a leaf still to come down.
+    bareTrees: () => { crowns.forEach((c) => { c.leaves.length = 0; }); }
 };
