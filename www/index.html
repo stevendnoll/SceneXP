@@ -111,48 +111,54 @@
             {
               "@type": "ListItem",
               "position": 1,
+              "url": "https://www.scenexp.com/leaves/",
+              "name": "Leaf Blower"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
               "url": "https://www.scenexp.com/office/",
               "name": "Corner Office"
             },
             {
               "@type": "ListItem",
-              "position": 2,
+              "position": 3,
               "url": "https://www.scenexp.com/tornado/",
               "name": "Tornado Alley"
             },
             {
               "@type": "ListItem",
-              "position": 3,
+              "position": 4,
               "url": "https://www.scenexp.com/xo/",
               "name": "X's and O's"
             },
             {
               "@type": "ListItem",
-              "position": 4,
+              "position": 5,
               "url": "https://www.scenexp.com/garden/",
               "name": "Fractal Garden"
             },
             {
               "@type": "ListItem",
-              "position": 5,
+              "position": 6,
               "url": "https://www.scenexp.com/highwater/",
               "name": "High Water"
             },
             {
               "@type": "ListItem",
-              "position": 6,
+              "position": 7,
               "url": "https://www.scenexp.com/earthdefense/",
               "name": "Earth Defense"
             },
             {
               "@type": "ListItem",
-              "position": 7,
+              "position": 8,
               "url": "https://www.scenexp.com/mandelbrot/",
               "name": "The Mandelbrot Set"
             },
             {
               "@type": "ListItem",
-              "position": 8,
+              "position": 9,
               "url": "https://www.scenexp.com/steve/",
               "name": "Steve's Home Office"
             }
@@ -327,32 +333,54 @@
                     <p>No app, no download, nothing to install.</p>
                 </div>
 
-                <!-- THE SPOTLIGHT: the three newest worlds, one at a time, newest
-                     first, each with the date it was released. A slow cross-fade
-                     with a gentle pan and zoom, from /js/home.js, which also adds
-                     the dots and the pause button (WCAG 2.2.2: anything that moves
-                     on its own for more than five seconds must be pausable). It
-                     holds still for reduced motion, and pauses while the pointer
-                     or keyboard focus is on it.
+                <!-- THE SPOTLIGHT, "Featured" (Steve, 2026-10-09; "Just released"
+                     and the three newest worlds until then): a few worlds picked
+                     by hand, one at a time, LED BY THE NEWEST RELEASE, each with
+                     the date it was released. The "New" badge (home.js) still
+                     marks any released in the last month, here and on its card.
+                     A slow cross-fade with a gentle pan and zoom, from
+                     /js/home.js, which also adds the dots and the pause button
+                     (WCAG 2.2.2: anything that moves on its own for more than
+                     five seconds must be pausable). It holds still for reduced
+                     motion, and pauses while the pointer or keyboard focus is on
+                     it.
 
-                     WITHOUT JAVASCRIPT it is simply the newest world: the other two
+                     WITHOUT JAVASCRIPT it is simply the first world: the other
                      slides are hidden by the stylesheet (never by `hidden`, which
                      would be markup waiting on a script), and there are no controls
                      to sit inert. The first image is the page's Largest Contentful
                      Paint on every screen, so it is the one eager, high-priority
-                     image on the page. Every card in the grid below is lazy.
+                     image on the page. Every card in the grid below is lazy. Every
+                     slide's picture loads with the page (they share the same spot
+                     on screen), so the set is kept to three.
 
-                     WHEN A WORLD IS RELEASED, its slide goes first here and the
-                     third one goes. tests/home-dates.test.mjs checks these are the
-                     three newest cards, by date, in order. -->
+                     WHEN A WORLD IS RELEASED, its slide goes first here. Which
+                     others stay is a choice. tests/home-dates.test.mjs checks the
+                     first is the newest card and that every slide matches its
+                     card. -->
                 <section class="spotlight" id="spotlight" aria-labelledby="spotlight-heading"
                     aria-roledescription="carousel">
-                    <h2 id="spotlight-heading">Just released</h2>
+                    <h2 id="spotlight-heading">Featured</h2>
                     <ul class="spotlight-slides">
-                        <li class="spotlight-slide is-active" data-slug="office" aria-roledescription="slide" aria-label="1 of 3">
+                        <li class="spotlight-slide is-active" data-slug="leaves" aria-roledescription="slide" aria-label="1 of 3">
+                            <a href="/leaves/">
+                                <div class="spotlight-media">
+                                    <img src="/leaves/assets/og-leaves.webp?v=1" width="1200" height="630" loading="eager" fetchpriority="high" decoding="async"
+                                        alt="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding.">
+                                </div>
+                                <div class="spotlight-body">
+                                    <p class="spotlight-date">Released <time datetime="2026-10-09">October 9, 2026</time></p>
+                                    <p class="experience-eyebrow">A leaf blower game in an autumn front yard</p>
+                                    <h3>Leaf Blower</h3>
+                                    <p class="spotlight-text">Twelve thousand autumn leaves and a leaf blower. Blow them onto the tarp before the clock runs out, then take a running dive into the pile.</p>
+                                    <span class="experience-cta">Grab the leaf blower →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="spotlight-slide" data-slug="office" aria-roledescription="slide" aria-label="2 of 3">
                             <a href="/office/">
                                 <div class="spotlight-media">
-                                    <img src="/office/assets/og-office.webp?v=1" width="1200" height="630" loading="eager" fetchpriority="high" decoding="async"
+                                    <img src="/office/assets/og-office.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
                                         alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond.">
                                 </div>
                                 <div class="spotlight-body">
@@ -364,33 +392,18 @@
                                 </div>
                             </a>
                         </li>
-                        <li class="spotlight-slide" data-slug="tornado" aria-roledescription="slide" aria-label="2 of 3">
-                            <a href="/tornado/">
+                        <li class="spotlight-slide" data-slug="garden" aria-roledescription="slide" aria-label="3 of 3">
+                            <a href="/garden/">
                                 <div class="spotlight-media">
-                                    <img src="/tornado/assets/og-tornado.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
-                                        alt="A pale tornado reaching down from a dark, turning storm base to a cloud of dust and flying debris, just left of a small farm with a red barn, across golden fields with wildflowers in the foreground.">
+                                    <img src="/garden/assets/og-garden.webp?v=3" width="1200" height="630" loading="lazy" decoding="async"
+                                        alt="Five fractal fruit trees in full summer leaf, their canopies heavy with red fruit, standing on dark mulch mounds in a walled garden plot. Each trunk has a small blue water gauge at its base. Behind the wall a pale lake sits below gray rolling hills, under a blue sky with white clouds.">
                                 </div>
                                 <div class="spotlight-body">
-                                    <p class="spotlight-date">Released <time datetime="2026-09-23">September 23, 2026</time></p>
-                                    <p class="experience-eyebrow">A storm chaser's view of a tornado</p>
-                                    <h3>Tornado Alley</h3>
-                                    <p class="spotlight-text">Thirty seconds on the open prairie. A storm organizes on the horizon, its base begins to turn, and a tornado touches down far out across the fields.</p>
-                                    <span class="experience-cta">Watch the storm roll in →</span>
-                                </div>
-                            </a>
-                        </li>
-                        <li class="spotlight-slide" data-slug="xo" aria-roledescription="slide" aria-label="3 of 3">
-                            <a href="/xo/">
-                                <div class="spotlight-media">
-                                    <img src="/xo/assets/og-xo.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
-                                        alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides.">
-                                </div>
-                                <div class="spotlight-body">
-                                    <p class="spotlight-date">Released <time datetime="2026-09-14">September 14, 2026</time></p>
-                                    <p class="experience-eyebrow">A football game where you call the plays</p>
-                                    <h3>X's and O's</h3>
-                                    <p class="spotlight-text">You are on offense for all ten plays. Pick a play, snap the ball, then throw to an open receiver or keep it and run. 500 is a perfect game.</p>
-                                    <span class="experience-cta">Call the first play →</span>
+                                    <p class="spotlight-date">Released <time datetime="2026-08-26">August 26, 2026</time></p>
+                                    <p class="experience-eyebrow">A garden you plant and tend yourself</p>
+                                    <h3>Fractal Garden</h3>
+                                    <p class="spotlight-text">Plant a walled garden of fractal trees and tend them through spring blossom, summer fruit, autumn color and winter snow. Every tree you plant is still standing when you come back.</p>
+                                    <span class="experience-cta">Plant your first tree →</span>
                                 </div>
                             </a>
                         </li>
@@ -422,6 +435,23 @@
                     aria-labelledby="worlds-and-games">
                     <h2 id="worlds-and-games">Worlds and games</h2>
                     <ul class="experience-grid">
+                        <li class="experience-card" data-slug="leaves">
+                            <a href="/leaves/">
+                                <img src="/leaves/assets/og-leaves.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
+                                    alt="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">A leaf blower game in an autumn front yard</p>
+                                    <h3>Leaf Blower</h3>
+                                    <p>Twelve thousand autumn leaves cover the front yard, and every one
+                                        tumbles, skids and piles up on its own. Blow them onto the tarp
+                                        before the clock runs out, keep them out of the neighbor's yard,
+                                        then take a running dive into the pile. Or skip the clock and just
+                                        play with the leaves.</p>
+                                    <p class="experience-date">Released <time datetime="2026-10-09">October 9, 2026</time></p>
+                                    <span class="experience-cta">Grab the leaf blower →</span>
+                                </div>
+                            </a>
+                        </li>
                         <li class="experience-card" data-slug="office">
                             <a href="/office/">
                                 <img src="/office/assets/og-office.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"

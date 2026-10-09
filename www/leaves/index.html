@@ -11,12 +11,6 @@
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <!-- BEING BUILT IN THE OPEN (M0, 2026-10-06): the leaf lab, the first step
-         of the leaf blower scene. Kept out of the directory, the sitemap,
-         llms.txt and search until it is released. Releasing it means a social
-         card, a directory card, and taking this tag off (see tests/directory). -->
-    <meta name="robots" content="noindex, nofollow">
-
     <meta name="description" content="A front yard buried in autumn leaves, and a leaf blower waiting for you. Every leaf tumbles, skids and piles up on its own, live in your browser.">
     <meta name="theme-color" content="#5d7f3a">
     <meta name="author" content="Steve Noll">
@@ -34,37 +28,57 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/leaves/">
     <meta property="og:locale" content="en_US">
-    <!-- THE SOCIAL CARD IS STILL TO COME. og-leaves.jpg will be Steve's
-         capture of the yard (1200 by 630, sRGB baked in, see CONTRIBUTING),
-         made once the look is approved. Exactly one og:image, as on every
-         page, since Apple's link preview draws every one it finds. -->
+    <!-- THE SOCIAL CARD. JPEG, NOT WEBP (LinkedIn previews no WebP), and
+         exactly one og:image (Apple renders every one it finds). Steve's
+         capture of the yard mid-job (2026-10-09, `?clean=1&halloween=0`, so
+         it suits the whole year), converted from the display's profile to
+         sRGB and stripped; og-leaves.webp beside it (cwebp -sharp_yuv, for
+         the small bright leaves) is the directory card's. og:image:alt
+         describes THIS picture, so it is rewritten with the card, and the
+         ?v= moves with it. -->
     <meta property="og:image" content="https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1">
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower.">
+    <meta property="og:image:alt" content="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Leaf Blower">
     <meta name="twitter:description" content="A front yard buried in autumn leaves, and a leaf blower waiting for you.">
     <meta name="twitter:image" content="https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1">
-    <meta name="twitter:image:alt" content="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower.">
+    <meta name="twitter:image:alt" content="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding.">
 
     <!-- Structured data: site identity for search engines.
          JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebPage",
-      "@id": "https://www.scenexp.com/leaves/#webpage",
+      "@type": "VideoGame",
+      "@id": "https://www.scenexp.com/leaves/#game",
       "url": "https://www.scenexp.com/leaves/",
       "name": "Leaf Blower",
-      "description": "A front yard buried in autumn leaves, drawn live in the browser, where visitors blow the leaves around with a leaf blower and watch every one tumble, skid and pile up.",
+      "image": "https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1",
+      "description": "A browser-based 3D leaf blower game. A front yard is buried in thousands of autumn leaves, each one simulated as it tumbles, skids and piles up. Blow them onto the tarp before the clock runs out, keep them out of the neighbor's yard, then dive into the pile. There is a no-clock mode for just playing with the leaves.",
+      "genre": ["Casual", "Simulation"],
+      "gamePlatform": "Web browser",
+      "applicationCategory": "Game",
+      "operatingSystem": "Any",
+      "datePublished": "2026-10-09",
       "inLanguage": "en-US",
       "isPartOf": {
         "@type": "WebSite",
         "@id": "https://www.scenexp.com/#website"
+      },
+      "isAccessibleForFree": true,
+      "playMode": "SinglePlayer",
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Continuum Commerce LLC"
       }
     }
     </script>

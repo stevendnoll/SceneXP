@@ -64,8 +64,9 @@ const WITHHELD_CARDS = ['www/interstate/index.html', 'www/seedtoseed/index.html'
  *  adding its card and taking it off this list. */
 // Starfall is an unlisted proof of concept (2026-10-01), so its card may
 // never be captured, and it stays here for as long as it stays unlisted.
-// The leaf lab (2026-10-06) waits for its card until the look is approved.
-const PENDING_CARDS = ['www/leaves/index.html', 'www/starfall/index.html'];
+// The leaf lab (2026-10-06) waited for its card until the look was approved,
+// and left with Leaf Blower's release on 2026-10-09.
+const PENDING_CARDS = ['www/starfall/index.html'];
 
 // ---- Reading the pages -------------------------------------------------------
 

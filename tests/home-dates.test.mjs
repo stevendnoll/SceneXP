@@ -8,8 +8,9 @@
  * together, and because the date is now written down it can also hold the
  * rules that used to be left to whoever added a card:
  *   - each category runs newest first;
- *   - the spotlight above the grid shows the three newest worlds, newest
- *     first, and says the same thing about each as its card does.
+ *   - the spotlight above the grid ("Featured" since 2026-10-09, worlds
+ *     picked by hand, the newest only until then) leads with the newest
+ *     world, and says the same thing about each as its card does.
  *
  * The July dates are approximate (see the note in www/index.html), but they
  * are still the dates, and they are held like any other.
@@ -78,9 +79,17 @@ test('each category runs newest first', () => {
     }
 });
 
-test('the spotlight shows the three newest worlds, newest first', () => {
-    const newest = [...cards].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 3).map((c) => c.slug);
-    expect(slides.map((s) => s.slug)).toEqual(newest);
+// STEVE, 2026-10-09: "change the heading over the slider from 'Just
+// released' to 'Featured'", Leaf Blower, Corner Office and Fractal Garden.
+// The picks are his. What holds is that the newest release leads, and a
+// handful at most, since every slide's picture loads with the page.
+test('the spotlight is "Featured": the newest world first, then a few picked by hand', () => {
+    expect(spotlight).toMatch(/<h2 id="spotlight-heading">Featured<\/h2>/);
+    const newest = [...cards].sort((a, b) => (a.date < b.date ? 1 : -1))[0].slug;
+    expect(slides[0].slug).toBe(newest);
+    expect(slides.length).toBeGreaterThanOrEqual(3);
+    expect(slides.length).toBeLessThanOrEqual(4);
+    expect(new Set(slides.map((s) => s.slug)).size).toBe(slides.length);
 });
 
 test('each spotlight slide says what its card says', () => {

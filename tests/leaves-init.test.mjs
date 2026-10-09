@@ -1696,10 +1696,13 @@ describe('the page', () => {
     let html;
     beforeAll(async () => { html = await readFile(PAGE, 'utf8'); });
 
-    test('names itself, and stays out of search until it is released', () => {
+    // Released 2026-10-09: open to search, with its date and its own card.
+    test('names itself, is open to search since its release, and shows its own card', () => {
         expect(html).toContain('<title>Leaf Blower | SceneXP</title>');
         expect(html).toContain('<link rel="canonical" href="https://www.scenexp.com/leaves/">');
-        expect(html).toContain('<meta name="robots" content="noindex, nofollow">');
+        expect(html).not.toContain('noindex');
+        expect(html).toContain('"datePublished": "2026-10-09"');
+        expect(html).toContain('<meta property="og:image" content="https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1">');
     });
 
     test('carries the welcome card and a no-JavaScript fallback', () => {

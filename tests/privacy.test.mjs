@@ -54,8 +54,8 @@ const PERSISTENT = {
     'www/xo/js/progress.js': 'a game of X’s and O’s that has not finished yet',
     'www/xo/js/colors.js': 'the team and field colors chosen in X’s and O’s',
     'www/xo/js/jump.js': 'whether Auto jump is on in X’s and O’s',
-    'www/leaves/js/cast.js': 'the character chosen in Leaves',
-    'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaves'
+    'www/leaves/js/cast.js': 'the character chosen in Leaf Blower',
+    'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaf Blower'
 };
 
 /** Source files only. The built .min copies are the same code twice. */
