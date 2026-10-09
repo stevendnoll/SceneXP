@@ -13,7 +13,7 @@
  */
 import { readFile } from 'node:fs/promises';
 
-const { createSound } = await import('../www/leaves/js/sound.js');
+const { createSound, settled } = await import('../www/leaves/js/sound.js');
 const { LEAVES_CONFIG: C } = await import('../www/leaves/js/config.js');
 const S = C.sound;
 
@@ -418,5 +418,97 @@ describe('on a phone', () => {
         plain.unlock();
         const master = built.nodes.slice(before).find((n) => n.kind === 'gain');
         expect(master.to.map((t) => t.kind)).toEqual(['destination']);
+    });
+});
+
+// Steve's QA, 2026-10-08: "sounds great if my system's volume is at 25% or
+// less, but anything over 50% and it gets LOUD", on a phone and a computer.
+describe('never too loud', () => {
+    /** One biquad (Web Audio's, RBJ's cookbook) as a sample-at-a-time step. */
+    function biquad(type, f0, Q, fs) {
+        const w = 2 * Math.PI * f0 / fs;
+        const c = Math.cos(w);
+        const a = Math.sin(w) / (2 * Q);
+        const b = type === 'lowpass' ? [(1 - c) / 2, 1 - c, (1 - c) / 2] : [a, 0, -a];
+        return step([...b, -2 * c, 1 - a].map((k) => k / (1 + a)));
+    }
+    function step(k) {
+        let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+        return (x) => {
+            const y = k[0] * x + k[1] * x1 + k[2] * x2 - k[3] * y1 - k[4] * y2;
+            x2 = x1; x1 = x; y2 = y1; y1 = y;
+            return y;
+        };
+    }
+
+    /** The blower at full blow, at `level`, through the voice's own filters
+     *  and the module's own noise, measured as ITU-R BS.1770 loudness (LUFS,
+     *  K-weighted, a centered pan sending cos(pi/4) to each side). Music is
+     *  mastered near -14. */
+    function loudness(level) {
+        createSound(S).setOn(true);
+        const noise = built.buffers[0].data;
+        const fs = 48000;
+        const air = biquad('lowpass', S.fullHz, S.airQ, fs);
+        const band = biquad('bandpass', S.bodyHz, S.bodyQ, fs);
+        // The K-weighting at 48 kHz, the standard's own coefficients.
+        const shelf = step([1.53512485958697, -2.69169618940638, 1.19839281085285, -1.69065929318241, 0.73248077421585]);
+        const high = step([1, -2, 1, -1.99004745483398, 0.99007225036621]);
+        const side = Math.cos(Math.PI / 4);
+        let sum = 0;
+        const n = fs * 4;
+        for (let i = 0; i < n; i++) {
+            const x = noise[i % noise.length];
+            const k = high(shelf((air(x) + band(x) * S.bodyGain) * level * side));
+            sum += k * k;
+        }
+        return -0.691 + 10 * Math.log10(2 * sum / n);
+    }
+
+    test('a computer\'s blower stays far under music, and a phone\'s a step under that', () => {
+        const computer = loudness(S.master);
+        const phone = loudness(S.masterMobile);
+        // About -30.5 and -36.6. It was -22.5 and -28.6.
+        expect(computer).toBeLessThan(-29);
+        expect(computer).toBeGreaterThan(-33);
+        expect(phone).toBeLessThan(computer - 5);
+        // The measure itself is sound: the old level reads 8 dB louder.
+        expect(loudness(0.22) - computer).toBeCloseTo(8, 0);
+    });
+
+    test('held, it settles back a few decibels, and every new blow starts at full strength', () => {
+        expect(settled(0, 5, S.settle)).toBe(0);
+        expect(settled(1, 0.5, S.settle)).toBe(1);
+        expect(settled(1, S.settle.after + 0.1, S.settle)).toBe(S.settle.level);
+        expect(settled(0.8, 9, S.settle)).toBeCloseTo(0.8 * S.settle.level, 9);
+        expect(settled(1, 9, undefined)).toBe(1);
+        const dB = 20 * Math.log10(S.settle.level);
+        expect(dB).toBeLessThan(-3);
+        expect(dB).toBeGreaterThan(-6);
+
+        const sound = createSound(S);
+        sound.setOn(true);
+        const [mine, his] = voiceGains();
+        const blow = (seconds, me, him = false) => {
+            for (let t = 0; t < seconds; t += 1 / 60) sound.update(1 / 60, { blowing: me }, { blowing: him, pan: 0.4 });
+        };
+        blow(0.5, true);
+        expect(mine.gain.value).toBe(1);
+        blow(1.5, true);
+        const ease = mine.gain.calls.at(-1);
+        expect(ease[1]).toBe(S.settle.level);
+        // Eased, not dropped: slower than the spool-up and the let-go.
+        expect(ease[3]).toBe(S.settle.tau);
+        expect(S.settle.tau).toBeGreaterThan(S.release);
+        blow(0.1, false);
+        expect(mine.gain.calls.at(-1)[1]).toBe(0);
+        expect(mine.gain.calls.at(-1)[3]).toBe(S.release);
+        blow(0.1, true);
+        expect(mine.gain.calls.at(-1)).toEqual(['target', 1, expect.any(Number), S.attack]);
+        // His settles the same way.
+        blow(0.1, false, true);
+        expect(his.gain.value).toBeCloseTo(S.neighbor, 5);
+        blow(2, false, true);
+        expect(his.gain.value).toBeCloseTo(S.neighbor * S.settle.level, 5);
     });
 });

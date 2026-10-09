@@ -40,11 +40,12 @@
  * on themselves has asked for it, so then, where Safari offers
  * navigator.audioSession, it is set to playback, through the switch.
  *
- * QUIETER ON A PHONE (Steve's QA, 2026-10-08: "way too loud relative to the
- * speaker's volume"): the whoosh sits where a phone's small speaker is
- * loudest, so a phone plays it at `masterMobile` (setLevel), and a limiter
- * on the way out keeps the moments when several sounds stack up (both
- * blowers, the fanfare, a crunch) from spiking.
+ * QUIETER (Steve's QA, 2026-10-08: "anything over 50% and it gets LOUD", on
+ * a phone and a computer alike): 8 dB under where it was, a phone 6 dB
+ * under a computer (`masterMobile`, setLevel), a held blow easing back a
+ * little after its first second (`settle`), and a limiter on the way out so
+ * the moments when several sounds stack up (both blowers, the fanfare, a
+ * crunch) cannot spike.
  *
  * Every call is safe before the context exists, after it has gone, and in a
  * browser with no Web Audio at all.
@@ -61,6 +62,14 @@ function audioSession(on) {
     try {
         if (typeof navigator !== 'undefined' && navigator.audioSession) navigator.audioSession.type = on ? 'playback' : 'auto';
     } catch (e) { /* not settable */ }
+}
+
+/** A voice's level, `full` while it first blows, eased back to `K.level`
+ *  of that once it has blown `held` seconds past `K.after` (config.sound
+ *  .settle), silent when it is not blowing. */
+export function settled(full, held, K) {
+    if (full <= 0) return 0;
+    return K && held > K.after ? full * K.level : full;
 }
 
 /** Let a promise from the audio API fail quietly (some return none). */
@@ -205,13 +214,18 @@ export function createSound(S) {
             // His, only while ours is quiet.
             [voices.his, his && his.blowing && !(mine && mine.blowing) ? S.neighbor * (his.big ? S.big : 1) : 0, his ? his.pan || 0 : 0]
         ];
-        for (const [v, level, side] of want) {
+        for (const [v, full, side] of want) {
             if (!v) continue;
-            const hz = level > 0 ? S.fullHz * breathe : S.idleHz;
+            // How long it has been blowing without a break, and so whether it
+            // has settled back.
+            v.held = full > 0 ? (v.held || 0) + (dt > 0 ? dt : 0) : 0;
+            const level = settled(full, v.held, S.settle);
+            const hz = full > 0 ? S.fullHz * breathe : S.idleHz;
             // Only when something changed enough to hear, so the audio
             // thread is not handed sixty new automation events a second.
             if (Math.abs(level - v.level) > 0.01) {
-                glide(v.gain.gain, level, level > v.level ? S.attack : S.release);
+                const tau = level > v.level ? S.attack : level > 0 ? S.settle.tau : S.release;
+                glide(v.gain.gain, level, tau);
                 v.level = level;
             }
             if (Math.abs(hz - v.hz) / v.hz > 0.02) {

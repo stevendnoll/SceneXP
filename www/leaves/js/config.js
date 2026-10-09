@@ -820,11 +820,17 @@ export const LEAVES_CONFIG = Object.freeze({
     // remembered.
     sound: {
         startOn: true,
-        master: 0.22,
-        // A phone's level (Steve's QA, 2026-10-08: "way too loud relative to
-        // the speaker's volume"), and the limiter on the way out: above
-        // `threshold` dB, `ratio` to one, over a `knee` dB bend.
-        masterMobile: 0.11,
+        // HOW LOUD, all told (Steve's QA, 2026-10-08: fine at a quarter of
+        // the system's volume, "anything over 50% and it gets LOUD", on a
+        // phone and a computer alike). 8 dB under the 0.22 and 0.11 it had:
+        // the blower measures about -30.5 LUFS on a computer (it was
+        // -22.5, music is mastered near -14), and a phone, whose small
+        // speaker is loudest where the whoosh is, plays 6 dB under that.
+        // tests/leaves-sound holds it under a loudness ceiling. And the
+        // limiter on the way out: above `threshold` dB, `ratio` to one,
+        // over a `knee` dB bend.
+        master: 0.088,
+        masterMobile: 0.044,
         limiter: { threshold: -12, knee: 6, ratio: 8, attack: 0.003, release: 0.25 },
         // The air: noise through a lowpass that spools up from `idleHz` to
         // `fullHz` when the blower starts, and a band for its body.
@@ -837,6 +843,10 @@ export const LEAVES_CONFIG = Object.freeze({
         // How fast it spools up and down (time constants, seconds).
         attack: 0.07,
         release: 0.18,
+        // HELD, IT SETTLES (Steve's QA, 2026-10-08): each blow starts at full
+        // strength, and after `after` seconds of steady blowing eases back to
+        // `level` (-4 dB) over `tau`, so a long blow is not a wall of noise.
+        settle: { after: 1.2, level: 0.63, tau: 0.9 },
         spool: 0.12,
         // A slow wander in the air's pitch, so it breathes.
         wobble: { hz: 0.7, depth: 0.08 },
