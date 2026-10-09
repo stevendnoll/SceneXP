@@ -1030,6 +1030,15 @@ export function isBlowing(playing, ptr, held, button) {
     return playing && ((ptr.down && ptr.blows) || held.blow || button.id !== null || button.key);
 }
 
+/** Whether the shadows are due a redraw, `since` seconds after the last:
+ *  at `hz`, give or take `slack`. A HAIR OF SLACK (found by CI, 2026-10-09):
+ *  two 60 fps frames add up to a rounding error UNDER 1/30 s as often as
+ *  not, so the redraw waited for a third, 20 a second instead of 30, on the
+ *  last bits of the frame times. 2 ms is far less than any frame. */
+export function shadowDue(since, S) {
+    return since >= 1 / S.hz - (S.slack || 0);
+}
+
 /** Whether the ring on the lawn marks where the mouse aims: while the
  *  person is free to move and steered by a pointer, never under the lab's
  *  ?clean=1 (a social card's capture). */
@@ -2052,7 +2061,7 @@ function animate() {
         if (uploaded > 0 || operator.speed > 0 || neighbor.speed > 0 || (neighbor.door > 0 && neighbor.door < 1)) shade.owed = true;
         if (rising || treaterGroups.some((g) => g.tr.speed > 0)) shade.owed = true;
         shade.since += delta;
-        if (shade.owed && shade.since >= 1 / CONFIG.shadows.hz) {
+        if (shade.owed && shadowDue(shade.since, CONFIG.shadows)) {
             renderer.shadowMap.needsUpdate = true;
             shade.owed = false;
             shade.since = 0;

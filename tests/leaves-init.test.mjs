@@ -558,6 +558,25 @@ test('in a still yard the shadows keep up with the swaying trees', async () => {
     expect(redraws).toBeGreaterThan(C0.shadows.hz * 2 * 0.8);
 });
 
+// FOUND BY CI, 2026-10-09: the test above counted 60 redraws here and 40 on
+// CI. Two 60 fps frames add up to 1/30 s give or take the last bits of the
+// frame times, and when the sum fell a rounding error short the redraw
+// waited a third frame: 20 a second, not 30. Which way it fell depended on
+// the clock, so the rule is tested here on the sum CI met.
+test('two frames at 60 a second are a shadow redraw at 30, whatever the rounding', async () => {
+    const main = await boot();
+    const S = C0.shadows;
+    const frame = 1 / 60;
+    // A rounding error short of 1/30, as the frame times CI had.
+    const short = 2 * frame - 1e-12;
+    expect(short).toBeLessThan(1 / S.hz);
+    expect(main.shadowDue(short, S)).toBe(true);
+    // One frame is never enough, at 60 a second or at 144.
+    expect(main.shadowDue(frame, S)).toBe(false);
+    expect(main.shadowDue(4 / 144, S)).toBe(false);
+    expect(main.shadowDue(5 / 144, S)).toBe(true);
+});
+
 // THE SOCIAL CARD'S CAPTURE (M7, 2026-10-09): ?clean=1 on a QA host hides
 // everything over the yard (the CSS keys off the class) and the aim ring.
 test('?clean=1 leaves nothing over the yard but the yard', async () => {

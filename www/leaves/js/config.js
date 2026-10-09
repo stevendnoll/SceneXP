@@ -1163,8 +1163,10 @@ export const LEAVES_CONFIG = Object.freeze({
     shadows: {
         enabled: true,
         mapSize: { desktop: 2048, mobile: 1024 },
-        // The leaves' shadows are redrawn this often while any leaf moves.
+        // The leaves' shadows are redrawn this often while any leaf moves,
+        // give or take `slack` seconds of frame-time rounding (main.js).
         hz: 30,
+        slack: 0.002,
         bias: -0.0004,
         normalBias: 0.02
     },
