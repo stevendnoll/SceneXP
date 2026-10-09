@@ -77,7 +77,7 @@ import {
 import { createLeafMesh } from './leafmesh.min.js';
 import { buildYard } from './yard.min.js';
 import { rakeFootprint } from './house.min.js';
-import { createOperator, stepOperator, facing, createOperatorFigure } from './blower.min.js';
+import { createOperator, stepOperator, standoffFor, facing, createOperatorFigure } from './blower.min.js';
 import { cameraFor, cameraOn, cameraCast, castFrame, rayToGround, ease, clampZoom, orbitView } from './view.min.js';
 import {
     SHIRTS, PANTS, SKINS, HAIR_COLORS, HAIR_LENGTHS, DEFAULT_CHOICE,
@@ -479,12 +479,19 @@ function buildMarker() {
     return ring;
 }
 
+/** How far the camera stands from what it looks at, as the visitor sees it
+ *  (the eased view), or NaN before there is one. */
+function viewDistance() {
+    if (!view.position || !view.target) return NaN;
+    return Math.hypot(view.position.x - view.target.x, view.position.y - view.target.y, view.position.z - view.target.z);
+}
+
 function placeCamera(snap) {
     if (!camera) return;
     const aspect = window.innerWidth / window.innerHeight;
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
-    const want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null, zoom.value);
+    const want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null, zoom.value, state.touch);
     if (snap || !view.position) {
         view.position = { ...want.position };
         view.target = { ...want.target };
@@ -522,7 +529,7 @@ function followCamera(dt) {
         want = orbitView(cameraOn(cheerFocus(operator, CONFIG.yard.lawn), aspect, CONFIG.camera, CONFIG.cheer.span),
             cheerOrbit(cheer.t, CONFIG.cheer));
     }
-    else want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null, zoom.value);
+    else want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null, zoom.value, state.touch);
     const rate = CONFIG.camera.follow;
     ['x', 'y', 'z'].forEach((k) => {
         view.position[k] = ease(view.position[k], want.position[k], rate, dt);
@@ -1893,6 +1900,8 @@ function animate() {
     // QA). A finger only re-aims when it moves.
     if (free && steer === 'point' && pointer.mouse && pointer.client) aimAt(pointer.client.x, pointer.client.y);
     const aim = free ? aimFor(steer, pointer, keys, stick ? stick.vector() : null) : null;
+    // In close the person stops nearer the pointer (Steve's QA, 2026-10-09).
+    if (aim && aim.mode === 'point') aim.standoff = standoffFor(B, viewDistance());
     const diving = round.phase === 'finale';
     if (cheering) {
         if (inYard) stepCheerPose(dt);

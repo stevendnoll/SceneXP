@@ -671,6 +671,23 @@ describe('what gets uploaded', () => {
 describe('the person with the blower', () => {
     const area = { minX: -9.5, maxX: 9.6, minZ: -5.4, maxZ: 9 };
 
+    // Steve's QA, 2026-10-09: in close, the cursor could not get far enough
+    // away to walk the person. The usual view keeps the usual standoff.
+    test('in close the person stops nearer the pointed spot, never nearer than the nozzle\'s tip', () => {
+        const B = C.blower;
+        expect(Op.standoffFor(B, 22.4)).toBe(B.standoff);
+        expect(Op.standoffFor(B, NaN)).toBe(B.standoff);
+        expect(Op.standoffFor(B, 11.2)).toBeCloseTo(11.2 * B.standoffScale, 9);
+        expect(Op.standoffFor(B, 5.5)).toBe(B.minStandoff);
+        expect(B.minStandoff).toBeGreaterThanOrEqual(B.reach);
+        const op = Op.createOperator(B);
+        const target = { mode: 'point', x: -4, z: -3, standoff: 1.2 };
+        for (let f = 0; f < 600; f++) Op.stepOperator(op, target, 1 / 60, B, area);
+        const gap = Math.hypot(target.x - op.x, target.z - op.z);
+        expect(gap).toBeGreaterThan(1.15);
+        expect(gap).toBeLessThan(1.5);
+    });
+
     test('walks toward a pointed spot, stops short of it, and faces it', () => {
         const op = Op.createOperator(C.blower);
         const target = { mode: 'point', x: -4, z: -3 };

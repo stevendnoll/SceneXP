@@ -57,8 +57,9 @@ export function clampZoom(zoom, C) {
  * view. A zoomed view is the visitor's choice, so the neighbor coming out no
  * longer widens it (Steve's QA, 2026-10-08: he "really competes for the
  * camera"), and the closer it comes the more it follows them in depth too.
+ * `touch`, a touch screen's, lets it come in narrower (`zoom.touchSpan`).
  */
-export function cameraFor(aspect, C, lawn, follow, include = null, zoom = 1) {
+export function cameraFor(aspect, C, lawn, follow, include = null, zoom = 1, touch = false) {
     const zf = C.zoom ? clampZoom(zoom, C) : 1;
     const zoomed = Math.abs(zf - 1) > 1e-6;
     let span = spanFor(aspect, C);
@@ -96,9 +97,11 @@ export function cameraFor(aspect, C, lawn, follow, include = null, zoom = 1) {
     let dist = distanceFor(span, aspect, C.fovDegrees);
     if (C.frontZ !== undefined) dist = Math.max(dist, distanceForFront(C.frontZ, tz, C));
     // In close, never narrower than minSpan (the reach either side of the
-    // person) nor nearer than minDistance (the person's height, top to
-    // bottom, on a screen much wider than tall).
-    if (zoomed) dist = Math.max(dist / zf, distanceFor(C.zoom.minSpan, aspect, C.fovDegrees), C.zoom.minDistance || 0);
+    // person, for a mouse to aim past) or a touch screen's touchSpan (the
+    // joystick aims no pointer), nor nearer than minDistance (the person's
+    // height, top to bottom, on a screen much wider than tall).
+    const narrowest = touch && C.zoom.touchSpan !== undefined ? C.zoom.touchSpan : C.zoom.minSpan;
+    if (zoomed) dist = Math.max(dist / zf, distanceFor(narrowest, aspect, C.fovDegrees), C.zoom.minDistance || 0);
     // The width of ground actually shown at the target.
     const shown = 2 * dist * Math.tan(Math.atan(Math.tan((C.fovDegrees * Math.PI) / 360) * aspect));
     // How far the target may slide before the frame runs off the region.

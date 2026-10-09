@@ -92,6 +92,32 @@ describe('walking to the edges of the yard with a pointer', () => {
         });
     }
 
+    // STEVE'S QA, 2026-10-09: "When I zoom all the way in, I don't have
+    // enough screen space to get the cursor far enough away from the player,
+    // so the player won't walk." All the way in on a 16:9 screen the lawn
+    // showed 2.4 m toward the camera, and a walk took 2.55 m. So here the
+    // cursor goes 60% of the way from the person to the screen's edge,
+    // down, up, left and right, and that must start a walk.
+    test('all the way in on a computer, a cursor partway to any edge of the screen walks the person', () => {
+        const short = [];
+        for (const aspect of [1.33, 1.6, 1.78, 2.4, 3.56]) {
+            for (const person of [{ x: 0, z: 2 }, { x: -6, z: -2.4 }, { x: 6, z: 6.5 }]) {
+                const view = V.cameraFor(aspect, cam, lawn, person, null, cam.zoom.max);
+                const camera = cameraAt(view, aspect);
+                const at = new THREE.Vector3(person.x, 0, person.z).project(camera);
+                const stop = Op.standoffFor(B, Math.hypot(view.position.x - view.target.x, view.position.y - view.target.y, view.position.z - view.target.z));
+                for (const [ex, ey] of [[at.x, -1], [at.x, 1], [-1, at.y], [1, at.y]]) {
+                    const p = groundAt(camera, at.x + (ex - at.x) * 0.6, at.y + (ey - at.y) * 0.6);
+                    if (!p) continue;
+                    const op = { ...Op.createOperator(B), x: person.x, z: person.z };
+                    Op.stepOperator(op, { mode: 'point', x: p.x, z: p.z, standoff: stop }, 1 / 30, B, area);
+                    if (op.speed === 0) short.push({ aspect, person, toward: [ex, ey], gap: Math.hypot(p.x - person.x, p.z - person.z).toFixed(2), stop });
+                }
+            }
+        }
+        expect(short).toEqual([]);
+    });
+
     test('with the neighbor out and the view widened for him, the person still reaches the hedge', () => {
         const visits = [{ x: C.neighbor.nearLine, z: 0 }, { x: C.neighbor.lineMax, z: -4.8 }, { x: C.neighbor.door.x, z: -5.4 }];
         for (const aspect of ASPECTS) {
@@ -178,9 +204,43 @@ describe('the frame on any screen, at any zoom (Steve\'s QA, 2026-10-08)', () =>
             expect(at(cam.zoom.max * 4)).toBeCloseTo(at(cam.zoom.max), 6);
             expect(at(0.01)).toBeCloseTo(at(cam.zoom.min), 6);
             expect(at(NaN)).toBeCloseTo(at(1), 6);
-            // Never narrower than minSpan across.
+            // Never narrower than minSpan across, nor a touch screen's
+            // touchSpan, and never nearer than minDistance.
             expect(V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, cam.zoom.max).span).toBeGreaterThan(cam.zoom.minSpan - 1e-6);
+            expect(V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, cam.zoom.max, true).span).toBeGreaterThan(cam.zoom.touchSpan - 1e-6);
+            expect(V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, cam.zoom.max, true).distance).toBeGreaterThan(cam.zoom.minDistance - 1e-6);
         }
+    });
+
+    // STEVE'S QA, 2026-10-09: "it would be cool to zoom in a little closer".
+    // A computer stopped 8 m away, and a phone in portrait at 1.29x, held
+    // back by the width a mouse needs to aim, which a joystick does not.
+    test('a computer comes in to 5.5 m, and a phone in portrait more than twice as close as usual', () => {
+        const near = (aspect, touch) => V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, cam.zoom.max, touch).distance;
+        const usual = (aspect) => V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, 1).distance;
+        expect(near(16 / 9, false)).toBeCloseTo(cam.zoom.minDistance, 6);
+        expect(near(16 / 9, false)).toBeLessThan(6);
+        expect(usual(0.46) / near(0.46, true)).toBeGreaterThan(2);
+        // A phone held to the mouse's width would barely zoom at all.
+        expect(near(0.46, true)).toBeLessThan(near(0.46, false) * 0.8);
+    });
+
+    test('in close, the camera never stands inside a tree\'s crown, from anywhere the person walks', () => {
+        const crowns = C.yard.trees.filter((t) => t.crown);
+        const inside = [];
+        for (const aspect of ASPECTS) {
+            for (const touch of [false, true]) {
+                for (let x = area.minX; x <= area.maxX; x += 1) {
+                    for (let z = area.minZ; z <= area.maxZ; z += 1) {
+                        const p = V.cameraFor(aspect, cam, lawn, { x, z }, null, cam.zoom.max, touch).position;
+                        for (const t of crowns) {
+                            if (Math.hypot(p.x - t.x, p.y - t.crown.y, p.z - t.z) < t.crown.radius) inside.push({ aspect, touch, x, z, tree: t.species });
+                        }
+                    }
+                }
+            }
+        }
+        expect(inside).toEqual([]);
     });
 
     test('a visitor who has zoomed keeps their view when the neighbor comes out', () => {
@@ -236,14 +296,14 @@ describe('the ground under every view', () => {
         // And every zoom, which never widens for the neighbor.
         for (const aspect of ASPECTS) {
             for (const person of people) {
-                for (const zoom of [cam.zoom.min, cam.zoom.max]) {
-                    const camera = cameraAt(V.cameraFor(aspect, cam, lawn, person, null, zoom), aspect);
+                for (const [zoom, touch] of [[cam.zoom.min, false], [cam.zoom.max, false], [cam.zoom.max, true]]) {
+                    const camera = cameraAt(V.cameraFor(aspect, cam, lawn, person, null, zoom, touch), aspect);
                     for (let i = 0; i <= 16; i++) {
                         for (let j = 0; j <= 16; j++) {
                             const p = groundAt(camera, -1 + i / 8, -1 + j / 8);
                             if (!p || p.z < block.minZ) continue;
                             rays++;
-                            if (!covered(p, rects)) holes.push({ aspect, person, zoom, p });
+                            if (!covered(p, rects)) holes.push({ aspect, person, zoom, touch, p });
                         }
                     }
                 }

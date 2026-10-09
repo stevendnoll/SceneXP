@@ -5,7 +5,8 @@
  *
  * TWO WAYS TO STEER, ONE PERSON. A pointer (a mouse, or a finger held on the
  * lawn) names a spot, and the person walks toward it, stopping `standoff`
- * meters short, and points the blower at it. That reads as "blow the leaves
+ * meters short (less with the camera in close, standoffFor), and points the
+ * blower at it. That reads as "blow the leaves
  * over there", which is all a visitor has to know. The keyboard walks them
  * directly (WASD or the arrow keys, relative to the screen), and the blower
  * points the way they walk.
@@ -42,6 +43,14 @@ export function facing(heading) {
  * things in it (the trees' trunks, M5), which they walk round. Mutates and
  * returns `op`.
  */
+/** How far short of a pointed spot the person stops, with the camera
+ *  `distance` meters away: `standoff` in the usual view, and in close a
+ *  share of the distance, so a walk starts within the lawn on screen. */
+export function standoffFor(B, distance) {
+    if (!Number.isFinite(distance) || !B.standoffScale) return B.standoff;
+    return clamp(distance * B.standoffScale, B.minStandoff ?? 0, B.standoff);
+}
+
 export function stepOperator(op, aim, dt, B, area, boxes = []) {
     let want = op.heading;
     let vx = 0;
@@ -51,7 +60,7 @@ export function stepOperator(op, aim, dt, B, area, boxes = []) {
         const dz = aim.z - op.z;
         const dist = Math.hypot(dx, dz);
         if (dist > 0.05) want = Math.atan2(dx, dz);
-        const gap = dist - B.standoff;
+        const gap = dist - (aim.standoff ?? B.standoff);
         if (gap > 0.15) {
             const speed = Math.min(B.walkSpeed, gap * 3);
             vx = (dx / dist) * speed;

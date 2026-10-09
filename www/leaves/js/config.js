@@ -441,8 +441,18 @@ export const LEAVES_CONFIG = Object.freeze({
         turbulence: 0.35,
         // The person walks toward the pointer at `walkSpeed` and stops
         // `standoff` meters short of it, turning at `turnRate` rad/s.
+        // ZOOMED IN, SHORTER (Steve's QA, 2026-10-09: all the way in, the
+        // cursor could not get far enough from the person to walk them).
+        // The standoff is `standoffScale` of the camera's distance, never
+        // more than `standoff` (the usual view, unchanged) nor less than
+        // `minStandoff` (just past the nozzle's tip, `reach`).
+        // Measured on a 16:9 screen all the way in, the lawn shows 2.4 m
+        // toward the camera and 3.6 m to the side: a walk now starts under
+        // half way to the screen's edge.
         walkSpeed: 2.4,
         standoff: 2.4,
+        standoffScale: 0.15,
+        minStandoff: 1.0,
         turnRate: 7,
         // Where the person starts.
         start: { x: 2, z: 5.2 },
@@ -993,10 +1003,17 @@ export const LEAVES_CONFIG = Object.freeze({
         // The visitor's zoom: the wheel or a trackpad pinch, + and - (0 to
         // reset), or a pinch on a phone. 1 is the usual view and `max` the
         // closest, but never narrower than `minSpan` meters across, which
-        // keeps `reach` on screen either side of the person, nor nearer than
-        // `minDistance`, which keeps all of them on a very wide screen. A
-        // wheel notch or a key press is one `step`.
-        zoom: { min: 0.8, max: 3, minSpan: 8.5, minDistance: 8, step: 1.25, wheel: 0.0015, pinchWheel: 0.01 },
+        // keeps `reach` on screen either side of the person for a mouse to
+        // aim past, nor nearer than `minDistance`, which keeps all of them
+        // on a very wide screen. A touch screen walks by the joystick and
+        // aims no pointer, so it may come in to `touchSpan`. A wheel notch
+        // or a key press is one `step`.
+        // CLOSER SINCE STEVE'S QA, 2026-10-09 ("it would be cool to zoom in
+        // a little closer"): minSpan 8.5, minDistance 8 and max 3 stopped a
+        // computer 8 m away, and a phone in portrait at 1.29x. Now 5.5 m and
+        // 2.2x, measured clear of every tree crown from anywhere the person
+        // walks (the closest, 0.1 m, on a 4:3 screen).
+        zoom: { min: 0.8, max: 4.5, minSpan: 7, touchSpan: 5, minDistance: 5.5, step: 1.25, wheel: 0.0015, pinchWheel: 0.01 },
         follow: 2.5,
         // The ground this far either side of the person, at their depth,
         // stays on screen: the blower's standoff (2.4) and a meter more, so
