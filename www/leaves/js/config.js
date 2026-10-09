@@ -719,7 +719,7 @@ export const LEAVES_CONFIG = Object.freeze({
             towerPumpkins: [
                 { r: 0.28, color: 0xefe8d8, ribs: 11, groove: 0.08 },
                 { r: 0.2, color: 0xe0701f, ribs: 11, groove: 0.1 },
-                { r: 0.13, color: 0x8fa3a6, ribs: 9, groove: 0.1, stem: 0x6b6338 }
+                { r: 0.13, color: 0x8fa3a6, ribs: 9, groove: 0.1, stemColor: 0x6b6338 }
             ],
             hats: [{ x: 5.4, y: 3.25, z: -2.5 }, { x: 7.7, y: 3.55, z: -2.9 }, { x: 6.5, y: 2.95, z: -4.5 }],
             hatString: 1.3,

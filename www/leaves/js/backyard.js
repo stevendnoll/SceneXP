@@ -14,7 +14,7 @@
  * ALL OF IT IS PAST THE SIM'S GROUND (x below yard.bounds.minX), so no leaf
  * meets it, and it is plain drawing: boxes, cylinders and a few spheres.
  */
-import { pumpkin } from './house.min.js';
+import { ribbedPumpkin } from './house.min.js';
 import { makeRandom } from './sim.min.js';
 
 const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
@@ -106,7 +106,9 @@ function patch(P, L, random) {
     }
     const colors = [0xe0701f, 0xd9832a, 0xe8892b, 0xefe3c4];
     for (let k = 0; k < 6; k++) {
-        group.add(pumpkin({ x: (random() - 0.5) * (P.w - 0.4), z: (random() - 0.5) * (P.d - 0.4), y: 0, r: 0.14 + random() * 0.14, color: colors[k % colors.length] }));
+        // Ribbed (house.js, Steve's QA, 2026-10-09), each lying its own way.
+        group.add(ribbedPumpkin({ x: (random() - 0.5) * (P.w - 0.4), z: (random() - 0.5) * (P.d - 0.4), y: 0, r: 0.14 + random() * 0.14, color: colors[k % colors.length] },
+            { ribs: 11, turn: random() * Math.PI * 2 }));
     }
     return group;
 }

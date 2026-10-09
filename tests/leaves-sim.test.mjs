@@ -523,12 +523,17 @@ describe('the houses and the street, drawn from the same boxes (house.js)', () =
 
     test('every pumpkin is drawn where it is solid, sitting on what it sits on', () => {
         const boxes = drawn();
+        // Ribbed since Steve's QA of 2026-10-09 (house.js ribbedPumpkin): a
+        // touch narrower than 2 r at its grooves and a little off center, and
+        // still resting on what it sits on, 1.44 r tall, to the millimeter
+        // or so the mesh allows.
         for (const p of C.yard.pumpkins) {
-            const body = boxes.find((m) => Math.abs((m.min.x + m.max.x) / 2 - p.x) < 1e-4
-                && Math.abs((m.min.z + m.max.z) / 2 - p.z) < 1e-4 && Math.abs(m.max.x - m.min.x - 2 * p.r) < 1e-3);
+            const body = boxes.find((m) => Math.abs((m.min.x + m.max.x) / 2 - p.x) < 0.02
+                && Math.abs((m.min.z + m.max.z) / 2 - p.z) < 0.02
+                && m.max.x - m.min.x > 1.85 * p.r && m.max.x - m.min.x < 2.01 * p.r && m.max.y - m.min.y > p.r);
             expect(body).toBeTruthy();
-            expect(body.min.y).toBeCloseTo(p.y, 4);
-            expect(body.max.y).toBeCloseTo(p.y + p.r * 1.44, 4);
+            expect(body.min.y).toBeCloseTo(p.y, 2);
+            expect(body.max.y).toBeCloseTo(p.y + p.r * 1.44, 2);
         }
     });
 });

@@ -154,6 +154,124 @@ function windowAt(group, x, y, front, { w = 1.3, h = 1.7, frame, glass }) {
     group.add(box(w - 0.14, 0.05, 0.06, frame, x, y, front + 0.09));
 }
 
+/**
+ * THE RIBBED PUMPKIN'S SHAPE (Steve's QA, 2026-10-09: "add more detail to
+ * the stacked pumpkins", then the porch's and the patch's). A sphere of
+ * radius `r` with `ribs` lobes, grooves `groove` deep, dimpled top and
+ * bottom toward the stem, squat, and stretched to the plain pumpkin's
+ * height (1.44 r) so it sits on the same box. Turned `turn` about y; at the
+ * default a lobe faces the street (+z), where a carved face goes. An odd
+ * number of ribs puts the sphere's seam (opposite that lobe) in a groove.
+ *
+ * Pure numbers: the drawing and the carved faces (halloween.js) both read
+ * the skin from here, so a face lies on the lobes and in the grooves alike.
+ */
+export function pumpkinShape(r, spec = {}) {
+    const ribs = spec.ribs || 11;
+    const depth = spec.groove ?? 0.08;
+    const turn = spec.turn ?? -Math.PI / 2;
+    // The mesh's divisions around and top to bottom (ribbedPumpkin).
+    const around = 44;
+    const rings = 24;
+    const step = (Math.PI * 2) / around;
+    const lobe = (phi) => Math.sqrt(Math.abs(Math.cos((ribs * phi) / 2)));
+    const along = (phi) => 1 - depth * (1 - lobe(phi));
+    const dimple = (y, rho) => 1 - (y > 0 ? 0.3 : 0.12) * Math.exp(-((rho / 0.32) ** 2));
+    // Lowest and highest of the squat, dimpled profile, top to bottom.
+    let low = Infinity;
+    let high = -Infinity;
+    for (let i = 0; i <= 400; i++) {
+        const t = (i / 400) * Math.PI;
+        const y = r * Math.cos(t);
+        const h = (y * dimple(y, Math.sin(t)) + r) * 0.72;
+        low = Math.min(low, h);
+        high = Math.max(high, h);
+    }
+    const stretch = (1.44 * r) / (high - low);
+    /** `along` as the mesh draws it: a flat facet from one vertex to the
+     *  next around, the chord between them, not the curve (a face laid on
+     *  the curve stood off the facets by up to 1.5 cm at its edges). The
+     *  vertices stand every `step` round from the pumpkin's own +x. */
+    const drawnAlong = (phi) => {
+        const a = Math.floor(phi / step) * step;
+        const b = a + step;
+        const ka = along(a);
+        const kb = along(b);
+        return (ka * kb * Math.sin(step)) / (ka * Math.sin(phi - a) + kb * Math.sin(b - phi));
+    };
+    /** A sphere point (x, y, z) on the pumpkin's skin, the pumpkin's own. */
+    const skin = (x, y, z) => {
+        const k = along(Math.atan2(z, x));
+        return [x * k, ((y * dimple(y, Math.hypot(x, z) / r) + r) * 0.72 - low) * stretch, z * k];
+    };
+    /** How far the skin stands toward the street (+z, after `turn`) at
+     *  `x` across and `h` above the pumpkin's base, or 0 off its side. */
+    const front = (x, h) => {
+        let y = (h / stretch + low) / 0.72 - r;
+        for (let i = 0; i < 3; i++) {
+            const rho = Math.sqrt(Math.max(0, 1 - (y / r) ** 2));
+            y = ((h / stretch + low) / 0.72 - r) / dimple(y, rho);
+        }
+        const R = Math.sqrt(Math.max(0, r * r - y * y));
+        let z = Math.sqrt(Math.max(0, R * R - x * x));
+        for (let i = 0; i < 8; i++) {
+            const k = drawnAlong(Math.atan2(z, x) + turn);
+            z = Math.sqrt(Math.max(0, (k * R) ** 2 - x * x));
+        }
+        return z;
+    };
+    return { r, ribs, depth, turn, stretch, low, lobe, skin, front, around, rings, equator: (0.72 * r - low) * stretch };
+}
+
+/** The porch pumpkins' shape, which halloween.js carves faces to fit. */
+export const PORCH_PUMPKIN = { ribs: 11 };
+
+/**
+ * A ribbed pumpkin ({ x, z, y, r, color }, and the shape's `spec`), its
+ * grooves shaded darker, with a curved, five-sided stem unless `spec.stem`
+ * is false.
+ */
+export function ribbedPumpkin(p, spec = {}) {
+    const shape = pumpkinShape(p.r, spec);
+    const r = p.r;
+    const g = new THREE.SphereGeometry(r, shape.around, shape.rings);
+    const pos = g.attributes.position;
+    const colors = [];
+    for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const z = pos.getZ(i);
+        pos.setXYZ(i, ...shape.skin(x, pos.getY(i), z));
+        const shade = 1 - 0.26 * (1 - shape.lobe(Math.atan2(z, x)));
+        colors.push(shade, shade, shade);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    g.computeVertexNormals();
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(g, material(p.color, { vertexColors: true }));
+    body.castShadow = true;
+    body.receiveShadow = true;
+    group.add(body);
+    if (spec.stem !== false) {
+        // Tapered, five-sided, leaning and curling over at the tip, from the
+        // dimple's floor (the pole, lowered 30%).
+        const tall = r * 0.5;
+        const sg = new THREE.CylinderGeometry(r * 0.07, r * 0.12, tall, 5, 4);
+        const sp = sg.attributes.position;
+        for (let i = 0; i < sp.count; i++) {
+            const u = (sp.getY(i) + tall / 2) / tall;
+            sp.setX(i, sp.getX(i) + r * 0.16 * u * u);
+        }
+        sg.computeVertexNormals();
+        const stem = new THREE.Mesh(sg, material(spec.stemColor || 0x6b6338, { flatShading: true }));
+        stem.position.y = shape.skin(0, r, 0)[1] + tall / 2 - r * 0.04;
+        stem.castShadow = true;
+        group.add(stem);
+    }
+    group.position.set(p.x, p.y, p.z);
+    group.rotation.y = shape.turn;
+    return group;
+}
+
 /** A pumpkin ({ x, z, y, r, color }): a squashed sphere and a stem. */
 export function pumpkin(p) {
     const group = new THREE.Group();
@@ -236,7 +354,9 @@ export function buildOurHouse(Y, L) {
     wreath.position.set(door, 1.8, front + 0.14);
     wreath.castShadow = true;
     group.add(wreath);
-    for (const p of Y.pumpkins || []) group.add(solidMark(pumpkin(p)));
+    // The porch's pumpkins, ribbed (Steve's QA, 2026-10-09), a lobe toward
+    // the street where Halloween week carves a face.
+    for (const p of Y.pumpkins || []) group.add(solidMark(ribbedPumpkin(p, PORCH_PUMPKIN)));
     if (Y.rake) group.add(buildRake(Y, L));
 
     // The stone walk from the step to the sidewalk, laid flat on the lawn,

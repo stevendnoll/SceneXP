@@ -450,29 +450,39 @@ describe('the drawing, on the real three.js', () => {
         expect(group.children).toHaveLength(0);
     });
 
-    test('each carved face lies on its pumpkin\'s skin, a few millimeters proud, facing the street', () => {
+    // The porch pumpkins are ribbed since Steve's QA of 2026-10-09, so the
+    // skin is measured on the pumpkin as drawn (house.js ribbedPumpkin): a
+    // ray from the street through each point of the face meets the
+    // pumpkin's own mesh just behind it, on the lobes and in the grooves.
+    test('each carved face lies on its pumpkin\'s skin, a few millimeters proud, facing the street', async () => {
+        const Ho = await import('../www/leaves/js/house.js');
         const group = H.carvePumpkins(C.yard.pumpkins, HW, new THREE.Texture());
         expect(group.children).toHaveLength(HW.carved.length);
         group.updateMatrixWorld(true);
+        const ray = new THREE.Raycaster();
         group.children.forEach((face, k) => {
             const p = C.yard.pumpkins[HW.carved[k]];
+            const body = Ho.ribbedPumpkin(p, Ho.PORCH_PUMPKIN);
+            body.updateMatrixWorld(true);
             const at = face.geometry.attributes.position;
             const v = new THREE.Vector3();
             let worst = 0;
+            let missed = 0;
             for (let i = 0; i < at.count; i++) {
                 v.fromBufferAttribute(at, i).applyMatrix4(face.matrixWorld);
-                // The pumpkin is a sphere of radius r squashed to 0.72 tall,
-                // its middle 0.72 r above what it sits on (house.js).
-                const dx = v.x - p.x;
-                const dy = (v.y - (p.y + p.r * 0.72)) / 0.72;
-                const dz = v.z - p.z;
-                expect(dz).toBeGreaterThan(0);
-                // How far outside the skin, along the outward line.
-                worst = Math.max(worst, Math.abs(Math.hypot(dx, dy, dz) - p.r));
+                expect(v.z).toBeGreaterThan(p.z);
+                ray.set(new THREE.Vector3(v.x, v.y, p.z + 2), new THREE.Vector3(0, 0, -1));
+                const hit = ray.intersectObject(body.children[0], false)[0];
+                if (!hit) { missed++; continue; }
+                // How far in front of the skin, along the line of sight.
+                const gap = v.z - hit.point.z;
+                worst = Math.max(worst, Math.abs(gap - 0.003));
+                expect(gap).toBeGreaterThan(-0.001);
             }
-            // Never inside the skin, and never more than a few millimeters
-            // off it (the squash stretches the 3 mm a little at the top).
-            expect(worst).toBeLessThan(0.006);
+            // Every point of the face is over the pumpkin, never inside its
+            // skin, and within a few millimeters of it.
+            expect(missed).toBe(0);
+            expect(worst).toBeLessThan(0.004);
         });
     });
 
@@ -705,7 +715,7 @@ describe('the drawing, on the real three.js', () => {
         expect(stacks).toHaveLength(2);
         for (const stack of stacks) {
             const bodies = stack.children.map((pk) => new THREE.Box3().setFromObject(pk.children[0], true));
-            expect(bodies[0].min.y).toBeCloseTo(0, 3);
+            expect(bodies[0].min.y).toBeCloseTo(0, 2);
             for (let k = 1; k < bodies.length; k++) {
                 // Down into the one below, never above it, and not sunk deep.
                 expect(bodies[k].min.y).toBeLessThan(bodies[k - 1].max.y);

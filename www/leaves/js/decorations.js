@@ -38,7 +38,7 @@
  */
 import { faceTexture, faceOnPumpkin } from './halloween.min.js';
 import { makeRandom } from './sim.min.js';
-import { pumpkin, streetHouseParts, OUR_WINDOWS, facadeZ, MAILBOX, mailboxSpot, mailboxShape, neighborWindows } from './house.min.js';
+import { pumpkin, ribbedPumpkin, streetHouseParts, OUR_WINDOWS, facadeZ, MAILBOX, mailboxSpot, mailboxShape, neighborWindows } from './house.min.js';
 
 const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
 
@@ -931,70 +931,6 @@ function clownTexture(P) {
     return texture;
 }
 
-/**
- * A ribbed pumpkin for the stacks by the porch step (Steve's QA,
- * 2026-10-09: "add more detail to the stacked pumpkins"), the size and
- * place of house.js's pumpkin (`p`: x, y, z, r, color), so it sits on the
- * same box. `ribs` lobes, grooves `groove` deep and shaded darker, a dimple
- * where the stem grows, and, on the one on top, a curved, ridged stem.
- * An odd number of ribs puts the sphere's seam in a groove, out of sight.
- */
-function heirloomPumpkin(p, spec, stem) {
-    const r = p.r;
-    const ribs = spec.ribs || 11;
-    const depth = spec.groove ?? 0.09;
-    const g = new THREE.SphereGeometry(r, 44, 18);
-    const pos = g.attributes.position;
-    const colors = [];
-    for (let i = 0; i < pos.count; i++) {
-        const x = pos.getX(i);
-        const y = pos.getY(i);
-        const z = pos.getZ(i);
-        const lobe = Math.sqrt(Math.abs(Math.cos((ribs * Math.atan2(z, x)) / 2)));
-        const k = 1 - depth * (1 - lobe);
-        // Squat, as house.js's (0.72 as tall as wide), dimpled top and
-        // bottom toward the stem.
-        const rho = Math.hypot(x, z) / r;
-        const dimple = 1 - (y > 0 ? 0.3 : 0.12) * Math.exp(-((rho / 0.32) ** 2));
-        pos.setXYZ(i, x * k, (y * dimple + r) * 0.72, z * k);
-        const shade = 1 - 0.26 * (1 - lobe);
-        colors.push(shade, shade, shade);
-    }
-    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    // Resting on its lowest point, and as tall as house.js's (1.44 r), so
-    // a stack sits as towerStack and the sim's box say: each pumpkin's
-    // dimpled bottom down in the dimple of the one below.
-    let low = Infinity;
-    let high = -Infinity;
-    for (let i = 0; i < pos.count; i++) {
-        low = Math.min(low, pos.getY(i));
-        high = Math.max(high, pos.getY(i));
-    }
-    const stretch = (1.44 * r) / (high - low);
-    g.translate(0, -low, 0);
-    g.scale(1, stretch, 1);
-    g.computeVertexNormals();
-    const group = new THREE.Group();
-    group.add(mesh(g, lambert(p.color, { vertexColors: true }), 0, 0, 0, true));
-    if (stem) {
-        // Tapered, five-sided, leaning and curling over at the tip.
-        const tall = r * 0.5;
-        const sg = new THREE.CylinderGeometry(r * 0.07, r * 0.12, tall, 5, 4);
-        const sp = sg.attributes.position;
-        for (let i = 0; i < sp.count; i++) {
-            const u = (sp.getY(i) + tall / 2) / tall;
-            sp.setX(i, sp.getX(i) + r * 0.16 * u * u);
-        }
-        sg.computeVertexNormals();
-        // The dimple's floor, where the stem grows: the pole, lowered 30%.
-        const top = ((r * 0.7 + r) * 0.72 - low) * stretch;
-        group.add(mesh(sg, lambert(spec.stem || 0x6b6338, { flatShading: true }), 0, top + tall / 2 - r * 0.04, 0, true));
-    }
-    group.position.set(p.x, p.y, p.z);
-    group.rotation.y = (p.x * 7.1 + p.y * 3.3) % (Math.PI * 2);
-    return group;
-}
-
 /** Pieces `[geometry, x, y, z, turn]` as ONE geometry: each piece turned
  *  `turn` about y and moved to (x, y, z). Positions and normals only. A
  *  lantern of twenty pieces is then one draw, not twenty. */
@@ -1204,7 +1140,11 @@ export function buildDecorations(config) {
         const stack = new THREE.Group();
         stack.name = 'pumpkins';
         const pile = towerStack(t, D);
-        pile.forEach((p, k) => stack.add(heirloomPumpkin(p, D.towerPumpkins[k], k === pile.length - 1)));
+        // Ribbed (house.js), each turned its own way, the stem on the top one.
+        pile.forEach((p, k) => {
+            const spec = D.towerPumpkins[k];
+            stack.add(ribbedPumpkin(p, { ...spec, stem: k === pile.length - 1, turn: (p.x * 7.1 + p.y * 3.3) % (Math.PI * 2) }));
+        });
         group.add(stack);
     }
     // Our graves before the window right of the porch (2026-10-08): slate

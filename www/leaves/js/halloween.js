@@ -26,6 +26,7 @@
  * createTreaterFigures() are the drawing.
  */
 import { createPerson } from '../../shared/js/people-1.0.0.min.js';
+import { pumpkinShape, PORCH_PUMPKIN } from './house.min.js';
 
 const between = (pair, r) => pair[0] + (pair[1] - pair[0]) * r;
 
@@ -341,8 +342,11 @@ export function carvePumpkins(pumpkins, H, map = faceTexture(H.glow)) {
     for (const k of H.carved) {
         const p = pumpkins[k];
         if (!p) continue;
-        const face = faceOnPumpkin(p.r, 0.72, glow);
-        face.position.set(p.x, p.y + p.r * 0.72, p.z);
+        // On the ribbed skin (house.js), down into the grooves and over the
+        // lobes, its middle at the pumpkin's widest.
+        const shape = pumpkinShape(p.r, PORCH_PUMPKIN);
+        const face = faceOnPumpkin(p.r, 0.72, glow, 0.003, (x, y) => shape.front(x, shape.equator + y));
+        face.position.set(p.x, p.y + shape.equator, p.z);
         group.add(face);
     }
     return group;
@@ -351,17 +355,19 @@ export function carvePumpkins(pumpkins, H, map = faceTexture(H.glow)) {
 /**
  * A face patch for the front (+z) of a sphere of radius `r` squashed to
  * `squash` as tall as wide, centered on its middle: finely divided and laid
- * onto the skin, a few millimeters proud of it.
+ * onto the skin, a few millimeters proud of it. `front(x, y)`, if given, is
+ * how far the skin stands forward there (a ribbed pumpkin's, house.js), and
+ * the patch is divided finer to follow its grooves.
  */
-export function faceOnPumpkin(r, squash, material, proud = 0.003) {
-    const geometry = new THREE.PlaneGeometry(1.4 * r, 1.05 * r * squash, 14, 10);
+export function faceOnPumpkin(r, squash, material, proud = 0.003, front = null) {
+    const geometry = new THREE.PlaneGeometry(1.4 * r, 1.05 * r * squash, front ? 44 : 14, front ? 16 : 10);
     const at = geometry.attributes && geometry.attributes.position;
     if (at && typeof at.count === 'number') {
         for (let v = 0; v < at.count; v++) {
             const x = at.getX(v);
             const y = at.getY(v);
             const inside = 1 - (x * x) / (r * r) - (y * y) / (squash * squash * r * r);
-            at.setXYZ(v, x, y, r * Math.sqrt(Math.max(0, inside)) + proud);
+            at.setXYZ(v, x, y, (front ? front(x, y) : r * Math.sqrt(Math.max(0, inside))) + proud);
         }
         at.needsUpdate = true;
     }
