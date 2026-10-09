@@ -158,11 +158,13 @@ let countedAgo = Infinity;
 // The last result, for the share button.
 let result = null;
 // The neighbor, his figure and his door; which leaves have been over the
-// fence this round.
+// fence this round, and where each leaf last came to rest (score.js tally:
+// a leaf still moving counts there).
 const neighbor = createNeighbor(N);
 let neighborFigure = null;
 let neighborDoor = null;
 let sent = null;
+let landed = null;
 // The finale: its plan, how far into it we are, whether the burst has gone
 // off, the arms it left the person in, and the result as it stood before
 // the dive (the burst throws leaves off the tarp, and a dive should not
@@ -372,6 +374,7 @@ async function init() {
     // Leaves resting on the roofs and the hedge (2026-10-08), never blown.
     scene.add(buildResting(CONFIG, leafBase, { shadows: state.shadows, underside: CONFIG.look.underside }).mesh);
     sent = new Uint8Array(state.count);
+    landed = new Uint8Array(state.count);
     findList = findsFor(CONFIG.finds, state.halloween);
     findModels = buildFindModels(findList);
     Object.values(findModels).forEach((m) => scene.add(m.group));
@@ -1270,7 +1273,7 @@ function pileDepth(x, z) {
 
 /** Count where the leaves are now. */
 function recount() {
-    counted = tally(sim, CONFIG.yard, sent);
+    counted = tally(sim, CONFIG.yard, sent, landed);
     countedAgo = 0;
     return counted;
 }
@@ -1605,6 +1608,7 @@ function resetYard() {
     layFinds();
     hideToast();
     if (sent) sent.fill(0);
+    if (landed) landed.fill(0);
     finale.plan = null;
     finale.t = 0;
     finale.burst = false;

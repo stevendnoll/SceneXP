@@ -257,7 +257,8 @@ describe('the leaves resting on the roofs and the hedge', () => {
         // blown leaf reaches.
         for (let i = 0; i < r.count; i++) {
             const [x, y, z] = r.pose.subarray(i * 6, i * 6 + 3);
-            const inSim = x >= Y.bounds.minX && x <= Y.bounds.maxX && z >= Y.bounds.minZ && z <= Y.bounds.maxZ;
+            // (On the hedge's top is behind its wall, which stops every leaf.)
+            const inSim = x >= wall.at && x <= Y.bounds.maxX && z >= Y.bounds.minZ && z <= Y.bounds.maxZ;
             if (inSim) expect(y).toBeGreaterThan(2.5);
         }
         const built = Rt.buildResting(C, base, { shadows: true });

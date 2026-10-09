@@ -33,8 +33,8 @@ import { regionOf } from './score.min.js';
 // ---- The crowns' leaves (pure) -----------------------------------------------
 
 /**
- * A point in the tree's crown that lies over the sim's ground (a margin in
- * from its edges), or null if `tries` random points found none. The crown is
+ * A point in the tree's crown that lies over `bounds`, where the leaves
+ * may fall (config.yard.fallArea, a margin in from its edges), or null if `tries` random points found none. The crown is
  * a sphere of `crown.radius` around (x, crown.y, z), flattened a little.
  */
 export function crownPoint(entry, bounds, random, tries = 40) {
@@ -70,7 +70,7 @@ export function createCrowns(sim, config, seed = 77) {
     for (const entry of Y.trees) {
         const crown = { entry, leaves: [], falling: [], owed: random(), refill: 0, random };
         for (let k = 0; k < (entry.hanging || 0) && next < sim.count; k++, next += step) {
-            const p = crownPoint(entry, sim.bounds, random);
+            const p = crownPoint(entry, Y.fallArea || sim.bounds, random);
             if (p && hangLeaf(sim, next, p.x, p.y, p.z, random)) crown.leaves.push(next);
         }
         crowns.push(crown);
@@ -126,7 +126,7 @@ export function stepCrowns(crowns, sim, dt, config) {
             if (crown.refill >= 1) {
                 crown.refill -= 1;
                 const i = streetLeaf(sim, config.yard, crown.random);
-                const p = i >= 0 ? crownPoint(crown.entry, sim.bounds, crown.random) : null;
+                const p = i >= 0 ? crownPoint(crown.entry, config.yard.fallArea || sim.bounds, crown.random) : null;
                 if (p && hangLeaf(sim, i, p.x, p.y, p.z, crown.random)) crown.leaves.push(i);
             }
         }

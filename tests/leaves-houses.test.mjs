@@ -116,3 +116,24 @@ test('the mailbox is a real one: a cedar post where the leaves meet it, a plank,
     expect(near.some(({ o }) => o.geometry.type === 'ExtrudeGeometry')).toBe(true);
     expect(near.some(({ o }) => o.material.color && o.material.color.getHex() === C.look.flag)).toBe(true);
 });
+
+// Steve's QA, 2026-10-08: "Currently the car parked along the curb would
+// block traffic. The lane needs to be wide enough so a car of a similar
+// width could fit between the parked car and the road lines."
+test('a car as wide as the parked one fits between it and the yellow lines, with room either side', async () => {
+    const Ho = await import('../www/leaves/js/house.js');
+    const street = Ho.buildStreet(Y, C.look);
+    street.updateMatrixWorld(true);
+    const lines = [];
+    street.traverse((o) => {
+        if (o.isMesh && o.material.color && o.material.color.getHex() === C.look.centerLine) lines.push(new THREE.Box3().setFromObject(o, true));
+    });
+    expect(lines).toHaveLength(2);
+    const nearEdge = Math.min(...lines.map((b) => b.min.z));
+    const car = Y.boxes.find((b) => b.name === 'car');
+    const wide = car.maxZ - car.minZ;
+    // Lane left between the parked car's far side and the nearer line.
+    expect(nearEdge - car.maxZ).toBeGreaterThanOrEqual(wide + 0.8);
+    // And the lines are where the config says.
+    expect((lines[0].min.z + lines[1].max.z) / 2).toBeCloseTo(Y.sidewalk.maxZ + Y.centerLine, 2);
+});

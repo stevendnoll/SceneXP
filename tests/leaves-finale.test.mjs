@@ -152,7 +152,10 @@ describe('the pile and the burst, in the real sim', () => {
         for (let i = 0; i < n; i++) S.wake(sim, i);
         sim.activeCount = 0;
         sim.activeAt.fill(-1);
-        for (let i = 0; i < n; i++) S.layDown(sim, i, -9.6 + (i % 7) * 0.05, -5.6 + (i % 5) * 0.05);
+        // A quarter of a cell in from the cells' edges: a leaf laid exactly
+        // on one went into whichever cell the rounding picked, which moved
+        // with the grid's origin (2026-10-08, when the ground was widened).
+        for (let i = 0; i < n; i++) S.layDown(sim, i, -9.575 + (i % 7) * 0.05, -5.575 + (i % 5) * 0.05);
         return sim;
     }
 

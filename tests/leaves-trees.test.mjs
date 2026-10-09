@@ -119,6 +119,90 @@ describe('on the porch is not on the lawn', () => {
         expect(t.lawn).toBe(1);
         expect(t.lawn + t.tarp + t.street + t.neighbor + t.porch).toBe(t.total);
     });
+
+    // Steve's QA, 2026-10-08: blowing leaves across the porch, the score
+    // "will jump from like 80% to 96% and then drop back down to 85%". Every
+    // leaf in the air above the porch counted `porch`, off the lawn, until it
+    // came down on the far side.
+    test('a drift blown across the porch counts where each leaf lands, not where it flies, so the score never jumps and falls back', () => {
+        const sim = S.createSim(6000, C);
+        S.scatterLeaves(sim, C);
+        // A heap banked against the house right of the porch, late in a round.
+        let k = 0;
+        for (let i = 0; i < sim.count && k < 1600; i++) {
+            if (Sc.regionOf(sim.px[i], sim.pz[i], Y) !== 'lawn' || sim.px[i] < -4) continue;
+            S.hangLeaf(sim, i, 0, 5, 0);
+            S.layDown(sim, i, 2 + (k % 40) * 0.1, -5.9 + Math.floor(k / 40) * 0.025);
+            k++;
+        }
+        const landed = new Uint8Array(sim.count);
+        Sc.tally(sim, Y, null, landed);
+        let flying = 0;
+        let counted = 0;
+        let best = 0;
+        let fallBack = 0;
+        // Walking left in front of the step, blowing along the house.
+        for (let x = 6, n = 0; x > 0; x -= 1 / 30, n++) {
+            S.stepSim(sim, 1 / 30, [S.makeJet(C.blower, x, -3.2, -1, -0.35, true)]);
+            if (n % 6) continue;
+            flying = Math.max(flying, Sc.tally(sim, Y).porch);
+            const t = Sc.tally(sim, Y, null, landed);
+            counted = Math.max(counted, t.porch);
+            const share = Sc.clearedShare(t);
+            best = Math.max(best, share);
+            fallBack = Math.max(fallBack, best - share);
+        }
+        // Counted where they were, hundreds were "on the porch" in mid-air.
+        expect(flying).toBeGreaterThan(200);
+        // Counted where they landed, only the few that came to rest there.
+        expect(counted).toBeLessThan(flying / 10);
+        expect(fallBack).toBeLessThan(0.005);
+    });
+
+    test('a leaf at rest counts where it lies, and one still moving where it last lay', () => {
+        const sim = S.createSim(2, C);
+        const porch = Y.boxes.find((b) => b.name === 'porch');
+        S.layDown(sim, 0, 3, 2);
+        S.layDown(sim, 1, (porch.minX + porch.maxX) / 2, (porch.minZ + porch.maxZ) / 2);
+        const landed = new Uint8Array(2);
+        expect(Sc.tally(sim, Y, null, landed)).toMatchObject({ lawn: 1, porch: 1 });
+        expect([...landed].map((r) => Sc.REGIONS[r - 1])).toEqual(['lawn', 'porch']);
+        // Both blown up and away, the lawn's over the fence, the porch's
+        // into the street: they count where they last lay until they land.
+        S.wake(sim, 0);
+        S.wake(sim, 1);
+        sim.px[0] = 12; sim.pz[0] = 2;
+        sim.px[1] = 0; sim.pz[1] = 8;
+        expect(Sc.tally(sim, Y, null, landed)).toMatchObject({ lawn: 1, porch: 1, neighbor: 0, street: 0 });
+        // Without the record, where they are.
+        expect(Sc.tally(sim, Y)).toMatchObject({ lawn: 0, neighbor: 1, street: 1 });
+        // A moving leaf with no landing yet counts where it is.
+        expect(Sc.tally(sim, Y, null, new Uint8Array(2))).toMatchObject({ neighbor: 1, street: 1 });
+    });
+});
+
+describe('down the block', () => {
+    // Steve's QA, 2026-10-08: no invisible walls, so a leaf can now be blown
+    // down the sidewalk past the hedge or his side fence, onto the lawns
+    // there. Those are off our lawn, counted with the street, and never his.
+    test('a leaf past the hedge or past his side fence is off our lawn, and not over his fence', () => {
+        expect(Sc.regionOf(Y.lawn.minX - 3, 6, Y)).toBe('street');
+        expect(Sc.regionOf(Y.lawn.minX - 3, 8, Y)).toBe('street');
+        expect(Sc.regionOf(Y.neighborYard.maxX + 1, 3, Y)).toBe('street');
+        expect(Sc.regionOf(Y.neighborYard.maxX - 1, 3, Y)).toBe('neighbor');
+        expect(Sc.regionOf(Y.lawn.minX + 0.5, 3, Y)).toBe('lawn');
+    });
+
+    test('the maple over the hedge drops its leaves on our side of it only, as it always did', () => {
+        const sim = S.createSim(3000, C);
+        S.scatterLeaves(sim, C);
+        Tr.createCrowns(sim, C);
+        for (let i = 0; i < sim.count; i++) {
+            if (!sim.hanging[i]) continue;
+            expect(sim.px[i]).toBeGreaterThan(Y.fallArea.minX);
+            expect(sim.px[i]).toBeLessThan(Y.fallArea.maxX);
+        }
+    });
 });
 
 describe('100%', () => {

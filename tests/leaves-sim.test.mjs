@@ -549,15 +549,92 @@ describe('walls', () => {
 
     test('nothing leaves the yard\'s bounds', () => {
         const { sim } = yard(400);
-        S.dropLeaf(sim, 5, -9.5, 0.5, 0);
-        sim.vx[5] = -20;
-        S.dropLeaf(sim, 6, 0, 0.5, 11.5);
-        sim.vz[6] = 20;
-        run(sim, 2);
         const b = C.yard.bounds;
+        S.dropLeaf(sim, 5, b.minX + 0.5, 0.5, 8.2);
+        sim.vx[5] = -20;
+        S.dropLeaf(sim, 6, 0, 0.5, b.maxZ - 0.5);
+        sim.vz[6] = 20;
+        S.dropLeaf(sim, 7, b.maxX - 0.5, 0.5, 8.2);
+        sim.vx[7] = 20;
+        run(sim, 2);
         expect(sim.px[5]).toBeGreaterThanOrEqual(b.minX);
         expect(sim.pz[6]).toBeLessThanOrEqual(b.maxZ);
+        expect(sim.px[7]).toBeLessThanOrEqual(b.maxX);
     });
+
+    // Steve's QA, 2026-10-08: "an invisible wall at the end of the row of
+    // hedges" on the sidewalk, and another "in the road, a little further
+    // out than the car". The hedge's wall ran on through the sidewalk and
+    // the street, and the ground ended 12 m out.
+    test('the hedge stops a leaf however high it flies, and ends where it is drawn, at the sidewalk', () => {
+        const { sim } = yard(400);
+        const hedge = C.yard.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
+        expect(hedge.to).toBe(C.yard.sidewalk.minZ);
+        // Low and high, over the lawn: stopped, and not carried up it.
+        S.dropLeaf(sim, 1, hedge.at + 0.4, 0.3, 2);
+        sim.vx[1] = -8;
+        S.dropLeaf(sim, 2, hedge.at + 0.4, hedge.height + 1, 3);
+        sim.vx[2] = -8;
+        sim.vy[2] = 1;
+        // On the sidewalk, past its end: on its way down the block.
+        S.dropLeaf(sim, 3, hedge.at + 0.4, 0.3, 8.2);
+        sim.vx[3] = -8;
+        run(sim, 0.15);
+        expect(sim.py[2]).toBeLessThan(hedge.height + 1.3);
+        run(sim, 3);
+        expect(sim.px[1]).toBeGreaterThan(hedge.at);
+        expect(sim.px[2]).toBeGreaterThan(hedge.at);
+        expect(sim.px[3]).toBeLessThan(hedge.at);
+    });
+
+    test('his side fence stops a leaf below its top rail, as ours does', () => {
+        const { sim } = yard(400);
+        const his = C.yard.walls.find((w) => w.axis === 'x' && w.at === C.yard.neighborYard.maxX);
+        expect(his.height).toBe(C.yard.walls.find((w) => w.at === 10).height);
+        S.dropLeaf(sim, 1, his.at - 0.4, 0.3, 2);
+        sim.vx[1] = 8;
+        run(sim, 3);
+        expect(sim.px[1]).toBeLessThan(his.at);
+    });
+
+    test('NO INVISIBLE WALLS: blown down the sidewalk past the hedge, or out into the street past the car, the leaves stop where the air gives out, well inside the ground', () => {
+        const { sim } = yard(3000);
+        const b = C.yard.bounds;
+        const old = C.yard.fallArea;
+        const B = C.blower;
+        // Two drifts of 200: on the sidewalk by the hedge's end, and along
+        // the curb by the mailbox.
+        const lay = (from, x, z) => {
+            for (let k = 0; k < 200; k++) {
+                S.hangLeaf(sim, from + k, 0, 5, 0);
+                S.layDown(sim, from + k, x + (k % 25) * 0.1, z + Math.floor(k / 25) * 0.1);
+            }
+        };
+        lay(0, -9.4, 7.5);
+        lay(200, -1.2, 8.2);
+        // The person walks after each to the end of where they may walk.
+        const push = (x, z, fx, fz, limit) => {
+            for (let t = 0; t < 12; t += 1 / 30) {
+                x = Math.max(limit.minX, Math.min(limit.maxX, x + fx * 0.8 / 30));
+                z = Math.max(limit.minZ, Math.min(limit.maxZ, z + fz * 0.8 / 30));
+                S.stepSim(sim, 1 / 30, [S.makeJet(B, x, z, fx, fz, true)]);
+            }
+        };
+        const area = { minX: C.yard.lawn.minX + 0.5, maxX: C.yard.lawn.maxX - 0.4, minZ: C.yard.lawn.minZ + 0.6, maxZ: C.yard.sidewalk.maxZ };
+        push(-3, 8.2, -1, 0, area);
+        push(0, 5, 0, 1, area);
+        run(sim, 3);
+        const xs = [];
+        const zs = [];
+        for (let k = 0; k < 200; k++) xs.push(sim.px[k]);
+        for (let k = 200; k < 400; k++) zs.push(sim.pz[k]);
+        // Well past where the old ground ended...
+        expect(Math.min(...xs)).toBeLessThan(old.minX - 4);
+        expect(Math.max(...zs)).toBeGreaterThan(old.maxZ + 3);
+        // ...and nowhere near the new one's edges.
+        expect(Math.min(...xs)).toBeGreaterThan(b.minX + 3);
+        expect(Math.max(...zs)).toBeLessThan(b.maxZ - 3);
+    }, 60000);
 });
 
 describe('what gets uploaded', () => {

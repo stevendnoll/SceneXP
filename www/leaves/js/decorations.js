@@ -28,7 +28,8 @@
  * NOTHING HERE IS ON OUR LAWN. The leaves would blow through it (the sim
  * knows only the boxes in config.yard), and the dive runs straight at the
  * pile from wherever the person stands. So everything hangs on a house,
- * sits on a roof, or stands past the edge of the sim's ground.
+ * sits on a roof, stands behind the hedge, or stands on a box the sim knows
+ * (yardDecorBoxes on our lawn, theirDecorBoxes on the others).
  *
  * Halloween week's extras (the carved, lit faces on the porch pumpkins and
  * the trick-or-treaters) are halloween.js's. Everything here is drawing:
@@ -109,10 +110,35 @@ export function yardDecorBoxes(config) {
     return out;
 }
 
-/** The config with our yard's decorations among its solid boxes: the world
- *  the sim is built from while they are up. */
+/**
+ * The solid boxes of the decorations on the other lawns (2026-10-08), on the
+ * sim's ground since it was widened past them: his inflatable jack-o-lantern
+ * (a platform over the square inside its belly, as the pumpkins are), his
+ * inflatable ghost (a wall around its middle), his foam stones (each a wall,
+ * as ours are), the hay bale his skeleton sits on (inside its turned
+ * footprint, as tall as he sits), and the scarecrow's post at the sage house.
+ */
+export function theirDecorBoxes(config) {
+    const D = config.halloween.decor;
+    const out = [];
+    const square = (name, x, z, half, height, platform = false) => out.push({ name, minX: x - half, maxX: x + half, minZ: z - half, maxZ: z + half, height, ...(platform ? { platform } : {}) });
+    const I = D.inflatable;
+    if (I) square('inflatable', I.x, I.z, I.r * 0.75, I.r * 1.7, true);
+    const G = D.ghostInflatable;
+    if (G) square('ghost', G.x, G.z, G.tall * 0.22, G.tall);
+    for (const g of D.graves || []) {
+        const t = STONE[g.kind];
+        out.push({ name: 'foam-stone', minX: g.x - t.w / 2 - 0.03, maxX: g.x + t.w / 2 + 0.03, minZ: g.z - 0.08, maxZ: g.z + 0.08, height: t.h });
+    }
+    if (D.skeleton) square('bale', D.skeleton.x, D.skeleton.z, 0.3, 1.1);
+    if (D.scarecrow) square('scarecrow', D.scarecrow.x, D.scarecrow.z, 0.06, 1.95);
+    return out;
+}
+
+/** The config with the decorations among its solid boxes, ours and the
+ *  other lawns': the world the sim is built from while they are up. */
 export function decoratedConfig(config) {
-    return { ...config, yard: { ...config.yard, boxes: [...config.yard.boxes, ...yardDecorBoxes(config)] } };
+    return { ...config, yard: { ...config.yard, boxes: [...config.yard.boxes, ...yardDecorBoxes(config), ...theirDecorBoxes(config)] } };
 }
 
 /** How far into our window the clown has slid at `time`, 0 (out of sight)
@@ -1142,7 +1168,7 @@ export function buildDecorations(config) {
     const hedgeLine = Y.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
     if (SK.peeker && hedgeLine) {
         const peeker = peekingSkeleton(D);
-        // Its fingers just short of the sim's edge, over our lawn's side.
+        // Its fingers just short of the hedge's wall, over our lawn's side.
         peeker.position.set(hedgeLine.at - 0.12, hedgeLine.height, SK.peeker.z);
         peeker.name = 'skeleton';
         group.add(peeker);
@@ -1202,7 +1228,8 @@ export function buildDecorations(config) {
     ghost.position.set(D.ghost.x, eave.y + 0.05, hisFront + 0.55);
     group.add(ghost);
 
-    // His inflatable jack-o-lantern, past the sim's ground, swaying a little.
+    // His inflatable jack-o-lantern, swaying a little (a box the sim knows,
+    // theirDecorBoxes).
     const I = D.inflatable;
     const inflatable = new THREE.Group();
     inflatable.position.set(I.x, 0, I.z);

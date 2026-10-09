@@ -26,17 +26,32 @@
  * against the lawn forever. A leaf on anything raised there (`sim.floor`)
  * is counted `porch`, off the lawn.
  *
+ * A LEAF COUNTS WHERE IT LANDS (Steve's QA, 2026-10-08: blowing leaves
+ * across the porch, the score "will jump from like 80% to 96% and then drop
+ * back down to 85%"). It counted every leaf where it was that moment, so a
+ * drift blown over the porch counted `porch` while it was in the air above
+ * it (555 leaves at once in a measured sweep), and lawn again once it came
+ * down on the far side. Now a leaf still moving counts where it last came to
+ * rest (`landed`, kept by the page), so the score moves only when leaves
+ * settle: a leaf blown into the street counts once it lands there, a moment
+ * later, and one blown over the porch never counts until it stops.
+ *
  * PURE: the copy lives here so the house style is tested (no em dashes, no
  * semicolons, American spelling).
  */
 
+/** The regions, by the code tally() keeps in `landed` (0 is none yet). */
+export const REGIONS = Object.freeze(['lawn', 'tarp', 'street', 'neighbor', 'porch']);
+
 const inRect = (r, x, z) => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ;
 
 /** Which region a point is in: 'street' (the sidewalk and the street, in
- *  front of the yard), 'neighbor' (past the picket fence), 'tarp', or
- *  'lawn'. */
+ *  front of the yard, and anywhere down the block past the hedge or his
+ *  side fence, which only the sidewalk leads to), 'neighbor' (past the
+ *  picket fence), 'tarp', or 'lawn'. */
 export function regionOf(x, z, yard) {
-    if (z >= yard.lawn.maxZ) return 'street';
+    if (z >= yard.lawn.maxZ || x < yard.lawn.minX) return 'street';
+    if (yard.neighborYard && x > yard.neighborYard.maxX) return 'street';
     if (x > yard.lawn.maxX) return 'neighbor';
     if (inRect(yard.tarp, x, z)) return 'tarp';
     return 'lawn';
@@ -64,8 +79,12 @@ function raised(sim, x, z) {
  * the neighbor's lawn and never cleared, and its count comes back as
  * `sent`: every leaf that went over the fence this round, even the ones he
  * has since blown back.
+ *
+ * `landed`, if given, is one byte per leaf (zeroed with the yard): where it
+ * last lay at rest, as 1 + its index in REGIONS, written here for every
+ * sleeping leaf. A leaf still moving counts there, not where it is.
  */
-export function tally(sim, yard, sent = null) {
+export function tally(sim, yard, sent = null, landed = null) {
     const t = {
         lawn: 0, tarp: 0, street: 0, neighbor: 0, porch: 0, total: sim.count,
         sent: 0, nearZ: Infinity, farZ: -Infinity, deepX: -Infinity
@@ -78,8 +97,14 @@ export function tally(sim, yard, sent = null) {
         }
         const x = sim.px[i];
         const z = sim.pz[i];
-        let where = regionOf(x, z, yard);
-        if (where === 'lawn' && sim.floor && raised(sim, x, z)) where = 'porch';
+        let where;
+        if (landed && sim.awake[i] && landed[i]) {
+            where = REGIONS[landed[i] - 1];
+        } else {
+            where = regionOf(x, z, yard);
+            if (where === 'lawn' && sim.floor && raised(sim, x, z)) where = 'porch';
+            if (landed && !sim.awake[i]) landed[i] = REGIONS.indexOf(where) + 1;
+        }
         t[where]++;
         if (where === 'neighbor') {
             if (z < t.nearZ) t.nearZ = z;

@@ -479,7 +479,7 @@ describe('the drawing, on the real three.js', () => {
     // Our yard's own decorations (M6 QA: "add more Halloween decorations to
     // the main user's yard") stand on the lawn, each on a box the sim knows,
     // so the leaves meet them. Nothing else may.
-    test('NOTHING STANDS ON OUR LAWN UNSEEN BY THE LEAVES: every decoration hangs on a house, sits up high, stands past the sim\'s ground, or stands on a box the sim knows', () => {
+    test('NOTHING STANDS ON OUR LAWN UNSEEN BY THE LEAVES: every decoration hangs on a house, sits up high, stands past our lawn, or stands on a box the sim knows', () => {
         const { group } = Dc.buildDecorations(C);
         group.updateMatrixWorld(true);
         const Y = C.yard;
@@ -492,7 +492,9 @@ describe('the drawing, on the real three.js', () => {
             box.setFromObject(o, true);
             const onAHouse = box.max.z <= Y.lawn.minZ + 0.6;
             const overhead = box.min.y >= 2;
-            const pastTheSim = box.min.x > Y.bounds.maxX || box.max.x < Y.bounds.minX;
+            // Past the picket or the hedge (the other lawns' have their own
+            // boxes, tested below).
+            const pastTheSim = box.min.x > Y.neighbor.minX || box.max.x < Y.lawn.minX;
             // On or wound round something the sim treats as solid (a porch
             // post, a lantern, a skeleton, a pumpkin stack, whose bellies
             // bulge past their boxes as the porch pumpkins' always have),
@@ -542,13 +544,37 @@ describe('the drawing, on the real three.js', () => {
         const aspen = C.yard.trees.find((t) => t.species === 'quaking-aspen');
         const things = [{ x: D.inflatable.x, z: D.inflatable.z, r: D.inflatable.r }, ...D.graves.map((g) => ({ x: g.x, z: g.z, r: 0.35 }))];
         for (const t of things) {
-            expect(t.x - t.r).toBeGreaterThan(C.yard.bounds.maxX);
             expect(t.x - t.r).toBeGreaterThan(C.neighbor.lineMax);
             expect(t.z - t.r).toBeGreaterThan(C.yard.neighbor.minZ);
             expect(t.z + t.r).toBeLessThan(C.yard.sidewalk.minZ);
             expect(Math.hypot(t.x - aspen.x, t.z - aspen.z)).toBeGreaterThan(t.r + 0.5);
         }
         expect(D.inflatable.x).toBeLessThan(NH.maxX);
+    });
+
+    // Steve's QA, 2026-10-08: no invisible walls, so the sim's ground now
+    // reaches past his side fence and over the sage house's lawn.
+    test('on the other lawns, now on the sim\'s ground, each decoration stands on a box the sim knows', () => {
+        const D = HW.decor;
+        const Y = C.yard;
+        const theirs = Dc.theirDecorBoxes(C);
+        const solid = S.solidBoxes(Dc.decoratedConfig(C).yard);
+        const at = (x, z) => solid.filter((b) => x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ);
+        const feet = [D.inflatable, D.ghostInflatable, D.skeleton, D.scarecrow, ...D.graves];
+        for (const f of feet) {
+            const inSim = f.x > Y.bounds.minX && f.x < Y.bounds.maxX && f.z > Y.bounds.minZ && f.z < Y.bounds.maxZ;
+            expect(inSim).toBe(true);
+            expect(at(f.x, f.z).length).toBeGreaterThan(0);
+        }
+        expect(theirs).toHaveLength(feet.length);
+        // None reaches across a fence or onto a sidewalk.
+        for (const b of theirs) {
+            expect(b.maxZ).toBeLessThan(Y.sidewalk.minZ);
+            const over = b.minX > Y.neighbor.minX ? b.maxX < Y.neighborYard.maxX : b.maxX < Y.lawn.minX;
+            expect(over).toBe(true);
+        }
+        // And the sim is built with them only while the decorations are up.
+        expect(Dc.decoratedConfig(C).yard.boxes.length).toBe(C.yard.boxes.length + Dc.yardDecorBoxes(C).length + theirs.length);
     });
 
     /** The decorations' meshes, each with its world box. */
@@ -564,7 +590,7 @@ describe('the drawing, on the real three.js', () => {
     // spot". She dove headfirst into the top of our hedge instead.
     test('the witch who dove into our hedge kicks her legs up out of its top, all of her past our lawn', () => {
         const hedge = C.yard.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
-        const her = boxes().filter(({ box }) => box.max.x < C.yard.bounds.minX && Math.abs((box.min.z + box.max.z) / 2 - HW.decor.witch.z) < 0.9);
+        const her = boxes().filter(({ box }) => box.max.x < hedge.at && Math.abs((box.min.z + box.max.z) / 2 - HW.decor.witch.z) < 0.9);
         expect(her.length).toBeGreaterThan(15);
         for (const { box } of her) {
             // Over the hedge, inside its width, on our side of nothing.
@@ -714,14 +740,14 @@ describe('the drawing, on the real three.js', () => {
     });
 
     // Steve's M6 QA: "Maybe a skeleton or two (or three)?"
-    test('three skeletons: one breaking out of the lawn, one raking, and one peeking over our hedge from past the sim', () => {
+    test('three skeletons: one breaking out of the lawn, one raking, and one peeking over our hedge from behind it', () => {
         const { group } = Dc.buildDecorations(C);
         group.updateMatrixWorld(true);
         const skeletons = group.children.filter((c) => c.name === 'skeleton');
         expect(skeletons).toHaveLength(3);
         const hedge = C.yard.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
         const peeker = new THREE.Box3().setFromObject(skeletons[2], true);
-        expect(peeker.max.x).toBeLessThan(C.yard.bounds.minX);
+        expect(peeker.max.x).toBeLessThan(hedge.at);
         expect(peeker.min.y).toBeGreaterThan(hedge.height - 0.1);
         // The raker stands as tall as a person, the riser low in its mound.
         const raker = new THREE.Box3().setFromObject(skeletons[1], true);

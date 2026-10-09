@@ -232,11 +232,11 @@ export function groundRects(config) {
         { name: 'lawn', rect: Y.lawn, color: L.lawn, y: 0, grass: 7 },
         // His: a deeper, healthier green than ours, mowed in stripes
         // (Steve's QA, 2026-10-08), from the fence all the way to his side
-        // fence and the sidewalk (past the sim's ground, which ends at his
+        // fence and the sidewalk (the sim's ground once ended at his
         // lawn's middle).
         { name: 'neighbor-lawn', rect: { ...Y.neighbor, maxX: Math.max(Y.neighbor.maxX, Y.neighborYard?.maxX ?? 0), maxZ: Y.sidewalk.minZ }, color: L.neighborLawn, dark: L.neighborLawnDark, y: 0, grass: 11, stripes: L.stripes },
         // The strip of our lawn between the yard's edge and the sidewalk.
-        { name: 'strip', rect: { minX: b.minX, maxX: Y.neighbor.minX, minZ: Y.lawn.maxZ, maxZ: Y.sidewalk.minZ }, color: L.lawn, y: 0, grass: 13 },
+        { name: 'strip', rect: { minX: Y.lawn.minX, maxX: Y.neighbor.minX, minZ: Y.lawn.maxZ, maxZ: Y.sidewalk.minZ }, color: L.lawn, y: 0, grass: 13 },
         // Concrete and asphalt (surfaces.js, 2026-10-08).
         { name: 'sidewalk', rect: { minX: block.minX, maxX: block.maxX, minZ: Y.sidewalk.minZ, maxZ: Y.sidewalk.maxZ }, color: L.sidewalk, y: 0.01, surface: 'sidewalk' },
         { name: 'street', rect: { minX: block.minX - 30, maxX: block.maxX + 30, minZ: Y.sidewalk.maxZ, maxZ: b.maxZ + 40 }, color: L.street, y: -0.02, surface: 'street' }
@@ -394,8 +394,9 @@ export function boxwood(x, z, r, look, seed, tall = 0.85) {
  * little bare when it's visible"), as between our houses: the same side
  * gate across the gap between his house and the next, and a white picket
  * fence like ours from it along his side to the sidewalk, with a few
- * boxwoods in the front corner. All of it past the sim's ground. Named
- * 'his-side-fence'.
+ * boxwoods in the front corner. The picket is a wall the sim knows
+ * (config.yard.walls) and the boxwoods are solid (sim.js solidBoxes), since
+ * the sim's ground reached past them (2026-10-08). Named 'his-side-fence'.
  */
 export function hisSideFence(Y, look) {
     const group = new THREE.Group();
@@ -420,7 +421,9 @@ export function hisSideFence(Y, look) {
 export function buildYard(scene, config, { shadows = true, mobile = false } = {}) {
     const Y = config.yard;
     const look = config.look;
-    const b = Y.bounds;
+    // The sun's shadows cover the yard as the sim's ground did before it
+    // was widened (2026-10-08), `fallArea`, so they kept their sharpness.
+    const b = Y.fallArea || Y.bounds;
     const surfaces = paving(look, mobile);
 
     for (const g of groundRects(config)) {
@@ -457,7 +460,7 @@ export function buildYard(scene, config, { shadows = true, mobile = false } = {}
     }
 
     Y.walls.forEach((wall) => {
-        if (wall.axis === 'x' && wall.height < 1.2) {
+        if (wall.axis === 'x' && wall.height < 1.2 && !wall.drawn) {
             const fence = picketFence(wall, look);
             fence.name = 'fence';
             scene.add(fence);

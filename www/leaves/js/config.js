@@ -57,12 +57,31 @@ export const LEAVES_CONFIG = Object.freeze({
     // The world, in meters. The sim's grid covers `bounds`; the walls are
     // thin and axis-aligned, and a leaf above a wall's height sails over it.
     yard: {
-        bounds: { minX: -10, maxX: 18, minZ: -6, maxZ: 12 },
+        // NO INVISIBLE WALLS (Steve's QA, 2026-10-08: leaves stopped "at the
+        // end of the row of hedges" on the sidewalk, and in the road a little
+        // past the parked car). The ground ran from the hedge to the middle
+        // of the neighbor's lawn and 12 m out, so its edges stood on the
+        // sidewalk, in the street and on his lawn. Now it reaches well past
+        // anywhere the blower can push a leaf (measured: about 9 m past where
+        // the person may walk, so x -18.7, x 18.9 and z 18.2), past his side
+        // fence and the sage house's lawn, and into the far lane. Only real
+        // things stop a leaf: the hedge, the fences, the houses.
+        bounds: { minX: -26, maxX: 28, minZ: -6, maxZ: 22 },
+        // Where the trees' crowns let their leaves fall (trees.js): the ground
+        // as it was, so the maple over the hedge drops none into the side
+        // yard behind it.
+        fallArea: { minX: -10, maxX: 18, minZ: -6, maxZ: 12 },
         // Our lawn, where the leaves fall and where the score is counted.
         lawn: { minX: -10, maxX: 10, minZ: -6, maxZ: 7 },
         // The neighbor's lawn, past the picket fence.
         neighbor: { minX: 10.1, maxX: 18, minZ: -6, maxZ: 7 },
         sidewalk: { minZ: 7.4, maxZ: 9 },
+        // The double yellow line's middle, this far out from the curb's side
+        // of the sidewalk (house.js buildStreet). Steve's QA, 2026-10-08: at
+        // 4.2 "the car parked along the curb would block traffic". The parked
+        // car's far side is 2.4 m out, and a passing car 1.85 m wide wants
+        // half a meter either side of it, so the lane runs to 5.3 m.
+        centerLine: 5.4,
         // How far back the hedge down our left side is drawn (M6 QA), along
         // the property line past the backs of the houses.
         hedgeBack: -15,
@@ -80,8 +99,8 @@ export const LEAVES_CONFIG = Object.freeze({
         // between and `thick` deep, a band of `lattice` under the top rail,
         // `lift` off the ground, and `back` behind the neighbor's face.
         gate: { height: 1.8, post: 0.1, board: 0.13, gap: 0.014, thick: 0.022, rail: 0.06, lattice: 0.32, lift: 0.05, back: 0.02 },
-        // His striped lawn runs past the sim's ground to his side fence
-        // (yard.js groundRects), clear of his inflatable ghost's arms.
+        // His striped lawn runs to his side fence (yard.js groundRects),
+        // clear of his inflatable ghost's arms.
         // A shrub in the gap between our house and the hedge (yard.js),
         // its front just behind the line the leaves bank against.
         cornerShrub: { x: -9.5, z: -6.8, r: 0.55, tall: 1.6 },
@@ -131,8 +150,15 @@ export const LEAVES_CONFIG = Object.freeze({
             { axis: 'x', at: 10, from: -6, to: 7.2, height: 0.95 },
             // The house and the neighbor's house, across the back.
             { axis: 'z', at: -6, from: -10, to: 18, height: 5 },
-            // A tall hedge down the left side.
-            { axis: 'x', at: -10, from: -6, to: 12, height: 1.8 }
+            // A tall hedge down the left side, from the house to its end at
+            // the sidewalk. It `stops` a leaf however high it flies (a leaf
+            // over 1.8 m is still stopped, up to 40 m): the side yard behind
+            // it (backyard.js) is drawn, not simulated, as it was when the
+            // sim's ground ended here.
+            { axis: 'x', at: -10, from: -6, to: 7.4, height: 1.8, stops: 40 },
+            // His white picket along his far side, at neighborYard.maxX
+            // (`drawn` by yard.js hisSideFence, with its gate and boxwoods).
+            { axis: 'x', at: 24.9, from: -6, to: 7.2, height: 0.95, drawn: 'hisSideFence' }
         ],
         // `door` is our front door's middle, in x (house.js).
         // `setBack` (M6 QA): how far behind the line the leaves rest against
@@ -198,8 +224,8 @@ export const LEAVES_CONFIG = Object.freeze({
         // Each holds `hanging` of the yard's leaves up in its crown, dropped
         // a few at a time (see trees.js).
         // `hanging` is how many leaves its crown holds (only the part of the
-        // crown over the sim's ground can drop any, so the tree past the
-        // neighbor's yard holds none).
+        // crown over `fallArea` can drop any, so the tree past the neighbor's
+        // yard holds none).
         trees: [
             // Our sugar maple, in the back right corner by the house.
             { species: 'sugar-maple', x: 6.6, z: -3.4, height: 10, seed: 1101, trunk: 0.22, crown: { y: 5.5, radius: 2.8 }, hanging: 70 },
@@ -265,8 +291,8 @@ export const LEAVES_CONFIG = Object.freeze({
         },
         // BEHIND OUR HEDGE (Steve's M6 QA: "more environment details to the
         // back left of the scene behind the row of hedges"): the sage house's
-        // side yard, between the hedge and its garage, all of it past the
-        // sim's ground. A garden shed, a privacy fence along the back, raised
+        // side yard, between the hedge and its garage, all of it behind the
+        // hedge, which no leaf gets over (`stops`). A garden shed, a privacy fence along the back, raised
         // beds and a pumpkin patch, a fire pit with two Adirondack chairs, a
         // birdbath, a wheelbarrow of leaves, stepping stones (backyard.js).
         // Packed into the 4 m or so behind the hedge that a wide screen shows
@@ -620,9 +646,10 @@ export const LEAVES_CONFIG = Object.freeze({
             // The neighbor's ghost, hung from his eave by his windows.
             sheet: 0xf4f3ee,
             ghost: { x: 14.32, tall: 0.62, string: 0.25 },
-            // His inflatable jack-o-lantern and his foam graveyard, both past
-            // the sim's ground (x beyond yard.bounds.maxX), so no leaf ever
-            // blows through them.
+            // His inflatable jack-o-lantern and his foam graveyard, past where
+            // he blows (neighbor.lineMax), each standing on a box the sim
+            // knows (decorations.js theirDecorBoxes), so no leaf blows
+            // through them.
             orange: 0xe9781f,
             stem: 0x4f6b2a,
             ink: 0x1d140a,
@@ -697,7 +724,7 @@ export const LEAVES_CONFIG = Object.freeze({
             // raking leaves on the right (the rake ahead of it, toward the
             // street), and one peeking over our hedge from the side yard.
             // The first two stand on boxes the sim knows (`box`, around their
-            // middles), the third is past the sim's ground.
+            // middles), the third behind the hedge.
             skeletons: {
                 riser: { x: -7.8, z: 5.6, turn: 0.5, box: { x: 0.35, z: 0.35, height: 0.9 } },
                 raker: { x: 7.9, z: 4.9, box: { x: 0.3, minZ: -0.22, maxZ: 0.88, height: 1.72 } },

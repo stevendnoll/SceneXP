@@ -276,8 +276,9 @@ export function boxWalls(box) {
 
 /** Every solid box on the ground: the yard's own (`yard.boxes`), the
  *  trunk of each tree that stands on the sim's ground (M5), three meters
- *  tall, so no leaf goes through a trunk, and each pumpkin, as a platform
- *  as tall as the pumpkin over the square inside its belly. */
+ *  tall, so no leaf goes through a trunk, each pumpkin, as a platform
+ *  as tall as the pumpkin over the square inside its belly, and his
+ *  boxwoods the same way. */
 export function solidBoxes(Y) {
     const b = Y.bounds;
     const trunks = (Y.trees || [])
@@ -287,7 +288,13 @@ export function solidBoxes(Y) {
         const half = p.r * 0.75;
         return { minX: p.x - half, maxX: p.x + half, minZ: p.z - half, maxZ: p.z + half, height: p.y + p.r * 1.44, platform: true };
     });
-    return [...(Y.boxes || []), ...trunks, ...pumpkins];
+    // His boxwoods by his side fence (yard.js boxwood: about r tall), on the
+    // sim's ground since it reached past his fence (2026-10-08).
+    const boxwoods = ((Y.neighborYard && Y.neighborYard.boxwoods) || []).map((p) => {
+        const half = p.r * 0.75;
+        return { minX: p.x - half, maxX: p.x + half, minZ: p.z - half, maxZ: p.z + half, height: p.r * 1.05, platform: true };
+    });
+    return [...(Y.boxes || []), ...trunks, ...pumpkins, ...boxwoods];
 }
 
 /** Whether (x, z) is inside any of `boxes`, grown by `margin`. */
@@ -979,18 +986,22 @@ function stepLeaf(sim, i, h, jets) {
     // the pickets on his side stayed there by the hundred, and he went back
     // in with his lawn full of them.
     const lift = u > P.wallLift.air ? P.wallLift.share : 0;
+    // A wall that `stops` higher than it stands (the hedge, with the side
+    // yard drawn behind it) stops a leaf up to there, but only lifts one
+    // below its top.
     for (let w = 0; w < sim.walls.length; w++) {
         const wall = sim.walls[w];
-        if (y >= wall.height) continue;
+        if (y >= (wall.stops ?? wall.height)) continue;
+        const up = lift && y < wall.height ? lift : 0;
         if (wall.axis === 'x') {
             if ((ox < wall.at) !== (x < wall.at) && z >= wall.from && z <= wall.to) {
                 x = ox < wall.at ? wall.at - 0.01 : wall.at + 0.01;
-                if (lift) vy = Math.max(vy, lift * Math.abs(vx));
+                if (up) vy = Math.max(vy, up * Math.abs(vx));
                 vx = -vx * P.wallBounce;
             }
         } else if ((oz < wall.at) !== (z < wall.at) && x >= wall.from && x <= wall.to) {
             z = oz < wall.at ? wall.at - 0.01 : wall.at + 0.01;
-            if (lift) vy = Math.max(vy, lift * Math.abs(vz));
+            if (up) vy = Math.max(vy, up * Math.abs(vz));
             vz = -vz * P.wallBounce;
         }
     }

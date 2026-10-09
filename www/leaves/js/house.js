@@ -428,7 +428,7 @@ export function buildStreet(Y, L) {
     const length = b.maxX - b.minX + 120;
     const mid = (b.minX + b.maxX) / 2;
     group.add(flat(length, 0.22, L.curb, mid, 0.012, Y.sidewalk.maxZ + 0.11));
-    const line = Y.sidewalk.maxZ + 4.2;
+    const line = Y.sidewalk.maxZ + Y.centerLine;
     for (const dz of [-0.07, 0.07]) group.add(flat(length, 0.08, L.centerLine, mid, -0.015, line + dz));
 
     // Our mailbox: a cedar post (the box the leaves meet), a plank on top,

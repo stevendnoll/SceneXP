@@ -34,15 +34,18 @@ function pieces() {
 
 const overlaps = (box, r) => box.max.x > r.minX && box.min.x < r.maxX && box.max.z > r.minZ && box.min.z < r.maxZ;
 
-test('all of it is past the sim\'s ground, behind the hedge or behind the houses', () => {
+test('all of it is behind the hedge, which stops every leaf however high it flies, or behind the houses', () => {
     const wall = Y.walls.find((w) => w.axis === 'x' && w.height >= 1.2);
     // The hedge as drawn: 0.9 m thick behind its wall, back along the
     // property line to `hedgeBack`.
     const hedge = { minX: wall.at - 0.9, maxX: wall.at, minZ: Y.hedgeBack, maxZ: Y.sidewalk.minZ };
+    // The sim's ground reaches past it (2026-10-08), so the hedge's wall
+    // stands in for its edge: no leaf sails over into the side yard.
+    expect(wall.stops).toBeGreaterThanOrEqual(10);
     const { out } = pieces();
     expect(out.length).toBeGreaterThan(40);
     for (const { box } of out) {
-        expect(box.max.x < Y.bounds.minX || box.max.z < Y.bounds.minZ).toBe(true);
+        expect(box.max.x < wall.at || box.max.z < Y.bounds.minZ).toBe(true);
         expect(overlaps(box, hedge)).toBe(false);
     }
 });
