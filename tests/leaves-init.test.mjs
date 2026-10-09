@@ -430,8 +430,10 @@ describe('the welcome card', () => {
         expect(dom.el('step-in').textContent).toBe('Tap to step in');
         const css = await readFile(new URL('../www/leaves/css/experience.css', import.meta.url), 'utf8');
         expect(css).toMatch(/html\.touch-ui #instructions \.for-mouse,\s*html:not\(\.touch-ui\) #instructions \.for-touch \{\s*display: none;/);
-        // On a phone the card stays as it was: no controls at all.
-        expect(css).toMatch(/@media \(max-width: 768px\) \{\s*#instructions \.controls-brief,\s*#instructions \.all-controls \{\s*display: none;/);
+        // On a phone the card stays as it was: no controls at all. A
+        // computer zoomed that narrow keeps its keys (the sweep, 2026-10-09).
+        expect(css).toMatch(/@media \(max-width: 768px\) \{\s*html\.touch-ui #instructions \.controls-brief,\s*html\.touch-ui #instructions \.all-controls \{\s*display: none;/);
+        expect(css).toMatch(/html:not\(\.touch-ui\) #instructions \.all-controls \.controls-hint\.for-mouse \{\s*display: block;/);
     });
 
     test('"All the controls" opens without stepping in, by a click or a key', async () => {
@@ -465,6 +467,76 @@ describe('the welcome card', () => {
         fire(dom.documentStub, 'keydown', { code: 'Enter' });
         expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
     });
+});
+
+// THE ACCESSIBILITY SWEEP, 2026-10-09. In the yard Space is the blower, and
+// a focused button keeps Space for itself. Help (which opened the card) got
+// focus back on the way in, so Space brought the card straight back; and a
+// control of the card itself (Click to step in, Play with no clock) kept
+// focus once the card was hidden, so Space did nothing. A keyboard could
+// not blow. Into the yard, those let go of focus.
+test('stepping into the yard never leaves focus where Space cannot blow', async () => {
+    const main = await boot();
+    const blocker = dom.el('blocker');
+    const help = dom.el('help-btn');
+    fire(blocker, 'click');
+    // Help, from the keyboard: focus on it, the card comes back, then in again.
+    help.focus();
+    fire(help, 'click');
+    expect(blocker.classList.contains('hidden')).toBe(false);
+    // (The stub never moves focus off one element onto another, so what is
+    // checked is whether focus is handed back to help: it must not be.)
+    const refocus = jest.fn();
+    help.focus = refocus;
+    fire(dom.documentStub, 'keydown', { code: 'Escape' });
+    expect(blocker.classList.contains('hidden')).toBe(true);
+    expect(refocus).not.toHaveBeenCalled();
+    // Space blows.
+    fire(dom.documentStub, 'keydown', { code: 'Space', target: dom.documentStub.body });
+    expect(main.getState().blowing).toBe(true);
+    fire(dom.documentStub, 'keyup', { code: 'Space' });
+    // A control of the card, focused when it steps in, lets go too.
+    fire(dom.documentStub, 'keydown', { code: 'Escape' });
+    const stepIn = dom.el('step-in');
+    stepIn.parentElement = blocker;
+    stepIn.focus();
+    const letGo = jest.fn();
+    stepIn.blur = letGo;
+    fire(stepIn, 'click');
+    expect(blocker.classList.contains('hidden')).toBe(true);
+    expect(letGo).toHaveBeenCalled();
+});
+
+// THE SWEEP, 2026-10-09: a computer zoomed to 200% has a phone-sized window,
+// and was treated as a phone (the joystick, "Tap to step in", the sound
+// off). A small window with a mouse (a fine pointer) is still a computer.
+test('a computer zoomed in keeps its mouse, and a small screen without one is a touch screen', async () => {
+    dom.windowStub.matchMedia = (q) => ({ media: q, matches: q === '(pointer: fine)', addEventListener() {}, removeEventListener() {} });
+    let main = await boot();
+    expect(main.getState().isMobile).toBe(false);
+    expect(dom.el('step-in').textContent).toBe('Click to step in');
+    dom.uninstall();
+    jest.resetModules();
+    installThree();
+    dom = installDom({ innerWidth: 390, innerHeight: 844 });
+    dom.windowStub.location.search = '?leaves=600';
+    main = await boot();
+    expect(main.getState().isMobile).toBe(true);
+});
+
+// THE SWEEP, 2026-10-09: iOS pinch-zoom was cancelled everywhere on the
+// page, so nobody could zoom a card to read it. Only over the yard now.
+test('a pinch over a card zooms the page, and over the yard it does not', async () => {
+    await boot();
+    const card = { closest: (sel) => (sel.includes('#blocker') ? {} : null) };
+    const yard = { closest: () => null };
+    const over = (target) => {
+        let prevented = false;
+        fire(dom.documentStub, 'gesturestart', { target, preventDefault() { prevented = true; } });
+        return prevented;
+    };
+    expect(over(card)).toBe(false);
+    expect(over(yard)).toBe(true);
 });
 
 // THE SOCIAL CARD'S CAPTURE (M7, 2026-10-09): ?clean=1 on a QA host hides
@@ -1003,9 +1075,17 @@ describe('the round', () => {
         fire(dom.documentStub, 'keydown', { code: 'Space' });
         frames(main, 0.2, 20);
         fire(dom.documentStub, 'keyup', { code: 'Space' });
-        frames(main, SHORT + C0.round.finaleMax, 20);
+        // Time up, said in one sentence with the dive, so neither is lost
+        // (the accessibility sweep, 2026-10-09: "Time is up." was
+        // overwritten in the same moment).
+        frames(main, SHORT + 0.3, 20);
+        expect(main.getState().round.phase).toBe('finale');
+        expect(dom.el('round-status').textContent).toMatch(/^Time is up\. You set the blower down/);
+        frames(main, C0.round.finaleMax, 20);
         expect(main.getState().endShown).toBe(true);
         expect(dom.el('end-kicker').textContent).toBe('Time is up');
+        // The result is said inside the card, which is aria-modal.
+        expect(dom.el('end-status').textContent).toMatch(/percent of the lawn cleared/);
         // The plain card: no gold, no ribbon.
         expect(dom.el('end-modal').classList.contains('perfect')).toBe(false);
         expect(dom.el('end-ribbon').hidden).toBe(true);

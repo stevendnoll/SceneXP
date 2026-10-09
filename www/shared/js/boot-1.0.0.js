@@ -135,7 +135,22 @@ export async function getProofOfWork(options = {}) {
  *  (rather than on its primary action, which puts a stray Enter one keypress
  *  from an outbound link), and it must not become a tab stop of its own. */
 const CARD_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), '
-    + 'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    + 'select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+
+/** The tab stops among `items`, in order. A group of radio buttons is ONE
+ *  stop, its checked member (or its first, with none checked), as a browser
+ *  tabs through it (the arrows move within it). Counting every radio, the
+ *  trap's first stop was the group's first radio, so with another one
+ *  checked Shift+Tab from it was neither "first" nor outside and left the
+ *  card (found in www/leaves's character card, 2026-10-09). A `<summary>`
+ *  is a stop of its own (www/earthdefense's settings). */
+export function tabStops(items) {
+    return items.filter((el) => {
+        if (el.type !== 'radio' || !el.name) return true;
+        const group = items.filter((o) => o.type === 'radio' && o.name === el.name);
+        return el === (group.find((o) => o.checked) || group[0]);
+    });
+}
 
 /** Visible in the layout sense, which is the sense that matters for a tab
  *  stop. Both offsets are zero for a `display: none` element and non-zero for
@@ -170,7 +185,7 @@ export function installCardFocusTrap(options = {}) {
         const card = topmostOpenCard();
         if (!card) return;
 
-        const items = Array.from(card.querySelectorAll(CARD_FOCUSABLE)).filter(isLaidOut);
+        const items = tabStops(Array.from(card.querySelectorAll(CARD_FOCUSABLE)).filter(isLaidOut));
         if (!items.length) return;
 
         const first = items[0];

@@ -328,3 +328,54 @@ describe('installCardScrollReset', () => {
     expect(m2.installCardScrollReset()).toBe(0);
   });
 });
+
+// THE FOCUS TRAP'S TAB STOPS (www/leaves's accessibility sweep, 2026-10-09).
+// A radio group is one stop (its checked member), as a browser tabs through
+// it: counting every radio, Shift+Tab from a checked one that was not the
+// group's first left the card. And a <summary> is a stop.
+describe('installCardFocusTrap', () => {
+  const el = (name, extra = {}) => ({ name: '', type: '', checked: false, offsetWidth: 10, offsetHeight: 10, focus: jest.fn(), ...extra, id: name });
+  function page(items) {
+    const card = {
+      querySelectorAll: () => items,
+      contains: (n) => items.includes(n),
+      offsetWidth: 100,
+      offsetHeight: 100
+    };
+    const listeners = [];
+    globalThis.document = {
+      activeElement: null,
+      querySelectorAll: () => [card],
+      addEventListener: (type, fn) => listeners.push(fn)
+    };
+    return { press: (shiftKey) => { const e = { key: 'Tab', shiftKey, preventDefault: jest.fn() }; listeners.forEach((fn) => fn(e)); return e; } };
+  }
+
+  test('a radio group is one stop, its checked member, so Shift+Tab from it wraps to the end', async () => {
+    const B = await load();
+    const red = el('red', { type: 'radio', name: 'shirt' });
+    const navy = el('navy', { type: 'radio', name: 'shirt', checked: true });
+    const done = el('done');
+    expect(B.tabStops([red, navy, done])).toEqual([navy, done]);
+    const { press } = page([red, navy, done]);
+    B.installCardFocusTrap();
+    globalThis.document.activeElement = navy;
+    const e = press(true);
+    expect(done.focus).toHaveBeenCalled();
+    expect(e.preventDefault).toHaveBeenCalled();
+    // With none checked, the group's first is its stop.
+    navy.checked = false;
+    expect(B.tabStops([red, navy, done])).toEqual([red, done]);
+  });
+
+  test('a summary is a stop, and Tab from the last stop comes round to it', async () => {
+    const B = await load();
+    const summary = el('summary');
+    const done = el('done');
+    const { press } = page([summary, done]);
+    B.installCardFocusTrap();
+    globalThis.document.activeElement = done;
+    press(false);
+    expect(summary.focus).toHaveBeenCalled();
+  });
+});

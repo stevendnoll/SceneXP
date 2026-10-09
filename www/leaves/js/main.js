@@ -49,7 +49,7 @@
 
 import { LEAVES_CONFIG } from './config.min.js';
 import {
-    createSim, resetSim, scatterLeaves, stepSim, makeJet, airAt, pilePeak, burst, solidBoxes, makeRandom, restingNear,
+    createSim, resetSim, scatterLeaves, warmUp as warmPhysics, stepSim, makeJet, airAt, pilePeak, burst, solidBoxes, makeRandom, restingNear,
     wrapAngle, cellIndex
 } from './sim.min.js';
 import { buildTrees, updateTrees, createCrowns, stepCrowns } from './trees.min.js';
@@ -252,10 +252,14 @@ const shade = { owed: true, since: 0 };
 
 // ---- Initialization -------------------------------------------------------
 
+/** A touch screen: a coarse pointer, or a small screen without a fine one.
+ *  A computer zoomed in is small too, but has its mouse (the accessibility
+ *  sweep, 2026-10-09: at 200% it was given the joystick, "Tap to step in"
+ *  and the sound off). */
 function detectMobile() {
     if (typeof window === 'undefined') return false;
-    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    return Boolean(coarse) || Math.min(window.innerWidth, window.innerHeight) < 600;
+    const media = (q) => Boolean(window.matchMedia && window.matchMedia(q).matches);
+    return media('(pointer: coarse)') || (Math.min(window.innerWidth, window.innerHeight) < 600 && !media('(pointer: fine)'));
 }
 
 function prefersReducedMotion() {
@@ -370,6 +374,11 @@ async function init() {
     updateLoadingStatus(`Letting ${shortCount(state.count)} leaves fall…`, 55);
     sim = createSim(state.count, WORLD);
     const { look, size: leafBase } = scatterLeaves(sim, WORLD);
+    // The physics warmed up while the loading screen is up, so the first
+    // blow does not stutter (sim.js warmUp). A lab-sized yard has no
+    // stutter to hide (and the page tests boot dozens of them).
+    const W = CONFIG.leaves.warm;
+    if (W && state.count >= W.from) warmPhysics(WORLD, W.count, W.seconds);
     leafSize = leafBase;
     trees = buildTrees(scene, CONFIG, { mobile: state.isMobile, shadows: state.shadows });
     crowns = createCrowns(sim, WORLD);
@@ -574,9 +583,15 @@ function setupEventListeners() {
     }, { signal });
 
     // Keep the view from being pinch-zoomed by iOS Safari, which ignores
-    // user-scalable=no. Safari-only gesture events, this page only.
+    // user-scalable=no. Safari-only gesture events, this page only. NEVER
+    // OVER A CARD (the accessibility sweep, 2026-10-09): a visitor may zoom
+    // the page to read one.
     ['gesturestart', 'gesturechange', 'gestureend'].forEach((type) =>
-        document.addEventListener(type, (e) => e.preventDefault(), { passive: false, signal }));
+        document.addEventListener(type, (e) => {
+            const t = e.target;
+            if (t && typeof t.closest === 'function' && t.closest('#blocker, #end-modal, #cast-modal')) return;
+            e.preventDefault();
+        }, { passive: false, signal }));
 
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
@@ -1149,13 +1164,23 @@ function returnToWelcome(how) {
     } catch (e) { /* not focusable */ }
 }
 
+/** Into the yard: focus goes back to what had it before the card came up,
+ *  EXCEPT the card's own controls and the help and sound buttons. In the
+ *  yard Space is the blower, and a focused button keeps Space for itself
+ *  (onKeyDown), so focus left on the help button (which opened the card)
+ *  or on a hidden control of the card meant Space brought the card back or
+ *  did nothing at all, and a keyboard could not blow (the accessibility
+ *  sweep, 2026-10-09). Those let go of focus instead. */
 function handFocusBack() {
     const el = welcomeReturn;
     welcomeReturn = null;
-    if (el && document.contains && document.contains(el)) {
+    const chrome = (node) => Boolean(node) && (node === blocker || node === helpBtn || node === soundBtn
+        || (blocker && typeof blocker.contains === 'function' && blocker.contains(node)));
+    if (el && !chrome(el) && document.contains && document.contains(el)) {
         try { el.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
     }
-    if (document.activeElement === blocker && typeof blocker.blur === 'function') blocker.blur();
+    const at = document.activeElement;
+    if (chrome(at) && typeof at.blur === 'function') at.blur();
 }
 
 function applySiteLinks() {
@@ -1372,8 +1397,10 @@ function recount() {
 }
 
 /** Say a beat of the round to a screen reader. */
-function announce(text) {
-    const el = document.getElementById('round-status');
+/** Say `text` to a screen reader, in `region` (the yard's own, or a live
+ *  region inside an open card). */
+function announce(text, region = 'round-status') {
+    const el = document.getElementById(region);
     if (el) el.textContent = text;
 }
 
@@ -1385,7 +1412,6 @@ function onRoundEvent(event) {
         // The clock has run out: the blower stops, whatever is still held,
         // the result is counted, and the dive begins.
         releaseInput();
-        announce('Time is up.');
         if (round.spotless) track('spotless', { outcome: 'round', seconds: Math.round(round.elapsed) });
         startFinale();
     } else if (event === 'done') {
@@ -1430,7 +1456,9 @@ function startFinale() {
         const clock = document.getElementById('hud-clock');
         if (clock) clock.classList.add('clear');
     }
-    const early = round.spotless ? 'The lawn is clear, with time to spare. ' : '';
+    // One sentence, so neither half is lost: "Time is up." was announced
+    // and overwritten by this in the same moment (the sweep, 2026-10-09).
+    const early = round.spotless ? 'The lawn is clear, with time to spare. ' : 'Time is up. ';
     announce(`${early}You set the blower down and take a running dive at the pile.`);
     track('dive', { outcome: finale.plan.success ? 'landed' : 'flop' });
 }
@@ -1610,7 +1638,9 @@ function showEnd() {
     releaseInput();
     if (endModal) endModal.classList.remove('hidden');
     setChromeVisible(false);
-    announce(resultSentence(t, landed, result.found));
+    // Inside the card (it is aria-modal, so a region outside it may never
+    // be read: the sweep, 2026-10-09).
+    announce(resultSentence(t, landed, result.found), 'end-status');
     const again = document.getElementById('end-again');
     if (again) {
         try { again.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }

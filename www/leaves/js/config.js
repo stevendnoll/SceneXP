@@ -54,7 +54,13 @@ export const LEAVES_CONFIG = Object.freeze({
         // How much of the yard's leaf fall lies in drifts along the fences and
         // the house, rather than spread evenly.
         driftShare: 0.3,
-        driftWidth: 1.4
+        driftWidth: 1.4,
+        // THE PHYSICS WARMED UP behind the loading screen (the phone pass,
+        // 2026-10-09; sim.js warmUp): `count` leaves blown for `seconds` in
+        // a throwaway yard, for any yard of `from` leaves or more. The first
+        // blow's next ten frames went from 10 ms to 1.7 ms on a computer;
+        // it costs about 37 ms there while the page loads.
+        warm: { from: 2000, count: 400, seconds: 0.75 }
     },
 
     // The world, in meters. The sim's grid covers `bounds`; the walls are

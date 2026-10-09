@@ -1122,6 +1122,37 @@ export function stepSim(sim, dt, jets) {
     }
 }
 
+/**
+ * WARM THE PHYSICS UP behind the loading screen (the phone pass, 2026-10-09).
+ * The first blow of a visit woke some 700 leaves in one frame while the
+ * engine compiled the code that steps them for the first time: 25 ms on a
+ * computer, several frames' stutter on a phone, at the moment a visitor
+ * first touches the blower. A second blow had no such frame. So a small
+ * throwaway yard of `count` leaves is blown across the lawn into the hedge
+ * and then the house for `seconds`, the same code on the same shapes of
+ * data, and the real yard's first blow runs compiled. Returns the steps
+ * taken. Nothing it does touches any other sim.
+ */
+export function warmUp(config, count = 600, seconds = 1.5) {
+    const sim = createSim(count, config);
+    scatterLeaves(sim, config);
+    const B = config.blower;
+    const L = config.yard.lawn;
+    const frames = Math.max(1, Math.round(seconds * 60));
+    const midX = (L.minX + L.maxX) / 2;
+    const midZ = (L.minZ + L.maxZ) / 2;
+    for (let f = 0; f < frames; f++) {
+        const u = f / frames;
+        // Across the lawn toward the hedge, then up it toward the house:
+        // a ground skid, a hop into the air, a landing, a wall, a drift.
+        const jet = u < 0.5
+            ? makeJet(B, midX - (L.maxX - L.minX) * 0.4 * u, midZ, -1, -0.15, true)
+            : makeJet(B, midX, midZ - (L.maxZ - L.minZ) * 0.6 * (u - 0.5), 0.1, -1, true);
+        stepSim(sim, 1 / 60, [jet]);
+    }
+    return sim.stats.steps;
+}
+
 /** Drop a leaf from height `y` at (x, z): for tests, and for leaves that
  *  fall from the trees later on. */
 export function dropLeaf(sim, i, x, y, z) {

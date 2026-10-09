@@ -673,6 +673,26 @@ describe('what gets uploaded', () => {
     });
 });
 
+// THE PHONE PASS, 2026-10-09: the first blow of a visit stuttered while the
+// engine compiled the stepping code, so a throwaway yard is blown behind the
+// loading screen first. It must do real work, and leave the real yard alone.
+describe('warming the physics up', () => {
+    test('it blows a throwaway yard, and a yard made after it moves exactly as one made without it', () => {
+        const run = () => {
+            const sim = S.createSim(400, C);
+            S.scatterLeaves(sim, C);
+            for (let f = 0; f < 20; f++) S.stepSim(sim, 1 / 60, [S.makeJet(C.blower, 0, 4, 0, -1, true)]);
+            return Array.from(sim.px.slice(0, 400));
+        };
+        const before = run();
+        expect(S.warmUp(C, 120, 0.2)).toBeGreaterThan(0);
+        expect(run()).toEqual(before);
+        // The page warms full yards only, never the lab's small ones.
+        expect(C.leaves.warm.from).toBeGreaterThan(600);
+        expect(C.leaves.mobile).toBeGreaterThanOrEqual(C.leaves.warm.from);
+    });
+});
+
 describe('the person with the blower', () => {
     const area = { minX: -9.5, maxX: 9.6, minZ: -5.4, maxZ: 9 };
 

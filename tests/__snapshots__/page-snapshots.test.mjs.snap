@@ -3886,7 +3886,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Leaf Blower | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=12" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=13" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -3928,7 +3928,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/surfaces.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=2" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=12" rel="stylesheet"]
+    link [href="css/experience.min.css?v=13" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -4040,7 +4040,7 @@ html [data-ui-theme="ember" lang="en"]
       div#joystick-zone
         div.joystick-base-fixed
           div.joystick-thumb-fixed
-    button#blow-btn.ui-float.blow-btn [aria-label="Hold to run the leaf blower" title="Hold to blow" type="button"]
+    button#blow-btn.ui-float.blow-btn [aria-label="Blow: hold to run the leaf blower" title="Hold to blow" type="button"]
       svg [aria-hidden="true" viewbox="0 0 24 24"]
         path [d="M3 8h10.5a2.75 2.75 0 1 0-2.75-2.75"]
         path [d="M3 12h15a3 3 0 1 1-3 3"]
