@@ -23,6 +23,9 @@
  *                    read by halloween.js
  *   ?clock=30        a round this many seconds long (5 to 600), to try the
  *                    finish without the whole five minutes (2026-10-08)
+ *   ?clean=1         no buttons, HUD, toasts or aim ring over the yard, for
+ *                    capturing the social card (2026-10-09). The welcome
+ *                    and end cards still show
  *
  * PURE, so all of it is tested without a browser; main.js does the wiring.
  */
@@ -41,7 +44,7 @@ export function isQaHost(location = (typeof window !== 'undefined' ? window.loca
 }
 
 /** What the address asks for, with the device's defaults for the rest:
- *  { count, shadows, ratio, finds, clock }. `ratio` is null unless one is
+ *  { count, shadows, ratio, finds, clock, clean }. `ratio` is null unless one is
  *  asked for, and `clock` is the round's length in seconds. */
 export function labOptions(search, config, mobile) {
     const L = config.leaves;
@@ -62,7 +65,7 @@ export function labOptions(search, config, mobile) {
     let clock = config.round.seconds;
     const c = params.get('clock');
     if (c !== null && /^\d+$/.test(c)) clock = Math.min(600, Math.max(5, Number(c)));
-    return { count, shadows, ratio, finds: params.get('finds') === '1', clock };
+    return { count, shadows, ratio, finds: params.get('finds') === '1', clock, clean: params.get('clean') === '1' };
 }
 
 /** 24000 as "24k", 1500 as "1.5k", 800 as "800". */

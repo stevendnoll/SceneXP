@@ -335,6 +335,34 @@ test('a mouse leaving the lawn stops steering from the screen, but the person st
     expect(main.getState().aim).toEqual(aim);
 });
 
+// THE SOCIAL CARD'S CAPTURE (M7, 2026-10-09): ?clean=1 on a QA host hides
+// everything over the yard (the CSS keys off the class) and the aim ring.
+test('?clean=1 leaves nothing over the yard but the yard', async () => {
+    dom.windowStub.location.search += '&clean=1';
+    const main = await boot();
+    expect(main.getState().clean).toBe(true);
+    expect(dom.documentStub.documentElement.classList.contains('clean')).toBe(true);
+    const css = await readFile(new URL('../www/leaves/css/experience.css', import.meta.url), 'utf8');
+    for (const id of ['help-btn', 'sound-btn', 'blow-btn', 'touch-controls', 'round-hud', 'find-toast', 'cheer-banner']) {
+        expect(css).toContain(`html.clean #${id}`);
+    }
+    // The aim ring: the three stub keeps no `visible`, so the rule itself.
+    const aim = { x: -6, z: 2 };
+    expect(main.showsAimRing(true, 'point', aim, false)).toBe(true);
+    expect(main.showsAimRing(true, 'point', aim, true)).toBe(false);
+    expect(main.showsAimRing(true, 'point', null, false)).toBe(false);
+    expect(main.showsAimRing(true, 'keys', aim, false)).toBe(false);
+    expect(main.showsAimRing(false, 'point', aim, false)).toBe(false);
+});
+
+test('on the public site ?clean=1 is ignored', async () => {
+    dom.windowStub.location.hostname = 'www.scenexp.com';
+    dom.windowStub.location.search += '&clean=1';
+    const main = await boot();
+    expect(main.getState().clean).toBe(false);
+    expect(dom.documentStub.documentElement.classList.contains('clean')).toBe(false);
+});
+
 // STEVE'S QA, 2026-10-09: with the mouse off the window the person kept
 // walking. Leaving the window stops them. Passing over a button does not,
 // and neither does a held mouse (its capture carries on).
@@ -1434,7 +1462,7 @@ describe('the page', () => {
     beforeAll(async () => { html = await readFile(PAGE, 'utf8'); });
 
     test('names itself, and stays out of search until it is released', () => {
-        expect(html).toContain('<title>Leaves | SceneXP</title>');
+        expect(html).toContain('<title>Leaf Blower | SceneXP</title>');
         expect(html).toContain('<link rel="canonical" href="https://www.scenexp.com/leaves/">');
         expect(html).toContain('<meta name="robots" content="noindex, nofollow">');
     });

@@ -114,6 +114,9 @@ const state = {
     decor: false,
     halloween: false,
     showFinds: false,
+    // The lab's ?clean=1: nothing over the yard but the yard (a social
+    // card's capture).
+    clean: false,
     lastTime: 0,
     time: 0,
     blows: 0,
@@ -302,6 +305,8 @@ async function init() {
     state.shadows = options.shadows;
     state.ratio = options.ratio;
     state.showFinds = options.finds;
+    state.clean = options.clean;
+    if (state.clean) document.documentElement.classList.add('clean');
     // The round's length: five minutes, or the lab's ?clock= on a QA host.
     round.seconds = options.clock;
     showBest();
@@ -947,6 +952,13 @@ export function isBlowing(playing, ptr, held, button) {
     return playing && ((ptr.down && ptr.blows) || held.blow || button.id !== null || button.key);
 }
 
+/** Whether the ring on the lawn marks where the mouse aims: while the
+ *  person is free to move and steered by a pointer, never under the lab's
+ *  ?clean=1 (a social card's capture). */
+export function showsAimRing(free, steerBy, aim, clean) {
+    return Boolean(free && steerBy === 'point' && aim && !clean);
+}
+
 /** Count the visit's blows, and log only the first, so the log can tell
  *  people who used the blower from people who only looked. */
 function noteBlow() {
@@ -1262,7 +1274,7 @@ function installRoundControls() {
     installShare(
         document.getElementById('end-share'),
         () => ({
-            title: 'Leaves',
+            title: 'Leaf Blower',
             text: shareText(result ? result.tally : counted, result ? result.seconds : round.seconds, result ? result.landed : null,
                 result ? result.found : found, result ? result.bestNote : '')
         }),
@@ -1918,7 +1930,7 @@ function animate() {
     // The clouds drift (held still under reduced motion).
     if (skyMap && skyMap.offset && !state.reducedMotion) skyMap.offset.x = (state.time * CONFIG.look.clouds.drift) % 1;
     treaterGroups.forEach((g) => g.figs.update(g.tr, state.time));
-    const marked = free && steer === 'point' && Boolean(pointer.aim);
+    const marked = showsAimRing(free, steer, pointer.aim, state.clean);
     marker.visible = marked;
     if (marked) marker.position.set(pointer.aim.x, 0.05, pointer.aim.z);
     followCamera(dt);

@@ -892,3 +892,14 @@
     text-align: center;
 }
 
+/* THE LAB'S ?clean=1 (a QA host only, js/lab.js): nothing over the yard,
+   for capturing the social card. The welcome and end cards still show. */
+html.clean #help-btn,
+html.clean #sound-btn,
+html.clean #blow-btn,
+html.clean #touch-controls,
+html.clean #round-hud,
+html.clean #find-toast,
+html.clean #cheer-banner {
+    display: none !important;
+}

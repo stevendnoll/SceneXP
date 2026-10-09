@@ -3834,7 +3834,7 @@ html [data-ui-theme="ember" lang="en"]
     meta [content="#5d7f3a" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/leaves/" rel="canonical"]
-    meta [content="Leaves" property="og:title"]
+    meta [content="Leaf Blower" property="og:title"]
     meta [content="A front yard buried in autumn leaves, and a leaf blower waiting for you." property="og:description"]
     meta [content="website" property="og:type"]
     meta [content="SceneXP" property="og:site_name"]
@@ -3846,7 +3846,7 @@ html [data-ui-theme="ember" lang="en"]
     meta [content="630" property="og:image:height"]
     meta [content="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower." property="og:image:alt"]
     meta [content="summary_large_image" name="twitter:card"]
-    meta [content="Leaves" name="twitter:title"]
+    meta [content="Leaf Blower" name="twitter:title"]
     meta [content="A front yard buried in autumn leaves, and a leaf blower waiting for you." name="twitter:description"]
     meta [content="https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1" name="twitter:image"]
     meta [content="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower." name="twitter:image:alt"]
@@ -3856,7 +3856,7 @@ html [data-ui-theme="ember" lang="en"]
         "@type": "WebPage",
         "@id": "https://www.scenexp.com/leaves/#webpage",
         "url": "https://www.scenexp.com/leaves/",
-        "name": "Leaves",
+        "name": "Leaf Blower",
         "description": "A front yard buried in autumn leaves, drawn live in the browser, where visitors blow the leaves around with a leaf blower and watch every one tumble, skid and pile up.",
         "inLanguage": "en-US",
         "isPartOf": {
@@ -3878,15 +3878,15 @@ html [data-ui-theme="ember" lang="en"]
           {
             "@type": "ListItem",
             "position": 2,
-            "name": "Leaves",
+            "name": "Leaf Blower",
             "item": "https://www.scenexp.com/leaves/"
           }
         ]
       }
     title
-      "Leaves | SceneXP"
+      "Leaf Blower | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=9" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=10" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -3928,16 +3928,16 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/surfaces.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=2" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=9" rel="stylesheet"]
+    link [href="css/experience.min.css?v=10" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
     h1.sr-only
-      "Leaves"
+      "Leaf Blower"
     noscript
       div.noscript-fallback
         h1
-          "Leaves"
+          "Leaf Blower"
         p
           "This is a front yard buried in autumn leaves, and it needs JavaScript to run. Thousands of red, orange and gold leaves cover the lawn in front of a white house, and a leaf blower is waiting for you. Point it anywhere and every leaf in its path tumbles, skids and piles up on its own, drawn live in your browser."
         p
@@ -3953,7 +3953,7 @@ html [data-ui-theme="ember" lang="en"]
     div#loading-screen
       div.loader-content
         div.loader-title
-          "LEAVES"
+          "LEAF BLOWER"
         div.loader-bar [aria-hidden="true"]
           div.loader-progress#load-progress
         div.loader-status#load-status [aria-live="polite" role="status"]
@@ -4115,7 +4115,7 @@ html [data-ui-theme="ember" lang="en"]
           p#end-status.sr-only [aria-live="polite" role="status"]
           div#end-promo.end-promo
           p.end-mark [aria-hidden="true"]
-            "Leaves &middot; SceneXP.com"
+            "Leaf Blower &middot; SceneXP.com"
     script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;

@@ -752,9 +752,9 @@ describe('the lab', () => {
     });
 
     test('the address picks the count and the shadows, within the config\'s range', () => {
-        expect(Lab.labOptions('', C, false)).toEqual({ count: C.leaves.desktop, shadows: true, ratio: null, finds: false, clock: C.round.seconds });
+        expect(Lab.labOptions('', C, false)).toEqual({ count: C.leaves.desktop, shadows: true, ratio: null, finds: false, clock: C.round.seconds, clean: false });
         expect(Lab.labOptions('', C, true).count).toBe(C.leaves.mobile);
-        expect(Lab.labOptions('?leaves=36000&shadows=0', C, true)).toEqual({ count: 36000, shadows: false, ratio: null, finds: false, clock: C.round.seconds });
+        expect(Lab.labOptions('?leaves=36000&shadows=0', C, true)).toEqual({ count: 36000, shadows: false, ratio: null, finds: false, clock: C.round.seconds, clean: false });
         expect(Lab.labOptions('?finds=1', C, false).finds).toBe(true);
         expect(Lab.labOptions('?leaves=5', C, false).count).toBe(C.leaves.minCount);
         expect(Lab.labOptions('?leaves=9999999', C, false).count).toBe(C.leaves.maxCount);
@@ -767,6 +767,9 @@ describe('the lab', () => {
         expect(Lab.labOptions('?clock=1', C, false).clock).toBe(5);
         expect(Lab.labOptions('?clock=99999', C, false).clock).toBe(600);
         expect(Lab.labOptions('?clock=soon', C, false).clock).toBe(C.round.seconds);
+        // Nothing over the yard, for the social card's capture (2026-10-09).
+        expect(Lab.labOptions('?clean=1', C, false).clean).toBe(true);
+        expect(Lab.labOptions('?clean=0', C, false).clean).toBe(false);
     });
 
     test('the loading screen says how many leaves, shortly', () => {
