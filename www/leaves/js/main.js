@@ -282,6 +282,16 @@ async function init() {
     state.isMobile = detectMobile();
     state.touch = state.isMobile;
     state.reducedMotion = prefersReducedMotion();
+    // Quieter on a phone, whose small speaker is loudest where the whoosh is.
+    sound.setLevel(state.isMobile ? CONFIG.sound.masterMobile : CONFIG.sound.master);
+    // OFF TO START ON A PHONE OR A TABLET (Steve's QA, 2026-10-08). An
+    // iPhone's silent switch mutes a page without the page knowing, so the
+    // speaker showed on while nothing was heard. Starting off there, the
+    // speaker never says otherwise, and a phone in a meeting stays quiet. A
+    // tap turns it on (and, on an iPhone, plays through the switch). A
+    // computer starts with it on, as before.
+    if (state.isMobile) sound.setOn(false, { chosen: false });
+    markSound();
     state.qa = isQaHost();
     // The address only steers the lab on a QA host. Anywhere else the page
     // runs at the device's defaults whatever the address says.
@@ -1970,6 +1980,7 @@ export function getState() {
         found: [...found],
         treaters: treatersState(),
         sound: sound.isOn(),
+        soundLevel: sound.level(),
         toast: toast.until > 0,
         cheer: { ...cheer },
         zoom: zoom.value,

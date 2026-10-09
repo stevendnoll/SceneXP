@@ -33,10 +33,18 @@
  * its low thump, since a phone's speaker plays next to nothing below about
  * 500 Hz.
  *
- * ON AN iPHONE plain Web Audio is muted by the ring switch, and on by
- * default it stays that way: a phone set to silent stays silent. A visitor
- * who turns the sound on themselves has asked for it, so then, where Safari
- * offers navigator.audioSession, it is set to playback.
+ * ON AN iPHONE plain Web Audio is muted by the ring switch, without the page
+ * knowing. So a phone or a tablet starts with the sound off (main.js,
+ * Steve's QA, 2026-10-08: the speaker showed on while a silenced phone
+ * played nothing), and a computer with it on. A visitor who turns the sound
+ * on themselves has asked for it, so then, where Safari offers
+ * navigator.audioSession, it is set to playback, through the switch.
+ *
+ * QUIETER ON A PHONE (Steve's QA, 2026-10-08: "way too loud relative to the
+ * speaker's volume"): the whoosh sits where a phone's small speaker is
+ * loudest, so a phone plays it at `masterMobile` (setLevel), and a limiter
+ * on the way out keeps the moments when several sounds stack up (both
+ * blowers, the fanfare, a crunch) from spiking.
  *
  * Every call is safe before the context exists, after it has gone, and in a
  * browser with no Web Audio at all.
@@ -70,6 +78,8 @@ export function createSound(S) {
     let failed = false;
     let on = Boolean(S.startOn);
     let paused = false;
+    // How loud, all told (setLevel).
+    let level = S.master;
     // Whether a gesture has happened, so a context may be made.
     let unlocked = false;
     const voices = {};
@@ -120,8 +130,21 @@ export function createSound(S) {
         try {
             ctx = new Ctor();
             master = ctx.createGain();
-            master.gain.value = S.master;
-            master.connect(ctx.destination);
+            master.gain.value = on ? level : 0;
+            // A limiter on the way out, where the browser has one.
+            const L = S.limiter;
+            if (L && ctx.createDynamicsCompressor) {
+                const limiter = ctx.createDynamicsCompressor();
+                limiter.threshold.value = L.threshold;
+                limiter.knee.value = L.knee;
+                limiter.ratio.value = L.ratio;
+                limiter.attack.value = L.attack;
+                limiter.release.value = L.release;
+                master.connect(limiter);
+                limiter.connect(ctx.destination);
+            } else {
+                master.connect(ctx.destination);
+            }
             const frames = Math.floor(ctx.sampleRate * 2);
             noise = ctx.createBuffer(1, frames, ctx.sampleRate);
             const data = noise.getChannelData(0);
@@ -151,9 +174,9 @@ export function createSound(S) {
 
     /** The visitor's own choice, from the button or M (a gesture). Only
      *  that asks an iPhone to play through its ring switch. */
-    function setOn(next, { chosen = true } = {}) {
+    function setOn(next, { chosen: byVisitor = true } = {}) {
         on = Boolean(next);
-        if (chosen) {
+        if (byVisitor) {
             unlocked = true;
             audioSession(on);
         }
@@ -161,7 +184,7 @@ export function createSound(S) {
         if (!ctx) return on;
         if (on) {
             if (!paused && ctx.resume) quietly(ctx.resume());
-            glide(master.gain, S.master, 0.05);
+            glide(master.gain, level, 0.05);
         } else {
             glide(master.gain, 0, 0.05);
             Object.values(voices).forEach((v) => { v.level = 0; glide(v.gain.gain, 0, 0.05); });
@@ -370,6 +393,13 @@ export function createSound(S) {
         crunch,
         chime,
         fanfare,
+        /** How loud, all told: config.sound.master on a laptop,
+         *  masterMobile on a phone. */
+        setLevel(value) {
+            level = value;
+            if (ctx && master && on) glide(master.gain, level, 0.05);
+        },
+        level: () => level,
         toggle: () => setOn(!on),
         update,
         pause,

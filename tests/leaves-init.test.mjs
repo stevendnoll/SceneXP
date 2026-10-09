@@ -1142,7 +1142,11 @@ describe('delights and surprises (M6)', () => {
     }
 
     // STEVE'S M6 QA, 2026-10-07: "Let's have the sound on by default."
-    test('the sound is on from the start, begins with the first key or tap, and the speaker or M turns it off and on', async () => {
+    test('on a computer the sound is on from the start, begins with the first key or click, and the speaker or M turns it off and on', async () => {
+        dom.uninstall();
+        installThree();
+        dom = installDom({ innerWidth: 1280, innerHeight: 800 });
+        dom.windowStub.location.search = '?leaves=600';
         const made = installAudio();
         const main = await boot();
         const btn = dom.el('sound-btn');
@@ -1177,12 +1181,75 @@ describe('delights and surprises (M6)', () => {
         expect(globalThis.localStorage.length || 0).toBe(0);
     });
 
+    // STEVE'S QA, 2026-10-08: an iPhone's silent switch mutes the page
+    // without the page knowing, so the speaker showed on while nothing was
+    // heard. A phone or a tablet starts with the sound off, so the speaker
+    // never says otherwise ("default to volume off on mobile devices (and
+    // tablets/ipads), and default to volume on for desktops").
+    test('on a phone or a tablet the sound starts off, the speaker says so, and a tap turns it on, through an iPhone\'s silent switch', async () => {
+        const made = installAudio();
+        globalThis.navigator.audioSession = { type: 'auto' };
+        const main = await boot();
+        const btn = dom.el('sound-btn');
+        expect(main.getState().sound).toBe(false);
+        expect(btn.getAttribute('aria-pressed')).toBe('false');
+        expect(btn.title).toBe('Sound off (M)');
+        fire(dom.el('blocker'), 'click');
+        // A first touch makes no sound, and no context to make it with.
+        fire(dom.documentStub, 'keydown', { code: 'Space' });
+        fire(dom.documentStub, 'keyup', { code: 'Space' });
+        expect(made).toHaveLength(0);
+        expect(globalThis.navigator.audioSession.type).toBe('auto');
+        // The speaker turns it on, through the switch.
+        fire(btn, 'click');
+        expect(main.getState().sound).toBe(true);
+        expect(btn.getAttribute('aria-pressed')).toBe('true');
+        expect(globalThis.navigator.audioSession.type).toBe('playback');
+        expect(made).toHaveLength(1);
+        expect(dom.el('round-status').textContent).toBe('Sound on.');
+        // And off again, back to the switch.
+        fire(btn, 'click');
+        expect(main.getState().sound).toBe(false);
+        expect(globalThis.navigator.audioSession.type).toBe('auto');
+    });
+
+    // STEVE'S QA, 2026-10-08: "it seems way too loud relative to the
+    // speaker's volume" on a phone.
+    test('a phone plays it quieter than a laptop, through a limiter', async () => {
+        const made = installAudio();
+        let compressors = 0;
+        dom.windowStub.AudioContext.prototype.createDynamicsCompressor = function () {
+            compressors++;
+            const p = () => ({ value: 0 });
+            return { connect: (t) => t, threshold: p(), knee: p(), ratio: p(), attack: p(), release: p() };
+        };
+        let main = await boot();
+        expect(main.getState().soundLevel).toBe(C0.sound.masterMobile);
+        fire(dom.el('blocker'), 'click');
+        // Off to start on a phone: the speaker turns it on.
+        fire(dom.el('sound-btn'), 'click');
+        expect(made).toHaveLength(1);
+        expect(made.gains[0].gain.value).toBe(C0.sound.masterMobile);
+        expect(compressors).toBe(1);
+        // A laptop's window: the usual level.
+        dom.uninstall();
+        installThree();
+        dom = installDom({ innerWidth: 1280, innerHeight: 800 });
+        dom.windowStub.location.search = '?leaves=600';
+        jest.resetModules();
+        main = await boot();
+        expect(main.getState().soundLevel).toBe(C0.sound.master);
+        expect(C0.sound.masterMobile).toBeLessThan(C0.sound.master);
+    });
+
     // Steve's M6 QA: "I didn't hear the blowing sound while the neighbor was
     // outside blowing."
     test('with the neighbor out blowing and us not, his blower is heard', async () => {
         const made = installAudio();
         const main = await boot();
         fire(dom.el('blocker'), 'click');
+        // The suite's window is a phone's, where the sound starts off.
+        fire(dom.el('sound-btn'), 'click');
         fire(dom.documentStub, 'keydown', { code: 'Space' });
         frames(main, 0.3, 20);
         fire(dom.documentStub, 'keyup', { code: 'Space' });

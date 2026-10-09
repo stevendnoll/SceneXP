@@ -374,3 +374,49 @@ describe('the fanfare', () => {
         expect(off.fanfare(true)).toBe(false);
     });
 });
+
+// Steve's QA, 2026-10-08: on a phone it "seems way too loud relative to the
+// speaker's volume", and the silent switch kept, with the button fixed.
+describe('on a phone', () => {
+    test('a quieter level, set before or after the sound starts, and kept through off and on', () => {
+        const sound = createSound(S);
+        sound.setLevel(S.masterMobile);
+        expect(sound.level()).toBe(S.masterMobile);
+        sound.unlock();
+        const master = gains()[0];
+        expect(master.gain.value).toBe(S.masterMobile);
+        sound.setOn(false);
+        sound.setOn(true);
+        expect(master.gain.calls.at(-1)).toEqual(['target', S.masterMobile, expect.any(Number), expect.any(Number)]);
+        sound.setLevel(S.master);
+        expect(master.gain.calls.at(-1)[1]).toBe(S.master);
+        expect(S.masterMobile).toBeLessThan(S.master);
+    });
+
+    test('everything goes out through a limiter where the browser has one, and straight out where it has not', () => {
+        const made = [];
+        FakeAudioContext.prototype.createDynamicsCompressor = function () {
+            const n = node('limiter');
+            for (const k of ['threshold', 'knee', 'ratio', 'attack', 'release']) n[k] = param(0);
+            made.push(n);
+            return n;
+        };
+        try {
+            const sound = createSound(S);
+            sound.unlock();
+            expect(made).toHaveLength(1);
+            const limiter = made[0];
+            expect(limiter.threshold.value).toBe(S.limiter.threshold);
+            expect(limiter.ratio.value).toBe(S.limiter.ratio);
+            expect(gains()[0].to).toEqual([limiter]);
+            expect(limiter.to.map((t) => t.kind)).toEqual(['destination']);
+        } finally {
+            delete FakeAudioContext.prototype.createDynamicsCompressor;
+        }
+        const before = built.nodes.length;
+        const plain = createSound(S);
+        plain.unlock();
+        const master = built.nodes.slice(before).find((n) => n.kind === 'gain');
+        expect(master.to.map((t) => t.kind)).toEqual(['destination']);
+    });
+});

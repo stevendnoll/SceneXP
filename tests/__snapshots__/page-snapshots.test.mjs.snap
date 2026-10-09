@@ -3980,7 +3980,7 @@ html [data-ui-theme="ember" lang="en"]
           "Scroll, or pinch with two fingers, to come in closer or stand back. The + and - keys zoom too, and 0 brings back the usual view."
           span
             "SOUND"
-          "The leaf blower makes a whoosh. M or the speaker in the corner turns it off."
+          "The leaf blower makes a whoosh. On a computer it starts on, and on a phone or tablet it starts off, so tap the speaker in the corner to hear it. M or the speaker turns it on and off."
           span
             "HELP"
           "The question mark in the corner, or Escape, brings you back here."

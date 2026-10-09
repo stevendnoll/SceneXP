@@ -812,13 +812,20 @@ export const LEAVES_CONFIG = Object.freeze({
     touch: { stick: { radius: 45, dead: 0.12, turn: 0.38, crawl: 0.25 } },
 
     // THE SOUND (M6, sound.js): a whoosh while the blower runs, made with
-    // Web Audio from noise. ON BY DEFAULT since Steve's M6 QA (2026-10-07,
-    // "Let's have the sound on by default"; it was off at first), starting
-    // with the visitor's first click, tap or key, as browsers require. The
-    // button or M turns it off. Nothing is remembered.
+    // Web Audio from noise. ON BY DEFAULT on a computer since Steve's M6 QA
+    // (2026-10-07, "Let's have the sound on by default"; it was off at
+    // first), starting with the visitor's first click or key, as browsers
+    // require, and OFF TO START on a phone or a tablet since his QA of
+    // 2026-10-08 (main.js). The button or M turns it on and off. Nothing is
+    // remembered.
     sound: {
         startOn: true,
         master: 0.22,
+        // A phone's level (Steve's QA, 2026-10-08: "way too loud relative to
+        // the speaker's volume"), and the limiter on the way out: above
+        // `threshold` dB, `ratio` to one, over a `knee` dB bend.
+        masterMobile: 0.11,
+        limiter: { threshold: -12, knee: 6, ratio: 8, attack: 0.003, release: 0.25 },
         // The air: noise through a lowpass that spools up from `idleHz` to
         // `fullHz` when the blower starts, and a band for its body.
         idleHz: 450,
