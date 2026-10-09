@@ -84,6 +84,7 @@ import {
     loadChoice, saveChoice, forgetChoice, personConfig, castLine
 } from './cast.min.js';
 import { isQaHost, labOptions, shortCount } from './lab.min.js';
+import { createStick, stickAim } from './stick.min.js';
 import {
     getProofOfWork, bufToHex, shieldOverlayControl, installCardFocusTrap, installCardScrollReset
 } from '../../shared/js/boot-1.0.0.min.js';
@@ -236,6 +237,8 @@ const view = { position: null, target: null };
 // the lawn, by pointer id.
 const zoom = { value: 1, pinch: null };
 const touches = new Map();
+// The walking joystick on a touch screen (stick.js), once it is wired.
+let stick = null;
 // Shadows are redrawn at most config.shadows.hz times a second while
 // anything moves, and a frame that moved something is owed one.
 const shade = { owed: true, since: 0 };
@@ -605,28 +608,24 @@ function setupEventListeners() {
     canvas.addEventListener('pointerdown', (event) => {
         if (skipFinale() || endCheer()) return;
         if (welcomeShown()) return;
-        // A second finger on the lawn is a pinch: the first stops steering,
-        // and neither steers again until it is lifted.
+        // A FINGER ON THE LAWN NO LONGER WALKS (Steve's QA, 2026-10-08: the
+        // joystick in the lower left walks, stick.js). It brings out the
+        // touch controls, and two of them pinch to zoom.
         if (event.pointerType === 'touch') {
+            showTouchControls();
             touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
-            if (touches.size >= 2) {
-                startPinch();
-                if (canvas.setPointerCapture) {
-                    try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* not capturable */ }
-                }
-                return;
+            if (canvas.setPointerCapture) {
+                try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* not capturable */ }
             }
+            if (touches.size >= 2) startPinch();
+            return;
         }
         if (pointer.id !== null && pointer.id !== event.pointerId) return;
         pointer.id = event.pointerId;
         pointer.down = true;
         pointer.mouse = event.pointerType === 'mouse';
-        // A mouse or a pen presses to blow. A finger only walks and aims.
-        pointer.blows = event.pointerType !== 'touch';
-        if (event.pointerType === 'touch' && !state.touch) {
-            state.touch = true;
-            setChromeVisible(true);
-        }
+        // A mouse or a pen presses to blow.
+        pointer.blows = true;
         steer = 'point';
         aimAt(event.clientX, event.clientY);
         if (canvas.setPointerCapture) {
@@ -643,7 +642,8 @@ function setupEventListeners() {
                 return;
             }
         }
-        // A mouse steers by hovering. A finger only while it is down.
+        // A mouse steers by hovering, a pen while it is down. A finger never
+        // (the joystick walks).
         const hovering = event.pointerType === 'mouse' && pointer.id === null;
         if (event.pointerId !== pointer.id && !hovering) return;
         pointer.mouse = event.pointerType === 'mouse';
@@ -687,6 +687,19 @@ function setupEventListeners() {
     }, { passive: false, signal });
 
     if (blowBtn) installBlowButton(blowBtn, signal);
+
+    // The walking joystick in the lower left (stick.js).
+    const zone = document.getElementById('joystick-zone');
+    if (zone) {
+        stick = createStick(zone, zone.querySelector ? zone.querySelector('.joystick-base-fixed') : null,
+            zone.querySelector ? zone.querySelector('.joystick-thumb-fixed') : null, CONFIG.touch.stick, {
+                signal,
+                onStart: () => {
+                    showTouchControls();
+                    steer = 'stick';
+                }
+            });
+    }
 }
 
 // ---- Zoom -----------------------------------------------------------------
@@ -903,6 +916,7 @@ function releaseInput() {
     if (blowBtn) blowBtn.classList.remove('held');
     touches.clear();
     zoom.pinch = null;
+    if (stick) stick.reset();
 }
 
 /** Whether the blower is running: a mouse or pen pressed on the lawn, Space,
@@ -919,7 +933,9 @@ function noteBlow() {
 }
 
 /** What the person is steered by this frame, for stepOperator(). */
-export function aimFor(steerBy, ptr, held) {
+export function aimFor(steerBy, ptr, held, stickV = null, K = CONFIG.touch.stick) {
+    // The touch joystick (stick.js): a walk, a turn in place, or nothing.
+    if (steerBy === 'stick') return stickAim(stickV, K);
     if (steerBy === 'keys') {
         const x = (held.right ? 1 : 0) - (held.left ? 1 : 0);
         // Up the screen is toward the house, which is -z.
@@ -973,8 +989,17 @@ function setChromeVisible(on) {
     if (soundBtn) soundBtn.classList.toggle('visible', shown);
     if (!shown) hideToast();
     if (blowBtn) blowBtn.classList.toggle('visible', shown && state.touch);
+    const controls = document.getElementById('touch-controls');
+    if (controls) controls.classList.toggle('visible', shown && state.touch);
     const hud = document.getElementById('round-hud');
     if (hud) hud.classList.toggle('visible', shown);
+}
+
+/** A finger on the screen: the joystick and the blow button, from now on. */
+function showTouchControls() {
+    if (state.touch) return;
+    state.touch = true;
+    setChromeVisible(true);
 }
 
 /** The welcome card's "just play with the leaves": the yard with no clock. */
@@ -1810,7 +1835,7 @@ function animate() {
     // slides: at the screen's edge the person keeps going to the hedge (M6
     // QA). A finger only re-aims when it moves.
     if (free && steer === 'point' && pointer.mouse && pointer.client) aimAt(pointer.client.x, pointer.client.y);
-    const aim = free ? aimFor(steer, pointer, keys) : null;
+    const aim = free ? aimFor(steer, pointer, keys, stick ? stick.vector() : null) : null;
     const diving = round.phase === 'finale';
     if (cheering) {
         if (inYard) stepCheerPose(dt);
@@ -1922,6 +1947,7 @@ export function getState() {
         active: sim ? sim.activeCount : 0,
         operator: operator ? { ...operator } : null,
         steer,
+        stick: stick ? stick.active() : false,
         aim: pointer.aim ? { ...pointer.aim } : null,
         blowing: isBlowing(!welcomeShown() && !endShown() && canBlow(round), pointer, keys, blowHold),
         round: { ...round },

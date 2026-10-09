@@ -94,7 +94,7 @@
     <title>Leaves | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=8" as="style">
+    <link rel="preload" href="css/experience.min.css?v=9" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -124,6 +124,7 @@
     <link rel="modulepreload" href="js/view.min.js">
     <link rel="modulepreload" href="js/cast.min.js">
     <link rel="modulepreload" href="js/lab.min.js">
+    <link rel="modulepreload" href="js/stick.min.js">
     <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
@@ -139,7 +140,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=8">
+    <link rel="stylesheet" href="css/experience.min.css?v=9">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -196,8 +197,8 @@
                  no hurry to read the rest of this card. -->
             <p class="tour-note">You have five minutes to clear the lawn, and the clock starts with your first blow. Clear the whole lawn and you finish early.</p>
             <div class="controls-hint">
-                <span>WALK</span> Point at the lawn with the mouse, or drag a finger across it, and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too.
-                <span>BLOW</span> Hold the mouse button or Space. On a touch screen, hold the blow button in the corner.
+                <span>WALK</span> Point at the lawn with the mouse and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too. On a touch screen, the joystick in the lower left walks you, and a light push turns you in place to aim.
+                <span>BLOW</span> Hold the mouse button or Space. On a touch screen, hold the blow button in the lower right.
                 <span>ZOOM</span> Scroll, or pinch with two fingers, to come in closer or stand back. The + and - keys zoom too, and 0 brings back the usual view.
                 <span>SOUND</span> The leaf blower makes a whoosh. M or the speaker in the corner turns it off.
                 <span>HELP</span> The question mark in the corner, or Escape, brings you back here.
@@ -249,11 +250,25 @@
         </svg>
     </button>
 
-    <!-- The blow button, for touch screens, where a finger on the lawn walks
-         and aims and this button runs the blower (two thumbs, the way a
-         mouse has a pointer and a button). Hidden until main.js knows the
-         screen is touched: .ui-float is display:none until it adds .visible.
-         It answers a held Space or Enter as well, for anybody who tabs to it. -->
+    <!-- The walking joystick, for touch screens (Steve's QA, 2026-10-08),
+         where the dual-joystick scenes keep theirs: the shared markup and
+         styles (styles-1.0.0.css), a ring low in the left corner, steered by
+         js/stick.js. A finger on the lawn no longer walks. Shown with the
+         rest of the touch chrome (.visible). A keyboard walks with the keys,
+         so it is hidden from a screen reader. -->
+    <div id="touch-controls" aria-hidden="true">
+        <div id="joystick-zone">
+            <div class="joystick-base-fixed">
+                <div class="joystick-thumb-fixed"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- The blow button, for touch screens, in the right joystick's place:
+         the left thumb walks and aims, the right one blows. Hidden until
+         main.js knows the screen is touched: .ui-float is display:none until
+         it adds .visible. It answers a held Space or Enter as well, for
+         anybody who tabs to it. -->
     <button id="blow-btn" class="ui-float blow-btn" type="button"
         title="Hold to blow"
         aria-label="Hold to run the leaf blower">

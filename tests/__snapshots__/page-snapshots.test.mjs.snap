@@ -3886,7 +3886,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Leaves | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=8" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=9" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -3915,6 +3915,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/view.min.js" rel="modulepreload"]
     link [href="js/cast.min.js" rel="modulepreload"]
     link [href="js/lab.min.js" rel="modulepreload"]
+    link [href="js/stick.min.js" rel="modulepreload"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
@@ -3927,7 +3928,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/surfaces.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=2" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=8" rel="stylesheet"]
+    link [href="css/experience.min.css?v=9" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -3970,10 +3971,10 @@ html [data-ui-theme="ember" lang="en"]
         div.controls-hint
           span
             "WALK"
-          "Point at the lawn with the mouse, or drag a finger across it, and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too."
+          "Point at the lawn with the mouse and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too. On a touch screen, the joystick in the lower left walks you, and a light push turns you in place to aim."
           span
             "BLOW"
-          "Hold the mouse button or Space. On a touch screen, hold the blow button in the corner."
+          "Hold the mouse button or Space. On a touch screen, hold the blow button in the lower right."
           span
             "ZOOM"
           "Scroll, or pinch with two fingers, to come in closer or stand back. The + and - keys zoom too, and 0 brings back the usual view."
@@ -4007,6 +4008,10 @@ html [data-ui-theme="ember" lang="en"]
         path [d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" stroke-linejoin="round"]
         path.sound-waves [d=#839f041928]
         path.sound-off [d="M16 9.5l5 5M21 9.5l-5 5"]
+    div#touch-controls [aria-hidden="true"]
+      div#joystick-zone
+        div.joystick-base-fixed
+          div.joystick-thumb-fixed
     button#blow-btn.ui-float.blow-btn [aria-label="Hold to run the leaf blower" title="Hold to blow" type="button"]
       svg [aria-hidden="true" viewbox="0 0 24 24"]
         path [d="M3 8h10.5a2.75 2.75 0 1 0-2.75-2.75"]

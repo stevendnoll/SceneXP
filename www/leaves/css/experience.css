@@ -24,6 +24,33 @@
     margin: auto 0;
 }
 
+/* ---- The walking joystick (2026-10-08) ----
+   The shared ring (styles-1.0.0.css), clear of a notched phone's edges as
+   the shared sheet does for its touch devices, and lit while it is held. */
+#joystick-zone {
+    width: calc(180px + env(safe-area-inset-left));
+    height: calc(200px + env(safe-area-inset-bottom));
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+#joystick-zone .joystick-base-fixed {
+    left: calc(30px + env(safe-area-inset-left));
+    bottom: calc(40px + env(safe-area-inset-bottom));
+}
+
+#joystick-zone.stick-on .joystick-base-fixed {
+    border-color: rgba(var(--ui-joystick-rgb), 0.9);
+    background: rgba(var(--ui-joystick-rgb), 0.35);
+}
+
+/* The thumb follows the finger at once, never easing behind it. */
+#joystick-zone .joystick-thumb-fixed {
+    transition: none;
+}
+
 /* The canvas takes every gesture itself: a drag on the lawn steers the
    blower, so the browser must not scroll or zoom the page under it. */
 #game-canvas {
@@ -36,19 +63,23 @@
    as one already pressed. Long-press menus, text selection and the browser's
    own gestures are all turned off, since holding it is the whole point. */
 
+/* In the right joystick's place in the dual-joystick scenes (Steve's QA,
+   2026-10-08): the shared ring's size, 30px in and 40px up, its ring and
+   dark edge, mirroring the walking joystick in the lower left. */
 .blow-btn {
     position: fixed;
-    right: max(20px, calc(env(safe-area-inset-right) + 12px));
-    bottom: max(28px, calc(env(safe-area-inset-bottom) + 16px));
-    width: 88px;
-    height: 88px;
+    right: calc(30px + env(safe-area-inset-right));
+    bottom: calc(40px + env(safe-area-inset-bottom));
+    width: 120px;
+    height: 120px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 2px;
-    border: 2px solid rgba(var(--ui-accent-rgb), 0.7);
+    border: 2px solid rgba(var(--ui-joystick-rgb), 0.65);
     border-radius: 50%;
-    background: rgba(20, 20, 20, 0.62);
+    background: rgba(20, 20, 20, 0.5);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.28);
     color: #fff;
     z-index: 110;
     cursor: pointer;
@@ -61,8 +92,8 @@
 }
 
 .blow-btn svg {
-    width: 30px;
-    height: 30px;
+    width: 36px;
+    height: 36px;
     fill: none;
     stroke: currentColor;
     stroke-width: 2;
@@ -71,7 +102,7 @@
 }
 
 .blow-label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.08em;
 }

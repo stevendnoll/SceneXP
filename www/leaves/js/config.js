@@ -805,6 +805,12 @@ export const LEAVES_CONFIG = Object.freeze({
         }
     },
 
+    // THE TOUCH JOYSTICK (stick.js, Steve's QA, 2026-10-08): the thumb
+    // travels `radius` pixels to the rim. Inside `dead` of it nothing,
+    // inside `turn` a turn in place to aim, and past that a walk from
+    // `crawl` of full pace to full pace at the rim.
+    touch: { stick: { radius: 45, dead: 0.12, turn: 0.38, crawl: 0.25 } },
+
     // THE SOUND (M6, sound.js): a whoosh while the blower runs, made with
     // Web Audio from noise. ON BY DEFAULT since Steve's M6 QA (2026-10-07,
     // "Let's have the sound on by default"; it was off at first), starting

@@ -35,6 +35,8 @@ export function facing(heading) {
  * One frame of walking. `aim` is one of:
  *   { mode: 'point', x, z }       walk toward a spot and point at it
  *   { mode: 'keys', x, z }        walk along (x, z), a vector of length 0 to 1
+ *   { mode: 'face', x, z }        turn to face (x, z) where they stand (a
+ *                                 light push on the touch stick, stick.js)
  *   null                          stand still
  * `area` is the rectangle the person can walk in, and `boxes` the solid
  * things in it (the trees' trunks, M5), which they walk round. Mutates and
@@ -55,6 +57,8 @@ export function stepOperator(op, aim, dt, B, area, boxes = []) {
             vx = (dx / dist) * speed;
             vz = (dz / dist) * speed;
         }
+    } else if (aim && aim.mode === 'face') {
+        if (Math.hypot(aim.x, aim.z) > 0.01) want = Math.atan2(aim.x, aim.z);
     } else if (aim && aim.mode === 'keys') {
         const len = Math.hypot(aim.x, aim.z);
         if (len > 0.01) {
