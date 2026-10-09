@@ -335,6 +335,30 @@ test('a mouse leaving the lawn stops steering from the screen, but the person st
     expect(main.getState().aim).toEqual(aim);
 });
 
+// STEVE'S QA, 2026-10-09: with the mouse off the window the person kept
+// walking. Leaving the window stops them. Passing over a button does not,
+// and neither does a held mouse (its capture carries on).
+test('a mouse leaving the window stops the person, but not one passing over a button or held down', async () => {
+    const main = await boot();
+    const canvas = dom.el('game-canvas');
+    fire(dom.el('blocker'), 'click');
+    fire(canvas, 'pointermove', { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 600 });
+    const aim = { x: -6, z: 2 };
+    main.__test__.pointer.aim = { ...aim };
+    fire(dom.documentStub, 'pointerout', { pointerId: 1, pointerType: 'mouse', relatedTarget: dom.el('help-btn') });
+    expect(main.getState().aim).toEqual(aim);
+    // Held: the press steers on, off the window or not.
+    fire(canvas, 'pointerdown', { pointerId: 1, pointerType: 'mouse', clientX: 100, clientY: 600 });
+    main.__test__.pointer.aim = { ...aim };
+    fire(dom.documentStub, 'pointerout', { pointerId: 1, pointerType: 'mouse', relatedTarget: null });
+    expect(main.getState().aim).toEqual(aim);
+    fire(canvas, 'pointerup', { pointerId: 1, pointerType: 'mouse' });
+    // Hovering, out of the window: the person stops where they stand.
+    fire(dom.documentStub, 'pointerout', { pointerId: 1, pointerType: 'mouse', relatedTarget: null });
+    expect(main.getState().aim).toBe(null);
+    expect(main.__test__.pointer.client).toBe(null);
+});
+
 // STEVE'S QA, 2026-10-08: "Could we add zoom support so the user can zoom in
 // and out while playing?" The framing itself is measured on the real
 // three.js in tests/leaves-view.

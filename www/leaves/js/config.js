@@ -673,12 +673,12 @@ export const LEAVES_CONFIG = Object.freeze({
             roofSpider: { x: 13.9, along: 0.42, turn: 0.35 },
             // Where along our hedge the witch dove into it.
             witch: { z: 2.6 },
-            // Third round (Steve's M6 QA, "could we please add more"): a flock
-            // of bats circling over the neighbor's roof, a giant inflatable
-            // ghost beside his pumpkin, lights spiraling up our porch posts, a
-            // scarecrow at the sage house and little ghosts along the gray
-            // house's eave.
-            flock: { x: 15.4, y: 7.7, z: -9.4, r: 1.5, bats: 6, speed: 0.8 },
+            // Third round (Steve's M6 QA, "could we please add more"): a giant
+            // inflatable ghost beside his pumpkin, lights spiraling up our
+            // porch posts, a scarecrow at the sage house and little ghosts
+            // along the gray house's eave. (A flock of bats circling over his
+            // roof was taken out at Steve's QA, 2026-10-09: too early in the
+            // day for bats.)
             ghostInflatable: { x: 23.5, z: -0.6, tall: 2.3, turn: -0.35 },
             postLights: { turns: 6, bulbs: 26, r: 0.075 },
             scarecrow: { x: -21.2, z: -4.6, turn: 0.5, shirt: 0x8c3b2a, pants: 0x3f5670, burlap: 0xc9a76a, hat: 0xd8bb6f },

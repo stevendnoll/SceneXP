@@ -686,6 +686,15 @@ function setupEventListeners() {
     canvas.addEventListener('pointerleave', (event) => {
         if (event.pointerType === 'mouse' && pointer.id === null) pointer.client = null;
     }, { signal });
+    // A mouse leaving the WINDOW stops the person where they stand (Steve's
+    // QA, 2026-10-09: they kept walking with the cursor off the screen).
+    // Listened for on the document, so leaving past a button counts too.
+    // A held mouse keeps its capture and carries on.
+    document.addEventListener('pointerout', (event) => {
+        if (event.relatedTarget || event.pointerType !== 'mouse' || pointer.id !== null) return;
+        pointer.client = null;
+        pointer.aim = null;
+    }, { signal });
 
     // The wheel zooms, and so does a trackpad's pinch, which a browser sends
     // as a wheel with the Control key held. Not passive, so the page itself

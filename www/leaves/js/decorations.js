@@ -604,31 +604,6 @@ function skeletonOnBale(D) {
     return { group, wave };
 }
 
-/** A bat with wings that flap: { group, left, right } (the wings' hinges,
- *  turned about z to flap). Wingspan 1 before scaling, facing +z. */
-function flappingBat(black) {
-    const group = new THREE.Group();
-    const body = mesh(new THREE.SphereGeometry(0.08, 8, 6), black, 0, 0, 0);
-    body.scale.set(0.8, 0.9, 1.4);
-    group.add(body);
-    const half = new THREE.Shape();
-    [[0.04, 0.05], [0.2, 0.12], [0.36, 0.15], [0.5, 0.14], [0.4, 0.03], [0.32, 0.06], [0.24, -0.02], [0.15, 0.02], [0.06, -0.06]]
-        .forEach(([x, y], k) => (k ? half.lineTo(x, y) : half.moveTo(x, y)));
-    half.closePath();
-    const geometry = new THREE.ShapeGeometry(half);
-    const wing = (side) => {
-        const hinge = new THREE.Group();
-        const w = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ color: black.color, side: THREE.DoubleSide }));
-        // Lying flat, spread out to `side`.
-        w.rotation.x = -Math.PI / 2;
-        w.scale.x = side;
-        hinge.add(w);
-        group.add(hinge);
-        return hinge;
-    };
-    return { group, left: wing(1), right: wing(-1) };
-}
-
 /** A giant inflatable ghost, about `tall` meters, arms out, eyes and an
  *  "oh" of a mouth, facing +z. */
 function inflatableGhost(tall, D) {
@@ -1263,16 +1238,6 @@ export function buildDecorations(config) {
     bigGhost.rotation.y = G.turn;
     group.add(bigGhost);
 
-    // A flock of bats circling over his roof.
-    const F = D.flock;
-    const flock = [];
-    for (let k = 0; k < F.bats; k++) {
-        const bat = flappingBat(black);
-        bat.group.scale.setScalar(0.55 + (k % 3) * 0.12);
-        group.add(bat.group);
-        flock.push({ ...bat, phase: (k / F.bats) * Math.PI * 2, lift: (k % 3) * 0.35, rate: 1 + (k % 2) * 0.15 });
-    }
-
     const lounger = skeletonOnBale(D);
     lounger.group.position.set(D.skeleton.x, 0, D.skeleton.z);
     lounger.group.rotation.y = D.skeleton.turn;
@@ -1348,21 +1313,11 @@ export function buildDecorations(config) {
         });
         bigGhost.rotation.z = 0.04 * motion * Math.sin(time * 0.7 + 2);
         littleGhosts.forEach((g, k) => { g.rotation.z = 0.15 * motion * Math.sin(time * (0.8 + k * 0.17) + k); });
-        // The flock wheels over his roof, wings beating, each a little apart.
-        flock.forEach((b) => {
-            const a = b.phase + time * F.speed * motion;
-            b.group.position.set(F.x + Math.cos(a) * F.r * b.rate, F.y + b.lift + 0.2 * Math.sin(a * 2), F.z + Math.sin(a) * F.r * 0.6);
-            b.group.rotation.y = -a;
-            const flap = 0.9 * Math.sin(time * 14 * b.rate + b.phase) * (motion > 0.5 ? 1 : 0.3);
-            b.left.rotation.z = flap;
-            b.right.rotation.z = -flap;
-        });
         // Now and then the spider's front legs twitch.
         const twitch = motion * 0.12 * Math.max(0, Math.sin(time * 0.7)) * Math.sin(time * 9);
         crawler.legs.forEach((leg, k) => { leg.rotation.y = k % 4 === 0 ? twitch : 0; });
     }
-    // Everything that moves starts where it moves, not at the origin (the
-    // flock would sit on our lawn until the first frame).
+    // Everything that moves starts where it moves, not at the origin.
     update(0, 1);
     return { group, update };
 }
