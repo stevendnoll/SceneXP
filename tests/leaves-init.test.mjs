@@ -539,6 +539,25 @@ test('a pinch over a card zooms the page, and over the yard it does not', async 
     expect(over(yard)).toBe(true);
 });
 
+// STEVE'S QA, 2026-10-09: once the crowns were bare and the yard lay still,
+// the trees' shadows froze on the lawn while the trees went on swaying,
+// until the person moved. Swaying trees owe the shadows a redraw.
+test('in a still yard the shadows keep up with the swaying trees', async () => {
+    const main = await boot();
+    fire(dom.el('blocker'), 'click');
+    main.__test__.bareTrees();
+    // Long enough for every leaf to come to rest.
+    frames(main, 4, 20);
+    expect(main.getState().active).toBe(0);
+    let redraws = 0;
+    for (let k = 0; k < 120; k++) {
+        frames(main, 1 / 60, 60);
+        if (main.__test__.shade.since === 0) redraws++;
+    }
+    // About 30 a second, for two seconds.
+    expect(redraws).toBeGreaterThan(C0.shadows.hz * 2 * 0.8);
+});
+
 // THE SOCIAL CARD'S CAPTURE (M7, 2026-10-09): ?clean=1 on a QA host hides
 // everything over the yard (the CSS keys off the class) and the aim ring.
 test('?clean=1 leaves nothing over the yard but the yard', async () => {

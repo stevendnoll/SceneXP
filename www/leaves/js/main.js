@@ -2042,8 +2042,13 @@ function animate() {
     followCamera(dt);
 
     // Shadows: owed by any frame that moved a leaf or the person, paid at
-    // most `hz` times a second.
+    // most `hz` times a second. THE TREES SWAY ALL THE TIME (updateTrees,
+    // above), so they owe one every frame too: once the crowns had let go
+    // of their last leaves and the yard lay still, the trees' shadows froze
+    // on the lawn while the trees went on swaying, until the person moved
+    // (Steve's QA, 2026-10-09).
     if (state.shadows) {
+        if (trees.length > 0) shade.owed = true;
         if (uploaded > 0 || operator.speed > 0 || neighbor.speed > 0 || (neighbor.door > 0 && neighbor.door < 1)) shade.owed = true;
         if (rising || treaterGroups.some((g) => g.tr.speed > 0)) shade.owed = true;
         shade.since += delta;
@@ -2170,5 +2175,7 @@ export const __test__ = {
     bufToHex, keys, pointer, blowHold, aimAt, walkArea, sim: () => sim,
     // Strips the trees bare, for a test that clears the lawn and must not
     // race a leaf still to come down.
-    bareTrees: () => { crowns.forEach((c) => { c.leaves.length = 0; }); }
+    bareTrees: () => { crowns.forEach((c) => { c.leaves.length = 0; }); },
+    // The shadow redraw's bookkeeping, to count redraws in a still yard.
+    shade
 };
