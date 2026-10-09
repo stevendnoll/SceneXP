@@ -286,6 +286,7 @@ async function init() {
 
     state.isMobile = detectMobile();
     state.touch = state.isMobile;
+    markDevice();
     state.reducedMotion = prefersReducedMotion();
     // Quieter on a phone, whose small speaker is loudest where the whoosh is.
     sound.setLevel(state.isMobile ? CONFIG.sound.masterMobile : CONFIG.sound.master);
@@ -600,6 +601,14 @@ function setupEventListeners() {
         if (shieldOverlayControl(freeBtn, { signal })) {
             freeBtn.addEventListener('click', startFreePlay, { signal });
         }
+        // "Click to step in" does what it says, by its own click (a click
+        // anywhere else on the card still does too).
+        const stepIn = document.getElementById('step-in');
+        if (shieldOverlayControl(stepIn, { signal })) {
+            stepIn.addEventListener('click', dismiss, { signal });
+        }
+        // "All the controls" opens and closes, and never steps in.
+        shieldOverlayControl(document.getElementById('all-controls-toggle'), { signal });
     }
     if (helpBtn) helpBtn.addEventListener('click', () => returnToWelcome('help'), { signal });
     if (soundBtn) soundBtn.addEventListener('click', () => toggleSound('button'), { signal });
@@ -870,6 +879,10 @@ function onKeyDown(event) {
     }
     if (isTextEntry(event.target)) return;
     if (welcomeShown()) {
+        // A focused control on the card keeps Enter and Space for itself:
+        // the character button opens the character card, "All the controls"
+        // opens, and "Click to step in" steps in by its own click.
+        if (isButton(event.target)) return;
         if (!event.repeat && (event.code === 'Enter' || event.code === 'Space')) {
             event.preventDefault();
             beginPlaying();
@@ -930,7 +943,7 @@ function isTextEntry(target) {
 
 function isButton(target) {
     const tag = target && target.tagName ? String(target.tagName).toLowerCase() : '';
-    return tag === 'button' || tag === 'a';
+    return tag === 'button' || tag === 'a' || tag === 'summary';
 }
 
 function releaseInput() {
@@ -1033,10 +1046,19 @@ function setChromeVisible(on) {
 function showTouchControls() {
     if (state.touch) return;
     state.touch = true;
+    markDevice();
     setChromeVisible(true);
 }
 
-/** The welcome card's "just play with the leaves": the yard with no clock. */
+/** The welcome card speaks to the device in hand (Steve's QA, 2026-10-09):
+ *  "Tap to step in" and the joystick on a touch screen, "Click" and the
+ *  mouse on a computer. The `touch-ui` class picks the controls (the CSS). */
+function markDevice() {
+    document.documentElement.classList.toggle('touch-ui', state.touch);
+    setText('step-in', state.touch ? 'Tap to step in' : 'Click to step in');
+}
+
+/** The welcome card's "Play with no clock": the yard with no clock. */
 function startFreePlay() {
     if (!state.isLoaded) return;
     if (round.phase !== 'free') {

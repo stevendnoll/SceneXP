@@ -24,6 +24,167 @@
     margin: auto 0;
 }
 
+/* ---- The welcome card, trimmed (Steve's QA, 2026-10-09: "really wordy" on
+   a computer, and "Click to step in almost gets lost in the sea of text").
+   One filled button, one line of controls, the rest folded away, and a
+   quieter footer. ---- */
+
+#instructions .subtitle {
+    margin-bottom: 2rem;
+}
+
+/* THE ONLY FILLED THING ON THE CARD. No pulse: a fill already says "press
+   me", and a filled button that throbs reads as one still loading. */
+#instructions button.step-in {
+    display: block;
+    margin: 0 auto 1.25rem;
+    padding: 0.8rem 2.25rem;
+    border: none;
+    border-radius: 999px;
+    background: var(--ui-accent);
+    color: var(--ui-on-accent);
+    font: inherit;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    animation: none;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+#instructions button.step-in:hover {
+    background: var(--ui-accent-strong);
+}
+
+#instructions button.step-in:active {
+    transform: scale(0.98);
+}
+
+#instructions button.step-in:focus-visible {
+    outline: 3px solid var(--ui-title);
+    outline-offset: 3px;
+}
+
+#instructions .tour-note {
+    margin: 0 auto 1.25rem;
+}
+
+#instructions .controls-brief {
+    margin: 0 auto 0.4rem;
+    color: var(--ui-subtitle);
+    font-size: 0.9rem;
+    letter-spacing: 0.04em;
+}
+
+/* This device's controls only: `touch-ui` on <html> (main.js markDevice). */
+html.touch-ui #instructions .for-mouse,
+html:not(.touch-ui) #instructions .for-touch {
+    display: none;
+}
+
+#instructions .all-controls {
+    max-width: 40rem;
+    margin: 0 auto;
+}
+
+/* The disclosure, as Earth Defense's: its own triangle in the card's ink,
+   `list-style` and the WebKit pseudo-element both needed to retire the
+   built-in marker. */
+#instructions .all-controls > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    color: var(--ui-accent);
+    font-size: 0.875rem;
+    letter-spacing: 0.04em;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    list-style: none;
+}
+
+#instructions .all-controls > summary::-webkit-details-marker {
+    display: none;
+}
+
+#instructions .all-controls > summary::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 6px solid currentColor;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 0.2s ease;
+}
+
+#instructions .all-controls[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+#instructions .all-controls > summary:hover {
+    color: var(--ui-title);
+}
+
+#instructions .all-controls > summary:focus-visible {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
+}
+
+#instructions .all-controls .controls-hint {
+    margin: 0.5rem 0 0.25rem;
+    line-height: 2;
+}
+
+/* The footer: smaller than everything above it. */
+#instructions .welcome-more {
+    margin-top: 1.25rem;
+}
+
+#instructions .welcome-more .cast-line {
+    margin: 0.25rem auto 0;
+    font-size: 0.85rem;
+}
+
+#instructions .welcome-more .welcome-free {
+    font-size: 0.85rem;
+}
+
+#instructions .welcome-ways {
+    margin: 0.5rem 0 0;
+}
+
+#instructions .welcome-ways .welcome-free,
+#instructions .welcome-ways .welcome-explore {
+    margin: 0;
+}
+
+#instructions .welcome-dot {
+    color: var(--text-dim);
+}
+
+/* On a phone the controls were never on the card (the shared sheet hides
+   them below 768px), and the card was right as it was. */
+@media (max-width: 768px) {
+    #instructions .controls-brief,
+    #instructions .all-controls {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #instructions button.step-in,
+    #instructions .all-controls > summary::before {
+        transition: none;
+    }
+
+    #instructions button.step-in:active {
+        transform: none;
+    }
+}
+
 /* ---- The walking joystick (2026-10-08) ----
    The shared ring (styles-1.0.0.css), clear of a notched phone's edges as
    the shared sheet does for its touch devices, and lit while it is held. */

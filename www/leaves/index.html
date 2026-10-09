@@ -94,7 +94,7 @@
     <title>Leaf Blower | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=10" as="style">
+    <link rel="preload" href="css/experience.min.css?v=11" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -140,7 +140,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=10">
+    <link rel="stylesheet" href="css/experience.min.css?v=11">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -191,32 +191,62 @@
         <div id="instructions">
             <p class="title">WELCOME</p>
             <p class="subtitle">A front yard buried in autumn leaves, and a leaf blower waiting for you</p>
-            <p class="click-prompt">Click to step in</p>
+            <!-- THE ONE THING TO DO (Steve's QA, 2026-10-09: "Click to step in
+                 almost gets lost in the sea of text"). A real button, the only
+                 filled thing on the card. A click anywhere still steps in, and
+                 this is the click a keyboard can find. "Tap" on a touch screen
+                 (main.js). -->
+            <button id="step-in" class="click-prompt step-in" type="button">Click to step in</button>
             <!-- The round, in one line. The clock waits for the first blow
                  (js/round.js), which is worth saying, since it means there is
                  no hurry to read the rest of this card. -->
-            <p class="tour-note">You have five minutes to clear the lawn, and the clock starts with your first blow. Clear the whole lawn and you finish early.</p>
-            <div class="controls-hint">
-                <span>WALK</span> Point at the lawn with the mouse and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too. On a touch screen, the joystick in the lower left walks you, and a light push turns you in place to aim.
-                <span>BLOW</span> Hold the mouse button or Space. On a touch screen, hold the blow button in the lower right.
-                <span>ZOOM</span> Scroll, or pinch with two fingers, to come in closer or stand back. The + and - keys zoom too, and 0 brings back the usual view.
-                <span>SOUND</span> The leaf blower makes a whoosh. On a computer it starts on, and on a phone or tablet it starts off, so tap the speaker in the corner to hear it. M or the speaker turns it on and off.
-                <span>HELP</span> The question mark in the corner, or Escape, brings you back here.
+            <p class="tour-note">Clear the lawn in five minutes. The clock starts with your first blow.</p>
+            <!-- THE CONTROLS FOR THIS DEVICE ONLY: a mouse and keys on a
+                 computer, the joystick and the blow button on a touch screen
+                 (the `touch-ui` class, main.js). The essentials in one line,
+                 the rest folded away. Below 768px wide neither shows, as the
+                 shared sheet has always hidden the controls on a phone. -->
+            <p class="controls-brief">
+                <span class="for-mouse">Point to walk &middot; Hold the mouse button to blow &middot; Scroll to zoom</span>
+                <span class="for-touch">The joystick walks &middot; Hold the blow button to blow &middot; Pinch to zoom</span>
+            </p>
+            <!-- A <details>, as Earth Defense's settings are: the browser gives
+                 it its keys, and its open or closed state to a screen reader.
+                 Its summary is shielded from the card's click-to-step-in
+                 (main.js), and it stays as it was left for the visit. -->
+            <details id="all-controls" class="all-controls">
+                <summary id="all-controls-toggle">All the controls</summary>
+                <div class="controls-hint for-mouse">
+                    <span>WALK</span> Point at the lawn with the mouse and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too.
+                    <span>BLOW</span> Hold the mouse button or Space.
+                    <span>ZOOM</span> Scroll, or pinch on a trackpad, to come in closer or stand back. The + and - keys zoom too, and 0 brings back the usual view.
+                    <span>SOUND</span> The leaf blower makes a whoosh. M or the speaker in the corner turns it on and off.
+                    <span>HELP</span> The question mark in the corner, or Escape, brings you back here.
+                </div>
+                <div class="controls-hint for-touch">
+                    <span>WALK</span> The joystick in the lower left walks you, and a light push turns you in place to aim.
+                    <span>BLOW</span> Hold the blow button in the lower right.
+                    <span>ZOOM</span> Pinch with two fingers to come in closer or stand back.
+                    <span>SOUND</span> The leaf blower makes a whoosh. It starts off on a phone or tablet, so tap the speaker in the corner to hear it.
+                    <span>HELP</span> The question mark in the corner brings you back here.
+                </div>
+            </details>
+            <!-- THE QUIET FOOTER: who is on leaf duty (M4), the best time
+                 (js/best.js, hidden until there is one), the yard with no
+                 clock, and the directory. Smaller than everything above it,
+                 so the button stays the thing to press. Each control is
+                 shielded from the overlay's click-to-step-in by main.js. -->
+            <div class="welcome-more">
+                <p class="cast-line"><span id="cast-name">Playing in a rust red shirt and navy pants.</span>
+                    <button id="cast-btn" class="welcome-free cast-btn" type="button">Change your character</button></p>
+                <p id="best-line" class="cast-line best-line" hidden><span id="best-text"></span>
+                    <button id="best-forget" class="welcome-free cast-btn" type="button">Forget my best time</button></p>
+                <p class="welcome-ways">
+                    <button id="free-btn" class="welcome-free" type="button">Play with no clock</button>
+                    <span class="welcome-dot" aria-hidden="true">&middot;</span>
+                    <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
+                </p>
             </div>
-            <!-- Who is on leaf duty (M4): the line names the character, and
-                 the button opens the character card. Shielded from the
-                 overlay's click-to-start by main.js. -->
-            <p class="cast-line"><span id="cast-name">Playing in a rust red shirt and navy pants.</span>
-                <button id="cast-btn" class="welcome-free cast-btn" type="button">Change your character</button></p>
-            <!-- The visitor's best time to clear the lawn (js/best.js), once
-                 they have one, and a way to forget it. Hidden until then, and
-                 shielded from the overlay's click-to-start by main.js. -->
-            <p id="best-line" class="cast-line best-line" hidden><span id="best-text"></span>
-                <button id="best-forget" class="welcome-free cast-btn" type="button">Forget my best time</button></p>
-            <!-- Free blow: the yard with no clock. Shielded from the overlay's
-                 own click-to-start by main.js, so it does its own job. -->
-            <button id="free-btn" class="welcome-free" type="button">Or just play with the leaves, with no clock</button>
-            <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
         </div>
     </div>
 

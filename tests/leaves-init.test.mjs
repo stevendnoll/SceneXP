@@ -335,6 +335,82 @@ test('a mouse leaving the lawn stops steering from the screen, but the person st
     expect(main.getState().aim).toEqual(aim);
 });
 
+// THE WELCOME CARD, TRIMMED (Steve's QA, 2026-10-09: "really wordy" on a
+// computer, "Click to step in almost gets lost in the sea of text").
+describe('the welcome card', () => {
+    /** A computer's screen (the suite's default is a phone's). */
+    function desktop() {
+        dom.uninstall();
+        installThree();
+        dom = installDom({ innerWidth: 1280, innerHeight: 800 });
+        dom.windowStub.location.search = '?leaves=600';
+    }
+
+    test('"Click to step in" is a button that steps in', async () => {
+        desktop();
+        const main = await boot();
+        expect(dom.el('step-in').textContent).toBe('Click to step in');
+        fire(dom.el('step-in'), 'click');
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
+        expect(main.getState().isLoaded).toBe(true);
+    });
+
+    test('a phone says "Tap to step in" and is shown the joystick', async () => {
+        await boot();
+        expect(dom.documentStub.documentElement.classList.contains('touch-ui')).toBe(true);
+        expect(dom.el('step-in').textContent).toBe('Tap to step in');
+    });
+
+    test('a computer is shown the mouse, until a finger touches the lawn', async () => {
+        desktop();
+        await boot();
+        expect(dom.el('step-in').textContent).toBe('Click to step in');
+        const html = dom.documentStub.documentElement;
+        expect(html.classList.contains('touch-ui')).toBe(false);
+        // The first finger on the lawn makes it a touch screen from then on.
+        fire(dom.el('blocker'), 'click');
+        fire(dom.el('game-canvas'), 'pointerdown', { pointerId: 5, pointerType: 'touch', clientX: 100, clientY: 600 });
+        expect(html.classList.contains('touch-ui')).toBe(true);
+        expect(dom.el('step-in').textContent).toBe('Tap to step in');
+        const css = await readFile(new URL('../www/leaves/css/experience.css', import.meta.url), 'utf8');
+        expect(css).toMatch(/html\.touch-ui #instructions \.for-mouse,\s*html:not\(\.touch-ui\) #instructions \.for-touch \{\s*display: none;/);
+        // On a phone the card stays as it was: no controls at all.
+        expect(css).toMatch(/@media \(max-width: 768px\) \{\s*#instructions \.controls-brief,\s*#instructions \.all-controls \{\s*display: none;/);
+    });
+
+    test('"All the controls" opens without stepping in, by a click or a key', async () => {
+        await boot();
+        const summary = dom.el('all-controls-toggle');
+        summary.tagName = 'SUMMARY';
+        // Shielded: its click never reaches the card's click-to-step-in.
+        for (const type of ['click', 'touchstart', 'touchend']) {
+            const stop = jest.fn();
+            fire(summary, type, { stopPropagation: stop });
+            expect(stop).toHaveBeenCalled();
+        }
+        const down = fire(dom.documentStub, 'keydown', { code: 'Enter', target: summary });
+        expect(down.defaultPrevented).toBe(false);
+        fire(dom.documentStub, 'keydown', { code: 'Space', target: summary });
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+    });
+
+    // Before 2026-10-09 the card took Enter and Space from every control on
+    // it: a keyboard on "Change your character" stepped into the yard.
+    test('a focused button on the card keeps Enter and Space for itself', async () => {
+        await boot();
+        const castBtn = dom.el('cast-btn');
+        castBtn.tagName = 'BUTTON';
+        const down = fire(dom.documentStub, 'keydown', { code: 'Enter', target: castBtn });
+        expect(down.defaultPrevented).toBe(false);
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+        fire(dom.documentStub, 'keydown', { code: 'Space', target: castBtn });
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+        // With nothing focused, Enter and Space still step in.
+        fire(dom.documentStub, 'keydown', { code: 'Enter' });
+        expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
+    });
+});
+
 // THE SOCIAL CARD'S CAPTURE (M7, 2026-10-09): ?clean=1 on a QA host hides
 // everything over the yard (the CSS keys off the class) and the aim ring.
 test('?clean=1 leaves nothing over the yard but the yard', async () => {

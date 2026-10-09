@@ -3886,7 +3886,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Leaf Blower | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=10" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=11" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -3928,7 +3928,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/surfaces.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=2" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=10" rel="stylesheet"]
+    link [href="css/experience.min.css?v=11" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -3964,39 +3964,67 @@ html [data-ui-theme="ember" lang="en"]
           "WELCOME"
         p.subtitle
           "A front yard buried in autumn leaves, and a leaf blower waiting for you"
-        p.click-prompt
+        button#step-in.click-prompt.step-in [type="button"]
           "Click to step in"
         p.tour-note
-          "You have five minutes to clear the lawn, and the clock starts with your first blow. Clear the whole lawn and you finish early."
-        div.controls-hint
-          span
-            "WALK"
-          "Point at the lawn with the mouse and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too. On a touch screen, the joystick in the lower left walks you, and a light push turns you in place to aim."
-          span
-            "BLOW"
-          "Hold the mouse button or Space. On a touch screen, hold the blow button in the lower right."
-          span
-            "ZOOM"
-          "Scroll, or pinch with two fingers, to come in closer or stand back. The + and - keys zoom too, and 0 brings back the usual view."
-          span
-            "SOUND"
-          "The leaf blower makes a whoosh. On a computer it starts on, and on a phone or tablet it starts off, so tap the speaker in the corner to hear it. M or the speaker turns it on and off."
-          span
-            "HELP"
-          "The question mark in the corner, or Escape, brings you back here."
-        p.cast-line
-          span#cast-name
-            "Playing in a rust red shirt and navy pants."
-          button#cast-btn.welcome-free.cast-btn [type="button"]
-            "Change your character"
-        p#best-line.cast-line.best-line [hidden]
-          span#best-text
-          button#best-forget.welcome-free.cast-btn [type="button"]
-            "Forget my best time"
-        button#free-btn.welcome-free [type="button"]
-          "Or just play with the leaves, with no clock"
-        a#explore-link.welcome-explore [href="/"]
-          "More 3D worlds to explore at SceneXP.com"
+          "Clear the lawn in five minutes. The clock starts with your first blow."
+        p.controls-brief
+          span.for-mouse
+            "Point to walk &middot; Hold the mouse button to blow &middot; Scroll to zoom"
+          span.for-touch
+            "The joystick walks &middot; Hold the blow button to blow &middot; Pinch to zoom"
+        details#all-controls.all-controls
+          summary#all-controls-toggle
+            "All the controls"
+          div.controls-hint.for-mouse
+            span
+              "WALK"
+            "Point at the lawn with the mouse and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too."
+            span
+              "BLOW"
+            "Hold the mouse button or Space."
+            span
+              "ZOOM"
+            "Scroll, or pinch on a trackpad, to come in closer or stand back. The + and - keys zoom too, and 0 brings back the usual view."
+            span
+              "SOUND"
+            "The leaf blower makes a whoosh. M or the speaker in the corner turns it on and off."
+            span
+              "HELP"
+            "The question mark in the corner, or Escape, brings you back here."
+          div.controls-hint.for-touch
+            span
+              "WALK"
+            "The joystick in the lower left walks you, and a light push turns you in place to aim."
+            span
+              "BLOW"
+            "Hold the blow button in the lower right."
+            span
+              "ZOOM"
+            "Pinch with two fingers to come in closer or stand back."
+            span
+              "SOUND"
+            "The leaf blower makes a whoosh. It starts off on a phone or tablet, so tap the speaker in the corner to hear it."
+            span
+              "HELP"
+            "The question mark in the corner brings you back here."
+        div.welcome-more
+          p.cast-line
+            span#cast-name
+              "Playing in a rust red shirt and navy pants."
+            button#cast-btn.welcome-free.cast-btn [type="button"]
+              "Change your character"
+          p#best-line.cast-line.best-line [hidden]
+            span#best-text
+            button#best-forget.welcome-free.cast-btn [type="button"]
+              "Forget my best time"
+          p.welcome-ways
+            button#free-btn.welcome-free [type="button"]
+              "Play with no clock"
+            span.welcome-dot [aria-hidden="true"]
+              "&middot;"
+            a#explore-link.welcome-explore [href="/"]
+              "More 3D worlds to explore at SceneXP.com"
     canvas#game-canvas [aria-label="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower" role="img"]
     button#help-btn.ui-float.menu-btn.help-btn [aria-label="Help" title="Help (Esc)" type="button"]
       svg [aria-hidden="true" viewbox="0 0 24 24"]
