@@ -31,9 +31,12 @@ export const LEAVES_CONFIG = Object.freeze({
     },
 
     // How many leaves, by device. A count from the address (?leaves=n on a
-    // QA host) wins over both.
+    // QA host) wins over both. Computers had 24,000 until Steve's QA of
+    // 2026-10-09 (the round "starts to feel a little tedious" after two or
+    // three minutes): now the phones' 12,000 everywhere, bigger leaves
+    // burying the lawn just as deep (`coverage`).
     leaves: {
-        desktop: 24000,
+        desktop: 12000,
         mobile: 12000,
         minCount: 500,
         maxCount: 96000,

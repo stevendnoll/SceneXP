@@ -21,7 +21,7 @@ const { LEAVES_CONFIG: C } = await import('../www/leaves/js/config.js');
 const F = C.finds;
 // The fewest leaves that still bury the lawn: below about 9,000 a leaf is
 // at its largest and the carpet thins (see config.leaves.coverage). The
-// shipped counts are 12,000 and 24,000.
+// shipped count is 12,000 (24,000 on computers until 2026-10-09).
 const COUNT = 9000;
 
 function yard(count = COUNT) {

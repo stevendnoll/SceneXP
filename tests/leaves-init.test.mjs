@@ -658,17 +658,18 @@ describe('the round', () => {
         frames(main, 0.5, 20);
         const Sim = await import('../www/leaves/js/sim.min.js');
         const sim = main.__test__.sim();
-        // All but three into the street (600 leaves allow none on a clear lawn).
+        // All but four into the street (the 480 counted allow two on a clear
+        // lawn, half a percent since 2026-10-09).
         let kept = 0;
         for (let i = 0; i < sim.count; i++) {
             if (sim.hanging[i] || sim.falling[i]) continue;
-            if (kept < 3) { kept++; continue; }
+            if (kept < 4) { kept++; continue; }
             Sim.hangLeaf(sim, i, 0, 5, 0);
             Sim.layDown(sim, i, -8 + (i % 60) * 0.3, 9.6 + Math.floor(i / 60) * 0.3);
         }
         frames(main, 0.5, 20);
-        expect(main.getState().counted.lawn).toBe(3);
-        expect(dom.el('hud-cleared').textContent).toBe('99%, 3 leaves to go');
+        expect(main.getState().counted.lawn).toBe(4);
+        expect(dom.el('hud-cleared').textContent).toBe('99%, 2 leaves to go');
         expect(main.getState().cheer.phase).toBe('idle');
     });
 

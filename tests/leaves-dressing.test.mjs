@@ -161,7 +161,7 @@ describe('the side gate', () => {
 });
 
 describe('the leaves resting on the roofs and the hedge', () => {
-    const base = S.leafSize(24000, S.areaOf(Y.lawn), C.leaves);
+    const base = S.leafSize(C.leaves.desktop, S.areaOf(Y.lawn), C.leaves);
 
     test('each surface has its leaves, and the front slopes the camera sees have the most', () => {
         const r = Rt.scatterResting(C, base);

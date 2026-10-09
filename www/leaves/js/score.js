@@ -125,9 +125,10 @@ export function clearedShare(t) {
 
 /** A CLEAR LAWN HAS A SMALL MARGIN (Steve's QA, 2026-10-08: "1 single leaf
  *  will keep the score at 99%"). No more than this share of the yard's
- *  leaves left on it is clear: 24 of 24,000 on a desktop, 12 of 12,000 on a
- *  phone, scattered over 260 square meters. */
-export const SPOTLESS_SHARE = 0.001;
+ *  leaves left on it is clear: 60 of 12,000, scattered over 260 square
+ *  meters. A tenth of a percent until Steve's QA of 2026-10-09 asked for
+ *  half a percent, so the last stragglers are less of a hunt. */
+export const SPOTLESS_SHARE = 0.005;
 
 /** How many leaves may still lie on a clear lawn, for a yard of `total`. */
 export function leavesAllowed(total) {
