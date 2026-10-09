@@ -13,11 +13,21 @@
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
 /** How many meters of ground across the view is fitted to, for a screen of
- *  this aspect (width / height): the narrow span on a phone held upright,
- *  the whole yard from about 4:3 and wider. */
-export function spanFor(aspect, C) {
+ *  this aspect (width / height): the narrow span on a phone held upright
+ *  (narrower still on a touch screen, `touchNarrowSpan`), the whole yard
+ *  from about 4:3 and wider. */
+export function spanFor(aspect, C, touch = false) {
     const t = clamp((aspect - 0.5) / (1.3 - 0.5), 0, 1);
-    return C.narrowSpan + (C.wideSpan - C.narrowSpan) * t;
+    const narrow = touch && C.touchNarrowSpan !== undefined ? C.touchNarrowSpan : C.narrowSpan;
+    return narrow + (C.wideSpan - narrow) * t;
+}
+
+/** Whether the frame keeps the street in it (`frontZ`): always, except on a
+ *  touch screen held upright, where the person is the picture (Steve's QA,
+ *  2026-10-09: "a lot of the street is visible by default, and that isn't
+ *  really necessary"). */
+export function keepsStreet(aspect, touch = false) {
+    return !(touch && aspect < 1);
 }
 
 /** How far back the camera stands to fit `span` meters across at its
@@ -62,7 +72,7 @@ export function clampZoom(zoom, C) {
 export function cameraFor(aspect, C, lawn, follow, include = null, zoom = 1, touch = false) {
     const zf = C.zoom ? clampZoom(zoom, C) : 1;
     const zoomed = Math.abs(zf - 1) > 1e-6;
-    let span = spanFor(aspect, C);
+    let span = spanFor(aspect, C, touch);
     let region = lawn;
     let focus = follow;
     // SOMEBODY ELSE IN THE SCENE (the neighbor, out on his lawn): the view
@@ -95,13 +105,29 @@ export function cameraFor(aspect, C, lawn, follow, include = null, zoom = 1, tou
     // the frame to reach `frontZ`, as much of the street as a 4:3 screen
     // shows, and a wide screen shows more of the block either side instead.
     let dist = distanceFor(span, aspect, C.fovDegrees);
-    if (C.frontZ !== undefined) dist = Math.max(dist, distanceForFront(C.frontZ, tz, C));
+    if (C.frontZ !== undefined && keepsStreet(aspect, touch)) dist = Math.max(dist, distanceForFront(C.frontZ, tz, C));
+    // AND ALWAYS PAST THE PERSON'S FEET, by `footRoom`: out on the sidewalk's
+    // front edge they would stand on the frame's bottom edge (frontZ 9
+    // since 2026-10-09), so there the camera eases back a little.
+    if (follow && C.footRoom !== undefined) dist = Math.max(dist, distanceForFront(follow.z + C.footRoom, tz, C));
     // In close, never narrower than minSpan (the reach either side of the
     // person, for a mouse to aim past) or a touch screen's touchSpan (the
     // joystick aims no pointer), nor nearer than minDistance (the person's
     // height, top to bottom, on a screen much wider than tall).
     const narrowest = touch && C.zoom.touchSpan !== undefined ? C.zoom.touchSpan : C.zoom.minSpan;
-    if (zoomed) dist = Math.max(dist / zf, distanceFor(narrowest, aspect, C.fovDegrees), C.zoom.minDistance || 0);
+    if (zoomed && zf < 1 && C.zoom.out) {
+        // ZOOMED OUT, AS FAR AS IT EVER WENT (Steve's QA, 2026-10-09: "I'm
+        // not able to zoom out as far as I used to"). The farthest view is
+        // `zoom.out`'s framing (the usual view before the defaults came in
+        // closer) times `beyond`, whatever the usual view now is, and the
+        // zoom eases there from the usual view, step for step.
+        const O = C.zoom.out;
+        const far = Math.max(distanceFor(spanFor(aspect, O), aspect, C.fovDegrees), distanceForFront(O.frontZ, tz, C)) * O.beyond;
+        const u = Math.log(zf) / Math.log(C.zoom.min);
+        dist *= Math.pow(Math.max(1, far / dist), u);
+    } else if (zoomed) {
+        dist = Math.max(dist / zf, distanceFor(narrowest, aspect, C.fovDegrees), C.zoom.minDistance || 0);
+    }
     // The width of ground actually shown at the target.
     const shown = 2 * dist * Math.tan(Math.atan(Math.tan((C.fovDegrees * Math.PI) / 360) * aspect));
     // How far the target may slide before the frame runs off the region.
@@ -128,6 +154,29 @@ export function cameraFor(aspect, C, lawn, follow, include = null, zoom = 1, tou
         span: shown,
         distance: dist
     };
+}
+
+/**
+ * A view kept out of the trees: if the camera would stand within
+ * `margin` of a crown (`{ x, y, z, r }`, a sphere), it eases back along its
+ * own line of sight until it is clear, still looking at the same spot. In
+ * close at the lawn's back corners the frame's reach toward the street had
+ * set it inside the left maple's lower branches (2026-10-09).
+ */
+export function clearOfCrowns(view, crowns, margin = 0) {
+    if (!crowns || !crowns.length) return view;
+    const t = view.target;
+    const dx = view.position.x - t.x;
+    const dy = view.position.y - t.y;
+    const dz = view.position.z - t.z;
+    const len = Math.hypot(dx, dy, dz);
+    if (len < 1e-9) return view;
+    const at = (d) => ({ x: t.x + (dx / len) * d, y: t.y + (dy / len) * d, z: t.z + (dz / len) * d });
+    const inside = (p) => crowns.some((c) => Math.hypot(p.x - c.x, p.y - c.y, p.z - c.z) < c.r + margin);
+    let d = len;
+    for (let i = 0; i < 80 && inside(at(d)); i++) d += 0.25;
+    if (d === len) return view;
+    return { ...view, position: at(d), distance: view.distance + (d - len) };
 }
 
 /** The camera's usual angle, looking straight at `point` from far enough

@@ -155,13 +155,15 @@ describe('the frame on any screen, at any zoom (Steve\'s QA, 2026-10-08)', () =>
         return groundAt(camera, 0, -1).z;
     }
 
-    test('"the street isn\'t visible": every landscape screen shows the sidewalk and the curb', () => {
+    test('"the street isn\'t visible": every landscape screen shows the whole sidewalk', () => {
         // Before: the bottom edge sat at z 8.1 on 16:9 (mid-sidewalk) and 6.3
         // on 21:9, the sidewalk gone. The street starts at the sidewalk's
         // far edge.
         for (const aspect of [1.33, 1.6, 1.78, 2.2, 2.4, 3.56]) {
             for (const person of [null, { x: 0, z: 2 }, { x: -8, z: -4 }, { x: 8, z: 8 }]) {
-                expect(bottomZ(aspect, person)).toBeGreaterThan(C.yard.sidewalk.maxZ + 1);
+                // The whole sidewalk (Steve, 2026-10-09: "street out,
+                // sidewalk kept"; until then the street as well).
+                expect(bottomZ(aspect, person)).toBeGreaterThan(C.yard.sidewalk.maxZ - 0.05);
             }
         }
     });
@@ -194,6 +196,28 @@ describe('the frame on any screen, at any zoom (Steve\'s QA, 2026-10-08)', () =>
         expect(off).toEqual([]);
     });
 
+    // STEVE'S QA, 2026-10-09: "I'm not able to zoom out as far as I used
+    // to". The far end was 1.25 times the usual view, so bringing the usual
+    // view in brought it in too. Now it is this morning's farthest view on
+    // every screen, and the zoom out eases there smoothly from the usual.
+    test('zoomed all the way out stands as far back as it did before the closer defaults', () => {
+        const far = (aspect, touch) => V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, cam.zoom.min, touch).distance;
+        expect(far(16 / 9, false)).toBeCloseTo(28.0, 1);
+        expect(far(1.6, false)).toBeCloseTo(28.0, 1);
+        expect(far(4 / 3, false)).toBeCloseTo(28.1, 1);
+        expect(far(390 / 844, true)).toBeCloseTo(38.8, 1);
+        expect(far(844 / 390, true)).toBeCloseTo(28.0, 1);
+        // Every step out stands further back, from the usual view to the end.
+        for (const [aspect, touch] of [[16 / 9, false], [390 / 844, true], [0.75, true]]) {
+            let last = V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, 1, touch).distance;
+            for (let zoom = 0.98; zoom >= cam.zoom.min - 1e-9; zoom -= 0.02) {
+                const d = V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, zoom, touch).distance;
+                expect(d).toBeGreaterThan(last);
+                last = d;
+            }
+        }
+    });
+
     test('zooming in comes closer and zooming out stands back, within the range', () => {
         for (const aspect of [0.46, 1.33, 1.78, 2.4]) {
             const at = (zoom) => V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, zoom).distance;
@@ -212,27 +236,72 @@ describe('the frame on any screen, at any zoom (Steve\'s QA, 2026-10-08)', () =>
         }
     });
 
+    // STEVE'S QA, 2026-10-09, on his iPhone: "the default zoom when the game
+    // first starts seems too far out". The usual view, not a zoom, so the
+    // neighbor's arrival still widens it.
+    // And again the same evening: "It still looks small on my iPhone in
+    // portrait mode... a lot of the street is visible by default, and that
+    // isn't really necessary". A touch screen held upright drops the street
+    // (frontZ) and comes in to touchNarrowSpan. A mouse in a window that
+    // shape keeps narrowSpan and the street, for the reach it aims with.
+    test('an upright phone starts closer, and still widens for the neighbor', () => {
+        const phone = 390 / 844;
+        const usual = V.cameraFor(phone, cam, lawn, { x: 0, z: 2 }, null, 1, true);
+        expect(usual.distance).toBeLessThan(19);
+        expect(usual.span).toBeCloseTo(cam.touchNarrowSpan, 6);
+        const mouse = V.cameraFor(phone, cam, lawn, { x: 0, z: 2 }, null, 1, false);
+        expect(mouse.span).toBeCloseTo(cam.narrowSpan, 6);
+        const withHim = V.cameraFor(phone, cam, lawn, { x: 0, z: 2 }, { x: C.neighbor.lineMax, z: 0 }, 1, true);
+        expect(withHim.span).toBeGreaterThan(20);
+        // Held sideways, a phone keeps the street.
+        expect(V.keepsStreet(844 / 390, true)).toBe(true);
+        expect(V.keepsStreet(phone, true)).toBe(false);
+        expect(V.keepsStreet(phone, false)).toBe(true);
+    });
+
+    // Without the street holding the camera back, the person must still be
+    // in the picture wherever they walk, and above the joystick and the
+    // blow button, which take about the bottom quarter of an upright phone.
+    test('on an upright phone the person is on screen and above the touch controls, anywhere on the lawn', () => {
+        const off = [];
+        for (const aspect of [390 / 844, 0.75]) {
+            for (let x = area.minX; x <= area.maxX; x += 1) {
+                for (let z = area.minZ; z <= area.maxZ; z += 1) {
+                    const camera = cameraAt(V.cameraFor(aspect, cam, lawn, { x, z }, null, 1, true), aspect);
+                    const feet = new THREE.Vector3(x, 0, z).project(camera);
+                    const head = new THREE.Vector3(x, 1.8, z).project(camera);
+                    if (feet.y < -0.5 || head.y > 0.95 || Math.abs(feet.x) > 0.95) off.push({ aspect, x, z, feet: feet.y.toFixed(2) });
+                }
+            }
+        }
+        expect(off).toEqual([]);
+    });
+
     // STEVE'S QA, 2026-10-09: "it would be cool to zoom in a little closer".
     // A computer stopped 8 m away, and a phone in portrait at 1.29x, held
     // back by the width a mouse needs to aim, which a joystick does not.
-    test('a computer comes in to 5.5 m, and a phone in portrait more than twice as close as usual', () => {
+    test('a computer comes in to 5.5 m, and a phone in portrait to under 15 m', () => {
         const near = (aspect, touch) => V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, cam.zoom.max, touch).distance;
         const usual = (aspect) => V.cameraFor(aspect, cam, lawn, { x: 0, z: 2 }, null, 1).distance;
         expect(near(16 / 9, false)).toBeCloseTo(cam.zoom.minDistance, 6);
         expect(near(16 / 9, false)).toBeLessThan(6);
-        expect(usual(0.46) / near(0.46, true)).toBeGreaterThan(2);
+        // 24 m back to start (narrowSpan), 14.2 m all the way in.
+        expect(near(0.46, true)).toBeLessThan(15);
+        expect(usual(0.46) / near(0.46, true)).toBeGreaterThan(1.5);
         // A phone held to the mouse's width would barely zoom at all.
         expect(near(0.46, true)).toBeLessThan(near(0.46, false) * 0.8);
     });
 
     test('in close, the camera never stands inside a tree\'s crown, from anywhere the person walks', () => {
         const crowns = C.yard.trees.filter((t) => t.crown);
+        const spheres = crowns.map((t) => ({ x: t.x, y: t.crown.y, z: t.z, r: t.crown.radius }));
         const inside = [];
         for (const aspect of ASPECTS) {
             for (const touch of [false, true]) {
                 for (let x = area.minX; x <= area.maxX; x += 1) {
                     for (let z = area.minZ; z <= area.maxZ; z += 1) {
-                        const p = V.cameraFor(aspect, cam, lawn, { x, z }, null, cam.zoom.max, touch).position;
+                        // As main.js frames the yard: cameraFor, kept clear of the crowns.
+                        const p = V.clearOfCrowns(V.cameraFor(aspect, cam, lawn, { x, z }, null, cam.zoom.max, touch), spheres, cam.crownClearance).position;
                         for (const t of crowns) {
                             if (Math.hypot(p.x - t.x, p.y - t.crown.y, p.z - t.z) < t.crown.radius) inside.push({ aspect, touch, x, z, tree: t.species });
                         }
@@ -296,7 +365,7 @@ describe('the ground under every view', () => {
         // And every zoom, which never widens for the neighbor.
         for (const aspect of ASPECTS) {
             for (const person of people) {
-                for (const [zoom, touch] of [[cam.zoom.min, false], [cam.zoom.max, false], [cam.zoom.max, true]]) {
+                for (const [zoom, touch] of [[cam.zoom.min, false], [cam.zoom.max, false], [1, true], [cam.zoom.min, true], [cam.zoom.max, true]]) {
                     const camera = cameraAt(V.cameraFor(aspect, cam, lawn, person, null, zoom, touch), aspect);
                     for (let i = 0; i <= 16; i++) {
                         for (let j = 0; j <= 16; j++) {

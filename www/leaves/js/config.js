@@ -993,13 +993,36 @@ export const LEAVES_CONFIG = Object.freeze({
         // On a narrow screen the camera comes in close and follows the
         // blower instead of showing the whole yard. `span` is the width of
         // ground the view is fitted to.
-        wideSpan: 23,
-        narrowSpan: 11,
+        // CLOSER ON A PHONE SINCE STEVE'S QA, 2026-10-09 ("the player is kind
+        // of small and hard to see"): 11 m stood an iPhone's camera 31 m
+        // back, 8.5 m stands it 24 m back, the person 1.29x bigger. The view
+        // with the neighbor out still widens to the same 22 m. NOT NARROWER:
+        // at 8 m a mouse in a window that shape could no longer lead the
+        // person to the hedge from the sidewalk's front edge (the view
+        // showed under `reach` either side there; tests/leaves-view).
+        // A TOUCH SCREEN HELD UPRIGHT comes in further (Steve's QA, the
+        // same evening: "It still looks small on my iPhone"): `touchNarrowSpan`
+        // and no `frontZ`, so the street mostly leaves the frame. The
+        // joystick walks a phone and aims no pointer, so the reach a mouse
+        // needs does not apply. An iPhone's camera stands 18.3 m back (31 m
+        // this morning), the person 1.69x bigger, and their feet stay above
+        // the joystick and the blow button wherever they walk.
+        // A COMPUTER CAME IN TOO (Steve, the same night, choosing "street
+        // out, sidewalk kept"): wideSpan 23 -> 21 and frontZ 10.6 -> 9.
+        wideSpan: 21,
+        narrowSpan: 8.5,
+        touchNarrowSpan: 6.5,
         // However wide the screen, the bottom of the frame reaches this far
-        // toward the street (the sidewalk, the curb and the parked car, as
-        // a 4:3 screen shows them). Steve's QA, 2026-10-08: a wide screen
-        // had lost the street and most of the sidewalk.
-        frontZ: 10.6,
+        // toward the street. Steve's QA, 2026-10-08: a wide screen had lost
+        // the street and most of the sidewalk, so 10.6, the parked car in
+        // frame. Since 2026-10-09 the sidewalk's front edge (9): "Street
+        // out, sidewalk kept", 22.4 m back -> 18.8 m on 16:9 (1.19x).
+        frontZ: 9,
+        // How far past the person's feet the frame always reaches (view.js).
+        footRoom: 0.6,
+        // The camera stays this far clear of every tree's crown (view.js
+        // clearOfCrowns), easing back along its line of sight if it must.
+        crownClearance: 0.3,
         // The visitor's zoom: the wheel or a trackpad pinch, + and - (0 to
         // reset), or a pinch on a phone. 1 is the usual view and `max` the
         // closest, but never narrower than `minSpan` meters across, which
@@ -1013,7 +1036,15 @@ export const LEAVES_CONFIG = Object.freeze({
         // computer 8 m away, and a phone in portrait at 1.29x. Now 5.5 m and
         // 2.2x, measured clear of every tree crown from anywhere the person
         // walks (the closest, 0.1 m, on a 4:3 screen).
-        zoom: { min: 0.8, max: 4.5, minSpan: 7, touchSpan: 5, minDistance: 5.5, step: 1.25, wheel: 0.0015, pinchWheel: 0.01 },
+        // ZOOMED OUT (Steve's QA, the same night): `min` is the far end of
+        // the zoom, and it reaches `out`'s framing, the usual view as it was
+        // before the defaults came in closer (the street in frame, wider),
+        // times `beyond`: 28 m back on a computer, 38.8 m on an upright
+        // iPhone, as this morning, however close the usual view is now.
+        zoom: {
+            min: 0.8, max: 4.5, minSpan: 7, touchSpan: 5, minDistance: 5.5, step: 1.25, wheel: 0.0015, pinchWheel: 0.01,
+            out: { wideSpan: 23, narrowSpan: 11, frontZ: 10.6, beyond: 1.25 }
+        },
         follow: 2.5,
         // The ground this far either side of the person, at their depth,
         // stays on screen: the blower's standoff (2.4) and a meter more, so

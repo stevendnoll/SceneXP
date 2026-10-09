@@ -78,7 +78,7 @@ import { createLeafMesh } from './leafmesh.min.js';
 import { buildYard } from './yard.min.js';
 import { rakeFootprint } from './house.min.js';
 import { createOperator, stepOperator, standoffFor, facing, createOperatorFigure } from './blower.min.js';
-import { cameraFor, cameraOn, cameraCast, castFrame, rayToGround, ease, clampZoom, orbitView } from './view.min.js';
+import { cameraFor, clearOfCrowns, cameraOn, cameraCast, castFrame, rayToGround, ease, clampZoom, orbitView } from './view.min.js';
 import {
     SHIRTS, PANTS, SKINS, HAIR_COLORS, HAIR_LENGTHS, DEFAULT_CHOICE,
     loadChoice, saveChoice, forgetChoice, personConfig, castLine
@@ -486,12 +486,22 @@ function viewDistance() {
     return Math.hypot(view.position.x - view.target.x, view.position.y - view.target.y, view.position.z - view.target.z);
 }
 
+/** The trees' crowns as spheres, which the camera keeps out of. */
+const CROWNS = CONFIG.yard.trees.filter((t) => t.crown).map((t) => ({ x: t.x, y: t.crown.y, z: t.z, r: t.crown.radius }));
+
+/** The yard's own view: the visitor's zoom, the neighbor if he is out, and
+ *  never inside a tree. */
+function yardView(aspect) {
+    const view = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null, zoom.value, state.touch);
+    return clearOfCrowns(view, CROWNS, CONFIG.camera.crownClearance);
+}
+
 function placeCamera(snap) {
     if (!camera) return;
     const aspect = window.innerWidth / window.innerHeight;
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
-    const want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null, zoom.value, state.touch);
+    const want = yardView(aspect);
     if (snap || !view.position) {
         view.position = { ...want.position };
         view.target = { ...want.target };
@@ -529,7 +539,7 @@ function followCamera(dt) {
         want = orbitView(cameraOn(cheerFocus(operator, CONFIG.yard.lawn), aspect, CONFIG.camera, CONFIG.cheer.span),
             cheerOrbit(cheer.t, CONFIG.cheer));
     }
-    else want = cameraFor(aspect, CONFIG.camera, CONFIG.yard.lawn, operator, isOut(neighbor) ? neighbor : null, zoom.value, state.touch);
+    else want = yardView(aspect);
     const rate = CONFIG.camera.follow;
     ['x', 'y', 'z'].forEach((k) => {
         view.position[k] = ease(view.position[k], want.position[k], rate, dt);
