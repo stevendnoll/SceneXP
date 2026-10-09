@@ -444,6 +444,40 @@ describe('the drawing, on the real three.js', () => {
         }
     });
 
+    // Steve's QA, 2026-10-09: the faces were "only really visible if you
+    // zoom all the way in". Drawn on a canvas that records where every
+    // point lands: bigger than before, and all of it still on the canvas.
+    test('the carved face is drawn bold and whole, every feature inside its picture', () => {
+        const points = [];
+        let m = [1, 0, 0, 1, 0, 0];
+        const at = (x, y) => points.push([m[0] * x + m[4], m[3] * y + m[5]]);
+        const ctx = {
+            clearRect() {}, beginPath() {}, closePath() {}, fill() {},
+            setTransform(a, b, c, d, e, f) { m = [a, b, c, d, e, f]; },
+            moveTo: at, lineTo: at,
+            quadraticCurveTo(cx, cy, x, y) { at(x, y); }
+        };
+        const canvas = { width: 0, height: 0, getContext: () => ctx };
+        const saved = globalThis.document;
+        globalThis.document = { createElement: () => canvas };
+        try {
+            expect(H.faceTexture(HW.glow)).not.toBe(null);
+        } finally {
+            globalThis.document = saved;
+        }
+        expect(H.FACE_SCALE).toBeGreaterThan(1);
+        for (const [x, y] of points) {
+            expect(x).toBeGreaterThan(4);
+            expect(x).toBeLessThan(canvas.width - 4);
+            expect(y).toBeGreaterThan(4);
+            expect(y).toBeLessThan(canvas.height - 4);
+        }
+        // The first eye, a quarter of the face's width at least (it was 24
+        // of 128 before, under a fifth).
+        const eye = points.slice(0, 3).map(([x]) => x);
+        expect((Math.max(...eye) - Math.min(...eye)) / canvas.width).toBeGreaterThan(0.25);
+    });
+
     test('no faces are carved where nothing can draw them, and the pumpkins are left as they are', () => {
         // Under Node there is no canvas for the faces' texture.
         const group = H.carvePumpkins(C.yard.pumpkins, HW);

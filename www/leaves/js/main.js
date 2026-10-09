@@ -113,6 +113,8 @@ const state = {
     // lab's address, and the lab's every-find-showing.
     decor: false,
     halloween: false,
+    // The porch pumpkins carved and lit: whenever the decorations are up.
+    carved: false,
     showFinds: false,
     // The lab's ?clean=1: nothing over the yard but the yard (a social
     // card's capture).
@@ -314,6 +316,11 @@ async function init() {
     const season = seasonFor(window.location.search, new Date(), CONFIG.halloween, state.qa);
     state.decor = season.decor;
     state.halloween = season.week;
+    // CARVED ALL OCTOBER (Steve's QA, 2026-10-09: "could we just always
+    // have the pumpkins carved in the month of October?"): whenever the
+    // decorations are up, through the morning after, November 1st. Only
+    // the skeleton hand under the leaves still waits for Halloween week.
+    state.carved = season.decor;
     setMobile(state.isMobile);
     applySiteLinks();
 
@@ -321,7 +328,7 @@ async function init() {
     const proof = await getProofOfWork(CONFIG.proofOfWork);
     setProofHash(proof && proof.hash);
 
-    updateLoadingStatus(state.halloween ? 'Carving the pumpkins…' : 'Raking the yard…', 30);
+    updateLoadingStatus(state.carved ? 'Carving the pumpkins…' : 'Raking the yard…', 30);
     renderer = new THREE.WebGLRenderer({ canvas, antialias: !state.isMobile, powerPreference: 'high-performance' });
     renderer.toneMapping = THREE.NeutralToneMapping || THREE.NoToneMapping;
     renderer.toneMappingExposure = CONFIG.lights.exposure;
@@ -358,7 +365,7 @@ async function init() {
         WORLD = decoratedConfig(CONFIG);
         solids = solidBoxes(WORLD.yard);
     }
-    if (state.halloween) scene.add(carvePumpkins(CONFIG.yard.pumpkins, CONFIG.halloween));
+    if (state.carved) scene.add(carvePumpkins(CONFIG.yard.pumpkins, CONFIG.halloween));
 
     updateLoadingStatus(`Letting ${shortCount(state.count)} leaves fall…`, 55);
     sim = createSim(state.count, WORLD);

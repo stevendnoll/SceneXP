@@ -1436,6 +1436,8 @@ describe('delights and surprises (M6)', () => {
         let main = await boot();
         expect(main.getState().decor).toBe(true);
         expect(main.getState().halloween).toBe(false);
+        // The porch pumpkins are carved all October (Steve, 2026-10-09).
+        expect(main.getState().carved).toBe(true);
         // The trick-or-treaters come with the decorations (M6 QA).
         expect(main.getState().treaters).not.toBe(null);
         fire(dom.el('blocker'), 'click');
@@ -1463,6 +1465,7 @@ describe('delights and surprises (M6)', () => {
         jest.setSystemTime(new Date(2026, 10, 3, 15));
         main = await boot();
         expect(main.getState().decor).toBe(false);
+        expect(main.getState().carved).toBe(false);
     }, 20000);
 
     describe('a find', () => {

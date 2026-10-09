@@ -4,9 +4,11 @@
  * week itself, from October 24 to 31 by the visitor's own calendar. (The
  * decorations that are up all October are decorations.js.)
  *
- * Halloween week's two extras, kind spooky and never scary: the porch
- * pumpkins are carved into jack-o-lanterns lit from inside, and a plastic
- * skeleton hand is hidden under the leaves (one of the finds, finds.js).
+ * Halloween week's extra, kind spooky and never scary: a plastic skeleton
+ * hand hidden under the leaves (one of the finds, finds.js). The porch
+ * pumpkins were carved into jack-o-lanterns that week too, and since
+ * Steve's QA of 2026-10-09 are carved whenever the decorations are up
+ * (main.js `state.carved`), their faces bolder (faceTexture).
  *
  * The trick-or-treaters are here too, though they walk WHENEVER THE
  * DECORATIONS ARE UP, not only that week (Steve's M6 QA: "I didn't see the
@@ -286,14 +288,25 @@ function mesh(geometry, material, x, y, z, shadow = true) {
  *  nose, a grin with two teeth), or null where there is no document (under
  *  test). Carved and lit on the porch, printed on the neighbor's inflatable
  *  (decorations.js). */
+/** How much bigger the face's features are drawn than their 128 by 96
+ *  design, about its middle (2026-10-09). */
+export const FACE_SCALE = 1.2;
+
 export function faceTexture(color) {
     if (typeof document === 'undefined') return null;
     const canvas = document.createElement('canvas');
-    canvas.width = 128;
-    canvas.height = 96;
+    canvas.width = 256;
+    canvas.height = 192;
     const ctx = canvas.getContext && canvas.getContext('2d');
     if (!ctx) return null;
-    ctx.clearRect(0, 0, 128, 96);
+    ctx.clearRect(0, 0, 256, 192);
+    // BOLDER (Steve's QA, 2026-10-09: "only really visible if you zoom all
+    // the way in"): drawn in a 128 by 96 face, scaled up `FACE_SCALE` about
+    // its middle, onto a canvas twice as fine for clean edges. The eyes are
+    // half as wide again as they were, and the mouth, a crescent 4 pixels
+    // thick, is now 10.
+    const s = FACE_SCALE;
+    if (ctx.setTransform) ctx.setTransform(2 * s, 0, 0, 2 * s, 128 * (1 - s), 96 * (1 - s));
     ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
     const tri = (a, b, c) => {
         ctx.beginPath();
@@ -303,18 +316,18 @@ export function faceTexture(color) {
         ctx.closePath();
         ctx.fill();
     };
-    tri([26, 38], [50, 38], [38, 18]);
-    tri([78, 38], [102, 38], [90, 18]);
-    tri([58, 52], [70, 52], [64, 42]);
+    tri([22, 40], [52, 40], [37, 14]);
+    tri([76, 40], [106, 40], [91, 14]);
+    tri([56, 56], [72, 56], [64, 44]);
     ctx.beginPath();
-    ctx.moveTo(22, 60);
-    ctx.quadraticCurveTo(64, 96, 106, 60);
-    ctx.lineTo(92, 64);
-    ctx.lineTo(88, 72);
-    ctx.lineTo(80, 69);
-    ctx.quadraticCurveTo(64, 80, 48, 69);
-    ctx.lineTo(40, 72);
-    ctx.lineTo(36, 64);
+    ctx.moveTo(18, 62);
+    ctx.quadraticCurveTo(64, 100, 110, 62);
+    ctx.lineTo(96, 64);
+    ctx.lineTo(91, 74);
+    ctx.lineTo(81, 70);
+    ctx.quadraticCurveTo(64, 74, 47, 70);
+    ctx.lineTo(37, 74);
+    ctx.lineTo(32, 64);
     ctx.closePath();
     ctx.fill();
     const texture = new THREE.CanvasTexture(canvas);

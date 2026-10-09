@@ -626,11 +626,12 @@ export const LEAVES_CONFIG = Object.freeze({
         ]
     },
 
-    // HALLOWEEN (M6, halloween.js and decorations.js): the decorations and
-    // the trick-or-treaters from October 1st through November 1st, and in
-    // Halloween week (October 24 to 31, by the visitor's own calendar) the
-    // porch pumpkins carved and lit and a plastic skeleton hand under the
-    // leaves. Kind spooky, never scary. `?halloween=1` on a QA host.
+    // HALLOWEEN (M6, halloween.js and decorations.js): the decorations, the
+    // trick-or-treaters and the porch pumpkins carved and lit (all of it
+    // since Steve's QA, 2026-10-09) from October 1st through November 1st,
+    // and in Halloween week (October 24 to 31, by the visitor's own
+    // calendar) a plastic skeleton hand under the leaves. Kind spooky,
+    // never scary. `?halloween=1` on a QA host.
     halloween: {
         // October (months count from 0), the 24th to the 31st. The
         // decorations are up all month and through November 1st
