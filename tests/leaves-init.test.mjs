@@ -272,6 +272,30 @@ test('a finger on the lawn walks and aims without blowing, and a tap is somewher
     expect(main.getState().aim).toBe(null);
 });
 
+// STEVE'S QA, 2026-10-09: "could we have a pulsing/flashing effect on or
+// around the blow button until the user uses the blow button for the first
+// time?" Every visit, until its first press; nothing stored.
+test('the blow button beckons until its first press, and then never again this visit', async () => {
+    const main = await boot();
+    const btn = dom.el('blow-btn');
+    expect(btn.classList.contains('beckon')).toBe(true);
+    // Behind the welcome card a press does nothing, and it still beckons.
+    fire(btn, 'pointerdown', { pointerId: 3, pointerType: 'touch' });
+    expect(btn.classList.contains('beckon')).toBe(true);
+    fire(btn, 'pointerup', { pointerId: 3 });
+    fire(dom.el('blocker'), 'click');
+    fire(btn, 'pointerdown', { pointerId: 4, pointerType: 'touch' });
+    expect(main.getState().blowing).toBe(true);
+    expect(btn.classList.contains('beckon')).toBe(false);
+    fire(btn, 'pointerup', { pointerId: 4 });
+    frames(main, 0.5);
+    expect(btn.classList.contains('beckon')).toBe(false);
+    // The halo is its own layer, pulsing, and steady under reduced motion.
+    const css = await readFile(new URL('../www/leaves/css/experience.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.blow-btn\.beckon::after \{[^}]*animation: blow-beckon[^}]*\}/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.blow-btn\.beckon::after \{\s*animation: none;/);
+});
+
 test('the blow button answers a held Space or Enter, for anybody who tabs to it', async () => {
     const main = await boot();
     const btn = dom.el('blow-btn');

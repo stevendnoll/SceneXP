@@ -818,12 +818,16 @@ function stepPinch() {
  *  Space or Enter while it has focus. Its own pointer, so a second thumb can
  *  hold it while the first one steers. */
 function installBlowButton(btn, signal) {
+    // It beckons until its first press this visit (Steve's QA, 2026-10-09):
+    // a halo pulses round it (the CSS). Never remembered.
+    btn.classList.add('beckon');
     // Called before the hold is recorded, so a blow is counted once however
     // many ways the button is held at the same moment.
     const press = () => {
         if (welcomeShown() || endShown() || !canBlow(round)) return false;
         if (!blowHeld()) noteBlow();
         btn.classList.add('held');
+        btn.classList.remove('beckon');
         return true;
     };
     btn.addEventListener('pointerdown', (event) => {

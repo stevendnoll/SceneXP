@@ -279,6 +279,39 @@ html:not(.touch-ui) #instructions .for-touch {
     outline-offset: 3px;
 }
 
+/* THE FIRST BLOW (Steve's QA, 2026-10-09: the button is "kind of
+   transparent by default, which is fine for an experienced user"). Until
+   its first press on this visit (`beckon`, main.js), a warm halo pulses out
+   from it and its rim is lit. The halo is its own layer, so the button's
+   look and its `held` state are its own. Nothing is remembered: every visit
+   beckons until the first blow. */
+.blow-btn.beckon {
+    border-color: rgba(var(--ui-accent-rgb), 0.95);
+}
+
+.blow-btn.beckon::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border: 3px solid rgba(var(--ui-accent-rgb), 0.9);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: blow-beckon 1.6s ease-out infinite;
+}
+
+@keyframes blow-beckon {
+    0% {
+        transform: scale(0.92);
+        opacity: 0.9;
+    }
+
+    70%,
+    100% {
+        transform: scale(1.35);
+        opacity: 0;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .blow-btn {
         transition: none;
@@ -286,6 +319,13 @@ html:not(.touch-ui) #instructions .for-touch {
 
     .blow-btn.held {
         transform: none;
+    }
+
+    /* A steady ring instead of a pulse. */
+    .blow-btn.beckon::after {
+        animation: none;
+        transform: none;
+        opacity: 1;
     }
 }
 
