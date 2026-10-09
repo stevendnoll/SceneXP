@@ -706,9 +706,21 @@ export const LEAVES_CONFIG = Object.freeze({
             // candle under each, and the mailbox wrapped as a mummy. (A
             // cauldron of candy by the sidewalk was built and taken out at
             // Steve's QA, 2026-10-07.)
-            lanterns: { xs: [-1.35, 0.35], zs: [0.6, 2.9, 5.2], size: 0.2, height: 0.55, glow: 0xffb04a },
+            // MORE DETAIL (Steve's QA, 2026-10-09): carriage lanterns with
+            // window bars, a candle behind warm glass, and a finial, and
+            // ribbed heirloom pumpkins in the stacks. The top one was black
+            // (0x26262a), "so dark/black": now a blue-gray Jarrahdale, an
+            // heirloom that suits the house's white, black and stone.
+            lanterns: {
+                xs: [-1.35, 0.35], zs: [0.6, 2.9, 5.2], size: 0.2, height: 0.55, glow: 0xffb04a,
+                glass: 0xffb04a, glassOpacity: 0.55, wax: 0xf3ead6, candle: 0.11, flame: 0xffd27a
+            },
             towers: [{ x: -1.95, z: -3.35 }, { x: 0.95, z: -3.35 }],
-            towerPumpkins: [{ r: 0.28, color: 0xefe8d8 }, { r: 0.2, color: 0xe0701f }, { r: 0.13, color: 0x26262a }],
+            towerPumpkins: [
+                { r: 0.28, color: 0xefe8d8, ribs: 11, groove: 0.08 },
+                { r: 0.2, color: 0xe0701f, ribs: 11, groove: 0.1 },
+                { r: 0.13, color: 0x8fa3a6, ribs: 9, groove: 0.1, stem: 0x6b6338 }
+            ],
             hats: [{ x: 5.4, y: 3.25, z: -2.5 }, { x: 7.7, y: 3.55, z: -2.9 }, { x: 6.5, y: 2.95, z: -4.5 }],
             hatString: 1.3,
             mummy: 0xece6d6,

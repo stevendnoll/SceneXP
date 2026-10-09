@@ -694,6 +694,35 @@ describe('the drawing, on the real three.js', () => {
         }
     });
 
+    // Steve's QA, 2026-10-09: "add more detail to the stacked pumpkins...
+    // could the top pumpkins not look so dark/black? ... slightly more
+    // detail to the lanterns". The ribbed pumpkins are dimpled, which first
+    // left each one floating 1 to 2 cm over the one below.
+    test('the stacked pumpkins rest one on another, the top one not black, and each lantern is four draws', () => {
+        const { group } = Dc.buildDecorations(C);
+        group.updateMatrixWorld(true);
+        const stacks = group.children.filter((c) => c.name === 'pumpkins');
+        expect(stacks).toHaveLength(2);
+        for (const stack of stacks) {
+            const bodies = stack.children.map((pk) => new THREE.Box3().setFromObject(pk.children[0], true));
+            expect(bodies[0].min.y).toBeCloseTo(0, 3);
+            for (let k = 1; k < bodies.length; k++) {
+                // Down into the one below, never above it, and not sunk deep.
+                expect(bodies[k].min.y).toBeLessThan(bodies[k - 1].max.y);
+                expect(bodies[k - 1].max.y - bodies[k].min.y).toBeLessThan(0.06);
+            }
+            // The top one carries its stem, above its own rim.
+            const top = stack.children[stack.children.length - 1];
+            expect(new THREE.Box3().setFromObject(top.children[1], true).max.y).toBeGreaterThan(bodies[bodies.length - 1].max.y + 0.02);
+        }
+        const topColor = new THREE.Color(HW.decor.towerPumpkins[HW.decor.towerPumpkins.length - 1].color);
+        // Lightness as the eye has it (sRGB): the old black was 0.16.
+        expect(topColor.getHSL({}, THREE.SRGBColorSpace).l).toBeGreaterThan(0.4);
+        const lamps = group.children.filter((c) => c.name === 'lantern');
+        expect(lamps).toHaveLength(HW.decor.lanterns.xs.length * HW.decor.lanterns.zs.length);
+        for (const lamp of lamps) expect(lamp.children.filter((c) => c.isMesh)).toHaveLength(4);
+    });
+
     // Steve's QA, 2026-10-08: "in front of the windows on the right (in front
     // of or near the window without the clown) we add a couple of tombstones
     // and grave plots".

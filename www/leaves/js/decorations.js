@@ -931,21 +931,135 @@ function clownTexture(P) {
     return texture;
 }
 
-/** A black lantern `size` square and `height` tall: a base, four corner
- *  posts, a warm light inside its glass, a pointed cap and a ring. */
+/**
+ * A ribbed pumpkin for the stacks by the porch step (Steve's QA,
+ * 2026-10-09: "add more detail to the stacked pumpkins"), the size and
+ * place of house.js's pumpkin (`p`: x, y, z, r, color), so it sits on the
+ * same box. `ribs` lobes, grooves `groove` deep and shaded darker, a dimple
+ * where the stem grows, and, on the one on top, a curved, ridged stem.
+ * An odd number of ribs puts the sphere's seam in a groove, out of sight.
+ */
+function heirloomPumpkin(p, spec, stem) {
+    const r = p.r;
+    const ribs = spec.ribs || 11;
+    const depth = spec.groove ?? 0.09;
+    const g = new THREE.SphereGeometry(r, 44, 18);
+    const pos = g.attributes.position;
+    const colors = [];
+    for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = pos.getZ(i);
+        const lobe = Math.sqrt(Math.abs(Math.cos((ribs * Math.atan2(z, x)) / 2)));
+        const k = 1 - depth * (1 - lobe);
+        // Squat, as house.js's (0.72 as tall as wide), dimpled top and
+        // bottom toward the stem.
+        const rho = Math.hypot(x, z) / r;
+        const dimple = 1 - (y > 0 ? 0.3 : 0.12) * Math.exp(-((rho / 0.32) ** 2));
+        pos.setXYZ(i, x * k, (y * dimple + r) * 0.72, z * k);
+        const shade = 1 - 0.26 * (1 - lobe);
+        colors.push(shade, shade, shade);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    // Resting on its lowest point, and as tall as house.js's (1.44 r), so
+    // a stack sits as towerStack and the sim's box say: each pumpkin's
+    // dimpled bottom down in the dimple of the one below.
+    let low = Infinity;
+    let high = -Infinity;
+    for (let i = 0; i < pos.count; i++) {
+        low = Math.min(low, pos.getY(i));
+        high = Math.max(high, pos.getY(i));
+    }
+    const stretch = (1.44 * r) / (high - low);
+    g.translate(0, -low, 0);
+    g.scale(1, stretch, 1);
+    g.computeVertexNormals();
+    const group = new THREE.Group();
+    group.add(mesh(g, lambert(p.color, { vertexColors: true }), 0, 0, 0, true));
+    if (stem) {
+        // Tapered, five-sided, leaning and curling over at the tip.
+        const tall = r * 0.5;
+        const sg = new THREE.CylinderGeometry(r * 0.07, r * 0.12, tall, 5, 4);
+        const sp = sg.attributes.position;
+        for (let i = 0; i < sp.count; i++) {
+            const u = (sp.getY(i) + tall / 2) / tall;
+            sp.setX(i, sp.getX(i) + r * 0.16 * u * u);
+        }
+        sg.computeVertexNormals();
+        // The dimple's floor, where the stem grows: the pole, lowered 30%.
+        const top = ((r * 0.7 + r) * 0.72 - low) * stretch;
+        group.add(mesh(sg, lambert(spec.stem || 0x6b6338, { flatShading: true }), 0, top + tall / 2 - r * 0.04, 0, true));
+    }
+    group.position.set(p.x, p.y, p.z);
+    group.rotation.y = (p.x * 7.1 + p.y * 3.3) % (Math.PI * 2);
+    return group;
+}
+
+/** Pieces `[geometry, x, y, z, turn]` as ONE geometry: each piece turned
+ *  `turn` about y and moved to (x, y, z). Positions and normals only. A
+ *  lantern of twenty pieces is then one draw, not twenty. */
+function merged(pieces) {
+    const position = [];
+    const normal = [];
+    for (const [geometry, x, y, z, turn = 0] of pieces) {
+        const g = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+        if (turn) g.rotateY(turn);
+        g.translate(x, y, z);
+        position.push(...g.attributes.position.array);
+        normal.push(...g.attributes.normal.array);
+        g.dispose();
+        geometry.dispose();
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+    out.setAttribute('normal', new THREE.Float32BufferAttribute(normal, 3));
+    return out;
+}
+
+/**
+ * A black carriage lantern `size` square and `height` tall (Steve's QA,
+ * 2026-10-09: "slightly more detail"): a stepped base, corner posts, a
+ * window bar across and down each glass side, a candle burning behind warm
+ * glass, a top plate, a pyramid cap with a ball finial, and a ring to carry
+ * it by. Four draws, one for each material: the iron (merged), the glass,
+ * the candle and its flame.
+ */
 function lantern(Ln, black) {
     const group = new THREE.Group();
     const s = Ln.size;
     const h = Ln.height;
-    group.add(mesh(new THREE.BoxGeometry(s, 0.04, s), black, 0, 0.02, 0, true));
-    for (const x of [-1, 1]) for (const z of [-1, 1]) group.add(mesh(new THREE.BoxGeometry(0.02, h * 0.62, 0.02), black, x * (s / 2 - 0.01), 0.04 + h * 0.31, z * (s / 2 - 0.01), true));
-    group.add(mesh(new THREE.BoxGeometry(s * 0.86, h * 0.6, s * 0.86), new THREE.MeshBasicMaterial({ color: Ln.glow }), 0, 0.04 + h * 0.31, 0));
-    group.add(mesh(new THREE.BoxGeometry(s, 0.03, s), black, 0, 0.04 + h * 0.62, 0, true));
-    const cap = mesh(new THREE.ConeGeometry(s * 0.72, h * 0.22, 4), black, 0, 0.04 + h * 0.62 + h * 0.11, 0, true);
-    cap.rotation.y = Math.PI / 4;
-    group.add(cap);
-    const ring = mesh(new THREE.TorusGeometry(0.03, 0.006, 4, 10), black, 0, h - 0.03, 0);
-    group.add(ring);
+    const y0 = 0.06;
+    const y1 = y0 + h * 0.55;
+    const mid = (y0 + y1) / 2;
+    const bar = 0.008;
+    const iron = [
+        [new THREE.BoxGeometry(s * 1.12, 0.03, s * 1.12), 0, 0.015, 0],
+        [new THREE.BoxGeometry(s, 0.03, s), 0, 0.045, 0],
+        [new THREE.BoxGeometry(s * 1.06, 0.025, s * 1.06), 0, y1 + 0.0125, 0],
+        [new THREE.ConeGeometry(s * 0.74, h * 0.2, 4), 0, y1 + 0.025 + h * 0.1, 0, Math.PI / 4],
+        [new THREE.SphereGeometry(0.016, 8, 6), 0, y1 + 0.025 + h * 0.2 + 0.01, 0],
+        [new THREE.TorusGeometry(0.024, 0.005, 4, 12), 0, h, 0]
+    ];
+    for (const x of [-1, 1]) {
+        for (const z of [-1, 1]) iron.push([new THREE.BoxGeometry(0.02, y1 - y0, 0.02), x * (s / 2 - 0.01), mid, z * (s / 2 - 0.01)]);
+    }
+    // The window bars: across and down the middle of each side.
+    for (let k = 0; k < 4; k++) {
+        const turn = (k * Math.PI) / 2;
+        const out = s / 2 - 0.004;
+        const ox = Math.sin(turn) * out;
+        const oz = Math.cos(turn) * out;
+        iron.push([new THREE.BoxGeometry(s - 0.02, bar, bar), ox, mid, oz, turn]);
+        iron.push([new THREE.BoxGeometry(bar, y1 - y0, bar), ox, mid, oz, turn]);
+    }
+    group.add(mesh(merged(iron), black, 0, 0, 0, true));
+    // Warm glass, see-through, so the candle shows.
+    const glass = new THREE.MeshBasicMaterial({ color: Ln.glass, transparent: true, opacity: Ln.glassOpacity, depthWrite: false });
+    group.add(mesh(new THREE.BoxGeometry(s - 0.018, y1 - y0, s - 0.018), glass, 0, mid, 0));
+    group.add(mesh(new THREE.CylinderGeometry(0.026, 0.028, Ln.candle, 10), lambert(Ln.wax), 0, y0 + Ln.candle / 2, 0));
+    const flame = mesh(new THREE.SphereGeometry(0.016, 8, 6), new THREE.MeshBasicMaterial({ color: Ln.flame }), 0, y0 + Ln.candle + 0.02, 0);
+    flame.scale.set(1, 1.7, 1);
+    group.add(flame);
     return group;
 }
 
@@ -1089,7 +1203,8 @@ export function buildDecorations(config) {
     for (const t of D.towers || []) {
         const stack = new THREE.Group();
         stack.name = 'pumpkins';
-        towerStack(t, D).forEach((p) => stack.add(pumpkin(p)));
+        const pile = towerStack(t, D);
+        pile.forEach((p, k) => stack.add(heirloomPumpkin(p, D.towerPumpkins[k], k === pile.length - 1)));
         group.add(stack);
     }
     // Our graves before the window right of the porch (2026-10-08): slate
