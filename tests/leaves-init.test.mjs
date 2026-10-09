@@ -158,9 +158,9 @@ test('a mouse pressed on the lawn runs the blower, and only once the welcome car
 // reach. A finger now only steers, and the blow button blows.
 // STEVE'S QA, 2026-10-08: "add a left joystick for the player movement
 // instead of tapping/swiping around the screen", where the dual-joystick
-// scenes put theirs, the blow button in the right one's place, and "let's
-// remove the tapping and dragging to walk option".
-test('on a touch screen the joystick walks and turns, a finger on the lawn does not, and the blow button blows', async () => {
+// scenes put theirs, the blow button in the right one's place. (A finger on
+// the lawn walks again beside it since 2026-10-09: the next test.)
+test('on a touch screen the joystick walks and turns, and the blow button blows', async () => {
     const main = await boot();
     const canvas = dom.el('game-canvas');
     const btn = dom.el('blow-btn');
@@ -170,16 +170,7 @@ test('on a touch screen the joystick walks and turns, a finger on the lawn does 
     expect(btn.classList.contains('visible')).toBe(true);
     expect(dom.el('touch-controls').classList.contains('visible')).toBe(true);
     const start = main.getState().operator;
-
-    // A finger on the lawn walks nowhere and aims at nothing.
-    fire(canvas, 'pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 300 });
-    fire(canvas, 'pointermove', { pointerId: 1, pointerType: 'touch', clientX: 120, clientY: 250 });
-    expect(main.__test__.pointer.id).toBe(null);
-    expect(main.getState().aim).toBe(null);
-    frames(main, 0.5);
-    expect(main.getState().operator.x).toBeCloseTo(start.x, 6);
-    expect(main.getState().operator.z).toBeCloseTo(start.z, 6);
-    fire(canvas, 'pointerup', { pointerId: 1 });
+    expect(canvas).toBeTruthy();
 
     // The joystick pushed all the way up walks them toward the house. (The
     // stub lays every element out at 800 by 600, so the ring's middle is
@@ -234,6 +225,51 @@ test('on a touch screen the joystick walks and turns, a finger on the lawn does 
     expect(dom.el('touch-controls').classList.contains('visible')).toBe(false);
     expect(main.getState().blowing).toBe(false);
     expect(main.getState().stick).toBe(false);
+});
+
+// STEVE'S QA, 2026-10-09: "On touchscreen devices, it seems like we should
+// support both the left joystick AND the touch/drag/swipe to move option...
+// some users will show up and start touching the screen". A finger on the
+// lawn walks and aims (never blows: the blow button blows, 2026-10-06), a
+// held one steers as it drags, and a lifted one leaves its spot as where
+// the person goes (tap to go). The joystick, touched last, takes over.
+test('a finger on the lawn walks and aims without blowing, and a tap is somewhere to go', async () => {
+    const main = await boot();
+    const canvas = dom.el('game-canvas');
+    const zone = dom.el('joystick-zone');
+    fire(dom.el('blocker'), 'click');
+    const start = main.getState().operator;
+    const spot = { x: -6, z: 2 };
+    const gap = (o) => Math.hypot(o.x - spot.x, o.z - spot.z);
+    fire(canvas, 'pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 300 });
+    expect(main.__test__.pointer.id).toBe(1);
+    expect(main.getState().steer).toBe('point');
+    // The stub's camera meets no ground (tests/leaves-view does that on the
+    // real three.js), so the spot under the finger is set here.
+    main.__test__.pointer.aim = { ...spot };
+    frames(main, 0.5);
+    expect(main.getState().blowing).toBe(false);
+    expect(main.getState().blows).toBe(0);
+    expect(gap(main.getState().operator)).toBeLessThan(gap(start) - 0.5);
+    // Lifted: still on the way, and they arrive, stopping short, aimed.
+    fire(canvas, 'pointerup', { pointerId: 1 });
+    expect(main.getState().aim).toEqual(spot);
+    expect(main.__test__.pointer.client).toBe(null);
+    frames(main, 5);
+    const there = main.getState().operator;
+    expect(gap(there)).toBeGreaterThan(C0.blower.standoff - 0.1);
+    expect(gap(there)).toBeLessThan(C0.blower.standoff + 0.3);
+    // The joystick, touched last, steers.
+    fire(zone, 'pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 400, clientY: 300 - C0.touch.stick.radius, cancelable: true });
+    expect(main.getState().steer).toBe('stick');
+    fire(zone, 'pointerup', { pointerId: 2 });
+    // A finger again, then the welcome card: the tap is forgotten.
+    fire(canvas, 'pointerdown', { pointerId: 3, pointerType: 'touch', clientX: 200, clientY: 300 });
+    main.__test__.pointer.aim = { ...spot };
+    fire(canvas, 'pointerup', { pointerId: 3 });
+    expect(main.getState().aim).toEqual(spot);
+    fire(dom.documentStub, 'keydown', { code: 'Escape' });
+    expect(main.getState().aim).toBe(null);
 });
 
 test('the blow button answers a held Space or Enter, for anybody who tabs to it', async () => {
@@ -329,10 +365,6 @@ test('a mouse leaving the lawn stops steering from the screen, but the person st
     fire(canvas, 'pointerleave', { pointerId: 1, pointerType: 'mouse' });
     expect(main.getState().aim).toEqual(aim);
     expect(main.__test__.pointer.client).toBe(null);
-    // A finger on the lawn changes nothing (the joystick walks, 2026-10-08).
-    fire(canvas, 'pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 600 });
-    fire(canvas, 'pointerup', { pointerId: 2 });
-    expect(main.getState().aim).toEqual(aim);
 });
 
 // THE WELCOME CARD, TRIMMED (Steve's QA, 2026-10-09: "really wordy" on a
@@ -522,8 +554,9 @@ describe('zoom', () => {
         const main = await boot();
         const canvas = dom.el('game-canvas');
         fire(dom.el('blocker'), 'click');
+        // One finger steers (since 2026-10-09), until a second makes a pinch.
         fire(canvas, 'pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 150, clientY: 500 });
-        expect(main.__test__.pointer.id).toBe(null);
+        expect(main.__test__.pointer.id).toBe(1);
         expect(main.getState().pinching).toBe(false);
         fire(canvas, 'pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 250, clientY: 500 });
         expect(main.__test__.pointer.id).toBe(null);
@@ -542,9 +575,9 @@ describe('zoom', () => {
         expect(main.__test__.pointer.id).toBe(null);
         expect(main.__test__.pointer.client).toBe(null);
         fire(canvas, 'pointerup', { pointerId: 1 });
-        // A fresh finger is a fresh pinch's first, no more.
+        // A fresh finger steers again, and never blows.
         fire(canvas, 'pointerdown', { pointerId: 3, pointerType: 'touch', clientX: 150, clientY: 500 });
-        expect(main.__test__.pointer.id).toBe(null);
+        expect(main.__test__.pointer.id).toBe(3);
         expect(main.getState().blowing).toBe(false);
     });
 

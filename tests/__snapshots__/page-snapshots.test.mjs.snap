@@ -3972,7 +3972,7 @@ html [data-ui-theme="ember" lang="en"]
           span.for-mouse
             "Point to walk &middot; Hold the mouse button to blow &middot; Scroll to zoom"
           span.for-touch
-            "The joystick walks &middot; Hold the blow button to blow &middot; Pinch to zoom"
+            "Touch the lawn or use the joystick to walk &middot; Hold the blow button to blow &middot; Pinch to zoom"
         details#all-controls.all-controls
           summary#all-controls-toggle
             "All the controls"
@@ -3995,7 +3995,7 @@ html [data-ui-theme="ember" lang="en"]
           div.controls-hint.for-touch
             span
               "WALK"
-            "The joystick in the lower left walks you, and a light push turns you in place to aim."
+            "Touch the lawn and you will walk over and aim the leaf blower there, or drag to steer. The joystick in the lower left walks you too, and a light push turns you in place to aim."
             span
               "BLOW"
             "Hold the blow button in the lower right."

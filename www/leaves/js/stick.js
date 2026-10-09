@@ -18,8 +18,10 @@
  *     the blower points the way they face;
  *   - a hair's push, inside `dead`, does nothing.
  *
- * A finger on the lawn no longer walks (Steve: "let's remove the tapping and
- * dragging to walk option"). Two of them still pinch to zoom.
+ * A finger on the lawn walks too (main.js): it was taken out when this came
+ * in (2026-10-08) and put back beside it the next day (Steve: "some users
+ * will show up and start touching the screen"). Whichever was touched last
+ * steers. Two fingers on the lawn pinch to zoom.
  *
  * PURE: stickVector and stickAim are plain numbers. createStick does the
  * listening and moves the thumb.

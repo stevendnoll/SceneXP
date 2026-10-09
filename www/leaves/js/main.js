@@ -225,11 +225,11 @@ let welcomeReturn = null;
 // while a button is held. A finger on the lawn only steers (it walks the
 // person over and aims), and the blow button runs the blower, since one
 // finger doing both made the leaves impossible to place (Steve's phone QA,
-// 2026-10-06).
-// `client` is where on the screen a mouse last pointed: the aim is worked out
-// from it again every frame, so it stays on whatever is under the cursor as
-// the view slides (M6 QA).
-const pointer = { id: null, down: false, mouse: false, blows: false, aim: null, seen: false, client: null };
+// 2026-10-06). `touch`: the steering pointer is a finger.
+// `client` is where on the screen a mouse last pointed, or a finger held
+// down: the aim is worked out from it again every frame, so it stays on
+// whatever is under it as the view slides (M6 QA).
+const pointer = { id: null, down: false, mouse: false, touch: false, blows: false, aim: null, seen: false, client: null };
 // The blow button, held by a finger (by pointer id) or by Space or Enter
 // while it has focus.
 const blowHold = { id: null, key: false };
@@ -659,27 +659,34 @@ function setupEventListeners() {
     canvas.addEventListener('pointerdown', (event) => {
         if (skipFinale() || endCheer()) return;
         if (welcomeShown()) return;
-        // A FINGER ON THE LAWN NO LONGER WALKS (Steve's QA, 2026-10-08: the
-        // joystick in the lower left walks, stick.js). It brings out the
-        // touch controls, and two of them pinch to zoom.
-        if (event.pointerType === 'touch') {
+        // A FINGER ON THE LAWN WALKS AGAIN, beside the joystick (Steve's QA,
+        // 2026-10-09: "some users will show up and start touching the
+        // screen, so I think we should respond to that interaction"; it was
+        // taken out for the joystick on 10-08). It walks and aims, never
+        // blows (the blow button blows), and whichever of it and the
+        // joystick was touched last steers. Two fingers pinch to zoom.
+        const finger = event.pointerType === 'touch';
+        if (finger) {
             showTouchControls();
             touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
             if (canvas.setPointerCapture) {
                 try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* not capturable */ }
             }
-            if (touches.size >= 2) startPinch();
-            return;
+            if (touches.size >= 2) {
+                startPinch();
+                return;
+            }
         }
         if (pointer.id !== null && pointer.id !== event.pointerId) return;
         pointer.id = event.pointerId;
         pointer.down = true;
         pointer.mouse = event.pointerType === 'mouse';
-        // A mouse or a pen presses to blow.
-        pointer.blows = true;
+        pointer.touch = finger;
+        // A mouse or a pen presses to blow. A finger only walks and aims.
+        pointer.blows = !finger;
         steer = 'point';
         aimAt(event.clientX, event.clientY);
-        if (canvas.setPointerCapture) {
+        if (!finger && canvas.setPointerCapture) {
             try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* not capturable */ }
         }
         if (pointer.blows) noteBlow();
@@ -693,8 +700,7 @@ function setupEventListeners() {
                 return;
             }
         }
-        // A mouse steers by hovering, a pen while it is down. A finger never
-        // (the joystick walks).
+        // A mouse steers by hovering, a pen or a finger while it is down.
         const hovering = event.pointerType === 'mouse' && pointer.id === null;
         if (event.pointerId !== pointer.id && !hovering) return;
         pointer.mouse = event.pointerType === 'mouse';
@@ -708,8 +714,12 @@ function setupEventListeners() {
         pointer.id = null;
         pointer.down = false;
         pointer.blows = false;
-        // A finger lifted leaves nothing to steer by. A mouse still hovers.
-        if (!pointer.mouse) {
+        // TAP TO GO (2026-10-09): a finger lifted leaves its spot as where
+        // the person is going, and they walk on there and stop, aimed at it.
+        // A pen lifted leaves nothing to steer by. A mouse still hovers.
+        if (pointer.touch) {
+            pointer.client = null;
+        } else if (!pointer.mouse) {
             pointer.aim = null;
             pointer.client = null;
         }
@@ -791,6 +801,7 @@ function fingerSpread() {
 function startPinch() {
     pointer.id = null;
     pointer.down = false;
+    pointer.touch = false;
     pointer.blows = false;
     pointer.aim = null;
     pointer.client = null;
@@ -970,8 +981,19 @@ function isButton(target) {
     return tag === 'button' || tag === 'a' || tag === 'summary';
 }
 
+/** A tapped spot is forgotten: the person goes nowhere until touched again
+ *  (a new round, the welcome card, keep blowing after the dive). A mouse's
+ *  aim is kept, since it is under the cursor still. */
+function forgetTap() {
+    if (!pointer.touch) return;
+    pointer.touch = false;
+    pointer.aim = null;
+    pointer.client = null;
+}
+
 function releaseInput() {
     Object.keys(keys).forEach((k) => { keys[k] = false; });
+    forgetTap();
     pointer.id = null;
     pointer.down = false;
     pointer.blows = false;
@@ -1657,6 +1679,7 @@ function playAgain(from) {
 function keepBlowing() {
     hideEnd();
     standUp();
+    forgetTap();
     freePlay(round);
     resetCheer(cheer);
     track('free-blow', { outcome: 'end-card' });
@@ -1671,6 +1694,7 @@ function resetYard() {
     crowns = createCrowns(sim, WORLD);
     leaves.update();
     Object.assign(operator, createOperator(B));
+    forgetTap();
     resetNeighbor(neighbor, N);
     layFinds();
     hideToast();
@@ -1914,8 +1938,8 @@ function animate() {
     const free = inYard && canBlow(round) && !cheering;
     // A mouse held still still steers by what is under it, as the view
     // slides: at the screen's edge the person keeps going to the hedge (M6
-    // QA). A finger only re-aims when it moves.
-    if (free && steer === 'point' && pointer.mouse && pointer.client) aimAt(pointer.client.x, pointer.client.y);
+    // QA). So does a finger held down; a lifted one has gone (tap to go).
+    if (free && steer === 'point' && (pointer.mouse || pointer.down) && pointer.client) aimAt(pointer.client.x, pointer.client.y);
     const aim = free ? aimFor(steer, pointer, keys, stick ? stick.vector() : null) : null;
     // In close the person stops nearer the pointer (Steve's QA, 2026-10-09).
     if (aim && aim.mode === 'point') aim.standoff = standoffFor(B, viewDistance());

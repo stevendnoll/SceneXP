@@ -145,7 +145,8 @@ describe('where the controls sit', () => {
         expect(px(ring, 'bottom')).toBe(px(base, 'bottom'));
     });
 
-    test('the welcome card tells a touch screen about the joystick and the button, not a finger on the lawn', () => {
+    test('the welcome card tells a touch screen about the lawn, the joystick and the button', () => {
+        expect(html).toMatch(/Touch the lawn and you will walk over/);
         expect(html).toMatch(/joystick in the lower left walks you/);
         expect(html).toMatch(/blow button in the lower right/);
         expect(html).not.toMatch(/drag a finger across it/);
