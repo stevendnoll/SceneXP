@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en" data-ui-theme="ember">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         No media-src: the only sound is the blower's whoosh, made with Web Audio
+         from noise (js/sound.js), which loads no media at all. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="description" content="A front yard buried in autumn leaves, and a leaf blower waiting for you. Every leaf tumbles, skids and piles up on its own, live in your browser.">
+    <meta name="theme-color" content="#5d7f3a">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they stay literal absolute URLs naming where this page is served
+         (www.scenexp.com/leaves). When serving from a new domain, update
+         the canonical, og:url, og:image, twitter:image, and the JSON-LD ids. -->
+    <link rel="canonical" href="https://www.scenexp.com/leaves/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Leaf Blower">
+    <meta property="og:description" content="A front yard buried in autumn leaves, and a leaf blower waiting for you.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/leaves/">
+    <meta property="og:locale" content="en_US">
+    <!-- THE SOCIAL CARD. JPEG, NOT WEBP (LinkedIn previews no WebP), and
+         exactly one og:image (Apple renders every one it finds). Steve's
+         capture of the yard mid-job (2026-10-09, `?clean=1&halloween=0`, so
+         it suits the whole year), converted from the display's profile to
+         sRGB and stripped; og-leaves.webp beside it (cwebp -sharp_yuv, for
+         the small bright leaves) is the directory card's. og:image:alt
+         describes THIS picture, so it is rewritten with the card, and the
+         ?v= moves with it. -->
+    <meta property="og:image" content="https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Leaf Blower">
+    <meta name="twitter:description" content="A front yard buried in autumn leaves, and a leaf blower waiting for you.">
+    <meta name="twitter:image" content="https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1">
+    <meta name="twitter:image:alt" content="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "VideoGame",
+      "@id": "https://www.scenexp.com/leaves/#game",
+      "url": "https://www.scenexp.com/leaves/",
+      "name": "Leaf Blower",
+      "image": "https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1",
+      "description": "A browser-based 3D leaf blower game. A front yard is buried in thousands of autumn leaves, each one simulated as it tumbles, skids and piles up. Blow them onto the tarp before the clock runs out, keep them out of the neighbor's yard, then dive into the pile. There is a no-clock mode for just playing with the leaves.",
+      "genre": ["Casual", "Simulation"],
+      "gamePlatform": "Web browser",
+      "applicationCategory": "Game",
+      "operatingSystem": "Any",
+      "datePublished": "2026-10-09",
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
+      "isAccessibleForFree": true,
+      "playMode": "SinglePlayer",
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Continuum Commerce LLC"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Leaf Blower",
+          "item": "https://www.scenexp.com/leaves/"
+        }
+      ]
+    }
+    </script>
+
+    <title>Leaf Blower | SceneXP</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
+    <link rel="preload" href="css/experience.min.css?v=13" as="style">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="js/sim.min.js">
+    <link rel="modulepreload" href="js/trees.min.js">
+    <link rel="modulepreload" href="js/finale.min.js">
+    <link rel="modulepreload" href="js/round.min.js">
+    <link rel="modulepreload" href="js/finds.min.js">
+    <link rel="modulepreload" href="js/halloween.min.js">
+    <link rel="modulepreload" href="js/decorations.min.js">
+    <link rel="modulepreload" href="js/backyard.min.js">
+    <link rel="modulepreload" href="js/gap.min.js">
+    <link rel="modulepreload" href="js/backdrop.min.js">
+    <link rel="modulepreload" href="js/trophy.min.js">
+    <link rel="modulepreload" href="js/best.min.js">
+    <link rel="modulepreload" href="js/rooftops.min.js">
+    <link rel="modulepreload" href="js/celebrate.min.js">
+    <link rel="modulepreload" href="js/confetti.min.js">
+    <link rel="modulepreload" href="js/sound.min.js">
+    <link rel="modulepreload" href="js/neighbor.min.js">
+    <link rel="modulepreload" href="js/score.min.js">
+    <link rel="modulepreload" href="js/leafmesh.min.js">
+    <link rel="modulepreload" href="js/yard.min.js">
+    <link rel="modulepreload" href="js/house.min.js">
+    <link rel="modulepreload" href="js/blower.min.js">
+    <link rel="modulepreload" href="js/view.min.js">
+    <link rel="modulepreload" href="js/cast.min.js">
+    <link rel="modulepreload" href="js/lab.min.js">
+    <link rel="modulepreload" href="js/stick.min.js">
+    <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/promo-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/treespecies-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/fractaltree-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
+    <link rel="modulepreload" href="js/hedge.min.js">
+    <link rel="modulepreload" href="js/surfaces.min.js">
+    <!-- END generated modulepreload -->
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
+    <link rel="stylesheet" href="css/experience.min.css?v=13">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- The live page's heading, for anybody navigating by heading. -->
+    <h1 class="sr-only">Leaf Blower</h1>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers). -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Leaf Blower</h1>
+            <p>This is a front yard buried in autumn leaves, and it needs
+                JavaScript to run. Thousands of red, orange and gold leaves
+                cover the lawn in front of a white house, and a leaf blower is
+                waiting for you. Point it anywhere and every leaf in its path
+                tumbles, skids and piles up on its own, drawn live in your
+                browser.</p>
+            <p>SceneXP is a home for 3D experiences that run right in your
+                browser.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">LEAF BLOWER</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <!-- The welcome overlay. Steps aside on a click, a tap, Enter, Space, or
+         Escape, and comes back with Escape or the help button. tabindex="-1"
+         so the help button can hand it focus as the button hides. -->
+    <div id="blocker" tabindex="-1">
+        <div id="instructions">
+            <p class="title">WELCOME</p>
+            <p class="subtitle">A front yard buried in autumn leaves, and a leaf blower waiting for you</p>
+            <!-- THE ONE THING TO DO (Steve's QA, 2026-10-09: "Click to step in
+                 almost gets lost in the sea of text"). A real button, the only
+                 filled thing on the card. A click anywhere still steps in, and
+                 this is the click a keyboard can find. "Tap" on a touch screen
+                 (main.js). -->
+            <button id="step-in" class="click-prompt step-in" type="button">Click to step in</button>
+            <!-- The round, in one line. The clock waits for the first blow
+                 (js/round.js), which is worth saying, since it means there is
+                 no hurry to read the rest of this card. -->
+            <p class="tour-note">Clear the lawn in five minutes. The clock starts with your first blow.</p>
+            <!-- THE CONTROLS FOR THIS DEVICE ONLY: a mouse and keys on a
+                 computer, the joystick and the blow button on a touch screen
+                 (the `touch-ui` class, main.js). The essentials in one line,
+                 the rest folded away. Below 768px wide neither shows, as the
+                 shared sheet has always hidden the controls on a phone. -->
+            <p class="controls-brief">
+                <span class="for-mouse">Point to walk &middot; Hold the mouse button to blow &middot; Scroll to zoom</span>
+                <span class="for-touch">Touch the lawn or use the joystick to walk &middot; Hold the blow button to blow &middot; Pinch to zoom</span>
+            </p>
+            <!-- A <details>, as Earth Defense's settings are: the browser gives
+                 it its keys, and its open or closed state to a screen reader.
+                 Its summary is shielded from the card's click-to-step-in
+                 (main.js), and it stays as it was left for the visit. -->
+            <details id="all-controls" class="all-controls">
+                <summary id="all-controls-toggle">All the controls</summary>
+                <div class="controls-hint for-mouse">
+                    <span>WALK</span> Point at the lawn with the mouse and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too.
+                    <span>BLOW</span> Hold the mouse button or Space.
+                    <span>ZOOM</span> Scroll, or pinch on a trackpad, to come in closer or stand back. The + and - keys zoom too, and 0 brings back the usual view.
+                    <span>SOUND</span> The leaf blower makes a whoosh. M or the speaker in the corner turns it on and off.
+                    <span>HELP</span> The question mark in the corner, or Escape, brings you back here.
+                </div>
+                <div class="controls-hint for-touch">
+                    <span>WALK</span> Touch the lawn and you will walk over and aim the leaf blower there, or drag to steer. The joystick in the lower left walks you too, and a light push turns you in place to aim.
+                    <span>BLOW</span> Hold the blow button in the lower right.
+                    <span>ZOOM</span> Pinch with two fingers to come in closer or stand back.
+                    <span>SOUND</span> The leaf blower makes a whoosh. It starts off on a phone or tablet, so tap the speaker in the corner to hear it.
+                    <span>HELP</span> The question mark in the corner brings you back here.
+                </div>
+            </details>
+            <!-- THE QUIET FOOTER: who is on leaf duty (M4), the best time
+                 (js/best.js, hidden until there is one), the yard with no
+                 clock, and the directory. Smaller than everything above it,
+                 so the button stays the thing to press. Each control is
+                 shielded from the overlay's click-to-step-in by main.js. -->
+            <div class="welcome-more">
+                <p class="cast-line"><span id="cast-name">Playing in a rust red shirt and navy pants.</span>
+                    <button id="cast-btn" class="welcome-free cast-btn" type="button">Change your character</button></p>
+                <p id="best-line" class="cast-line best-line" hidden><span id="best-text"></span>
+                    <button id="best-forget" class="welcome-free cast-btn" type="button">Forget my best time</button></p>
+                <p class="welcome-ways">
+                    <button id="free-btn" class="welcome-free" type="button">Play with no clock</button>
+                    <span class="welcome-dot" aria-hidden="true">&middot;</span>
+                    <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="game-canvas" role="img" aria-label="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower"></canvas>
+
+    <!-- Help: brings the welcome screen back, exactly as Escape does, for
+         anybody without a keyboard. Hidden while the welcome screen is up:
+         .ui-float is display:none until main.js adds .visible. -->
+    <button id="help-btn" class="ui-float menu-btn help-btn" type="button"
+        title="Help (Esc)"
+        aria-label="Help">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" />
+            <path d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" stroke-linecap="round"
+                stroke-linejoin="round" fill="none" />
+            <circle cx="12.1" cy="17.4" r="1.05" stroke="none" fill="currentColor" />
+        </svg>
+    </button>
+
+    <!-- The sound (M6): the blower's whoosh, on by default (it starts with
+         the first click, tap or key) and turned off here or with M. A
+         toggle, so its name stays "Sound" and aria-pressed says which. Top
+         left, opposite the help button, and hidden with it (.ui-float). -->
+    <button id="sound-btn" class="ui-float menu-btn sound-btn" type="button"
+        title="Sound on (M)"
+        aria-label="Sound" aria-pressed="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" stroke-linejoin="round" />
+            <path class="sound-waves" d="M15.5 9a4 4 0 0 1 0 6M18.2 6.6a7.4 7.4 0 0 1 0 10.8" />
+            <path class="sound-off" d="M16 9.5l5 5M21 9.5l-5 5" />
+        </svg>
+    </button>
+
+    <!-- The walking joystick, for touch screens (Steve's QA, 2026-10-08),
+         where the dual-joystick scenes keep theirs: the shared markup and
+         styles (styles-1.0.0.css), a ring low in the left corner, steered by
+         js/stick.js. A finger on the lawn no longer walks. Shown with the
+         rest of the touch chrome (.visible). A keyboard walks with the keys,
+         so it is hidden from a screen reader. -->
+    <div id="touch-controls" aria-hidden="true">
+        <div id="joystick-zone">
+            <div class="joystick-base-fixed">
+                <div class="joystick-thumb-fixed"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- The blow button, for touch screens, in the right joystick's place:
+         the left thumb walks and aims, the right one blows. Hidden until
+         main.js knows the screen is touched: .ui-float is display:none until
+         it adds .visible. It answers a held Space or Enter as well, for
+         anybody who tabs to it. -->
+    <button id="blow-btn" class="ui-float blow-btn" type="button"
+        title="Hold to blow"
+        aria-label="Blow: hold to run the leaf blower">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 8h10.5a2.75 2.75 0 1 0-2.75-2.75" />
+            <path d="M3 12h15a3 3 0 1 1-3 3" />
+            <path d="M3 16h7" />
+        </svg>
+        <span class="blow-label" aria-hidden="true">BLOW</span>
+    </button>
+
+    <!-- The round's readout: the clock and the share of the lawn cleared, or
+         in free play a way back to a round. Shown with the rest of the chrome
+         (.visible), never over the welcome card. The clock is not a live
+         region, since a second-by-second countdown read aloud would drown out
+         everything else. The beats are told in #round-status instead. -->
+    <div id="round-hud" class="round-hud">
+        <span id="hud-clock" class="hud-clock">1:00</span>
+        <span id="hud-cleared" class="hud-cleared">0% cleared</span>
+        <span id="hud-hint" class="hud-hint">Blow to start the clock</span>
+        <button id="hud-new" class="hud-btn" type="button" hidden>New round</button>
+    </div>
+    <p id="round-status" class="sr-only" role="status" aria-live="polite"></p>
+    <!-- What a visitor just found under the leaves (M6), under the HUD for a
+         few seconds. A screen reader hears it through #round-status. -->
+    <p id="find-toast" class="find-toast" aria-hidden="true"></p>
+
+    <!-- A clear lawn's banner (js/celebrate.js), big across the screen for a
+         few seconds. A screen reader hears the same words through
+         #round-status, so this one is hidden from it. -->
+    <div id="cheer-banner" class="cheer-banner" aria-hidden="true">
+        <p id="cheer-big" class="cheer-big"></p>
+        <p id="cheer-small" class="cheer-small"></p>
+        <p id="cheer-extra" class="cheer-extra"></p>
+    </div>
+
+    <!-- The character card (M4), opened from the welcome card. It sits
+         beside the yard (a sheet along the bottom on a phone) rather than over
+         it, with the camera in close on the character, so every choice shows
+         on them as it is made. The choices are radio buttons, built by
+         main.js from js/cast.js. Done (or Escape) goes back to the welcome
+         card, and the choice is kept in this browser. -->
+    <div id="cast-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="cast-title">
+        <div class="cast-panel">
+            <h2 id="cast-title" class="cast-title">Who is on leaf duty?</h2>
+            <fieldset class="cast-group">
+                <legend>Shirt</legend>
+                <div id="cast-shirts" class="cast-options cast-swatches"></div>
+            </fieldset>
+            <fieldset class="cast-group">
+                <legend>Pants</legend>
+                <div id="cast-pants" class="cast-options cast-swatches"></div>
+            </fieldset>
+            <fieldset class="cast-group">
+                <legend>Skin tone</legend>
+                <div id="cast-skins" class="cast-options cast-swatches"></div>
+            </fieldset>
+            <fieldset class="cast-group">
+                <legend>Hair color</legend>
+                <div id="cast-hair" class="cast-options cast-swatches"></div>
+            </fieldset>
+            <fieldset class="cast-group">
+                <legend>Hair</legend>
+                <div id="cast-length" class="cast-options"></div>
+            </fieldset>
+            <button id="cast-done" class="piece-enter cast-done" type="button">Done</button>
+            <button id="cast-forget" class="cast-forget" type="button">Forget my choice</button>
+            <p class="cast-note">Your choice is kept in this browser, so they are waiting for you next time.</p>
+            <p id="cast-status" class="sr-only" role="status" aria-live="polite"></p>
+        </div>
+    </div>
+
+    <!-- The end of a round. No close button and no backdrop dismissal: the
+         ways on are Play again (which takes focus), Keep blowing, or Escape,
+         which keeps blowing. Share sends the result sentence. -->
+    <div id="end-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="end-title" aria-describedby="end-line">
+        <div class="modal-backdrop"></div>
+        <!-- The card itself (Steve's QA, 2026-10-08: "more transparent and
+             screenshot-able", and wide on a wide screen): frosted glass over
+             the yard, the pile beside the result on a wide screen and above
+             it on a narrow one, and the scene's name at the foot of it, so a
+             screenshot says where it came from. -->
+        <div class="end-card">
+            <div class="end-hero">
+                <!-- The pile of leaves the round made (js/trophy.js): its own
+                     little 3D view, bigger the more of the lawn was cleared.
+                     Decoration, so hidden from screen readers, which hear
+                     the result in words. -->
+                <canvas id="end-pile" class="end-pile" aria-hidden="true"></canvas>
+                <!-- The time a clear lawn took, on a timed round only. -->
+                <p id="end-ribbon" class="end-ribbon" hidden></p>
+            </div>
+            <div class="end-body">
+                <p id="end-kicker" class="end-kicker">Time is up</p>
+                <h2 id="end-title" class="end-title">Respectable work</h2>
+                <p class="end-score"><span id="end-percent">0%</span> of the lawn cleared</p>
+                <p id="end-line" class="end-line"></p>
+                <!-- How the dive into the pile went (M3), empty when there
+                     was none. -->
+                <p id="end-dive" class="end-note"></p>
+                <!-- What turned up under the leaves (M6), empty when nothing
+                     did. -->
+                <p id="end-finds" class="end-note end-finds"></p>
+                <!-- The best time to clear the lawn (js/best.js): a first
+                     clear, a new best, or the time to beat. -->
+                <p id="end-best" class="end-note end-best"></p>
+                <dl class="end-stats">
+                    <div class="end-stat">
+                        <dt>On the tarp</dt>
+                        <dd id="end-tarp">0</dd>
+                    </div>
+                    <div class="end-stat">
+                        <dt>In the street</dt>
+                        <dd id="end-street">0</dd>
+                    </div>
+                    <div class="end-stat">
+                        <dt>Sent over the fence</dt>
+                        <dd id="end-neighbor">0</dd>
+                    </div>
+                    <div class="end-stat">
+                        <dt>Still on the lawn</dt>
+                        <dd id="end-lawn">0</dd>
+                    </div>
+                </dl>
+                <div class="end-actions">
+                    <button id="end-again" class="end-again" type="button">Play again</button>
+                    <button id="end-share" class="end-share" type="button">Share</button>
+                </div>
+                <button id="end-free" class="end-free" type="button">Keep blowing leaves</button>
+                <!-- Inside the dialog on purpose: content outside an aria-modal
+                     dialog may not be announced at all. -->
+                <p id="end-status" class="sr-only" role="status" aria-live="polite"></p>
+                <!-- Built by shared/js/promo-1.0.0.js: the next experience to
+                     try (once this one is in its catalog) and the directory. -->
+                <div id="end-promo" class="end-promo"></div>
+                <p class="end-mark" aria-hidden="true">Leaf Blower &middot; SceneXP.com</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

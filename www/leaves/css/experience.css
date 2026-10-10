@@ -1,0 +1,1161 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+
+/* ============================================================
+   The leaf lab (www/leaves) experience styles
+   Loaded after the shared stylesheet, so these rules layer on
+   top of ../shared/css/styles-1.0.0.css.
+   ============================================================ */
+
+/* THE WELCOME CARD SCROLLS when it is taller than the screen (Steve's QA,
+   2026-10-08: "I can't scroll vertically"). The shared overlay centers the
+   card and clips it, top and bottom, on a short screen. Here it scrolls,
+   and the card's auto margins center it while it fits and start it at the
+   top when it does not. A finger that moves is a scroll, not a tap
+   (main.js), so scrolling never steps in by accident. */
+#blocker {
+    align-items: flex-start;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+}
+
+#blocker #instructions {
+    margin: auto 0;
+}
+
+/* ---- The welcome card, trimmed (Steve's QA, 2026-10-09: "really wordy" on
+   a computer, and "Click to step in almost gets lost in the sea of text").
+   One filled button, one line of controls, the rest folded away, and a
+   quieter footer. ---- */
+
+#instructions .subtitle {
+    margin-bottom: 2rem;
+}
+
+/* THE ONLY FILLED THING ON THE CARD. No pulse: a fill already says "press
+   me", and a filled button that throbs reads as one still loading. */
+#instructions button.step-in {
+    display: block;
+    margin: 0 auto 1.25rem;
+    padding: 0.8rem 2.25rem;
+    border: none;
+    border-radius: 999px;
+    background: var(--ui-accent);
+    color: var(--ui-on-accent);
+    font: inherit;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    animation: none;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+#instructions button.step-in:hover {
+    background: var(--ui-accent-strong);
+}
+
+#instructions button.step-in:active {
+    transform: scale(0.98);
+}
+
+#instructions button.step-in:focus-visible {
+    outline: 3px solid var(--ui-title);
+    outline-offset: 3px;
+}
+
+#instructions .tour-note {
+    margin: 0 auto 1.25rem;
+}
+
+#instructions .controls-brief {
+    margin: 0 auto 0.4rem;
+    color: var(--ui-subtitle);
+    font-size: 0.9rem;
+    letter-spacing: 0.04em;
+}
+
+/* This device's controls only: `touch-ui` on <html> (main.js markDevice). */
+html.touch-ui #instructions .for-mouse,
+html:not(.touch-ui) #instructions .for-touch {
+    display: none;
+}
+
+#instructions .all-controls {
+    max-width: 40rem;
+    margin: 0 auto;
+}
+
+/* The disclosure, as Earth Defense's: its own triangle in the card's ink,
+   `list-style` and the WebKit pseudo-element both needed to retire the
+   built-in marker. */
+#instructions .all-controls > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    color: var(--ui-accent);
+    font-size: 0.875rem;
+    letter-spacing: 0.04em;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    list-style: none;
+}
+
+#instructions .all-controls > summary::-webkit-details-marker {
+    display: none;
+}
+
+#instructions .all-controls > summary::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 6px solid currentColor;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 0.2s ease;
+}
+
+#instructions .all-controls[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+#instructions .all-controls > summary:hover {
+    color: var(--ui-title);
+}
+
+#instructions .all-controls > summary:focus-visible {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
+}
+
+#instructions .all-controls .controls-hint {
+    margin: 0.5rem 0 0.25rem;
+    line-height: 2;
+}
+
+/* The footer: smaller than everything above it. */
+#instructions .welcome-more {
+    margin-top: 1.25rem;
+}
+
+#instructions .welcome-more .cast-line {
+    margin: 0.25rem auto 0;
+    font-size: 0.85rem;
+}
+
+#instructions .welcome-more .welcome-free {
+    font-size: 0.85rem;
+}
+
+#instructions .welcome-ways {
+    margin: 0.5rem 0 0;
+}
+
+#instructions .welcome-ways .welcome-free,
+#instructions .welcome-ways .welcome-explore {
+    margin: 0;
+}
+
+#instructions .welcome-dot {
+    color: var(--text-dim);
+}
+
+/* On a phone the controls were never on the card (the shared sheet hides
+   them below 768px), and the card was right as it was. ONLY A TOUCH SCREEN
+   (the accessibility sweep, 2026-10-09): a computer zoomed to 200% is that
+   narrow too, and lost every key it could press. */
+@media (max-width: 768px) {
+    html.touch-ui #instructions .controls-brief,
+    html.touch-ui #instructions .all-controls {
+        display: none;
+    }
+
+    html:not(.touch-ui) #instructions .all-controls .controls-hint.for-mouse {
+        display: block;
+    }
+}
+
+/* A finger's worth (44 px) for the card's small buttons on a touch screen,
+   where a near miss steps into the yard instead. */
+html.touch-ui #instructions .cast-btn,
+html.touch-ui .cast-forget {
+    min-height: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #instructions button.step-in,
+    #instructions .all-controls > summary::before {
+        transition: none;
+    }
+
+    #instructions button.step-in:active {
+        transform: none;
+    }
+}
+
+/* ---- The walking joystick (2026-10-08) ----
+   The shared ring (styles-1.0.0.css), clear of a notched phone's edges as
+   the shared sheet does for its touch devices, and lit while it is held. */
+#joystick-zone {
+    width: calc(180px + env(safe-area-inset-left));
+    height: calc(200px + env(safe-area-inset-bottom));
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+#joystick-zone .joystick-base-fixed {
+    left: calc(30px + env(safe-area-inset-left));
+    bottom: calc(40px + env(safe-area-inset-bottom));
+}
+
+#joystick-zone.stick-on .joystick-base-fixed {
+    border-color: rgba(var(--ui-joystick-rgb), 0.9);
+    background: rgba(var(--ui-joystick-rgb), 0.35);
+}
+
+/* The thumb follows the finger at once, never easing behind it. */
+#joystick-zone .joystick-thumb-fixed {
+    transition: none;
+}
+
+/* The canvas takes every gesture itself: a drag on the lawn steers the
+   blower, so the browser must not scroll or zoom the page under it. */
+#game-canvas {
+    touch-action: none;
+}
+
+/* ---- The blow button (touch screens) ----
+   Low in the right corner, under the thumb. It rests dark and neutral, and
+   fills with the accent only while it is held: a tinted resting button reads
+   as one already pressed. Long-press menus, text selection and the browser's
+   own gestures are all turned off, since holding it is the whole point. */
+
+/* In the right joystick's place in the dual-joystick scenes (Steve's QA,
+   2026-10-08): the shared ring's size, 30px in and 40px up, its ring and
+   dark edge, mirroring the walking joystick in the lower left. */
+.blow-btn {
+    position: fixed;
+    right: calc(30px + env(safe-area-inset-right));
+    bottom: calc(40px + env(safe-area-inset-bottom));
+    width: 120px;
+    height: 120px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: 2px solid rgba(var(--ui-joystick-rgb), 0.65);
+    border-radius: 50%;
+    background: rgba(20, 20, 20, 0.5);
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.28);
+    color: #fff;
+    z-index: 110;
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.12s ease, transform 0.12s ease;
+}
+
+.blow-btn svg {
+    width: 36px;
+    height: 36px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.blow-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+}
+
+.blow-btn.held {
+    background: rgba(var(--ui-accent-rgb), 0.9);
+    color: #1a1208;
+    transform: scale(0.94);
+}
+
+/* TWO-TONE FOCUS RINGS over the live scene (the accessibility sweep,
+   2026-10-09): an amber ring alone measured 1.3 to 1.7 to 1 against the
+   sky and the lawn. White with a dark band outside it shows on anything. */
+.blow-btn:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 7px rgba(20, 20, 20, 0.9);
+}
+
+/* THE FIRST BLOW (Steve's QA, 2026-10-09: the button is "kind of
+   transparent by default, which is fine for an experienced user"). Until
+   its first press on this visit (`beckon`, main.js), a warm halo pulses out
+   from it and its rim is lit. The halo is its own layer, so the button's
+   look and its `held` state are its own. Nothing is remembered: every visit
+   beckons until the first blow. */
+.blow-btn.beckon {
+    border-color: rgba(var(--ui-accent-rgb), 0.95);
+}
+
+.blow-btn.beckon::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border: 3px solid rgba(var(--ui-accent-rgb), 0.9);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: blow-beckon 1.6s ease-out infinite;
+}
+
+@keyframes blow-beckon {
+    0% {
+        transform: scale(0.92);
+        opacity: 0.9;
+    }
+
+    70%,
+    100% {
+        transform: scale(1.35);
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .blow-btn {
+        transition: none;
+    }
+
+    .blow-btn.held {
+        transform: none;
+    }
+
+    /* A steady ring instead of a pulse. */
+    .blow-btn.beckon::after {
+        animation: none;
+        transform: none;
+        opacity: 1;
+    }
+}
+
+/* ---- The sound button (M6) ----
+   Top left, opposite the help button, in the same neutral circle. Its
+   speaker shows waves when the sound is on and a cross when it is off, and
+   it never fills: a tinted resting button reads as one already pressed. */
+
+.sound-btn {
+    top: max(20px, env(safe-area-inset-top));
+    left: max(20px, env(safe-area-inset-left));
+    right: auto;
+}
+
+.sound-btn[aria-pressed="false"] .sound-waves,
+.sound-btn[aria-pressed="true"] .sound-off {
+    display: none;
+}
+
+.sound-btn:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 7px rgba(20, 20, 20, 0.9);
+}
+
+/* ---- What was just found (M6) ----
+   A line under the HUD for a few seconds, never in the way of a tap. */
+
+.find-toast {
+    position: fixed;
+    top: max(68px, calc(env(safe-area-inset-top) + 58px));
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 32px);
+    margin: 0;
+    padding: 0.4rem 0.95rem;
+    border-radius: 999px;
+    background: rgba(20, 20, 20, 0.7);
+    color: #fff;
+    font-size: 0.9rem;
+    text-align: center;
+    z-index: 105;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.35s ease, visibility 0s linear 0.35s;
+}
+
+.find-toast.visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.35s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .find-toast,
+    .find-toast.visible {
+        transition: none;
+    }
+}
+
+/* ---- A clear lawn's banner (2026-10-08) ----
+   Big words across the upper middle of the screen for a few seconds, never
+   in the way of a tap. Gold for a clear lawn inside the time. */
+
+.cheer-banner {
+    position: fixed;
+    top: 16vh;
+    left: 50%;
+    width: max-content;
+    max-width: min(92vw, 720px);
+    transform: translateX(-50%);
+    z-index: 106;
+    text-align: center;
+    /* A FROSTED BACKING, as the results card has (the accessibility sweep,
+       2026-10-09): the cream and gold words measured 1.0 to 1.4 to 1
+       against the white house and the sky, and a shadow is not a
+       background. 5.4 to 1 or better now over anything behind it. */
+    padding: 0.9rem 1.5rem 1rem;
+    border-radius: 28px;
+    background: rgba(20, 20, 20, 0.6);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s ease, visibility 0s linear 0.4s;
+}
+
+.cheer-banner.visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s ease;
+}
+
+.cheer-banner.visible .cheer-big {
+    animation: cheer-pop 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.cheer-big {
+    margin: 0;
+    font-size: clamp(2.8rem, 9vw, 5.2rem);
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    color: #fff4dc;
+    text-shadow: 0 4px 0 rgba(120, 50, 10, 0.55), 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+
+.cheer-banner.timed .cheer-big {
+    color: #ffe08a;
+    text-shadow: 0 4px 0 rgba(120, 70, 0, 0.6), 0 0 40px rgba(255, 200, 80, 0.55), 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+
+.cheer-small {
+    margin: 0.5rem 0 0;
+    font-size: clamp(1.1rem, 3.6vw, 1.6rem);
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.cheer-extra {
+    display: inline-block;
+    margin: 0.7rem 0 0;
+    padding: 0.35rem 1rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #f6c14a, #ffe39a, #f6c14a);
+    color: #2a1c05;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.cheer-extra:empty {
+    display: none;
+}
+
+@keyframes cheer-pop {
+    0% { transform: scale(0.4); opacity: 0; }
+    60% { transform: scale(1.12); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* The clock, stopped on a clear lawn, flashing gold. */
+.hud-clock.clear {
+    color: #ffd76a;
+    animation: clock-flash 0.45s ease-in-out 5 alternate;
+}
+
+@keyframes clock-flash {
+    from { opacity: 1; }
+    to { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cheer-banner,
+    .cheer-banner.visible {
+        transition: none;
+    }
+
+    .cheer-banner.visible .cheer-big,
+    .hud-clock.clear {
+        animation: none;
+    }
+}
+
+/* ---- The welcome card's free play ----
+   A quiet text button under the controls: the round is what the card is
+   offering, and this is the other door. Light ink on the dark overlay. */
+
+#instructions .welcome-free {
+    display: inline-block;
+    margin: 1.25rem auto 0;
+    padding: 0.5rem 0.75rem;
+    border: none;
+    background: none;
+    color: var(--ui-accent);
+    font: inherit;
+    font-size: 0.95rem;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+#instructions .welcome-free:hover,
+#instructions .welcome-free:focus-visible {
+    color: var(--ui-title);
+}
+
+#instructions .welcome-free:focus-visible {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+
+/* ---- The round's HUD ----
+   One pill at the top middle: the clock, the share cleared, and a hint or a
+   button. It never takes a tap except on its button, so the lawn under it
+   still steers. */
+
+.round-hud {
+    position: fixed;
+    top: max(18px, calc(env(safe-area-inset-top) + 8px));
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    align-items: center;
+    gap: 0.85rem;
+    max-width: calc(100vw - 160px);
+    padding: 0.45rem 1.1rem;
+    border-radius: 999px;
+    /* 0.7, not 0.62, since the accessibility sweep (2026-10-09): over the
+       white house the hint measured 4.2 and the hurrying clock 2.7. */
+    background: rgba(20, 20, 20, 0.7);
+    color: #fff;
+    z-index: 105;
+    pointer-events: none;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.round-hud.visible {
+    display: flex;
+}
+
+.hud-clock {
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.hud-clock.hurry {
+    color: var(--ui-accent);
+}
+
+.hud-cleared {
+    font-size: 0.95rem;
+}
+
+.hud-hint {
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+.hud-btn {
+    pointer-events: auto;
+    padding: 0.3rem 0.75rem;
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.7);
+    border-radius: 999px;
+    background: transparent;
+    color: #fff;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.hud-btn:hover,
+.hud-btn:focus-visible {
+    background: rgba(var(--ui-accent-rgb), 0.25);
+}
+
+.round-hud [hidden] {
+    display: none;
+}
+
+@media (max-width: 480px) {
+    .round-hud {
+        gap: 0.6rem;
+        padding: 0.4rem 0.9rem;
+    }
+
+    .hud-hint {
+        display: none;
+    }
+}
+
+/* A narrow phone: "4:59  99%, 12 leaves to go" wanted 234 px of a 230 px
+   pill at 390 wide and spilled out of it (the accessibility sweep,
+   2026-10-09). A size smaller, and a second line rather than spilling. */
+@media (max-width: 400px) {
+    .round-hud {
+        white-space: normal;
+        text-align: center;
+        line-height: 1.2;
+    }
+
+    .hud-clock {
+        font-size: 1.15rem;
+    }
+
+    .hud-cleared {
+        font-size: 0.85rem;
+    }
+}
+
+/* ---- The end of a round ----
+   Its own card (below), held by an id of its own. No backdrop dismissal:
+   the ways on are the buttons, or Escape (keep blowing). */
+
+#end-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    /* The card's own accent: autumn amber, gold for a clear lawn. Both hold
+       4.5:1 over the glass even with white sky behind it. */
+    --end-accent: #ffc27a;
+    --end-ink: #fbf6ec;
+    --end-muted: rgba(251, 246, 236, 0.8);
+}
+
+#end-modal.hidden {
+    display: none;
+}
+
+#end-modal.perfect {
+    --end-accent: #ffd76a;
+}
+
+/* Light enough that the yard shows round the card in a screenshot. */
+#end-modal .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, rgba(12, 10, 6, 0.18), rgba(12, 10, 6, 0.5));
+    pointer-events: none;
+}
+
+/* ---- The results card (Steve's QA, 2026-10-08: "more transparent and
+   screenshot-able", "very narrow even on a wide screen") ----
+   Frosted glass: a dark warm tint over the blurred yard, the white text on
+   it holding its contrast over any part of the scene. The pile beside the
+   result on a wide screen, above it on a narrow one. */
+.end-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    width: min(940px, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid rgba(255, 236, 200, 0.2);
+    border-radius: 24px;
+    background: linear-gradient(155deg, rgba(40, 32, 22, 0.72), rgba(16, 14, 10, 0.8));
+    -webkit-backdrop-filter: blur(18px) saturate(1.25);
+    backdrop-filter: blur(18px) saturate(1.25);
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    color: var(--end-ink);
+    font-family: var(--font-system);
+    text-align: left;
+}
+
+#end-modal.perfect .end-card {
+    border-color: rgba(255, 215, 106, 0.55);
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5), 0 0 60px rgba(255, 196, 80, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* The pile, on a warm glow, filling its half. */
+.end-hero {
+    position: relative;
+    min-height: 360px;
+    background: radial-gradient(ellipse at 50% 72%, rgba(255, 190, 110, 0.22), transparent 66%);
+}
+
+.end-pile {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* The time a clear lawn took, pinned over the pile. */
+.end-ribbon {
+    position: absolute;
+    top: 1.2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 0.4rem 1.1rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #f6c14a, #ffe39a, #f6c14a);
+    color: #2a1c05;
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    box-shadow: 0 6px 20px rgba(246, 193, 74, 0.35);
+}
+
+.end-ribbon[hidden] {
+    display: none;
+}
+
+.end-body {
+    padding: 2.1rem 2.1rem 1.6rem 0.6rem;
+}
+
+.end-kicker {
+    margin: 0 0 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--end-accent);
+}
+
+.end-title {
+    margin: 0 0 0.2rem;
+    font-size: 1.9rem;
+    font-weight: 800;
+    line-height: 1.15;
+    color: var(--end-ink);
+}
+
+/* The number a visitor came for, big. */
+.end-score {
+    margin: 0.2rem 0 0.5rem;
+    font-size: 1rem;
+    color: var(--end-muted);
+}
+
+.end-score span {
+    display: block;
+    font-size: 4.4rem;
+    font-weight: 900;
+    line-height: 1;
+    color: var(--end-accent);
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 4px 24px rgba(255, 170, 70, 0.35);
+}
+
+.end-line {
+    margin: 0 0 0.7rem;
+    font-size: 1rem;
+    line-height: 1.45;
+    color: var(--end-ink);
+}
+
+/* How the dive went, what was found, the best time: quieter lines. */
+.end-note {
+    margin: 0 0 0.5rem;
+    font-size: 0.9rem;
+    font-style: italic;
+    color: var(--end-muted);
+}
+
+.end-note:empty {
+    display: none;
+}
+
+.end-best {
+    font-style: normal;
+    font-weight: 700;
+    color: var(--end-accent);
+}
+
+/* Where the leaves went, as four tiles. */
+.end-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin: 0.9rem 0 1.1rem;
+    padding: 0;
+}
+
+.end-stat {
+    padding: 0.55rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.end-stat dt {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--end-muted);
+}
+
+.end-stat dd {
+    margin: 0.1rem 0 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--end-ink);
+}
+
+.end-actions {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.end-again,
+.end-share {
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.end-again {
+    flex: 2;
+    border: none;
+    background: var(--end-accent);
+    color: #2a1c05;
+}
+
+.end-again:hover {
+    background: #ffd29a;
+}
+
+#end-modal.perfect .end-again:hover {
+    background: #ffe39a;
+}
+
+.end-share {
+    flex: 1;
+    border: 1.5px solid rgba(251, 246, 236, 0.6);
+    background: transparent;
+    color: var(--end-ink);
+}
+
+.end-share:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.end-again:focus-visible,
+.end-share:focus-visible,
+.end-free:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+.end-free {
+    display: block;
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.6rem;
+    border: none;
+    background: none;
+    color: var(--end-muted);
+    font: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.end-free:hover {
+    color: var(--end-ink);
+}
+
+.end-promo {
+    margin-top: 0.3rem;
+}
+
+#end-modal .promo-explore {
+    color: var(--end-ink);
+    text-decoration-color: rgba(251, 246, 236, 0.45);
+}
+
+/* The scene's name at the card's foot, so a screenshot says where it is
+   from. */
+.end-mark {
+    margin: 0.8rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(251, 246, 236, 0.65);
+}
+
+/* A narrow screen: one column, the pile on top, centered. */
+@media (max-width: 720px) {
+    .end-card {
+        grid-template-columns: 1fr;
+        border-radius: 20px;
+        text-align: center;
+    }
+
+    .end-hero {
+        min-height: 200px;
+    }
+
+    .end-body {
+        padding: 0.4rem 1.25rem 1.25rem;
+    }
+
+    .end-title {
+        font-size: 1.5rem;
+    }
+
+    .end-score span {
+        font-size: 3.4rem;
+    }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+    .end-hero {
+        min-height: 240px;
+    }
+
+    .end-score span {
+        font-size: 3rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .end-again,
+    .end-share {
+        transition: none;
+    }
+}
+
+/* ---- The welcome card's character line (M4) ---- */
+
+#instructions .cast-line {
+    margin: 1.25rem auto 0;
+    max-width: 34rem;
+    color: var(--ui-subtitle);
+    font-size: 0.95rem;
+}
+
+#instructions .cast-btn {
+    margin: 0 0 0 0.25rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* The best time to clear the lawn, under the character line (2026-10-08),
+   only once there is one. */
+#instructions .best-line {
+    margin-top: 0.5rem;
+}
+
+#instructions .best-line[hidden] {
+    display: none;
+}
+
+/* ---- The character card (M4) ----
+   Beside the yard, not over it: a panel down the right on a wide screen and
+   a sheet along the bottom on a narrow one, so the character the camera has
+   come in close on stays in view while the choices are made. The scene is
+   not dimmed. Its own ink on a warm, nearly opaque paper. */
+
+#cast-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    pointer-events: none;
+}
+
+#cast-modal.hidden {
+    display: none;
+}
+
+.cast-panel {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: min(380px, calc(100vw - 32px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1.4rem 1.3rem 1.2rem;
+    box-sizing: border-box;
+    border-radius: 16px;
+    background: rgba(247, 247, 244, 0.97);
+    color: var(--gallery-ink);
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.35);
+    pointer-events: auto;
+    font-family: var(--font-system);
+}
+
+@media (max-width: 719px) {
+    .cast-panel {
+        top: auto;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: auto;
+        max-height: 56vh;
+        max-height: 56dvh;
+        border-radius: 16px 16px 0 0;
+        padding-bottom: max(1.2rem, env(safe-area-inset-bottom));
+    }
+}
+
+.cast-title {
+    margin: 0 0 0.9rem;
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.cast-group {
+    margin: 0 0 0.9rem;
+    padding: 0;
+    border: none;
+}
+
+.cast-group legend {
+    margin-bottom: 0.4rem;
+    padding: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gallery-muted);
+}
+
+.cast-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+/* Each choice is a real radio button, hidden behind its label, so the arrow
+   keys move through a group and a screen reader names it. The resting look
+   is plain and only the chosen one is filled: a tinted resting control reads
+   as one already pressed. */
+.cast-option {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 40px;
+    padding: 0.35rem 0.75rem;
+    border: 1.5px solid rgba(0, 0, 0, 0.18);
+    border-radius: 999px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.cast-option input {
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.cast-option.chosen {
+    border-color: var(--gallery-accent);
+    background: rgba(61, 90, 128, 0.12);
+    font-weight: 600;
+}
+
+.cast-option:focus-within {
+    /* The card's own dark accent: #9db4d0 measured 1.96 on the paper. */
+    outline: 3px solid #3d5a80;
+    outline-offset: 2px;
+}
+
+#cast-done:focus-visible {
+    outline: 3px solid #3d5a80;
+    outline-offset: 2px;
+}
+
+.cast-swatches .cast-option {
+    padding: 4px;
+    min-width: 40px;
+    justify-content: center;
+}
+
+.cast-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.cast-done {
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    margin-top: 0.3rem;
+}
+
+.cast-forget {
+    display: block;
+    margin: 0.6rem auto 0;
+    padding: 0.4rem 0.6rem;
+    border: none;
+    background: none;
+    color: var(--gallery-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.cast-note {
+    margin: 0.4rem 0 0;
+    font-size: 0.78rem;
+    color: var(--gallery-muted);
+    text-align: center;
+}
+
+/* THE LAB'S ?clean=1 (a QA host only, js/lab.js): nothing over the yard,
+   for capturing the social card. The welcome and end cards still show. */
+html.clean #help-btn,
+html.clean #sound-btn,
+html.clean #blow-btn,
+html.clean #touch-controls,
+html.clean #round-hud,
+html.clean #find-toast,
+html.clean #cheer-banner {
+    display: none !important;
+}

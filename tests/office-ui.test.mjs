@@ -533,7 +533,11 @@ describe('the look (QA, 2026-09-29)', () => {
         expect(midnight).toBeCloseTo(CONFIG.view.roomExposure.night, 2);
         expect(CONFIG.view.roomExposure.night).toBe(1);
         expect(noon).toBeGreaterThan(1.1);
-        // Set with the light, and handed to the room's pass.
+        // Set with the light, and handed to the room's pass. On the same
+        // day: the pin holds the hour, not the date, and an October noon is
+        // lower and dimmer than a September one (this failed from early
+        // October on, the day the suite ran on being the real one).
+        jest.setSystemTime(new Date(2026, 8, 24, 9));
         window.cornerOffice.hour(12);
         expect(t.ui.roomExposure).toBeCloseTo(noon, 2);
         window.cornerOffice.hour(null);

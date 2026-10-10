@@ -1,0 +1,21 @@
+<!-- A SUGAR MAPLE LEAF ON THE LAWN (Steve's QA, 2026-10-08: the old leaf
+     "doesn't look quite right"; it was a jagged star with stubby points).
+     Three broad lobes, each with its point and a tooth either side, two small
+     ones at its foot, notches cut straight in between, a stem, and veins to
+     each lobe, in autumn orange to red on the lawn's green. At 16 pixels the
+     veins vanish and what is left is the silhouette, which still reads as a
+     maple leaf. Generated from the lobes' angles and lengths, so it is
+     symmetrical. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Leaves">
+  <defs>
+    <linearGradient id="leaf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f59a35"/>
+      <stop offset="0.5" stop-color="#e4561f"/>
+      <stop offset="1" stop-color="#bf321a"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#4d6c2f"/>
+  <path d="M16.00 18.10Q16.5 24.1 15.2 27.9" fill="none" stroke="#7d2613" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M15.55 18.65 L12.47 20.31 L9.51 21.17 L8.33 20.53 L8.36 19.19 L10.59 17.05 L10.60 16.01 L7.87 15.39 L4.12 13.14 L6.48 12.06 L4.46 8.89 L8.19 9.31 L8.13 6.72 L11.79 9.10 L12.96 10.62 L12.06 8.36 L11.98 3.71 L14.28 5.24 L16.00 1.63 L17.72 5.24 L20.02 3.71 L19.94 8.36 L19.04 10.62 L20.21 9.10 L23.87 6.72 L23.81 9.31 L27.54 8.89 L25.52 12.06 L27.88 13.14 L24.13 15.39 L21.40 16.01 L21.41 17.05 L23.64 19.19 L23.67 20.53 L22.49 21.17 L19.53 20.31 L16.45 18.65 Z" fill="url(#leaf)" stroke="#9a2c15" stroke-width="0.5" stroke-linejoin="round"/>
+  <path d="M16.00 18.10L16.00 3.57M16.00 18.10L6.29 10.03M16.00 18.10L25.71 10.03M16.00 18.10L9.83 19.66M16.00 18.10L22.17 19.66" fill="none" stroke="#a8341a" stroke-width="0.6" stroke-linecap="round" opacity="0.8"/>
+</svg>

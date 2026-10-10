@@ -1361,7 +1361,7 @@ html [data-ui-theme="ember" lang="en"]
         "datePublished": "2026-08-05",
         "inLanguage": "en-US",
         "isPartOf": {
-          "@type": "WebPage",
+          "@type": "WebSite",
           "@id": "https://www.scenexp.com/#website"
         },
         "isAccessibleForFree": true,
@@ -2652,48 +2652,54 @@ html [lang="en"]
               {
                 "@type": "ListItem",
                 "position": 1,
+                "url": "https://www.scenexp.com/leaves/",
+                "name": "Leaf Blower"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
                 "url": "https://www.scenexp.com/office/",
                 "name": "Corner Office"
               },
               {
                 "@type": "ListItem",
-                "position": 2,
+                "position": 3,
                 "url": "https://www.scenexp.com/tornado/",
                 "name": "Tornado Alley"
               },
               {
                 "@type": "ListItem",
-                "position": 3,
+                "position": 4,
                 "url": "https://www.scenexp.com/xo/",
                 "name": "X's and O's"
               },
               {
                 "@type": "ListItem",
-                "position": 4,
+                "position": 5,
                 "url": "https://www.scenexp.com/garden/",
                 "name": "Fractal Garden"
               },
               {
                 "@type": "ListItem",
-                "position": 5,
+                "position": 6,
                 "url": "https://www.scenexp.com/highwater/",
                 "name": "High Water"
               },
               {
                 "@type": "ListItem",
-                "position": 6,
+                "position": 7,
                 "url": "https://www.scenexp.com/earthdefense/",
                 "name": "Earth Defense"
               },
               {
                 "@type": "ListItem",
-                "position": 7,
+                "position": 8,
                 "url": "https://www.scenexp.com/mandelbrot/",
                 "name": "The Mandelbrot Set"
               },
               {
                 "@type": "ListItem",
-                "position": 8,
+                "position": 9,
                 "url": "https://www.scenexp.com/steve/",
                 "name": "Steve's Home Office"
               }
@@ -2828,12 +2834,29 @@ html [lang="en"]
               "No app, no download, nothing to install."
           section.spotlight#spotlight [aria-labelledby="spotlight-heading" aria-roledescription="carousel"]
             h2#spotlight-heading
-              "Just released"
+              "Featured"
             ul.spotlight-slides
-              li.spotlight-slide.is-active [aria-label="1 of 3" aria-roledescription="slide" data-slug="office"]
+              li.spotlight-slide.is-active [aria-label="1 of 3" aria-roledescription="slide" data-slug="leaves"]
+                a [href="/leaves/"]
+                  div.spotlight-media
+                    img [alt="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding." decoding="async" fetchpriority="high" height="630" loading="eager" src="/leaves/assets/og-leaves.webp?v=1" width="1200"]
+                  div.spotlight-body
+                    p.spotlight-date
+                      "Released"
+                      time [datetime="2026-10-09"]
+                        "October 9, 2026"
+                    p.experience-eyebrow
+                      "A leaf blower game in an autumn front yard"
+                    h3
+                      "Leaf Blower"
+                    p.spotlight-text
+                      "Twelve thousand autumn leaves and a leaf blower. Blow them onto the tarp before the clock runs out, then take a running dive into the pile."
+                    span.experience-cta
+                      "Grab the leaf blower →"
+              li.spotlight-slide [aria-label="2 of 3" aria-roledescription="slide" data-slug="office"]
                 a [href="/office/"]
                   div.spotlight-media
-                    img [alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." decoding="async" fetchpriority="high" height="630" loading="eager" src="/office/assets/og-office.webp?v=1" width="1200"]
+                    img [alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." decoding="async" height="630" loading="lazy" src="/office/assets/og-office.webp?v=1" width="1200"]
                   div.spotlight-body
                     p.spotlight-date
                       "Released"
@@ -2847,44 +2870,43 @@ html [lang="en"]
                       "A working job search tracker in a corner office forty floors above the bay. Every application you send earns a firework over the water."
                     span.experience-cta
                       "Step into the office →"
-              li.spotlight-slide [aria-label="2 of 3" aria-roledescription="slide" data-slug="tornado"]
-                a [href="/tornado/"]
+              li.spotlight-slide [aria-label="3 of 3" aria-roledescription="slide" data-slug="garden"]
+                a [href="/garden/"]
                   div.spotlight-media
-                    img [alt="A pale tornado reaching down from a dark, turning storm base to a cloud of dust and flying debris, just left of a small farm with a red barn, across golden fields with wildflowers in the foreground." decoding="async" height="630" loading="lazy" src="/tornado/assets/og-tornado.webp?v=1" width="1200"]
+                    img [alt="Five fractal fruit trees in full summer leaf, their canopies heavy with red fruit, standing on dark mulch mounds in a walled garden plot. Each trunk has a small blue water gauge at its base. Behind the wall a pale lake sits below gray rolling hills, under a blue sky with white clouds." decoding="async" height="630" loading="lazy" src="/garden/assets/og-garden.webp?v=3" width="1200"]
                   div.spotlight-body
                     p.spotlight-date
                       "Released"
-                      time [datetime="2026-09-23"]
-                        "September 23, 2026"
+                      time [datetime="2026-08-26"]
+                        "August 26, 2026"
                     p.experience-eyebrow
-                      "A storm chaser's view of a tornado"
+                      "A garden you plant and tend yourself"
                     h3
-                      "Tornado Alley"
+                      "Fractal Garden"
                     p.spotlight-text
-                      "Thirty seconds on the open prairie. A storm organizes on the horizon, its base begins to turn, and a tornado touches down far out across the fields."
+                      "Plant a walled garden of fractal trees and tend them through spring blossom, summer fruit, autumn color and winter snow. Every tree you plant is still standing when you come back."
                     span.experience-cta
-                      "Watch the storm roll in →"
-              li.spotlight-slide [aria-label="3 of 3" aria-roledescription="slide" data-slug="xo"]
-                a [href="/xo/"]
-                  div.spotlight-media
-                    img [alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." decoding="async" height="630" loading="lazy" src="/xo/assets/og-xo.webp?v=1" width="1200"]
-                  div.spotlight-body
-                    p.spotlight-date
-                      "Released"
-                      time [datetime="2026-09-14"]
-                        "September 14, 2026"
-                    p.experience-eyebrow
-                      "A football game where you call the plays"
-                    h3
-                      "X's and O's"
-                    p.spotlight-text
-                      "You are on offense for all ten plays. Pick a play, snap the ball, then throw to an open receiver or keep it and run. 500 is a perfect game."
-                    span.experience-cta
-                      "Call the first play →"
+                      "Plant your first tree →"
           section.experience-group [aria-labelledby="worlds-and-games" data-category="worlds"]
             h2#worlds-and-games
               "Worlds and games"
             ul.experience-grid
+              li.experience-card [data-slug="leaves"]
+                a [href="/leaves/"]
+                  img [alt="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding." decoding="async" height="630" loading="lazy" src="/leaves/assets/og-leaves.webp?v=1" width="1200"]
+                  div.experience-card-body
+                    p.experience-eyebrow
+                      "A leaf blower game in an autumn front yard"
+                    h3
+                      "Leaf Blower"
+                    p
+                      "Twelve thousand autumn leaves cover the front yard, and every one tumbles, skids and piles up on its own. Blow them onto the tarp before the clock runs out, keep them out of the neighbor's yard, then take a running dive into the pile. Or skip the clock and just play with the leaves."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-10-09"]
+                        "October 9, 2026"
+                    span.experience-cta
+                      "Grab the leaf blower →"
               li.experience-card [data-slug="office"]
                 a [href="/office/"]
                   img [alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." decoding="async" height="630" loading="lazy" src="/office/assets/og-office.webp?v=1" width="1200"]
@@ -3821,6 +3843,351 @@ html [data-ui-theme="neon" lang="en"]
     script [src="js/main.min.js" type="module"]"
 `;
 
+exports[`www/leaves/index.html 1`] = `
+"<!doctype html>
+html [data-ui-theme="ember" lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="A front yard buried in autumn leaves, and a leaf blower waiting for you. Every leaf tumbles, skids and piles up on its own, live in your browser." name="description"]
+    meta [content="#5d7f3a" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/leaves/" rel="canonical"]
+    meta [content="Leaf Blower" property="og:title"]
+    meta [content="A front yard buried in autumn leaves, and a leaf blower waiting for you." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/leaves/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Leaf Blower" name="twitter:title"]
+    meta [content="A front yard buried in autumn leaves, and a leaf blower waiting for you." name="twitter:description"]
+    meta [content="https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1" name="twitter:image"]
+    meta [content="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "@id": "https://www.scenexp.com/leaves/#game",
+        "url": "https://www.scenexp.com/leaves/",
+        "name": "Leaf Blower",
+        "image": "https://www.scenexp.com/leaves/assets/og-leaves.jpg?v=1",
+        "description": "A browser-based 3D leaf blower game. A front yard is buried in thousands of autumn leaves, each one simulated as it tumbles, skids and piles up. Blow them onto the tarp before the clock runs out, keep them out of the neighbor's yard, then dive into the pile. There is a no-clock mode for just playing with the leaves.",
+        "genre": [
+          "Casual",
+          "Simulation"
+        ],
+        "gamePlatform": "Web browser",
+        "applicationCategory": "Game",
+        "operatingSystem": "Any",
+        "datePublished": "2026-10-09",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
+        "isAccessibleForFree": true,
+        "playMode": "SinglePlayer",
+        "author": {
+          "@type": "Person",
+          "name": "Steve Noll"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Continuum Commerce LLC"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Leaf Blower",
+            "item": "https://www.scenexp.com/leaves/"
+          }
+        ]
+      }
+    title
+      "Leaf Blower | SceneXP"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=13" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="js/sim.min.js" rel="modulepreload"]
+    link [href="js/trees.min.js" rel="modulepreload"]
+    link [href="js/finale.min.js" rel="modulepreload"]
+    link [href="js/round.min.js" rel="modulepreload"]
+    link [href="js/finds.min.js" rel="modulepreload"]
+    link [href="js/halloween.min.js" rel="modulepreload"]
+    link [href="js/decorations.min.js" rel="modulepreload"]
+    link [href="js/backyard.min.js" rel="modulepreload"]
+    link [href="js/gap.min.js" rel="modulepreload"]
+    link [href="js/backdrop.min.js" rel="modulepreload"]
+    link [href="js/trophy.min.js" rel="modulepreload"]
+    link [href="js/best.min.js" rel="modulepreload"]
+    link [href="js/rooftops.min.js" rel="modulepreload"]
+    link [href="js/celebrate.min.js" rel="modulepreload"]
+    link [href="js/confetti.min.js" rel="modulepreload"]
+    link [href="js/sound.min.js" rel="modulepreload"]
+    link [href="js/neighbor.min.js" rel="modulepreload"]
+    link [href="js/score.min.js" rel="modulepreload"]
+    link [href="js/leafmesh.min.js" rel="modulepreload"]
+    link [href="js/yard.min.js" rel="modulepreload"]
+    link [href="js/house.min.js" rel="modulepreload"]
+    link [href="js/blower.min.js" rel="modulepreload"]
+    link [href="js/view.min.js" rel="modulepreload"]
+    link [href="js/cast.min.js" rel="modulepreload"]
+    link [href="js/lab.min.js" rel="modulepreload"]
+    link [href="js/stick.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/treespecies-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/fractaltree-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/hedge.min.js" rel="modulepreload"]
+    link [href="js/surfaces.min.js" rel="modulepreload"]
+    link [href="favicon.svg?v=2" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="css/experience.min.css?v=13" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body
+    h1.sr-only
+      "Leaf Blower"
+    noscript
+      div.noscript-fallback
+        h1
+          "Leaf Blower"
+        p
+          "This is a front yard buried in autumn leaves, and it needs JavaScript to run. Thousands of red, orange and gold leaves cover the lawn in front of a white house, and a leaf blower is waiting for you. Point it anywhere and every leaf in its path tumbles, skids and piles up on its own, drawn live in your browser."
+        p
+          "SceneXP is a home for 3D experiences that run right in your browser."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/contact.html"]
+                "Contact the developer"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    div#loading-screen
+      div.loader-content
+        div.loader-title
+          "LEAF BLOWER"
+        div.loader-bar [aria-hidden="true"]
+          div.loader-progress#load-progress
+        div.loader-status#load-status [aria-live="polite" role="status"]
+          "Loading…"
+    div#blocker [tabindex="-1"]
+      div#instructions
+        p.title
+          "WELCOME"
+        p.subtitle
+          "A front yard buried in autumn leaves, and a leaf blower waiting for you"
+        button#step-in.click-prompt.step-in [type="button"]
+          "Click to step in"
+        p.tour-note
+          "Clear the lawn in five minutes. The clock starts with your first blow."
+        p.controls-brief
+          span.for-mouse
+            "Point to walk &middot; Hold the mouse button to blow &middot; Scroll to zoom"
+          span.for-touch
+            "Touch the lawn or use the joystick to walk &middot; Hold the blow button to blow &middot; Pinch to zoom"
+        details#all-controls.all-controls
+          summary#all-controls-toggle
+            "All the controls"
+          div.controls-hint.for-mouse
+            span
+              "WALK"
+            "Point at the lawn with the mouse and you will walk over and aim the leaf blower there. WASD or the arrow keys walk too."
+            span
+              "BLOW"
+            "Hold the mouse button or Space."
+            span
+              "ZOOM"
+            "Scroll, or pinch on a trackpad, to come in closer or stand back. The + and - keys zoom too, and 0 brings back the usual view."
+            span
+              "SOUND"
+            "The leaf blower makes a whoosh. M or the speaker in the corner turns it on and off."
+            span
+              "HELP"
+            "The question mark in the corner, or Escape, brings you back here."
+          div.controls-hint.for-touch
+            span
+              "WALK"
+            "Touch the lawn and you will walk over and aim the leaf blower there, or drag to steer. The joystick in the lower left walks you too, and a light push turns you in place to aim."
+            span
+              "BLOW"
+            "Hold the blow button in the lower right."
+            span
+              "ZOOM"
+            "Pinch with two fingers to come in closer or stand back."
+            span
+              "SOUND"
+            "The leaf blower makes a whoosh. It starts off on a phone or tablet, so tap the speaker in the corner to hear it."
+            span
+              "HELP"
+            "The question mark in the corner brings you back here."
+        div.welcome-more
+          p.cast-line
+            span#cast-name
+              "Playing in a rust red shirt and navy pants."
+            button#cast-btn.welcome-free.cast-btn [type="button"]
+              "Change your character"
+          p#best-line.cast-line.best-line [hidden]
+            span#best-text
+            button#best-forget.welcome-free.cast-btn [type="button"]
+              "Forget my best time"
+          p.welcome-ways
+            button#free-btn.welcome-free [type="button"]
+              "Play with no clock"
+            span.welcome-dot [aria-hidden="true"]
+              "&middot;"
+            a#explore-link.welcome-explore [href="/"]
+              "More 3D worlds to explore at SceneXP.com"
+    canvas#game-canvas [aria-label="A front lawn buried in red, orange and gold autumn leaves in front of a white house, with a person holding a leaf blower" role="img"]
+    button#help-btn.ui-float.menu-btn.help-btn [aria-label="Help" title="Help (Esc)" type="button"]
+      svg [aria-hidden="true" viewbox="0 0 24 24"]
+        circle [cx="12" cy="12" fill="none" r="9"]
+        path [d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"]
+        circle [cx="12.1" cy="17.4" fill="currentColor" r="1.05" stroke="none"]
+    button#sound-btn.ui-float.menu-btn.sound-btn [aria-label="Sound" aria-pressed="true" title="Sound on (M)" type="button"]
+      svg [aria-hidden="true" viewbox="0 0 24 24"]
+        path [d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" stroke-linejoin="round"]
+        path.sound-waves [d=#839f041928]
+        path.sound-off [d="M16 9.5l5 5M21 9.5l-5 5"]
+    div#touch-controls [aria-hidden="true"]
+      div#joystick-zone
+        div.joystick-base-fixed
+          div.joystick-thumb-fixed
+    button#blow-btn.ui-float.blow-btn [aria-label="Blow: hold to run the leaf blower" title="Hold to blow" type="button"]
+      svg [aria-hidden="true" viewbox="0 0 24 24"]
+        path [d="M3 8h10.5a2.75 2.75 0 1 0-2.75-2.75"]
+        path [d="M3 12h15a3 3 0 1 1-3 3"]
+        path [d="M3 16h7"]
+      span.blow-label [aria-hidden="true"]
+        "BLOW"
+    div#round-hud.round-hud
+      span#hud-clock.hud-clock
+        "1:00"
+      span#hud-cleared.hud-cleared
+        "0% cleared"
+      span#hud-hint.hud-hint
+        "Blow to start the clock"
+      button#hud-new.hud-btn [hidden type="button"]
+        "New round"
+    p#round-status.sr-only [aria-live="polite" role="status"]
+    p#find-toast.find-toast [aria-hidden="true"]
+    div#cheer-banner.cheer-banner [aria-hidden="true"]
+      p#cheer-big.cheer-big
+      p#cheer-small.cheer-small
+      p#cheer-extra.cheer-extra
+    div#cast-modal.hidden [aria-labelledby="cast-title" aria-modal="true" role="dialog"]
+      div.cast-panel
+        h2#cast-title.cast-title
+          "Who is on leaf duty?"
+        fieldset.cast-group
+          legend
+            "Shirt"
+          div#cast-shirts.cast-options.cast-swatches
+        fieldset.cast-group
+          legend
+            "Pants"
+          div#cast-pants.cast-options.cast-swatches
+        fieldset.cast-group
+          legend
+            "Skin tone"
+          div#cast-skins.cast-options.cast-swatches
+        fieldset.cast-group
+          legend
+            "Hair color"
+          div#cast-hair.cast-options.cast-swatches
+        fieldset.cast-group
+          legend
+            "Hair"
+          div#cast-length.cast-options
+        button#cast-done.piece-enter.cast-done [type="button"]
+          "Done"
+        button#cast-forget.cast-forget [type="button"]
+          "Forget my choice"
+        p.cast-note
+          "Your choice is kept in this browser, so they are waiting for you next time."
+        p#cast-status.sr-only [aria-live="polite" role="status"]
+    div#end-modal.hidden [aria-describedby="end-line" aria-labelledby="end-title" aria-modal="true" role="dialog"]
+      div.modal-backdrop
+      div.end-card
+        div.end-hero
+          canvas#end-pile.end-pile [aria-hidden="true"]
+          p#end-ribbon.end-ribbon [hidden]
+        div.end-body
+          p#end-kicker.end-kicker
+            "Time is up"
+          h2#end-title.end-title
+            "Respectable work"
+          p.end-score
+            span#end-percent
+              "0%"
+            "of the lawn cleared"
+          p#end-line.end-line
+          p#end-dive.end-note
+          p#end-finds.end-note.end-finds
+          p#end-best.end-note.end-best
+          dl.end-stats
+            div.end-stat
+              dt
+                "On the tarp"
+              dd#end-tarp
+                "0"
+            div.end-stat
+              dt
+                "In the street"
+              dd#end-street
+                "0"
+            div.end-stat
+              dt
+                "Sent over the fence"
+              dd#end-neighbor
+                "0"
+            div.end-stat
+              dt
+                "Still on the lawn"
+              dd#end-lawn
+                "0"
+          div.end-actions
+            button#end-again.end-again [type="button"]
+              "Play again"
+            button#end-share.end-share [type="button"]
+              "Share"
+          button#end-free.end-free [type="button"]
+            "Keep blowing leaves"
+          p#end-status.sr-only [aria-live="polite" role="status"]
+          div#end-promo.end-promo
+          p.end-mark [aria-hidden="true"]
+            "Leaf Blower &middot; SceneXP.com"
+    script [src="../lib/three/r186/three.min.js" type="module"]
+    script [src="js/main.min.js" type="module"]"
+`;
+
 exports[`www/mandelbrot/index.html 1`] = `
 "<!doctype html>
 html [data-ui-theme="ember" lang="en"]
@@ -4015,7 +4382,7 @@ html [lang="en"]
         "datePublished": "2026-09-28",
         "inLanguage": "en-US",
         "isPartOf": {
-          "@type": "WebPage",
+          "@type": "WebSite",
           "@id": "https://www.scenexp.com/#website"
         },
         "isAccessibleForFree": true,
@@ -4827,6 +5194,10 @@ html [lang="en"]
               "Corner Office keeps everything you enter, your applications, interviews, contacts and follow-ups, along with your settings and which things in the office you have already opened, in your browser's local storage, so your office is just as you left it when you come back. None of it is ever sent anywhere: its usage pings say only what kind of thing you did, such as adding an application, and never anything you typed. Its Out-tray saves a backup you can keep, and its Settings can clear the office on the spot."
             li
               strong
+                "Your character and best time in Leaf Blower."
+              "The leaf blower game keeps the character you choose, their shirt and pants colors, skin tone, hair color and hair length, in your browser's local storage, so they are waiting for you when you come back. When you clear the whole lawn before the clock runs out, it also keeps your fastest time, just the number of seconds, so you have a time to beat. The Forget my choice button on the character card and the Forget my best time button on the welcome card clear them on the spot."
+            li
+              strong
                 "You can remove any of it whenever you like."
               "Apart from that puzzle token, everything above stays on your device and is never sent to us or to anyone else. Clearing this site's data in your browser settings removes all of it at once."
           h2
@@ -4852,7 +5223,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated September 18, 2026."
+              "Last updated October 9, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand
@@ -6664,7 +7035,7 @@ html [data-ui-theme="neon" lang="en"]
         "datePublished": "2026-09-14",
         "inLanguage": "en-US",
         "isPartOf": {
-          "@type": "WebPage",
+          "@type": "WebSite",
           "@id": "https://www.scenexp.com/#website"
         },
         "isAccessibleForFree": true,

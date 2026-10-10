@@ -50,6 +50,7 @@
  *  `art` carries the home page's own cache-busting query string verbatim, so a
  *  visitor who has seen the directory already has the file. */
 export const EXPERIENCES = Object.freeze([
+    { slug: 'leaves', category: 'worlds', title: 'Leaf Blower', line: 'A leaf blower game in an autumn front yard', art: '/leaves/assets/og-leaves.webp?v=1' },
     { slug: 'office', category: 'worlds', title: 'Corner Office', line: 'A job search tracker in a 3D office', art: '/office/assets/og-office.webp?v=1' },
     { slug: 'tornado', category: 'worlds', title: 'Tornado Alley', line: "A storm chaser's view of a tornado", art: '/tornado/assets/og-tornado.webp?v=1' },
     { slug: 'xo', category: 'worlds', title: "X's and O's", line: 'A football game where you call the plays', art: '/xo/assets/og-xo.webp?v=1' },
@@ -83,6 +84,10 @@ export const PAIRS = Object.freeze({
     // home page's newest-first order can express.
     xo: 'earthdefense',
     earthdefense: 'xo',
+    // A round of leaves, then a game of football: both played in one
+    // sitting (2026-10-09). The category's next would have been the job
+    // tracker. One way only: X's and O's keeps Earth Defense.
+    leaves: 'xo',
     // Two fractals. One you fall into and one you grow.
     mandelbrot: 'garden',
     garden: 'mandelbrot'
