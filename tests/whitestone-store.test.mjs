@@ -12,7 +12,7 @@
 import { CONFIG } from '../www/whitestone/js/config.js';
 import {
     newId, emptyDoc, validate, migrate, createChecklist, updateChecklist, setLevels, setPreferences,
-    deleteChecklist, restoreChecklist, addRoom, updateRoom, deleteRoom, restoreRoom, addItem, updateItem,
+    deleteChecklist, restoreChecklist, duplicateChecklist, addRoom, updateRoom, deleteRoom, restoreRoom, addItem, updateItem,
     deleteItem, restoreItem, addPhoto, removePhoto, photoIdsInUse, clearSamples, hasSamples, setSettings,
     touchVisit, storageUse, liveRooms, liveItems, itemsIn, photoCount, findChecklist, createStore, ID_PATTERN
 } from '../www/whitestone/js/store.js';
@@ -129,6 +129,43 @@ describe('checklists', () => {
         doc = apply(doc, (d) => restoreChecklist(d, 'checklist-1', CONFIG, LATER)).doc;
         expect(C(doc).deletedAt).toBeNull();
         expect(apply(doc, (d) => restoreChecklist(d, 'checklist-1', CONFIG, LATER)).doc).toEqual(doc);
+    });
+});
+
+describe('duplicating a checklist', () => {
+    test('a fresh draft: new ids, tasks following their rooms, and nothing removed, published or sampled', () => {
+        let doc = home();
+        const kitchenItems = itemsIn(C(doc), 'kitchen-1');
+        doc = deleteItem(doc, 'checklist-1', kitchenItems[0].id, CONFIG, NOW).doc;
+        doc = addPhoto(doc, 'checklist-1', kitchenItems[1].id, 'photo-one-1', CONFIG, NOW).doc;
+        let n = 0;
+        const { record } = apply(doc, (d) => duplicateChecklist(d, 'checklist-1', CONFIG, LATER, { newId: () => `copy-id-${++n}` }));
+
+        expect(record.title).toBe('Copy of Our home');
+        expect(record.id).not.toBe('checklist-1');
+        const ids = new Set([record.id, ...record.rooms.map((r) => r.id), ...record.items.map((i) => i.id)]);
+        expect(ids.size).toBe(1 + record.rooms.length + record.items.length);
+        // Every task sits in one of the copy's own rooms, the kitchen's in the kitchen.
+        const kitchen = record.rooms.find((r) => r.area === 'kitchen');
+        expect(record.items.every((i) => record.rooms.some((r) => r.id === i.roomId))).toBe(true);
+        expect(record.items.filter((i) => i.roomId === kitchen.id)).toHaveLength(kitchenItems.length - 1);
+        // The removed task stays behind, and the photo is shared, not copied.
+        expect(record.items.every((i) => !i.deletedAt)).toBe(true);
+        expect(record.items.some((i) => i.photos.includes('photo-one-1'))).toBe(true);
+        expect(record).toMatchObject({ sample: false, quote: null, published: null, booking: null, visits: [], createdAt: LATER.toISOString() });
+    });
+
+    test('a removed checklist, or one past the limit, is not duplicated', () => {
+        const gone = deleteChecklist(home(), 'checklist-1', CONFIG, NOW).doc;
+        expect(apply(gone, (d) => duplicateChecklist(d, 'checklist-1', CONFIG, NOW)).error).toBe(STOREtext('checklistRemoved'));
+        let full = home();
+        while (full.checklists.filter((c) => !c.deletedAt).length < CONFIG.limits.checklists) full = createChecklist(full, {}, CONFIG, NOW).doc;
+        expect(apply(full, (d) => duplicateChecklist(d, 'checklist-1', CONFIG, NOW)).error).toBe('You can keep up to 20 checklists on this device.');
+    });
+
+    test('a long title stays within its limit', () => {
+        const long = updateChecklist(home(), 'checklist-1', { title: 'x'.repeat(80) }, CONFIG, NOW).doc;
+        expect(apply(long, (d) => duplicateChecklist(d, 'checklist-1', CONFIG, NOW)).record.title).toHaveLength(80);
     });
 });
 

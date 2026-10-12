@@ -343,6 +343,42 @@ export function createChecklist(doc, fields, config, now, opts = {}) {
     return { doc: { ...doc, checklists: [...doc.checklists, n.record] }, record: n.record, error: null };
 }
 
+/**
+ * A copy of a checklist as a new draft: fresh ids for it, its rooms and its
+ * tasks (tasks follow their rooms), its removed records left behind, and
+ * nothing published, booked or reported. Photos are shared, not copied on
+ * disk: both checklists refer to the same photo ids, and a photo is pruned
+ * only once neither does (photoIdsInUse).
+ */
+export function duplicateChecklist(doc, id, config, now, opts = {}) {
+    const found = liveChecklist(doc, id);
+    if (found.error) return refusal(doc, found.error);
+    if (doc.checklists.filter(isLive).length >= config.limits.checklists) {
+        return refusal(doc, STORE.tooManyChecklists(config.limits.checklists));
+    }
+    const c = found.checklist;
+    const make = opts.newId || newId;
+    const roomIds = new Map(liveRooms(c).map((r) => [r.id, make()]));
+    const at = stamp(now);
+    const fresh = (r) => ({ ...r, sample: false, createdAt: at, updatedAt: at, deletedAt: null });
+    const record = {
+        ...c,
+        id: make(),
+        title: STORE.copyOf(c.title).slice(0, config.limits.title),
+        rooms: liveRooms(c).map((r) => fresh({ ...r, id: roomIds.get(r.id) })),
+        items: liveItems(c).map((i) => fresh({ ...i, id: make(), roomId: roomIds.get(i.roomId), photos: [...i.photos] })),
+        quote: null,
+        published: null,
+        booking: null,
+        visits: [],
+        sample: false,
+        createdAt: at,
+        updatedAt: at,
+        deletedAt: null
+    };
+    return { doc: { ...doc, checklists: [...doc.checklists, record] }, record, error: null };
+}
+
 /** Title, visit frequency and the household note. */
 export function updateChecklist(doc, id, fields, config, now) {
     const found = liveChecklist(doc, id);

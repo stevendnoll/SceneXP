@@ -82,7 +82,146 @@ export const STORE = Object.freeze({
     tooManyItems: (n) => `A checklist can have up to ${n} tasks.`,
     tooManyPhotos: (n) => `A task can have up to ${n} photos.`,
     tooManyChecklistPhotos: (n) => `A checklist can have up to ${n} photos.`,
-    roomOfRemovedRoom: 'Its room was removed too. Please restore the room first.'
+    roomOfRemovedRoom: 'Its room was removed too. Please restore the room first.',
+    copyOf: (title) => `Copy of ${title}`
+});
+
+/** How often a visit happens (config.frequencies), as the setup card says it. */
+export const FREQUENCIES = Object.freeze({
+    '': 'Not sure yet',
+    once: 'Just this once',
+    weekly: 'Every week',
+    biweekly: 'Every other week',
+    monthly: 'Every month'
+});
+
+/** The studio's own lines: toasts, the live region, list text. */
+export const UI = Object.freeze({
+    started: (title) => `Started ${title}. Next, add a room.`,
+    homeSaved: 'Your home details are saved.',
+    preferencesSaved: 'Your care preferences are saved.',
+    preferencesNone: 'No care preferences. That is fine.',
+    opened: (title) => `Opened ${title}.`,
+    duplicated: (title) => `Made ${title}.`,
+    removedChecklist: (title) => `Removed ${title}.`,
+    undone: (label) => `Undone. ${label}`,
+    nothingToUndo: 'There is nothing to undo.',
+    levelsNeeded: 'Please tick at least one level.',
+    sheetFailed: 'The service menu could not be loaded. Please check your connection and reload the page.',
+    noChecklists: 'No checklists yet. Start your own and it is kept here, in this browser.',
+    draft: 'Draft',
+    example: 'Example home',
+    rooms: (n) => `${n} ${n === 1 ? 'room' : 'rooms'}`,
+    tasks: (n) => `${n} ${n === 1 ? 'task' : 'tasks'}`,
+    open: 'Open',
+    current: 'Open now',
+    duplicate: 'Duplicate',
+    remove: 'Remove',
+    removeTitle: (title) => `Remove ${title}?`,
+    removeDetail: 'It goes from this browser. You can bring it back with Undo until you leave the page.',
+    notSaving: 'Not saving',
+    otherTab: 'Your checklists were updated in another tab.',
+    labels: Object.freeze({
+        started: 'Started a checklist',
+        home: 'Changed your home details',
+        preferences: 'Changed care preferences',
+        duplicated: 'Duplicated a checklist',
+        removed: 'Removed a checklist',
+        roomAdded: 'Added a room',
+        roomChanged: 'Changed a room',
+        roomRemoved: 'Removed a room',
+        taskAdded: 'Added a task',
+        taskChanged: 'Changed a task',
+        taskRemoved: 'Removed a task',
+        moved: 'Moved a task',
+        clearedExample: 'Cleared the example'
+    }),
+    exampleCleared: 'The example home is cleared. Your own checklists are untouched.',
+
+    // Rooms
+    addRoomTitle: 'Add a room',
+    editRoomTitle: 'Edit this room',
+    addRoomSave: 'Add room',
+    saveChanges: 'Save changes',
+    roomAdded: (name, n) => (n ? `Added ${name} with ${n} standard ${n === 1 ? 'task' : 'tasks'}.` : `Added ${name}.`),
+    roomChanged: (name) => `Saved ${name}.`,
+    roomRemoved: (name) => `Removed ${name} and its tasks.`,
+    presetAdds: (names) => `Adds ${names}.`,
+    presetWaiting: 'The standard tasks appear once the service menu has loaded.',
+
+    // The checklist view
+    noRooms: 'No rooms yet. Add your first room to begin.',
+    emptyLevel: 'No rooms on this level yet.',
+    emptyRoom: 'No tasks in this room yet.',
+    addTask: 'Add a task',
+    editRoom: 'Edit room',
+    edit: 'Edit',
+    important: 'Important',
+    photos: (n) => `${n} ${n === 1 ? 'photo' : 'photos'}`,
+    hasNotes: 'Has notes',
+    quantity: (n) => `Quantity ${n}`,
+    sizes: Object.freeze({ small: 'Small room', medium: 'Medium room', large: 'Large room' }),
+    sizeChoices: Object.freeze({ small: 'Small', medium: 'Medium', large: 'Large' }),
+    priceAndTime: (money, time) => `${money}, ${time}`,
+    sheetLoading: 'The service menu is still loading. Please try again in a moment.',
+    sheetMissing: 'Prices appear once the service menu has loaded.',
+
+    // Tasks
+    addTaskTitle: (room) => `Add a task to ${room}`,
+    editTaskTitle: (task) => `Edit ${task}`,
+    addTaskSave: 'Add task',
+    taskAdded: (task, room) => `Added ${task} to ${room}.`,
+    taskChanged: (task) => `Saved ${task}.`,
+    taskRemoved: (task) => `Removed ${task}.`,
+    optionLine: (name, money, minutes) => `${name}, plus ${money} and ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`,
+    optionFree: (name) => `${name}, no extra charge`,
+
+    // Photos
+    photoUnreadable: 'That file could not be read as a photo. Please choose a JPEG, PNG or HEIC picture.',
+    photoFailed: 'That photo could not be saved. Please try another.',
+    photosFull: (n) => `A task can have up to ${n} photos.`,
+    photosInMemory: 'This browser is not keeping photos, so they last only until you leave the page.',
+    photoAdded: 'Photo added.',
+    photoRemoved: 'Photo removed.',
+    removePhoto: (n) => `Remove photo ${n}`,
+    photoAlt: (task, n) => `Photo ${n} for ${task}`,
+
+    // The quote (PRD 8.5)
+    quoteChip: (money, time) => `Your quote: ${money}, ${time}`,
+    quoteChipSpoken: (money, time) => `Your quote, ${money}, ${time}. Example prices. Show the breakdown.`,
+    examplePrices: 'Example prices',
+    quoteTotal: (money) => `Your quote: ${money}`,
+    quoteTime: (time) => `The visit takes ${time}.`,
+    minimumNudge: (minimum, more) => `Visit minimum ${minimum}. Add ${more} more to reach it, or it rounds up to ${minimum}.`,
+    minimumMet: (minimum) => `The visit minimum of ${minimum} is met.`,
+    topUpLine: 'Minimum top-up',
+    subtotalLine: 'Tasks',
+    totalLine: 'Total',
+    taxIncluded: 'Tax is included.',
+    taxExtra: 'Prices are before any sales tax.',
+    cannotPrice: (n) => `${n} ${n === 1 ? 'task is' : 'tasks are'} not on the current service menu, so ${n === 1 ? 'it is' : 'they are'} not in the quote. Please edit or remove ${n === 1 ? 'it' : 'them'}.`,
+    sheetVersion: (version) => `Priced on service menu ${version}.`,
+
+    // The service menu
+    menuEach: (money) => `${money} each time`,
+    menuCount: (money) => `${money} each`,
+    menuRoom: (small, medium, large) => `${small} small room, ${medium} medium, ${large} large`,
+    menuMinutes: (minutes) => `about ${minutes} minutes`,
+    menuOption: (name, money) => `${name} adds ${money}`,
+    menuAddTo: (room) => `Add to ${room}`,
+    // No article, so the sentence reads right for every kind of room (an entry, a kitchen).
+    menuNoRoom: (kind) => `Your checklist has no ${String(kind).toLowerCase()} yet. Add one to order these.`,
+    menuNoChecklist: 'Start your own checklist to order from the menu.',
+
+    // Reordering, filtering, printing
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    moved: (task) => `Moved ${task}.`,
+    filterAll: 'Everything',
+    filterImportant: 'Important tasks only',
+    filterLevel: (level) => `${level} only`,
+    filterNone: 'Nothing matches this filter.',
+    filterShowing: (shown, total) => `Showing ${shown} of ${total} tasks.`
 });
 
 /** What the page says about saving, under the studio's storage note. */
@@ -121,6 +260,6 @@ export function allCopy() {
         else if (typeof value === 'function') out.push({ where, text: value(12) });
         else if (value && typeof value === 'object') Object.entries(value).forEach(([k, v]) => walk(v, `${where}.${k}`));
     };
-    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, DAY_STATUS, STORE, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
+    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, DAY_STATUS, STORE, FREQUENCIES, UI, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
     return out;
 }

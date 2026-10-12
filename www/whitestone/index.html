@@ -6,9 +6,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         img-src allows blob: for one thing only: a task's photos, shown from
+         the browser's own storage (photos.js) through URL.createObjectURL.
+         Nothing from another site can be a blob: URL here. -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <!-- STILL BEING BUILT (the proto-1 prototype). Kept out of the directory,
          the sitemap, llms.txt and search until release, which means a social
@@ -115,6 +118,18 @@
     <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/resolution-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="js/store.min.js">
+    <link rel="modulepreload" href="js/samples.min.js">
+    <link rel="modulepreload" href="js/history.min.js">
+    <link rel="modulepreload" href="js/sheet.min.js">
+    <link rel="modulepreload" href="js/pricing.min.js">
+    <link rel="modulepreload" href="js/photos.min.js">
+    <link rel="modulepreload" href="js/taxonomy.min.js">
+    <link rel="modulepreload" href="js/cards.min.js">
+    <link rel="modulepreload" href="js/forms.min.js">
+    <link rel="modulepreload" href="js/panels.min.js">
+    <link rel="modulepreload" href="js/copy.min.js">
+    <link rel="modulepreload" href="js/guards.min.js">
     <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
@@ -169,6 +184,307 @@
     </div>
 
     <canvas id="game-canvas" role="img" aria-label="The Whitestone Home Care studio, a bright room with white plaster walls and a pale stone floor in morning light"></canvas>
+
+    <!-- Every change, said aloud. Polite, so it waits its turn. -->
+    <p id="ws-live" class="sr-only" role="status" aria-live="polite"></p>
+
+    <!-- THE HOME, top left: which checklist is open, a tap away from the
+         list of them. A .ui-float, so it is display:none until main.js
+         reveals it after the loading screen. -->
+    <div id="ws-hud" class="ui-float ws-hud" role="group" aria-label="Your checklist">
+        <button id="hud-home" class="hud-chip" type="button" hidden>Our home</button>
+        <!-- THE QUOTE, always in view once there is a task (PRD 8.5). Its
+             aria-label says the money in words and that the prices are
+             examples. -->
+        <button id="hud-quote" class="hud-chip hud-quote" type="button" hidden>
+            <span id="hud-quote-text"></span>
+            <span class="hud-example">Example prices</span>
+        </button>
+    </div>
+
+    <!-- THE TOOLBAR, bottom center, where a thumb can reach it. Every action
+         in the studio has a button here, so nothing depends on tapping the
+         picture (PRD 8.1). Buttons that need an open checklist stay hidden
+         until there is one. -->
+    <nav id="ws-bar" class="ui-float ws-bar" aria-label="The studio">
+        <button id="bar-new" class="ws-btn ws-btn-primary" type="button">Start your own</button>
+        <button id="bar-checklist" class="ws-btn ws-btn-primary" type="button" hidden>Checklist</button>
+        <button id="bar-room" class="ws-btn" type="button" hidden>Add a room</button>
+        <button id="bar-home" class="ws-btn" type="button" hidden>Your home</button>
+        <button id="bar-prefs" class="ws-btn" type="button" hidden>Care preferences</button>
+        <button id="bar-menu" class="ws-btn" type="button">Service menu</button>
+        <button id="bar-mine" class="ws-btn" type="button">My checklists</button>
+        <button id="bar-undo" class="ws-btn" type="button" title="Undo (Ctrl or Command and Z)" disabled>Undo</button>
+    </nav>
+
+    <!-- THE UNDO TOAST. Not a live region itself: its words also go through
+         #ws-live, so they are heard once. -->
+    <div id="ws-toast" class="ws-toast" hidden>
+        <span id="toast-text"></span>
+        <button id="toast-undo" class="ws-btn ws-btn-small" type="button" hidden>Undo</button>
+    </div>
+
+    <!-- ==== THE CARDS, IN STACKING ORDER (cards.js CARD_ORDER) ==== -->
+
+    <!-- MY CHECKLISTS: every checklist in this browser. -->
+    <div id="my-checklists" class="card-overlay" hidden>
+        <div id="my-checklists-panel" class="card-panel list-panel" role="dialog" aria-modal="true"
+            aria-labelledby="my-checklists-title" aria-describedby="my-checklists-about" tabindex="-1">
+            <div class="card-head">
+                <h2 id="my-checklists-title" class="card-title">My checklists</h2>
+                <button id="my-checklists-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <p id="my-checklists-about" class="card-meta">Kept in this browser. Nothing is sent anywhere
+                unless you choose to share a checklist.</p>
+            <!-- Filled in only when the browser will not let the page save,
+                 or is running out of room. Empty and silent otherwise. -->
+            <p id="storage-note" class="storage-note"></p>
+            <ul id="my-list" class="my-list"></ul>
+            <div class="card-actions">
+                <button id="my-clear-example" class="ws-btn" type="button" hidden>Clear the example</button>
+                <button id="my-new" class="ws-btn ws-btn-primary" type="button">Start a new checklist</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SETUP: a new home, or an edit of this one (forms.js). -->
+    <div id="setup" class="card-overlay" hidden>
+        <div id="setup-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="setup-title-text" aria-describedby="setup-about" tabindex="-1">
+            <h2 id="setup-title-text" class="card-title">Start your own</h2>
+            <p id="setup-about" class="card-meta">Tell us a little about your home. You can change any
+                of this later.</p>
+            <form id="setup-form" class="ws-form" novalidate>
+                <fieldset class="form-group">
+                    <legend>Which levels does your home have?</legend>
+                    <div id="setup-levels-list" class="form-columns"></div>
+                </fieldset>
+                <div class="form-row">
+                    <label for="setup-title">Name this checklist</label>
+                    <input id="setup-title" class="ws-input" type="text" maxlength="80" placeholder="Our home" autocomplete="off">
+                </div>
+                <div class="form-row">
+                    <label for="setup-frequency">How often would you like a visit?</label>
+                    <select id="setup-frequency" class="ws-select"></select>
+                </div>
+                <div class="form-row">
+                    <label for="setup-household">Anything your cleaner should know</label>
+                    <textarea id="setup-household" class="ws-input" rows="3" maxlength="500"
+                        placeholder="Parking, where supplies are kept, pets at home"
+                        aria-describedby="setup-household-hint"></textarea>
+                    <p id="setup-household-hint" class="form-hint" hidden></p>
+                </div>
+                <p id="setup-error" class="form-error" role="alert" hidden></p>
+                <div class="card-actions">
+                    <button id="setup-cancel" class="ws-btn" type="button">Cancel</button>
+                    <button id="setup-save" class="ws-btn ws-btn-primary" type="submit">Start my checklist</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CARE PREFERENCES for the whole visit (PRD 11.8). Offered once after
+         setup, and from the toolbar any time. About the work, never about
+         anybody's health. -->
+    <div id="preferences" class="card-overlay" hidden>
+        <div id="preferences-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="preferences-title" aria-describedby="preferences-about" tabindex="-1">
+            <h2 id="preferences-title" class="card-title">Anything we should avoid?</h2>
+            <p id="preferences-about" class="card-meta">Care preferences apply to the whole visit, and your
+                cleaner sees them first. They are optional.</p>
+            <form id="prefs-form" class="ws-form" novalidate>
+                <div id="prefs-groups"></div>
+                <div class="form-row">
+                    <label for="prefs-note">Anything else we should know</label>
+                    <textarea id="prefs-note" class="ws-input" rows="3" maxlength="300"
+                        aria-describedby="prefs-note-hint"></textarea>
+                    <p id="prefs-note-hint" class="form-hint" hidden></p>
+                </div>
+                <div class="card-actions">
+                    <button id="prefs-skip" class="ws-btn" type="button">Not now</button>
+                    <button id="prefs-save" class="ws-btn ws-btn-primary" type="submit">Save preferences</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- THE SERVICE MENU: every task by kind of room, with its price, its
+         time and its options. Where "transparent pricing" can be seen. -->
+    <div id="menu" class="card-overlay checklist-overlay" hidden>
+        <div id="menu-panel" class="card-panel checklist-panel" role="dialog" aria-modal="true"
+            aria-labelledby="menu-title" aria-describedby="menu-about" tabindex="-1">
+            <div class="card-head">
+                <h2 id="menu-title" class="card-title">Service menu</h2>
+                <button id="menu-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <p id="menu-about" class="card-meta">Every task has a set price and a time estimate. Options
+                add a set amount. These are example prices.</p>
+            <div class="form-row menu-pick">
+                <label for="menu-area">Show tasks for</label>
+                <select id="menu-area" class="ws-select"></select>
+            </div>
+            <p id="menu-note" class="card-meta"></p>
+            <ul id="menu-list" class="menu-list"></ul>
+        </div>
+    </div>
+
+    <!-- THE QUOTE: the total, the time, the visit minimum, and the
+         breakdown by room and task. -->
+    <div id="quote" class="card-overlay" hidden>
+        <div id="quote-panel" class="card-panel list-panel" role="dialog" aria-modal="true"
+            aria-labelledby="quote-title" tabindex="-1">
+            <div class="card-head">
+                <h2 id="quote-title" class="card-title">Your quote</h2>
+                <button id="quote-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <p id="quote-total" class="quote-total"></p>
+            <p id="quote-time" class="card-meta"></p>
+            <p id="quote-minimum" class="quote-minimum"></p>
+            <p id="quote-problems" class="form-hint" hidden></p>
+            <div id="quote-breakdown" class="quote-breakdown"></div>
+            <p id="quote-tax" class="card-meta"></p>
+            <p class="card-meta quote-promise">You will never pay more than your quote without approving it
+                first. Anything we skip comes off your bill.</p>
+            <p class="card-meta">Whitestone Home Care is a SceneXP concept studio. Prices and bookings are
+                examples.</p>
+            <div class="card-actions">
+                <button id="quote-open-checklist" class="ws-btn ws-btn-primary" type="button">Open the checklist</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE CHECKLIST: every task, grouped by level and room (PRD 8.7). The
+         complete keyboard and screen reader path through a home. Rooms and
+         tasks open over it, so their cards come after it. -->
+    <div id="checklist" class="card-overlay checklist-overlay" hidden>
+        <div id="checklist-panel" class="card-panel checklist-panel" role="dialog" aria-modal="true"
+            aria-labelledby="checklist-title" tabindex="-1">
+            <div class="card-head">
+                <h2 id="checklist-title" class="card-title">Checklist</h2>
+                <button id="checklist-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <p id="checklist-summary" class="card-meta"></p>
+            <div class="checklist-actions">
+                <button id="checklist-add-room" class="ws-btn ws-btn-primary ws-btn-small" type="button">Add a room</button>
+                <button id="checklist-print" class="ws-btn ws-btn-small" type="button">Print</button>
+                <label for="checklist-filter" class="checklist-filter-label">Show</label>
+                <select id="checklist-filter" class="ws-select checklist-filter"></select>
+            </div>
+            <p id="checklist-showing" class="card-meta" hidden></p>
+            <div id="checklist-body" class="checklist-body"></div>
+        </div>
+    </div>
+
+    <!-- A ROOM: its level, its kind, an optional label, and its standard
+         tasks in the same step (PRD 8.4). -->
+    <div id="room" class="card-overlay" hidden>
+        <div id="room-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="room-title" tabindex="-1">
+            <h2 id="room-title" class="card-title">Add a room</h2>
+            <form id="room-form" class="ws-form" novalidate>
+                <div class="form-row">
+                    <label for="room-area">Kind of room</label>
+                    <select id="room-area" class="ws-select"></select>
+                </div>
+                <div class="form-row">
+                    <label for="room-level">Level</label>
+                    <select id="room-level" class="ws-select"></select>
+                </div>
+                <div class="form-row">
+                    <label for="room-label">Its name, if it needs one</label>
+                    <input id="room-label" class="ws-input" type="text" maxlength="40" autocomplete="off"
+                        placeholder="Emma's room, or the guest bath">
+                </div>
+                <div id="room-preset-row" class="form-row form-check">
+                    <input id="room-preset" type="checkbox" checked aria-describedby="room-preset-list">
+                    <label for="room-preset">Add the standard tasks for this room</label>
+                </div>
+                <p id="room-preset-list" class="form-note"></p>
+                <p id="room-error" class="form-error" role="alert" hidden></p>
+                <div class="card-actions">
+                    <button id="room-remove" class="ws-btn ws-btn-quiet" type="button" hidden>Remove this room</button>
+                    <button id="room-cancel" class="ws-btn" type="button">Cancel</button>
+                    <button id="room-save" class="ws-btn ws-btn-primary" type="submit">Add room</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- A TASK: only tasks offered in its kind of room, only the options the
+         task accepts, a size or a quantity where the price needs one, the
+         star, the notes, and up to 5 photos. -->
+    <div id="task" class="card-overlay" hidden>
+        <div id="task-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="task-title" tabindex="-1">
+            <h2 id="task-title" class="card-title">Add a task</h2>
+            <form id="task-form" class="ws-form" novalidate>
+                <div class="form-row">
+                    <label for="task-task">Task</label>
+                    <select id="task-task" class="ws-select" aria-describedby="task-about"></select>
+                    <p id="task-about" class="form-note"></p>
+                </div>
+                <fieldset id="task-options-row" class="form-group">
+                    <legend>Options</legend>
+                    <div id="task-options-list"></div>
+                </fieldset>
+                <div id="task-size-row" class="form-row">
+                    <label for="task-size">Size of the room</label>
+                    <select id="task-size" class="ws-select"></select>
+                </div>
+                <div id="task-quantity-row" class="form-row">
+                    <label for="task-quantity">How many</label>
+                    <input id="task-quantity" class="ws-input ws-input-short" type="number" min="1" max="50" step="1" inputmode="numeric">
+                </div>
+                <div class="form-row form-check">
+                    <input id="task-important" type="checkbox">
+                    <label for="task-important">Important. Please start here.</label>
+                </div>
+                <p id="task-price" class="task-price" aria-live="polite"></p>
+                <details id="task-more" class="form-more">
+                    <summary>Notes, things to avoid, and photos</summary>
+                    <div class="form-row">
+                        <label for="task-notes">How you would like it done</label>
+                        <textarea id="task-notes" class="ws-input" rows="2" maxlength="500" aria-describedby="task-notes-hint"></textarea>
+                        <p id="task-notes-hint" class="form-hint" hidden></p>
+                    </div>
+                    <div class="form-row">
+                        <label for="task-avoid">Anything to avoid</label>
+                        <textarea id="task-avoid" class="ws-input" rows="2" maxlength="500" placeholder="No abrasives on the marble"
+                            aria-describedby="task-avoid-hint"></textarea>
+                        <p id="task-avoid-hint" class="form-hint" hidden></p>
+                    </div>
+                    <div class="form-row">
+                        <label for="task-products">Products to use or skip</label>
+                        <input id="task-products" class="ws-input" type="text" maxlength="200" autocomplete="off">
+                    </div>
+                    <div class="form-row">
+                        <p id="task-photos-label" class="form-label">Photos</p>
+                        <ul id="task-photos" class="task-photos" aria-labelledby="task-photos-label"></ul>
+                        <input id="task-photo-input" class="sr-only" type="file" accept="image/*">
+                        <label id="task-photo-add" for="task-photo-input" class="ws-btn ws-btn-small ws-file">Add a photo</label>
+                        <p id="task-photo-note" class="form-note">Photos are resized and stripped of their location
+                            before they are kept.</p>
+                    </div>
+                </details>
+                <p id="task-error" class="form-error" role="alert" hidden></p>
+                <div class="card-actions">
+                    <button id="task-remove" class="ws-btn ws-btn-quiet" type="button" hidden>Remove this task</button>
+                    <button id="task-cancel" class="ws-btn" type="button">Cancel</button>
+                    <button id="task-save" class="ws-btn ws-btn-primary" type="submit">Add task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- THE CONFIRMATION CARD, last, so it stacks over everything. -->
+    <div id="confirm" class="card-overlay" hidden>
+        <div id="confirm-panel" class="card-panel" role="dialog" aria-modal="true"
+            aria-labelledby="confirm-title" aria-describedby="confirm-detail" tabindex="-1">
+            <h2 id="confirm-title" class="card-title"></h2>
+            <p id="confirm-detail" class="card-detail"></p>
+            <div id="confirm-actions" class="card-actions"></div>
+        </div>
+    </div>
 
     <script type="module" src="../lib/three/r186/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>
