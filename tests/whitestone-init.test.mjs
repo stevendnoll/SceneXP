@@ -1,9 +1,9 @@
 // © 2026 Continuum Commerce LLC. All rights reserved.
 /**
- * Boot-and-drive smoke for Whitestone Home Care at M0, plus the page-level
- * rules no unit test can see: the empty studio boots behind its loading
- * screen and then draws only when asked, the shell is a room with its glass
- * side open, the cleaner's PIN form never accepts less than a PIN, and
+ * Boot-and-drive smoke for Whitestone Home Care, plus the page-level
+ * rules no unit test can see: the studio boots behind its loading screen
+ * and then draws only when asked, the camera glides between its stations
+ * (or cuts under reduced motion), the cleaner's PIN form never accepts less than a PIN, and
  * nothing under either js folder writes markup from strings.
  *
  * Under Node, importing main.js is side-effect-free unless a `document`
@@ -22,9 +22,7 @@ import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { readPin, wire, COPY } from '../www/whitestone/tasks/js/main.js';
-// Imported here, before any test installs a `document`, so this copy never
-// boots. Each boot below imports a fresh copy after jest.resetModules.
-import { shellSurfaces } from '../www/whitestone/js/main.js';
+import { poseFor } from '../www/whitestone/js/stations.js';
 
 let dom;
 
@@ -117,72 +115,81 @@ test('page hide stops the loop for good', async () => {
     expect(main.getState().running).toBe(false);
 });
 
-// ---- The shell (pure) -------------------------------------------------------
+// ---- Stations ---------------------------------------------------------------
 
-describe('the studio shell', () => {
-    /** Where a plane's face points: its +z normal turned by the Euler angles
-     *  three.js applies (XYZ order). Worked out here rather than read back
-     *  from the code, so the test checks the room, not the arithmetic. */
-    function normalOf([rx, ry, rz]) {
-        let v = [0, 0, 1];
-        const rot = (a, i, j) => {
-            const c = Math.cos(a);
-            const s = Math.sin(a);
-            const out = [...v];
-            out[i] = v[i] * c - v[j] * s;
-            out[j] = v[i] * s + v[j] * c;
-            v = out;
-        };
-        // Matrix XYZ = Rx * Ry * Rz, applied to a vector: z first, then y, then x.
-        rot(rz, 0, 1);
-        rot(ry, 2, 0);
-        rot(rx, 1, 2);
-        return v.map((n) => Math.round(n * 1e9) / 1e9);
-    }
-
-    const surfaces = shellSurfaces(CONFIG.room);
-
-    test('every surface faces into the room', () => {
-        const center = [0, CONFIG.room.height / 2, 0];
-        for (const s of surfaces) {
-            const n = normalOf(s.rotation);
-            const toCenter = center.map((c, i) => c - s.position[i]);
-            const facing = n.reduce((sum, x, i) => sum + x * toCenter[i], 0);
-            expect(`${s.name} faces in: ${facing > 0}`).toBe(`${s.name} faces in: true`);
-        }
+describe('stations', () => {
+    test('the studio opens at the overview, composed for the screen', async () => {
+        const main = await boot();
+        const pose = main.getState().pose;
+        expect(main.__test__.ui.station).toBe('overview');
+        expect(pose).toEqual(poseFor('overview', window.innerWidth / window.innerHeight, CONFIG));
     });
 
-    test('the room is closed on every side but the street glass', () => {
-        const { width: w, depth: d, height: h } = CONFIG.room;
-        const at = (name) => surfaces.find((s) => s.name === name);
-        expect(at('floor').position[1]).toBe(0);
-        expect(at('ceiling').position[1]).toBe(h);
-        expect(at('back').position[2]).toBe(-d / 2);
-        expect(at('left').position[0]).toBe(-w / 2);
-        expect(at('right').position[0]).toBe(w / 2);
-        // Nothing stands on the +z long wall, which becomes the glass in M2.
-        expect(surfaces.some((s) => s.position[2] === d / 2)).toBe(false);
-        // And each piece spans its whole side.
-        expect(at('floor').size).toEqual([w, d]);
-        expect(at('back').size).toEqual([w, h]);
-        expect(at('left').size).toEqual([d, h]);
+    test('a glide takes its time, draws every frame on the way, and lands on the station', async () => {
+        const main = await boot();
+        stepFrames(3);
+        const before = main.getState().frames;
+        expect(main.__test__.goTo('menu')).toBe(true);
+        expect(main.__test__.glide()).not.toBeNull();
+        stepFrames(30, 16);
+        expect(main.__test__.glide()).not.toBeNull();
+        expect(main.getState().frames - before).toBeGreaterThanOrEqual(30);
+        stepFrames(Math.ceil((CONFIG.view.glideSeconds * 1000) / 16), 16);
+        expect(main.__test__.glide()).toBeNull();
+        expect(main.getState().pose).toEqual(poseFor('menu', window.innerWidth / window.innerHeight, CONFIG));
+        // Landed, it goes quiet again.
+        const landed = main.getState().frames;
+        stepFrames(20);
+        expect(main.getState().frames).toBe(landed);
     });
 
-    test('the arrival camera stands inside the room, looking at the back wall', () => {
-        const { width: w, depth: d, height: h } = CONFIG.room;
-        const [x, y, z] = CONFIG.camera.position;
-        expect(Math.abs(x)).toBeLessThan(w / 2);
-        expect(y).toBeGreaterThan(0);
-        expect(y).toBeLessThan(h);
-        expect(Math.abs(z)).toBeLessThan(d / 2);
-        expect(CONFIG.camera.lookAt[2]).toBeLessThan(z);
+    test('under reduced motion it cuts', async () => {
+        const main = await boot();
+        main.__test__.state.reducedMotion = true;
+        main.__test__.goTo('board');
+        stepFrames(1);
+        expect(main.__test__.glide()).toBeNull();
+        expect(main.getState().pose).toEqual(poseFor('board', window.innerWidth / window.innerHeight, CONFIG));
+    });
+
+    test('a station that does not exist goes nowhere', async () => {
+        const main = await boot();
+        expect(main.__test__.goTo('basement')).toBe(false);
+        expect(main.__test__.glide()).toBeNull();
+        expect(main.__test__.ui.station).toBe('overview');
+    });
+
+    test('a resize recomposes the station for the new screen', async () => {
+        const main = await boot();
+        main.__test__.state.reducedMotion = true;
+        main.__test__.goTo('model');
+        stepFrames(1);
+        dom.windowStub.innerWidth = 390;
+        dom.windowStub.innerHeight = 844;
+        fire(dom.windowStub, 'resize');
+        expect(main.getState().pose).toEqual(poseFor('model', 390 / 844, CONFIG));
+        expect(main.getState().pose.fov).toBeGreaterThan(CONFIG.stations.model.fov);
+    });
+
+    test('the look is held while a card is open', async () => {
+        const main = await boot();
+        expect(main.__test__.lookLocked()).toBe(false);
+        main.__test__.openMine();
+        expect(main.__test__.lookLocked()).toBe(true);
+    });
+
+    test('the console helper goes to stations too', async () => {
+        await boot();
+        expect(window.whitestone.stations().all).toContain('printer');
+        expect(window.whitestone.goTo('printer')).toBe(true);
+        expect(window.whitestone.stations().at).toBe('printer');
     });
 });
 
 test('the config is frozen all the way down', () => {
     expect(Object.isFrozen(CONFIG)).toBe(true);
     expect(Object.isFrozen(CONFIG.room)).toBe(true);
-    expect(Object.isFrozen(CONFIG.camera.position)).toBe(true);
+    expect(Object.isFrozen(CONFIG.stations.overview.eye)).toBe(true);
 });
 
 // ---- The cleaner's page -----------------------------------------------------

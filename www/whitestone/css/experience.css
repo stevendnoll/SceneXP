@@ -922,6 +922,18 @@ textarea.ws-input {
     opacity: 0.35;
 }
 
+/* ---- Looking around (M2) ------------------------------------------------------
+ *
+ * NO FLOATING LOOK BUTTONS, as in Corner Office. The shared pan part builds
+ * its row and the reveal adds .visible to every .ui-float, so it is hidden
+ * here. Hidden rather than left out, because the part answers its keys only
+ * where its buttons exist. `body` makes this beat the shared sheet's
+ * three-class .pan-controls.always-on.visible.
+ */
+body .pan-controls.no-chrome.visible {
+    display: none;
+}
+
 /* ---- Printing the checklist -------------------------------------------------
  *
  * Print from the checklist card: only the checklist goes to paper, with no

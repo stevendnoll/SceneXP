@@ -15,8 +15,15 @@
  *
  * THE SCENE RENDERS ON DEMAND, as Corner Office does. A studio mostly sits
  * still, so a frame is drawn only when something asks for one
- * (`requestRender`): the reveal, a resize, a returning tab. An idle studio
- * costs a phone nothing.
+ * (`requestRender`): the reveal, a resize, a returning tab, a glide between
+ * stations, the visitor looking around. An idle studio costs a phone
+ * nothing.
+ *
+ * THE CAMERA STANDS AT STATIONS (stations.js) and glides between them,
+ * slowly and eased, or cuts under reduced motion. From any station the
+ * visitor can look around with a drag, the wheel, a pinch or the arrow keys
+ * (the shared pan part, its buttons hidden), and every glide starts from
+ * the view as they left it and lands on the next station's composed view.
  *
  * This is the one place the real clock and the real window are read.
  */
@@ -38,7 +45,7 @@ import { loadSheet, currentVersion, checkChoice, presetFor } from './sheet.min.j
 import { priceChoice, formatMoney, formatMinutes } from './pricing.min.js';
 import { createPhotoStore, createMemoryBackend, openIdbBackend, preparePhoto } from './photos.min.js';
 import { roomName } from './taxonomy.min.js';
-import { initCards, openCard, closeCard, isOpen, announce, toast, confirmCard, setFocusFallback } from './cards.min.js';
+import { initCards, openCard, closeCard, isOpen, anyOpen, announce, toast, confirmCard, setFocusFallback } from './cards.min.js';
 import {
     initForms, fillSetupForm, readSetupForm, validateSetup, showError, showHints, fillPreferencesForm, readPreferencesForm,
     fillRoomForm, readRoomForm, validateRoom, showPresetPreview, fillTaskForm, showTaskChoices, readTaskForm
@@ -48,6 +55,12 @@ import {
     renderMenu, fillMenuAreas
 } from './panels.min.js';
 import { UI, STORAGE_NOTES, ITEM_ERRORS } from './copy.min.js';
+import { HOME_STATION, poseFor, zoomedFov, createGlide } from './stations.min.js';
+import { buildStudio } from './studio.min.js';
+import { buildStreet } from './street.min.js';
+import {
+    initPortraitControls, updatePortraitControls, resetPortraitAim
+} from '../../shared/js/pan-1.0.0.min.js';
 
 // ---- State ------------------------------------------------------------------
 
@@ -67,7 +80,9 @@ const state = {
     sheet: null,
     sheetStatus: 'loading',
     /** Where photos are kept: opening, device (IndexedDB) or memory. */
-    photosStatus: 'opening'
+    photosStatus: 'opening',
+    /** The station's pose the camera was last set to (stations.js). */
+    pose: null
 };
 
 /**
@@ -78,8 +93,13 @@ const state = {
  *   afterPrefs  open the room card once preferences close (first visit)
  *   filter      what the checklist view shows (panels.js filterChoices)
  *   menuArea    the kind of room the service menu shows
+ *   station     where the camera stands (stations.js)
+ *   zoom        the visitor's zoom from the station's own lens, in doublings
  */
-const ui = { editing: null, room: null, task: null, afterPrefs: false, filter: 'all', menuArea: null };
+const ui = {
+    editing: null, room: null, task: null, afterPrefs: false, filter: 'all', menuArea: null,
+    station: HOME_STATION, zoom: 0
+};
 
 /** Thumbnail addresses made for the task card, released when it closes. */
 const photoUrls = new Map();
@@ -96,6 +116,16 @@ let sessionEnded = false;
 let store = null;
 let history = null;
 let photoStore = null;
+let studio = null;
+let street = null;
+let sun = null;
+let envTarget = null;
+/** The glide in progress between stations, or null. */
+let glide = null;
+/** The point the shared pan part turns and tilts the camera about. */
+const viewAim = { x: 0, y: 0, z: 0 };
+/** The camera's rotation and lens as last drawn (lookChanged). */
+const lastLook = { values: null };
 
 // ---- Device and preference checks -----------------------------------------
 
@@ -121,32 +151,6 @@ function now() {
 
 function aspect() {
     return window.innerWidth / Math.max(1, window.innerHeight);
-}
-
-// ---- The shell (pure) -------------------------------------------------------
-
-/**
- * The studio's surfaces as plain numbers: each one a plane of `size`
- * [width, height] meters, centered at `position`, turned by `rotation`
- * (radians about x, y, z) so its face looks into the room. Pure, so the
- * suite can check the box is closed where it should be and open where the
- * glass will go, without a renderer.
- *
- * The +z long wall is left open in M0. It becomes the street glass in M2,
- * and leaving it open now is what lets the sun in.
- */
-export function shellSurfaces(room) {
-    const w = room.width;
-    const d = room.depth;
-    const h = room.height;
-    const half = Math.PI / 2;
-    return [
-        { name: 'floor', size: [w, d], position: [0, 0, 0], rotation: [-half, 0, 0], color: room.floor },
-        { name: 'ceiling', size: [w, d], position: [0, h, 0], rotation: [half, 0, 0], color: room.ceiling },
-        { name: 'back', size: [w, h], position: [0, h / 2, -d / 2], rotation: [0, 0, 0], color: room.walls },
-        { name: 'left', size: [d, h], position: [-w / 2, h / 2, 0], rotation: [0, half, 0], color: room.walls },
-        { name: 'right', size: [d, h], position: [w / 2, h / 2, 0], rotation: [0, -half, 0], color: room.walls }
-    ];
 }
 
 // ---- Initialization ---------------------------------------------------------
@@ -224,7 +228,11 @@ async function init() {
             return held;
         },
         /** The saved document as it is now. */
-        doc: () => state.doc
+        doc: () => state.doc,
+        /** Glide to a station: overview, model, menu, board, printer, desk. */
+        goTo,
+        /** The stations there are, and where the camera stands now. */
+        stations: () => ({ at: ui.station, all: Object.keys(CONFIG.stations) })
     };
 
     // Whether the visitor came back to saved checklists rides in `outcome`,
@@ -257,44 +265,209 @@ function buildRenderer() {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: !state.mobile, powerPreference: 'high-performance' });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = CONFIG.light.exposure;
+    // The sun's shadows through the glass. Nothing in the studio moves, so
+    // the map is drawn once and again only when something on the plinth
+    // changes (markShadows), never for a glide or a look around.
+    renderer.shadowMap.enabled = true;
+    // PCFShadowMap is soft from r182 on, which retired PCFSoftShadowMap.
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
     // Adaptive resolution (shared resolution-1.0.0): below the device's own
     // ratio for as long as the frames say it is too much, back up when not.
     resolution = createResolution({ renderer, ceiling: pixelRatioCeiling });
     resolution.apply();
 }
 
+/** Draw the sun's shadows again on the next frame. */
+function markShadows() {
+    if (renderer && renderer.shadowMap) renderer.shadowMap.needsUpdate = true;
+    requestRender();
+}
+
 function buildScene() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(CONFIG.colors.stone);
+    // Anything the sky dome does not cover (it covers everything) is the
+    // pale horizon, never black.
+    scene.background = new THREE.Color(CONFIG.street.sky.horizon);
 
-    const cam = CONFIG.camera;
-    camera = new THREE.PerspectiveCamera(cam.fov, aspect(), cam.near, cam.far);
-    camera.position.set(cam.position[0], cam.position[1], cam.position[2]);
-    camera.lookAt(cam.lookAt[0], cam.lookAt[1], cam.lookAt[2]);
+    studio = buildStudio(CONFIG);
+    scene.add(studio.group);
+    street = buildStreet(CONFIG);
+    scene.add(street.group);
 
-    for (const s of shellSurfaces(CONFIG.room)) {
-        const mesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(s.size[0], s.size[1]),
-            new THREE.MeshStandardMaterial({ color: s.color, roughness: s.name === 'floor' ? 0.7 : 0.92, metalness: 0 })
-        );
-        mesh.name = s.name;
-        mesh.position.set(s.position[0], s.position[1], s.position[2]);
-        mesh.rotation.set(s.rotation[0], s.rotation[1], s.rotation[2]);
-        scene.add(mesh);
-    }
-
-    const { sun, sky } = CONFIG.light;
+    const { sun: s, sky, fill, bounce } = CONFIG.light;
     scene.add(new THREE.HemisphereLight(sky.color, sky.ground, sky.intensity));
-    const sunLight = new THREE.DirectionalLight(sun.color, sun.intensity);
-    sunLight.position.set(sun.position[0], sun.position[1], sun.position[2]);
-    scene.add(sunLight);
+    // The sun, from the street side, through the glass. Its shadow camera
+    // covers the room and no more (CONFIG.light.sun.shadow.reach).
+    sun = new THREE.DirectionalLight(s.color, s.intensity);
+    sun.position.set(s.position[0], s.position[1], s.position[2]);
+    sun.target.position.set(s.target[0], s.target[1], s.target[2]);
+    sun.castShadow = true;
+    const size = state.mobile ? s.shadow.sizeMobile : s.shadow.size;
+    sun.shadow.mapSize.set(size, size);
+    const cam = sun.shadow.camera;
+    cam.left = -s.shadow.reach;
+    cam.right = s.shadow.reach;
+    cam.top = s.shadow.reach;
+    cam.bottom = -s.shadow.reach;
+    cam.near = s.shadow.near;
+    cam.far = s.shadow.far;
+    sun.shadow.bias = s.shadow.bias;
+    sun.shadow.normalBias = s.shadow.normalBias;
+    scene.add(sun, sun.target);
+    // A soft cool fill from the entrance side, so the faces turned away from
+    // the sun (the homes across the street among them) are not left flat.
+    const fillLight = new THREE.DirectionalLight(fill.color, fill.intensity);
+    fillLight.position.set(fill.position[0], fill.position[1], fill.position[2]);
+    scene.add(fillLight);
+    // The light off the pale floor, shining up.
+    const bounceLight = new THREE.DirectionalLight(bounce.color, bounce.intensity);
+    bounceLight.position.set(0.4, -3, 0.3);
+    scene.add(bounceLight);
+
+    const pose = poseFor(ui.station, aspect(), CONFIG);
+    camera = new THREE.PerspectiveCamera(pose.fov, aspect(), CONFIG.camera.near, CONFIG.camera.far);
+    applyPose(pose);
+    captureRoom();
+}
+
+/**
+ * Give the aluminum and the clear-coated stone the studio to reflect: the
+ * room captured once from its middle, behind the loading screen. A metal
+ * with nothing to reflect renders nearly black.
+ */
+function captureRoom() {
+    if (!renderer || !studio || !THREE.PMREMGenerator) return;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const middle = CONFIG.light.reflectFrom;
+    envTarget = pmrem.fromScene(scene, 0.03, 0.1, CONFIG.camera.far, { position: new THREE.Vector3(middle[0], middle[1], middle[2]) });
+    pmrem.dispose();
+    for (const m of studio.shiny) {
+        m.envMap = envTarget.texture;
+        m.envMapIntensity = m.metalness >= 0.25 ? 1 : 0.6;
+        m.needsUpdate = true;
+    }
+    // The capture spent the shadow map's update on its own first face. The
+    // sun has not moved, so the map it drew is the one the studio needs.
+}
+
+// ---- Stations and the look ----------------------------------------------------
+
+/** Whether the visitor's look is held still: before the studio is ready,
+ *  and while any card is open (each card has the studio behind it). */
+function lookLocked() {
+    return !state.loaded || anyOpen();
+}
+
+/**
+ * The drag, wheel, pinch and keys that look around (CONFIG.view.look),
+ * through the shared pan part with its buttons hidden (experience.css
+ * .no-chrome): the studio owns the zoom (each station composes its own
+ * lens), the part the turn and tilt about `viewAim`. A guard on the canvas,
+ * registered first, keeps the part out while a card is open.
+ */
+function setupLook(signal) {
+    const stopWhileLocked = (event) => {
+        if (lookLocked()) event.stopImmediatePropagation();
+    };
+    canvas.addEventListener('pointerdown', stopWhileLocked, { signal });
+    canvas.addEventListener('wheel', stopWhileLocked, { passive: true, signal });
+    const { pan, zoom } = CONFIG.view.look;
+    initPortraitControls({
+        getCamera: () => camera,
+        lookAt: viewAim,
+        pan,
+        zoom,
+        zoomDelegate: {
+            onDelta: (d) => setZoom(ui.zoom + d),
+            limits: () => ({ atIn: ui.zoom >= zoom.maxIn - 1e-6, atOut: ui.zoom <= -zoom.maxOut + 1e-6 })
+        },
+        // Hidden, but built: the part answers the up and down arrows with
+        // the tilt only where its tilt pair exists.
+        tiltButtons: true,
+        alwaysOn: true,
+        extraClass: 'always-on no-chrome',
+        surface: canvas,
+        onFirstUse: (kind) => track(`portrait-${kind}`),
+        signal
+    });
+}
+
+/** Zoom to `zoom` doublings (clamped to CONFIG.view.look.zoom), from the
+ *  station's own composed lens. */
+function setZoom(zoom) {
+    const { maxIn, maxOut } = CONFIG.view.look.zoom;
+    ui.zoom = Math.min(maxIn, Math.max(-maxOut, zoom));
+    if (!camera || !state.pose) return ui.zoom;
+    camera.fov = zoomedFov(state.pose.fov, ui.zoom, CONFIG.view.maxFov);
+    camera.updateProjectionMatrix();
+    requestRender();
+    return ui.zoom;
+}
+
+/** Whether the camera has turned or zoomed since the last time asked: its
+ *  rotation and lens as plain numbers (anything else, as a test's stand-in
+ *  camera gives, is never a change). */
+function lookChanged() {
+    const q = camera.quaternion;
+    const values = [q.x, q.y, q.z, q.w, camera.fov];
+    if (!values.every((v) => typeof v === 'number' && Number.isFinite(v))) return false;
+    const was = lastLook.values;
+    lastLook.values = values;
+    return !was || values.some((v, i) => v !== was[i]);
+}
+
+/** The camera's pose as the visitor now sees it, turned and zoomed: where a
+ *  glide to a station starts, so it never snaps back first. */
+function lookingPose() {
+    const base = state.pose;
+    if (!camera || !base) return base;
+    const reach = Math.hypot(base.aim[0] - base.eye[0], base.aim[1] - base.eye[1], base.aim[2] - base.eye[2]);
+    const dir = camera.getWorldDirection(new THREE.Vector3());
+    const eye = camera.position;
+    return {
+        eye: [eye.x, eye.y, eye.z],
+        aim: [eye.x + dir.x * reach, eye.y + dir.y * reach, eye.z + dir.z * reach],
+        fov: camera.fov
+    };
+}
+
+function applyPose(pose) {
+    camera.position.set(pose.eye[0], pose.eye[1], pose.eye[2]);
+    camera.fov = zoomedFov(pose.fov, ui.zoom || 0, CONFIG.view.maxFov);
+    viewAim.x = pose.aim[0];
+    viewAim.y = pose.aim[1];
+    viewAim.z = pose.aim[2];
+    camera.aspect = aspect();
+    camera.updateProjectionMatrix();
+    camera.lookAt(pose.aim[0], pose.aim[1], pose.aim[2]);
+    state.pose = pose;
+}
+
+/**
+ * Move the camera to a station, gliding unless the visitor asked for less
+ * motion, in which case it cuts. From the view as the visitor has turned
+ * and zoomed it, and the look is spent on the way: each station starts
+ * from its composed view. Returns whether the station exists.
+ */
+function goTo(station) {
+    if (!camera || !CONFIG.stations[station]) return false;
+    ui.station = station;
+    const to = poseFor(station, aspect(), CONFIG);
+    const from = lookingPose() || to;
+    resetPortraitAim();
+    ui.zoom = 0;
+    glide = createGlide(from, to, state.reducedMotion ? 0 : CONFIG.view.glideSeconds);
+    requestRender();
+    return true;
 }
 
 function handleResize() {
     if (!renderer || !camera) return;
     resolution.apply();
-    camera.aspect = aspect();
-    camera.updateProjectionMatrix();
+    if (!glide) applyPose(poseFor(ui.station, aspect(), CONFIG));
     requestRender();
 }
 
@@ -941,6 +1114,7 @@ function setupEventListeners() {
     // When what opened a card has gone (a toolbar button hidden by the
     // change the card made), focus lands on My checklists rather than nowhere.
     setFocusFallback(() => el('bar-mine'));
+    setupLook(signal);
 
     const on = (id, type, fn) => { const node = el(id); if (node) node.addEventListener(type, fn, { signal }); };
     on('bar-new', 'click', startOwn);
@@ -1067,6 +1241,16 @@ function animate() {
     if (state.drewLast && resolution) resolution.sample(delta);
     state.drewLast = false;
 
+    if (glide) {
+        applyPose(glide.step(delta));
+        if (glide.done) glide = null;
+        state.dirty = true;
+    }
+    // The visitor's look (setupLook), and a frame when it has turned or
+    // zoomed the camera.
+    if (camera && !lookLocked()) updatePortraitControls(delta);
+    if (camera && lookChanged()) state.dirty = true;
+
     if (!state.dirty) return;
     state.dirty = false;
     state.frames++;
@@ -1173,6 +1357,12 @@ export const __test__ = {
     openMenu,
     requestRender,
     handleResize,
+    goTo,
+    lookLocked,
+    markShadows,
+    glide: () => glide,
+    studio: () => studio,
+    street: () => street,
     start,
     stop,
     scene: () => scene,
