@@ -6988,6 +6988,199 @@ html [data-ui-theme="surf" lang="en"]
     script [src="js/main.min.js" type="module"]"
 `;
 
+exports[`www/whitestone/index.html 1`] = `
+"<!doctype html>
+html [data-ui-theme="surf" lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="noindex, nofollow" name="robots"]
+    meta [content="A bright, modern cleaning studio where you build a room by room cleaning checklist, see the price of every task as you go, and share the finished list with your cleaner." name="description"]
+    meta [content="#F4F2EE" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/whitestone/" rel="canonical"]
+    meta [content="Whitestone Home Care" property="og:title"]
+    meta [content="Pick what you would like cleaned, room by room, and see your price as you go." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/whitestone/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="A bright cleaning studio with white stone walls and tall windows full of morning light." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Whitestone Home Care" name="twitter:title"]
+    meta [content="Pick what you would like cleaned, room by room, and see your price as you go." name="twitter:description"]
+    meta [content="https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1" name="twitter:image"]
+    meta [content="A bright cleaning studio with white stone walls and tall windows full of morning light." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "@id": "https://www.scenexp.com/whitestone/#app",
+        "url": "https://www.scenexp.com/whitestone/",
+        "name": "Whitestone Home Care",
+        "description": "A 3D cleaning studio in the browser where a visitor builds a room by room cleaning checklist from a menu of priced tasks, sees the quote and the expected visit length update as they go, and shares the finished checklist with a cleaner.",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript and WebGL 2.",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
+        "isAccessibleForFree": true,
+        "author": {
+          "@type": "Person",
+          "name": "Steve Noll"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Continuum Commerce LLC"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Whitestone Home Care",
+            "item": "https://www.scenexp.com/whitestone/"
+          }
+        ]
+      }
+    title
+      "Whitestone Home Care | SceneXP"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=1" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/resolution-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="css/experience.min.css?v=1" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body
+    h1.sr-only
+      "Whitestone Home Care"
+    noscript
+      div.noscript-fallback
+        h1
+          "Whitestone Home Care"
+        p
+          "This is a bright, modern cleaning studio, and it needs JavaScript to run. Inside, you build a cleaning checklist room by room from a menu of tasks, each with a set price and a time estimate, so your quote and the expected length of the visit update as you go. When the list is ready, you can share it with your cleaner."
+        p
+          "Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples."
+        p
+          "SceneXP is a home for 3D experiences that run right in your browser."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/"]
+                "Explore SceneXP"
+            li
+              a [href="/contact.html"]
+                "Contact the developer"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    div#loading-screen
+      div.loader-content
+        div.loader-title
+          "WHITESTONE"
+        p.loader-tagline
+          "Bright homes, kept with care."
+        div.loader-bar [aria-hidden="true"]
+          div.loader-progress#load-progress
+        div.loader-status#load-status [aria-live="polite" role="status"]
+          "Loading…"
+    canvas#game-canvas [aria-label="The Whitestone Home Care studio, a bright room with white plaster walls and a pale stone floor in morning light" role="img"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
+    script [src="js/main.min.js" type="module"]"
+`;
+
+exports[`www/whitestone/tasks/index.html 1`] = `
+"<!doctype html>
+html [lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="no-referrer" name="referrer"]
+    meta [content="noindex, nofollow" name="robots"]
+    meta [content="Open the cleaning checklist your customer shared with you, room by room, with every task and note in one place." name="description"]
+    meta [content="#F4F2EE" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/whitestone/tasks/" rel="canonical"]
+    meta [content="Your Whitestone checklist" property="og:title"]
+    meta [content="A cleaning checklist was shared with you. Open it with the 6 digit PIN that came with the link." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/whitestone/tasks/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/whitestone/tasks/assets/og-whitestone-tasks.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="The Whitestone Home Care mark, a white stone on slate blue, above the words Your cleaning checklist." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Your Whitestone checklist" name="twitter:title"]
+    meta [content="A cleaning checklist was shared with you. Open it with the 6 digit PIN that came with the link." name="twitter:description"]
+    meta [content="https://www.scenexp.com/whitestone/tasks/assets/og-whitestone-tasks.jpg?v=1" name="twitter:image"]
+    meta [content="The Whitestone Home Care mark, a white stone on slate blue, above the words Your cleaning checklist." name="twitter:image:alt"]
+    title
+      "Your checklist | Whitestone Home Care"
+    link [href="../favicon.svg?v=1" rel="icon" type="image/svg+xml"]
+    link [href="css/tasks.min.css?v=1" rel="stylesheet"]
+    script [src="js/main.min.js?v=1" type="module"]
+  body
+    header.tasks-header
+      svg.tasks-mark [aria-hidden="true" viewbox="0 0 32 32"]
+        rect [fill="#3E5C76" height="32" rx="7" width="32"]
+        ellipse [cx="16" cy="18" fill="#F4F2EE" rx="10.5" ry="7.2"]
+      span.tasks-brand
+        "Whitestone Home Care"
+    main.tasks-main
+      h1
+        "Your cleaning checklist"
+      p.tasks-lead
+        "A customer shared a checklist with you. Enter the 6 digit PIN that came with the link to open it."
+      form#pin-form.pin-form [hidden novalidate]
+        label [for="pin-input"]
+          "PIN"
+        input#pin-input [aria-describedby="pin-status" autocomplete="one-time-code" inputmode="numeric" maxlength="6" name="pin" pattern="[0-9]{6}" required type="text"]
+        button#pin-open [type="submit"]
+          "Open the checklist"
+        p#pin-status.pin-status [aria-live="polite" role="status"]
+      noscript
+        p.tasks-noscript
+          "This page needs JavaScript to open a checklist. The checklist is locked in the link your customer shared, and it is only unlocked here, in your own browser, once you enter the PIN. Please allow JavaScript for this page and reload it."
+    footer.tasks-footer
+      p
+        "Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples."
+      p
+        a [href="/privacy.html"]
+          "Privacy""
+`;
+
 exports[`www/xo/index.html 1`] = `
 "<!doctype html>
 html [data-ui-theme="neon" lang="en"]

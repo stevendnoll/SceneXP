@@ -1,0 +1,197 @@
+/* © 2026 Continuum Commerce LLC. All rights reserved. */
+/*
+ * tasks.css - The cleaner's page.
+ *
+ * MOBILE FIRST AND SELF-CONTAINED. A cleaner opens this on a phone in
+ * somebody's hallway, so it carries no shared stylesheet, no three.js and no
+ * web fonts: one small sheet in the studio's palette (PLANNING 13) and the
+ * system font stack. Large type and tap targets of at least 44 pixels.
+ */
+
+:root {
+    --stone: #F4F2EE;
+    --white: #FFFFFF;
+    --line: #E2DED6;
+    --graphite: #22252A;
+    --muted: #5E5952;          /* warm gray, darkened for text contrast */
+    --accent: #3E5C76;
+    --accent-dark: #2F4759;
+    --attention: #8A5A0B;      /* the amber, darkened for text on white */
+    color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--stone);
+    color: var(--graphite);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 1.0625rem;
+    line-height: 1.5;
+}
+
+a {
+    color: var(--accent);
+}
+
+a:visited {
+    color: var(--accent);
+}
+
+/* ---- Header ----------------------------------------------------------------- */
+
+.tasks-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.9rem 1rem;
+    background: var(--white);
+    border-bottom: 1px solid var(--line);
+}
+
+.tasks-mark {
+    width: 28px;
+    height: 28px;
+    flex: none;
+}
+
+.tasks-brand {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+/* ---- Main ------------------------------------------------------------------- */
+
+.tasks-main {
+    flex: 1;
+    width: 100%;
+    max-width: 34rem;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 2rem;
+}
+
+h1 {
+    margin: 0 0 0.5rem;
+    font-size: 1.6rem;
+    line-height: 1.25;
+    font-weight: 600;
+}
+
+.tasks-lead {
+    margin: 0 0 1.5rem;
+    color: var(--muted);
+}
+
+.tasks-noscript {
+    padding: 1rem;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+/* ---- The PIN form ----------------------------------------------------------- */
+
+.pin-form {
+    display: grid;
+    gap: 0.6rem;
+    padding: 1.25rem 1rem;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+}
+
+.pin-form[hidden] {
+    display: none;
+}
+
+.pin-form label {
+    font-weight: 600;
+}
+
+.pin-form input {
+    width: 100%;
+    min-height: 3.25rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #B9B3A9;
+    border-radius: 10px;
+    background: var(--white);
+    color: var(--graphite);
+    font: inherit;
+    font-size: 1.6rem;
+    letter-spacing: 0.4em;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.pin-form input:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+    border-color: var(--accent);
+}
+
+.pin-form button {
+    min-height: 3rem;
+    padding: 0.6rem 1rem;
+    border: 0;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--white);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.pin-form button:hover {
+    background: var(--accent-dark);
+}
+
+.pin-form button:focus-visible {
+    outline: 3px solid var(--graphite);
+    outline-offset: 2px;
+}
+
+.pin-status {
+    min-height: 1.5em;
+    margin: 0;
+    color: var(--muted);
+}
+
+.pin-status.is-problem {
+    color: var(--attention);
+}
+
+/* ---- Footer ----------------------------------------------------------------- */
+
+.tasks-footer {
+    padding: 1rem;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.tasks-footer p {
+    margin: 0.25rem 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition: none !important;
+        animation: none !important;
+    }
+}

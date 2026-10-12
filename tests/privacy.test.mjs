@@ -55,7 +55,21 @@ const PERSISTENT = {
     'www/xo/js/colors.js': 'the team and field colors chosen in X’s and O’s',
     'www/xo/js/jump.js': 'whether Auto jump is on in X’s and O’s',
     'www/leaves/js/cast.js': 'the character chosen in Leaf Blower',
-    'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaf Blower'
+    'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaf Blower',
+    // Unreleased (proto-1). Its privacy.html section is part of Whitestone's
+    // M7, before release (PRD 15).
+    'www/whitestone/js/store.js': 'the checklists a visitor builds in Whitestone Home Care'
+};
+
+/**
+ * Every source file allowed to open an IndexedDB database, which outlives the
+ * tab exactly as local storage does, and what it keeps. Empty until a scene
+ * needs one (Whitestone's photos, M0 of that scene, 2026-10-12, added the
+ * rule before the first database so the first one cannot slip past it).
+ */
+const PERSISTENT_DATABASES = {
+    // Unreleased (proto-1), described in privacy.html with Whitestone's M7.
+    'www/whitestone/js/photos.js': 'photos added to a Whitestone checklist, resized and stripped of location'
 };
 
 /** Source files only. The built .min copies are the same code twice. */
@@ -86,6 +100,19 @@ test('NOTHING OUTLIVES THE VISIT THAT THE PRIVACY POLICY DOES NOT KNOW ABOUT', (
     // one means the list has rotted and is no longer guarding anything, which
     // is the failure mode of every allowlist ever written.
     expect(writers).toEqual(Object.keys(PERSISTENT).sort());
+});
+
+test('NOR ANY DATABASE: opening IndexedDB is held to the same rule', () => {
+    // A database is a second door to the same room. Without this, a scene
+    // could keep a visitor's photos for years while the list above, and the
+    // policy it guards, said nothing.
+    const openers = [];
+    for (const full of sourceFiles(WWW)) {
+        if (/\bindexedDB\.open\s*\(/.test(readFileSync(full, 'utf8'))) {
+            openers.push(full.slice(process.cwd().length + 1));
+        }
+    }
+    expect(openers.sort()).toEqual(Object.keys(PERSISTENT_DATABASES).sort());
 });
 
 test('and the policy actually describes them, in words a visitor would use', () => {

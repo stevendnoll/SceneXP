@@ -1,0 +1,53 @@
+/* © 2026 Continuum Commerce LLC. All rights reserved. */
+/*
+ * experience.css - Whitestone Home Care specifics, loaded after the shared
+ * stylesheet.
+ *
+ * A BRIGHT STUDIO, SO A BRIGHT LOADER. Every other scene opens on a dark
+ * loading screen, but this one opens on white stone and daylight, and a dark
+ * screen fading into a white room would flash. The loader wears the studio's
+ * own palette (PLANNING 13): white stone, graphite text, warm gray status,
+ * and the slate blue accent on the progress bar.
+ *
+ * THE CHROME WEARS THE SHARED `surf` THEME until the cards arrive in M1. A
+ * theme of Whitestone's own would have to live in the shared sheet (see
+ * tests/ui-theme.test.mjs), so the cards will carry the palette themselves,
+ * the way Corner Office's do.
+ */
+
+/* The page behind the canvas: the studio's own white, so the moment before
+ * the first frame and the overscroll on a phone match the room. */
+body {
+    background: #F4F2EE;
+}
+
+#loading-screen {
+    background:
+        radial-gradient(120% 80% at 50% 0%, #FFFFFF 0%, transparent 65%),
+        #F4F2EE;
+}
+
+#loading-screen .loader-title {
+    color: #22252A;
+    letter-spacing: 0.22em;
+    font-weight: 500;
+}
+
+#loading-screen .loader-bar {
+    background: #E2DED6;
+}
+
+#loading-screen .loader-progress {
+    background: #3E5C76;
+}
+
+#loading-screen .loader-status {
+    color: #6F6A62;
+}
+
+#loading-screen .loader-tagline {
+    margin: -1.25rem 0 2rem;
+    color: #6F6A62;
+    font-size: 0.95rem;
+    letter-spacing: 0.04em;
+}

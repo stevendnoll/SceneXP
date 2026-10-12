@@ -1,0 +1,9 @@
+key,value
+timezone,America/Los_Angeles
+cleaners,1
+mode,day
+gap_minutes,240
+slot_step_minutes,30
+lead_hours,24
+horizon_days,60
+cancel_hours,24

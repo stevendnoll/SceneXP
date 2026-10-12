@@ -23,10 +23,13 @@ export default {
   // *.min.js bundles. All custom JS lives in a js/ folder (site-wide www/js,
   // shared parts www/shared/js, and each experience's www/<name>/js), so two
   // globs cover everything, and untested files show up at 0% so the report
-  // doubles as a map of what still needs tests.
+  // doubles as a map of what still needs tests. The third reaches a page that
+  // lives inside an experience with scripts of its own (Whitestone's
+  // cleaner's page, www/whitestone/tasks/js, 2026-10-12).
   collectCoverageFrom: [
     'www/js/*.js',
     'www/*/js/*.js',
+    'www/*/*/js/*.js',
     '!**/*.min.js',
   ],
   // Fail any coverage run (CI uses `npm run test:coverage`) that dips below
