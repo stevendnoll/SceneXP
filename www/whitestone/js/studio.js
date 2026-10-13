@@ -120,6 +120,65 @@ export function footprints(config) {
     return out;
 }
 
+/**
+ * Where each touch point's halo sits, in world meters (marks.js): over the
+ * desk where the concierge will stand (M6 moves it to the concierge's
+ * head), on the faces of the menu and the board, and over the printer. The
+ * model's halo follows the model (model.js anchor).
+ */
+export function anchorsFor(config) {
+    const { room, studio: s } = config;
+    const wall = -room.depth / 2;
+    return {
+        desk: [s.desk.x, s.desk.height + 0.38, s.desk.z - 0.12],
+        menu: [s.menu.x, s.menu.y, wall + 0.05],
+        board: [s.board.x, s.board.y, wall + 0.08],
+        printer: [s.console.x, s.console.height + s.printer.height + 0.12, s.console.z]
+    };
+}
+
+/**
+ * What a ray's hits (nearest first) say was tapped: the first one shown
+ * decides, so a wall in front of the menu is a wall. Returns `{ key, hit }`
+ * or null. A hit on something hidden (three's raycaster does not skip
+ * them) is passed over.
+ */
+export function firstPick(hits) {
+    for (const hit of hits || []) {
+        let shown = true;
+        for (let o = hit.object; o; o = o.parent) if (o.visible === false) { shown = false; break; }
+        if (!shown) continue;
+        const key = pickOf(hit.object);
+        return key ? { key, hit } : null;
+    }
+    return null;
+}
+
+/**
+ * Whether something stands between `eye` and `point` (THREE.Vector3s),
+ * other than the thing whose key is `key`: a halo behind the desk is hidden,
+ * a halo on the menu's own face is not. `objects` are what can stand in the
+ * way. Stops a few centimeters short of the point.
+ */
+export function hiddenFrom(raycaster, eye, point, objects, key) {
+    const to = point.clone().sub(eye);
+    const far = to.length();
+    raycaster.set(eye, to.normalize());
+    raycaster.far = Math.max(0, far - 0.03);
+    const hits = raycaster.intersectObjects(objects, true);
+    raycaster.far = Infinity;
+    return hits.some((hit) => pickOf(hit.object) !== key);
+}
+
+/** The pick key of the nearest ancestor (or the object itself) that has
+ *  one, or null. */
+export function pickOf(object) {
+    for (let o = object; o; o = o.parent) {
+        if (o.userData && o.userData.pick) return o.userData.pick;
+    }
+    return null;
+}
+
 /** The planters' sizes, meters: a round planter for a small tree, a long
  *  low trough for grasses. `top` is the plant's height. */
 export const PLANTS = {

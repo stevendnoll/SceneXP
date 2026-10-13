@@ -224,6 +224,62 @@ export const UI = Object.freeze({
     filterShowing: (shown, total) => `Showing ${shown} of ${total} tasks.`
 });
 
+/** The plan board and the service menu's display in the studio (boards.js),
+ *  and the room labels on the house model (main.js). */
+export const BOARDS = Object.freeze({
+    emptyTitle: 'Your plan appears here',
+    emptyDetail: 'Start your own checklist at the desk, and your quote, the time and your starred tasks gather on this board.',
+    noTasks: 'Add a room and its tasks, and your quote appears here.',
+    quoteLabel: 'Your quote',
+    starredHeading: 'Starred first',
+    noStarred: 'Star the tasks that matter most, and they lead this list.',
+    moreStarred: (n) => `and ${n} more`,
+    levelsHeading: 'Tasks by level',
+    minimumShort: (more) => `Add ${more} more to reach the visit minimum.`,
+    menuHeading: 'Service menu',
+    menuFrom: (money) => `from ${money}`,
+    menuEach: (money) => `${money} each`,
+    menuMinutes: (minutes) => `about ${minutes} min`,
+    menuMore: (n) => `and ${n} more in the service menu`,
+    menuFooter: (version) => `Service menu ${version}`,
+    menuLoading: 'The service menu is loading.',
+    roomsOn: (level) => `Rooms of the ${String(level).toLowerCase()}`,
+    lifted: (level) => `Lifted the ${String(level).toLowerCase()} out of the model.`,
+    setDown: 'The model is back together.'
+});
+
+/** The arrival panel (intro.js), the halos and the stations list (marks.js
+ *  and main.js). */
+export const STUDIO = Object.freeze({
+    body: 'Build your cleaning checklist room by room. Every task shows its price and its time as you add it, and your quote keeps up. Star what matters most, and we start there.',
+    start: 'Start your own',
+    explore: 'Explore the example',
+    hintTouch: 'Tap a glowing marker to begin. Drag to look around, and pinch to look closer.',
+    hintPointer: 'Click a glowing marker to begin. Drag to look around, and scroll to look closer.',
+    collapse: 'Collapse this introduction',
+    handle: 'About Whitestone',
+    /** The stations list's rows: the place, said plainly. */
+    places: Object.freeze({
+        overview: 'The whole studio',
+        desk: 'The concierge',
+        model: 'The house model',
+        menu: 'The service menu',
+        board: 'The plan board',
+        printer: 'The printer'
+    }),
+    /** Each halo's spoken name: the place and what it does. */
+    halos: Object.freeze({
+        desk: 'The concierge. Start your own checklist, or open your checklists.',
+        model: 'The house model. Lift a level to see its rooms.',
+        menu: 'The service menu. Every task, with its price and time.',
+        board: 'The plan board. Your checklist in full.',
+        printer: 'The printer. Print your checklist.'
+    }),
+    printerEmpty: 'Add a task to your checklist, and the printer prints it for you.',
+    listHeading: 'Places in the studio',
+    listNote: 'Choose a place to go there. Keys 1 to 6 go to them from anywhere in the studio. The arrow keys move through this list, and Tab or Escape puts it away.'
+});
+
 /** What the page says about saving, under the studio's storage note. */
 export const STORAGE_NOTES = Object.freeze({
     unavailable: 'This browser is not saving, perhaps because it is a private window. Your checklist will be gone when you leave.',
@@ -260,6 +316,6 @@ export function allCopy() {
         else if (typeof value === 'function') out.push({ where, text: value(12) });
         else if (value && typeof value === 'object') Object.entries(value).forEach(([k, v]) => walk(v, `${where}.${k}`));
     };
-    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, DAY_STATUS, STORE, FREQUENCIES, UI, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
+    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, DAY_STATUS, STORE, FREQUENCIES, UI, BOARDS, STUDIO, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
     return out;
 }

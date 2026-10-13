@@ -186,6 +186,96 @@ describe('stations', () => {
     });
 });
 
+// ---- The house model and the painted faces -------------------------------------
+
+describe('the model and the boards', () => {
+    test('a first visit shows the example home on the plinth, and paints both faces once', async () => {
+        const main = await boot();
+        const model = main.__test__.model();
+        expect(model.placed.tiles.length).toBe(13);
+        expect(model.placed.markers.length).toBe(27);
+        const faces = main.__test__.faces();
+        expect(faces.board.key).toContain('Example home');
+        expect(faces.menu.key).toBeTruthy();
+        const keys0 = [faces.board.key, faces.menu.key];
+        // Nothing changed, nothing repainted: count what is written.
+        let writes = 0;
+        const counting = new Proxy({}, {
+            get: (_t, prop) => (prop === 'measureText' ? () => ({ width: 10 }) : prop === 'createLinearGradient'
+                ? () => ({ addColorStop() {} }) : () => { writes++; }),
+            set: () => true
+        });
+        faces.board.ctx = counting;
+        faces.menu.ctx = counting;
+        main.__test__.paintFaces();
+        main.__test__.refresh();
+        stepFrames(10);
+        expect(writes).toBe(0);
+        // A change to the home repaints the board, and only the board.
+        main.__test__.removeTask('example-task-2-4');
+        expect(writes).toBeGreaterThan(0);
+        expect(faces.board.key).not.toBe(keys0[0]);
+        expect(faces.menu.key).toBe(keys0[1]);
+    });
+
+    test('clearing the example empties the plinth and the board invites a start', async () => {
+        const main = await boot();
+        main.__test__.clearExample();
+        expect(main.__test__.model().placed.tiles.length).toBe(0);
+        expect(main.__test__.model().placed.slabs.length).toBe(1);
+        expect(JSON.parse(main.__test__.faces().board.key).empty).toBeTruthy();
+    });
+
+    test('lifting a level goes to the model, says so, and names its rooms over them', async () => {
+        const main = await boot();
+        expect(main.__test__.liftLevel('second')).toBe(true);
+        expect(main.__test__.ui.station).toBe('model');
+        jest.advanceTimersByTime(40);   // announce speaks a beat later
+        expect(dom.el('ws-live').textContent).toBe('Lifted the second floor out of the model.');
+        stepFrames(Math.ceil((CONFIG.view.glideSeconds * 1000) / 16) + 5);
+        const list = dom.el('ws-rooms');
+        expect(list.hidden).toBe(false);
+        expect(list.getAttribute('aria-label')).toBe('Rooms of the second floor');
+        const names = list.children.map((li) => li.textContent).sort();
+        expect(names).toEqual(["Emma's room", 'Guest room', 'Hall bath', "Noah's room", 'Primary bathroom', 'Primary bedroom']);
+        expect(list.children.every((li) => /^translate\(/.test(li.style.transform))).toBe(true);
+        // Set down: the names go.
+        main.__test__.liftLevel(null);
+        jest.advanceTimersByTime(40);
+        expect(dom.el('ws-live').textContent).toBe('The model is back together.');
+        stepFrames(Math.ceil((CONFIG.model.lift.seconds * 1000) / 16) + 2);
+        expect(list.hidden).toBe(true);
+        expect(list.children).toHaveLength(0);
+    });
+
+    test('a lift draws every frame while it moves, then goes quiet', async () => {
+        const main = await boot();
+        main.__test__.state.reducedMotion = true;
+        main.__test__.goTo('model');
+        stepFrames(2);
+        main.__test__.state.reducedMotion = false;
+        const before = main.getState().frames;
+        main.__test__.liftLevel('main');
+        const frames = Math.ceil((CONFIG.model.lift.seconds * 1000) / 16);
+        stepFrames(frames);
+        expect(main.getState().frames - before).toBeGreaterThanOrEqual(frames - 1);
+        expect(main.__test__.model().moving).toBe(false);
+        const landed = main.getState().frames;
+        stepFrames(20);
+        expect(main.getState().frames).toBe(landed);
+    });
+
+    test('under reduced motion the lift is instant, and a level the home lacks is refused', async () => {
+        const main = await boot();
+        main.__test__.state.reducedMotion = true;
+        main.__test__.liftLevel('basement');
+        expect(main.__test__.model().moving).toBe(false);
+        expect(main.__test__.model().lifted).toBe('basement');
+        expect(main.__test__.liftLevel('attic')).toBe(false);
+        expect(window.whitestone.lift('main')).toBe(true);
+    });
+});
+
 test('the config is frozen all the way down', () => {
     expect(Object.isFrozen(CONFIG)).toBe(true);
     expect(Object.isFrozen(CONFIG.room)).toBe(true);

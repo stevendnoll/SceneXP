@@ -400,7 +400,8 @@ textarea.ws-input {
     z-index: 30;
     flex-wrap: wrap;
     gap: 0.5rem;
-    max-width: calc(100vw - 32px);
+    /* Clear of the intro panel's handle, top right. */
+    max-width: calc(100vw - 32px - 11.5rem);
 }
 
 .hud-chip {
@@ -931,6 +932,294 @@ textarea.ws-input {
  * three-class .pan-controls.always-on.visible.
  */
 body .pan-controls.no-chrome.visible {
+    display: none;
+}
+
+/* ---- The rooms of a lifted level (M2) -------------------------------------------
+ *
+ * Each room's name over its tile on the house model, placed by main.js
+ * placeLabels as the camera moves. Never in a pointer's way, and under the
+ * HUD, the toolbar and the cards.
+ */
+.ws-rooms {
+    position: fixed;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    pointer-events: none;
+    z-index: 20;
+}
+
+.ws-room {
+    position: absolute;
+    left: 0;
+    top: 0;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94);
+    color: #22252A;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    box-shadow: 0 1px 4px rgba(34, 37, 42, 0.18);
+}
+
+.ws-room[hidden] {
+    display: none;
+}
+
+/* ---- The halos (M2) ---------------------------------------------------------------
+ *
+ * A pulsing ring over each thing that answers a tap (marks.js), placed by
+ * main.js. Corner Office's ring: a bright outline over a soft dark halo, so
+ * it holds its edge on white plaster and on the bright sky through the
+ * glass, and is wide enough to survive a compressed screen share.
+ */
+.ws-marks {
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    pointer-events: none;
+}
+
+.ws-marks[hidden],
+.ws-mark[hidden] {
+    display: none;
+}
+
+.ws-mark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3.4rem;
+    height: 3.4rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.ws-mark-ring {
+    position: absolute;
+    inset: 0.4rem;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.96);
+    background: radial-gradient(circle, rgba(62, 92, 118, 0.42) 0%, rgba(62, 92, 118, 0.14) 55%, rgba(20, 21, 23, 0) 72%);
+    box-shadow: 0 0 0 1px rgba(20, 21, 23, 0.5), 0 0 14px rgba(20, 21, 23, 0.4), inset 0 0 10px rgba(255, 255, 255, 0.35);
+}
+
+.ws-mark-ring::before,
+.ws-mark-ring::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    border: 2px solid rgba(232, 240, 250, 0.92);
+    animation: ws-mark-pulse 2.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+.ws-mark-ring::after {
+    animation-delay: 1.3s;
+}
+
+.ws-marks.is-calm .ws-mark-ring::before,
+.ws-marks.is-calm .ws-mark-ring::after {
+    animation-duration: 5.2s;
+}
+
+.ws-marks.is-calm .ws-mark-ring::after {
+    animation-delay: 2.6s;
+}
+
+@keyframes ws-mark-pulse {
+    0% { transform: scale(0.7); opacity: 0; }
+    15% { opacity: 0.9; }
+    100% { transform: scale(2); opacity: 0; }
+}
+
+.ws-mark:hover .ws-mark-ring,
+.ws-mark:focus-visible .ws-mark-ring {
+    background: radial-gradient(circle, rgba(62, 92, 118, 0.62) 0%, rgba(62, 92, 118, 0.2) 55%, rgba(20, 21, 23, 0) 72%);
+}
+
+.ws-mark:focus-visible {
+    outline: none;
+}
+
+.ws-mark:focus-visible .ws-mark-ring {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.96), 0 0 0 6px rgba(34, 37, 42, 0.85);
+}
+
+/* Less motion: the ring stays, still. */
+@media (prefers-reduced-motion: reduce) {
+    .ws-mark-ring::before,
+    .ws-mark-ring::after {
+        animation: none;
+        opacity: 0;
+    }
+}
+
+/* ---- The arrival panel (M2) --------------------------------------------------------
+ *
+ * Auto Man's slim bottom panel, in the studio's white. While it is open the
+ * toolbar steps aside (.ws-bar.is-away), so the bottom of a phone is never
+ * covered twice. It never takes the studio's gestures except on its own
+ * controls.
+ */
+.ws-intro {
+    position: fixed;
+    left: 50%;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    z-index: 40;
+    box-sizing: border-box;
+    width: min(600px, calc(100vw - 32px));
+    padding: 1.1rem 1.25rem 1rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--ws-graphite);
+    box-shadow: 0 14px 40px rgba(34, 37, 42, 0.18);
+    pointer-events: none;
+    transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.ws-intro button {
+    pointer-events: auto;
+}
+
+.ws-intro:focus {
+    outline: none;
+}
+
+.ws-intro:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.ws-intro.is-out {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+    visibility: hidden;
+}
+
+.intro-close {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--ws-muted);
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.intro-close:hover {
+    background: var(--ws-accent-soft);
+}
+
+.intro-close:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 0;
+}
+
+.intro-kicker {
+    margin: 0 2.5rem 0.2rem 0;
+    color: var(--ws-accent);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.intro-lead {
+    margin: 0 2.5rem 0.4rem 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.intro-body {
+    margin: 0 0 0.8rem;
+    color: var(--ws-graphite);
+    line-height: 1.45;
+}
+
+.intro-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.7rem;
+}
+
+.intro-actions .ws-btn[hidden] {
+    display: none;
+}
+
+.intro-hint,
+.intro-honesty {
+    margin: 0;
+    color: var(--ws-muted);
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.intro-honesty {
+    margin-top: 0.25rem;
+}
+
+/* On a phone the body sentence goes, so the panel stays a strip. */
+@media (max-width: 620px) {
+    .ws-intro {
+        padding: 0.9rem 1rem 0.85rem;
+    }
+
+    .intro-lead {
+        font-size: 1.15rem;
+    }
+
+    .intro-body {
+        display: none;
+    }
+}
+
+/* The handle, top right, the panel's way back for the whole visit. */
+.intro-handle {
+    position: fixed;
+    top: max(16px, env(safe-area-inset-top));
+    right: 16px;
+    z-index: 30;
+    min-height: 40px;
+    padding: 0.45rem 0.95rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94);
+    color: var(--ws-graphite);
+    font: inherit;
+    font-weight: 600;
+    box-shadow: 0 6px 18px rgba(34, 37, 42, 0.12);
+    cursor: pointer;
+}
+
+.intro-handle:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.intro-handle.is-out {
+    display: none;
+}
+
+/* The toolbar, stepped aside while the panel is open. `body` makes this
+   beat the shared sheet's .ui-float.visible. */
+body .ws-bar.is-away {
     display: none;
 }
 

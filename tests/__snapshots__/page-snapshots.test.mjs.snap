@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=2" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=4" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7087,11 +7087,17 @@ html [data-ui-theme="surf" lang="en"]
     link [href="js/stations.min.js" rel="modulepreload"]
     link [href="js/studio.min.js" rel="modulepreload"]
     link [href="js/street.min.js" rel="modulepreload"]
+    link [href="js/model.min.js" rel="modulepreload"]
+    link [href="js/marks.min.js" rel="modulepreload"]
+    link [href="js/intro.min.js" rel="modulepreload"]
+    link [href="../shared/js/proplist-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/boards.min.js" rel="modulepreload"]
     link [href="../shared/js/pan-1.0.0.min.js" rel="modulepreload"]
     link [href="js/guards.min.js" rel="modulepreload"]
+    link [href="js/layout.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=2" rel="stylesheet"]
+    link [href="css/experience.min.css?v=4" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7128,7 +7134,29 @@ html [data-ui-theme="surf" lang="en"]
           div.loader-progress#load-progress
         div.loader-status#load-status [aria-live="polite" role="status"]
           "Loading…"
-    canvas#game-canvas [aria-label="The Whitestone Home Care studio, a bright room with white plaster walls and a pale stone floor in morning light" role="img"]
+    canvas#game-canvas [aria-label="The Whitestone Home Care studio in morning light: a model of your home on a stone plinth, the plan board and the service menu on the walls, and a leafy street beyond the glass" role="img"]
+    ol#ws-rooms.ws-rooms [hidden]
+    div#ws-marks.ws-marks [hidden]
+    section#ws-intro.ws-intro.is-out [aria-labelledby="intro-kicker" tabindex="-1"]
+      button#intro-close.intro-close [aria-label="Collapse this introduction" type="button"]
+        "&times;"
+      p#intro-kicker.intro-kicker
+        "Whitestone Home Care"
+      p.intro-lead
+        "Bright homes, kept with care."
+      p.intro-body
+        "Build your cleaning checklist room by room. Every task shows its price and its time as you add it, and your quote keeps up. Star what matters most, and we start there."
+      div.intro-actions
+        button#intro-start.ws-btn.ws-btn-primary [type="button"]
+          "Start your own"
+        button#intro-explore.ws-btn [type="button"]
+          "Explore the example"
+      p#intro-hint.intro-hint
+        "Tap a glowing marker to begin. Drag to look around, and pinch to look closer."
+      p.intro-honesty
+        "Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples."
+    button#intro-handle.intro-handle.is-out [aria-controls="ws-intro" aria-expanded="true" type="button"]
+      "About Whitestone"
     p#ws-live.sr-only [aria-live="polite" role="status"]
     div#ws-hud.ui-float.ws-hud [aria-label="Your checklist" role="group"]
       button#hud-home.hud-chip [hidden type="button"]
@@ -7371,6 +7399,12 @@ html [data-ui-theme="surf" lang="en"]
         h2#confirm-title.card-title
         p#confirm-detail.card-detail
         div#confirm-actions.card-actions
+    section#prop-panel.prop-panel [aria-labelledby="prop-panel-heading" hidden]
+      h2#prop-panel-heading.prop-panel-heading
+        "Places in the studio"
+      p.prop-panel-note
+        "Choose a place to go there. Keys 1 to 6 go to them from anywhere in the studio. The arrow keys move through this list, and Tab or Escape puts it away."
+      ul#prop-list.prop-list
     script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;

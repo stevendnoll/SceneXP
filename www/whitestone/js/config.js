@@ -61,20 +61,45 @@ export const CONFIG = deepFreeze({
     },
 
     /** The furniture, each by its middle on the floor plan. Meters. The menu
-     *  and the board hang on the glass wall's piers, facing the room. */
+     *  and the board hang on the glass wall's piers, facing the room.
+     *
+     *  THE DESK AND THE PRINTER FLANK THE PLINTH, in front of the glass, so
+     *  the arrival view holds every touch point, even on an upright phone:
+     *  the concierge's halo is the only one a first visit sees, and by the
+     *  entrance it was out of frame (whitestone-marks tests the view). The
+     *  concierge stands behind the desk with the street behind them. */
     studio: {
         plinth: { x: 0, z: -0.7, width: 2.7, depth: 1.3, height: 0.82 },
-        desk: { x: -3.7, z: 1.6, length: 2.4, depth: 0.72, height: 1.05 },
-        console: { x: 3.8, z: 1.6, length: 1.3, depth: 0.45, height: 0.86 },
+        desk: { x: -1.95, z: -2.45, length: 1.8, depth: 0.7, height: 1.05 },
+        console: { x: 1.95, z: -2.5, length: 1.3, depth: 0.45, height: 0.86 },
         printer: { width: 0.46, depth: 0.36, height: 0.22 },
         menu: { x: -5, y: 1.55, width: 1.5, height: 1.0 },
         board: { x: 5, y: 1.55, width: 1.6, height: 1.1 },
         /** Slim linear pendants: [x, z, length along x], hung `drop` below
          *  the ceiling. */
-        pendants: { drop: 0.75, width: 0.06, height: 0.035, list: [[0, -0.7, 2.0], [-3.7, 1.6, 1.8]] },
+        pendants: { drop: 0.75, width: 0.06, height: 0.035, list: [[0, -0.7, 2.0], [-1.95, -2.45, 1.4]] },
         /** Plants in white stone planters: [kind, x, z], kind 'tree' or
          *  'grass'. */
         plants: [['tree', -5.5, 3.5], ['tree', 5.5, 3.5], ['grass', -3.55, -3.55], ['grass', 3.55, -3.55], ['tree', 5.45, 0.4]]
+    },
+
+    /** The house model on the plinth (model.js; its layout is layout.js's
+     *  MODEL). A lifted level rises by `raise`, and every story above it by
+     *  `open`, so its rooms can be seen from the model station; the move
+     *  takes `seconds`, and is instant under reduced motion. */
+    model: {
+        slab: '#E9E5DE',       // the levels, a shade under the tiles
+        tile: '#FFFFFF',       // the rooms
+        lifted: '#F3F6F9',     // the rooms of a lifted level, a breath of the accent
+        marker: '#3E5C76',     // the tasks, in the brand accent
+        lift: { raise: 0.03, open: 0.34, seconds: 0.6 }
+    },
+
+    /** The painted faces (boards.js), in canvas pixels. Each is the face's
+     *  own aspect, so nothing is stretched. */
+    boards: {
+        board: { width: 1024, height: 694, background: '#F6F7F7' },
+        menu: { width: 1024, height: 672, background: '#1E2125' }
     },
 
     /** Where the camera stands (stations.js): `eye`, `aim`, vertical `fov`
@@ -85,8 +110,8 @@ export const CONFIG = deepFreeze({
         model: { eye: [0, 1.95, 1.5], aim: [0, 0.98, -0.7], fov: 42, retreat: 1.3 },
         menu: { eye: [-5, 1.55, -1.5], aim: [-5, 1.52, -4], fov: 42, retreat: 1.2 },
         board: { eye: [5, 1.55, -1.5], aim: [5, 1.52, -4], fov: 42, retreat: 1.2 },
-        printer: { eye: [2.55, 1.5, 3.3], aim: [3.85, 0.98, 1.6], fov: 44, retreat: 0.6 },
-        desk: { eye: [-2.35, 1.6, 3.3], aim: [-3.75, 1.12, 1.6], fov: 46, retreat: 0.7 }
+        printer: { eye: [3.6, 1.5, -0.2], aim: [1.95, 0.98, -2.5], fov: 44, retreat: 0.6 },
+        desk: { eye: [-3.6, 1.6, -0.2], aim: [-1.95, 1.12, -2.45], fov: 46, retreat: 0.6 }
     },
 
     camera: { near: 0.05, far: 160 },

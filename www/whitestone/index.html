@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=2" as="style">
+    <link rel="preload" href="css/experience.min.css?v=4" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -132,14 +132,20 @@
     <link rel="modulepreload" href="js/stations.min.js">
     <link rel="modulepreload" href="js/studio.min.js">
     <link rel="modulepreload" href="js/street.min.js">
+    <link rel="modulepreload" href="js/model.min.js">
+    <link rel="modulepreload" href="js/marks.min.js">
+    <link rel="modulepreload" href="js/intro.min.js">
+    <link rel="modulepreload" href="../shared/js/proplist-1.0.0.min.js">
+    <link rel="modulepreload" href="js/boards.min.js">
     <link rel="modulepreload" href="../shared/js/pan-1.0.0.min.js">
     <link rel="modulepreload" href="js/guards.min.js">
+    <link rel="modulepreload" href="js/layout.min.js">
     <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=2">
+    <link rel="stylesheet" href="css/experience.min.css?v=4">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -187,7 +193,36 @@
         </div>
     </div>
 
-    <canvas id="game-canvas" role="img" aria-label="The Whitestone Home Care studio, a bright room with white plaster walls and a pale stone floor in morning light"></canvas>
+    <canvas id="game-canvas" role="img" aria-label="The Whitestone Home Care studio in morning light: a model of your home on a stone plinth, the plan board and the service menu on the walls, and a leafy street beyond the glass"></canvas>
+
+    <!-- THE ROOMS OF A LIFTED LEVEL, named over the house model (main.js
+         placeLabels). Hidden until a level is lifted. -->
+    <ol id="ws-rooms" class="ws-rooms" hidden></ol>
+
+    <!-- THE HALOS (marks.js): a pulsing ring over each thing in the studio
+         that answers a tap, built and placed by main.js. Real buttons with
+         spoken names, so each is a keyboard target too. They light up one
+         stage at a time and retire once used. -->
+    <div id="ws-marks" class="ws-marks" hidden></div>
+
+    <!-- THE ARRIVAL PANEL (intro.js), Auto Man's, adapted. It arrives with
+         the studio, collapses to the handle below on its close button, on
+         either of its buttons, or on the first tap in the studio, and the
+         handle brings it back. The words are copy.js's (whitestone-intro
+         tests hold them to it). -->
+    <section id="ws-intro" class="ws-intro is-out" tabindex="-1" aria-labelledby="intro-kicker">
+        <button id="intro-close" class="intro-close" type="button" aria-label="Collapse this introduction">&times;</button>
+        <p id="intro-kicker" class="intro-kicker">Whitestone Home Care</p>
+        <p class="intro-lead">Bright homes, kept with care.</p>
+        <p class="intro-body">Build your cleaning checklist room by room. Every task shows its price and its time as you add it, and your quote keeps up. Star what matters most, and we start there.</p>
+        <div class="intro-actions">
+            <button id="intro-start" class="ws-btn ws-btn-primary" type="button">Start your own</button>
+            <button id="intro-explore" class="ws-btn" type="button">Explore the example</button>
+        </div>
+        <p id="intro-hint" class="intro-hint">Tap a glowing marker to begin. Drag to look around, and pinch to look closer.</p>
+        <p class="intro-honesty">Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples.</p>
+    </section>
+    <button id="intro-handle" class="intro-handle is-out" type="button" aria-expanded="true" aria-controls="ws-intro">About Whitestone</button>
 
     <!-- Every change, said aloud. Polite, so it waits its turn. -->
     <p id="ws-live" class="sr-only" role="status" aria-live="polite"></p>
@@ -489,6 +524,18 @@
             <div id="confirm-actions" class="card-actions"></div>
         </div>
     </div>
+
+    <!-- THE PLACES IN THE STUDIO, FOR ANYBODY WITHOUT A POINTER (the shared
+         proplist part, as www/sunnyvalejenn uses it). One row per place,
+         doing exactly what a tap there does. Off the top of the screen until
+         something in it has focus, and `hidden` until the studio is ready.
+         Last in the markup on purpose, so a click on the studio never leaves
+         the next Tab above it. -->
+    <section id="prop-panel" class="prop-panel" aria-labelledby="prop-panel-heading" hidden>
+        <h2 id="prop-panel-heading" class="prop-panel-heading">Places in the studio</h2>
+        <p class="prop-panel-note">Choose a place to go there. Keys 1 to 6 go to them from anywhere in the studio. The arrow keys move through this list, and Tab or Escape puts it away.</p>
+        <ul id="prop-list" class="prop-list"></ul>
+    </section>
 
     <script type="module" src="../lib/three/r186/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

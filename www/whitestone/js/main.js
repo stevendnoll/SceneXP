@@ -44,8 +44,8 @@ import { createHistory } from './history.min.js';
 import { loadSheet, currentVersion, checkChoice, presetFor } from './sheet.min.js';
 import { priceChoice, formatMoney, formatMinutes } from './pricing.min.js';
 import { createPhotoStore, createMemoryBackend, openIdbBackend, preparePhoto } from './photos.min.js';
-import { roomName } from './taxonomy.min.js';
-import { initCards, openCard, closeCard, isOpen, anyOpen, announce, toast, confirmCard, setFocusFallback } from './cards.min.js';
+import { roomName, levelOf } from './taxonomy.min.js';
+import { h, clear, initCards, openCard, closeCard, isOpen, anyOpen, announce, toast, confirmCard, setFocusFallback } from './cards.min.js';
 import {
     initForms, fillSetupForm, readSetupForm, validateSetup, showError, showHints, fillPreferencesForm, readPreferencesForm,
     fillRoomForm, readRoomForm, validateRoom, showPresetPreview, fillTaskForm, showTaskChoices, readTaskForm
@@ -54,12 +54,19 @@ import {
     renderMyChecklists, renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote,
     renderMenu, fillMenuAreas
 } from './panels.min.js';
-import { UI, STORAGE_NOTES, ITEM_ERRORS } from './copy.min.js';
+import { UI, BOARDS, STUDIO, STORAGE_NOTES, ITEM_ERRORS } from './copy.min.js';
 import { HOME_STATION, poseFor, zoomedFov, createGlide } from './stations.min.js';
-import { buildStudio } from './studio.min.js';
+import { buildStudio, anchorsFor, firstPick, hiddenFrom } from './studio.min.js';
 import { buildStreet } from './street.min.js';
+import { buildModel } from './model.min.js';
+import { TOUCH, COACHING, marksShown, noteUsed as withUsed, touchForKey, nextLevel, onScreen } from './marks.min.js';
+import { arrivalId, createIntro } from './intro.min.js';
+import { installPropList } from '../../shared/js/proplist-1.0.0.min.js';
 import {
-    initPortraitControls, updatePortraitControls, resetPortraitAim
+    boardContent, menuContent, contentKey, drawBoard as paintBoard, drawMenu as paintMenu, menuAreaFor
+} from './boards.min.js';
+import {
+    initPortraitControls, updatePortraitControls, resetPortraitAim, gestureClaimedTap
 } from '../../shared/js/pan-1.0.0.min.js';
 
 // ---- State ------------------------------------------------------------------
@@ -82,7 +89,10 @@ const state = {
     /** Where photos are kept: opening, device (IndexedDB) or memory. */
     photosStatus: 'opening',
     /** The station's pose the camera was last set to (stations.js). */
-    pose: null
+    pose: null,
+    /** Whether this browser holds the document yet. A first visit's example
+     *  is not saved until the visitor changes something (samples.js). */
+    saved: false
 };
 
 /**
@@ -118,6 +128,20 @@ let history = null;
 let photoStore = null;
 let studio = null;
 let street = null;
+/** The house model on the plinth (model.js). */
+let model = null;
+/** The plan board's and the menu display's canvases, each with its texture
+ *  and the words it last painted (boards.js). */
+const faces = {};
+/** The room labels over a lifted level, and what they say. */
+const roomLabels = { nodes: [], key: '' };
+/** The halos (marks.js): their layer, a button for each, and how many
+ *  frames have placed them (occlusion is asked every few). */
+const marks = { root: null, list: [], frame: 0, locked: null };
+/** The arrival panel (intro.js). */
+let intro = null;
+let raycaster = null;
+let lastHover = 0;
 let sun = null;
 let envTarget = null;
 /** The glide in progress between stations, or null. */
@@ -187,6 +211,10 @@ async function init() {
         const seeded = withExample(state.doc, CONFIG, now(), null);
         if (!seeded.error) state.doc = seeded.doc;
     }
+    state.saved = loaded.status === 'restored';
+    // A RETURNING VISITOR ARRIVES TO THEIR OWN HOME (PRD 8.6): the one open
+    // when they left, else their latest (intro.js arrivalId).
+    state.doc = setSettings(state.doc, { activeId: arrivalId(state.doc) }).doc;
     history = createHistory();
 
     updateLoadingStatus('Turning on the lights…', 75);
@@ -209,7 +237,12 @@ async function init() {
         state.loaded = true;
         // EVERY .ui-float IS display:none UNTIL THIS LINE.
         document.querySelectorAll('.ui-float').forEach((node) => node.classList.add('visible'));
-        requestRender();
+        const places = el('prop-panel');
+        if (places) places.hidden = false;
+        if (intro) intro.arrive();
+        // The halos' pulse slows once the visitor has had a while to look.
+        setTimeout(() => { if (marks.root && marks.root.classList) marks.root.classList.add('is-calm'); }, COACHING.calmSeconds * 1000);
+        refresh();
     }, CONFIG.loadingReveal);
 
     // Console helpers for QA and screenshots.
@@ -231,6 +264,12 @@ async function init() {
         doc: () => state.doc,
         /** Glide to a station: overview, model, menu, board, printer, desk. */
         goTo,
+        /** Lift a level out of the house model ('main', 'second'...), or
+         *  set it down with null. */
+        lift: liftLevel,
+        /** Do what a touch point does: overview, desk, model, menu, board,
+         *  printer. */
+        act: actOn,
         /** The stations there are, and where the camera stands now. */
         stations: () => ({ at: ui.station, all: Object.keys(CONFIG.stations) })
     };
@@ -294,6 +333,9 @@ function buildScene() {
 
     studio = buildStudio(CONFIG);
     scene.add(studio.group);
+    model = buildModel(CONFIG, studio.plinthTop);
+    scene.add(model.group);
+    prepareFaces();
     street = buildStreet(CONFIG);
     scene.add(street.group);
 
@@ -351,6 +393,329 @@ function captureRoom() {
     }
     // The capture spent the shadow map's update on its own first face. The
     // sun has not moved, so the map it drew is the one the studio needs.
+}
+
+// ---- The plan board and the menu display -------------------------------------
+
+/** A canvas for each painted face, its texture laid on the face. Where the
+ *  browser gives no 2D context the faces keep their plain color. */
+function prepareFaces() {
+    for (const key of ['board', 'menu']) {
+        const size = CONFIG.boards[key];
+        const c = document.createElement('canvas');
+        c.width = size.width;
+        c.height = size.height;
+        const ctx = c.getContext && c.getContext('2d');
+        if (!ctx) continue;
+        const texture = new THREE.CanvasTexture(c);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const caps = renderer && renderer.capabilities;
+        texture.anisotropy = caps && caps.getMaxAnisotropy ? Math.min(8, caps.getMaxAnisotropy()) : 1;
+        const face = studio.faces[key];
+        face.material.map = texture;
+        face.material.color.set(0xffffff);
+        face.material.needsUpdate = true;
+        faces[key] = { canvas: c, ctx, texture, key: null };
+    }
+}
+
+/** Paint a face when, and only when, what it says has changed. */
+function paintFace(key, content, draw) {
+    const f = faces[key];
+    if (!f) return false;
+    const next = contentKey(content);
+    if (next === f.key) return false;
+    f.key = next;
+    draw(f.ctx, f.canvas.width, f.canvas.height, content, CONFIG);
+    f.texture.needsUpdate = true;
+    return true;
+}
+
+/** The plan board and the menu display, from the document as it is now. */
+function paintFaces() {
+    const c = active();
+    const board = paintFace('board', boardContent(c, state.sheet), paintBoard);
+    const menu = paintFace('menu', menuContent(state.sheet, menuAreaFor(ui.menuArea, c)), paintMenu);
+    if (board || menu) requestRender();
+}
+
+// ---- The house model ------------------------------------------------------------
+
+/**
+ * Lift a level out of the model (null sets it down), and go to the model
+ * station to see it. Returns whether the level is one of the home's.
+ */
+function liftLevel(level) {
+    if (!model) return false;
+    const was = model.lifted;
+    if (!model.lift(level, state.reducedMotion)) return false;
+    markShadows();
+    if (level && ui.station !== 'model') goTo('model');
+    const c = active();
+    const name = level ? levelOf(c ? c.serviceType : 'cleaning', level) : null;
+    if (level && name) announce(BOARDS.lifted(name.name));
+    else if (!level && was) announce(BOARDS.setDown);
+    return true;
+}
+
+/**
+ * The names of the lifted level's rooms, each over its tile, wherever the
+ * camera is. Called before every frame that is drawn, so they follow a
+ * glide, a look around and the lift itself. Rebuilt only when the rooms
+ * change, moved otherwise.
+ */
+function placeLabels() {
+    const list = el('ws-rooms');
+    if (!list || !camera) return;
+    const labels = model && state.loaded ? model.labels() : [];
+    list.hidden = !labels.length;
+    const key = labels.map((l) => `${l.roomId}:${l.text}`).join('|');
+    if (key !== roomLabels.key) {
+        roomLabels.key = key;
+        clear(list);
+        roomLabels.nodes = labels.map((l) => list.appendChild(h('li', { className: 'ws-room', text: l.text })));
+        const c = active();
+        const level = c && model.lifted ? levelOf(c.serviceType, model.lifted) : null;
+        if (level) list.setAttribute('aria-label', BOARDS.roomsOn(level.name));
+    }
+    if (!labels.length) return;
+    // The camera as this frame will draw it, not as the last frame did.
+    camera.updateMatrixWorld();
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const v = new THREE.Vector3();
+    labels.forEach((l, i) => {
+        const node = roomLabels.nodes[i];
+        if (!node) return;
+        v.set(l.point[0], l.point[1], l.point[2]).project(camera);
+        const x = Math.round(((v.x + 1) / 2) * width);
+        const y = Math.round(((1 - v.y) / 2) * height);
+        node.hidden = !(v.z > -1 && v.z < 1);
+        node.style.transform = `translate(${x}px, ${y}px) translate(-50%, -140%)`;
+    });
+}
+
+// ---- The touch points -------------------------------------------------------------
+
+/** Whether the visitor has a checklist of their own (not the example). */
+function hasOwn() {
+    return state.doc.checklists.some((c) => isLive(c) && !c.sample);
+}
+
+/**
+ * Note that a touch point has been used, by any route, so its halo retires
+ * (marks.js). Kept in the document's settings, and saved with it, except on
+ * a first visit whose example nobody has changed yet: that waits for the
+ * next real change, which saves it along with everything else.
+ */
+function noteUsed(key) {
+    const bits = state.doc.settings.coached || 0;
+    const next = withUsed(bits, key);
+    if (next === bits) return false;
+    state.doc = setSettings(state.doc, { coached: next }).doc;
+    if (state.saved) save();
+    marks.frame = 0;
+    requestRender();
+    return true;
+}
+
+/**
+ * What a touch point does, however it was reached: a tap on it, a tap on
+ * its halo, its row in the places list, or its key. The camera goes to it,
+ * and what it opens opens over the studio.
+ *
+ *   overview  the whole studio
+ *   desk      the concierge: Start your own, or My checklists once the
+ *             visitor has one
+ *   model     a tap on a level lifts it, a tap on the lifted level opens
+ *             its rooms; with no level (a halo, a row, a key) the next level
+ *             up lifts, and after the top one the model goes back together
+ *   menu      the service menu
+ *   board     the checklist in full
+ *   printer   prints the checklist
+ */
+function actOn(key, { level = null } = {}) {
+    if (!state.loaded || !TOUCH.some((t) => t.key === key)) return false;
+    const c = active();
+    noteUsed(key);
+    switch (key) {
+    case 'overview':
+        goTo('overview');
+        break;
+    case 'desk':
+        goTo('desk');
+        if (hasOwn()) openMine();
+        else startOwn();
+        break;
+    case 'model':
+        goTo('model');
+        if (!c) startOwn();
+        else if (level && level === model.lifted) openLevel(level);
+        else liftLevel(level || nextLevel(model.levels(), model.lifted));
+        break;
+    case 'menu':
+        goTo('menu');
+        openMenu();
+        break;
+    case 'board':
+        goTo('board');
+        if (c) openChecklistView();
+        else startOwn();
+        break;
+    case 'printer':
+        goTo('printer');
+        printChecklist();
+        break;
+    default:
+        return false;
+    }
+    return true;
+}
+
+/** A lifted level's rooms: the checklist, showing that level only. */
+function openLevel(level) {
+    ui.filter = `level:${level}`;
+    openChecklistView();
+}
+
+/** The printer: the checklist, printed (the print stylesheet sends only the
+ *  checklist to paper). Until it has a task there is nothing to print. */
+function printChecklist() {
+    const c = active();
+    if (!c || !liveItems(c).length) {
+        announce(STUDIO.printerEmpty);
+        toast(STUDIO.printerEmpty);
+        return false;
+    }
+    openChecklistView();
+    if (typeof window.print === 'function') window.print();
+    return true;
+}
+
+/** The example on the plinth, its main floor lifted to show its rooms. */
+function exploreExample() {
+    const example = state.doc.checklists.find((c) => isLive(c) && c.sample);
+    if (!example) return false;
+    if (!active() || active().id !== example.id) openChecklist(example.id);
+    const levels = model.levels();
+    liftLevel(levels.includes('main') ? 'main' : levels[0]);
+    return true;
+}
+
+/** What is under a point on the canvas: `{ key, level }`, or null. The
+ *  first thing shown that the ray meets decides, so a wall in front of the
+ *  menu is a wall. */
+function pickAt(clientX, clientY) {
+    if (!camera || !studio || !model) return null;
+    if (!raycaster) raycaster = new THREE.Raycaster();
+    const rect = canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+        ((clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1,
+        -((clientY - rect.top) / Math.max(1, rect.height)) * 2 + 1
+    );
+    raycaster.setFromCamera(ndc, camera);
+    const pick = firstPick(raycaster.intersectObjects([studio.group, model.group], true));
+    if (!pick) return null;
+    return { key: pick.key, level: pick.key === 'model' ? model.levelOfHit(pick.hit) : null };
+}
+
+/** A tap on the studio: the arrival panel steps down, and whatever was
+ *  tapped answers. Nothing answers while a card is open. */
+function handleSceneTap(clientX, clientY) {
+    if (!state.loaded || anyOpen()) return null;
+    if (intro) intro.collapse();
+    const hit = pickAt(clientX, clientY);
+    if (!hit) return null;
+    actOn(hit.key, { level: hit.level });
+    return hit.key;
+}
+
+// ---- The halos ---------------------------------------------------------------------
+
+/** A button for each touch point with a halo (marks.js USED), its ring
+ *  pulsing in CSS, placed over its anchor every drawn frame. */
+function buildMarks(signal) {
+    const root = el('ws-marks');
+    if (!root || !studio) return;
+    clear(root);
+    const anchors = anchorsFor(CONFIG);
+    marks.root = root;
+    marks.list = TOUCH.filter((t) => t.key !== 'overview').map((t) => {
+        const btn = h('button', { type: 'button', className: 'ws-mark', attrs: { 'aria-label': STUDIO.halos[t.key] } }, [h('span', { className: 'ws-mark-ring' })]);
+        btn.hidden = true;
+        btn.addEventListener('click', () => {
+            if (intro) intro.collapse();
+            actOn(t.key);
+        }, { signal });
+        root.appendChild(btn);
+        return { key: t.key, btn, anchor: t.key === 'model' ? () => model.anchor() : () => anchors[t.key], at: '', occluded: false };
+    });
+}
+
+/** Whether something in the studio stands between the eye and a halo,
+ *  other than its own thing. */
+function markHidden(m, point) {
+    if (!raycaster) raycaster = new THREE.Raycaster();
+    return hiddenFrom(raycaster, camera.position, point, [studio.group, model.group], m.key);
+}
+
+/**
+ * Put each halo over its thing, or out of sight: when it has retired or
+ * is not yet due, while a card is open, when its thing is off the frame,
+ * and when something stands in front of it (asked every few frames).
+ */
+function updateMarks() {
+    if (!marks.root || !camera) return;
+    const c = active();
+    const own = Boolean(c && !c.sample);
+    const shown = new Set(state.loaded ? marksShown(state.doc.settings.coached || 0, { own, tasks: own && liveItems(c).length > 0 }) : []);
+    const quiet = lookLocked();
+    marks.root.hidden = quiet || !shown.size;
+    const askOcclusion = marks.frame % 20 === 0;
+    marks.frame++;
+    if (marks.root.hidden) return;
+    camera.updateMatrixWorld();
+    const W = window.innerWidth || 1;
+    const H = window.innerHeight || 1;
+    const p = new THREE.Vector3();
+    for (const m of marks.list) {
+        let on = shown.has(m.key);
+        let x = 0;
+        let y = 0;
+        if (on) {
+            const a = m.anchor();
+            p.set(a[0], a[1], a[2]);
+            if (askOcclusion) m.occluded = markHidden(m, p.clone());
+            p.project(camera);
+            on = onScreen(p) && !m.occluded;
+            x = ((p.x + 1) / 2) * W;
+            y = ((1 - p.y) / 2) * H;
+        }
+        if (m.btn.hidden !== !on) m.btn.hidden = !on;
+        if (on) {
+            const at = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%)`;
+            if (at !== m.at) {
+                m.btn.style.transform = at;
+                m.at = at;
+            }
+        }
+    }
+}
+
+/** The places list: the keyboard's way to every touch point (the shared
+ *  proplist part), each row doing what a tap there does. */
+function buildPlaces(signal) {
+    installPropList({
+        list: el('prop-list'),
+        items: TOUCH.map((t) => ({ id: t.key, label: STUDIO.places[t.key] })),
+        onChoose: (key) => {
+            if (anyOpen()) return;
+            if (intro) intro.collapse();
+            actOn(key);
+        },
+        exitTo: () => (intro && intro.open ? el('intro-start') : el('bar-mine')),
+        signal
+    });
 }
 
 // ---- Stations and the look ----------------------------------------------------
@@ -523,7 +888,9 @@ function active() {
 }
 
 function save() {
-    return store ? store.save(state.doc) : false;
+    const ok = store ? store.save(state.doc) : false;
+    if (ok) state.saved = true;
+    return ok;
 }
 
 /**
@@ -637,6 +1004,10 @@ function refresh() {
         else closeCard('quote');
     }
     if (isOpen('menu')) drawMenu();
+    if (model && model.show(c)) markShadows();
+    paintFaces();
+    if (intro) intro.showExplore(hasSamples(state.doc));
+    marks.frame = 0;
     requestRender();
 }
 
@@ -1115,12 +1486,74 @@ function setupEventListeners() {
     // change the card made), focus lands on My checklists rather than nowhere.
     setFocusFallback(() => el('bar-mine'));
     setupLook(signal);
+    buildMarks(signal);
+    buildPlaces(signal);
+    intro = createIntro({
+        mobile: state.mobile,
+        signal,
+        on: {
+            start: startOwn,
+            explore: exploreExample,
+            // While the panel is open the toolbar steps aside.
+            change: (open) => {
+                const bar = el('ws-bar');
+                if (bar && bar.classList) bar.classList.toggle('is-away', open);
+            }
+        }
+    });
+
+    // Taps on the studio, by a click, or on a touch screen by the touch's
+    // end (the shared pan part cancels touchstart, so a touch makes no
+    // click), and never the end of a drag or a pinch that looked around.
+    canvas.addEventListener('click', (event) => {
+        if (gestureClaimedTap()) return;
+        handleSceneTap(event.clientX, event.clientY);
+    }, { signal });
+    canvas.addEventListener('touchend', (event) => {
+        if (event.cancelable) event.preventDefault();
+        if (gestureClaimedTap()) return;
+        const touch = event.changedTouches && event.changedTouches[0];
+        if (touch) handleSceneTap(touch.clientX, touch.clientY);
+    }, { passive: false, signal });
+    // A pointer over something that answers a tap says so, asked no more
+    // than twenty times a second.
+    canvas.addEventListener('pointermove', (event) => {
+        if (event.pointerType !== 'mouse' || !state.loaded || anyOpen()) return;
+        const t = performance.now();
+        if (t - lastHover < 50) return;
+        lastHover = t;
+        canvas.style.cursor = pickAt(event.clientX, event.clientY) ? 'pointer' : '';
+    }, { signal });
+
+    // The places' keys, 1 to 6, from anywhere in the studio but a text
+    // field or an open card. Escape sets a lifted level down, or puts the
+    // arrival panel away.
+    document.addEventListener('keydown', (event) => {
+        if (event.ctrlKey || event.metaKey || event.altKey) return;
+        const target = event.target;
+        if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || '')) return;
+        if (!state.loaded || anyOpen()) return;
+        if (event.key === 'Escape') {
+            if (model && model.lifted) {
+                event.preventDefault();
+                liftLevel(null);
+            } else if (intro && intro.collapse()) {
+                event.preventDefault();
+            }
+            return;
+        }
+        const key = touchForKey(event.key);
+        if (!key) return;
+        event.preventDefault();
+        if (intro) intro.collapse();
+        actOn(key);
+    }, { signal });
 
     const on = (id, type, fn) => { const node = el(id); if (node) node.addEventListener(type, fn, { signal }); };
-    on('bar-new', 'click', startOwn);
+    on('bar-new', 'click', () => { noteUsed('desk'); startOwn(); });
     on('bar-home', 'click', editHome);
     on('bar-prefs', 'click', openPreferences);
-    on('bar-mine', 'click', openMine);
+    on('bar-mine', 'click', () => { noteUsed('desk'); openMine(); });
     on('bar-undo', 'click', () => undo());
     on('hud-home', 'click', openMine);
     on('my-new', 'click', startOwn);
@@ -1130,7 +1563,7 @@ function setupEventListeners() {
     on('setup-household', 'input', () => showHints('setup-household', 'setup-household-hint'));
     on('prefs-form', 'submit', submitPreferences);
     on('prefs-skip', 'click', () => closeCard('preferences'));
-    on('bar-checklist', 'click', openChecklistView);
+    on('bar-checklist', 'click', () => { noteUsed('board'); openChecklistView(); });
     on('bar-room', 'click', () => openRoom(null));
     on('checklist-add-room', 'click', () => openRoom(null));
     on('room-form', 'submit', submitRoom);
@@ -1151,10 +1584,11 @@ function setupEventListeners() {
     on('task-avoid', 'input', () => showHints('task-avoid', 'task-avoid-hint'));
     on('hud-quote', 'click', openQuote);
     on('quote-open-checklist', 'click', openChecklistView);
-    on('bar-menu', 'click', openMenu);
+    on('bar-menu', 'click', () => { noteUsed('menu'); openMenu(); });
     on('menu-area', 'change', () => {
         ui.menuArea = el('menu-area').value;
         drawMenu();
+        paintFaces();
     });
     on('checklist-filter', 'change', () => {
         ui.filter = el('checklist-filter').value;
@@ -1250,10 +1684,21 @@ function animate() {
     // zoomed the camera.
     if (camera && !lookLocked()) updatePortraitControls(delta);
     if (camera && lookChanged()) state.dirty = true;
+    // A level being lifted or set down, and its shadow with it.
+    if (model && model.tick(delta)) markShadows();
+    // A card opening or closing hides or brings back the halos, though the
+    // studio itself has not changed.
+    const locked = lookLocked();
+    if (locked !== marks.locked) {
+        marks.locked = locked;
+        state.dirty = true;
+    }
 
     if (!state.dirty) return;
     state.dirty = false;
     state.frames++;
+    placeLabels();
+    updateMarks();
     renderer.render(scene, camera);
     state.drewLast = true;
 }
@@ -1361,6 +1806,19 @@ export const __test__ = {
     lookLocked,
     markShadows,
     glide: () => glide,
+    liftLevel,
+    actOn,
+    pickAt,
+    handleSceneTap,
+    updateMarks,
+    marks: () => marks,
+    intro: () => intro,
+    noteUsed,
+    exploreExample,
+    paintFaces,
+    placeLabels,
+    model: () => model,
+    faces: () => faces,
     studio: () => studio,
     street: () => street,
     start,
