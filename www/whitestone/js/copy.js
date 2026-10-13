@@ -256,8 +256,12 @@ export const STUDIO = Object.freeze({
     explore: 'Explore the example',
     hintTouch: 'Tap a glowing marker to begin. Drag to look around, and pinch to look closer.',
     hintPointer: 'Click a glowing marker to begin. Drag to look around, and scroll to look closer.',
+    /** Once the halos have retired, the hint names what answers instead. */
+    hintPlacesTouch: 'Tap the desk, the model, the menu, the board or the printer. Drag to look around, and pinch to look closer.',
+    hintPlacesPointer: 'Click the desk, the model, the menu, the board or the printer. Drag to look around, and scroll to look closer.',
     collapse: 'Collapse this introduction',
     handle: 'About Whitestone',
+    back: 'Back to the studio',
     /** The stations list's rows: the place, said plainly. */
     places: Object.freeze({
         overview: 'The whole studio',

@@ -382,6 +382,14 @@ describe('the street', () => {
         }
     });
 
+    test('no tree stands in the middle of the view, behind the model', () => {
+        const clear = CONFIG.street.clearCenter;
+        expect(clear).toBeGreaterThan(CONFIG.studio.plinth.width);
+        for (const t of plan.trees) expect(Math.abs(t.x) - t.radius).toBeGreaterThan(clear);
+        // And the street still has its trees.
+        expect(plan.trees.length).toBeGreaterThan(20);
+    });
+
     test('the homes stand side by side, never in each other', () => {
         const spans = plan.homes.map((h) => {
             const parts = [[h.x - h.width / 2, h.x + h.width / 2]];
@@ -462,6 +470,19 @@ describe('built with the real three.js', () => {
         // One mesh per material in the still part of the room.
         const shell = meshes.filter((m) => m.name === 'shell');
         expect(new Set(shell.map((m) => m.material)).size).toBe(shell.length);
+    });
+
+    test('the plinth is a stone top on a narrower base, not a block', () => {
+        const studio = buildStudio(CONFIG);
+        const p = CONFIG.studio.plinth;
+        const parts = meshesOf(studio.picks.model).map((m) => ({ m, b: boundsOf(m) }));
+        const top = parts.find(({ m }) => m.material.name === 'stone');
+        const base = parts.find(({ m }) => m.material.name === 'white');
+        expect(top.b.max.x - top.b.min.x).toBeCloseTo(p.width, 6);
+        expect(top.b.max.y - top.b.min.y).toBeCloseTo(p.top, 6);
+        expect(base.b.max.x - base.b.min.x).toBeCloseTo(p.width - 2 * p.inset, 6);
+        expect(base.b.max.z - base.b.min.z).toBeCloseTo(p.depth - 2 * p.inset, 6);
+        expect(base.b.max.y).toBeCloseTo(top.b.min.y, 6);
     });
 
     test('the plinth top is where the house model will stand, and the plinth is on the floor', () => {

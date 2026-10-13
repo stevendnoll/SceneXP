@@ -218,6 +218,14 @@ describe('the model and the boards', () => {
         expect(faces.menu.key).toBe(keys0[1]);
     });
 
+    test("whatever of the model's materials are shiny mirror the room, as the studio's metals do", async () => {
+        const main = await boot();
+        const shiny = main.__test__.reflective();
+        expect(shiny).toEqual(expect.arrayContaining(main.__test__.model().shiny));
+        expect(shiny).toEqual(expect.arrayContaining(main.__test__.studio().shiny));
+        expect(shiny.length).toBe(main.__test__.model().shiny.length + main.__test__.studio().shiny.length);
+    });
+
     test('clearing the example empties the plinth and the board invites a start', async () => {
         const main = await boot();
         main.__test__.clearExample();
@@ -239,6 +247,15 @@ describe('the model and the boards', () => {
         const names = list.children.map((li) => li.textContent).sort();
         expect(names).toEqual(["Emma's room", 'Guest room', 'Hall bath', "Noah's room", 'Primary bathroom', 'Primary bedroom']);
         expect(list.children.every((li) => /^translate\(/.test(li.style.transform))).toBe(true);
+        // A card over the studio hides them, and closing it brings them back.
+        main.__test__.openMine();
+        stepFrames(2);
+        expect(list.hidden).toBe(true);
+        // The page's own instance: main.js imports the built cards module.
+        const { closeCard } = await import('../www/whitestone/js/cards.min.js');
+        closeCard('my-checklists');
+        stepFrames(2);
+        expect(list.hidden).toBe(false);
         // Set down: the names go.
         main.__test__.liftLevel(null);
         jest.advanceTimersByTime(40);

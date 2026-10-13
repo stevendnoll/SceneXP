@@ -55,9 +55,12 @@ describe('which home is on the plinth', () => {
         expect(arrivalId(doc([]))).toBeNull();
     });
 
-    test('the hint speaks to the device in hand', () => {
+    test('the hint speaks to the device in hand, and to the halos only while there are any', () => {
         expect(introHint(true)).toBe(STUDIO.hintTouch);
         expect(introHint(false)).toBe(STUDIO.hintPointer);
+        expect(introHint(true, false)).toBe(STUDIO.hintPlacesTouch);
+        expect(introHint(false, false)).toBe(STUDIO.hintPlacesPointer);
+        expect(STUDIO.hintPlacesPointer).not.toMatch(/marker/);
     });
 });
 
@@ -79,6 +82,8 @@ describe('the markup', () => {
         expect(text(/class="intro-honesty">([^<]+)</)).toBe(BRAND.honesty);
         expect(text(/id="intro-close"[^>]*aria-label="([^"]+)"/)).toBe(STUDIO.collapse);
         expect(text(/id="intro-handle"[^>]*>([^<]+)</)).toBe(STUDIO.handle);
+        expect(text(/id="ws-back"[^>]*>([^<]+)</)).toBe(STUDIO.back);
+        expect(HTML).toMatch(/<button id="ws-back"[^>]*\shidden>/);
     });
 
     test('the places list says what copy.js says', () => {
@@ -123,7 +128,7 @@ function serveSheet() {
 async function boot({ saved = null, sheet = false } = {}) {
     if (saved) localStorage.setItem(CONFIG.storage.key, JSON.stringify(saved));
     // What the markup ships hidden (the stub reads no markup).
-    for (const id of ['prop-panel', 'ws-marks']) dom.el(id).hidden = true;
+    for (const id of ['prop-panel', 'ws-marks', 'ws-back']) dom.el(id).hidden = true;
     if (sheet) serveSheet();
     const main = await import('../www/whitestone/js/main.js');
     await flushAsync(20);
@@ -354,6 +359,57 @@ describe('the places list and the keys', () => {
     });
 });
 
+describe('getting back out', () => {
+    test('Back to the studio appears once a floor is opened, and one press sets the house down and returns', async () => {
+        const main = await boot();
+        main.__test__.state.reducedMotion = true;
+        dom.el('ws-back').hidden = true;   // the markup ships it hidden
+        expect(dom.el('ws-back').hidden).toBe(true);
+        main.__test__.actOn('model', { level: 'second' });
+        expect(dom.el('ws-back').hidden).toBe(false);
+        fire(dom.el('ws-back'), 'click');
+        expect(main.__test__.model().lifted).toBeNull();
+        expect(main.__test__.ui.station).toBe('overview');
+        expect(dom.el('ws-back').hidden).toBe(true);
+        expect(said()).toBe('The model is back together.');
+    });
+
+    test('it shows at any station, not only the model', async () => {
+        const main = await boot();
+        main.__test__.goTo('menu');
+        expect(dom.el('ws-back').hidden).toBe(false);
+        fire(dom.el('ws-back'), 'click');
+        expect(main.__test__.ui.station).toBe('overview');
+    });
+
+    test('Escape, and the 1 key, do the whole thing in one step', async () => {
+        const main = await boot();
+        main.__test__.state.reducedMotion = true;
+        const press = (key) => fire(dom.documentStub, 'keydown', { key, target: dom.documentStub.body, preventDefault() {} });
+        press('3');
+        expect(main.__test__.model().lifted).toBe('basement');
+        press('Escape');
+        expect(main.__test__.model().lifted).toBeNull();
+        expect(main.__test__.ui.station).toBe('overview');
+        press('3');
+        press('1');
+        expect(main.__test__.model().lifted).toBeNull();
+        expect(main.__test__.ui.station).toBe('overview');
+    });
+
+    test('a tap on nothing in particular steps back out, and at the overview does nothing', async () => {
+        const main = await boot();
+        main.__test__.state.reducedMotion = true;
+        main.__test__.actOn('model', { level: 'main' });
+        // The stub's raycaster meets nothing, so every tap is on nothing.
+        main.__test__.handleSceneTap(10, 10);
+        expect(main.__test__.model().lifted).toBeNull();
+        expect(main.__test__.ui.station).toBe('overview');
+        main.__test__.handleSceneTap(10, 10);
+        expect(main.__test__.ui.station).toBe('overview');
+    });
+});
+
 describe('the halos', () => {
     test('they retire as things are used, and go once three have been', async () => {
         const main = await boot({ saved: await savedDoc([['home-mine', STAMP]], { activeId: 'home-mine' }) });
@@ -387,6 +443,22 @@ describe('the halos', () => {
         expect(localStorage.getItem(CONFIG.storage.key)).toBeNull();
         main.__test__.clearExample();
         expect(JSON.parse(localStorage.getItem(CONFIG.storage.key)).settings.coached).toBe(USED.desk);
+    });
+
+    test('once the halos have retired, the panel stops promising them', async () => {
+        const main = await boot({ saved: await savedDoc([['home-mine', STAMP]], { activeId: 'home-mine', coached: USED.desk | USED.menu | USED.board }) });
+        expect(dom.el('intro-hint').textContent).toBe(STUDIO.hintPlacesPointer);
+        expect(main.__test__.intro().open).toBe(true);
+    });
+
+    test('the hint changes the moment the last halo retires', async () => {
+        const main = await boot({ saved: await savedDoc([['home-mine', STAMP]], { activeId: 'home-mine' }) });
+        expect(dom.el('intro-hint').textContent).toBe(STUDIO.hintPointer);
+        main.__test__.noteUsed('desk');
+        main.__test__.noteUsed('menu');
+        expect(dom.el('intro-hint').textContent).toBe(STUDIO.hintPointer);
+        main.__test__.noteUsed('board');
+        expect(dom.el('intro-hint').textContent).toBe(STUDIO.hintPlacesPointer);
     });
 
     test('a halo does what its thing does', async () => {

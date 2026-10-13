@@ -177,7 +177,7 @@ describe('in the built studio', () => {
             printer: [s.console.x, s.console.height + s.printer.height / 2, s.console.z - 0.02 + s.printer.depth / 2],
             menu: [s.menu.x + 0.2, s.menu.y - 0.1, wall + 0.04],
             board: [s.board.x - 0.2, s.board.y + 0.1, wall + 0.07],
-            model: [studio.plinthTop[0] + anchorModel.position[0], studio.plinthTop[1] + anchorModel.position[1], studio.plinthTop[2] + anchorModel.position[2]]
+            model: model.toWorld(anchorModel.position)
         };
     }
 
@@ -206,7 +206,7 @@ describe('in the built studio', () => {
     test('a tap on a lifted level\'s tile reaches the model, and says which level', () => {
         model.lift('second', true);
         const tile = model.placed.tiles.find((t) => t.level === 'second');
-        const p = [studio.plinthTop[0] + tile.position[0], studio.plinthTop[1] + tile.position[1] + tile.scale[1] / 2, studio.plinthTop[2] + tile.position[2]];
+        const p = model.toWorld([tile.position[0], tile.position[1] + tile.scale[1] / 2, tile.position[2]]);
         const cam = cameraAt('model', 16 / 10);
         const ndc = new REAL.Vector3(...p).project(cam);
         const ray = new REAL.Raycaster();

@@ -380,14 +380,18 @@ function materials(room) {
     };
 }
 
-/** The plinth for the house model: a block of white stone floating on a
- *  dark recessed toe, its top at `plinth.height`. */
+/** The plinth for the house model: a slim stone top, its edges catching
+ *  the light, on a white base set `inset` in, which sits on a dark recessed
+ *  toe. The top is at `plinth.height`. */
 function buildPlinth(p, m) {
-    const toe = 0.07;
-    const inset = 0.05;
+    const toe = 0.06;
+    const top = p.top || 0.08;
+    const inset = p.inset || 0.14;
+    const base = p.height - top - toe;
     return pickable('model', [
-        roundedBox(p.width, p.height - toe, p.depth, 0.025, m.stone, p.x, toe + (p.height - toe) / 2, p.z),
-        box(p.width - 2 * inset, toe, p.depth - 2 * inset, m.reveal, p.x, toe / 2, p.z)
+        roundedBox(p.width, top, p.depth, 0.02, m.stone, p.x, p.height - top / 2, p.z),
+        roundedBox(p.width - 2 * inset, base, p.depth - 2 * inset, 0.015, m.white, p.x, toe + base / 2, p.z),
+        box(p.width - 2 * inset - 0.06, toe, p.depth - 2 * inset - 0.06, m.reveal, p.x, toe / 2, p.z)
     ]);
 }
 

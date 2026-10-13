@@ -37,9 +37,12 @@ export function arrivalId(doc) {
     return example ? example.id : null;
 }
 
-/** The panel's hint for the visitor's device: tap and pinch on a touch
- *  screen, click and scroll with a mouse. */
-export function introHint(mobile) {
+/** The panel's hint for the visitor's device (tap and pinch on a touch
+ *  screen, click and scroll with a mouse), pointing at the glowing markers
+ *  while there are any and naming the things to tap once they have retired
+ *  (QA, 2026-10-13: it promised markers that were gone). */
+export function introHint(mobile, marks = true) {
+    if (!marks) return mobile ? STUDIO.hintPlacesTouch : STUDIO.hintPlacesPointer;
     return mobile ? STUDIO.hintTouch : STUDIO.hintPointer;
 }
 
@@ -92,6 +95,10 @@ export function createIntro({ mobile = false, on = {}, signal } = {}) {
             show(true);
             if (panel && typeof panel.focus === 'function') panel.focus();
             return true;
+        },
+        /** Whether halos are showing, for the hint's words. */
+        setMarks(shown) {
+            if (hint) hint.textContent = introHint(mobile, shown);
         },
         /** Explore the example is offered only while there is one. */
         showExplore(shown) {

@@ -49,15 +49,20 @@ export function streetPlan(config) {
     const rand = seeded(20261012);
     const trees = [];
     const verge = at('verge');
+    // Nothing in the middle of the view, where the model is seen against
+    // the street (CONFIG.street.clearCenter). The numbers are drawn either
+    // way, so the trees elsewhere stay where they were.
+    const clear = (x, radius) => Math.abs(x) - radius > (s.clearCenter || 0);
     for (let x = -s.span; x <= s.span; x += s.treeEvery) {
-        trees.push({
+        const tree = {
             x: x + (rand() - 0.5) * 1.5,
             z: (verge.z0 + verge.z1) / 2,
             trunk: 2.2 + rand() * 0.6,
-            crown: 1.7 + rand() * 0.7,
-            radius: 1.6 + rand() * 0.6,
+            crown: 1.5 + rand() * 0.6,
+            radius: 1.3 + rand() * 0.5,
             shade: Math.floor(rand() * s.leaves.length)
-        });
+        };
+        if (clear(tree.x, tree.radius)) trees.push(tree);
     }
     const homes = [];
     const lawns = at('lawns');
@@ -92,14 +97,15 @@ export function streetPlan(config) {
     for (const home of homes) {
         if (rand() < 0.5) continue;
         const side = home.garage ? -home.garage : (rand() < 0.5 ? -1 : 1);
-        trees.push({
+        const tree = {
             x: home.x + side * (home.width / 2 - 1.2),
             z: (lawns.z0 + lawns.z1) / 2 - 0.5,
             trunk: 1.6 + rand() * 0.6,
             crown: 1.3 + rand() * 0.5,
             radius: 1.2 + rand() * 0.5,
             shade: Math.floor(rand() * s.leaves.length)
-        });
+        };
+        if (clear(tree.x, tree.radius)) trees.push(tree);
     }
     // The road's dashed center line.
     const road = at('road');

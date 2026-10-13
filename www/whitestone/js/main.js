@@ -240,6 +240,7 @@ async function init() {
         const places = el('prop-panel');
         if (places) places.hidden = false;
         if (intro) intro.arrive();
+        showBack();
         // The halos' pulse slows once the visitor has had a while to look.
         setTimeout(() => { if (marks.root && marks.root.classList) marks.root.classList.add('is-calm'); }, COACHING.calmSeconds * 1000);
         refresh();
@@ -380,13 +381,19 @@ function buildScene() {
  * room captured once from its middle, behind the loading screen. A metal
  * with nothing to reflect renders nearly black.
  */
+/** The materials that mirror the room: the studio's metals and stone, and
+ *  the model's aluminum roof. */
+function reflective() {
+    return [...(studio ? studio.shiny : []), ...(model ? model.shiny : [])];
+}
+
 function captureRoom() {
     if (!renderer || !studio || !THREE.PMREMGenerator) return;
     const pmrem = new THREE.PMREMGenerator(renderer);
     const middle = CONFIG.light.reflectFrom;
     envTarget = pmrem.fromScene(scene, 0.03, 0.1, CONFIG.camera.far, { position: new THREE.Vector3(middle[0], middle[1], middle[2]) });
     pmrem.dispose();
-    for (const m of studio.shiny) {
+    for (const m of reflective()) {
         m.envMap = envTarget.texture;
         m.envMapIntensity = m.metalness >= 0.25 ? 1 : 0.6;
         m.needsUpdate = true;
@@ -455,7 +462,34 @@ function liftLevel(level) {
     const name = level ? levelOf(c ? c.serviceType : 'cleaning', level) : null;
     if (level && name) announce(BOARDS.lifted(name.name));
     else if (!level && was) announce(BOARDS.setDown);
+    showBack();
     return true;
+}
+
+/** Whether the visitor is anywhere but the whole studio: at a station, or
+ *  with a level of the model lifted. */
+function away() {
+    return ui.station !== HOME_STATION || Boolean(model && model.lifted);
+}
+
+/**
+ * Back out of whatever the camera is close to (QA, 2026-10-13: "once I
+ * click on a floor of the model house it's hard to exit out"): a lifted
+ * level is set down, and the camera glides back to the whole studio. One
+ * step, by the Back to the studio button, Escape, the 1 key, or a tap on
+ * nothing in particular.
+ */
+function backToStudio() {
+    if (model && model.lifted) liftLevel(null);
+    if (ui.station !== HOME_STATION) goTo(HOME_STATION);
+    showBack();
+    return true;
+}
+
+/** The Back to the studio button, shown whenever there is somewhere to come back from. */
+function showBack() {
+    const b = el('ws-back');
+    if (b) b.hidden = !(state.loaded && away());
 }
 
 /**
@@ -467,7 +501,8 @@ function liftLevel(level) {
 function placeLabels() {
     const list = el('ws-rooms');
     if (!list || !camera) return;
-    const labels = model && state.loaded ? model.labels() : [];
+    // Not over an open card (QA, 2026-10-13: they showed through it).
+    const labels = model && state.loaded && !lookLocked() ? model.labels() : [];
     list.hidden = !labels.length;
     const key = labels.map((l) => `${l.roomId}:${l.text}`).join('|');
     if (key !== roomLabels.key) {
@@ -514,6 +549,7 @@ function noteUsed(key) {
     if (next === bits) return false;
     state.doc = setSettings(state.doc, { coached: next }).doc;
     if (state.saved) save();
+    if (intro) intro.setMarks(marksDue().length > 0);
     marks.frame = 0;
     requestRender();
     return true;
@@ -540,7 +576,7 @@ function actOn(key, { level = null } = {}) {
     noteUsed(key);
     switch (key) {
     case 'overview':
-        goTo('overview');
+        backToStudio();
         break;
     case 'desk':
         goTo('desk');
@@ -625,7 +661,12 @@ function handleSceneTap(clientX, clientY) {
     if (!state.loaded || anyOpen()) return null;
     if (intro) intro.collapse();
     const hit = pickAt(clientX, clientY);
-    if (!hit) return null;
+    if (!hit) {
+        // A tap on nothing in particular (the floor, a wall, the street)
+        // steps back out to the whole studio.
+        if (away()) backToStudio();
+        return null;
+    }
     actOn(hit.key, { level: hit.level });
     return hit.key;
 }
@@ -664,11 +705,16 @@ function markHidden(m, point) {
  * is not yet due, while a card is open, when its thing is off the frame,
  * and when something stands in front of it (asked every few frames).
  */
-function updateMarks() {
-    if (!marks.root || !camera) return;
+/** The halos due now (marks.js), whatever the camera can see. */
+function marksDue() {
     const c = active();
     const own = Boolean(c && !c.sample);
-    const shown = new Set(state.loaded ? marksShown(state.doc.settings.coached || 0, { own, tasks: own && liveItems(c).length > 0 }) : []);
+    return marksShown(state.doc.settings.coached || 0, { own, tasks: own && liveItems(c).length > 0 });
+}
+
+function updateMarks() {
+    if (!marks.root || !camera) return;
+    const shown = new Set(state.loaded ? marksDue() : []);
     const quiet = lookLocked();
     marks.root.hidden = quiet || !shown.size;
     const askOcclusion = marks.frame % 20 === 0;
@@ -826,6 +872,7 @@ function goTo(station) {
     ui.zoom = 0;
     glide = createGlide(from, to, state.reducedMotion ? 0 : CONFIG.view.glideSeconds);
     requestRender();
+    showBack();
     return true;
 }
 
@@ -1006,7 +1053,10 @@ function refresh() {
     if (isOpen('menu')) drawMenu();
     if (model && model.show(c)) markShadows();
     paintFaces();
-    if (intro) intro.showExplore(hasSamples(state.doc));
+    if (intro) {
+        intro.showExplore(hasSamples(state.doc));
+        intro.setMarks(marksDue().length > 0);
+    }
     marks.frame = 0;
     requestRender();
 }
@@ -1534,9 +1584,9 @@ function setupEventListeners() {
         if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || '')) return;
         if (!state.loaded || anyOpen()) return;
         if (event.key === 'Escape') {
-            if (model && model.lifted) {
+            if (away()) {
                 event.preventDefault();
-                liftLevel(null);
+                backToStudio();
             } else if (intro && intro.collapse()) {
                 event.preventDefault();
             }
@@ -1583,6 +1633,7 @@ function setupEventListeners() {
     on('task-notes', 'input', () => showHints('task-notes', 'task-notes-hint'));
     on('task-avoid', 'input', () => showHints('task-avoid', 'task-avoid-hint'));
     on('hud-quote', 'click', openQuote);
+    on('ws-back', 'click', backToStudio);
     on('quote-open-checklist', 'click', openChecklistView);
     on('bar-menu', 'click', () => { noteUsed('menu'); openMenu(); });
     on('menu-area', 'change', () => {
@@ -1807,6 +1858,8 @@ export const __test__ = {
     markShadows,
     glide: () => glide,
     liftLevel,
+    backToStudio,
+    reflective,
     actOn,
     pickAt,
     handleSceneTap,

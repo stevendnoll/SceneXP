@@ -1175,6 +1175,21 @@ body .pan-controls.no-chrome.visible {
     margin-top: 0.25rem;
 }
 
+/* On a wide screen it sits bottom left, clear of the model (QA,
+   2026-10-13: centered, it covered the centerpiece). */
+@media (min-width: 900px) {
+    .ws-intro {
+        left: 24px;
+        bottom: 24px;
+        transform: none;
+        width: 440px;
+    }
+
+    .ws-intro.is-out {
+        transform: translateY(12px);
+    }
+}
+
 /* On a phone the body sentence goes, so the panel stays a strip. */
 @media (max-width: 620px) {
     .ws-intro {
@@ -1214,6 +1229,46 @@ body .pan-controls.no-chrome.visible {
 }
 
 .intro-handle.is-out {
+    display: none;
+}
+
+/* Back to the studio, top center under the chips, whenever the camera is
+   close to something (QA, 2026-10-13: it was hard to get out of the
+   model). */
+.ws-back {
+    position: fixed;
+    top: calc(max(16px, env(safe-area-inset-top)) + 56px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    min-height: 44px;
+    padding: 0.5rem 1.1rem 0.5rem 0.9rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.96);
+    color: var(--ws-graphite);
+    font: inherit;
+    font-weight: 600;
+    box-shadow: 0 6px 18px rgba(34, 37, 42, 0.14);
+    cursor: pointer;
+}
+
+.ws-back::before {
+    content: '\2190';
+    margin-right: 0.45rem;
+    color: var(--ws-accent);
+}
+
+.ws-back:hover {
+    background: #FFFFFF;
+}
+
+.ws-back:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.ws-back[hidden] {
     display: none;
 }
 
