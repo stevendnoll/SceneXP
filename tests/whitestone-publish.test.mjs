@@ -15,7 +15,7 @@ import { CONFIG } from '../www/whitestone/js/config.js';
 import {
     clockLabel, dayLabel, monthLabel, shiftMonth, visitMinutes, finishOf, calendarView, timesView, firstOpen
 } from '../www/whitestone/js/booking.js';
-import { publish, publishedForm, photoIdsOf } from '../www/whitestone/js/sync.js';
+import { publish, publishedForm, photoIdsOf, openPublished } from '../www/whitestone/js/sync.js';
 import { receiptView } from '../www/whitestone/js/receipt.js';
 import { createApi } from '../www/whitestone/js/api.js';
 import { createStandin } from '../www/whitestone/js/standin.js';
@@ -23,7 +23,7 @@ import { createMemoryBackend, createPhotoStore } from '../www/whitestone/js/phot
 import { createSealer, contextFor } from '../www/whitestone/js/seal.js';
 import {
     emptyDoc, createChecklist, addRoom, addItem, addPhoto, setPublication, keepServerFacts, findChecklist, validate,
-    normalizePublished, normalizeBooking, duplicateChecklist, updateChecklist
+    normalizePublished, normalizeBooking, duplicateChecklist, updateChecklist, importPublished
 } from '../www/whitestone/js/store.js';
 import { checkChoice, presetFor } from '../www/whitestone/js/sheet.js';
 import { withExample } from '../www/whitestone/js/samples.js';
@@ -208,7 +208,10 @@ describe('the store keeps it (store.js)', () => {
     test('a publication and a booking read back, and anything malformed is dropped', () => {
         const good = { id: 'A'.repeat(22), key: 'k'.repeat(43), ownerToken: 'o'.repeat(43), pin: '012345', at: NOW.toISOString(), version: 2, expiresAt: NOW.toISOString(), photos: ['photo-aaaaaaaaaaaaaaaa', '../x'] };
         expect(normalizePublished(good)).toEqual({ ...good, photos: ['photo-aaaaaaaaaaaaaaaa'] });
-        for (const bad of [{ ...good, key: 'short' }, { ...good, pin: '12345' }, { ...good, id: 'x' }, { ...good, ownerToken: null }, null]) expect(normalizePublished(bad)).toBeNull();
+        for (const bad of [{ ...good, key: 'short' }, { ...good, id: 'x' }, { ...good, ownerToken: null }, null]) expect(normalizePublished(bad)).toBeNull();
+        // A PIN this device does not know (opened by its edit link) is null, the keys kept.
+        expect(normalizePublished({ ...good, pin: '12345' })).toMatchObject({ id: good.id, pin: null });
+        expect(normalizePublished({ ...good, pin: undefined }).pin).toBeNull();
         expect(normalizePublished({ ...good, version: -1, at: 'nope' })).toMatchObject({ version: 0, at: null });
         const b = { date: '2026-10-16', time: '09:00', minutes: 120, start: '2026-10-16T09:00:00-07:00', end: '2026-10-16T11:00:00-07:00' };
         expect(normalizeBooking(b)).toEqual(b);
@@ -260,5 +263,55 @@ describe('the receipt (receipt.js)', () => {
         // Not yet published, no receipt.
         expect(receiptView({ ...c, published: { ...c.published, at: null } }, { origin: 'http://localhost:8000', config: CONFIG, timezone: SCHEDULE.timezone, now: START })).toBeNull();
         expect(receiptView(null, {})).toBeNull();
+    });
+});
+
+describe('opening by the edit link (sync.js openPublished, store.js importPublished)', () => {
+    test('fetched with the owner token, opened with the key, its photos brought back, and made a checklist of this device', async () => {
+        const w = await world();
+        await publish({ checklist: findChecklist(w.box.doc, 'checklist-1'), api: w.api, sealer: w.sealer, photos: w.photos, sheet: SHEET, slot: SLOT, at: NOW.toISOString(), record: w.record });
+        const c = findChecklist(w.box.doc, 'checklist-1');
+        const link = { id: c.published.id, key: c.published.key, ownerToken: c.published.ownerToken };
+        const elsewhere = createPhotoStore(createMemoryBackend(), CONFIG);
+        const opened = await openPublished({ api: w.api, sealer: w.sealer, photos: elsewhere, link });
+        expect(opened).toMatchObject({ ok: true, version: 1, error: null });
+        expect(opened.form.title).toBe('Maple Street');
+        expect([...new Uint8Array(await (await elsewhere.get('photo-aaaaaaaaaaaaaaaa', 'full')).arrayBuffer())]).toEqual([1, 2, 3]);
+        const imported = importPublished(emptyDoc(CONFIG, NOW), opened.form, { ...link, version: opened.version }, CONFIG, NOW, { id: 'checklist-here' });
+        expect(imported.error).toBeNull();
+        const r = imported.record;
+        expect(r).toMatchObject({ id: 'checklist-here', title: 'Maple Street', sample: false, booking: c.booking, quote: c.quote });
+        expect(r.published).toMatchObject({ id: link.id, key: link.key, ownerToken: link.ownerToken, pin: null, version: 1, photos: ['photo-aaaaaaaaaaaaaaaa'] });
+        // The rooms and tasks keep their ids, so the photos still match.
+        expect(r.rooms.map((x) => x.id)).toEqual(c.rooms.map((x) => x.id));
+        expect(r.items.map((x) => x.id).sort()).toEqual(c.items.map((x) => x.id).sort());
+        // Its receipt knows it does not know the PIN.
+        const v = receiptView(r, { origin: 'http://localhost:8000', config: CONFIG, timezone: SCHEDULE.timezone, now: START });
+        expect([v.pin, v.pinUnknown]).toEqual(['', true]);
+    });
+
+    test('a wrong key, a wrong token, another checklist\'s, or a full device opens nothing', async () => {
+        const w = await world();
+        await publish({ checklist: findChecklist(w.box.doc, 'checklist-1'), api: w.api, sealer: w.sealer, photos: w.photos, sheet: SHEET, slot: SLOT, at: NOW.toISOString(), record: w.record });
+        const c = findChecklist(w.box.doc, 'checklist-1');
+        const link = { id: c.published.id, key: c.published.key, ownerToken: c.published.ownerToken };
+        const photos = createPhotoStore(createMemoryBackend(), CONFIG);
+        const otherKey = await w.sealer.exportKey(await w.sealer.generateKey());
+        expect((await openPublished({ api: w.api, sealer: w.sealer, photos, link: { ...link, key: otherKey } })).error).toBe('denied');
+        expect((await openPublished({ api: w.api, sealer: w.sealer, photos, link: { ...link, key: 'short' } })).error).toBe('denied');
+        expect((await openPublished({ api: w.api, sealer: w.sealer, photos, link: { ...link, ownerToken: 'x'.repeat(43) } })).error).toBe('denied');
+        // A form that is not the published form, or names another checklist.
+        const key = await w.sealer.importKey(link.key);
+        const forged = { ...w.api, getChecklist: async () => ({ ok: true, bytes: await w.sealer.sealJson(key, { format: 1, id: 'B'.repeat(22) }, contextFor(link.id, 'checklist')) }) };
+        expect((await openPublished({ api: forged, sealer: w.sealer, photos, link })).error).toBe('denied');
+        // A photo that will not open is left out, and the rest goes on.
+        const broken = { ...w.api, getThumb: async () => ({ ok: true, bytes: new Uint8Array([9, 9, 9]) }) };
+        const partial = await openPublished({ api: broken, sealer: w.sealer, photos, link });
+        expect(partial.ok).toBe(true);
+        expect(await photos.get('photo-aaaaaaaaaaaaaaaa', 'full')).toBeNull();
+        let full = emptyDoc(CONFIG, NOW);
+        for (let i = 0; i < CONFIG.limits.checklists; i++) full = createChecklist(full, {}, CONFIG, NOW).doc;
+        expect(importPublished(full, partial.form, link, CONFIG, NOW).error).toMatch(/up to/);
+        expect(importPublished(emptyDoc(CONFIG, NOW), partial.form, { ...link, key: 'short' }, CONFIG, NOW).error).toBeTruthy();
     });
 });

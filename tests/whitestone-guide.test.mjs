@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { GUIDE, BRAND, countWord } from '../www/whitestone/js/copy.js';
 import {
-    GUIDED, PROGRESS, arrivalId, arrivalGuide, hasOwn, savedForm, step, presetSummary, addedLine, viewFor
+    GUIDED, PROGRESS, HALO, arrivalId, arrivalGuide, hasOwn, savedForm, step, presetSummary, addedLine, viewFor
 } from '../www/whitestone/js/guide.js';
 import { presetFor } from '../www/whitestone/js/sheet.js';
 import { priceChoice, formatMoney } from '../www/whitestone/js/pricing.js';
@@ -297,7 +297,7 @@ describe('what Maya says', () => {
         const sentences = v.text.split(/(?<=[.?])\s+/).filter(Boolean);
         expect(sentences.length).toBeLessThanOrEqual(3);
         // A question of a few answers has them as its choices instead.
-        if (v.choices === 'home') expect(v.buttons).toEqual([]);
+        if (v.choices === 'home' || v.choices === 'returning') expect(v.buttons).toEqual([]);
         else if (v.choices === 'attached') expect(v.buttons).toEqual([]);
         else expect(v.buttons.length).toBeGreaterThanOrEqual(1);
         expect(v.buttons.length).toBeLessThanOrEqual(2);
@@ -352,9 +352,25 @@ describe('what Maya says', () => {
         expect(rooms(4, 2).text).toBe(GUIDE.roomsMore);
     });
 
-    test('a return mid-build is offered Keep going, and otherwise just welcomed', () => {
+    test('a return mid-build is offered Keep going; any other is a home base, its words and choices the page\'s', () => {
         expect(viewFor({ ...fresh(), scene: 'welcome', resume: 'rooms' }).buttons.map((b) => b.id)).toEqual(['keepGoing', 'lookAround']);
-        expect(viewFor({ ...fresh(), scene: 'welcome', resume: null }).buttons.map((b) => b.id)).toEqual(['lookAround']);
+        const base = viewFor({ ...fresh(), scene: 'welcome', resume: null }, { welcome: 'Welcome back. All is well. What would you like to do?' });
+        expect(base).toMatchObject({ text: 'Welcome back. All is well. What would you like to do?', buttons: [], choices: 'returning' });
+        expect(viewFor({ ...fresh(), scene: 'welcome', resume: null }).text).toBe(GUIDE.welcome);
+        // Add or change rooms: the build's own Your rooms step, every step behind it reached.
+        expect(step({ ...fresh(), scene: 'welcome', resume: null }, { type: 'editRooms' })).toMatchObject({ scene: 'rooms', reached: 4 });
+        expect(step({ ...fresh(), scene: 'rooms' }, { type: 'editRooms' }).scene).toBe('rooms');
+    });
+
+    test('a halo on the touch point each step speaks of, and none where there is none', () => {
+        const halo = (scene) => viewFor({ ...fresh(), scene }, { sheet: SHEET, roomCount: 2 }).halo;
+        expect(halo('dots')).toEqual({ kind: 'dot' });
+        expect(halo('rooms')).toEqual({ kind: 'floor' });
+        expect(halo('look')).toEqual({ kind: 'floor' });
+        expect(halo('review')).toEqual({ kind: 'element', id: 'hud-quote' });
+        expect(halo('hint')).toEqual({ kind: 'element', id: 'ws-help' });
+        for (const scene of ['hello', 'home', 'floors', 'firstRoom', 'added', 'saved', 'example1', 'welcome', 'about']) expect(halo(scene)).toBeNull();
+        expect(Object.isFrozen(HALO)).toBe(true);
     });
 
     test('done puts the bubble away', () => {

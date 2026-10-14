@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=15" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=16" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7082,6 +7082,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="js/booking.min.js" rel="modulepreload"]
     link [href="js/receipt.min.js" rel="modulepreload"]
     link [href="js/zoned.min.js" rel="modulepreload"]
+    link [href="js/links.min.js" rel="modulepreload"]
     link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
     link [href="js/history.min.js" rel="modulepreload"]
     link [href="js/sheet.min.js" rel="modulepreload"]
@@ -7099,7 +7100,6 @@ html [data-ui-theme="surf" lang="en"]
     link [href="js/host.min.js" rel="modulepreload"]
     link [href="js/cast.min.js" rel="modulepreload"]
     link [href="js/panel.min.js" rel="modulepreload"]
-    link [href="js/links.min.js" rel="modulepreload"]
     link [href="js/schedule.min.js" rel="modulepreload"]
     link [href="js/ics.min.js" rel="modulepreload"]
     link [href="js/qr.min.js" rel="modulepreload"]
@@ -7109,7 +7109,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=15" rel="stylesheet"]
+    link [href="css/experience.min.css?v=16" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7148,6 +7148,7 @@ html [data-ui-theme="surf" lang="en"]
           "Loading…"
     canvas#game-canvas [aria-label="A model of your home on a round stone turntable in a bright white studio. Drag to turn it, and tap a floor to open it." role="img"]
     ol#ws-rooms.ws-rooms [hidden]
+    div#ws-halo.ws-halo [aria-hidden="true" hidden]
     section#ws-host.ws-host [aria-labelledby="host-name" hidden]
       div.host-head
         span.host-portrait [aria-hidden="true"]
@@ -7396,7 +7397,9 @@ html [data-ui-theme="surf" lang="en"]
             p#receipt-pin.receipt-pin
             button#receipt-copy-pin.ws-btn.ws-btn-small [type="button"]
               "Copy"
-            p.form-note
+            button#receipt-new-pin.ws-btn.ws-btn-small [hidden type="button"]
+              "Set a new PIN"
+            p#receipt-pin-note.form-note
               "Send the PIN separately, for example by text."
           figure.receipt-qr
             div#receipt-qr-box.receipt-qr-box

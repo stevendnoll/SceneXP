@@ -1126,6 +1126,73 @@ textarea.ws-input {
  * placeLabels as the camera moves. Never in a pointer's way, and under the
  * HUD, the toolbar and the cards.
  */
+/* A halo on the touch point Maya is speaking of: a ring on the house,
+   placed each frame (main.js placeHalo), or a glow on a control. One at a
+   time, and still under reduced motion. */
+.ws-halo {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 21;
+}
+
+.ws-halo.is-dot {
+    width: 38px;
+    height: 38px;
+}
+
+.ws-halo[hidden] {
+    display: none;
+}
+
+.ws-halo::before,
+.ws-halo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 3px solid var(--ws-accent);
+    border-radius: 50%;
+}
+
+.ws-halo::after {
+    opacity: 0.35;
+}
+
+.ws-halo::before {
+    animation: halo-ring 1.8s ease-out infinite;
+}
+
+@keyframes halo-ring {
+    from { opacity: 0.9; transform: scale(0.7); }
+    to { opacity: 0; transform: scale(1.5); }
+}
+
+.has-halo {
+    animation: halo-glow 1.8s ease-out infinite;
+}
+
+@keyframes halo-glow {
+    from { box-shadow: 0 0 0 0 rgba(62, 92, 118, 0.55); }
+    to { box-shadow: 0 0 0 14px rgba(62, 92, 118, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ws-halo::before {
+        animation: none;
+        opacity: 0.9;
+        transform: none;
+    }
+
+    .has-halo {
+        animation: none;
+        box-shadow: 0 0 0 4px rgba(62, 92, 118, 0.45);
+    }
+}
+
 .ws-rooms {
     position: fixed;
     inset: 0;

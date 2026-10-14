@@ -1001,6 +1001,24 @@ describe('built with the real three.js', () => {
         expect(m.assembling).toBe(false);
     });
 
+    test('where a halo goes: a floor\'s front edge, a dot\'s top, and nowhere for what is not shown', () => {
+        const m = buildModel(CONFIG, AT);
+        const home = example();
+        m.show(home);
+        const k = m.scale;
+        const slab = m.placed.slabs.find((s) => s.level === 'main');
+        const floor = m.pointOf({ kind: 'floor', level: 'main' });
+        expect(floor[2]).toBeCloseTo(AT[2] + k * (slab.position[2] + slab.scale[2] / 2), 9);
+        expect(floor[1]).toBeCloseTo(AT[1] + k * (slab.position[1] + slab.scale[1] / 2), 9);
+        const dot = m.placed.markers[0];
+        const top = m.pointOf({ kind: 'dot', itemId: dot.itemId });
+        expect(top[1]).toBeCloseTo(AT[1] + k * dot.top, 9);
+        expect(m.pointOf({ kind: 'floor', level: 'attic' })).toBeNull();
+        expect(m.pointOf({ kind: 'dot', itemId: 'nope' })).toBeNull();
+        expect(m.pointOf({ kind: 'elsewhere' })).toBeNull();
+        expect(m.pointOf(null)).toBeNull();
+    });
+
     test('under reduced motion a lift is instant', () => {
         const m = buildModel(CONFIG, AT);
         m.show(example());

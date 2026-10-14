@@ -615,6 +615,7 @@ describe('choosing a time and publishing, on the page', () => {
         expect(action('visit').textContent).toBe(PANEL.visit);
         expect(action('book')).toBeUndefined();
         fire(action('visit'), 'click');
+        await flushAsync(20);
         expect(dom.el('receipt').hidden).toBe(false);
     });
 
@@ -641,5 +642,59 @@ describe('choosing a time and publishing, on the page', () => {
         expect(action('book')).toBeUndefined();
         await main.__test__.openBooking();
         expect(dom.el('booking').hidden).toBe(true);
+    });
+});
+
+// ---- Arriving by the edit link (PLANNING 7.3) --------------------------------------------
+
+describe('arriving by the edit link', () => {
+    async function published() {
+        jest.setSystemTime(new Date('2026-10-14T16:00:00Z'));
+        const main = await bootHome();
+        main.__test__.tapModel('main');
+        fire(chip('kitchen'), 'click');
+        await main.__test__.openBooking();
+        await main.__test__.confirmBooking();
+        const c = main.__test__.active();
+        return { main, link: { id: c.published.id, key: c.published.key, ownerToken: c.published.ownerToken }, c };
+    }
+
+    test('on this device: that checklist opened, and Maya says how it was opened', async () => {
+        const { main, link, c } = await published();
+        main.__test__.state.doc = (await import('../www/whitestone/js/store.js')).setSettings(main.__test__.state.doc, { activeId: null }).doc;
+        expect(await main.__test__.arriveByEditLink(link)).toBe(true);
+        expect(main.__test__.active().id).toBe(c.id);
+        expect(main.__test__.state.viaEdit).toBe(true);
+    });
+
+    test('after Start over (as on another device): brought back from the API, its PIN set anew on request', async () => {
+        const { main, link, c } = await published();
+        main.__test__.startOver();
+        expect(main.__test__.state.doc.checklists).toEqual([]);
+        expect(await main.__test__.arriveByEditLink(link)).toBe(true);
+        const here = main.__test__.active();
+        expect(here.id).not.toBe(c.id);
+        expect(here).toMatchObject({ title: c.title, booking: c.booking });
+        expect(here.published).toMatchObject({ id: link.id, pin: null });
+        expect(JSON.parse(localStorage.getItem(CONFIG.storage.key)).checklists).toHaveLength(1);
+        // Its receipt offers a new PIN, asked first.
+        await main.__test__.openReceipt();
+        expect(dom.el('receipt-new-pin').hidden).toBe(false);
+        expect(dom.el('receipt-copy-pin').hidden).toBe(true);
+        main.__test__.confirmNewPin();
+        expect(dom.el('confirm').hidden).toBe(false);
+        // The PIN is stretched on a real thread: real time to wait for it.
+        jest.useRealTimers();
+        fire(dom.el('confirm-actions').children[1], 'click');
+        for (let i = 0; i < 200 && !main.__test__.active().published.pin; i++) await new Promise((r) => setTimeout(r, 10));
+        expect(main.__test__.active().published.pin).toMatch(/^\d{6}$/);
+    });
+
+    test('a link that opens nothing changes nothing, and is said', async () => {
+        const { main } = await published();
+        const before = main.__test__.state.doc;
+        expect(await main.__test__.arriveByEditLink({ id: 'Z'.repeat(22), key: 'k'.repeat(43), ownerToken: 'o'.repeat(43) })).toBe(false);
+        expect(main.__test__.state.doc).toBe(before);
+        expect(main.__test__.state.editLinkFailed).toBe(true);
     });
 });

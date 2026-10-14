@@ -37,16 +37,17 @@ import {
     createStore, findChecklist, createChecklist, updateChecklist, setLevels, setPreferences, deleteChecklist,
     duplicateChecklist, setSettings, touchVisit, storageUse, isLive, addRoom, updateRoom, deleteRoom, addItem,
     updateItem, deleteItem, addPhoto, removePhoto, photoIdsInUse, newId, itemsIn, liveRooms, liveItems,
-    clearSamples, hasSamples, setBath, setResidence, emptyDoc, setPublication, keepServerFacts
+    clearSamples, hasSamples, setBath, setResidence, emptyDoc, setPublication, keepServerFacts, importPublished
 } from './store.min.js';
 import { withExample } from './samples.min.js';
 import { createApi, createFetchTransport } from './api.min.js';
 import { createStandin } from './standin.min.js';
 import { createSealer } from './seal.min.js';
-import { publish } from './sync.min.js';
+import { publish, openPublished } from './sync.min.js';
 import { createBooking, visitMinutes, shiftMonth, firstOpen, dayLabel, clockLabel } from './booking.min.js';
 import { createReceipt, receiptView } from './receipt.min.js';
 import { todayIn, addDays } from './zoned.min.js';
+import { parseEdit } from './links.min.js';
 import { shareLink, flash } from '../../shared/js/share-1.0.0.min.js';
 import { createHistory } from './history.min.js';
 import { loadSheet, currentVersion, checkChoice, presetFor, presetGains, taskOf } from './sheet.min.js';
@@ -217,11 +218,25 @@ async function init() {
     state.doc = loaded.doc;
     state.storageStatus = loaded.status;
     state.saved = loaded.status === 'restored';
+    // BY THE EDIT LINK (PLANNING 7.3): its keys off the address bar before
+    // anything else (a screen share must never show them), then its
+    // checklist opened, from this device or, failing that, the API.
+    const editLink = parseEdit(window.location.href, CONFIG);
+    if (editLink) {
+        try {
+            window.history.replaceState(null, '', window.location.pathname);
+        } catch (e) {
+            // An address that cannot be changed changes nothing else.
+        }
+        updateLoadingStatus('Opening your checklist…', 70);
+        await arriveByEditLink(editLink);
+    }
     // MAYA GREETS A FIRST VISIT beside a plain house (PRD 8.2), with the
     // example one tap away. A RETURNING VISITOR ARRIVES TO THEIR OWN HOME
     // (PRD 8.6): the one open when they left, else their latest, and is
     // welcomed back (guide.js).
     ui.guide = arrivalGuide(state.doc);
+    if (state.viaEdit && ui.guide.scene === 'welcome') ui.guide = { ...ui.guide, viaEdit: true, resume: null };
     state.doc = setSettings(state.doc, { activeId: ui.guide.scene === 'hello' ? null : arrivalId(state.doc) }).doc;
     history = createHistory();
 
@@ -230,7 +245,7 @@ async function init() {
     setupEventListeners();
     refresh();
     loadPrices();
-    openPhotos();
+    if (!photoStore) openPhotos();
 
     // Build the shaders now, behind the loading screen, rather than on the
     // first frame where they would freeze the house the moment it appears
@@ -253,6 +268,10 @@ async function init() {
         // Maya speaks once the house has come in (at once under reduced
         // motion, ONBOARDING Scene 1).
         setTimeout(showGuide, state.reducedMotion ? 0 : CONFIG.guide.delay * 1000);
+        if (state.editLinkFailed) {
+            announce(UI.editLinkFailed);
+            toast(UI.editLinkFailed);
+        }
         // The push-in: from farther out, eased in (a cut under reduced
         // motion, PLANNING 4.1).
         if (!state.reducedMotion) turntable.arrive();
@@ -569,6 +588,69 @@ function onPanelChip(area) {
  * a turn, a zoom and the lift itself. Rebuilt only when the rooms change,
  * moved otherwise.
  */
+// ---- Halos (QA, 2026-10-14) ------------------------------------------------------
+
+/** The scene's touch point (guide.js HALO): a control's glow set here, a
+ *  ring on the house placed each frame (placeHalo). A new scene's halo is
+ *  a fresh one, used or not before. */
+function setHalo(spec) {
+    if (ui.halo && ui.halo.node && ui.halo.node.classList) ui.halo.node.classList.remove('has-halo');
+    ui.halo = spec ? { spec, used: false, node: null } : null;
+    if (spec && spec.kind === 'element') {
+        const node = el(spec.id);
+        if (node && node.classList) {
+            node.classList.add('has-halo');
+            // Used, it is done with.
+            node.addEventListener('click', () => {
+                node.classList.remove('has-halo');
+                if (ui.halo && ui.halo.node === node) ui.halo.used = true;
+            }, { once: true });
+            ui.halo.node = node;
+        }
+    }
+    placeHalo();
+    requestRender();
+}
+
+/** Where the ring on the house goes, in the turntable's frame, or null when
+ *  there is none to show: a floor while the house is closed and nothing is
+ *  chosen (opening one is using it); the first dot of the room just added
+ *  while its floor is open and no task is chosen yet. Never over a card. */
+function haloPoint() {
+    const h = ui.halo;
+    const c = active();
+    if (!h || h.used || !model || !c || !state.loaded || lookLocked()) return null;
+    if (h.spec.kind === 'floor') {
+        if (model.lifted || ui.selected || (panel && panel.shown)) return null;
+        const levels = model.levels();
+        return model.pointOf({ kind: 'floor', level: levels.includes('main') ? 'main' : levels[0] });
+    }
+    if (h.spec.kind === 'dot') {
+        const room = ui.guide && c.rooms.find((r) => r.id === ui.guide.roomId && !r.deletedAt);
+        if (!room || model.lifted !== room.level || (ui.selected && ui.selected.scope === 'task')) return null;
+        const first = itemsIn(c, room.id)[0];
+        return first ? model.pointOf({ kind: 'dot', itemId: first.id }) : null;
+    }
+    return null;
+}
+
+/** The ring on the house, over its touch point however the house turns. */
+function placeHalo() {
+    const ring = el('ws-halo');
+    if (!ring || !camera) return;
+    const p = haloPoint();
+    if (!p) {
+        ring.hidden = true;
+        return;
+    }
+    camera.updateMatrixWorld();
+    const q = turnPoint(p, turntable.yaw);
+    const v = new THREE.Vector3(q[0], q[1], q[2]).project(camera);
+    ring.className = `ws-halo is-${ui.halo.spec.kind}`;
+    ring.hidden = !(v.z > -1 && v.z < 1);
+    ring.style.transform = `translate(${Math.round(((v.x + 1) / 2) * window.innerWidth)}px, ${Math.round(((1 - v.y) / 2) * window.innerHeight)}px) translate(-50%, -50%)`;
+}
+
 function placeLabels() {
     const list = el('ws-rooms');
     if (!list || !camera) return;
@@ -882,8 +964,48 @@ function guideContext() {
         sheet: state.sheet,
         roomCount: c ? liveRooms(c).length : 0,
         roomLabel: room ? roomName(c.serviceType, room) : '',
-        addedText: room ? addedLine(state.sheet, room.area, roomName(c.serviceType, room), room.bath) : ''
+        addedText: room ? addedLine(state.sheet, room.area, roomName(c.serviceType, room), room.bath) : '',
+        welcome: welcomeLine(c)
     };
+}
+
+/** Is the open checklist booked and published? */
+const isBooked = (c) => Boolean(c && c.booking && c.published && c.published.at);
+
+/**
+ * What Maya says to a returning visitor (QA, 2026-10-14): a greeting (or,
+ * by the edit link, that it was opened with it), where the home stands (its
+ * visit when booked, else its rooms, tasks and price so far), and what they
+ * would like to do.
+ */
+function welcomeLine(c) {
+    if (!c) return '';
+    const lead = ui.guide && ui.guide.viaEdit ? GUIDE.welcomeEditLink : GUIDE.welcomeBack;
+    let where;
+    if (isBooked(c)) {
+        where = GUIDE.homeBooked(dayLabel(c.booking.date), clockLabel(c.booking.time));
+    } else if (!liveRooms(c).length) {
+        where = GUIDE.homeEmpty(c.title);
+    } else {
+        const quote = state.sheet ? quoteChecklist(state.sheet, c) : null;
+        where = GUIDE.homeDraft(c.title, PANEL.rooms(liveRooms(c).length), PANEL.tasks(liveItems(c).length), quote ? formatMoney(quote.totalCents) : '');
+    }
+    return `${lead} ${where} ${GUIDE.returningLegend}`;
+}
+
+/** A returning visitor's choices: their visit, or a time to choose; the
+ *  rooms; the checklist; or simply a look round. */
+function returningChoices(c) {
+    const o = (id, label) => ({ id, label });
+    const out = [];
+    if (isBooked(c)) out.push(o('visit', GUIDE.seeVisit), o('editRooms', GUIDE.changeChecklist));
+    else {
+        if (bookable(c)) out.push(o('chooseTime', GUIDE.chooseTime));
+        out.push(o('editRooms', GUIDE.editRooms));
+        if (c && liveItems(c).length) out.push(o('reviewChecklist', GUIDE.reviewChecklist));
+    }
+    out.push(o('lookAround', GUIDE.illLook));
+    return out;
 }
 
 /** The bubble for the scene now, with the floors to tick filled in from
@@ -893,6 +1015,9 @@ function guideView() {
     const v = viewFor(ui.guide, guideContext());
     const c = active();
     const typeKey = c ? c.serviceType : 'cleaning';
+    if (v && v.choices === 'returning') {
+        return { ...v, choices: { kind: 'pick', legend: GUIDE.returningLegend, options: returningChoices(c) } };
+    }
     if (v && v.choices === 'home') {
         const now = v.answered && c && c.residence ? c.residence.kind : null;
         const options = residencesOf(typeKey).map((k) => ({ id: `kind-${k.key}`, label: k.name, on: k.key === now }));
@@ -929,6 +1054,7 @@ function showGuide() {
     if (!host || !state.loaded) return;
     const view = guideView();
     host.show(view);
+    setHalo(view ? view.halo : null);
     if (!cast) return;
     cast.speaking(view ? speakSeconds(view.text) : 0);
     const scene = ui.guide ? ui.guide.scene : null;
@@ -1094,7 +1220,17 @@ function onHostButton(id) {
         guideTo({ type: 'saved' });
         break;
     case 'chooseTime':
+        // Maya steps aside for the card (from her All set, or a return).
+        if (ui.guide && ui.guide.scene === 'welcome') guideTo({ type: 'lookAround' });
         openBooking();
+        break;
+    case 'visit':
+        guideTo({ type: 'lookAround' });
+        openReceipt();
+        break;
+    case 'reviewChecklist':
+        guideTo({ type: 'lookAround' });
+        openChecklistView();
         break;
     case 'back':
         guideTo({ type: 'back', roomId: firstRoomId() });
@@ -1360,6 +1496,56 @@ async function connect() {
     }
 }
 
+/**
+ * Arriving by the edit link: its checklist, if this device has it, else
+ * brought from the API and opened with the link's key (sync.js
+ * openPublished), and made the open one. A link that opens nothing (expired,
+ * unpublished, or not a real one) is said once the house is up.
+ */
+async function arriveByEditLink(link) {
+    const mine = state.doc.checklists.find((c) => !c.deletedAt && c.published && c.published.id === link.id);
+    if (mine) {
+        state.doc = setSettings(state.doc, { activeId: mine.id }).doc;
+        state.viaEdit = true;
+        return true;
+    }
+    const svc = await connect();
+    if (!photoStore) await openPhotos();
+    const opened = svc ? await openPublished({ api: svc.api, sealer: svc.sealer, photos: photoStore, link }) : { ok: false };
+    const imported = opened.ok ? importPublished(state.doc, opened.form, { ...link, version: opened.version }, CONFIG, now()) : null;
+    if (!imported || imported.error) {
+        state.editLinkFailed = true;
+        return false;
+    }
+    state.doc = setSettings(imported.doc, { activeId: imported.record.id }).doc;
+    state.viaEdit = true;
+    save();
+    return true;
+}
+
+/** A new PIN for an imported checklist whose PIN this device never saw,
+ *  asked first: the cleaner then needs the new one. */
+function confirmNewPin() {
+    confirmCard({
+        title: RECEIPT.newPinTitle,
+        detail: RECEIPT.newPinDetail,
+        confirmLabel: RECEIPT.newPin,
+        onConfirm: async () => {
+            const c = active();
+            const svc = await connect();
+            if (!c || !c.published || !svc) return;
+            const r = await svc.api.resetPin(c.published.id, c.published.ownerToken);
+            if (!r.ok) {
+                toast(BOOKING_ERRORS[r.error] || BOOKING_ERRORS.server);
+                return;
+            }
+            mutate((d) => setPublication(d, c.id, { published: { ...c.published, pin: r.data.pin } }, CONFIG, now()));
+            announce(RECEIPT.newPinDone);
+            openReceipt();
+        }
+    });
+}
+
 /** The checklist the visitor can book: their own, priced, not yet booked. */
 function bookable(c) {
     return Boolean(c && !c.sample && state.sheet && liveItems(c).length && !(c.booking && c.published && c.published.at));
@@ -1479,9 +1665,11 @@ async function confirmBooking() {
     return result;
 }
 
-/** The receipt for the open checklist, once it is published and booked. */
-function openReceipt() {
+/** The receipt for the open checklist, once it is published and booked.
+ *  Resolves to its view, or null. */
+async function openReceipt() {
     const c = active();
+    if (isBooked(c)) await connect();
     const view = c && service ? receiptView(c, { origin: window.location.origin, config: CONFIG, timezone: service.schedule.timezone, now: now().getTime() }) : null;
     if (!view || !receipt) return null;
     ui.receipt = view;
@@ -2304,7 +2492,7 @@ function setupEventListeners() {
             confirm: () => confirmBooking()
         }
     });
-    receipt = createReceipt({ signal, on: { copy: copyFromReceipt, share: shareFromReceipt, done: () => closeCard('receipt') } });
+    receipt = createReceipt({ signal, on: { copy: copyFromReceipt, share: shareFromReceipt, newPin: confirmNewPin, done: () => closeCard('receipt') } });
     on('booking-cancel', 'click', () => closeCard('booking'));
     on('menu-area', 'change', () => {
         ui.menuArea = el('menu-area').value;
@@ -2428,6 +2616,7 @@ function animate() {
     state.dirty = false;
     state.frames++;
     placeLabels();
+    placeHalo();
     placeHost();
     renderer.render(scene, camera);
     state.drewLast = true;
@@ -2523,6 +2712,9 @@ export const __test__ = {
     submitPreferences,
     openBooking,
     confirmBooking,
+    showGuide,
+    arriveByEditLink,
+    confirmNewPin,
     openReceipt,
     connect,
     openMine,

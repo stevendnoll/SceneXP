@@ -62,6 +62,21 @@ export function entryOf(stepIndex, { roomId = null } = {}) {
     }
 }
 
+/**
+ * The touch point a scene's words are about, ringed on screen (QA,
+ * 2026-10-14): one at a time, and only while it is what Maya is speaking
+ * of. `dot` the first task of the room just added, `floor` a floor of the
+ * house, `element` a control by its id. main.js finds where it is and
+ * takes the ring away the moment it is used.
+ */
+export const HALO = Object.freeze({
+    dots: Object.freeze({ kind: 'dot' }),
+    rooms: Object.freeze({ kind: 'floor' }),
+    look: Object.freeze({ kind: 'floor' }),
+    review: Object.freeze({ kind: 'element', id: 'hud-quote' }),
+    hint: Object.freeze({ kind: 'element', id: 'ws-help' })
+});
+
 /** Scenes that sit over another for a moment and go back to it. */
 const ASIDE = ['hint', 'about'];
 
@@ -141,7 +156,7 @@ export function step(guide, event) {
     const to = (scene, extra = {}) => {
         const next = { ...g, scene, ...extra };
         const at = PROGRESS[scene];
-        return at === undefined ? next : { ...next, reached: Math.max(g.reached ?? -1, at) };
+        return at === undefined ? next : { ...next, reached: Math.max(next.reached ?? -1, at) };
     };
     const type = event && event.type;
     if (type === 'restart') return { ...to('hello', { back: null, tapped: false, rooms: 0, resume: null, answered: false, attachedAnswered: false }), reached: -1 };
@@ -212,6 +227,9 @@ export function step(guide, event) {
     case 'welcome':
         if (type === 'keepGoing' && g.resume) return to(g.resume, { resume: null });
         if (type === 'lookAround') return to('done', { resume: null });
+        // Back to the rooms (QA, 2026-10-14): the build's own step, every
+        // step behind it reached already.
+        if (type === 'editRooms') return to('rooms', { resume: null, reached: Math.max(g.reached ?? -1, PROGRESS.review) });
         return g;
     default:
         return g;
@@ -270,7 +288,8 @@ export function viewFor(guide, ctx = {}) {
     // steps reached so far, each a tap away.
     const base = {
         choices: null, progress: PROGRESS[guide.scene] ?? null, reached: guide.reached ?? -1, skip: SKIPPABLE.includes(guide.scene),
-        stepBack: GUIDED.includes(guide.scene), small: '', again: GUIDE[`${guide.scene}Again`] || ''
+        stepBack: GUIDED.includes(guide.scene), small: '', again: GUIDE[`${guide.scene}Again`] || '',
+        halo: HALO[guide.scene] || null
     };
     switch (guide.scene) {
     case 'hello':
@@ -308,9 +327,12 @@ export function viewFor(guide, ctx = {}) {
     case 'look':
         return { ...base, text: GUIDE.look, buttons: [b('buildOwn', GUIDE.buildOwn, true)] };
     case 'welcome':
+        // A return mid-build picks up where it stopped. Any other return is
+        // a home base (QA, 2026-10-14): where the home stands, in words
+        // (`ctx.welcome`, main.js), and what can be done next as choices.
         return guide.resume
             ? { ...base, text: GUIDE.welcomeResume, buttons: [b('keepGoing', GUIDE.keepGoing, true), b('lookAround', GUIDE.illLook)] }
-            : { ...base, text: GUIDE.welcome, buttons: [b('lookAround', GUIDE.lookAround, true)] };
+            : { ...base, text: ctx.welcome || GUIDE.welcome, buttons: [], choices: 'returning' };
     case 'hint':
         return { ...base, text: GUIDE.hint, buttons: [b('close', GUIDE.gotIt, true)] };
     case 'about':

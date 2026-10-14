@@ -105,7 +105,14 @@ export const RECEIPT = Object.freeze({
     editAdvice: 'Keep this one to yourself. It lets you edit this checklist, approve add-ons, and read visit reports from any device.',
     standin: 'Until Whitestone\u2019s server is running, this checklist is kept in this browser, so the link opens here only.',
     done: 'Done',
-    open: 'Your visit'
+    open: 'Your visit',
+    /** A checklist opened by its edit link: this device never saw its PIN. */
+    pinUnknown: 'Shown when you published.',
+    pinUnknownAdvice: 'This device opened your checklist with its edit link, so it does not know the PIN. Set a new one to send your cleaner.',
+    newPin: 'Set a new PIN',
+    newPinTitle: 'Set a new PIN?',
+    newPinDetail: 'The old PIN stops working, so your cleaner will need the new one.',
+    newPinDone: 'Your new PIN is on the receipt.'
 });
 
 /** schedule.js `monthView` statuses, as the calendar labels a day. */
@@ -194,6 +201,7 @@ export const UI = Object.freeze({
         clearedExample: 'Cleared the example'
     }),
     exampleCleared: 'The example home is cleared. Your own checklists are untouched.',
+    editLinkFailed: 'That edit link did not open a checklist. It may have expired, or been unpublished.',
 
     // Rooms
     addRoomTitle: 'Add a room',
@@ -376,6 +384,18 @@ export const GUIDE = Object.freeze({
     look: 'Take your time. Drag to turn the house, and tap a floor to open it.',
 
     welcome: 'Welcome back. Your home is just as you left it.',
+    /** A returning visitor's home base (QA, 2026-10-14): where the home
+     *  stands, then the choices. */
+    welcomeBack: 'Welcome back.',
+    welcomeEditLink: 'Welcome, with your private edit link.',
+    homeDraft: (title, rooms, tasks, money) => `${title} has ${rooms} and ${tasks}${money ? `, ${money} so far` : ''}.`,
+    homeEmpty: (title) => `${title} has no rooms yet.`,
+    homeBooked: (day, time) => `Your visit is booked for ${day} at ${time}.`,
+    returningLegend: 'What would you like to do?',
+    seeVisit: 'See my visit',
+    editRooms: 'Add or change rooms',
+    changeChecklist: 'Change my checklist',
+    reviewChecklist: 'Review my checklist',
     welcomeResume: 'Welcome back. Your home is just as you left it. Shall we pick up where we stopped?',
     keepGoing: 'Keep going',
     illLook: "I'll look around",

@@ -125,3 +125,36 @@ export async function publish({ checklist, api, sealer, photos, sheet, slot, at,
     });
     return { ok: true, error: null, next: [], checklist: c };
 }
+
+/**
+ * A published checklist opened by its edit link (PLANNING 7.3): fetched with
+ * the owner token, opened with the key, held to the published form, its
+ * photos and thumbnails brought into this device's photo store (any that
+ * will not open are left out). Resolves to `{ ok, form, version, error }`.
+ */
+export async function openPublished({ api, sealer, photos, link }) {
+    const got = await api.getChecklist(link.id, link.ownerToken);
+    if (!got.ok) return { ok: false, error: got.error };
+    let key;
+    let form;
+    try {
+        key = await sealer.importKey(link.key);
+        form = await sealer.openJson(key, got.bytes, contextFor(link.id, 'checklist'));
+    } catch (e) {
+        return { ok: false, error: 'denied' };
+    }
+    if (!form || form.format !== PUBLISHED_FORMAT || form.id !== link.id) return { ok: false, error: 'denied' };
+    const ids = [...new Set((form.items || []).flatMap((i) => (Array.isArray(i.photos) ? i.photos : [])))];
+    for (const photoId of ids) {
+        try {
+            const full = await api.getPhoto(link.id, link.ownerToken, photoId);
+            const thumb = await api.getThumb(link.id, link.ownerToken, photoId);
+            if (!full.ok || !thumb.ok) continue;
+            const open = async (bytes, kind) => new Blob([await sealer.open(key, bytes, contextFor(link.id, kind, photoId))], { type: 'image/jpeg' });
+            await photos.put(photoId, { full: await open(full.bytes, 'photo'), thumb: await open(thumb.bytes, 'thumb') });
+        } catch (e) {
+            // A photo that will not open is left out; the task keeps its words.
+        }
+    }
+    return { ok: true, form, version: Number(got.version) || 0, error: null };
+}

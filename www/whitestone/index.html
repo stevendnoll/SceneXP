@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=15" as="style">
+    <link rel="preload" href="css/experience.min.css?v=16" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -127,6 +127,7 @@
     <link rel="modulepreload" href="js/booking.min.js">
     <link rel="modulepreload" href="js/receipt.min.js">
     <link rel="modulepreload" href="js/zoned.min.js">
+    <link rel="modulepreload" href="js/links.min.js">
     <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
     <link rel="modulepreload" href="js/history.min.js">
     <link rel="modulepreload" href="js/sheet.min.js">
@@ -144,7 +145,6 @@
     <link rel="modulepreload" href="js/host.min.js">
     <link rel="modulepreload" href="js/cast.min.js">
     <link rel="modulepreload" href="js/panel.min.js">
-    <link rel="modulepreload" href="js/links.min.js">
     <link rel="modulepreload" href="js/schedule.min.js">
     <link rel="modulepreload" href="js/ics.min.js">
     <link rel="modulepreload" href="js/qr.min.js">
@@ -157,7 +157,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=15">
+    <link rel="stylesheet" href="css/experience.min.css?v=16">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -210,6 +210,10 @@
     <!-- THE ROOMS OF A LIFTED LEVEL, named over the house model (main.js
          placeLabels). Hidden until a level is lifted. -->
     <ol id="ws-rooms" class="ws-rooms" hidden></ol>
+    <!-- A HALO on the touch point Maya is speaking of (guide.js HALO), one
+         at a time, gone once it is used. Decoration only: her words say
+         what to do. -->
+    <div id="ws-halo" class="ws-halo" aria-hidden="true" hidden></div>
 
     <!-- MAYA, THE HOST (host.js, guide.js): her portrait and name, the
          progress through the first build, what she says, the floors to
@@ -500,7 +504,8 @@
                     <p class="receipt-label">PIN</p>
                     <p id="receipt-pin" class="receipt-pin"></p>
                     <button id="receipt-copy-pin" class="ws-btn ws-btn-small" type="button">Copy</button>
-                    <p class="form-note">Send the PIN separately, for example by text.</p>
+                    <button id="receipt-new-pin" class="ws-btn ws-btn-small" type="button" hidden>Set a new PIN</button>
+                    <p id="receipt-pin-note" class="form-note">Send the PIN separately, for example by text.</p>
                 </div>
                 <figure class="receipt-qr">
                     <div id="receipt-qr-box" class="receipt-qr-box"></div>

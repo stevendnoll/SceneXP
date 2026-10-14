@@ -185,16 +185,18 @@ function normalizeQuote(raw) {
  * device's alone, never part of what is published), when it was published
  * and its version, when it expires, and which photos are uploaded, so a
  * publish that stopped part way picks up where it was. Null for anything
- * malformed: a key or a token of the wrong shape opens nothing.
+ * malformed: a key or a token of the wrong shape opens nothing. The PIN is
+ * null on a device that opened the checklist by its edit link, since the
+ * PIN is never kept anywhere it could be read back.
  */
 export function normalizePublished(raw) {
     if (!raw || typeof raw !== 'object') return null;
-    if (!LINK_ID.test(String(raw.id)) || !SECRET.test(String(raw.key)) || !SECRET.test(String(raw.ownerToken)) || !/^\d{6}$/.test(String(raw.pin))) return null;
+    if (!LINK_ID.test(String(raw.id)) || !SECRET.test(String(raw.key)) || !SECRET.test(String(raw.ownerToken))) return null;
     return {
         id: raw.id,
         key: raw.key,
         ownerToken: raw.ownerToken,
-        pin: raw.pin,
+        pin: /^\d{6}$/.test(String(raw.pin)) ? raw.pin : null,
         at: stampOrNull(raw.at),
         version: Number.isInteger(raw.version) && raw.version >= 0 ? raw.version : 0,
         expiresAt: stampOrNull(raw.expiresAt),
@@ -497,6 +499,39 @@ export function setPublication(doc, id, patch, config, now) {
     if ('quote' in src) next.quote = normalizeQuote(src.quote);
     const record = touched(next, now);
     return { doc: replaceChecklist(doc, record), record, error: null };
+}
+
+/**
+ * A published checklist brought to this device by its edit link (PLANNING
+ * 7.3): `form` as sync.js `openPublished` opened it, `link` its id, key and
+ * owner token (and `version`), made a checklist of this device's own, kept
+ * as published and booked. Its rooms and tasks keep their ids, so its
+ * photos still match. Built through `normalizeChecklist`, so it is held to
+ * every rule a checklist is.
+ */
+export function importPublished(doc, form, link, config, now, opts = {}) {
+    if (doc.checklists.filter(isLive).length >= config.limits.checklists) {
+        return refusal(doc, STORE.tooManyChecklists(config.limits.checklists));
+    }
+    const at = stamp(now);
+    const src = form || {};
+    const items = Array.isArray(src.items) ? src.items : [];
+    const n = normalizeChecklist({
+        ...src,
+        id: opts.id || newId(),
+        rooms: (Array.isArray(src.rooms) ? src.rooms : []).map((r) => ({ ...r, createdAt: at, updatedAt: at, deletedAt: null })),
+        items: items.map((i) => ({ ...i, createdAt: at, updatedAt: at, deletedAt: null })),
+        published: {
+            id: link.id, key: link.key, ownerToken: link.ownerToken, pin: null, at, version: link.version || 0, expiresAt: null,
+            photos: items.flatMap((i) => (Array.isArray(i.photos) ? i.photos : []))
+        },
+        sample: false,
+        createdAt: at,
+        updatedAt: at,
+        deletedAt: null
+    }, config, now);
+    if (!n || !n.record.published) return refusal(doc, STORE.noChecklist);
+    return { doc: { ...doc, checklists: [...doc.checklists, n.record] }, record: n.record, error: null };
 }
 
 /**

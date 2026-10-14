@@ -682,12 +682,65 @@ describe('a return', () => {
         expect(line()).toBe(GUIDE.rooms);
     });
 
-    test('after the first build: welcomed, and the bubble goes at a tap', async () => {
+    test('after the first build: welcomed to a home base, and the bubble goes with I\'ll look around', async () => {
         await boot({ saved: await savedDoc([['home-mine', STAMP]], { guide: { scene: 'done', reviewed: true } }) });
-        expect(line()).toBe(GUIDE.welcome);
+        expect(line()).toBe(`${GUIDE.welcomeBack} ${GUIDE.homeEmpty('Home home-mine')} ${GUIDE.returningLegend}`);
         expect(dom.el('host-progress').hidden).toBe(true);
-        press('lookAround');
+        expect(picks().map((b) => b.id)).toEqual(['host-editRooms', 'host-lookAround']);
+        pick('lookAround');
         expect(shown()).toBe(false);
+    });
+
+    test('a home with rooms: its rooms, tasks and price so far, and a time to choose first', async () => {
+        const { emptyDoc, createChecklist, addRoom, setSettings } = await import('../www/whitestone/js/store.js');
+        const { presetFor } = await import('../www/whitestone/js/sheet.js');
+        const sheet = JSON.parse(readFileSync(join(process.cwd(), 'www', 'whitestone', 'data', 'prices', 'cleaning-2026-10.json'), 'utf8'));
+        const at = new Date(STAMP);
+        let doc = createChecklist(emptyDoc(CONFIG, at), { title: 'Maple Street', levels: ['main'] }, CONFIG, at, { id: 'home-mine' }).doc;
+        doc = addRoom(doc, 'home-mine', { level: 'main', area: 'kitchen' }, CONFIG, at, { presetItems: presetFor(sheet, 'kitchen') }).doc;
+        doc = setSettings(doc, { activeId: 'home-mine', guide: { scene: 'done', reviewed: true } }).doc;
+        const main = await boot({ saved: doc, sheet: true });
+        main.__test__.showGuide();
+        expect(line()).toMatch(/^Welcome back\. Maple Street has 1 room and 9 tasks, \$\d+ so far\. What would you like to do\?$/);
+        expect(picks().map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.editRooms, GUIDE.reviewChecklist, GUIDE.illLook]);
+        // Add or change rooms: back to the build's Your rooms, Maya at the step.
+        pick('editRooms');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        expect(line()).toBe(GUIDE.rooms);
+    });
+
+    test('by the edit link: its keys off the address bar at once, that checklist open, and Maya saying how', async () => {
+        const { emptyDoc, createChecklist, setPublication, setSettings } = await import('../www/whitestone/js/store.js');
+        const at = new Date(STAMP);
+        const pub = { id: 'A'.repeat(22), key: 'k'.repeat(43), ownerToken: 'o'.repeat(43), pin: '012345', at: STAMP, version: 1, expiresAt: STAMP };
+        let doc = createChecklist(emptyDoc(CONFIG, at), { levels: ['main'] }, CONFIG, at, { id: 'home-other' }).doc;
+        doc = createChecklist(doc, { levels: ['main'] }, CONFIG, at, { id: 'home-linked' }).doc;
+        doc = setPublication(doc, 'home-linked', { published: pub }, CONFIG, at).doc;
+        doc = setSettings(doc, { activeId: 'home-other', guide: { scene: 'done', reviewed: true } }).doc;
+        const replaced = [];
+        dom.windowStub.history.replaceState = (_s, _t, url) => replaced.push(url);
+        Object.assign(dom.windowStub.location, {
+            href: `http://localhost:8000/whitestone/?edit=${pub.id}#k=${pub.key}&o=${pub.ownerToken}`,
+            pathname: '/whitestone/', search: `?edit=${pub.id}`, hash: `#k=${pub.key}&o=${pub.ownerToken}`
+        });
+        const main = await boot({ saved: doc });
+        expect(replaced).toEqual(['/whitestone/']);
+        expect(main.__test__.active().id).toBe('home-linked');
+        expect(line()).toBe(`${GUIDE.welcomeEditLink} ${GUIDE.homeEmpty('Our home')} ${GUIDE.returningLegend}`);
+    });
+
+    test('a booked visit: its day and time, and See my visit first', async () => {
+        const { emptyDoc, createChecklist, setPublication, setSettings } = await import('../www/whitestone/js/store.js');
+        const at = new Date(STAMP);
+        let doc = createChecklist(emptyDoc(CONFIG, at), { levels: ['main'] }, CONFIG, at, { id: 'home-mine' }).doc;
+        doc = setPublication(doc, 'home-mine', {
+            published: { id: 'A'.repeat(22), key: 'k'.repeat(43), ownerToken: 'o'.repeat(43), pin: '012345', at: STAMP, version: 1, expiresAt: STAMP },
+            booking: { date: '2026-10-16', time: '09:00', minutes: 120, start: '2026-10-16T09:00:00-07:00', end: '2026-10-16T11:00:00-07:00' }
+        }, CONFIG, at).doc;
+        doc = setSettings(doc, { activeId: 'home-mine', guide: { scene: 'done', reviewed: true } }).doc;
+        await boot({ saved: doc });
+        expect(line()).toBe(`${GUIDE.welcomeBack} ${GUIDE.homeBooked('Friday, October 16', '9:00 am')} ${GUIDE.returningLegend}`);
+        expect(picks().map((b) => b.textContent)).toEqual([GUIDE.seeVisit, GUIDE.changeChecklist, GUIDE.illLook]);
     });
 });
 
@@ -718,6 +771,79 @@ describe('nudges', () => {
         main.__test__.host().poke();
         await jest.advanceTimersByTimeAsync(4000);
         expect(line()).toBe(GUIDE.hello);
+    });
+});
+
+describe('halos on the touch points (QA, 2026-10-14)', () => {
+    const ring = () => dom.el('ws-halo');
+
+    test('the first dot of the room just added, ringed until a task is opened; Got it moves on to a floor\'s ring', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        press('next');
+        press('kitchen');
+        press('next');
+        expect(main.__test__.ui.guide.scene).toBe('dots');
+        stepFrames(2);
+        expect(ring().hidden).toBe(false);
+        expect(ring().className).toBe('ws-halo is-dot');
+        expect(ring().style.transform).toMatch(/^translate\(-?\d+px, -?\d+px\) translate\(-50%, -50%\)$/);
+        // A card over the scene hides it.
+        main.__test__.openChecklistView();
+        stepFrames(2);
+        expect(ring().hidden).toBe(true);
+        fire(dom.el('checklist-close'), 'click');
+        stepFrames(2);
+        expect(ring().hidden).toBe(false);
+        // A task opened is the dot used; its floor closed, the dot is gone.
+        const c = main.__test__.active();
+        const room = c.rooms[0];
+        const first = c.items.filter((i) => i.roomId === room.id).sort((a, b) => a.order - b.order)[0];
+        main.__test__.selectTo({ scope: 'task', level: room.level, roomId: room.id, itemId: first.id });
+        stepFrames(2);
+        expect(ring().hidden).toBe(true);
+        main.__test__.selectTo({ scope: 'room', level: room.level, roomId: room.id, itemId: null });
+        stepFrames(2);
+        expect(ring().hidden).toBe(false);
+        main.__test__.liftLevel(null);
+        stepFrames(2);
+        expect(ring().hidden).toBe(true);
+        main.__test__.liftLevel(room.level);
+        press('gotIt');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        // The rooms step rings a floor while the house is closed; opening one is using it.
+        main.__test__.liftLevel(null);
+        main.__test__.selectTo(null);
+        stepFrames(2);
+        expect(ring().className).toBe('ws-halo is-floor');
+        expect(ring().hidden).toBe(false);
+        main.__test__.tapModel('main');
+        stepFrames(2);
+        expect(ring().hidden).toBe(true);
+    });
+
+    test('a control\'s glow (the quote at review) until it is tapped, and only one halo at a time', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        press('next');
+        press('kitchen');
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'review', reached: 4 };
+        main.__test__.showGuide();
+        const quote = dom.el('hud-quote');
+        expect(quote.classList.contains('has-halo')).toBe(true);
+        stepFrames(2);
+        expect(ring().hidden).toBe(true);
+        fire(quote, 'click');
+        expect(quote.classList.contains('has-halo')).toBe(false);
+        // A new scene takes the old glow away.
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'hint', back: 'done' };
+        main.__test__.showGuide();
+        expect(dom.el('ws-help').classList.contains('has-halo')).toBe(true);
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'saved' };
+        main.__test__.showGuide();
+        expect(dom.el('ws-help').classList.contains('has-halo')).toBe(false);
     });
 });
 

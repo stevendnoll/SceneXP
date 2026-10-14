@@ -39,7 +39,8 @@ export function receiptView(checklist, { origin, config, timezone, now }) {
         quote: quote ? RECEIPT.quote(formatMoney(quote.totalCents), formatMinutes(roundMinutes(quote.minutes))) : '',
         link: buildShare(origin, config, pub.id, pub.key),
         edit: buildEdit(origin, config, pub.id, pub.key, pub.ownerToken),
-        pin: pub.pin,
+        pin: pub.pin || '',
+        pinUnknown: !pub.pin,
         expires: expires === null ? '' : RECEIPT.expires(dayLabel(toWall(expires, timezone).date)),
         ics: bookingIcs({ id: pub.id, start: booking.start, end: booking.end }, now),
         icsName: icsFilename(booking),
@@ -84,6 +85,7 @@ export function createReceipt({ on = {}, signal } = {}) {
     wire('receipt-copy-pin', (b) => call('copy', 'pin', b));
     wire('receipt-copy-edit', (b) => call('copy', 'edit', b));
     wire('receipt-share', (b) => call('share', b));
+    wire('receipt-new-pin', () => call('newPin'));
     wire('receipt-done', () => call('done'));
 
     function release() {
@@ -95,7 +97,15 @@ export function createReceipt({ on = {}, signal } = {}) {
         const text = (id, value) => { const el = byId(id); if (el) el.textContent = value; };
         text('receipt-when', v.when);
         text('receipt-quote', v.quote);
-        text('receipt-pin', v.pin);
+        // A PIN this device never saw (opened by the edit link): a new one
+        // can be set instead.
+        text('receipt-pin', v.pinUnknown ? RECEIPT.pinUnknown : v.pin);
+        const pinNote = byId('receipt-pin-note');
+        if (pinNote) pinNote.textContent = v.pinUnknown ? RECEIPT.pinUnknownAdvice : RECEIPT.pinAdvice;
+        const copyPin = byId('receipt-copy-pin');
+        if (copyPin) copyPin.hidden = Boolean(v.pinUnknown);
+        const newPin = byId('receipt-new-pin');
+        if (newPin) newPin.hidden = !v.pinUnknown;
         text('receipt-expires', v.expires);
         const link = byId('receipt-link');
         if (link) link.value = v.link;

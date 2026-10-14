@@ -1603,6 +1603,24 @@ export function buildModel(config, at) {
             return scaled;
         },
         toWorld,
+        /**
+         * Where a touch point is, in the turntable's frame, for its halo:
+         * `{ kind: 'floor', level }` the middle of that floor's front edge,
+         * `{ kind: 'dot', itemId }` the top of that task's dot. Null when
+         * the model does not show it.
+         */
+        pointOf(target) {
+            if (!target) return null;
+            if (target.kind === 'floor') {
+                const s = placed.slabs.find((p) => p.level === target.level);
+                return s ? toWorld([s.position[0], s.position[1] + s.scale[1] / 2, s.position[2] + s.scale[2] / 2]) : null;
+            }
+            if (target.kind === 'dot') {
+                const m = placed.markers.find((p) => p.itemId === target.itemId);
+                return m ? toWorld([m.position[0], m.top, m.position[2]]) : null;
+            }
+            return null;
+        },
         labels() {
             if (!lifted || !checklist) return [];
             const rooms = new Map((checklist.rooms || []).map((r) => [r.id, r]));
