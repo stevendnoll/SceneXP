@@ -1234,3 +1234,85 @@ describe('built with the real three.js', () => {
         expect(m.height).toBeCloseTo(closed, 9);
     });
 });
+
+// ---- Nothing fights at the front door (pure) ------------------------------------------
+
+describe('the front door, without z-fighting', () => {
+    // QA, 2026-10-14: a window was drawn on the door of a house with no
+    // rooms by it, the stone base ran across the door and the low windows a
+    // tenth of a millimeter proud of them, and the railing's posts stood in
+    // the piers at their depth. Two parts of different colors whose faces
+    // turned the same way overlap closer than this fight on a real GPU.
+    const CLEAR = 0.0005;   // model meters, about three quarters of a millimeter on the turntable
+
+    function fights(home) {
+        const layout = layoutHome(home);
+        const k = fitScale(layout, T, CONFIG.model.scale);
+        const areas = new Map((home.rooms || []).map((r) => [r.id, r.area]));
+        const inst = instancesFor(layout, new Map(), { areas, site: siteFor(layout, T, k) });
+        const boxes = [...inst.windows, ...inst.siding, ...inst.trims, ...inst.site].filter((p) => !p.rotation);
+        const door = inst.windows.find((p) => p.color === 'door');
+        if (!door) return [];
+        const lo = (b, a) => b.position[a] - b.scale[a] / 2;
+        const hi = (b, a) => b.position[a] + b.scale[a] / 2;
+        // The door's neighborhood, out to its lamps, piers and railing.
+        const near = boxes.filter((b) => Math.abs(b.position[0] - door.position[0]) < 0.12 && hi(b, 2) > lo(door, 2) - 0.01 && lo(b, 1) < hi(door, 1) + 0.03);
+        const out = [];
+        for (let i = 0; i < near.length; i++) {
+            for (let j = i + 1; j < near.length; j++) {
+                const A = near[i];
+                const B = near[j];
+                if (A.color === B.color) continue;
+                // Their faces toward the street (+z) and toward each side.
+                for (const [ax, face] of [[2, hi], [0, lo], [0, hi]]) {
+                    if (Math.abs(face(A, ax) - face(B, ax)) > CLEAR) continue;
+                    const overlap = [0, 1, 2].filter((x) => x !== ax).every((x) => Math.min(hi(A, x), hi(B, x)) - Math.max(lo(A, x), lo(B, x)) > 1e-6);
+                    if (overlap) out.push(`${A.role || A.color} and ${B.role || B.color} on ${'xyz'[ax]}`);
+                }
+            }
+        }
+        return out;
+    }
+
+    test('on the plain houses a first visit meets, the example, and three hundred others', () => {
+        const plain = (levels) => ({ id: levels.join('-'), serviceType: 'cleaning', levels, rooms: [], items: [] });
+        const homes = [plain(['main']), plain(['main', 'second']), plain(['basement', 'main']), plain(['basement', 'main', 'second', 'third']), example(), ...HOMES];
+        for (const home of homes) expect(`${home.id}: ${fights(home).join(', ') || 'none'}`).toBe(`${home.id}: none`);
+    });
+
+    test('the stone base stops at every window that comes down into it, all along the front', () => {
+        const plain = { id: 'plain', serviceType: 'cleaning', levels: ['main', 'second'], rooms: [], items: [] };
+        let cut = 0;
+        for (const home of [plain, ...HOMES]) {
+            const layout = layoutHome(home);
+            const areas = new Map((home.rooms || []).map((r) => [r.id, r.area]));
+            const inst = instancesFor(layout, new Map(), { areas });
+            const stone = inst.siding.filter((p) => p.role === 'stoneBase');
+            const low = inst.windows.filter((p) => p.side === 'front' && (p.color === 'glass' || p.role === 'frame') && p.level === (stone[0] || {}).level);
+            for (const w of low) {
+                const reaches = w.position[1] - w.scale[1] / 2 < stone[0].position[1] + stone[0].scale[1] / 2;
+                if (!reaches) continue;
+                cut++;
+                const under = stone.filter((st) => Math.abs(st.position[0] - w.position[0]) < (st.scale[0] + w.scale[0]) / 2 - 1e-6);
+                expect(`${home.id}: ${under.length}`).toBe(`${home.id}: 0`);
+            }
+        }
+        expect(cut).toBeGreaterThan(0);
+    });
+
+    test('a window never covers the door, and the stone base stops at it', () => {
+        const home = { id: 'plain', serviceType: 'cleaning', levels: ['main'], rooms: [], items: [] };
+        const layout = layoutHome(home);
+        const inst = instancesFor(layout, new Map(), { areas: new Map(), site: siteFor(layout, T, fitScale(layout, T, CONFIG.model.scale)) });
+        const door = inst.windows.find((p) => p.color === 'door');
+        const casing = inst.windows.find((p) => p.role === 'casing');
+        const across = (b, d) => Math.abs(b.position[0] - d.position[0]) < (b.scale[0] + d.scale[0]) / 2;
+        expect(inst.windows.filter((p) => p.side === 'front' && p.color === 'glass' && across(p, door))).toEqual([]);
+        const stone = inst.siding.filter((p) => p.role === 'stoneBase');
+        expect(stone.length).toBeGreaterThan(1);
+        expect(stone.filter((p) => across(p, casing))).toEqual([]);
+        // Still a base the length of the front, short of the door and the windows.
+        const front = stone.reduce((n, p) => n + p.scale[0], 0);
+        expect(front).toBeGreaterThan(layout.slabs[0].width * 0.6);
+    });
+});

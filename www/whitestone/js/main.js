@@ -634,7 +634,10 @@ function showExample() {
     let example = state.doc.checklists.find((c) => isLive(c) && c.sample);
     if (!example) {
         const seeded = withExample(state.doc, CONFIG, now(), null);
-        if (seeded.error) return false;
+        if (seeded.error) {
+            console.error('[Whitestone] The example home could not be built:', seeded.error);
+            return false;
+        }
         state.doc = seeded.doc;
         example = state.doc.checklists.find((c) => isLive(c) && c.sample);
     }

@@ -415,6 +415,25 @@ describe('the example', () => {
         expect(buttons()).toEqual([GUIDE.buildOwn]);
     });
 
+    test('removed from My checklists, the example comes back when asked for again, and after a reload too', async () => {
+        // QA, 2026-10-14: the removed example kept its fixed id for its
+        // undo, and a second one could not be built beside it.
+        const main = await boot();
+        press('example');
+        main.__test__.remove('example-home-1');
+        fire(dom.el('confirm-actions').children[1], 'click');
+        expect(main.__test__.active()).toBeNull();
+        fire(dom.el('help-restart'), 'click');
+        press('example');
+        expect(main.__test__.active()).toMatchObject({ id: 'example-home-1', sample: true, deletedAt: null });
+        expect(main.__test__.state.doc.checklists.filter((c) => c.id === 'example-home-1')).toHaveLength(1);
+        expect(line()).toBe(GUIDE.example1);
+        expect(main.__test__.model().levels()).toEqual(['basement', 'main', 'second']);
+        // The removal was saved with the example in it, so a reload meets it too.
+        const saved = JSON.parse(localStorage.getItem(CONFIG.storage.key));
+        expect(saved.checklists.find((c) => c.id === 'example-home-1').deletedAt).not.toBeNull();
+    });
+
     test('starting over puts the example back and shows the plain house again', async () => {
         const main = await boot();
         press('example');

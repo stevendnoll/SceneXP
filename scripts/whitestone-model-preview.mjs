@@ -429,6 +429,17 @@ function closeOn(built, roomId, dist = 0.62, fov = 38) {
     // Under the floors lifted above, in front of and above the room.
     return { eye: [c[0], c[1] + dist * 0.55, c[2] + dist], aim: [c[0], c[1], c[2] - 0.03], fov };
 }
+/** A camera close on the front door, from in front and a little above. */
+function closeOnDoor(built, dist = 0.5, fov = 38) {
+    const d = built.inst.windows.find((p) => p.color === 'door');
+    const T0 = CONFIG.stage.turntable;
+    const c = [built.k * d.position[0], T0.height + built.k * d.position[1], built.k * d.position[2]];
+    return { eye: [c[0] + dist * 0.25, c[1] + dist * 0.2, c[2] + dist], aim: c, fov };
+}
+const doorShot = (home, title) => {
+    const built = build(home);
+    return [title, { ...shot(built, { yaw: 0, tilt: 0.4 }, 1000, 640), camera: closeOnDoor(built) }];
+};
 const roomShot = (lifted, roomId, title, dist) => {
     const built = build(showcase, lifted, null);
     return [title, { ...shot(built, { yaw: 0, tilt: 0.4 }, 1000, 640), camera: closeOn(built, roomId, dist) }];
@@ -446,6 +457,8 @@ const views = [
     ['Close: the main floor (kitchen, living, dining, office, entry, half bath)', shot(build(example, 'main'), close, 1400, 900)],
     ['Close: the second floor (bedrooms, a shower primary bath, a full hall bath)', shot(build(example, 'second'), close, 1400, 900)],
     ['Close: the basement', shot(build(example, 'basement'), close, 1400, 900)],
+    doorShot(EMPTY_HOME, 'The front door of a house with no basement: the stone stops at the door and the windows'),
+    doorShot(example, "The example's front door, up its steps"),
     roomShot('main', 's0', 'Kitchen'),
     roomShot('main', 's5', 'Half bath'),
     roomShot('main', 's4', 'Laundry'),

@@ -87,8 +87,14 @@ const ROOMS = [
  * A document with the example home added and on the plinth. `check` is the
  * sheet's rule (sheet.js checkChoice), so an example the current sheet cannot
  * price is refused here rather than shown. Returns { doc, error }.
+ *
+ * An example from before (removed from My checklists, and so kept for its
+ * undo with the same fixed id) is replaced, never joined by a second record
+ * of its id: the steps would find the removed one and refuse (QA,
+ * 2026-10-14: a removed example would not come back).
  */
 export function withExample(doc, config, now, check) {
+    const start = { ...doc, checklists: doc.checklists.filter((c) => c.id !== EXAMPLE_ID) };
     const steps = [
         (d) => createChecklist(d, {
             title: 'Example home',
@@ -109,7 +115,7 @@ export function withExample(doc, config, now, check) {
                 { id: `example-task-${r + 1}-${i + 1}`, sample: true, check }));
         });
     });
-    let current = doc;
+    let current = start;
     for (const step of steps) {
         const result = step(current);
         if (result.error) return { doc, error: result.error };

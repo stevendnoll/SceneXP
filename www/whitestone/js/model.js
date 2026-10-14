@@ -388,6 +388,13 @@ function shell(s, y, h, cx, cz, { open, door, garage, basement, attic, base = fa
             }
             out.door = { x: doorAt, z: f.at + t / 2 };
         }
+        // The door's casing (round the door and its sidelight), and the
+        // stretch of wall the door and its lamps keep for themselves.
+        const sl = HOUSE.sidelight.width;
+        const casing = doorAt === null ? null
+            : { c: doorAt + sl / 2, w: HOUSE.door.width + sl + 0.016 };
+        const doorKeeps = (c, half) => doorAt !== null
+            && c + half > doorAt - HOUSE.lamp.beside - HOUSE.lamp.size && c - half < doorAt + HOUSE.lamp.beside + HOUSE.lamp.size;
         if (f.side === 'front' && garage) out.garage = { x: mid, width: len * HOUSE.garageDoor.width, z: f.at + t / 2 };
         if (f.side === 'front' && open) continue;
         out.walls.push(f.along === 'x'
@@ -399,8 +406,25 @@ function shell(s, y, h, cx, cz, { open, door, garage, basement, attic, base = fa
             out.siding.push(onFace(mid, cy2, len, course.line, course.line, 0, { color: 'lapLine', role: 'course' }));
         }
         // A stone base along the front of the lowest story, as along the
-        // garage and under the porch posts.
-        if (base && f.side === 'front') out.siding.push(onFace(mid, 0, len, HOUSE.stone.base, 0.006, 0.0005, { color: 'stone', role: 'stoneBase' }));
+        // garage and under the porch posts, laid once the door and windows
+        // are placed (`layStone`). It stops at the door's casing and at
+        // every window frame that comes down into it, as stone is cut round
+        // a frame: run across, it stood a tenth of a millimeter proud of the
+        // door and the glass and fought them (QA, 2026-10-14).
+        const stoneCuts = casing ? [[casing.c - casing.w / 2, casing.c + casing.w / 2]] : [];
+        // A millimeter short of each corner, so its ends never lie in the
+        // plane of the siding's.
+        const layStone = () => {
+            if (!base || f.side !== 'front') return;
+            const end = f.b - 0.001;
+            let from = f.a + 0.001;
+            for (const [cut, cb] of stoneCuts.slice().sort((p2, q) => p2[0] - q[0])) {
+                const ca = Math.min(cut, end);
+                if (ca - from > 1e-6) out.siding.push(onFace((from + ca) / 2, 0, ca - from, HOUSE.stone.base, 0.006, 0.0005, { color: 'stone', role: 'stoneBase' }));
+                from = Math.max(from, cb);
+            }
+            if (end - from > 1e-6) out.siding.push(onFace((from + end) / 2, 0, end - from, HOUSE.stone.base, 0.006, 0.0005, { color: 'stone', role: 'stoneBase' }));
+        };
         // White trim: a corner board at each end of the wall, and a band
         // along the floor line of each story above the lowest.
         for (const end of [f.a + HOUSE.corner / 2, f.b - HOUSE.corner / 2]) {
@@ -415,6 +439,7 @@ function shell(s, y, h, cx, cz, { open, door, garage, basement, attic, base = fa
             out.windows.push(onFace(c, sill, w, ph, HOUSE.window.depth, 0.0024, { color: kind, ...extra }));
         };
         if (garage) {
+            layStone();
             if (f.side === 'front') {
                 const gd = HOUSE.garageDoor;
                 out.windows.push(onFace(mid, 0, len * gd.width, gd.height, HOUSE.window.depth, 0.0024, { color: 'cedar', role: 'garageDoor' }));
@@ -429,8 +454,7 @@ function shell(s, y, h, cx, cz, { open, door, garage, basement, attic, base = fa
         if (doorAt !== null) {
             // A white casing, the black door with its glass, and a glass
             // sidelight beside it.
-            const sl = HOUSE.sidelight.width;
-            out.windows.push(onFace(doorAt + sl / 2, 0, HOUSE.door.width + sl + 0.016, HOUSE.door.height + 0.008, HOUSE.window.depth * 0.5, 0.0012, { color: 'whiteTrim', role: 'casing' }));
+            out.windows.push(onFace(casing.c, 0, casing.w, HOUSE.door.height + 0.008, HOUSE.window.depth * 0.5, 0.0012, { color: 'whiteTrim', role: 'casing' }));
             out.windows.push(onFace(doorAt, 0, HOUSE.door.width, HOUSE.door.height, HOUSE.window.depth, 0.0024, { color: 'door' }));
             out.windows.push(onFace(doorAt, HOUSE.door.height * 0.55, HOUSE.door.width * 0.5, HOUSE.door.height * 0.3, HOUSE.window.depth, 0.0034, { color: 'lite' }));
             out.windows.push(onFace(doorAt + HOUSE.door.width / 2 + 0.004 + sl / 2, 0.008, sl, HOUSE.door.height - 0.012, HOUSE.window.depth, 0.0024, { color: 'lite', role: 'sidelight' }));
@@ -457,24 +481,30 @@ function shell(s, y, h, cx, cz, { open, door, garage, basement, attic, base = fa
             const k = Math.min(1, (b - a - 0.03) / total);
             if (k * win.w < 0.025) continue;
             const half = (k * total) / 2;
+            // Never over the door: a door in no room of its own (an empty
+            // floor) had a window drawn on it, glass on black at the same
+            // depth (QA, 2026-10-14).
             const fits = [];
             for (let i = 0; i < cols; i++) {
                 const cc = f.a + ((i + 0.5) * len) / cols;
-                if (cc - half >= a + 0.012 && cc + half <= b - 0.012) fits.push(cc);
+                if (cc - half >= a + 0.012 && cc + half <= b - 0.012 && !doorKeeps(cc, half)) fits.push(cc);
             }
             const wanted = ['small', 'tall', 'basement'].includes(o.kind) ? 1 : Math.max(1, Math.round((b - a) / HOUSE.windowEvery));
             let at;
-            if (!fits.length) at = [(a + b) / 2];
+            if (!fits.length) at = doorKeeps((a + b) / 2, half) ? [] : [(a + b) / 2];
             else if (fits.length <= wanted) at = fits;
             else if (wanted === 1) at = [fits.slice().sort((p2, q) => Math.abs(p2 - (a + b) / 2) - Math.abs(q - (a + b) / 2))[0]];
             else at = Array.from({ length: wanted }, (_, j) => fits[Math.round((j * (fits.length - 1)) / (wanted - 1))]);
             for (const c of at) placeWindow(win, c, k, total, { at: c, roomId: o.roomId, onColumn: fits.includes(c) });
         }
+        layStone();
         function placeWindow(win, c, k, total, extra) {
             const count = win.count || 1;
             for (let i = 0; i < count; i++) {
                 const wc = c - (k * total) / 2 + k * (win.w / 2 + i * (win.w + (win.gap || 0)));
                 pane(wc, win.w * k, win.sill, win.h, 'glass', extra);
+                const reach = (win.w * k) / 2 + HOUSE.frame;
+                if (win.sill - HOUSE.frame < HOUSE.stone.base) stoneCuts.push([wc - reach, wc + reach]);
                 if (win.split) out.windows.push(onFace(wc, win.sill, HOUSE.frame * 0.8, win.h, HOUSE.window.depth * 0.6, 0.0042, { color: 'frame', role: 'mullion' }));
             }
         }
@@ -868,7 +898,10 @@ function landscape(out, site, layout, cx, cz, door, garages, front, doorOpen = f
         if (n > 2) {
             const R = HOUSE.rail;
             const railY = lawnTop + landingTop + R.height;
-            const front = door.z + P.depth - R.size;
+            // A clear millimeter in front of the piers' faces and behind the
+            // landing's: at the pier's own depth the two fought (QA,
+            // 2026-10-14).
+            const front = door.z + P.depth - R.size / 2 - 0.001;
             const inner = door.x - dir * (width / 2 - 0.01);
             const outer = door.x + dir * (width / 2);
             out.site.push(part(null, (inner + outer) / 2, railY, front, Math.abs(outer - inner), R.size, R.size, { color: 'frame', role: 'rail' }));

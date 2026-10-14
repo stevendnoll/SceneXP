@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { withExample, EXAMPLE_ID } from '../www/whitestone/js/samples.js';
-import { emptyDoc, validate, clearSamples, createChecklist, liveRooms, liveItems, findChecklist } from '../www/whitestone/js/store.js';
+import { emptyDoc, validate, clearSamples, createChecklist, deleteChecklist, liveRooms, liveItems, findChecklist } from '../www/whitestone/js/store.js';
 import { checkChoice } from '../www/whitestone/js/sheet.js';
 import { quoteChecklist } from '../www/whitestone/js/pricing.js';
 
@@ -20,6 +20,21 @@ const check = (choice, area) => checkChoice(SHEET, choice, area);
 
 const built = withExample(emptyDoc(CONFIG, NOW), CONFIG, NOW, check);
 const example = built.doc && findChecklist(built.doc, EXAMPLE_ID);
+
+test('replaces an example from before, removed or not, rather than building a second of its id', () => {
+    const removed = deleteChecklist(built.doc, EXAMPLE_ID, CONFIG, NOW).doc;
+    const mine = createChecklist(removed, { title: 'Ours' }, CONFIG, NOW, { id: 'checklist-mine' }).doc;
+    for (const before of [mine, built.doc]) {
+        const again = withExample(before, CONFIG, NOW, check);
+        expect(again.error).toBeNull();
+        const copies = again.doc.checklists.filter((c) => c.id === EXAMPLE_ID);
+        expect(copies).toHaveLength(1);
+        expect(copies[0].deletedAt).toBeNull();
+        expect(again.doc.settings.activeId).toBe(EXAMPLE_ID);
+    }
+    // The visitor's own checklist is untouched.
+    expect(findChecklist(withExample(mine, CONFIG, NOW, check).doc, 'checklist-mine').title).toBe('Ours');
+});
 
 test('builds without a refusal, every choice allowed by the shipped sheet, and goes on the plinth', () => {
     expect(built.error).toBeNull();
