@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=17" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=18" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7080,6 +7080,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="js/seal.min.js" rel="modulepreload"]
     link [href="js/sync.min.js" rel="modulepreload"]
     link [href="js/booking.min.js" rel="modulepreload"]
+    link [href="js/schedule.min.js" rel="modulepreload"]
     link [href="js/receipt.min.js" rel="modulepreload"]
     link [href="js/zoned.min.js" rel="modulepreload"]
     link [href="js/links.min.js" rel="modulepreload"]
@@ -7100,7 +7101,6 @@ html [data-ui-theme="surf" lang="en"]
     link [href="js/host.min.js" rel="modulepreload"]
     link [href="js/cast.min.js" rel="modulepreload"]
     link [href="js/panel.min.js" rel="modulepreload"]
-    link [href="js/schedule.min.js" rel="modulepreload"]
     link [href="js/ics.min.js" rel="modulepreload"]
     link [href="js/qr.min.js" rel="modulepreload"]
     link [href="js/guards.min.js" rel="modulepreload"]
@@ -7109,7 +7109,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=17" rel="stylesheet"]
+    link [href="css/experience.min.css?v=18" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7195,6 +7195,10 @@ html [data-ui-theme="surf" lang="en"]
         span#hud-quote-text
         span.hud-example
           "Example prices"
+      button#hud-visit.hud-chip.hud-visit [hidden type="button"]
+        span#hud-visit-text
+        span#hud-visit-note.hud-visit-note [hidden]
+          "Changes not sent"
     div#ws-tools.ui-float.ws-tools [aria-label="Help and undo" role="group"]
       button#ws-undo.tool-btn.tool-undo [hidden title="Undo (Ctrl or Command and Z)" type="button"]
         "Undo"
@@ -7377,10 +7381,22 @@ html [data-ui-theme="surf" lang="en"]
             "Your visit is booked"
           button#receipt-close.ws-btn.ws-btn-small [type="button"]
             "Close"
+        div#receipt-unsent.receipt-unsent [hidden]
+          p
+            "You have changes your cleaner has not seen yet."
+          button#receipt-send.ws-btn.ws-btn-small.ws-btn-primary [type="button"]
+            "Send my changes"
         p#receipt-when.receipt-when
-        p
+        div.receipt-visit
           a#receipt-calendar.ws-btn.ws-btn-small [download href="#"]
             "Add to calendar"
+          button#receipt-reschedule.ws-btn.ws-btn-small [hidden type="button"]
+            "Change the time"
+          button#receipt-cancel-visit.ws-btn.ws-btn-small [hidden type="button"]
+            "Cancel my visit"
+          button#receipt-book.ws-btn.ws-btn-small.ws-btn-primary [hidden type="button"]
+            "Choose a time"
+        p#receipt-locked.form-note [hidden]
         p#receipt-quote.receipt-quote
         p.card-meta
           "You will never pay more than your quote without approving it first."
@@ -7419,6 +7435,8 @@ html [data-ui-theme="surf" lang="en"]
         p#receipt-standin.form-note [hidden]
         p#receipt-status.sr-only [aria-live="polite" role="status"]
         div.card-actions
+          button#receipt-unpublish.ws-btn.ws-btn-small.ws-btn-quiet.receipt-unpublish [hidden type="button"]
+            "Unpublish this checklist"
           button#receipt-done.ws-btn.ws-btn-primary [type="button"]
             "Done"
     div#checklist.card-overlay.checklist-overlay [hidden]

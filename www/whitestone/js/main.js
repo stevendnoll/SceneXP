@@ -37,14 +37,16 @@ import {
     createStore, findChecklist, createChecklist, updateChecklist, setLevels, setPreferences, deleteChecklist,
     duplicateChecklist, setSettings, touchVisit, storageUse, isLive, addRoom, updateRoom, deleteRoom, addItem,
     updateItem, deleteItem, addPhoto, removePhoto, photoIdsInUse, newId, itemsIn, liveRooms, liveItems,
-    clearSamples, hasSamples, setBath, setResidence, emptyDoc, setPublication, keepServerFacts, importPublished
+    clearSamples, hasSamples, setBath, setResidence, emptyDoc, setPublication, keepServerFacts, importPublished,
+    hasUnsent
 } from './store.min.js';
 import { withExample } from './samples.min.js';
 import { createApi, createFetchTransport } from './api.min.js';
 import { createStandin } from './standin.min.js';
 import { createSealer } from './seal.min.js';
-import { publish, openPublished } from './sync.min.js';
+import { publish, openPublished, republish, cancelVisit, unpublish, quoteToSend } from './sync.min.js';
 import { createBooking, visitMinutes, shiftMonth, firstOpen, dayLabel, clockLabel } from './booking.min.js';
+import { canChange } from './schedule.min.js';
 import { createReceipt, receiptView } from './receipt.min.js';
 import { todayIn, addDays } from './zoned.min.js';
 import { parseEdit } from './links.min.js';
@@ -64,7 +66,7 @@ import {
     renderMyChecklists, renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote,
     renderMenu, fillMenuAreas
 } from './panels.min.js';
-import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKING, BOOKING_ERRORS, RECEIPT } from './copy.min.js';
+import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKING, BOOKING_ERRORS, RECEIPT, CHANGES } from './copy.min.js';
 import { createTurntable, turnPoint } from './turntable.min.js';
 import { buildStage, buildLights, firstPick } from './stage.min.js';
 import { buildModel } from './model.min.js';
@@ -96,7 +98,9 @@ const state = {
     pose: null,
     /** Whether this browser holds the document yet. A first visit's example
      *  is not saved until the visitor changes something (samples.js). */
-    saved: false
+    saved: false,
+    /** Whether changes are on their way to the server (sendChanges). */
+    sending: false
 };
 
 /**
@@ -538,6 +542,7 @@ function onPanelAction(id) {
     case 'home': editHome(); break;
     case 'book': openBooking(); break;
     case 'visit': openReceipt(); break;
+    case 'send': sendChanges(); break;
     case 'anotherRoom': {
         openRoom(null);
         const levelField = el('room-level');
@@ -998,7 +1003,10 @@ function guideContext() {
  *  tasks and price so far, else that it has none yet. */
 function whereLine(c) {
     if (!c) return GUIDE.noHome;
-    if (isBooked(c)) return GUIDE.homeBooked(dayLabel(c.booking.date), clockLabel(c.booking.time));
+    if (isPublished(c)) {
+        const visit = isBooked(c) ? GUIDE.homeBooked(dayLabel(c.booking.date), clockLabel(c.booking.time)) : GUIDE.homePublished(c.title);
+        return hasUnsent(c) ? `${visit} ${GUIDE.homeUnsent}` : visit;
+    }
     if (!liveRooms(c).length) return GUIDE.homeEmpty(c.title);
     const quote = state.sheet ? quoteChecklist(state.sheet, c) : null;
     return GUIDE.homeDraft(c.title, PANEL.rooms(liveRooms(c).length), PANEL.tasks(liveItems(c).length), quote ? formatMoney(quote.totalCents) : '');
@@ -1013,8 +1021,9 @@ function standbyLine(c) {
     return `${whereLine(c)} ${GUIDE.returningLegend}`;
 }
 
-/** Is the open checklist booked and published? */
-const isBooked = (c) => Boolean(c && c.booking && c.published && c.published.at);
+/** Is the open checklist published, and is it booked? */
+const isPublished = (c) => Boolean(c && c.published && c.published.at);
+const isBooked = (c) => Boolean(isPublished(c) && c.booking);
 
 /**
  * What Maya says to a returning visitor (QA, 2026-10-14): a greeting (or,
@@ -1028,16 +1037,20 @@ function welcomeLine(c) {
     return `${lead} ${whereLine(c)} ${GUIDE.returningLegend}`;
 }
 
-/** A returning visitor's choices: their visit, or a time to choose; the
- *  rooms; the checklist; or simply a look round. */
+/** A returning visitor's choices: changes to send; their visit, or a time
+ *  to choose; the rooms; the checklist; or simply a look round. */
 function returningChoices(c) {
     const o = (id, label) => ({ id, label });
     // No home of their own yet: the example's way on, or a start.
     if (!c) return [o('start', GUIDE.start), o('lookAround', GUIDE.illLook)];
     if (c.sample) return [o('buildOwn', GUIDE.buildOwn), o('lookAround', GUIDE.illLook)];
     const out = [];
-    if (isBooked(c)) out.push(o('visit', GUIDE.seeVisit), o('editRooms', GUIDE.changeChecklist));
-    else {
+    if (isPublished(c)) {
+        if (hasUnsent(c)) out.push(o('sendChanges', GUIDE.sendChanges));
+        if (isBooked(c)) out.push(o('visit', GUIDE.seeVisit));
+        else out.push(o('chooseTime', GUIDE.chooseTime), o('visit', GUIDE.seeLink));
+        out.push(o('editRooms', GUIDE.changeChecklist));
+    } else {
         if (bookable(c)) out.push(o('chooseTime', GUIDE.chooseTime));
         out.push(o('editRooms', GUIDE.editRooms));
         if (c && liveItems(c).length) out.push(o('reviewChecklist', GUIDE.reviewChecklist));
@@ -1273,6 +1286,10 @@ function onHostButton(id) {
     case 'visit':
         guideTo({ type: 'lookAround' });
         openReceipt();
+        break;
+    case 'sendChanges':
+        guideTo({ type: 'lookAround' });
+        sendChanges();
         break;
     case 'reviewChecklist':
         guideTo({ type: 'lookAround' });
@@ -1594,7 +1611,7 @@ function confirmNewPin() {
 
 /** The checklist the visitor can book: their own, priced, not yet booked. */
 function bookable(c) {
-    return Boolean(c && !c.sample && state.sheet && liveItems(c).length && !(c.booking && c.published && c.published.at));
+    return Boolean(c && !c.sample && state.sheet && liveItems(c).length && !isBooked(c));
 }
 
 /** The month a booking can be made in now, and the last it can reach. */
@@ -1603,14 +1620,50 @@ function bookingMonths(schedule) {
     return { first: today.slice(0, 7), last: addDays(today, schedule.horizonDays).slice(0, 7) };
 }
 
+/** The quote the open checklist goes out with (sync.js quoteToSend): the
+ *  one locked at publish while nothing has changed, else a fresh one. */
+function sendingQuote(c) {
+    return state.sheet ? quoteToSend(c, state.sheet, now().toISOString()).quote : null;
+}
+
+/** The last day a visit may be on: the quote's 90 days from when it was
+ *  locked (a quote not locked yet is locked today). */
+function quoteUntil(quote, schedule) {
+    const locked = quote && quote.lockedAt ? Date.parse(quote.lockedAt) : now().getTime();
+    return addDays(todayIn(locked, schedule.timezone), CONFIG.api.quoteDays);
+}
+
+/** "Friday, October 16 at 9:00 am" */
+const visitWhen = (booking) => `${dayLabel(booking.date)} at ${clockLabel(booking.time)}`;
+
+/** What the hours of the change window are, for the lines that say it. */
+const cancelHours = () => (service ? service.schedule.cancelHours : 24);
+
+/** A `record` for sync.js: each step written to the store as it happens,
+ *  never as an undo step (store.js setPublication). */
+function recordFor(id) {
+    return async (patch) => {
+        const r = mutate((d) => setPublication(d, id, patch, CONFIG, now()));
+        return r.error ? findChecklist(state.doc, id) : r.record;
+    };
+}
+
 function drawBooking() {
     if (!booking || !ui.booking) return;
     const b = ui.booking;
     const range = service ? bookingMonths(service.schedule) : { first: b.month, last: b.month };
-    const quote = state.sheet && active() ? quoteChecklist(state.sheet, active()) : null;
+    const c = active();
+    const quote = c ? sendingQuote(c) : null;
+    const moving = b.mode === 'move' && c && c.booking;
     booking.show({
         ...b,
-        summary: quote ? BOOKING.summary(formatMoney(quote.totalCents), formatMinutes(roundMinutes(quote.minutes))) : '',
+        title: moving ? BOOKING.newTitle : BOOKING.title,
+        confirmLabel: b.busy ? null : moving ? BOOKING.move : b.mode === 'again' ? BOOKING.bookAgain : BOOKING.confirm,
+        current: moving ? c.booking.date : null,
+        summary: [
+            moving ? BOOKING.nowAt(visitWhen(c.booking)) : '',
+            quote ? BOOKING.summary(formatMoney(quote.totalCents), formatMinutes(roundMinutes(quote.minutes))) : ''
+        ].filter(Boolean).join(' '),
         canPrev: b.month > range.first && !b.busy,
         canNext: b.month < range.last && !b.busy
     });
@@ -1628,17 +1681,22 @@ async function loadMonth() {
     b.loading = false;
     b.days = r.ok ? r.data.days : [];
     if (!r.ok) b.error = BOOKING_ERRORS[r.error] || BOOKING_ERRORS.server;
-    const chosen = b.days.find((d) => d.date === b.selected && d.times.length);
+    const chosen = b.days.find((d) => d.date === b.selected && d.times.length && !(b.until && d.date > b.until));
     if (!chosen) {
-        b.selected = firstOpen(b.days);
+        b.selected = firstOpen(b.days, b.until);
         b.time = null;
     }
     drawBooking();
 }
 
-/** Choose a time (PRD 10.3): this month's openings for a visit as long as
- *  the quote, the earliest chosen. */
-async function openBooking() {
+/**
+ * Choose a time (PRD 10.3): this month's openings for a visit as long as
+ * the quote, the earliest chosen. A booked visit is moved here too (PRD
+ * 10.4), inside the change window and the quote's 90 days, its own day
+ * marked; and a published checklist with no visit is booked again. `error`
+ * is said as the card opens (a change that no longer fits its time).
+ */
+async function openBooking({ error = '' } = {}) {
     const c = active();
     if (!c) return null;
     if (!state.sheet) {
@@ -1646,32 +1704,72 @@ async function openBooking() {
         toast(UI.sheetLoading);
         return null;
     }
-    if (!bookable(c)) {
-        const why = c.sample ? BOOKING_ERRORS.sample : BOOKING_ERRORS.unpriced;
-        announce(why);
-        toast(why);
-        return null;
-    }
     const svc = await connect();
     if (!svc) {
         toast(BOOKING_ERRORS.server);
         return null;
     }
-    const quote = quoteChecklist(state.sheet, c);
-    ui.booking = { month: bookingMonths(svc.schedule).first, days: [], selected: null, time: null, minutes: visitMinutes(quote.minutes), error: '', busy: false, loading: true };
+    const moving = isBooked(c);
+    if (moving && !canChange(svc.schedule, c.booking, now().getTime())) {
+        const why = RECEIPT.locked(svc.schedule.cancelHours);
+        announce(why);
+        toast(why);
+        return null;
+    }
+    const quote = sendingQuote(c);
+    if (c.sample || !liveItems(c).length || !quote) {
+        const why = c.sample ? BOOKING_ERRORS.sample : BOOKING_ERRORS.unpriced;
+        announce(why);
+        toast(why);
+        return null;
+    }
+    ui.booking = {
+        mode: moving ? 'move' : isPublished(c) ? 'again' : 'new',
+        month: bookingMonths(svc.schedule).first, days: [], selected: null, time: null,
+        minutes: visitMinutes(quote.minutes), until: isPublished(c) ? quoteUntil(quote, svc.schedule) : null,
+        error, busy: false, loading: true, priceOk: false
+    };
     openCard('booking', { onClose: () => { if (ui.booking && !ui.booking.busy) ui.booking = null; } });
     await loadMonth();
     // A month with nothing left goes on to the next, once.
-    if (ui.booking && !firstOpen(ui.booking.days) && ui.booking.month < bookingMonths(svc.schedule).last) {
+    if (ui.booking && !firstOpen(ui.booking.days, ui.booking.until) && ui.booking.month < bookingMonths(svc.schedule).last) {
         ui.booking.month = shiftMonth(ui.booking.month, 1);
         await loadMonth();
     }
     if (booking) booking.focusDay();
+    if (error) announce(error);
     return ui.booking;
 }
 
-/** Book and publish (PLANNING 10.1), then the receipt. A time just taken
- *  shows the day again with what is left, and the next openings said. */
+/**
+ * How the quote moves with the changes not sent yet: `{ from, to }` in
+ * words, or null when it does not (PLANNING 10.2: asked before sending).
+ */
+function priceChange(c) {
+    if (!isPublished(c) || !c.quote || !state.sheet) return null;
+    const next = sendingQuote(c);
+    if (!next || next.totalCents === c.quote.totalCents) return null;
+    return { from: formatMoney(c.quote.totalCents), to: formatMoney(next.totalCents) };
+}
+
+/** Ask first when the quote changes, then `go()`. */
+function askPrice(c, go) {
+    const diff = priceChange(c);
+    if (!diff) return go();
+    confirmCard({
+        title: CHANGES.priceTitle,
+        detail: CHANGES.priceDetail(diff.from, diff.to),
+        confirmLabel: CHANGES.priceConfirm,
+        cancelLabel: CHANGES.notNow,
+        onConfirm: go
+    });
+    return null;
+}
+
+/** Book and publish (PLANNING 10.1), or move the booked visit, or book a
+ *  published checklist again (sync.js republish), then the receipt. A time
+ *  just taken shows the day again with what is left, and the next openings
+ *  said. */
 async function confirmBooking() {
     const b = ui.booking;
     const c = active();
@@ -1679,22 +1777,27 @@ async function confirmBooking() {
     const day = b.days.find((d) => d.date === b.selected);
     const time = day && (day.times.includes(b.time) ? b.time : day.times[0]);
     if (!time) return null;
+    // Changes not sent go with a move, so a new price is asked about first.
+    if (isPublished(c) && !b.priceOk && priceChange(c)) {
+        askPrice(c, () => {
+            if (ui.booking !== b) return;
+            b.priceOk = true;
+            confirmBooking();
+        });
+        return null;
+    }
     b.busy = true;
     b.error = '';
     drawBooking();
-    const id = c.id;
-    const record = async (patch) => {
-        const r = mutate((d) => setPublication(d, id, patch, CONFIG, now()));
-        return r.error ? findChecklist(state.doc, id) : r.record;
-    };
-    const result = await publish({
-        checklist: c, api: service.api, sealer: service.sealer, photos: photoStore, sheet: state.sheet,
-        slot: { date: b.selected, time, minutes: b.minutes }, at: now().toISOString(), record
-    });
+    if (!photoStore) await openPhotos();
+    const args = { checklist: c, api: service.api, sealer: service.sealer, photos: photoStore, sheet: state.sheet, at: now().toISOString(), record: recordFor(c.id) };
+    const result = isPublished(c)
+        ? await republish({ ...args, slot: { date: b.selected, time } })
+        : await publish({ ...args, slot: { date: b.selected, time, minutes: b.minutes } });
     if (ui.booking !== b) return result;
     b.busy = false;
     if (!result.ok) {
-        b.error = BOOKING_ERRORS[result.error] || BOOKING_ERRORS.server;
+        b.error = result.error === 'too-late' ? RECEIPT.locked(cancelHours()) : BOOKING_ERRORS[result.error] || BOOKING_ERRORS.server;
         if (result.error === 'taken' && result.next.length) {
             b.error = `${b.error} ${result.next.map((n) => `${dayLabel(n.date)} at ${clockLabel(n.time)}`).join(', ')}.`;
             b.selected = result.next[0].date;
@@ -1707,21 +1810,166 @@ async function confirmBooking() {
     }
     closeCard('booking');
     ui.booking = null;
+    if (b.mode === 'move') {
+        const said = CHANGES.moved(visitWhen(result.checklist.booking));
+        announce(said);
+        toast(said);
+    }
+    afterServerChange();
     openReceipt();
     return result;
 }
 
-/** The receipt for the open checklist, once it is published and booked.
- *  Resolves to its view, or null. */
+/**
+ * Send the changes made since publishing (PLANNING 10.2): asked first when
+ * the quote moves; a visit that no longer fits its time opens Choose a new
+ * time, and the changes go with the move.
+ */
+async function sendChanges() {
+    const c = active();
+    if (!isPublished(c)) return null;
+    if (!hasUnsent(c)) {
+        announce(CHANGES.nothingToSend);
+        toast(CHANGES.nothingToSend);
+        return null;
+    }
+    if (!state.sheet) {
+        announce(UI.sheetLoading);
+        toast(UI.sheetLoading);
+        return null;
+    }
+    const svc = await connect();
+    if (!svc) {
+        toast(BOOKING_ERRORS.server);
+        return null;
+    }
+    return askPrice(c, async () => {
+        if (state.sending) return null;
+        state.sending = true;
+        announce(CHANGES.sending);
+        if (!photoStore) await openPhotos();
+        const result = await republish({
+            checklist: active(), api: svc.api, sealer: svc.sealer, photos: photoStore, sheet: state.sheet,
+            at: now().toISOString(), record: recordFor(c.id)
+        });
+        state.sending = false;
+        if (result.ok) {
+            announce(CHANGES.sent);
+            toast(CHANGES.sent);
+            afterServerChange();
+            return result;
+        }
+        if (result.error === 'no-longer-fits') {
+            if (isOpen('receipt')) closeCard('receipt');
+            openBooking({ error: BOOKING_ERRORS['no-longer-fits'] });
+            return result;
+        }
+        const why = result.error === 'too-late' ? CHANGES.tooLateLonger(svc.schedule.cancelHours) : BOOKING_ERRORS[result.error] || BOOKING_ERRORS.server;
+        announce(why);
+        toast(why);
+        return result;
+    });
+}
+
+/** Cancel the booked visit, asked first (PRD 10.4). The checklist stays
+ *  published, and the receipt then offers Choose a time. */
+function confirmCancelVisit() {
+    const c = active();
+    if (!isBooked(c)) return;
+    confirmCard({
+        title: CHANGES.cancelTitle,
+        detail: CHANGES.cancelDetail(visitWhen(c.booking)),
+        confirmLabel: CHANGES.cancelConfirm,
+        cancelLabel: CHANGES.keep,
+        danger: true,
+        onConfirm: async () => {
+            const svc = await connect();
+            const latest = active();
+            if (!svc || !isBooked(latest)) return;
+            const r = await cancelVisit({ checklist: latest, api: svc.api, sealer: svc.sealer, at: now().toISOString(), record: recordFor(latest.id) });
+            const said = r.ok ? CHANGES.cancelled : r.error === 'too-late' ? RECEIPT.locked(svc.schedule.cancelHours) : BOOKING_ERRORS[r.error] || BOOKING_ERRORS.server;
+            announce(said);
+            toast(said);
+            if (r.ok) afterServerChange();
+        }
+    });
+}
+
+/** Unpublish, asked first (PRD 13.2): the link and PIN stop working, the
+ *  visit (if any) is cancelled, and the checklist is a draft here again. */
+function confirmUnpublish() {
+    const c = active();
+    if (!isPublished(c)) return;
+    confirmCard({
+        title: CHANGES.unpublishTitle,
+        detail: isBooked(c) ? CHANGES.unpublishDetailBooked(visitWhen(c.booking)) : CHANGES.unpublishDetail,
+        confirmLabel: CHANGES.unpublishConfirm,
+        cancelLabel: CHANGES.keep,
+        danger: true,
+        onConfirm: async () => {
+            const svc = await connect();
+            const latest = active();
+            if (!svc || !isPublished(latest)) return;
+            const r = await unpublish({ checklist: latest, api: svc.api, record: recordFor(latest.id) });
+            if (!r.ok) {
+                const why = r.error === 'too-late' ? RECEIPT.locked(svc.schedule.cancelHours) : BOOKING_ERRORS[r.error] || BOOKING_ERRORS.server;
+                announce(why);
+                toast(why);
+                return;
+            }
+            if (isOpen('receipt')) closeCard('receipt');
+            const said = CHANGES.unpublished(latest.title);
+            announce(said);
+            toast(said);
+            afterServerChange();
+        }
+    });
+}
+
+/** After a send, a move, a cancel or an unpublish: the receipt (if open)
+ *  and Maya's words (if she is standing by) catch up. */
+function afterServerChange() {
+    refresh();
+    redrawReceipt();
+    if (ui.guide && !guiding()) showGuide();
+}
+
+/** The receipt for the open checklist, once it is published. Resolves to
+ *  its view, or null. */
 async function openReceipt() {
     const c = active();
-    if (isBooked(c)) await connect();
-    const view = c && service ? receiptView(c, { origin: window.location.origin, config: CONFIG, timezone: service.schedule.timezone, now: now().getTime() }) : null;
+    if (isPublished(c)) await connect();
+    const view = c && service ? receiptFor(c) : null;
     if (!view || !receipt) return null;
     ui.receipt = view;
     receipt.show(view);
     openCard('receipt', { onClose: () => receipt.release() });
     return view;
+}
+
+function receiptFor(c) {
+    return receiptView(c, { origin: window.location.origin, config: CONFIG, timezone: service.schedule.timezone, now: now().getTime(), schedule: service.schedule });
+}
+
+/** The receipt drawn again while it is open, from the checklist as it now
+ *  stands; closed if there is nothing left to show. */
+function redrawReceipt() {
+    if (!receipt || !isOpen('receipt')) return;
+    const c = active();
+    const view = c && service ? receiptFor(c) : null;
+    if (!view) {
+        closeCard('receipt');
+        return;
+    }
+    ui.receipt = view;
+    receipt.show(view);
+}
+
+/** From the receipt: Change the time, or Choose a time after a cancel. The
+ *  receipt steps aside for the calendar, and comes back once it is done. */
+function bookFromReceipt() {
+    closeCard('receipt');
+    openBooking();
 }
 
 /** Copy the link, the PIN or the edit link, and say so beside the button. */
@@ -1851,6 +2099,24 @@ function storageNote() {
     return storageUse(state.doc, CONFIG).nearlyFull ? STORAGE_NOTES.nearlyFull : '';
 }
 
+/** The visit chip beside the quote (PRD 8.6), once the checklist is
+ *  published: when the visit is (or that none is booked), and changes not
+ *  sent yet. */
+function drawVisitChip(c) {
+    const chip = el('hud-visit');
+    if (!chip) return;
+    chip.hidden = !isPublished(c);
+    if (chip.hidden) return;
+    const unsent = hasUnsent(c);
+    const text = isBooked(c) ? UI.visitChip(dayLabel(c.booking.date), clockLabel(c.booking.time)) : UI.visitChipNone;
+    const textEl = el('hud-visit-text');
+    if (textEl) textEl.textContent = text;
+    const note = el('hud-visit-note');
+    if (note) note.hidden = !unsent;
+    const spoken = isBooked(c) ? UI.visitChipSpoken(dayLabel(c.booking.date), clockLabel(c.booking.time)) : text;
+    chip.setAttribute('aria-label', unsent ? `${spoken} ${UI.visitChipUnsent}.` : spoken);
+}
+
 /** Draw everything on screen again from the document. */
 function refresh() {
     if (!state.doc) return;
@@ -1874,6 +2140,7 @@ function refresh() {
     }
     const quoteText = el('hud-quote-text');
     if (quoteText) quoteText.textContent = chip ? chip.text : '';
+    drawVisitChip(c);
     // Undo only when there is something to undo (QA, 2026-10-14). Put away
     // while it has the keyboard (the last step undone), Help takes it.
     const undoBtn = el('ws-undo');
@@ -2368,30 +2635,90 @@ function clearExample() {
     return change((d) => clearSamples(d), UI.labels.clearedExample, UI.exampleCleared);
 }
 
-function remove(id) {
+/**
+ * Remove a checklist from this browser, asked first. A published one is
+ * unpublished first (its visit cancelled with it), so no copy or booking is
+ * left behind that nothing here could reach again; one whose visit is
+ * inside the change window waits until after the visit.
+ */
+async function remove(id) {
     const c = findChecklist(state.doc, id);
     if (!c) return;
+    const svc = isPublished(c) ? await connect() : null;
+    if (isBooked(c) && svc && !canChange(svc.schedule, c.booking, now().getTime())) {
+        const why = CHANGES.removeLocked(svc.schedule.cancelHours);
+        announce(why);
+        toast(why);
+        return;
+    }
+    const gone = () => change((d) => deleteChecklist(d, id, CONFIG, now()), UI.labels.removed, UI.removedChecklist(c.title));
     confirmCard({
         title: UI.removeTitle(c.title),
-        detail: UI.removeDetail,
+        detail: !isPublished(c) ? UI.removeDetail : isBooked(c) ? CHANGES.removeBooked(visitWhen(c.booking)) : CHANGES.removePublished,
         confirmLabel: UI.remove,
         danger: true,
-        onConfirm: () => change((d) => deleteChecklist(d, id, CONFIG, now()), UI.labels.removed, UI.removedChecklist(c.title))
+        onConfirm: async () => {
+            const latest = findChecklist(state.doc, id);
+            if (isPublished(latest)) {
+                const r = svc ? await unpublish({ checklist: latest, api: svc.api, record: recordFor(id) }) : { ok: false, error: 'server' };
+                if (!r.ok) {
+                    const why = r.error === 'too-late' ? CHANGES.removeLocked(cancelHours()) : BOOKING_ERRORS[r.error] || BOOKING_ERRORS.server;
+                    announce(why);
+                    toast(why);
+                    return;
+                }
+            }
+            gone();
+        }
     });
 }
 
 /**
  * Start over (the Help menu): asked first, on the confirmation card, since
- * it cannot be undone (QA, 2026-10-14).
+ * it cannot be undone (QA, 2026-10-14). Everything this browser published
+ * is unpublished first (Steve, 2026-10-14), its visits canceled with it,
+ * since clearing the owner tokens would leave those copies and bookings
+ * where nothing could reach them. A visit inside the change window makes
+ * it wait until after the visit, and a failure to unpublish clears
+ * nothing.
  */
-function confirmStartOver() {
+async function confirmStartOver() {
+    // Every checklist this browser holds a publication for, removed ones
+    // and a publish stopped part way included.
+    const published = state.doc ? state.doc.checklists.filter((c) => c.published) : [];
+    const svc = published.length ? await connect() : null;
+    if (svc && published.some((c) => c.booking && !canChange(svc.schedule, c.booking, now().getTime()))) {
+        const why = HELP.resetLocked(svc.schedule.cancelHours);
+        announce(why);
+        toast(why);
+        return;
+    }
     confirmCard({
         title: HELP.resetTitle,
-        detail: HELP.resetDetail,
+        detail: published.length ? HELP.resetDetailPublished : HELP.resetDetail,
         confirmLabel: HELP.resetConfirm,
         danger: true,
-        onConfirm: startOver
+        onConfirm: published.length ? () => unpublishAllThenStartOver(svc) : startOver
     });
+}
+
+/** Unpublish each checklist this browser published, then start over. One
+ *  that will not go stops it all, with nothing cleared, so it can be tried
+ *  again. */
+async function unpublishAllThenStartOver(svc) {
+    for (const c of state.doc.checklists.filter((x) => x.published)) {
+        // A removed one (kept for its undo) takes no store write, and is
+        // cleared a moment later with the rest.
+        const record = c.deletedAt ? async () => c : recordFor(c.id);
+        const r = svc ? await unpublish({ checklist: c, api: svc.api, record }) : { ok: false, error: 'server' };
+        if (!r.ok) {
+            const why = r.error === 'too-late' ? HELP.resetLocked(cancelHours()) : BOOKING_ERRORS[r.error] || BOOKING_ERRORS.server;
+            announce(why);
+            toast(why);
+            return null;
+        }
+    }
+    return startOver();
 }
 
 /**
@@ -2513,6 +2840,7 @@ function setupEventListeners() {
     on('task-notes', 'input', () => showHints('task-notes', 'task-notes-hint'));
     on('task-avoid', 'input', () => showHints('task-avoid', 'task-avoid-hint'));
     on('hud-quote', 'click', openQuote);
+    on('hud-visit', 'click', () => openReceipt());
     on('hud-rooms', 'click', () => selectTo({ scope: 'house', level: null, roomId: null, itemId: null }, { focus: true }));
     on('quote-open-checklist', 'click', openChecklistView);
     booking = createBooking({
@@ -2538,7 +2866,14 @@ function setupEventListeners() {
             confirm: () => confirmBooking()
         }
     });
-    receipt = createReceipt({ signal, on: { copy: copyFromReceipt, share: shareFromReceipt, newPin: confirmNewPin, done: () => closeCard('receipt') } });
+    receipt = createReceipt({
+        signal,
+        on: {
+            copy: copyFromReceipt, share: shareFromReceipt, newPin: confirmNewPin, send: sendChanges,
+            reschedule: bookFromReceipt, book: bookFromReceipt, cancelVisit: confirmCancelVisit, unpublish: confirmUnpublish,
+            done: () => closeCard('receipt')
+        }
+    });
     on('booking-cancel', 'click', () => closeCard('booking'));
     on('menu-area', 'change', () => {
         ui.menuArea = el('menu-area').value;
@@ -2762,6 +3097,9 @@ export const __test__ = {
     arriveByEditLink,
     confirmNewPin,
     openReceipt,
+    sendChanges,
+    confirmCancelVisit,
+    confirmUnpublish,
     connect,
     openMine,
     openChecklist,

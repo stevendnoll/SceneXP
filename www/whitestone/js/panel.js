@@ -30,6 +30,7 @@ import { PANEL } from './copy.min.js';
 import { roomName, levelOf, bathChoices, bathChoiceOf, residenceLine } from './taxonomy.min.js';
 import { priceChoice, formatMoney, formatMinutes, roundMinutes } from './pricing.min.js';
 import { taskName, choiceText } from './panels.min.js';
+import { hasUnsent } from './store.min.js';
 
 // ---- What is selected (pure) -----------------------------------------------------
 
@@ -175,6 +176,24 @@ function backName(type, room) {
 }
 
 /**
+ * The whole house's buttons (M3): changes not sent yet come first; then a
+ * booked visit's receipt; a published checklist with no visit, Choose a
+ * time and its link; a priced draft of the visitor's own, Choose a time.
+ */
+function houseActions(checklist, items, b) {
+    const pub = checklist.published && checklist.published.at;
+    const rest = [b('checklist', PANEL.checklist), b('home', PANEL.home)];
+    if (pub) {
+        const visit = b('visit', checklist.booking ? PANEL.visit : PANEL.link);
+        if (hasUnsent(checklist)) return [b('send', PANEL.send, true), visit, ...rest];
+        if (checklist.booking) return [{ ...visit, primary: true }, ...rest];
+        return [b('book', PANEL.book, true), visit, ...rest];
+    }
+    if (!checklist.sample && items.length) return [b('book', PANEL.book, true), ...rest];
+    return [b('checklist', PANEL.checklist, true), b('home', PANEL.home)];
+}
+
+/**
  * What the panel shows for a selection: `{ scope, title, back, summary,
  * baths, heading, rows, empty, chips, actions, detail }`. `rows` are `{ kind,
  * id, label, detail, starred }` (floors, rooms, or tasks), `baths` a
@@ -206,13 +225,7 @@ export function panelView(sel, checklist, sheet) {
             scope: 'house', title: checklist.title, back: PANEL.close, heading: PANEL.floorsHeading,
             summary: kind ? `${kind}. ${counts}` : counts,
             rows, empty: null, baths: null, chips: null, detail: null,
-            // Booked, the visit's receipt first; priced and the visitor's
-            // own, Choose a time (M3).
-            actions: checklist.booking && checklist.published && checklist.published.at
-                ? [b('visit', PANEL.visit, true), b('checklist', PANEL.checklist), b('home', PANEL.home)]
-                : !checklist.sample && items.length
-                    ? [b('book', PANEL.book, true), b('checklist', PANEL.checklist), b('home', PANEL.home)]
-                    : [b('checklist', PANEL.checklist, true), b('home', PANEL.home)]
+            actions: houseActions(checklist, items, b)
         };
     }
     const level = levelOf(type, sel.level) || { name: sel.level };

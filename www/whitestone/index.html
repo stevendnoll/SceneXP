@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=17" as="style">
+    <link rel="preload" href="css/experience.min.css?v=18" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -125,6 +125,7 @@
     <link rel="modulepreload" href="js/seal.min.js">
     <link rel="modulepreload" href="js/sync.min.js">
     <link rel="modulepreload" href="js/booking.min.js">
+    <link rel="modulepreload" href="js/schedule.min.js">
     <link rel="modulepreload" href="js/receipt.min.js">
     <link rel="modulepreload" href="js/zoned.min.js">
     <link rel="modulepreload" href="js/links.min.js">
@@ -145,7 +146,6 @@
     <link rel="modulepreload" href="js/host.min.js">
     <link rel="modulepreload" href="js/cast.min.js">
     <link rel="modulepreload" href="js/panel.min.js">
-    <link rel="modulepreload" href="js/schedule.min.js">
     <link rel="modulepreload" href="js/ics.min.js">
     <link rel="modulepreload" href="js/qr.min.js">
     <link rel="modulepreload" href="js/guards.min.js">
@@ -157,7 +157,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=17">
+    <link rel="stylesheet" href="css/experience.min.css?v=18">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -276,6 +276,13 @@
         <button id="hud-quote" class="hud-chip hud-quote" type="button" hidden>
             <span id="hud-quote-text"></span>
             <span class="hud-example">Example prices</span>
+        </button>
+        <!-- THE VISIT, once the checklist is published (PRD 8.6): when it
+             is, or that none is booked, and changes not sent yet. Opens the
+             receipt, where it can be changed. -->
+        <button id="hud-visit" class="hud-chip hud-visit" type="button" hidden>
+            <span id="hud-visit-text"></span>
+            <span id="hud-visit-note" class="hud-visit-note" hidden>Changes not sent</span>
         </button>
     </div>
 
@@ -482,7 +489,10 @@
     <!-- THE RECEIPT (receipt.js, PRD 13.1): the appointment with Add to
          calendar, the quote, the link for the cleaner with Copy and Share,
          the PIN, a QR code of the link, when it expires, and the private
-         edit link set apart. Filled by script. -->
+         edit link set apart. Filled by script. It is also where a visit is
+         changed afterward (PRD 10.4): changes sent, the time moved or
+         cancelled, the checklist unpublished, each shown only when the
+         change window allows it. -->
     <div id="receipt" class="card-overlay" hidden>
         <div id="receipt-panel" class="card-panel receipt-panel" role="dialog" aria-modal="true"
             aria-labelledby="receipt-title" tabindex="-1">
@@ -490,8 +500,18 @@
                 <h2 id="receipt-title" class="card-title">Your visit is booked</h2>
                 <button id="receipt-close" class="ws-btn ws-btn-small" type="button">Close</button>
             </div>
+            <div id="receipt-unsent" class="receipt-unsent" hidden>
+                <p>You have changes your cleaner has not seen yet.</p>
+                <button id="receipt-send" class="ws-btn ws-btn-small ws-btn-primary" type="button">Send my changes</button>
+            </div>
             <p id="receipt-when" class="receipt-when"></p>
-            <p><a id="receipt-calendar" class="ws-btn ws-btn-small" href="#" download>Add to calendar</a></p>
+            <div class="receipt-visit">
+                <a id="receipt-calendar" class="ws-btn ws-btn-small" href="#" download>Add to calendar</a>
+                <button id="receipt-reschedule" class="ws-btn ws-btn-small" type="button" hidden>Change the time</button>
+                <button id="receipt-cancel-visit" class="ws-btn ws-btn-small" type="button" hidden>Cancel my visit</button>
+                <button id="receipt-book" class="ws-btn ws-btn-small ws-btn-primary" type="button" hidden>Choose a time</button>
+            </div>
+            <p id="receipt-locked" class="form-note" hidden></p>
             <p id="receipt-quote" class="receipt-quote"></p>
             <p class="card-meta">You will never pay more than your quote without approving it first.</p>
             <div class="receipt-share">
@@ -524,6 +544,7 @@
             <p id="receipt-standin" class="form-note" hidden></p>
             <p id="receipt-status" class="sr-only" role="status" aria-live="polite"></p>
             <div class="card-actions">
+                <button id="receipt-unpublish" class="ws-btn ws-btn-small ws-btn-quiet receipt-unpublish" type="button" hidden>Unpublish this checklist</button>
                 <button id="receipt-done" class="ws-btn ws-btn-primary" type="button">Done</button>
             </div>
         </div>

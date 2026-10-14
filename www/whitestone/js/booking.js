@@ -65,18 +65,26 @@ export function finishOf(time, minutes) {
  * The month as the calendar draws it, weeks from Sunday: `{ title, weeks }`,
  * each cell `{ date, day, status, open, selected, label }` or null for the
  * days before the 1st and after the last. `days` are the API's
- * (`availability`), `selected` the chosen date.
+ * (`availability`), `selected` the chosen date. When a booked visit is
+ * moved: `until`, the last date it may move to (a quote is honored for 90
+ * days, PRD 10.3), and `current`, the day it is on now, which says so
+ * rather than "Fully booked" (the visit itself fills it).
  */
-export function calendarView(month, days, selected = null) {
+export function calendarView(month, days, selected = null, { until = null, current = null } = {}) {
     const byDate = new Map((days || []).map((d) => [d.date, d]));
     const first = `${month}-01`;
     const cells = Array.from({ length: WEEKDAYS.indexOf(weekdayOf(first)) }, () => null);
     for (let date = first; date.startsWith(month); date = addDays(date, 1)) {
-        const d = byDate.get(date) || { status: 'closed', times: [] };
+        const listed = byDate.get(date) || { status: 'closed', times: [] };
+        const d = until && date > until && listed.status === 'open' ? { status: 'beyond-quote', times: [] } : listed;
         const open = d.status === 'open' && (d.times || []).length > 0;
-        const why = open ? BOOKING.times((d.times || []).length) : (d.status === 'holiday' && d.holiday ? BOOKING.holiday(d.holiday) : DAY_STATUS[d.status] || DAY_STATUS.closed);
+        let status = open ? 'open' : d.status;
+        if (date === current && !open) status = 'yours';
+        const why = open ? BOOKING.times((d.times || []).length)
+            : status === 'yours' ? DAY_STATUS.yours
+                : (d.status === 'holiday' && d.holiday ? BOOKING.holiday(d.holiday) : DAY_STATUS[d.status] || DAY_STATUS.closed);
         cells.push({
-            date, day: Number(date.slice(8)), status: open ? 'open' : d.status, open, selected: date === selected,
+            date, day: Number(date.slice(8)), status, open, selected: date === selected,
             label: `${dayLabel(date)}, ${why}`
         });
     }
@@ -96,9 +104,10 @@ export function timesView(day, minutes, chosen = null) {
     }));
 }
 
-/** The first date in `days` that can be chosen, or null. */
-export function firstOpen(days) {
-    const d = (days || []).find((x) => x.status === 'open' && (x.times || []).length);
+/** The first date in `days` that can be chosen (on or before `until`, if
+ *  given), or null. */
+export function firstOpen(days, until = null) {
+    const d = (days || []).find((x) => x.status === 'open' && (x.times || []).length && !(until && x.date > until));
     return d ? d.date : null;
 }
 
@@ -107,7 +116,8 @@ export function firstOpen(days) {
 /**
  * Drive the #booking card. `on` holds month(by), day(date), time(time) and
  * confirm(). `show({ month, days, selected, time, minutes, summary, error,
- * busy, canPrev, canNext, loading })` draws it.
+ * busy, canPrev, canNext, loading, title, confirmLabel, until, current })`
+ * draws it.
  */
 export function createBooking({ on = {}, signal } = {}) {
     const byId = (id) => document.getElementById(id);
@@ -121,6 +131,9 @@ export function createBooking({ on = {}, signal } = {}) {
     let dayButtons = [];
 
     function show(v) {
+        // Choose a time, or Choose a new time when moving a booked visit.
+        const heading = byId('booking-title');
+        if (heading) heading.textContent = v.title || BOOKING.title;
         const title = byId('booking-month');
         if (title) title.textContent = monthLabel(v.month);
         const summary = byId('booking-summary');
@@ -131,7 +144,7 @@ export function createBooking({ on = {}, signal } = {}) {
         dayButtons = [];
         if (grid) {
             clear(grid);
-            const cal = calendarView(v.month, v.days, v.selected);
+            const cal = calendarView(v.month, v.days, v.selected, { until: v.until || null, current: v.current || null });
             for (const week of cal.weeks) {
                 const row = h('div', { className: 'booking-week' });
                 for (const cell of week) {
@@ -155,14 +168,14 @@ export function createBooking({ on = {}, signal } = {}) {
         }
         const status = byId('booking-status');
         if (status) {
-            status.textContent = v.loading ? BOOKING.loading : (!firstOpen(v.days) ? BOOKING.noneThisMonth : '');
+            status.textContent = v.loading ? BOOKING.loading : (!firstOpen(v.days, v.until || null) ? BOOKING.noneThisMonth : '');
             status.hidden = !status.textContent;
         }
-        const heading = byId('booking-day-title');
-        const day = (v.days || []).find((d) => d.date === v.selected) || null;
-        if (heading) {
-            heading.textContent = day ? BOOKING.startsOn(dayLabel(day.date)) : '';
-            heading.hidden = !day;
+        const dayTitle = byId('booking-day-title');
+        const day = (v.days || []).find((d) => d.date === v.selected && !(v.until && d.date > v.until)) || null;
+        if (dayTitle) {
+            dayTitle.textContent = day ? BOOKING.startsOn(dayLabel(day.date)) : '';
+            dayTitle.hidden = !day;
         }
         const list = byId('booking-times');
         if (list) {

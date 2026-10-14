@@ -729,12 +729,12 @@ describe('a return', () => {
     });
 
     test('by the edit link: its keys off the address bar at once, that checklist open, and Maya saying how', async () => {
-        const { emptyDoc, createChecklist, setPublication, setSettings } = await import('../www/whitestone/js/store.js');
+        const { emptyDoc, createChecklist, setPublication, setSettings, findChecklist, contentPrint } = await import('../www/whitestone/js/store.js');
         const at = new Date(STAMP);
         const pub = { id: 'A'.repeat(22), key: 'k'.repeat(43), ownerToken: 'o'.repeat(43), pin: '012345', at: STAMP, version: 1, expiresAt: STAMP };
         let doc = createChecklist(emptyDoc(CONFIG, at), { levels: ['main'] }, CONFIG, at, { id: 'home-other' }).doc;
         doc = createChecklist(doc, { levels: ['main'] }, CONFIG, at, { id: 'home-linked' }).doc;
-        doc = setPublication(doc, 'home-linked', { published: pub }, CONFIG, at).doc;
+        doc = setPublication(doc, 'home-linked', { published: { ...pub, sent: contentPrint(findChecklist(doc, 'home-linked')) } }, CONFIG, at).doc;
         doc = setSettings(doc, { activeId: 'home-other', guide: { scene: 'done', reviewed: true } }).doc;
         const replaced = [];
         dom.windowStub.history.replaceState = (_s, _t, url) => replaced.push(url);
@@ -745,21 +745,41 @@ describe('a return', () => {
         const main = await boot({ saved: doc });
         expect(replaced).toEqual(['/whitestone/']);
         expect(main.__test__.active().id).toBe('home-linked');
-        expect(line()).toBe(`${GUIDE.welcomeEditLink} ${GUIDE.homeEmpty('Our home')} ${GUIDE.returningLegend}`);
+        // Published with no visit booked (one canceled, say): that is said.
+        expect(line()).toBe(`${GUIDE.welcomeEditLink} ${GUIDE.homePublished('Our home')} ${GUIDE.returningLegend}`);
+        expect(picks().map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.seeLink, GUIDE.changeChecklist, GUIDE.illLook]);
     });
 
-    test('a booked visit: its day and time, and See my visit first', async () => {
-        const { emptyDoc, createChecklist, setPublication, setSettings } = await import('../www/whitestone/js/store.js');
+    /** A home booked for Friday at 9, its fingerprint as sent unless
+     *  `changed` (an edit since). */
+    async function bookedHome(changed = false) {
+        const { emptyDoc, createChecklist, updateChecklist, setPublication, setSettings, findChecklist, contentPrint } = await import('../www/whitestone/js/store.js');
         const at = new Date(STAMP);
         let doc = createChecklist(emptyDoc(CONFIG, at), { levels: ['main'] }, CONFIG, at, { id: 'home-mine' }).doc;
         doc = setPublication(doc, 'home-mine', {
-            published: { id: 'A'.repeat(22), key: 'k'.repeat(43), ownerToken: 'o'.repeat(43), pin: '012345', at: STAMP, version: 1, expiresAt: STAMP },
+            published: { id: 'A'.repeat(22), key: 'k'.repeat(43), ownerToken: 'o'.repeat(43), pin: '012345', at: STAMP, version: 1, expiresAt: STAMP, sent: contentPrint(findChecklist(doc, 'home-mine')) },
             booking: { date: '2026-10-16', time: '09:00', minutes: 120, start: '2026-10-16T09:00:00-07:00', end: '2026-10-16T11:00:00-07:00' }
         }, CONFIG, at).doc;
-        doc = setSettings(doc, { activeId: 'home-mine', guide: { scene: 'done', reviewed: true } }).doc;
-        await boot({ saved: doc });
+        if (changed) doc = updateChecklist(doc, 'home-mine', { title: 'Maple Street' }, CONFIG, at).doc;
+        return setSettings(doc, { activeId: 'home-mine', guide: { scene: 'done', reviewed: true } }).doc;
+    }
+
+    test('a booked visit: its day and time, and See my visit first', async () => {
+        await boot({ saved: await bookedHome() });
         expect(line()).toBe(`${GUIDE.welcomeBack} ${GUIDE.homeBooked('Friday, October 16', '9:00 am')} ${GUIDE.returningLegend}`);
         expect(picks().map((b) => b.textContent)).toEqual([GUIDE.seeVisit, GUIDE.changeChecklist, GUIDE.illLook]);
+    });
+
+    test('a booked visit changed since it was sent: said, and Send my changes first', async () => {
+        const main = await boot({ saved: await bookedHome(true) });
+        expect(line()).toBe(`${GUIDE.welcomeBack} ${GUIDE.homeBooked('Friday, October 16', '9:00 am')} ${GUIDE.homeUnsent} ${GUIDE.returningLegend}`);
+        expect(picks().map((b) => b.textContent)).toEqual([GUIDE.sendChanges, GUIDE.seeVisit, GUIDE.changeChecklist, GUIDE.illLook]);
+        // The visit chip says when, and that changes wait.
+        const chip = dom.el('hud-visit');
+        expect(chip.hidden).toBe(false);
+        expect(dom.el('hud-visit-text').textContent).toBe('Your visit: Friday, October 16, 9:00 am');
+        expect(dom.el('hud-visit-note').hidden).toBe(false);
+        expect(main.__test__.active().title).toBe('Maple Street');
     });
 });
 

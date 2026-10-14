@@ -63,7 +63,10 @@ export const BOOKING_ERRORS = Object.freeze({
     denied: 'This checklist could not be updated. Please try again.',
     server: 'Something went wrong on our side. Please try again in a moment.',
     unpriced: 'Please add a task, or fix the ones the menu no longer offers, before choosing a time.',
-    sample: 'The example home cannot be booked. Build your own to choose a time.'
+    sample: 'The example home cannot be booked. Build your own to choose a time.',
+    // Sending changes and moving a visit (sync.js republish, PRD 10.4).
+    'no-longer-fits': 'With your changes, your visit no longer fits at its booked time. Please choose a new time, and your changes are sent with it.',
+    'not-published': 'This checklist is not published yet. Please choose a time to publish it.'
 });
 
 /** The Choose a time card (booking.js, PRD 10.3). */
@@ -78,6 +81,12 @@ export const BOOKING = Object.freeze({
     until: (time) => `until about ${time}`,
     confirm: 'Book and publish',
     working: 'Booking your visit…',
+    /** Moving a booked visit, or booking again after a cancel. */
+    newTitle: 'Choose a new time',
+    move: 'Move my visit',
+    moving: 'Moving your visit…',
+    bookAgain: 'Book my visit',
+    nowAt: (when) => `Your visit is booked for ${when}. Choose another day or time to move it.`,
     prev: 'Previous month',
     next: 'Next month',
     nextOpenings: 'Next openings',
@@ -112,7 +121,47 @@ export const RECEIPT = Object.freeze({
     newPin: 'Set a new PIN',
     newPinTitle: 'Set a new PIN?',
     newPinDetail: 'The old PIN stops working, so your cleaner will need the new one.',
-    newPinDone: 'Your new PIN is on the receipt.'
+    newPinDone: 'Your new PIN is on the receipt.',
+
+    /** Published, with no visit booked (after a cancel). */
+    titlePublished: 'Your checklist is published',
+    noVisit: 'No visit is booked. Choose a time whenever you are ready.',
+    /** Changing things afterward (PRD 10.4). */
+    unsent: 'You have changes your cleaner has not seen yet.',
+    send: 'Send my changes',
+    reschedule: 'Change the time',
+    cancelVisit: 'Cancel my visit',
+    book: 'Choose a time',
+    locked: (hours) => `Your visit is less than ${hours} hours away, so it can no longer be changed online.`,
+    unpublish: 'Unpublish this checklist'
+});
+
+/** Sending changes, moving, cancelling and unpublishing (PLANNING 10.2, PRD
+ *  10.4 and 13.2): the confirmations and what is said after. */
+export const CHANGES = Object.freeze({
+    priceTitle: 'Your quote changes',
+    priceDetail: (from, to) => `With your changes, your quote goes from ${from} to ${to}. Your link and PIN stay the same.`,
+    priceConfirm: 'Send my changes',
+    sending: 'Sending your changes…',
+    sent: 'Your changes are sent. Your link and PIN stay the same.',
+    nothingToSend: 'Your cleaner already has everything. There is nothing new to send.',
+    tooLateLonger: (hours) => `Your visit is less than ${hours} hours away, so changes that make it longer can no longer be sent online.`,
+    moved: (when) => `Your visit is moved to ${when}.`,
+    cancelTitle: 'Cancel your visit?',
+    cancelDetail: (when) => `Your visit on ${when} is canceled and the time is given back. Your checklist stays published, so you can choose a new time.`,
+    cancelConfirm: 'Cancel my visit',
+    keep: 'Keep it',
+    notNow: 'Not now',
+    cancelled: 'Your visit is canceled. Your checklist is still published, ready for a new time.',
+    unpublishTitle: 'Unpublish this checklist?',
+    unpublishDetail: 'The link and PIN stop working now, and the copy kept for your cleaner is deleted. Your checklist stays here as a draft.',
+    unpublishDetailBooked: (when) => `The link and PIN stop working now, the copy kept for your cleaner is deleted, and your visit on ${when} is canceled. Your checklist stays here as a draft.`,
+    unpublishConfirm: 'Unpublish',
+    unpublished: (title) => `${title} is unpublished. It is a draft on this device again.`,
+    /** Removing a published checklist from My checklists unpublishes it. */
+    removePublished: 'It goes from this browser, and is unpublished first, so the link and PIN stop working.',
+    removeBooked: (when) => `It goes from this browser, and is unpublished first, so the link and PIN stop working and your visit on ${when} is canceled.`,
+    removeLocked: (hours) => `This checklist has a visit less than ${hours} hours away, so it cannot be removed until after the visit.`
 });
 
 /** schedule.js `monthView` statuses, as the calendar labels a day. */
@@ -122,7 +171,9 @@ export const DAY_STATUS = Object.freeze({
     closed: 'Closed',
     holiday: 'Closed for a holiday',
     'too-soon': 'Too soon to book',
-    'too-far': 'Not yet bookable'
+    'too-far': 'Not yet bookable',
+    'beyond-quote': 'After your quote\u2019s 90 days',
+    yours: 'Your visit is on this day'
 });
 
 /** store.js refusals. */
@@ -182,6 +233,9 @@ export const UI = Object.freeze({
     remove: 'Remove',
     removeTitle: (title) => `Remove ${title}?`,
     removeDetail: 'It goes from this browser. You can bring it back with Undo until you leave the page.',
+    published: 'Published',
+    booked: (day) => `Visit booked for ${day}`,
+    withUnsent: (status) => `${status}, changes not sent`,
     notSaving: 'Not saving',
     otherTab: 'Your checklists were updated in another tab.',
     labels: Object.freeze({
@@ -257,6 +311,12 @@ export const UI = Object.freeze({
     photoRemoved: 'Photo removed.',
     removePhoto: (n) => `Remove photo ${n}`,
     photoAlt: (task, n) => `Photo ${n} for ${task}`,
+
+    // The booked visit, under the quote (PRD 8.6)
+    visitChip: (day, time) => `Your visit: ${day}, ${time}`,
+    visitChipSpoken: (day, time) => `Your visit, ${day} at ${time}. Show the link, the PIN and the ways to change it.`,
+    visitChipNone: 'Published, no visit booked',
+    visitChipUnsent: 'Changes not sent',
 
     // The quote (PRD 8.5)
     quoteChip: (money, time) => `Your quote: ${money}, ${time}`,
@@ -399,6 +459,10 @@ export const GUIDE = Object.freeze({
     homeDraft: (title, rooms, tasks, money) => `${title} has ${rooms} and ${tasks}${money ? `, ${money} so far` : ''}.`,
     homeEmpty: (title) => `${title} has no rooms yet.`,
     homeBooked: (day, time) => `Your visit is booked for ${day} at ${time}.`,
+    homePublished: (title) => `${title} is published, with no visit booked yet.`,
+    homeUnsent: 'You have changes your cleaner has not seen yet.',
+    sendChanges: 'Send my changes',
+    seeLink: 'See my link and PIN',
     returningLegend: 'What would you like to do?',
     seeVisit: 'See my visit',
     editRooms: 'Add or change rooms',
@@ -456,6 +520,8 @@ export const PANEL = Object.freeze({
     home: 'Your home',
     book: 'Choose a time',
     visit: 'Your visit',
+    link: 'Link and PIN',
+    send: 'Send my changes',
     open: 'Rooms',
     openLabel: 'Your home, floor by floor: its floors, rooms and tasks',
     starred: (name) => `Starred ${name}. We start there.`,
@@ -473,6 +539,10 @@ export const HELP = Object.freeze({
     resetTitle: 'Start over from the beginning?',
     resetDetail: 'This clears your checklists, photos and answers from this browser, and Maya will greet you as on your first visit. It cannot be undone.',
     resetConfirm: 'Clear and start over',
+    /** With checklists published from this browser: they are unpublished
+     *  first (Steve, 2026-10-14). */
+    resetDetailPublished: 'This unpublishes what you published, so its links and PINs stop working and any booked visit is canceled. Then it clears your checklists, photos and answers from this browser, and Maya will greet you as on your first visit. It cannot be undone.',
+    resetLocked: (hours) => `You have a visit less than ${hours} hours away, so Start over has to wait until after it.`,
     resetDone: 'Everything is cleared. You are back at the beginning.',
     checklist: 'Your checklist',
     menu: 'Service menu',
@@ -519,6 +589,6 @@ export function allCopy() {
         else if (typeof value === 'function') out.push({ where, text: value(12) });
         else if (value && typeof value === 'object') Object.entries(value).forEach(([k, v]) => walk(v, `${where}.${k}`));
     };
-    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, BOOKING, RECEIPT, DAY_STATUS, STORE, FREQUENCIES, UI, MODEL_LINES, GUIDE, HELP, PANEL, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
+    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, BOOKING, RECEIPT, CHANGES, DAY_STATUS, STORE, FREQUENCIES, UI, MODEL_LINES, GUIDE, HELP, PANEL, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
     return out;
 }

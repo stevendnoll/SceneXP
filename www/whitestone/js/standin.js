@@ -239,6 +239,10 @@ export function createStandin({
             if (method === 'PUT') return owner ? putChecklist(m, bytes) : denied();
             if (method === 'DELETE') {
                 if (!owner) return denied();
+                // Unpublishing cancels the visit, so it keeps the
+                // cancel window's rule (PRD 10.4).
+                const mine = (await bookings()).find((b) => b.id === id);
+                if (mine && !canChange(schedule, mine, now())) return fail(409, 'too-late');
                 await forget(id);
                 return answer(200, { deleted: true });
             }

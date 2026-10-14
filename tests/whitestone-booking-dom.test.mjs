@@ -81,7 +81,56 @@ describe('the Choose a time card (booking.js)', () => {
     });
 });
 
+describe('moving a visit on the Choose a time card (booking.js)', () => {
+    test('its own title and button, its day marked, days past the quote closed', async () => {
+        const { createBooking } = await import('../www/whitestone/js/booking.js');
+        const b = createBooking();
+        const days = [...DAYS, { date: '2026-10-19', status: 'open', times: ['09:00'] }];
+        b.show({ month: '2026-10', days, selected: '2026-10-19', minutes: 60, title: BOOKING.newTitle, confirmLabel: BOOKING.move, until: '2026-10-15', current: '2026-10-16' });
+        expect(dom.el('booking-title').textContent).toBe(BOOKING.newTitle);
+        expect(dom.el('booking-confirm').textContent).toBe(BOOKING.move);
+        const cells = dom.el('booking-days').children.flatMap((r) => r.children);
+        const day = (date) => cells.find((c) => c.id === `booking-day-${date}`);
+        expect(day('2026-10-16').getAttribute('aria-label')).toBe('Friday, October 16, Your visit is on this day');
+        expect(day('2026-10-19').disabled).toBe(true);
+        // A chosen day past the quote shows no times, and cannot be confirmed.
+        expect(dom.el('booking-times').hidden).toBe(true);
+        expect(dom.el('booking-confirm').disabled).toBe(true);
+        b.show({ month: '2026-10', days, selected: null, minutes: 60 });
+        expect(dom.el('booking-title').textContent).toBe(BOOKING.title);
+    });
+});
+
 describe('the receipt (receipt.js)', () => {
+    test('the ways to change the visit, each only when it can be used', async () => {
+        const { createReceipt } = await import('../www/whitestone/js/receipt.js');
+        const on = { send: jest.fn(), reschedule: jest.fn(), cancelVisit: jest.fn(), book: jest.fn(), unpublish: jest.fn() };
+        const r = createReceipt({ on });
+        const base = {
+            when: 'Thursday', quote: '$120', link: 'http://localhost:8000/whitestone/tasks/?c=x', edit: 'e', pin: '012345', expires: '',
+            ics: 'BEGIN:VCALENDAR', icsName: 'a.ics', standin: false, title: RECEIPT.title, booked: true, unsent: false, changeable: true, locked: ''
+        };
+        const hidden = (ids) => ids.map((id) => dom.el(id).hidden);
+        const ids = ['receipt-unsent', 'receipt-calendar', 'receipt-reschedule', 'receipt-cancel-visit', 'receipt-book', 'receipt-locked', 'receipt-unpublish'];
+        r.show(base);
+        expect(dom.el('receipt-title').textContent).toBe(RECEIPT.title);
+        expect(hidden(ids)).toEqual([true, false, false, false, true, true, false]);
+        r.show({ ...base, unsent: true });
+        expect(hidden(ids)).toEqual([false, false, false, false, true, true, false]);
+        // Inside the change window.
+        r.show({ ...base, changeable: false, locked: RECEIPT.locked(24) });
+        expect(hidden(ids)).toEqual([true, false, true, true, true, false, true]);
+        expect(dom.el('receipt-locked').textContent).toBe(RECEIPT.locked(24));
+        // Canceled: published, no visit.
+        r.show({ ...base, booked: false, title: RECEIPT.titlePublished, when: RECEIPT.noVisit, ics: '', icsName: '' });
+        expect(hidden(ids)).toEqual([true, true, true, true, false, true, false]);
+        expect(dom.el('receipt-title').textContent).toBe(RECEIPT.titlePublished);
+        for (const [id, fn] of [['receipt-send', 'send'], ['receipt-reschedule', 'reschedule'], ['receipt-cancel-visit', 'cancelVisit'], ['receipt-book', 'book'], ['receipt-unpublish', 'unpublish']]) {
+            fire(dom.el(id), 'click');
+            expect(on[fn]).toHaveBeenCalledTimes(1);
+        }
+    });
+
     const VIEW = {
         when: 'Thursday, October 15, 9:30 am to about 11:00 am', quote: '$120 for about 1 hr 30 min',
         link: 'http://localhost:8000/whitestone/tasks/?c=AbCdEfGhIjKlMnOpQrStUv#k=0123456789abcdefghijklmnopqrstuvwxyzABCDEFG',

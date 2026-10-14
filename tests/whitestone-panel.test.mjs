@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
-import { PANEL, UI, withArticle } from '../www/whitestone/js/copy.js';
+import { PANEL, UI, BOOKING, BOOKING_ERRORS, RECEIPT, CHANGES, DAY_STATUS, HELP, withArticle } from '../www/whitestone/js/copy.js';
 import { selectFromHit, stepOut, reconcile, suggestions, panelView, CHIPS, COMMON, homeSuggestions } from '../www/whitestone/js/panel.js';
 import { withExample } from '../www/whitestone/js/samples.js';
 import { emptyDoc } from '../www/whitestone/js/store.js';
@@ -174,6 +174,8 @@ describe('what the panel says (pure)', () => {
 // ---- Driven through the page ------------------------------------------------------------
 
 let dom;
+/** The real setImmediate, kept before the fake timers stand in for it. */
+const REAL_IMMEDIATE = globalThis.setImmediate;
 
 beforeEach(() => {
     jest.resetModules();
@@ -642,6 +644,211 @@ describe('choosing a time and publishing, on the page', () => {
         expect(action('book')).toBeUndefined();
         await main.__test__.openBooking();
         expect(dom.el('booking').hidden).toBe(true);
+    });
+});
+
+// ---- Changing things after publishing (M3 3d) ------------------------------------------
+
+describe('changing things after publishing, on the page', () => {
+    const action = (id) => dom.el('panel-actions').children.find((b) => b.id === `panel-${id}`);
+    const dayButton = (date) => dom.el('booking-days').children.flatMap((row) => row.children).find((b) => b.id === `booking-day-${date}`);
+    const confirmButton = () => dom.el('confirm-actions').children[1];
+    /** Wait for an answer that crosses the stand-in (its PIN is stretched
+     *  on a real thread), turning the real event loop while the clock stays
+     *  pinned. */
+    async function until(test) {
+        for (let i = 0; i < 2000 && !test(); i++) await new Promise((r) => REAL_IMMEDIATE(r));
+        return test();
+    }
+
+    async function bookedHome() {
+        jest.setSystemTime(new Date('2026-10-14T16:00:00Z'));
+        const main = await bootHome();
+        main.__test__.tapModel('main');
+        fire(chip('kitchen'), 'click');
+        await main.__test__.openBooking();
+        expect((await main.__test__.confirmBooking()).ok).toBe(true);
+        fire(dom.el('receipt-done'), 'click');
+        return main;
+    }
+
+    test('an edit is shown as not sent, and Send my changes sends it, with nothing to ask', async () => {
+        const main = await bookedHome();
+        expect(dom.el('hud-visit').hidden).toBe(false);
+        expect(dom.el('hud-visit-text').textContent).toBe('Your visit: Thursday, October 15, 9:30 am');
+        expect(dom.el('hud-visit-note').hidden).toBe(true);
+        const stove = main.__test__.active().items.find((i) => i.task === 'stovetop');
+        main.__test__.toggleStar(stove.id);
+        expect(dom.el('hud-visit-note').hidden).toBe(false);
+        expect(dom.el('hud-visit').getAttribute('aria-label')).toMatch(/Changes not sent\.$/);
+        fire(dom.el('hud-rooms'), 'click');
+        expect(action('send').textContent).toBe(PANEL.send);
+        fire(action('send'), 'click');
+        // A star does not change the price, so nothing is asked.
+        expect(await until(() => dom.el('hud-visit-note').hidden)).toBe(true);
+        expect(dom.el('confirm').hidden).toBe(true);
+        expect(main.__test__.active().published.version).toBe(2);
+        expect(dom.el('toast-text').textContent).toBe(CHANGES.sent);
+    });
+
+    test('a change of price is asked about first, and Not now sends nothing', async () => {
+        const main = await bookedHome();
+        // Past the visit minimum, so the total moves.
+        for (const area of ['living', 'dining', 'office']) {
+            main.__test__.tapModel('main');
+            fire(chip(area), 'click');
+        }
+        const before = main.__test__.active().quote.totalCents;
+        main.__test__.sendChanges();
+        expect(await until(() => !dom.el('confirm').hidden)).toBe(true);
+        expect(dom.el('confirm-title').textContent).toBe(CHANGES.priceTitle);
+        expect(dom.el('confirm-detail').textContent).toMatch(/^With your changes, your quote goes from \$\d+ to \$\d+\. Your link and PIN stay the same\.$/);
+        fire(dom.el('confirm-actions').children[0], 'click');
+        expect(main.__test__.active().quote.totalCents).toBe(before);
+        main.__test__.sendChanges();
+        await until(() => !dom.el('confirm').hidden);
+        fire(confirmButton(), 'click');
+        expect(await until(() => main.__test__.active().quote.totalCents !== before)).toBe(true);
+        expect(main.__test__.active().booking.minutes).toBeGreaterThan(60);
+    });
+
+    test('from the receipt: Change the time opens the calendar on the visit\'s own day, and moves it', async () => {
+        const main = await bookedHome();
+        fire(dom.el('hud-visit'), 'click');
+        expect(await until(() => !dom.el('receipt').hidden)).toBe(true);
+        expect(dom.el('receipt-reschedule').hidden).toBe(false);
+        expect(dom.el('receipt-cancel-visit').hidden).toBe(false);
+        expect(dom.el('receipt-book').hidden).toBe(true);
+        expect(dom.el('receipt-unsent').hidden).toBe(true);
+        fire(dom.el('receipt-reschedule'), 'click');
+        expect(await until(() => !dom.el('booking').hidden && !main.__test__.ui.booking.loading)).toBe(true);
+        expect(dom.el('receipt').hidden).toBe(true);
+        expect(dom.el('booking-title').textContent).toBe(BOOKING.newTitle);
+        expect(dom.el('booking-confirm').textContent).toBe(BOOKING.move);
+        expect(dom.el('booking-summary').textContent).toMatch(/^Your visit is booked for Thursday, October 15 at 9:30 am\. /);
+        expect(dayButton('2026-10-15').getAttribute('aria-label')).toBe('Thursday, October 15, Your visit is on this day');
+        fire(dayButton('2026-10-16'), 'click');
+        const moved = await main.__test__.confirmBooking();
+        expect(moved.ok).toBe(true);
+        expect(main.__test__.active().booking.date).toBe('2026-10-16');
+        expect(dom.el('receipt').hidden).toBe(false);
+        expect(dom.el('receipt-when').textContent).toMatch(/^Friday, October 16/);
+    });
+
+    test('a move stays inside the quote\'s 90 days', async () => {
+        const main = await bookedHome();
+        const { setPublication } = await import('../www/whitestone/js/store.js');
+        const c = main.__test__.active();
+        // Quoted on August 1: honored through October 30.
+        main.__test__.mutate((d) => setPublication(d, c.id, { quote: { ...c.quote, lockedAt: '2026-08-01T16:00:00.000Z' } }, CONFIG, new Date()));
+        await main.__test__.openBooking();
+        expect(dayButton('2026-10-30').disabled).toBe(false);
+        expect(dayButton('2026-10-31').disabled).toBe(true);
+        expect(dayButton('2026-10-31').getAttribute('aria-label')).toBe(`Saturday, October 31, ${DAY_STATUS['beyond-quote']}`);
+        expect(dom.el('booking-next').disabled).toBe(false);
+    });
+
+    test('from the receipt: Cancel my visit, asked first, leaves it published and ready for a new time', async () => {
+        const main = await bookedHome();
+        await main.__test__.openReceipt();
+        fire(dom.el('receipt-cancel-visit'), 'click');
+        expect(dom.el('confirm-title').textContent).toBe(CHANGES.cancelTitle);
+        expect(dom.el('confirm-detail').textContent).toBe(CHANGES.cancelDetail('Thursday, October 15 at 9:30 am'));
+        fire(confirmButton(), 'click');
+        // Canceled, then the cleaner's copy sent again without the time.
+        expect(await until(() => dom.el('receipt-title').textContent === RECEIPT.titlePublished)).toBe(true);
+        expect(main.__test__.active().booking).toBeNull();
+        expect(main.__test__.active().published.version).toBe(2);
+        expect(dom.el('receipt').hidden).toBe(false);
+        expect(dom.el('receipt-when').textContent).toBe(RECEIPT.noVisit);
+        expect(dom.el('receipt-book').hidden).toBe(false);
+        expect(dom.el('receipt-calendar').hidden).toBe(true);
+        expect(dom.el('hud-visit-text').textContent).toBe(UI.visitChipNone);
+        fire(dom.el('receipt-done'), 'click');
+        fire(dom.el('hud-rooms'), 'click');
+        expect(action('book').textContent).toBe(PANEL.book);
+        expect(action('visit').textContent).toBe(PANEL.link);
+    });
+
+    test('from the receipt: Unpublish, asked first, makes it a draft again', async () => {
+        const main = await bookedHome();
+        await main.__test__.openReceipt();
+        fire(dom.el('receipt-unpublish'), 'click');
+        expect(dom.el('confirm-detail').textContent).toBe(CHANGES.unpublishDetailBooked('Thursday, October 15 at 9:30 am'));
+        fire(confirmButton(), 'click');
+        expect(await until(() => main.__test__.active().published === null)).toBe(true);
+        expect(dom.el('receipt').hidden).toBe(true);
+        expect(dom.el('hud-visit').hidden).toBe(true);
+        expect(main.__test__.active().booking).toBeNull();
+    });
+
+    test('inside the change window: the receipt says why, and nothing offers a change', async () => {
+        const main = await bookedHome();
+        // Thursday at 9:30 am is under a day away by Wednesday at 10.
+        jest.setSystemTime(new Date('2026-10-14T17:00:00Z'));
+        await main.__test__.openReceipt();
+        expect(dom.el('receipt-locked').textContent).toBe(RECEIPT.locked(24));
+        for (const id of ['receipt-reschedule', 'receipt-cancel-visit', 'receipt-unpublish']) expect(dom.el(id).hidden).toBe(true);
+        expect(await main.__test__.openBooking()).toBeNull();
+        // Nor can it be removed until after the visit.
+        await main.__test__.remove(main.__test__.active().id);
+        expect(dom.el('confirm').hidden).toBe(true);
+        expect(main.__test__.active()).not.toBeNull();
+    });
+
+    test('Start over unpublishes first, a removed checklist\'s publication included', async () => {
+        const main = await bookedHome();
+        const c = main.__test__.active();
+        const { api } = await main.__test__.connect();
+        await main.__test__.confirmStartOver();
+        expect(dom.el('confirm-detail').textContent).toBe(HELP.resetDetailPublished);
+        fire(confirmButton(), 'click');
+        expect(await until(() => main.__test__.state.doc.checklists.length === 0)).toBe(true);
+        expect((await api.getChecklist(c.published.id, c.published.ownerToken)).error).toBe('denied');
+        expect((await api.availability('2026-10', 60)).data.days.find((d) => d.date === '2026-10-15').times).toContain('09:30');
+        // Removed here before removing unpublished (an older build): still found.
+        const again = await bookedHome();
+        const gone = again.__test__.active();
+        const { api: api2 } = await again.__test__.connect();
+        again.__test__.state.doc = { ...again.__test__.state.doc, checklists: [{ ...gone, deletedAt: new Date().toISOString() }] };
+        await again.__test__.confirmStartOver();
+        fire(confirmButton(), 'click');
+        expect(await until(() => again.__test__.state.doc.checklists.length === 0)).toBe(true);
+        expect((await api2.getChecklist(gone.published.id, gone.published.ownerToken)).error).toBe('denied');
+    });
+
+    test('Start over waits for a visit inside the change window, and clears nothing when it cannot unpublish', async () => {
+        const main = await bookedHome();
+        jest.setSystemTime(new Date('2026-10-14T17:00:00Z'));
+        await main.__test__.confirmStartOver();
+        expect(dom.el('confirm').hidden).toBe(true);
+        expect(dom.el('toast-text').textContent).toBe(HELP.resetLocked(24));
+        expect(main.__test__.state.doc.checklists).toHaveLength(1);
+        // Offline: said, and nothing cleared.
+        jest.setSystemTime(new Date('2026-10-14T16:00:00Z'));
+        const svc = await main.__test__.connect();
+        const real = svc.api.deleteChecklist;
+        svc.api.deleteChecklist = async () => ({ ok: false, status: 0, error: 'offline' });
+        try {
+            await main.__test__.confirmStartOver();
+            fire(confirmButton(), 'click');
+            expect(await until(() => dom.el('toast-text').textContent === BOOKING_ERRORS.offline)).toBe(true);
+            expect(main.__test__.state.doc.checklists).toHaveLength(1);
+            expect(main.__test__.active().published).not.toBeNull();
+        } finally {
+            svc.api.deleteChecklist = real;
+        }
+    });
+
+    test('removing a published checklist unpublishes it first', async () => {
+        const main = await bookedHome();
+        const c = main.__test__.active();
+        const { api } = await main.__test__.connect();
+        await main.__test__.remove(c.id);
+        expect(dom.el('confirm-detail').textContent).toBe(CHANGES.removeBooked('Thursday, October 15 at 9:30 am'));
+        fire(confirmButton(), 'click');
+        expect(await until(() => main.__test__.active() === null)).toBe(true);
+        expect((await api.getChecklist(c.published.id, c.published.ownerToken)).error).toBe('denied');
     });
 });
 

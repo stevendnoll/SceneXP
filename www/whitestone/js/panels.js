@@ -13,7 +13,8 @@
 
 import { h, clear, button } from './cards.min.js';
 import { UI } from './copy.min.js';
-import { isLive, liveRooms, liveItems, itemsIn } from './store.min.js';
+import { isLive, liveRooms, liveItems, itemsIn, hasUnsent } from './store.min.js';
+import { dayLabel } from './booking.min.js';
 import { quoteChecklist, priceItem, priceChoice, formatMoney, spokenMoney, formatMinutes } from './pricing.min.js';
 import { taskOf, optionOf, tasksFor, optionsFor } from './sheet.min.js';
 import { levelOf, areaOf, roomName, serviceType, bathAllows } from './taxonomy.min.js';
@@ -45,6 +46,17 @@ export function checklistSummary(checklist, sheet) {
     return { text: parts.join(', ') };
 }
 
+/** Where a checklist stands, for My checklists (PRD 8.6): the example, a
+ *  draft, published, or its booked visit, and whether changes wait to be
+ *  sent. */
+export function checklistStatus(checklist) {
+    if (checklist.sample) return UI.example;
+    const pub = checklist.published;
+    if (!pub || !pub.at) return UI.draft;
+    const status = checklist.booking ? UI.booked(dayLabel(checklist.booking.date)) : UI.published;
+    return hasUnsent(checklist) ? UI.withUnsent(status) : status;
+}
+
 /**
  * My checklists: every checklist in this browser, with Open, Duplicate and
  * Remove. `on` holds open(id), duplicate(id) and remove(id).
@@ -65,7 +77,7 @@ export function renderMyChecklists({ doc, sheet, activeId, on }) {
         list.appendChild(h('li', { className: current ? 'my-row is-current' : 'my-row' }, [
             h('div', { className: 'my-text' }, [
                 h('span', { id: titleId, className: 'my-title', text: c.title }),
-                h('span', { className: 'my-status', text: c.sample ? UI.example : UI.draft }),
+                h('span', { className: 'my-status', text: checklistStatus(c) }),
                 h('span', { className: 'my-summary', text: summary.text })
             ]),
             h('div', { className: 'my-actions' }, [

@@ -207,7 +207,10 @@ describe('publishing (sync.js)', () => {
 describe('the store keeps it (store.js)', () => {
     test('a publication and a booking read back, and anything malformed is dropped', () => {
         const good = { id: 'A'.repeat(22), key: 'k'.repeat(43), ownerToken: 'o'.repeat(43), pin: '012345', at: NOW.toISOString(), version: 2, expiresAt: NOW.toISOString(), photos: ['photo-aaaaaaaaaaaaaaaa', '../x'] };
-        expect(normalizePublished(good)).toEqual({ ...good, photos: ['photo-aaaaaaaaaaaaaaaa'] });
+        expect(normalizePublished(good)).toEqual({ ...good, photos: ['photo-aaaaaaaaaaaaaaaa'], sent: null });
+        // The fingerprint of what was sent is kept, and anything else is not one.
+        expect(normalizePublished({ ...good, sent: 'k3j9x0a' }).sent).toBe('k3j9x0a');
+        for (const sent of [undefined, 'Not-One', 12345, 'x'.repeat(17)]) expect(normalizePublished({ ...good, sent }).sent).toBeNull();
         for (const bad of [{ ...good, key: 'short' }, { ...good, id: 'x' }, { ...good, ownerToken: null }, null]) expect(normalizePublished(bad)).toBeNull();
         // A PIN this device does not know (opened by its edit link) is null, the keys kept.
         expect(normalizePublished({ ...good, pin: '12345' })).toMatchObject({ id: good.id, pin: null });

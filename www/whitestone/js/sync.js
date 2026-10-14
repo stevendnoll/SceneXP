@@ -18,14 +18,21 @@
  * of it sealed with the key (seal.js), which stays on this device and in the
  * share link's fragment.
  *
- * `publish` takes everything it touches as arguments (the API, the sealer,
- * the photo store, the sheet), so the suite runs it against the stand-in in
- * memory.
+ * AFTERWARD (PLANNING 10.2, PRD 10.4): `republish` sends the changes made
+ * since (re-quoted, the booking's minutes kept in step, new photos sent and
+ * removed ones deleted) and moves the visit to a new time when given one;
+ * `cancelVisit` gives the time back and keeps the checklist published;
+ * `unpublish` deletes the server's copy. The link and the PIN never change.
+ *
+ * Every function takes everything it touches as arguments (the API, the
+ * sealer, the photo store, the sheet), so the suite runs it against the
+ * stand-in in memory.
  */
 
 import { quoteChecklist, lockQuote } from './pricing.min.js';
 import { contextFor } from './seal.min.js';
-import { liveRooms, liveItems } from './store.min.js';
+import { liveItems, publishedContent, contentPrint, hasUnsent } from './store.min.js';
+import { visitMinutes } from './booking.min.js';
 
 export const PUBLISHED_FORMAT = 1;
 
@@ -42,21 +49,62 @@ export function publishedForm(checklist, quote) {
     return {
         format: PUBLISHED_FORMAT,
         id: checklist.published ? checklist.published.id : null,
-        serviceType: checklist.serviceType,
-        title: checklist.title,
-        residence: checklist.residence || null,
-        levels: checklist.levels,
-        visitFrequency: checklist.visitFrequency,
-        household: checklist.household,
-        preferences: checklist.preferences,
-        rooms: liveRooms(checklist).map((r) => ({ id: r.id, level: r.level, area: r.area, bath: r.bath || null, label: r.label })),
-        items: liveItems(checklist).map((i) => ({
-            id: i.id, roomId: i.roomId, task: i.task, options: i.options, size: i.size, quantity: i.quantity,
-            important: i.important, notes: i.notes, avoid: i.avoid, products: i.products, photos: i.photos, order: i.order
-        })),
+        ...publishedContent(checklist),
         quote,
         booking: checklist.booking || null
     };
+}
+
+/** The API's answers that say nothing about the time itself: the request
+ *  never arrived, or was refused for who sent it. */
+const NOT_ABOUT_TIME = new Set(['offline', 'denied', 'server', 'too-late', 'no-booking']);
+const notAboutTime = (error) => NOT_ABOUT_TIME.has(error) || /^http-/.test(String(error));
+
+/**
+ * Send every photo the checklist shows that the server does not have (with
+ * its thumbnail), then delete those it no longer shows, recording each, so
+ * a send that stops part way resumes. Resolves to `{ ok, error, checklist }`.
+ */
+async function sendPhotos({ checklist, api, sealer, photos, key, record }) {
+    let c = checklist;
+    const pub = () => c.published;
+    const wanted = photoIdsOf(c);
+    for (const photoId of wanted) {
+        if (pub().photos.includes(photoId)) continue;
+        for (const [kind, size] of [['photo', 'full'], ['thumb', 'thumb']]) {
+            const blob = await photos.get(photoId, size);
+            // A photo gone from this device cannot be sent; the task keeps
+            // its words.
+            if (!blob) continue;
+            const sealed = await sealer.seal(key, new Uint8Array(await blob.arrayBuffer()), contextFor(pub().id, kind, photoId));
+            const put = kind === 'photo'
+                ? await api.putPhoto(pub().id, pub().ownerToken, photoId, sealed)
+                : await api.putThumb(pub().id, pub().ownerToken, photoId, sealed);
+            if (!put.ok) return { ok: false, error: put.error, checklist: c };
+        }
+        c = await record({ published: { ...pub(), photos: [...pub().photos, photoId] } });
+    }
+    for (const photoId of pub().photos.filter((p) => !wanted.includes(p))) {
+        const gone = await api.deletePhoto(pub().id, pub().ownerToken, photoId);
+        // Already gone is as good as deleted.
+        if (!gone.ok && gone.status !== 404) return { ok: false, error: gone.error, checklist: c };
+        c = await record({ published: { ...pub(), photos: pub().photos.filter((p) => p !== photoId) } });
+    }
+    return { ok: true, error: null, checklist: c };
+}
+
+/** Seal and send the checklist as it stands with `quote`, recording the
+ *  version, the expiry, the quote and the fingerprint of what was sent. */
+async function sendChecklist({ checklist, api, sealer, key, quote, at, record }) {
+    const pub = checklist.published;
+    const body = await sealer.sealJson(key, publishedForm(checklist, quote), contextFor(pub.id, 'checklist'));
+    const put = await api.putChecklist(pub.id, pub.ownerToken, body);
+    if (!put.ok) return { ok: false, error: put.error, checklist };
+    const c = await record({
+        published: { ...pub, at: pub.at || at, version: put.data.version, expiresAt: put.data.expiresAt, sent: contentPrint(checklist) },
+        quote
+    });
+    return { ok: true, error: null, checklist: c };
 }
 
 /**
@@ -99,31 +147,115 @@ export async function publish({ checklist, api, sealer, photos, sheet, slot, at,
     }
 
     const key = await sealer.importKey(pub().key);
-    for (const photoId of photoIdsOf(c)) {
-        if (pub().photos.includes(photoId)) continue;
-        for (const [kind, size] of [['photo', 'full'], ['thumb', 'thumb']]) {
-            const blob = await photos.get(photoId, size);
-            // A photo gone from this device cannot be sent; the task keeps
-            // its words.
-            if (!blob) continue;
-            const sealed = await sealer.seal(key, new Uint8Array(await blob.arrayBuffer()), contextFor(pub().id, kind, photoId));
-            const put = kind === 'photo'
-                ? await api.putPhoto(pub().id, pub().ownerToken, photoId, sealed)
-                : await api.putThumb(pub().id, pub().ownerToken, photoId, sealed);
-            if (!put.ok) return lapsed(put.error);
-        }
-        c = await record({ published: { ...pub(), photos: [...pub().photos, photoId] } });
+    const sentPhotos = await sendPhotos({ checklist: c, api, sealer, photos, key, record });
+    c = sentPhotos.checklist;
+    if (!sentPhotos.ok) return lapsed(sentPhotos.error);
+
+    const sent = await sendChecklist({ checklist: c, api, sealer, key, quote: lockQuote(quote, at), at, record });
+    c = sent.checklist;
+    if (!sent.ok) return lapsed(sent.error);
+    return { ok: true, error: null, next: [], checklist: c };
+}
+
+/**
+ * The quote a published checklist goes out with: the one locked at publish
+ * while nothing has changed since (a quote is honored as given, PRD 9.2),
+ * else a fresh one from the current sheet. `{ quote, fresh, changed }`,
+ * `quote` null when the checklist cannot be priced.
+ */
+export function quoteToSend(checklist, sheet, at) {
+    const changed = hasUnsent(checklist) || !checklist.quote;
+    const fresh = quoteChecklist(sheet, checklist);
+    if (!changed) return { quote: checklist.quote, fresh, changed };
+    if (!fresh.lines.length || fresh.errors.length) return { quote: null, fresh, changed };
+    return { quote: lockQuote(fresh, at), fresh, changed };
+}
+
+/**
+ * Send a published checklist again (PLANNING 10.2), and move its visit to
+ * `slot` ({ date, time }, optional). In order:
+ *   1. the booking: to `slot` when one is given (or booked anew there, after
+ *      a cancel); else, when the visit's length changed, the same start for
+ *      the new length. A length that no longer fits there stops with
+ *      `no-longer-fits` (and the next openings), so a new time is chosen
+ *      before anything is sent. Inside the change window a shorter visit
+ *      keeps its booking as it is, and a longer one stops with `too-late`;
+ *   2. the photos added since, and those removed deleted;
+ *   3. the checklist, with its quote (kept as locked, or fresh if it
+ *      changed).
+ * Resolves to `{ ok, error, next, checklist }`.
+ */
+export async function republish({ checklist, api, sealer, photos, sheet, slot = null, at, record }) {
+    let c = checklist;
+    const stop = (error, extra = {}) => ({ ok: false, error, next: [], checklist: c, ...extra });
+    if (!c.published || !c.published.at) return stop('not-published');
+    const { quote } = quoteToSend(c, sheet, at);
+    if (!quote) return stop('unpriced');
+    const pub = c.published;
+    const minutes = visitMinutes(quote.minutes);
+
+    if (slot) {
+        const request = { date: slot.date, time: slot.time, minutes };
+        const b = c.booking ? await api.rebook(pub.id, pub.ownerToken, request) : await api.book(pub.id, pub.ownerToken, request);
+        if (!b.ok) return stop(b.error, { next: (b.data && b.data.next) || [] });
+        c = await record({ booking: b.data.booking });
+    } else if (c.booking && c.booking.minutes !== minutes) {
+        const b = await api.rebook(pub.id, pub.ownerToken, { date: c.booking.date, time: c.booking.time, minutes });
+        if (b.ok) c = await record({ booking: b.data.booking });
+        else if (b.error === 'too-late') {
+            if (minutes > c.booking.minutes) return stop('too-late');
+            // Shorter, and too close to change: the longer booking stands.
+        } else if (!notAboutTime(b.error)) return stop('no-longer-fits', { next: (b.data && b.data.next) || [], minutes });
+        else return stop(b.error);
     }
 
-    const locked = lockQuote(quote, at);
-    const body = await sealer.sealJson(key, publishedForm(c, locked), contextFor(pub().id, 'checklist'));
-    const put = await api.putChecklist(pub().id, pub().ownerToken, body);
-    if (!put.ok) return lapsed(put.error);
-    c = await record({
-        published: { ...pub(), at: pub().at || at, version: put.data.version, expiresAt: put.data.expiresAt },
-        quote: locked
-    });
+    const key = await sealer.importKey(pub.key);
+    const sentPhotos = await sendPhotos({ checklist: c, api, sealer, photos, key, record });
+    c = sentPhotos.checklist;
+    if (!sentPhotos.ok) return stop(sentPhotos.error);
+    const sent = await sendChecklist({ checklist: c, api, sealer, key, quote, at, record });
+    c = sent.checklist;
+    if (!sent.ok) return stop(sent.error);
     return { ok: true, error: null, next: [], checklist: c };
+}
+
+/**
+ * Cancel the visit (PRD 10.4), refused inside the change window. The
+ * checklist stays published, its link and PIN working, ready for a new
+ * time. The cleaner's copy is sent again without the booking, unless there
+ * are changes not yet sent (the next send carries both, with its quote).
+ * Resolves to `{ ok, error, checklist }`.
+ */
+export async function cancelVisit({ checklist, api, sealer, at, record }) {
+    let c = checklist;
+    const pub = c.published;
+    if (!pub || !pub.at || !c.booking) return { ok: false, error: 'no-booking', checklist: c };
+    const r = await api.cancelBooking(pub.id, pub.ownerToken);
+    // Already gone on the server (a sweep, another device) is cancelled too.
+    if (!r.ok && r.error !== 'no-booking') return { ok: false, error: r.error, checklist: c };
+    c = await record({ booking: null });
+    if (!hasUnsent(c) && c.quote) {
+        const sent = await sendChecklist({ checklist: c, api, sealer, key: await sealer.importKey(pub.key), quote: c.quote, at, record });
+        c = sent.checklist;
+        // The visit is cancelled either way; a copy left showing the old time
+        // is put right by the next send.
+    }
+    return { ok: true, error: null, checklist: c };
+}
+
+/**
+ * Unpublish (PRD 13.2): the server's copy deleted now, its booking with it,
+ * and this device's checklist a draft again. Refused while a booked visit is
+ * inside the change window. A copy the server no longer has (expired) is
+ * unpublished here too. Resolves to `{ ok, error, checklist }`.
+ */
+export async function unpublish({ checklist, api, record }) {
+    const pub = checklist.published;
+    if (!pub) return { ok: true, error: null, checklist };
+    const r = await api.deleteChecklist(pub.id, pub.ownerToken);
+    if (!r.ok && r.error !== 'denied') return { ok: false, error: r.error, checklist };
+    const c = await record({ published: null, booking: null, quote: null });
+    return { ok: true, error: null, checklist: c };
 }
 
 /**

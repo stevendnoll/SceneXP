@@ -316,7 +316,10 @@ export const CONFIG = deepFreeze({
         lockoutEvery: 5,
         pinIterations: 20000,
         /** How many openings a refused time offers instead. */
-        nextOpenings: 3
+        nextOpenings: 3,
+        /** A quote is honored for 90 days (PRD 9.2), so a visit moved
+         *  later than that is refused by the calendar. */
+        quoteDays: 90
     },
 
     quality: {

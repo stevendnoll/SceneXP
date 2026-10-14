@@ -187,7 +187,9 @@ function normalizeQuote(raw) {
  * publish that stopped part way picks up where it was. Null for anything
  * malformed: a key or a token of the wrong shape opens nothing. The PIN is
  * null on a device that opened the checklist by its edit link, since the
- * PIN is never kept anywhere it could be read back.
+ * PIN is never kept anywhere it could be read back. `sent` is the
+ * fingerprint of what was last sent (`contentPrint`), so a later edit shows
+ * as a change the cleaner has not seen.
  */
 export function normalizePublished(raw) {
     if (!raw || typeof raw !== 'object') return null;
@@ -200,7 +202,8 @@ export function normalizePublished(raw) {
         at: stampOrNull(raw.at),
         version: Number.isInteger(raw.version) && raw.version >= 0 ? raw.version : 0,
         expiresAt: stampOrNull(raw.expiresAt),
-        photos: keysFrom(raw.photos, (k) => ID_PATTERN.test(k))
+        photos: keysFrom(raw.photos, (k) => ID_PATTERN.test(k)),
+        sent: typeof raw.sent === 'string' && /^[0-9a-z]{1,16}$/.test(raw.sent) ? raw.sent : null
     };
 }
 
@@ -348,6 +351,58 @@ export function itemsIn(checklist, roomId) {
 
 export function photoCount(checklist) {
     return liveItems(checklist).reduce((n, i) => n + i.photos.length, 0);
+}
+
+/**
+ * What a published checklist tells the cleaner about the home (sync.js
+ * `publishedForm` sends it with the quote and the booking): the home, its
+ * live rooms and tasks, and the preferences. Nothing that opens or changes
+ * it.
+ */
+export function publishedContent(checklist) {
+    return {
+        serviceType: checklist.serviceType,
+        title: checklist.title,
+        residence: checklist.residence || null,
+        levels: checklist.levels,
+        visitFrequency: checklist.visitFrequency,
+        household: checklist.household,
+        preferences: checklist.preferences,
+        rooms: liveRooms(checklist).map((r) => ({ id: r.id, level: r.level, area: r.area, bath: r.bath || null, label: r.label })),
+        items: liveItems(checklist).map((i) => ({
+            id: i.id, roomId: i.roomId, task: i.task, options: i.options, size: i.size, quantity: i.quantity,
+            important: i.important, notes: i.notes, avoid: i.avoid, products: i.products, photos: i.photos, order: i.order
+        }))
+    };
+}
+
+/**
+ * A short fingerprint of `publishedContent` (53-bit, base 36), kept with a
+ * publication as `sent`, so an edit made since shows as unsent and an edit
+ * undone back to what was sent does not. Not a secret, and not
+ * cryptographic: it only tells two versions of one checklist apart.
+ */
+export function contentPrint(checklist) {
+    const s = JSON.stringify(publishedContent(checklist));
+    let h1 = 0xdeadbeef;
+    let h2 = 0x41c6ce57;
+    for (let i = 0; i < s.length; i++) {
+        const ch = s.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+/** Has a published checklist changed since it was last sent? One published
+ *  before fingerprints were kept counts as changed, so sending it once
+ *  settles it. */
+export function hasUnsent(checklist) {
+    const pub = checklist && checklist.published;
+    if (!pub || !pub.at) return false;
+    return pub.sent !== contentPrint(checklist);
 }
 
 // ---- Changing it ------------------------------------------------------------
@@ -531,7 +586,9 @@ export function importPublished(doc, form, link, config, now, opts = {}) {
         deletedAt: null
     }, config, now);
     if (!n || !n.record.published) return refusal(doc, STORE.noChecklist);
-    return { doc: { ...doc, checklists: [...doc.checklists, n.record] }, record: n.record, error: null };
+    // What arrived is what was sent: no changes to send yet.
+    const record = { ...n.record, published: { ...n.record.published, sent: contentPrint(n.record) } };
+    return { doc: { ...doc, checklists: [...doc.checklists, record] }, record, error: null };
 }
 
 /**

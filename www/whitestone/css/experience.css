@@ -525,6 +525,52 @@ textarea.ws-input {
     font-size: 0.75rem;
 }
 
+/* Changes not sent yet: first on the receipt, with the way to send them. */
+.receipt-unsent {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin: 0.6rem 0 0.2rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--ws-accent);
+    border-radius: 12px;
+    background: var(--ws-accent-soft);
+}
+
+.receipt-unsent[hidden] {
+    display: none;
+}
+
+.receipt-unsent p {
+    margin: 0;
+    font-weight: 600;
+}
+
+/* The visit's own buttons: Add to calendar, Change the time, Cancel. */
+.receipt-visit {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.4rem;
+}
+
+.receipt-visit a.ws-btn {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.receipt-visit a.ws-btn[hidden] {
+    display: none;
+}
+
+/* Unpublish sits apart from Done, on the far side. */
+.receipt-unpublish {
+    margin-right: auto;
+}
+
 .receipt-edit {
     margin-top: 0.9rem;
     padding: 0.9rem;
@@ -948,6 +994,32 @@ textarea.ws-input {
     font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.02em;
+}
+
+/* ---- The visit chip (PRD 8.6), beside the quote ------------------------------ */
+
+.hud-visit {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.05rem;
+    text-align: left;
+}
+
+.hud-visit[hidden] {
+    display: none;
+}
+
+/* Changes the cleaner has not seen: said in words, and in the accent. */
+.hud-visit-note {
+    color: var(--ws-accent);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.hud-visit-note[hidden] {
+    display: none;
 }
 
 /* ---- The quote card --------------------------------------------------------- */
