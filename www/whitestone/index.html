@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=8" as="style">
+    <link rel="preload" href="css/experience.min.css?v=9" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -135,6 +135,7 @@
     <link rel="modulepreload" href="js/guide.min.js">
     <link rel="modulepreload" href="js/host.min.js">
     <link rel="modulepreload" href="js/cast.min.js">
+    <link rel="modulepreload" href="js/panel.min.js">
     <link rel="modulepreload" href="js/guards.min.js">
     <link rel="modulepreload" href="js/layout.min.js">
     <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
@@ -143,7 +144,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=8">
+    <link rel="stylesheet" href="css/experience.min.css?v=9">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -216,10 +217,22 @@
         <button id="host-skip" class="host-skip" type="button" hidden>Skip the guide</button>
     </section>
 
-    <!-- THE WAY BACK, whenever a floor of the house is open: one press
-         closes it (main.js stepBack). Escape and a tap on empty space do
-         the same. -->
-    <button id="ws-back" class="ws-back" type="button" hidden>Back to the whole house</button>
+    <!-- THE PANEL BESIDE THE HOUSE (panel.js): whatever is selected on the
+         house, in words. A floor's rooms with rooms to add, a room's tasks
+         with their stars, a task to edit. Its back button, Escape, or a tap
+         on empty space goes one step back. Where Maya's bubble is, and she
+         steps aside while it is open. -->
+    <aside id="ws-panel" class="ws-panel" aria-labelledby="panel-title" hidden>
+        <button id="panel-back" class="panel-back" type="button">Back to the whole house</button>
+        <h2 id="panel-title" class="panel-title"></h2>
+        <p id="panel-summary" class="panel-summary" hidden></p>
+        <h3 id="panel-heading" class="panel-heading" hidden></h3>
+        <ul id="panel-list" class="panel-list" hidden></ul>
+        <p id="panel-empty" class="panel-empty" hidden></p>
+        <div id="panel-detail" class="panel-detail" hidden></div>
+        <div id="panel-chips" class="panel-chips" hidden></div>
+        <div id="panel-actions" class="panel-actions"></div>
+    </aside>
 
     <!-- Every change, said aloud. Polite, so it waits its turn. -->
     <p id="ws-live" class="sr-only" role="status" aria-live="polite"></p>
@@ -229,6 +242,9 @@
          reveals it after the loading screen. -->
     <div id="ws-hud" class="ui-float ws-hud" role="group" aria-label="Your checklist">
         <button id="hud-home" class="hud-chip" type="button" hidden>Our home</button>
+        <!-- The panel on the whole house: every floor, room and task, from
+             the keyboard as well as the pointer. -->
+        <button id="hud-rooms" class="hud-chip" type="button" aria-label="Your home, floor by floor: its floors, rooms and tasks" hidden>Rooms</button>
         <!-- THE QUOTE, always in view once there is a task (PRD 8.5). Its
              aria-label says the money in words and that the prices are
              examples. -->

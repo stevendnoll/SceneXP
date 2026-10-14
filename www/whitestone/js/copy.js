@@ -232,11 +232,6 @@ export const MODEL_LINES = Object.freeze({
     setDown: 'The house is back together.'
 });
 
-/** The Back button (main.js). */
-export const STUDIO = Object.freeze({
-    back: 'Back to the whole house'
-});
-
 /** A count said as a word, as Maya would say it: "nine standard tasks". */
 export function countWord(n) {
     const words = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
@@ -315,6 +310,47 @@ export const GUIDE = Object.freeze({
     close: 'Close'
 });
 
+/** "a kitchen", "an office": a room's kind with its article. */
+export function withArticle(name) {
+    const word = String(name || '');
+    return `${/^[aeiou]/i.test(word) ? 'an' : 'a'} ${word.toLowerCase()}`;
+}
+
+/** The panel beside the house (panel.js) and the Rooms chip that opens it. */
+export const PANEL = Object.freeze({
+    label: 'Your home, floor by floor',
+    rooms: (n) => (n === 1 ? '1 room' : `${n} rooms`),
+    tasks: (n) => (n === 1 ? '1 task' : `${n} tasks`),
+    about: (time) => `about ${time}`,
+    back: (name) => `Back to ${name}`,
+    wholeHouse: 'the whole house',
+    close: 'Close',
+    floorsHeading: 'Floors',
+    roomsHeading: 'Rooms',
+    tasksHeading: 'Tasks',
+    noRooms: 'No rooms on this floor yet. Add one below.',
+    noTasks: 'No tasks in this room yet. Add one below.',
+    addRoom: 'Add a room',
+    chipLabel: (name) => `Add ${withArticle(name)} with its standard tasks`,
+    anotherRoom: 'Another kind of room',
+    addTask: 'Add a task',
+    editRoom: 'Edit this room',
+    editTask: 'Edit this task',
+    star: 'Star it',
+    unstar: 'Unstar it',
+    starLabel: (name) => `Star ${name}`,
+    removeTask: 'Remove this task',
+    notes: (text) => `Notes: ${text}`,
+    avoid: (text) => `Please avoid: ${text}`,
+    checklist: 'Your checklist',
+    home: 'Your home',
+    open: 'Rooms',
+    openLabel: 'Your home, floor by floor: its floors, rooms and tasks',
+    starred: (name) => `Starred ${name}. We start there.`,
+    unstarred: (name) => `${name} is no longer starred.`,
+    starStep: 'Starred a task'
+});
+
 /** The Help menu and Undo, top right (main.js). */
 export const HELP = Object.freeze({
     button: 'Help',
@@ -366,6 +402,6 @@ export function allCopy() {
         else if (typeof value === 'function') out.push({ where, text: value(12) });
         else if (value && typeof value === 'object') Object.entries(value).forEach(([k, v]) => walk(v, `${where}.${k}`));
     };
-    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, DAY_STATUS, STORE, FREQUENCIES, UI, MODEL_LINES, STUDIO, GUIDE, HELP, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
+    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, DAY_STATUS, STORE, FREQUENCIES, UI, MODEL_LINES, GUIDE, HELP, PANEL, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
     return out;
 }

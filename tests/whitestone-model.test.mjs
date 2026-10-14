@@ -853,7 +853,7 @@ describe('built with the real three.js', () => {
         expect(tiles.instanceColor.count).toBe(CONFIG.limits.rooms);
     });
 
-    test('the example home: three levels, thirteen rooms, twenty-seven tasks, in sixteen draw calls', () => {
+    test('the example home: three levels, thirteen rooms, twenty-seven tasks, in seventeen draw calls', () => {
         const m = buildModel(CONFIG, AT);
         const home = example();
         expect(m.show(home)).toBe(true);
@@ -865,7 +865,7 @@ describe('built with the real three.js', () => {
         expect(windows.count).toBe(m.placed.windows.length);
         let n = 0;
         m.group.traverse((o) => { if (o.isMesh) n++; });
-        expect(n).toBe(16);
+        expect(n).toBe(17);
         // Every part fits its mesh: nothing is dropped for want of room.
         for (const [kind, mesh] of Object.entries(meshes(m))) {
             expect(`${kind}: ${m.placed[kind].length <= mesh.instanceMatrix.count}`).toBe(`${kind}: true`);
@@ -987,6 +987,67 @@ describe('built with the real three.js', () => {
         expect(m.levelOfHit({ object: slabs, instanceId: 2 })).toBe(m.placed.slabs[2].level);
         expect(m.levelOfHit({ object: {}, instanceId: 0 })).toBeNull();
         expect(m.levelOfHit(null)).toBeNull();
+    });
+
+    test('a hit says its level, the room of anything in one, and the task of a dot', () => {
+        const m = buildModel(CONFIG, AT);
+        m.show(example());
+        const { markers, tiles, fixtures, walls, roofs } = meshes(m);
+        const dot = m.placed.markers[2];
+        expect(m.hitOf({ object: markers, instanceId: 2 })).toEqual({ level: dot.level, roomId: dot.roomId, itemId: dot.itemId });
+        const tile = m.placed.tiles[4];
+        expect(m.hitOf({ object: tiles, instanceId: 4 })).toEqual({ level: tile.level, roomId: tile.roomId, itemId: null });
+        // A bed or a sofa is its room.
+        const fx = m.placed.fixtures.findIndex((f) => f.roomId);
+        expect(m.hitOf({ object: fixtures, instanceId: fx }).roomId).toBe(m.placed.fixtures[fx].roomId);
+        expect(m.placed.fixtures.every((f) => f.roomId)).toBe(true);
+        // An outside wall or the roof is only its level.
+        const wall = m.placed.walls.findIndex((w) => w.role === 'wall');
+        expect(m.hitOf({ object: walls, instanceId: wall })).toEqual({ level: m.placed.walls[wall].level, roomId: null, itemId: null });
+        expect(m.hitOf({ object: roofs, instanceId: 0 }).roomId).toBeNull();
+        expect(m.hitOf({ object: {}, instanceId: 0 })).toBeNull();
+        expect(m.hitOf(null)).toBeNull();
+    });
+
+    test('a selected room is outlined in the accent just inside its floor, a hovered one faintly, and a selected dot stands out', () => {
+        const m = buildModel(CONFIG, AT);
+        const home = example();
+        m.show(home);
+        expect(m.placed.outlines).toHaveLength(0);
+        const tile = m.placed.tiles[3];
+        const item = home.items.find((i) => i.roomId === tile.roomId);
+        expect(m.select({ roomId: tile.roomId, itemId: item.id })).toBe(true);
+        expect(m.select({ roomId: tile.roomId, itemId: item.id })).toBe(false);
+        const lines = m.placed.outlines;
+        expect(lines).toHaveLength(4);
+        expect(lines.every((l) => l.roomId === tile.roomId && l.color === 'outline')).toBe(true);
+        const floorTop = tile.position[1] + tile.scale[1] / 2;
+        for (const l of lines) {
+            expect(l.position[1] - l.scale[1] / 2).toBeCloseTo(floorTop, 9);
+            expect(Math.abs(l.position[0] - tile.position[0]) + l.scale[0] / 2).toBeLessThanOrEqual(tile.scale[0] / 2 + 1e-9);
+            expect(Math.abs(l.position[2] - tile.position[2]) + l.scale[2] / 2).toBeLessThanOrEqual(tile.scale[2] / 2 + 1e-9);
+        }
+        const dot = m.placed.markers.find((d) => d.itemId === item.id);
+        const other = m.placed.markers.find((d) => d.itemId !== item.id);
+        expect(dot.selected).toBe(true);
+        expect(dot.scale[0]).toBeCloseTo(other.scale[0] * HOUSE.dot.selected, 9);
+        // Painted: the selected dot and the outline in the accent.
+        const accent = new REAL.Color(CONFIG.colors.accent);
+        const c = new REAL.Color();
+        m.meshes.markers.getColorAt(m.placed.markers.indexOf(dot), c);
+        expect(c.getHex()).toBe(accent.getHex());
+        m.meshes.outlines.getColorAt(0, c);
+        expect(c.getHex()).toBe(accent.getHex());
+        // Hovering another room adds its faint outline, the selected room's own never doubles.
+        const near = m.placed.tiles.find((t) => t.roomId !== tile.roomId);
+        expect(m.hover(near.roomId)).toBe(true);
+        expect(m.placed.outlines.filter((l) => l.color === 'outlineHover')).toHaveLength(4);
+        expect(m.hover(tile.roomId)).toBe(true);
+        expect(m.placed.outlines).toHaveLength(4);
+        expect(m.hover(null)).toBe(false);
+        // Another home clears it.
+        m.show({ ...EMPTY_HOME, id: 'other' });
+        expect(m.selection).toEqual({ roomId: null, itemId: null, hoverRoomId: null });
     });
 
     test('a hit on a dot or its flag says which task it is, and anything else none', () => {

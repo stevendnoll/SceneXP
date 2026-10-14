@@ -1317,43 +1317,245 @@ textarea.ws-input {
     outline: none;
 }
 
-/* Back to the whole house, top center under the chips, whenever a floor
-   is open (QA, 2026-10-13: it was hard to get out of the model). */
-.ws-back {
+/* ---- The panel beside the house (M2 step 3) ------------------------------------
+ *
+ * Where Maya's bubble is: beside her on a wide screen (main.js placeHost),
+ * the right edge where there is no room, a sheet along the bottom on a
+ * phone. Whatever is selected on the house, in words.
+ */
+.ws-panel {
     position: fixed;
-    top: calc(max(16px, env(safe-area-inset-top)) + 56px);
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 30;
-    min-height: 44px;
-    padding: 0.5rem 1.1rem 0.5rem 0.9rem;
+    top: 76px;
+    right: max(24px, env(safe-area-inset-right));
+    bottom: 16px;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    width: clamp(280px, 27vw, 380px);
+    overflow: auto;
+    padding: 0.9rem 1.1rem 1rem;
     border: 1px solid var(--ws-line);
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.96);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.97);
     color: var(--ws-graphite);
+    box-shadow: 0 18px 50px rgba(34, 37, 42, 0.16);
+}
+
+.ws-panel[hidden] {
+    display: none;
+}
+
+/* Beside Maya: its own top and height, set by main.js. */
+.ws-panel.is-anchored {
+    right: auto;
+    bottom: auto;
+}
+
+.panel-back {
+    align-self: flex-start;
+    min-height: 40px;
+    margin: 0 0 0.35rem -0.4rem;
+    padding: 0.3rem 0.5rem;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--ws-accent);
     font: inherit;
+    font-size: 0.9rem;
     font-weight: 600;
-    box-shadow: 0 6px 18px rgba(34, 37, 42, 0.14);
     cursor: pointer;
 }
 
-.ws-back::before {
+.panel-back::before {
     content: '\2190';
-    margin-right: 0.45rem;
+    margin-right: 0.4rem;
+}
+
+.panel-back:hover,
+.panel-back:focus-visible {
+    background: var(--ws-accent-soft);
+    outline: none;
+}
+
+.panel-title {
+    margin: 0;
+    font-size: 1.25rem;
+    line-height: 1.3;
+}
+
+.panel-summary {
+    margin: 0.25rem 0 0.8rem;
+    color: var(--ws-muted);
+    font-size: 0.9rem;
+}
+
+.panel-heading {
+    margin: 0.2rem 0 0.4rem;
+    color: var(--ws-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.panel-summary[hidden],
+.panel-heading[hidden],
+.panel-list[hidden],
+.panel-empty[hidden],
+.panel-detail[hidden],
+.panel-chips[hidden] {
+    display: none;
+}
+
+.panel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin: 0 0 0.9rem;
+    padding: 0;
+    list-style: none;
+}
+
+.panel-item {
+    display: flex;
+    gap: 0.3rem;
+}
+
+/* A floor, a room or a task: the whole row is its button. */
+.panel-row {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 10px;
+    background: #FFFFFF;
+    color: var(--ws-graphite);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.panel-row:hover,
+.panel-row:focus-visible {
+    border-color: var(--ws-accent);
+    outline: none;
+}
+
+.panel-row:focus-visible {
+    box-shadow: 0 0 0 3px var(--ws-accent-soft);
+}
+
+.panel-row-label {
+    font-weight: 600;
+}
+
+.panel-row-detail {
+    color: var(--ws-muted);
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+/* A task's star: hollow until it matters most. */
+.panel-star {
+    flex: none;
+    width: 44px;
+    min-height: 44px;
+    border: 1px solid var(--ws-line);
+    border-radius: 10px;
+    background: #FFFFFF;
+    color: var(--ws-muted);
+    font-size: 1.15rem;
+    cursor: pointer;
+}
+
+.panel-star.is-on {
     color: var(--ws-accent);
 }
 
-.ws-back:hover {
-    background: #FFFFFF;
-}
-
-.ws-back:focus-visible {
+.panel-star:focus-visible {
     outline: 3px solid var(--ws-accent);
-    outline-offset: 2px;
+    outline-offset: 1px;
 }
 
-.ws-back[hidden] {
-    display: none;
+.panel-empty {
+    margin: 0 0 0.9rem;
+    color: var(--ws-muted);
+    font-size: 0.92rem;
+}
+
+.panel-detail {
+    margin: 0 0 0.9rem;
+}
+
+.panel-detail-line {
+    margin: 0 0 0.35rem;
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.panel-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.9rem;
+}
+
+.panel-chips-heading {
+    flex-basis: 100%;
+    margin: 0 0 0.1rem;
+    color: var(--ws-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.panel-chip {
+    min-height: 40px;
+    padding: 0.35rem 0.8rem;
+    border: 1px dashed var(--ws-accent);
+    border-radius: 999px;
+    background: #FFFFFF;
+    color: var(--ws-accent);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.panel-chip:hover,
+.panel-chip:focus-visible {
+    background: var(--ws-accent-soft);
+    outline: none;
+}
+
+.panel-chip:focus-visible {
+    box-shadow: 0 0 0 3px var(--ws-accent);
+}
+
+.panel-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: auto;
+}
+
+/* A phone upright: a sheet along the bottom, the house above it. */
+@media (max-aspect-ratio: 999/1000) {
+    .ws-panel {
+        top: auto;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: auto;
+        max-height: 50vh;
+        padding: 0.8rem 1rem calc(1rem + env(safe-area-inset-bottom));
+        border-radius: 20px 20px 0 0;
+    }
 }
 
 /* ---- Printing the checklist -------------------------------------------------

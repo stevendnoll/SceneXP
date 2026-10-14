@@ -21,7 +21,8 @@ import { join } from 'node:path';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
-import { BRAND, GUIDE, HELP, STUDIO, UI } from '../www/whitestone/js/copy.js';
+import { BRAND, GUIDE, HELP, PANEL, UI } from '../www/whitestone/js/copy.js';
+import { roomName } from '../www/whitestone/js/taxonomy.js';
 
 const WS = join(process.cwd(), 'www', 'whitestone');
 const HTML = readFileSync(join(WS, 'index.html'), 'utf8');
@@ -56,7 +57,13 @@ describe('the markup', () => {
         for (const key of ['again', 'restart', 'checklist', 'menu', 'prefs', 'home', 'mine', 'about']) {
             expect(text(new RegExp(`id="help-${key}"[^>]*>([^<]+)<`))).toBe(HELP[key]);
         }
-        expect(text(/id="ws-back"[^>]*>([^<]+)</)).toBe(STUDIO.back);
+        // The panel ships closed, its back button in copy.js's words, and the
+        // Rooms chip that opens it says what it opens.
+        expect(HTML).not.toMatch(/id="ws-back"/);
+        expect(HTML).toMatch(/<aside id="ws-panel"[^>]*\shidden>/);
+        expect(text(/id="panel-back"[^>]*>([^<]+)</)).toBe(PANEL.back(PANEL.wholeHouse));
+        expect(text(/id="hud-rooms"[^>]*>([^<]+)</)).toBe(PANEL.open);
+        expect(text(/id="hud-rooms"[^>]*aria-label="([^"]+)"/)).toBe(PANEL.openLabel);
     });
 });
 
@@ -88,7 +95,7 @@ function serveSheet() {
 async function boot({ saved = null, sheet = false, quiet = false } = {}) {
     if (saved) localStorage.setItem(CONFIG.storage.key, JSON.stringify(saved));
     // What the markup ships hidden (the stub reads no markup).
-    for (const id of ['ws-host', 'ws-back', 'ws-help-menu', 'help-checklist', 'help-prefs', 'help-home']) dom.el(id).hidden = true;
+    for (const id of ['ws-host', 'ws-panel', 'ws-help-menu', 'help-checklist', 'help-prefs', 'help-home', 'hud-rooms']) dom.el(id).hidden = true;
     if (sheet) serveSheet();
     const main = await import('../www/whitestone/js/main.js');
     await flushAsync(20);
@@ -111,6 +118,9 @@ function said() {
 }
 
 const line = () => dom.el('host-line').textContent;
+const panelShown = () => !dom.el('ws-panel').hidden;
+const rows = () => dom.el('panel-list').children.map((li) => li.children[0]);
+const rowLabels = () => rows().map((b) => b.children[0].textContent);
 const shown = () => !dom.el('ws-host').hidden;
 const buttons = () => dom.el('host-actions').children.map((b) => b.textContent);
 const press = (id) => {
@@ -252,7 +262,7 @@ describe('a first visit', () => {
         expect(line()).toBe(GUIDE.firstRoom);
     });
 
-    test('a tapped dot opens its task over the house, and Maya steps aside until it closes', async () => {
+    test('a tapped dot shows its task in the panel, Maya stepping aside until it closes', async () => {
         const main = await boot({ sheet: true });
         press('start');
         press('next');
@@ -260,16 +270,16 @@ describe('a first visit', () => {
         press('next');
         const dot = own(main).items[0];
         main.__test__.tapModel(null, dot.id);
-        expect(openCards()).toEqual(['task']);
-        // Armed: the tap's own click, landing a beat later on the card, is
-        // swallowed (a keyboard press, detail 0, never is).
-        expect(fire(dom.el('task-panel'), 'click', { detail: 1 }).defaultPrevented).toBe(true);
-        expect(fire(dom.el('task-panel'), 'click', { detail: 0 }).defaultPrevented).toBe(false);
+        expect(openCards()).toEqual([]);
+        expect(panelShown()).toBe(true);
+        expect(dom.el('panel-title').textContent).toBe('Stovetop');
         stepFrames(2);
         expect(shown()).toBe(false);
         expect(main.__test__.ui.guide.scene).toBe('rooms');
-        const { closeCard } = await import('../www/whitestone/js/cards.min.js');
-        closeCard('task');
+        // Back out of the task, the room, the floor: the panel goes, and Maya
+        // is back with the step she is on.
+        for (let i = 0; i < 3; i++) fire(dom.el('panel-back'), 'click');
+        expect(panelShown()).toBe(false);
         stepFrames(2);
         expect(shown()).toBe(true);
         expect(line()).toBe(GUIDE.rooms);
@@ -542,7 +552,7 @@ describe('tapping the house', () => {
         expect(lifts).toEqual(['basement', 'main', 'second', null]);
     });
 
-    test('a tap on a floor opens it, turned to face you, and a tap on the open floor shows its rooms', async () => {
+    test('a tap on a floor opens it, turned to face you, and the panel lists its rooms; a tap on a room inside lists its tasks', async () => {
         const main = await boot();
         main.__test__.state.reducedMotion = true;
         main.__test__.showExample();
@@ -550,9 +560,17 @@ describe('tapping the house', () => {
         expect(main.__test__.model().lifted).toBe('second');
         expect(said()).toBe('Opened the second floor of the house.');
         expect(Math.abs(main.__test__.turntable().yaw % (Math.PI * 2))).toBeLessThan(1e-9);
-        main.__test__.tapModel('second');
-        expect(openCards()).toEqual(['checklist']);
-        expect(dom.el('checklist-filter').value).toBe('level:second');
+        expect(dom.el('panel-title').textContent).toBe('Second floor');
+        expect(rowLabels()).toEqual(expect.arrayContaining(["Emma's room", 'Primary bedroom']));
+        const room = main.getDoc().checklists[0].rooms.find((r) => r.level === 'second');
+        main.__test__.tapModel('second', null, room.id);
+        expect(dom.el('panel-title').textContent).toBe(roomName('cleaning', room));
+        expect(main.__test__.model().selection.roomId).toBe(room.id);
+        // A room on a closed floor cannot be met; a tap on another floor opens that floor.
+        main.__test__.tapModel('main', null, room.id);
+        expect(main.__test__.model().lifted).toBe('main');
+        expect(main.__test__.ui.selected.scope).toBe('floor');
+        expect(openCards()).toEqual([]);
     });
 
     test('the plain house tapped while Maya greets is Let\'s start, and after the guide opens the setup card', async () => {
@@ -618,16 +636,24 @@ describe('tapping the house', () => {
 });
 
 describe('getting back out', () => {
-    test('the Back button appears once a floor is open, and one press closes it', async () => {
+    test("the panel's back button steps back one at a time, and closes the house at the last", async () => {
         const main = await boot();
         main.__test__.state.reducedMotion = true;
         main.__test__.showExample();
-        expect(dom.el('ws-back').hidden).toBe(true);
-        main.__test__.tapModel('second');
-        expect(dom.el('ws-back').hidden).toBe(false);
-        fire(dom.el('ws-back'), 'click');
+        expect(panelShown()).toBe(false);
+        const c = main.getDoc().checklists[0];
+        const item = c.items.find((i) => c.rooms.find((r) => r.id === i.roomId).level === 'second');
+        main.__test__.tapModel(null, item.id);
+        expect(main.__test__.ui.selected.scope).toBe('task');
+        fire(dom.el('panel-back'), 'click');
+        expect(main.__test__.ui.selected.scope).toBe('room');
+        expect(dom.el('panel-back').textContent).toBe(PANEL.back('the second floor'));
+        fire(dom.el('panel-back'), 'click');
+        expect(main.__test__.ui.selected.scope).toBe('floor');
+        expect(dom.el('panel-back').textContent).toBe(PANEL.back(PANEL.wholeHouse));
+        fire(dom.el('panel-back'), 'click');
+        expect(panelShown()).toBe(false);
         expect(main.__test__.model().lifted).toBeNull();
-        expect(dom.el('ws-back').hidden).toBe(true);
         expect(said()).toBe('The house is back together.');
     });
 

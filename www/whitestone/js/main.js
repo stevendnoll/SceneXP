@@ -54,13 +54,14 @@ import {
     renderMyChecklists, renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote,
     renderMenu, fillMenuAreas
 } from './panels.min.js';
-import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE } from './copy.min.js';
+import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL } from './copy.min.js';
 import { createTurntable, turnPoint } from './turntable.min.js';
 import { buildStage, buildLights, firstPick } from './stage.min.js';
 import { buildModel } from './model.min.js';
 import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, GUIDED } from './guide.min.js';
 import { createHost } from './host.min.js';
 import { buildMaya, speakSeconds } from './cast.min.js';
+import { createPanel, selectFromHit, stepOut, reconcile, panelView } from './panel.min.js';
 
 // ---- State ------------------------------------------------------------------
 
@@ -97,9 +98,11 @@ const state = {
  *   filter      what the checklist view shows (panels.js filterChoices)
  *   menuArea    the kind of room the service menu shows
  *   guide       where Maya's guide is (guide.js)
+ *   selected    what is selected on the house (panel.js): the whole house,
+ *               a floor, a room or a task, or null
  */
 const ui = {
-    editing: null, room: null, task: null, afterPrefs: false, filter: 'all', menuArea: null, guide: null
+    editing: null, room: null, task: null, afterPrefs: false, filter: 'all', menuArea: null, guide: null, selected: null
 };
 
 /** Thumbnail addresses made for the task card, released when it closes. */
@@ -129,6 +132,8 @@ const roomLabels = { nodes: [], key: '' };
 let host = null;
 /** Maya on the stage (cast.js). */
 let cast = null;
+/** The panel beside the house (panel.js). */
+let panel = null;
 /** The scene Maya last gestured for, so each new one gets its gesture. */
 let gesturedFor = null;
 let raycaster = null;
@@ -231,7 +236,6 @@ async function init() {
         state.loaded = true;
         // EVERY .ui-float IS display:none UNTIL THIS LINE.
         document.querySelectorAll('.ui-float').forEach((node) => node.classList.add('visible'));
-        showBack();
         // Maya speaks once the house has come in (at once under reduced
         // motion, ONBOARDING Scene 1).
         setTimeout(showGuide, state.reducedMotion ? 0 : CONFIG.guide.delay * 1000);
@@ -391,7 +395,6 @@ function liftLevel(level) {
     const name = level ? levelOf(c ? c.serviceType : 'cleaning', level) : null;
     if (level && name) announce(MODEL_LINES.lifted(name.name));
     else if (!level && was) announce(MODEL_LINES.setDown);
-    showBack();
     return true;
 }
 
@@ -402,27 +405,136 @@ function frameHeight() {
     return model.height + (model.lifted ? CONFIG.model.lift.open * model.scale : 0);
 }
 
-/** Whether there is a step back to take: a floor of the house is open. */
+/** Whether there is a step back to take: something selected, or a floor
+ *  open. */
 function away() {
-    return Boolean(model && model.lifted);
+    return Boolean(ui.selected || (model && model.lifted));
 }
 
 /**
  * One step back (QA, 2026-10-13: "once I click on a floor of the model
- * house it's hard to exit out"): an open floor closes. By the Back button,
- * Escape, or a tap on empty space.
+ * house it's hard to exit out"): a task to its room, a room to its floor, a
+ * floor to the closed house. By the panel's back button, Escape, or a tap
+ * on empty space.
  */
 function stepBack() {
-    if (!away()) return false;
-    liftLevel(null);
-    showBack();
-    return true;
+    if (ui.selected) {
+        selectTo(stepOut(ui.selected));
+        return true;
+    }
+    if (model && model.lifted) {
+        liftLevel(null);
+        return true;
+    }
+    return false;
 }
 
-/** The Back button, shown whenever a floor is open. */
-function showBack() {
-    const b = el('ws-back');
-    if (b) b.hidden = !(state.loaded && away());
+// ---- The selection and the panel (panel.js) --------------------------------------
+
+/**
+ * Select something on the house (null for nothing): its floor opens (the
+ * whole house closes them), the room is outlined, the task's dot stands
+ * out, and the panel says what it is. With `focus`, the keyboard picks up
+ * in the panel. Returns the selection as it could be made.
+ */
+function selectTo(next, { focus = false } = {}) {
+    const c = active();
+    let sel = next && c ? reconcile(next, c) : null;
+    if (sel) sel = { ...sel, checklistId: c.id };
+    ui.selected = sel;
+    const level = sel && sel.scope !== 'house' ? sel.level : null;
+    if (level !== (model ? model.lifted : null)) liftLevel(level);
+    if (model && model.select({ roomId: sel ? sel.roomId : null, itemId: sel ? sel.itemId : null })) markShadows();
+    showPanel();
+    if (focus && panel && panel.shown) panel.focusFirst();
+    requestRender();
+    return ui.selected;
+}
+
+/** The panel for the selection now, or put away. */
+function showPanel() {
+    if (!panel) return;
+    const view = ui.selected ? panelView(ui.selected, active(), state.sheet) : null;
+    if (!view) ui.selected = null;
+    panel.show(view);
+}
+
+/** A button in the panel's list: a floor, a room, or a task. */
+function onPanelRow(kind, id) {
+    const c = active();
+    if (!c) return;
+    if (kind === 'floor') selectTo({ scope: 'floor', level: id, roomId: null, itemId: null }, { focus: true });
+    else if (kind === 'room') {
+        const room = c.rooms.find((r) => r.id === id);
+        if (room) selectTo({ scope: 'room', level: room.level, roomId: id, itemId: null }, { focus: true });
+    } else if (kind === 'task') {
+        const item = c.items.find((i) => i.id === id);
+        const room = item && c.rooms.find((r) => r.id === item.roomId);
+        if (room) {
+            selectTo({ scope: 'task', level: room.level, roomId: room.id, itemId: id }, { focus: true });
+            guideTo({ type: 'dotOpened' });
+        }
+    }
+}
+
+/** The panel's back button: one step back, the keyboard kept in the panel,
+ *  or on the Rooms chip once the panel has gone. */
+function onPanelBack() {
+    selectTo(stepOut(ui.selected), { focus: true });
+    if (!ui.selected) {
+        const rooms = el('hud-rooms');
+        if (rooms && typeof rooms.focus === 'function') rooms.focus();
+    }
+}
+
+/** A task starred, or no longer: the ones that matter most, done first. */
+function toggleStar(itemId) {
+    const c = active();
+    const item = c && c.items.find((i) => i.id === itemId && !i.deletedAt);
+    if (!item) return null;
+    const name = taskName(state.sheet, item);
+    return change((d) => updateItem(d, c.id, itemId, { important: !item.important }, CONFIG, now(), { check }),
+        PANEL.starStep, item.important ? PANEL.unstarred(name) : PANEL.starred(name));
+}
+
+/** The panel's buttons under its list. */
+function onPanelAction(id) {
+    const sel = ui.selected;
+    switch (id) {
+    case 'checklist': openChecklistView(); break;
+    case 'home': editHome(); break;
+    case 'anotherRoom': {
+        openRoom(null);
+        const levelField = el('room-level');
+        if (sel && levelField) levelField.value = sel.level;
+        break;
+    }
+    case 'addTask': if (sel) openTask(sel.roomId, null); break;
+    case 'editRoom': if (sel) openRoom(sel.roomId); break;
+    case 'editTask': if (sel) openTask(null, sel.itemId); break;
+    case 'starTask': if (sel) toggleStar(sel.itemId); break;
+    case 'removeTask':
+        if (sel) {
+            // The removal itself drops the selection back to the room
+            // (refresh reconciles it); only step back if it has not.
+            const result = removeTask(sel.itemId);
+            if (result && !result.error) {
+                if (ui.selected && ui.selected.scope === 'task') selectTo(stepOut(ui.selected), { focus: true });
+                else if (panel) panel.focusFirst();
+            }
+        }
+        break;
+    default: break;
+    }
+}
+
+/** A room chip in the panel: that kind of room on the open floor, with its
+ *  standard tasks, selected to show them. */
+function onPanelChip(area) {
+    const sel = ui.selected;
+    if (!sel) return;
+    const result = addRoomOf(area, sel.level);
+    if (result && !result.error) selectTo({ scope: 'room', level: sel.level, roomId: result.record.id, itemId: null }, { focus: true });
 }
 
 /**
@@ -467,40 +579,40 @@ function placeLabels() {
 // ---- Tapping the house -------------------------------------------------------------
 
 /**
- * A tap on the house. A tap on a blue dot opens its task. With no checklist
- * open it starts one. A tap on a floor opens it, and a tap on the open
- * floor shows its rooms in the checklist. A tap on the house with no floor known opens the next floor
- * up, and past the top one closes it again.
+ * A tap on the house (ONBOARDING section 4). A tap on a blue dot selects
+ * its task, inside the open floor a tap on a room selects the room, and a
+ * tap anywhere else on a floor selects (and opens) it, the panel saying
+ * what was chosen. With no checklist open it starts one. With nothing known
+ * of where it landed, it opens the next floor up, and past the top one
+ * closes the house again.
  */
-function tapModel(level = null, itemId = null) {
+function tapModel(level = null, itemId = null, roomId = null) {
     if (!state.loaded) return false;
     const c = active();
-    // A blue dot: that task (ONBOARDING Scene 4), armed against the tap's
-    // own click landing on the card.
-    if (itemId && c && c.items.some((i) => i.id === itemId && !i.deletedAt)) {
-        openTask(null, itemId, null, { armed: true });
-        guideTo({ type: 'dotOpened' });
-        return true;
-    }
     if (!c) {
         // While Maya greets, a tap on the plain house is Let's start.
         if (!(ui.guide && ui.guide.scene === 'hello' && guideTo({ type: 'start' }))) startOwn();
         return true;
     }
-    if (level && level === model.lifted) {
-        openLevel(level);
+    // A blue dot: its task (ONBOARDING Scene 4), wherever its floor is.
+    const item = itemId ? c.items.find((i) => i.id === itemId && !i.deletedAt) : null;
+    if (item) {
+        const room = c.rooms.find((r) => r.id === item.roomId);
+        selectTo({ scope: 'task', level: room.level, roomId: room.id, itemId: item.id });
+        guideTo({ type: 'dotOpened' });
         return true;
     }
-    if (level) return liftLevel(level);
-    const levels = model.levels();
-    const at = levels.indexOf(model.lifted);
-    return liftLevel(at + 1 < levels.length ? levels[at + 1] : null);
-}
-
-/** An open floor's rooms: the checklist, showing that floor only. */
-function openLevel(level) {
-    ui.filter = `level:${level}`;
-    openChecklistView();
+    if (!level) {
+        const levels = model.levels();
+        const at = levels.indexOf(model.lifted);
+        const next = at + 1 < levels.length ? levels[at + 1] : null;
+        selectTo(next ? { scope: 'floor', level: next, roomId: null, itemId: null } : null);
+        return true;
+    }
+    const sel = selectFromHit({ level, roomId, itemId: null }, model.lifted);
+    if (!sel) return false;
+    selectTo(sel);
+    return Boolean(ui.selected);
 }
 
 /**
@@ -516,13 +628,15 @@ function showExample() {
         state.doc = seeded.doc;
         example = state.doc.checklists.find((c) => isLive(c) && c.sample);
     }
+    selectTo(null);
     liftLevel(null);
     state.doc = setSettings(state.doc, { activeId: example.id }).doc;
     refresh();
     return true;
 }
 
-/** What is under a point on the canvas: `{ key, level, itemId }`, or null. Only the
+/** What is under a point on the canvas: `{ key, level, roomId, itemId }`,
+ *  or null. Only the
  *  house answers: the stone, the cove and the air are empty space. */
 function pickAt(clientX, clientY) {
     if (!camera || !model) return null;
@@ -535,8 +649,8 @@ function pickAt(clientX, clientY) {
     raycaster.setFromCamera(ndc, camera);
     const pick = firstPick(raycaster.intersectObjects(cast && cast.group.visible ? [model.group, cast.group] : [model.group], true));
     if (!pick) return null;
-    if (pick.key !== 'model') return { key: pick.key, level: null, itemId: null };
-    return { key: pick.key, level: model.levelOfHit(pick.hit), itemId: model.itemOfHit(pick.hit) };
+    if (pick.key !== 'model') return { key: pick.key, level: null, roomId: null, itemId: null };
+    return { key: pick.key, ...(model.hitOf(pick.hit) || { level: null, roomId: null, itemId: null }) };
 }
 
 /** A tap on Maya: she says it again, with a wave toward the house (or,
@@ -563,7 +677,7 @@ function handleSceneTap(clientX, clientY) {
         tapHost();
         return hit.key;
     }
-    tapModel(hit.level, hit.itemId);
+    tapModel(hit.level, hit.itemId, hit.roomId);
     return hit.key;
 }
 
@@ -661,14 +775,18 @@ function setupLook(signal) {
     }, { passive: false, signal });
 }
 
-/** A mouse over the house points, elsewhere it offers to turn it. Asked no
- *  more than twenty times a second. */
+/** A mouse over the house points, elsewhere it offers to turn it, and a
+ *  room it is over is outlined. Asked no more than twenty times a second. */
 function hover(event) {
     if (event.pointerType !== 'mouse' || !state.loaded || anyOpen() || !canvas.style) return;
     const t = performance.now();
     if (t - lastHover < 50) return;
     lastHover = t;
-    canvas.style.cursor = pickAt(event.clientX, event.clientY) ? 'pointer' : 'grab';
+    const hit = pickAt(event.clientX, event.clientY);
+    canvas.style.cursor = hit ? 'pointer' : 'grab';
+    // The room under the pointer, inside the open floor, faintly outlined.
+    const room = hit && hit.key === 'model' && hit.roomId && hit.level === model.lifted ? hit.roomId : null;
+    if (model && model.hover(room)) requestRender();
 }
 
 /**
@@ -773,13 +891,17 @@ function showGuide() {
 }
 
 /**
- * Maya's bubble beside her head, wherever the camera has put her, on a
- * frame that shows her. Elsewhere (a phone) it keeps its own place.
+ * Maya's bubble, or the panel while it is open, beside her head wherever
+ * the camera has put her, on a frame that shows her. Elsewhere (a phone)
+ * each keeps its own place.
  */
 function placeHost() {
     if (!host || !camera) return;
-    if (!host.shown || !cast || !cast.group.visible || !state.pose || !state.pose.host) {
+    const panelOpen = Boolean(panel && panel.shown);
+    const showing = panelOpen || host.shown;
+    if (!showing || !cast || !cast.group.visible || !state.pose || !state.pose.host) {
         host.anchor(null);
+        if (panel) panel.anchor(null);
         return;
     }
     camera.updateMatrixWorld();
@@ -787,7 +909,15 @@ function placeHost() {
     const v = new THREE.Vector3(a[0], a[1], a[2]).project(camera);
     const w = window.innerWidth || 1;
     const hgt = window.innerHeight || 1;
-    host.anchor(((v.x + 1) / 2) * w, ((1 - v.y) / 2) * hgt, w, hgt);
+    const x = ((v.x + 1) / 2) * w;
+    const y = ((1 - v.y) / 2) * hgt;
+    if (panelOpen) {
+        panel.anchor(x, y, w, hgt);
+        host.anchor(null);
+    } else {
+        host.anchor(x, y, w, hgt);
+        if (panel) panel.anchor(null);
+    }
 }
 
 /**
@@ -819,6 +949,7 @@ function enterScene(to) {
     switch (to) {
     case 'hello': {
         // The plain house again: the example, if it was showing, put back.
+        selectTo(null);
         liftLevel(null);
         const c = active();
         if (c && c.sample) {
@@ -828,6 +959,7 @@ function enterScene(to) {
         break;
     }
     case 'floors':
+        selectTo(null);
         liftLevel(null);
         ensureOwn();
         break;
@@ -848,6 +980,7 @@ function enterScene(to) {
     }
     case 'review':
     case 'saved':
+        selectTo(null);
         liftLevel(null);
         if (to === 'saved') save();
         break;
@@ -939,17 +1072,25 @@ function onFloor(key, on) {
 function addKitchen() {
     const c = active();
     if (!c) return null;
+    const type = typeOf(c.serviceType);
+    const annex = new Set(type.levels.filter((l) => l.annex).map((l) => l.key));
+    const level = c.levels.includes('main') ? 'main' : c.levels.find((k) => !annex.has(k)) || c.levels[0];
+    return addRoomOf('kitchen', level);
+}
+
+/** A room of kind `area` on `level` with its standard preset, in one step
+ *  (Maya's kitchen, the panel's chips). Waits politely for the sheet. */
+function addRoomOf(area, level) {
+    const c = active();
+    if (!c) return null;
     if (!state.sheet) {
         announce(UI.sheetLoading);
         toast(UI.sheetLoading);
         return null;
     }
-    const type = typeOf(c.serviceType);
-    const annex = new Set(type.levels.filter((l) => l.annex).map((l) => l.key));
-    const level = c.levels.includes('main') ? 'main' : c.levels.find((k) => !annex.has(k)) || c.levels[0];
-    const presetItems = presetFor(state.sheet, 'kitchen');
-    const name = roomName(c.serviceType, { area: 'kitchen', label: '' });
-    const result = change((d) => addRoom(d, c.id, { level, area: 'kitchen', label: '' }, CONFIG, now(), { check, presetItems }),
+    const presetItems = presetFor(state.sheet, area);
+    const name = roomName(c.serviceType, { area, label: '' });
+    const result = change((d) => addRoom(d, c.id, { level, area, label: '' }, CONFIG, now(), { check, presetItems }),
         UI.labels.roomAdded, UI.roomAdded(name, presetItems.length));
     if (!result.error) guideTo({ type: 'roomAdded', roomId: result.record.id });
     return result;
@@ -1152,6 +1293,7 @@ function refresh() {
     const show = (id, on) => { const b = el(id); if (b) b.hidden = !on; };
     show('my-clear-example', hasSamples(state.doc));
     show('help-checklist', Boolean(c));
+    show('hud-rooms', Boolean(c));
     show('help-home', Boolean(c));
     show('help-prefs', Boolean(c));
     const chip = quoteChip(c, state.sheet);
@@ -1184,6 +1326,13 @@ function refresh() {
     }
     // Maya's words that depend on the home (the rooms so far) keep up.
     if (host && host.view) host.update(guideView());
+    // The selection, as the home now has it: a different checklist drops
+    // it, a removed room or task steps back to what is left.
+    if (ui.selected) {
+        const kept = c && ui.selected.checklistId === c.id ? reconcile(ui.selected, c) : null;
+        if (kept !== ui.selected) selectTo(kept);
+        else showPanel();
+    }
     requestRender();
 }
 
@@ -1671,6 +1820,10 @@ function setupEventListeners() {
         on: { button: onHostButton, floor: onFloor }
     });
     setupHelp(signal);
+    panel = createPanel({
+        signal,
+        on: { back: onPanelBack, row: onPanelRow, star: toggleStar, chip: onPanelChip, action: onPanelAction }
+    });
 
     // Escape steps back (an open floor closes) or puts the arrival panel
     // away, and the arrows and + and - move the view: from anywhere but a
@@ -1687,6 +1840,8 @@ function setupEventListeners() {
             if (closeHelp(true) || stepBack()) event.preventDefault();
             return;
         }
+        // The panel's own lists take their arrow keys.
+        if (panel && panel.contains(target)) return;
         if (lookKey(event.key)) event.preventDefault();
     }, { signal });
 
@@ -1718,7 +1873,7 @@ function setupEventListeners() {
     on('task-notes', 'input', () => showHints('task-notes', 'task-notes-hint'));
     on('task-avoid', 'input', () => showHints('task-avoid', 'task-avoid-hint'));
     on('hud-quote', 'click', openQuote);
-    on('ws-back', 'click', stepBack);
+    on('hud-rooms', 'click', () => selectTo({ scope: 'house', level: null, roomId: null, itemId: null }, { focus: true }));
     on('quote-open-checklist', 'click', openChecklistView);
     on('menu-area', 'change', () => {
         ui.menuArea = el('menu-area').value;
@@ -1834,9 +1989,9 @@ function animate() {
     if (locked !== wasLocked) {
         wasLocked = locked;
         state.dirty = true;
-        // Maya steps out of sight while a card is open.
-        if (host) host.setCovered(locked);
     }
+    // Maya steps out of sight while a card or the panel is open.
+    if (host) host.setCovered(locked || Boolean(panel && panel.shown));
 
     if (!state.dirty) return;
     state.dirty = false;
@@ -1974,6 +2129,14 @@ export const __test__ = {
     stage: () => stage,
     turntable: () => turntable,
     cast: () => cast,
+    panel: () => panel,
+    selectTo,
+    toggleStar,
+    addRoomOf,
+    onPanelRow,
+    onPanelBack,
+    onPanelAction,
+    onPanelChip,
     placeHost,
     tapHost,
     drawnYaw: () => drawnYaw,

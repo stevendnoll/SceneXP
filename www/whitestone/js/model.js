@@ -38,7 +38,7 @@
  * on the walls of the one below. Everything is plain numbers first
  * (`instancesFor`), so the tests check every wall, window and dot without a
  * renderer, and each kind of part is then ONE instanced mesh, sized for the
- * most a checklist may hold: sixteen draw calls for any home.
+ * most a checklist may hold: seventeen draw calls for any home.
  *
  * ON A ROUND LAWN. The model stands on the turntable's top, on a lawn disc
  * inside its stone rim, the house a little back of the middle so the front
@@ -110,7 +110,9 @@ export const HOUSE = Object.freeze({
         }),
         yard: 0.75              // of the room in front and behind the house, the share in front
     }),
-    dot: Object.freeze({ height: 0.008 }),
+    dot: Object.freeze({ height: 0.008, selected: 1.6 }),
+    /** The border round a selected or hovered room, just inside its floor. */
+    outline: Object.freeze({ width: 0.013, height: 0.006, inset: 0.004 }),
     flag: Object.freeze({ pole: 0.06, poleWidth: 0.004, width: 0.03, height: 0.02, depth: 0.004 }),
     /** Tasks in the front of a room, its fixture against the back. */
     taskBand: 0.5,
@@ -640,7 +642,7 @@ function crossGable(level, top, roofY, cx, cz) {
  * its windows); `site` the yard's half width and depth (siteFor), and the
  * round lawn's radius when it has one.
  */
-export function instancesFor(layout, offsets, { lifted = null, areas = new Map(), site = null } = {}) {
+export function instancesFor(layout, offsets, { lifted = null, areas = new Map(), site = null, selection = null } = {}) {
     const [cx, cy, cz0] = centerOf(layout);
     // On a site, the house stands back a little, so the front yard has room
     // for its path, its drive and its beds (HOUSE.site.yard).
@@ -657,7 +659,7 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
     const lowest = living[0] || stories[0];
     const out = {
         slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [],
-        fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: []
+        fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [], outlines: []
     };
     let door = null;
     const garages = [];
@@ -767,23 +769,43 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
         out.tiles.push(part(t.level, x, y, z, t.width, MODEL.tileHeight, t.depth, { roomId: t.roomId, color: FLOOR_OF[areas.get(t.roomId)] || 'oak' }));
         const floorTop = y + MODEL.tileHeight;
         out.walls.push(...partitions(t, s, y, cx, cz).map((p) => ({ ...p, color: 'interior' })));
+        // Its fixture carries the room's id (fixtureFor), so a tap on its
+        // bed or its sofa is a tap on the room.
         const fx = fixtureFor(areas.get(t.roomId), t, floorTop, x, z);
         out.fixtures.push(...fx.boxes);
         out.blooms.push(...fx.blobs);
+        // The selected room outlined in the accent, a hovered one more
+        // faintly: a thin raised border just inside the room's floor.
+        if (selection && (selection.roomId === t.roomId || selection.hoverRoomId === t.roomId)) {
+            const O = HOUSE.outline;
+            const color = selection.roomId === t.roomId ? 'outline' : 'outlineHover';
+            const fw = t.width - O.inset * 2;
+            const fd = t.depth - O.inset * 2;
+            const extra = { roomId: t.roomId, color, role: color };
+            out.outlines.push(
+                part(t.level, x, floorTop, z - fd / 2 + O.width / 2, fw, O.height, O.width, extra),
+                part(t.level, x, floorTop, z + fd / 2 - O.width / 2, fw, O.height, O.width, extra),
+                part(t.level, x - fw / 2 + O.width / 2, floorTop, z, O.width, O.height, fd, extra),
+                part(t.level, x + fw / 2 - O.width / 2, floorTop, z, O.width, O.height, fd, extra)
+            );
+        }
         // The tasks, on a grid in the front of the room (layout.js's grid,
         // the same order and the same cells, in the front band).
         const items = (byRoom.get(t.roomId) || []).map((m) => ({ id: m.itemId, important: m.important }));
         const band = { ...t, x, z: z + t.depth * (1 - HOUSE.taskBand) / 2, depth: t.depth * HOUSE.taskBand, y: 0, roomId: t.roomId };
         for (const m of markerGrid(band, items)) {
+            // The selected task's dot stands out: larger, and darker.
+            const chosen = Boolean(selection && selection.itemId === m.itemId);
+            const size = chosen ? m.size * HOUSE.dot.selected : m.size;
             out.markers.push({
-                level: t.level, itemId: m.itemId, important: m.important,
-                position: [m.x, floorTop, m.z], scale: [m.size, HOUSE.dot.height, m.size], top: floorTop + HOUSE.dot.height
+                level: t.level, itemId: m.itemId, roomId: t.roomId, important: m.important, selected: chosen,
+                position: [m.x, floorTop, m.z], scale: [size, HOUSE.dot.height, size], top: floorTop + HOUSE.dot.height
             });
             if (m.important) {
                 const f = HOUSE.flag;
                 const px = m.x + m.size * 0.3;
-                out.flags.push(part(t.level, px, floorTop, m.z, f.poleWidth, f.pole, f.poleWidth, { itemId: m.itemId }));
-                out.flags.push(part(t.level, px + f.width / 2, floorTop + f.pole - f.height, m.z, f.width, f.height, f.depth, { itemId: m.itemId }));
+                out.flags.push(part(t.level, px, floorTop, m.z, f.poleWidth, f.pole, f.poleWidth, { itemId: m.itemId, roomId: t.roomId }));
+                out.flags.push(part(t.level, px + f.width / 2, floorTop + f.pole - f.height, m.z, f.width, f.height, f.depth, { itemId: m.itemId, roomId: t.roomId }));
             }
         }
     }
@@ -1090,6 +1112,9 @@ function prismGeometry() {
  *   pickable            the meshes a tap on the model can meet
  *   levelOfHit(hit)     the level a raycast hit on the model belongs to
  *   itemOfHit(hit)      the task a hit on a dot or its flag belongs to
+ *   hitOf(hit)          { level, roomId, itemId } of whatever a hit met
+ *   select({ roomId, itemId })  outline a room, enlarge a task's dot
+ *   hover(roomId)       outline the room under the pointer, faintly
  *   shiny               the materials that should mirror the room
  */
 export function buildModel(config, at) {
@@ -1139,6 +1164,9 @@ export function buildModel(config, at) {
         blooms: make('blooms', new THREE.IcosahedronGeometry(0.5, 0), colored(0.8, { flatShading: true }), 80, true),
         firs: make('firs', new THREE.ConeGeometry(0.5, 1, 9), colored(0.85, { flatShading: true }), 4, true),
         lawn: make('lawn', new THREE.CylinderGeometry(0.5, 0.5, 1, 96), colored(0.95), 1, true),
+        // The selected and hovered rooms' borders, lit a little so they read
+        // on a shaded floor.
+        outlines: make('outlines', box, colored(0.5, { emissive: config.colors.accent, emissiveIntensity: 0.35 }), 8, true),
         markers: make('markers', dot, std(0xffffff, {
             roughness: 0.4, emissive: colors.marker, emissiveIntensity: colors.markerGlow || 0
         }), limits.items, true),
@@ -1146,6 +1174,9 @@ export function buildModel(config, at) {
     };
     const paint = Object.fromEntries(Object.entries(pal).map(([k, v]) => [k, new THREE.Color(v)]));
     paint.marker = new THREE.Color(colors.marker);
+    paint.markerSelected = new THREE.Color(config.colors.accent);
+    paint.outline = new THREE.Color(config.colors.accent);
+    paint.outlineHover = new THREE.Color(colors.outlineHover || '#9FB3C4');
     const paintOf = (p) => paint[p.color] || paint.wall;
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
@@ -1158,10 +1189,12 @@ export function buildModel(config, at) {
     let areas = new Map();
     let key = '';
     let lifted = null;
+    /** The selected room and task, and the room under the pointer. */
+    const selection = { roomId: null, itemId: null, hoverRoomId: null };
     /** Each part's lift now, and the move toward its target. */
     const now = new Map();
     let move = null;
-    let placed = { slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [], fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [] };
+    let placed = { slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [], fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [], outlines: [] };
     const turntable = config.stage.turntable;
     let scaled = 1;
     let restHeight = 0;
@@ -1189,7 +1222,7 @@ export function buildModel(config, at) {
     }
 
     function draw() {
-        placed = instancesFor(layout, now, { lifted, areas, site: siteFor(layout, turntable, scaled) });
+        placed = instancesFor(layout, now, { lifted, areas, site: siteFor(layout, turntable, scaled), selection });
         place(meshes.slabs, placed.slabs, paintOf);
         place(meshes.walls, placed.walls, paintOf);
         place(meshes.siding, placed.siding, paintOf);
@@ -1204,7 +1237,8 @@ export function buildModel(config, at) {
         place(meshes.blooms, placed.blooms, paintOf);
         place(meshes.firs, placed.firs, paintOf);
         place(meshes.lawn, placed.lawn, paintOf);
-        place(meshes.markers, placed.markers, () => paint.marker);
+        place(meshes.markers, placed.markers, (p) => (p.selected ? paint.markerSelected : paint.marker));
+        place(meshes.outlines, placed.outlines, paintOf);
         place(meshes.flags, placed.flags);
     }
 
@@ -1246,6 +1280,7 @@ export function buildModel(config, at) {
             // A different home, or the lifted level gone from this one, sets
             // the level down at once.
             if (!sameHome || !layout.slabs.some((s) => s.level === lifted)) lifted = null;
+            if (!sameHome) Object.assign(selection, { roomId: null, itemId: null, hoverRoomId: null });
             settle();
             draw();
             return true;
@@ -1314,6 +1349,39 @@ export function buildModel(config, at) {
             const kind = Object.keys(meshes).find((k) => meshes[k] === hit.object);
             const p = kind ? placed[kind][hit.instanceId] : null;
             return p ? p.level : null;
+        },
+        /**
+         * What a hit on the model met: `{ level, roomId, itemId }`, the
+         * room of anything inside one (its floor, its fixture, a dot), the
+         * task of a dot or its flag, and the level of anything at all.
+         */
+        hitOf(hit) {
+            if (!hit || hit.instanceId === undefined) return null;
+            const kind = Object.keys(meshes).find((k) => meshes[k] === hit.object);
+            const p = kind ? placed[kind][hit.instanceId] : null;
+            if (!p) return null;
+            return { level: p.level || null, roomId: p.roomId || null, itemId: p.itemId || null };
+        },
+        /** Select a room and a task (either null): outlined and enlarged.
+         *  Returns whether anything changed. */
+        select({ roomId = null, itemId = null } = {}) {
+            if (selection.roomId === roomId && selection.itemId === itemId) return false;
+            selection.roomId = roomId;
+            selection.itemId = itemId;
+            draw();
+            return true;
+        },
+        /** The room under the pointer (null for none), outlined faintly.
+         *  Returns whether anything changed. */
+        hover(roomId = null) {
+            const next = roomId === selection.roomId ? null : roomId;
+            if (selection.hoverRoomId === next) return false;
+            selection.hoverRoomId = next;
+            draw();
+            return true;
+        },
+        get selection() {
+            return { ...selection };
         },
         /** The task a hit on a dot or its flag belongs to, else null. */
         itemOfHit(hit) {

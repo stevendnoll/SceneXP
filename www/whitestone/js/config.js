@@ -135,6 +135,7 @@ export const CONFIG = deepFreeze({
             fir2: '#4A6B42'
         },
         marker: '#5A82A6',     // the tasks, a lighter accent
+        outlineHover: '#9FB3C4', // the room under the pointer, faintly
         markerGlow: 0.22,      // how much the task dots light themselves
         lift: { raise: 0.02, open: 0.34, seconds: 0.6 },
         /** Drawn larger than layout.js's numbers, up to `max`, and smaller

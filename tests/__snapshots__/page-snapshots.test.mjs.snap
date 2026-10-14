@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=8" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=9" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7090,12 +7090,13 @@ html [data-ui-theme="surf" lang="en"]
     link [href="js/guide.min.js" rel="modulepreload"]
     link [href="js/host.min.js" rel="modulepreload"]
     link [href="js/cast.min.js" rel="modulepreload"]
+    link [href="js/panel.min.js" rel="modulepreload"]
     link [href="js/guards.min.js" rel="modulepreload"]
     link [href="js/layout.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=8" rel="stylesheet"]
+    link [href="css/experience.min.css?v=9" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7150,12 +7151,23 @@ html [data-ui-theme="surf" lang="en"]
       p#host-small.host-small [hidden]
       button#host-skip.host-skip [hidden type="button"]
         "Skip the guide"
-    button#ws-back.ws-back [hidden type="button"]
-      "Back to the whole house"
+    aside#ws-panel.ws-panel [aria-labelledby="panel-title" hidden]
+      button#panel-back.panel-back [type="button"]
+        "Back to the whole house"
+      h2#panel-title.panel-title
+      p#panel-summary.panel-summary [hidden]
+      h3#panel-heading.panel-heading [hidden]
+      ul#panel-list.panel-list [hidden]
+      p#panel-empty.panel-empty [hidden]
+      div#panel-detail.panel-detail [hidden]
+      div#panel-chips.panel-chips [hidden]
+      div#panel-actions.panel-actions
     p#ws-live.sr-only [aria-live="polite" role="status"]
     div#ws-hud.ui-float.ws-hud [aria-label="Your checklist" role="group"]
       button#hud-home.hud-chip [hidden type="button"]
         "Our home"
+      button#hud-rooms.hud-chip [aria-label="Your home, floor by floor: its floors, rooms and tasks" hidden type="button"]
+        "Rooms"
       button#hud-quote.hud-chip.hud-quote [hidden type="button"]
         span#hud-quote-text
         span.hud-example

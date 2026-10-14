@@ -214,7 +214,8 @@ function facesOf(inst) {
     for (const b of [...inst.canopies, ...inst.blooms]) add(blobFaces(b), color(b, PAL.leaves));
     for (const b of inst.firs) add(coneFaces(b), color(b, PAL.fir1));
     for (const b of inst.lawn || []) add(discFaces(b), PAL.lawn);
-    for (const m of inst.markers) add(boxFaces(m, true), CONFIG.model.marker);
+    for (const b of inst.outlines || []) add(boxFaces(b), b.color === 'outline' ? CONFIG.colors.accent : CONFIG.model.outlineHover);
+    for (const m of inst.markers) add(boxFaces(m, true), m.selected ? CONFIG.colors.accent : CONFIG.model.marker);
     for (const b of inst.flags) add(boxFaces(b), CONFIG.model.marker);
     return faces;
 }
@@ -356,12 +357,12 @@ function png({ width, height, rgb }) {
 }
 
 /** A home's parts on the turntable, its scale, and its closed height. */
-function build(home, lifted = null) {
+function build(home, lifted = null, selection = null) {
     const layout = layoutHome(home);
     const k = fitScale(layout, T, CONFIG.model.scale);
     const site = siteFor(layout, T, k);
     const areas = new Map((home.rooms || []).map((r) => [r.id, r.area]));
-    const inst = instancesFor(layout, levelOffsets(layout.slabs, lifted, CONFIG.model.lift), { lifted, areas, site });
+    const inst = instancesFor(layout, levelOffsets(layout.slabs, lifted, CONFIG.model.lift), { lifted, areas, site, selection });
     const closed = instancesFor(layout, new Map(), { areas, site });
     // The frame holds the floors lifted above an open one too (main.js
     // frameHeight).
@@ -386,7 +387,12 @@ const views = [
     ['Every level, the tallest', shot(build(widest), start, 1280, 800)],
     ['Maya waving hello', { ...shot(build(EMPTY_HOME), start, 1280, 800), gesture: { name: 'wave', t: 1.0 } }],
     ['Maya pointing to the house', { ...shot(build(example), start, 1280, 800), gesture: { name: 'point', t: 1.0 } }],
-    ['A narrower laptop (1024 by 768)', shot(build(example), start, 1024, 768)]
+    ['A narrower laptop (1024 by 768)', shot(build(example), start, 1024, 768)],
+    ['The main floor open, the kitchen selected and a task in it, the living room hovered', shot(build(example, 'main', {
+        roomId: example.rooms.find((r) => r.area === 'kitchen').id,
+        itemId: example.items.find((i) => i.roomId === example.rooms.find((r) => r.area === 'kitchen').id).id,
+        hoverRoomId: (example.rooms.find((r) => r.area === 'living' && r.level === 'main') || {}).id
+    }), front, 1280, 800)]
 ];
 
 await mkdir(path.dirname(OUT), { recursive: true });
