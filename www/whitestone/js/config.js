@@ -103,13 +103,17 @@ export const CONFIG = deepFreeze({
          *  muted accent per room. Still no dark walnut browns
          *  (whitestone-model tests the palette). */
         palette: {
-            wall: '#6E7276',       // gray lap siding
-            lapLine: '#5C6064',    // the siding's courses
+            // QA, 2026-10-13: the dark gray body, roof and floor edges made
+            // one gloomy mass. A lighter body, crisp white trim, and the
+            // dark kept for the roof and the windows, as real ones are.
+            wall: '#959A9C',       // gray lap siding
+            lapLine: '#82878A',    // the siding's courses
+            whiteTrim: '#F4F3EF',  // corner boards, the band between floors, fascia, gutters, railings' caps
             gable: '#F2F1EC',      // the cross gable's board and batten
             batten: '#D9D6CE',
             stone: '#A49C90',      // the stone base, the porch piers
             stoneLine: '#8C857A',
-            roof: '#3E4042',       // asphalt
+            roof: '#45484C',       // asphalt
             trim: '#2C2F33',       // the ridge, the gutters
             frame: '#1F2124',      // the windows' black frames
             glass: '#6F8796',
