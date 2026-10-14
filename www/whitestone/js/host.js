@@ -124,6 +124,21 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         choices.appendChild(h('div', { className: 'host-picks', attrs: { role: 'group', 'aria-label': c.legend } }, buttons));
     }
 
+    /** Rooms to add, as the panel's dashed chips (`{ kind: 'chips', legend,
+     *  chips }`, each `{ area, level, label, aria }`): one tap adds it. */
+    function drawChips(c) {
+        const chips = c.chips.map((ch) => {
+            const btn = h('button', { type: 'button', id: `host-chip-${ch.area}`, className: 'panel-chip', text: `+ ${ch.label}`, attrs: { 'aria-label': ch.aria } });
+            btn.addEventListener('click', () => {
+                if (typeof on.chip === 'function') on.chip(ch.area, ch.level);
+            }, { signal });
+            return btn;
+        });
+        choices.appendChild(h('div', { className: 'panel-chips host-room-chips', attrs: { role: 'group', 'aria-label': c.legend } }, [
+            h('p', { className: 'panel-chips-heading', text: c.legend }), ...chips
+        ]));
+    }
+
     /** The floors to tick, and the checklist's name, or one of a few, when
      *  Maya asks. */
     function drawChoices() {
@@ -134,6 +149,11 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         choices.hidden = !c;
         if (c && c.kind === 'pick') {
             drawPick(c);
+            return;
+        }
+        if (c && c.kind === 'chips') {
+            if (c.chips.length) drawChips(c);
+            else choices.hidden = true;
             return;
         }
         if (!c || c.kind !== 'floors') return;
@@ -222,6 +242,19 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             if (covered === Boolean(on)) return;
             covered = Boolean(on);
             place();
+        },
+        /** A button she drew (a choice, a chip, an action) by its id, for
+         *  its halo; null when there is none. */
+        nodeOf(id) {
+            for (const box of [choices, actions]) {
+                const stack = box ? [box] : [];
+                while (stack.length) {
+                    const n = stack.pop();
+                    if (n !== box && n.id === id) return n;
+                    for (const child of Array.from(n.children || [])) stack.push(child);
+                }
+            }
+            return null;
         },
         /** Focus on the main button of what she says (Let's start, Next),
          *  else her first: where a keyboard picks up after Start over. */

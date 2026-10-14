@@ -14,7 +14,7 @@ import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { PANEL, UI, withArticle } from '../www/whitestone/js/copy.js';
-import { selectFromHit, stepOut, reconcile, suggestions, panelView, CHIPS } from '../www/whitestone/js/panel.js';
+import { selectFromHit, stepOut, reconcile, suggestions, panelView, CHIPS, COMMON, homeSuggestions } from '../www/whitestone/js/panel.js';
 import { withExample } from '../www/whitestone/js/samples.js';
 import { emptyDoc } from '../www/whitestone/js/store.js';
 import { priceChoice, formatMoney } from '../www/whitestone/js/pricing.js';
@@ -696,5 +696,68 @@ describe('arriving by the edit link', () => {
         expect(await main.__test__.arriveByEditLink({ id: 'Z'.repeat(22), key: 'k'.repeat(43), ownerToken: 'o'.repeat(43) })).toBe(false);
         expect(main.__test__.state.doc).toBe(before);
         expect(main.__test__.state.editLinkFailed).toBe(true);
+    });
+});
+
+
+// ---- The common rooms (QA, 2026-10-14) -------------------------------------------------
+
+describe('the common rooms only, each on its usual floor', () => {
+    const home = (levels, rooms = []) => ({ levels, rooms: rooms.map(([area, level], i) => ({ id: `r${i}`, area, level })) });
+
+    test('a floor\'s chips are the common kinds; the rest wait under Another kind of room', () => {
+        const all = Object.values(CHIPS).flat();
+        for (const rare of ['mudroom', 'pantry', 'closet', 'hallway', 'gym', 'nursery', 'playroom', 'stairs', 'patio', 'entry']) expect(all).not.toContain(rare);
+        expect(suggestions('main', home(['main']))).toEqual(['kitchen', 'living', 'dining', 'powder-room', 'office', 'laundry']);
+    });
+
+    test('Maya\'s chips: most common first, on the floor each usually goes, six at most', () => {
+        expect(homeSuggestions(home(['main']))).toEqual([
+            { area: 'kitchen', level: 'main' }, { area: 'living', level: 'main' }, { area: 'primary-bedroom', level: 'main' },
+            { area: 'primary-bathroom', level: 'main' }, { area: 'bedroom', level: 'main' }, { area: 'bathroom', level: 'main' }
+        ]);
+        const two = homeSuggestions(home(['basement', 'main', 'second', 'garage']), 12);
+        const at = (area) => (two.find((x) => x.area === area) || {}).level;
+        expect([at('kitchen'), at('primary-bedroom'), at('bedroom'), at('family'), at('garage'), at('laundry')]).toEqual(['main', 'second', 'second', 'basement', 'garage', 'main']);
+        // A garage only where there is one.
+        expect(homeSuggestions(home(['main']), 12).map((x) => x.area)).not.toContain('garage');
+        expect(homeSuggestions(home(['main']), 12)).toHaveLength(COMMON.length - 1);
+        // A condo (no main floor): its first.
+        expect(homeSuggestions(home(['second']))[0]).toEqual({ area: 'kitchen', level: 'second' });
+    });
+
+    test('a kind a home has its one of is not offered again; a bedroom always is', () => {
+        const h = home(['main', 'second'], [['kitchen', 'main'], ['primary-bedroom', 'second'], ['bedroom', 'second']]);
+        const areas = homeSuggestions(h, 12).map((x) => x.area);
+        expect(areas).not.toContain('kitchen');
+        expect(areas).not.toContain('primary-bedroom');
+        expect(areas).toContain('bedroom');
+        // A garage already in the garage is not offered twice.
+        expect(homeSuggestions(home(['main', 'garage'], [['garage', 'garage']]), 12).map((x) => x.area)).not.toContain('garage');
+        // Removed rooms do not count.
+        expect(homeSuggestions({ levels: ['main'], rooms: [{ id: 'k', area: 'kitchen', level: 'main', deletedAt: 'x' }] })[0].area).toBe('kitchen');
+    });
+});
+
+describe('Maya\'s room chips on the page', () => {
+    test('Your rooms: a chip adds the room on its usual floor, opens that floor, and the ringed kitchen chip keeps its ring through a redraw', async () => {
+        const main = await bootHome();
+        const t = main.__test__;
+        // Back into the build at Your rooms, with a second floor.
+        t.ui.guide = { ...t.ui.guide, scene: 'firstRoom', reached: 2 };
+        t.showGuide();
+        const chipOf = (area) => (dom.el('host-choices').children[0] || { children: [] }).children.find((b) => b.id === `host-chip-${area}`);
+        expect(chipOf('kitchen').classList.contains('has-halo')).toBe(true);
+        t.refresh();
+        expect(chipOf('kitchen').classList.contains('has-halo')).toBe(true);
+        t.ui.guide = { ...t.ui.guide, scene: 'rooms', reached: 3, rooms: 0 };
+        t.showGuide();
+        fire(chipOf('primary-bedroom'), 'click');
+        const bed = t.active().rooms.find((r) => r.area === 'primary-bedroom');
+        expect(bed.level).toBe('second');
+        expect(t.model().lifted).toBe('second');
+        expect(t.ui.guide).toMatchObject({ scene: 'rooms', rooms: 1 });
+        // Not offered twice.
+        expect(chipOf('primary-bedroom')).toBeUndefined();
     });
 });

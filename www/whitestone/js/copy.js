@@ -352,7 +352,8 @@ export const GUIDE = Object.freeze({
     firstRoom: 'Most people start with the kitchen. Shall we add it?',
     firstRoomAgain: 'Adding the kitchen brings its standard tasks with it. You can change any of them.',
     addKitchen: 'Add the kitchen',
-    otherRoom: 'Choose another room',
+    otherRoom: 'Another kind of room',
+    roomsLegend: 'Add a room',
 
     /** Said once the first room is in, from the price sheet. */
     added: (room, count, money) => `There's your ${room} with its ${countWord(count)} standard ${count === 1 ? 'task' : 'tasks'}, ${money} so far.`,

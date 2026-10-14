@@ -126,8 +126,14 @@ const rows = () => dom.el('panel-list').children.map((li) => li.children[0]);
 const rowLabels = () => rows().map((b) => b.children[0].textContent);
 const shown = () => !dom.el('ws-host').hidden;
 const buttons = () => dom.el('host-actions').children.map((b) => b.textContent);
+/** A room chip in Maya's bubble, by its kind of room. */
+const roomChip = (area) => {
+    const group = dom.el('host-choices').children[0];
+    return group ? group.children.find((x) => x.id === `host-chip-${area}`) : undefined;
+};
 const press = (id) => {
-    const b = dom.el('host-actions').children.find((x) => x.id === `host-${id}`);
+    // A button, or (the kitchen, a bedroom) one of her room chips.
+    const b = dom.el('host-actions').children.find((x) => x.id === `host-${id}`) || roomChip(id);
     if (!b) throw new Error(`no ${id} in ${buttons().join(', ')}`);
     fire(b, 'click');
 };
@@ -423,7 +429,11 @@ describe('a first visit', () => {
         // On the main floor, not the first floor listed.
         tick('basement', true);
         press('next');
-        expect(buttons()).toEqual([GUIDE.addKitchen, GUIDE.otherRoom]);
+        expect(buttons()).toEqual([GUIDE.otherRoom]);
+        // The rooms most homes have, as chips, the kitchen first and ringed.
+        expect(dom.el('host-choices').children[0].children.slice(1).map((b) => b.textContent)).toEqual(
+            ['+ Kitchen', '+ Living room', '+ Primary bedroom', '+ Primary bathroom', '+ Bedroom', '+ Bathroom']);
+        expect(roomChip('kitchen').classList.contains('has-halo')).toBe(true);
         press('kitchen');
         const c = own(main);
         expect(c.rooms).toHaveLength(1);
@@ -437,7 +447,7 @@ describe('a first visit', () => {
         expect(buttons()).toEqual([GUIDE.gotIt]);
         press('gotIt');
         expect(line()).toBe(GUIDE.rooms);
-        expect(buttons()).toEqual([GUIDE.addRoom]);
+        expect(buttons()).toEqual([GUIDE.otherRoom]);
     });
 
     test('before the price sheet arrives, the kitchen waits and says so', async () => {
@@ -484,7 +494,7 @@ describe('a first visit', () => {
         press('kitchen');
         press('next');
         press('gotIt');
-        press('addRoom');
+        press('otherRoom');
         expect(openCards()).toEqual(['room']);
         dom.el('room-level').value = 'second';
         dom.el('room-area').value = 'bedroom';
@@ -493,7 +503,7 @@ describe('a first visit', () => {
         // Shown on the house, not in the checklist, while Maya is guiding.
         expect(openCards()).toEqual([]);
         expect(own(main).rooms).toHaveLength(2);
-        expect(buttons()).toEqual([GUIDE.addRoom, GUIDE.reviewIt]);
+        expect(buttons()).toEqual([GUIDE.reviewIt, GUIDE.otherRoom]);
         press('review');
         expect(main.__test__.model().lifted).toBeNull();
         expect(line()).toBe(GUIDE.review);

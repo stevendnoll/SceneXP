@@ -70,6 +70,7 @@ export function entryOf(stepIndex, { roomId = null } = {}) {
  * takes the ring away the moment it is used.
  */
 export const HALO = Object.freeze({
+    firstRoom: Object.freeze({ kind: 'element', id: 'host-chip-kitchen' }),
     dots: Object.freeze({ kind: 'dot' }),
     rooms: Object.freeze({ kind: 'floor' }),
     look: Object.freeze({ kind: 'floor' }),
@@ -312,16 +313,18 @@ export function viewFor(guide, ctx = {}) {
     case 'floors':
         return { ...base, text: guide.tapped ? `${GUIDE.floorsTaking} ${GUIDE.floors}` : GUIDE.floors, buttons: [b('next', GUIDE.next, true)], choices: 'floors' };
     case 'firstRoom':
-        return { ...base, text: GUIDE.firstRoom, buttons: [b('kitchen', GUIDE.addKitchen, true), b('otherRoom', GUIDE.otherRoom)] };
+        // The rooms most homes have as chips, the kitchen first and ringed
+        // (QA, 2026-10-14), every other kind one tap away.
+        return { ...base, text: GUIDE.firstRoom, buttons: [b('otherRoom', GUIDE.otherRoom)], choices: 'rooms' };
     case 'added':
         return { ...base, text: ctx.addedText || GUIDE.addedPlain(String(ctx.roomLabel || '').toLowerCase()), buttons: [b('next', GUIDE.next, true)] };
     case 'dots':
         return { ...base, text: GUIDE.dots, buttons: [b('gotIt', GUIDE.gotIt)] };
     case 'rooms': {
-        const buttons = [b('addRoom', GUIDE.addRoom, true)];
-        // Review is offered once there are two rooms (ONBOARDING Scene 5).
-        if ((ctx.roomCount || 0) >= 2) buttons.push(b('review', GUIDE.reviewIt));
-        return { ...base, text: guide.rooms >= 2 ? GUIDE.roomsMore : GUIDE.rooms, buttons };
+        // Rooms as chips (QA, 2026-10-14); Review is offered once there are
+        // two rooms (ONBOARDING Scene 5).
+        const buttons = (ctx.roomCount || 0) >= 2 ? [b('review', GUIDE.reviewIt, true), b('otherRoom', GUIDE.otherRoom)] : [b('otherRoom', GUIDE.otherRoom)];
+        return { ...base, text: guide.rooms >= 2 ? GUIDE.roomsMore : GUIDE.rooms, buttons, choices: 'rooms' };
     }
     case 'review':
         return { ...base, text: GUIDE.review, buttons: [b('save', GUIDE.save, true), b('preferences', GUIDE.preferences)] };

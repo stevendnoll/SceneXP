@@ -71,7 +71,7 @@ import { buildModel } from './model.min.js';
 import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, GUIDED } from './guide.min.js';
 import { createHost } from './host.min.js';
 import { buildMaya, speakSeconds } from './cast.min.js';
-import { createPanel, selectFromHit, stepOut, reconcile, panelView } from './panel.min.js';
+import { createPanel, selectFromHit, stepOut, reconcile, panelView, homeSuggestions } from './panel.min.js';
 
 // ---- State ------------------------------------------------------------------
 
@@ -596,20 +596,42 @@ function onPanelChip(area) {
 function setHalo(spec) {
     if (ui.halo && ui.halo.node && ui.halo.node.classList) ui.halo.node.classList.remove('has-halo');
     ui.halo = spec ? { spec, used: false, node: null } : null;
-    if (spec && spec.kind === 'element') {
-        const node = el(spec.id);
-        if (node && node.classList) {
-            node.classList.add('has-halo');
-            // Used, it is done with.
-            node.addEventListener('click', () => {
-                node.classList.remove('has-halo');
-                if (ui.halo && ui.halo.node === node) ui.halo.used = true;
-            }, { once: true });
-            ui.halo.node = node;
-        }
-    }
+    glowHalo();
     placeHalo();
     requestRender();
+}
+
+/** A control's glow, on the control as it is drawn now: Maya's own buttons
+ *  are drawn again with each change (a chip added), so the glow follows
+ *  the new one until it is used. */
+function glowHalo() {
+    const h = ui.halo;
+    if (!h || h.used || h.spec.kind !== 'element') return;
+    const node = (host && host.nodeOf(h.spec.id)) || el(h.spec.id);
+    if (!node || !node.classList || node === h.node) return;
+    node.classList.add('has-halo');
+    // Used, it is done with.
+    node.addEventListener('click', () => {
+        node.classList.remove('has-halo');
+        if (ui.halo === h) h.used = true;
+    }, { once: true });
+    h.node = node;
+}
+
+/** Maya's bubble drawn again for a change within the scene, its halo kept. */
+function updateHost() {
+    host.update(guideView());
+    glowHalo();
+}
+
+/** A room chip in Maya's bubble: that room, with its standard tasks, on
+ *  the floor it usually goes on, and that floor opened to show it. */
+function onGuideChip(area, level) {
+    if (!state.loaded) return null;
+    if (host) host.poke();
+    const result = addRoomOf(area, level);
+    if (result && !result.error && ui.guide && ui.guide.scene === 'rooms') liftLevel(level);
+    return result;
 }
 
 /** Where the ring on the house goes, in the turntable's frame, or null when
@@ -1031,6 +1053,14 @@ function guideView() {
     const v = viewFor(ui.guide, guideContext());
     const c = active();
     const typeKey = c ? c.serviceType : 'cleaning';
+    if (v && v.choices === 'rooms') {
+        // The rooms most homes have, each on its usual floor (panel.js).
+        const chips = c ? homeSuggestions(c).map(({ area, level }) => {
+            const name = roomName(typeKey, { area, label: '' });
+            return { area, level, label: name, aria: PANEL.chipLabel(name) };
+        }) : [];
+        return { ...v, choices: { kind: 'chips', legend: GUIDE.roomsLegend, chips } };
+    }
     if (v && v.choices === 'returning') {
         return { ...v, choices: { kind: 'pick', legend: GUIDE.returningLegend, options: returningChoices(c) } };
     }
@@ -1290,7 +1320,7 @@ function chooseResidence(patch) {
     const residence = { ...(c.residence || {}), ...patch };
     const result = mutate((d) => setResidence(d, c.id, residence, CONFIG, now()), UI.labels.home);
     if (result.error) {
-        if (host) host.update(guideView());
+        if (host) updateHost();
         return result;
     }
     guideTo({ type: 'residence', kind: active().residence.kind });
@@ -1317,10 +1347,10 @@ function onFloor(key, on) {
     const levels = on ? [...c.levels.filter((k) => k !== key), key] : c.levels.filter((k) => k !== key);
     const result = mutate((d) => setLevels(d, c.id, levels, CONFIG, now()), UI.labels.home);
     if (result.error) {
-        if (host) host.update(guideView());
+        if (host) updateHost();
         return;
     }
-    if (!guideTo({ type: 'floorTapped' }) && host) host.update(guideView());
+    if (!guideTo({ type: 'floorTapped' }) && host) updateHost();
 }
 
 /** The kitchen, with its standard preset, on the main floor (or the
@@ -1874,7 +1904,7 @@ function refresh() {
         if (turntable) turntable.setHeight(frameHeight(), !state.loaded || state.reducedMotion);
     }
     // Maya's words that depend on the home (the rooms so far) keep up.
-    if (host && host.view) host.update(guideView());
+    if (host && host.view) updateHost();
     // The selection, as the home now has it: a different checklist drops
     // it, a removed room or task steps back to what is left.
     if (ui.selected) {
@@ -2414,7 +2444,7 @@ function setupEventListeners() {
     host = createHost({
         signal,
         timing: { pulse: CONFIG.guide.pulse, again: CONFIG.guide.again },
-        on: { button: onHostButton, floor: onFloor, step: onHostStep }
+        on: { button: onHostButton, floor: onFloor, step: onHostStep, chip: onGuideChip }
     });
     setupHelp(signal);
     panel = createPanel({

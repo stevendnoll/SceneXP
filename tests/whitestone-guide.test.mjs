@@ -346,8 +346,12 @@ describe('what Maya says', () => {
 
     test('Review is offered once there are two rooms, and the rooms line warms after two more', () => {
         const rooms = (n, added) => viewFor({ ...fresh(), scene: 'rooms', rooms: added }, { roomCount: n });
-        expect(rooms(1, 0).buttons.map((b) => b.id)).toEqual(['addRoom']);
-        expect(rooms(2, 1).buttons.map((b) => b.id)).toEqual(['addRoom', 'review']);
+        // The rooms are chips (QA, 2026-10-14); the buttons are Review, once
+        // there are two, and every other kind of room.
+        expect(rooms(1, 0).buttons.map((b) => b.id)).toEqual(['otherRoom']);
+        expect(rooms(1, 0).choices).toBe('rooms');
+        expect(rooms(2, 1).buttons.map((b) => [b.id, b.primary])).toEqual([['review', true], ['otherRoom', false]]);
+        expect(viewFor({ ...fresh(), scene: 'firstRoom' })).toMatchObject({ choices: 'rooms', halo: { kind: 'element', id: 'host-chip-kitchen' } });
         expect(rooms(2, 1).text).toBe(GUIDE.rooms);
         expect(rooms(4, 2).text).toBe(GUIDE.roomsMore);
     });
@@ -369,7 +373,8 @@ describe('what Maya says', () => {
         expect(halo('look')).toEqual({ kind: 'floor' });
         expect(halo('review')).toEqual({ kind: 'element', id: 'hud-quote' });
         expect(halo('hint')).toEqual({ kind: 'element', id: 'ws-help' });
-        for (const scene of ['hello', 'home', 'floors', 'firstRoom', 'added', 'saved', 'example1', 'welcome', 'about']) expect(halo(scene)).toBeNull();
+        expect(halo('firstRoom')).toEqual({ kind: 'element', id: 'host-chip-kitchen' });
+        for (const scene of ['hello', 'home', 'floors', 'added', 'saved', 'example1', 'welcome', 'about']) expect(halo(scene)).toBeNull();
         expect(Object.isFrozen(HALO)).toBe(true);
     });
 

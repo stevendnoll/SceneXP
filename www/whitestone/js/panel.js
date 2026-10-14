@@ -73,22 +73,66 @@ export function reconcile(sel, checklist) {
 }
 
 /**
- * The rooms a floor like this usually has, offered as chips: the kinds of
- * room in the order most homes add them. A kind there is one of in a home
- * (a kitchen, a primary bedroom, an entry) is not offered again once the
- * home has it. At most `max`.
+ * The rooms a floor like this usually has, offered as chips: the common
+ * kinds only, in the order most homes add them (QA, 2026-10-14: a mudroom
+ * is not as common as a living room). Every other kind is one tap away
+ * under Another kind of room. A kind there is one of in a home (a kitchen,
+ * a primary bedroom) is not offered again once the home has it. At most
+ * `max`.
  */
 export const CHIPS = Object.freeze({
-    basement: Object.freeze(['family', 'bathroom', 'laundry', 'bedroom', 'gym', 'closet']),
-    main: Object.freeze(['kitchen', 'living', 'dining', 'entry', 'powder-room', 'office', 'laundry', 'mudroom']),
-    second: Object.freeze(['primary-bedroom', 'primary-bathroom', 'bedroom', 'bathroom', 'laundry', 'hallway']),
-    third: Object.freeze(['bedroom', 'bathroom', 'bonus', 'office']),
-    attic: Object.freeze(['bonus', 'bedroom', 'closet']),
+    basement: Object.freeze(['family', 'bedroom', 'bathroom', 'laundry']),
+    main: Object.freeze(['kitchen', 'living', 'dining', 'powder-room', 'office', 'laundry']),
+    second: Object.freeze(['primary-bedroom', 'primary-bathroom', 'bedroom', 'bathroom', 'laundry']),
+    third: Object.freeze(['bedroom', 'bathroom', 'office']),
+    attic: Object.freeze(['bonus', 'bedroom']),
     garage: Object.freeze(['garage']),
     'detached-garage': Object.freeze(['garage'])
 });
+
+/**
+ * The rooms most homes have, most common first, each with the floors it
+ * usually goes on, best first (Maya's chips, QA 2026-10-14). A home with
+ * none of those floors puts it on its main floor (or its first).
+ */
+export const COMMON = Object.freeze([
+    ['kitchen', ['main']],
+    ['living', ['main']],
+    ['primary-bedroom', ['second', 'main', 'third']],
+    ['primary-bathroom', ['second', 'main', 'third']],
+    ['bedroom', ['second', 'third', 'main', 'basement']],
+    ['bathroom', ['second', 'main', 'basement', 'third']],
+    ['dining', ['main']],
+    ['powder-room', ['main']],
+    ['laundry', ['main', 'second', 'basement']],
+    ['office', ['main', 'second', 'third']],
+    ['family', ['basement', 'main']],
+    ['garage', ['garage', 'detached-garage']]
+].map(([area, floors]) => Object.freeze({ area, floors: Object.freeze(floors) })));
 const ONE_PER_HOME = new Set(['kitchen', 'primary-bedroom', 'primary-bathroom', 'entry', 'mudroom', 'laundry', 'dining', 'living']);
 const ONE_PER_FLOOR = new Set(['garage', 'hallway', 'family', 'gym', 'bonus']);
+
+/**
+ * The common rooms the whole home is offered (Maya's chips): `[{ area,
+ * level }]`, each on the first of its usual floors the home has (a garage
+ * only where there is one), none of a kind the home has its one of, at
+ * most `max`.
+ */
+export function homeSuggestions(checklist, max = 6) {
+    const levels = checklist.levels || [];
+    const rooms = (checklist.rooms || []).filter((r) => !r.deletedAt);
+    const fallback = levels.includes('main') ? 'main' : levels.find((l) => l !== 'garage' && l !== 'detached-garage') || levels[0];
+    const out = [];
+    for (const { area, floors } of COMMON) {
+        if (ONE_PER_HOME.has(area) && rooms.some((r) => r.area === area)) continue;
+        const level = floors.find((f) => levels.includes(f)) || (area === 'garage' ? null : fallback);
+        if (!level) continue;
+        if (ONE_PER_FLOOR.has(area) && rooms.some((r) => r.area === area && r.level === level)) continue;
+        out.push({ area, level });
+        if (out.length >= max) break;
+    }
+    return out;
+}
 
 export function suggestions(level, checklist, max = 6) {
     const rooms = (checklist.rooms || []).filter((r) => !r.deletedAt);
