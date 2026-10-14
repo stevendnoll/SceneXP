@@ -19,7 +19,7 @@
          tests/directory.test.mjs and tests/page-rules.test.mjs). -->
     <meta name="robots" content="noindex, nofollow">
 
-    <meta name="description" content="A bright, modern cleaning studio where you build a room by room cleaning checklist, see the price of every task as you go, and share the finished list with your cleaner.">
+    <meta name="description" content="Build a room by room cleaning checklist on a 3D model of your home, see the price of every task as you go, and share the finished list with your cleaner.">
     <meta name="theme-color" content="#F4F2EE">
     <meta name="author" content="Steve Noll">
 
@@ -37,7 +37,7 @@
     <meta property="og:url" content="https://www.scenexp.com/whitestone/">
     <meta property="og:locale" content="en_US">
     <!-- THE SOCIAL CARD IS STILL TO COME. og-whitestone.jpg will be Steve's
-         capture of the studio and the house model (1200 by 630, sRGB baked
+         capture of the house model on its turntable (1200 by 630, sRGB baked
          in, see CONTRIBUTING), made once the look is approved. Exactly one
          og:image, as on every page, since Apple's link preview draws every
          one it finds. -->
@@ -45,14 +45,14 @@
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="A bright cleaning studio with white stone walls and tall windows full of morning light.">
+    <meta property="og:image:alt" content="A model of a family home on a round stone turntable in a bright white studio.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Whitestone Home Care">
     <meta name="twitter:description" content="Pick what you would like cleaned, room by room, and see your price as you go.">
     <meta name="twitter:image" content="https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1">
-    <meta name="twitter:image:alt" content="A bright cleaning studio with white stone walls and tall windows full of morning light.">
+    <meta name="twitter:image:alt" content="A model of a family home on a round stone turntable in a bright white studio.">
 
     <!-- Structured data: site identity for search engines.
          JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
@@ -63,7 +63,7 @@
       "@id": "https://www.scenexp.com/whitestone/#app",
       "url": "https://www.scenexp.com/whitestone/",
       "name": "Whitestone Home Care",
-      "description": "A 3D cleaning studio in the browser where a visitor builds a room by room cleaning checklist from a menu of priced tasks, sees the quote and the expected visit length update as they go, and shares the finished checklist with a cleaner.",
+      "description": "A 3D model home in the browser on which a visitor builds a room by room cleaning checklist from a menu of priced tasks, sees the quote and the expected visit length update as they go, and shares the finished checklist with a cleaner.",
       "applicationCategory": "BusinessApplication",
       "operatingSystem": "Any",
       "browserRequirements": "Requires JavaScript and WebGL 2.",
@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=6" as="style">
+    <link rel="preload" href="css/experience.min.css?v=7" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -129,15 +129,11 @@
     <link rel="modulepreload" href="js/forms.min.js">
     <link rel="modulepreload" href="js/panels.min.js">
     <link rel="modulepreload" href="js/copy.min.js">
-    <link rel="modulepreload" href="js/stations.min.js">
-    <link rel="modulepreload" href="js/studio.min.js">
-    <link rel="modulepreload" href="js/street.min.js">
+    <link rel="modulepreload" href="js/turntable.min.js">
+    <link rel="modulepreload" href="js/stage.min.js">
     <link rel="modulepreload" href="js/model.min.js">
-    <link rel="modulepreload" href="js/marks.min.js">
-    <link rel="modulepreload" href="js/intro.min.js">
-    <link rel="modulepreload" href="../shared/js/proplist-1.0.0.min.js">
-    <link rel="modulepreload" href="js/boards.min.js">
-    <link rel="modulepreload" href="../shared/js/pan-1.0.0.min.js">
+    <link rel="modulepreload" href="js/guide.min.js">
+    <link rel="modulepreload" href="js/host.min.js">
     <link rel="modulepreload" href="js/guards.min.js">
     <link rel="modulepreload" href="js/layout.min.js">
     <!-- END generated modulepreload -->
@@ -145,7 +141,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=6">
+    <link rel="stylesheet" href="css/experience.min.css?v=7">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -162,9 +158,9 @@
     <noscript>
         <div class="noscript-fallback">
             <h1>Whitestone Home Care</h1>
-            <p>This is a bright, modern cleaning studio, and it needs
-                JavaScript to run. Inside, you build a cleaning checklist room by
-                room from a menu of tasks, each with a set price and a time
+            <p>This is a 3D model of your home, and it needs JavaScript to
+                run. On it, you build a cleaning checklist room by room from a
+                menu of tasks, each with a set price and a time
                 estimate, so your quote and the expected length of the visit
                 update as you go. When the list is ready, you can share it with
                 your cleaner.</p>
@@ -193,41 +189,35 @@
         </div>
     </div>
 
-    <canvas id="game-canvas" role="img" aria-label="The Whitestone Home Care studio in morning light: a model of your home on a stone plinth, the plan board and the service menu on the walls, and a leafy street beyond the glass"></canvas>
+    <canvas id="game-canvas" role="img" aria-label="A model of your home on a round stone turntable in a bright white studio. Drag to turn it, and tap a floor to open it."></canvas>
 
     <!-- THE ROOMS OF A LIFTED LEVEL, named over the house model (main.js
          placeLabels). Hidden until a level is lifted. -->
     <ol id="ws-rooms" class="ws-rooms" hidden></ol>
 
-    <!-- THE HALOS (marks.js): a pulsing ring over each thing in the studio
-         that answers a tap, built and placed by main.js. Real buttons with
-         spoken names, so each is a keyboard target too. They light up one
-         stage at a time and retire once used. -->
-    <div id="ws-marks" class="ws-marks" hidden></div>
-
-    <!-- THE ARRIVAL PANEL (intro.js), Auto Man's, adapted. It arrives with
-         the studio, collapses to the handle below on its close button, on
-         either of its buttons, or on the first tap in the studio, and the
-         handle brings it back. The words are copy.js's (whitestone-intro
-         tests hold them to it). -->
-    <section id="ws-intro" class="ws-intro is-out" tabindex="-1" aria-labelledby="intro-kicker">
-        <button id="intro-close" class="intro-close" type="button" aria-label="Collapse this introduction">&times;</button>
-        <p id="intro-kicker" class="intro-kicker">Whitestone Home Care</p>
-        <p class="intro-lead">Bright homes, kept with care.</p>
-        <p class="intro-body">Build your cleaning checklist room by room. Every task shows its price and its time as you add it, and your quote keeps up. Star what matters most, and we start there.</p>
-        <div class="intro-actions">
-            <button id="intro-start" class="ws-btn ws-btn-primary" type="button">Start your own</button>
-            <button id="intro-explore" class="ws-btn" type="button">Explore the example</button>
+    <!-- MAYA, THE HOST (host.js, guide.js): her portrait and name, the
+         progress through the first build, what she says, the floors to
+         tick when she asks, at most two buttons, and a quiet Skip. Beside
+         the house on a wide screen, a sheet along the bottom on a phone.
+         Built and shown by main.js once the house has arrived. Every line
+         she says also goes through #ws-live, once. -->
+    <section id="ws-host" class="ws-host" aria-labelledby="host-name" hidden>
+        <div class="host-head">
+            <span class="host-portrait" aria-hidden="true">M</span>
+            <p class="host-who"><span id="host-name" class="host-name">Maya</span> <span class="host-role">Whitestone Home Care</span></p>
         </div>
-        <p id="intro-hint" class="intro-hint">Tap a glowing marker to begin. Drag to look around, and pinch to look closer.</p>
-        <p class="intro-honesty">Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples.</p>
+        <ol id="host-progress" class="host-progress" hidden></ol>
+        <p id="host-line" class="host-line"></p>
+        <div id="host-choices" class="host-choices" hidden></div>
+        <div id="host-actions" class="host-actions"></div>
+        <p id="host-small" class="host-small" hidden></p>
+        <button id="host-skip" class="host-skip" type="button" hidden>Skip the guide</button>
     </section>
-    <button id="intro-handle" class="intro-handle is-out" type="button" aria-expanded="true" aria-controls="ws-intro">About Whitestone</button>
 
-    <!-- THE WAY BACK, whenever the camera is close to something or a level
-         of the model is lifted: one press sets the model down and returns
-         to the whole studio (main.js backToStudio). -->
-    <button id="ws-back" class="ws-back" type="button" hidden>Back to the studio</button>
+    <!-- THE WAY BACK, whenever a floor of the house is open: one press
+         closes it (main.js stepBack). Escape and a tap on empty space do
+         the same. -->
+    <button id="ws-back" class="ws-back" type="button" hidden>Back to the whole house</button>
 
     <!-- Every change, said aloud. Polite, so it waits its turn. -->
     <p id="ws-live" class="sr-only" role="status" aria-live="polite"></p>
@@ -246,20 +236,24 @@
         </button>
     </div>
 
-    <!-- THE TOOLBAR, bottom center, where a thumb can reach it. Every action
-         in the studio has a button here, so nothing depends on tapping the
-         picture (PRD 8.1). Buttons that need an open checklist stay hidden
-         until there is one. -->
-    <nav id="ws-bar" class="ui-float ws-bar" aria-label="The studio">
-        <button id="bar-new" class="ws-btn ws-btn-primary" type="button">Start your own</button>
-        <button id="bar-checklist" class="ws-btn ws-btn-primary" type="button" hidden>Checklist</button>
-        <button id="bar-room" class="ws-btn" type="button" hidden>Add a room</button>
-        <button id="bar-home" class="ws-btn" type="button" hidden>Your home</button>
-        <button id="bar-prefs" class="ws-btn" type="button" hidden>Care preferences</button>
-        <button id="bar-menu" class="ws-btn" type="button">Service menu</button>
-        <button id="bar-mine" class="ws-btn" type="button">My checklists</button>
-        <button id="bar-undo" class="ws-btn" type="button" title="Undo (Ctrl or Command and Z)" disabled>Undo</button>
-    </nav>
+    <!-- HELP AND UNDO, top right (ONBOARDING section 3). Help opens a short
+         menu: Maya again, the guide from the start, and the checklist's own
+         cards, so nothing depends on tapping the house (PRD 8.1). Items
+         that need an open checklist stay hidden until there is one. -->
+    <div id="ws-tools" class="ui-float ws-tools" role="group" aria-label="Help and undo">
+        <button id="ws-undo" class="tool-btn" type="button" title="Undo (Ctrl or Command and Z)" disabled>Undo</button>
+        <button id="ws-help" class="tool-btn tool-help" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="ws-help-menu" aria-label="Help and your checklist">?</button>
+        <div id="ws-help-menu" class="help-menu" role="group" aria-label="Help and your checklist" hidden>
+            <button id="help-again" class="help-item" type="button">Show me again</button>
+            <button id="help-restart" class="help-item" type="button">Start over with the guide</button>
+            <button id="help-checklist" class="help-item" type="button" hidden>Your checklist</button>
+            <button id="help-menu" class="help-item" type="button">Service menu</button>
+            <button id="help-prefs" class="help-item" type="button" hidden>Care preferences</button>
+            <button id="help-home" class="help-item" type="button" hidden>Your home</button>
+            <button id="help-mine" class="help-item" type="button">My checklists</button>
+            <button id="help-about" class="help-item" type="button">About Whitestone</button>
+        </div>
+    </div>
 
     <!-- THE UNDO TOAST. Not a live region itself: its words also go through
          #ws-live, so they are heard once. -->
@@ -529,18 +523,6 @@
             <div id="confirm-actions" class="card-actions"></div>
         </div>
     </div>
-
-    <!-- THE PLACES IN THE STUDIO, FOR ANYBODY WITHOUT A POINTER (the shared
-         proplist part, as www/sunnyvalejenn uses it). One row per place,
-         doing exactly what a tap there does. Off the top of the screen until
-         something in it has focus, and `hidden` until the studio is ready.
-         Last in the markup on purpose, so a click on the studio never leaves
-         the next Tab above it. -->
-    <section id="prop-panel" class="prop-panel" aria-labelledby="prop-panel-heading" hidden>
-        <h2 id="prop-panel-heading" class="prop-panel-heading">Places in the studio</h2>
-        <p class="prop-panel-note">Choose a place to go there. Keys 1 to 6 go to them from anywhere in the studio. The arrow keys move through this list, and Tab or Escape puts it away.</p>
-        <ul id="prop-list" class="prop-list"></ul>
-    </section>
 
     <script type="module" src="../lib/three/r186/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

@@ -87,11 +87,11 @@ afterEach(() => {
 });
 
 /**
- * Boot the page. A first visit (nothing saved) arrives to the example home,
- * so unless a test asks for that (`example: true`), an empty saved document
- * is put in place first and the studio starts empty.
+ * Boot the page. With `example: true` it is a first visit (nothing saved)
+ * shown the example, as Show me an example does; otherwise an empty saved
+ * document is put in place first and the house starts empty.
  */
-async function boot({ example = false } = {}) {
+async function boot({ example = false, guide = false } = {}) {
     if (!example) {
         try {
             localStorage.setItem(CONFIG.storage.key, JSON.stringify({
@@ -102,6 +102,11 @@ async function boot({ example = false } = {}) {
     const main = await import('../www/whitestone/js/main.js');
     await flushAsync();
     await jest.advanceTimersByTimeAsync(CONFIG.loadingReveal + 100);
+    // These tests drive the cards, so Maya is put away first, as Skip
+    // would (her guide has its own suite, whitestone-arrival).
+    if (guide === false) main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done' };
+    // The example arrives when asked for (Maya's Show me an example).
+    if (example) main.__test__.showExample();
     return main;
 }
 
@@ -133,9 +138,16 @@ function prefsBox(key) {
 const saved = () => JSON.parse(localStorage.getItem(CONFIG.storage.key));
 const visible = (id) => !dom.el(id).hidden;
 
+/** A new checklist's setup card, as a visitor reaches it without the
+ *  guide: My checklists, from the Help menu, then New. */
+function newHome() {
+    fire(dom.el('help-mine'), 'click');
+    fire(dom.el('my-new'), 'click');
+}
+
 /** Fill in and submit the setup card for a new home. */
 async function startHome(main, { title = 'Maple Street', levels = ['main', 'second'] } = {}) {
-    fire(dom.el('bar-new'), 'click');
+    newHome();
     expect(visible('setup')).toBe(true);
     for (const key of ['basement', 'main', 'second', 'attic']) box('setup-levels-list', key).checked = levels.includes(key);
     dom.el('setup-title').value = title;
@@ -144,15 +156,16 @@ async function startHome(main, { title = 'Maple Street', levels = ['main', 'seco
     return main;
 }
 
-test('an empty studio offers Start your own and My checklists, and nothing that needs a checklist', async () => {
+test('an empty house offers My checklists and the service menu, and nothing that needs a checklist', async () => {
     const main = await boot();
     expect(main.getState().storageStatus).toBe('restored');
-    expect(visible('bar-new')).toBe(true);
-    expect(visible('bar-mine')).toBe(true);
-    expect(visible('bar-home')).toBe(false);
-    expect(visible('bar-prefs')).toBe(false);
+    expect(visible('help-mine')).toBe(true);
+    expect(visible('help-menu')).toBe(true);
+    expect(visible('help-checklist')).toBe(false);
+    expect(visible('help-home')).toBe(false);
+    expect(visible('help-prefs')).toBe(false);
     expect(visible('hud-home')).toBe(false);
-    expect(dom.el('bar-undo').disabled).toBe(true);
+    expect(dom.el('ws-undo').disabled).toBe(true);
     // No fetch here, so the price sheet waits and nothing breaks.
     expect(main.getState().sheetStatus).toBe('failed');
 });
@@ -171,8 +184,7 @@ test('Start your own: setup makes the checklist, opens it, and offers care prefe
     expect(visible('setup')).toBe(false);
     expect(visible('preferences')).toBe(true);
     expect(dom.el('hud-home').textContent).toBe('Maple Street');
-    expect(visible('bar-new')).toBe(false);
-    expect(visible('bar-home') && visible('bar-prefs')).toBe(true);
+    expect(visible('help-home') && visible('help-prefs') && visible('help-checklist')).toBe(true);
     expect(dom.el('toast-text').textContent).toBe(UI.started('Maple Street'));
 
     prefsBox('no-bleach').checked = true;
@@ -196,7 +208,7 @@ test('editing the home changes its details and its levels, and a level with room
     const main = await boot();
     await startHome(main);
     fire(dom.el('prefs-skip'), 'click');
-    fire(dom.el('bar-home'), 'click');
+    fire(dom.el('help-home'), 'click');
     expect(dom.el('setup-title').value).toBe('Maple Street');
     expect(box('setup-levels-list', 'second').checked).toBe(true);
     dom.el('setup-title').value = 'The Maple house';
@@ -210,11 +222,11 @@ test('undo takes back each step, from the button and from the keyboard, but not 
     const main = await boot();
     await startHome(main);
     fire(dom.el('prefs-skip'), 'click');
-    fire(dom.el('bar-home'), 'click');
+    fire(dom.el('help-home'), 'click');
     dom.el('setup-title').value = 'Renamed';
     fire(dom.el('setup-form'), 'submit');
     expect(main.getDoc().checklists[0].title).toBe('Renamed');
-    expect(dom.el('bar-undo').disabled).toBe(false);
+    expect(dom.el('ws-undo').disabled).toBe(false);
 
     // Ctrl+Z typed into a text box is the text box's own undo.
     fire(dom.windowStub, 'keydown', { key: 'z', ctrlKey: true, target: { tagName: 'TEXTAREA' } });
@@ -224,11 +236,11 @@ test('undo takes back each step, from the button and from the keyboard, but not 
     expect(main.getDoc().checklists[0].title).toBe('Maple Street');
     expect(said()).toBe(UI.undone(UI.labels.home));
 
-    fire(dom.el('bar-undo'), 'click');
+    fire(dom.el('ws-undo'), 'click');
     expect(main.getDoc().checklists).toHaveLength(0);
     expect(saved().checklists).toHaveLength(0);
-    expect(dom.el('bar-undo').disabled).toBe(true);
-    fire(dom.el('bar-undo'), 'click');
+    expect(dom.el('ws-undo').disabled).toBe(true);
+    fire(dom.el('ws-undo'), 'click');
     expect(said()).toBe(UI.nothingToUndo);
 });
 
@@ -236,7 +248,7 @@ test('My checklists: open, duplicate and remove, with undo for the last two', as
     const main = await boot();
     await startHome(main, { title: 'First' });
     fire(dom.el('prefs-skip'), 'click');
-    fire(dom.el('bar-mine'), 'click');
+    fire(dom.el('help-mine'), 'click');
     await startHome(main, { title: 'Second' });
     fire(dom.el('prefs-skip'), 'click');
     const [first, second] = main.getDoc().checklists;
@@ -257,7 +269,7 @@ test('My checklists: open, duplicate and remove, with undo for the last two', as
     expect(main.__test__.history().size).toBe(2);   // opening is not an undo step
 
     // Duplicate it.
-    fire(dom.el('bar-mine'), 'click');
+    fire(dom.el('help-mine'), 'click');
     fire(buttonsOf(rowFor('First'))[1], 'click');
     expect(main.getDoc().checklists.map((c) => c.title)).toEqual(['First', 'Second', 'Copy of First']);
     expect(rows()).toHaveLength(3);
@@ -276,7 +288,7 @@ test('My checklists: open, duplicate and remove, with undo for the last two', as
 
 test('an empty list says so, kindly', async () => {
     await boot();
-    fire(dom.el('bar-mine'), 'click');
+    fire(dom.el('help-mine'), 'click');
     expect(dom.el('my-list').children[0].textContent).toBe(UI.noChecklists);
 });
 
@@ -299,7 +311,7 @@ test('a browser that will not save says so under My checklists', async () => {
     localStorage.getItem = () => { throw new Error('denied'); };
     const main = await boot();
     expect(main.getState().storageStatus).toBe('unavailable');
-    fire(dom.el('bar-mine'), 'click');
+    fire(dom.el('help-mine'), 'click');
     expect(dom.el('storage-note').textContent).toMatch(/private window/);
 });
 
@@ -327,7 +339,7 @@ test('with the price sheet loaded, My checklists shows each total', async () => 
     const id = main.getDoc().checklists[0].id;
     main.__test__.mutate((d) => addRoom(d, id, { level: 'main', area: 'powder-room' }, CONFIG, new Date(),
         { presetItems: [{ task: 'toilet' }, { task: 'bathroom-sink' }] }), 'Added a room');
-    fire(dom.el('bar-mine'), 'click');
+    fire(dom.el('help-mine'), 'click');
     const summary = dom.el('my-list').children[0].children[0].children[2];
     // Toilet $12 and sink $6 come to $18, topped up to the $120 visit minimum.
     expect(summary.textContent).toBe('1 room, 2 tasks, $120');
@@ -389,7 +401,7 @@ test('a first visit goes from preferences straight to the first room, however pr
     expect(dom.el('room-title').textContent).toBe(UI.addRoomTitle);
     // A second home, with preferences closed by Escape instead.
     fire(dom.el('room-cancel'), 'click');
-    fire(dom.el('bar-mine'), 'click');
+    fire(dom.el('help-mine'), 'click');
     await startHome(main, { title: 'Second' });
     fire(dom.documentStub, 'keydown', { key: 'Escape' });
     jest.advanceTimersByTime(10);
@@ -641,7 +653,7 @@ test('a big enough home says the minimum is met, and a task the menu no longer h
 test('the service menu shows a room kind\'s tasks with their prices, and adds one to a room of that kind', async () => {
     const main = await homeWithPrices();
     const kitchen = await addKitchen(main);
-    fire(dom.el('bar-menu'), 'click');
+    fire(dom.el('help-menu'), 'click');
     expect(visible('menu')).toBe(true);
     expect(dom.el('menu-area').value).toBe('kitchen');
     const rows = dom.el('menu-list').children;
@@ -665,7 +677,7 @@ test('the service menu shows a room kind\'s tasks with their prices, and adds on
 
 test('the menu can be browsed before there is a checklist, and waits for prices', async () => {
     let main = await boot();
-    fire(dom.el('bar-menu'), 'click');
+    fire(dom.el('help-menu'), 'click');
     expect(visible('menu')).toBe(false);
     expect(said()).toBe(UI.sheetLoading);
 
@@ -676,7 +688,7 @@ test('the menu can be browsed before there is a checklist, and waits for prices'
     serveSheet();
     main = await boot();
     await flushAsync(20);
-    fire(dom.el('bar-menu'), 'click');
+    fire(dom.el('help-menu'), 'click');
     expect(visible('menu')).toBe(true);
     expect(dom.el('menu-note').textContent).toBe(UI.menuNoChecklist);
     expect(main.getState().sheetStatus).toBe('ready');
@@ -697,7 +709,7 @@ test('tasks move up and down in their room as one undo step each, and the ends c
     expect(said()).toBe(UI.moved('Kitchen sink'));
     main.__test__.moveTask(second.id, -1);   // already first
     expect(order().slice(0, 2)).toEqual([before[1], before[0]]);
-    fire(dom.el('bar-undo'), 'click');
+    fire(dom.el('ws-undo'), 'click');
     expect(order()).toEqual(before);
 });
 
@@ -728,14 +740,14 @@ test('Print hands the checklist to the browser\'s print', async () => {
     let printed = 0;
     dom.windowStub.print = () => { printed++; };
     fire(dom.el('room-cancel'), 'click');
-    fire(dom.el('bar-checklist'), 'click');
+    fire(dom.el('help-checklist'), 'click');
     fire(dom.el('checklist-print'), 'click');
     expect(printed).toBe(1);
 });
 
 // ---- The example home (M1 piece 4) -------------------------------------------
 
-test('a first visit arrives to the example home, priced, with Start your own still on offer, and nothing saved yet', async () => {
+test('the example, asked for on a first visit, is priced and opens in full, and nothing is saved yet', async () => {
     serveSheet();
     const main = await boot({ example: true });
     await flushAsync(20);
@@ -743,20 +755,19 @@ test('a first visit arrives to the example home, priced, with Start your own sti
     const doc = main.getDoc();
     expect(doc.settings.activeId).toBe('example-home-1');
     expect(dom.el('hud-home').textContent).toBe('Example home');
-    expect(visible('bar-new')).toBe(true);
-    expect(visible('bar-checklist')).toBe(true);
+    expect(visible('help-checklist')).toBe(true);
     expect(visible('hud-quote')).toBe(true);
     expect(dom.el('hud-quote-text').textContent).toMatch(/^Your quote: \$\d+/);
     // Shown, not saved: nothing is written until the visitor changes something.
     expect(localStorage.getItem(CONFIG.storage.key)).toBeNull();
 
-    fire(dom.el('bar-checklist'), 'click');
+    fire(dom.el('help-checklist'), 'click');
     expect(dom.el('checklist-summary').textContent).toMatch(/^13 rooms, 27 tasks, \$/);
 });
 
 test('My checklists marks the example, offers no duplicate of it, and clears it with an undo', async () => {
     const main = await boot({ example: true });
-    fire(dom.el('bar-mine'), 'click');
+    fire(dom.el('help-mine'), 'click');
     const row = dom.el('my-list').children[0];
     expect(row.children[0].children[1].textContent).toBe(UI.example);
     expect(row.children[1].children.map((b) => b.textContent)).toEqual([UI.current, UI.remove]);
@@ -780,7 +791,7 @@ test('starting your own from the example keeps the example in the list, and a re
     const doc = main.getDoc();
     expect(doc.checklists.map((c) => c.title)).toEqual(['Example home', 'Our place']);
     expect(doc.settings.activeId).toBe(doc.checklists[1].id);
-    expect(visible('bar-new')).toBe(false);
+    expect(dom.el('hud-home').textContent).toBe('Our place');
 });
 
 test('UNDO ACROSS EVERY KIND OF CHANGE walks the document back to exactly where it began', async () => {
@@ -800,10 +811,10 @@ test('UNDO ACROSS EVERY KIND OF CHANGE walks the document back to exactly where 
     fire(bodyButton(UI.editRoom, `room-name-${kitchen.id}`), 'click');
     dom.el('room-label').value = 'Big kitchen';
     fire(dom.el('room-form'), 'submit'); record();
-    fire(dom.el('bar-prefs'), 'click');
+    fire(dom.el('help-prefs'), 'click');
     prefsBox('fragrance-free').checked = true;
     fire(dom.el('prefs-form'), 'submit'); record();
-    fire(dom.el('bar-home'), 'click');
+    fire(dom.el('help-home'), 'click');
     dom.el('setup-title').value = 'Renamed';
     fire(dom.el('setup-form'), 'submit'); record();
     t.duplicate(checklist(main).id); record();

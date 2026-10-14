@@ -1,0 +1,199 @@
+// © 2026 Continuum Commerce LLC. All rights reserved.
+/**
+ * host.js - Maya's speech bubble (ONBOARDING sections 3 and 9): her
+ * portrait and name, the progress strip, what she says, the floors to tick
+ * when she asks, at most two buttons, the small print, and a quiet Skip.
+ *
+ * WHERE IT SITS: beside the house on a wide screen (the frame leaves the
+ * right of the screen for it, turntable.js), a sheet along the bottom on a
+ * phone (the frame keeps the house above it). It never covers the house,
+ * and it steps out of sight while a card is open, so Maya never speaks over
+ * one.
+ *
+ * WHAT IT SAYS IS SAID ONCE. Each new scene's line goes through the live
+ * region, and the buttons are real buttons in the tab order. If nothing
+ * happens for a while the main button pulses once, and later Maya says the
+ * hint once more in other words. After that, nothing: a nag is worse than
+ * silence. Any sign of the visitor (`poke`) starts the wait again.
+ *
+ * It draws what guide.js `viewFor` describes and calls back into main.js
+ * for what a button or a floor does. No markup from strings: every word is
+ * set as text.
+ */
+
+import { h, clear, announce } from './cards.min.js';
+import { GUIDE } from './copy.min.js';
+
+/**
+ * Drive the bubble in index.html. `on.button(id)` is called for a button,
+ * `on.floor(key, checked)` for a floor ticked or unticked. `timing` gives
+ * the seconds before the pulse and before the hint is said again. Returns
+ * { show, update, hide, setCovered, poke, title, shown, view }.
+ */
+export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal } = {}) {
+    const byId = (id) => document.getElementById(id);
+    const root = byId('ws-host');
+    const line = byId('host-line');
+    const progress = byId('host-progress');
+    const choices = byId('host-choices');
+    const actions = byId('host-actions');
+    const small = byId('host-small');
+    const skip = byId('host-skip');
+    let view = null;
+    let covered = false;
+    let said = false;
+    /** The checklist's name field, while Maya asks for it. */
+    let titleField = null;
+    const timers = [];
+
+    const stopTimers = () => {
+        while (timers.length) clearTimeout(timers.pop());
+    };
+    if (signal) signal.addEventListener('abort', stopTimers);
+    if (skip) skip.addEventListener('click', () => { if (typeof on.button === 'function') on.button('skip'); }, { signal });
+
+    function place() {
+        if (root) root.hidden = covered || !view;
+    }
+
+    /** The pulse, then the hint in other words, each once. */
+    function schedule() {
+        stopTimers();
+        if (!view) return;
+        timers.push(setTimeout(() => {
+            const primary = actions ? Array.from(actions.children || []).find((b) => b.classList && b.classList.contains('ws-btn-primary')) : null;
+            if (primary && primary.classList) {
+                primary.classList.add('is-nudge');
+                timers.push(setTimeout(() => primary.classList.remove('is-nudge'), 1600));
+            }
+        }, timing.pulse * 1000));
+        if (view.again && !said) {
+            timers.push(setTimeout(() => {
+                said = true;
+                if (line) line.textContent = view.again;
+                if (!covered) announce(view.again);
+            }, timing.again * 1000));
+        }
+    }
+
+    function drawProgress() {
+        if (!progress) return;
+        clear(progress);
+        const at = view.progress;
+        progress.hidden = at === null || at === undefined;
+        if (progress.hidden) return;
+        GUIDE.progress.forEach((name, i) => {
+            const li = h('li', { className: `host-step${i < at ? ' is-done' : ''}${i === at ? ' is-now' : ''}`, text: name });
+            if (i === at) li.setAttribute('aria-current', 'step');
+            progress.appendChild(li);
+        });
+        progress.setAttribute('aria-label', GUIDE.progressStep(at + 1, GUIDE.progress.length, GUIDE.progress[at]));
+    }
+
+    /** The floors to tick, and the checklist's name, when Maya asks. */
+    function drawChoices() {
+        if (!choices) return;
+        clear(choices);
+        titleField = null;
+        const c = view.choices;
+        choices.hidden = !c;
+        if (!c || c.kind !== 'floors') return;
+        const boxes = c.levels.map((level) => {
+            const input = h('input', { type: 'checkbox', value: level.key, checked: Boolean(level.on), id: `host-floor-${level.key}` });
+            input.addEventListener('change', () => {
+                if (typeof on.floor === 'function') on.floor(level.key, Boolean(input.checked));
+            }, { signal });
+            return h('label', { className: 'host-chip', attrs: { for: `host-floor-${level.key}` } }, [input, h('span', { text: level.name })]);
+        });
+        choices.appendChild(h('fieldset', { className: 'host-floors' }, [h('legend', { text: GUIDE.floorsLegend }), ...boxes]));
+        titleField = h('input', { type: 'text', id: 'host-title', className: 'host-title', value: c.title || '', attrs: { maxlength: String(c.maxTitle || 80), autocomplete: 'off' } });
+        choices.appendChild(h('label', { className: 'host-title-label', attrs: { for: 'host-title' } }, [h('span', { text: GUIDE.titleLabel }), titleField]));
+    }
+
+    function drawActions() {
+        if (!actions) return;
+        clear(actions);
+        for (const b of view.buttons || []) {
+            const btn = h('button', {
+                type: 'button',
+                id: `host-${b.id}`,
+                className: b.primary ? 'ws-btn ws-btn-primary' : 'ws-btn',
+                text: b.label
+            });
+            btn.addEventListener('click', () => {
+                if (typeof on.button === 'function') on.button(b.id);
+            }, { signal });
+            actions.appendChild(btn);
+        }
+    }
+
+    function draw() {
+        if (line) line.textContent = view.text;
+        drawProgress();
+        drawChoices();
+        drawActions();
+        if (small) {
+            small.textContent = view.small || '';
+            small.hidden = !view.small;
+        }
+        if (skip) skip.hidden = !view.skip;
+    }
+
+    const api = {
+        /** A new scene: drawn, said once, and the wait for a nudge begun.
+         *  Null puts the bubble away. */
+        show(next) {
+            view = next;
+            said = false;
+            stopTimers();
+            if (view) {
+                draw();
+                if (!covered) announce(view.text);
+                schedule();
+            }
+            place();
+        },
+        /** The same scene with something changed (a floor ticked): drawn
+         *  again, said again only if its words changed. */
+        update(next) {
+            if (!next) return api.show(null);
+            const changed = !view || next.text !== view.text;
+            const title = api.title();
+            view = next;
+            draw();
+            // A name being typed is kept as typed.
+            if (titleField && title !== null) titleField.value = title;
+            if (changed && !covered) announce(view.text);
+            place();
+            return undefined;
+        },
+        hide() {
+            api.show(null);
+        },
+        /** Out of sight while a card is open, back when it closes. */
+        setCovered(on) {
+            if (covered === Boolean(on)) return;
+            covered = Boolean(on);
+            place();
+        },
+        /** The visitor did something: the wait for a nudge starts again. */
+        poke() {
+            if (view) schedule();
+        },
+        /** The name typed for the checklist, or null when it is not asked. */
+        title() {
+            return titleField && view && view.choices ? String(titleField.value || '') : null;
+        },
+        /** The checklist's name field, while Maya asks for it. */
+        get titleField() {
+            return titleField;
+        },
+        get shown() {
+            return Boolean(view) && !covered;
+        },
+        get view() {
+            return view;
+        }
+    };
+    return api;
+}

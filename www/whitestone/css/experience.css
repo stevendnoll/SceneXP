@@ -400,8 +400,8 @@ textarea.ws-input {
     z-index: 30;
     flex-wrap: wrap;
     gap: 0.5rem;
-    /* Clear of the intro panel's handle, top right. */
-    max-width: calc(100vw - 32px - 11.5rem);
+    /* Clear of Undo and Help, top right. */
+    max-width: calc(100vw - 32px - 9.5rem);
 }
 
 .hud-chip {
@@ -426,47 +426,12 @@ textarea.ws-input {
     display: none;
 }
 
-/* ---- The toolbar, bottom center ------------------------------------------- */
-
-.ws-bar {
-    position: fixed;
-    left: 50%;
-    bottom: max(16px, env(safe-area-inset-bottom));
-    transform: translateX(-50%);
-    z-index: 30;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.45rem;
-    width: max-content;
-    max-width: calc(100vw - 32px);
-    padding: 0.45rem;
-    border: 1px solid var(--ws-line);
-    border-radius: 26px;
-    background: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 10px 30px rgba(34, 37, 42, 0.16);
-}
-
-/* A narrow screen wraps the toolbar onto more rows, centered, so every
-   button stays on screen (Corner Office's M5 lesson). */
-@media (max-width: 620px) {
-    .ws-bar {
-        gap: 0.35rem;
-        padding: 0.4rem;
-        border-radius: 20px;
-    }
-
-    .ws-bar .ws-btn {
-        padding: 0.45rem 0.75rem;
-        font-size: 0.9rem;
-    }
-}
-
 /* ---- The toast ------------------------------------------------------------ */
 
 .ws-toast {
     position: fixed;
     left: 50%;
-    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 76px);
+    bottom: max(16px, env(safe-area-inset-bottom));
     transform: translateX(-50%);
     z-index: 160;
     display: flex;
@@ -923,16 +888,16 @@ textarea.ws-input {
     opacity: 0.35;
 }
 
-/* ---- Looking around (M2) ------------------------------------------------------
+/* ---- Turning the house (M2) ------------------------------------------------------
  *
- * NO FLOATING LOOK BUTTONS, as in Corner Office. The shared pan part builds
- * its row and the reveal adds .visible to every .ui-float, so it is hidden
- * here. Hidden rather than left out, because the part answers its keys only
- * where its buttons exist. `body` makes this beat the shared sheet's
- * three-class .pan-controls.always-on.visible.
+ * The canvas reads every pointer itself (main.js setupLook): a drag turns
+ * the house and a pinch zooms, so the browser must neither scroll nor zoom
+ * the page under a finger. A grab cursor over the stage, a pointer over the
+ * house (main.js hover).
  */
-body .pan-controls.no-chrome.visible {
-    display: none;
+#game-canvas {
+    touch-action: none;
+    cursor: grab;
 }
 
 /* ---- The rooms of a lifted level (M2) -------------------------------------------
@@ -970,249 +935,301 @@ body .pan-controls.no-chrome.visible {
     display: none;
 }
 
-/* ---- The halos (M2) ---------------------------------------------------------------
+/* ---- Maya's bubble (M2) ------------------------------------------------------------
  *
- * A pulsing ring over each thing that answers a tap (marks.js), placed by
- * main.js. Corner Office's ring: a bright outline over a soft dark halo, so
- * it holds its edge on white plaster and on the bright sky through the
- * glass, and is wide enough to survive a compressed screen share.
+ * Beside the house on a wide screen, in the part of the screen the frame
+ * leaves free (turntable.js), and a sheet along the bottom on a phone, with
+ * the house above it. White, soft, and one accent: the portrait, the step
+ * of the progress strip she is on, and the main button.
  */
-.ws-marks {
+.ws-host {
     position: fixed;
-    inset: 0;
-    z-index: 25;
-    pointer-events: none;
+    top: 50%;
+    right: max(24px, env(safe-area-inset-right));
+    z-index: 40;
+    width: clamp(280px, 27vw, 380px);
+    max-height: calc(100vh - 160px);
+    overflow: auto;
+    padding: 1.1rem 1.2rem 1rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.97);
+    color: var(--ws-graphite);
+    box-shadow: 0 18px 50px rgba(34, 37, 42, 0.16);
+    transform: translateY(-50%);
+    animation: host-in 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-.ws-marks[hidden],
-.ws-mark[hidden] {
+.ws-host[hidden] {
     display: none;
 }
 
-.ws-mark {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 3.4rem;
-    height: 3.4rem;
+.host-head {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 0.7rem;
+}
+
+/* Her portrait, until the 3D Maya arrives: her initial in the accent. */
+.host-portrait {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--ws-accent);
+    color: #FFFFFF;
+    font-size: 1.15rem;
+    font-weight: 700;
+    box-shadow: 0 0 0 3px var(--ws-accent-soft);
+}
+
+.host-who {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    line-height: 1.25;
+}
+
+.host-name {
+    font-weight: 700;
+}
+
+.host-role {
+    color: var(--ws-muted);
+    font-size: 0.82rem;
+}
+
+/* The progress strip: four steps, the one she is on in the accent. */
+.host-progress {
+    display: flex;
+    gap: 0.35rem;
+    margin: 0 0 0.8rem;
+    padding: 0;
+    list-style: none;
+}
+
+.host-progress[hidden] {
+    display: none;
+}
+
+.host-step {
+    flex: 1;
+    padding-top: 0.4rem;
+    border-top: 3px solid var(--ws-line);
+    color: var(--ws-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.host-step.is-done {
+    border-color: #9FB3C4;
+}
+
+.host-step.is-now {
+    border-color: var(--ws-accent);
+    color: var(--ws-graphite);
+}
+
+.host-line {
+    margin: 0 0 0.95rem;
+    font-size: 1.06rem;
+    line-height: 1.45;
+}
+
+.host-choices[hidden] {
+    display: none;
+}
+
+.host-floors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.9rem;
     padding: 0;
     border: 0;
-    background: none;
-    cursor: pointer;
-    pointer-events: auto;
 }
 
-.ws-mark-ring {
-    position: absolute;
-    inset: 0.4rem;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.96);
-    background: radial-gradient(circle, rgba(62, 92, 118, 0.42) 0%, rgba(62, 92, 118, 0.14) 55%, rgba(20, 21, 23, 0) 72%);
-    box-shadow: 0 0 0 1px rgba(20, 21, 23, 0.5), 0 0 14px rgba(20, 21, 23, 0.4), inset 0 0 10px rgba(255, 255, 255, 0.35);
+.host-floors legend {
+    margin-bottom: 0.4rem;
+    padding: 0;
+    color: var(--ws-muted);
+    font-size: 0.82rem;
+    font-weight: 600;
 }
 
-.ws-mark-ring::before,
-.ws-mark-ring::after {
-    content: '';
-    position: absolute;
-    inset: -2px;
-    border-radius: 50%;
-    border: 2px solid rgba(232, 240, 250, 0.92);
-    animation: ws-mark-pulse 2.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
-}
-
-.ws-mark-ring::after {
-    animation-delay: 1.3s;
-}
-
-.ws-marks.is-calm .ws-mark-ring::before,
-.ws-marks.is-calm .ws-mark-ring::after {
-    animation-duration: 5.2s;
-}
-
-.ws-marks.is-calm .ws-mark-ring::after {
-    animation-delay: 2.6s;
-}
-
-@keyframes ws-mark-pulse {
-    0% { transform: scale(0.7); opacity: 0; }
-    15% { opacity: 0.9; }
-    100% { transform: scale(2); opacity: 0; }
-}
-
-.ws-mark:hover .ws-mark-ring,
-.ws-mark:focus-visible .ws-mark-ring {
-    background: radial-gradient(circle, rgba(62, 92, 118, 0.62) 0%, rgba(62, 92, 118, 0.2) 55%, rgba(20, 21, 23, 0) 72%);
-}
-
-.ws-mark:focus-visible {
-    outline: none;
-}
-
-.ws-mark:focus-visible .ws-mark-ring {
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.96), 0 0 0 6px rgba(34, 37, 42, 0.85);
-}
-
-/* Less motion: the ring stays, still. */
-@media (prefers-reduced-motion: reduce) {
-    .ws-mark-ring::before,
-    .ws-mark-ring::after {
-        animation: none;
-        opacity: 0;
-    }
-}
-
-/* ---- The arrival panel (M2) --------------------------------------------------------
- *
- * Auto Man's slim bottom panel, in the studio's white. While it is open the
- * toolbar steps aside (.ws-bar.is-away), so the bottom of a phone is never
- * covered twice. It never takes the studio's gestures except on its own
- * controls.
- */
-.ws-intro {
-    position: fixed;
-    left: 50%;
-    bottom: max(16px, env(safe-area-inset-bottom));
-    transform: translateX(-50%);
-    z-index: 40;
-    box-sizing: border-box;
-    width: min(600px, calc(100vw - 32px));
-    padding: 1.1rem 1.25rem 1rem;
+/* A floor to tick: a chip, its box kept (a checkbox reads as one). */
+.host-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 44px;
+    padding: 0.35rem 0.85rem;
     border: 1px solid var(--ws-line);
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.95);
-    color: var(--ws-graphite);
-    box-shadow: 0 14px 40px rgba(34, 37, 42, 0.18);
-    pointer-events: none;
-    transition: opacity 0.35s ease, transform 0.35s ease;
+    border-radius: 999px;
+    background: #FFFFFF;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
 }
 
-.ws-intro button {
-    pointer-events: auto;
+.host-chip input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--ws-accent);
 }
 
-.ws-intro:focus {
-    outline: none;
+.host-chip:has(input:checked) {
+    border-color: var(--ws-accent);
 }
 
-.ws-intro:focus-visible {
+.host-chip:focus-within {
     outline: 3px solid var(--ws-accent);
     outline-offset: 2px;
 }
 
-.ws-intro.is-out {
-    opacity: 0;
-    transform: translate(-50%, 12px);
-    visibility: hidden;
-}
-
-.intro-close {
-    position: absolute;
-    top: 0.35rem;
-    right: 0.35rem;
-    width: 44px;
-    height: 44px;
-    border: 0;
-    border-radius: 50%;
-    background: none;
+.host-title-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin: 0 0 0.95rem;
     color: var(--ws-muted);
-    font-size: 1.6rem;
-    line-height: 1;
-    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
 }
 
-.intro-close:hover {
-    background: var(--ws-accent-soft);
-}
-
-.intro-close:focus-visible {
-    outline: 3px solid var(--ws-accent);
-    outline-offset: 0;
-}
-
-.intro-kicker {
-    margin: 0 2.5rem 0.2rem 0;
-    color: var(--ws-accent);
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.intro-lead {
-    margin: 0 2.5rem 0.4rem 0;
-    font-size: 1.35rem;
-    font-weight: 700;
-    line-height: 1.2;
-}
-
-.intro-body {
-    margin: 0 0 0.8rem;
+.host-title {
+    min-height: 44px;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 10px;
     color: var(--ws-graphite);
-    line-height: 1.45;
+    font: inherit;
 }
 
-.intro-actions {
+.host-title:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 1px;
+}
+
+.host-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
-    margin-bottom: 0.7rem;
 }
 
-.intro-actions .ws-btn[hidden] {
-    display: none;
-}
-
-.intro-hint,
-.intro-honesty {
-    margin: 0;
+.host-small {
+    margin: 0.85rem 0 0;
     color: var(--ws-muted);
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     line-height: 1.4;
 }
 
-.intro-honesty {
-    margin-top: 0.25rem;
+.host-small[hidden] {
+    display: none;
 }
 
-/* On a wide screen it sits bottom left, clear of the model (QA,
-   2026-10-13: centered, it covered the centerpiece). */
-@media (min-width: 900px) {
-    .ws-intro {
-        left: 24px;
-        bottom: 24px;
+.host-skip {
+    display: block;
+    min-height: 36px;
+    margin: 0.6rem 0 0 auto;
+    padding: 0.3rem 0;
+    border: 0;
+    background: none;
+    color: var(--ws-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.host-skip:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.host-skip[hidden] {
+    display: none;
+}
+
+/* Nothing has happened for a while: the next step pulses, once. */
+.ws-btn.is-nudge {
+    animation: host-nudge 1.6s ease-in-out;
+}
+
+@keyframes host-nudge {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(62, 92, 118, 0); }
+    40% { box-shadow: 0 0 0 9px rgba(62, 92, 118, 0.3); }
+}
+
+@keyframes host-in {
+    from { opacity: 0; transform: translateY(calc(-50% + 12px)); }
+    to { opacity: 1; transform: translateY(-50%); }
+}
+
+@keyframes host-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: none; }
+}
+
+/* A phone upright: a sheet along the bottom, the house above it. */
+@media (max-aspect-ratio: 999/1000) {
+    .ws-host {
+        top: auto;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: auto;
+        max-height: 46vh;
+        padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+        border-radius: 20px 20px 0 0;
         transform: none;
-        width: 440px;
+        animation-name: host-up;
     }
 
-    .ws-intro.is-out {
-        transform: translateY(12px);
-    }
-}
-
-/* On a phone the body sentence goes, so the panel stays a strip. */
-@media (max-width: 620px) {
-    .ws-intro {
-        padding: 0.9rem 1rem 0.85rem;
+    .host-portrait {
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
     }
 
-    .intro-lead {
-        font-size: 1.15rem;
-    }
-
-    .intro-body {
-        display: none;
+    .host-actions .ws-btn {
+        flex: 1 1 auto;
     }
 }
 
-/* The handle, top right, the panel's way back for the whole visit. */
-.intro-handle {
+@media (prefers-reduced-motion: reduce) {
+    .ws-host {
+        animation: none;
+    }
+
+    .ws-btn.is-nudge {
+        animation: none;
+        outline: 3px solid var(--ws-accent);
+        outline-offset: 2px;
+    }
+}
+
+/* ---- Help and Undo, top right (M2) -------------------------------------------------
+ *
+ * Two small buttons, and Help's short menu under them: Maya again, the
+ * guide from the start, and the checklist's own cards.
+ */
+.ws-tools {
     position: fixed;
     top: max(16px, env(safe-area-inset-top));
     right: 16px;
-    z-index: 30;
-    min-height: 40px;
-    padding: 0.45rem 0.95rem;
+    z-index: 45;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.tool-btn {
+    min-height: 44px;
+    padding: 0.45rem 1rem;
     border: 1px solid var(--ws-line);
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.94);
@@ -1223,18 +1240,63 @@ body .pan-controls.no-chrome.visible {
     cursor: pointer;
 }
 
-.intro-handle:focus-visible {
+.tool-help {
+    width: 44px;
+    padding: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.tool-btn:disabled {
+    color: var(--ws-muted);
+    box-shadow: none;
+    cursor: default;
+}
+
+.tool-btn:focus-visible {
     outline: 3px solid var(--ws-accent);
     outline-offset: 2px;
 }
 
-.intro-handle.is-out {
+.help-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 230px;
+    padding: 0.4rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 14px;
+    background: #FFFFFF;
+    box-shadow: 0 18px 50px rgba(34, 37, 42, 0.18);
+}
+
+.help-menu[hidden],
+.help-item[hidden] {
     display: none;
 }
 
-/* Back to the studio, top center under the chips, whenever the camera is
-   close to something (QA, 2026-10-13: it was hard to get out of the
-   model). */
+.help-item {
+    min-height: 44px;
+    padding: 0.55rem 0.8rem;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: var(--ws-graphite);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.help-item:hover,
+.help-item:focus-visible {
+    background: var(--ws-accent-soft);
+    outline: none;
+}
+
+/* Back to the whole house, top center under the chips, whenever a floor
+   is open (QA, 2026-10-13: it was hard to get out of the model). */
 .ws-back {
     position: fixed;
     top: calc(max(16px, env(safe-area-inset-top)) + 56px);
@@ -1269,12 +1331,6 @@ body .pan-controls.no-chrome.visible {
 }
 
 .ws-back[hidden] {
-    display: none;
-}
-
-/* The toolbar, stepped aside while the panel is open. `body` makes this
-   beat the shared sheet's .ui-float.visible. */
-body .ws-bar.is-away {
     display: none;
 }
 

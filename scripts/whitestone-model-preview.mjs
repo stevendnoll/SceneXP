@@ -6,21 +6,25 @@
  *
  *   npm run build && node scripts/whitestone-model-preview.mjs
  *
- * Writes specs/whitestone/previews/model.html (git-ignored): the example
- * home on its site from the front, from three quarters, and with its main
- * floor lifted, and the empty house, as PNGs beside it. A small software
- * rasterizer with a depth buffer over model.js's `instancesFor`: every box,
- * gable and tree as flat-shaded triangles in an orthographic view, drawn at
- * twice the size and shrunk for smooth edges, so what it shows is the
- * model's own numbers, not a drawing of them. Lighting and materials are
- * rough; the shapes, colors and placement are exact.
+ * Writes specs/whitestone/previews/model.html (git-ignored): the house on
+ * its turntable in the white studio, through the page's own camera
+ * (turntable.js framePose, view offset and all) on a wide screen and a
+ * phone, with a floor open, empty, and the widest home, as PNGs beside it.
+ * A small software rasterizer with a depth buffer over model.js's
+ * `instancesFor`: every box, gable and tree as flat-shaded triangles in
+ * perspective, drawn at twice the size and shrunk for smooth edges, so what
+ * it shows is the model's own numbers, not a drawing of them. The cove and
+ * the contact shadow are traced per pixel. Lighting and materials are
+ * rough; the shapes, colors, placement and framing are exact.
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { deflateSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { instancesFor, levelOffsets, fitScale, HOUSE } from '../www/whitestone/js/model.js';
+import { instancesFor, levelOffsets, fitScale, siteFor, EMPTY_HOME } from '../www/whitestone/js/model.js';
+import { framePose, turnPoint } from '../www/whitestone/js/turntable.js';
+import { contactAlpha } from '../www/whitestone/js/stage.js';
 import { layoutHome } from '../www/whitestone/js/layout.js';
 import { withExample } from '../www/whitestone/js/samples.js';
 import { emptyDoc } from '../www/whitestone/js/store.js';
@@ -30,7 +34,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'specs', 'whitestone', 'previews', 'model.html');
 const NOW = new Date('2026-10-12T16:00:00Z');
 const PAL = CONFIG.model.palette;
-const LIGHT = norm([-0.45, 0.8, 0.55]);
+const SUN = CONFIG.light.sun;
+const LIGHT = norm(SUN.position.map((v, i) => v - SUN.target[i]));
+const T = CONFIG.stage.turntable;
+const COVE = CONFIG.stage.cove;
 
 function norm(v) {
     const l = Math.hypot(...v) || 1;
@@ -113,6 +120,45 @@ function coneFaces(b) {
     return ring.map((p, k) => [apex, ring[(k + 1) % 9], p]);
 }
 
+/** A cylinder record (a lawn): its top as a fan and its rim as quads. */
+function discFaces(b, n = 64) {
+    const [w, h, d] = b.scale;
+    const c = b.position;
+    const ring = (y) => Array.from({ length: n }, (_, k) => {
+        const a = (k / n) * Math.PI * 2;
+        return [c[0] + Math.cos(a) * w / 2, y, c[2] + Math.sin(a) * d / 2];
+    });
+    const top = ring(c[1] + h / 2);
+    const bottom = ring(c[1] - h / 2);
+    const faces = [];
+    const mid = [c[0], c[1] + h / 2, c[2]];
+    for (let k = 0; k < n; k++) {
+        faces.push([mid, top[(k + 1) % n], top[k]]);
+        faces.push([bottom[k], top[k], top[(k + 1) % n], bottom[(k + 1) % n]]);
+    }
+    return faces;
+}
+
+/** The turntable in the world: a stone drum on its dark toe. */
+function turntableFaces(n = 96) {
+    const faces = [];
+    const drum = (r, y0, y1, hex) => {
+        const ring = (y) => Array.from({ length: n }, (_, k) => {
+            const a = (k / n) * Math.PI * 2;
+            return [Math.cos(a) * r, y, Math.sin(a) * r];
+        });
+        const lo = ring(y0);
+        const hi = ring(y1);
+        for (let k = 0; k < n; k++) {
+            faces.push({ poly: [lo[k], hi[k], hi[(k + 1) % n], lo[(k + 1) % n]], hex });
+            faces.push({ poly: [[0, y1, 0], hi[(k + 1) % n], hi[k]], hex });
+        }
+    };
+    drum(T.radius - T.inset, 0, T.toe, T.toeColor);
+    drum(T.radius, T.toe, T.height, T.stone);
+    return faces;
+}
+
 function hexToRgb(hex) {
     return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 }
@@ -139,27 +185,72 @@ function facesOf(inst) {
     for (const g of inst.gables) add(prismFaces(g), color(g, PAL.wall));
     for (const b of [...inst.canopies, ...inst.blooms]) add(blobFaces(b), color(b, PAL.leaves));
     for (const b of inst.firs) add(coneFaces(b), color(b, PAL.fir1));
+    for (const b of inst.lawn || []) add(discFaces(b), PAL.lawn);
     for (const m of inst.markers) add(boxFaces(m, true), CONFIG.model.marker);
     for (const b of inst.flags) add(boxFaces(b), CONFIG.model.marker);
     return faces;
 }
 
-/** Rasterize with a depth buffer at twice the size, then shrink by four
- *  samples a pixel. Returns RGB bytes. */
-function render(inst, { yaw, pitch, scale, width, height, cx = 0, cy = 0.2 }) {
+/** Light a face by its normal (lit from either side, the back dimmer). */
+function lit(poly, hex) {
+    const n = norm(cross(sub(poly[1], poly[0]), sub(poly[2], poly[0])));
+    const f = 0.62 + 0.45 * Math.abs(dot(n, LIGHT)) * (dot(n, LIGHT) >= 0 ? 1 : 0.35);
+    return hexToRgb(hex).map((v) => Math.min(255, v * f));
+}
+
+/**
+ * Draw the scene as the page's camera sees it on a `width` by `height`
+ * screen: the cove and its shadow traced per pixel, then the turntable and
+ * the house (turned by `yaw`, at scale `k`) rasterized with a depth buffer
+ * at twice the size, then shrunk.
+ */
+function render(inst, { k, yaw, tilt, zoom = 1, houseHeight, width, height }) {
+    const aspect = width / height;
+    const pose = framePose(aspect, houseHeight, { tilt, zoom }, CONFIG);
     const W2 = width * 2;
     const H2 = height * 2;
-    const rgb = new Uint8Array(W2 * H2 * 3).fill(0);
-    for (let i = 0; i < W2 * H2; i++) rgb.set([244, 242, 238], i * 3);
+    const eye = pose.eye;
+    const f = norm(sub(pose.aim, eye));
+    const right = norm(cross(f, [0, 1, 0]));
+    const up = cross(right, f);
+    const tanV = Math.tan((pose.fov * Math.PI) / 360);
+    const tanH = tanV * aspect;
+    const [ox, oy] = pose.offset;
+    const rgb = new Uint8Array(W2 * H2 * 3);
     const depth = new Float32Array(W2 * H2).fill(-Infinity);
-    const view = (p) => rotate(rotate(p, [0, yaw, 0]), [pitch, 0, 0]);
+    // The cove: the floor where a ray meets it, with the soft shadow under
+    // the turntable, and the curve and wall beyond, all the cove's white.
+    const white = hexToRgb(COVE.color);
+    for (let y = 0; y < H2; y++) {
+        for (let x = 0; x < W2; x++) {
+            const nx = ((x + 0.5) / W2 + ox) * 2 - 1;
+            const ny = 1 - ((y + 0.5) / H2 + oy) * 2;
+            const dir = [0, 1, 2].map((i) => f[i] + right[i] * nx * tanH + up[i] * ny * tanV);
+            let shade = 0.93;
+            if (dir[1] < 0) {
+                const t = -eye[1] / dir[1];
+                const px = eye[0] + dir[0] * t;
+                const pz = eye[2] + dir[2] * t;
+                if (pz > -COVE.back + COVE.radius) shade = 0.95 * (1 - contactAlpha(Math.hypot(px, pz), T.radius, CONFIG.stage.contact));
+            }
+            rgb.set(white.map((v) => v * shade), (y * W2 + x) * 3);
+        }
+    }
     const toScreen = (p) => {
-        const v = view(p);
-        return [W2 / 2 + (v[0] - cx) * scale * 2, H2 / 2 - (v[1] - cy) * scale * 2, v[2]];
+        const d = sub(p, eye);
+        const zc = dot(d, f);
+        const nx = dot(d, right) / (zc * tanH);
+        const ny = dot(d, up) / (zc * tanV);
+        return [((nx + 1) / 2 - ox) * W2, ((1 - ny) / 2 - oy) * H2, 1 / zc];
     };
-    for (const { poly, rgb: c } of facesOf(inst)) {
+    const world = (p) => turnPoint([k * p[0], T.height + k * p[1], k * p[2]], yaw);
+    const faces = [
+        ...turntableFaces().map(({ poly, hex }) => ({ poly, rgb: lit(poly, hex) })),
+        ...facesOf(inst).map(({ poly, rgb: c }) => ({ poly: poly.map(world), rgb: c }))
+    ];
+    for (const { poly, rgb: c } of faces) {
         const pts = poly.map(toScreen);
-        for (let k = 1; k + 1 < pts.length; k++) tri(pts[0], pts[k], pts[k + 1], c);
+        for (let i = 1; i + 1 < pts.length; i++) tri(pts[0], pts[i], pts[i + 1], c);
     }
     function tri(a, b, c, col) {
         const minX = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0])));
@@ -176,11 +267,11 @@ function render(inst, { yaw, pitch, scale, width, height, cx = 0, cy = 0.2 }) {
                 const w1 = ((c[0] - px) * (a[1] - py) - (c[1] - py) * (a[0] - px)) / area;
                 const w2 = 1 - w0 - w1;
                 if (w0 < -1e-6 || w1 < -1e-6 || w2 < -1e-6) continue;
+                // 1 / depth runs straight across the screen, so it is what
+                // is interpolated, and the nearer is the larger.
                 const z = w0 * a[2] + w1 * b[2] + w2 * c[2];
                 const i = y * W2 + x;
-                // A nudge toward the viewer for what lies on a face (the
-                // siding's courses, the windows), drawn after the wall.
-                if (z <= depth[i] + 1e-7) continue;
+                if (z <= depth[i] * (1 + 1e-6)) continue;
                 depth[i] = z;
                 rgb[i * 3] = col[0];
                 rgb[i * 3 + 1] = col[1];
@@ -233,36 +324,47 @@ function png({ width, height, rgb }) {
     return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
+/** A home's parts on the turntable, its scale, and its closed height. */
 function build(home, lifted = null) {
     const layout = layoutHome(home);
-    const p = CONFIG.studio.plinth;
-    const k = fitScale(layout, p, CONFIG.model.scale);
-    const site = { halfWidth: (p.width / 2 - HOUSE.site.rim) / k, halfDepth: (p.depth / 2 - HOUSE.site.rim) / k };
+    const k = fitScale(layout, T, CONFIG.model.scale);
+    const site = siteFor(layout, T, k);
     const areas = new Map((home.rooms || []).map((r) => [r.id, r.area]));
-    return instancesFor(layout, levelOffsets(layout.slabs, lifted, CONFIG.model.lift), { lifted, areas, site });
+    const inst = instancesFor(layout, levelOffsets(layout.slabs, lifted, CONFIG.model.lift), { lifted, areas, site });
+    const closed = instancesFor(layout, new Map(), { areas, site });
+    // The frame holds the floors lifted above an open one too (main.js
+    // frameHeight).
+    const houseHeight = k * Math.max(...Object.values(closed).flat().map((p) => p.top)) + (lifted ? CONFIG.model.lift.open * k : 0);
+    return { inst, k, houseHeight };
 }
 
 const example = withExample(emptyDoc(CONFIG, NOW), CONFIG, NOW, null).doc.checklists[0];
 const withGarage = { ...example, levels: [...example.levels, 'garage'], rooms: [...example.rooms, { id: 'g1', level: 'garage', area: 'garage', label: '', deletedAt: null }] };
-const empty = { serviceType: 'cleaning', levels: ['main'], rooms: [], items: [] };
+const widest = { serviceType: 'cleaning', levels: ['basement', 'main', 'second', 'third', 'attic', 'garage', 'detached-garage'], rooms: [], items: [] };
+const V = CONFIG.view;
+const start = { yaw: V.yaw.start, tilt: V.tilt.start };
+const front = { yaw: 0, tilt: V.tilt.open };
+const shot = (built, look, width, height) => ({ ...built, ...look, width, height });
 
 const views = [
-    ['The example home with a garage, from the front', build(withGarage), { yaw: 0, pitch: 0.12, scale: 380, width: 900, height: 560, cy: 0.35 }],
-    ['From three quarters, as the studio sees it', build(withGarage), { yaw: -0.5, pitch: 0.38, scale: 380, width: 900, height: 600, cy: 0.3 }],
-    ['The main floor lifted', build(withGarage, 'main'), { yaw: -0.25, pitch: 0.55, scale: 380, width: 900, height: 700, cy: 0.42 }],
-    ['An empty plinth', build(empty), { yaw: -0.5, pitch: 0.38, scale: 380, width: 900, height: 520, cy: 0.2 }]
+    ['The example home on arrival, a laptop (1280 by 800)', shot(build(example), start, 1280, 800)],
+    ['On arrival, a phone upright (390 by 844), the bottom 45% kept for the sheet', shot(build(example), start, 390, 844)],
+    ['Its main floor open, turned to face the visitor', shot(build(example, 'main'), front, 1280, 800)],
+    ['An empty house, as a first visit will meet it', shot(build(EMPTY_HOME), start, 1280, 800)],
+    ['The widest home there can be, with a garage', shot(build(withGarage), start, 1280, 800)],
+    ['Every level, the tallest', shot(build(widest), start, 1280, 800)]
 ];
 
 await mkdir(path.dirname(OUT), { recursive: true });
 const shots = [];
-for (const [i, [title, inst, opts]] of views.entries()) {
+for (const [i, [title, opts]] of views.entries()) {
     const file = `model-${i + 1}.png`;
-    await writeFile(path.join(path.dirname(OUT), file), png(render(inst, opts)));
+    await writeFile(path.join(path.dirname(OUT), file), png(render(opts.inst, opts)));
     shots.push([title, file]);
 }
 const page = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Whitestone house model</title>
 <style>body { margin: 24px; font-family: -apple-system, sans-serif; background: #E9E6E0; color: #22252A; } section { margin-bottom: 28px; } h2 { font-size: 18px; margin: 0 0 8px; } img { border-radius: 10px; max-width: 100%; }</style></head><body>
-<h1>The house model, drawn from its own parts</h1>
+<h1>The house on its turntable, through the page's camera</h1>
 ${shots.map(([title, file]) => `<section><h2>${title}</h2><img src="${file}" alt="${title}"></section>`).join('\n')}
 </body></html>`;
 await writeFile(OUT, page);

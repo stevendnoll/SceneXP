@@ -1,10 +1,11 @@
 // © 2026 Continuum Commerce LLC. All rights reserved.
 /**
- * The house model on the plinth (www/whitestone/js/model.js): every room
- * sits on its level and every task in its room, lifted or not; a lifted
- * level opens enough to be seen into; the model is centered on the plinth
- * and fits it for any home; and the built model draws exactly the home it
- * was handed, in three instanced meshes, against the real three.js.
+ * The house model on the turntable (www/whitestone/js/model.js): every
+ * room sits on its level and every task in its room, lifted or not; a
+ * lifted level opens enough to be seen into; the model is centered on the
+ * turntable and fits its round lawn however it is turned, for any home; and
+ * the built model draws exactly the home it was handed, in instanced
+ * meshes, against the real three.js.
  *
  * Each random home draws from its own well-mixed seed.
  */
@@ -12,18 +13,19 @@ import { loadRealThree } from './helpers/real-three.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import {
     levelOffsets, centerOf, instancesFor, buildModel, fitScale, restack, wallHeight, EMPTY_HOME, HOUSE, FIXTURE_OF, FIXTURES, ACCENTS, accentsFor,
-    openingsFor, WINDOW_OF, WINDOWS, columnsFor
+    openingsFor, WINDOW_OF, WINDOWS, columnsFor, siteFor, lawnRadius
 } from '../www/whitestone/js/model.js';
 import { layoutHome, MODEL } from '../www/whitestone/js/layout.js';
 import { TAXONOMY, roomName } from '../www/whitestone/js/taxonomy.js';
 import { withExample } from '../www/whitestone/js/samples.js';
 import { emptyDoc } from '../www/whitestone/js/store.js';
-import { poseFor } from '../www/whitestone/js/stations.js';
+import { framePose } from '../www/whitestone/js/turntable.js';
 
 const NOW = new Date('2026-10-12T16:00:00Z');
 const AREAS = TAXONOMY.cleaning.areas.map((a) => a.key);
 const LEVELS = TAXONOMY.cleaning.levels.map((l) => l.key);
 const LIFT = CONFIG.model.lift;
+const T = CONFIG.stage.turntable;
 const EPS = 1e-9;
 
 const mix = (n) => {
@@ -399,12 +401,11 @@ describe('instances', () => {
         expect(small.fixtures.length).toBeLessThan(80);
     });
 
-    test('the model is centered on the plinth and fits on it, drawn at its scale, for any home', () => {
-        const p = CONFIG.studio.plinth;
+    test('the model is centered on the turntable and fits its lawn however it is turned, for any home', () => {
         const { scale } = CONFIG.model;
         for (const home of [...HOMES, FULL, EMPTY_HOME]) {
             const layout = layoutHome(home);
-            const k = fitScale(layout, p, scale);
+            const k = fitScale(layout, T, scale);
             expect(k).toBeGreaterThan(0);
             expect(k).toBeLessThanOrEqual(scale.max);
             const { slabs } = instancesFor(layout, new Map());
@@ -412,19 +413,20 @@ describe('instances', () => {
             const zs = slabs.flatMap((s) => [s.position[2] - s.scale[2] / 2, s.position[2] + s.scale[2] / 2]);
             expect(Math.min(...xs) + Math.max(...xs)).toBeCloseTo(0, 9);
             expect(Math.min(...zs) + Math.max(...zs)).toBeCloseTo(0, 9);
-            expect(k * (Math.max(...xs) - Math.min(...xs))).toBeLessThanOrEqual(p.width - scale.margin + 1e-9);
-            expect(k * (Math.max(...zs) - Math.min(...zs))).toBeLessThanOrEqual(p.depth - scale.margin + 1e-9);
-            // The lowest level stands on the plinth's top.
+            // Every corner of the house, at any turn, stays `margin` inside
+            // the lawn's edge.
+            const half = Math.hypot((Math.max(...xs) - Math.min(...xs)) / 2, (Math.max(...zs) - Math.min(...zs)) / 2);
+            expect(k * half).toBeLessThanOrEqual(lawnRadius(T) - scale.margin + 1e-9);
+            // The lowest level stands on the turntable's top.
             expect(Math.min(...slabs.map(bottom))).toBeCloseTo(0, 9);
         }
     });
 
     describe('the site and the details', () => {
-        const p = CONFIG.studio.plinth;
         function sited(home, lifted = null) {
             const layout = layoutHome(home);
-            const k = fitScale(layout, p, CONFIG.model.scale);
-            const site = { halfWidth: (p.width / 2 - HOUSE.site.rim) / k, halfDepth: (p.depth / 2 - HOUSE.site.rim) / k };
+            const k = fitScale(layout, T, CONFIG.model.scale);
+            const site = siteFor(layout, T, k);
             const areas = new Map((home.rooms || []).map((r) => [r.id, r.area]));
             return { site, inst: instancesFor(layout, levelOffsets(layout.slabs, lifted, LIFT), { lifted, areas, site }) };
         }
@@ -438,15 +440,30 @@ describe('instances', () => {
         };
         const overlaps = (a, b) => Math.min(a[2], b[2]) - Math.max(a[0], b[0]) > 1e-9 && Math.min(a[3], b[3]) - Math.max(a[1], b[1]) > 1e-9;
 
-        test.each([['the example', () => example()], ['every level', () => FULL], ['an empty plinth', () => ({ ...EMPTY_HOME, id: 'e' })],
+        test.each([['the example', () => example()], ['every level', () => FULL], ['an empty home', () => ({ ...EMPTY_HOME, id: 'e' })],
             ...HOMES.slice(0, 60).map((h, i) => [`random home ${i}`, () => h])])('%s: everything on the site stays on the lawn, and nothing crosses anything', (_name, make) => {
             const { site, inst } = sited(make());
-            const lawn = inst.site.find((b) => b.role === 'lawn');
-            const inLawn = (b) => rect(b).every((v, i) => (i % 2 === 0 ? Math.abs(v) <= site.halfWidth + 1e-9 : Math.abs(v) <= site.halfDepth + 1e-9));
-            for (const b of [...inst.site, ...inst.slabs, ...inst.canopies.map((c) => ({ ...c, scale: [c.scale[0], 0, c.scale[2]] }))]) {
-                expect(inLawn(b)).toBe(true);
+            expect(inst.lawn).toHaveLength(1);
+            const lawn = inst.lawn[0];
+            // Inside the yard's rectangle, and every corner on the round lawn.
+            const inYard = (b) => rect(b).every((v, i) => (i % 2 === 0 ? Math.abs(v) <= site.halfWidth + 1e-9 : Math.abs(v) <= site.halfDepth + 1e-9));
+            const onLawn = (b) => {
+                const [x0, z0, x1, z1] = rect(b);
+                return [[x0, z0], [x0, z1], [x1, z0], [x1, z1]].every(([x, z]) => Math.hypot(x, z) <= site.radius + 1e-9);
+            };
+            // The house, its paving and its beds in the yard; the trees round
+            // the lawn's edge, and on it.
+            const trees = ['trunk', 'maple', 'shade', 'fir'];
+            const flat = (c) => ({ ...c, scale: [c.scale[0], 0, c.scale[2]] });
+            for (const b of [...inst.site, ...inst.slabs, ...inst.canopies.map(flat), ...inst.firs.map(flat)]) {
+                // A tree is round: its middle, plus its reach, on the lawn.
+                const round = (t) => Math.hypot(t.position[0], t.position[2]) + Math.max(t.scale[0], t.scale[2]) / 2 <= site.radius + 1e-9;
+                const fine = trees.includes(b.role) ? round(b) : inYard(b) && onLawn(b);
+                expect(`${b.role} ${fine}`).toBe(`${b.role} true`);
             }
-            expect(lawn.scale[0]).toBeCloseTo(2 * site.halfWidth, 9);
+            expect(lawn.scale[0]).toBeCloseTo(2 * site.radius, 9);
+            expect(lawn.scale[2]).toBeCloseTo(2 * site.radius, 9);
+            expect([lawn.position[0], lawn.position[2]]).toEqual([0, 0]);
             const house = inst.slabs.map(rect);
             const ways = inst.site.filter((b) => ['path', 'drive', 'stoop'].includes(b.role)).map(rect);
             for (const hedge of inst.site.filter((b) => b.role === 'hedge').map(rect)) {
@@ -592,6 +609,37 @@ describe('instances', () => {
             for (const p2 of inside) expect(p2.color).toBe('interior');
         });
 
+        test('a stair with no room on its outer side turns in, and it and its path stay in the yard', () => {
+            // An entry at the front corner of a narrow house over a
+            // basement: outward, the stair and its path would leave the yard.
+            const home = {
+                serviceType: 'cleaning', levels: ['basement', 'main', 'second'], items: [],
+                rooms: [{ id: 'r0', level: 'main', area: 'entry', label: '' }, { id: 'r1', level: 'main', area: 'closet', label: '' }]
+            };
+            const { site, inst } = sited(home);
+            const [landing, ...steps] = inst.site.filter((b) => b.role === 'stoop');
+            expect(steps.length).toBeGreaterThan(0);
+            const outward = landing.position[0] <= 0 ? -1 : 1;
+            expect(Math.sign(steps[0].position[0] - landing.position[0])).toBe(-outward);
+            for (const b of inst.site.filter((p) => ['stoop', 'path'].includes(p.role))) {
+                const [x0, , x1] = rect(b);
+                expect(Math.max(Math.abs(x0), Math.abs(x1))).toBeLessThanOrEqual(site.halfWidth + 1e-9);
+            }
+        });
+
+        test("the porch's roof and posts step aside while the door's floor is open, its landing stays", () => {
+            const roles = (inst) => inst.site.map((b) => b.role);
+            const closed = sited(example()).inst;
+            const open = sited(example(), 'main').inst;
+            for (const role of ['porch', 'post', 'pier']) {
+                expect(roles(closed)).toContain(role);
+                expect(roles(open)).not.toContain(role);
+            }
+            expect(open.site.filter((b) => b.role === 'stoop')).toEqual(closed.site.filter((b) => b.role === 'stoop'));
+            // Another floor open: the porch stays.
+            expect(roles(sited(example(), 'second').inst)).toContain('porch');
+        });
+
         test('a lift opens the house, never the garden', () => {
             const closed = sited(example()).inst;
             const open = sited(example(), 'basement').inst;
@@ -600,19 +648,19 @@ describe('instances', () => {
         });
     });
 
-    test('even the tallest home, its lowest level lifted, stays well under the ceiling', () => {
+    test('even the tallest home, its lowest level lifted, is no taller than the turntable is wide', () => {
         const { layout, inst } = check(FULL, 'basement');
-        const k = fitScale(layout, CONFIG.studio.plinth, CONFIG.model.scale);
+        const k = fitScale(layout, T, CONFIG.model.scale);
         const highest = Math.max(...Object.values(inst).flat().map((p) => p.top));
-        expect(CONFIG.studio.plinth.height + k * highest).toBeLessThan(CONFIG.room.height - 0.6);
+        expect(T.height + k * highest).toBeLessThan(2 * T.radius);
     });
 
-    test('the example closed is no taller than a person standing at the plinth', () => {
+    test('the example closed is no taller than a person standing beside the turntable', () => {
         const layout = layoutHome(example());
         const inst = instancesFor(layout, levelOffsets(layout.slabs, null, LIFT));
-        const k = fitScale(layout, CONFIG.studio.plinth, CONFIG.model.scale);
+        const k = fitScale(layout, T, CONFIG.model.scale);
         const highest = Math.max(...Object.values(inst).flat().map((p) => p.top));
-        expect(CONFIG.studio.plinth.height + k * highest).toBeLessThan(1.9);
+        expect(T.height + k * highest).toBeLessThan(1.7);
     });
 
     test('the stack: stories on walls, a garage on the ground', () => {
@@ -629,16 +677,32 @@ describe('instances', () => {
     });
 
     test('a typical home is drawn larger than laid out, and only the widest smaller', () => {
-        const p = CONFIG.studio.plinth;
         const { scale } = CONFIG.model;
-        expect(fitScale(layoutHome(example()), p, scale)).toBe(scale.max);
-        expect(fitScale(layoutHome(EMPTY_HOME), p, scale)).toBe(scale.max);
-        const k = fitScale(layoutHome(FULL), p, scale);
+        expect(fitScale(layoutHome(example()), T, scale)).toBe(scale.max);
+        expect(fitScale(layoutHome(EMPTY_HOME), T, scale)).toBe(scale.max);
+        const k = fitScale(layoutHome(FULL), T, scale);
         expect(k).toBeLessThan(scale.max);
         expect(k).toBeGreaterThan(0.85);
     });
 
-    test('a garage beside the lowest floor rises with the model rather than sinking into the plinth', () => {
+    test('the yard grows the house by one margin on every side, its corners on the lawn', () => {
+        for (const home of [example(), FULL, EMPTY_HOME]) {
+            const layout = layoutHome(home);
+            const k = fitScale(layout, T, CONFIG.model.scale);
+            const site = siteFor(layout, T, k);
+            expect(site.radius).toBeCloseTo(lawnRadius(T) / k, 9);
+            expect(Math.hypot(site.halfWidth, site.halfDepth)).toBeCloseTo(site.radius, 9);
+            const { slabs } = instancesFor(layout, new Map());
+            const xs = slabs.flatMap((s) => [s.position[0] - s.scale[0] / 2, s.position[0] + s.scale[0] / 2]);
+            const zs = slabs.flatMap((s) => [s.position[2] - s.scale[2] / 2, s.position[2] + s.scale[2] / 2]);
+            const gx = site.halfWidth - (Math.max(...xs) - Math.min(...xs)) / 2;
+            const gz = site.halfDepth - (Math.max(...zs) - Math.min(...zs)) / 2;
+            expect(gx).toBeGreaterThan(0);
+            expect(gx).toBeCloseTo(gz, 9);
+        }
+    });
+
+    test('a garage beside the lowest floor rises with the model rather than sinking into the turntable', () => {
         const low = { ...FULL, levels: ['main', 'garage'], rooms: FULL.rooms.filter((r) => ['main', 'garage'].includes(r.level)) };
         const [cx, cy] = centerOf(layoutHome(low));
         expect(cy).toBeCloseTo(MODEL.annex.drop, 9);
@@ -653,9 +717,9 @@ describe('instances', () => {
     });
 });
 
-// ---- Seen from the model station (pure) --------------------------------------------------
+// ---- Seen from the camera (pure) --------------------------------------------------
 
-describe('seen from the model station', () => {
+describe('seen from the camera, the floor open and its front turned to the visitor', () => {
     /** Whether the segment from a to b passes through a box (slab method). */
     function crosses(a, b, box) {
         let t0 = 0;
@@ -678,12 +742,11 @@ describe('seen from the model station', () => {
         return true;
     }
 
-    const p = CONFIG.studio.plinth;
-    /** A box in the model's frame, as drawn in the studio: scaled, on the
-     *  plinth's top. */
+    /** A box in the model's frame, as drawn on the stage: scaled, on the
+     *  turntable's top, the house turned to face the camera. */
     const worldAt = (k) => (b) => ({
         ...b,
-        position: [p.x + k * b.position[0], p.height + k * b.position[1], p.z + k * b.position[2]],
+        position: [k * b.position[0], T.height + k * b.position[1], k * b.position[2]],
         scale: b.scale.map((v) => k * v)
     });
 
@@ -704,10 +767,10 @@ describe('seen from the model station', () => {
 
     function seen(home, level, pointsFor) {
         const layout = layoutHome(home);
-        const world = worldAt(fitScale(layout, p, CONFIG.model.scale));
+        const k = fitScale(layout, T, CONFIG.model.scale);
+        const world = worldAt(k);
         const areas = new Map((home.rooms || []).map((r) => [r.id, r.area]));
-        const k = fitScale(layout, p, CONFIG.model.scale);
-        const site = { halfWidth: (p.width / 2 - HOUSE.site.rim) / k, halfDepth: (p.depth / 2 - HOUSE.site.rim) / k };
+        const site = siteFor(layout, T, k);
         const inst = instancesFor(layout, levelOffsets(layout.slabs, level, LIFT), { lifted: level, areas, site });
         // What can stand in the way: everything but the lifted level's own
         // floors, fixtures, dots and flags (and, for its back row, its own
@@ -718,18 +781,23 @@ describe('seen from the model station', () => {
             ...inst.gables.map(asBox('gables')),
             ...inst.roofs.map(asBox('roofs')),
             ...inst.trims,
-            ...inst.site.filter((b) => b.role !== 'lawn'),
+            ...inst.site,
             ...inst.canopies
         ].map(world);
         const misses = [];
+        const height = k * Math.max(...Object.values(instancesFor(layout, new Map(), { areas, site })).flat().map((b) => b.top));
+        const views = CONFIG.view.tilt;
         for (const aspect of [16 / 10, 0.45]) {
-            const { eye } = poseFor('model', aspect, CONFIG);
+          // As a floor opens (turntable faceFront), and as low as it goes.
+          for (const tilt of [views.open, views.min]) {
+            const { eye } = framePose(aspect, height, { tilt, zoom: 1 }, CONFIG);
             for (const t of inst.tiles.filter((x) => x.level === level).map(world)) {
                 for (const [at, withPartitions] of pointsFor(t)) {
                     const blocked = solid(withPartitions).find((o) => crosses(eye, at, o));
-                    if (blocked) misses.push(`${level} ${t.roomId} at ${aspect.toFixed(2)}: ${blocked.level} ${blocked.role || ''}`);
+                    if (blocked) misses.push(`${level} ${t.roomId} at ${aspect.toFixed(2)}, tilt ${tilt}: ${blocked.level} ${blocked.role || ''}`);
                 }
             }
+          }
         }
         return misses;
     }
@@ -765,7 +833,7 @@ describe('built with the real three.js', () => {
         globalThis.THREE = REAL;
     });
 
-    const AT = [0, 0.72, -0.7];
+    const AT = [0, CONFIG.stage.turntable.height, 0];
     const meshes = (m) => m.meshes;
     const positionOf = (mesh, i) => {
         const matrix = new REAL.Matrix4();
@@ -773,7 +841,7 @@ describe('built with the real three.js', () => {
         return new REAL.Vector3().setFromMatrixPosition(matrix);
     };
 
-    test('the empty plinth shows one empty floor', () => {
+    test('an empty turntable shows one empty floor', () => {
         const m = buildModel(CONFIG, AT);
         const { slabs, tiles, markers } = meshes(m);
         expect([slabs.count, tiles.count, markers.count]).toEqual([1, 0, 0]);
@@ -785,7 +853,7 @@ describe('built with the real three.js', () => {
         expect(tiles.instanceColor.count).toBe(CONFIG.limits.rooms);
     });
 
-    test('the example home: three levels, thirteen rooms, twenty-seven tasks, in fifteen draw calls', () => {
+    test('the example home: three levels, thirteen rooms, twenty-seven tasks, in sixteen draw calls', () => {
         const m = buildModel(CONFIG, AT);
         const home = example();
         expect(m.show(home)).toBe(true);
@@ -797,7 +865,7 @@ describe('built with the real three.js', () => {
         expect(windows.count).toBe(m.placed.windows.length);
         let n = 0;
         m.group.traverse((o) => { if (o.isMesh) n++; });
-        expect(n).toBe(15);
+        expect(n).toBe(16);
         // Every part fits its mesh: nothing is dropped for want of room.
         for (const [kind, mesh] of Object.entries(meshes(m))) {
             expect(`${kind}: ${m.placed[kind].length <= mesh.instanceMatrix.count}`).toBe(`${kind}: true`);
@@ -883,7 +951,7 @@ describe('built with the real three.js', () => {
         const labels = m.labels();
         const second = home.rooms.filter((r) => r.level === 'second');
         expect(labels.map((l) => l.text).sort()).toEqual(second.map((r) => roomName('cleaning', r)).sort());
-        // Over each tile as drawn: scaled up, on the plinth.
+        // Over each tile as drawn: scaled up, on the turntable.
         const k = m.scale;
         expect(k).toBe(CONFIG.model.scale.max);
         expect(m.group.scale.x).toBe(k);
@@ -919,6 +987,19 @@ describe('built with the real three.js', () => {
         expect(m.levelOfHit({ object: slabs, instanceId: 2 })).toBe(m.placed.slabs[2].level);
         expect(m.levelOfHit({ object: {}, instanceId: 0 })).toBeNull();
         expect(m.levelOfHit(null)).toBeNull();
+    });
+
+    test('a hit on a dot or its flag says which task it is, and anything else none', () => {
+        const m = buildModel(CONFIG, AT);
+        m.show(example());
+        const { markers, flags, tiles } = meshes(m);
+        expect(m.itemOfHit({ object: markers, instanceId: 3 })).toBe(m.placed.markers[3].itemId);
+        expect(m.placed.markers[3].itemId).toBeTruthy();
+        expect(m.itemOfHit({ object: flags, instanceId: 1 })).toBe(m.placed.flags[1].itemId);
+        expect(m.itemOfHit({ object: tiles, instanceId: 0 })).toBeNull();
+        expect(m.itemOfHit({ object: markers, instanceId: 9999 })).toBeNull();
+        expect(m.itemOfHit({ object: markers })).toBeNull();
+        expect(m.itemOfHit(null)).toBeNull();
     });
 
     test('every part is painted its own color from the palette', () => {
@@ -1029,14 +1110,30 @@ describe('built with the real three.js', () => {
         expect(walnut(hsl('#D9A441')) || brass(hsl('#D9A441'))).toBe(false);
     });
 
-    test('the site fills the plinth inside its rim, and the house stands on it', () => {
+    test('the lawn fills the turntable inside its rim, round, and the house stands on it', () => {
         const m = buildModel(CONFIG, AT);
         m.show(example());
-        const lawn = m.placed.site.find((p) => p.role === 'lawn');
-        const p = CONFIG.studio.plinth;
+        expect(m.placed.site.some((p) => p.role === 'lawn')).toBe(false);
+        const [lawn] = m.placed.lawn;
         const k = m.scale;
-        expect(k * lawn.scale[0]).toBeCloseTo(p.width - 2 * HOUSE.site.rim, 9);
-        expect(k * lawn.scale[2]).toBeCloseTo(p.depth - 2 * HOUSE.site.rim, 9);
+        expect(k * lawn.scale[0]).toBeCloseTo(2 * (T.radius - T.rim), 9);
+        expect(k * lawn.scale[2]).toBeCloseTo(2 * (T.radius - T.rim), 9);
         expect(m.toWorld([lawn.position[0], 0, lawn.position[2]])).toEqual([AT[0], AT[1], AT[2]]);
+        // The lawn is a disc: a cylinder drawn once.
+        const mesh = m.meshes.lawn;
+        expect(mesh.count).toBe(1);
+        expect(mesh.geometry.type).toBe('CylinderGeometry');
+    });
+
+    test("the house's height is its highest point standing closed, in the stage's meters", () => {
+        const m = buildModel(CONFIG, AT);
+        m.show(example());
+        const closed = Math.max(...Object.values(m.placed).flat().map((p) => p.top)) * m.scale;
+        expect(m.height).toBeCloseTo(closed, 9);
+        // Opening a floor lifts the stories above it, but the frame keeps
+        // the house's closed height.
+        m.lift('basement', true);
+        expect(Math.max(...Object.values(m.placed).flat().map((p) => p.top)) * m.scale).toBeGreaterThan(closed);
+        expect(m.height).toBeCloseTo(closed, 9);
     });
 });

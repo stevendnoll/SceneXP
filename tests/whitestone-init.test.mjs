@@ -1,9 +1,10 @@
 // © 2026 Continuum Commerce LLC. All rights reserved.
 /**
  * Boot-and-drive smoke for Whitestone Home Care, plus the page-level
- * rules no unit test can see: the studio boots behind its loading screen
- * and then draws only when asked, the camera glides between its stations
- * (or cuts under reduced motion), the cleaner's PIN form never accepts less than a PIN, and
+ * rules no unit test can see: the house boots behind its loading screen
+ * and then draws only when asked, arrives with a push-in (none under
+ * reduced motion), turns under a drag, and frames itself to the screen and
+ * the house, the cleaner's PIN form never accepts less than a PIN, and
  * nothing under either js folder writes markup from strings.
  *
  * Under Node, importing main.js is side-effect-free unless a `document`
@@ -22,7 +23,6 @@ import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { readPin, wire, COPY } from '../www/whitestone/tasks/js/main.js';
-import { poseFor } from '../www/whitestone/js/stations.js';
 
 let dom;
 
@@ -42,6 +42,16 @@ async function boot() {
     const main = await import('../www/whitestone/js/main.js');
     await flushAsync();
     await jest.advanceTimersByTimeAsync(CONFIG.loadingReveal + 100);
+    return main;
+}
+
+/** Boot, then put the example on the turntable, as Show me an example
+ *  does. */
+async function bootExample() {
+    const main = await boot();
+    main.__test__.showExample();
+    // The frame eases to the taller house.
+    stepFrames(Math.ceil((CONFIG.view.subject.ease * 1000) / 16) + 2);
     return main;
 }
 
@@ -78,9 +88,12 @@ test('without WebGL the page says so and goes to the standard site', async () =>
 
 // ---- Frames -----------------------------------------------------------------
 
-test('an idle studio draws no frames, and a change draws exactly one', async () => {
+test('a still house draws no frames, and a change draws exactly one', async () => {
     const main = await boot();
-    stepFrames(5);
+    // Past the push-in, and touched so it does not drift.
+    stepFrames(Math.ceil((CONFIG.view.arrival.seconds * 1000) / 16) + 5);
+    main.__test__.turntable().touch();
+    stepFrames(2);
     const settled = main.getState().frames;
     stepFrames(60);
     expect(main.getState().frames).toBe(settled);
@@ -115,60 +128,85 @@ test('page hide stops the loop for good', async () => {
     expect(main.getState().running).toBe(false);
 });
 
-// ---- Stations ---------------------------------------------------------------
+// ---- The turntable ------------------------------------------------------------
 
-describe('stations', () => {
-    test('the studio opens at the overview, composed for the screen', async () => {
-        const main = await boot();
-        const pose = main.getState().pose;
-        expect(main.__test__.ui.station).toBe('overview');
-        expect(pose).toEqual(poseFor('overview', window.innerWidth / window.innerHeight, CONFIG));
-    });
+describe('the turntable', () => {
+    const aspectNow = () => window.innerWidth / window.innerHeight;
 
-    test('a glide takes its time, draws every frame on the way, and lands on the station', async () => {
+    test('the house arrives from farther out, eases in, and goes quiet', async () => {
         const main = await boot();
-        stepFrames(3);
-        const before = main.getState().frames;
-        expect(main.__test__.goTo('menu')).toBe(true);
-        expect(main.__test__.glide()).not.toBeNull();
-        stepFrames(30, 16);
-        expect(main.__test__.glide()).not.toBeNull();
-        expect(main.getState().frames - before).toBeGreaterThanOrEqual(30);
-        stepFrames(Math.ceil((CONFIG.view.glideSeconds * 1000) / 16), 16);
-        expect(main.__test__.glide()).toBeNull();
-        expect(main.getState().pose).toEqual(poseFor('menu', window.innerWidth / window.innerHeight, CONFIG));
-        // Landed, it goes quiet again.
+        const tt = main.__test__.turntable();
+        expect(tt.arriving).toBe(true);
+        const start = main.getState().pose.distance;
+        stepFrames(30);
+        expect(main.getState().pose.distance).toBeLessThan(start);
+        stepFrames(Math.ceil((CONFIG.view.arrival.seconds * 1000) / 16) + 2);
+        expect(tt.arriving).toBe(false);
+        expect(main.getState().pose).toEqual(tt.pose(aspectNow()));
         const landed = main.getState().frames;
         stepFrames(20);
         expect(main.getState().frames).toBe(landed);
     });
 
-    test('under reduced motion it cuts', async () => {
+    test('under reduced motion there is no push-in', async () => {
+        dom.windowStub.matchMedia = (media) => ({ matches: /reduce/.test(media), addEventListener() {}, removeEventListener() {} });
         const main = await boot();
-        main.__test__.state.reducedMotion = true;
-        main.__test__.goTo('board');
-        stepFrames(1);
-        expect(main.__test__.glide()).toBeNull();
-        expect(main.getState().pose).toEqual(poseFor('board', window.innerWidth / window.innerHeight, CONFIG));
+        expect(main.__test__.turntable().arriving).toBe(false);
     });
 
-    test('a station that does not exist goes nowhere', async () => {
+    test('a drag turns the house and the turntable with it, and a tap is not a drag', async () => {
         const main = await boot();
-        expect(main.__test__.goTo('basement')).toBe(false);
-        expect(main.__test__.glide()).toBeNull();
-        expect(main.__test__.ui.station).toBe('overview');
+        main.__test__.turntable().touch();
+        stepFrames(2);
+        const canvas = dom.el('game-canvas');
+        const tt = main.__test__.turntable();
+        const yaw = tt.yaw;
+        fire(canvas, 'pointerdown', { pointerId: 1, clientX: 300, clientY: 300 });
+        fire(canvas, 'pointermove', { pointerId: 1, clientX: 340, clientY: 300 });
+        fire(canvas, 'pointermove', { pointerId: 1, clientX: 400, clientY: 300 });
+        expect(tt.yaw).toBeGreaterThan(yaw);
+        stepFrames(1);
+        // The turntable is drawn at the house's turn (the stub keeps no
+        // rotation, so the turn main.js last set is asked instead).
+        expect(main.__test__.drawnYaw()).toBe(tt.yaw);
+        const before = main.__test__.model().lifted;
+        fire(canvas, 'pointerup', { pointerId: 1, clientX: 400, clientY: 300 });
+        // The end of a drag opens nothing.
+        expect(main.__test__.model().lifted).toBe(before);
+        expect(main.__test__.gesture.pointers.size).toBe(0);
     });
 
-    test('a resize recomposes the station for the new screen', async () => {
+    test('a wheel and the + and - keys zoom, the arrows turn and tilt, but never from a field or over a card', async () => {
         const main = await boot();
-        main.__test__.state.reducedMotion = true;
-        main.__test__.goTo('model');
-        stepFrames(1);
+        const tt = main.__test__.turntable();
+        tt.touch();
+        fire(dom.el('game-canvas'), 'wheel', { deltaY: 200, cancelable: true, preventDefault() {} });
+        expect(tt.zoom).toBeGreaterThan(1);
+        const z = tt.zoom;
+        fire(dom.documentStub, 'keydown', { key: '+', target: dom.el('game-canvas'), preventDefault() {} });
+        expect(tt.zoom).toBeLessThan(z);
+        const y = tt.yaw;
+        fire(dom.documentStub, 'keydown', { key: 'ArrowRight', target: dom.el('game-canvas'), preventDefault() {} });
+        expect(tt.yaw).toBeCloseTo(y + CONFIG.view.turn.key, 12);
+        const t = tt.tilt;
+        fire(dom.documentStub, 'keydown', { key: 'ArrowDown', target: dom.el('game-canvas'), preventDefault() {} });
+        expect(tt.tilt).toBeLessThan(t);
+        fire(dom.documentStub, 'keydown', { key: 'ArrowRight', target: { tagName: 'INPUT' }, preventDefault() {} });
+        expect(tt.yaw).toBeCloseTo(y + CONFIG.view.turn.key, 12);
+        main.__test__.openMine();
+        fire(dom.documentStub, 'keydown', { key: 'ArrowRight', target: dom.el('game-canvas'), preventDefault() {} });
+        expect(tt.yaw).toBeCloseTo(y + CONFIG.view.turn.key, 12);
+        expect(main.__test__.lookKey('q')).toBe(false);
+    });
+
+    test('a resize reframes for the new screen, a phone with the house above the sheet', async () => {
+        const main = await boot();
+        main.__test__.turntable().touch();
         dom.windowStub.innerWidth = 390;
         dom.windowStub.innerHeight = 844;
         fire(dom.windowStub, 'resize');
-        expect(main.getState().pose).toEqual(poseFor('model', 390 / 844, CONFIG));
-        expect(main.getState().pose.fov).toBeGreaterThan(CONFIG.stations.model.fov);
+        expect(main.getState().pose).toEqual(main.__test__.turntable().pose(390 / 844));
+        expect(main.getState().pose.offset).toEqual(CONFIG.view.tall.shift);
     });
 
     test('the look is held while a card is open', async () => {
@@ -176,78 +214,77 @@ describe('stations', () => {
         expect(main.__test__.lookLocked()).toBe(false);
         main.__test__.openMine();
         expect(main.__test__.lookLocked()).toBe(true);
+        // A drag over a card turns nothing.
+        const tt = main.__test__.turntable();
+        const yaw = tt.yaw;
+        fire(dom.el('game-canvas'), 'pointerdown', { pointerId: 1, clientX: 300, clientY: 300 });
+        fire(dom.el('game-canvas'), 'pointermove', { pointerId: 1, clientX: 400, clientY: 300 });
+        expect(tt.yaw).toBe(yaw);
     });
 
-    test('the console helper goes to stations too', async () => {
-        await boot();
-        expect(window.whitestone.stations().all).toContain('printer');
-        expect(window.whitestone.goTo('printer')).toBe(true);
-        expect(window.whitestone.stations().at).toBe('printer');
+    test('the console helper turns the house and says how it is turned', async () => {
+        const main = await boot();
+        const yaw = window.whitestone.look().yaw;
+        expect(window.whitestone.turn(0.5)).toBeCloseTo(yaw + 0.5, 12);
+        expect(window.whitestone.look()).toEqual({ yaw: yaw + 0.5, tilt: main.__test__.turntable().tilt, zoom: 1 });
     });
 });
 
-// ---- The house model and the painted faces -------------------------------------
+// ---- The house model ---------------------------------------------------------------
 
-describe('the model and the boards', () => {
-    test('a first visit shows the example home on the plinth, and paints both faces once', async () => {
+describe('the model', () => {
+    test('a first visit shows a plain one-story house, and the example when asked, framed to its height', async () => {
         const main = await boot();
         const model = main.__test__.model();
+        expect(model.placed.slabs.length).toBe(1);
+        expect(model.placed.tiles.length).toBe(0);
+        expect(main.__test__.active()).toBeNull();
+        const plain = model.height;
+        main.__test__.showExample();
         expect(model.placed.tiles.length).toBe(13);
         expect(model.placed.markers.length).toBe(27);
-        const faces = main.__test__.faces();
-        expect(faces.board.key).toContain('Example home');
-        expect(faces.menu.key).toBeTruthy();
-        const keys0 = [faces.board.key, faces.menu.key];
-        // Nothing changed, nothing repainted: count what is written.
-        let writes = 0;
-        const counting = new Proxy({}, {
-            get: (_t, prop) => (prop === 'measureText' ? () => ({ width: 10 }) : prop === 'createLinearGradient'
-                ? () => ({ addColorStop() {} }) : () => { writes++; }),
-            set: () => true
-        });
-        faces.board.ctx = counting;
-        faces.menu.ctx = counting;
-        main.__test__.paintFaces();
-        main.__test__.refresh();
-        stepFrames(10);
-        expect(writes).toBe(0);
-        // A change to the home repaints the board, and only the board.
-        main.__test__.removeTask('example-task-2-4');
-        expect(writes).toBeGreaterThan(0);
-        expect(faces.board.key).not.toBe(keys0[0]);
-        expect(faces.menu.key).toBe(keys0[1]);
+        stepFrames(Math.ceil((CONFIG.view.subject.ease * 1000) / 16) + 2);
+        expect(main.__test__.turntable().height).toBeCloseTo(model.height, 12);
+        expect(model.height).toBeGreaterThan(plain);
+        // Looked at, not kept: nothing is saved for a look at the example.
+        expect(localStorage.getItem(CONFIG.storage.key)).toBeNull();
     });
 
-    test("whatever of the model's materials are shiny mirror the room, as the studio's metals do", async () => {
+    test("whatever is shiny mirrors the stage: the turntable's stone and the model's", async () => {
         const main = await boot();
         const shiny = main.__test__.reflective();
         expect(shiny).toEqual(expect.arrayContaining(main.__test__.model().shiny));
-        expect(shiny).toEqual(expect.arrayContaining(main.__test__.studio().shiny));
-        expect(shiny.length).toBe(main.__test__.model().shiny.length + main.__test__.studio().shiny.length);
+        expect(shiny).toEqual(expect.arrayContaining(main.__test__.stage().shiny));
+        expect(shiny.length).toBe(main.__test__.model().shiny.length + main.__test__.stage().shiny.length);
     });
 
-    test('clearing the example empties the plinth and the board invites a start', async () => {
-        const main = await boot();
+    test('clearing the example leaves one empty floor, and the frame eases down to it', async () => {
+        const main = await bootExample();
+        const tall = main.__test__.turntable().height;
         main.__test__.clearExample();
         expect(main.__test__.model().placed.tiles.length).toBe(0);
         expect(main.__test__.model().placed.slabs.length).toBe(1);
-        expect(JSON.parse(main.__test__.faces().board.key).empty).toBeTruthy();
+        stepFrames(Math.ceil((CONFIG.view.subject.ease * 1000) / 16) + 2);
+        expect(main.__test__.turntable().height).toBeLessThan(tall);
+        expect(main.__test__.turntable().height).toBeCloseTo(main.__test__.model().height, 12);
     });
 
-    test('lifting a level goes to the model, says so, and names its rooms over them', async () => {
-        const main = await boot();
+    test('opening a floor says so, turns its open front to the visitor, and names its rooms over them', async () => {
+        const main = await bootExample();
+        const tt = main.__test__.turntable();
         expect(main.__test__.liftLevel('second')).toBe(true);
-        expect(main.__test__.ui.station).toBe('model');
         jest.advanceTimersByTime(40);   // announce speaks a beat later
-        expect(dom.el('ws-live').textContent).toBe('Lifted the second floor out of the model.');
-        stepFrames(Math.ceil((CONFIG.view.glideSeconds * 1000) / 16) + 5);
+        expect(dom.el('ws-live').textContent).toBe('Opened the second floor of the house.');
+        stepFrames(Math.ceil((Math.max(CONFIG.view.turn.face, CONFIG.view.arrival.seconds) * 1000) / 16) + 5);
+        expect(Math.abs(tt.yaw % (Math.PI * 2))).toBeLessThan(1e-9);
+        expect(tt.tilt).toBeLessThanOrEqual(CONFIG.view.tilt.open + 1e-12);
         const list = dom.el('ws-rooms');
         expect(list.hidden).toBe(false);
         expect(list.getAttribute('aria-label')).toBe('Rooms of the second floor');
         const names = list.children.map((li) => li.textContent).sort();
         expect(names).toEqual(["Emma's room", 'Guest room', 'Hall bath', "Noah's room", 'Primary bathroom', 'Primary bedroom']);
         expect(list.children.every((li) => /^translate\(/.test(li.style.transform))).toBe(true);
-        // A card over the studio hides them, and closing it brings them back.
+        // A card over the house hides them, and closing it brings them back.
         main.__test__.openMine();
         stepFrames(2);
         expect(list.hidden).toBe(true);
@@ -256,19 +293,40 @@ describe('the model and the boards', () => {
         closeCard('my-checklists');
         stepFrames(2);
         expect(list.hidden).toBe(false);
-        // Set down: the names go.
+        // The frame stepped back to hold the lifted floors too.
+        const model = main.__test__.model();
+        expect(tt.height).toBeCloseTo(model.height + CONFIG.model.lift.open * model.scale, 9);
+        // Closed: the names go.
         main.__test__.liftLevel(null);
         jest.advanceTimersByTime(40);
-        expect(dom.el('ws-live').textContent).toBe('The model is back together.');
-        stepFrames(Math.ceil((CONFIG.model.lift.seconds * 1000) / 16) + 2);
+        expect(dom.el('ws-live').textContent).toBe('The house is back together.');
+        stepFrames(Math.ceil((Math.max(CONFIG.model.lift.seconds, CONFIG.view.subject.ease) * 1000) / 16) + 2);
         expect(list.hidden).toBe(true);
         expect(list.children).toHaveLength(0);
+        expect(tt.height).toBeCloseTo(model.height, 9);
+    });
+
+    test('the house never drifts while a floor is open', async () => {
+        const main = await boot();
+        main.__test__.state.reducedMotion = true;
+        main.__test__.liftLevel('main');
+        stepFrames(2);
+        main.__test__.state.reducedMotion = false;
+        const yaw = main.__test__.turntable().yaw;
+        stepFrames(Math.ceil(((CONFIG.view.idle.after + 2) * 1000) / 100), 100);
+        expect(main.__test__.turntable().yaw).toBe(yaw);
+        main.__test__.liftLevel(null);
+        stepFrames(Math.ceil(((CONFIG.view.idle.after + 2) * 1000) / 100), 100);
+        expect(main.__test__.turntable().yaw).toBeGreaterThan(yaw);
     });
 
     test('a lift draws every frame while it moves, then goes quiet', async () => {
         const main = await boot();
         main.__test__.state.reducedMotion = true;
-        main.__test__.goTo('model');
+        main.__test__.turntable().touch();
+        main.__test__.liftLevel('main');
+        stepFrames(2);
+        main.__test__.liftLevel(null);
         stepFrames(2);
         main.__test__.state.reducedMotion = false;
         const before = main.getState().frames;
@@ -277,13 +335,14 @@ describe('the model and the boards', () => {
         stepFrames(frames);
         expect(main.getState().frames - before).toBeGreaterThanOrEqual(frames - 1);
         expect(main.__test__.model().moving).toBe(false);
+        stepFrames(Math.ceil((CONFIG.view.turn.face * 1000) / 16) + 2);
         const landed = main.getState().frames;
         stepFrames(20);
         expect(main.getState().frames).toBe(landed);
     });
 
     test('under reduced motion the lift is instant, and a level the home lacks is refused', async () => {
-        const main = await boot();
+        const main = await bootExample();
         main.__test__.state.reducedMotion = true;
         main.__test__.liftLevel('basement');
         expect(main.__test__.model().moving).toBe(false);
@@ -295,8 +354,8 @@ describe('the model and the boards', () => {
 
 test('the config is frozen all the way down', () => {
     expect(Object.isFrozen(CONFIG)).toBe(true);
-    expect(Object.isFrozen(CONFIG.room)).toBe(true);
-    expect(Object.isFrozen(CONFIG.stations.overview.eye)).toBe(true);
+    expect(Object.isFrozen(CONFIG.stage.turntable)).toBe(true);
+    expect(Object.isFrozen(CONFIG.view.wide.shift)).toBe(true);
 });
 
 // ---- The cleaner's page -----------------------------------------------------

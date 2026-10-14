@@ -14,7 +14,7 @@ import {
     newId, emptyDoc, validate, migrate, createChecklist, updateChecklist, setLevels, setPreferences,
     deleteChecklist, restoreChecklist, duplicateChecklist, addRoom, updateRoom, deleteRoom, restoreRoom, addItem, updateItem,
     deleteItem, restoreItem, addPhoto, removePhoto, photoIdsInUse, clearSamples, hasSamples, setSettings,
-    touchVisit, storageUse, liveRooms, liveItems, itemsIn, photoCount, findChecklist, createStore, ID_PATTERN
+    touchVisit, storageUse, liveRooms, liveItems, itemsIn, photoCount, findChecklist, createStore, ID_PATTERN, guideSetting
 } from '../www/whitestone/js/store.js';
 import { createHistory } from '../www/whitestone/js/history.js';
 import { checkChoice, presetFor } from '../www/whitestone/js/sheet.js';
@@ -477,5 +477,39 @@ describe('undo', () => {
         h.clear();
         expect(h.canUndo).toBe(false);
         expect(createHistory().size).toBe(0);
+    });
+});
+
+describe("where Maya's guide is (settings.guide)", () => {
+    test('a scene name and whether the first build was reviewed, and anything else dropped', () => {
+        expect(guideSetting({ scene: 'rooms', reviewed: false })).toEqual({ scene: 'rooms', reviewed: false });
+        expect(guideSetting({ scene: 'done', reviewed: true, extra: 1 })).toEqual({ scene: 'done', reviewed: true });
+        expect(guideSetting({ scene: 'firstRoom', reviewed: 'yes' })).toEqual({ scene: 'firstRoom', reviewed: false });
+        for (const bad of [null, 'rooms', { scene: '' }, { scene: 'Rooms' }, { scene: '<b>' }, { scene: 'x'.repeat(30) }, { scene: 4 }]) {
+            expect(guideSetting(bad)).toBeNull();
+        }
+    });
+
+    test('kept through a save and a load, and a bad one is dropped on load', () => {
+        const doc = setSettings(emptyDoc(CONFIG, NOW), { guide: { scene: 'dots', reviewed: false } }).doc;
+        expect(doc.settings.guide).toEqual({ scene: 'dots', reviewed: false });
+        const back = validate(JSON.parse(JSON.stringify(doc)), CONFIG, NOW);
+        expect(back.doc.settings.guide).toEqual({ scene: 'dots', reviewed: false });
+        const bad = validate({ ...JSON.parse(JSON.stringify(doc)), settings: { guide: { scene: '<script>' } } }, CONFIG, NOW);
+        expect(bad.doc.settings.guide).toBeUndefined();
+        // None at all is none.
+        expect(validate(JSON.parse(JSON.stringify(emptyDoc(CONFIG, NOW))), CONFIG, NOW).doc.settings.guide).toBeUndefined();
+    });
+
+    test('set, replaced, and cleared, the rest of the settings untouched', () => {
+        let doc = emptyDoc(CONFIG, NOW);
+        doc = setSettings(doc, { guide: { scene: 'floors', reviewed: false } }).doc;
+        doc = setSettings(doc, { guide: { scene: 'done', reviewed: true } }).doc;
+        expect(doc.settings).toMatchObject({ guide: { scene: 'done', reviewed: true }, activeId: null, coached: 0 });
+        doc = setSettings(doc, { guide: null }).doc;
+        expect('guide' in doc.settings).toBe(false);
+        // A patch without it leaves it alone.
+        doc = setSettings(setSettings(doc, { guide: { scene: 'rooms' } }).doc, { coached: 3 }).doc;
+        expect(doc.settings.guide).toEqual({ scene: 'rooms', reviewed: false });
     });
 });

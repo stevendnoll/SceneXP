@@ -1,6 +1,6 @@
 // © 2026 Continuum Commerce LLC. All rights reserved.
 /**
- * model.js - The house model on the plinth (PLANNING 6.2): the open
+ * model.js - The house model on the turntable (PLANNING 6.3): the open
  * checklist as a white architectural model of a modern home, drawn from
  * layout.js's numbers.
  *
@@ -15,7 +15,7 @@
  *
  * A LEVEL OPENS LIKE A DOLLHOUSE. Lifting a level raises every story above
  * it, roof and all, and its front wall steps aside, so its rooms can be seen
- * and named from the model station (main.js puts their names over them).
+ * and named (main.js puts their names over them).
  * The move is eased, and instant under reduced motion. `levelOffsets` is
  * the arithmetic, pure, and `tick` moves the levels toward it.
  *
@@ -29,26 +29,30 @@
  * for a bath), a black door under a black metal porch roof on cedar posts
  * and stone piers, a stone base, a cedar garage door. Clipped shrubs and
  * white hydrangeas, a Japanese maple in front, Douglas firs behind. Inside,
- * white oak and white, each room with one muted accent. The studio round it
- * stays modern and white. Every color is in CONFIG.model.palette.
+ * white oak and white, each room with one muted accent. The white stage
+ * round it (stage.js) leaves the house all the color. Every color is in
+ * CONFIG.model.palette.
  *
  * WHERE THINGS GO IS layout.js's (which room where, which task in which
  * cell), and how tall they are is this file's: `restack` stands each level
  * on the walls of the one below. Everything is plain numbers first
  * (`instancesFor`), so the tests check every wall, window and dot without a
  * renderer, and each kind of part is then ONE instanced mesh, sized for the
- * most a checklist may hold: nine draw calls for any home.
+ * most a checklist may hold: sixteen draw calls for any home.
  *
- * The model is centered on the plinth's top whatever the home, and drawn up
- * to CONFIG.model.scale.max times layout.js's size (`fitScale`).
+ * ON A ROUND LAWN. The model stands on the turntable's top, on a lawn disc
+ * inside its stone rim, the house a little back of the middle so the front
+ * yard has room (`siteFor`), drawn up to CONFIG.model.scale.max times
+ * layout.js's size and small enough to fit the lawn however it is turned
+ * (`fitScale`).
  */
 
 import { layoutHome, extentOf, markerGrid, MODEL } from './layout.min.js';
-import { smoothstep } from './stations.min.js';
+import { smoothstep } from './turntable.min.js';
 import { roomName } from './taxonomy.min.js';
 
 /** The home shown when no checklist is open: one empty main floor under
- *  its roof, so the plinth holds a house waiting to be filled. */
+ *  its roof, so the turntable holds a house waiting to be filled. */
 export const EMPTY_HOME = Object.freeze({ serviceType: 'cleaning', levels: Object.freeze(['main']), rooms: Object.freeze([]), items: Object.freeze([]) });
 
 /**
@@ -87,7 +91,6 @@ export const HOUSE = Object.freeze({
     step: Object.freeze({ width: 0.11, depth: 0.03, height: 0.01 }),
     trim: Object.freeze({ ridge: 0.014, gutter: 0.01 }),
     site: Object.freeze({
-        rim: 0.03,              // the plinth's stone showing round the lawn, in the studio's meters
         lawn: 0.006,
         path: Object.freeze({ width: 0.075, height: 0.008 }),
         stoop: Object.freeze({ rise: 0.032, tread: 0.022, landing: 0.045 }),
@@ -95,6 +98,16 @@ export const HOUSE = Object.freeze({
         bed: Object.freeze({ depth: 0.05, height: 0.01, shrub: 0.022, every: 0.05 }),
         tree: Object.freeze({ trunk: 0.11, trunkWidth: 0.012, radius: 0.06, inset: 0.085, clear: 0.025 }),
         fir: Object.freeze({ height: 0.36, radius: 0.07 }),
+        /** The trees stand round the lawn's edge, this far in from it. */
+        edge: 0.02,
+        /** Where each tree may stand, in degrees round the lawn (0 to the
+         *  right, 90 to the front), tried in order: the maple at a front
+         *  corner, a fir at each back corner, a shade tree at each side. */
+        angles: Object.freeze({
+            maple: Object.freeze([128, 52, 145, 35]),
+            firs: Object.freeze([Object.freeze([-128, -145, -110]), Object.freeze([-52, -35, -70])]),
+            shade: Object.freeze([Object.freeze([180, 165, 195]), Object.freeze([0, 15, -15])])
+        }),
         yard: 0.75              // of the room in front and behind the house, the share in front
     }),
     dot: Object.freeze({ height: 0.008 }),
@@ -307,8 +320,8 @@ export function levelOffsets(slabs, lifted, lift) {
 }
 
 /**
- * The shift that centers a layout on the plinth, in model meters, and
- * stands its lowest slab on the plinth's top. The garage sits a step below
+ * The shift that centers a layout on the turntable, in model meters, and
+ * stands its lowest slab on the turntable's top. The garage sits a step below
  * the floor beside it (layout.js), which beside the lowest story would sink
  * it into the stone, so the whole model rises by that step instead.
  */
@@ -318,17 +331,41 @@ export function centerOf(layout) {
     return [-(e.minX + e.maxX) / 2, -lowest, -(e.minZ + e.maxZ) / 2];
 }
 
+/** The lawn's radius on the turntable, in the stage's meters: the
+ *  turntable's top inside its stone rim. */
+export function lawnRadius(turntable) {
+    return turntable.radius - turntable.rim;
+}
+
 /**
  * How large the model is drawn: up to `scale.max` times layout.js's
- * numbers, and smaller only when the home is too wide or deep for the
- * plinth with `scale.margin` to spare. Taken over the slabs as they stand
- * unlifted, so a lift never changes it.
+ * numbers, and smaller only when the house's half-diagonal would come
+ * within `scale.margin` of the lawn's edge, so it fits however far it is
+ * turned. Taken over the slabs as they stand unlifted, so a lift never
+ * changes it.
  */
-export function fitScale(layout, plinth, scale) {
+export function fitScale(layout, turntable, scale) {
     const e = extentOf(layout);
-    const width = e.maxX - e.minX;
-    const depth = e.maxZ - e.minZ;
-    return Math.min(scale.max, (plinth.width - scale.margin) / width, (plinth.depth - scale.margin) / depth);
+    const half = Math.hypot((e.maxX - e.minX) / 2, (e.maxZ - e.minZ) / 2);
+    return Math.min(scale.max, (lawnRadius(turntable) - scale.margin) / Math.max(half, 1e-6));
+}
+
+/**
+ * The site the house stands on, in the model's meters at scale `k`: the
+ * round lawn (`radius`), and the yard inside it (`halfWidth`, `halfDepth`),
+ * the house's own footprint grown by the same margin on every side until
+ * its corners reach the lawn's edge, so the trees in its corners and the
+ * path to its front all stay on the grass.
+ */
+export function siteFor(layout, turntable, k) {
+    const e = extentOf(layout);
+    const a = (e.maxX - e.minX) / 2;
+    const b = (e.maxZ - e.minZ) / 2;
+    const r = lawnRadius(turntable) / k;
+    // (a + g)^2 + (b + g)^2 = r^2, for the margin g.
+    const sum = a + b;
+    const g = Math.max(0, (-sum + Math.sqrt(Math.max(0, sum * sum - 2 * (a * a + b * b - r * r)))) / 2);
+    return { halfWidth: a + g, halfDepth: b + g, radius: r };
 }
 
 // ---- Every part in its place (pure) --------------------------------------------------
@@ -368,7 +405,7 @@ export function columnsFor(len) {
 
 /**
  * The walls, windows and siding round one level. `front` is the +z side,
- * the one facing the studio; a lifted level leaves it out (the dollhouse's
+ * the one facing the camera at first; a lifted level leaves it out (the dollhouse's
  * open side) along with its windows and its door. `openings` gives each
  * side's windows by room (openingsFor); `door` the room the front door is
  * in (its id), or true for the middle of an empty front. Gray lap siding is
@@ -599,8 +636,9 @@ function crossGable(level, top, roofY, cx, cz) {
  * `rotation` too; tiles with `roomId`; markers and flags with `itemId`).
  * Positions are box middles, except a marker's and a gable's, which are
  * their bases. All in the model's own frame: centered, y up from the
- * plinth's top. `areas` maps a room id to its kind (for its fixture and
- * its windows); `site` the lawn's half width and depth.
+ * turntable's top. `areas` maps a room id to its kind (for its fixture and
+ * its windows); `site` the yard's half width and depth (siteFor), and the
+ * round lawn's radius when it has one.
  */
 export function instancesFor(layout, offsets, { lifted = null, areas = new Map(), site = null } = {}) {
     const [cx, cy, cz0] = centerOf(layout);
@@ -619,7 +657,7 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
     const lowest = living[0] || stories[0];
     const out = {
         slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [],
-        fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: []
+        fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: []
     };
     let door = null;
     const garages = [];
@@ -712,7 +750,7 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
         out.siding.push(...cg.battens);
     }
     const front = lowest ? { x0: lowest.x + cx - lowest.width / 2, x1: lowest.x + cx + lowest.width / 2, z: lowest.z + cz + lowest.depth / 2, z0: lowest.z + cz - lowest.depth / 2 } : null;
-    if (site) landscape(out, site, layout, cx, cz, door, garages, front);
+    if (site) landscape(out, site, layout, cx, cz, door, garages, front, lifted !== null && lifted === doorLevel);
 
     // The rooms: a floor each, low walls between them with a doorway, a
     // fixture against the back, and the tasks in the front.
@@ -824,21 +862,27 @@ function fixtureFor(area, t, floorTop, x, z) {
 }
 
 /**
- * The site the house stands on, filling the plinth's top inside its rim
- * (`site` gives half its width and depth, in the model's meters): a lawn, a
+ * The site the house stands on, filling the turntable's top inside its rim
+ * (`site` gives the yard's half width and depth, and the lawn's radius, in
+ * the model's meters): a round lawn, a
  * concrete path from the front door to the front edge (with a landing and
  * steps down beside the house to a door above the lawn), a black metal
  * porch roof over the door on cedar posts and stone piers, a driveway from
  * each garage door, a bed of clipped shrubs and white hydrangeas along the
  * front, a Japanese maple in the front yard, and Douglas firs behind the
- * house, each where it stands clear. Never lifted.
+ * house, each where it stands clear. Never lifted, though the porch's roof
+ * and posts step aside while the door's floor is open (`doorOpen`).
  */
-function landscape(out, site, layout, cx, cz, door, garages, front) {
+function landscape(out, site, layout, cx, cz, door, garages, front, doorOpen = false) {
     const S = HOUSE.site;
     const W = site.halfWidth;
     const D = site.halfDepth;
     const lawnTop = S.lawn;
-    out.site.push(part(null, 0, 0, 0, 2 * W, S.lawn, 2 * D, { color: 'lawn', role: 'lawn' }));
+    // The lawn: a disc filling the turntable inside its rim, or, with no
+    // radius given, the yard's own rectangle.
+    const R = site.radius;
+    if (R > 0) out.lawn.push(part(null, 0, 0, 0, 2 * R, S.lawn, 2 * R, { color: 'lawn', role: 'lawn' }));
+    else out.site.push(part(null, 0, 0, 0, 2 * W, S.lawn, 2 * D, { color: 'lawn', role: 'lawn' }));
     const gaps = [];
     if (door) {
         // A landing at the door, and from it steps down alongside the house
@@ -856,7 +900,11 @@ function landscape(out, site, layout, cx, cz, door, garages, front) {
         const landingTop = Math.max(rise, HOUSE.step.height);
         out.site.push(part(null, door.x, lawnTop, z, width, landingTop, P.depth, { color: rise > 0.05 ? 'stone' : 'path', role: 'stoop' }));
         if (rise > 0.05) out.site.push(part(null, door.x, lawnTop + landingTop - 0.006, z, width + 0.006, 0.008, P.depth + 0.006, { color: 'path', role: 'landingTop' }));
-        const dir = door.x <= 0 ? -1 : 1;
+        // Outward, away from the middle, unless the yard is too narrow
+        // there for the stair and the path at its foot.
+        let dir = door.x <= 0 ? -1 : 1;
+        const reach = width / 2 + (n - 1) * st.tread + S.path.width / 2;
+        if (Math.abs(door.x + dir * reach) > W - 0.01) dir = -dir;
         let foot = door.x;
         for (let k = 1; k < n; k++) {
             foot = door.x + dir * (width / 2 + (k - 0.5) * st.tread);
@@ -888,11 +936,13 @@ function landscape(out, site, layout, cx, cz, door, garages, front) {
             out.site.push(part(null, foot + dir * st.tread / 2, lawnTop, front, R.size, rise / n + R.height, R.size, { color: 'frame', role: 'rail' }));
         }
         // The porch roof, black metal, over the door, on two cedar posts
-        // standing on short stone piers at the landing's front corners.
+        // standing on short stone piers at the landing's front corners. It
+        // is the front's, so it steps aside with the front wall while the
+        // door's floor is open, or it would hide the room behind it.
         const floorY = lawnTop + Math.max(rise, HOUSE.step.height);
         const roofY = door.y + HOUSE.door.height + P.above;
-        out.site.push(part(null, door.x, roofY, z, width + 0.01, P.thickness, P.depth + 0.008, { color: 'porch', role: 'porch' }));
-        for (const side of [-1, 1]) {
+        if (!doorOpen) out.site.push(part(null, door.x, roofY, z, width + 0.01, P.thickness, P.depth + 0.008, { color: 'porch', role: 'porch' }));
+        for (const side of doorOpen ? [] : [-1, 1]) {
             const px = door.x + side * (width / 2 - P.post);
             const pz = door.z + P.depth - P.post;
             out.site.push(part(null, px, floorY, pz, P.post * 1.6, P.pier, P.post * 1.6, { color: 'stone', role: 'pier' }));
@@ -945,11 +995,19 @@ function landscape(out, site, layout, cx, cz, door, garages, front) {
     const placed = [];
     const room = (x, z, r) => clearOf(x, z, r) && placed.every(([px, pz, pr]) => Math.hypot(px - x, pz - z) >= pr + r);
     const trunk = (x, z, height) => out.site.push(part(null, x, lawnTop, z, T.trunkWidth, height, T.trunkWidth, { color: 'trunk', role: 'trunk' }));
-    // The maple, in a front corner of the yard.
-    for (const sx of [-1, 1]) {
-        const x = sx * (W - T.inset);
-        const z = D - T.inset - 0.02;
+    // ROUND THE LAWN'S EDGE, where a round garden has its room: a spot at
+    // `angle` degrees (0 to the right, 90 to the front) as near the edge as
+    // a tree of `reach` fits, inside a small margin.
+    const ring = R > 0 ? R : Math.hypot(W, D);
+    const spot = (angle, reach) => {
+        const a = (angle * Math.PI) / 180;
+        const rho = ring - reach - S.edge;
+        return [Math.cos(a) * rho, Math.sin(a) * rho];
+    };
+    // The maple, at a front corner, the left one first.
+    for (const angle of S.angles.maple) {
         const r = T.radius * 1.05;
+        const [x, z] = spot(angle, r * 1.3);
         if (!room(x, z, r + T.clear)) continue;
         trunk(x, z, T.trunk * 0.65);
         // A Japanese maple's crown: low, round and layered.
@@ -958,26 +1016,31 @@ function landscape(out, site, layout, cx, cz, door, garages, front) {
             const rr = r * k;
             out.canopies.push({ level: null, position: [x + dx * r, ty + dy * r, z + dz * r], scale: [2 * rr, 1.5 * rr, 2 * rr], top: ty + dy * r + 0.75 * rr, color, role: 'maple' });
         }
-        placed.push([x, z, r]);
+        placed.push([x, z, r * 1.3]);
         break;
     }
-    // Firs, tall and dark, in the back corners.
+    // Firs, tall and dark, one at each back corner where one fits.
     const F = S.fir;
-    for (const sx of [-1, 1]) {
-        const x = sx * (W - F.radius - 0.01);
-        const z = -(D - F.radius - 0.01);
-        if (!room(x, z, F.radius + 0.01)) continue;
-        trunk(x, z, F.height * 0.18);
-        out.firs.push({ level: null, position: [x, lawnTop + F.height * 0.12 + F.height * 0.44, z], scale: [2 * F.radius, F.height * 0.88, 2 * F.radius], top: lawnTop + F.height, color: sx < 0 ? 'fir1' : 'fir2', role: 'fir' });
-        placed.push([x, z, F.radius]);
-    }
-    // A shade tree halfway along each side, where one fits.
-    for (const sx of [-1, 1]) {
-        const x = sx * (W - T.inset);
-        if (!room(x, 0, T.radius + T.clear)) continue;
-        trunk(x, 0, T.trunk);
-        out.canopies.push({ level: null, position: [x, lawnTop + T.trunk + T.radius * 0.55, 0], scale: [2 * T.radius, 1.7 * T.radius, 2 * T.radius], top: lawnTop + T.trunk + T.radius * 1.4, color: 'leaves', role: 'shade' });
-        placed.push([x, 0, T.radius]);
+    S.angles.firs.forEach((angles, side) => {
+        for (const angle of angles) {
+            const [x, z] = spot(angle, F.radius);
+            if (!room(x, z, F.radius + 0.01)) continue;
+            trunk(x, z, F.height * 0.18);
+            out.firs.push({ level: null, position: [x, lawnTop + F.height * 0.12 + F.height * 0.44, z], scale: [2 * F.radius, F.height * 0.88, 2 * F.radius], top: lawnTop + F.height, color: side === 0 ? 'fir1' : 'fir2', role: 'fir' });
+            placed.push([x, z, F.radius]);
+            break;
+        }
+    });
+    // A shade tree at each side, where one fits.
+    for (const angles of S.angles.shade) {
+        for (const angle of angles) {
+            const [x, z] = spot(angle, T.radius);
+            if (!room(x, z, T.radius + T.clear)) continue;
+            trunk(x, z, T.trunk);
+            out.canopies.push({ level: null, position: [x, lawnTop + T.trunk + T.radius * 0.55, z], scale: [2 * T.radius, 1.7 * T.radius, 2 * T.radius], top: lawnTop + T.trunk + T.radius * 1.4, color: 'leaves', role: 'shade' });
+            placed.push([x, z, T.radius]);
+            break;
+        }
     }
 }
 
@@ -1006,11 +1069,12 @@ function prismGeometry() {
 }
 
 /**
- * Build the model. `at` is the plinth's top, `config` the scene's CONFIG.
+ * Build the model. `at` is the turntable's top in its own frame, `config`
+ * the scene's CONFIG.
  * Returns the controller main.js drives:
  *
  *   group               add it to the scene
- *   show(checklist)     draw this home (null for the empty plinth); returns
+ *   show(checklist)     draw this home (null for an empty one); returns
  *                       whether anything changed
  *   lift(level, now)    lift a level (null to set it down), `now` to skip
  *                       the move; returns whether it is a level of the home
@@ -1019,10 +1083,13 @@ function prismGeometry() {
  *                       anything moved this frame
  *   labels()            the lifted level's rooms: [{ roomId, text, point }]
  *                       with `point` over the room in world meters
- *   levels()            the home's levels, in the order a halo lifts them
- *   anchor()            where the model's halo sits, in world meters
+ *   levels()            the home's levels, bottom to top, then garages
+ *   anchor()            a point a hand above the house's middle
+ *   height              the house's highest point over the turntable's top,
+ *                       unlifted, in the stage's meters (the frame's)
  *   pickable            the meshes a tap on the model can meet
  *   levelOfHit(hit)     the level a raycast hit on the model belongs to
+ *   itemOfHit(hit)      the task a hit on a dot or its flag belongs to
  *   shiny               the materials that should mirror the room
  */
 export function buildModel(config, at) {
@@ -1071,6 +1138,7 @@ export function buildModel(config, at) {
         canopies: make('canopies', new THREE.IcosahedronGeometry(0.5, 1), colored(0.8, { flatShading: true }), 120, true),
         blooms: make('blooms', new THREE.IcosahedronGeometry(0.5, 0), colored(0.8, { flatShading: true }), 80, true),
         firs: make('firs', new THREE.ConeGeometry(0.5, 1, 9), colored(0.85, { flatShading: true }), 4, true),
+        lawn: make('lawn', new THREE.CylinderGeometry(0.5, 0.5, 1, 96), colored(0.95), 1, true),
         markers: make('markers', dot, std(0xffffff, {
             roughness: 0.4, emissive: colors.marker, emissiveIntensity: colors.markerGlow || 0
         }), limits.items, true),
@@ -1093,11 +1161,10 @@ export function buildModel(config, at) {
     /** Each part's lift now, and the move toward its target. */
     const now = new Map();
     let move = null;
-    let placed = { slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [], fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [] };
-    /** The plinth's top inside its rim, in the model's meters at this scale. */
-    const plinth = config.studio.plinth;
-    const siteAt = (k) => ({ halfWidth: (plinth.width / 2 - HOUSE.site.rim) / k, halfDepth: (plinth.depth / 2 - HOUSE.site.rim) / k });
+    let placed = { slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [], fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [] };
+    const turntable = config.stage.turntable;
     let scaled = 1;
+    let restHeight = 0;
     /** A point in the model's own frame, in world meters. */
     const toWorld = (p) => [at[0] + p[0] * scaled, at[1] + p[1] * scaled, at[2] + p[2] * scaled];
 
@@ -1122,7 +1189,7 @@ export function buildModel(config, at) {
     }
 
     function draw() {
-        placed = instancesFor(layout, now, { lifted, areas, site: siteAt(scaled) });
+        placed = instancesFor(layout, now, { lifted, areas, site: siteFor(layout, turntable, scaled) });
         place(meshes.slabs, placed.slabs, paintOf);
         place(meshes.walls, placed.walls, paintOf);
         place(meshes.siding, placed.siding, paintOf);
@@ -1136,6 +1203,7 @@ export function buildModel(config, at) {
         place(meshes.canopies, placed.canopies, paintOf);
         place(meshes.blooms, placed.blooms, paintOf);
         place(meshes.firs, placed.firs, paintOf);
+        place(meshes.lawn, placed.lawn, paintOf);
         place(meshes.markers, placed.markers, () => paint.marker);
         place(meshes.flags, placed.flags);
     }
@@ -1171,8 +1239,10 @@ export function buildModel(config, at) {
             key = nextKey;
             layout = layoutHome(home);
             areas = new Map((home.rooms || []).map((r) => [r.id, r.area]));
-            scaled = fitScale(layout, config.studio.plinth, colors.scale);
+            scaled = fitScale(layout, turntable, colors.scale);
             group.scale.set(scaled, scaled, scaled);
+            const rest = instancesFor(layout, new Map(), { areas, site: siteFor(layout, turntable, scaled) });
+            restHeight = Math.max(0, ...Object.values(rest).flat().map((p) => p.top)) * scaled;
             // A different home, or the lifted level gone from this one, sets
             // the level down at once.
             if (!sameHome || !layout.slabs.some((s) => s.level === lifted)) lifted = null;
@@ -1209,16 +1279,19 @@ export function buildModel(config, at) {
         get moving() {
             return Boolean(move);
         },
-        /** The home's levels, bottom to top and then the garages: the order
-         *  a tap on the model's halo lifts them in. */
+        /** The home's levels, bottom to top and then the garages. */
         levels() {
             return layout.slabs.map((s) => s.level);
         },
-        /** Where the model's halo sits: over its middle, a hand above its
-         *  highest point (the roof's ridge), lifted or not. In world meters. */
+        /** A point over the house's middle, a hand above its highest point
+         *  (the roof's ridge), lifted or not, in the turntable's frame. */
         anchor() {
             const tops = Object.values(placed).flat().map((p) => p.top);
             return toWorld([0, Math.max(0, ...tops) + 0.14 / scaled, 0]);
+        },
+        /** How tall the house stands, unlifted (turntable.js frames it). */
+        get height() {
+            return restHeight;
         },
         /** How large the model is drawn (fitScale). */
         get scale() {
@@ -1241,6 +1314,13 @@ export function buildModel(config, at) {
             const kind = Object.keys(meshes).find((k) => meshes[k] === hit.object);
             const p = kind ? placed[kind][hit.instanceId] : null;
             return p ? p.level : null;
+        },
+        /** The task a hit on a dot or its flag belongs to, else null. */
+        itemOfHit(hit) {
+            if (!hit || hit.instanceId === undefined) return null;
+            const kind = hit.object === meshes.markers ? 'markers' : hit.object === meshes.flags ? 'flags' : null;
+            const p = kind ? placed[kind][hit.instanceId] : null;
+            return p && p.itemId ? p.itemId : null;
         }
     };
     api.show(null);

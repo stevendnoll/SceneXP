@@ -3,27 +3,27 @@
  * main.js - Entry point for Whitestone Home Care.
  *
  * THE BOOT (Auto Man's, adapted in PLANNING 4.1): the loading screen, the
- * shared proof-of-work puzzle, the renderer and the room, the saved document,
- * the shaders warmed behind the loader, then the reveal. The price sheet
- * loads in the background, so a slow network never holds up the studio.
+ * shared proof-of-work puzzle, the renderer and the stage, the saved
+ * document, the shaders warmed behind the loader, then the reveal and the
+ * camera's push-in. The price sheet loads in the background, so a slow
+ * network never holds up the house.
  *
- * THE DOCUMENT IS THE SOURCE OF TRUTH AND THE STUDIO IS A PROJECTION OF IT
+ * THE DOCUMENT IS THE SOURCE OF TRUTH AND THE HOUSE IS A PROJECTION OF IT
  * (Corner Office's rule). Every change goes through `mutate`, which applies a
  * store.js mutation, keeps the document it replaced for undo, saves, and
  * calls `refresh` so everything on screen is drawn again from the new
  * document. `change` is mutate plus the spoken line and the undo toast.
  *
- * THE SCENE RENDERS ON DEMAND, as Corner Office does. A studio mostly sits
- * still, so a frame is drawn only when something asks for one
- * (`requestRender`): the reveal, a resize, a returning tab, a glide between
- * stations, the visitor looking around. An idle studio costs a phone
- * nothing.
+ * THE SCENE RENDERS ON DEMAND, as Corner Office does. The house mostly
+ * sits still, so a frame is drawn only when something asks for one
+ * (`requestRender`): the reveal, a resize, a returning tab, the house
+ * turning, a floor opening. A still house costs a phone nothing.
  *
- * THE CAMERA STANDS AT STATIONS (stations.js) and glides between them,
- * slowly and eased, or cuts under reduced motion. From any station the
- * visitor can look around with a drag, the wheel, a pinch or the arrow keys
- * (the shared pan part, its buttons hidden), and every glide starts from
- * the view as they left it and lands on the next station's composed view.
+ * THE HOUSE TURNS, NOT THE CAMERA (turntable.js, PLANNING 6.2). A drag
+ * turns the turntable and tilts the view, a pinch, the wheel or the + and -
+ * keys zoom, and the arrow keys turn and tilt. A press that barely moves is
+ * a tap, and a tap on the house opens a floor. This file reads the pointers
+ * itself, since the shared pan part turns a camera.
  *
  * This is the one place the real clock and the real window are read.
  */
@@ -44,7 +44,7 @@ import { createHistory } from './history.min.js';
 import { loadSheet, currentVersion, checkChoice, presetFor } from './sheet.min.js';
 import { priceChoice, formatMoney, formatMinutes } from './pricing.min.js';
 import { createPhotoStore, createMemoryBackend, openIdbBackend, preparePhoto } from './photos.min.js';
-import { roomName, levelOf } from './taxonomy.min.js';
+import { roomName, levelOf, serviceType as typeOf } from './taxonomy.min.js';
 import { h, clear, initCards, openCard, closeCard, isOpen, anyOpen, announce, toast, confirmCard, setFocusFallback } from './cards.min.js';
 import {
     initForms, fillSetupForm, readSetupForm, validateSetup, showError, showHints, fillPreferencesForm, readPreferencesForm,
@@ -54,20 +54,12 @@ import {
     renderMyChecklists, renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote,
     renderMenu, fillMenuAreas
 } from './panels.min.js';
-import { UI, BOARDS, STUDIO, STORAGE_NOTES, ITEM_ERRORS } from './copy.min.js';
-import { HOME_STATION, poseFor, zoomedFov, createGlide } from './stations.min.js';
-import { buildStudio, anchorsFor, firstPick, hiddenFrom } from './studio.min.js';
-import { buildStreet } from './street.min.js';
+import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE } from './copy.min.js';
+import { createTurntable, turnPoint } from './turntable.min.js';
+import { buildStage, buildLights, firstPick } from './stage.min.js';
 import { buildModel } from './model.min.js';
-import { TOUCH, COACHING, marksShown, noteUsed as withUsed, touchForKey, nextLevel, onScreen } from './marks.min.js';
-import { arrivalId, createIntro } from './intro.min.js';
-import { installPropList } from '../../shared/js/proplist-1.0.0.min.js';
-import {
-    boardContent, menuContent, contentKey, drawBoard as paintBoard, drawMenu as paintMenu, menuAreaFor
-} from './boards.min.js';
-import {
-    initPortraitControls, updatePortraitControls, resetPortraitAim, gestureClaimedTap
-} from '../../shared/js/pan-1.0.0.min.js';
+import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, GUIDED } from './guide.min.js';
+import { createHost } from './host.min.js';
 
 // ---- State ------------------------------------------------------------------
 
@@ -88,7 +80,7 @@ const state = {
     sheetStatus: 'loading',
     /** Where photos are kept: opening, device (IndexedDB) or memory. */
     photosStatus: 'opening',
-    /** The station's pose the camera was last set to (stations.js). */
+    /** The camera's pose as last set (turntable.js framePose). */
     pose: null,
     /** Whether this browser holds the document yet. A first visit's example
      *  is not saved until the visitor changes something (samples.js). */
@@ -103,12 +95,10 @@ const state = {
  *   afterPrefs  open the room card once preferences close (first visit)
  *   filter      what the checklist view shows (panels.js filterChoices)
  *   menuArea    the kind of room the service menu shows
- *   station     where the camera stands (stations.js)
- *   zoom        the visitor's zoom from the station's own lens, in doublings
+ *   guide       where Maya's guide is (guide.js)
  */
 const ui = {
-    editing: null, room: null, task: null, afterPrefs: false, filter: 'all', menuArea: null,
-    station: HOME_STATION, zoom: 0
+    editing: null, room: null, task: null, afterPrefs: false, filter: 'all', menuArea: null, guide: null
 };
 
 /** Thumbnail addresses made for the task card, released when it closes. */
@@ -126,30 +116,28 @@ let sessionEnded = false;
 let store = null;
 let history = null;
 let photoStore = null;
-let studio = null;
-let street = null;
-/** The house model on the plinth (model.js). */
+/** The white cove and the turntable (stage.js). */
+let stage = null;
+/** The house model on the turntable (model.js). */
 let model = null;
-/** The plan board's and the menu display's canvases, each with its texture
- *  and the words it last painted (boards.js). */
-const faces = {};
+/** The visitor's view: the house's turn, the tilt, the zoom (turntable.js). */
+let turntable = null;
 /** The room labels over a lifted level, and what they say. */
 const roomLabels = { nodes: [], key: '' };
-/** The halos (marks.js): their layer, a button for each, and how many
- *  frames have placed them (occlusion is asked every few). */
-const marks = { root: null, list: [], frame: 0, locked: null };
-/** The arrival panel (intro.js). */
-let intro = null;
+/** Maya's bubble (host.js). */
+let host = null;
 let raycaster = null;
 let lastHover = 0;
 let sun = null;
 let envTarget = null;
-/** The glide in progress between stations, or null. */
-let glide = null;
-/** The point the shared pan part turns and tilts the camera about. */
-const viewAim = { x: 0, y: 0, z: 0 };
-/** The camera's rotation and lens as last drawn (lookChanged). */
-const lastLook = { values: null };
+/** The pointers down on the canvas, and what they are doing: a tap until
+ *  one moves past the slop, then a drag; two make a pinch. */
+const gesture = { pointers: new Map(), start: null, dragging: false, lastMove: 0, spread: 0 };
+/** Whether the look was held still last frame (a card open), so the frame
+ *  after a card opens or closes is drawn. */
+let wasLocked = null;
+/** The turn the turntable was last drawn at. */
+let drawnYaw = null;
 
 // ---- Device and preference checks -----------------------------------------
 
@@ -191,7 +179,7 @@ async function init() {
     const proof = await getProofOfWork(CONFIG.telemetry.proofOfWork);
     setProofHash(proof && proof.hash);
 
-    updateLoadingStatus('Opening the studio…', 40);
+    updateLoadingStatus('Setting the stage…', 40);
     // THE ONE ABORT CONTROLLER FOR THE PAGE, made before anything listens.
     cleanupController = new AbortController();
     buildRenderer();
@@ -204,17 +192,13 @@ async function init() {
     const loaded = store.load(now());
     state.doc = loaded.doc;
     state.storageStatus = loaded.status;
-    // A FIRST VISIT ARRIVES TO THE EXAMPLE HOME (PRD 8.2). Only when nothing
-    // is saved at all, and it is not saved until the visitor changes
-    // something, so clearing it once clears it for good.
-    if (loaded.status === 'fresh') {
-        const seeded = withExample(state.doc, CONFIG, now(), null);
-        if (!seeded.error) state.doc = seeded.doc;
-    }
     state.saved = loaded.status === 'restored';
-    // A RETURNING VISITOR ARRIVES TO THEIR OWN HOME (PRD 8.6): the one open
-    // when they left, else their latest (intro.js arrivalId).
-    state.doc = setSettings(state.doc, { activeId: arrivalId(state.doc) }).doc;
+    // MAYA GREETS A FIRST VISIT beside a plain house (PRD 8.2), with the
+    // example one tap away. A RETURNING VISITOR ARRIVES TO THEIR OWN HOME
+    // (PRD 8.6): the one open when they left, else their latest, and is
+    // welcomed back (guide.js).
+    ui.guide = arrivalGuide(state.doc);
+    state.doc = setSettings(state.doc, { activeId: ui.guide.scene === 'hello' ? null : arrivalId(state.doc) }).doc;
     history = createHistory();
 
     updateLoadingStatus('Turning on the lights…', 75);
@@ -225,7 +209,7 @@ async function init() {
     openPhotos();
 
     // Build the shaders now, behind the loading screen, rather than on the
-    // first frame where they would freeze the studio the moment it appears
+    // first frame where they would freeze the house the moment it appears
     // (shared warmup part).
     updateLoadingStatus('Preparing the view…', 95);
     await warmShaders(renderer, [{ scene, camera }]);
@@ -237,12 +221,14 @@ async function init() {
         state.loaded = true;
         // EVERY .ui-float IS display:none UNTIL THIS LINE.
         document.querySelectorAll('.ui-float').forEach((node) => node.classList.add('visible'));
-        const places = el('prop-panel');
-        if (places) places.hidden = false;
-        if (intro) intro.arrive();
         showBack();
-        // The halos' pulse slows once the visitor has had a while to look.
-        setTimeout(() => { if (marks.root && marks.root.classList) marks.root.classList.add('is-calm'); }, COACHING.calmSeconds * 1000);
+        // Maya speaks once the house has come in (at once under reduced
+        // motion, ONBOARDING Scene 1).
+        setTimeout(showGuide, state.reducedMotion ? 0 : CONFIG.guide.delay * 1000);
+        // The push-in: from farther out, eased in (a cut under reduced
+        // motion, PLANNING 4.1).
+        if (!state.reducedMotion) turntable.arrive();
+        applyPose(turntable.pose(aspect()));
         refresh();
     }, CONFIG.loadingReveal);
 
@@ -263,16 +249,17 @@ async function init() {
         },
         /** The saved document as it is now. */
         doc: () => state.doc,
-        /** Glide to a station: overview, model, menu, board, printer, desk. */
-        goTo,
-        /** Lift a level out of the house model ('main', 'second'...), or
-         *  set it down with null. */
+        /** Open a floor of the house ('main', 'second'...), or close it
+         *  with null. */
         lift: liftLevel,
-        /** Do what a touch point does: overview, desk, model, menu, board,
-         *  printer. */
-        act: actOn,
-        /** The stations there are, and where the camera stands now. */
-        stations: () => ({ at: ui.station, all: Object.keys(CONFIG.stations) })
+        /** Turn the house by this many radians (a screenshot's angle). */
+        turn(radians) {
+            turntable.turnBy(Number(radians) || 0);
+            requestRender();
+            return turntable.yaw;
+        },
+        /** The view now: the house's turn, the tilt, the zoom. */
+        look: () => ({ yaw: turntable.yaw, tilt: turntable.tilt, zoom: turntable.zoom })
     };
 
     // Whether the visitor came back to saved checklists rides in `outcome`,
@@ -306,9 +293,9 @@ function buildRenderer() {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = CONFIG.light.exposure;
-    // The sun's shadows through the glass. Nothing in the studio moves, so
-    // the map is drawn once and again only when something on the plinth
-    // changes (markShadows), never for a glide or a look around.
+    // The skylight's shadows. Only the house moves, so the map is drawn
+    // again only when it changes or turns (markShadows), never for a tilt
+    // or a zoom.
     renderer.shadowMap.enabled = true;
     // PCFShadowMap is soft from r182 on, which retired PCFSoftShadowMap.
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -328,70 +315,40 @@ function markShadows() {
 
 function buildScene() {
     scene = new THREE.Scene();
-    // Anything the sky dome does not cover (it covers everything) is the
-    // pale horizon, never black.
-    scene.background = new THREE.Color(CONFIG.street.sky.horizon);
+    stage = buildStage(CONFIG);
+    // Beyond the cove's edges (never in frame) is the cove's own white.
+    scene.background = new THREE.Color(stage.background);
+    scene.add(stage.group);
+    // The house stands in the turntable's group, so it turns with it.
+    model = buildModel(CONFIG, [0, stage.top, 0]);
+    stage.spin.add(model.group);
 
-    studio = buildStudio(CONFIG);
-    scene.add(studio.group);
-    model = buildModel(CONFIG, studio.plinthTop);
-    scene.add(model.group);
-    prepareFaces();
-    street = buildStreet(CONFIG);
-    scene.add(street.group);
+    const lit = buildLights(CONFIG, state.mobile);
+    sun = lit.sun;
+    for (const light of lit.lights) scene.add(light);
 
-    const { sun: s, sky, fill, bounce } = CONFIG.light;
-    scene.add(new THREE.HemisphereLight(sky.color, sky.ground, sky.intensity));
-    // The sun, from the street side, through the glass. Its shadow camera
-    // covers the room and no more (CONFIG.light.sun.shadow.reach).
-    sun = new THREE.DirectionalLight(s.color, s.intensity);
-    sun.position.set(s.position[0], s.position[1], s.position[2]);
-    sun.target.position.set(s.target[0], s.target[1], s.target[2]);
-    sun.castShadow = true;
-    const size = state.mobile ? s.shadow.sizeMobile : s.shadow.size;
-    sun.shadow.mapSize.set(size, size);
-    const cam = sun.shadow.camera;
-    cam.left = -s.shadow.reach;
-    cam.right = s.shadow.reach;
-    cam.top = s.shadow.reach;
-    cam.bottom = -s.shadow.reach;
-    cam.near = s.shadow.near;
-    cam.far = s.shadow.far;
-    sun.shadow.bias = s.shadow.bias;
-    sun.shadow.normalBias = s.shadow.normalBias;
-    scene.add(sun, sun.target);
-    // A soft cool fill from the entrance side, so the faces turned away from
-    // the sun (the homes across the street among them) are not left flat.
-    const fillLight = new THREE.DirectionalLight(fill.color, fill.intensity);
-    fillLight.position.set(fill.position[0], fill.position[1], fill.position[2]);
-    scene.add(fillLight);
-    // The light off the pale floor, shining up.
-    const bounceLight = new THREE.DirectionalLight(bounce.color, bounce.intensity);
-    bounceLight.position.set(0.4, -3, 0.3);
-    scene.add(bounceLight);
-
-    const pose = poseFor(ui.station, aspect(), CONFIG);
+    turntable = createTurntable(CONFIG);
+    const pose = turntable.pose(aspect());
     camera = new THREE.PerspectiveCamera(pose.fov, aspect(), CONFIG.camera.near, CONFIG.camera.far);
     applyPose(pose);
     captureRoom();
 }
 
-/**
- * Give the aluminum and the clear-coated stone the studio to reflect: the
- * room captured once from its middle, behind the loading screen. A metal
- * with nothing to reflect renders nearly black.
- */
-/** The materials that mirror the room: the studio's metals and stone, and
- *  the model's aluminum roof. */
+/** The materials that mirror the stage: the turntable's clear-coated
+ *  stone, and whatever of the model's is shiny. */
 function reflective() {
-    return [...(studio ? studio.shiny : []), ...(model ? model.shiny : [])];
+    return [...(stage ? stage.shiny : []), ...(model ? model.shiny : [])];
 }
 
+/**
+ * Give the stone the white of the cove to reflect: the stage captured once
+ * from in front, behind the loading screen.
+ */
 function captureRoom() {
-    if (!renderer || !studio || !THREE.PMREMGenerator) return;
+    if (!renderer || !stage || !THREE.PMREMGenerator) return;
     const pmrem = new THREE.PMREMGenerator(renderer);
-    const middle = CONFIG.light.reflectFrom;
-    envTarget = pmrem.fromScene(scene, 0.03, 0.1, CONFIG.camera.far, { position: new THREE.Vector3(middle[0], middle[1], middle[2]) });
+    const from = CONFIG.light.reflectFrom;
+    envTarget = pmrem.fromScene(scene, 0.03, 0.1, CONFIG.camera.far, { position: new THREE.Vector3(from[0], from[1], from[2]) });
     pmrem.dispose();
     for (const m of reflective()) {
         m.envMap = envTarget.texture;
@@ -399,104 +356,67 @@ function captureRoom() {
         m.needsUpdate = true;
     }
     // The capture spent the shadow map's update on its own first face. The
-    // sun has not moved, so the map it drew is the one the studio needs.
-}
-
-// ---- The plan board and the menu display -------------------------------------
-
-/** A canvas for each painted face, its texture laid on the face. Where the
- *  browser gives no 2D context the faces keep their plain color. */
-function prepareFaces() {
-    for (const key of ['board', 'menu']) {
-        const size = CONFIG.boards[key];
-        const c = document.createElement('canvas');
-        c.width = size.width;
-        c.height = size.height;
-        const ctx = c.getContext && c.getContext('2d');
-        if (!ctx) continue;
-        const texture = new THREE.CanvasTexture(c);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        const caps = renderer && renderer.capabilities;
-        texture.anisotropy = caps && caps.getMaxAnisotropy ? Math.min(8, caps.getMaxAnisotropy()) : 1;
-        const face = studio.faces[key];
-        face.material.map = texture;
-        face.material.color.set(0xffffff);
-        face.material.needsUpdate = true;
-        faces[key] = { canvas: c, ctx, texture, key: null };
-    }
-}
-
-/** Paint a face when, and only when, what it says has changed. */
-function paintFace(key, content, draw) {
-    const f = faces[key];
-    if (!f) return false;
-    const next = contentKey(content);
-    if (next === f.key) return false;
-    f.key = next;
-    draw(f.ctx, f.canvas.width, f.canvas.height, content, CONFIG);
-    f.texture.needsUpdate = true;
-    return true;
-}
-
-/** The plan board and the menu display, from the document as it is now. */
-function paintFaces() {
-    const c = active();
-    const board = paintFace('board', boardContent(c, state.sheet), paintBoard);
-    const menu = paintFace('menu', menuContent(state.sheet, menuAreaFor(ui.menuArea, c)), paintMenu);
-    if (board || menu) requestRender();
+    // sun has not moved, so the map it drew is the one the stage needs.
 }
 
 // ---- The house model ------------------------------------------------------------
 
 /**
- * Lift a level out of the model (null sets it down), and go to the model
- * station to see it. Returns whether the level is one of the home's.
+ * Open a floor of the house (null closes it): the floors above it lift
+ * away like a dollhouse's, and the house turns its open front to the
+ * visitor. Returns whether the floor is one of the home's.
  */
 function liftLevel(level) {
     if (!model) return false;
     const was = model.lifted;
     if (!model.lift(level, state.reducedMotion)) return false;
+    // An open floor's open side is the house's front: turned to the visitor.
+    if (level && turntable) turntable.faceFront(state.reducedMotion ? 0 : CONFIG.view.turn.face);
+    if (turntable) turntable.setHeight(frameHeight(), state.reducedMotion);
     markShadows();
-    if (level && ui.station !== 'model') goTo('model');
     const c = active();
     const name = level ? levelOf(c ? c.serviceType : 'cleaning', level) : null;
-    if (level && name) announce(BOARDS.lifted(name.name));
-    else if (!level && was) announce(BOARDS.setDown);
+    if (level && name) announce(MODEL_LINES.lifted(name.name));
+    else if (!level && was) announce(MODEL_LINES.setDown);
     showBack();
     return true;
 }
 
-/** Whether the visitor is anywhere but the whole studio: at a station, or
- *  with a level of the model lifted. */
+/** How tall the frame holds the house: as it stands closed, and with the
+ *  floors above an open one lifted away. */
+function frameHeight() {
+    if (!model) return 0;
+    return model.height + (model.lifted ? CONFIG.model.lift.open * model.scale : 0);
+}
+
+/** Whether there is a step back to take: a floor of the house is open. */
 function away() {
-    return ui.station !== HOME_STATION || Boolean(model && model.lifted);
+    return Boolean(model && model.lifted);
 }
 
 /**
- * Back out of whatever the camera is close to (QA, 2026-10-13: "once I
- * click on a floor of the model house it's hard to exit out"): a lifted
- * level is set down, and the camera glides back to the whole studio. One
- * step, by the Back to the studio button, Escape, the 1 key, or a tap on
- * nothing in particular.
+ * One step back (QA, 2026-10-13: "once I click on a floor of the model
+ * house it's hard to exit out"): an open floor closes. By the Back button,
+ * Escape, or a tap on empty space.
  */
-function backToStudio() {
-    if (model && model.lifted) liftLevel(null);
-    if (ui.station !== HOME_STATION) goTo(HOME_STATION);
+function stepBack() {
+    if (!away()) return false;
+    liftLevel(null);
     showBack();
     return true;
 }
 
-/** The Back to the studio button, shown whenever there is somewhere to come back from. */
+/** The Back button, shown whenever a floor is open. */
 function showBack() {
     const b = el('ws-back');
     if (b) b.hidden = !(state.loaded && away());
 }
 
 /**
- * The names of the lifted level's rooms, each over its tile, wherever the
- * camera is. Called before every frame that is drawn, so they follow a
- * glide, a look around and the lift itself. Rebuilt only when the rooms
- * change, moved otherwise.
+ * The names of the open floor's rooms, each over its room, however the
+ * house is turned. Called before every frame that is drawn, so they follow
+ * a turn, a zoom and the lift itself. Rebuilt only when the rooms change,
+ * moved otherwise.
  */
 function placeLabels() {
     const list = el('ws-rooms');
@@ -511,7 +431,7 @@ function placeLabels() {
         roomLabels.nodes = labels.map((l) => list.appendChild(h('li', { className: 'ws-room', text: l.text })));
         const c = active();
         const level = c && model.lifted ? levelOf(c.serviceType, model.lifted) : null;
-        if (level) list.setAttribute('aria-label', BOARDS.roomsOn(level.name));
+        if (level) list.setAttribute('aria-label', MODEL_LINES.roomsOn(level.name));
     }
     if (!labels.length) return;
     // The camera as this frame will draw it, not as the last frame did.
@@ -522,7 +442,8 @@ function placeLabels() {
     labels.forEach((l, i) => {
         const node = roomLabels.nodes[i];
         if (!node) return;
-        v.set(l.point[0], l.point[1], l.point[2]).project(camera);
+        const p = turnPoint(l.point, turntable.yaw);
+        v.set(p[0], p[1], p[2]).project(camera);
         const x = Math.round(((v.x + 1) / 2) * width);
         const y = Math.round(((1 - v.y) / 2) * height);
         node.hidden = !(v.z > -1 && v.z < 1);
@@ -530,119 +451,68 @@ function placeLabels() {
     });
 }
 
-// ---- The touch points -------------------------------------------------------------
-
-/** Whether the visitor has a checklist of their own (not the example). */
-function hasOwn() {
-    return state.doc.checklists.some((c) => isLive(c) && !c.sample);
-}
+// ---- Tapping the house -------------------------------------------------------------
 
 /**
- * Note that a touch point has been used, by any route, so its halo retires
- * (marks.js). Kept in the document's settings, and saved with it, except on
- * a first visit whose example nobody has changed yet: that waits for the
- * next real change, which saves it along with everything else.
+ * A tap on the house. A tap on a blue dot opens its task. With no checklist
+ * open it starts one. A tap on a floor opens it, and a tap on the open
+ * floor shows its rooms in the checklist. A tap on the house with no floor known opens the next floor
+ * up, and past the top one closes it again.
  */
-function noteUsed(key) {
-    const bits = state.doc.settings.coached || 0;
-    const next = withUsed(bits, key);
-    if (next === bits) return false;
-    state.doc = setSettings(state.doc, { coached: next }).doc;
-    if (state.saved) save();
-    if (intro) intro.setMarks(marksDue().length > 0);
-    marks.frame = 0;
-    requestRender();
-    return true;
-}
-
-/**
- * What a touch point does, however it was reached: a tap on it, a tap on
- * its halo, its row in the places list, or its key. The camera goes to it,
- * and what it opens opens over the studio.
- *
- *   overview  the whole studio
- *   desk      the concierge: Start your own, or My checklists once the
- *             visitor has one
- *   model     a tap on a level lifts it, a tap on the lifted level opens
- *             its rooms; with no level (a halo, a row, a key) the next level
- *             up lifts, and after the top one the model goes back together
- *   menu      the service menu
- *   board     the checklist in full
- *   printer   prints the checklist
- */
-function actOn(key, { level = null } = {}) {
-    if (!state.loaded || !TOUCH.some((t) => t.key === key)) return false;
+function tapModel(level = null, itemId = null) {
+    if (!state.loaded) return false;
     const c = active();
-    noteUsed(key);
-    switch (key) {
-    case 'overview':
-        backToStudio();
-        break;
-    case 'desk':
-        goTo('desk');
-        if (hasOwn()) openMine();
-        else startOwn();
-        break;
-    case 'model':
-        goTo('model');
-        if (!c) startOwn();
-        else if (level && level === model.lifted) openLevel(level);
-        else liftLevel(level || nextLevel(model.levels(), model.lifted));
-        break;
-    case 'menu':
-        goTo('menu');
-        openMenu();
-        break;
-    case 'board':
-        goTo('board');
-        if (c) openChecklistView();
-        else startOwn();
-        break;
-    case 'printer':
-        goTo('printer');
-        printChecklist();
-        break;
-    default:
-        return false;
+    // A blue dot: that task (ONBOARDING Scene 4), armed against the tap's
+    // own click landing on the card.
+    if (itemId && c && c.items.some((i) => i.id === itemId && !i.deletedAt)) {
+        openTask(null, itemId, null, { armed: true });
+        guideTo({ type: 'dotOpened' });
+        return true;
     }
-    return true;
+    if (!c) {
+        // While Maya greets, a tap on the plain house is Let's start.
+        if (!(ui.guide && ui.guide.scene === 'hello' && guideTo({ type: 'start' }))) startOwn();
+        return true;
+    }
+    if (level && level === model.lifted) {
+        openLevel(level);
+        return true;
+    }
+    if (level) return liftLevel(level);
+    const levels = model.levels();
+    const at = levels.indexOf(model.lifted);
+    return liftLevel(at + 1 < levels.length ? levels[at + 1] : null);
 }
 
-/** A lifted level's rooms: the checklist, showing that level only. */
+/** An open floor's rooms: the checklist, showing that floor only. */
 function openLevel(level) {
     ui.filter = `level:${level}`;
     openChecklistView();
 }
 
-/** The printer: the checklist, printed (the print stylesheet sends only the
- *  checklist to paper). Until it has a task there is nothing to print. */
-function printChecklist() {
-    const c = active();
-    if (!c || !liveItems(c).length) {
-        announce(STUDIO.printerEmpty);
-        toast(STUDIO.printerEmpty);
-        return false;
+/**
+ * The example home on the turntable, closed. Made for this visit only and
+ * not saved unless the visitor changes something (PRD 8.8), so looking at
+ * it costs nothing.
+ */
+function showExample() {
+    let example = state.doc.checklists.find((c) => isLive(c) && c.sample);
+    if (!example) {
+        const seeded = withExample(state.doc, CONFIG, now(), null);
+        if (seeded.error) return false;
+        state.doc = seeded.doc;
+        example = state.doc.checklists.find((c) => isLive(c) && c.sample);
     }
-    openChecklistView();
-    if (typeof window.print === 'function') window.print();
+    liftLevel(null);
+    state.doc = setSettings(state.doc, { activeId: example.id }).doc;
+    refresh();
     return true;
 }
 
-/** The example on the plinth, its main floor lifted to show its rooms. */
-function exploreExample() {
-    const example = state.doc.checklists.find((c) => isLive(c) && c.sample);
-    if (!example) return false;
-    if (!active() || active().id !== example.id) openChecklist(example.id);
-    const levels = model.levels();
-    liftLevel(levels.includes('main') ? 'main' : levels[0]);
-    return true;
-}
-
-/** What is under a point on the canvas: `{ key, level }`, or null. The
- *  first thing shown that the ray meets decides, so a wall in front of the
- *  menu is a wall. */
+/** What is under a point on the canvas: `{ key, level, itemId }`, or null. Only the
+ *  house answers: the stone, the cove and the air are empty space. */
 function pickAt(clientX, clientY) {
-    if (!camera || !studio || !model) return null;
+    if (!camera || !model) return null;
     if (!raycaster) raycaster = new THREE.Raycaster();
     const rect = canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
@@ -650,242 +520,435 @@ function pickAt(clientX, clientY) {
         -((clientY - rect.top) / Math.max(1, rect.height)) * 2 + 1
     );
     raycaster.setFromCamera(ndc, camera);
-    const pick = firstPick(raycaster.intersectObjects([studio.group, model.group], true));
+    const pick = firstPick(raycaster.intersectObjects([model.group], true));
     if (!pick) return null;
-    return { key: pick.key, level: pick.key === 'model' ? model.levelOfHit(pick.hit) : null };
+    return { key: pick.key, level: model.levelOfHit(pick.hit), itemId: model.itemOfHit(pick.hit) };
 }
 
-/** A tap on the studio: the arrival panel steps down, and whatever was
- *  tapped answers. Nothing answers while a card is open. */
+/** A tap on the canvas: the house answers, or a tap on empty space steps
+ *  back. Nothing answers while a card is open. */
 function handleSceneTap(clientX, clientY) {
     if (!state.loaded || anyOpen()) return null;
-    if (intro) intro.collapse();
+    closeHelp();
     const hit = pickAt(clientX, clientY);
     if (!hit) {
-        // A tap on nothing in particular (the floor, a wall, the street)
-        // steps back out to the whole studio.
-        if (away()) backToStudio();
+        stepBack();
         return null;
     }
-    actOn(hit.key, { level: hit.level });
+    tapModel(hit.level, hit.itemId);
     return hit.key;
 }
 
-// ---- The halos ---------------------------------------------------------------------
+// ---- The look: turning, tilting, zooming --------------------------------------------
 
-/** A button for each touch point with a halo (marks.js USED), its ring
- *  pulsing in CSS, placed over its anchor every drawn frame. */
-function buildMarks(signal) {
-    const root = el('ws-marks');
-    if (!root || !studio) return;
-    clear(root);
-    const anchors = anchorsFor(CONFIG);
-    marks.root = root;
-    marks.list = TOUCH.filter((t) => t.key !== 'overview').map((t) => {
-        const btn = h('button', { type: 'button', className: 'ws-mark', attrs: { 'aria-label': STUDIO.halos[t.key] } }, [h('span', { className: 'ws-mark-ring' })]);
-        btn.hidden = true;
-        btn.addEventListener('click', () => {
-            if (intro) intro.collapse();
-            actOn(t.key);
-        }, { signal });
-        root.appendChild(btn);
-        return { key: t.key, btn, anchor: t.key === 'model' ? () => model.anchor() : () => anchors[t.key], at: '', occluded: false };
-    });
-}
-
-/** Whether something in the studio stands between the eye and a halo,
- *  other than its own thing. */
-function markHidden(m, point) {
-    if (!raycaster) raycaster = new THREE.Raycaster();
-    return hiddenFrom(raycaster, camera.position, point, [studio.group, model.group], m.key);
-}
-
-/**
- * Put each halo over its thing, or out of sight: when it has retired or
- * is not yet due, while a card is open, when its thing is off the frame,
- * and when something stands in front of it (asked every few frames).
- */
-/** The halos due now (marks.js), whatever the camera can see. */
-function marksDue() {
-    const c = active();
-    const own = Boolean(c && !c.sample);
-    return marksShown(state.doc.settings.coached || 0, { own, tasks: own && liveItems(c).length > 0 });
-}
-
-function updateMarks() {
-    if (!marks.root || !camera) return;
-    const shown = new Set(state.loaded ? marksDue() : []);
-    const quiet = lookLocked();
-    marks.root.hidden = quiet || !shown.size;
-    const askOcclusion = marks.frame % 20 === 0;
-    marks.frame++;
-    if (marks.root.hidden) return;
-    camera.updateMatrixWorld();
-    const W = window.innerWidth || 1;
-    const H = window.innerHeight || 1;
-    const p = new THREE.Vector3();
-    for (const m of marks.list) {
-        let on = shown.has(m.key);
-        let x = 0;
-        let y = 0;
-        if (on) {
-            const a = m.anchor();
-            p.set(a[0], a[1], a[2]);
-            if (askOcclusion) m.occluded = markHidden(m, p.clone());
-            p.project(camera);
-            on = onScreen(p) && !m.occluded;
-            x = ((p.x + 1) / 2) * W;
-            y = ((1 - p.y) / 2) * H;
-        }
-        if (m.btn.hidden !== !on) m.btn.hidden = !on;
-        if (on) {
-            const at = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -50%)`;
-            if (at !== m.at) {
-                m.btn.style.transform = at;
-                m.at = at;
-            }
-        }
-    }
-}
-
-/** The places list: the keyboard's way to every touch point (the shared
- *  proplist part), each row doing what a tap there does. */
-function buildPlaces(signal) {
-    installPropList({
-        list: el('prop-list'),
-        items: TOUCH.map((t) => ({ id: t.key, label: STUDIO.places[t.key] })),
-        onChoose: (key) => {
-            if (anyOpen()) return;
-            if (intro) intro.collapse();
-            actOn(key);
-        },
-        exitTo: () => (intro && intro.open ? el('intro-start') : el('bar-mine')),
-        signal
-    });
-}
-
-// ---- Stations and the look ----------------------------------------------------
-
-/** Whether the visitor's look is held still: before the studio is ready,
- *  and while any card is open (each card has the studio behind it). */
+/** Whether the visitor's look is held still: before the house is ready,
+ *  and while any card is open (each card has the house behind it). */
 function lookLocked() {
     return !state.loaded || anyOpen();
 }
 
+/** How far apart the first two pointers are, in pixels. */
+function spread() {
+    const [a, b] = [...gesture.pointers.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+}
+
 /**
- * The drag, wheel, pinch and keys that look around (CONFIG.view.look),
- * through the shared pan part with its buttons hidden (experience.css
- * .no-chrome): the studio owns the zoom (each station composes its own
- * lens), the part the turn and tilt about `viewAim`. A guard on the canvas,
- * registered first, keeps the part out while a card is open.
+ * The canvas's pointers: one that barely moves and lifts soon is a tap,
+ * one that moves turns and tilts the house, and two pinch. The wheel
+ * zooms. A mouse that is not pressed says what answers a tap with its
+ * cursor.
  */
 function setupLook(signal) {
-    const stopWhileLocked = (event) => {
-        if (lookLocked()) event.stopImmediatePropagation();
+    if (canvas.style) canvas.style.touchAction = 'none';
+    const { tap } = CONFIG.view;
+    canvas.addEventListener('pointerdown', (event) => {
+        if (lookLocked()) return;
+        if (typeof canvas.setPointerCapture === 'function') {
+            try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* an old pointer */ }
+        }
+        const t = performance.now();
+        gesture.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (gesture.pointers.size === 1) {
+            gesture.start = { x: event.clientX, y: event.clientY, t };
+            gesture.dragging = false;
+        } else {
+            // A second finger: a pinch, and never a tap.
+            gesture.dragging = true;
+            gesture.spread = spread();
+        }
+        gesture.lastMove = t;
+        turntable.touch();
+        if (host) host.poke();
+    }, { signal });
+    canvas.addEventListener('pointermove', (event) => {
+        const prev = gesture.pointers.get(event.pointerId);
+        if (!prev) {
+            hover(event);
+            return;
+        }
+        if (lookLocked()) return;
+        const t = performance.now();
+        const now = { x: event.clientX, y: event.clientY };
+        gesture.pointers.set(event.pointerId, now);
+        if (gesture.pointers.size >= 2) {
+            const d = spread();
+            if (gesture.spread > 0 && d > 0) turntable.zoomBy(Math.log2(gesture.spread / d));
+            gesture.spread = d;
+            gesture.lastMove = t;
+            requestRender();
+            return;
+        }
+        if (!gesture.dragging && gesture.start
+            && Math.hypot(now.x - gesture.start.x, now.y - gesture.start.y) > tap.slop) gesture.dragging = true;
+        if (!gesture.dragging) return;
+        turntable.drag(now.x - prev.x, now.y - prev.y, window.innerHeight, (t - gesture.lastMove) / 1000);
+        gesture.lastMove = t;
+        requestRender();
+    }, { signal });
+    const lift = (event) => {
+        if (!gesture.pointers.has(event.pointerId)) return;
+        gesture.pointers.delete(event.pointerId);
+        const t = performance.now();
+        if (gesture.pointers.size > 0) {
+            // One finger of a pinch lifted: the other carries on turning.
+            gesture.spread = 0;
+            gesture.lastMove = t;
+            return;
+        }
+        const start = gesture.start;
+        const tapped = event.type === 'pointerup' && !gesture.dragging && start && t - start.t <= tap.ms;
+        turntable.release((t - gesture.lastMove) / 1000);
+        gesture.start = null;
+        gesture.dragging = false;
+        if (tapped) handleSceneTap(event.clientX, event.clientY);
     };
-    canvas.addEventListener('pointerdown', stopWhileLocked, { signal });
-    canvas.addEventListener('wheel', stopWhileLocked, { passive: true, signal });
-    const { pan, zoom } = CONFIG.view.look;
-    initPortraitControls({
-        getCamera: () => camera,
-        lookAt: viewAim,
-        pan,
-        zoom,
-        zoomDelegate: {
-            onDelta: (d) => setZoom(ui.zoom + d),
-            limits: () => ({ atIn: ui.zoom >= zoom.maxIn - 1e-6, atOut: ui.zoom <= -zoom.maxOut + 1e-6 })
-        },
-        // Hidden, but built: the part answers the up and down arrows with
-        // the tilt only where its tilt pair exists.
-        tiltButtons: true,
-        alwaysOn: true,
-        extraClass: 'always-on no-chrome',
-        surface: canvas,
-        onFirstUse: (kind) => track(`portrait-${kind}`),
-        signal
-    });
+    canvas.addEventListener('pointerup', lift, { signal });
+    canvas.addEventListener('pointercancel', lift, { signal });
+    canvas.addEventListener('wheel', (event) => {
+        if (lookLocked()) return;
+        if (event.cancelable) event.preventDefault();
+        turntable.zoomBy((event.deltaY || 0) * CONFIG.view.zoom.wheel);
+        requestRender();
+    }, { passive: false, signal });
 }
 
-/** Zoom to `zoom` doublings (clamped to CONFIG.view.look.zoom), from the
- *  station's own composed lens. */
-function setZoom(zoom) {
-    const { maxIn, maxOut } = CONFIG.view.look.zoom;
-    ui.zoom = Math.min(maxIn, Math.max(-maxOut, zoom));
-    if (!camera || !state.pose) return ui.zoom;
-    camera.fov = zoomedFov(state.pose.fov, ui.zoom, CONFIG.view.maxFov);
-    camera.updateProjectionMatrix();
+/** A mouse over the house points, elsewhere it offers to turn it. Asked no
+ *  more than twenty times a second. */
+function hover(event) {
+    if (event.pointerType !== 'mouse' || !state.loaded || anyOpen() || !canvas.style) return;
+    const t = performance.now();
+    if (t - lastHover < 50) return;
+    lastHover = t;
+    canvas.style.cursor = pickAt(event.clientX, event.clientY) ? 'pointer' : 'grab';
+}
+
+/**
+ * The keys that move the view, from anywhere but a field or an open card:
+ * the left and right arrows turn the house, up and down tilt the view, and
+ * + and - zoom. Returns whether the key was one of them.
+ */
+function lookKey(key) {
+    const v = CONFIG.view;
+    switch (key) {
+    case 'ArrowLeft': turntable.turnBy(-v.turn.key); break;
+    case 'ArrowRight': turntable.turnBy(v.turn.key); break;
+    case 'ArrowUp': turntable.tiltBy(v.turn.key / 2); break;
+    case 'ArrowDown': turntable.tiltBy(-v.turn.key / 2); break;
+    case '+': case '=': turntable.zoomBy(-v.zoom.key); break;
+    case '-': case '_': turntable.zoomBy(v.zoom.key); break;
+    default: return false;
+    }
     requestRender();
-    return ui.zoom;
+    return true;
 }
 
-/** Whether the camera has turned or zoomed since the last time asked: its
- *  rotation and lens as plain numbers (anything else, as a test's stand-in
- *  camera gives, is never a change). */
-function lookChanged() {
-    const q = camera.quaternion;
-    const values = [q.x, q.y, q.z, q.w, camera.fov];
-    if (!values.every((v) => typeof v === 'number' && Number.isFinite(v))) return false;
-    const was = lastLook.values;
-    lastLook.values = values;
-    return !was || values.some((v, i) => v !== was[i]);
-}
-
-/** The camera's pose as the visitor now sees it, turned and zoomed: where a
- *  glide to a station starts, so it never snaps back first. */
-function lookingPose() {
-    const base = state.pose;
-    if (!camera || !base) return base;
-    const reach = Math.hypot(base.aim[0] - base.eye[0], base.aim[1] - base.eye[1], base.aim[2] - base.eye[2]);
-    const dir = camera.getWorldDirection(new THREE.Vector3());
-    const eye = camera.position;
-    return {
-        eye: [eye.x, eye.y, eye.z],
-        aim: [eye.x + dir.x * reach, eye.y + dir.y * reach, eye.z + dir.z * reach],
-        fov: camera.fov
-    };
-}
-
+/** Set the camera to a pose (turntable.js framePose), its view shifted so
+ *  the house sits where the frame says. */
 function applyPose(pose) {
     camera.position.set(pose.eye[0], pose.eye[1], pose.eye[2]);
-    camera.fov = zoomedFov(pose.fov, ui.zoom || 0, CONFIG.view.maxFov);
-    viewAim.x = pose.aim[0];
-    viewAim.y = pose.aim[1];
-    viewAim.z = pose.aim[2];
+    camera.fov = pose.fov;
     camera.aspect = aspect();
+    const w = window.innerWidth || 1;
+    const hgt = window.innerHeight || 1;
+    if (typeof camera.setViewOffset === 'function') camera.setViewOffset(w, hgt, pose.offset[0] * w, pose.offset[1] * hgt, w, hgt);
     camera.updateProjectionMatrix();
     camera.lookAt(pose.aim[0], pose.aim[1], pose.aim[2]);
     state.pose = pose;
 }
 
-/**
- * Move the camera to a station, gliding unless the visitor asked for less
- * motion, in which case it cuts. From the view as the visitor has turned
- * and zoomed it, and the look is spent on the way: each station starts
- * from its composed view. Returns whether the station exists.
- */
-function goTo(station) {
-    if (!camera || !CONFIG.stations[station]) return false;
-    ui.station = station;
-    const to = poseFor(station, aspect(), CONFIG);
-    const from = lookingPose() || to;
-    resetPortraitAim();
-    ui.zoom = 0;
-    glide = createGlide(from, to, state.reducedMotion ? 0 : CONFIG.view.glideSeconds);
-    requestRender();
-    showBack();
-    return true;
-}
-
 function handleResize() {
     if (!renderer || !camera) return;
     resolution.apply();
-    if (!glide) applyPose(poseFor(ui.station, aspect(), CONFIG));
+    applyPose(turntable.pose(aspect()));
     requestRender();
+}
+
+// ---- Maya and the guide (guide.js, host.js) ---------------------------------------
+
+/** Whether Maya is walking the visitor through the first build. */
+function guiding() {
+    return Boolean(ui.guide && GUIDED.includes(ui.guide.scene));
+}
+
+/** What the words of a scene depend on: the sheet, the rooms so far, and
+ *  the first room's line. */
+function guideContext() {
+    const c = active();
+    const room = c && ui.guide && ui.guide.roomId ? c.rooms.find((r) => r.id === ui.guide.roomId) : null;
+    return {
+        sheet: state.sheet,
+        roomCount: c ? liveRooms(c).length : 0,
+        roomLabel: room ? roomName(c.serviceType, room) : '',
+        addedText: room ? addedLine(state.sheet, room.area, roomName(c.serviceType, room)) : ''
+    };
+}
+
+/** The bubble for the scene now, with the floors to tick filled in from
+ *  the open checklist. Null when Maya has nothing to say. */
+function guideView() {
+    if (!ui.guide) return null;
+    const v = viewFor(ui.guide, guideContext());
+    if (v && v.choices === 'floors') {
+        const c = active();
+        const type = typeOf(c ? c.serviceType : 'cleaning');
+        const levels = (type ? type.levels : []).map((l) => ({ key: l.key, name: l.name, on: Boolean(c && c.levels.includes(l.key)) }));
+        return { ...v, choices: { kind: 'floors', levels, title: c ? c.title : GUIDE.defaultTitle, maxTitle: CONFIG.limits.title } };
+    }
+    return v;
+}
+
+/** Maya says the scene now (or is put away when there is none). */
+function showGuide() {
+    if (!host || !state.loaded) return;
+    host.show(guideView());
+}
+
+/**
+ * Move the guide on by an event (guide.js step), do what the new scene
+ * needs, save where it is, and let Maya say it. Returns whether the guide
+ * moved. "Again" on a scene that has nothing else to show says its hint
+ * once more.
+ */
+function guideTo(event) {
+    if (!ui.guide) return false;
+    const was = ui.guide;
+    const next = guideStep(was, event);
+    if (next === was) {
+        if (event.type === 'again' && host) {
+            const v = guideView();
+            if (v) host.show({ ...v, text: v.again || v.text });
+        }
+        return false;
+    }
+    ui.guide = next;
+    enterScene(next.scene);
+    persistGuide();
+    showGuide();
+    return true;
+}
+
+/** What a scene needs on the house and in the document as it begins. */
+function enterScene(to) {
+    switch (to) {
+    case 'hello': {
+        // The plain house again: the example, if it was showing, put back.
+        liftLevel(null);
+        const c = active();
+        if (c && c.sample) {
+            state.doc = setSettings(state.doc, { activeId: null }).doc;
+            refresh();
+        }
+        break;
+    }
+    case 'floors':
+        liftLevel(null);
+        ensureOwn();
+        break;
+    case 'example1':
+        showExample();
+        break;
+    case 'example2': {
+        const levels = model.levels();
+        liftLevel(levels.includes('main') ? 'main' : levels[0]);
+        break;
+    }
+    case 'added': {
+        // The new room's floor opens, its dots in view.
+        const c = active();
+        const room = c && ui.guide.roomId ? c.rooms.find((r) => r.id === ui.guide.roomId) : null;
+        if (room) liftLevel(room.level);
+        break;
+    }
+    case 'review':
+    case 'saved':
+        liftLevel(null);
+        if (to === 'saved') save();
+        break;
+    default:
+        break;
+    }
+}
+
+/** Keep where the guide is in the document, once the visitor has a home
+ *  of their own to come back to. */
+function persistGuide() {
+    if (!hasOwn(state.doc)) return;
+    const form = savedForm(ui.guide);
+    const had = state.doc.settings.guide;
+    if (had && had.scene === form.scene && had.reviewed === form.reviewed) return;
+    state.doc = setSettings(state.doc, { guide: form }).doc;
+    save();
+}
+
+/** The visitor's own checklist, made now if the one open is the example or
+ *  there is none, named for the guide ("Our home") and on one floor. */
+function ensureOwn() {
+    const c = active();
+    if (c && !c.sample) return c;
+    const at = now();
+    const result = mutate((d) => {
+        const a = createChecklist(d, { title: GUIDE.defaultTitle, levels: ['main'], visitFrequency: 'once', household: '' }, CONFIG, at);
+        if (a.error) return a;
+        return { doc: setSettings(a.doc, { activeId: a.record.id }).doc, record: a.record, error: null };
+    }, UI.labels.started);
+    return result.error ? null : active();
+}
+
+/** A button in Maya's bubble. */
+function onHostButton(id) {
+    if (!state.loaded) return;
+    if (host) host.poke();
+    switch (id) {
+    case 'next':
+        if (ui.guide.scene === 'floors') commitTitle();
+        guideTo({ type: 'next' });
+        break;
+    case 'kitchen':
+        addKitchen();
+        break;
+    case 'otherRoom':
+    case 'addRoom':
+        openRoom(null);
+        break;
+    case 'preferences':
+        openPreferences();
+        break;
+    case 'save':
+        guideTo({ type: 'saved' });
+        break;
+    default:
+        guideTo({ type: id });
+    }
+}
+
+/** The name typed in the bubble, kept as the checklist's title. */
+function commitTitle() {
+    const c = active();
+    const typed = host ? host.title() : null;
+    if (!c || typed === null) return;
+    const title = typed.trim();
+    if (!title || title === c.title) return;
+    change((d) => updateChecklist(d, c.id, { title }, CONFIG, now()), UI.labels.home, null);
+}
+
+/** A floor ticked or unticked in the bubble: it rises onto the house, or
+ *  goes. A floor that still has rooms, or the last one, stays (and its box
+ *  is ticked again). */
+function onFloor(key, on) {
+    const c = ensureOwn();
+    if (!c) return;
+    if (host) host.poke();
+    const levels = on ? [...c.levels.filter((k) => k !== key), key] : c.levels.filter((k) => k !== key);
+    const result = mutate((d) => setLevels(d, c.id, levels, CONFIG, now()), UI.labels.home);
+    if (result.error) {
+        if (host) host.update(guideView());
+        return;
+    }
+    if (!guideTo({ type: 'floorTapped' }) && host) host.update(guideView());
+}
+
+/** The kitchen, with its standard preset, on the main floor (or the
+ *  lowest floor that is not a garage), in one tap (ONBOARDING Scene 3). */
+function addKitchen() {
+    const c = active();
+    if (!c) return null;
+    if (!state.sheet) {
+        announce(UI.sheetLoading);
+        toast(UI.sheetLoading);
+        return null;
+    }
+    const type = typeOf(c.serviceType);
+    const annex = new Set(type.levels.filter((l) => l.annex).map((l) => l.key));
+    const level = c.levels.includes('main') ? 'main' : c.levels.find((k) => !annex.has(k)) || c.levels[0];
+    const presetItems = presetFor(state.sheet, 'kitchen');
+    const name = roomName(c.serviceType, { area: 'kitchen', label: '' });
+    const result = change((d) => addRoom(d, c.id, { level, area: 'kitchen', label: '' }, CONFIG, now(), { check, presetItems }),
+        UI.labels.roomAdded, UI.roomAdded(name, presetItems.length));
+    if (!result.error) guideTo({ type: 'roomAdded', roomId: result.record.id });
+    return result;
+}
+
+// ---- Help and Undo ----------------------------------------------------------------
+
+/** Whether the Help menu is open. */
+function helpOpen() {
+    const menu = el('ws-help-menu');
+    return Boolean(menu && !menu.hidden);
+}
+
+/** Close the Help menu, focus back on its button when asked. Returns
+ *  whether it was open. */
+function closeHelp(refocus = false) {
+    if (!helpOpen()) return false;
+    el('ws-help-menu').hidden = true;
+    const btn = el('ws-help');
+    if (btn) {
+        btn.setAttribute('aria-expanded', 'false');
+        if (refocus && typeof btn.focus === 'function') btn.focus();
+    }
+    return true;
+}
+
+/** The Help menu: Maya again, the guide from the start, and the
+ *  checklist's own cards. Each item closes the menu first. */
+function setupHelp(signal) {
+    const btn = el('ws-help');
+    const menu = el('ws-help-menu');
+    if (!btn || !menu) return;
+    btn.addEventListener('click', () => {
+        if (helpOpen()) {
+            closeHelp();
+            return;
+        }
+        menu.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+        const first = Array.from(menu.children || []).find((b) => !b.hidden);
+        if (first && typeof first.focus === 'function') first.focus();
+    }, { signal });
+    const items = {
+        'help-again': () => guideTo({ type: 'again' }),
+        'help-restart': () => guideTo({ type: 'restart' }),
+        'help-checklist': openChecklistView,
+        'help-menu': openMenu,
+        'help-prefs': openPreferences,
+        'help-home': editHome,
+        'help-mine': openMine,
+        'help-about': () => guideTo({ type: 'about' })
+    };
+    for (const [id, act] of Object.entries(items)) {
+        const item = el(id);
+        if (!item) continue;
+        item.addEventListener('click', () => {
+            closeHelp();
+            act();
+        }, { signal });
+    }
 }
 
 // ---- The price sheet --------------------------------------------------------
 
-/** Load the price sheet index.json names, in the background. The studio
+/** Load the price sheet index.json names, in the background. The house
  *  works without it, and says so where prices would be. */
 async function loadPrices() {
     if (typeof fetch !== 'function') {
@@ -1021,14 +1084,10 @@ function refresh() {
         home.textContent = c ? c.title : '';
     }
     const show = (id, on) => { const b = el(id); if (b) b.hidden = !on; };
-    // The example is on the plinth, not the visitor's own home, so Start
-    // your own stays on offer while it is.
-    show('bar-new', !c || c.sample);
     show('my-clear-example', hasSamples(state.doc));
-    show('bar-checklist', Boolean(c));
-    show('bar-room', Boolean(c));
-    show('bar-home', Boolean(c));
-    show('bar-prefs', Boolean(c));
+    show('help-checklist', Boolean(c));
+    show('help-home', Boolean(c));
+    show('help-prefs', Boolean(c));
     const chip = quoteChip(c, state.sheet);
     const quoteBtn = el('hud-quote');
     if (quoteBtn) {
@@ -1037,7 +1096,7 @@ function refresh() {
     }
     const quoteText = el('hud-quote-text');
     if (quoteText) quoteText.textContent = chip ? chip.text : '';
-    const undoBtn = el('bar-undo');
+    const undoBtn = el('ws-undo');
     if (undoBtn) undoBtn.disabled = !history.canUndo;
     const note = el('storage-note');
     if (note) note.textContent = storageNote();
@@ -1051,13 +1110,14 @@ function refresh() {
         else closeCard('quote');
     }
     if (isOpen('menu')) drawMenu();
-    if (model && model.show(c)) markShadows();
-    paintFaces();
-    if (intro) {
-        intro.showExplore(hasSamples(state.doc));
-        intro.setMarks(marksDue().length > 0);
+    if (model && model.show(c)) {
+        markShadows();
+        // The frame fits the house as it now stands, eased to once the
+        // visitor can see it.
+        if (turntable) turntable.setHeight(frameHeight(), !state.loaded || state.reducedMotion);
     }
-    marks.frame = 0;
+    // Maya's words that depend on the home (the rooms so far) keep up.
+    if (host && host.view) host.update(guideView());
     requestRender();
 }
 
@@ -1121,6 +1181,7 @@ function submitSetup(event) {
         return result;
     }
     closeCard('setup');
+    guideTo({ type: 'homeMade' });
     const said = UI.started(result.record.title);
     announce(said);
     toast(said, { undo });
@@ -1292,8 +1353,10 @@ function submitRoom(event) {
         return result;
     }
     closeCard('room');
-    // The new room and its tasks, where the customer can adjust them.
-    if (!isOpen('checklist')) openChecklistView();
+    // The new room and its tasks, where the customer can adjust them, unless
+    // Maya is showing them on the house.
+    if (!guiding() && !isOpen('checklist')) openChecklistView();
+    guideTo({ type: 'roomAdded', roomId: result.record.id });
     return result;
 }
 
@@ -1315,7 +1378,7 @@ function taskRoom() {
 
 /** The task card, for a new task in a room (perhaps a given task, from the
  *  menu) or an edit of an item. */
-function openTask(roomId, itemId, taskKey = null) {
+function openTask(roomId, itemId, taskKey = null, { armed = false } = {}) {
     const c = active();
     if (!c) return;
     if (!state.sheet) {
@@ -1330,7 +1393,7 @@ function openTask(roomId, itemId, taskKey = null) {
     fillTaskForm({ sheet: state.sheet, room, item, roomLabel: roomName(c.serviceType, room), taskKey });
     updateTaskPrice();
     drawTaskPhotos();
-    openCard('task', { onClose: releaseTaskPhotos });
+    openCard('task', { armed, onClose: releaseTaskPhotos });
 }
 
 /** The price and time of the task as chosen right now, or why it cannot be
@@ -1534,77 +1597,35 @@ function setupEventListeners() {
     initCards({ signal });
     // When what opened a card has gone (a toolbar button hidden by the
     // change the card made), focus lands on My checklists rather than nowhere.
-    setFocusFallback(() => el('bar-mine'));
+    setFocusFallback(() => el('ws-help'));
     setupLook(signal);
-    buildMarks(signal);
-    buildPlaces(signal);
-    intro = createIntro({
-        mobile: state.mobile,
+    host = createHost({
         signal,
-        on: {
-            start: startOwn,
-            explore: exploreExample,
-            // While the panel is open the toolbar steps aside.
-            change: (open) => {
-                const bar = el('ws-bar');
-                if (bar && bar.classList) bar.classList.toggle('is-away', open);
-            }
-        }
+        timing: { pulse: CONFIG.guide.pulse, again: CONFIG.guide.again },
+        on: { button: onHostButton, floor: onFloor }
     });
+    setupHelp(signal);
 
-    // Taps on the studio, by a click, or on a touch screen by the touch's
-    // end (the shared pan part cancels touchstart, so a touch makes no
-    // click), and never the end of a drag or a pinch that looked around.
-    canvas.addEventListener('click', (event) => {
-        if (gestureClaimedTap()) return;
-        handleSceneTap(event.clientX, event.clientY);
-    }, { signal });
-    canvas.addEventListener('touchend', (event) => {
-        if (event.cancelable) event.preventDefault();
-        if (gestureClaimedTap()) return;
-        const touch = event.changedTouches && event.changedTouches[0];
-        if (touch) handleSceneTap(touch.clientX, touch.clientY);
-    }, { passive: false, signal });
-    // A pointer over something that answers a tap says so, asked no more
-    // than twenty times a second.
-    canvas.addEventListener('pointermove', (event) => {
-        if (event.pointerType !== 'mouse' || !state.loaded || anyOpen()) return;
-        const t = performance.now();
-        if (t - lastHover < 50) return;
-        lastHover = t;
-        canvas.style.cursor = pickAt(event.clientX, event.clientY) ? 'pointer' : '';
-    }, { signal });
-
-    // The places' keys, 1 to 6, from anywhere in the studio but a text
-    // field or an open card. Escape sets a lifted level down, or puts the
-    // arrival panel away.
+    // Escape steps back (an open floor closes) or puts the arrival panel
+    // away, and the arrows and + and - move the view: from anywhere but a
+    // text field or an open card (a window key listener asks who has focus).
     document.addEventListener('keydown', (event) => {
+        // A key a card has already answered (its Escape closes it) is not
+        // the house's too: one Escape, one step.
+        if (event.defaultPrevented) return;
         if (event.ctrlKey || event.metaKey || event.altKey) return;
         const target = event.target;
         if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || '')) return;
         if (!state.loaded || anyOpen()) return;
         if (event.key === 'Escape') {
-            if (away()) {
-                event.preventDefault();
-                backToStudio();
-            } else if (intro && intro.collapse()) {
-                event.preventDefault();
-            }
+            if (closeHelp(true) || stepBack()) event.preventDefault();
             return;
         }
-        const key = touchForKey(event.key);
-        if (!key) return;
-        event.preventDefault();
-        if (intro) intro.collapse();
-        actOn(key);
+        if (lookKey(event.key)) event.preventDefault();
     }, { signal });
 
     const on = (id, type, fn) => { const node = el(id); if (node) node.addEventListener(type, fn, { signal }); };
-    on('bar-new', 'click', () => { noteUsed('desk'); startOwn(); });
-    on('bar-home', 'click', editHome);
-    on('bar-prefs', 'click', openPreferences);
-    on('bar-mine', 'click', () => { noteUsed('desk'); openMine(); });
-    on('bar-undo', 'click', () => undo());
+    on('ws-undo', 'click', () => undo());
     on('hud-home', 'click', openMine);
     on('my-new', 'click', startOwn);
     on('my-clear-example', 'click', clearExample);
@@ -1613,8 +1634,6 @@ function setupEventListeners() {
     on('setup-household', 'input', () => showHints('setup-household', 'setup-household-hint'));
     on('prefs-form', 'submit', submitPreferences);
     on('prefs-skip', 'click', () => closeCard('preferences'));
-    on('bar-checklist', 'click', () => { noteUsed('board'); openChecklistView(); });
-    on('bar-room', 'click', () => openRoom(null));
     on('checklist-add-room', 'click', () => openRoom(null));
     on('room-form', 'submit', submitRoom);
     on('room-cancel', 'click', () => closeCard('room'));
@@ -1633,13 +1652,11 @@ function setupEventListeners() {
     on('task-notes', 'input', () => showHints('task-notes', 'task-notes-hint'));
     on('task-avoid', 'input', () => showHints('task-avoid', 'task-avoid-hint'));
     on('hud-quote', 'click', openQuote);
-    on('ws-back', 'click', backToStudio);
+    on('ws-back', 'click', stepBack);
     on('quote-open-checklist', 'click', openChecklistView);
-    on('bar-menu', 'click', () => { noteUsed('menu'); openMenu(); });
     on('menu-area', 'change', () => {
         ui.menuArea = el('menu-area').value;
         drawMenu();
-        paintFaces();
     });
     on('checklist-filter', 'change', () => {
         ui.filter = el('checklist-filter').value;
@@ -1726,32 +1743,47 @@ function animate() {
     if (state.drewLast && resolution) resolution.sample(delta);
     state.drewLast = false;
 
-    if (glide) {
-        applyPose(glide.step(delta));
-        if (glide.done) glide = null;
-        state.dirty = true;
-    }
-    // The visitor's look (setupLook), and a frame when it has turned or
-    // zoomed the camera.
-    if (camera && !lookLocked()) updatePortraitControls(delta);
-    if (camera && lookChanged()) state.dirty = true;
-    // A level being lifted or set down, and its shadow with it.
-    if (model && model.tick(delta)) markShadows();
-    // A card opening or closing hides or brings back the halos, though the
-    // studio itself has not changed.
     const locked = lookLocked();
-    if (locked !== marks.locked) {
-        marks.locked = locked;
+    // The turntable: the push-in, a turn carrying on after a drag, the idle
+    // drift, the frame easing to a taller or shorter house.
+    if (turntable && camera) {
+        turntable.step(delta, { reducedMotion: state.reducedMotion, locked, drift: !away() });
+        if (stage && turntable.yaw !== drawnYaw) {
+            drawnYaw = turntable.yaw;
+            stage.spin.rotation.y = drawnYaw;
+            markShadows();
+        }
+        const pose = turntable.pose(aspect());
+        if (poseChanged(pose)) {
+            applyPose(pose);
+            state.dirty = true;
+        }
+    }
+    // A floor opening or closing, and its shadow with it.
+    if (model && model.tick(delta)) markShadows();
+    // A card opening or closing hides or brings back the room labels,
+    // though the house itself has not changed.
+    if (locked !== wasLocked) {
+        wasLocked = locked;
         state.dirty = true;
+        // Maya steps out of sight while a card is open.
+        if (host) host.setCovered(locked);
     }
 
     if (!state.dirty) return;
     state.dirty = false;
     state.frames++;
     placeLabels();
-    updateMarks();
     renderer.render(scene, camera);
     state.drewLast = true;
+}
+
+/** Whether a pose differs from the one the camera was last set to. */
+function poseChanged(pose) {
+    const was = state.pose;
+    if (!was) return true;
+    const same = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 1e-9);
+    return !(same(pose.eye, was.eye) && same(pose.aim, was.aim) && pose.fov === was.fov && same(pose.offset, was.offset));
 }
 
 function cleanup() {
@@ -1796,7 +1828,7 @@ function fallbackTo2D() {
         const loading = el('loading-screen');
         if (loading) loading.classList.remove('hidden');
         const status = el('load-status');
-        if (status) status.textContent = "This browser can't run the 3D studio. Taking you to the standard site…";
+        if (status) status.textContent = "This browser can't show the 3D house. Taking you to the standard site…";
     } catch (e) { /* ignore, we're redirecting regardless */ }
     setTimeout(() => { window.location.replace('/'); }, 2500);
 }
@@ -1853,27 +1885,27 @@ export const __test__ = {
     openMenu,
     requestRender,
     handleResize,
-    goTo,
     lookLocked,
+    lookKey,
     markShadows,
-    glide: () => glide,
     liftLevel,
-    backToStudio,
+    stepBack,
     reflective,
-    actOn,
+    frameHeight,
+    tapModel,
     pickAt,
     handleSceneTap,
-    updateMarks,
-    marks: () => marks,
-    intro: () => intro,
-    noteUsed,
-    exploreExample,
-    paintFaces,
+    host: () => host,
+    guideTo,
+    onHostButton,
+    onFloor,
+    showExample,
     placeLabels,
     model: () => model,
-    faces: () => faces,
-    studio: () => studio,
-    street: () => street,
+    stage: () => stage,
+    turntable: () => turntable,
+    drawnYaw: () => drawnYaw,
+    gesture,
     start,
     stop,
     scene: () => scene,

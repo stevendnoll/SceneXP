@@ -224,64 +224,110 @@ export const UI = Object.freeze({
     filterShowing: (shown, total) => `Showing ${shown} of ${total} tasks.`
 });
 
-/** The plan board and the service menu's display in the studio (boards.js),
- *  and the room labels on the house model (main.js). */
-export const BOARDS = Object.freeze({
-    emptyTitle: 'Your plan appears here',
-    emptyDetail: 'Start your own checklist at the desk, and your quote, the time and your starred tasks gather on this board.',
-    noTasks: 'Add a room and its tasks, and your quote appears here.',
-    quoteLabel: 'Your quote',
-    starredHeading: 'Starred first',
-    noStarred: 'Star the tasks that matter most, and they lead this list.',
-    moreStarred: (n) => `and ${n} more`,
-    levelsHeading: 'Tasks by level',
-    minimumShort: (more) => `Add ${more} more to reach the visit minimum.`,
-    menuHeading: 'Service menu',
-    menuFrom: (money) => `from ${money}`,
-    menuEach: (money) => `${money} each`,
-    menuMinutes: (minutes) => `about ${minutes} min`,
-    menuMore: (n) => `and ${n} more in the service menu`,
-    menuFooter: (version) => `Service menu ${version}`,
-    menuLoading: 'The service menu is loading.',
+/** What the house model says as a floor opens and closes, and the name of
+ *  its room labels (main.js). */
+export const MODEL_LINES = Object.freeze({
     roomsOn: (level) => `Rooms of the ${String(level).toLowerCase()}`,
-    lifted: (level) => `Lifted the ${String(level).toLowerCase()} out of the model.`,
-    setDown: 'The model is back together.'
+    lifted: (level) => `Opened the ${String(level).toLowerCase()} of the house.`,
+    setDown: 'The house is back together.'
 });
 
-/** The arrival panel (intro.js), the halos and the stations list (marks.js
- *  and main.js). */
+/** The Back button (main.js). */
 export const STUDIO = Object.freeze({
-    body: 'Build your cleaning checklist room by room. Every task shows its price and its time as you add it, and your quote keeps up. Star what matters most, and we start there.',
-    start: 'Start your own',
-    explore: 'Explore the example',
-    hintTouch: 'Tap a glowing marker to begin. Drag to look around, and pinch to look closer.',
-    hintPointer: 'Click a glowing marker to begin. Drag to look around, and scroll to look closer.',
-    /** Once the halos have retired, the hint names what answers instead. */
-    hintPlacesTouch: 'Tap the desk, the model, the menu, the board or the printer. Drag to look around, and pinch to look closer.',
-    hintPlacesPointer: 'Click the desk, the model, the menu, the board or the printer. Drag to look around, and scroll to look closer.',
-    collapse: 'Collapse this introduction',
-    handle: 'About Whitestone',
-    back: 'Back to the studio',
-    /** The stations list's rows: the place, said plainly. */
-    places: Object.freeze({
-        overview: 'The whole studio',
-        desk: 'The concierge',
-        model: 'The house model',
-        menu: 'The service menu',
-        board: 'The plan board',
-        printer: 'The printer'
-    }),
-    /** Each halo's spoken name: the place and what it does. */
-    halos: Object.freeze({
-        desk: 'The concierge. Start your own checklist, or open your checklists.',
-        model: 'The house model. Lift a level to see its rooms.',
-        menu: 'The service menu. Every task, with its price and time.',
-        board: 'The plan board. Your checklist in full.',
-        printer: 'The printer. Print your checklist.'
-    }),
-    printerEmpty: 'Add a task to your checklist, and the printer prints it for you.',
-    listHeading: 'Places in the studio',
-    listNote: 'Choose a place to go there. Keys 1 to 6 go to them from anywhere in the studio. The arrow keys move through this list, and Tab or Escape puts it away.'
+    back: 'Back to the whole house'
+});
+
+/** A count said as a word, as Maya would say it: "nine standard tasks". */
+export function countWord(n) {
+    const words = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+    return Number.isInteger(n) && n >= 0 && n < words.length ? words[n] : String(n);
+}
+
+/**
+ * Maya, the host, and everything she says (guide.js, host.js; ONBOARDING
+ * section 5). One or two short sentences a bubble. Each scene's `...Again`
+ * line is what she says once, in other words, if nothing happens for a
+ * while. Lines that state a price take it from the price sheet at run time.
+ */
+export const GUIDE = Object.freeze({
+    name: 'Maya',
+    role: 'Whitestone Home Care',
+    label: 'Maya, your host',
+    portrait: 'M',
+    defaultTitle: 'Our home',
+    skip: 'Skip the guide',
+    progressLabel: 'Your progress',
+    progress: Object.freeze(['Floors', 'First room', 'Your rooms', 'Review']),
+    progressStep: (n, total, name) => `Step ${n} of ${total}: ${name}`,
+
+    hello: "Hi, I'm Maya with Whitestone Home Care. Let's build a cleaning checklist for your home, room by room. It takes about two minutes.",
+    helloAgain: "Tap Let's start and I'll walk you through it, one step at a time.",
+    start: "Let's start",
+    example: 'Show me an example',
+
+    floors: 'First, which floors does your home have?',
+    floorsAgain: 'Tick each floor your home has. You can change them later.',
+    floorsTaking: "That's your house taking shape.",
+    floorsLegend: 'Floors in your home',
+    titleLabel: 'Name this checklist',
+    next: 'Next',
+
+    firstRoom: 'Most people start with the kitchen. Shall we add it?',
+    firstRoomAgain: 'Adding the kitchen brings its standard tasks with it. You can change any of them.',
+    addKitchen: 'Add the kitchen',
+    otherRoom: 'Choose another room',
+
+    /** Said once the first room is in, from the price sheet. */
+    added: (room, count, money) => `There's your ${room} with its ${countWord(count)} standard ${count === 1 ? 'task' : 'tasks'}, ${money} so far.`,
+    addedMinimum: (money) => `Every visit starts at ${money}, so your next rooms fit inside that.`,
+    addedPlain: (room) => `There's your ${room}.`,
+
+    dots: "Each blue dot is a task. Tap one to see what's included, or star the ones that matter most.",
+    dotsAgain: 'Tap any blue dot on the open floor to see that task.',
+    gotIt: 'Got it',
+
+    rooms: 'Now add your other rooms. Tap a floor to open it, or add a room here.',
+    roomsAgain: "Add as many rooms as you like. When you're done, review your checklist.",
+    roomsMore: "Looking good. Add as many as you like, or review when you're ready.",
+    addRoom: 'Add a room',
+    reviewIt: 'Review my checklist',
+
+    review: "Here's your home and your quote. One last thing: is there anything we should avoid, like strong scents or bleach?",
+    reviewAgain: 'Save your checklist when it looks right. Care preferences are optional.',
+    preferences: 'Choose preferences',
+    save: 'Save my checklist',
+    saved: 'All set. Your checklist is saved in this browser, so you can come back and change it anytime.',
+    lookAround: 'Look around',
+
+    example1: 'This is a four-bedroom home with a home office.',
+    example2: 'Each room has its tasks, and every task has a price.',
+    example3: 'Want to build yours?',
+    buildOwn: 'Build my own',
+    look: 'Take your time. Drag to turn the house, and tap a floor to open it.',
+
+    welcome: 'Welcome back. Your home is just as you left it.',
+    welcomeResume: 'Welcome back. Your home is just as you left it. Shall we pick up where we stopped?',
+    keepGoing: 'Keep going',
+    illLook: "I'll look around",
+
+    hint: 'Tap a floor of the house to open it, and tap a blue dot to see a task. Your checklist is in the Help menu at the top.',
+    about: 'Whitestone Home Care builds your cleaning checklist room by room. Every task shows its price and its time as you add it, and your quote keeps up.',
+    close: 'Close'
+});
+
+/** The Help menu and Undo, top right (main.js). */
+export const HELP = Object.freeze({
+    button: 'Help',
+    label: 'Help and your checklist',
+    again: 'Show me again',
+    restart: 'Start over with the guide',
+    checklist: 'Your checklist',
+    menu: 'Service menu',
+    prefs: 'Care preferences',
+    home: 'Your home',
+    mine: 'My checklists',
+    about: 'About Whitestone',
+    undo: 'Undo'
 });
 
 /** What the page says about saving, under the studio's storage note. */
@@ -320,6 +366,6 @@ export function allCopy() {
         else if (typeof value === 'function') out.push({ where, text: value(12) });
         else if (value && typeof value === 'object') Object.entries(value).forEach(([k, v]) => walk(v, `${where}.${k}`));
     };
-    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, DAY_STATUS, STORE, FREQUENCIES, UI, BOARDS, STUDIO, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
+    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, DAY_STATUS, STORE, FREQUENCIES, UI, MODEL_LINES, STUDIO, GUIDE, HELP, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
     return out;
 }

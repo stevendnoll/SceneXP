@@ -263,6 +263,7 @@ export function validate(input, config, now) {
     }
     const settings = raw.settings && typeof raw.settings === 'object' ? raw.settings : {};
     const coached = Number.isInteger(settings.coached) && settings.coached >= 0 && settings.coached <= 65535 ? settings.coached : 0;
+    const guide = guideSetting(settings.guide);
     const meta = raw.meta && typeof raw.meta === 'object' ? raw.meta : {};
     return {
         ok: true,
@@ -270,7 +271,7 @@ export function validate(input, config, now) {
         doc: {
             schema: config.storage.schema,
             checklists,
-            settings: { coached, activeId: ids.has(settings.activeId) ? settings.activeId : null },
+            settings: { coached, activeId: ids.has(settings.activeId) ? settings.activeId : null, ...(guide ? { guide } : {}) },
             meta: { createdAt: stampOrNull(meta.createdAt) || stamp(now), lastVisitAt: stampOrNull(meta.lastVisitAt) }
         }
     };
@@ -676,10 +677,26 @@ export function hasSamples(doc) {
     return doc.checklists.some((c) => c.sample && !c.deletedAt);
 }
 
-/** `coached` bits (which halos have retired) and the checklist on the plinth. */
+/**
+ * Where Maya's guide is (guide.js savedForm): a scene name and whether the
+ * first build reached its review. Anything else is dropped, so a hand-edited
+ * or future value never breaks the page. Null when there is none.
+ */
+export function guideSetting(value) {
+    if (!value || typeof value !== 'object' || typeof value.scene !== 'string' || !/^[a-z][A-Za-z0-9]{0,23}$/.test(value.scene)) return null;
+    return { scene: value.scene, reviewed: value.reviewed === true };
+}
+
+/** `coached` bits (which halos had retired; nothing reads them since the
+ *  guide), the open checklist, and where the guide is. */
 export function setSettings(doc, patch) {
     const src = patch || {};
     const settings = { ...doc.settings };
+    if ('guide' in src) {
+        const guide = guideSetting(src.guide);
+        if (guide) settings.guide = guide;
+        else delete settings.guide;
+    }
     if ('coached' in src && Number.isInteger(src.coached) && src.coached >= 0 && src.coached <= 65535) settings.coached = src.coached;
     if ('activeId' in src) {
         const target = src.activeId === null ? null : findChecklist(doc, src.activeId);

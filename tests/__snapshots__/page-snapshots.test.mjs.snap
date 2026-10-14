@@ -6997,7 +6997,7 @@ html [data-ui-theme="surf" lang="en"]
     meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
     meta [content="noindex, nofollow" name="robots"]
-    meta [content="A bright, modern cleaning studio where you build a room by room cleaning checklist, see the price of every task as you go, and share the finished list with your cleaner." name="description"]
+    meta [content="Build a room by room cleaning checklist on a 3D model of your home, see the price of every task as you go, and share the finished list with your cleaner." name="description"]
     meta [content="#F4F2EE" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/whitestone/" rel="canonical"]
@@ -7011,12 +7011,12 @@ html [data-ui-theme="surf" lang="en"]
     meta [content="image/jpeg" property="og:image:type"]
     meta [content="1200" property="og:image:width"]
     meta [content="630" property="og:image:height"]
-    meta [content="A bright cleaning studio with white stone walls and tall windows full of morning light." property="og:image:alt"]
+    meta [content="A model of a family home on a round stone turntable in a bright white studio." property="og:image:alt"]
     meta [content="summary_large_image" name="twitter:card"]
     meta [content="Whitestone Home Care" name="twitter:title"]
     meta [content="Pick what you would like cleaned, room by room, and see your price as you go." name="twitter:description"]
     meta [content="https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1" name="twitter:image"]
-    meta [content="A bright cleaning studio with white stone walls and tall windows full of morning light." name="twitter:image:alt"]
+    meta [content="A model of a family home on a round stone turntable in a bright white studio." name="twitter:image:alt"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
@@ -7024,7 +7024,7 @@ html [data-ui-theme="surf" lang="en"]
         "@id": "https://www.scenexp.com/whitestone/#app",
         "url": "https://www.scenexp.com/whitestone/",
         "name": "Whitestone Home Care",
-        "description": "A 3D cleaning studio in the browser where a visitor builds a room by room cleaning checklist from a menu of priced tasks, sees the quote and the expected visit length update as they go, and shares the finished checklist with a cleaner.",
+        "description": "A 3D model home in the browser on which a visitor builds a room by room cleaning checklist from a menu of priced tasks, sees the quote and the expected visit length update as they go, and shares the finished checklist with a cleaner.",
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "Any",
         "browserRequirements": "Requires JavaScript and WebGL 2.",
@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=6" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=7" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7084,20 +7084,16 @@ html [data-ui-theme="surf" lang="en"]
     link [href="js/forms.min.js" rel="modulepreload"]
     link [href="js/panels.min.js" rel="modulepreload"]
     link [href="js/copy.min.js" rel="modulepreload"]
-    link [href="js/stations.min.js" rel="modulepreload"]
-    link [href="js/studio.min.js" rel="modulepreload"]
-    link [href="js/street.min.js" rel="modulepreload"]
+    link [href="js/turntable.min.js" rel="modulepreload"]
+    link [href="js/stage.min.js" rel="modulepreload"]
     link [href="js/model.min.js" rel="modulepreload"]
-    link [href="js/marks.min.js" rel="modulepreload"]
-    link [href="js/intro.min.js" rel="modulepreload"]
-    link [href="../shared/js/proplist-1.0.0.min.js" rel="modulepreload"]
-    link [href="js/boards.min.js" rel="modulepreload"]
-    link [href="../shared/js/pan-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/guide.min.js" rel="modulepreload"]
+    link [href="js/host.min.js" rel="modulepreload"]
     link [href="js/guards.min.js" rel="modulepreload"]
     link [href="js/layout.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=6" rel="stylesheet"]
+    link [href="css/experience.min.css?v=7" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7108,7 +7104,7 @@ html [data-ui-theme="surf" lang="en"]
         h1
           "Whitestone Home Care"
         p
-          "This is a bright, modern cleaning studio, and it needs JavaScript to run. Inside, you build a cleaning checklist room by room from a menu of tasks, each with a set price and a time estimate, so your quote and the expected length of the visit update as you go. When the list is ready, you can share it with your cleaner."
+          "This is a 3D model of your home, and it needs JavaScript to run. On it, you build a cleaning checklist room by room from a menu of tasks, each with a set price and a time estimate, so your quote and the expected length of the visit update as you go. When the list is ready, you can share it with your cleaner."
         p
           "Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples."
         p
@@ -7134,31 +7130,26 @@ html [data-ui-theme="surf" lang="en"]
           div.loader-progress#load-progress
         div.loader-status#load-status [aria-live="polite" role="status"]
           "Loading…"
-    canvas#game-canvas [aria-label="The Whitestone Home Care studio in morning light: a model of your home on a stone plinth, the plan board and the service menu on the walls, and a leafy street beyond the glass" role="img"]
+    canvas#game-canvas [aria-label="A model of your home on a round stone turntable in a bright white studio. Drag to turn it, and tap a floor to open it." role="img"]
     ol#ws-rooms.ws-rooms [hidden]
-    div#ws-marks.ws-marks [hidden]
-    section#ws-intro.ws-intro.is-out [aria-labelledby="intro-kicker" tabindex="-1"]
-      button#intro-close.intro-close [aria-label="Collapse this introduction" type="button"]
-        "&times;"
-      p#intro-kicker.intro-kicker
-        "Whitestone Home Care"
-      p.intro-lead
-        "Bright homes, kept with care."
-      p.intro-body
-        "Build your cleaning checklist room by room. Every task shows its price and its time as you add it, and your quote keeps up. Star what matters most, and we start there."
-      div.intro-actions
-        button#intro-start.ws-btn.ws-btn-primary [type="button"]
-          "Start your own"
-        button#intro-explore.ws-btn [type="button"]
-          "Explore the example"
-      p#intro-hint.intro-hint
-        "Tap a glowing marker to begin. Drag to look around, and pinch to look closer."
-      p.intro-honesty
-        "Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples."
-    button#intro-handle.intro-handle.is-out [aria-controls="ws-intro" aria-expanded="true" type="button"]
-      "About Whitestone"
+    section#ws-host.ws-host [aria-labelledby="host-name" hidden]
+      div.host-head
+        span.host-portrait [aria-hidden="true"]
+          "M"
+        p.host-who
+          span#host-name.host-name
+            "Maya"
+          span.host-role
+            "Whitestone Home Care"
+      ol#host-progress.host-progress [hidden]
+      p#host-line.host-line
+      div#host-choices.host-choices [hidden]
+      div#host-actions.host-actions
+      p#host-small.host-small [hidden]
+      button#host-skip.host-skip [hidden type="button"]
+        "Skip the guide"
     button#ws-back.ws-back [hidden type="button"]
-      "Back to the studio"
+      "Back to the whole house"
     p#ws-live.sr-only [aria-live="polite" role="status"]
     div#ws-hud.ui-float.ws-hud [aria-label="Your checklist" role="group"]
       button#hud-home.hud-chip [hidden type="button"]
@@ -7167,23 +7158,28 @@ html [data-ui-theme="surf" lang="en"]
         span#hud-quote-text
         span.hud-example
           "Example prices"
-    nav#ws-bar.ui-float.ws-bar [aria-label="The studio"]
-      button#bar-new.ws-btn.ws-btn-primary [type="button"]
-        "Start your own"
-      button#bar-checklist.ws-btn.ws-btn-primary [hidden type="button"]
-        "Checklist"
-      button#bar-room.ws-btn [hidden type="button"]
-        "Add a room"
-      button#bar-home.ws-btn [hidden type="button"]
-        "Your home"
-      button#bar-prefs.ws-btn [hidden type="button"]
-        "Care preferences"
-      button#bar-menu.ws-btn [type="button"]
-        "Service menu"
-      button#bar-mine.ws-btn [type="button"]
-        "My checklists"
-      button#bar-undo.ws-btn [disabled title="Undo (Ctrl or Command and Z)" type="button"]
+    div#ws-tools.ui-float.ws-tools [aria-label="Help and undo" role="group"]
+      button#ws-undo.tool-btn [disabled title="Undo (Ctrl or Command and Z)" type="button"]
         "Undo"
+      button#ws-help.tool-btn.tool-help [aria-controls="ws-help-menu" aria-expanded="false" aria-haspopup="true" aria-label="Help and your checklist" type="button"]
+        "?"
+      div#ws-help-menu.help-menu [aria-label="Help and your checklist" hidden role="group"]
+        button#help-again.help-item [type="button"]
+          "Show me again"
+        button#help-restart.help-item [type="button"]
+          "Start over with the guide"
+        button#help-checklist.help-item [hidden type="button"]
+          "Your checklist"
+        button#help-menu.help-item [type="button"]
+          "Service menu"
+        button#help-prefs.help-item [hidden type="button"]
+          "Care preferences"
+        button#help-home.help-item [hidden type="button"]
+          "Your home"
+        button#help-mine.help-item [type="button"]
+          "My checklists"
+        button#help-about.help-item [type="button"]
+          "About Whitestone"
     div#ws-toast.ws-toast [hidden]
       span#toast-text
       button#toast-undo.ws-btn.ws-btn-small [hidden type="button"]
@@ -7401,12 +7397,6 @@ html [data-ui-theme="surf" lang="en"]
         h2#confirm-title.card-title
         p#confirm-detail.card-detail
         div#confirm-actions.card-actions
-    section#prop-panel.prop-panel [aria-labelledby="prop-panel-heading" hidden]
-      h2#prop-panel-heading.prop-panel-heading
-        "Places in the studio"
-      p.prop-panel-note
-        "Choose a place to go there. Keys 1 to 6 go to them from anywhere in the studio. The arrow keys move through this list, and Tab or Escape puts it away."
-      ul#prop-list.prop-list
     script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;

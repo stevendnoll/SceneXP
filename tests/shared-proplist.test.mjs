@@ -354,9 +354,10 @@ describe('one tab stop, arrow keys, and Escape', () => {
 });
 
 describe('the panel in the page', () => {
-  /** Pages that arrive without a welcome card, by design: www/whitestone's
-   *  arrival is a slim panel over the studio (its PLANNING 4.1). */
-  const NO_WELCOME_CARD = ['whitestone'];
+  /** Pages with a list that arrive without a welcome card, by design. None
+   *  now: www/whitestone was one until its places list retired (2026-10-13,
+   *  the house-first experience). */
+  const NO_WELCOME_CARD = [];
 
   test('every page with a list places it after the welcome card and the 3D view', async () => {
     const www = new URL('../www/', import.meta.url);
@@ -383,6 +384,6 @@ describe('the panel in the page', () => {
         .toBe(`${entry.name} before the scripts: true`);
     }
     // The scan has to find them, or this passes on nothing.
-    expect(found).toEqual(expect.arrayContaining(['gavin', 'jamar', 'mandelbrot', 'steve', 'sunnyvalejenn', 'whitestone']));
+    expect(found).toEqual(expect.arrayContaining(['gavin', 'jamar', 'mandelbrot', 'steve', 'sunnyvalejenn']));
   });
 });

@@ -6,8 +6,8 @@
  * take the config as an argument rather than importing a constant of their
  * own (the Corner Office pattern), so a test can hand them a different one.
  *
- * DEEP FROZEN, because a shallow freeze lets `CONFIG.room.width = 20` succeed
- * silently and then every test that follows measures a different studio.
+ * DEEP FROZEN, because a shallow freeze lets `CONFIG.stage.cove.width = 2` succeed
+ * silently and then every test that follows measures a different stage.
  *
  * The API base and polling intervals arrive with the server (M3). Every
  * other tunable the PRD names is here.
@@ -37,58 +37,32 @@ export const CONFIG = deepFreeze({
         skipped: '#9AA0A6'
     },
 
-    /** The studio shell (PLANNING 6.1): 12 m by 8 m, x across, z from the
-     *  street (-z) to the entrance wall (+z), y up. Meters.
+    /** Where the house stands (stage.js, PLANNING 6.1): a seamless white
+     *  cove and a round stone turntable. Meters, x across, z toward the
+     *  camera, y up, the turntable's middle on the floor at the origin.
      *
-     *  THE GLASS IS ACROSS THE ROOM FROM THE ARRIVAL VIEW, not behind it as
-     *  PLANNING 6.1 first drew it: the first thing a visitor sees is the
-     *  house model on its plinth in the morning light with the street beyond
-     *  it, floor to ceiling between `glass.x0` and `glass.x1`. The plaster
-     *  piers either side carry the service menu (left) and the plan board
-     *  (right). */
-    room: {
-        width: 12,
-        depth: 8,
-        height: 3.4,
-        floor: '#E8E4DC',      // pale stone, a shade under the wall white
-        walls: '#F7F5F1',      // white plaster
-        ceiling: '#F3F1ED',
-        /** The curtain wall: aluminum mullions every `mullionEvery` meters,
-         *  a slim frame `frame` wide, and glass faintly tinted. */
-        glass: { x0: -4, x1: 4, mullionEvery: 2, frame: 0.05, frameDepth: 0.1, tint: '#DCE6EC', opacity: 0.08 },
-        /** The baseboard's shadow gap, a dark line where wall meets floor. */
-        reveal: 0.012
+     *  THE COVE: a floor running from `front` (behind the camera) back to
+     *  `back`, where it curves up through a quarter circle of `radius` into
+     *  a wall `height` tall, `width` wide. Far larger than any frame, so its
+     *  edges are never seen.
+     *
+     *  THE TURNTABLE: `radius` by `height`, a stone drum with a `chamfer`
+     *  round its top edge on a dark `toe` set `inset` in. The house's lawn
+     *  stops `rim` short of its edge, so a ring of stone shows round it. */
+    stage: {
+        cove: { color: '#F1F0EC', width: 80, front: 30, back: 7, radius: 3.5, height: 22 },
+        turntable: {
+            radius: 1.5, height: 0.35, toe: 0.05, inset: 0.07, chamfer: 0.012, rim: 0.05,
+            stone: '#E6E1D8', toeColor: '#2A2D31'
+        },
+        /** The soft shadow under the turntable: `alpha` dark from `inside`
+         *  meters within its rim, fading out over `soft` meters past it. */
+        contact: { alpha: 0.38, inside: 0.25, soft: 0.6, lift: 0.002 }
     },
 
-    /** The furniture, each by its middle on the floor plan. Meters. The menu
-     *  and the board hang on the glass wall's piers, facing the room.
-     *
-     *  THE DESK AND THE PRINTER FLANK THE PLINTH, in front of the glass, so
-     *  the arrival view holds every touch point, even on an upright phone:
-     *  the concierge's halo is the only one a first visit sees, and by the
-     *  entrance it was out of frame (whitestone-marks tests the view). The
-     *  concierge stands behind the desk with the street behind them. */
-    studio: {
-        /** A stone top on a recessed base (`inset` meters in), so it reads as a
-         *  display plinth rather than a block (QA, 2026-10-13). */
-        plinth: { x: 0, z: -0.7, width: 2.7, depth: 1.3, height: 0.72, top: 0.08, inset: 0.14 },
-        desk: { x: -1.95, z: -2.45, length: 1.8, depth: 0.7, height: 1.05 },
-        console: { x: 1.95, z: -2.5, length: 1.3, depth: 0.45, height: 0.86 },
-        printer: { width: 0.46, depth: 0.36, height: 0.22 },
-        menu: { x: -5, y: 1.55, width: 1.5, height: 1.0 },
-        board: { x: 5, y: 1.55, width: 1.6, height: 1.1 },
-        /** Slim linear pendants: [x, z, length along x], hung `drop` below
-         *  the ceiling. */
-        pendants: { drop: 0.75, width: 0.06, height: 0.035, list: [[0, -0.7, 2.0], [-1.95, -2.45, 1.4]] },
-        /** Plants in white stone planters: [kind, x, z], kind 'tree' or
-         *  'grass'. */
-        plants: [['tree', -5.5, 3.5], ['tree', 5.5, 3.5], ['grass', -3.55, -3.55], ['grass', 3.55, -3.55], ['tree', 5.45, 0.4]]
-    },
-
-    /** The house model on the plinth (model.js; where its rooms go is
-     *  layout.js's). A white architectural model of a modern home: floor
-     *  plates, walls with dark windows, a front door, an aluminum gable roof
-     *  (QA, 2026-10-13: the trays did not read as a house). Lifting a level
+    /** The house model on the turntable (model.js; where its rooms go is
+     *  layout.js's). A model of the visitor's home, on a round lawn on the
+     *  turntable (QA, 2026-10-13: the trays did not read as a house). Lifting a level
      *  opens the house there like a dollhouse: every story above it, roof
      *  included, rises by `open`, the level itself by `raise`, and its front
      *  wall steps aside so its rooms can be seen. The move takes `seconds`,
@@ -164,101 +138,72 @@ export const CONFIG = deepFreeze({
         markerGlow: 0.22,      // how much the task dots light themselves
         lift: { raise: 0.02, open: 0.34, seconds: 0.6 },
         /** Drawn larger than layout.js's numbers, up to `max`, and smaller
-         *  only when a home is too wide to fit the plinth with `margin` to
-         *  spare (QA: the model sat small on a big plinth). */
-        scale: { max: 1.25, margin: 0.2 }
+         *  only when the house's half-diagonal would come within `margin`
+         *  meters of the lawn's edge (QA: the model sat small on a big
+         *  plinth). */
+        scale: { max: 1.5, margin: 0.3 }
     },
 
-    /** The painted faces (boards.js), in canvas pixels. Each is the face's
-     *  own aspect, so nothing is stretched. */
-    boards: {
-        board: { width: 1024, height: 694, background: '#F6F7F7' },
-        menu: { width: 1024, height: 672, background: '#1E2125' }
-    },
+    camera: { near: 0.05, far: 120 },
 
-    /** Where the camera stands (stations.js): `eye`, `aim`, vertical `fov`
-     *  at the reference aspect. A station with `retreat` steps back up to that
-     *  many meters on an upright phone, so its subject still fits. */
-    stations: {
-        overview: { eye: [0, 1.65, 3.5], aim: [0, 1.1, -1.6], fov: 52, retreat: 0.35 },
-        model: { eye: [0, 2.05, 1.9], aim: [0, 1.2, -0.7], fov: 44, retreat: 1.2 },
-        menu: { eye: [-5, 1.55, -1.5], aim: [-5, 1.52, -4], fov: 42, retreat: 1.2 },
-        board: { eye: [5, 1.55, -1.5], aim: [5, 1.52, -4], fov: 42, retreat: 1.2 },
-        printer: { eye: [3.6, 1.5, -0.2], aim: [1.95, 0.98, -2.5], fov: 44, retreat: 0.6 },
-        desk: { eye: [-3.6, 1.6, -0.2], aim: [-1.95, 1.12, -2.45], fov: 46, retreat: 0.6 }
-    },
-
-    camera: { near: 0.05, far: 160 },
-
+    /** The camera on the house (turntable.js, PLANNING 6.2). Angles in
+     *  radians.
+     *
+     *  THE FRAME: a screen narrower than `tallBelow` is `tall` (a phone
+     *  upright), else `wide`. Each has a vertical `fov`, the share of the
+     *  screen's width and height the turntable and the house may fill
+     *  (`use`), and how far the subject is moved off center (`shift`, as
+     *  shares of the width and height, positive is left and up): on a wide
+     *  screen a little left for Maya and the panel, on a phone into the top
+     *  part above the bottom sheet.
+     *
+     *  THE LOOK: the house's turn (`yaw`, from a three-quarter view of its
+     *  front), the camera's `tilt` above level, and the `zoom` as a share of
+     *  the framed distance. A drag of a pixel turns by `turn.perPixel` and
+     *  tilts by `turn.tiltPerPixel` (on an 800 pixel tall screen), a released
+     *  turn slows at `turn.damping` per second (none if the finger rested
+     *  `turn.hold` seconds before lifting), and after `idle.after`
+     *  seconds untouched the house drifts round at `idle.speed` (never while
+     *  a floor is open). Opening a floor turns the house's open front to the
+     *  camera over `turn.face` seconds, the view lowered to `tilt.open` so
+     *  the floors above do not hide its rooms. The arrival
+     *  starts `arrival.from` times farther out. A frame refits over
+     *  `subject.ease` seconds when the house grows or shrinks. A press that
+     *  moves less than `tap.slop` pixels and lifts within `tap.ms` is a tap. */
     view: {
-        refAspect: 16 / 10,
-        narrowAspect: 0.45,
-        maxFov: 80,
-        /** Slow and eased, for a screen share (PLANNING 6.1). A cut under
-         *  reduced motion. */
-        glideSeconds: 1.8,
-        /** Looking around from a station (the shared pan part): turn and
-         *  tilt in radians, zoom in doublings of magnification. Every
-         *  station starts from its composed view. */
-        look: {
-            pan: { speed: 0.7, maxAngle: 0.55, maxTilt: 0.3 },
-            zoom: { speed: 1.2, wheel: 0.15, maxIn: 1.2, maxOut: 0.3 }
-        }
+        tallBelow: 1,
+        wide: { fov: 30, use: [0.58, 0.8], shift: [0.1, 0] },
+        tall: { fov: 34, use: [0.9, 0.48], shift: [0, 0.23] },
+        yaw: { start: -0.55 },
+        tilt: { start: 0.42, min: 0.16, max: 0.72, open: 0.3 },
+        zoom: { min: 0.6, max: 1.4, wheel: 0.0012, key: 0.25 },
+        turn: { perPixel: 0.007, tiltPerPixel: 0.0035, damping: 4.5, stop: 0.03, maxSpeed: 4, key: 0.3, hold: 0.12, face: 0.9 },
+        idle: { after: 20, speed: 0.07 },
+        arrival: { seconds: 2.5, from: 1.7 },
+        subject: { ease: 0.8 },
+        tap: { slop: 8, ms: 600 }
     },
 
-    /** Morning light through the glass: a warm sun from the street side,
-     *  high enough to lay a bright patch on the floor around the plinth, and
-     *  a soft sky fill. Its shadows cover the room only (`reach` meters
-     *  either side of the light's line through the room's middle), so the
-     *  map's pixels go where they are seen. Anything outside that box is
-     *  lit as if unshadowed, so it must take in every corner of the room
-     *  (whitestone-studio.test.mjs). */
+    /** Maya's timing (host.js, ONBOARDING section 8), in seconds: she
+     *  speaks `delay` after the house arrives (at once under reduced
+     *  motion), the next step pulses after `pulse` seconds of nothing, and
+     *  she says the hint once more, in other words, after `again`. */
+    guide: { delay: 1.2, pulse: 8, again: 20 },
+
+    /** Soft daylight from an unseen skylight: an even sky over the white,
+     *  one sun from high in front whose shadows cover the turntable only
+     *  (`reach` meters either side of its line), and a cool fill from the
+     *  left. */
     light: {
         sun: {
-            color: '#FFF1DC', intensity: 3.0, position: [-5.5, 10.7, -12], target: [0, 1.7, 0],
-            shadow: { size: 2048, sizeMobile: 1024, reach: 8, near: 4, far: 36, bias: -0.0004, normalBias: 0.03 }
+            color: '#FFF6EA', intensity: 2.2, position: [2.5, 9, 6], target: [0, 0.4, 0],
+            shadow: { size: 2048, sizeMobile: 1024, reach: 2.6, near: 4, far: 20, bias: -0.0004, normalBias: 0.02, radius: 4 }
         },
-        // QA, 2026-10-13: the room read dim and gray, the ceiling taupe. A
-        // stronger, near-white fill, its ground color no longer beige.
-        sky: { color: '#F3F6FA', ground: '#EFEBE4', intensity: 2.7 },
-        /** A soft cool fill from the entrance side, for the faces turned
-         *  away from the sun. */
-        fill: { color: '#E2EAF4', intensity: 0.6, position: [-3, 3.5, 7] },
-        /** The light off the pale floor, shining up, so the ceiling and the
-         *  undersides of things are not left in the hemisphere's ground tone. */
-        bounce: { color: '#F2EEE8', intensity: 0.9 },
-        /** Where the room is captured from for the metals' reflections. */
-        reflectFrom: [0, 1.5, 0.8],
-        exposure: 1.1
-    },
-
-    /** The street beyond the glass (street.js). Distances run from the glass
-     *  outward along -z, meters. Seen only through the glass, so it casts no
-     *  shadows and is drawn in a handful of meshes. */
-    street: {
-        sky: { top: '#9DBFDF', horizon: '#E9EFF3' },
-        ground: '#C9C4BA',
-        sidewalk: '#D9D5CD',
-        road: '#707377',
-        line: '#ECE7DA',
-        lawn: '#8FAA68',
-        hedge: '#5F7F45',
-        leaves: ['#6F9150', '#5E8445', '#7FA05A'],
-        trunk: '#6A6158',
-        homes: ['#F4F2EE', '#E6E3DD', '#F8F7F4', '#DCDAD6'],
-        trim: '#3A3D42',
-        windows: '#55636E',
-        /** Where each band of the street ends, from the glass: the studio's
-         *  own sidewalk, the planting strip with the street trees, the road,
-         *  the far sidewalk, and the front yards across the street. */
-        bands: { sidewalk: 2.4, verge: 3.6, road: 10.6, farSidewalk: 12.6, lawns: 18 },
-        homeDepth: 9,
-        span: 90,              // how far the street runs either way
-        treeEvery: 7,
-        /** No tree within this many meters of the middle of the view, so
-         *  nothing outside competes with the model (QA, 2026-10-13). */
-        clearCenter: 6.5,
-        homeEvery: 15
+        sky: { color: '#F6F8FB', ground: '#EEEAE3', intensity: 2.6 },
+        fill: { color: '#E6EDF5', intensity: 0.5, position: [-6, 4, 5] },
+        /** Where the stage is captured from for the stone's soft sheen. */
+        reflectFrom: [0, 1.2, 3],
+        exposure: 1.0
     },
 
     /** The one localStorage key (store.js), and the schema this build
