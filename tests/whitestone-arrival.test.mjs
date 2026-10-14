@@ -175,7 +175,7 @@ describe('the kind of home (ONBOARDING Scene 2a)', () => {
         ]);
         expect(dom.el('host-choices').children[0].getAttribute('aria-label')).toBe(GUIDE.homeLegend);
         expect(buttons()).toEqual([]);
-        expect(dom.el('host-progress').getAttribute('aria-label')).toBe(GUIDE.progressStep(1, 4, 'Your home'));
+        expect(dom.el('host-progress').getAttribute('aria-label')).toBe(GUIDE.progressStep(1, 5, 'Home type'));
         // The checklist is already there, a house until answered.
         expect(main.__test__.active().residence).toEqual({ kind: 'house', attached: null });
     });
@@ -203,6 +203,50 @@ describe('the kind of home (ONBOARDING Scene 2a)', () => {
         expect(floorKeys()).toEqual(['main', 'second']);
         tick('second', true);
         expect(main.__test__.active().levels).toEqual(['main', 'second']);
+    });
+
+    test('the house answers: neighbors beside a townhome, a building and a plaza round a condo (4c-2)', async () => {
+        const main = await boot();
+        press('start');
+        expect(main.__test__.model().placed.massing).toEqual([]);
+        pick('kind-townhome');
+        expect(main.__test__.model().placed.massing.filter((p) => p.role === 'neighbor')).toHaveLength(1);
+        pick('attached-middle');
+        expect(main.__test__.model().placed.massing.filter((p) => p.role === 'neighbor')).toHaveLength(2);
+        fire(dom.el('ws-undo'), 'click');
+        fire(dom.el('ws-undo'), 'click');
+        expect(main.__test__.model().placed.massing).toEqual([]);
+        fire(dom.el('help-restart'), 'click');
+        press('start');
+        pick('kind-condo');
+        expect(main.__test__.model().placed.lawn.map((p) => p.color)).toEqual(['paving']);
+        expect(main.__test__.model().placed.massing.map((p) => p.role)).toContain('podium');
+    });
+
+    test('Back changes the answer: from the floors, or from a townhome\'s neighbors, the answer so far marked', async () => {
+        const main = await boot();
+        press('start');
+        expect(picks().map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'false']);
+        pick('kind-townhome');
+        expect(buttons()).toEqual([GUIDE.back]);
+        press('back');
+        expect(line()).toBe(GUIDE.homeAgainAsked);
+        expect(picks().filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent)).toEqual(['A townhome']);
+        expect(picks().find((b) => b.textContent === 'A townhome').classList.contains('is-on')).toBe(true);
+        pick('kind-townhome');
+        pick('attached-middle');
+        press('back');
+        pick('kind-townhome');
+        // Its neighbors, once answered, are marked too.
+        expect(picks().filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent)).toEqual(['Between two neighbors']);
+        press('back');
+        pick('kind-condo');
+        expect(main.__test__.active().residence).toEqual({ kind: 'condo', attached: null });
+        expect(line()).toBe(GUIDE.floors);
+        press('back');
+        pick('kind-house');
+        expect(main.__test__.active().residence.kind).toBe('house');
+        expect(dom.el('host-choices').children[0].children.slice(1).map((l) => l.children[0].value)).toContain('basement');
     });
 
     test('Undo takes the answer back', async () => {
@@ -324,7 +368,10 @@ describe('a first visit', () => {
         expect(floor('second').checked).toBe(false);
         expect(dom.el('host-skip').hidden).toBe(false);
         expect(dom.el('host-progress').hidden).toBe(false);
-        expect(dom.el('host-progress').children.map((li) => li.getAttribute('aria-current'))).toEqual(['step', null, null, null]);
+        // The floors are the strip's second step, the home type done.
+        expect(dom.el('host-progress').children.map((li) => li.getAttribute('aria-current'))).toEqual([null, 'step', null, null, null]);
+        expect(dom.el('host-progress').children[0].classList.contains('is-done')).toBe(true);
+        expect(buttons()).toEqual([GUIDE.next, GUIDE.back]);
         // Saved, with where the guide is.
         expect(saved().settings.guide).toEqual({ scene: 'floors', reviewed: false });
     });
@@ -380,7 +427,7 @@ describe('a first visit', () => {
         expect(c.items).toHaveLength(9);
         expect(main.__test__.model().lifted).toBe('main');
         expect(line()).toBe("There's your kitchen with its nine standard tasks, $61 so far. Every visit starts at $120, so your next rooms fit inside that.");
-        expect(dom.el('host-progress').children[1].getAttribute('aria-current')).toBe('step');
+        expect(dom.el('host-progress').children[2].getAttribute('aria-current')).toBe('step');
         press('next');
         expect(line()).toBe(GUIDE.dots);
         expect(buttons()).toEqual([GUIDE.gotIt]);

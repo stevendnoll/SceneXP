@@ -90,6 +90,22 @@ describe('the way through', () => {
         }
     });
 
+    test('Back from the floors, or a townhome\'s neighbors, asks the kind of home again, the answer so far marked', () => {
+        const floors = walk(fresh(), 'start', HOUSE);
+        const again = walk(floors, 'back');
+        expect(again).toMatchObject({ scene: 'home', answered: true });
+        expect(viewFor(again)).toMatchObject({ text: GUIDE.homeAgainAsked, answered: true, progress: 0 });
+        expect(viewFor(walk(fresh(), 'start'))).toMatchObject({ text: GUIDE.home, answered: false });
+        const attached = walk(fresh(), 'start', { type: 'residence', kind: 'townhome' });
+        expect(walk(attached, 'back').scene).toBe('home');
+        // A townhome's neighbors once answered are marked when asked again.
+        expect(walk(attached, { type: 'residence', kind: 'townhome' }).attachedAnswered).toBe(true);
+        // The question itself has no Back (Skip leaves it), and Start over
+        // forgets the answers.
+        expect(step(walk(fresh(), 'start'), { type: 'back' }).scene).toBe('home');
+        expect(walk(again, 'restart')).toMatchObject({ scene: 'hello', answered: false, attachedAnswered: false });
+    });
+
     test('the first floor tapped is remarked on once', () => {
         const once = walk(fresh(), 'start', HOUSE, 'floorTapped');
         expect(once.tapped).toBe(true);
@@ -241,7 +257,8 @@ describe('what Maya says', () => {
         const sentences = v.text.split(/(?<=[.?])\s+/).filter(Boolean);
         expect(sentences.length).toBeLessThanOrEqual(3);
         // A question of a few answers has them as its choices instead.
-        if (['home', 'attached'].includes(v.choices)) expect(v.buttons).toEqual([]);
+        if (v.choices === 'home') expect(v.buttons).toEqual([]);
+        else if (v.choices === 'attached') expect(v.buttons.map((b) => b.id)).toEqual(['back']);
         else expect(v.buttons.length).toBeGreaterThanOrEqual(1);
         expect(v.buttons.length).toBeLessThanOrEqual(2);
         expect(v.buttons.filter((b) => b.primary).length).toBeLessThanOrEqual(1);
@@ -263,7 +280,7 @@ describe('what Maya says', () => {
         expect(viewFor(walk(fresh(), 'start'))).toMatchObject({ text: 'First, what kind of home is it?', choices: 'home', progress: 0 });
         expect(viewFor(walk(fresh(), 'start', { type: 'residence', kind: 'townhome' }))).toMatchObject({ text: 'Is it an end unit, or between two neighbors?', choices: 'attached' });
         expect(GUIDE.floors).toBe('Next, which floors does your home have?');
-        expect(GUIDE.progress[0]).toBe('Your home');
+        expect(GUIDE.progress).toEqual(['Home type', 'Floors', 'First room', 'Your rooms', 'Review']);
     });
 
     test('the floors ask for choices and remark on the first tap', () => {

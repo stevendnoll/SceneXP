@@ -97,7 +97,11 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
      *  answer moving the guide on. */
     function drawPick(c) {
         const buttons = c.options.map((o) => {
-            const btn = h('button', { type: 'button', id: `host-${o.id}`, className: 'ws-btn host-pick', text: o.label });
+            // The answer already given, when Maya asks again, shown as chosen.
+            const btn = h('button', {
+                type: 'button', id: `host-${o.id}`, className: `ws-btn host-pick${o.on ? ' is-on' : ''}`, text: o.label,
+                attrs: { 'aria-pressed': o.on ? 'true' : 'false' }
+            });
             btn.addEventListener('click', () => {
                 if (typeof on.button === 'function') on.button(o.id);
             }, { signal });

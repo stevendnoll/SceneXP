@@ -41,9 +41,9 @@ import { priceChoice, formatMoney } from './pricing.min.js';
  *  these is saved, and offered again on a return. */
 export const GUIDED = Object.freeze(['home', 'attached', 'floors', 'firstRoom', 'added', 'dots', 'rooms', 'review']);
 
-/** Which step of the progress strip each guided scene is on. Your home
- *  covers the kind of home and its floors. */
-export const PROGRESS = Object.freeze({ home: 0, attached: 0, floors: 0, firstRoom: 1, added: 1, dots: 1, rooms: 2, review: 3 });
+/** Which step of the progress strip each guided scene is on: Home type
+ *  (with a townhome's neighbors), Floors, First room, Your rooms, Review. */
+export const PROGRESS = Object.freeze({ home: 0, attached: 0, floors: 1, firstRoom: 2, added: 2, dots: 2, rooms: 3, review: 4 });
 
 /** Scenes that sit over another for a moment and go back to it. */
 const ASIDE = ['hint', 'about'];
@@ -101,6 +101,8 @@ export function savedForm(guide) {
  *   start, example         from the greeting
  *   residence              a kind of home chosen ({ kind }: a townhome is
  *                          asked once more), or a townhome's neighbors
+ *   back                   back to the kind of home, from its follow-up or
+ *                          the floors, to change it (QA, 2026-10-14)
  *   floorTapped, next      the floors, and moving on from them
  *   roomAdded              a room was added, by any route
  *   dotOpened, gotIt       the dots
@@ -116,7 +118,7 @@ export function step(guide, event) {
     const g = guide;
     const to = (scene, extra = {}) => ({ ...g, scene, ...extra });
     const type = event && event.type;
-    if (type === 'restart') return to('hello', { back: null, tapped: false, rooms: 0, resume: null });
+    if (type === 'restart') return to('hello', { back: null, tapped: false, rooms: 0, resume: null, answered: false, attachedAnswered: false });
     if (type === 'about') return ASIDE.includes(g.scene) ? g : to('about', { back: g.scene });
     if (type === 'again') {
         if (g.scene === 'done' || g.scene === 'look' || g.scene === 'saved') return to('hint', { back: g.scene });
@@ -131,12 +133,14 @@ export function step(guide, event) {
         if (type === 'example') return to('example1');
         return g;
     case 'home':
-        if (type === 'residence') return event.kind === 'townhome' ? to('attached') : to('floors', { tapped: false });
+        if (type === 'residence') return event.kind === 'townhome' ? to('attached', { answered: true }) : to('floors', { tapped: false, answered: true });
         return g;
     case 'attached':
-        if (type === 'residence') return to('floors', { tapped: false });
+        if (type === 'residence') return to('floors', { tapped: false, attachedAnswered: true });
+        if (type === 'back') return to('home');
         return g;
     case 'floors':
+        if (type === 'back') return to('home');
         if (type === 'floorTapped') return g.tapped ? g : to('floors', { tapped: true });
         if (type === 'next') return to('firstRoom');
         if (type === 'roomAdded') return to('added', { roomId: event.roomId || null });
@@ -234,11 +238,12 @@ export function viewFor(guide, ctx = {}) {
     case 'hello':
         return { ...base, text: GUIDE.hello, buttons: [b('start', GUIDE.start, true), b('example', GUIDE.example)], small: BRAND.honesty };
     case 'home':
-        return { ...base, text: GUIDE.home, buttons: [], choices: 'home' };
+        // Asked again after Back, the answer given is shown as chosen.
+        return { ...base, text: guide.answered ? GUIDE.homeAgainAsked : GUIDE.home, buttons: [], choices: 'home', answered: Boolean(guide.answered) };
     case 'attached':
-        return { ...base, text: GUIDE.attached, buttons: [], choices: 'attached' };
+        return { ...base, text: GUIDE.attached, buttons: [b('back', GUIDE.back)], choices: 'attached' };
     case 'floors':
-        return { ...base, text: guide.tapped ? `${GUIDE.floorsTaking} ${GUIDE.floors}` : GUIDE.floors, buttons: [b('next', GUIDE.next, true)], choices: 'floors' };
+        return { ...base, text: guide.tapped ? `${GUIDE.floorsTaking} ${GUIDE.floors}` : GUIDE.floors, buttons: [b('next', GUIDE.next, true), b('back', GUIDE.back)], choices: 'floors' };
     case 'firstRoom':
         return { ...base, text: GUIDE.firstRoom, buttons: [b('kitchen', GUIDE.addKitchen, true), b('otherRoom', GUIDE.otherRoom)] };
     case 'added':

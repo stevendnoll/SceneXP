@@ -106,7 +106,8 @@ describe('what the panel says (pure)', () => {
         expect(v.rows.map((r) => r.id)).toEqual(c.levels);
         expect(v.rows[0]).toMatchObject({ kind: 'floor', label: 'Basement', detail: PANEL.rooms(c.rooms.filter((r) => r.level === 'basement').length) });
         expect(v.actions.map((a) => a.id)).toEqual(['checklist', 'home']);
-        expect(v.summary).toMatch(/^13 rooms, 27 tasks, \$\d+/);
+        // The kind of home first, which Your home can change.
+        expect(v.summary).toMatch(/^A house\. 13 rooms, 27 tasks, \$\d+/);
     });
 
     test('a floor: its rooms with their tasks and price, rooms to add, and back to the whole house', () => {

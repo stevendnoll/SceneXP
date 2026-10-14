@@ -10,6 +10,14 @@
  *            taxonomy's order with a fixed gap between them (an exploded
  *            view). The garage is a lower annex beside the main floor, and a
  *            detached garage a small slab of its own beside the house.
+ *   neighbors  for a townhome or a condo (PRD 8.9), where the plain white
+ *            massing beside the home stands: the next units in the row, or
+ *            in the building. Counted in the model's extent, so the whole
+ *            group fits the turntable.
+ *
+ * THE KIND OF RESIDENCE SHAPES THE FOOTPRINT. A townhome is narrower and
+ * deeper than a house, its garage tucked under the main floor as a story of
+ * its own; a condo is wider and shallower.
  *   tiles    each room's tile on its slab, packed by a squarified treemap
  *            weighted by the kind of room (a kitchen 3, a closet 0.5), with a
  *            small gap all round.
@@ -36,6 +44,18 @@ import { serviceType } from './taxonomy.min.js';
 /** Sizes in model meters (PLANNING 6.2): a slab about 1.2 by 0.8. */
 export const MODEL = Object.freeze({
     footprint: Object.freeze({ width: 1.2, depth: 0.8 }),
+    /** A townhome's and a condo's own footprints (a house has `footprint`). */
+    footprints: Object.freeze({
+        townhome: Object.freeze({ width: 0.74, depth: 0.95 }),
+        condo: Object.freeze({ width: 1.2, depth: 0.7 })
+    }),
+    /** The massing beside a townhome or a condo: how much of each neighbor
+     *  shows, and how far back from the home's front it stands, so the home
+     *  reads as its own. */
+    neighbor: Object.freeze({
+        townhome: Object.freeze({ width: 0.3, setback: 0.03 }),
+        condo: Object.freeze({ width: 0.22, setback: 0.025 })
+    }),
     slabThickness: 0.04,
     levelGap: 0.2,
     margin: 0.03,           // the slab's rim, inside which tiles are packed
@@ -111,22 +131,42 @@ export function squarify(areas, rect) {
 
 // ---- The slabs ----------------------------------------------------------------
 
+/** The kind of residence a checklist is, as a key (none is a house). */
+export function kindOf(checklist) {
+    const r = checklist && checklist.residence;
+    return r && (r.kind === 'townhome' || r.kind === 'condo') ? r.kind : 'house';
+}
+
+/** Whether a townhome's garage is tucked under its main floor: a story of
+ *  its own, under the main floor, rather than an annex beside it. */
+export function tuckedGarage(checklist) {
+    return kindOf(checklist) === 'townhome' && checklist.levels.includes('garage');
+}
+
 /**
  * One slab per level the home has. Stories stack from the lowest; the garage
- * sits beside the main floor (or the lowest story), slightly lower; a
- * detached garage stands apart on the other side, at ground level.
+ * sits beside the main floor (or the lowest story), slightly lower, or in a
+ * townhome under the main floor; a detached garage stands apart on the
+ * other side, at ground level. The footprint is the kind of residence's.
  */
 export function slabsFor(checklist, model = MODEL) {
     const type = serviceType(checklist.serviceType);
     const levels = type.levels.filter((l) => checklist.levels.includes(l.key));
-    const stories = levels.filter((l) => !l.annex);
+    const tucked = tuckedGarage(checklist);
+    let stories = levels.filter((l) => !l.annex);
+    if (tucked) {
+        // Under the main floor: above a basement, below everything else.
+        const garage = levels.find((l) => l.key === 'garage');
+        const at = stories.findIndex((l) => l.key !== 'basement');
+        stories = [...stories.slice(0, at < 0 ? stories.length : at), garage, ...stories.slice(at < 0 ? stories.length : at)];
+    }
     const step = model.slabThickness + model.levelGap;
-    const { width, depth } = model.footprint;
+    const { width, depth } = (model.footprints && model.footprints[kindOf(checklist)]) || model.footprint;
     const slabs = stories.map((l, i) => ({
         level: l.key, kind: 'story', x: 0, z: 0, width, depth, y: i * step + model.slabThickness, thickness: model.slabThickness
     }));
     const ground = slabs.length ? slabs[0].y : model.slabThickness;
-    for (const l of levels.filter((x) => x.annex)) {
+    for (const l of levels.filter((x) => x.annex && !(tucked && x.key === 'garage'))) {
         if (l.key === 'detached-garage') {
             const d = model.detached;
             slabs.push({
@@ -216,7 +256,31 @@ export function markerGrid(tile, items, model = MODEL) {
 }
 
 /**
- * The whole model for a checklist: { slabs, tiles, markers }. Only live
+ * The massing beside a townhome or a condo (PRD 8.9): a rectangle per
+ * neighbor, `{ side, x, z, width, depth }`, against the home's side walls
+ * and set back from its front and its back: a roof of the same pitch on a
+ * footprint flush with the home's would lie in the plane of the home's own,
+ * and the two would fight. A townhome's end unit has one neighbor, on
+ * the right; between two, and a condo, one each side. A house, none.
+ */
+export function neighborsFor(checklist, model = MODEL) {
+    const kind = kindOf(checklist);
+    const n = model.neighbor && model.neighbor[kind];
+    if (!n) return [];
+    const fp = model.footprints[kind];
+    const sides = kind === 'townhome' && checklist.residence.attached !== 'middle' ? [1] : [-1, 1];
+    return sides.map((side) => ({
+        side,
+        x: side * (fp.width / 2 + n.width / 2),
+        z: 0,
+        width: n.width,
+        depth: fp.depth - 2 * n.setback
+    }));
+}
+
+/**
+ * The whole model for a checklist: { slabs, tiles, markers, neighbors,
+ * kind }. Only live
  * rooms and live tasks appear. Tiles and markers come out in the stable
  * order, slab by slab.
  */
@@ -259,14 +323,15 @@ export function layoutHome(checklist, model = MODEL) {
             markers.push(...markerGrid(tile, own, model));
         });
     }
-    return { slabs, tiles, markers };
+    return { slabs, tiles, markers, neighbors: neighborsFor(checklist, model), kind: kindOf(checklist) };
 }
 
 /** The model's overall extent, for framing a camera on it:
  *  { minX, maxX, minZ, maxZ, top }. */
 export function extentOf(layout, model = MODEL) {
-    const xs = layout.slabs.flatMap((s) => [s.x - s.width / 2, s.x + s.width / 2]);
-    const zs = layout.slabs.flatMap((s) => [s.z - s.depth / 2, s.z + s.depth / 2]);
+    const all = [...layout.slabs, ...(layout.neighbors || [])];
+    const xs = all.flatMap((s) => [s.x - s.width / 2, s.x + s.width / 2]);
+    const zs = all.flatMap((s) => [s.z - s.depth / 2, s.z + s.depth / 2]);
     const top = Math.max(0, ...layout.slabs.map((s) => s.y), ...layout.markers.map((m) => m.y + m.height)) + model.tileHeight;
     return {
         minX: xs.length ? Math.min(...xs) : -model.footprint.width / 2,

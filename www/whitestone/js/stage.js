@@ -88,10 +88,13 @@ export function pickOf(object) {
 /**
  * What a ray's hits (nearest first) say was tapped: the first one shown
  * decides. Returns `{ key, hit }` or null. A hit on something hidden
- * (three's raycaster does not skip them) is passed over.
+ * (three's raycaster does not skip them) is passed over, and so is one on
+ * something a tap goes through (`userData.through`: the sketch of a
+ * townhome's neighbors or a condo's building).
  */
 export function firstPick(hits) {
     for (const hit of hits || []) {
+        if (hit.object && hit.object.userData && hit.object.userData.through) continue;
         let shown = true;
         for (let o = hit.object; o; o = o.parent) if (o.visible === false) { shown = false; break; }
         if (!shown) continue;

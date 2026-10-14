@@ -222,22 +222,28 @@ function shade(hex, f) {
 /** Every face of every part, as flat-colored polygons in the model's frame. */
 function facesOf(inst) {
     const faces = [];
-    const add = (polys, hex) => {
+    const add = (polys, hex, alpha = 1) => {
         for (const poly of polys) {
             const n = norm(cross(sub(poly[1], poly[0]), sub(poly[2], poly[0])));
             // Lit from either side, so a face wound either way shades alike.
             const f = 0.62 + 0.45 * Math.abs(dot(n, LIGHT)) * (dot(n, LIGHT) >= 0 ? 1 : 0.35);
-            faces.push({ poly, rgb: hexToRgb(hex).map((v) => Math.min(255, v * f)) });
+            faces.push({ poly, rgb: hexToRgb(hex).map((v) => Math.min(255, v * f)), alpha });
         }
     };
-    const color = (p, fallback) => PAL[p.color] || fallback;
+    // A part may carry its own `hex` and `alpha` (the context treatments
+    // tried below, --context).
+    const color = (p, fallback) => p.hex || PAL[p.color] || fallback;
     for (const b of inst.slabs) add(boxFaces(b), color(b, PAL.wall));
     for (const b of [...inst.walls, ...inst.siding, ...inst.windows, ...inst.trims, ...inst.fixtures, ...inst.site, ...inst.tiles]) add(boxFaces(b), color(b, '#FF00FF'));
+    const fillAlpha = (b) => (b.alpha !== undefined ? b.alpha : CONFIG.model.context.opacity);
+    for (const b of inst.massing || []) add(boxFaces(b), color(b, '#FF00FF'), fillAlpha(b));
+    for (const g of inst.contextRoofs || []) add(prismFaces(g), color(g, '#FF00FF'), fillAlpha(g));
     for (const b of inst.roofs) add(boxFaces(b), PAL.roof);
-    for (const g of inst.gables) add(prismFaces(g), color(g, PAL.wall));
+    for (const g of inst.gables) add(prismFaces(g), color(g, PAL.wall), g.alpha);
     for (const b of [...inst.canopies, ...inst.blooms]) add(blobFaces(b), color(b, PAL.leaves));
     for (const b of inst.firs) add(coneFaces(b), color(b, PAL.fir1));
-    for (const b of inst.lawn || []) add(discFaces(b), PAL.lawn);
+    for (const b of inst.lawn || []) add(discFaces(b), color(b, PAL.lawn));
+    for (const b of inst.edges || []) add(boxFaces(b), color(b, '#FF00FF'));
     for (const b of inst.rounds || []) add(roundFaces(b), color(b, '#FF00FF'));
     for (const b of inst.outlines || []) add(boxFaces(b), b.color === 'outline' ? CONFIG.colors.accent : CONFIG.model.outlineHover);
     for (const m of inst.markers) add(boxFaces(m, true), m.selected ? CONFIG.colors.accent : CONFIG.model.marker);
@@ -303,13 +309,19 @@ function render(inst, { k, yaw, tilt, zoom = 1, houseHeight, width, height, gest
     const faces = [
         ...turntableFaces().map(({ poly, hex }) => ({ poly, rgb: lit(poly, hex) })),
         ...(maya ? figureFaces(maya, gesture) : []).map(({ poly, hex }) => ({ poly, rgb: lit(poly, hex) })),
-        ...facesOf(inst).map(({ poly, rgb: c }) => ({ poly: poly.map(world), rgb: c }))
+        ...facesOf(inst).map(({ poly, rgb: c, alpha }) => ({ poly: poly.map(world), rgb: c, alpha }))
     ];
-    for (const { poly, rgb: c } of faces) {
+    // The solid faces first, then any see-through ones, farthest first,
+    // each blended over what is in front of nothing nearer.
+    const solid = faces.filter((x) => !(x.alpha < 1));
+    const clear = faces.filter((x) => x.alpha < 1)
+        .map((x) => ({ ...x, d: Math.min(...x.poly.map((p) => toScreen(p)[2])) }))
+        .sort((p, q) => p.d - q.d);
+    for (const { poly, rgb: c, alpha } of [...solid, ...clear]) {
         const pts = poly.map(toScreen);
-        for (let i = 1; i + 1 < pts.length; i++) tri(pts[0], pts[i], pts[i + 1], c);
+        for (let i = 1; i + 1 < pts.length; i++) tri(pts[0], pts[i], pts[i + 1], c, alpha);
     }
-    function tri(a, b, c, col) {
+    function tri(a, b, c, col, alpha = 1) {
         const minX = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0])));
         const maxX = Math.min(W2 - 1, Math.ceil(Math.max(a[0], b[0], c[0])));
         const minY = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1])));
@@ -329,6 +341,10 @@ function render(inst, { k, yaw, tilt, zoom = 1, houseHeight, width, height, gest
                 const z = w0 * a[2] + w1 * b[2] + w2 * c[2];
                 const i = y * W2 + x;
                 if (z <= depth[i] * (1 + 1e-6)) continue;
+                if (alpha < 1) {
+                    for (let ch = 0; ch < 3; ch++) rgb[i * 3 + ch] = rgb[i * 3 + ch] * (1 - alpha) + col[ch] * alpha;
+                    continue;
+                }
                 depth[i] = z;
                 rgb[i * 3] = col[0];
                 rgb[i * 3 + 1] = col[1];
@@ -399,6 +415,16 @@ function build(home, lifted = null, selection = null) {
 
 const example = withExample(emptyDoc(CONFIG, NOW), CONFIG, NOW, null).doc.checklists[0];
 const withGarage = { ...example, levels: [...example.levels, 'garage'], rooms: [...example.rooms, { id: 'g1', level: 'garage', area: 'garage', label: '', deletedAt: null }] };
+// The kinds of residence (PRD 8.9), from the example's rooms.
+const notBasement = example.rooms.filter((r) => r.level !== 'basement');
+const asKind = (residence, levels, rooms) => ({ ...example, id: `kind-${residence.kind}-${levels.join('-')}`, residence, levels, rooms });
+const garageRoom = { id: 'tg1', level: 'garage', area: 'garage', label: '', deletedAt: null };
+const townEnd = asKind({ kind: 'townhome', attached: 'end' }, ['main', 'second', 'garage'], [...notBasement, garageRoom]);
+const townMiddle = asKind({ kind: 'townhome', attached: 'middle' }, ['main', 'second', 'garage'], [...notBasement, garageRoom]);
+const townNoGarage = asKind({ kind: 'townhome', attached: 'middle' }, ['main', 'second'], notBasement);
+const townBasement = asKind({ kind: 'townhome', attached: 'end' }, ['basement', 'main', 'second', 'garage'], [...example.rooms, garageRoom]);
+const condoOne = asKind({ kind: 'condo', attached: null }, ['main'], example.rooms.filter((r) => r.level === 'main'));
+const condoTwo = asKind({ kind: 'condo', attached: null }, ['main', 'second'], notBasement);
 const widest = { serviceType: 'cleaning', levels: ['basement', 'main', 'second', 'third', 'attic', 'garage', 'detached-garage'], rooms: [], items: [] };
 const V = CONFIG.view;
 const start = { yaw: V.yaw.start, tilt: V.tilt.start };
@@ -444,6 +470,19 @@ const roomShot = (lifted, roomId, title, dist) => {
     const built = build(showcase, lifted, null);
     return [title, { ...shot(built, { yaw: 0, tilt: 0.4 }, 1000, 640), camera: closeOn(built, roomId, dist) }];
 };
+const kindViews = [
+    ['A townhome, an end unit, its garage tucked under', shot(build(townEnd), start, 1280, 800)],
+    ['A townhome between two neighbors', shot(build(townMiddle), start, 1280, 800)],
+    ['A townhome between two, no garage', shot(build(townNoGarage), start, 1280, 800)],
+    ['A townhome over a basement, its garage a story up', shot(build(townBasement), start, 1280, 800)],
+    ['A townhome, its main floor open', shot(build(townMiddle, 'main'), front, 1280, 800)],
+    ['A condo on one level', shot(build(condoOne), start, 1280, 800)],
+    ['A condo on two levels', shot(build(condoTwo), start, 1280, 800)],
+    ['A condo, its main floor open', shot(build(condoTwo, 'main'), front, 1280, 800)],
+    ['A townhome on a phone upright', shot(build(townMiddle), start, 390, 844)],
+    ['A condo on a phone upright', shot(build(condoTwo), start, 390, 844)],
+    doorShot(townEnd, "A townhome's stoop and its tucked garage")
+];
 const views = [
     ['The example home on arrival, a laptop (1280 by 800)', shot(build(example), start, 1280, 800)],
     ['On arrival, a phone upright (390 by 844), the bottom 45% kept for the sheet', shot(build(example), start, 390, 844)],
@@ -478,10 +517,15 @@ const views = [
     }), front, 1280, 800)]
 ];
 
+// `--kinds` renders the kinds of residence alone, to kind-*.png and
+// kinds.html, which is quicker while their models are being made.
+const onlyKinds = process.argv.includes('--kinds');
+const list = onlyKinds ? kindViews : [...views, ...kindViews];
+const prefix = onlyKinds ? 'kind' : 'model';
 await mkdir(path.dirname(OUT), { recursive: true });
 const shots = [];
-for (const [i, [title, opts]] of views.entries()) {
-    const file = `model-${i + 1}.png`;
+for (const [i, [title, opts]] of list.entries()) {
+    const file = `${prefix}-${i + 1}.png`;
     await writeFile(path.join(path.dirname(OUT), file), png(render(opts.inst, opts)));
     shots.push([title, file]);
 }
@@ -490,5 +534,5 @@ const page = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>
 <h1>The house on its turntable, through the page's camera</h1>
 ${shots.map(([title, file]) => `<section><h2>${title}</h2><img src="${file}" alt="${title}"></section>`).join('\n')}
 </body></html>`;
-await writeFile(OUT, page);
+await writeFile(onlyKinds ? path.join(path.dirname(OUT), 'kinds.html') : OUT, page);
 console.log(`Wrote ${path.relative(ROOT, OUT)} and ${shots.length} pictures.`);

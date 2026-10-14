@@ -27,7 +27,7 @@
 
 import { h, clear } from './cards.min.js';
 import { PANEL } from './copy.min.js';
-import { roomName, levelOf, bathChoices, bathChoiceOf } from './taxonomy.min.js';
+import { roomName, levelOf, bathChoices, bathChoiceOf, residenceLine } from './taxonomy.min.js';
 import { priceChoice, formatMoney, formatMinutes, roundMinutes } from './pricing.min.js';
 import { taskName, choiceText } from './panels.min.js';
 
@@ -154,9 +154,13 @@ export function panelView(sel, checklist, sheet) {
             const here = rooms.filter((r) => r.level === key);
             return { kind: 'floor', id: key, label: (levelOf(type, key) || { name: key }).name, detail: PANEL.rooms(here.length) };
         });
+        // The kind of home first ("A townhome, end unit."), which Your home
+        // below can change.
+        const kind = residenceLine(type, checklist.residence);
+        const counts = [PANEL.rooms(rooms.length), tasksLine(priced(sheet, items, areaOf))].join(', ');
         return {
             scope: 'house', title: checklist.title, back: PANEL.close, heading: PANEL.floorsHeading,
-            summary: [PANEL.rooms(rooms.length), tasksLine(priced(sheet, items, areaOf))].join(', '),
+            summary: kind ? `${kind}. ${counts}` : counts,
             rows, empty: null, baths: null, chips: null, detail: null,
             actions: [b('checklist', PANEL.checklist, true), b('home', PANEL.home)]
         };

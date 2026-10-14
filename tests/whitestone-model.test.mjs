@@ -604,7 +604,13 @@ describe('instances', () => {
             for (const w of inst.walls.filter((x) => x.role === 'wall' && x.level !== 'attic')) {
                 expect(inst.siding.some((c) => c.role === 'course' && c.level === w.level && c.side === w.side)).toBe(true);
             }
-            expect(inst.siding.filter((b) => b.role === 'stoneBase').map((b) => b.level).sort()).toEqual(['basement', 'detached-garage', 'garage']);
+            expect([...new Set(inst.siding.filter((b) => b.role === 'stoneBase').map((b) => b.level))].sort()).toEqual(['basement', 'detached-garage', 'garage']);
+            // A garage's stone stops at its door, either side.
+            for (const gd of inst.windows.filter((w) => w.role === 'garageDoor')) {
+                const across = inst.siding.filter((b) => b.role === 'stoneBase' && b.level === gd.level
+                    && Math.abs(b.position[0] - gd.position[0]) < (b.scale[0] + gd.scale[0]) / 2 - 1e-6);
+                expect(`${gd.level}: ${across.length}`).toBe(`${gd.level}: 0`);
+            }
             const inside = sited(example()).inst.walls.filter((w) => w.role === 'partition');
             expect(inside.length).toBeGreaterThan(5);
             for (const p2 of inside) expect(p2.color).toBe('interior');
@@ -854,7 +860,7 @@ describe('built with the real three.js', () => {
         expect(tiles.instanceColor.count).toBe(CONFIG.limits.rooms);
     });
 
-    test('the example home: three levels, thirteen rooms, twenty-seven tasks, in eighteen draw calls', () => {
+    test('the example home: three levels, thirteen rooms, twenty-seven tasks, in twenty-one draw calls', () => {
         const m = buildModel(CONFIG, AT);
         const home = example();
         expect(m.show(home)).toBe(true);
@@ -866,7 +872,7 @@ describe('built with the real three.js', () => {
         expect(windows.count).toBe(m.placed.windows.length);
         let n = 0;
         m.group.traverse((o) => { if (o.isMesh) n++; });
-        expect(n).toBe(18);
+        expect(n).toBe(21);
         // Every part fits its mesh: nothing is dropped for want of room.
         for (const [kind, mesh] of Object.entries(meshes(m))) {
             expect(`${kind}: ${m.placed[kind].length <= mesh.instanceMatrix.count}`).toBe(`${kind}: true`);

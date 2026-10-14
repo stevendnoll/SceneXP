@@ -132,6 +132,12 @@ export const CONFIG = deepFreeze({
             accent5: '#5F6B78',
             accent6: '#C98F78',
             lawn: '#8DAE68',
+            // The context round a townhome or a condo (PRD 8.9), a sketch:
+            // a faint slate fill (at model.context.opacity) and slate
+            // edges, and a condo's plaza, a step darker than the studio.
+            massing: '#8A9BA8',
+            contextEdge: '#8A9BA8',
+            paving: '#C4BEB3',
             mulch: '#5B4C40',
             path: '#D3CFC7',       // concrete
             drive: '#C9C5BD',
@@ -146,6 +152,8 @@ export const CONFIG = deepFreeze({
         },
         marker: '#5A82A6',     // the tasks, a lighter accent
         outlineHover: '#9FB3C4', // the room under the pointer, faintly
+        /** The context's fill, see-through (model.js massing). */
+        context: { opacity: 0.12 },
         markerGlow: 0.22,      // how much the task dots light themselves
         lift: { raise: 0.02, open: 0.34, seconds: 0.6 },
         /** Drawn larger than layout.js's numbers, up to `max`, and smaller

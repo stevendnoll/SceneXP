@@ -89,6 +89,22 @@ export const HOUSE = Object.freeze({
     rail: Object.freeze({ height: 0.045, size: 0.004 }),
     lamp: Object.freeze({ size: 0.012, height: 0.09, beside: 0.075 }),
     porch: Object.freeze({ width: 0.15, depth: 0.065, thickness: 0.008, above: 0.014, post: 0.011, pier: 0.026 }),
+    /** A townhome's garage door, tucked under the main floor: its share of
+     *  the front, on the side away from the front door's stoop. */
+    tucked: Object.freeze({ share: 0.56, inset: 0.03, clear: 0.025, min: 0.2 }),
+    /** A condo (PRD 8.9): one plain story of the building under the unit,
+     *  one over it with a capping ledge, and a balcony on the unit's front
+     *  with a black railing. */
+    condo: Object.freeze({
+        podium: 0.21,            // a slab and a story's walls
+        above: 0.17,
+        cap: Object.freeze({ height: 0.012, over: 0.008 }),
+        balcony: Object.freeze({ share: 0.4, depth: 0.08, thickness: 0.012, rail: 0.05, post: 0.004, every: 0.06 })
+    }),
+    /** The context's sketch: its edges' thickness. */
+    context: Object.freeze({ edge: 0.004 }),
+    /** A condo's plaza: planters, each a concrete box with clipped shrubs. */
+    plaza: Object.freeze({ planter: Object.freeze({ width: 0.16, depth: 0.07, height: 0.04 }), angles: Object.freeze([118, 62, -125, -55]) }),
     step: Object.freeze({ width: 0.11, depth: 0.03, height: 0.01 }),
     trim: Object.freeze({ ridge: 0.014, gutter: 0.01 }),
     site: Object.freeze({
@@ -175,9 +191,11 @@ export function accentsFor(roomId) {
 
 // ---- The stack (pure) ------------------------------------------------------------
 
-/** A story's wall height: an attic's are low, under the roof. */
+/** A story's wall height: an attic's are low, under the roof, and a
+ *  townhome's tucked-under garage is a garage's height. */
 export function wallHeight(level) {
-    return level === 'attic' ? HOUSE.knee : HOUSE.wall;
+    if (level === 'attic') return HOUSE.knee;
+    return level === 'garage' ? HOUSE.garageWall : HOUSE.wall;
 }
 
 /**
@@ -186,13 +204,14 @@ export function wallHeight(level) {
  * { tops: Map level -> y, roof: y where the roof sits }. A garage stands on
  * the ground: a step below the story beside it when that is the ground
  * floor (as layout.js has it), and level with the ground floor over a
- * basement. A detached garage stands on the ground too.
+ * basement. A detached garage stands on the ground too. A condo's unit
+ * stands on a story of its building (HOUSE.condo.podium).
  */
 export function restack(layout) {
     const t = MODEL.slabThickness;
     const stories = layout.slabs.filter((s) => s.kind === 'story').sort((a, b) => a.y - b.y);
     const tops = new Map();
-    let base = 0;
+    let base = layout.kind === 'condo' ? HOUSE.condo.podium : 0;
     for (const s of stories) {
         tops.set(s.level, base + t);
         base += t + wallHeight(s.level);
@@ -334,7 +353,7 @@ export function columnsFor(len) {
  * front door is ({ x, z }, z on the wall's outside face, whether or not the
  * wall is showing) or null, and `garage` where a garage door is.
  */
-function shell(s, y, h, cx, cz, { open, door, garage, basement, attic, base = false, band = false, openings = {} }) {
+function shell(s, y, h, cx, cz, { open, door, garage, garageAt = null, basement, attic, base = false, band = false, openings = {} }) {
     const t = HOUSE.wallThickness;
     const x0 = s.x + cx - s.width / 2;
     const x1 = s.x + cx + s.width / 2;
@@ -395,7 +414,10 @@ function shell(s, y, h, cx, cz, { open, door, garage, basement, attic, base = fa
             : { c: doorAt + sl / 2, w: HOUSE.door.width + sl + 0.016 };
         const doorKeeps = (c, half) => doorAt !== null
             && c + half > doorAt - HOUSE.lamp.beside - HOUSE.lamp.size && c - half < doorAt + HOUSE.lamp.beside + HOUSE.lamp.size;
-        if (f.side === 'front' && garage) out.garage = { x: mid, width: len * HOUSE.garageDoor.width, z: f.at + t / 2 };
+        // The garage door: across the middle of a garage's front, or where
+        // `garageAt` puts it (a townhome's, beside the stoop).
+        const gdoor = garage && f.side === 'front' ? (garageAt ? { c: garageAt.c, w: garageAt.w } : { c: mid, w: len * HOUSE.garageDoor.width }) : null;
+        if (gdoor) out.garage = { x: gdoor.c, width: gdoor.w, z: f.at + t / 2, y };
         if (f.side === 'front' && open) continue;
         out.walls.push(f.along === 'x'
             ? part(s.level, mid, y, f.at, len, h, t, { role: 'wall', side: f.side, color })
@@ -439,12 +461,15 @@ function shell(s, y, h, cx, cz, { open, door, garage, basement, attic, base = fa
             out.windows.push(onFace(c, sill, w, ph, HOUSE.window.depth, 0.0024, { color: kind, ...extra }));
         };
         if (garage) {
-            layStone();
-            if (f.side === 'front') {
+            if (gdoor) {
                 const gd = HOUSE.garageDoor;
-                out.windows.push(onFace(mid, 0, len * gd.width, gd.height, HOUSE.window.depth, 0.0024, { color: 'cedar', role: 'garageDoor' }));
-                out.windows.push(onFace(mid, gd.height - gd.glass - 0.008, len * gd.width * 0.92, gd.glass, HOUSE.window.depth, 0.0034, { color: 'lite' }));
-            } else if (f.side === 'back') {
+                // The stone stops at the door, as at the front door.
+                stoneCuts.push([gdoor.c - gdoor.w / 2, gdoor.c + gdoor.w / 2]);
+                out.windows.push(onFace(gdoor.c, 0, gdoor.w, gd.height, HOUSE.window.depth, 0.0024, { color: 'cedar', role: 'garageDoor' }));
+                out.windows.push(onFace(gdoor.c, gd.height - gd.glass - 0.008, gdoor.w * 0.92, gd.glass, HOUSE.window.depth, 0.0034, { color: 'lite' }));
+            }
+            layStone();
+            if (f.side === 'back') {
                 // A garage's walls are lower than a story's, so its window
                 // sits lower too.
                 pane(mid, WINDOWS.small.w, h - WINDOWS.small.h - 0.03, WINDOWS.small.h);
@@ -602,21 +627,34 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
     const floorOf = (level) => cy + tops.get(level) + lift(level);
     const slabByLevel = new Map(layout.slabs.map((s) => [s.level, s]));
     const stories = layout.slabs.filter((s) => s.kind === 'story');
+    // The kind of residence (PRD 8.9): a townhome's garage is a story under
+    // its main floor, and a condo has no front door of its own (its
+    // building's entrance is not the visitor's home).
+    const kind = layout.kind || 'house';
+    const tuckedOf = (s) => s.kind === 'story' && s.level === 'garage';
     const living = stories.filter((s) => s.level !== 'attic').sort((a, b) => a.y - b.y);
-    const doorLevel = (stories.find((s) => s.level === 'main') || living[0] || stories[0] || {}).level;
+    const doorLevel = kind === 'condo' ? null
+        : (stories.find((s) => s.level === 'main') || living.find((s) => !tuckedOf(s)) || stories[0] || {}).level;
     const lowest = living[0] || stories[0];
+    // The side walls a neighbor stands against have no windows.
+    const attached = new Set((layout.neighbors || []).map((n) => (n.side < 0 ? 'left' : 'right')));
     const out = {
         slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [],
-        fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [], outlines: [], rounds: []
+        fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [], outlines: [], rounds: [], massing: [],
+        contextRoofs: [], edges: []
     };
     let door = null;
     const garages = [];
     const tilesOn = (level) => layout.tiles.filter((t) => t.level === level);
 
-    for (const s of layout.slabs) {
+    // The front door's story first, so a townhome's garage below it can
+    // take the side away from the stoop.
+    const order = layout.slabs.slice().sort((a, b) => Number(b.level === doorLevel) - Number(a.level === doorLevel));
+    for (const s of order) {
         const y = floorOf(s.level);
         out.slabs.push(part(s.level, s.x + cx, y - s.thickness, s.z + cz, s.width, s.thickness, s.depth, { color: 'wall' }));
         const isGarage = s.kind !== 'story';
+        const tucked = tuckedOf(s);
         const h = isGarage ? HOUSE.garageWall : wallHeight(s.level);
         // Which rooms touch which outside wall, and the windows they want.
         const inner = { x0: s.x - s.width / 2 + MODEL.margin, x1: s.x + s.width / 2 - MODEL.margin, z0: s.z - s.depth / 2 + MODEL.margin, z1: s.z + s.depth / 2 - MODEL.margin };
@@ -631,7 +669,7 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
             right: { tiles: here.filter((t) => near(t.x + t.width / 2 + g, inner.x1)), a: s.z - s.depth / 2, b: s.z + s.depth / 2, along: 2 }
         };
         const openings = {};
-        for (const [side, v] of Object.entries(sides)) openings[side] = openingsFor(v.tiles, areas, { ...v, basement });
+        for (const [side, v] of Object.entries(sides)) openings[side] = attached.has(side) ? [] : openingsFor(v.tiles, areas, { ...v, basement });
         // The front door is in the entry, else in the front room nearest
         // the left of the middle, else in the middle of an empty front.
         let doorRoom = null;
@@ -646,13 +684,28 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
                 if (t) openings.front = [...openings.front, { a: t.x - t.width / 2 - g, b: t.x + t.width / 2 + g, kind: 'tall', roomId: doorRoom }].sort((p, q) => p.a - q.a);
             }
         }
+        // A tucked garage's door on the side away from the front door, no
+        // wider than leaves its stoop clear, so the drive and the stair
+        // never meet (measured: at its full share it ran under the stoop).
+        let garageAt = null;
+        if (tucked) {
+            const T = HOUSE.tucked;
+            const x0 = s.x + cx - s.width / 2;
+            const x1 = s.x + cx + s.width / 2;
+            const onLeft = Boolean(door) && door.x > (x0 + x1) / 2;
+            const stoop = door ? HOUSE.porch.width / 2 + T.clear : 0;
+            const room = door ? (onLeft ? door.x - stoop - (x0 + T.inset) : x1 - T.inset - (door.x + stoop)) : Infinity;
+            const w = Math.max(T.min, Math.min(s.width * T.share, room));
+            garageAt = { c: onLeft ? x0 + T.inset + w / 2 : x1 - T.inset - w / 2, w };
+        }
         const sh = shell(s, y, h, cx, cz, {
             open: s.level === lifted,
             door: s.level === doorLevel ? doorRoom : null,
-            garage: isGarage,
+            garage: isGarage || tucked,
+            garageAt,
             basement,
             attic: s.level === 'attic',
-            base: Boolean(lowest) && s.level === lowest.level,
+            base: kind !== 'condo' && Boolean(lowest) && s.level === lowest.level,
             band: s.kind === 'story' && Boolean(lowest) && s.level !== lowest.level,
             openings
         });
@@ -663,7 +716,8 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
         // Where the door and the garages meet the site, as the house stands
         // closed (a lift opens the house, not the garden).
         if (sh.door) door = { ...sh.door, y: cy + tops.get(s.level) };
-        if (sh.garage) garages.push(sh.garage);
+        if (sh.garage) garages.push({ ...sh.garage, y: cy + tops.get(s.level) });
+        if (kind === 'condo' && s.level === (lowest || {}).level && s.level !== lifted) balcony(out, s, y, cx, cz);
         if (isGarage) {
             if (s.kind === 'annex') {
                 // A short wall joining the garage to the house, so it reads
@@ -679,14 +733,22 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
             out.gables.push(...gr.gables);
             out.roofs.push(...gr.roofs);
             out.trims.push(...gr.trims);
-            // A stone base along the garage's front, as the porch piers have.
+            // A stone base along the garage's front, as the porch piers have,
+            // either side of its door: run across, it stood 0.4 mm behind
+            // the door's face and fought it (measured, 2026-10-14).
             if (s.level !== lifted) {
                 const fz = s.z + cz + s.depth / 2 + 0.003;
-                out.siding.push(part(s.level, s.x + cx, y, fz, s.width, HOUSE.stone.base * 0.6, 0.006, { color: 'stone', role: 'stoneBase', side: 'front' }));
+                const a = s.x + cx - s.width / 2;
+                const b = s.x + cx + s.width / 2;
+                const gd = sh.garage;
+                const runs = gd ? [[a, gd.x - gd.width / 2], [gd.x + gd.width / 2, b]] : [[a, b]];
+                for (const [r0, r1] of runs) {
+                    if (r1 - r0 > 1e-6) out.siding.push(part(s.level, (r0 + r1) / 2, y, fz, r1 - r0, HOUSE.stone.base * 0.6, 0.006, { color: 'stone', role: 'stoneBase', side: 'front' }));
+                }
             }
         }
     }
-    if (roof !== null && stories.length) {
+    if (roof !== null && stories.length && kind !== 'condo') {
         const top = stories.slice().sort((a, b) => b.y - a.y)[0];
         const roofY = cy + roof + lift('roof');
         const g = gable(top.level, top.x + cx, roofY, top.z + cz, top.width, top.depth);
@@ -699,8 +761,10 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
         out.trims.push(...cg.trims);
         out.siding.push(...cg.battens);
     }
+    if (roof !== null) massing(out, layout, { cx, cy, cz, wallTop: cy + roof, raised: lift('roof'), kind });
     const front = lowest ? { x0: lowest.x + cx - lowest.width / 2, x1: lowest.x + cx + lowest.width / 2, z: lowest.z + cz + lowest.depth / 2, z0: lowest.z + cz - lowest.depth / 2 } : null;
-    if (site) landscape(out, site, layout, cx, cz, door, garages, front, lifted !== null && lifted === doorLevel);
+    if (site && kind === 'condo') plaza(out, site, layout, cx, cz);
+    else if (site) landscape(out, site, layout, cx, cz, door, garages, front, lifted !== null && lifted === doorLevel, { forward: kind === 'townhome' });
 
     // The rooms: a floor each, low walls between them with a doorway, a
     // fixture against the back, and the tasks in the front.
@@ -842,6 +906,131 @@ function fixtureFor(area, t, floorTop, x, z, bath = 'tub', wall = Infinity) {
     return out;
 }
 
+/** A box's twelve edges as thin beams, `e` thick, for the sketch. */
+function boxEdges(b, e) {
+    const [x, y, z] = b.position;
+    const [w, h, d] = b.scale;
+    const out = [];
+    const beam = (px, py, pz, sx, sy, sz) => out.push({ level: null, role: 'edge', color: 'contextEdge', position: [px, py, pz], scale: [sx, sy, sz], top: py + sy / 2 });
+    for (const sy of [-1, 1]) for (const sz of [-1, 1]) beam(x, y + (sy * h) / 2, z + (sz * d) / 2, w + e, e, e);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) beam(x + (sx * w) / 2, y, z + (sz * d) / 2, e, h + e, e);
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) beam(x + (sx * w) / 2, y + (sy * h) / 2, z, e, e, d + e);
+    return out;
+}
+
+/** A gable's ridge and its four sloped edges (its eaves are its box's). */
+function gableEdges(g, e) {
+    const [x, y, z] = g.position;
+    const [w, h, d] = g.scale;
+    const out = [{ level: null, role: 'edge', color: 'contextEdge', position: [x, y + h, z], scale: [w + e, e, e], top: y + h + e / 2 }];
+    const len = Math.hypot(d / 2, h);
+    const angle = Math.atan2(h, d / 2);
+    for (const sx of [-1, 1]) {
+        for (const sz of [-1, 1]) {
+            out.push({ level: null, role: 'edge', color: 'contextEdge', position: [x + (sx * w) / 2, y + h / 2, z + (sz * d) / 4], scale: [e, e, len], rotation: [sz * angle, 0, 0], top: y + h });
+        }
+    }
+    return out;
+}
+
+/**
+ * The context round a townhome or a condo (PRD 8.9), drawn as a sketch:
+ * slate edges over a faint see-through fill, so it can never be taken for
+ * part of the visitor's home, the only solid, colored thing on the
+ * turntable (Steve's choice, 2026-10-14, of three tried in the preview: a
+ * white massing blended into the white studio, and beside a townhome read
+ * as more house). Never tappable (no level). A townhome's neighbors to the
+ * eaves under gables of the home's pitch; a condo's units beside it, the
+ * story of the building under it, and the story over it with its capping
+ * ledge, which rises with the roof when a floor opens. `out.massing` holds
+ * the fills, `out.contextRoofs` the gables' fills, `out.edges` the lines.
+ */
+function massing(out, layout, { cx, cy, cz, wallTop, raised, kind }) {
+    const ns = layout.neighbors || [];
+    if (!ns.length) return;
+    const e = HOUSE.context.edge;
+    const fill = (p) => {
+        out.massing.push(p);
+        out.edges.push(...boxEdges(p, e));
+    };
+    const ground = cy + (kind === 'condo' ? HOUSE.condo.podium : 0);
+    for (const n of ns) {
+        fill(part(null, n.x + cx, ground, n.z + cz, n.width, wallTop - ground, n.depth, { color: 'massing', role: 'neighbor' }));
+        if (kind === 'townhome') {
+            const h = HOUSE.roof.pitch * (n.depth / 2);
+            const roofPart = { level: null, role: 'neighborRoof', color: 'massing', position: [n.x + cx, wallTop, n.z + cz], scale: [n.width, h, n.depth], top: wallTop + h };
+            out.contextRoofs.push(roofPart);
+            out.edges.push(...gableEdges(roofPart, e));
+        }
+    }
+    if (kind !== 'condo') return;
+    const all = [...layout.slabs, ...ns];
+    const x0 = Math.min(...all.map((s) => s.x - s.width / 2));
+    const x1 = Math.max(...all.map((s) => s.x + s.width / 2));
+    const unit = layout.slabs[0];
+    const x = (x0 + x1) / 2 + cx;
+    const z = unit.z + cz;
+    const C = HOUSE.condo;
+    fill(part(null, x, cy, z, x1 - x0, C.podium, unit.depth, { color: 'massing', role: 'podium' }));
+    const up = wallTop + raised;
+    fill(part(null, x, up, z, x1 - x0, C.above, unit.depth, { color: 'massing', role: 'above' }));
+    fill(part(null, x, up + C.above, z, x1 - x0 + 2 * C.cap.over, C.cap.height, unit.depth + 2 * C.cap.over, { color: 'massing', role: 'cap' }));
+}
+
+/**
+ * A condo's balcony on the front of its lowest story: a white slab level
+ * with the floor, and a black railing round its open sides, posts along the
+ * front. It is the story's, so it lifts with it (and steps aside while that
+ * story is open, as the porch does).
+ */
+function balcony(out, s, y, cx, cz) {
+    const B = HOUSE.condo.balcony;
+    const w = s.width * B.share;
+    const x = s.x + cx + s.width * 0.18;
+    const zf = s.z + cz + s.depth / 2;
+    const p = B.post;
+    out.walls.push(part(s.level, x, y - B.thickness, zf + B.depth / 2, w, B.thickness, B.depth, { color: 'plate', role: 'balcony' }));
+    const top = y + B.rail - p;
+    const front = zf + B.depth - p / 2 - 0.001;
+    out.trims.push(part(s.level, x, top, front, w - 0.002, p, p, { color: 'frame', role: 'balconyRail' }));
+    for (const side of [-1, 1]) {
+        // From a little off the wall, clear of the siding's courses.
+        out.trims.push(part(s.level, x + side * (w / 2 - p / 2 - 0.001), top, zf + 0.004 + (B.depth - 0.005) / 2, p, p, B.depth - 0.005, { color: 'frame', role: 'balconyRail' }));
+    }
+    const n = Math.max(2, Math.round(w / B.every));
+    for (let i = 0; i <= n; i++) {
+        const px = x - w / 2 + p / 2 + 0.001 + (i * (w - p - 0.002)) / n;
+        out.trims.push(part(s.level, px, y, front, p, B.rail - p, p, { color: 'frame', role: 'balconyPost' }));
+    }
+}
+
+/**
+ * A condo's site (PRD 8.9): no yard and no garage of its own, so the
+ * turntable's top is a paved plaza, with concrete planters of clipped
+ * shrubs round its edge where they stand clear of the building.
+ */
+function plaza(out, site, layout, cx, cz) {
+    const S = HOUSE.site;
+    const R = site.radius > 0 ? site.radius : Math.hypot(site.halfWidth, site.halfDepth);
+    out.lawn.push(part(null, 0, 0, 0, 2 * R, S.lawn, 2 * R, { color: 'paving', role: 'plaza' }));
+    const P = HOUSE.plaza.planter;
+    const keep = [...layout.slabs, ...(layout.neighbors || [])].map((s) => [s.x + cx - s.width / 2, s.z + cz - s.depth / 2, s.x + cx + s.width / 2, s.z + cz + s.depth / 2]);
+    const reach = Math.hypot(P.width, P.depth) / 2;
+    for (const angle of HOUSE.plaza.angles) {
+        const a = (angle * Math.PI) / 180;
+        const rho = R - reach - S.edge;
+        const x = Math.cos(a) * rho;
+        const z = Math.sin(a) * rho;
+        const clear = keep.every(([x0, z0, x1, z1]) => x + P.width / 2 < x0 - 0.01 || x - P.width / 2 > x1 + 0.01 || z + P.depth / 2 < z0 - 0.01 || z - P.depth / 2 > z1 + 0.01);
+        if (!clear) continue;
+        out.site.push(part(null, x, S.lawn, z, P.width, P.height, P.depth, { color: 'concrete', role: 'planter' }));
+        for (const dx of [-0.25, 0.25]) {
+            const r = S.bed.shrub * 1.15;
+            out.canopies.push(part(null, x + dx * P.width, S.lawn + P.height - r * 0.25, z, 2 * r, 1.6 * r, 2 * r, { color: 'shrub', role: 'shrub' }));
+        }
+    }
+}
+
 /**
  * The site the house stands on, filling the turntable's top inside its rim
  * (`site` gives the yard's half width and depth, and the lawn's radius, in
@@ -852,9 +1041,11 @@ function fixtureFor(area, t, floorTop, x, z, bath = 'tub', wall = Infinity) {
  * each garage door, a bed of clipped shrubs and white hydrangeas along the
  * front, a Japanese maple in the front yard, and Douglas firs behind the
  * house, each where it stands clear. Never lifted, though the porch's roof
- * and posts step aside while the door's floor is open (`doorOpen`).
+ * and posts step aside while the door's floor is open (`doorOpen`). With
+ * `forward` (a townhome, its neighbors at its sides) the stoop's steps come
+ * down toward the street, between railings, instead of beside the house.
  */
-function landscape(out, site, layout, cx, cz, door, garages, front, doorOpen = false) {
+function landscape(out, site, layout, cx, cz, door, garages, front, doorOpen = false, { forward = false } = {}) {
     const S = HOUSE.site;
     const W = site.halfWidth;
     const D = site.halfDepth;
@@ -887,15 +1078,41 @@ function landscape(out, site, layout, cx, cz, door, garages, front, doorOpen = f
         const reach = width / 2 + (n - 1) * st.tread + S.path.width / 2;
         if (Math.abs(door.x + dir * reach) > W - 0.01) dir = -dir;
         let foot = door.x;
+        let from = door.z + P.depth;
+        const sw = width * 0.62;   // a stair toward the street, narrower than its landing
         for (let k = 1; k < n; k++) {
-            foot = door.x + dir * (width / 2 + (k - 0.5) * st.tread);
-            out.site.push(part(null, foot, lawnTop, z, st.tread, (rise * (n - k)) / n, P.depth, { color: 'path', role: 'stoop' }));
+            if (forward) {
+                const zk = door.z + P.depth + (k - 0.5) * st.tread;
+                out.site.push(part(null, door.x, lawnTop, zk, sw, (rise * (n - k)) / n, st.tread, { color: 'path', role: 'stoop' }));
+                from = zk + st.tread / 2;
+            } else {
+                foot = door.x + dir * (width / 2 + (k - 0.5) * st.tread);
+                out.site.push(part(null, foot, lawnTop, z, st.tread, (rise * (n - k)) / n, P.depth, { color: 'path', role: 'stoop' }));
+            }
         }
-        const from = door.z + P.depth;
         if (D > from) out.site.push(part(null, foot, lawnTop, (from + D) / 2, S.path.width, S.path.height, D - from, { color: 'path', role: 'path' }));
+        if (forward && n > 2) {
+            // A sloped black railing down each side of the stair, a post at
+            // each foot.
+            const R = HOUSE.rail;
+            const railY = lawnTop + landingTop + R.height;
+            const run = (n - 1) * st.tread;
+            const drop = rise - rise / n;
+            const angle = Math.atan2(drop, run);
+            const len = Math.hypot(run, drop);
+            const z0 = door.z + P.depth;
+            for (const side of [-1, 1]) {
+                const x = door.x + side * (sw / 2 - R.size / 2 - 0.001);
+                out.site.push({
+                    level: null, role: 'rail', color: 'frame',
+                    position: [x, railY - drop / 2, z0 + run / 2], scale: [R.size, R.size, len], rotation: [angle, 0, 0], top: railY
+                });
+                out.site.push(part(null, x, lawnTop, z0 + run - R.size / 2 - 0.001, R.size, rise / n + R.height, R.size, { color: 'frame', role: 'rail' }));
+            }
+        }
         // Black railings: along the landing's open front and down the
         // stair, on its open side, once the stair is more than a step or two.
-        if (n > 2) {
+        if (n > 2 && !forward) {
             const R = HOUSE.rail;
             const railY = lawnTop + landingTop + R.height;
             // A clear millimeter in front of the piers' faces and behind the
@@ -938,7 +1155,19 @@ function landscape(out, site, layout, cx, cz, door, garages, front, doorOpen = f
     }
     for (const g of garages) {
         const width = g.width + 0.02;
-        if (D > g.z) out.site.push(part(null, g.x, lawnTop, (g.z + D) / 2, width, S.drive.height, D - g.z, { color: 'drive', role: 'drive' }));
+        // A garage a story up (a townhome's, over a basement) is reached by a
+        // ramp down to the street; any other by a drive on the lawn.
+        const up = (g.y || 0) - lawnTop;
+        if (D > g.z && up > 0.06) {
+            const run = D - g.z;
+            out.site.push({
+                level: null, role: 'drive', color: 'drive',
+                position: [g.x, lawnTop + up / 2, (g.z + D) / 2], scale: [width, S.drive.height, Math.hypot(run, up)],
+                rotation: [Math.atan2(up, run), 0, 0], top: lawnTop + up
+            });
+        } else if (D > g.z) {
+            out.site.push(part(null, g.x, lawnTop, (g.z + D) / 2, width, S.drive.height, D - g.z, { color: 'drive', role: 'drive' }));
+        }
         gaps.push([g.x - width / 2, g.x + width / 2]);
     }
     // A bed of clipped shrubs along the front of the house, a white
@@ -971,7 +1200,7 @@ function landscape(out, site, layout, cx, cz, door, garages, front, doorOpen = f
     // the house, the paving and the beds.
     const T = S.tree;
     const keepOut = [
-        ...layout.slabs.map((s) => [s.x + cx - s.width / 2, s.z + cz - s.depth / 2, s.x + cx + s.width / 2, s.z + cz + s.depth / 2]),
+        ...[...layout.slabs, ...(layout.neighbors || [])].map((s) => [s.x + cx - s.width / 2, s.z + cz - s.depth / 2, s.x + cx + s.width / 2, s.z + cz + s.depth / 2]),
         ...out.site.filter((p) => ['path', 'drive', 'stoop', 'bed', 'porch', 'post', 'pier'].includes(p.role))
             .map((p) => [p.position[0] - p.scale[0] / 2, p.position[2] - p.scale[2] / 2, p.position[0] + p.scale[0] / 2, p.position[2] + p.scale[2] / 2])
     ];
@@ -1033,7 +1262,8 @@ function landscape(out, site, layout, cx, cz, door, garages, front, doorOpen = f
 export function layoutKey(checklist) {
     const rooms = (checklist.rooms || []).filter((r) => !r.deletedAt).map((r) => [r.id, r.level, r.area, r.label, r.bath || null]);
     const items = (checklist.items || []).filter((i) => !i.deletedAt).map((i) => [i.id, i.roomId, i.order, Boolean(i.important)]);
-    return JSON.stringify([checklist.id || '', checklist.levels, rooms, items]);
+    const r = checklist.residence || null;
+    return JSON.stringify([checklist.id || '', checklist.levels, r ? [r.kind, r.attached] : null, rooms, items]);
 }
 
 /** Each bathroom's type of bath by room id (store.js `bath`), for
@@ -1115,6 +1345,14 @@ export function buildModel(config, at) {
     };
     const pal = colors.palette;
     const levelsCap = 8;
+    const sketchFill = { transparent: true, opacity: colors.context.opacity, depthWrite: false };
+    const context = (mesh) => {
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        mesh.userData.pick = null;
+        mesh.userData.through = true;
+        return mesh;
+    };
     const colored = (roughness, extra = {}) => std(0xffffff, { roughness, ...extra });
     const roofMaterial = std(pal.roof, { roughness: 0.85 });
     const meshes = {
@@ -1124,17 +1362,24 @@ export function buildModel(config, at) {
         tiles: make('tiles', box, colored(0.7), limits.rooms, true),
         windows: make('windows', box, colored(0.25, { metalness: 0.2 }), 600, true),
         roofs: make('roofs', box, roofMaterial, 12),
-        gables: make('gables', prism, colored(0.85), 6, true),
+        gables: make('gables', prism, colored(0.85), 10, true),
         fixtures: make('fixtures', box, colored(0.7), limits.rooms * 40, true),
         // The round things in the rooms: basins, bowls, burners, stools,
         // lamps, a washer's door.
         rounds: make('rounds', new THREE.CylinderGeometry(0.5, 0.5, 1, 18), colored(0.55), limits.rooms * 24, true),
-        trims: make('trims', box, colored(0.5), 40, true),
+        trims: make('trims', box, colored(0.5), 64, true),
         site: make('site', box, colored(0.9), 80, true),
         canopies: make('canopies', new THREE.IcosahedronGeometry(0.5, 1), colored(0.8, { flatShading: true }), 120, true),
         blooms: make('blooms', new THREE.IcosahedronGeometry(0.5, 0), colored(0.8, { flatShading: true }), 80, true),
         firs: make('firs', new THREE.ConeGeometry(0.5, 1, 9), colored(0.85, { flatShading: true }), 4, true),
         lawn: make('lawn', new THREE.CylinderGeometry(0.5, 0.5, 1, 96), colored(0.95), 1, true),
+        // The context round a townhome or a condo (PRD 8.9), a sketch: a
+        // faint see-through fill (its walls, its gables) and slate edges.
+        // No shadows, and never met by a tap, which goes through to the
+        // house.
+        massing: context(make('massing', box, colored(0.95, sketchFill), 12, true)),
+        contextRoofs: context(make('contextRoofs', prism, colored(0.95, sketchFill), 4, true)),
+        edges: context(make('edges', box, colored(0.7), 220, true)),
         // The selected and hovered rooms' borders, lit a little so they read
         // on a shaded floor.
         outlines: make('outlines', box, colored(0.5, { emissive: config.colors.accent, emissiveIntensity: 0.35 }), 8, true),
@@ -1167,7 +1412,7 @@ export function buildModel(config, at) {
     /** Each part's lift now, and the move toward its target. */
     const now = new Map();
     let move = null;
-    let placed = { slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [], fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [], outlines: [], rounds: [] };
+    let placed = { slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [], fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [], outlines: [], rounds: [], massing: [], contextRoofs: [], edges: [] };
     const turntable = config.stage.turntable;
     let scaled = 1;
     let restHeight = 0;
@@ -1211,6 +1456,9 @@ export function buildModel(config, at) {
         place(meshes.firs, placed.firs, paintOf);
         place(meshes.rounds, placed.rounds, paintOf);
         place(meshes.lawn, placed.lawn, paintOf);
+        place(meshes.massing, placed.massing, paintOf);
+        place(meshes.contextRoofs, placed.contextRoofs, paintOf);
+        place(meshes.edges, placed.edges, paintOf);
         place(meshes.markers, placed.markers, (p) => (p.selected ? paint.markerSelected : paint.marker));
         place(meshes.outlines, placed.outlines, paintOf);
         place(meshes.flags, placed.flags);

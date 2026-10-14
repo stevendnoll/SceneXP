@@ -263,7 +263,7 @@ export const GUIDE = Object.freeze({
     defaultTitle: 'Our home',
     skip: 'Skip the guide',
     progressLabel: 'Your progress',
-    progress: Object.freeze(['Your home', 'First room', 'Your rooms', 'Review']),
+    progress: Object.freeze(['Home type', 'Floors', 'First room', 'Your rooms', 'Review']),
     progressStep: (n, total, name) => `Step ${n} of ${total}: ${name}`,
 
     hello: "Hi, I'm Maya with Whitestone Home Care. Let's build a cleaning checklist for your home, room by room. It takes about two minutes.",
@@ -273,6 +273,7 @@ export const GUIDE = Object.freeze({
 
     /** What kind of home (ONBOARDING Scene 2a), and a townhome's neighbors. */
     home: 'First, what kind of home is it?',
+    homeAgainAsked: 'Of course. What kind of home is it? Your answer so far is marked.',
     homeAgain: 'Choose the one closest to your home. You can change it later.',
     homeLegend: 'Kind of home',
     attached: 'Is it an end unit, or between two neighbors?',
@@ -284,6 +285,7 @@ export const GUIDE = Object.freeze({
     floorsLegend: 'Floors in your home',
     titleLabel: 'Name this checklist',
     next: 'Next',
+    back: 'Back',
 
     firstRoom: 'Most people start with the kitchen. Shall we add it?',
     firstRoomAgain: 'Adding the kitchen brings its standard tasks with it. You can change any of them.',

@@ -1097,6 +1097,12 @@ textarea.ws-input {
     text-align: left;
 }
 
+/* The answer already given, when Maya asks again after Back. */
+.host-pick.is-on {
+    border-color: var(--ws-accent);
+    background: var(--ws-accent-soft);
+}
+
 /* A floor to tick: a chip, its box kept (a checkbox reads as one). */
 .host-chip {
     display: inline-flex;

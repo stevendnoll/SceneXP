@@ -874,12 +874,14 @@ function guideView() {
     const c = active();
     const typeKey = c ? c.serviceType : 'cleaning';
     if (v && v.choices === 'home') {
-        const options = residencesOf(typeKey).map((k) => ({ id: `kind-${k.key}`, label: k.name }));
+        const now = v.answered && c && c.residence ? c.residence.kind : null;
+        const options = residencesOf(typeKey).map((k) => ({ id: `kind-${k.key}`, label: k.name, on: k.key === now }));
         return { ...v, choices: { kind: 'pick', legend: GUIDE.homeLegend, options } };
     }
     if (v && v.choices === 'attached') {
         const townhome = residencesOf(typeKey).find((k) => k.attached) || { attached: [] };
-        const options = townhome.attached.map((a) => ({ id: `attached-${a.key}`, label: a.name }));
+        const side = c && c.residence ? c.residence.attached : null;
+        const options = townhome.attached.map((a) => ({ id: `attached-${a.key}`, label: a.name, on: Boolean(ui.guide.attachedAnswered) && a.key === side }));
         return { ...v, choices: { kind: 'pick', legend: GUIDE.attached, options } };
     }
     if (v && v.choices === 'floors') {
