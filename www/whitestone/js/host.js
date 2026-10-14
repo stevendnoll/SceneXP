@@ -39,6 +39,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     const actions = byId('host-actions');
     const small = byId('host-small');
     const skip = byId('host-skip');
+    const backBtn = byId('host-back');
     let view = null;
     let covered = false;
     let said = false;
@@ -53,6 +54,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     };
     if (signal) signal.addEventListener('abort', stopTimers);
     if (skip) skip.addEventListener('click', () => { if (typeof on.button === 'function') on.button('skip'); }, { signal });
+    if (backBtn) backBtn.addEventListener('click', () => { if (typeof on.button === 'function') on.button('back'); }, { signal });
 
     function place() {
         if (root) root.hidden = covered || !view;
@@ -84,8 +86,18 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         const at = view.progress;
         progress.hidden = at === null || at === undefined;
         if (progress.hidden) return;
+        // A step reached so far, other than this one, is a button that goes
+        // to it (QA, 2026-10-14); one not reached yet is only its name.
+        const reached = view.reached ?? at;
         GUIDE.progress.forEach((name, i) => {
-            const li = h('li', { className: `host-step${i < at ? ' is-done' : ''}${i === at ? ' is-now' : ''}`, text: name });
+            const li = h('li', { className: `host-step${i < at ? ' is-done' : ''}${i === at ? ' is-now' : ''}${i > at && i <= reached ? ' is-reached' : ''}` });
+            if (i !== at && i <= reached) {
+                const go = h('button', { type: 'button', className: 'host-step-btn', id: `host-step-${i}`, text: name, attrs: { 'aria-label': GUIDE.goToStep(name) } });
+                go.addEventListener('click', () => { if (typeof on.step === 'function') on.step(i); }, { signal });
+                li.appendChild(go);
+            } else {
+                li.textContent = name;
+            }
             if (i === at) li.setAttribute('aria-current', 'step');
             progress.appendChild(li);
         });
@@ -162,6 +174,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             small.hidden = !view.small;
         }
         if (skip) skip.hidden = !view.skip;
+        if (backBtn) backBtn.hidden = !view.stepBack;
     }
 
     const api = {
@@ -200,6 +213,14 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             if (covered === Boolean(on)) return;
             covered = Boolean(on);
             place();
+        },
+        /** Focus on the main button of what she says (Let's start, Next),
+         *  else her first: where a keyboard picks up after Start over. */
+        focusPrimary() {
+            const all = actions ? Array.from(actions.children || []) : [];
+            const btn = all.find((b) => b.classList && b.classList.contains('ws-btn-primary')) || all[0];
+            if (btn && typeof btn.focus === 'function') btn.focus();
+            return btn || null;
         },
         /** The visitor did something: the wait for a nudge starts again. */
         poke() {

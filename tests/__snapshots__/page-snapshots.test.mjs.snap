@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=12" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=14" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7097,7 +7097,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=12" rel="stylesheet"]
+    link [href="css/experience.min.css?v=14" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7150,8 +7150,11 @@ html [data-ui-theme="surf" lang="en"]
       div#host-choices.host-choices [hidden]
       div#host-actions.host-actions
       p#host-small.host-small [hidden]
-      button#host-skip.host-skip [hidden type="button"]
-        "Skip the guide"
+      div.host-foot
+        button#host-back.host-back [hidden type="button"]
+          "Back"
+        button#host-skip.host-skip [hidden type="button"]
+          "Skip the guide"
     aside#ws-panel.ws-panel [aria-labelledby="panel-title" hidden]
       button#panel-back.panel-back [type="button"]
         "Back to the whole house"
@@ -7178,15 +7181,15 @@ html [data-ui-theme="surf" lang="en"]
         span.hud-example
           "Example prices"
     div#ws-tools.ui-float.ws-tools [aria-label="Help and undo" role="group"]
-      button#ws-undo.tool-btn [disabled title="Undo (Ctrl or Command and Z)" type="button"]
+      button#ws-undo.tool-btn.tool-undo [hidden title="Undo (Ctrl or Command and Z)" type="button"]
         "Undo"
       button#ws-help.tool-btn.tool-help [aria-controls="ws-help-menu" aria-expanded="false" aria-haspopup="true" aria-label="Help and your checklist" type="button"]
         "?"
       div#ws-help-menu.help-menu [aria-label="Help and your checklist" hidden role="group"]
         button#help-again.help-item [type="button"]
           "Show me again"
-        button#help-restart.help-item [type="button"]
-          "Start over with the guide"
+        button#help-reset.help-item [type="button"]
+          "Start over"
         button#help-checklist.help-item [hidden type="button"]
           "Your checklist"
         button#help-menu.help-item [type="button"]

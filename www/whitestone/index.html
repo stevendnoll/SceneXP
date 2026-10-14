@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=12" as="style">
+    <link rel="preload" href="css/experience.min.css?v=14" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -145,7 +145,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=12">
+    <link rel="stylesheet" href="css/experience.min.css?v=14">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -215,7 +215,10 @@
         <div id="host-choices" class="host-choices" hidden></div>
         <div id="host-actions" class="host-actions"></div>
         <p id="host-small" class="host-small" hidden></p>
-        <button id="host-skip" class="host-skip" type="button" hidden>Skip the guide</button>
+        <div class="host-foot">
+            <button id="host-back" class="host-back" type="button" hidden>Back</button>
+            <button id="host-skip" class="host-skip" type="button" hidden>Skip the guide</button>
+        </div>
     </section>
 
     <!-- THE PANEL BESIDE THE HOUSE (panel.js): whatever is selected on the
@@ -262,13 +265,14 @@
     <!-- HELP AND UNDO, top right (ONBOARDING section 3). Help opens a short
          menu: Maya again, the guide from the start, and the checklist's own
          cards, so nothing depends on tapping the house (PRD 8.1). Items
-         that need an open checklist stay hidden until there is one. -->
+         that need an open checklist stay hidden until there is one, and
+         Undo until there is something to undo. -->
     <div id="ws-tools" class="ui-float ws-tools" role="group" aria-label="Help and undo">
-        <button id="ws-undo" class="tool-btn" type="button" title="Undo (Ctrl or Command and Z)" disabled>Undo</button>
+        <button id="ws-undo" class="tool-btn tool-undo" type="button" title="Undo (Ctrl or Command and Z)" hidden>Undo</button>
         <button id="ws-help" class="tool-btn tool-help" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="ws-help-menu" aria-label="Help and your checklist">?</button>
         <div id="ws-help-menu" class="help-menu" role="group" aria-label="Help and your checklist" hidden>
             <button id="help-again" class="help-item" type="button">Show me again</button>
-            <button id="help-restart" class="help-item" type="button">Start over with the guide</button>
+            <button id="help-reset" class="help-item" type="button">Start over</button>
             <button id="help-checklist" class="help-item" type="button" hidden>Your checklist</button>
             <button id="help-menu" class="help-item" type="button">Service menu</button>
             <button id="help-prefs" class="help-item" type="button" hidden>Care preferences</button>

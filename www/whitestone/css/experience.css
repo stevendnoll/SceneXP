@@ -1024,7 +1024,8 @@ textarea.ws-input {
     font-size: 0.82rem;
 }
 
-/* The progress strip: four steps, the one she is on in the accent. */
+/* The progress strip: five steps, the one she is on in the accent, and
+   those reached so far a tap away. */
 .host-progress {
     display: flex;
     gap: 0.35rem;
@@ -1053,6 +1054,34 @@ textarea.ws-input {
 .host-step.is-now {
     border-color: var(--ws-accent);
     color: var(--ws-graphite);
+}
+
+.host-step.is-reached {
+    border-color: #9FB3C4;
+}
+
+.host-step-btn {
+    display: block;
+    width: 100%;
+    min-height: 32px;
+    margin: -0.4rem 0 0;
+    padding: 0.4rem 0 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.host-step-btn:hover {
+    color: var(--ws-accent);
+    text-decoration: underline;
+}
+
+.host-step-btn:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
 }
 
 .host-line {
@@ -1175,10 +1204,46 @@ textarea.ws-input {
     display: none;
 }
 
+/* Back and Skip, quiet, along the bubble's foot. */
+.host-foot {
+    display: flex;
+    align-items: center;
+    margin-top: 0.6rem;
+}
+
+.host-back {
+    min-height: 36px;
+    padding: 0.3rem 0;
+    border: 0;
+    background: none;
+    color: var(--ws-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.host-back::before {
+    content: '\2039\00a0';
+    content: '\2039\00a0' / '';   /* a chevron, not read aloud */
+}
+
+.host-back:hover {
+    color: var(--ws-accent);
+}
+
+.host-back:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.host-back[hidden] {
+    display: none;
+}
+
 .host-skip {
     display: block;
     min-height: 36px;
-    margin: 0.6rem 0 0 auto;
+    margin: 0 0 0 auto;
     padding: 0.3rem 0;
     border: 0;
     background: none;
@@ -1288,6 +1353,26 @@ textarea.ws-input {
     padding: 0;
     font-size: 1.15rem;
     font-weight: 700;
+}
+
+/* Undo appears with the first change it can take back, gently. */
+.tool-undo[hidden] {
+    display: none;
+}
+
+.tool-undo {
+    animation: tool-in 0.25s ease-out;
+}
+
+@keyframes tool-in {
+    from { opacity: 0; transform: translateX(6px); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tool-undo {
+        animation: none;
+    }
 }
 
 .tool-btn:disabled {

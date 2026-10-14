@@ -100,10 +100,50 @@ describe('the way through', () => {
         expect(walk(attached, 'back').scene).toBe('home');
         // A townhome's neighbors once answered are marked when asked again.
         expect(walk(attached, { type: 'residence', kind: 'townhome' }).attachedAnswered).toBe(true);
-        // The question itself has no Back (Skip leaves it), and Start over
-        // forgets the answers.
-        expect(step(walk(fresh(), 'start'), { type: 'back' }).scene).toBe('home');
-        expect(walk(again, 'restart')).toMatchObject({ scene: 'hello', answered: false, attachedAnswered: false });
+        // From the question itself, Back is the greeting; a restart forgets
+        // the answers and the steps reached.
+        expect(step(walk(fresh(), 'start'), { type: 'back' }).scene).toBe('hello');
+        expect(walk(again, 'restart')).toMatchObject({ scene: 'hello', answered: false, attachedAnswered: false, reached: -1 });
+    });
+
+    test('Back on every step goes to where the step before begins', () => {
+        const at = (scene, extra = {}) => ({ ...fresh(), scene, reached: 4, ...extra });
+        const back = (g, roomId = null) => step(g, { type: 'back', roomId });
+        expect(back(at('floors')).scene).toBe('home');
+        expect(back(at('attached')).scene).toBe('home');
+        for (const scene of ['firstRoom', 'added', 'dots']) expect(back(at(scene))).toMatchObject({ scene: 'floors', tapped: false });
+        // The First room step begins with the first room's line once there
+        // is one, else with the question.
+        expect(back(at('rooms'), 'k1')).toMatchObject({ scene: 'added', roomId: 'k1' });
+        expect(back(at('rooms')).scene).toBe('firstRoom');
+        expect(back(at('review')).scene).toBe('rooms');
+        // Nothing outside the strip has a Back.
+        for (const scene of ['hello', 'saved', 'example1', 'welcome', 'done']) {
+            const g = at(scene);
+            expect(back(g)).toBe(g);
+            expect(viewFor(g, { sheet: SHEET }) ? viewFor(g, { sheet: SHEET }).stepBack : false).toBe(false);
+        }
+        for (const scene of GUIDED) expect(viewFor(at(scene), { sheet: SHEET, roomCount: 2 }).stepBack).toBe(true);
+    });
+
+    test('a tapped step goes there, but only to a step reached so far', () => {
+        const g = walk(fresh(), 'start', HOUSE, 'next');
+        expect(g).toMatchObject({ scene: 'firstRoom', reached: 2 });
+        const go = (from, n, roomId = null) => step(from, { type: 'goto', step: n, roomId });
+        expect(go(g, 0).scene).toBe('home');
+        expect(go(g, 1).scene).toBe('floors');
+        // Not yet reached, or the step it is on already: nothing.
+        expect(go(g, 3)).toBe(g);
+        expect(go(g, 2)).toBe(g);
+        // Gone back, the steps ahead stay a tap away.
+        const back = go(g, 0);
+        expect(back.reached).toBe(2);
+        expect(go(back, 2, 'k1')).toMatchObject({ scene: 'added', roomId: 'k1' });
+        expect(viewFor(back, { sheet: SHEET }).reached).toBe(2);
+        // Outside the strip, a tap on a step does nothing.
+        const done = { ...g, scene: 'done' };
+        expect(go(done, 0)).toBe(done);
+        expect(go(g, 'two')).toBe(g);
     });
 
     test('the first floor tapped is remarked on once', () => {
@@ -258,7 +298,7 @@ describe('what Maya says', () => {
         expect(sentences.length).toBeLessThanOrEqual(3);
         // A question of a few answers has them as its choices instead.
         if (v.choices === 'home') expect(v.buttons).toEqual([]);
-        else if (v.choices === 'attached') expect(v.buttons.map((b) => b.id)).toEqual(['back']);
+        else if (v.choices === 'attached') expect(v.buttons).toEqual([]);
         else expect(v.buttons.length).toBeGreaterThanOrEqual(1);
         expect(v.buttons.length).toBeLessThanOrEqual(2);
         expect(v.buttons.filter((b) => b.primary).length).toBeLessThanOrEqual(1);

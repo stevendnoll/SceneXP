@@ -37,7 +37,7 @@ import {
     createStore, findChecklist, createChecklist, updateChecklist, setLevels, setPreferences, deleteChecklist,
     duplicateChecklist, setSettings, touchVisit, storageUse, isLive, addRoom, updateRoom, deleteRoom, addItem,
     updateItem, deleteItem, addPhoto, removePhoto, photoIdsInUse, newId, itemsIn, liveRooms, liveItems,
-    clearSamples, hasSamples, setBath, setResidence
+    clearSamples, hasSamples, setBath, setResidence, emptyDoc
 } from './store.min.js';
 import { withExample } from './samples.min.js';
 import { createHistory } from './history.min.js';
@@ -55,7 +55,7 @@ import {
     renderMyChecklists, renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote,
     renderMenu, fillMenuAreas
 } from './panels.min.js';
-import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL } from './copy.min.js';
+import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP } from './copy.min.js';
 import { createTurntable, turnPoint } from './turntable.min.js';
 import { buildStage, buildLights, firstPick } from './stage.min.js';
 import { buildModel } from './model.min.js';
@@ -1066,11 +1066,34 @@ function onHostButton(id) {
     case 'save':
         guideTo({ type: 'saved' });
         break;
+    case 'back':
+        guideTo({ type: 'back', roomId: firstRoomId() });
+        break;
     default:
         if (id.startsWith('kind-')) chooseResidence({ kind: id.slice(5) });
         else if (id.startsWith('attached-')) chooseResidence({ attached: id.slice(9) });
         else guideTo({ type: id });
     }
+}
+
+/** The first room of the build, for its line when the guide goes back to
+ *  the First room step: the one Maya spoke of, while it is still there,
+ *  else the earliest added. Null with no rooms. */
+function firstRoomId() {
+    const c = active();
+    if (!c) return null;
+    const rooms = liveRooms(c);
+    const spoken = ui.guide && rooms.find((r) => r.id === ui.guide.roomId);
+    if (spoken) return spoken.id;
+    const first = rooms.slice().sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))[0];
+    return first ? first.id : null;
+}
+
+/** A step of Maya's progress strip tapped: that step, if reached. */
+function onHostStep(index) {
+    if (!state.loaded) return;
+    if (host) host.poke();
+    guideTo({ type: 'goto', step: index, roomId: firstRoomId() });
 }
 
 /**
@@ -1230,7 +1253,7 @@ function setupHelp(signal) {
     }, { signal });
     const items = {
         'help-again': () => guideTo({ type: 'again' }),
-        'help-restart': () => guideTo({ type: 'restart' }),
+        'help-reset': confirmStartOver,
         'help-checklist': openChecklistView,
         'help-menu': openMenu,
         'help-prefs': openPreferences,
@@ -1400,8 +1423,17 @@ function refresh() {
     }
     const quoteText = el('hud-quote-text');
     if (quoteText) quoteText.textContent = chip ? chip.text : '';
+    // Undo only when there is something to undo (QA, 2026-10-14). Put away
+    // while it has the keyboard (the last step undone), Help takes it.
     const undoBtn = el('ws-undo');
-    if (undoBtn) undoBtn.disabled = !history.canUndo;
+    if (undoBtn) {
+        const away = !history.canUndo;
+        if (away && !undoBtn.hidden && document.activeElement === undoBtn) {
+            const help = el('ws-help');
+            if (help && typeof help.focus === 'function') help.focus();
+        }
+        undoBtn.hidden = away;
+    }
     const note = el('storage-note');
     if (note) note.textContent = storageNote();
     if (isOpen('my-checklists')) drawMyChecklists();
@@ -1897,6 +1929,42 @@ function remove(id) {
     });
 }
 
+/**
+ * Start over (the Help menu): asked first, on the confirmation card, since
+ * it cannot be undone (QA, 2026-10-14).
+ */
+function confirmStartOver() {
+    confirmCard({
+        title: HELP.resetTitle,
+        detail: HELP.resetDetail,
+        confirmLabel: HELP.resetConfirm,
+        danger: true,
+        onConfirm: startOver
+    });
+}
+
+/**
+ * Everything this browser keeps for the studio cleared, as on a first
+ * visit: the saved checklists, the photos, the undo steps, where the guide
+ * was, the open floor and selection. Maya greets the visitor again.
+ */
+function startOver() {
+    selectTo(null);
+    liftLevel(null);
+    history.clear();
+    if (store) store.clear();
+    if (photoStore) photoStore.prune(new Set()).catch(() => {});
+    state.doc = emptyDoc(CONFIG, now());
+    state.saved = false;
+    state.storageStatus = 'fresh';
+    Object.assign(ui, { editing: null, room: null, task: null, afterPrefs: false, filter: 'all', menuArea: null });
+    refresh();
+    guideTo({ type: 'restart' });
+    announce(HELP.resetDone);
+    if (host) host.focusPrimary();
+    return state.doc;
+}
+
 /** Another tab saved: follow it, and drop undo steps that belonged to the
  *  document it replaced. */
 function followOtherTab() {
@@ -1925,7 +1993,7 @@ function setupEventListeners() {
     host = createHost({
         signal,
         timing: { pulse: CONFIG.guide.pulse, again: CONFIG.guide.again },
-        on: { button: onHostButton, floor: onFloor }
+        on: { button: onHostButton, floor: onFloor, step: onHostStep }
     });
     setupHelp(signal);
     panel = createPanel({
@@ -2204,6 +2272,9 @@ export const __test__ = {
     active,
     loadPrices,
     startOwn,
+    startOver,
+    confirmStartOver,
+    firstRoomId,
     editHome,
     submitSetup,
     openPreferences,

@@ -45,6 +45,23 @@ export const GUIDED = Object.freeze(['home', 'attached', 'floors', 'firstRoom', 
  *  (with a townhome's neighbors), Floors, First room, Your rooms, Review. */
 export const PROGRESS = Object.freeze({ home: 0, attached: 0, floors: 1, firstRoom: 2, added: 2, dots: 2, rooms: 3, review: 4 });
 
+/**
+ * Where each step of the strip begins, for a jump to it (a tap on the step)
+ * or Back from the step after: the kind of home, the floors, the first room
+ * (its line again once there is one, `roomId`, else the question), the
+ * rooms, the review. Null for a step that is not on the strip.
+ */
+export function entryOf(stepIndex, { roomId = null } = {}) {
+    switch (stepIndex) {
+    case 0: return { scene: 'home' };
+    case 1: return { scene: 'floors', tapped: false };
+    case 2: return roomId ? { scene: 'added', roomId } : { scene: 'firstRoom' };
+    case 3: return { scene: 'rooms' };
+    case 4: return { scene: 'review' };
+    default: return null;
+    }
+}
+
 /** Scenes that sit over another for a moment and go back to it. */
 const ASIDE = ['hint', 'about'];
 
@@ -81,9 +98,9 @@ export function hasOwn(doc) {
 export function arrivalGuide(doc) {
     const saved = doc.settings && doc.settings.guide;
     const reviewed = Boolean(saved && saved.reviewed);
-    if (!hasOwn(doc)) return { scene: 'hello', resume: null, reviewed, back: null, tapped: false, rooms: 0 };
+    if (!hasOwn(doc)) return { scene: 'hello', resume: null, reviewed, back: null, tapped: false, rooms: 0, reached: -1 };
     const resume = saved && GUIDED.includes(saved.scene) ? saved.scene : null;
-    return { scene: 'welcome', resume, reviewed, back: null, tapped: false, rooms: 0 };
+    return { scene: 'welcome', resume, reviewed, back: null, tapped: false, rooms: 0, reached: -1 };
 }
 
 /** What is saved in the document's settings: the scene of the first build
@@ -101,8 +118,11 @@ export function savedForm(guide) {
  *   start, example         from the greeting
  *   residence              a kind of home chosen ({ kind }: a townhome is
  *                          asked once more), or a townhome's neighbors
- *   back                   back to the kind of home, from its follow-up or
- *                          the floors, to change it (QA, 2026-10-14)
+ *   back                   one step back along the strip, to where the step
+ *                          before begins ({ roomId }: the first room, for
+ *                          its line); from the kind of home, the greeting
+ *   goto                   a step of the strip tapped ({ step, roomId }),
+ *                          any step reached so far (QA, 2026-10-14)
  *   floorTapped, next      the floors, and moving on from them
  *   roomAdded              a room was added, by any route
  *   dotOpened, gotIt       the dots
@@ -116,9 +136,24 @@ export function savedForm(guide) {
  */
 export function step(guide, event) {
     const g = guide;
-    const to = (scene, extra = {}) => ({ ...g, scene, ...extra });
+    // Every step of the strip the visitor has reached, so far, can be gone
+    // back to with a tap (`reached`, the furthest).
+    const to = (scene, extra = {}) => {
+        const next = { ...g, scene, ...extra };
+        const at = PROGRESS[scene];
+        return at === undefined ? next : { ...next, reached: Math.max(g.reached ?? -1, at) };
+    };
     const type = event && event.type;
-    if (type === 'restart') return to('hello', { back: null, tapped: false, rooms: 0, resume: null, answered: false, attachedAnswered: false });
+    if (type === 'restart') return { ...to('hello', { back: null, tapped: false, rooms: 0, resume: null, answered: false, attachedAnswered: false }), reached: -1 };
+    if (GUIDED.includes(g.scene) && (type === 'back' || type === 'goto')) {
+        const here = PROGRESS[g.scene];
+        if (type === 'back' && g.scene === 'home') return to('hello');
+        const target = type === 'back' ? (g.scene === 'attached' ? 0 : here - 1) : event.step;
+        const entry = Number.isInteger(target) && target <= (g.reached ?? -1) ? entryOf(target, event) : null;
+        if (!entry || (entry.scene === g.scene && target === here && g.scene !== 'attached')) return g;
+        const { scene, ...extra } = entry;
+        return to(scene, extra);
+    }
     if (type === 'about') return ASIDE.includes(g.scene) ? g : to('about', { back: g.scene });
     if (type === 'again') {
         if (g.scene === 'done' || g.scene === 'look' || g.scene === 'saved') return to('hint', { back: g.scene });
@@ -137,10 +172,8 @@ export function step(guide, event) {
         return g;
     case 'attached':
         if (type === 'residence') return to('floors', { tapped: false, attachedAnswered: true });
-        if (type === 'back') return to('home');
         return g;
     case 'floors':
-        if (type === 'back') return to('home');
         if (type === 'floorTapped') return g.tapped ? g : to('floors', { tapped: true });
         if (type === 'next') return to('firstRoom');
         if (type === 'roomAdded') return to('added', { roomId: event.roomId || null });
@@ -224,7 +257,7 @@ export function addedLine(sheet, area, label, bath) {
 
 /**
  * What the bubble shows for a scene: `{ text, buttons, choices, progress,
- * skip, small, again }`. `buttons` are `{ id, label, primary }`, at most
+ * reached, stepBack, skip, small, again }`. `buttons` are `{ id, label, primary }`, at most
  * two; `choices` is 'home' (the kinds of home, each a button in a group),
  * 'floors' or null; `progress` the step of the strip or
  * null; `again` the line said once, in other words, if nothing happens.
@@ -233,7 +266,12 @@ export function addedLine(sheet, area, label, bath) {
  */
 export function viewFor(guide, ctx = {}) {
     const b = (id, label, primary = false) => ({ id, label, primary });
-    const base = { choices: null, progress: PROGRESS[guide.scene] ?? null, skip: SKIPPABLE.includes(guide.scene), small: '', again: GUIDE[`${guide.scene}Again`] || '' };
+    // Back on every step of the strip, beside Skip (QA, 2026-10-14), and the
+    // steps reached so far, each a tap away.
+    const base = {
+        choices: null, progress: PROGRESS[guide.scene] ?? null, reached: guide.reached ?? -1, skip: SKIPPABLE.includes(guide.scene),
+        stepBack: GUIDED.includes(guide.scene), small: '', again: GUIDE[`${guide.scene}Again`] || ''
+    };
     switch (guide.scene) {
     case 'hello':
         return { ...base, text: GUIDE.hello, buttons: [b('start', GUIDE.start, true), b('example', GUIDE.example)], small: BRAND.honesty };
@@ -241,9 +279,9 @@ export function viewFor(guide, ctx = {}) {
         // Asked again after Back, the answer given is shown as chosen.
         return { ...base, text: guide.answered ? GUIDE.homeAgainAsked : GUIDE.home, buttons: [], choices: 'home', answered: Boolean(guide.answered) };
     case 'attached':
-        return { ...base, text: GUIDE.attached, buttons: [b('back', GUIDE.back)], choices: 'attached' };
+        return { ...base, text: GUIDE.attached, buttons: [], choices: 'attached' };
     case 'floors':
-        return { ...base, text: guide.tapped ? `${GUIDE.floorsTaking} ${GUIDE.floors}` : GUIDE.floors, buttons: [b('next', GUIDE.next, true), b('back', GUIDE.back)], choices: 'floors' };
+        return { ...base, text: guide.tapped ? `${GUIDE.floorsTaking} ${GUIDE.floors}` : GUIDE.floors, buttons: [b('next', GUIDE.next, true)], choices: 'floors' };
     case 'firstRoom':
         return { ...base, text: GUIDE.firstRoom, buttons: [b('kitchen', GUIDE.addKitchen, true), b('otherRoom', GUIDE.otherRoom)] };
     case 'added':

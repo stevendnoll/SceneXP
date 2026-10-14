@@ -265,6 +265,7 @@ export const GUIDE = Object.freeze({
     progressLabel: 'Your progress',
     progress: Object.freeze(['Home type', 'Floors', 'First room', 'Your rooms', 'Review']),
     progressStep: (n, total, name) => `Step ${n} of ${total}: ${name}`,
+    goToStep: (name) => `Go to ${name}`,
 
     hello: "Hi, I'm Maya with Whitestone Home Care. Let's build a cleaning checklist for your home, room by room. It takes about two minutes.",
     helloAgain: "Tap Let's start and I'll walk you through it, one step at a time.",
@@ -383,7 +384,12 @@ export const HELP = Object.freeze({
     button: 'Help',
     label: 'Help and your checklist',
     again: 'Show me again',
-    restart: 'Start over with the guide',
+    /** Start over: everything cleared, after the confirmation card. */
+    reset: 'Start over',
+    resetTitle: 'Start over from the beginning?',
+    resetDetail: 'This clears your checklists, photos and answers from this browser, and Maya will greet you as on your first visit. It cannot be undone.',
+    resetConfirm: 'Clear and start over',
+    resetDone: 'Everything is cleared. You are back at the beginning.',
     checklist: 'Your checklist',
     menu: 'Service menu',
     prefs: 'Care preferences',

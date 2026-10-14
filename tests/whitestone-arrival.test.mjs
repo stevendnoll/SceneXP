@@ -54,7 +54,10 @@ describe('the markup', () => {
         expect(text(/id="ws-undo"[^>]*>([^<]+)</)).toBe(HELP.undo);
         expect(text(/id="ws-help"[^>]*aria-label="([^"]+)"/)).toBe(HELP.label);
         expect(HTML).toMatch(/<div id="ws-help-menu"[^>]*\shidden>/);
-        for (const key of ['again', 'restart', 'checklist', 'menu', 'prefs', 'home', 'mine', 'about']) {
+        // Maya's Back, beside Skip, ships hidden, in copy.js's word.
+        expect(text(/id="host-back"[^>]*>([^<]+)</)).toBe(GUIDE.back);
+        expect(HTML).toMatch(/<button id="host-back"[^>]*\shidden>/);
+        for (const key of ['again', 'reset', 'checklist', 'menu', 'prefs', 'home', 'mine', 'about']) {
             expect(text(new RegExp(`id="help-${key}"[^>]*>([^<]+)<`))).toBe(HELP[key]);
         }
         // The panel ships closed, its back button in copy.js's words, and the
@@ -216,7 +219,7 @@ describe('the kind of home (ONBOARDING Scene 2a)', () => {
         fire(dom.el('ws-undo'), 'click');
         fire(dom.el('ws-undo'), 'click');
         expect(main.__test__.model().placed.massing).toEqual([]);
-        fire(dom.el('help-restart'), 'click');
+        main.__test__.guideTo({ type: 'restart' });
         press('start');
         pick('kind-condo');
         expect(main.__test__.model().placed.lawn.map((p) => p.color)).toEqual(['paving']);
@@ -228,22 +231,22 @@ describe('the kind of home (ONBOARDING Scene 2a)', () => {
         press('start');
         expect(picks().map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'false']);
         pick('kind-townhome');
-        expect(buttons()).toEqual([GUIDE.back]);
-        press('back');
+        expect(buttons()).toEqual([]);
+        fire(dom.el('host-back'), 'click');
         expect(line()).toBe(GUIDE.homeAgainAsked);
         expect(picks().filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent)).toEqual(['A townhome']);
         expect(picks().find((b) => b.textContent === 'A townhome').classList.contains('is-on')).toBe(true);
         pick('kind-townhome');
         pick('attached-middle');
-        press('back');
+        fire(dom.el('host-back'), 'click');
         pick('kind-townhome');
         // Its neighbors, once answered, are marked too.
         expect(picks().filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent)).toEqual(['Between two neighbors']);
-        press('back');
+        fire(dom.el('host-back'), 'click');
         pick('kind-condo');
         expect(main.__test__.active().residence).toEqual({ kind: 'condo', attached: null });
         expect(line()).toBe(GUIDE.floors);
-        press('back');
+        fire(dom.el('host-back'), 'click');
         pick('kind-house');
         expect(main.__test__.active().residence.kind).toBe('house');
         expect(dom.el('host-choices').children[0].children.slice(1).map((l) => l.children[0].value)).toContain('basement');
@@ -371,7 +374,8 @@ describe('a first visit', () => {
         // The floors are the strip's second step, the home type done.
         expect(dom.el('host-progress').children.map((li) => li.getAttribute('aria-current'))).toEqual([null, 'step', null, null, null]);
         expect(dom.el('host-progress').children[0].classList.contains('is-done')).toBe(true);
-        expect(buttons()).toEqual([GUIDE.next, GUIDE.back]);
+        expect(buttons()).toEqual([GUIDE.next]);
+        expect(dom.el('host-back').hidden).toBe(false);
         // Saved, with where the guide is.
         expect(saved().settings.guide).toEqual({ scene: 'floors', reviewed: false });
     });
@@ -404,7 +408,7 @@ describe('a first visit', () => {
         press('next');
         expect(own(main).title).toBe('Maple Street');
         expect(line()).toBe(GUIDE.firstRoom);
-        fire(dom.el('help-restart'), 'click');
+        main.__test__.guideTo({ type: 'restart' });
         press('start');
         pick('kind-house');
         main.__test__.host().titleField.value = '   ';
@@ -613,7 +617,7 @@ describe('the example', () => {
         main.__test__.remove('example-home-1');
         fire(dom.el('confirm-actions').children[1], 'click');
         expect(main.__test__.active()).toBeNull();
-        fire(dom.el('help-restart'), 'click');
+        main.__test__.guideTo({ type: 'restart' });
         press('example');
         expect(main.__test__.active()).toMatchObject({ id: 'example-home-1', sample: true, deletedAt: null });
         expect(main.__test__.state.doc.checklists.filter((c) => c.id === 'example-home-1')).toHaveLength(1);
@@ -624,10 +628,10 @@ describe('the example', () => {
         expect(saved.checklists.find((c) => c.id === 'example-home-1').deletedAt).not.toBeNull();
     });
 
-    test('starting over puts the example back and shows the plain house again', async () => {
+    test('restarting the guide puts the example back and shows the plain house again', async () => {
         const main = await boot();
         press('example');
-        fire(dom.el('help-restart'), 'click');
+        main.__test__.guideTo({ type: 'restart' });
         expect(main.__test__.active()).toBeNull();
         expect(line()).toBe(GUIDE.hello);
     });
@@ -679,6 +683,111 @@ describe('nudges', () => {
         main.__test__.host().poke();
         await jest.advanceTimersByTimeAsync(4000);
         expect(line()).toBe(GUIDE.hello);
+    });
+});
+
+describe('moving along the strip (QA, 2026-10-14)', () => {
+    const steps = () => dom.el('host-progress').children;
+    const stepButton = (i) => steps()[i].children[0];
+
+    test('the steps reached are buttons that go there; the one she is on, and those ahead, are not', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        press('next');
+        expect(line()).toBe(GUIDE.firstRoom);
+        // Home type and Floors behind, First room here, the rest ahead.
+        expect(steps().map((li) => (li.children[0] ? 'button' : 'text'))).toEqual(['button', 'button', 'text', 'text', 'text']);
+        expect(stepButton(1).getAttribute('aria-label')).toBe(GUIDE.goToStep('Floors'));
+        fire(stepButton(1), 'click');
+        expect(line()).toBe(GUIDE.floors);
+        // First room is ahead of the floors now, and still a tap away.
+        expect(steps()[2].children[0].textContent).toBe('First room');
+        fire(steps()[2].children[0], 'click');
+        expect(line()).toBe(GUIDE.firstRoom);
+        press('kitchen');
+        const kitchen = main.__test__.active().rooms[0];
+        // Back to the floors, and on again to the First room: the kitchen's
+        // line, not a second kitchen.
+        fire(dom.el('host-back'), 'click');
+        expect(line()).toBe(GUIDE.floors);
+        fire(steps()[2].children[0], 'click');
+        expect(main.__test__.ui.guide).toMatchObject({ scene: 'added', roomId: kitchen.id });
+        expect(main.__test__.active().rooms).toHaveLength(1);
+    });
+
+    test('Back from Your rooms is the first room\'s line again, not its question', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        press('next');
+        press('kitchen');
+        press('next');
+        press('gotIt');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        fire(dom.el('host-back'), 'click');
+        expect(main.__test__.ui.guide).toMatchObject({ scene: 'added', roomId: main.__test__.active().rooms[0].id });
+    });
+
+    test('Back on the First room step, and from the kind of home to the greeting', async () => {
+        await boot();
+        press('start');
+        pick('kind-house');
+        press('next');
+        expect(dom.el('host-back').hidden).toBe(false);
+        fire(dom.el('host-back'), 'click');
+        expect(line()).toBe(GUIDE.floors);
+        fire(dom.el('host-back'), 'click');
+        expect(line()).toBe(GUIDE.homeAgainAsked);
+        fire(dom.el('host-back'), 'click');
+        expect(line()).toBe(GUIDE.hello);
+        expect(dom.el('host-back').hidden).toBe(true);
+    });
+});
+
+describe('Start over (QA, 2026-10-14)', () => {
+    test('asked first on the confirmation card; Cancel keeps everything', async () => {
+        const main = await boot();
+        press('start');
+        pick('kind-condo');
+        const before = main.__test__.state.doc;
+        fire(dom.el('ws-help'), 'click');
+        fire(dom.el('help-reset'), 'click');
+        expect(openCards()).toEqual(['confirm']);
+        expect(dom.el('confirm-title').textContent).toBe(HELP.resetTitle);
+        expect(dom.el('confirm-detail').textContent).toBe(HELP.resetDetail);
+        expect(dom.el('confirm-actions').children.map((b) => b.textContent)).toEqual(['Cancel', HELP.resetConfirm]);
+        fire(dom.el('confirm-actions').children[0], 'click');
+        expect(main.__test__.state.doc).toBe(before);
+        expect(saved()).not.toBeNull();
+    });
+
+    test('confirmed, everything is cleared and Maya greets the visitor as on a first visit', async () => {
+        const main = await boot();
+        press('start');
+        pick('kind-townhome');
+        pick('attached-end');
+        tick('second', true);
+        expect(saved().checklists).toHaveLength(1);
+        main.__test__.confirmStartOver();
+        fire(dom.el('confirm-actions').children[1], 'click');
+        expect(localStorage.getItem(CONFIG.storage.key)).toBeNull();
+        expect(main.__test__.state.doc.checklists).toEqual([]);
+        expect(main.__test__.active()).toBeNull();
+        expect(main.__test__.ui.guide).toMatchObject({ scene: 'hello', reached: -1, answered: false });
+        expect(line()).toBe(GUIDE.hello);
+        expect(main.__test__.model().placed.massing).toEqual([]);
+        expect(main.__test__.model().levels()).toEqual(['main']);
+        expect(said()).toBe(HELP.resetDone);
+        expect(document.activeElement).toBe(dom.el('host-actions').children.find((b) => b.id === 'host-start'));
+        // Nothing to undo, and nothing saved until a change.
+        fire(dom.el('ws-undo'), 'click');
+        expect(main.__test__.state.doc.checklists).toEqual([]);
+        expect(localStorage.getItem(CONFIG.storage.key)).toBeNull();
+        // And the whole way in again works.
+        press('start');
+        expect(line()).toBe(GUIDE.home);
+        expect(saved().checklists).toHaveLength(1);
     });
 });
 
@@ -746,7 +855,7 @@ describe('Help and Undo', () => {
         press('start');
         pick('kind-house');
         tick('second', true);
-        expect(dom.el('ws-undo').disabled).toBe(false);
+        expect(dom.el('ws-undo').hidden).toBe(false);
         fire(dom.el('ws-undo'), 'click');
         expect(own(main).levels).toEqual(['main']);
     });
