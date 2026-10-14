@@ -38,7 +38,7 @@
  * on the walls of the one below. Everything is plain numbers first
  * (`instancesFor`), so the tests check every wall, window and dot without a
  * renderer, and each kind of part is then ONE instanced mesh, sized for the
- * most a checklist may hold: seventeen draw calls for any home.
+ * most a checklist may hold: eighteen draw calls for any home.
  *
  * ON A ROUND LAWN. The model stands on the turntable's top, on a lawn disc
  * inside its stone rim, the house a little back of the middle so the front
@@ -50,6 +50,7 @@
 import { layoutHome, extentOf, markerGrid, MODEL } from './layout.min.js';
 import { smoothstep } from './turntable.min.js';
 import { roomName } from './taxonomy.min.js';
+import { kitFor, kitExtent } from './rooms.min.js';
 
 /** The home shown when no checklist is open: one empty main floor under
  *  its roof, so the turntable holds a house waiting to be filled. */
@@ -146,84 +147,12 @@ export const WINDOWS = Object.freeze({
     basement: Object.freeze({ w: 0.09, h: 0.04, sill: 0.11 })
 });
 
-/**
- * Each kind of room's fixture: parts in meters, [dx, dz, width, depth,
- * height, lift, color, shape], from the middle of the room's back wall (dz
- * runs toward the front). `color` is a key of CONFIG.model.palette, or
- * `accent` and `accent2`, the room's own muted colors (accentsFor): the
- * room is white oak and white and greige, and the accent is a cushion, a
- * throw, a rug, an island. `shape` is 'blob' for a plant's leaves, else a
- * box. Scaled down together to fit a small room.
- */
-const PLANT = (dx, dz) => [[dx, dz, 0.026, 0.026, 0.026, 0, 'pot'], [dx, dz, 0.045, 0.045, 0.05, 0.026, 'plant', 'blob']];
-export const FIXTURES = Object.freeze({
-    bed: [
-        [0, 0.11, 0.24, 0.22, 0.002, 0, 'rug'],
-        [0, 0.095, 0.14, 0.17, 0.025, 0, 'duvet'],
-        [-0.035, 0.03, 0.05, 0.025, 0.012, 0.025, 'duvet'],
-        [0.035, 0.03, 0.05, 0.025, 0.012, 0.025, 'duvet'],
-        [0, 0.163, 0.14, 0.035, 0.004, 0.025, 'accent'],
-        [0, 0.008, 0.15, 0.014, 0.055, 0, 'fabric'],
-        [-0.1, 0.02, 0.03, 0.03, 0.03, 0, 'oak'],
-        [0.1, 0.02, 0.03, 0.03, 0.03, 0, 'oak']
-    ],
-    crib: [[0, 0.07, 0.13, 0.13, 0.002, 0, 'rug'], [0, 0.06, 0.09, 0.1, 0.04, 0, 'white'], [0, 0.06, 0.07, 0.08, 0.003, 0.04, 'accent']],
-    sofa: [
-        [0, 0.09, 0.2, 0.12, 0.002, 0, 'rug'],
-        [0, 0.04, 0.18, 0.06, 0.022, 0, 'fabric'],
-        [0, 0.01, 0.18, 0.016, 0.045, 0, 'fabric'],
-        [-0.084, 0.04, 0.014, 0.06, 0.032, 0, 'fabric'],
-        [0.084, 0.04, 0.014, 0.06, 0.032, 0, 'fabric'],
-        [-0.045, 0.026, 0.035, 0.012, 0.022, 0.022, 'accent'],
-        [0.045, 0.026, 0.035, 0.012, 0.022, 0.022, 'accent2'],
-        [0, 0.115, 0.06, 0.035, 0.016, 0, 'oak'],
-        ...PLANT(0.12, 0.025)
-    ],
-    table: [
-        [0, 0.1, 0.14, 0.08, 0.006, 0.034, 'oak'],
-        [0, 0.1, 0.03, 0.03, 0.034, 0, 'oak'],
-        [-0.04, 0.045, 0.026, 0.026, 0.022, 0, 'charcoal'],
-        [0.04, 0.045, 0.026, 0.026, 0.022, 0, 'charcoal'],
-        [-0.04, 0.155, 0.026, 0.026, 0.022, 0, 'charcoal'],
-        [0.04, 0.155, 0.026, 0.026, 0.022, 0, 'charcoal'],
-        [0, 0.1, 0.02, 0.02, 0.014, 0.04, 'accent']
-    ],
-    counters: [
-        [0, 0.025, 0.24, 0.045, 0.036, 0, 'white'],
-        [0, 0.025, 0.24, 0.047, 0.006, 0.036, 'counter'],
-        [0, 0.11, 0.1, 0.045, 0.036, 0, 'accent'],
-        [0, 0.11, 0.104, 0.049, 0.006, 0.036, 'counter'],
-        [-0.03, 0.15, 0.018, 0.018, 0.026, 0, 'oak'],
-        [0.03, 0.15, 0.018, 0.018, 0.026, 0, 'oak']
-    ],
-    tub: [[0, 0.04, 0.13, 0.065, 0.032, 0, 'white'], [0.09, 0.03, 0.035, 0.03, 0.03, 0, 'counter'], [0, 0.095, 0.07, 0.035, 0.002, 0, 'rug']],
-    vanity: [[0, 0.02, 0.06, 0.04, 0.032, 0, 'white'], [0, 0.02, 0.062, 0.042, 0.006, 0.032, 'counter'], [0, 0.065, 0.06, 0.03, 0.002, 0, 'rug']],
-    desk: [
-        [0, 0.03, 0.11, 0.05, 0.006, 0.032, 'oak'],
-        [-0.045, 0.03, 0.012, 0.045, 0.032, 0, 'white'],
-        [0.045, 0.03, 0.012, 0.045, 0.032, 0, 'white'],
-        [0, 0.075, 0.032, 0.03, 0.024, 0, 'charcoal'],
-        [0, 0.08, 0.16, 0.1, 0.002, 0, 'rug'],
-        ...PLANT(0.1, 0.02)
-    ],
-    laundry: [[-0.022, 0.022, 0.04, 0.04, 0.042, 0, 'white'], [0.022, 0.022, 0.04, 0.04, 0.042, 0, 'white'], [0.06, 0.03, 0.025, 0.025, 0.02, 0, 'accent']],
-    shelves: [
-        [0, 0.012, 0.16, 0.022, 0.05, 0, 'white'],
-        [-0.05, 0.012, 0.02, 0.016, 0.02, 0.05, 'accent'],
-        [-0.02, 0.012, 0.02, 0.016, 0.016, 0.05, 'oak'],
-        [0.04, 0.012, 0.02, 0.016, 0.022, 0.05, 'accent2']
-    ],
-    stairs: [[0, 0.02, 0.07, 0.04, 0.012], [0, 0.05, 0.07, 0.03, 0.024], [0, 0.075, 0.07, 0.03, 0.036], [0, 0.1, 0.07, 0.03, 0.048]]
-        .map(([x, z, w, d, h]) => [x, 0.12 - z, w, d, h, 0, 'oak']),
-    bench: [[0, 0.05, 0.12, 0.08, 0.002, 0, 'rug'], [0, 0.02, 0.1, 0.03, 0.022, 0, 'oak'], ...PLANT(0.075, 0.02)],
-    mat: [[0, 0.08, 0.12, 0.05, 0.004, 0, 'accent'], [0.05, 0.03, 0.03, 0.03, 0.03, 0, 'white']],
-    car: [[0, 0.13, 0.09, 0.2, 0.03, 0.006, 'car'], [0, 0.135, 0.075, 0.1, 0.025, 0.036, 'carGlass']]
-});
-
 /** Each kind of room's floor: white oak where people live and sleep,
  *  light tile in a kitchen and a bath, concrete where there is a car. */
 export const FLOOR_OF = Object.freeze({
-    kitchen: 'tileKitchen', 'primary-bathroom': 'tileBath', bathroom: 'tileBath', 'powder-room': 'tileBath',
+    // A white kitchen on white oak, so its cabinets stand out (QA of the
+    // first kits, by eye).
+    kitchen: 'oak', 'primary-bathroom': 'tileBath', bathroom: 'tileBath', 'powder-room': 'tileBath',
     laundry: 'tile', mudroom: 'tile', pantry: 'tile',
     garage: 'concrete', patio: 'counter'
 });
@@ -243,17 +172,6 @@ export function accentsFor(roomId) {
     return { accent: `accent${i + 1}`, accent2: `accent${((i + 2) % ACCENTS) + 1}` };
 }
 
-/** Which fixture says what kind of room it is. A room not named here has
- *  none, and its floor and its walls say enough. */
-export const FIXTURE_OF = Object.freeze({
-    'primary-bedroom': 'bed', bedroom: 'bed', nursery: 'crib',
-    living: 'sofa', family: 'sofa', bonus: 'sofa', playroom: 'mat',
-    dining: 'table', patio: 'table', kitchen: 'counters',
-    'primary-bathroom': 'tub', bathroom: 'tub', 'powder-room': 'vanity',
-    office: 'desk', laundry: 'laundry', closet: 'shelves', pantry: 'shelves',
-    stairs: 'stairs', entry: 'bench', mudroom: 'bench', hallway: 'bench',
-    gym: 'mat', garage: 'car'
-});
 
 // ---- The stack (pure) ------------------------------------------------------------
 
@@ -642,7 +560,7 @@ function crossGable(level, top, roofY, cx, cz) {
  * its windows); `site` the yard's half width and depth (siteFor), and the
  * round lawn's radius when it has one.
  */
-export function instancesFor(layout, offsets, { lifted = null, areas = new Map(), site = null, selection = null } = {}) {
+export function instancesFor(layout, offsets, { lifted = null, areas = new Map(), site = null, selection = null, baths = new Map() } = {}) {
     const [cx, cy, cz0] = centerOf(layout);
     // On a site, the house stands back a little, so the front yard has room
     // for its path, its drive and its beds (HOUSE.site.yard).
@@ -659,7 +577,7 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
     const lowest = living[0] || stories[0];
     const out = {
         slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [],
-        fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [], outlines: []
+        fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [], outlines: [], rounds: []
     };
     let door = null;
     const garages = [];
@@ -771,9 +689,14 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
         out.walls.push(...partitions(t, s, y, cx, cz).map((p) => ({ ...p, color: 'interior' })));
         // Its fixture carries the room's id (fixtureFor), so a tap on its
         // bed or its sofa is a tap on the room.
-        const fx = fixtureFor(areas.get(t.roomId), t, floorTop, x, z);
+        // Against an outside wall, or only a low partition (what hangs on
+        // a wall goes where there is one).
+        const outer = Math.abs(t.z - t.depth / 2 - MODEL.tileGap / 2 - (s.z - s.depth / 2 + MODEL.margin)) < 1e-6;
+        const wall = outer ? (s.kind === 'story' ? wallHeight(t.level) : HOUSE.garageWall) : HOUSE.partition.height;
+        const fx = fixtureFor(areas.get(t.roomId), t, floorTop, x, z, baths.get(t.roomId), wall);
         out.fixtures.push(...fx.boxes);
         out.blooms.push(...fx.blobs);
+        out.rounds.push(...fx.rounds);
         // The selected room outlined in the accent, a hovered one more
         // faintly: a thin raised border just inside the room's floor.
         if (selection && (selection.roomId === t.roomId || selection.hoverRoomId === t.roomId)) {
@@ -860,25 +783,31 @@ function partitions(t, s, y, cx, cz) {
 /** A room's fixture against its back wall, scaled down to fit a small
  *  room, or none when the room is too small to show one: { boxes, blobs },
  *  the leaves of its plants as blobs, its colors resolved to the room's own. */
-function fixtureFor(area, t, floorTop, x, z) {
-    const shape = FIXTURES[FIXTURE_OF[area]];
-    if (!shape) return { boxes: [], blobs: [] };
-    const wide = Math.max(...shape.map(([dx, , w]) => Math.abs(dx) + w / 2)) * 2;
-    const deep = Math.max(...shape.map(([, dz, , d]) => dz + d / 2));
+function fixtureFor(area, t, floorTop, x, z, bath = 'tub', wall = Infinity) {
+    const none = { boxes: [], blobs: [], rounds: [] };
+    const pieces = kitFor(area, t.width, t.depth, { bath, band: HOUSE.fixtureBand, wall });
+    if (!pieces.length) return none;
+    const { half, deep } = kitExtent(pieces);
     const gap = 0.006;   // off the back wall
-    const k = Math.min(1, (t.width * 0.85) / wide, (t.depth * HOUSE.fixtureBand - gap) / deep);
-    if (k < 0.4) return { boxes: [], blobs: [] };
+    // Shrunk evenly to fit, and left out below a point.
+    const k = Math.min(1, (t.width / 2 - 0.004) / half, (t.depth * HOUSE.fixtureBand - gap) / deep);
+    if (k < 0.4) return none;
     const back = z - t.depth / 2 + gap;
     const own = accentsFor(t.roomId);
-    const out = { boxes: [], blobs: [] };
-    for (const [dx, dz, w, d, h, up, color, kind] of shape) {
-        const p = part(t.level, x + dx * k, floorTop + up * k, back + dz * k, w * k, h * k, d * k, { roomId: t.roomId, color: own[color] || color });
-        if (kind === 'blob') {
-            // A blob's record has its middle at `position`.
-            out.blobs.push({ ...p, top: p.top });
-        } else {
-            out.boxes.push(p);
+    const out = { boxes: [], blobs: [], rounds: [] };
+    for (const p of pieces) {
+        const extra = { roomId: t.roomId, color: own[p.color] || p.color, role: p.role };
+        if (p.rot) extra.rotation = p.rot;
+        const r = part(t.level, x + p.x * k, floorTop + p.up * k, back + p.z * k, p.w * k, p.h * k, p.d * k, extra);
+        if (p.rot) {
+            // Turned on its side: its height is its diameter, not its depth.
+            const tall = (p.rot[0] ? p.d : p.w) * k;
+            r.position[1] = floorTop + p.up * k + tall / 2;
+            r.top = floorTop + p.up * k + tall;
         }
+        if (p.shape === 'blob') out.blobs.push(r);
+        else if (p.shape === 'round') out.rounds.push(r);
+        else out.boxes.push(r);
     }
     return out;
 }
@@ -1157,7 +1086,10 @@ export function buildModel(config, at) {
         windows: make('windows', box, colored(0.25, { metalness: 0.2 }), 600, true),
         roofs: make('roofs', box, roofMaterial, 12),
         gables: make('gables', prism, colored(0.85), 6, true),
-        fixtures: make('fixtures', box, colored(0.7), limits.rooms * 8, true),
+        fixtures: make('fixtures', box, colored(0.7), limits.rooms * 40, true),
+        // The round things in the rooms: basins, bowls, burners, stools,
+        // lamps, a washer's door.
+        rounds: make('rounds', new THREE.CylinderGeometry(0.5, 0.5, 1, 18), colored(0.55), limits.rooms * 24, true),
         trims: make('trims', box, colored(0.5), 40, true),
         site: make('site', box, colored(0.9), 80, true),
         canopies: make('canopies', new THREE.IcosahedronGeometry(0.5, 1), colored(0.8, { flatShading: true }), 120, true),
@@ -1194,7 +1126,7 @@ export function buildModel(config, at) {
     /** Each part's lift now, and the move toward its target. */
     const now = new Map();
     let move = null;
-    let placed = { slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [], fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [], outlines: [] };
+    let placed = { slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [], fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [], outlines: [], rounds: [] };
     const turntable = config.stage.turntable;
     let scaled = 1;
     let restHeight = 0;
@@ -1236,6 +1168,7 @@ export function buildModel(config, at) {
         place(meshes.canopies, placed.canopies, paintOf);
         place(meshes.blooms, placed.blooms, paintOf);
         place(meshes.firs, placed.firs, paintOf);
+        place(meshes.rounds, placed.rounds, paintOf);
         place(meshes.lawn, placed.lawn, paintOf);
         place(meshes.markers, placed.markers, (p) => (p.selected ? paint.markerSelected : paint.marker));
         place(meshes.outlines, placed.outlines, paintOf);

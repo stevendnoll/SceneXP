@@ -100,7 +100,7 @@ export const CONFIG = deepFreeze({
             interior: '#F7F5F1',   // the rooms' own walls, white
             oak: '#D9C3A1',        // white oak floors
             tileKitchen: '#E8E5DF',
-            tileBath: '#E2E4E3',
+            tileBath: '#CBCECC',   // a soft gray, so white fixtures read on it
             tile: '#E1DDD6',
             concrete: '#BEBBB5',
             counter: '#EEEBE6',    // white quartz
@@ -110,6 +110,16 @@ export const CONFIG = deepFreeze({
             charcoal: '#3E4146',   // dining chairs, a desk chair
             rug: '#DCD4C6',
             pot: '#E9E5DD',        // white ceramic planters
+            // The rooms' furnishings (rooms.js): stainless appliances, a
+            // black cooktop and screens, a sink's basin, a bath's water and
+            // glass, a mirror, a lamp's shade.
+            steel: '#C3C7CA',
+            appliance: '#2A2D31',
+            sinkBasin: '#9EA5AA',
+            water: '#CFE0E6',
+            showerGlass: '#D4E2E8',
+            mirror: '#DCE6EA',
+            lampshade: '#F2ECE1',
             plant: '#5E8A4A',
             car: '#3A4452',
             carGlass: '#8EA3B4',

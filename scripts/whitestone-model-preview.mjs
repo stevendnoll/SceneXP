@@ -167,6 +167,30 @@ function figureFaces(maya, pose = null) {
     return faces;
 }
 
+/** A round piece (a basin, a stool, a washer's door): a cylinder, turned
+ *  as the page turns it. */
+function roundFaces(b, n = 16) {
+    const [w, h, d] = b.scale;
+    const c = b.position;
+    const P = (x, y, z) => {
+        const r = rotate([x, y, z], b.rotation);
+        return [c[0] + r[0], c[1] + r[1], c[2] + r[2]];
+    };
+    const ring = (y) => Array.from({ length: n }, (_, k) => {
+        const a = (k / n) * Math.PI * 2;
+        return P(Math.cos(a) * w / 2, y, Math.sin(a) * d / 2);
+    });
+    const top = ring(h / 2);
+    const bottom = ring(-h / 2);
+    const faces = [];
+    const mid = P(0, h / 2, 0);
+    for (let k = 0; k < n; k++) {
+        faces.push([mid, top[(k + 1) % n], top[k]]);
+        faces.push([bottom[k], top[k], top[(k + 1) % n], bottom[(k + 1) % n]]);
+    }
+    return faces;
+}
+
 /** The turntable in the world: a stone drum on its dark toe. */
 function turntableFaces(n = 96) {
     const faces = [];
@@ -214,6 +238,7 @@ function facesOf(inst) {
     for (const b of [...inst.canopies, ...inst.blooms]) add(blobFaces(b), color(b, PAL.leaves));
     for (const b of inst.firs) add(coneFaces(b), color(b, PAL.fir1));
     for (const b of inst.lawn || []) add(discFaces(b), PAL.lawn);
+    for (const b of inst.rounds || []) add(roundFaces(b), color(b, '#FF00FF'));
     for (const b of inst.outlines || []) add(boxFaces(b), b.color === 'outline' ? CONFIG.colors.accent : CONFIG.model.outlineHover);
     for (const m of inst.markers) add(boxFaces(m, true), m.selected ? CONFIG.colors.accent : CONFIG.model.marker);
     for (const b of inst.flags) add(boxFaces(b), CONFIG.model.marker);
@@ -233,9 +258,9 @@ function lit(poly, hex) {
  * the house (turned by `yaw`, at scale `k`) rasterized with a depth buffer
  * at twice the size, then shrunk.
  */
-function render(inst, { k, yaw, tilt, zoom = 1, houseHeight, width, height, gesture = null }) {
+function render(inst, { k, yaw, tilt, zoom = 1, houseHeight, width, height, gesture = null, camera = null }) {
     const aspect = width / height;
-    const pose = framePose(aspect, houseHeight, { tilt, zoom }, CONFIG);
+    const pose = camera ? { ...camera, offset: [0, 0] } : framePose(aspect, houseHeight, { tilt, zoom }, CONFIG);
     const W2 = width * 2;
     const H2 = height * 2;
     const eye = pose.eye;
@@ -274,7 +299,7 @@ function render(inst, { k, yaw, tilt, zoom = 1, houseHeight, width, height, gest
     };
     const world = (p) => turnPoint([k * p[0], T.height + k * p[1], k * p[2]], yaw);
     // Maya stands beside the turntable on a wide frame (turntable.js host).
-    const maya = aspect >= CONFIG.view.tallBelow ? buildMaya(CONFIG) : null;
+    const maya = aspect >= CONFIG.view.tallBelow && !camera ? buildMaya(CONFIG) : null;
     const faces = [
         ...turntableFaces().map(({ poly, hex }) => ({ poly, rgb: lit(poly, hex) })),
         ...(maya ? figureFaces(maya, gesture) : []).map(({ poly, hex }) => ({ poly, rgb: lit(poly, hex) })),
@@ -357,17 +382,17 @@ function png({ width, height, rgb }) {
 }
 
 /** A home's parts on the turntable, its scale, and its closed height. */
-function build(home, lifted = null, selection = null) {
+function build(home, lifted = null, selection = null, baths = new Map()) {
     const layout = layoutHome(home);
     const k = fitScale(layout, T, CONFIG.model.scale);
     const site = siteFor(layout, T, k);
     const areas = new Map((home.rooms || []).map((r) => [r.id, r.area]));
-    const inst = instancesFor(layout, levelOffsets(layout.slabs, lifted, CONFIG.model.lift), { lifted, areas, site, selection });
+    const inst = instancesFor(layout, levelOffsets(layout.slabs, lifted, CONFIG.model.lift), { lifted, areas, site, selection, baths });
     const closed = instancesFor(layout, new Map(), { areas, site });
     // The frame holds the floors lifted above an open one too (main.js
     // frameHeight).
     const houseHeight = k * Math.max(...Object.values(closed).flat().map((p) => p.top)) + (lifted ? CONFIG.model.lift.open * k : 0);
-    return { inst, k, houseHeight };
+    return { inst, k, houseHeight, home };
 }
 
 const example = withExample(emptyDoc(CONFIG, NOW), CONFIG, NOW, null).doc.checklists[0];
@@ -378,6 +403,34 @@ const start = { yaw: V.yaw.start, tilt: V.tilt.start };
 const front = { yaw: 0, tilt: V.tilt.open };
 const shot = (built, look, width, height) => ({ ...built, ...look, width, height });
 
+const close = { yaw: 0, tilt: 0.42, zoom: 0.6 };
+
+/** Every kind of room, and both kinds of bath, for the close-ups. */
+const showcase = {
+    id: 'showcase', serviceType: 'cleaning', title: 'Showcase', levels: ['basement', 'main', 'second', 'garage'], items: [],
+    rooms: [
+        ['kitchen', 'main'], ['living', 'main'], ['dining', 'main'], ['office', 'main'], ['laundry', 'main'], ['powder-room', 'main'],
+        ['primary-bedroom', 'second'], ['primary-bathroom', 'second'], ['bathroom', 'second'], ['bedroom', 'second'], ['nursery', 'second'], ['bathroom', 'second'],
+        ['family', 'basement'], ['gym', 'basement'], ['playroom', 'basement'], ['bonus', 'basement'], ['mudroom', 'basement'], ['closet', 'basement'],
+        ['garage', 'garage']
+    ].map(([area, level], i) => ({ id: `s${i}`, area, level, label: '', deletedAt: null }))
+};
+// The second floor's two baths: a full bath, and a shower bath.
+const showBaths = new Map([['s7', 'tub'], ['s8', 'shower'], ['s11', 'tub']]);
+
+/** A camera close on one room of a built home, its floor open: from in
+ *  front and above, looking at the room's middle. */
+function closeOn(built, roomId, dist = 0.62, fov = 38) {
+    const t = built.inst.tiles.find((x) => x.roomId === roomId);
+    const T0 = CONFIG.stage.turntable;
+    const c = [built.k * t.position[0], T0.height + built.k * t.position[1], built.k * t.position[2]];
+    // Under the floors lifted above, in front of and above the room.
+    return { eye: [c[0], c[1] + dist * 0.55, c[2] + dist], aim: [c[0], c[1], c[2] - 0.03], fov };
+}
+const roomShot = (lifted, roomId, title, dist) => {
+    const built = build(showcase, lifted, null, showBaths);
+    return [title, { ...shot(built, { yaw: 0, tilt: 0.4 }, 1000, 640), camera: closeOn(built, roomId, dist) }];
+};
 const views = [
     ['The example home on arrival, a laptop (1280 by 800)', shot(build(example), start, 1280, 800)],
     ['On arrival, a phone upright (390 by 844), the bottom 45% kept for the sheet', shot(build(example), start, 390, 844)],
@@ -388,6 +441,21 @@ const views = [
     ['Maya waving hello', { ...shot(build(EMPTY_HOME), start, 1280, 800), gesture: { name: 'wave', t: 1.0 } }],
     ['Maya pointing to the house', { ...shot(build(example), start, 1280, 800), gesture: { name: 'point', t: 1.0 } }],
     ['A narrower laptop (1024 by 768)', shot(build(example), start, 1024, 768)],
+    ['Close: the main floor (kitchen, living, dining, office, entry, half bath)', shot(build(example, 'main'), close, 1400, 900)],
+    ['Close: the second floor (bedrooms, baths)', shot(build(example, 'second'), close, 1400, 900)],
+    ['Close: the basement', shot(build(example, 'basement'), close, 1400, 900)],
+    roomShot('main', 's0', 'Kitchen'),
+    roomShot('main', 's5', 'Half bath (powder room)'),
+    roomShot('main', 's4', 'Laundry'),
+    roomShot('main', 's3', 'Office'),
+    roomShot('second', 's7', 'Primary bath, full'),
+    roomShot('second', 's8', 'Bathroom, shower bath'),
+    roomShot('second', 's11', 'Bathroom, full bath'),
+    roomShot('second', 's6', 'Primary bedroom'),
+    roomShot('second', 's10', 'Nursery'),
+    roomShot('basement', 's13', 'Gym'),
+    roomShot('basement', 's14', 'Playroom'),
+    roomShot('garage', 's18', 'Garage', 1.1),
     ['The main floor open, the kitchen selected and a task in it, the living room hovered', shot(build(example, 'main', {
         roomId: example.rooms.find((r) => r.area === 'kitchen').id,
         itemId: example.items.find((i) => i.roomId === example.rooms.find((r) => r.area === 'kitchen').id).id,

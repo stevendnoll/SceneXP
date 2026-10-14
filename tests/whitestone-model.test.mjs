@@ -12,10 +12,11 @@
 import { loadRealThree } from './helpers/real-three.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import {
-    levelOffsets, centerOf, instancesFor, buildModel, fitScale, restack, wallHeight, EMPTY_HOME, HOUSE, FIXTURE_OF, FIXTURES, ACCENTS, accentsFor,
+    levelOffsets, centerOf, instancesFor, buildModel, fitScale, restack, wallHeight, EMPTY_HOME, HOUSE, ACCENTS, accentsFor,
     openingsFor, WINDOW_OF, WINDOWS, columnsFor, siteFor, lawnRadius
 } from '../www/whitestone/js/model.js';
 import { layoutHome, MODEL } from '../www/whitestone/js/layout.js';
+import { KIT_OF, kitFor } from '../www/whitestone/js/rooms.js';
 import { TAXONOMY, roomName } from '../www/whitestone/js/taxonomy.js';
 import { withExample } from '../www/whitestone/js/samples.js';
 import { emptyDoc } from '../www/whitestone/js/store.js';
@@ -116,7 +117,7 @@ describe('instances', () => {
         const areas = new Map((home.rooms || []).map((r) => [r.id, r.area]));
         const inst = instancesFor(layout, off, { lifted, areas });
         // The fixtures are checked below, so there must be some to check.
-        if (home.rooms.some((r) => FIXTURE_OF[r.area]) && home.rooms.length < 10) expect(inst.fixtures.length).toBeGreaterThan(0);
+        if (home.rooms.some((r) => KIT_OF[r.area]) && home.rooms.length < 10) expect(inst.fixtures.length).toBeGreaterThan(0);
         const slabOf = new Map(inst.slabs.map((s) => [s.level, s]));
         const tileOf = new Map(inst.tiles.map((t) => [t.roomId, t]));
         for (const t of inst.tiles) {
@@ -136,7 +137,7 @@ describe('instances', () => {
             // A starred task carries a flag, pole and pennant, and no other does.
             expect(inst.flags.filter((f) => f.itemId === m.itemId)).toHaveLength(m.important ? 2 : 0);
         }
-        for (const f of inst.fixtures) {
+        for (const f of [...inst.fixtures, ...inst.rounds]) {
             const t = tileOf.get(f.roomId);
             expect(inside(f, t)).toBe(true);
             expect(Math.abs(bottom(f) - top(t)) < 1e-9 || bottom(f) > top(t)).toBe(true);
@@ -381,10 +382,10 @@ describe('instances', () => {
         // A room with no fixture of its kind has none, and the rooms a
         // visitor would look for first all have theirs.
         const plain = { ...FULL, levels: ['main'], rooms: [{ id: 'o1', level: 'main', area: 'other', label: '' }, { id: 'k1', level: 'main', area: 'kitchen', label: '' }], items: [] };
-        expect(FIXTURE_OF.other).toBeUndefined();
         const plainParts = instancesFor(layoutHome(plain), new Map(), { areas: new Map([['o1', 'other'], ['k1', 'kitchen']]) }).fixtures;
-        expect(plainParts.some((f) => f.roomId === 'o1')).toBe(false);
-        expect(plainParts.some((f) => f.roomId === 'k1')).toBe(true);
+        // An "other" room has only a plant; a kitchen its counters.
+        expect(plainParts.some((f) => f.roomId === 'o1' && f.role !== 'pot')).toBe(false);
+        expect(plainParts.some((f) => f.roomId === 'k1' && f.role === 'counter')).toBe(true);
         for (const area of ['kitchen', 'living', 'dining', 'office', 'primary-bedroom', 'bedroom', 'primary-bathroom', 'family']) {
             for (const r of home.rooms.filter((x) => x.area === area)) {
                 expect(`${area} ${r.id}: ${inst.fixtures.some((f) => f.roomId === r.id)}`).toBe(`${area} ${r.id}: true`);
@@ -393,12 +394,12 @@ describe('instances', () => {
         // The garage's car, in a garage of its own.
         const g = { ...FULL, levels: ['main', 'garage'], rooms: [{ id: 'g1', level: 'garage', area: 'garage', label: '' }], items: [] };
         const layout = layoutHome(g);
-        const cars = instancesFor(layout, new Map(), { areas: new Map([['g1', 'garage']]) }).fixtures;
-        expect(cars).toHaveLength(2);
+        const cars = instancesFor(layout, new Map(), { areas: new Map([['g1', 'garage']]) }).fixtures.filter((f) => f.role === 'car');
+        expect(cars.length).toBeGreaterThanOrEqual(2);
         // Forty rooms on one floor: tiny rooms, and their fixtures shrink or go.
         const crowd = { ...FULL, levels: ['main'], rooms: Array.from({ length: 40 }, (_, i) => ({ id: `c${i}`, level: 'main', area: 'bedroom', label: '' })), items: [] };
         const small = instancesFor(layoutHome(crowd), new Map(), { areas: new Map(crowd.rooms.map((r) => [r.id, 'bedroom'])) });
-        expect(small.fixtures.length).toBeLessThan(80);
+        expect(small.fixtures.length).toBeLessThan(40 * 16);
     });
 
     test('the model is centered on the turntable and fits its lawn however it is turned, for any home', () => {
@@ -853,7 +854,7 @@ describe('built with the real three.js', () => {
         expect(tiles.instanceColor.count).toBe(CONFIG.limits.rooms);
     });
 
-    test('the example home: three levels, thirteen rooms, twenty-seven tasks, in seventeen draw calls', () => {
+    test('the example home: three levels, thirteen rooms, twenty-seven tasks, in eighteen draw calls', () => {
         const m = buildModel(CONFIG, AT);
         const home = example();
         expect(m.show(home)).toBe(true);
@@ -865,7 +866,7 @@ describe('built with the real three.js', () => {
         expect(windows.count).toBe(m.placed.windows.length);
         let n = 0;
         m.group.traverse((o) => { if (o.isMesh) n++; });
-        expect(n).toBe(17);
+        expect(n).toBe(18);
         // Every part fits its mesh: nothing is dropped for want of room.
         for (const [kind, mesh] of Object.entries(meshes(m))) {
             expect(`${kind}: ${m.placed[kind].length <= mesh.instanceMatrix.count}`).toBe(`${kind}: true`);
@@ -1050,6 +1051,20 @@ describe('built with the real three.js', () => {
         expect(m.selection).toEqual({ roomId: null, itemId: null, hoverRoomId: null });
     });
 
+    test('a range hood and a mirror hang on an outside wall, and not over a low partition', () => {
+        // The example's kitchen backs onto the living room: only a partition.
+        const ex = example();
+        const kitchen = ex.rooms.find((r) => r.area === 'kitchen');
+        const areas = new Map(ex.rooms.map((r) => [r.id, r.area]));
+        const parts = instancesFor(layoutHome(ex), new Map(), { areas }).fixtures.filter((f) => f.roomId === kitchen.id);
+        expect(parts.some((f) => f.role === 'range')).toBe(true);
+        expect(parts.some((f) => f.role === 'hood')).toBe(false);
+        // A kitchen alone on its floor backs onto the outside wall.
+        const alone = { ...EMPTY_HOME, id: 'k', rooms: [{ id: 'k1', level: 'main', area: 'kitchen', label: '' }] };
+        const own = instancesFor(layoutHome(alone), new Map(), { areas: new Map([['k1', 'kitchen']]) }).fixtures;
+        expect(own.some((f) => f.role === 'hood')).toBe(true);
+    });
+
     test('a hit on a dot or its flag says which task it is, and anything else none', () => {
         const m = buildModel(CONFIG, AT);
         m.show(example());
@@ -1080,21 +1095,25 @@ describe('built with the real three.js', () => {
         // The rooms' floors follow the kind of room.
         const home = example();
         const floorOf = (area) => m.placed.tiles.find((t) => home.rooms.find((r) => r.id === t.roomId).area === area).color;
-        expect(floorOf('kitchen')).toBe('tileKitchen');
+        expect(floorOf('kitchen')).toBe('oak');   // white cabinets on white oak
         expect(floorOf('living')).toBe('oak');
         expect(floorOf('primary-bathroom')).toBe('tileBath');
     });
 
     test('every fixture is painted from the palette, each room in two colors of its own', () => {
         const pal = CONFIG.model.palette;
-        for (const [name, parts] of Object.entries(FIXTURES)) {
-            for (const part of parts) expect(`${name}: ${part[6] in pal || ['accent', 'accent2'].includes(part[6])}`).toBe(`${name}: true`);
+        for (const area of Object.keys(KIT_OF)) {
+            for (const bath of ['tub', 'shower']) {
+                for (const p of kitFor(area, 0.5, 0.4, { bath })) {
+                    expect(`${area} ${p.role}: ${p.color in pal || ['accent', 'accent2'].includes(p.color)}`).toBe(`${area} ${p.role}: true`);
+                }
+            }
         }
         for (let i = 1; i <= ACCENTS; i++) expect(pal[`accent${i}`]).toBeTruthy();
         const m = buildModel(CONFIG, AT);
         const home = example();
         m.show(home);
-        for (const f of [...m.placed.fixtures, ...m.placed.blooms]) expect(`${f.color}: ${f.color in pal}`).toBe(`${f.color}: true`);
+        for (const f of [...m.placed.fixtures, ...m.placed.blooms, ...m.placed.rounds]) expect(`${f.color}: ${f.color in pal}`).toBe(`${f.color}: true`);
         // A room's two colors differ, the same room always gets the same,
         // and the home's rooms are not all one color.
         for (const r of home.rooms) {
@@ -1108,7 +1127,7 @@ describe('built with the real three.js', () => {
         expect(m.placed.fixtures.filter((f) => f.roomId === sofaRoom.id).map((f) => f.color)).toContain(accentsFor(sofaRoom.id).accent);
         // Plants in the living room, in white planters.
         expect(m.placed.blooms.some((b) => b.roomId === sofaRoom.id && b.color === 'plant')).toBe(true);
-        expect(m.placed.fixtures.some((f) => f.roomId === sofaRoom.id && f.color === 'pot')).toBe(true);
+        expect(m.placed.rounds.some((f) => f.roomId === sofaRoom.id && f.color === 'pot')).toBe(true);
     });
 
     test('an Eastside new build: gray siding, a white gable, a black door, cedar posts, clipped shrubs, a maple in front and firs behind', () => {
