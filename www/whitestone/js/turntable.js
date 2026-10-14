@@ -280,6 +280,16 @@ export function createTurntable(config) {
             }
             seek = { from: look.yaw, to, tiltFrom: look.tilt, tiltTo, elapsed: 0, seconds };
         },
+        /** One slow, eased full turn, ending where it began: the house
+         *  shown off when the first checklist is saved. */
+        spinOnce(seconds = view.turn.celebrate) {
+            look.velocity = 0;
+            look.holding = false;
+            look.drifting = false;
+            look.idle = 0;
+            if (!(seconds > 0)) return;
+            seek = { from: look.yaw, to: look.yaw + Math.PI * 2, tiltFrom: look.tilt, tiltTo: look.tilt, elapsed: 0, seconds };
+        },
         touch() {
             look.idle = 0;
             look.drifting = false;

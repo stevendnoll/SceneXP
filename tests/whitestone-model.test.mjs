@@ -946,6 +946,61 @@ describe('built with the real three.js', () => {
         expect(yOf('second')).toBeCloseTo(restSecond, 9);
     });
 
+    test('the example builds itself: its floors lifted apart, settling bottom first, the roof last', () => {
+        const m = buildModel(CONFIG, AT);
+        const home = { ...example(), levels: [...example().levels, 'garage'], rooms: [...example().rooms, { id: 'g1', level: 'garage', area: 'garage', label: '' }] };
+        m.show(home);
+        const A = CONFIG.model.assemble;
+        const yOf = (level) => m.placed.slabs.find((s) => s.level === level).position[1];
+        const roofY = () => Math.max(...m.placed.roofs.filter((r) => r.level !== 'garage').map((r) => r.position[1]));
+        const rest = { basement: yOf('basement'), main: yOf('main'), second: yOf('second'), garage: yOf('garage'), roof: roofY() };
+        const plan = m.assemble();
+        expect(plan.map((p) => p.key)).toEqual(['basement', 'main', 'second', 'garage', 'roof:garage', 'roof']);
+        expect(m.moving && m.assembling).toBe(true);
+        // At the start, each above its place, the higher the later.
+        const lifts = () => ({ basement: yOf('basement') - rest.basement, main: yOf('main') - rest.main, second: yOf('second') - rest.second, roof: roofY() - rest.roof });
+        const start = lifts();
+        expect(start.basement).toBeCloseTo(A.rise, 9);
+        expect(start.basement).toBeLessThan(start.main);
+        expect(start.main).toBeLessThan(start.second);
+        expect(start.second).toBeLessThan(start.roof);
+        // The basement lands first, while the second floor waits.
+        m.tick(A.seconds + 1e-6);
+        expect(yOf('basement')).toBeCloseTo(rest.basement, 9);
+        expect(yOf('second') - rest.second).toBeGreaterThan(0.01);
+        // Never a floor through the one above it.
+        for (let t = 0; t < 4; t += 0.05) {
+            m.tick(0.05);
+            const now = lifts();
+            expect(now.main).toBeLessThanOrEqual(now.second + 1e-9);
+            expect(now.second).toBeLessThanOrEqual(now.roof + 1e-9);
+        }
+        expect(m.assembling).toBe(false);
+        expect(m.moving).toBe(false);
+        expect(lifts()).toEqual({ basement: expect.closeTo(0, 9), main: expect.closeTo(0, 9), second: expect.closeTo(0, 9), roof: expect.closeTo(0, 9) });
+        expect(yOf('garage')).toBeCloseTo(rest.garage, 9);
+    });
+
+    test('a floor opened while the home builds itself takes over from where the floors are', () => {
+        const m = buildModel(CONFIG, AT);
+        m.show(example());
+        const yOf = (level) => m.placed.slabs.find((s) => s.level === level).position[1];
+        const rest = yOf('main');
+        m.assemble();
+        m.tick(0.2);
+        const mid = yOf('main');
+        m.lift('main');
+        expect(m.assembling).toBe(false);
+        expect(m.moving).toBe(true);
+        expect(yOf('main')).toBeCloseTo(mid, 9);
+        m.tick(LIFT.seconds);
+        expect(yOf('main') - rest).toBeCloseTo(LIFT.raise, 9);
+        // A new home settles at once.
+        m.assemble();
+        m.show({ ...example(), id: 'another' });
+        expect(m.assembling).toBe(false);
+    });
+
     test('under reduced motion a lift is instant', () => {
         const m = buildModel(CONFIG, AT);
         m.show(example());

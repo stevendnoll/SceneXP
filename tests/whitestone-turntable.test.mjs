@@ -360,6 +360,35 @@ describe('the controller', () => {
         expect(framePose(0.45, 0.3, { tilt: V.tilt.start, zoom: 1 }, CONFIG).host).toBe(false);
     });
 
+    test('the first checklist saved: one slow full turn, ending where it began, and a drag takes over', () => {
+        const tt = createTurntable(CONFIG);
+        tt.turnBy(0.7);
+        tt.tiltBy(0.2);
+        const [yaw, tilt] = [tt.yaw, tt.tilt];
+        tt.spinOnce();
+        tt.step(V.turn.celebrate / 2);
+        // Eased: halfway in time, halfway round.
+        expect(tt.yaw - yaw).toBeCloseTo(Math.PI, 9);
+        steps(tt, V.turn.celebrate);
+        expect(tt.yaw - yaw).toBeCloseTo(Math.PI * 2, 9);
+        expect(tt.tilt).toBe(tilt);
+        expect(tt.step(0.1, { drift: false })).toBe(false);
+        // A drag on the way stops it where it is.
+        const busy = createTurntable(CONFIG);
+        busy.spinOnce();
+        busy.step(0.3);
+        busy.drag(10, 0, 800);
+        busy.release(1);
+        const y = busy.yaw;
+        steps(busy, 3);
+        expect(busy.yaw).toBe(y);
+        // No time, no turn.
+        const none = createTurntable(CONFIG);
+        none.spinOnce(0);
+        expect(none.step(0.1, { drift: false })).toBe(false);
+        expect(none.yaw).toBe(V.yaw.start);
+    });
+
     test('opening a floor turns the front to the visitor the shorter way, and lowers a high view', () => {
         const tt = createTurntable(CONFIG);
         tt.turnBy(Math.PI * 2 * 3 - 0.4);   // three turns round, less a little

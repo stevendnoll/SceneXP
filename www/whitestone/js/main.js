@@ -37,12 +37,20 @@ import {
     createStore, findChecklist, createChecklist, updateChecklist, setLevels, setPreferences, deleteChecklist,
     duplicateChecklist, setSettings, touchVisit, storageUse, isLive, addRoom, updateRoom, deleteRoom, addItem,
     updateItem, deleteItem, addPhoto, removePhoto, photoIdsInUse, newId, itemsIn, liveRooms, liveItems,
-    clearSamples, hasSamples, setBath, setResidence, emptyDoc
+    clearSamples, hasSamples, setBath, setResidence, emptyDoc, setPublication, keepServerFacts
 } from './store.min.js';
 import { withExample } from './samples.min.js';
+import { createApi, createFetchTransport } from './api.min.js';
+import { createStandin } from './standin.min.js';
+import { createSealer } from './seal.min.js';
+import { publish } from './sync.min.js';
+import { createBooking, visitMinutes, shiftMonth, firstOpen, dayLabel, clockLabel } from './booking.min.js';
+import { createReceipt, receiptView } from './receipt.min.js';
+import { todayIn, addDays } from './zoned.min.js';
+import { shareLink, flash } from '../../shared/js/share-1.0.0.min.js';
 import { createHistory } from './history.min.js';
 import { loadSheet, currentVersion, checkChoice, presetFor, presetGains, taskOf } from './sheet.min.js';
-import { priceChoice, formatMoney, formatMinutes } from './pricing.min.js';
+import { priceChoice, formatMoney, formatMinutes, quoteChecklist, roundMinutes } from './pricing.min.js';
 import { createPhotoStore, createMemoryBackend, openIdbBackend, preparePhoto } from './photos.min.js';
 import { roomName, levelOf, bathChoices, bathChoiceOf, residencesOf, levelsAllowed, serviceType as typeOf } from './taxonomy.min.js';
 import { h, clear, initCards, openCard, closeCard, isOpen, anyOpen, announce, toast, confirmCard, setFocusFallback } from './cards.min.js';
@@ -55,7 +63,7 @@ import {
     renderMyChecklists, renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote,
     renderMenu, fillMenuAreas
 } from './panels.min.js';
-import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP } from './copy.min.js';
+import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKING, BOOKING_ERRORS, RECEIPT } from './copy.min.js';
 import { createTurntable, turnPoint } from './turntable.min.js';
 import { buildStage, buildLights, firstPick } from './stage.min.js';
 import { buildModel } from './model.min.js';
@@ -103,7 +111,9 @@ const state = {
  *               a floor, a room or a task, or null
  */
 const ui = {
-    editing: null, room: null, task: null, afterPrefs: false, filter: 'all', menuArea: null, guide: null, selected: null
+    editing: null, room: null, task: null, afterPrefs: false, filter: 'all', menuArea: null, guide: null, selected: null,
+    /** The Choose a time card while it is open, and the receipt shown. */
+    booking: null, receipt: null
 };
 
 /** Thumbnail addresses made for the task card, released when it closes. */
@@ -135,6 +145,9 @@ let host = null;
 let cast = null;
 /** The panel beside the house (panel.js). */
 let panel = null;
+/** The Choose a time card (booking.js) and the receipt (receipt.js). */
+let booking = null;
+let receipt = null;
 /** The scene Maya last gestured for, so each new one gets its gesture. */
 let gesturedFor = null;
 let raycaster = null;
@@ -504,6 +517,8 @@ function onPanelAction(id) {
     switch (id) {
     case 'checklist': openChecklistView(); break;
     case 'home': editHome(); break;
+    case 'book': openBooking(); break;
+    case 'visit': openReceipt(); break;
     case 'anotherRoom': {
         openRoom(null);
         const levelField = el('room-level');
@@ -646,6 +661,11 @@ function showExample() {
     liftLevel(null);
     state.doc = setSettings(state.doc, { activeId: example.id }).doc;
     refresh();
+    // It builds itself, floor by floor, while Maya says what it is.
+    if (model && !state.reducedMotion) {
+        model.assemble();
+        requestRender();
+    }
     return true;
 }
 
@@ -899,7 +919,7 @@ function guideView() {
  *  as a step about it begins. */
 const GESTURE_OF = {
     hello: 'wave', welcome: 'wave',
-    home: 'point', attached: 'point', floors: 'point', firstRoom: 'point', added: 'point', dots: 'point', rooms: 'point', review: 'point',
+    home: 'point', attached: 'point', floors: 'point', saved: 'wave', firstRoom: 'point', added: 'point', dots: 'point', rooms: 'point', review: 'point',
     example1: 'point', example2: 'point', look: 'point'
 };
 
@@ -1012,7 +1032,14 @@ function enterScene(to) {
     case 'saved':
         selectTo(null);
         liftLevel(null);
-        if (to === 'saved') save();
+        if (to === 'saved') {
+            save();
+            // A small celebration: one slow turn of the house, as Maya waves.
+            if (turntable && !state.reducedMotion) {
+                turntable.spinOnce();
+                requestRender();
+            }
+        }
         break;
     default:
         break;
@@ -1065,6 +1092,9 @@ function onHostButton(id) {
         break;
     case 'save':
         guideTo({ type: 'saved' });
+        break;
+    case 'chooseTime':
+        openBooking();
         break;
     case 'back':
         guideTo({ type: 'back', roomId: firstRoomId() });
@@ -1297,6 +1327,191 @@ async function loadPrices() {
     refresh();
 }
 
+// ---- Choosing a time and publishing (M3, against the stand-in) ---------------
+
+/** Who answers the API, and the schedule, made on first need (keeping the
+ *  first load light): the stand-in in this browser until the server runs
+ *  (config.js `api`). Resolves to `{ api, schedule }`, or null. */
+let service = null;
+async function connect() {
+    if (service) return service;
+    try {
+        const response = await fetch('data/schedule.json');
+        if (!response.ok) throw new Error(`${response.status} for the schedule`);
+        const schedule = await response.json();
+        let api;
+        if (CONFIG.api.mode === 'standin') {
+            let backend = null;
+            try {
+                backend = await openIdbBackend(CONFIG, globalThis.indexedDB, { database: CONFIG.api.database, store: 'standin' });
+            } catch (e) {
+                backend = null;
+            }
+            const standin = createStandin({ backend: backend || createMemoryBackend(), config: CONFIG, schedule });
+            api = createApi((request) => standin.handle(request));
+        } else {
+            api = createApi(createFetchTransport((...args) => fetch(...args), CONFIG.api.base));
+        }
+        service = { api, schedule, sealer: createSealer() };
+        return service;
+    } catch (err) {
+        console.error('[Whitestone] The booking service could not start:', err);
+        return null;
+    }
+}
+
+/** The checklist the visitor can book: their own, priced, not yet booked. */
+function bookable(c) {
+    return Boolean(c && !c.sample && state.sheet && liveItems(c).length && !(c.booking && c.published && c.published.at));
+}
+
+/** The month a booking can be made in now, and the last it can reach. */
+function bookingMonths(schedule) {
+    const today = todayIn(now().getTime(), schedule.timezone);
+    return { first: today.slice(0, 7), last: addDays(today, schedule.horizonDays).slice(0, 7) };
+}
+
+function drawBooking() {
+    if (!booking || !ui.booking) return;
+    const b = ui.booking;
+    const range = service ? bookingMonths(service.schedule) : { first: b.month, last: b.month };
+    const quote = state.sheet && active() ? quoteChecklist(state.sheet, active()) : null;
+    booking.show({
+        ...b,
+        summary: quote ? BOOKING.summary(formatMoney(quote.totalCents), formatMinutes(roundMinutes(quote.minutes))) : '',
+        canPrev: b.month > range.first && !b.busy,
+        canNext: b.month < range.last && !b.busy
+    });
+}
+
+/** A month's openings from the API; the earliest open day chosen when the
+ *  chosen one is not open. */
+async function loadMonth() {
+    const b = ui.booking;
+    if (!b || !service) return;
+    b.loading = true;
+    drawBooking();
+    const r = await service.api.availability(b.month, b.minutes);
+    if (ui.booking !== b) return;
+    b.loading = false;
+    b.days = r.ok ? r.data.days : [];
+    if (!r.ok) b.error = BOOKING_ERRORS[r.error] || BOOKING_ERRORS.server;
+    const chosen = b.days.find((d) => d.date === b.selected && d.times.length);
+    if (!chosen) {
+        b.selected = firstOpen(b.days);
+        b.time = null;
+    }
+    drawBooking();
+}
+
+/** Choose a time (PRD 10.3): this month's openings for a visit as long as
+ *  the quote, the earliest chosen. */
+async function openBooking() {
+    const c = active();
+    if (!c) return null;
+    if (!state.sheet) {
+        announce(UI.sheetLoading);
+        toast(UI.sheetLoading);
+        return null;
+    }
+    if (!bookable(c)) {
+        const why = c.sample ? BOOKING_ERRORS.sample : BOOKING_ERRORS.unpriced;
+        announce(why);
+        toast(why);
+        return null;
+    }
+    const svc = await connect();
+    if (!svc) {
+        toast(BOOKING_ERRORS.server);
+        return null;
+    }
+    const quote = quoteChecklist(state.sheet, c);
+    ui.booking = { month: bookingMonths(svc.schedule).first, days: [], selected: null, time: null, minutes: visitMinutes(quote.minutes), error: '', busy: false, loading: true };
+    openCard('booking', { onClose: () => { if (ui.booking && !ui.booking.busy) ui.booking = null; } });
+    await loadMonth();
+    // A month with nothing left goes on to the next, once.
+    if (ui.booking && !firstOpen(ui.booking.days) && ui.booking.month < bookingMonths(svc.schedule).last) {
+        ui.booking.month = shiftMonth(ui.booking.month, 1);
+        await loadMonth();
+    }
+    if (booking) booking.focusDay();
+    return ui.booking;
+}
+
+/** Book and publish (PLANNING 10.1), then the receipt. A time just taken
+ *  shows the day again with what is left, and the next openings said. */
+async function confirmBooking() {
+    const b = ui.booking;
+    const c = active();
+    if (!b || b.busy || !c || !service || !b.selected) return null;
+    const day = b.days.find((d) => d.date === b.selected);
+    const time = day && (day.times.includes(b.time) ? b.time : day.times[0]);
+    if (!time) return null;
+    b.busy = true;
+    b.error = '';
+    drawBooking();
+    const id = c.id;
+    const record = async (patch) => {
+        const r = mutate((d) => setPublication(d, id, patch, CONFIG, now()));
+        return r.error ? findChecklist(state.doc, id) : r.record;
+    };
+    const result = await publish({
+        checklist: c, api: service.api, sealer: service.sealer, photos: photoStore, sheet: state.sheet,
+        slot: { date: b.selected, time, minutes: b.minutes }, at: now().toISOString(), record
+    });
+    if (ui.booking !== b) return result;
+    b.busy = false;
+    if (!result.ok) {
+        b.error = BOOKING_ERRORS[result.error] || BOOKING_ERRORS.server;
+        if (result.error === 'taken' && result.next.length) {
+            b.error = `${b.error} ${result.next.map((n) => `${dayLabel(n.date)} at ${clockLabel(n.time)}`).join(', ')}.`;
+            b.selected = result.next[0].date;
+            b.time = result.next[0].time;
+            if (b.selected.slice(0, 7) !== b.month) b.month = b.selected.slice(0, 7);
+        }
+        await loadMonth();
+        announce(b.error);
+        return result;
+    }
+    closeCard('booking');
+    ui.booking = null;
+    openReceipt();
+    return result;
+}
+
+/** The receipt for the open checklist, once it is published and booked. */
+function openReceipt() {
+    const c = active();
+    const view = c && service ? receiptView(c, { origin: window.location.origin, config: CONFIG, timezone: service.schedule.timezone, now: now().getTime() }) : null;
+    if (!view || !receipt) return null;
+    ui.receipt = view;
+    receipt.show(view);
+    openCard('receipt', { onClose: () => receipt.release() });
+    return view;
+}
+
+/** Copy the link, the PIN or the edit link, and say so beside the button. */
+async function copyFromReceipt(what, button) {
+    const v = ui.receipt;
+    if (!v) return;
+    const text = what === 'pin' ? v.pin : what === 'edit' ? v.edit : v.link;
+    const status = el('receipt-status');
+    try {
+        await navigator.clipboard.writeText(text);
+        flash(button, status, RECEIPT.copied);
+    } catch (e) {
+        // No clipboard here: the field is selected, ready to copy by hand.
+        const field = el(what === 'edit' ? 'receipt-edit-link' : 'receipt-link');
+        if (field && typeof field.select === 'function') field.select();
+    }
+}
+
+function shareFromReceipt(button) {
+    const v = ui.receipt;
+    if (!v) return;
+    shareLink({ title: RECEIPT.shareTitle, text: RECEIPT.shareText, url: v.link }, { onCopied: () => flash(button, el('receipt-status'), RECEIPT.copied) });
+}
+
 // ---- Photos -----------------------------------------------------------------
 
 /** Keep photos in IndexedDB, or in memory for the visit when the browser
@@ -1385,7 +1600,9 @@ function undo() {
         announce(UI.nothingToUndo);
         return null;
     }
-    state.doc = step.doc;
+    // Undo takes back edits, never a publication or a booking: those are
+    // the server's (store.js keepServerFacts).
+    state.doc = keepServerFacts(step.doc, state.doc);
     save();
     refresh();
     announce(UI.undone(step.label));
@@ -2064,6 +2281,31 @@ function setupEventListeners() {
     on('hud-quote', 'click', openQuote);
     on('hud-rooms', 'click', () => selectTo({ scope: 'house', level: null, roomId: null, itemId: null }, { focus: true }));
     on('quote-open-checklist', 'click', openChecklistView);
+    booking = createBooking({
+        signal,
+        on: {
+            month: (by) => {
+                if (!ui.booking || ui.booking.busy) return;
+                ui.booking.month = shiftMonth(ui.booking.month, by);
+                ui.booking.error = '';
+                loadMonth();
+            },
+            day: (date) => {
+                if (!ui.booking) return;
+                ui.booking.selected = date;
+                ui.booking.time = null;
+                drawBooking();
+            },
+            time: (time) => {
+                if (!ui.booking) return;
+                ui.booking.time = time;
+                drawBooking();
+            },
+            confirm: () => confirmBooking()
+        }
+    });
+    receipt = createReceipt({ signal, on: { copy: copyFromReceipt, share: shareFromReceipt, done: () => closeCard('receipt') } });
+    on('booking-cancel', 'click', () => closeCard('booking'));
     on('menu-area', 'change', () => {
         ui.menuArea = el('menu-area').value;
         drawMenu();
@@ -2279,6 +2521,10 @@ export const __test__ = {
     submitSetup,
     openPreferences,
     submitPreferences,
+    openBooking,
+    confirmBooking,
+    openReceipt,
+    connect,
     openMine,
     openChecklist,
     duplicate,

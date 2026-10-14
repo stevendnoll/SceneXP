@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=14" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=15" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7075,6 +7075,14 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="js/store.min.js" rel="modulepreload"]
     link [href="js/samples.min.js" rel="modulepreload"]
+    link [href="js/api.min.js" rel="modulepreload"]
+    link [href="js/standin.min.js" rel="modulepreload"]
+    link [href="js/seal.min.js" rel="modulepreload"]
+    link [href="js/sync.min.js" rel="modulepreload"]
+    link [href="js/booking.min.js" rel="modulepreload"]
+    link [href="js/receipt.min.js" rel="modulepreload"]
+    link [href="js/zoned.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
     link [href="js/history.min.js" rel="modulepreload"]
     link [href="js/sheet.min.js" rel="modulepreload"]
     link [href="js/pricing.min.js" rel="modulepreload"]
@@ -7091,13 +7099,17 @@ html [data-ui-theme="surf" lang="en"]
     link [href="js/host.min.js" rel="modulepreload"]
     link [href="js/cast.min.js" rel="modulepreload"]
     link [href="js/panel.min.js" rel="modulepreload"]
+    link [href="js/links.min.js" rel="modulepreload"]
+    link [href="js/schedule.min.js" rel="modulepreload"]
+    link [href="js/ics.min.js" rel="modulepreload"]
+    link [href="js/qr.min.js" rel="modulepreload"]
     link [href="js/guards.min.js" rel="modulepreload"]
     link [href="js/layout.min.js" rel="modulepreload"]
     link [href="js/rooms.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=14" rel="stylesheet"]
+    link [href="css/experience.min.css?v=15" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7313,6 +7325,97 @@ html [data-ui-theme="surf" lang="en"]
         div.card-actions
           button#quote-open-checklist.ws-btn.ws-btn-primary [type="button"]
             "Open the checklist"
+    div#booking.card-overlay [hidden]
+      div#booking-panel.card-panel.booking-panel [aria-describedby="booking-summary" aria-labelledby="booking-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.card-head
+          h2#booking-title.card-title
+            "Choose a time"
+          button#booking-close.ws-btn.ws-btn-small [type="button"]
+            "Close"
+        p#booking-summary.card-meta
+        div.booking-head
+          button#booking-prev.ws-btn.ws-btn-small.booking-nav [aria-label="Previous month" type="button"]
+            "&lsaquo;"
+          h3#booking-month.booking-month [aria-live="polite"]
+          button#booking-next.ws-btn.ws-btn-small.booking-nav [aria-label="Next month" type="button"]
+            "&rsaquo;"
+        div.booking-calendar [aria-labelledby="booking-month" role="group"]
+          div.booking-week.booking-weekdays [aria-hidden="true"]
+            span
+              "Sun"
+            span
+              "Mon"
+            span
+              "Tue"
+            span
+              "Wed"
+            span
+              "Thu"
+            span
+              "Fri"
+            span
+              "Sat"
+          div#booking-days
+        p#booking-status.form-note [hidden]
+        h3#booking-day-title.booking-day-title [hidden]
+        div#booking-times.booking-times [aria-labelledby="booking-day-title" hidden role="radiogroup"]
+        p#booking-error.form-error [hidden role="alert"]
+        p.card-meta
+          "Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples."
+        div.card-actions
+          button#booking-cancel.ws-btn [type="button"]
+            "Not now"
+          button#booking-confirm.ws-btn.ws-btn-primary [disabled type="button"]
+            "Book and publish"
+    div#receipt.card-overlay [hidden]
+      div#receipt-panel.card-panel.receipt-panel [aria-labelledby="receipt-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.card-head
+          h2#receipt-title.card-title
+            "Your visit is booked"
+          button#receipt-close.ws-btn.ws-btn-small [type="button"]
+            "Close"
+        p#receipt-when.receipt-when
+        p
+          a#receipt-calendar.ws-btn.ws-btn-small [download href="#"]
+            "Add to calendar"
+        p#receipt-quote.receipt-quote
+        p.card-meta
+          "You will never pay more than your quote without approving it first."
+        div.receipt-share
+          div.receipt-link
+            label.receipt-label [for="receipt-link"]
+              "Link for your cleaner"
+            input#receipt-link.ws-input [readonly type="text"]
+            div.receipt-buttons
+              button#receipt-copy-link.ws-btn.ws-btn-small [type="button"]
+                "Copy"
+              button#receipt-share.ws-btn.ws-btn-small [type="button"]
+                "Share"
+            p.receipt-label
+              "PIN"
+            p#receipt-pin.receipt-pin
+            button#receipt-copy-pin.ws-btn.ws-btn-small [type="button"]
+              "Copy"
+            p.form-note
+              "Send the PIN separately, for example by text."
+          figure.receipt-qr
+            div#receipt-qr-box.receipt-qr-box
+            figcaption
+              "Scan to open the checklist"
+        p#receipt-expires.card-meta
+        div.receipt-edit
+          label.receipt-label [for="receipt-edit-link"]
+            "Your private edit link"
+          p.form-note
+            "Keep this one to yourself. It lets you edit this checklist, approve add-ons, and read visit reports from any device."
+          input#receipt-edit-link.ws-input [readonly type="text"]
+          button#receipt-copy-edit.ws-btn.ws-btn-small [type="button"]
+            "Copy"
+        p#receipt-standin.form-note [hidden]
+        p#receipt-status.sr-only [aria-live="polite" role="status"]
+        div.card-actions
+          button#receipt-done.ws-btn.ws-btn-primary [type="button"]
+            "Done"
     div#checklist.card-overlay.checklist-overlay [hidden]
       div#checklist-panel.card-panel.checklist-panel [aria-labelledby="checklist-title" aria-modal="true" role="dialog" tabindex="-1"]
         div.card-head

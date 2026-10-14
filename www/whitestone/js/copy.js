@@ -53,7 +53,59 @@ export const BOOKING_ERRORS = Object.freeze({
     'no-such-time': 'That time does not happen that day, because the clocks change.',
     'too-soon': 'That time is too soon to book. Please choose a later one.',
     'after-close': 'The visit would run past closing. Please choose an earlier time.',
-    taken: 'That time was just taken. Here are the next openings.'
+    taken: 'That time was just taken. Here are the next openings.',
+    // The API's own refusals (api.js, standin.js).
+    'already-booked': 'This checklist already has a visit booked.',
+    'too-late': 'This visit is too close to change online. Please contact Whitestone.',
+    'no-booking': 'This checklist has no visit booked.',
+    expired: 'That took a while, so the reservation lapsed. Please choose your time again.',
+    offline: 'Whitestone could not be reached. Please check your connection and try again.',
+    denied: 'This checklist could not be updated. Please try again.',
+    server: 'Something went wrong on our side. Please try again in a moment.',
+    unpriced: 'Please add a task, or fix the ones the menu no longer offers, before choosing a time.',
+    sample: 'The example home cannot be booked. Build your own to choose a time.'
+});
+
+/** The Choose a time card (booking.js, PRD 10.3). */
+export const BOOKING = Object.freeze({
+    title: 'Choose a time',
+    summary: (money, time) => `Your visit takes about ${time}. Your quote is ${money}.`,
+    times: (n) => (n === 1 ? '1 start time open' : `${n} start times open`),
+    holiday: (name) => `closed for ${name}`,
+    loading: 'Finding open times…',
+    noneThisMonth: 'No openings this month. Please try the next.',
+    startsOn: (day) => `Start times on ${day}`,
+    until: (time) => `until about ${time}`,
+    confirm: 'Book and publish',
+    working: 'Booking your visit…',
+    prev: 'Previous month',
+    next: 'Next month',
+    nextOpenings: 'Next openings',
+    weekdays: Object.freeze(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])
+});
+
+/** The receipt (receipt.js, PRD 13.1). */
+export const RECEIPT = Object.freeze({
+    title: 'Your visit is booked',
+    when: (day, start, end) => `${day}, ${start} to about ${end}`,
+    addToCalendar: 'Add to calendar',
+    quote: (money, time) => `${money} for about ${time}`,
+    guarantee: 'You will never pay more than your quote without approving it first.',
+    linkLabel: 'Link for your cleaner',
+    copy: 'Copy',
+    copied: 'Copied',
+    share: 'Share',
+    shareTitle: 'Whitestone cleaning checklist',
+    shareText: 'Here is the checklist for our cleaning visit.',
+    pinLabel: 'PIN',
+    pinAdvice: 'Send the PIN separately, for example by text.',
+    qrLabel: 'Scan to open the checklist',
+    expires: (day) => `This checklist is kept until ${day}, and renewed whenever you change it.`,
+    editLabel: 'Your private edit link',
+    editAdvice: 'Keep this one to yourself. It lets you edit this checklist, approve add-ons, and read visit reports from any device.',
+    standin: 'Until Whitestone\u2019s server is running, this checklist is kept in this browser, so the link opens here only.',
+    done: 'Done',
+    open: 'Your visit'
 });
 
 /** schedule.js `monthView` statuses, as the calendar labels a day. */
@@ -85,6 +137,7 @@ export const STORE = Object.freeze({
     tooManyChecklistPhotos: (n) => `A checklist can have up to ${n} photos.`,
     roomOfRemovedRoom: 'Its room was removed too. Please restore the room first.',
     notABath: 'Only a bathroom has a type of bath.',
+    sampleNotPublished: 'The example home cannot be booked. Build your own to choose a time.',
     residenceLevelInUse: (level) => `Your ${String(level).toLowerCase()} still has rooms. Please move or remove them before changing the kind of home.`,
     copyOf: (title) => `Copy of ${title}`
 });
@@ -312,7 +365,8 @@ export const GUIDE = Object.freeze({
     reviewAgain: 'Save your checklist when it looks right. Care preferences are optional.',
     preferences: 'Choose preferences',
     save: 'Save my checklist',
-    saved: 'All set. Your checklist is saved in this browser, so you can come back and change it anytime.',
+    saved: 'All set. Your checklist is saved in this browser, so you can come back and change it anytime. When you are ready, choose a time for your visit.',
+    chooseTime: 'Choose a time',
     lookAround: 'Look around',
 
     example1: 'This is a four-bedroom home with a home office.',
@@ -372,6 +426,8 @@ export const PANEL = Object.freeze({
     avoid: (text) => `Please avoid: ${text}`,
     checklist: 'Your checklist',
     home: 'Your home',
+    book: 'Choose a time',
+    visit: 'Your visit',
     open: 'Rooms',
     openLabel: 'Your home, floor by floor: its floors, rooms and tasks',
     starred: (name) => `Starred ${name}. We start there.`,
@@ -435,6 +491,6 @@ export function allCopy() {
         else if (typeof value === 'function') out.push({ where, text: value(12) });
         else if (value && typeof value === 'object') Object.entries(value).forEach(([k, v]) => walk(v, `${where}.${k}`));
     };
-    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, DAY_STATUS, STORE, FREQUENCIES, UI, MODEL_LINES, GUIDE, HELP, PANEL, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
+    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, BOOKING, RECEIPT, DAY_STATUS, STORE, FREQUENCIES, UI, MODEL_LINES, GUIDE, HELP, PANEL, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
     return out;
 }

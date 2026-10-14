@@ -9,8 +9,9 @@
  * DEEP FROZEN, because a shallow freeze lets `CONFIG.stage.cove.width = 2` succeed
  * silently and then every test that follows measures a different stage.
  *
- * The API base and polling intervals arrive with the server (M3). Every
- * other tunable the PRD names is here.
+ * `api` says who answers the API: the server, or until it is running, the
+ * stand-in in this browser (standin.js, M3 option A). Every other tunable
+ * the PRD names is here.
  */
 
 function deepFreeze(value) {
@@ -156,6 +157,10 @@ export const CONFIG = deepFreeze({
         context: { opacity: 0.12 },
         markerGlow: 0.22,      // how much the task dots light themselves
         lift: { raise: 0.02, open: 0.34, seconds: 0.6 },
+        /** The example building itself (model.js assemble): each level, and
+         *  the roof last, starts `rise` and `step` more per level above its
+         *  place, and settles in `seconds`, one every `stagger`. */
+        assemble: { rise: 0.06, step: 0.08, stagger: 0.42, seconds: 0.7 },
         /** Drawn larger than layout.js's numbers, up to `max`, and smaller
          *  only when the house's half-diagonal would come within `margin`
          *  meters of the lawn's edge (QA: the model sat small on a big
@@ -199,7 +204,7 @@ export const CONFIG = deepFreeze({
         yaw: { start: -0.55 },
         tilt: { start: 0.42, min: 0.16, max: 0.72, open: 0.3 },
         zoom: { min: 0.6, max: 1.4, wheel: 0.0012, key: 0.25 },
-        turn: { perPixel: 0.007, tiltPerPixel: 0.0035, damping: 4.5, stop: 0.03, maxSpeed: 4, key: 0.3, hold: 0.12, face: 0.9 },
+        turn: { perPixel: 0.007, tiltPerPixel: 0.0035, damping: 4.5, stop: 0.03, maxSpeed: 4, key: 0.3, hold: 0.12, face: 0.9, celebrate: 2.6 },
         idle: { after: 20, speed: 0.07 },
         arrival: { seconds: 2.5, from: 1.7 },
         subject: { ease: 0.8 },
@@ -291,6 +296,27 @@ export const CONFIG = deepFreeze({
     links: {
         share: '/whitestone/tasks/',
         edit: '/whitestone/'
+    },
+
+    /** Who answers the API (PLANNING 9.2). `standin` until the server runs
+     *  (Steve, 2026-10-14, option A): the same routes answered inside this
+     *  browser (standin.js), kept in their own IndexedDB database, so the
+     *  studio and the tasks page share them on one device. `server` sends
+     *  them to `base`. The rest are the server's rules, which the stand-in
+     *  keeps too (PLANNING 9.3, PRD 13). */
+    api: {
+        mode: 'standin',
+        base: '/api/whitestone/',
+        database: 'scenexp-whitestone-standin',
+        reservationMinutes: 60,
+        publishedDays: 90,
+        visitHours: 12,
+        /** A lock after every fifth wrong PIN in a row, longer each time. */
+        lockoutMinutes: [1, 5, 30, 1440],
+        lockoutEvery: 5,
+        pinIterations: 20000,
+        /** How many openings a refused time offers instead. */
+        nextOpenings: 3
     },
 
     quality: {

@@ -65,7 +65,10 @@ describe('the IndexedDB backend, against a small fake', () => {
         const db = {
             objectStoreNames: { contains: (n) => stores.has(n) },
             createObjectStore: (n) => { stores.add(n); },
-            transaction() {
+            stores,
+            used: [],
+            transaction(name) {
+                db.used.push(name);
                 const tx = {};
                 const store = {
                     get: (k) => { const r = { result: data.get(k) }; return r; },
@@ -79,6 +82,7 @@ describe('the IndexedDB backend, against a small fake', () => {
             }
         };
         return {
+            db,
             opened: [],
             open(name, version) {
                 this.opened.push([name, version]);
@@ -99,6 +103,16 @@ describe('the IndexedDB backend, against a small fake', () => {
         expect(await store.ids()).toEqual(['photo-one-1']);
         await store.remove('photo-one-1');
         expect(await store.get('photo-one-1')).toBeNull();
+    });
+
+    test('the API stand-in\'s database, named, in its own store (standin.js)', async () => {
+        const idb = fakeIdb();
+        const backend = await openIdbBackend(CONFIG, idb, { database: CONFIG.api.database, store: 'standin' });
+        expect(idb.opened).toEqual([['scenexp-whitestone-standin', 1]]);
+        expect([...idb.db.stores]).toEqual(['standin']);
+        await backend.put('meta/x', { a: 1 });
+        expect(await backend.get('meta/x')).toEqual({ a: 1 });
+        expect(new Set(idb.db.used)).toEqual(new Set(['standin']));
     });
 
     test('no IndexedDB, or one that refuses, means no backend, never a crash', async () => {

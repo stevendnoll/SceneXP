@@ -906,6 +906,20 @@ function fixtureFor(area, t, floorTop, x, z, bath = 'tub', wall = Infinity) {
     return out;
 }
 
+/**
+ * How a home assembles itself (the example, M2 step 2): each level, lifted
+ * apart, settling into place in turn, bottom first, then the garages, each
+ * with its own roof, and the house's roof last. `[{ key, from, delay }]`:
+ * the offset key (a level, `roof:<garage>`, or `roof`), how high above its
+ * place it starts, and when it starts to settle. A later key always starts
+ * higher and settles later, so no level passes through the one above it.
+ */
+export function assemblyPlan(slabs, { rise, step, stagger }) {
+    const stories = slabs.filter((s) => s.kind === 'story').sort((a, b) => a.y - b.y).map((s) => s.level);
+    const garages = slabs.filter((s) => s.kind !== 'story').flatMap((s) => [s.level, `roof:${s.level}`]);
+    return [...stories, ...garages, 'roof'].map((key, i) => ({ key, from: rise + i * step, delay: i * stagger }));
+}
+
 /** A box's twelve edges as thin beams, `e` thick, for the sketch. */
 function boxEdges(b, e) {
     const [x, y, z] = b.position;
@@ -1412,6 +1426,8 @@ export function buildModel(config, at) {
     /** Each part's lift now, and the move toward its target. */
     const now = new Map();
     let move = null;
+    /** The home assembling itself (assemble), or null. */
+    let build = null;
     let placed = { slabs: [], tiles: [], markers: [], flags: [], walls: [], windows: [], siding: [], roofs: [], gables: [], fixtures: [], trims: [], site: [], canopies: [], blooms: [], firs: [], lawn: [], outlines: [], rounds: [], massing: [], contextRoofs: [], edges: [] };
     const turntable = config.stage.turntable;
     let scaled = 1;
@@ -1470,6 +1486,7 @@ export function buildModel(config, at) {
 
     function settle() {
         move = null;
+        build = null;
         now.clear();
         for (const [k, y] of targets()) now.set(k, y);
     }
@@ -1508,9 +1525,23 @@ export function buildModel(config, at) {
             draw();
             return true;
         },
+        /** The home builds itself: its levels lifted apart, settling into
+         *  place one by one, the roof last (assemblyPlan). A lift takes over
+         *  from wherever they are. */
+        assemble() {
+            lifted = null;
+            move = null;
+            const plan = assemblyPlan(layout.slabs, colors.assemble);
+            settle();
+            for (const p of plan) now.set(p.key, p.from);
+            build = { plan, elapsed: 0 };
+            draw();
+            return plan;
+        },
         lift(level, instant = false) {
             const exists = level === null || layout.slabs.some((s) => s.level === level);
             if (!exists) return false;
+            build = null;
             lifted = level;
             if (instant || !(colors.lift.seconds > 0)) {
                 settle();
@@ -1523,6 +1554,19 @@ export function buildModel(config, at) {
             return true;
         },
         tick(delta) {
+            if (build) {
+                build.elapsed += Math.max(0, delta);
+                const A = colors.assemble;
+                let done = true;
+                for (const p of build.plan) {
+                    const t = Math.min(1, Math.max(0, (build.elapsed - p.delay) / A.seconds));
+                    if (t < 1) done = false;
+                    now.set(p.key, p.from * (1 - smoothstep(t)));
+                }
+                if (done) build = null;
+                draw();
+                return true;
+            }
             if (!move) return false;
             move.elapsed += Math.max(0, delta);
             const t = smoothstep(move.elapsed / colors.lift.seconds);
@@ -1535,7 +1579,10 @@ export function buildModel(config, at) {
             return true;
         },
         get moving() {
-            return Boolean(move);
+            return Boolean(move || build);
+        },
+        get assembling() {
+            return Boolean(build);
         },
         /** The home's levels, bottom to top and then the garages. */
         levels() {

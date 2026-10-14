@@ -297,7 +297,8 @@ export function viewFor(guide, ctx = {}) {
     case 'review':
         return { ...base, text: GUIDE.review, buttons: [b('save', GUIDE.save, true), b('preferences', GUIDE.preferences)] };
     case 'saved':
-        return { ...base, text: GUIDE.saved, buttons: [b('lookAround', GUIDE.lookAround, true)] };
+        // Saved, the visit is a tap away (M3): Choose a time, or look around.
+        return { ...base, text: GUIDE.saved, buttons: [b('chooseTime', GUIDE.chooseTime, true), b('lookAround', GUIDE.lookAround)] };
     case 'example1':
         return { ...base, text: GUIDE.example1, buttons: [b('next', GUIDE.next, true)] };
     case 'example2':

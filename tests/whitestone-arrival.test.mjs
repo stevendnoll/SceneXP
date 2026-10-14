@@ -538,6 +538,41 @@ describe('Maya on the stage', () => {
         expect(maya.talking).toBe(0);
     });
 
+    test('the example builds itself, floor by floor, and whole at once under reduced motion', async () => {
+        const main = await boot();
+        main.__test__.state.reducedMotion = false;
+        press('example');
+        expect(main.__test__.model().assembling).toBe(true);
+        stepFrames(Math.ceil(4000 / 16));
+        expect(main.__test__.model().assembling).toBe(false);
+        main.__test__.guideTo({ type: 'restart' });
+        main.__test__.state.reducedMotion = true;
+        press('example');
+        expect(main.__test__.model().assembling).toBe(false);
+    });
+
+    test('the first checklist saved: the house turns once while Maya waves, and not under reduced motion', async () => {
+        const main = await boot();
+        main.__test__.state.reducedMotion = false;
+        press('start');
+        pick('kind-house');
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'review', reached: 4 };
+        const tt = main.__test__.turntable();
+        const yaw = tt.yaw;
+        main.__test__.onHostButton('save');
+        expect(line()).toBe(GUIDE.saved);
+        expect(main.__test__.cast().gesturing).toBe('wave');
+        stepFrames(Math.ceil((CONFIG.view.turn.celebrate + 0.5) * 1000 / 16));
+        expect(tt.yaw - yaw).toBeCloseTo(Math.PI * 2, 3);
+        // Under reduced motion, the words alone.
+        main.__test__.state.reducedMotion = true;
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'review' };
+        const still = tt.yaw;
+        main.__test__.onHostButton('save');
+        stepFrames(Math.ceil(3000 / 16));
+        expect(tt.yaw).toBe(still);
+    });
+
     test('her bubble goes beside her head where there is room for it, and back to its own place where there is not', async () => {
         const main = await boot();
         const host = main.__test__.host();

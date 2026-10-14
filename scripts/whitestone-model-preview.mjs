@@ -22,8 +22,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { deflateSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { instancesFor, levelOffsets, fitScale, siteFor, bathsOf, EMPTY_HOME } from '../www/whitestone/js/model.js';
-import { framePose, turnPoint } from '../www/whitestone/js/turntable.js';
+import { instancesFor, levelOffsets, fitScale, siteFor, bathsOf, assemblyPlan, EMPTY_HOME } from '../www/whitestone/js/model.js';
+import { framePose, turnPoint, smoothstep } from '../www/whitestone/js/turntable.js';
 import { contactAlpha } from '../www/whitestone/js/stage.js';
 import { loadRealThree } from '../tests/helpers/real-three.mjs';
 
@@ -398,14 +398,21 @@ function png({ width, height, rgb }) {
 }
 
 /** A home's parts on the turntable, its scale, and its closed height. Each
- *  bathroom drawn by its own type of bath, as the page draws it. */
-function build(home, lifted = null, selection = null) {
+ *  bathroom drawn by its own type of bath, as the page draws it. With
+ *  `assembleAt` (seconds), the home part way through building itself, as
+ *  model.js assemble and tick have it then. */
+function build(home, lifted = null, selection = null, assembleAt = null) {
     const baths = bathsOf(home);
     const layout = layoutHome(home);
     const k = fitScale(layout, T, CONFIG.model.scale);
     const site = siteFor(layout, T, k);
     const areas = new Map((home.rooms || []).map((r) => [r.id, r.area]));
-    const inst = instancesFor(layout, levelOffsets(layout.slabs, lifted, CONFIG.model.lift), { lifted, areas, site, selection, baths });
+    let offsets = levelOffsets(layout.slabs, lifted, CONFIG.model.lift);
+    if (assembleAt !== null) {
+        const A = CONFIG.model.assemble;
+        offsets = new Map(assemblyPlan(layout.slabs, A).map((q) => [q.key, q.from * (1 - smoothstep(Math.min(1, Math.max(0, (assembleAt - q.delay) / A.seconds))))]));
+    }
+    const inst = instancesFor(layout, offsets, { lifted, areas, site, selection, baths });
     const closed = instancesFor(layout, new Map(), { areas, site });
     // The frame holds the floors lifted above an open one too (main.js
     // frameHeight).
@@ -470,6 +477,7 @@ const roomShot = (lifted, roomId, title, dist) => {
     const built = build(showcase, lifted, null);
     return [title, { ...shot(built, { yaw: 0, tilt: 0.4 }, 1000, 640), camera: closeOn(built, roomId, dist) }];
 };
+const assembleViews = [0, 0.6, 1.2, 1.8].map((t) => [`The example building itself, ${t} seconds in`, shot(build(example, null, null, t), start, 1280, 800)]);
 const kindViews = [
     ['A townhome, an end unit, its garage tucked under', shot(build(townEnd), start, 1280, 800)],
     ['A townhome between two neighbors', shot(build(townMiddle), start, 1280, 800)],
@@ -519,9 +527,12 @@ const views = [
 
 // `--kinds` renders the kinds of residence alone, to kind-*.png and
 // kinds.html, which is quicker while their models are being made.
+// `--assemble` the example building itself, to assemble-*.png and
+// assemble.html.
 const onlyKinds = process.argv.includes('--kinds');
-const list = onlyKinds ? kindViews : [...views, ...kindViews];
-const prefix = onlyKinds ? 'kind' : 'model';
+const onlyAssemble = process.argv.includes('--assemble');
+const list = onlyAssemble ? assembleViews : onlyKinds ? kindViews : [...views, ...kindViews, ...assembleViews];
+const prefix = onlyAssemble ? 'assemble' : onlyKinds ? 'kind' : 'model';
 await mkdir(path.dirname(OUT), { recursive: true });
 const shots = [];
 for (const [i, [title, opts]] of list.entries()) {
@@ -534,5 +545,5 @@ const page = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>
 <h1>The house on its turntable, through the page's camera</h1>
 ${shots.map(([title, file]) => `<section><h2>${title}</h2><img src="${file}" alt="${title}"></section>`).join('\n')}
 </body></html>`;
-await writeFile(onlyKinds ? path.join(path.dirname(OUT), 'kinds.html') : OUT, page);
+await writeFile(onlyAssemble ? path.join(path.dirname(OUT), 'assemble.html') : onlyKinds ? path.join(path.dirname(OUT), 'kinds.html') : OUT, page);
 console.log(`Wrote ${path.relative(ROOT, OUT)} and ${shots.length} pictures.`);

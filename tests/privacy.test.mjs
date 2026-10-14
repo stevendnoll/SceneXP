@@ -69,7 +69,10 @@ const PERSISTENT = {
  */
 const PERSISTENT_DATABASES = {
     // Unreleased (proto-1), described in privacy.html with Whitestone's M7.
-    'www/whitestone/js/photos.js': 'photos added to a Whitestone checklist, resized and stripped of location'
+    // It opens the API stand-in's database too (standin.js, M3 option A):
+    // published checklists, sealed with a key it never holds, until the
+    // server runs.
+    'www/whitestone/js/photos.js': 'photos added to a Whitestone checklist, resized and stripped of location, and, until the server runs, the sealed checklists a visitor publishes'
 };
 
 /** Source files only. The built .min copies are the same code twice. */

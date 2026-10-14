@@ -546,3 +546,100 @@ describe('a bathroom\'s type of bath, on the page', () => {
         main.__test__.state.sheet = sheet;
     });
 });
+
+// ---- Choose a time, publish, the receipt (M3 against the stand-in) ------------------
+
+describe('choosing a time and publishing, on the page', () => {
+    const action = (id) => dom.el('panel-actions').children.find((b) => b.id === `panel-${id}`);
+    const dayButton = (date) => dom.el('booking-days').children.flatMap((row) => row.children).find((b) => b.id === `booking-day-${date}`);
+
+    async function kitchenHome() {
+        jest.setSystemTime(new Date('2026-10-14T16:00:00Z'));   // a Wednesday, 9:00 am in Seattle
+        const main = await bootHome();
+        main.__test__.tapModel('main');
+        fire(chip('kitchen'), 'click');
+        fire(dom.el('hud-rooms'), 'click');
+        return main;
+    }
+
+    test('the whole house offers Choose a time, which opens on the earliest day with a time free', async () => {
+        const main = await kitchenHome();
+        expect(action('book').textContent).toBe(PANEL.book);
+        await main.__test__.openBooking();
+        expect(dom.el('booking').hidden).toBe(false);
+        expect(dom.el('booking-month').textContent).toBe('October 2026');
+        expect(dom.el('booking-summary').textContent).toMatch(/^Your visit takes about .+\. Your quote is \$\d+\.$/);
+        // Tomorrow is the first day the notice allows; Sunday is closed.
+        const b = main.__test__.ui.booking;
+        expect(b.selected).toBe('2026-10-15');
+        expect(dayButton('2026-10-15').getAttribute('aria-pressed')).toBe('true');
+        expect(dayButton('2026-10-18').disabled).toBe(true);
+        expect(dayButton('2026-10-18').getAttribute('aria-label')).toBe('Sunday, October 18, Closed');
+        expect(dom.el('booking-day-title').textContent).toBe('Start times on Thursday, October 15');
+        const times = dom.el('booking-times').children;
+        expect(times.length).toBeGreaterThan(3);
+        expect(times[0].children[0].checked).toBe(true);
+        expect(dom.el('booking-confirm').disabled).toBe(false);
+        // Another day, and the month after.
+        fire(dayButton('2026-10-16'), 'click');
+        expect(dom.el('booking-day-title').textContent).toBe('Start times on Friday, October 16');
+        expect(dom.el('booking-prev').disabled).toBe(true);
+    });
+
+    test('Book and publish ends on the receipt: the time, the quote, the link, the PIN, a QR code, the edit link', async () => {
+        const main = await kitchenHome();
+        await main.__test__.openBooking();
+        const result = await main.__test__.confirmBooking();
+        expect(result.ok).toBe(true);
+        expect(dom.el('booking').hidden).toBe(true);
+        expect(dom.el('receipt').hidden).toBe(false);
+        expect(dom.el('receipt-when').textContent).toMatch(/^Thursday, October 15, \d+:\d\d (am|pm) to about \d+:\d\d (am|pm)$/);
+        expect(dom.el('receipt-pin').textContent).toMatch(/^\d{6}$/);
+        expect(dom.el('receipt-link').value).toMatch(/^http:\/\/localhost:8000\/whitestone\/tasks\/\?c=[A-Za-z0-9_-]{22}#k=[A-Za-z0-9_-]{43}$/);
+        expect(dom.el('receipt-edit-link').value).toMatch(/^http:\/\/localhost:8000\/whitestone\/\?edit=/);
+        const svg = dom.el('receipt-qr-box').children[0];
+        expect(svg.namespaceURI).toBe('http://www.w3.org/2000/svg');
+        expect(svg.getAttribute('aria-label')).toBe('Scan to open the checklist');
+        expect(dom.el('receipt-standin').hidden).toBe(false);
+        expect(dom.el('receipt-calendar').getAttribute('download')).toBe('whitestone-visit-2026-10-15.ics');
+        const c = main.__test__.active();
+        expect(c.published.at).not.toBeNull();
+        expect(c.booking.date).toBe('2026-10-15');
+        // Saved with it, and Undo cannot take it back.
+        expect(JSON.parse(localStorage.getItem(CONFIG.storage.key)).checklists[0].published.pin).toBe(c.published.pin);
+        fire(dom.el('ws-undo'), 'click');
+        expect(main.__test__.active().published.id).toBe(c.published.id);
+        // The whole house now offers the visit, and opens the receipt again.
+        fire(dom.el('receipt-done'), 'click');
+        fire(dom.el('hud-rooms'), 'click');
+        expect(action('visit').textContent).toBe(PANEL.visit);
+        expect(action('book')).toBeUndefined();
+        fire(action('visit'), 'click');
+        expect(dom.el('receipt').hidden).toBe(false);
+    });
+
+    test('a time just taken by someone else: said, the next opening chosen, and booked on the second try', async () => {
+        const main = await kitchenHome();
+        await main.__test__.openBooking();
+        const { api } = await main.__test__.connect();
+        const other = (await api.reserve()).data;
+        // The first time the page offers, taken a moment before Confirm.
+        const offered = main.__test__.ui.booking.days.find((d) => d.date === '2026-10-15').times[0];
+        expect((await api.book(other.id, other.ownerToken, { date: '2026-10-15', time: offered, minutes: 60 })).ok).toBe(true);
+        const first = await main.__test__.confirmBooking();
+        expect(first.error).toBe('taken');
+        expect(dom.el('booking-error').textContent).toMatch(/^That time was just taken\. Here are the next openings\. Friday, October 16 at 8:00 am/);
+        expect(main.__test__.ui.booking.selected).toBe('2026-10-16');
+        expect(dayButton('2026-10-15').disabled).toBe(true);
+        expect((await main.__test__.confirmBooking()).ok).toBe(true);
+    });
+
+    test('the example offers no time to choose, and says why when asked', async () => {
+        const main = await bootHome();
+        main.__test__.showExample();
+        fire(dom.el('hud-rooms'), 'click');
+        expect(action('book')).toBeUndefined();
+        await main.__test__.openBooking();
+        expect(dom.el('booking').hidden).toBe(true);
+    });
+});

@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=14" as="style">
+    <link rel="preload" href="css/experience.min.css?v=15" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -120,6 +120,14 @@
     <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
     <link rel="modulepreload" href="js/store.min.js">
     <link rel="modulepreload" href="js/samples.min.js">
+    <link rel="modulepreload" href="js/api.min.js">
+    <link rel="modulepreload" href="js/standin.min.js">
+    <link rel="modulepreload" href="js/seal.min.js">
+    <link rel="modulepreload" href="js/sync.min.js">
+    <link rel="modulepreload" href="js/booking.min.js">
+    <link rel="modulepreload" href="js/receipt.min.js">
+    <link rel="modulepreload" href="js/zoned.min.js">
+    <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
     <link rel="modulepreload" href="js/history.min.js">
     <link rel="modulepreload" href="js/sheet.min.js">
     <link rel="modulepreload" href="js/pricing.min.js">
@@ -136,6 +144,10 @@
     <link rel="modulepreload" href="js/host.min.js">
     <link rel="modulepreload" href="js/cast.min.js">
     <link rel="modulepreload" href="js/panel.min.js">
+    <link rel="modulepreload" href="js/links.min.js">
+    <link rel="modulepreload" href="js/schedule.min.js">
+    <link rel="modulepreload" href="js/ics.min.js">
+    <link rel="modulepreload" href="js/qr.min.js">
     <link rel="modulepreload" href="js/guards.min.js">
     <link rel="modulepreload" href="js/layout.min.js">
     <link rel="modulepreload" href="js/rooms.min.js">
@@ -145,7 +157,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=14">
+    <link rel="stylesheet" href="css/experience.min.css?v=15">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -422,6 +434,91 @@
                 examples.</p>
             <div class="card-actions">
                 <button id="quote-open-checklist" class="ws-btn ws-btn-primary" type="button">Open the checklist</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CHOOSE A TIME (booking.js, PRD 10.3): the month's days a visit can
+         start, the chosen day's start times with the earliest chosen, and
+         Book and publish. The days and times are drawn by script from the
+         API's answer. -->
+    <div id="booking" class="card-overlay" hidden>
+        <div id="booking-panel" class="card-panel booking-panel" role="dialog" aria-modal="true"
+            aria-labelledby="booking-title" aria-describedby="booking-summary" tabindex="-1">
+            <div class="card-head">
+                <h2 id="booking-title" class="card-title">Choose a time</h2>
+                <button id="booking-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <p id="booking-summary" class="card-meta"></p>
+            <div class="booking-head">
+                <button id="booking-prev" class="ws-btn ws-btn-small booking-nav" type="button" aria-label="Previous month">&lsaquo;</button>
+                <h3 id="booking-month" class="booking-month" aria-live="polite"></h3>
+                <button id="booking-next" class="ws-btn ws-btn-small booking-nav" type="button" aria-label="Next month">&rsaquo;</button>
+            </div>
+            <div class="booking-calendar" role="group" aria-labelledby="booking-month">
+                <div class="booking-week booking-weekdays" aria-hidden="true">
+                    <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                </div>
+                <div id="booking-days"></div>
+            </div>
+            <p id="booking-status" class="form-note" hidden></p>
+            <h3 id="booking-day-title" class="booking-day-title" hidden></h3>
+            <div id="booking-times" class="booking-times" role="radiogroup" aria-labelledby="booking-day-title" hidden></div>
+            <p id="booking-error" class="form-error" role="alert" hidden></p>
+            <p class="card-meta">Whitestone Home Care is a SceneXP concept studio. Prices and bookings are
+                examples.</p>
+            <div class="card-actions">
+                <button id="booking-cancel" class="ws-btn" type="button">Not now</button>
+                <button id="booking-confirm" class="ws-btn ws-btn-primary" type="button" disabled>Book and publish</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE RECEIPT (receipt.js, PRD 13.1): the appointment with Add to
+         calendar, the quote, the link for the cleaner with Copy and Share,
+         the PIN, a QR code of the link, when it expires, and the private
+         edit link set apart. Filled by script. -->
+    <div id="receipt" class="card-overlay" hidden>
+        <div id="receipt-panel" class="card-panel receipt-panel" role="dialog" aria-modal="true"
+            aria-labelledby="receipt-title" tabindex="-1">
+            <div class="card-head">
+                <h2 id="receipt-title" class="card-title">Your visit is booked</h2>
+                <button id="receipt-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <p id="receipt-when" class="receipt-when"></p>
+            <p><a id="receipt-calendar" class="ws-btn ws-btn-small" href="#" download>Add to calendar</a></p>
+            <p id="receipt-quote" class="receipt-quote"></p>
+            <p class="card-meta">You will never pay more than your quote without approving it first.</p>
+            <div class="receipt-share">
+                <div class="receipt-link">
+                    <label for="receipt-link" class="receipt-label">Link for your cleaner</label>
+                    <input id="receipt-link" class="ws-input" type="text" readonly>
+                    <div class="receipt-buttons">
+                        <button id="receipt-copy-link" class="ws-btn ws-btn-small" type="button">Copy</button>
+                        <button id="receipt-share" class="ws-btn ws-btn-small" type="button">Share</button>
+                    </div>
+                    <p class="receipt-label">PIN</p>
+                    <p id="receipt-pin" class="receipt-pin"></p>
+                    <button id="receipt-copy-pin" class="ws-btn ws-btn-small" type="button">Copy</button>
+                    <p class="form-note">Send the PIN separately, for example by text.</p>
+                </div>
+                <figure class="receipt-qr">
+                    <div id="receipt-qr-box" class="receipt-qr-box"></div>
+                    <figcaption>Scan to open the checklist</figcaption>
+                </figure>
+            </div>
+            <p id="receipt-expires" class="card-meta"></p>
+            <div class="receipt-edit">
+                <label for="receipt-edit-link" class="receipt-label">Your private edit link</label>
+                <p class="form-note">Keep this one to yourself. It lets you edit this checklist, approve add-ons,
+                    and read visit reports from any device.</p>
+                <input id="receipt-edit-link" class="ws-input" type="text" readonly>
+                <button id="receipt-copy-edit" class="ws-btn ws-btn-small" type="button">Copy</button>
+            </div>
+            <p id="receipt-standin" class="form-note" hidden></p>
+            <p id="receipt-status" class="sr-only" role="status" aria-live="polite"></p>
+            <div class="card-actions">
+                <button id="receipt-done" class="ws-btn ws-btn-primary" type="button">Done</button>
             </div>
         </div>
     </div>

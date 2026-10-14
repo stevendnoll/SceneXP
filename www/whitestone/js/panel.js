@@ -162,7 +162,13 @@ export function panelView(sel, checklist, sheet) {
             scope: 'house', title: checklist.title, back: PANEL.close, heading: PANEL.floorsHeading,
             summary: kind ? `${kind}. ${counts}` : counts,
             rows, empty: null, baths: null, chips: null, detail: null,
-            actions: [b('checklist', PANEL.checklist, true), b('home', PANEL.home)]
+            // Booked, the visit's receipt first; priced and the visitor's
+            // own, Choose a time (M3).
+            actions: checklist.booking && checklist.published && checklist.published.at
+                ? [b('visit', PANEL.visit, true), b('checklist', PANEL.checklist), b('home', PANEL.home)]
+                : !checklist.sample && items.length
+                    ? [b('book', PANEL.book, true), b('checklist', PANEL.checklist), b('home', PANEL.home)]
+                    : [b('checklist', PANEL.checklist, true), b('home', PANEL.home)]
         };
     }
     const level = levelOf(type, sel.level) || { name: sel.level };

@@ -46,6 +46,7 @@
 
 import { STORE, ITEM_ERRORS } from './copy.min.js';
 import { serviceType, levelOf, bathOf, bathChoices, residenceOf, levelsAllowed, KEY_PATTERN } from './taxonomy.min.js';
+import { ID as LINK_ID, SECRET } from './links.min.js';
 
 export const ID_PATTERN = /^[A-Za-z0-9_-]{8,36}$/;
 export const SIZES = Object.freeze(['small', 'medium', 'large']);
@@ -178,6 +179,39 @@ function normalizeQuote(raw) {
     };
 }
 
+/**
+ * A publication as this device keeps it (PRD 13, PLANNING 10.1): the
+ * server's id, the checklist's key, the owner token and the PIN (this
+ * device's alone, never part of what is published), when it was published
+ * and its version, when it expires, and which photos are uploaded, so a
+ * publish that stopped part way picks up where it was. Null for anything
+ * malformed: a key or a token of the wrong shape opens nothing.
+ */
+export function normalizePublished(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    if (!LINK_ID.test(String(raw.id)) || !SECRET.test(String(raw.key)) || !SECRET.test(String(raw.ownerToken)) || !/^\d{6}$/.test(String(raw.pin))) return null;
+    return {
+        id: raw.id,
+        key: raw.key,
+        ownerToken: raw.ownerToken,
+        pin: raw.pin,
+        at: stampOrNull(raw.at),
+        version: Number.isInteger(raw.version) && raw.version >= 0 ? raw.version : 0,
+        expiresAt: stampOrNull(raw.expiresAt),
+        photos: keysFrom(raw.photos, (k) => ID_PATTERN.test(k))
+    };
+}
+
+/** A booking as the API made it: the date and start on the business's
+ *  wall clock, its minutes, and its start and end with their offset. */
+export function normalizeBooking(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const ok = /^\d{4}-\d{2}-\d{2}$/.test(String(raw.date)) && /^\d{2}:\d{2}$/.test(String(raw.time))
+        && Number.isInteger(raw.minutes) && raw.minutes > 0 && raw.minutes <= 1440
+        && stampOrNull(raw.start) && stampOrNull(raw.end);
+    return ok ? { date: raw.date, time: raw.time, minutes: raw.minutes, start: raw.start, end: raw.end } : null;
+}
+
 /** Levels as known keys, without repeats, in the taxonomy's order (bottom to
  *  top, the way the house model stacks them). */
 function normalizeLevels(raw, type) {
@@ -231,9 +265,9 @@ export function normalizeChecklist(raw, config, now) {
             household: text(raw.household, config.limits.household),
             preferences: normalizePreferences(raw.preferences, raw.serviceType, config),
             quote: normalizeQuote(raw.quote),
-            // Publishing, booking and visit reports arrive with the server (M3).
-            published: null,
-            booking: null,
+            // Publishing and booking (M3); visit reports arrive with M5.
+            published: normalizePublished(raw.published),
+            booking: normalizeBooking(raw.booking),
             visits: [],
             sample: raw.sample === true,
             createdAt: stampOrNull(raw.createdAt),
@@ -443,6 +477,44 @@ export function setResidence(doc, id, residence, config, now) {
     const rooms = c.rooms.map((r) => (levels.includes(r.level) ? r : { ...r, level: levels[0] }));
     const record = touched({ ...c, residence: next, levels, rooms }, now);
     return { doc: replaceChecklist(doc, record), record, error: null };
+}
+
+/**
+ * What publishing has done so far, recorded as it happens (sync.js), so a
+ * publish that stopped part way resumes: `{ published, booking, quote }`,
+ * each optional, null to clear it. Never an undo step (main.js): these are
+ * facts on the server, which an undo cannot take back.
+ */
+export function setPublication(doc, id, patch, config, now) {
+    const found = liveChecklist(doc, id);
+    if (found.error) return refusal(doc, found.error);
+    const c = found.checklist;
+    if (c.sample) return refusal(doc, STORE.sampleNotPublished);
+    const src = patch || {};
+    const next = { ...c };
+    if ('published' in src) next.published = normalizePublished(src.published);
+    if ('booking' in src) next.booking = normalizeBooking(src.booking);
+    if ('quote' in src) next.quote = normalizeQuote(src.quote);
+    const record = touched(next, now);
+    return { doc: replaceChecklist(doc, record), record, error: null };
+}
+
+/**
+ * A document from undo (`restored`) with the server's facts of `current`
+ * kept: each checklist's publication, booking and locked quote stay as they
+ * are now, since undoing an edit cannot unpublish or unbook anything, and
+ * losing the key or the owner token would leave the published copy
+ * orphaned (QA, 2026-10-14, planned with M3).
+ */
+export function keepServerFacts(restored, current) {
+    const now = new Map((current.checklists || []).map((c) => [c.id, c]));
+    return {
+        ...restored,
+        checklists: restored.checklists.map((c) => {
+            const live = now.get(c.id);
+            return live ? { ...c, published: live.published, booking: live.booking, quote: live.quote } : c;
+        })
+    };
 }
 
 /** Care preferences for the whole visit (PRD 11.8). */

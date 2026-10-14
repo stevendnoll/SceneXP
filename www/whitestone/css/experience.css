@@ -328,6 +328,226 @@ textarea.ws-input {
     justify-content: flex-end;
 }
 
+/* ---- Choose a time (booking.js) ------------------------------------------- */
+
+.booking-panel,
+.receipt-panel {
+    width: min(32rem, 100%);
+    text-align: left;
+}
+
+.booking-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0.8rem 0 0.4rem;
+}
+
+.booking-month {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.booking-nav {
+    min-width: 44px;
+    font-size: 1.2rem;
+}
+
+.booking-calendar {
+    margin-bottom: 0.8rem;
+}
+
+.booking-week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.booking-weekdays span {
+    color: var(--ws-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+.booking-day {
+    min-height: 40px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: none;
+    color: var(--ws-muted);
+    font: inherit;
+    font-size: 0.92rem;
+}
+
+.booking-day.is-open {
+    border-color: var(--ws-line);
+    background: var(--ws-panel);
+    color: var(--ws-graphite);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.booking-day.is-open:hover {
+    border-color: var(--ws-accent);
+}
+
+/* The chosen day, filled: a fill here is the state it reads as. */
+.booking-day.is-selected {
+    border-color: var(--ws-accent);
+    background: var(--ws-accent);
+    color: #FFFFFF;
+}
+
+.booking-day:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.booking-day:focus-visible,
+.booking-time:focus-within {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.booking-day-title {
+    margin: 0.4rem 0 0.4rem;
+    font-size: 0.95rem;
+}
+
+.booking-day-title[hidden],
+.booking-times[hidden] {
+    display: none;
+}
+
+.booking-times {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: 0.4rem;
+    max-height: 13rem;
+    margin-bottom: 0.6rem;
+    overflow-y: auto;
+}
+
+.booking-time {
+    display: flex;
+    flex-direction: column;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.booking-time input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.booking-time:has(input:checked) {
+    border-color: var(--ws-accent);
+    background: var(--ws-accent-soft);
+}
+
+.booking-time-start {
+    font-weight: 700;
+}
+
+.booking-time-until {
+    color: var(--ws-muted);
+    font-size: 0.8rem;
+}
+
+/* ---- The receipt (receipt.js) ---------------------------------------------- */
+
+.receipt-when {
+    margin: 0.6rem 0 0.4rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.receipt-quote {
+    margin: 0.6rem 0 0;
+    font-weight: 600;
+}
+
+.receipt-share {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    align-items: start;
+    margin: 0.9rem 0;
+    padding: 0.9rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 12px;
+}
+
+.receipt-label {
+    display: block;
+    margin: 0 0 0.3rem;
+    color: var(--ws-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.receipt-buttons {
+    display: flex;
+    gap: 0.4rem;
+    margin: 0.4rem 0 0.8rem;
+}
+
+.receipt-pin {
+    margin: 0 0 0.3rem;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    font-variant-numeric: tabular-nums;
+}
+
+.receipt-qr {
+    width: 9.5rem;
+    margin: 0;
+    text-align: center;
+}
+
+.receipt-qr-box svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.receipt-qr figcaption {
+    margin-top: 0.3rem;
+    color: var(--ws-muted);
+    font-size: 0.75rem;
+}
+
+.receipt-edit {
+    margin-top: 0.9rem;
+    padding: 0.9rem;
+    border: 1px dashed var(--ws-line);
+    border-radius: 12px;
+    background: var(--ws-stone);
+}
+
+.receipt-edit .ws-input {
+    margin: 0.4rem 0;
+}
+
+@media (max-width: 30rem) {
+    .receipt-share {
+        grid-template-columns: 1fr;
+    }
+
+    .receipt-qr {
+        width: 11rem;
+        margin: 0 auto;
+    }
+}
+
 /* ---- My checklists -------------------------------------------------------- */
 
 .list-panel {

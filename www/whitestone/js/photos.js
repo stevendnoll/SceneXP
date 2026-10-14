@@ -104,9 +104,13 @@ export function createPhotoStore(backend, config) {
 /**
  * The IndexedDB backend: one database, one object store. Resolves to null
  * where IndexedDB is missing or refused (a private window, for instance),
- * and the page then keeps photos in memory for the visit and says so.
+ * and the page then keeps photos in memory for the visit and says so. The
+ * photos' database by default; `where` names another, as the API's stand-in
+ * does (standin.js), so this stays the one place a database is opened.
  */
-export function openIdbBackend(config, indexedDB = globalThis.indexedDB) {
+export function openIdbBackend(config, indexedDB = globalThis.indexedDB, where = {}) {
+    const database = where.database || config.photos.database;
+    const store = where.store || 'photos';
     // The parameter is named for the global on purpose, so the call below
     // reads `indexedDB.open(` as tests/privacy.test.mjs searches for it, and a
     // test can still hand in its own.
@@ -114,20 +118,20 @@ export function openIdbBackend(config, indexedDB = globalThis.indexedDB) {
         if (!indexedDB) { resolve(null); return; }
         let request;
         try {
-            request = indexedDB.open(config.photos.database, 1);
+            request = indexedDB.open(database, 1);
         } catch (e) {
             resolve(null);
             return;
         }
         request.onupgradeneeded = () => {
-            if (!request.result.objectStoreNames.contains('photos')) request.result.createObjectStore('photos');
+            if (!request.result.objectStoreNames.contains(store)) request.result.createObjectStore(store);
         };
         request.onerror = () => resolve(null);
         request.onsuccess = () => {
             const db = request.result;
             const run = (mode, act) => new Promise((done, fail) => {
-                const tx = db.transaction('photos', mode);
-                const req = act(tx.objectStore('photos'));
+                const tx = db.transaction(store, mode);
+                const req = act(tx.objectStore(store));
                 tx.oncomplete = () => done(req ? req.result : undefined);
                 tx.onerror = () => fail(tx.error);
                 tx.onabort = () => fail(tx.error);
