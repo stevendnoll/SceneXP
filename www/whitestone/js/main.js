@@ -37,18 +37,18 @@ import {
     createStore, findChecklist, createChecklist, updateChecklist, setLevels, setPreferences, deleteChecklist,
     duplicateChecklist, setSettings, touchVisit, storageUse, isLive, addRoom, updateRoom, deleteRoom, addItem,
     updateItem, deleteItem, addPhoto, removePhoto, photoIdsInUse, newId, itemsIn, liveRooms, liveItems,
-    clearSamples, hasSamples
+    clearSamples, hasSamples, setBath
 } from './store.min.js';
 import { withExample } from './samples.min.js';
 import { createHistory } from './history.min.js';
-import { loadSheet, currentVersion, checkChoice, presetFor } from './sheet.min.js';
+import { loadSheet, currentVersion, checkChoice, presetFor, presetGains, taskOf } from './sheet.min.js';
 import { priceChoice, formatMoney, formatMinutes } from './pricing.min.js';
 import { createPhotoStore, createMemoryBackend, openIdbBackend, preparePhoto } from './photos.min.js';
-import { roomName, levelOf, serviceType as typeOf } from './taxonomy.min.js';
+import { roomName, levelOf, bathChoices, bathChoiceOf, serviceType as typeOf } from './taxonomy.min.js';
 import { h, clear, initCards, openCard, closeCard, isOpen, anyOpen, announce, toast, confirmCard, setFocusFallback } from './cards.min.js';
 import {
     initForms, fillSetupForm, readSetupForm, validateSetup, showError, showHints, fillPreferencesForm, readPreferencesForm,
-    fillRoomForm, readRoomForm, validateRoom, showPresetPreview, fillTaskForm, showTaskChoices, readTaskForm
+    fillRoomForm, readRoomForm, validateRoom, showPresetPreview, showBathChoices, fillTaskForm, showTaskChoices, readTaskForm
 } from './forms.min.js';
 import {
     renderMyChecklists, renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote,
@@ -528,6 +528,16 @@ function onPanelAction(id) {
     }
 }
 
+/** A type of bath in the panel: the bathroom made it, the keyboard kept on
+ *  the type just chosen. */
+function onPanelBath(key) {
+    const sel = ui.selected;
+    if (!sel || !sel.roomId) return null;
+    const result = changeBath(sel.roomId, key);
+    if (result && !result.error && panel) panel.focusBath(key);
+    return result;
+}
+
 /** A room chip in the panel: that kind of room on the open floor, with its
  *  standard tasks, selected to show them. */
 function onPanelChip(area) {
@@ -848,7 +858,7 @@ function guideContext() {
         sheet: state.sheet,
         roomCount: c ? liveRooms(c).length : 0,
         roomLabel: room ? roomName(c.serviceType, room) : '',
-        addedText: room ? addedLine(state.sheet, room.area, roomName(c.serviceType, room)) : ''
+        addedText: room ? addedLine(state.sheet, room.area, roomName(c.serviceType, room), room.bath) : ''
     };
 }
 
@@ -1096,6 +1106,50 @@ function addRoomOf(area, level) {
     return result;
 }
 
+/**
+ * A step that makes a bathroom another type of bath (`key` of its
+ * bathChoices), for `change` or a `chain`, with what it takes off and
+ * brings: the tasks the new type cannot have go, and the standard tasks it
+ * brings that the room lacks (a full bath's bathtub) come in. Null when the
+ * room is that type already, or is not a bathroom.
+ */
+function bathStep(c, room, key) {
+    const to = bathChoices(c.serviceType, room.area).find((x) => x.key === key);
+    if (!to || bathChoiceOf(c.serviceType, room) === key) return null;
+    const have = itemsIn(c, room.id).map((i) => i.task);
+    const presetItems = presetGains(state.sheet, room, to, have);
+    return { to, step: (d) => setBath(d, c.id, room.id, key, CONFIG, now(), { check, presetItems }) };
+}
+
+/** A bathroom made another type of bath, said with what came off and on.
+ *  Waits politely for the sheet, which decides what a type can have. */
+function changeBath(roomId, key) {
+    const c = active();
+    const room = c && c.rooms.find((r) => r.id === roomId && !r.deletedAt);
+    if (!room) return null;
+    if (!state.sheet) {
+        announce(UI.sheetLoading);
+        toast(UI.sheetLoading);
+        return null;
+    }
+    const made = bathStep(c, room, key);
+    if (!made) return null;
+    const result = mutate(made.step, UI.labels.bathChanged);
+    if (!result.error) {
+        const said = bathSaid(c, room, made.to, result.record);
+        announce(said);
+        toast(said, { undo });
+    }
+    return result;
+}
+
+/** "The bathroom is now a shower bath. Took off the bathtub." */
+function bathSaid(c, room, to, record) {
+    const name = (i) => (taskOf(state.sheet, i.task) || { name: i.task }).name;
+    const subject = room.label || `The ${roomName(c.serviceType, room).toLowerCase()}`;
+    return UI.bathChanged(subject, to.name, record.removed.map(name), record.added.map(name));
+}
+
 // ---- Help and Undo ----------------------------------------------------------------
 
 /** Whether the Help menu is open. */
@@ -1245,9 +1299,10 @@ function chain(doc, steps) {
     return { doc: current.doc, record: first, error: null };
 }
 
-/** Whether the price sheet allows a choice in an area, for store.js. */
-function check(choice, area) {
-    return state.sheet ? checkChoice(state.sheet, choice, area) : null;
+/** Whether the price sheet allows a choice in an area (and a bathroom's
+ *  type of bath), for store.js. */
+function check(choice, area, bath) {
+    return state.sheet ? checkChoice(state.sheet, choice, area, bath) : null;
 }
 
 /** A mutation that says what it did, with Undo on the toast. */
@@ -1537,7 +1592,7 @@ function openRoom(roomId) {
     const room = roomId ? c.rooms.find((r) => r.id === roomId) || null : null;
     ui.room = room ? room.id : null;
     fillRoomForm(room, c);
-    showPresetPreview(state.sheet, room ? room.area : '');
+    showPresetPreview(state.sheet, room ? room.area : '', room ? room.bath : null);
     openCard('room');
 }
 
@@ -1545,23 +1600,33 @@ function submitRoom(event) {
     if (event) event.preventDefault();
     const c = active();
     if (!c) return null;
-    const fields = readRoomForm();
+    const fields = readRoomForm(c.serviceType);
     const at = now();
     if (ui.room) {
         const id = ui.room;
-        const name = roomName(c.serviceType, { ...c.rooms.find((r) => r.id === id), label: fields.label });
-        const result = change((d) => updateRoom(d, c.id, id, { label: fields.label, level: fields.level }, CONFIG, at),
-            UI.labels.roomChanged, UI.roomChanged(name));
-        if (result.error) showError('room-error', result.error);
-        else closeCard('room');
+        const room = c.rooms.find((r) => r.id === id);
+        // A new type of bath goes in the same step as the name and level, so
+        // one undo takes the whole card back.
+        const made = room && fields.bathChoice && state.sheet ? bathStep(c, room, fields.bathChoice) : null;
+        const update = (d) => updateRoom(d, c.id, id, { label: fields.label, level: fields.level }, CONFIG, at);
+        const result = mutate((d) => chain(d, made ? [made.step, update] : [update]), UI.labels.roomChanged);
+        if (result.error) {
+            showError('room-error', result.error);
+            return result;
+        }
+        const named = { ...room, label: fields.label };
+        const said = made ? bathSaid(c, named, made.to, result.record) : UI.roomChanged(roomName(c.serviceType, named));
+        announce(said);
+        toast(said, { undo });
+        closeCard('room');
         return result;
     }
     const problem = validateRoom(fields);
     showError('room-error', problem);
     if (problem) return null;
-    const presetItems = fields.preset && state.sheet ? presetFor(state.sheet, fields.area) : [];
+    const presetItems = fields.preset && state.sheet ? presetFor(state.sheet, fields.area, fields.bath) : [];
     const name = roomName(c.serviceType, fields);
-    const result = change((d) => addRoom(d, c.id, { level: fields.level, area: fields.area, label: fields.label }, CONFIG, at,
+    const result = change((d) => addRoom(d, c.id, { level: fields.level, area: fields.area, bath: fields.bath, label: fields.label }, CONFIG, at,
         { check, presetItems }), UI.labels.roomAdded, UI.roomAdded(name, presetItems.length));
     if (result.error) {
         showError('room-error', result.error);
@@ -1822,7 +1887,7 @@ function setupEventListeners() {
     setupHelp(signal);
     panel = createPanel({
         signal,
-        on: { back: onPanelBack, row: onPanelRow, star: toggleStar, chip: onPanelChip, action: onPanelAction }
+        on: { back: onPanelBack, row: onPanelRow, star: toggleStar, bath: onPanelBath, chip: onPanelChip, action: onPanelAction }
     });
 
     // Escape steps back (an open floor closes) or puts the arrival panel
@@ -1859,7 +1924,17 @@ function setupEventListeners() {
     on('room-form', 'submit', submitRoom);
     on('room-cancel', 'click', () => closeCard('room'));
     on('room-remove', 'click', removeRoom);
-    on('room-area', 'change', () => showPresetPreview(state.sheet, el('room-area').value));
+    // The kind of room decides the types of bath offered, and both decide
+    // the standard tasks.
+    const roomPreview = () => {
+        const fields = readRoomForm(active() ? active().serviceType : 'cleaning');
+        showPresetPreview(state.sheet, fields.area, fields.bath);
+    };
+    on('room-area', 'change', () => {
+        showBathChoices(active() ? active().serviceType : 'cleaning', el('room-area').value);
+        roomPreview();
+    });
+    on('room-bath-list', 'change', roomPreview);
     on('task-form', 'submit', submitTask);
     on('task-cancel', 'click', () => closeCard('task'));
     on('task-remove', 'click', removeTaskFromCard);

@@ -171,12 +171,13 @@ export function step(guide, event) {
 }
 
 /**
- * A room's preset as the sheet prices it: how many tasks, what they cost
- * together, and about how long they take. Null without a sheet.
+ * A room's preset as the sheet prices it (for a bathroom, its type of
+ * bath's): how many tasks, what they cost together, and about how long they
+ * take. Null without a sheet.
  */
-export function presetSummary(sheet, area) {
+export function presetSummary(sheet, area, bath) {
     if (!sheet) return null;
-    const items = presetFor(sheet, area);
+    const items = presetFor(sheet, area, bath);
     let cents = 0;
     let minutes = 0;
     let count = 0;
@@ -197,9 +198,9 @@ export function presetSummary(sheet, area) {
  * minimum. Without a sheet, or for a room with no standard tasks, she says
  * less, never something wrong.
  */
-export function addedLine(sheet, area, label) {
+export function addedLine(sheet, area, label, bath) {
     const room = String(label || '').toLowerCase();
-    const sum = presetSummary(sheet, area);
+    const sum = presetSummary(sheet, area, bath);
     if (!sum || !sum.count) return GUIDE.addedPlain(room);
     const line = GUIDE.added(room, sum.count, formatMoney(sum.cents));
     const minimum = sheet.visitMinimumCents || 0;

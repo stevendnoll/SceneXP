@@ -28,6 +28,7 @@ export const BRAND = Object.freeze({
 export const ITEM_ERRORS = Object.freeze({
     'unknown-task': 'That task is not on the current service menu.',
     'not-offered': 'That task is not offered in this kind of room.',
+    'not-with-bath': 'That task comes with a full bath. Make this room a full bath to add it.',
     'bad-options': 'Those options could not be read. Please choose them again.',
     'unknown-option': 'That option is not available for this task.',
     'repeated-option': 'That option is already chosen.',
@@ -83,6 +84,7 @@ export const STORE = Object.freeze({
     tooManyPhotos: (n) => `A task can have up to ${n} photos.`,
     tooManyChecklistPhotos: (n) => `A checklist can have up to ${n} photos.`,
     roomOfRemovedRoom: 'Its room was removed too. Please restore the room first.',
+    notABath: 'Only a bathroom has a type of bath.',
     copyOf: (title) => `Copy of ${title}`
 });
 
@@ -129,6 +131,7 @@ export const UI = Object.freeze({
         removed: 'Removed a checklist',
         roomAdded: 'Added a room',
         roomChanged: 'Changed a room',
+        bathChanged: 'Changed a type of bath',
         roomRemoved: 'Removed a room',
         taskAdded: 'Added a task',
         taskChanged: 'Changed a task',
@@ -148,6 +151,13 @@ export const UI = Object.freeze({
     roomRemoved: (name) => `Removed ${name} and its tasks.`,
     presetAdds: (names) => `Adds ${names}.`,
     presetWaiting: 'The standard tasks appear once the service menu has loaded.',
+    /** A bathroom's new type, and the tasks that came off or came with it,
+     *  named: "The bathroom is now a shower bath. Took off the bathtub." */
+    bathChanged: (room, kind, gone = [], added = []) => [
+        `${room} is now ${withArticle(kind)}.`,
+        gone.length ? `Took off ${theList(gone)}.` : '',
+        added.length ? `Added ${theList(added)}.` : ''
+    ].filter(Boolean).join(' '),
 
     // The checklist view
     noRooms: 'No rooms yet. Add your first room to begin.',
@@ -310,6 +320,12 @@ export const GUIDE = Object.freeze({
     close: 'Close'
 });
 
+/** "the shower and the bathtub": task names in a sentence. */
+export function theList(names) {
+    const words = names.map((n) => `the ${String(n).toLowerCase()}`);
+    return words.length < 3 ? words.join(' and ') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
+
 /** "a kitchen", "an office": a room's kind with its article. */
 export function withArticle(name) {
     const word = String(name || '');
@@ -335,6 +351,7 @@ export const PANEL = Object.freeze({
     anotherRoom: 'Another kind of room',
     addTask: 'Add a task',
     editRoom: 'Edit this room',
+    bathHeading: 'Type of bath',
     editTask: 'Edit this task',
     star: 'Star it',
     unstar: 'Unstar it',

@@ -63,7 +63,7 @@ export const TAXONOMY = deepFreeze({
             { key: 'nursery', name: 'Nursery', weight: 1.5 },
             { key: 'primary-bathroom', name: 'Primary bathroom', weight: 1.5 },
             { key: 'bathroom', name: 'Bathroom', weight: 1 },
-            { key: 'powder-room', name: 'Powder room', weight: 0.5 },
+            { key: 'powder-room', name: 'Half bath', weight: 0.5 },
             { key: 'laundry', name: 'Laundry room', weight: 1 },
             { key: 'mudroom', name: 'Mudroom', weight: 1 },
             { key: 'closet', name: 'Closet', weight: 0.5 },
@@ -74,6 +74,21 @@ export const TAXONOMY = deepFreeze({
             { key: 'patio', name: 'Patio', weight: 2 },
             { key: 'other', name: 'Other', weight: 1 }
         ],
+        /** Bath types (PRD 8.10). A bathroom or a primary bathroom is a full
+         *  bath (`tub`, a tub with its shower) or a shower bath (`shower`, a
+         *  stall and no tub), the first by default. A half bath is an area of
+         *  its own (`half.area`, its key kept from when it was the powder
+         *  room), offered as a bathroom's third type. A task a type names
+         *  comes with that type alone: in its standard tasks, after the task
+         *  it names as `after`, and never in a room of another type. */
+        baths: {
+            areas: ['primary-bathroom', 'bathroom'],
+            types: [
+                { key: 'tub', name: 'Full bath', tasks: [{ task: 'bathtub', after: 'shower' }] },
+                { key: 'shower', name: 'Shower bath', tasks: [] }
+            ],
+            half: { area: 'powder-room', of: 'bathroom' }
+        },
         /** Care preferences for the whole visit (PRD 11.8). Optional, unticked
          *  by default, and about the work, never about anybody's health. */
         preferences: [
@@ -152,6 +167,73 @@ export function preferenceOf(type, key) {
         if (item) return { ...item, group: group.key };
     }
     return null;
+}
+
+// ---- Bath types (PRD 8.10) ------------------------------------------------------
+
+const NO_BATHS = Object.freeze({ areas: [], types: [], half: null });
+
+function bathsOf(type) {
+    const t = serviceType(type);
+    return (t && t.baths) || NO_BATHS;
+}
+
+/** A room's bath type: its own when it names one, else the first, in an
+ *  area that has bath types; null in any other area. */
+export function bathOf(type, area, bath) {
+    const b = bathsOf(type);
+    if (!b.areas.includes(area)) return null;
+    return (b.types.find((t) => t.key === bath) || b.types[0]).key;
+}
+
+/** Whether a task can be in a room of `area` with bath type `bath`: false
+ *  only for a task that another bath type brings (a bathtub in a shower
+ *  bath). Every other rule is the price sheet's. */
+export function bathAllows(type, area, bath, taskKey) {
+    const kind = bathOf(type, area, bath);
+    if (!kind) return true;
+    return !bathsOf(type).types.some((t) => t.key !== kind && t.tasks.some((x) => x.task === taskKey));
+}
+
+/** The tasks a room's bath type brings to its standard tasks, each as
+ *  `{ task, after }`. */
+export function bathTasks(type, area, bath) {
+    const kind = bathOf(type, area, bath);
+    const t = kind && bathsOf(type).types.find((x) => x.key === kind);
+    return t ? t.tasks : [];
+}
+
+/**
+ * The types of bath a room of `area` can be, as the room card and the panel
+ * offer them: `[{ key, area, bath, name }]`. A bathroom, or a half bath, has
+ * Full bath, Shower bath and Half bath; a primary bathroom the first two;
+ * any other room none.
+ */
+export function bathChoices(type, area) {
+    const b = bathsOf(type);
+    const head = b.half && area === b.half.area ? b.half.of : area;
+    if (!b.areas.includes(head)) return [];
+    const out = b.types.map((t) => ({ key: t.key, area: head, bath: t.key, name: t.name }));
+    if (b.half && b.half.of === head) {
+        const half = areaOf(type, b.half.area);
+        out.push({ key: 'half', area: b.half.area, bath: null, name: half ? half.name : b.half.area });
+    }
+    return out;
+}
+
+/** Which of its `bathChoices` a room is now, by key, or null. */
+export function bathChoiceOf(type, room) {
+    if (!room) return null;
+    const b = bathsOf(type);
+    if (b.half && room.area === b.half.area) return 'half';
+    return bathOf(type, room.area, room.bath);
+}
+
+/** The area a half bath counts as, for the kinds of room a form lists: a
+ *  half bath is chosen as a bathroom's type, not as a room of its own. */
+export function listedArea(type, area) {
+    const b = bathsOf(type);
+    return b.half && area === b.half.area ? b.half.of : area;
 }
 
 /** The name a room shows: its own label, or its area's name. */

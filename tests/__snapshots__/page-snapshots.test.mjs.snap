@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=9" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=10" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7097,7 +7097,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=9" rel="stylesheet"]
+    link [href="css/experience.min.css?v=10" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7157,6 +7157,10 @@ html [data-ui-theme="surf" lang="en"]
         "Back to the whole house"
       h2#panel-title.panel-title
       p#panel-summary.panel-summary [hidden]
+      div#panel-baths.panel-baths [aria-labelledby="panel-baths-label" hidden role="group"]
+        p#panel-baths-label.panel-chips-heading
+          "Type of bath"
+        div#panel-baths-list.panel-baths-list
       h3#panel-heading.panel-heading [hidden]
       ul#panel-list.panel-list [hidden]
       p#panel-empty.panel-empty [hidden]
@@ -7325,6 +7329,10 @@ html [data-ui-theme="surf" lang="en"]
             label [for="room-area"]
               "Kind of room"
             select#room-area.ws-select
+          fieldset#room-bath-row.form-group [hidden]
+            legend
+              "Type of bath"
+            div#room-bath-list
           div.form-row
             label [for="room-level"]
               "Level"

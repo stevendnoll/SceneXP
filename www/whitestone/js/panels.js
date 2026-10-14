@@ -16,7 +16,7 @@ import { UI } from './copy.min.js';
 import { isLive, liveRooms, liveItems, itemsIn } from './store.min.js';
 import { quoteChecklist, priceItem, priceChoice, formatMoney, spokenMoney, formatMinutes } from './pricing.min.js';
 import { taskOf, optionOf, tasksFor, optionsFor } from './sheet.min.js';
-import { levelOf, areaOf, roomName, serviceType } from './taxonomy.min.js';
+import { levelOf, areaOf, roomName, serviceType, bathAllows } from './taxonomy.min.js';
 
 const TAXONOMY_AREAS = () => serviceType('cleaning').areas;
 
@@ -328,7 +328,8 @@ export function menuPrice(sheet, task) {
 
 /**
  * The menu for one kind of room. Each task can be added to any room of that
- * kind in the open checklist (`on.add(roomId, taskKey)`).
+ * kind in the open checklist (`on.add(roomId, taskKey)`) whose type of bath
+ * has it: a bathtub to a full bath, never a shower bath.
  */
 export function renderMenu({ sheet, area, checklist, on }) {
     const list = byId('menu-list');
@@ -340,6 +341,7 @@ export function renderMenu({ sheet, area, checklist, on }) {
     if (note) {
         note.textContent = !checklist ? UI.menuNoChecklist : (rooms.length ? '' : UI.menuNoRoom(kind ? kind.name : area));
     }
+    const fits = (task) => rooms.filter((r) => bathAllows(checklist.serviceType, r.area, r.bath, task.key));
     for (const task of tasksFor(sheet, area)) {
         const nameId = `menu-task-${task.key}`;
         const options = optionsFor(sheet, task.key);
@@ -350,7 +352,7 @@ export function renderMenu({ sheet, area, checklist, on }) {
                 h('span', { className: 'menu-row-about', text: task.description }),
                 options.length ? h('span', { className: 'menu-row-options', text: options.map((o) => UI.menuOption(o.name, formatMoney(o.cents))).join('. ') }) : null
             ]),
-            rooms.length ? h('div', { className: 'menu-row-actions' }, rooms.map((r) =>
+            fits(task).length ? h('div', { className: 'menu-row-actions' }, fits(task).map((r) =>
                 button(UI.menuAddTo(roomName(checklist.serviceType, r)), 'ws-btn ws-btn-small', () => on.add(r.id, task.key),
                     { 'aria-describedby': nameId }))) : null
         ]));

@@ -6,7 +6,8 @@
  * THE HOUSE IS THE INTERFACE, AND THE PANEL HOLDS THE WORDS. A tap on a
  * floor opens it and lists its rooms, with the rooms a floor like it usually
  * has offered as chips, each added with its standard tasks in one tap. A
- * tap on a room lists its tasks, each with its price and a star. A tap on a
+ * tap on a room lists its tasks, each with its price and a star, and a
+ * bathroom's type of bath (Full, Shower, Half) to switch in one tap. A tap on a
  * task's dot shows that task, to edit, star or remove. Escape, the panel's
  * back button, or a tap on empty space goes one step back: task to room,
  * room to floor, floor to the closed house.
@@ -26,7 +27,7 @@
 
 import { h, clear } from './cards.min.js';
 import { PANEL } from './copy.min.js';
-import { roomName, levelOf } from './taxonomy.min.js';
+import { roomName, levelOf, bathChoices, bathChoiceOf } from './taxonomy.min.js';
 import { priceChoice, formatMoney, formatMinutes, roundMinutes } from './pricing.min.js';
 import { taskName, choiceText } from './panels.min.js';
 
@@ -131,11 +132,12 @@ function backName(type, room) {
 
 /**
  * What the panel shows for a selection: `{ scope, title, back, summary,
- * heading, rows, empty, chips, actions, detail }`. `rows` are `{ kind, id,
- * label, detail, starred }` (floors, rooms, or tasks), `chips` the kinds of
- * room to add (`{ area, label, aria }`), `actions` the buttons under the
- * list (`{ id, label, primary }`), and `detail` a task's lines. Null when
- * nothing is selected or there is no checklist.
+ * baths, heading, rows, empty, chips, actions, detail }`. `rows` are `{ kind,
+ * id, label, detail, starred }` (floors, rooms, or tasks), `baths` a
+ * bathroom's types of bath (`{ key, label, pressed }`, else null), `chips`
+ * the kinds of room to add (`{ area, label, aria }`), `actions` the buttons
+ * under the list (`{ id, label, primary }`), and `detail` a task's lines.
+ * Null when nothing is selected or there is no checklist.
  */
 export function panelView(sel, checklist, sheet) {
     if (!sel || !checklist) return null;
@@ -155,7 +157,7 @@ export function panelView(sel, checklist, sheet) {
         return {
             scope: 'house', title: checklist.title, back: PANEL.close, heading: PANEL.floorsHeading,
             summary: [PANEL.rooms(rooms.length), tasksLine(priced(sheet, items, areaOf))].join(', '),
-            rows, empty: null, chips: null, detail: null,
+            rows, empty: null, baths: null, chips: null, detail: null,
             actions: [b('checklist', PANEL.checklist, true), b('home', PANEL.home)]
         };
     }
@@ -171,7 +173,7 @@ export function panelView(sel, checklist, sheet) {
         return {
             scope: 'floor', title: level.name, back: PANEL.back(PANEL.wholeHouse), heading: PANEL.roomsHeading,
             summary: [PANEL.rooms(here.length), tasksLine(priced(sheet, onFloor, areaOf))].join(', '),
-            rows, empty: rows.length ? null : PANEL.noRooms, chips, detail: null,
+            rows, empty: rows.length ? null : PANEL.noRooms, baths: null, chips, detail: null,
             actions: [b('anotherRoom', PANEL.anotherRoom)]
         };
     }
@@ -186,9 +188,12 @@ export function panelView(sel, checklist, sheet) {
                 detail: p && !p.error ? formatMoney(p.cents) : ''
             };
         });
+        const now = bathChoiceOf(type, room);
+        const baths = bathChoices(type, room.area).map((c) => ({ key: c.key, label: c.name, pressed: c.key === now }));
         return {
             scope: 'room', title: roomName(type, room), back: PANEL.back(`the ${level.name.toLowerCase()}`), heading: PANEL.tasksHeading,
             summary: tasksLine(priced(sheet, tasks, () => room.area), true),
+            baths: baths.length ? baths : null,
             rows, empty: rows.length ? null : PANEL.noTasks, chips: null, detail: null,
             actions: [b('addTask', PANEL.addTask, true), b('editRoom', PANEL.editRoom)]
         };
@@ -204,7 +209,7 @@ export function panelView(sel, checklist, sheet) {
     return {
         scope: 'task', title: taskName(sheet, item), back: PANEL.back(backName(type, room)), heading: null,
         summary: p && !p.error ? [formatMoney(p.cents), PANEL.about(formatMinutes(roundMinutes(p.minutes)))].join(', ') : '',
-        rows: [], empty: null, chips: null, detail, starred: Boolean(item.important),
+        rows: [], empty: null, baths: null, chips: null, detail, starred: Boolean(item.important),
         actions: [
             b('editTask', PANEL.editTask, true),
             b('starTask', item.important ? PANEL.unstar : PANEL.star),
@@ -217,7 +222,7 @@ export function panelView(sel, checklist, sheet) {
 
 /**
  * Drive the panel in index.html. `on` holds back(), row(kind, id),
- * star(itemId), chip(area) and action(id). Returns { show, hide, shown,
+ * star(itemId), bath(key), chip(area) and action(id). Returns { show, hide, shown,
  * view, contains, focusFirst, anchor }.
  */
 export function createPanel({ on = {}, signal } = {}) {
@@ -231,9 +236,13 @@ export function createPanel({ on = {}, signal } = {}) {
     const empty = byId('panel-empty');
     const detail = byId('panel-detail');
     const chips = byId('panel-chips');
+    const baths = byId('panel-baths');
+    const bathList = byId('panel-baths-list');
+    const bathLabel = byId('panel-baths-label');
     const actions = byId('panel-actions');
     let view = null;
     let rows = [];
+    let bathButtons = [];
     let anchored = '';
     const call = (name, ...args) => { if (typeof on[name] === 'function') on[name](...args); };
 
@@ -256,6 +265,27 @@ export function createPanel({ on = {}, signal } = {}) {
         if (summary) {
             summary.textContent = view.summary || '';
             summary.hidden = !view.summary;
+        }
+        if (baths) {
+            const kinds = view.baths || [];
+            baths.hidden = !kinds.length;
+            if (bathLabel) bathLabel.textContent = PANEL.bathHeading;
+            bathButtons = [];
+            if (bathList) {
+                clear(bathList);
+                for (const k of kinds) {
+                    const btn = h('button', {
+                        type: 'button',
+                        className: `panel-bath${k.pressed ? ' is-on' : ''}`,
+                        id: `panel-bath-${k.key}`,
+                        text: k.label,
+                        attrs: { 'aria-pressed': k.pressed ? 'true' : 'false' }
+                    });
+                    btn.addEventListener('click', () => call('bath', k.key), { signal });
+                    bathButtons.push(btn);
+                    bathList.appendChild(btn);
+                }
+            }
         }
         if (heading) {
             heading.textContent = view.heading || '';
@@ -346,6 +376,13 @@ export function createPanel({ on = {}, signal } = {}) {
             const first = rows[0] || (actions && Array.from(actions.children || [])[0]) || backBtn;
             if (first && typeof first.focus === 'function') first.focus();
             return first || null;
+        },
+        /** Focus on a type of bath by key, once the panel is drawn again
+         *  after the change, so a keyboard stays where it was. */
+        focusBath(key) {
+            const btn = bathButtons.find((b) => b.id === `panel-bath-${key}`);
+            if (btn && typeof btn.focus === 'function') btn.focus();
+            return btn || null;
         },
         /** Beside Maya's head on a wide screen, as her bubble is (host.js),
          *  running down toward the bottom; null puts it back in its place. */

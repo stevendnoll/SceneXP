@@ -413,3 +413,132 @@ describe('the panel on the page', () => {
         expect(roomName('cleaning', { area: 'kitchen', label: '' })).toBe('Kitchen');
     });
 });
+
+// ---- Bath types on the page (M2 step 4b) ------------------------------------------
+
+describe('a bathroom\'s type of bath, on the page', () => {
+    const bathButtons = () => dom.el('panel-baths-list').children;
+    const bathButton = (key) => bathButtons().find((b) => b.id === `panel-bath-${key}`);
+    const tasksIn = (main, roomId) => checklist(main).items.filter((i) => !i.deletedAt && i.roomId === roomId).map((i) => i.task);
+
+    /** The second floor open, a bathroom added from its chip and shown. */
+    async function bathroom() {
+        const main = await bootHome();
+        main.__test__.tapModel('second');
+        fire(chip('bathroom'), 'click');
+        const room = checklist(main).rooms.find((r) => r.area === 'bathroom');
+        return { main, room };
+    }
+
+    test('a chip adds a full bath with its bathtub, and the panel offers its three types', async () => {
+        const { main, room } = await bathroom();
+        expect(room.bath).toBe('tub');
+        expect(tasksIn(main, room.id)).toContain('bathtub');
+        expect(dom.el('panel-baths').hidden).toBe(false);
+        expect(dom.el('panel-baths-label').textContent).toBe(PANEL.bathHeading);
+        expect(bathButtons().map((b) => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([
+            ['Full bath', 'true'], ['Shower bath', 'false'], ['Half bath', 'false']
+        ]);
+        // A floor has no types of bath.
+        fire(dom.el('panel-back'), 'click');
+        expect(dom.el('panel-baths').hidden).toBe(true);
+    });
+
+    test('Shower bath takes the bathtub off, says so, keeps the keyboard there, and Undo puts it back', async () => {
+        const { main, room } = await bathroom();
+        const before = tasksIn(main, room.id);
+        fire(bathButton('shower'), 'click');
+        const now = checklist(main).rooms.find((r) => r.id === room.id);
+        expect(now.bath).toBe('shower');
+        expect(tasksIn(main, room.id)).toEqual(before.filter((t) => t !== 'bathtub'));
+        expect(said()).toBe('The bathroom is now a shower bath. Took off the bathtub.');
+        expect(bathButton('shower').getAttribute('aria-pressed')).toBe('true');
+        expect(document.activeElement).toBe(bathButton('shower'));
+        expect(rows().map((r) => r.children[0].textContent)).not.toContain('Bathtub');
+        // The pressed type again does nothing.
+        const doc = main.__test__.state.doc;
+        fire(bathButton('shower'), 'click');
+        expect(main.__test__.state.doc).toBe(doc);
+        fire(dom.el('ws-undo'), 'click');
+        expect(checklist(main).rooms.find((r) => r.id === room.id).bath).toBe('tub');
+        expect(tasksIn(main, room.id)).toEqual(before);
+    });
+
+    test('Half bath makes it the half bath, and Full bath brings its shower and tub back', async () => {
+        const { main, room } = await bathroom();
+        fire(bathButton('half'), 'click');
+        expect(checklist(main).rooms.find((r) => r.id === room.id)).toMatchObject({ area: 'powder-room', bath: null });
+        expect(title()).toBe('Half bath');
+        expect(tasksIn(main, room.id)).not.toContain('shower');
+        expect(main.__test__.ui.selected).toMatchObject({ scope: 'room', roomId: room.id });
+        fire(bathButton('tub'), 'click');
+        expect(title()).toBe('Bathroom');
+        expect(tasksIn(main, room.id)).toEqual(expect.arrayContaining(['shower', 'bathtub']));
+        expect(said()).toBe('The half bath is now a full bath. Added the shower and the bathtub.');
+    });
+
+    test('the room card offers the types, and a new type comes off with one undo, the name with it', async () => {
+        const { main, room } = await bathroom();
+        main.__test__.openRoom(room.id);
+        const radios = dom.el('room-bath-list').children.map((r) => r.children[0]);
+        expect(dom.el('room-bath-row').hidden).toBe(false);
+        expect(radios.map((r) => [r.value, r.checked])).toEqual([['tub', true], ['shower', false], ['half', false]]);
+        expect(dom.el('room-area').value).toBe('bathroom');
+        radios.forEach((r) => { r.checked = r.value === 'shower'; });
+        dom.el('room-label').value = 'Guest bath';
+        main.__test__.submitRoom();
+        const now = checklist(main).rooms.find((r) => r.id === room.id);
+        expect(now).toMatchObject({ bath: 'shower', label: 'Guest bath' });
+        expect(tasksIn(main, room.id)).not.toContain('bathtub');
+        expect(said()).toBe('Guest bath is now a shower bath. Took off the bathtub.');
+        fire(dom.el('ws-undo'), 'click');
+        expect(checklist(main).rooms.find((r) => r.id === room.id)).toMatchObject({ bath: 'tub', label: '' });
+        expect(tasksIn(main, room.id)).toContain('bathtub');
+    });
+
+    test('a half bath\'s card shows it as a bathroom of the half type; a kitchen\'s shows no types', async () => {
+        const { main, room } = await bathroom();
+        fire(bathButton('half'), 'click');
+        main.__test__.openRoom(room.id);
+        expect(dom.el('room-area').value).toBe('bathroom');
+        expect(dom.el('room-bath-list').children.map((r) => r.children[0]).filter((r) => r.checked).map((r) => r.value)).toEqual(['half']);
+        // No half bath in the kinds of room: it is a bathroom's type.
+        expect(dom.el('room-area').children.map((o) => o.value)).not.toContain('powder-room');
+        main.__test__.openRoom(null);
+        expect(dom.el('room-bath-row').hidden).toBe(true);
+        dom.el('room-area').value = 'kitchen';
+        fire(dom.el('room-area'), 'change');
+        expect(dom.el('room-bath-row').hidden).toBe(true);
+        dom.el('room-area').value = 'primary-bathroom';
+        fire(dom.el('room-area'), 'change');
+        expect(dom.el('room-bath-list').children.map((r) => r.children[0].value)).toEqual(['tub', 'shower']);
+        expect(dom.el('room-preset-list').textContent).toMatch(/Bathtub/);
+        dom.el('room-bath-list').children.forEach((r) => { r.children[0].checked = r.children[0].value === 'shower'; });
+        fire(dom.el('room-bath-list'), 'change');
+        expect(dom.el('room-preset-list').textContent).not.toMatch(/Bathtub/);
+    });
+
+    test('a shower bath is not offered the bathtub, on its task card or on the service menu', async () => {
+        const { main, room } = await bathroom();
+        fire(bathButton('shower'), 'click');
+        main.__test__.openTask(room.id, null);
+        expect(dom.el('task-task').children.map((o) => o.value)).not.toContain('bathtub');
+        expect(dom.el('task-task').children.map((o) => o.value)).toContain('shower');
+        main.__test__.openMenu();
+        dom.el('menu-area').value = 'bathroom';
+        fire(dom.el('menu-area'), 'change');
+        const menuRow = (name) => dom.el('menu-list').children.find((r) => r.children[0].children[0].textContent === name);
+        expect(menuRow('Bathtub').children).toHaveLength(1);   // no "Add to"
+        expect(menuRow('Shower').children[1].children.map((b) => b.textContent)).toEqual(['Add to Bathroom']);
+    });
+
+    test('before the sheet, a type waits and says so', async () => {
+        const { main, room } = await bathroom();
+        const sheet = main.__test__.state.sheet;
+        main.__test__.state.sheet = null;
+        fire(bathButton('shower'), 'click');
+        expect(checklist(main).rooms.find((r) => r.id === room.id).bath).toBe('tub');
+        expect(said()).toBe(UI.sheetLoading);
+        main.__test__.state.sheet = sheet;
+    });
+});

@@ -996,11 +996,17 @@ function landscape(out, site, layout, cx, cz, door, garages, front, doorOpen = f
 }
 
 /** A key for what the model shows, so the instances are rewritten only
- *  when the home changes. */
-function layoutKey(checklist) {
-    const rooms = (checklist.rooms || []).filter((r) => !r.deletedAt).map((r) => [r.id, r.level, r.area, r.label]);
+ *  when the home changes (a bathroom's type of bath too). */
+export function layoutKey(checklist) {
+    const rooms = (checklist.rooms || []).filter((r) => !r.deletedAt).map((r) => [r.id, r.level, r.area, r.label, r.bath || null]);
     const items = (checklist.items || []).filter((i) => !i.deletedAt).map((i) => [i.id, i.roomId, i.order, Boolean(i.important)]);
     return JSON.stringify([checklist.id || '', checklist.levels, rooms, items]);
+}
+
+/** Each bathroom's type of bath by room id (store.js `bath`), for
+ *  `instancesFor`. A room without one is left out, and draws a full bath. */
+export function bathsOf(checklist) {
+    return new Map((checklist.rooms || []).filter((r) => r.bath).map((r) => [r.id, r.bath]));
 }
 
 // ---- Building it (three) -------------------------------------------------------------
@@ -1119,6 +1125,8 @@ export function buildModel(config, at) {
     let checklist = null;
     let layout = layoutHome(EMPTY_HOME);
     let areas = new Map();
+    /** A bathroom's type of bath by room id, for the kit it draws. */
+    let baths = new Map();
     let key = '';
     let lifted = null;
     /** The selected room and task, and the room under the pointer. */
@@ -1154,7 +1162,7 @@ export function buildModel(config, at) {
     }
 
     function draw() {
-        placed = instancesFor(layout, now, { lifted, areas, site: siteFor(layout, turntable, scaled), selection });
+        placed = instancesFor(layout, now, { lifted, areas, baths, site: siteFor(layout, turntable, scaled), selection });
         place(meshes.slabs, placed.slabs, paintOf);
         place(meshes.walls, placed.walls, paintOf);
         place(meshes.siding, placed.siding, paintOf);
@@ -1206,9 +1214,10 @@ export function buildModel(config, at) {
             key = nextKey;
             layout = layoutHome(home);
             areas = new Map((home.rooms || []).map((r) => [r.id, r.area]));
+            baths = bathsOf(home);
             scaled = fitScale(layout, turntable, colors.scale);
             group.scale.set(scaled, scaled, scaled);
-            const rest = instancesFor(layout, new Map(), { areas, site: siteFor(layout, turntable, scaled) });
+            const rest = instancesFor(layout, new Map(), { areas, baths, site: siteFor(layout, turntable, scaled) });
             restHeight = Math.max(0, ...Object.values(rest).flat().map((p) => p.top)) * scaled;
             // A different home, or the lifted level gone from this one, sets
             // the level down at once.

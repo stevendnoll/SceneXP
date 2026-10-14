@@ -886,6 +886,23 @@ describe('built with the real three.js', () => {
         expect(CONFIG.model.markerGlow).toBeGreaterThan(0);
     });
 
+    test('each bathroom is drawn by its own type of bath, and a new type redraws it', () => {
+        const m = buildModel(CONFIG, AT);
+        const home = example();
+        const primary = home.rooms.find((r) => r.area === 'primary-bathroom');
+        const hall = home.rooms.find((r) => r.label === 'Hall bath');
+        const roles = (roomId) => new Set([...m.placed.fixtures, ...m.placed.rounds].filter((p) => p.roomId === roomId).map((p) => p.role));
+        m.show(home);
+        expect(primary.bath).toBe('shower');
+        expect(roles(primary.id).has('shower')).toBe(true);
+        expect(roles(primary.id).has('tub')).toBe(false);
+        expect(roles(hall.id).has('tub')).toBe(true);
+        const allShowers = { ...home, rooms: home.rooms.map((r) => (r.id === hall.id ? { ...r, bath: 'shower' } : r)) };
+        expect(m.show(allShowers)).toBe(true);
+        expect(roles(hall.id).has('tub')).toBe(false);
+        expect(roles(hall.id).has('shower')).toBe(true);
+    });
+
     test('the same home again changes nothing, and one more task changes the model', () => {
         const m = buildModel(CONFIG, AT);
         const home = example();

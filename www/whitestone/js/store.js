@@ -16,8 +16,8 @@
  * ITEMS STORE CHOICES, NEVER PRICES. A task, its options, its size and its
  * quantity. Prices come from the price sheet (pricing.js), so there is one
  * source of truth. Whether a choice is one the sheet allows is asked through
- * `opts.check(choice, area)`, which the page wires to sheet.js `checkChoice`,
- * so this file never needs a sheet.
+ * `opts.check(choice, area, bath)`, which the page wires to sheet.js
+ * `checkChoice`, so this file never needs a sheet.
  *
  * NOTHING IS DELETED OUTRIGHT. Removing sets `deletedAt`, and restoring
  * clears it. A room takes its tasks with it, stamped with the same moment,
@@ -45,7 +45,7 @@
  */
 
 import { STORE, ITEM_ERRORS } from './copy.min.js';
-import { serviceType, KEY_PATTERN } from './taxonomy.min.js';
+import { serviceType, bathOf, bathChoices, KEY_PATTERN } from './taxonomy.min.js';
 
 export const ID_PATTERN = /^[A-Za-z0-9_-]{8,36}$/;
 export const SIZES = Object.freeze(['small', 'medium', 'large']);
@@ -107,7 +107,10 @@ export function emptyDoc(config, now) {
     };
 }
 
-function normalizeRoom(raw, levels, type, config) {
+/** A room rebuilt from untrusted input. Its `bath` is a bathroom's type
+ *  (taxonomy.js `bathOf`: `tub` or `shower`) and null in any other room. A
+ *  bathroom saved before bath types is a full bath. */
+function normalizeRoom(raw, levels, type, typeKey, config) {
     if (!raw || typeof raw !== 'object') return null;
     const id = idOrNull(raw.id);
     if (!id || !levels.includes(raw.level) || !type.areas.some((a) => a.key === raw.area)) return null;
@@ -115,6 +118,7 @@ function normalizeRoom(raw, levels, type, config) {
         id,
         level: raw.level,
         area: raw.area,
+        bath: bathOf(typeKey, raw.area, raw.bath),
         label: text(raw.label, config.limits.label),
         sample: raw.sample === true,
         createdAt: stampOrNull(raw.createdAt),
@@ -195,7 +199,7 @@ export function normalizeChecklist(raw, config, now) {
     const rooms = [];
     const roomIds = new Set();
     for (const r of Array.isArray(raw.rooms) ? raw.rooms : []) {
-        const room = normalizeRoom(r, levels, type, config);
+        const room = normalizeRoom(r, levels, type, raw.serviceType, config);
         if (!room || roomIds.has(room.id) || expired(room, config, now)) { dropped++; continue; }
         rooms.push(room);
         roomIds.add(room.id);
@@ -235,7 +239,9 @@ export function normalizeChecklist(raw, config, now) {
 }
 
 /** Older documents into this build's shape. There is only schema 1 so far,
- *  so this is the hook a schema 2 will fill. */
+ *  so this is the hook a schema 2 will fill. A field added since (a room's
+ *  `bath`) has its default filled in by `normalizeChecklist`, so needs no
+ *  new schema. */
 export function migrate(raw, config) {
     if (!raw || typeof raw !== 'object' || !Number.isInteger(raw.schema)) return { ok: false, reason: 'invalid' };
     if (raw.schema > config.storage.schema) return { ok: false, reason: 'newer' };
@@ -436,10 +442,10 @@ export function restoreChecklist(doc, id, config, now) {
     return { doc: replaceChecklist(doc, record), record, error: null };
 }
 
-/** Whether a choice is one the sheet allows in an area, through the page's
- *  `check`, as a sentence, or null. */
-function choiceError(opts, choice, area) {
-    const code = opts && typeof opts.check === 'function' ? opts.check(choice, area) : null;
+/** Whether a choice is one the sheet allows in an area (and a bathroom's
+ *  type), through the page's `check`, as a sentence, or null. */
+function choiceError(opts, choice, area, bath) {
+    const code = opts && typeof opts.check === 'function' ? opts.check(choice, area, bath) : null;
     return code ? (ITEM_ERRORS[code] || ITEM_ERRORS['unknown-task']) : null;
 }
 
@@ -475,8 +481,9 @@ export function addRoom(doc, checklistId, fields, config, now, opts = {}) {
 
     const preset = Array.isArray(opts.presetItems) ? opts.presetItems : [];
     if (liveItems(c).length + preset.length > config.limits.items) return refusal(doc, STORE.tooManyItems(config.limits.items));
+    const bath = bathOf(c.serviceType, src.area, src.bath);
     for (const p of preset) {
-        const why = choiceError(opts, p, src.area);
+        const why = choiceError(opts, p, src.area, bath);
         if (why) return refusal(doc, why);
     }
 
@@ -488,7 +495,7 @@ export function addRoom(doc, checklistId, fields, config, now, opts = {}) {
         createdAt: stamp(now),
         updatedAt: stamp(now),
         deletedAt: null
-    }, levels, type, config);
+    }, levels, type, c.serviceType, config);
     const items = preset.map((p, i) => ({
         ...freshItem(p, room.id, config, now, { sample: opts.sample, id: opts.itemIds && opts.itemIds[i] }),
         order: i + 1
@@ -498,7 +505,8 @@ export function addRoom(doc, checklistId, fields, config, now, opts = {}) {
 }
 
 /** A room's label, or the level it is on. Its kind of room is fixed, since
- *  every task in it was chosen for that kind. */
+ *  every task in it was chosen for that kind, apart from a bathroom's type
+ *  of bath (`setBath`). */
 export function updateRoom(doc, checklistId, roomId, fields, config, now) {
     const found = liveChecklist(doc, checklistId);
     if (found.error) return refusal(doc, found.error);
@@ -552,6 +560,45 @@ export function restoreRoom(doc, checklistId, roomId, config, now) {
     return { doc: replaceChecklist(doc, record), record: back, error: null };
 }
 
+/**
+ * A bathroom's type of bath (PRD 8.10): one of its `bathChoices` by key
+ * (`tub`, `shower`, or `half`, which makes it the half bath area), in one
+ * step. The tasks the new type cannot have go, under one stamp, and
+ * `opts.presetItems` (the standard tasks the new type brings, sheet.js
+ * `presetGains`) come in after the rest. The record carries `removed` and
+ * `added`, the items that went and came, for the line that says so.
+ */
+export function setBath(doc, checklistId, roomId, key, config, now, opts = {}) {
+    const found = liveChecklist(doc, checklistId);
+    if (found.error) return refusal(doc, found.error);
+    const c = found.checklist;
+    const where = liveRoomOf(c, roomId);
+    if (where.error) return refusal(doc, where.error);
+    const room = where.room;
+    const to = bathChoices(c.serviceType, room.area).find((x) => x.key === key);
+    if (!to) return refusal(doc, STORE.notABath);
+    if (to.area === room.area && to.bath === room.bath) return { doc, record: { room, removed: [], added: [] }, error: null };
+
+    const preset = Array.isArray(opts.presetItems) ? opts.presetItems : [];
+    for (const p of preset) {
+        const why = choiceError(opts, p, to.area, to.bath);
+        if (why) return refusal(doc, why);
+    }
+    const mine = itemsIn(c, roomId);
+    const going = mine.filter((i) => choiceError(opts, i, to.area, to.bath));
+    if (liveItems(c).length - going.length + preset.length > config.limits.items) {
+        return refusal(doc, STORE.tooManyItems(config.limits.items));
+    }
+    const when = stamp(now);
+    const next = { ...room, area: to.area, bath: to.bath, updatedAt: when };
+    let order = mine.reduce((m, i) => Math.max(m, i.order), 0);
+    const added = preset.map((p, k) => ({ ...freshItem(p, roomId, config, now, { id: opts.itemIds && opts.itemIds[k] }), order: ++order }));
+    const gone = new Set(going.map((i) => i.id));
+    const items = [...c.items.map((i) => (gone.has(i.id) ? { ...i, deletedAt: when } : i)), ...added];
+    const record = touched({ ...c, rooms: c.rooms.map((r) => (r.id === roomId ? next : r)), items }, now);
+    return { doc: replaceChecklist(doc, record), record: { room: next, removed: going, added }, error: null };
+}
+
 function liveRoomOf(c, roomId) {
     const room = c.rooms.find((r) => r.id === roomId);
     if (!room) return { error: STORE.noRoom };
@@ -568,7 +615,7 @@ export function addItem(doc, checklistId, fields, config, now, opts = {}) {
     const where = liveRoomOf(c, src.roomId);
     if (where.error) return refusal(doc, where.error);
     if (liveItems(c).length >= config.limits.items) return refusal(doc, STORE.tooManyItems(config.limits.items));
-    const why = choiceError(opts, src, where.room.area);
+    const why = choiceError(opts, src, where.room.area, where.room.bath);
     if (why) return refusal(doc, why);
     const item = freshItem(src, src.roomId, config, now, opts);
     if (!item) return refusal(doc, ITEM_ERRORS['unknown-task']);
@@ -594,7 +641,7 @@ export function updateItem(doc, checklistId, itemId, fields, config, now, opts =
     for (const k of ITEM_FIELDS) if (k in src) merged[k] = src[k];
     const next = normalizeItem({ ...merged, updatedAt: stamp(now) }, new Set([item.roomId]), config);
     const room = c.rooms.find((r) => r.id === item.roomId);
-    const why = choiceError(opts, next, room.area);
+    const why = choiceError(opts, next, room.area, room.bath);
     if (why) return refusal(doc, why);
     const record = touched({ ...c, items: c.items.map((i) => (i.id === itemId ? next : i)) }, now);
     return { doc: replaceChecklist(doc, record), record: next, error: null };

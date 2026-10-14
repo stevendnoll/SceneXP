@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=9" as="style">
+    <link rel="preload" href="css/experience.min.css?v=10" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -145,7 +145,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=9">
+    <link rel="stylesheet" href="css/experience.min.css?v=10">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -220,13 +220,17 @@
 
     <!-- THE PANEL BESIDE THE HOUSE (panel.js): whatever is selected on the
          house, in words. A floor's rooms with rooms to add, a room's tasks
-         with their stars, a task to edit. Its back button, Escape, or a tap
+         with their stars (and a bathroom's type of bath), a task to edit. Its back button, Escape, or a tap
          on empty space goes one step back. Where Maya's bubble is, and she
          steps aside while it is open. -->
     <aside id="ws-panel" class="ws-panel" aria-labelledby="panel-title" hidden>
         <button id="panel-back" class="panel-back" type="button">Back to the whole house</button>
         <h2 id="panel-title" class="panel-title"></h2>
         <p id="panel-summary" class="panel-summary" hidden></p>
+        <div id="panel-baths" class="panel-baths" role="group" aria-labelledby="panel-baths-label" hidden>
+            <p id="panel-baths-label" class="panel-chips-heading">Type of bath</p>
+            <div id="panel-baths-list" class="panel-baths-list"></div>
+        </div>
         <h3 id="panel-heading" class="panel-heading" hidden></h3>
         <ul id="panel-list" class="panel-list" hidden></ul>
         <p id="panel-empty" class="panel-empty" hidden></p>
@@ -443,6 +447,10 @@
                     <label for="room-area">Kind of room</label>
                     <select id="room-area" class="ws-select"></select>
                 </div>
+                <fieldset id="room-bath-row" class="form-group" hidden>
+                    <legend>Type of bath</legend>
+                    <div id="room-bath-list"></div>
+                </fieldset>
                 <div class="form-row">
                     <label for="room-level">Level</label>
                     <select id="room-level" class="ws-select"></select>

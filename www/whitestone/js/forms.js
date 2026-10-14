@@ -9,11 +9,12 @@
  *
  * THE CHOICES COME FROM THE TAXONOMY. The levels and the care preferences
  * are built from taxonomy.js once, at boot, so the form can never offer a key
- * the store would drop.
+ * the store would drop. A bathroom's types of bath are built for the kind of
+ * room chosen, each time it changes.
  */
 
 import { h, clear } from './cards.min.js';
-import { serviceType, roomName } from './taxonomy.min.js';
+import { serviceType, roomName, bathChoices, bathChoiceOf, listedArea } from './taxonomy.min.js';
 import { FREQUENCIES, GUARDS, UI, STORE } from './copy.min.js';
 import { hintsFor } from './guards.min.js';
 import { taskOf, tasksFor, presetFor, optionsFor, SIZES } from './sheet.min.js';
@@ -94,7 +95,10 @@ export function initForms(config, type = 'cleaning') {
     if (area) {
         clear(area);
         area.appendChild(h('option', { value: '', text: 'Choose a kind of room' }));
-        for (const a of t.areas) area.appendChild(h('option', { value: a.key, text: a.name }));
+        // A half bath is a bathroom's third type of bath, not a kind of its own.
+        for (const a of t.areas) {
+            if (listedArea(type, a.key) === a.key) area.appendChild(h('option', { value: a.key, text: a.name }));
+        }
     }
     const level = byId('room-level');
     if (level) {
@@ -167,11 +171,36 @@ export function readPreferencesForm(type = 'cleaning') {
 
 // ---- The room card ----------------------------------------------------------
 
+/** The radios for a room's types of bath, kept as they are made. */
+let bathRadios = [];
+
+/**
+ * The types of bath for the kind of room chosen (taxonomy.js
+ * `bathChoices`), `current` checked or else the first, or none and the row
+ * hidden for a room that is not a bathroom.
+ */
+export function showBathChoices(type, area, current = null) {
+    const choices = area ? bathChoices(type, area) : [];
+    const row = byId('room-bath-row');
+    if (row) row.hidden = !choices.length;
+    const list = byId('room-bath-list');
+    if (list) clear(list);
+    bathRadios = choices.map((c, i) => {
+        const input = h('input', { id: `room-bath-${c.key}`, type: 'radio', name: 'room-bath', value: c.key });
+        input.checked = current ? c.key === current : i === 0;
+        if (list) list.appendChild(h('div', { className: 'form-row form-check' }, [input, h('label', { attrs: { for: input.id }, text: c.name })]));
+        return input;
+    });
+    return choices;
+}
+
 /** Fill the room card for a new room (`room` null) or an edit. A new room
  *  goes on the main floor when the home has one. */
 export function fillRoomForm(room, checklist) {
     const levels = checklist.levels;
-    setValue('room-area', room ? room.area : '');
+    const type = checklist.serviceType;
+    setValue('room-area', room ? listedArea(type, room.area) : '');
+    showBathChoices(type, room ? room.area : '', room ? bathChoiceOf(type, room) : null);
     setValue('room-level', room ? room.level : (levels.includes('main') ? 'main' : levels[0]));
     setValue('room-label', room ? room.label : '');
     const area = byId('room-area');
@@ -191,10 +220,19 @@ export function fillRoomForm(room, checklist) {
     showError('room-error', '');
 }
 
-export function readRoomForm() {
+/** The room card as fields: its kind of room as its type of bath makes it
+ *  (a half bath is its own area), its `bath`, and the type chosen by key as
+ *  `bathChoice` (null in a room that is not a bathroom). */
+export function readRoomForm(type = 'cleaning') {
     const preset = byId('room-preset');
+    const listed = value('room-area');
+    const choices = listed ? bathChoices(type, listed) : [];
+    const on = bathRadios.find((r) => r.checked);
+    const chosen = choices.find((c) => on && c.key === on.value) || choices.find((c) => c.area === listed) || choices[0] || null;
     return {
-        area: value('room-area'),
+        area: chosen ? chosen.area : listed,
+        bath: chosen ? chosen.bath : null,
+        bathChoice: chosen ? chosen.key : null,
         level: value('room-level'),
         label: value('room-label'),
         preset: Boolean(preset && preset.checked)
@@ -205,13 +243,14 @@ export function validateRoom(fields) {
     return fields.area ? '' : STORE.badArea;
 }
 
-/** The line under the preset box: what the standard tasks are. */
-export function showPresetPreview(sheet, area) {
+/** The line under the preset box: what the standard tasks are, for the
+ *  room's type of bath too. */
+export function showPresetPreview(sheet, area, bath) {
     const el = byId('room-preset-list');
     if (!el) return;
     if (!area) { el.textContent = ''; return; }
     if (!sheet) { el.textContent = UI.presetWaiting; return; }
-    const names = presetFor(sheet, area).map((p) => (taskOf(sheet, p.task) || { name: p.task }).name);
+    const names = presetFor(sheet, area, bath).map((p) => (taskOf(sheet, p.task) || { name: p.task }).name);
     el.textContent = names.length ? UI.presetAdds(names.join(', ')) : '';
 }
 
@@ -223,14 +262,14 @@ let shownTask = null;
 
 /**
  * Fill the task card. A new task (`item` null) offers every task the room's
- * kind allows. An edit shows only the item's own task, since a task is fixed
+ * kind (and its type of bath) allows. An edit shows only the item's own task, since a task is fixed
  * once chosen (store.js).
  */
 export function fillTaskForm({ sheet, room, item, roomLabel, taskKey = null }) {
     const select = byId('task-task');
     if (select) {
         clear(select);
-        const tasks = item ? [taskOf(sheet, item.task)].filter(Boolean) : tasksFor(sheet, room.area);
+        const tasks = item ? [taskOf(sheet, item.task)].filter(Boolean) : tasksFor(sheet, room.area, room.bath);
         for (const t of tasks) select.appendChild(h('option', { value: t.key, text: `${t.name}, ${formatMoney(t.cents)}` }));
         select.disabled = Boolean(item);
         const wanted = taskKey && tasks.some((t) => t.key === taskKey) ? taskKey : (tasks[0] ? tasks[0].key : '');

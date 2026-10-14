@@ -20,7 +20,7 @@
  * as an argument.
  */
 
-import { serviceType, KEY_PATTERN } from './taxonomy.min.js';
+import { serviceType, bathAllows, bathTasks, KEY_PATTERN } from './taxonomy.min.js';
 
 export const SHEET_FORMAT = 1;
 export const UNITS = Object.freeze(['each', 'count', 'room']);
@@ -91,15 +91,43 @@ export function optionsFor(sheet, taskKey) {
     return task.options.map((o) => ({ ...optionOf(sheet, o.key), cents: o.cents, minutes: o.minutes }));
 }
 
-/** Every task offered in an area, in the sheet's order. */
-export function tasksFor(sheet, area) {
-    return (sheet.tasks || []).filter((t) => t.areas.includes(area));
+/** Every task offered in an area (and, for a bathroom, its type of bath),
+ *  in the sheet's order. */
+export function tasksFor(sheet, area, bath) {
+    return (sheet.tasks || []).filter((t) => t.areas.includes(area) && bathAllows(sheet.serviceType, area, bath, t.key));
 }
 
-/** An area's standard preset: a list of { task, options, size, quantity }. */
-export function presetFor(sheet, area) {
+/**
+ * A room's standard tasks: a list of { task, options, size, quantity }. The
+ * sheet's preset for its area, as its type of bath has it (taxonomy.js): a
+ * full bath's bathtub added after its shower, a shower bath without one. A
+ * bathroom with no type given is a full bath. The sheet itself is unchanged.
+ */
+export function presetFor(sheet, area, bath) {
     const presets = sheet.presets || {};
-    return Object.prototype.hasOwnProperty.call(presets, area) ? presets[area] : [];
+    const type = sheet.serviceType;
+    const base = Object.prototype.hasOwnProperty.call(presets, area) ? presets[area] : [];
+    const out = base.filter((p) => bathAllows(type, area, bath, p.task));
+    for (const extra of bathTasks(type, area, bath)) {
+        const task = taskOf(sheet, extra.task);
+        if (!task || !task.areas.includes(area) || out.some((p) => p.task === extra.task)) continue;
+        const at = out.findIndex((p) => p.task === extra.after);
+        out.splice(at < 0 ? out.length : at + 1, 0, { task: extra.task, options: [] });
+    }
+    return out;
+}
+
+/**
+ * The standard tasks a room gains when its type of bath changes, `from` and
+ * `to` each `{ area, bath }`: those of the new type the old type did not
+ * have, and the room does not have already (`have`, its task keys). A
+ * shower bath made full gains its bathtub; a half bath made full, its
+ * shower and bathtub. A task taken off by hand is never put back.
+ */
+export function presetGains(sheet, from, to, have = []) {
+    const before = new Set(presetFor(sheet, from.area, from.bath).map((p) => p.task));
+    const owned = new Set(have);
+    return presetFor(sheet, to.area, to.bath).filter((p) => !before.has(p.task) && !owned.has(p.task));
 }
 
 // ---- One task as chosen -----------------------------------------------------
@@ -107,10 +135,12 @@ export function presetFor(sheet, area) {
 /**
  * Whether a task can be ordered as chosen, in an area: null if so, or the
  * reason it cannot, as a stable code. `area` may be omitted to skip the area
- * rule (an add-on upgrade of an item already placed, for instance).
+ * rule (an add-on upgrade of an item already placed, for instance). `bath`
+ * is a bathroom's type (taxonomy.js), a full bath when omitted.
  *
  *   unknown-task          no such task in this sheet
  *   not-offered           the task is not offered in this kind of room
+ *   not-with-bath         the task comes with another type of bath
  *   bad-options           options is not a list
  *   unknown-option        an option this task does not accept
  *   repeated-option       the same option twice
@@ -119,10 +149,11 @@ export function presetFor(sheet, area) {
  *   quantity-not-allowed  a quantity other than 1 on a task not priced per unit
  *   bad-quantity          a quantity that is not a whole number from 1 to 50
  */
-export function checkChoice(sheet, choice, area) {
+export function checkChoice(sheet, choice, area, bath) {
     const task = taskOf(sheet, choice && choice.task);
     if (!task) return 'unknown-task';
     if (area !== undefined && !task.areas.includes(area)) return 'not-offered';
+    if (area !== undefined && !bathAllows(sheet.serviceType, area, bath, task.key)) return 'not-with-bath';
 
     const options = choice.options === undefined ? [] : choice.options;
     if (!Array.isArray(options)) return 'bad-options';

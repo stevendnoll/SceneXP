@@ -22,7 +22,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { deflateSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { instancesFor, levelOffsets, fitScale, siteFor, EMPTY_HOME } from '../www/whitestone/js/model.js';
+import { instancesFor, levelOffsets, fitScale, siteFor, bathsOf, EMPTY_HOME } from '../www/whitestone/js/model.js';
 import { framePose, turnPoint } from '../www/whitestone/js/turntable.js';
 import { contactAlpha } from '../www/whitestone/js/stage.js';
 import { loadRealThree } from '../tests/helpers/real-three.mjs';
@@ -381,8 +381,10 @@ function png({ width, height, rgb }) {
     return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
-/** A home's parts on the turntable, its scale, and its closed height. */
-function build(home, lifted = null, selection = null, baths = new Map()) {
+/** A home's parts on the turntable, its scale, and its closed height. Each
+ *  bathroom drawn by its own type of bath, as the page draws it. */
+function build(home, lifted = null, selection = null) {
+    const baths = bathsOf(home);
     const layout = layoutHome(home);
     const k = fitScale(layout, T, CONFIG.model.scale);
     const site = siteFor(layout, T, k);
@@ -415,8 +417,8 @@ const showcase = {
         ['garage', 'garage']
     ].map(([area, level], i) => ({ id: `s${i}`, area, level, label: '', deletedAt: null }))
 };
-// The second floor's two baths: a full bath, and a shower bath.
-const showBaths = new Map([['s7', 'tub'], ['s8', 'shower'], ['s11', 'tub']]);
+// The second floor's baths: a full primary bath, a shower bath, and a full bath.
+for (const [id, bath] of [['s7', 'tub'], ['s8', 'shower'], ['s11', 'tub']]) showcase.rooms.find((r) => r.id === id).bath = bath;
 
 /** A camera close on one room of a built home, its floor open: from in
  *  front and above, looking at the room's middle. */
@@ -428,7 +430,7 @@ function closeOn(built, roomId, dist = 0.62, fov = 38) {
     return { eye: [c[0], c[1] + dist * 0.55, c[2] + dist], aim: [c[0], c[1], c[2] - 0.03], fov };
 }
 const roomShot = (lifted, roomId, title, dist) => {
-    const built = build(showcase, lifted, null, showBaths);
+    const built = build(showcase, lifted, null);
     return [title, { ...shot(built, { yaw: 0, tilt: 0.4 }, 1000, 640), camera: closeOn(built, roomId, dist) }];
 };
 const views = [
@@ -442,10 +444,10 @@ const views = [
     ['Maya pointing to the house', { ...shot(build(example), start, 1280, 800), gesture: { name: 'point', t: 1.0 } }],
     ['A narrower laptop (1024 by 768)', shot(build(example), start, 1024, 768)],
     ['Close: the main floor (kitchen, living, dining, office, entry, half bath)', shot(build(example, 'main'), close, 1400, 900)],
-    ['Close: the second floor (bedrooms, baths)', shot(build(example, 'second'), close, 1400, 900)],
+    ['Close: the second floor (bedrooms, a shower primary bath, a full hall bath)', shot(build(example, 'second'), close, 1400, 900)],
     ['Close: the basement', shot(build(example, 'basement'), close, 1400, 900)],
     roomShot('main', 's0', 'Kitchen'),
-    roomShot('main', 's5', 'Half bath (powder room)'),
+    roomShot('main', 's5', 'Half bath'),
     roomShot('main', 's4', 'Laundry'),
     roomShot('main', 's3', 'Office'),
     roomShot('second', 's7', 'Primary bath, full'),

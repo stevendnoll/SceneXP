@@ -1504,6 +1504,53 @@ textarea.ws-input {
     margin: 0 0 0.9rem;
 }
 
+/* A bathroom's type of bath: one of three, the one it is filled, since a
+   fill here is the state it reads as. */
+.panel-baths {
+    margin: 0 0 0.9rem;
+}
+
+.panel-baths[hidden] {
+    display: none;
+}
+
+.panel-baths-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.3rem;
+}
+
+.panel-bath {
+    min-height: 40px;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--ws-accent);
+    border-radius: 999px;
+    background: #FFFFFF;
+    color: var(--ws-accent);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.panel-bath:hover,
+.panel-bath:focus-visible {
+    background: var(--ws-accent-soft);
+    outline: none;
+}
+
+.panel-bath:focus-visible {
+    box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px var(--ws-accent);
+}
+
+.panel-bath.is-on,
+.panel-bath.is-on:hover {
+    background: var(--ws-accent);
+    color: #FFFFFF;
+    cursor: default;
+}
+
 .panel-chips-heading {
     flex-basis: 100%;
     margin: 0 0 0.1rem;

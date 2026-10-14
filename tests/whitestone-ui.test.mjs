@@ -606,8 +606,15 @@ test('without the price sheet, a task waits politely rather than offering nothin
 test('the quote chip appears with the first task, in words for a screen reader, and opens the breakdown', async () => {
     const main = await homeWithPrices();
     expect(visible('hud-quote')).toBe(false);
-    // A powder room alone: toilet $12 and sink $6, well under the $120 minimum.
-    dom.el('room-area').value = 'powder-room';
+    // A half bath alone: toilet $12 and sink $6, well under the $120 minimum.
+    // A half bath is a bathroom's third type of bath on the card.
+    dom.el('room-area').value = 'bathroom';
+    fire(dom.el('room-area'), 'change');
+    // The radios are built, so they are reached through their list; and the
+    // stub leaves a radio's group alone, as a browser would not.
+    const radios = dom.el('room-bath-list').children.map((row) => row.children[0]);
+    expect(radios.map((r) => r.value)).toEqual(['tub', 'shower', 'half']);
+    radios.forEach((r) => { r.checked = r.value === 'half'; });
     dom.el('room-level').value = 'main';
     dom.el('room-preset').checked = false;
     fire(dom.el('room-form'), 'submit');
@@ -626,7 +633,7 @@ test('the quote chip appears with the first task, in words for a screen reader, 
     expect(dom.el('quote-minimum').textContent).toBe('Visit minimum $120. Add $102 more to reach it, or it rounds up to $120.');
     expect(dom.el('quote-tax').textContent).toBe('Prices are before any sales tax. Priced on service menu cleaning-2026-10.');
     const breakdown = dom.el('quote-breakdown').children;
-    expect(breakdown[0].children[0].textContent).toBe('Powder room$18');
+    expect(breakdown[0].children[0].textContent).toBe('Half bath$18');
     const sums = breakdown[breakdown.length - 1].children.map((r) => r.textContent);
     expect(sums).toEqual(['Tasks$18', 'Minimum top-up$102', 'Total$120']);
 

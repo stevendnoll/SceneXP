@@ -24,7 +24,9 @@ import { createChecklist, setPreferences, addRoom, addItem, setSettings } from '
 
 export const EXAMPLE_ID = 'example-home-1';
 
-/** The rooms, level by level, and each room's tasks as chosen. */
+/** The rooms, level by level, and each room's tasks as chosen, with a
+ *  bathroom's type of bath last where it is not a full bath: the primary
+ *  bath is a shower bath, the hall bath a full bath with its tub. */
 const ROOMS = [
     ['main', 'entry', '', [
         { task: 'mop-floor', size: 'small' },
@@ -62,7 +64,7 @@ const ROOMS = [
         { task: 'toilet', options: ['deep-clean'] },
         { task: 'bathroom-sink' },
         { task: 'mirrors', quantity: 2 }
-    ]],
+    ], 'shower'],
     ['second', 'bedroom', "Emma's room", [
         { task: 'make-bed', quantity: 1 }
     ]],
@@ -99,9 +101,9 @@ export function withExample(doc, config, now, check) {
             note: 'Our dog, Juniper, is friendly and stays in the yard during visits.'
         }, config, now)
     ];
-    ROOMS.forEach(([level, area, label, tasks], r) => {
+    ROOMS.forEach(([level, area, label, tasks, bath], r) => {
         const roomId = `example-room-${r + 1}`;
-        steps.push((d) => addRoom(d, EXAMPLE_ID, { level, area, label }, config, now, { id: roomId, sample: true }));
+        steps.push((d) => addRoom(d, EXAMPLE_ID, { level, area, label, bath }, config, now, { id: roomId, sample: true }));
         tasks.forEach((t, i) => {
             steps.push((d) => addItem(d, EXAMPLE_ID, { ...t, roomId }, config, now,
                 { id: `example-task-${r + 1}-${i + 1}`, sample: true, check }));
