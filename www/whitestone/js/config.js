@@ -150,7 +150,10 @@ export const CONFIG = deepFreeze({
      *  radians.
      *
      *  THE FRAME: a screen narrower than `tallBelow` is `tall` (a phone
-     *  upright), else `wide`. Each has a vertical `fov`, the share of the
+     *  upright), else `wide`. A wide frame holds Maya too (`host`): it is at
+     *  least her height, and leaves her the room right of the turntable,
+     *  her bubble beside her. On a phone she is out of the frame, a
+     *  portrait in her bubble instead. Each has a vertical `fov`, the share of the
      *  screen's width and height the turntable and the house may fill
      *  (`use`), and how far the subject is moved off center (`shift`, as
      *  shares of the width and height, positive is left and up): on a wide
@@ -172,8 +175,8 @@ export const CONFIG = deepFreeze({
      *  moves less than `tap.slop` pixels and lifts within `tap.ms` is a tap. */
     view: {
         tallBelow: 1,
-        wide: { fov: 30, use: [0.58, 0.8], shift: [0.1, 0] },
-        tall: { fov: 34, use: [0.9, 0.48], shift: [0, 0.23] },
+        wide: { fov: 30, use: [0.48, 0.8], shift: [0.17, 0], host: true },
+        tall: { fov: 34, use: [0.9, 0.48], shift: [0, 0.23], host: false },
         yaw: { start: -0.55 },
         tilt: { start: 0.42, min: 0.16, max: 0.72, open: 0.3 },
         zoom: { min: 0.6, max: 1.4, wheel: 0.0012, key: 0.25 },
@@ -182,6 +185,19 @@ export const CONFIG = deepFreeze({
         arrival: { seconds: 2.5, from: 1.7 },
         subject: { ease: 0.8 },
         tap: { slop: 8, ms: 600 }
+    },
+
+    /** Maya on the stage (cast.js, PLANNING 6.4): a Hispanic woman, she
+     *  and her, standing on the cove's floor to the right of the turntable
+     *  at `x`, `z`, turned `facing` radians toward the house, `height`
+     *  meters tall with her hair. A white Whitestone polo with the accent's
+     *  mark, charcoal trousers, a warm medium skin tone, dark hair. */
+    cast: {
+        maya: {
+            x: 2.0, z: 0.1, facing: -0.55, height: 1.72,
+            skin: '#BF8A66', hair: '#22170F', eyes: '#3A2416',
+            shirt: '#F6F5F1', pants: '#2F353D', accent: '#3E5C76'
+        }
     },
 
     /** Maya's timing (host.js, ONBOARDING section 8), in seconds: she

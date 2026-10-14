@@ -4,7 +4,7 @@
  * for checking by eye without a browser (QA, 2026-10-13: "We really need to
  * nail the house").
  *
- *   npm run build && node scripts/whitestone-model-preview.mjs
+ *   npm run build && node --experimental-vm-modules scripts/whitestone-model-preview.mjs
  *
  * Writes specs/whitestone/previews/model.html (git-ignored): the house on
  * its turntable in the white studio, through the page's own camera
@@ -25,6 +25,11 @@ import { fileURLToPath } from 'node:url';
 import { instancesFor, levelOffsets, fitScale, siteFor, EMPTY_HOME } from '../www/whitestone/js/model.js';
 import { framePose, turnPoint } from '../www/whitestone/js/turntable.js';
 import { contactAlpha } from '../www/whitestone/js/stage.js';
+import { loadRealThree } from '../tests/helpers/real-three.mjs';
+
+// Maya is built by cast.js with the real three.js, as the page builds her.
+globalThis.THREE = await loadRealThree();
+const { buildMaya, poseFor, GESTURES } = await import('../www/whitestone/js/cast.js');
 import { layoutHome } from '../www/whitestone/js/layout.js';
 import { withExample } from '../www/whitestone/js/samples.js';
 import { emptyDoc } from '../www/whitestone/js/store.js';
@@ -139,6 +144,29 @@ function discFaces(b, n = 64) {
     return faces;
 }
 
+/** Every triangle of a built three.js object (Maya), in world meters,
+ *  colored by its material. `pose` is a gesture and a time in it. */
+function figureFaces(maya, pose = null) {
+    if (pose) maya.gesture(pose.name);
+    if (pose) maya.tick(pose.t);
+    maya.group.updateMatrixWorld(true);
+    const faces = [];
+    maya.group.traverse((o) => {
+        if (!o.isMesh || !o.visible) return;
+        const g = o.geometry;
+        const pos = g.attributes.position;
+        const idx = g.index ? g.index.array : null;
+        const v = (k) => new THREE.Vector3().fromBufferAttribute(pos, k).applyMatrix4(o.matrixWorld).toArray();
+        const hex = `#${o.material.color.getHexString()}`;
+        const n = idx ? idx.length : pos.count;
+        for (let i = 0; i < n; i += 3) {
+            const tri = [0, 1, 2].map((j) => v(idx ? idx[i + j] : i + j));
+            faces.push({ poly: tri, hex });
+        }
+    });
+    return faces;
+}
+
 /** The turntable in the world: a stone drum on its dark toe. */
 function turntableFaces(n = 96) {
     const faces = [];
@@ -204,7 +232,7 @@ function lit(poly, hex) {
  * the house (turned by `yaw`, at scale `k`) rasterized with a depth buffer
  * at twice the size, then shrunk.
  */
-function render(inst, { k, yaw, tilt, zoom = 1, houseHeight, width, height }) {
+function render(inst, { k, yaw, tilt, zoom = 1, houseHeight, width, height, gesture = null }) {
     const aspect = width / height;
     const pose = framePose(aspect, houseHeight, { tilt, zoom }, CONFIG);
     const W2 = width * 2;
@@ -244,8 +272,11 @@ function render(inst, { k, yaw, tilt, zoom = 1, houseHeight, width, height }) {
         return [((nx + 1) / 2 - ox) * W2, ((1 - ny) / 2 - oy) * H2, 1 / zc];
     };
     const world = (p) => turnPoint([k * p[0], T.height + k * p[1], k * p[2]], yaw);
+    // Maya stands beside the turntable on a wide frame (turntable.js host).
+    const maya = aspect >= CONFIG.view.tallBelow ? buildMaya(CONFIG) : null;
     const faces = [
         ...turntableFaces().map(({ poly, hex }) => ({ poly, rgb: lit(poly, hex) })),
+        ...(maya ? figureFaces(maya, gesture) : []).map(({ poly, hex }) => ({ poly, rgb: lit(poly, hex) })),
         ...facesOf(inst).map(({ poly, rgb: c }) => ({ poly: poly.map(world), rgb: c }))
     ];
     for (const { poly, rgb: c } of faces) {
@@ -352,7 +383,10 @@ const views = [
     ['Its main floor open, turned to face the visitor', shot(build(example, 'main'), front, 1280, 800)],
     ['An empty house, as a first visit will meet it', shot(build(EMPTY_HOME), start, 1280, 800)],
     ['The widest home there can be, with a garage', shot(build(withGarage), start, 1280, 800)],
-    ['Every level, the tallest', shot(build(widest), start, 1280, 800)]
+    ['Every level, the tallest', shot(build(widest), start, 1280, 800)],
+    ['Maya waving hello', { ...shot(build(EMPTY_HOME), start, 1280, 800), gesture: { name: 'wave', t: 1.0 } }],
+    ['Maya pointing to the house', { ...shot(build(example), start, 1280, 800), gesture: { name: 'point', t: 1.0 } }],
+    ['A narrower laptop (1024 by 768)', shot(build(example), start, 1024, 768)]
 ];
 
 await mkdir(path.dirname(OUT), { recursive: true });

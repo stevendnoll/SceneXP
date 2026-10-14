@@ -317,6 +317,65 @@ describe('a first visit', () => {
     });
 });
 
+describe('Maya on the stage', () => {
+    test('she waves hello, points as each step begins, and sways only while she says her line', async () => {
+        const main = await boot();
+        const maya = main.__test__.cast();
+        expect(maya.gesturing).toBe('wave');
+        expect(maya.talking).toBeGreaterThan(2);
+        press('start');
+        expect(maya.gesturing).toBe('point');
+        // The same scene again (a floor ticked) does not gesture again.
+        stepFrames(Math.ceil(2500 / 16));
+        expect(maya.gesturing).toBeNull();
+        tick('second', true);
+        expect(maya.gesturing).toBeNull();
+        // Put away, she stops talking.
+        fire(dom.el('host-skip'), 'click');
+        expect(maya.talking).toBe(0);
+    });
+
+    test('her bubble goes beside her head where there is room for it, and back to its own place where there is not', async () => {
+        const main = await boot();
+        const host = main.__test__.host();
+        const bubble = dom.el('ws-host');
+        // The stub lays nothing out: the bubble counts as 340 by 260.
+        expect(host.anchor(500, 300, 1280, 800)).toBe(true);
+        expect(bubble.classList.contains('is-anchored')).toBe(true);
+        expect([bubble.style.left, bubble.style.top]).toEqual(['518px', '272px']);
+        // Kept below Help and Undo, and above the bottom edge.
+        host.anchor(500, 10, 1280, 800);
+        expect(bubble.style.top).toBe('76px');
+        host.anchor(500, 790, 1280, 800);
+        expect(bubble.style.top).toBe(`${800 - 260 - 16}px`);
+        // No room to her right: back to its own place.
+        expect(host.anchor(1000, 300, 1280, 800)).toBe(false);
+        expect(bubble.classList.contains('is-anchored')).toBe(false);
+        expect(bubble.style.left).toBe('');
+        expect(host.anchor(500, 300, 1280, 800)).toBe(true);
+        expect(host.anchor(null)).toBe(false);
+        expect(bubble.style.left).toBe('');
+        expect(host.anchor(NaN, 300, 1280, 800)).toBe(false);
+    });
+
+    test('under reduced motion she does not gesture', async () => {
+        dom.windowStub.matchMedia = (media) => ({ matches: /reduce/.test(media), addEventListener() {}, removeEventListener() {} });
+        const main = await boot();
+        expect(main.__test__.cast().gesturing).toBeNull();
+    });
+
+    test('a tap on her: she says it again, and after the guide a hint about the house', async () => {
+        const main = await boot();
+        main.__test__.tapHost();
+        expect(line()).toBe(GUIDE.helloAgain);
+        expect(main.__test__.cast().gesturing).toBe('point');
+        press('start');
+        fire(dom.el('host-skip'), 'click');
+        main.__test__.tapHost();
+        expect(line()).toBe(GUIDE.hint);
+    });
+});
+
 describe('the example', () => {
     test('three beats, its main floor opened on the second, and Build my own from it', async () => {
         const main = await boot();

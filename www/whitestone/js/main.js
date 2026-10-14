@@ -60,6 +60,7 @@ import { buildStage, buildLights, firstPick } from './stage.min.js';
 import { buildModel } from './model.min.js';
 import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, GUIDED } from './guide.min.js';
 import { createHost } from './host.min.js';
+import { buildMaya, speakSeconds } from './cast.min.js';
 
 // ---- State ------------------------------------------------------------------
 
@@ -126,6 +127,10 @@ let turntable = null;
 const roomLabels = { nodes: [], key: '' };
 /** Maya's bubble (host.js). */
 let host = null;
+/** Maya on the stage (cast.js). */
+let cast = null;
+/** The scene Maya last gestured for, so each new one gets its gesture. */
+let gesturedFor = null;
 let raycaster = null;
 let lastHover = 0;
 let sun = null;
@@ -213,6 +218,11 @@ async function init() {
     // (shared warmup part).
     updateLoadingStatus('Preparing the view…', 95);
     await warmShaders(renderer, [{ scene, camera }]);
+    // Maya's face for her bubble, drawn once behind the loader.
+    if (cast && host) {
+        const face = cast.portrait(renderer, scene);
+        if (face) host.setPortrait(face);
+    }
 
     updateLoadingStatus('Ready', 100);
     setTimeout(() => {
@@ -322,6 +332,9 @@ function buildScene() {
     // The house stands in the turntable's group, so it turns with it.
     model = buildModel(CONFIG, [0, stage.top, 0]);
     stage.spin.add(model.group);
+
+    cast = buildMaya(CONFIG);
+    scene.add(cast.group);
 
     const lit = buildLights(CONFIG, state.mobile);
     sun = lit.sun;
@@ -520,9 +533,20 @@ function pickAt(clientX, clientY) {
         -((clientY - rect.top) / Math.max(1, rect.height)) * 2 + 1
     );
     raycaster.setFromCamera(ndc, camera);
-    const pick = firstPick(raycaster.intersectObjects([model.group], true));
+    const pick = firstPick(raycaster.intersectObjects(cast && cast.group.visible ? [model.group, cast.group] : [model.group], true));
     if (!pick) return null;
+    if (pick.key !== 'model') return { key: pick.key, level: null, itemId: null };
     return { key: pick.key, level: model.levelOfHit(pick.hit), itemId: model.itemOfHit(pick.hit) };
+}
+
+/** A tap on Maya: she says it again, with a wave toward the house (or,
+ *  once the guide is over, a hint about the house). */
+function tapHost() {
+    if (!state.loaded) return false;
+    guideTo({ type: 'again' });
+    if (cast && !state.reducedMotion) cast.gesture('point');
+    requestRender();
+    return true;
 }
 
 /** A tap on the canvas: the house answers, or a tap on empty space steps
@@ -534,6 +558,10 @@ function handleSceneTap(clientX, clientY) {
     if (!hit) {
         stepBack();
         return null;
+    }
+    if (hit.key === 'host') {
+        tapHost();
+        return hit.key;
     }
     tapModel(hit.level, hit.itemId);
     return hit.key;
@@ -674,6 +702,8 @@ function applyPose(pose) {
     if (typeof camera.setViewOffset === 'function') camera.setViewOffset(w, hgt, pose.offset[0] * w, pose.offset[1] * hgt, w, hgt);
     camera.updateProjectionMatrix();
     camera.lookAt(pose.aim[0], pose.aim[1], pose.aim[2]);
+    // Maya is in a wide frame, and out of an upright phone's.
+    if (cast) cast.setShown(pose.host);
     state.pose = pose;
 }
 
@@ -718,10 +748,46 @@ function guideView() {
     return v;
 }
 
-/** Maya says the scene now (or is put away when there is none). */
+/** Which gesture opens a scene: a wave to greet, an arm toward the house
+ *  as a step about it begins. */
+const GESTURE_OF = {
+    hello: 'wave', welcome: 'wave',
+    floors: 'point', firstRoom: 'point', added: 'point', dots: 'point', rooms: 'point', review: 'point',
+    example1: 'point', example2: 'point', look: 'point'
+};
+
+/** Maya says the scene now (or is put away when there is none), with the
+ *  gesture that opens it. */
 function showGuide() {
     if (!host || !state.loaded) return;
-    host.show(guideView());
+    const view = guideView();
+    host.show(view);
+    if (!cast) return;
+    cast.speaking(view ? speakSeconds(view.text) : 0);
+    const scene = ui.guide ? ui.guide.scene : null;
+    if (view && scene !== gesturedFor) {
+        gesturedFor = scene;
+        if (GESTURE_OF[scene] && !state.reducedMotion) cast.gesture(GESTURE_OF[scene]);
+        requestRender();
+    }
+}
+
+/**
+ * Maya's bubble beside her head, wherever the camera has put her, on a
+ * frame that shows her. Elsewhere (a phone) it keeps its own place.
+ */
+function placeHost() {
+    if (!host || !camera) return;
+    if (!host.shown || !cast || !cast.group.visible || !state.pose || !state.pose.host) {
+        host.anchor(null);
+        return;
+    }
+    camera.updateMatrixWorld();
+    const a = cast.anchor();
+    const v = new THREE.Vector3(a[0], a[1], a[2]).project(camera);
+    const w = window.innerWidth || 1;
+    const hgt = window.innerHeight || 1;
+    host.anchor(((v.x + 1) / 2) * w, ((1 - v.y) / 2) * hgt, w, hgt);
 }
 
 /**
@@ -1761,6 +1827,8 @@ function animate() {
     }
     // A floor opening or closing, and its shadow with it.
     if (model && model.tick(delta)) markShadows();
+    // Maya's wave, her arm toward the house, her sway while she speaks.
+    if (cast && cast.group.visible && cast.tick(delta, { reducedMotion: state.reducedMotion })) markShadows();
     // A card opening or closing hides or brings back the room labels,
     // though the house itself has not changed.
     if (locked !== wasLocked) {
@@ -1774,6 +1842,7 @@ function animate() {
     state.dirty = false;
     state.frames++;
     placeLabels();
+    placeHost();
     renderer.render(scene, camera);
     state.drewLast = true;
 }
@@ -1904,6 +1973,9 @@ export const __test__ = {
     model: () => model,
     stage: () => stage,
     turntable: () => turntable,
+    cast: () => cast,
+    placeHost,
+    tapHost,
     drawnYaw: () => drawnYaw,
     gesture,
     start,

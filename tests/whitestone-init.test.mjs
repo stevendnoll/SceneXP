@@ -55,6 +55,10 @@ async function bootExample() {
     return main;
 }
 
+/** Long enough for Maya to have greeted, waved and said her line, after
+ *  which a page left alone draws nothing (cast.js speakSeconds). */
+const SETTLE_MS = (CONFIG.guide.delay + 9 + 1) * 1000;
+
 function stepFrames(n, ms = 16) {
     const loop = dom.loops[dom.loops.length - 1];
     for (let i = 0; i < n; i++) {
@@ -90,8 +94,8 @@ test('without WebGL the page says so and goes to the standard site', async () =>
 
 test('a still house draws no frames, and a change draws exactly one', async () => {
     const main = await boot();
-    // Past the push-in, and touched so it does not drift.
-    stepFrames(Math.ceil((CONFIG.view.arrival.seconds * 1000) / 16) + 5);
+    // Past the push-in and Maya's greeting, and touched so it does not drift.
+    stepFrames(Math.ceil(SETTLE_MS / 100), 100);
     main.__test__.turntable().touch();
     stepFrames(2);
     const settled = main.getState().frames;
@@ -143,6 +147,10 @@ describe('the turntable', () => {
         stepFrames(Math.ceil((CONFIG.view.arrival.seconds * 1000) / 16) + 2);
         expect(tt.arriving).toBe(false);
         expect(main.getState().pose).toEqual(tt.pose(aspectNow()));
+        // Once Maya has said her line, nothing more is drawn.
+        stepFrames(Math.ceil(SETTLE_MS / 100), 100);
+        tt.touch();
+        stepFrames(2);
         const landed = main.getState().frames;
         stepFrames(20);
         expect(main.getState().frames).toBe(landed);
@@ -322,6 +330,7 @@ describe('the model', () => {
 
     test('a lift draws every frame while it moves, then goes quiet', async () => {
         const main = await boot();
+        stepFrames(Math.ceil(SETTLE_MS / 100), 100);
         main.__test__.state.reducedMotion = true;
         main.__test__.turntable().touch();
         main.__test__.liftLevel('main');

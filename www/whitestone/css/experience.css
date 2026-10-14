@@ -971,7 +971,8 @@ textarea.ws-input {
     margin-bottom: 0.7rem;
 }
 
-/* Her portrait, until the 3D Maya arrives: her initial in the accent. */
+/* Her portrait: her face, drawn once from the 3D Maya (cast.js), or her
+ * initial in the accent where it cannot be. */
 .host-portrait {
     display: grid;
     flex: none;
@@ -984,6 +985,27 @@ textarea.ws-input {
     font-size: 1.15rem;
     font-weight: 700;
     box-shadow: 0 0 0 3px var(--ws-accent-soft);
+    overflow: hidden;
+}
+
+.host-face {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Beside Maya's head on a wide screen, wherever the camera puts her
+ * (main.js placeHost). It fades in rather than sliding, since it already
+ * stands where it belongs. */
+.ws-host.is-anchored {
+    right: auto;
+    transform: none;
+    animation-name: host-fade;
+}
+
+@keyframes host-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .host-who {

@@ -122,6 +122,17 @@ export function verticalSpan(points, aim, back, up, d) {
 }
 
 /**
+ * How tall the frame holds the subject: the house, and on a frame that
+ * holds Maya (`frame.host`) never less than her, so her head is never cut
+ * off beside a low house. In meters over the turntable's top.
+ */
+export function frameHeight(height, frame, config) {
+    const h = Math.max(0, height);
+    if (!frame.host || !config.cast) return h;
+    return Math.max(h, config.cast.maya.height - config.stage.turntable.height);
+}
+
+/**
  * The camera's pose for a screen of `aspect`: `{ eye, aim, fov, offset }`,
  * with `offset` the view's shift as fractions of the screen's width and
  * height (positive moves the subject left and up). `look` is the visitor's
@@ -132,6 +143,7 @@ export function framePose(aspect, height, look, config, far = 1) {
     const { view, stage } = config;
     const frame = frameFor(aspect, view);
     const fov = frame.fov;
+    height = frameHeight(height, frame, config);
     const tanHalf = Math.tan((fov * Math.PI) / 360);
     const tanV = tanHalf * frame.use[1];
     const tanH = tanHalf * Math.max(0.1, aspect) * frame.use[0];
@@ -158,7 +170,8 @@ export function framePose(aspect, height, look, config, far = 1) {
         aim,
         fov,
         offset: [frame.shift[0], frame.shift[1]],
-        distance: d
+        distance: d,
+        host: Boolean(frame.host)
     };
 }
 

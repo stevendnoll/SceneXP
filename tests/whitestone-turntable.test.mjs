@@ -11,7 +11,7 @@
 import { loadRealThree } from './helpers/real-three.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import {
-    smoothstep, turnPoint, frameFor, subjectPoints, aimFor, fitDistance, framePose, createTurntable
+    smoothstep, turnPoint, frameFor, subjectPoints, aimFor, fitDistance, framePose, createTurntable, frameHeight
 } from '../www/whitestone/js/turntable.js';
 
 const V = CONFIG.view;
@@ -146,7 +146,7 @@ describe('the frame with the real three.js', () => {
             for (const tilt of [V.tilt.min, V.tilt.start, V.tilt.max]) {
                 const pose = framePose(aspect, height, { tilt, zoom: 1 }, CONFIG);
                 const f = frameFor(aspect, V);
-                const pts = subjectPoints(T, height).map((p) => onScreen(pose, aspect, p));
+                const pts = subjectPoints(T, frameHeight(height, f, CONFIG)).map((p) => onScreen(pose, aspect, p));
                 const xs = pts.map((p) => p[0]);
                 const ys = pts.map((p) => p[1]);
                 for (const p of pts) expect(p[2]).toBeLessThan(1);
@@ -333,20 +333,31 @@ describe('the controller', () => {
 
     test('a taller house is framed farther back, eased to rather than jumped', () => {
         const tt = createTurntable(CONFIG);
-        tt.setHeight(0.5, true);
+        // Taller than Maya, who sets the least height of a wide frame.
+        tt.setHeight(1.5, true);
         const low = tt.pose(16 / 10).distance;
-        tt.setHeight(1.2);
+        tt.setHeight(2.2);
         expect(tt.pose(16 / 10).distance).toBeCloseTo(low, 9);
         tt.step(V.subject.ease / 2);
         const mid = tt.pose(16 / 10).distance;
         expect(mid).toBeGreaterThan(low);
         steps(tt, V.subject.ease);
-        expect(tt.height).toBeCloseTo(1.2, 12);
+        expect(tt.height).toBeCloseTo(2.2, 12);
         expect(tt.pose(16 / 10).distance).toBeGreaterThan(mid);
         // At once when asked, or under reduced motion.
         tt.setHeight(0.5);
         tt.step(1 / 60, { reducedMotion: true });
         expect(tt.height).toBe(0.5);
+    });
+
+    test("a wide frame is never shorter than Maya, so her head is never cut off; a phone's is the house's own", () => {
+        const least = CONFIG.cast.maya.height - T.height;
+        expect(frameHeight(0.3, V.wide, CONFIG)).toBeCloseTo(least, 12);
+        expect(frameHeight(least + 0.4, V.wide, CONFIG)).toBeCloseTo(least + 0.4, 12);
+        expect(frameHeight(0.3, V.tall, CONFIG)).toBe(0.3);
+        expect(frameHeight(-1, V.tall, CONFIG)).toBe(0);
+        expect(framePose(16 / 10, 0.3, { tilt: V.tilt.start, zoom: 1 }, CONFIG).host).toBe(true);
+        expect(framePose(0.45, 0.3, { tilt: V.tilt.start, zoom: 1 }, CONFIG).host).toBe(false);
     });
 
     test('opening a floor turns the front to the visitor the shorter way, and lowers a high view', () => {

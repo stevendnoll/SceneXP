@@ -44,6 +44,8 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     let said = false;
     /** The checklist's name field, while Maya asks for it. */
     let titleField = null;
+    /** Where the bubble was last put beside Maya, as a key. */
+    let anchored = '';
     const timers = [];
 
     const stopTimers = () => {
@@ -183,6 +185,38 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         /** The name typed for the checklist, or null when it is not asked. */
         title() {
             return titleField && view && view.choices ? String(titleField.value || '') : null;
+        },
+        /**
+         * Beside Maya's head (`x`, `y` in pixels on a `w` by `h` screen),
+         * where there is room for the bubble to the right of her; null, or
+         * no room, puts it back in its own place.
+         */
+        anchor(x, y, w, h) {
+            if (!root || !root.style) return false;
+            const width = root.offsetWidth || 340;
+            const height = root.offsetHeight || 260;
+            const ok = x != null && Number.isFinite(x) && Number.isFinite(y) && x + 18 + width <= w - 16;
+            const left = ok ? Math.round(x + 18) : 0;
+            const top = ok ? Math.round(Math.min(Math.max(y - 28, 76), h - height - 16)) : 0;
+            const key = ok ? `${left},${top}` : '';
+            if (key === anchored) return ok;
+            anchored = key;
+            if (root.classList) root.classList.toggle('is-anchored', ok);
+            root.style.left = ok ? `${left}px` : '';
+            root.style.top = ok ? `${top}px` : '';
+            return ok;
+        },
+        /** Maya's face, drawn by cast.js, in place of her initial. */
+        setPortrait(canvas) {
+            const spot = root && root.querySelector ? root.querySelector('.host-portrait') : null;
+            if (!spot || !canvas) return false;
+            clear(spot);
+            if (canvas.classList) canvas.classList.add('host-face');
+            spot.appendChild(canvas);
+            return true;
+        },
+        get anchored() {
+            return anchored;
         },
         /** The checklist's name field, while Maya asks for it. */
         get titleField() {
