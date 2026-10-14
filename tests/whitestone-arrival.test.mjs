@@ -128,6 +128,13 @@ const press = (id) => {
     if (!b) throw new Error(`no ${id} in ${buttons().join(', ')}`);
     fire(b, 'click');
 };
+/** One of a few answers in the bubble (the kind of home). */
+const picks = () => (dom.el('host-choices').children[0] || { children: [] }).children;
+const pick = (id) => {
+    const b = picks().find((x) => x.id === `host-${id}`);
+    if (!b) throw new Error(`no ${id} in ${picks().map((x) => x.textContent).join(', ')}`);
+    fire(b, 'click');
+};
 /** The floor's checkbox in the bubble. */
 const floor = (key) => {
     const fieldset = dom.el('host-choices').children[0];
@@ -156,6 +163,131 @@ async function savedDoc(homes, settings = {}) {
     return setSettings(doc, settings).doc;
 }
 
+describe('the kind of home (ONBOARDING Scene 2a)', () => {
+    const floorKeys = () => dom.el('host-choices').children[0].children.slice(1).map((l) => l.children[0].value);
+
+    test('Maya asks first, three answers in a group, on the strip\'s first step, with no other button', async () => {
+        const main = await boot();
+        press('start');
+        expect(line()).toBe(GUIDE.home);
+        expect(picks().map((b) => [b.id, b.textContent])).toEqual([
+            ['host-kind-house', 'A house'], ['host-kind-townhome', 'A townhome'], ['host-kind-condo', 'A condo or apartment']
+        ]);
+        expect(dom.el('host-choices').children[0].getAttribute('aria-label')).toBe(GUIDE.homeLegend);
+        expect(buttons()).toEqual([]);
+        expect(dom.el('host-progress').getAttribute('aria-label')).toBe(GUIDE.progressStep(1, 4, 'Your home'));
+        // The checklist is already there, a house until answered.
+        expect(main.__test__.active().residence).toEqual({ kind: 'house', attached: null });
+    });
+
+    test('a townhome is asked once more, and its floors have no detached garage', async () => {
+        const main = await boot();
+        press('start');
+        pick('kind-townhome');
+        expect(main.__test__.active().residence).toEqual({ kind: 'townhome', attached: 'end' });
+        expect(line()).toBe(GUIDE.attached);
+        expect(picks().map((b) => b.textContent)).toEqual(['An end unit', 'Between two neighbors']);
+        pick('attached-middle');
+        expect(main.__test__.active().residence).toEqual({ kind: 'townhome', attached: 'middle' });
+        expect(line()).toBe(GUIDE.floors);
+        expect(floorKeys()).not.toContain('detached-garage');
+        expect(floorKeys()).toContain('garage');
+    });
+
+    test('a condo is offered one floor or two, and nothing else', async () => {
+        const main = await boot();
+        press('start');
+        pick('kind-condo');
+        expect(main.__test__.active().residence).toEqual({ kind: 'condo', attached: null });
+        expect(line()).toBe(GUIDE.floors);
+        expect(floorKeys()).toEqual(['main', 'second']);
+        tick('second', true);
+        expect(main.__test__.active().levels).toEqual(['main', 'second']);
+    });
+
+    test('Undo takes the answer back', async () => {
+        const main = await boot();
+        press('start');
+        pick('kind-condo');
+        fire(dom.el('ws-undo'), 'click');
+        expect(main.__test__.active().residence.kind).toBe('house');
+    });
+
+    test('a return in the middle of the question is asked it again', async () => {
+        await boot({ saved: await savedDoc([['home-mine', STAMP]], { activeId: 'home-mine', guide: { scene: 'home', reviewed: false } }) });
+        press('keepGoing');
+        expect(line()).toBe(GUIDE.home);
+        expect(picks()).toHaveLength(3);
+    });
+
+    test('Your home can change it later: the neighbors asked for a townhome, only a condo\'s floors offered', async () => {
+        const main = await boot();
+        press('start');
+        pick('kind-house');
+        main.__test__.editHome();
+        expect(dom.el('setup-residence').children.map((o) => o.value)).toEqual(['house', 'townhome', 'condo']);
+        expect(dom.el('setup-residence').value).toBe('house');
+        expect(dom.el('setup-attached-row').hidden).toBe(true);
+        const levelRows = () => dom.el('setup-levels-list').children.filter((r) => !r.hidden).map((r) => r.children[0].value);
+        expect(levelRows()).toContain('detached-garage');
+        dom.el('setup-residence').value = 'townhome';
+        fire(dom.el('setup-residence'), 'change');
+        expect(dom.el('setup-attached-row').hidden).toBe(false);
+        expect(levelRows()).not.toContain('detached-garage');
+        dom.el('setup-residence').value = 'condo';
+        fire(dom.el('setup-residence'), 'change');
+        expect(dom.el('setup-attached-row').hidden).toBe(true);
+        expect(levelRows()).toEqual(['main', 'second']);
+        main.__test__.submitSetup();
+        expect(main.__test__.active().residence).toEqual({ kind: 'condo', attached: null });
+        // One undo takes the whole card back.
+        fire(dom.el('ws-undo'), 'click');
+        expect(main.__test__.active().residence.kind).toBe('house');
+    });
+
+    test('a new home from the setup card keeps a condo a condo, a floor ticked before the change left behind', async () => {
+        const main = await boot();
+        main.__test__.startOwn();
+        const box = (key) => dom.el('setup-levels-list').children.map((r) => r.children[0]).find((i) => i.value === key);
+        box('basement').checked = true;
+        dom.el('setup-residence').value = 'condo';
+        fire(dom.el('setup-residence'), 'change');
+        main.__test__.submitSetup();
+        expect(main.__test__.active()).toMatchObject({ residence: { kind: 'condo', attached: null }, levels: ['main'] });
+    });
+
+    test('a return asked again, answering a kind its rooms do not fit, is told why and asked once more', async () => {
+        const { emptyDoc, createChecklist, addRoom, setSettings } = await import('../www/whitestone/js/store.js');
+        const at = new Date(STAMP);
+        let doc = createChecklist(emptyDoc(CONFIG, at), { levels: ['basement', 'main'] }, CONFIG, at, { id: 'home-mine' }).doc;
+        doc = addRoom(doc, 'home-mine', { level: 'basement', area: 'gym' }, CONFIG, at).doc;
+        doc = setSettings(doc, { activeId: 'home-mine', guide: { scene: 'home', reviewed: false } }).doc;
+        const main = await boot({ saved: doc });
+        press('keepGoing');
+        pick('kind-condo');
+        expect(said()).toBe('Your basement still has rooms. Please move or remove them before changing the kind of home.');
+        expect(line()).toBe(GUIDE.home);
+        expect(main.__test__.active().residence.kind).toBe('house');
+    });
+
+    test('a kind whose floors still have rooms is refused, said on the card, and nothing changes', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        tick('basement', true);
+        const { addRoom } = await import('../www/whitestone/js/store.js');
+        const c = main.__test__.active();
+        main.__test__.mutate((d) => addRoom(d, c.id, { level: 'basement', area: 'gym' }, CONFIG, new Date()), 'x');
+        main.__test__.editHome();
+        dom.el('setup-residence').value = 'condo';
+        fire(dom.el('setup-residence'), 'change');
+        main.__test__.submitSetup();
+        expect(dom.el('setup-error').textContent).toBe('Your basement still has rooms. Please move or remove them before changing the kind of home.');
+        expect(main.__test__.active().residence.kind).toBe('house');
+        expect(main.__test__.active().levels).toContain('basement');
+    });
+});
+
 describe('a first visit', () => {
     test('a plain house, and Maya a moment after it arrives, with nothing saved', async () => {
         const main = await boot({ quiet: true });
@@ -183,6 +315,7 @@ describe('a first visit', () => {
     test("Let's start makes \"Our home\" on one floor, and asks which floors it has", async () => {
         const main = await boot();
         press('start');
+        pick('kind-house');
         const c = own(main);
         expect(c).toMatchObject({ title: GUIDE.defaultTitle, levels: ['main'] });
         expect(main.getDoc().settings.activeId).toBe(c.id);
@@ -199,6 +332,7 @@ describe('a first visit', () => {
     test('each floor ticked rises onto the house, and the last cannot go', async () => {
         const main = await boot();
         press('start');
+        pick('kind-house');
         tick('second', true);
         expect(own(main).levels).toEqual(['main', 'second']);
         expect(main.__test__.model().placed.slabs).toHaveLength(2);
@@ -218,12 +352,14 @@ describe('a first visit', () => {
     test('the name typed is kept on Next, and an empty one changes nothing', async () => {
         const main = await boot();
         press('start');
+        pick('kind-house');
         main.__test__.host().titleField.value = '  Maple Street  ';
         press('next');
         expect(own(main).title).toBe('Maple Street');
         expect(line()).toBe(GUIDE.firstRoom);
         fire(dom.el('help-restart'), 'click');
         press('start');
+        pick('kind-house');
         main.__test__.host().titleField.value = '   ';
         press('next');
         expect(own(main).title).toBe('Maple Street');
@@ -232,6 +368,7 @@ describe('a first visit', () => {
     test('the kitchen in one tap: its preset, its floor opened, and its line from the price sheet', async () => {
         const main = await boot({ sheet: true });
         press('start');
+        pick('kind-house');
         // On the main floor, not the first floor listed.
         tick('basement', true);
         press('next');
@@ -255,6 +392,7 @@ describe('a first visit', () => {
     test('before the price sheet arrives, the kitchen waits and says so', async () => {
         const main = await boot();
         press('start');
+        pick('kind-house');
         press('next');
         press('kitchen');
         expect(own(main).rooms).toHaveLength(0);
@@ -265,6 +403,7 @@ describe('a first visit', () => {
     test('a tapped dot shows its task in the panel, Maya stepping aside until it closes', async () => {
         const main = await boot({ sheet: true });
         press('start');
+        pick('kind-house');
         press('next');
         press('kitchen');
         press('next');
@@ -288,6 +427,7 @@ describe('a first visit', () => {
     test('another room through the room card, then Review, preferences offered, and saved', async () => {
         const main = await boot({ sheet: true });
         press('start');
+        pick('kind-house');
         tick('second', true);
         press('next');
         press('kitchen');
@@ -319,6 +459,7 @@ describe('a first visit', () => {
     test('Skip leaves the guide, saved, and the house stays fully usable', async () => {
         const main = await boot();
         press('start');
+        pick('kind-house');
         fire(dom.el('host-skip'), 'click');
         expect(shown()).toBe(false);
         expect(saved().settings.guide).toEqual({ scene: 'done', reviewed: false });
@@ -334,6 +475,7 @@ describe('Maya on the stage', () => {
         expect(maya.gesturing).toBe('wave');
         expect(maya.talking).toBeGreaterThan(2);
         press('start');
+        pick('kind-house');
         expect(maya.gesturing).toBe('point');
         // The same scene again (a floor ticked) does not gesture again.
         stepFrames(Math.ceil(2500 / 16));
@@ -380,6 +522,7 @@ describe('Maya on the stage', () => {
         expect(line()).toBe(GUIDE.helloAgain);
         expect(main.__test__.cast().gesturing).toBe('point');
         press('start');
+        pick('kind-house');
         fire(dom.el('host-skip'), 'click');
         main.__test__.tapHost();
         expect(line()).toBe(GUIDE.hint);
@@ -402,7 +545,7 @@ describe('the example', () => {
         expect(main.__test__.model().lifted).toBeNull();
         expect(main.__test__.active().sample).toBe(false);
         expect(main.__test__.active().title).toBe(GUIDE.defaultTitle);
-        expect(line()).toBe(GUIDE.floors);
+        expect(line()).toBe(GUIDE.home);
     });
 
     test('Look around keeps Build my own at hand', async () => {
@@ -520,6 +663,7 @@ describe('Help and Undo', () => {
         fire(dom.el('help-again'), 'click');
         expect(line()).toBe(GUIDE.helloAgain);
         press('start');
+        pick('kind-house');
         fire(dom.el('host-skip'), 'click');
         fire(dom.el('help-again'), 'click');
         expect(line()).toBe(GUIDE.hint);
@@ -530,6 +674,7 @@ describe('Help and Undo', () => {
     test('About sits over the scene and goes back to it', async () => {
         await boot();
         press('start');
+        pick('kind-house');
         fire(dom.el('help-about'), 'click');
         expect(line()).toBe(GUIDE.about);
         expect(dom.el('host-small').textContent).toBe(BRAND.honesty);
@@ -541,6 +686,7 @@ describe('Help and Undo', () => {
         const main = await boot();
         expect(dom.el('help-checklist').hidden).toBe(true);
         press('start');
+        pick('kind-house');
         for (const id of ['help-checklist', 'help-prefs', 'help-home']) expect(dom.el(id).hidden).toBe(false);
         fire(dom.el('help-home'), 'click');
         expect(openCards()).toEqual(['setup']);
@@ -551,6 +697,7 @@ describe('Help and Undo', () => {
     test('Undo takes back a floor', async () => {
         const main = await boot();
         press('start');
+        pick('kind-house');
         tick('second', true);
         expect(dom.el('ws-undo').disabled).toBe(false);
         fire(dom.el('ws-undo'), 'click');
@@ -597,7 +744,7 @@ describe('tapping the house', () => {
         main.__test__.tapModel();
         expect(openCards()).toEqual([]);
         expect(main.__test__.active().title).toBe(GUIDE.defaultTitle);
-        expect(line()).toBe(GUIDE.floors);
+        expect(line()).toBe(GUIDE.home);
         fire(dom.el('host-skip'), 'click');
         fire(dom.el('ws-undo'), 'click');
         expect(main.__test__.active()).toBeNull();

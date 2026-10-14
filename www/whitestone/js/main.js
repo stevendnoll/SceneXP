@@ -37,18 +37,19 @@ import {
     createStore, findChecklist, createChecklist, updateChecklist, setLevels, setPreferences, deleteChecklist,
     duplicateChecklist, setSettings, touchVisit, storageUse, isLive, addRoom, updateRoom, deleteRoom, addItem,
     updateItem, deleteItem, addPhoto, removePhoto, photoIdsInUse, newId, itemsIn, liveRooms, liveItems,
-    clearSamples, hasSamples, setBath
+    clearSamples, hasSamples, setBath, setResidence
 } from './store.min.js';
 import { withExample } from './samples.min.js';
 import { createHistory } from './history.min.js';
 import { loadSheet, currentVersion, checkChoice, presetFor, presetGains, taskOf } from './sheet.min.js';
 import { priceChoice, formatMoney, formatMinutes } from './pricing.min.js';
 import { createPhotoStore, createMemoryBackend, openIdbBackend, preparePhoto } from './photos.min.js';
-import { roomName, levelOf, bathChoices, bathChoiceOf, serviceType as typeOf } from './taxonomy.min.js';
+import { roomName, levelOf, bathChoices, bathChoiceOf, residencesOf, levelsAllowed, serviceType as typeOf } from './taxonomy.min.js';
 import { h, clear, initCards, openCard, closeCard, isOpen, anyOpen, announce, toast, confirmCard, setFocusFallback } from './cards.min.js';
 import {
     initForms, fillSetupForm, readSetupForm, validateSetup, showError, showHints, fillPreferencesForm, readPreferencesForm,
-    fillRoomForm, readRoomForm, validateRoom, showPresetPreview, showBathChoices, fillTaskForm, showTaskChoices, readTaskForm
+    fillRoomForm, readRoomForm, validateRoom, showPresetPreview, showBathChoices, fillTaskForm, showTaskChoices, readTaskForm,
+    showResidence
 } from './forms.min.js';
 import {
     renderMyChecklists, renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote,
@@ -870,10 +871,23 @@ function guideContext() {
 function guideView() {
     if (!ui.guide) return null;
     const v = viewFor(ui.guide, guideContext());
+    const c = active();
+    const typeKey = c ? c.serviceType : 'cleaning';
+    if (v && v.choices === 'home') {
+        const options = residencesOf(typeKey).map((k) => ({ id: `kind-${k.key}`, label: k.name }));
+        return { ...v, choices: { kind: 'pick', legend: GUIDE.homeLegend, options } };
+    }
+    if (v && v.choices === 'attached') {
+        const townhome = residencesOf(typeKey).find((k) => k.attached) || { attached: [] };
+        const options = townhome.attached.map((a) => ({ id: `attached-${a.key}`, label: a.name }));
+        return { ...v, choices: { kind: 'pick', legend: GUIDE.attached, options } };
+    }
     if (v && v.choices === 'floors') {
-        const c = active();
-        const type = typeOf(c ? c.serviceType : 'cleaning');
-        const levels = (type ? type.levels : []).map((l) => ({ key: l.key, name: l.name, on: Boolean(c && c.levels.includes(l.key)) }));
+        const type = typeOf(typeKey);
+        // Only the floors this kind of home can have (a condo, one or two).
+        const allowed = levelsAllowed(typeKey, c ? c.residence : null);
+        const levels = (type ? type.levels : []).filter((l) => allowed.includes(l.key))
+            .map((l) => ({ key: l.key, name: l.name, on: Boolean(c && c.levels.includes(l.key)) }));
         return { ...v, choices: { kind: 'floors', levels, title: c ? c.title : GUIDE.defaultTitle, maxTitle: CONFIG.limits.title } };
     }
     return v;
@@ -883,7 +897,7 @@ function guideView() {
  *  as a step about it begins. */
 const GESTURE_OF = {
     hello: 'wave', welcome: 'wave',
-    floors: 'point', firstRoom: 'point', added: 'point', dots: 'point', rooms: 'point', review: 'point',
+    home: 'point', attached: 'point', floors: 'point', firstRoom: 'point', added: 'point', dots: 'point', rooms: 'point', review: 'point',
     example1: 'point', example2: 'point', look: 'point'
 };
 
@@ -971,6 +985,7 @@ function enterScene(to) {
         }
         break;
     }
+    case 'home':
     case 'floors':
         selectTo(null);
         liftLevel(null);
@@ -1050,8 +1065,29 @@ function onHostButton(id) {
         guideTo({ type: 'saved' });
         break;
     default:
-        guideTo({ type: id });
+        if (id.startsWith('kind-')) chooseResidence({ kind: id.slice(5) });
+        else if (id.startsWith('attached-')) chooseResidence({ attached: id.slice(9) });
+        else guideTo({ type: id });
     }
+}
+
+/**
+ * A kind of home chosen in Maya's bubble (or a townhome's neighbors), set
+ * on the checklist at once (PRD 8.9), and the guide moved on: a townhome is
+ * asked once more. A refusal (a level with rooms the kind cannot have) is
+ * said, and Maya asks again.
+ */
+function chooseResidence(patch) {
+    const c = ensureOwn();
+    if (!c) return null;
+    const residence = { ...(c.residence || {}), ...patch };
+    const result = mutate((d) => setResidence(d, c.id, residence, CONFIG, now()), UI.labels.home);
+    if (result.error) {
+        if (host) host.update(guideView());
+        return result;
+    }
+    guideTo({ type: 'residence', kind: active().residence.kind });
+    return result;
 }
 
 /** The name typed in the bubble, kept as the checklist's title. */
@@ -1436,10 +1472,12 @@ function submitSetup(event) {
     const at = now();
     if (ui.editing) {
         const id = ui.editing;
-        const result = change((d) => {
-            const a = updateChecklist(d, id, fields, CONFIG, at);
-            return a.error ? a : setLevels(a.doc, id, fields.levels, CONFIG, at);
-        }, UI.labels.home, UI.homeSaved);
+        // The kind of home before the levels, which it decides.
+        const result = change((d) => chain(d, [
+            (x) => updateChecklist(x, id, fields, CONFIG, at),
+            (x) => setResidence(x, id, fields.residence, CONFIG, at),
+            (x) => setLevels(x, id, fields.levels, CONFIG, at)
+        ]), UI.labels.home, UI.homeSaved);
         if (result.error) showError('setup-error', result.error);
         else closeCard('setup');
         return result;
@@ -1938,6 +1976,9 @@ function setupEventListeners() {
         roomPreview();
     });
     on('room-bath-list', 'change', roomPreview);
+    // The kind of home decides the neighbors asked and the levels offered.
+    on('setup-residence', 'change', () => showResidence());
+    on('setup-attached', 'change', () => showResidence());
     on('task-form', 'submit', submitTask);
     on('task-cancel', 'click', () => closeCard('task'));
     on('task-remove', 'click', removeTaskFromCard);

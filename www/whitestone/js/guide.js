@@ -8,6 +8,8 @@
  * visitor always knows the one thing to do next:
  *
  *   hello      the greeting: Let's start, or Show me an example
+ *   home       what kind of home: a house, a townhome, a condo
+ *   attached   a townhome's neighbors: an end unit, or between two
  *   floors     tick the floors the home has; each rises on the house
  *   firstRoom  add the kitchen in one tap, or choose another room
  *   added      the room and its price, from the price sheet
@@ -37,10 +39,11 @@ import { priceChoice, formatMoney } from './pricing.min.js';
 
 /** The scenes of the first build, in order. Where the visitor is among
  *  these is saved, and offered again on a return. */
-export const GUIDED = Object.freeze(['floors', 'firstRoom', 'added', 'dots', 'rooms', 'review']);
+export const GUIDED = Object.freeze(['home', 'attached', 'floors', 'firstRoom', 'added', 'dots', 'rooms', 'review']);
 
-/** Which step of the progress strip each guided scene is on. */
-export const PROGRESS = Object.freeze({ floors: 0, firstRoom: 1, added: 1, dots: 1, rooms: 2, review: 3 });
+/** Which step of the progress strip each guided scene is on. Your home
+ *  covers the kind of home and its floors. */
+export const PROGRESS = Object.freeze({ home: 0, attached: 0, floors: 0, firstRoom: 1, added: 1, dots: 1, rooms: 2, review: 3 });
 
 /** Scenes that sit over another for a moment and go back to it. */
 const ASIDE = ['hint', 'about'];
@@ -96,6 +99,8 @@ export function savedForm(guide) {
  * answer, leave it as it was (the same object, so a caller can tell).
  *
  *   start, example         from the greeting
+ *   residence              a kind of home chosen ({ kind }: a townhome is
+ *                          asked once more), or a townhome's neighbors
  *   floorTapped, next      the floors, and moving on from them
  *   roomAdded              a room was added, by any route
  *   dotOpened, gotIt       the dots
@@ -122,8 +127,14 @@ export function step(guide, event) {
     if (type === 'homeMade' && ['hello', 'example1', 'example2', 'example3', 'look'].includes(g.scene)) return to('firstRoom');
     switch (g.scene) {
     case 'hello':
-        if (type === 'start') return to('floors', { tapped: false });
+        if (type === 'start') return to('home');
         if (type === 'example') return to('example1');
+        return g;
+    case 'home':
+        if (type === 'residence') return event.kind === 'townhome' ? to('attached') : to('floors', { tapped: false });
+        return g;
+    case 'attached':
+        if (type === 'residence') return to('floors', { tapped: false });
         return g;
     case 'floors':
         if (type === 'floorTapped') return g.tapped ? g : to('floors', { tapped: true });
@@ -158,7 +169,7 @@ export function step(guide, event) {
         return type === 'next' ? to('example3') : g;
     case 'example3':
     case 'look':
-        if (type === 'buildOwn') return to('floors', { tapped: false });
+        if (type === 'buildOwn') return to('home');
         if (type === 'lookAround' && g.scene === 'example3') return to('look');
         return g;
     case 'welcome':
@@ -210,7 +221,8 @@ export function addedLine(sheet, area, label, bath) {
 /**
  * What the bubble shows for a scene: `{ text, buttons, choices, progress,
  * skip, small, again }`. `buttons` are `{ id, label, primary }`, at most
- * two; `choices` is 'floors' or null; `progress` the step of the strip or
+ * two; `choices` is 'home' (the kinds of home, each a button in a group),
+ * 'floors' or null; `progress` the step of the strip or
  * null; `again` the line said once, in other words, if nothing happens.
  * `ctx` gives what the words depend on: `{ sheet, roomLabel, roomCount,
  * addedText }`. Null for `done`, when the bubble is put away.
@@ -221,6 +233,10 @@ export function viewFor(guide, ctx = {}) {
     switch (guide.scene) {
     case 'hello':
         return { ...base, text: GUIDE.hello, buttons: [b('start', GUIDE.start, true), b('example', GUIDE.example)], small: BRAND.honesty };
+    case 'home':
+        return { ...base, text: GUIDE.home, buttons: [], choices: 'home' };
+    case 'attached':
+        return { ...base, text: GUIDE.attached, buttons: [], choices: 'attached' };
     case 'floors':
         return { ...base, text: guide.tapped ? `${GUIDE.floorsTaking} ${GUIDE.floors}` : GUIDE.floors, buttons: [b('next', GUIDE.next, true)], choices: 'floors' };
     case 'firstRoom':

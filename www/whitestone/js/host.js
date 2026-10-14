@@ -92,13 +92,32 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         progress.setAttribute('aria-label', GUIDE.progressStep(at + 1, GUIDE.progress.length, GUIDE.progress[at]));
     }
 
-    /** The floors to tick, and the checklist's name, when Maya asks. */
+    /** One of a few, when Maya asks (`{ kind: 'pick', legend, options }`,
+     *  each option `{ id, label }`): a button each, in a labeled group, the
+     *  answer moving the guide on. */
+    function drawPick(c) {
+        const buttons = c.options.map((o) => {
+            const btn = h('button', { type: 'button', id: `host-${o.id}`, className: 'ws-btn host-pick', text: o.label });
+            btn.addEventListener('click', () => {
+                if (typeof on.button === 'function') on.button(o.id);
+            }, { signal });
+            return btn;
+        });
+        choices.appendChild(h('div', { className: 'host-picks', attrs: { role: 'group', 'aria-label': c.legend } }, buttons));
+    }
+
+    /** The floors to tick, and the checklist's name, or one of a few, when
+     *  Maya asks. */
     function drawChoices() {
         if (!choices) return;
         clear(choices);
         titleField = null;
         const c = view.choices;
         choices.hidden = !c;
+        if (c && c.kind === 'pick') {
+            drawPick(c);
+            return;
+        }
         if (!c || c.kind !== 'floors') return;
         const boxes = c.levels.map((level) => {
             const input = h('input', { type: 'checkbox', value: level.key, checked: Boolean(level.on), id: `host-floor-${level.key}` });

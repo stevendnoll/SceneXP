@@ -197,6 +197,7 @@ async function bootHome() {
     await jest.advanceTimersByTimeAsync(CONFIG.loadingReveal + CONFIG.guide.delay * 1000 + 200);
     main.__test__.state.reducedMotion = true;
     main.__test__.onHostButton('start');
+    main.__test__.onHostButton('kind-house');
     main.__test__.onFloor('second', true);
     main.__test__.onHostButton('skip');
     return main;
@@ -365,6 +366,7 @@ describe('the panel on the page', () => {
         main.__test__.state.reducedMotion = true;
         const t = main.__test__;
         t.onHostButton('start');
+        t.onHostButton('kind-house');
         t.onHostButton('next');
         t.onHostButton('kitchen');
         t.onHostButton('next');
@@ -406,6 +408,7 @@ describe('the panel on the page', () => {
         await flushAsync(20);
         await jest.advanceTimersByTimeAsync(CONFIG.loadingReveal + CONFIG.guide.delay * 1000 + 200);
         main.__test__.onHostButton('start');
+        main.__test__.onHostButton('kind-house');
         main.__test__.tapModel('main');
         fire(chip('kitchen'), 'click');
         expect(main.__test__.active().rooms).toHaveLength(0);

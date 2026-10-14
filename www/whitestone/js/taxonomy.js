@@ -74,6 +74,24 @@ export const TAXONOMY = deepFreeze({
             { key: 'patio', name: 'Patio', weight: 2 },
             { key: 'other', name: 'Other', weight: 1 }
         ],
+        /** Kinds of residence (PRD 8.9), the first the default: what the
+         *  customer lives in, and so which levels it can have. A townhome is
+         *  joined to one neighbor or two (`attached`, the first the
+         *  default). `levels` null means every level. `short` is how a
+         *  line of text names it after the kind ("A townhome, end unit"). */
+        residences: [
+            { key: 'house', name: 'A house', levels: null },
+            {
+                key: 'townhome',
+                name: 'A townhome',
+                levels: ['basement', 'main', 'second', 'third', 'attic', 'garage'],
+                attached: [
+                    { key: 'end', name: 'An end unit', short: 'end unit' },
+                    { key: 'middle', name: 'Between two neighbors', short: 'between two neighbors' }
+                ]
+            },
+            { key: 'condo', name: 'A condo or apartment', levels: ['main', 'second'] }
+        ],
         /** Bath types (PRD 8.10). A bathroom or a primary bathroom is a full
          *  bath (`tub`, a tub with its shower) or a shower bath (`shower`, a
          *  stall and no tub), the first by default. A half bath is an area of
@@ -167,6 +185,46 @@ export function preferenceOf(type, key) {
         if (item) return { ...item, group: group.key };
     }
     return null;
+}
+
+// ---- Kinds of residence (PRD 8.9) ------------------------------------------------
+
+/** A service type's kinds of residence, or none (a yard has none). */
+export function residencesOf(type) {
+    const t = serviceType(type);
+    return (t && t.residences) || [];
+}
+
+/**
+ * A residence rebuilt from untrusted input: `{ kind, attached }`, `kind` a
+ * known key (else the first, a house), and `attached` a townhome's (else
+ * its first) and null for any other kind. Null for a service type without
+ * kinds of residence.
+ */
+export function residenceOf(type, raw) {
+    const kinds = residencesOf(type);
+    if (!kinds.length) return null;
+    const kind = kinds.find((k) => raw && k.key === raw.kind) || kinds[0];
+    const sides = kind.attached || [];
+    const attached = sides.length ? (sides.find((a) => raw && a.key === raw.attached) || sides[0]).key : null;
+    return { kind: kind.key, attached };
+}
+
+/** The level keys a residence can have, in the taxonomy's order. */
+export function levelsAllowed(type, residence) {
+    const t = serviceType(type);
+    if (!t) return [];
+    const all = t.levels.map((l) => l.key);
+    const kind = residencesOf(type).find((k) => residence && k.key === residence.kind);
+    return kind && kind.levels ? all.filter((key) => kind.levels.includes(key)) : all;
+}
+
+/** "A townhome, end unit": a residence in a line of text, or ''. */
+export function residenceLine(type, residence) {
+    const kind = residencesOf(type).find((k) => residence && k.key === residence.kind);
+    if (!kind) return '';
+    const side = (kind.attached || []).find((a) => a.key === residence.attached);
+    return side ? `${kind.name}, ${side.short}` : kind.name;
 }
 
 // ---- Bath types (PRD 8.10) ------------------------------------------------------

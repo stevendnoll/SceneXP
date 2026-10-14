@@ -1082,6 +1082,21 @@ textarea.ws-input {
     font-weight: 600;
 }
 
+/* One of a few (a kind of home): a full-width button each, stacked, so
+   each reads as an answer and is easy to hit on a phone. */
+.host-picks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin: 0 0 0.6rem;
+}
+
+.host-pick {
+    width: 100%;
+    min-height: 46px;
+    text-align: left;
+}
+
 /* A floor to tick: a chip, its box kept (a checkbox reads as one). */
 .host-chip {
     display: inline-flex;

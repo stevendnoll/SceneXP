@@ -85,6 +85,7 @@ export const STORE = Object.freeze({
     tooManyChecklistPhotos: (n) => `A checklist can have up to ${n} photos.`,
     roomOfRemovedRoom: 'Its room was removed too. Please restore the room first.',
     notABath: 'Only a bathroom has a type of bath.',
+    residenceLevelInUse: (level) => `Your ${String(level).toLowerCase()} still has rooms. Please move or remove them before changing the kind of home.`,
     copyOf: (title) => `Copy of ${title}`
 });
 
@@ -262,7 +263,7 @@ export const GUIDE = Object.freeze({
     defaultTitle: 'Our home',
     skip: 'Skip the guide',
     progressLabel: 'Your progress',
-    progress: Object.freeze(['Floors', 'First room', 'Your rooms', 'Review']),
+    progress: Object.freeze(['Your home', 'First room', 'Your rooms', 'Review']),
     progressStep: (n, total, name) => `Step ${n} of ${total}: ${name}`,
 
     hello: "Hi, I'm Maya with Whitestone Home Care. Let's build a cleaning checklist for your home, room by room. It takes about two minutes.",
@@ -270,7 +271,14 @@ export const GUIDE = Object.freeze({
     start: "Let's start",
     example: 'Show me an example',
 
-    floors: 'First, which floors does your home have?',
+    /** What kind of home (ONBOARDING Scene 2a), and a townhome's neighbors. */
+    home: 'First, what kind of home is it?',
+    homeAgain: 'Choose the one closest to your home. You can change it later.',
+    homeLegend: 'Kind of home',
+    attached: 'Is it an end unit, or between two neighbors?',
+    attachedAgain: 'An end unit has one neighbor, and a unit between two has neighbors on both sides.',
+
+    floors: 'Next, which floors does your home have?',
     floorsAgain: 'Tick each floor your home has. You can change them later.',
     floorsTaking: "That's your house taking shape.",
     floorsLegend: 'Floors in your home',

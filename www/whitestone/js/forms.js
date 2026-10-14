@@ -14,7 +14,7 @@
  */
 
 import { h, clear } from './cards.min.js';
-import { serviceType, roomName, bathChoices, bathChoiceOf, listedArea } from './taxonomy.min.js';
+import { serviceType, roomName, bathChoices, bathChoiceOf, listedArea, residencesOf, residenceOf, levelsAllowed } from './taxonomy.min.js';
 import { FREQUENCIES, GUARDS, UI, STORE } from './copy.min.js';
 import { hintsFor } from './guards.min.js';
 import { taskOf, tasksFor, presetFor, optionsFor, SIZES } from './sheet.min.js';
@@ -46,17 +46,24 @@ export function showError(id, text) {
  *  group never depends on searching the page. */
 const boxes = new Map();
 
+/** Each checkbox's row, so a row can be hidden (a level a kind of home
+ *  cannot have). */
+const rowsOf = new Map();
+
 /** One checkbox with its label, in a row. */
 function checkRow(name, key, label) {
     const id = `${name}-${key}`;
     const input = h('input', { id, type: 'checkbox', name, value: key });
     if (!boxes.has(name)) boxes.set(name, []);
     boxes.get(name).push(input);
-    return h('div', { className: 'form-row form-check' }, [input, h('label', { attrs: { for: id }, text: label })]);
+    const row = h('div', { className: 'form-row form-check' }, [input, h('label', { attrs: { for: id }, text: label })]);
+    rowsOf.set(input, row);
+    return row;
 }
 
+/** The boxes ticked, of those showing. */
 function checked(name) {
-    return (boxes.get(name) || []).filter((input) => input.checked).map((input) => input.value);
+    return (boxes.get(name) || []).filter((input) => input.checked && !(rowsOf.get(input) || {}).hidden).map((input) => input.value);
 }
 
 function setChecked(name, keys) {
@@ -81,6 +88,18 @@ export function showHints(textId, hintId) {
 export function initForms(config, type = 'cleaning') {
     const t = serviceType(type);
     boxes.clear();
+    rowsOf.clear();
+    const residence = byId('setup-residence');
+    if (residence) {
+        clear(residence);
+        for (const k of residencesOf(type)) residence.appendChild(h('option', { value: k.key, text: k.name }));
+    }
+    const attached = byId('setup-attached');
+    if (attached) {
+        clear(attached);
+        const townhome = residencesOf(type).find((k) => k.attached);
+        for (const a of townhome ? townhome.attached : []) attached.appendChild(h('option', { value: a.key, text: a.name }));
+    }
     const levels = byId('setup-levels-list');
     if (levels) {
         clear(levels);
@@ -124,9 +143,32 @@ export function initForms(config, type = 'cleaning') {
 
 // ---- The setup card ---------------------------------------------------------
 
+/**
+ * The setup card as a kind of home makes it: a townhome's neighbors asked,
+ * and only the levels that kind can have offered (a condo, one or two).
+ * Called on filling the card and on each change of kind.
+ */
+export function showResidence(type = 'cleaning') {
+    const residence = residenceOf(type, { kind: value('setup-residence'), attached: value('setup-attached') });
+    const kind = residencesOf(type).find((k) => residence && k.key === residence.kind);
+    const row = byId('setup-attached-row');
+    if (row) row.hidden = !(kind && kind.attached);
+    const allowed = levelsAllowed(type, residence);
+    for (const input of boxes.get('setup-levels') || []) {
+        const r = rowsOf.get(input);
+        if (r) r.hidden = !allowed.includes(input.value);
+    }
+    return residence;
+}
+
 /** Fill the setup card for a new home (`checklist` null) or an edit. */
 export function fillSetupForm(checklist) {
-    const src = checklist || { title: '', levels: ['main'], visitFrequency: null, household: '' };
+    const src = checklist || { title: '', levels: ['main'], visitFrequency: null, household: '', residence: null };
+    const type = (checklist && checklist.serviceType) || 'cleaning';
+    const residence = residenceOf(type, src.residence);
+    setValue('setup-residence', residence ? residence.kind : '');
+    setValue('setup-attached', residence && residence.attached ? residence.attached : '');
+    showResidence(type);
     setChecked('setup-levels', src.levels);
     setValue('setup-title', checklist ? src.title : '');
     setValue('setup-frequency', src.visitFrequency || '');
@@ -139,9 +181,11 @@ export function fillSetupForm(checklist) {
     showHints('setup-household', 'setup-household-hint');
 }
 
-/** The setup card as fields for createChecklist, updateChecklist and setLevels. */
-export function readSetupForm() {
+/** The setup card as fields for createChecklist, updateChecklist,
+ *  setResidence and setLevels. */
+export function readSetupForm(type = 'cleaning') {
     return {
+        residence: residenceOf(type, { kind: value('setup-residence'), attached: value('setup-attached') }),
         levels: checked('setup-levels'),
         title: value('setup-title'),
         visitFrequency: value('setup-frequency') || null,

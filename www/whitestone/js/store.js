@@ -45,7 +45,7 @@
  */
 
 import { STORE, ITEM_ERRORS } from './copy.min.js';
-import { serviceType, bathOf, bathChoices, KEY_PATTERN } from './taxonomy.min.js';
+import { serviceType, levelOf, bathOf, bathChoices, residenceOf, levelsAllowed, KEY_PATTERN } from './taxonomy.min.js';
 
 export const ID_PATTERN = /^[A-Za-z0-9_-]{8,36}$/;
 export const SIZES = Object.freeze(['small', 'medium', 'large']);
@@ -195,6 +195,11 @@ export function normalizeChecklist(raw, config, now) {
 
     let levels = normalizeLevels(raw.levels, type);
     if (!levels.length) levels = [type.levels.find((l) => l.key === 'main') ? 'main' : type.levels[0].key];
+    // The kind of residence (PRD 8.9): none is a house. One whose levels it
+    // cannot have (written by hand, or by a build to come) is read as a
+    // house, so nothing on those levels is lost.
+    let residence = residenceOf(raw.serviceType, raw.residence);
+    if (residence && levels.some((l) => !levelsAllowed(raw.serviceType, residence).includes(l))) residence = residenceOf(raw.serviceType, null);
 
     const rooms = [];
     const roomIds = new Set();
@@ -219,6 +224,7 @@ export function normalizeChecklist(raw, config, now) {
             serviceType: raw.serviceType,
             title: text(raw.title, config.limits.title) || 'Our home',
             visitFrequency: config.frequencies.includes(raw.visitFrequency) ? raw.visitFrequency : null,
+            residence,
             levels,
             rooms,
             items,
@@ -399,18 +405,43 @@ export function updateChecklist(doc, id, fields, config, now) {
     return { doc: replaceChecklist(doc, record), record, error: null };
 }
 
-/** The levels a home has. A level that still has rooms cannot go. */
+/** The levels a home has, of those its kind of residence can have. A level
+ *  that still has rooms cannot go. */
 export function setLevels(doc, id, levels, config, now) {
     const found = liveChecklist(doc, id);
     if (found.error) return refusal(doc, found.error);
     const c = found.checklist;
-    const next = normalizeLevels(levels, serviceType(c.serviceType));
+    const allowed = levelsAllowed(c.serviceType, c.residence);
+    const next = normalizeLevels(levels, serviceType(c.serviceType)).filter((l) => allowed.includes(l));
     if (!next.length) return refusal(doc, STORE.noLevels);
     if (liveRooms(c).some((r) => !next.includes(r.level))) return refusal(doc, STORE.levelInUse);
     // A removed room on a level that goes is kept, on the first level, so its
     // undo still has somewhere to land.
     const rooms = c.rooms.map((r) => (next.includes(r.level) ? r : { ...r, level: next[0] }));
     const record = touched({ ...c, levels: next, rooms }, now);
+    return { doc: replaceChecklist(doc, record), record, error: null };
+}
+
+/**
+ * The kind of residence (PRD 8.9): `{ kind, attached }`, rebuilt by
+ * taxonomy.js `residenceOf`. The levels the new kind cannot have go with
+ * it, unless one still has rooms, which refuses the change and says which.
+ */
+export function setResidence(doc, id, residence, config, now) {
+    const found = liveChecklist(doc, id);
+    if (found.error) return refusal(doc, found.error);
+    const c = found.checklist;
+    const next = residenceOf(c.serviceType, residence);
+    if (!next) return { doc, record: c, error: null };
+    const allowed = levelsAllowed(c.serviceType, next);
+    const busy = c.levels.find((l) => !allowed.includes(l) && liveRooms(c).some((r) => r.level === l));
+    if (busy) return refusal(doc, STORE.residenceLevelInUse((levelOf(c.serviceType, busy) || { name: busy }).name));
+    let levels = c.levels.filter((l) => allowed.includes(l));
+    if (!levels.length) levels = [allowed.includes('main') ? 'main' : allowed[0]];
+    // A removed room on a level that goes is kept, on the first level, so its
+    // undo still has somewhere to land (as in setLevels).
+    const rooms = c.rooms.map((r) => (levels.includes(r.level) ? r : { ...r, level: levels[0] }));
+    const record = touched({ ...c, residence: next, levels, rooms }, now);
     return { doc: replaceChecklist(doc, record), record, error: null };
 }
 
@@ -475,7 +506,7 @@ export function addRoom(doc, checklistId, fields, config, now, opts = {}) {
     const c = found.checklist;
     const type = serviceType(c.serviceType);
     const src = fields || {};
-    if (!type.levels.some((l) => l.key === src.level)) return refusal(doc, STORE.badLevel);
+    if (!levelsAllowed(c.serviceType, c.residence).includes(src.level)) return refusal(doc, STORE.badLevel);
     if (!type.areas.some((a) => a.key === src.area)) return refusal(doc, STORE.badArea);
     if (liveRooms(c).length >= config.limits.rooms) return refusal(doc, STORE.tooManyRooms(config.limits.rooms));
 
@@ -520,7 +551,7 @@ export function updateRoom(doc, checklistId, roomId, fields, config, now) {
     let levels = c.levels;
     if ('label' in src) next.label = text(src.label, config.limits.label);
     if ('level' in src) {
-        if (!type.levels.some((l) => l.key === src.level)) return refusal(doc, STORE.badLevel);
+        if (!levelsAllowed(c.serviceType, c.residence).includes(src.level)) return refusal(doc, STORE.badLevel);
         next.level = src.level;
         levels = normalizeLevels([...c.levels, src.level], type);
     }
