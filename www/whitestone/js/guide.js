@@ -175,7 +175,9 @@ export function step(guide, event) {
         return g;
     }
     if (type === 'close' && ASIDE.includes(g.scene)) return to(g.back || 'done', { back: null });
-    if (type === 'skip' && SKIPPABLE.includes(g.scene)) return to('done');
+    // Skipped, Maya stays, says so, and offers what can be done (QA,
+    // 2026-10-14: she should always have something to say).
+    if (type === 'skip' && SKIPPABLE.includes(g.scene)) return to('done', { skipped: true, minimized: false });
     if (type === 'homeMade' && ['hello', 'example1', 'example2', 'example3', 'look'].includes(g.scene)) return to('firstRoom');
     switch (g.scene) {
     case 'hello':
@@ -213,7 +215,7 @@ export function step(guide, event) {
         if (type === 'saved') return to('saved', { reviewed: true });
         return g;
     case 'saved':
-        if (type === 'lookAround') return to('done');
+        if (type === 'lookAround') return to('done', { skipped: false, minimized: true });
         return g;
     case 'example1':
         return type === 'next' ? to('example2') : g;
@@ -226,10 +228,18 @@ export function step(guide, event) {
         return g;
     case 'welcome':
         if (type === 'keepGoing' && g.resume) return to(g.resume, { resume: null });
-        if (type === 'lookAround') return to('done', { resume: null });
+        if (type === 'lookAround') return to('done', { resume: null, skipped: false, minimized: true });
         // Back to the rooms (QA, 2026-10-14): the build's own step, every
         // step behind it reached already.
         if (type === 'editRooms') return to('rooms', { resume: null, reached: Math.max(g.reached ?? -1, PROGRESS.review) });
+        return g;
+    case 'done':
+        // Standing by: tucked away (I'll look around), back at a tap (Need a
+        // hand?), and the same ways on as a return.
+        if (type === 'lookAround') return g.minimized ? g : to('done', { minimized: true });
+        if (type === 'expand') return g.minimized ? to('done', { minimized: false, skipped: false }) : g;
+        if (type === 'editRooms') return to('rooms', { minimized: false, skipped: false, reached: Math.max(g.reached ?? -1, PROGRESS.review) });
+        if (type === 'start' || type === 'buildOwn') return to('home', { minimized: false, skipped: false });
         return g;
     default:
         return g;
@@ -335,6 +345,10 @@ export function viewFor(guide, ctx = {}) {
             : { ...base, text: ctx.welcome || GUIDE.welcome, buttons: [], choices: 'returning' };
     case 'hint':
         return { ...base, text: GUIDE.hint, buttons: [b('close', GUIDE.gotIt, true)] };
+    case 'done':
+        // Never silent (QA, 2026-10-14): where the home stands and the ways
+        // on (`ctx.standby`, main.js), or tucked away as Need a hand?
+        return { ...base, text: ctx.standby || GUIDE.standbyPlain, buttons: [], choices: 'returning', minimized: Boolean(guide.minimized) };
     case 'about':
         return { ...base, text: GUIDE.about, buttons: [b('close', GUIDE.close, true)], small: BRAND.honesty };
     default:

@@ -40,6 +40,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     const small = byId('host-small');
     const skip = byId('host-skip');
     const backBtn = byId('host-back');
+    const expand = byId('host-expand');
     let view = null;
     let covered = false;
     let said = false;
@@ -55,6 +56,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     if (signal) signal.addEventListener('abort', stopTimers);
     if (skip) skip.addEventListener('click', () => { if (typeof on.button === 'function') on.button('skip'); }, { signal });
     if (backBtn) backBtn.addEventListener('click', () => { if (typeof on.button === 'function') on.button('back'); }, { signal });
+    if (expand) expand.addEventListener('click', () => { if (typeof on.button === 'function') on.button('expand'); }, { signal });
 
     function place() {
         if (root) root.hidden = covered || !view;
@@ -165,6 +167,10 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     }
 
     function draw() {
+        // Tucked away (standing by): only her portrait and Need a hand?
+        const tucked = Boolean(view.minimized);
+        if (root && root.classList) root.classList.toggle('is-minimized', tucked);
+        if (expand) expand.hidden = !tucked;
         if (line) line.textContent = view.text;
         drawProgress();
         drawChoices();
@@ -186,7 +192,10 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             stopTimers();
             if (view) {
                 draw();
-                if (!covered) announce(view.text);
+                // Tucked away, she is not saying anything, so nothing is said
+                // aloud (nor is there a main button to pulse or a line to
+                // say again).
+                if (!covered && !view.minimized) announce(view.text);
                 schedule();
             }
             place();
@@ -195,7 +204,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
          *  again, said again only if its words changed. */
         update(next) {
             if (!next) return api.show(null);
-            const changed = !view || next.text !== view.text;
+            const changed = (!view || next.text !== view.text) && !next.minimized;
             const title = api.title();
             view = next;
             draw();

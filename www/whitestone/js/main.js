@@ -773,7 +773,9 @@ function pickAt(clientX, clientY) {
  *  once the guide is over, a hint about the house). */
 function tapHost() {
     if (!state.loaded) return false;
-    guideTo({ type: 'again' });
+    // Tucked away, a tap on her brings her back; otherwise she says it again.
+    if (ui.guide && ui.guide.scene === 'done' && ui.guide.minimized) guideTo({ type: 'expand' });
+    else guideTo({ type: 'again' });
     if (cast && !state.reducedMotion) cast.gesture('point');
     requestRender();
     return true;
@@ -965,8 +967,28 @@ function guideContext() {
         roomCount: c ? liveRooms(c).length : 0,
         roomLabel: room ? roomName(c.serviceType, room) : '',
         addedText: room ? addedLine(state.sheet, room.area, roomName(c.serviceType, room), room.bath) : '',
-        welcome: welcomeLine(c)
+        welcome: welcomeLine(c),
+        standby: standbyLine(c)
     };
+}
+
+/** Where the home stands, in a sentence: its booked visit, else its rooms,
+ *  tasks and price so far, else that it has none yet. */
+function whereLine(c) {
+    if (!c) return GUIDE.noHome;
+    if (isBooked(c)) return GUIDE.homeBooked(dayLabel(c.booking.date), clockLabel(c.booking.time));
+    if (!liveRooms(c).length) return GUIDE.homeEmpty(c.title);
+    const quote = state.sheet ? quoteChecklist(state.sheet, c) : null;
+    return GUIDE.homeDraft(c.title, PANEL.rooms(liveRooms(c).length), PANEL.tasks(liveItems(c).length), quote ? formatMoney(quote.totalCents) : '');
+}
+
+/** What Maya says standing by (QA, 2026-10-14): just after Skip, that she
+ *  is here; back from Need a hand?, where the home stands; then the
+ *  question. The example speaks for itself. */
+function standbyLine(c) {
+    if (ui.guide && ui.guide.skipped) return `${GUIDE.skipped} ${GUIDE.returningLegend}`;
+    if (c && c.sample) return `${GUIDE.example3}`;
+    return `${whereLine(c)} ${GUIDE.returningLegend}`;
 }
 
 /** Is the open checklist booked and published? */
@@ -981,22 +1003,16 @@ const isBooked = (c) => Boolean(c && c.booking && c.published && c.published.at)
 function welcomeLine(c) {
     if (!c) return '';
     const lead = ui.guide && ui.guide.viaEdit ? GUIDE.welcomeEditLink : GUIDE.welcomeBack;
-    let where;
-    if (isBooked(c)) {
-        where = GUIDE.homeBooked(dayLabel(c.booking.date), clockLabel(c.booking.time));
-    } else if (!liveRooms(c).length) {
-        where = GUIDE.homeEmpty(c.title);
-    } else {
-        const quote = state.sheet ? quoteChecklist(state.sheet, c) : null;
-        where = GUIDE.homeDraft(c.title, PANEL.rooms(liveRooms(c).length), PANEL.tasks(liveItems(c).length), quote ? formatMoney(quote.totalCents) : '');
-    }
-    return `${lead} ${where} ${GUIDE.returningLegend}`;
+    return `${lead} ${whereLine(c)} ${GUIDE.returningLegend}`;
 }
 
 /** A returning visitor's choices: their visit, or a time to choose; the
  *  rooms; the checklist; or simply a look round. */
 function returningChoices(c) {
     const o = (id, label) => ({ id, label });
+    // No home of their own yet: the example's way on, or a start.
+    if (!c) return [o('start', GUIDE.start), o('lookAround', GUIDE.illLook)];
+    if (c.sample) return [o('buildOwn', GUIDE.buildOwn), o('lookAround', GUIDE.illLook)];
     const out = [];
     if (isBooked(c)) out.push(o('visit', GUIDE.seeVisit), o('editRooms', GUIDE.changeChecklist));
     else {
@@ -1056,7 +1072,7 @@ function showGuide() {
     host.show(view);
     setHalo(view ? view.halo : null);
     if (!cast) return;
-    cast.speaking(view ? speakSeconds(view.text) : 0);
+    cast.speaking(view && !view.minimized ? speakSeconds(view.text) : 0);
     const scene = ui.guide ? ui.guide.scene : null;
     if (view && scene !== gesturedFor) {
         gesturedFor = scene;
@@ -1221,7 +1237,7 @@ function onHostButton(id) {
         break;
     case 'chooseTime':
         // Maya steps aside for the card (from her All set, or a return).
-        if (ui.guide && ui.guide.scene === 'welcome') guideTo({ type: 'lookAround' });
+        if (ui.guide && (ui.guide.scene === 'welcome' || ui.guide.scene === 'done')) guideTo({ type: 'lookAround' });
         openBooking();
         break;
     case 'visit':

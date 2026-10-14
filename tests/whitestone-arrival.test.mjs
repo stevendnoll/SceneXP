@@ -503,16 +503,23 @@ describe('a first visit', () => {
         press('save');
         expect(line()).toBe(GUIDE.saved);
         expect(saved().settings.guide).toEqual({ scene: 'done', reviewed: true });
+        // Look around tucks her away, never out of reach.
         press('lookAround');
-        expect(shown()).toBe(false);
+        expect(shown()).toBe(true);
+        expect(dom.el('ws-host').classList.contains('is-minimized')).toBe(true);
+        expect(dom.el('host-expand').hidden).toBe(false);
     });
 
-    test('Skip leaves the guide, saved, and the house stays fully usable', async () => {
+    test('Skip leaves the guide, saved, Maya staying with the ways on, and the house fully usable', async () => {
         const main = await boot();
         press('start');
         pick('kind-house');
         fire(dom.el('host-skip'), 'click');
-        expect(shown()).toBe(false);
+        expect(shown()).toBe(true);
+        expect(line()).toBe(`${GUIDE.skipped} ${GUIDE.returningLegend}`);
+        expect(picks().map((b) => b.id)).toEqual(['host-editRooms', 'host-lookAround']);
+        expect(dom.el('host-skip').hidden).toBe(true);
+        expect(dom.el('host-back').hidden).toBe(true);
         expect(saved().settings.guide).toEqual({ scene: 'done', reviewed: false });
         expect(main.__test__.tapModel('main')).toBe(true);
         expect(main.__test__.model().lifted).toBe('main');
@@ -533,8 +540,10 @@ describe('Maya on the stage', () => {
         expect(maya.gesturing).toBeNull();
         tick('second', true);
         expect(maya.gesturing).toBeNull();
-        // Put away, she stops talking.
+        // Tucked away, she stops talking.
         fire(dom.el('host-skip'), 'click');
+        expect(maya.talking).toBeGreaterThan(0);
+        pick('lookAround');
         expect(maya.talking).toBe(0);
     });
 
@@ -688,7 +697,7 @@ describe('a return', () => {
         expect(dom.el('host-progress').hidden).toBe(true);
         expect(picks().map((b) => b.id)).toEqual(['host-editRooms', 'host-lookAround']);
         pick('lookAround');
-        expect(shown()).toBe(false);
+        expect(dom.el('ws-host').classList.contains('is-minimized')).toBe(true);
     });
 
     test('a home with rooms: its rooms, tasks and price so far, and a time to choose first', async () => {
@@ -771,6 +780,51 @@ describe('nudges', () => {
         main.__test__.host().poke();
         await jest.advanceTimersByTimeAsync(4000);
         expect(line()).toBe(GUIDE.hello);
+    });
+});
+
+describe('Maya standing by (QA, 2026-10-14: she should always have something to say)', () => {
+    test('tucked away, Need a hand? or a tap on her brings her back with where the home stands', async () => {
+        const main = await boot();
+        press('start');
+        pick('kind-house');
+        fire(dom.el('host-skip'), 'click');
+        // What was said before is let land first; tucked, nothing more is
+        // said aloud.
+        await jest.advanceTimersByTimeAsync(500);
+        dom.el('ws-live').textContent = 'quiet';
+        pick('lookAround');
+        expect(dom.el('ws-host').classList.contains('is-minimized')).toBe(true);
+        await jest.advanceTimersByTimeAsync((CONFIG.guide.again + 1) * 1000);
+        expect(dom.el('ws-live').textContent).toBe('quiet');
+        fire(dom.el('host-expand'), 'click');
+        expect(dom.el('ws-host').classList.contains('is-minimized')).toBe(false);
+        expect(line()).toBe(`${GUIDE.homeEmpty('Our home')} ${GUIDE.returningLegend}`);
+        pick('lookAround');
+        main.__test__.tapHost();
+        expect(main.__test__.ui.guide).toMatchObject({ scene: 'done', minimized: false });
+        expect(line()).toBe(`${GUIDE.homeEmpty('Our home')} ${GUIDE.returningLegend}`);
+        // Not tucked, a tap on her gives her hint about the house, as before.
+        main.__test__.tapHost();
+        expect(main.__test__.ui.guide.scene).toBe('hint');
+    });
+
+    test('on the example, Build my own; with no home at all, Let\'s start', async () => {
+        const main = await boot();
+        press('example');
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false, skipped: false };
+        main.__test__.showGuide();
+        expect(line()).toBe(GUIDE.example3);
+        expect(picks().map((b) => b.id)).toEqual(['host-buildOwn', 'host-lookAround']);
+        pick('buildOwn');
+        expect(line()).toBe(GUIDE.home);
+        main.__test__.startOver();
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false, skipped: false };
+        main.__test__.showGuide();
+        expect(line()).toBe(`${GUIDE.noHome} ${GUIDE.returningLegend}`);
+        expect(picks().map((b) => b.id)).toEqual(['host-start', 'host-lookAround']);
+        pick('start');
+        expect(line()).toBe(GUIDE.home);
     });
 });
 
@@ -985,7 +1039,7 @@ describe('Help and Undo', () => {
         fire(dom.el('help-again'), 'click');
         expect(line()).toBe(GUIDE.hint);
         press('close');
-        expect(shown()).toBe(false);
+        expect(line()).toBe(`${GUIDE.skipped} ${GUIDE.returningLegend}`);
     });
 
     test('About sits over the scene and goes back to it', async () => {

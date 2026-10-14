@@ -1491,6 +1491,29 @@ textarea.ws-input {
     display: none;
 }
 
+/* Standing by, tucked away: her portrait and Need a hand?, nothing else. */
+.host-expand[hidden] {
+    display: none;
+}
+
+.ws-host.is-minimized {
+    width: auto;
+    padding-bottom: 0.9rem;
+}
+
+.ws-host.is-minimized .host-progress,
+.ws-host.is-minimized .host-line,
+.ws-host.is-minimized .host-choices,
+.ws-host.is-minimized .host-actions,
+.ws-host.is-minimized .host-small,
+.ws-host.is-minimized .host-foot {
+    display: none;
+}
+
+.host-expand {
+    margin-top: 0.4rem;
+}
+
 /* Back and Skip, quiet, along the bubble's foot. */
 .host-foot {
     display: flex;

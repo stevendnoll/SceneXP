@@ -373,8 +373,27 @@ describe('what Maya says', () => {
         expect(Object.isFrozen(HALO)).toBe(true);
     });
 
-    test('done puts the bubble away', () => {
-        expect(viewFor({ ...fresh(), scene: 'done' })).toBeNull();
+    test('done is never silent: standing by with the ways on, or tucked away (QA, 2026-10-14)', () => {
+        const by = viewFor({ ...fresh(), scene: 'done' }, { standby: 'Here. What would you like to do?' });
+        expect(by).toMatchObject({ text: 'Here. What would you like to do?', buttons: [], choices: 'returning', minimized: false, progress: null, skip: false, stepBack: false });
+        expect(viewFor({ ...fresh(), scene: 'done' }).text).toBe(GUIDE.standbyPlain);
+        // Skip: standing by, open. Look around: tucked. Need a hand?: open again.
+        const skipped = step({ ...fresh(), scene: 'rooms' }, { type: 'skip' });
+        expect(skipped).toMatchObject({ scene: 'done', skipped: true, minimized: false });
+        const tucked = step(skipped, { type: 'lookAround' });
+        expect(tucked).toMatchObject({ scene: 'done', minimized: true });
+        expect(viewFor(tucked).minimized).toBe(true);
+        expect(step(tucked, { type: 'lookAround' })).toBe(tucked);
+        expect(step(tucked, { type: 'expand' })).toMatchObject({ scene: 'done', minimized: false, skipped: false });
+        expect(step(skipped, { type: 'expand' })).toBe(skipped);
+        // Its ways on: the rooms, a start, or the example's build my own.
+        expect(step(skipped, { type: 'editRooms' })).toMatchObject({ scene: 'rooms', reached: 4 });
+        expect(step(skipped, { type: 'start' }).scene).toBe('home');
+        expect(step(skipped, { type: 'buildOwn' }).scene).toBe('home');
+        expect(step(skipped, { type: 'nonsense' })).toBe(skipped);
+        // From All set and a welcome, Look around tucks her too.
+        expect(step({ ...fresh(), scene: 'saved' }, { type: 'lookAround' })).toMatchObject({ scene: 'done', minimized: true });
+        expect(step({ ...fresh(), scene: 'welcome' }, { type: 'lookAround' })).toMatchObject({ scene: 'done', minimized: true });
     });
 
     test('every scene of the first build has a hint to say again, in other words', () => {

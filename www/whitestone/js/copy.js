@@ -387,6 +387,13 @@ export const GUIDE = Object.freeze({
     /** A returning visitor's home base (QA, 2026-10-14): where the home
      *  stands, then the choices. */
     welcomeBack: 'Welcome back.',
+    /** Standing by, after Skip or I'll look around (QA, 2026-10-14). */
+    skipped: 'No problem. Explore at your own pace, and I\u2019m right here when you need me.',
+    standbyPlain: 'I\u2019m right here when you need me.',
+    noHome: 'There\u2019s no home here yet.',
+    expand: 'Need a hand?',
+    expandLabel: 'Maya, your host: need a hand?',
+    startOwn: 'Build my own',
     welcomeEditLink: 'Welcome, with your private edit link.',
     homeDraft: (title, rooms, tasks, money) => `${title} has ${rooms} and ${tasks}${money ? `, ${money} so far` : ''}.`,
     homeEmpty: (title) => `${title} has no rooms yet.`,
