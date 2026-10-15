@@ -376,7 +376,7 @@ export function createPanel({ on = {}, signal } = {}) {
                         className: `panel-star${r.starred ? ' is-on' : ''}`,
                         id: `panel-star-${r.id}`,
                         text: r.starred ? '★' : '☆',
-                        attrs: { 'aria-pressed': r.starred ? 'true' : 'false', 'aria-label': PANEL.starLabel(r.label) }
+                        attrs: { 'aria-pressed': r.starred ? 'true' : 'false', 'aria-label': PANEL.starLabel(r.label), title: PANEL.starLabel(r.label) }
                     });
                     star.addEventListener('click', () => call('star', r.id), { signal });
                     parts.push(star);
@@ -401,7 +401,7 @@ export function createPanel({ on = {}, signal } = {}) {
             if (list2.length) {
                 chips.appendChild(h('p', { className: 'panel-chips-heading', text: PANEL.addRoom }));
                 for (const c of list2) {
-                    const chip = h('button', { type: 'button', className: 'panel-chip', id: `panel-chip-${c.area}`, text: `+ ${c.label}`, attrs: { 'aria-label': c.aria } });
+                    const chip = h('button', { type: 'button', className: 'panel-chip', id: `panel-chip-${c.area}`, text: `+ ${c.label}`, attrs: { 'aria-label': c.aria, title: c.aria } });
                     chip.addEventListener('click', () => call('chip', c.area), { signal });
                     chips.appendChild(chip);
                 }

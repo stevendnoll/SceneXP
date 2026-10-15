@@ -7157,7 +7157,7 @@ html [data-ui-theme="surf" lang="en"]
             "Maya"
           span.host-role
             "Whitestone Home Care"
-        button#host-next.host-next [aria-label="Continue" hidden type="button"]
+        button#host-next.host-next [aria-label="Continue" hidden title="Continue" type="button"]
           svg [aria-hidden="true" focusable="false" height="18" viewbox="0 0 20 20" width="18"]
             path [d="M4 10h11M10.5 5l5 5-5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"]
       div#host-facts.host-facts [aria-label="Your home at a glance" hidden role="group"]
@@ -7171,7 +7171,7 @@ html [data-ui-theme="surf" lang="en"]
       div.host-foot
         button#host-back.host-back [hidden type="button"]
           "Back"
-        button#host-reset.host-reset [hidden type="button"]
+        button#host-reset.host-reset [hidden title="Clear everything and start from the beginning" type="button"]
           "Start over"
     aside#ws-panel.ws-panel [aria-labelledby="panel-title" hidden]
       button#panel-back.panel-back [type="button"]
@@ -7311,10 +7311,10 @@ html [data-ui-theme="surf" lang="en"]
             "Close"
         p#booking-summary.card-meta
         div.booking-head
-          button#booking-prev.ws-btn.ws-btn-small.booking-nav [aria-label="Previous month" type="button"]
+          button#booking-prev.ws-btn.ws-btn-small.booking-nav [aria-label="Previous month" title="Previous month" type="button"]
             "&lsaquo;"
           h3#booking-month.booking-month [aria-live="polite"]
-          button#booking-next.ws-btn.ws-btn-small.booking-nav [aria-label="Next month" type="button"]
+          button#booking-next.ws-btn.ws-btn-small.booking-nav [aria-label="Next month" title="Next month" type="button"]
             "&rsaquo;"
         div.booking-calendar [aria-labelledby="booking-month" role="group"]
           div.booking-week.booking-weekdays [aria-hidden="true"]

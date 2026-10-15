@@ -52,6 +52,25 @@ export function firstRoomClosed(roomCount) {
 }
 
 /**
+ * Where Back goes from a step of the first build: the index of the strip's
+ * step it goes to, or 'hello' (the greeting) from the kind of home. A
+ * townhome's neighbors go back to the kind of home; Your rooms, with First
+ * room closed, to Floors.
+ */
+export function backTarget(scene, roomCount) {
+    if (scene === 'home') return 'hello';
+    if (scene === 'attached') return PROGRESS.home;
+    const target = PROGRESS[scene] - 1;
+    return target === PROGRESS.firstRoom && firstRoomClosed(roomCount) ? PROGRESS.floors : target;
+}
+
+/** Back's hover title: where it goes (QA, 2026-10-15). */
+function backLabel(scene, roomCount) {
+    const target = backTarget(scene, roomCount);
+    return target === 'hello' ? GUIDE.backToStart : GUIDE.backTo(GUIDE.progress[target]);
+}
+
+/**
  * Where each step of the strip begins, for a jump to it (a tap on the step)
  * or Back from the step after: the kind of home, the floors, the first room
  * (its line again once there is one, `roomId`, else the question), the
@@ -238,14 +257,11 @@ export function step(guide, event) {
     if (GUIDED.includes(g.scene) && (type === 'back' || type === 'goto')) {
         const here = PROGRESS[g.scene];
         if (type === 'back' && g.scene === 'home') return to('hello');
-        let target = type === 'back' ? (g.scene === 'attached' ? 0 : here - 1) : event.step;
         // With two rooms or more, First room is closed (QA, 2026-10-15: back
-        // to it from Your rooms looked odd): Back steps over it to Floors,
-        // and a tap on it does nothing.
-        if (target === PROGRESS.firstRoom && firstRoomClosed(event.roomCount)) {
-            if (type === 'goto') return g;
-            target = PROGRESS.floors;
-        }
+        // to it from Your rooms looked odd): Back steps over it to Floors
+        // (backTarget), and a tap on it does nothing.
+        const target = type === 'back' ? backTarget(g.scene, event.roomCount) : event.step;
+        if (type === 'goto' && target === PROGRESS.firstRoom && firstRoomClosed(event.roomCount)) return g;
         const entry = Number.isInteger(target) && target <= (g.reached ?? -1) ? entryOf(target, event) : null;
         if (!entry || (entry.scene === g.scene && target === here && g.scene !== 'attached')) return g;
         const { scene, ...extra } = entry;
@@ -385,6 +401,7 @@ export function viewFor(guide, ctx = {}) {
     const base = {
         choices: null, progress: PROGRESS[guide.scene] ?? null, reached: guide.reached ?? -1,
         stepBack: GUIDED.includes(guide.scene), small: '', again: GUIDE[`${guide.scene}Again`] || '',
+        backTo: GUIDED.includes(guide.scene) ? backLabel(guide.scene, ctx.roomCount) : '',
         closed: firstRoomClosed(ctx.roomCount) ? [PROGRESS.firstRoom] : [],
         halo: HALO[guide.scene] || null
     };

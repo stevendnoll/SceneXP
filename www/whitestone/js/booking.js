@@ -156,7 +156,7 @@ export function createBooking({ on = {}, signal } = {}) {
                         type: 'button', id: `booking-day-${cell.date}`,
                         className: `booking-day is-${cell.status}${cell.selected ? ' is-selected' : ''}`,
                         text: String(cell.day),
-                        attrs: { 'aria-label': cell.label, 'aria-pressed': cell.selected ? 'true' : 'false' }
+                        attrs: { 'aria-label': cell.label, title: cell.label, 'aria-pressed': cell.selected ? 'true' : 'false' }
                     });
                     btn.disabled = !cell.open;
                     btn.addEventListener('click', () => call('day', cell.date), { signal });

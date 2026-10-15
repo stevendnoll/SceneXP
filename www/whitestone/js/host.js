@@ -101,7 +101,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             const closed = (view.closed || []).includes(i);
             if (closed) li.classList.add('is-closed');
             if (i !== at && i <= reached && !closed) {
-                const go = h('button', { type: 'button', className: 'host-step-btn', id: `host-step-${i}`, text: name, attrs: { 'aria-label': GUIDE.goToStep(name) } });
+                const go = h('button', { type: 'button', className: 'host-step-btn', id: `host-step-${i}`, text: name, attrs: { 'aria-label': GUIDE.goToStep(name), title: GUIDE.goToStep(name) } });
                 go.addEventListener('click', () => { if (typeof on.step === 'function') on.step(i); }, { signal });
                 li.appendChild(go);
             } else {
@@ -135,7 +135,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
      *  chips }`, each `{ area, level, label, aria }`): one tap adds it. */
     function drawChips(c) {
         const chips = c.chips.map((ch) => {
-            const btn = h('button', { type: 'button', id: `host-chip-${ch.area}`, className: 'panel-chip', text: `+ ${ch.label}`, attrs: { 'aria-label': ch.aria } });
+            const btn = h('button', { type: 'button', id: `host-chip-${ch.area}`, className: 'panel-chip', text: `+ ${ch.label}`, attrs: { 'aria-label': ch.aria, title: ch.aria } });
             btn.addEventListener('click', () => {
                 if (typeof on.chip === 'function') on.chip(ch.area, ch.level);
             }, { signal });
@@ -189,7 +189,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             if (f.note) parts.push(h('span', { className: 'host-fact-note', text: f.note }));
             const btn = h('button', {
                 type: 'button', id: `host-fact-${f.key}`, className: `host-fact host-fact-${f.key}`,
-                attrs: f.spoken ? { 'aria-label': f.spoken } : {}
+                attrs: f.spoken ? { 'aria-label': f.spoken, title: f.spoken } : {}
             }, parts);
             btn.addEventListener('click', () => {
                 if (typeof on.fact === 'function') on.fact(f.key);
@@ -229,12 +229,20 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             small.textContent = view.small || '';
             small.hidden = !view.small;
         }
-        if (backBtn) backBtn.hidden = !view.stepBack;
+        if (backBtn) {
+            backBtn.hidden = !view.stepBack;
+            // Where it goes, on hover (QA, 2026-10-15).
+            if (view.backTo) backBtn.setAttribute('title', view.backTo);
+        }
         if (resetBtn) resetBtn.hidden = !view.startOver;
         if (nextBtn) {
             const next = view.minimized ? null : view.next;
             nextBtn.hidden = !next;
-            if (next) nextBtn.setAttribute('aria-label', GUIDE.continueTo(next.label));
+            if (next) {
+                // Named for the step it takes, aloud and on hover (QA, 2026-10-15).
+                nextBtn.setAttribute('aria-label', GUIDE.continueTo(next.label));
+                nextBtn.setAttribute('title', GUIDE.continueTo(next.label));
+            }
         }
     }
 

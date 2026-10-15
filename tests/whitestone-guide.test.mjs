@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { GUIDE, BRAND, countWord } from '../www/whitestone/js/copy.js';
 import {
-    GUIDED, PROGRESS, HALO, CHANGED, firstRoomClosed, arrivalId, arrivalGuide, hasOwn, savedForm, step, presetSummary, addedLine, viewFor, outcomeOf, ringFloor
+    GUIDED, PROGRESS, HALO, CHANGED, firstRoomClosed, backTarget, arrivalId, arrivalGuide, hasOwn, savedForm, step, presetSummary, addedLine, viewFor, outcomeOf, ringFloor
 } from '../www/whitestone/js/guide.js';
 import { presetFor } from '../www/whitestone/js/sheet.js';
 import { priceChoice, formatMoney } from '../www/whitestone/js/pricing.js';
@@ -68,6 +68,26 @@ describe('the way through', () => {
         expect(seen).toEqual(['home', 'floors', 'floors', 'firstRoom', 'added', 'dots', 'rooms', 'rooms', 'rooms', 'review', 'saved', 'rooms']);
         expect(g.reviewed).toBe(true);
         expect(g.rooms).toBe(2);
+    });
+
+    test('Back goes where its hover title says (QA, 2026-10-15)', () => {
+        expect(backTarget('home')).toBe('hello');
+        expect(backTarget('attached')).toBe(PROGRESS.home);
+        expect(backTarget('floors')).toBe(PROGRESS.home);
+        expect(backTarget('rooms', 1)).toBe(PROGRESS.firstRoom);
+        expect(backTarget('rooms', 2)).toBe(PROGRESS.floors);
+        expect(backTarget('review', 2)).toBe(PROGRESS.rooms);
+        // The words, and the step Back really takes, agree on every step.
+        for (const scene of GUIDED) {
+            for (const roomCount of [1, 2]) {
+                const g = { ...fresh(), scene, reached: 4, roomId: 'k' };
+                const v = viewFor(g, { roomCount, sheet: SHEET });
+                const went = step(g, { type: 'back', roomId: 'k', roomCount });
+                const name = went.scene === 'hello' ? null : GUIDE.progress[PROGRESS[went.scene]];
+                expect(`${scene}/${roomCount}: ${v.backTo}`).toBe(`${scene}/${roomCount}: ${name ? GUIDE.backTo(name) : GUIDE.backToStart}`);
+            }
+        }
+        expect(viewFor({ ...fresh(), scene: 'saved' }).backTo).toBe('');
     });
 
     test('with two rooms or more First room is closed: Back from Your rooms steps over it, a tap on it does nothing (QA, 2026-10-15)', () => {

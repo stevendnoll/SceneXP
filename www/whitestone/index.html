@@ -227,7 +227,7 @@
         <div class="host-head">
             <span class="host-portrait" aria-hidden="true">M</span>
             <p class="host-who"><span id="host-name" class="host-name">Maya</span> <span class="host-role">Whitestone Home Care</span></p>
-            <button id="host-next" class="host-next" type="button" aria-label="Continue" hidden><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 10h11M10.5 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button id="host-next" class="host-next" type="button" aria-label="Continue" title="Continue" hidden><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 10h11M10.5 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         </div>
         <!-- THE HOME AT A GLANCE (host.js drawFacts): its quote (PRD 8.5),
              and once published its visit (PRD 8.6), each a button to the
@@ -244,7 +244,7 @@
         <p id="host-small" class="host-small" hidden></p>
         <div class="host-foot">
             <button id="host-back" class="host-back" type="button" hidden>Back</button>
-            <button id="host-reset" class="host-reset" type="button" hidden>Start over</button>
+            <button id="host-reset" class="host-reset" type="button" title="Clear everything and start from the beginning" hidden>Start over</button>
         </div>
     </section>
 
@@ -436,9 +436,9 @@
             </div>
             <p id="booking-summary" class="card-meta"></p>
             <div class="booking-head">
-                <button id="booking-prev" class="ws-btn ws-btn-small booking-nav" type="button" aria-label="Previous month">&lsaquo;</button>
+                <button id="booking-prev" class="ws-btn ws-btn-small booking-nav" type="button" aria-label="Previous month" title="Previous month">&lsaquo;</button>
                 <h3 id="booking-month" class="booking-month" aria-live="polite"></h3>
-                <button id="booking-next" class="ws-btn ws-btn-small booking-nav" type="button" aria-label="Next month">&rsaquo;</button>
+                <button id="booking-next" class="ws-btn ws-btn-small booking-nav" type="button" aria-label="Next month" title="Next month">&rsaquo;</button>
             </div>
             <div class="booking-calendar" role="group" aria-labelledby="booking-month">
                 <div class="booking-week booking-weekdays" aria-hidden="true">

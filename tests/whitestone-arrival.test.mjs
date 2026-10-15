@@ -60,11 +60,17 @@ describe('the markup', () => {
         expect(HTML).not.toMatch(/id="ws-help|id="ws-tools|class="help-item/);
         // About is gone too (QA, 2026-10-15); a → takes her main step.
         expect(HTML).not.toMatch(/host-about|About Whitestone/);
-        expect(HTML).toMatch(/<div class="host-head">[\s\S]*?<button id="host-next" class="host-next" type="button" aria-label="Continue" hidden><svg[^>]*aria-hidden="true"[\s\S]*?<\/svg><\/button>\s*<\/div>/);
+        expect(HTML).toMatch(/<div class="host-head">[\s\S]*?<button id="host-next" class="host-next" type="button" aria-label="Continue" title="Continue" hidden><svg[^>]*aria-hidden="true"[\s\S]*?<\/svg><\/button>\s*<\/div>/);
         // Maya's Back and Start over ship hidden along her foot, in copy.js's words.
         expect(text(/id="host-back"[^>]*>([^<]+)</)).toBe(GUIDE.back);
         expect(HTML).toMatch(/<button id="host-back"[^>]*\shidden>/);
         expect(text(/id="host-reset"[^>]*>([^<]+)</)).toBe(GUIDE.startOver);
+        // Hover titles (QA, 2026-10-15): Start over says what it does, and
+        // the calendar's arrows say which month.
+        expect(text(/id="host-reset"[^>]*title="([^"]+)"/)).toBe(HELP.resetHover);
+        for (const id of ['booking-prev', 'booking-next']) {
+            expect(text(new RegExp(`id="${id}"[^>]*title="([^"]+)"`))).toBe(text(new RegExp(`id="${id}"[^>]*aria-label="([^"]+)"`)));
+        }
         expect(HTML).toMatch(/<button id="host-reset"[^>]*\shidden>/);
         // The panel ships closed, its back button in copy.js's words. No
         // chips top left (Steve, 2026-10-14: lost against the studio): the
@@ -1247,6 +1253,42 @@ describe("Maya's → and Start over (QA, 2026-10-15: no Help, no About), and Und
         expect(line()).toBe(GUIDE.hint);
         press('close');
         expect(line()).toBe(`${GUIDE.homeEmpty('Our home')} ${GUIDE.returningLegend}`);
+    });
+
+    test('hover titles (QA, 2026-10-15): the → names its step, Back where it goes, and every labeled button says on hover what it says aloud', async () => {
+        const main = await boot({ sheet: true });
+        const next = dom.el('host-next');
+        const back = dom.el('host-back');
+        expect(next.getAttribute('title')).toBe(GUIDE.continueTo(GUIDE.start));
+        press('start');
+        expect(back.getAttribute('title')).toBe(GUIDE.backToStart);
+        pick('kind-house');
+        expect(back.getAttribute('title')).toBe(GUIDE.backTo('Home type'));
+        expect(next.getAttribute('title')).toBe(GUIDE.continueTo(GUIDE.next));
+        press('next');
+        expect(back.getAttribute('title')).toBe(GUIDE.backTo('Floors'));
+        press('kitchen');
+        press('next');
+        press('gotIt');
+        // Your rooms: one room, Back is First room; two, Floors.
+        expect(back.getAttribute('title')).toBe(GUIDE.backTo('First room'));
+        expect(next.getAttribute('title')).toBe(GUIDE.continueTo(GUIDE.reviewIt));
+        fire(roomChip('primary-bedroom'), 'click');
+        expect(back.getAttribute('title')).toBe(GUIDE.backTo('Floors'));
+        // Every button drawn with a label it says aloud says the same on hover.
+        main.__test__.tapModel('main');
+        const buttons = [];
+        const walk = (node) => {
+            if (!node || !node.children) return;
+            for (const child of node.children) {
+                if (child.tagName === 'BUTTON') buttons.push(child);
+                walk(child);
+            }
+        };
+        for (const id of ['host-progress', 'host-choices', 'host-facts', 'panel-list', 'panel-chips']) walk(dom.el(id));
+        const labeled = buttons.filter((b) => b.getAttribute('aria-label'));
+        expect(labeled.length).toBeGreaterThan(5);
+        for (const b of labeled) expect(`${b.id}: ${b.getAttribute('title')}`).toBe(`${b.id}: ${b.getAttribute('aria-label')}`);
     });
 
     test('her → takes her main step from the top of the bubble, and only where there is one (QA, 2026-10-15)', async () => {

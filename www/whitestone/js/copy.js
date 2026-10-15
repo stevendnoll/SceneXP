@@ -384,6 +384,9 @@ export const GUIDE = Object.freeze({
     progress: Object.freeze(['Home type', 'Floors', 'First room', 'Your rooms', 'Review']),
     progressStep: (n, total, name) => `Step ${n} of ${total}: ${name}`,
     goToStep: (name) => `Go to ${name}`,
+    /** Back's hover title: where it goes. */
+    backTo: (name) => `Back to ${name}`,
+    backToStart: 'Back to the start',
 
     hello: "Hi, I'm Maya with Whitestone Home Care. Let's build a cleaning checklist for your home, room by room. It takes about two minutes.",
     helloAgain: "Tap Let's start and I'll walk you through it, one step at a time.",
@@ -558,7 +561,9 @@ export const HELP = Object.freeze({
      *  first (Steve, 2026-10-14). */
     resetDetailPublished: 'This unpublishes what you published, so its links and PINs stop working and any booked visit is canceled. Then it clears your checklists, photos and answers from this browser, and Maya will greet you as on your first visit. It cannot be undone.',
     resetLocked: (hours) => `You have a visit less than ${hours} hours away, so Start over has to wait until after it.`,
-    resetDone: 'Everything is cleared. You are back at the beginning.'
+    resetDone: 'Everything is cleared. You are back at the beginning.',
+    /** Start over's hover title. */
+    resetHover: 'Clear everything and start from the beginning'
 });
 
 /** What the page says about saving, under the studio's storage note. */

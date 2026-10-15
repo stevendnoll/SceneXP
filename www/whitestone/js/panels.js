@@ -257,7 +257,7 @@ export function renderTaskPhotos({ photos, taskLabel, on }) {
     photos.forEach((p, i) => {
         list.appendChild(h('li', { className: 'task-photo' }, [
             h('img', { src: p.url, alt: UI.photoAlt(taskLabel, i + 1), width: 96, height: 96 }),
-            button(UI.remove, 'ws-btn ws-btn-small', () => on.remove(p.id), { 'aria-label': UI.removePhoto(i + 1) })
+            button(UI.remove, 'ws-btn ws-btn-small', () => on.remove(p.id), { 'aria-label': UI.removePhoto(i + 1), title: UI.removePhoto(i + 1) })
         ]));
     });
 }
