@@ -1431,6 +1431,17 @@ function enterScene(to) {
         liftLevel(levels.includes('main') ? 'main' : levels[0]);
         break;
     }
+    case 'rooms':
+        // Rooms are added floor by floor, so a floor is open here (QA,
+        // 2026-10-15: arriving from Review or the progress strip met a
+        // closed house and a ring asking for a tap that told nothing new).
+        // One already open stays open (the floor of a room just added); with
+        // none, the main floor. The ring moves on to the next floor.
+        if (model && !model.lifted) {
+            const levels = model.levels();
+            if (levels.length) liftLevel(levels.includes(MAIN_LEVEL) ? MAIN_LEVEL : levels[0]);
+        }
+        break;
     case 'added': {
         // The new room's floor opens, its dots in view.
         const c = active();

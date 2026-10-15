@@ -613,9 +613,12 @@ describe('a first visit', () => {
         expect(saved().settings.guide).toEqual({ scene: 'done', reviewed: true });
         // A time, or back to the rooms: no look around (QA, 2026-10-15).
         expect(buttons()).toEqual([GUIDE.chooseTime, GUIDE.editRooms]);
+        expect(main.__test__.model().lifted).toBeNull();
         press('editRooms');
         expect(main.__test__.ui.guide.scene).toBe('rooms');
         expect(line()).toBe(GUIDE.rooms);
+        // Back at Your rooms, the main floor is open (QA, 2026-10-15).
+        expect(main.__test__.model().lifted).toBe('main');
     });
 
     test('no Skip: the build is the way, Back and the strip to move about in it (QA, 2026-10-15: "the guide is the UX")', async () => {
@@ -827,6 +830,7 @@ describe('a return', () => {
         pick('editRooms');
         expect(main.__test__.ui.guide.scene).toBe('rooms');
         expect(line()).toBe(GUIDE.rooms);
+        expect(main.__test__.model().lifted).toBe('main');
     });
 
     test('by the edit link: its keys off the address bar at once, that checklist open, and Maya saying how', async () => {
@@ -1007,6 +1011,46 @@ describe('halos on the touch points (QA, 2026-10-14)', () => {
         main.__test__.tapModel('main');
         stepFrames(2);
         expect(ring().hidden).toBe(true);
+    });
+
+    test('Your rooms from the strip, after Review closed the house: the main floor opens, and the next floor is ringed (QA, 2026-10-15)', async () => {
+        const main = await boot({ sheet: true });
+        main.__test__.state.reducedMotion = true;
+        press('start');
+        pick('kind-house');
+        main.__test__.onFloor('second', true);
+        press('next');
+        press('kitchen');
+        press('next');
+        press('gotIt');
+        press('review');
+        expect(main.__test__.model().lifted).toBeNull();
+        fire(dom.el('host-progress').children[3].children[0], 'click');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        expect(main.__test__.model().lifted).toBe('main');
+        // Maya's line is what is heard, over the floor's own.
+        expect(said()).toBe(GUIDE.rooms);
+        stepFrames(2);
+        expect(ring().className).toBe('ws-halo is-floor');
+        expect(ring().hidden).toBe(false);
+        // Review closes it again, for the whole house.
+        press('review');
+        expect(main.__test__.model().lifted).toBeNull();
+    });
+
+    test('a floor already open when Your rooms begins again stays open: nothing jumps', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        main.__test__.onFloor('second', true);
+        press('next');
+        press('kitchen');
+        press('next');
+        press('gotIt');
+        main.__test__.liftLevel('second');
+        main.__test__.guideTo({ type: 'roomAdded' });
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        expect(main.__test__.model().lifted).toBe('second');
     });
 
     test('Your rooms with the kitchen\'s floor still open: another floor is ringed, and opening it uses the ring', async () => {
