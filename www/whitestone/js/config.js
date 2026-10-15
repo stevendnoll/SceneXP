@@ -330,6 +330,16 @@ export const CONFIG = deepFreeze({
         pinIterations: 20000,
         /** How many openings a refused time offers instead. */
         nextOpenings: 3,
+        /** Visits kept per checklist (the oldest dropped first, with its
+         *  add-ons), and add-ons per visit (PRD 13). */
+        maxVisits: 20,
+        maxAddOns: 20,
+        /** The most a sealed add-on or decision may weigh: a few hundred
+         *  bytes of JSON, with room to spare. */
+        maxSmallBytes: 4096,
+        /** The cleaner's page asks after an add-on this often while one is
+         *  waiting and the page is in view (PLANNING 10.3). Seconds. */
+        pollSeconds: 5,
         /** A quote is honored for 90 days (PRD 9.2), so a visit moved
          *  later than that is refused by the calendar. */
         quoteDays: 90

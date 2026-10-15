@@ -27,6 +27,10 @@ import { checkChoice, presetFor } from '../www/whitestone/js/sheet.js';
 import { buildShare } from '../www/whitestone/js/links.js';
 import { TASKS_PAGE as COPY } from '../www/whitestone/js/copy.js';
 import { SKIP_REASONS, WORDS_MAX, emptyProgress, cleanMark, cleanProgress, applyMark, summarize } from '../www/whitestone/tasks/js/visit.js';
+import { ADDON_FORMAT, choicesFor, choiceKey, priceOf, addOnName, cleanProposal, cleanDecision, cleanKept, takenKeys, roomOf } from '../www/whitestone/tasks/js/addons.js';
+import { contextFor } from '../www/whitestone/js/seal.js';
+import { taskOf } from '../www/whitestone/js/sheet.js';
+import { formatMoney, formatMinutes } from '../www/whitestone/js/pricing.js';
 
 const WS = join(process.cwd(), 'www', 'whitestone');
 const SCHEDULE = JSON.parse(readFileSync(join(WS, 'data', 'schedule.json'), 'utf8'));
@@ -40,6 +44,8 @@ const PHOTO = 'photo-aaaaaaaaaaaaaaaa';
 
 let dom;
 let page;
+/** The page's timers, held here to run by hand: a poll is a call, not a wait. */
+let timers;
 
 beforeEach(async () => {
     // The DOM stub wraps the three.js stub, so it goes in first (the page
@@ -47,6 +53,7 @@ beforeEach(async () => {
     installThree();
     dom = installDom();
     globalThis.window.__whitestoneTasksTest = true;
+    timers = [];
     page = await import('../www/whitestone/tasks/js/main.js');
 });
 
@@ -105,6 +112,8 @@ async function open(w, href, extra = {}) {
         history: { replaceState: (_s, _t, url) => replaced.push(url) },
         api: w.api, sealer: w.sealer, fetchJson, now: w.now,
         makeUrl: (blob) => `blob:test/${blob.size}`,
+        setTimer: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+        clearTimer: (n) => { if (timers[n - 1]) timers[n - 1].cleared = true; },
         ...extra
     });
     return { state, replaced };
@@ -494,5 +503,291 @@ describe('the visit on the page', () => {
         expect(button(`done-${w.stove.id}`).getAttribute('aria-pressed')).toBe('true');
         expect(taskLi(others[0].id).className).toContain('is-skipped');
         expect(summary()).toBe(`${COPY.summary(1, 1, state.form.items.length - 2)} ${COPY.starredDone}`);
+    });
+});
+
+// ---- Add-ons (M4 piece 3) -----------------------------------------------------
+
+describe('add-ons: what can be proposed, and what one is (pure)', () => {
+    const room = { id: 'kitchen-1', level: 'main', area: 'kitchen' };
+    const items = presetFor(SHEET, 'kitchen').map((p, n) => ({ id: `item-${n}`, roomId: room.id, order: n, ...p }));
+    const form = { rooms: [room], items };
+    const stove = items.find((i) => i.task === 'stovetop');
+
+    test('a task the room does not have, or an upgrade of one it does, each named and priced by the sheet', () => {
+        const choices = choicesFor(SHEET, form, room.id);
+        const oven = choices.find((c) => c.key === 'task:oven-interior');
+        expect(oven).toMatchObject({ kind: 'task', name: 'Oven interior', addOn: { roomId: room.id, task: 'oven-interior', options: [] } });
+        expect(priceOf(SHEET, form, oven.addOn)).toEqual({ cents: taskOf(SHEET, 'oven-interior').cents, minutes: taskOf(SHEET, 'oven-interior').minutes });
+        // Never a task the room has already.
+        expect(choices.some((c) => c.key === 'task:stovetop')).toBe(false);
+        const deep = choices.find((c) => c.key === `up:${stove.id}:deep-clean`);
+        expect(deep).toMatchObject({ kind: 'upgrade', name: 'Stovetop: Deep clean', addOn: { itemId: stove.id, options: ['deep-clean'] } });
+        const option = taskOf(SHEET, 'stovetop').options.find((o) => o.key === 'deep-clean');
+        expect(priceOf(SHEET, form, deep.addOn)).toEqual({ cents: option.cents, minutes: option.minutes });
+        // Every new task comes before every upgrade, and each is one the sheet prices.
+        const kinds = choices.map((c) => c.kind);
+        expect(kinds.lastIndexOf('task')).toBeLessThan(kinds.indexOf('upgrade'));
+        expect(choices.every((c) => !priceOf(SHEET, form, c.addOn).error)).toBe(true);
+    });
+
+    test('a task by room size takes the size the room\'s tasks have; one by the piece starts at one', () => {
+        const sized = { ...form, items: items.map((i) => (i.size ? { ...i, size: 'large' } : i)) };
+        const cabinets = choicesFor(SHEET, sized, room.id).find((c) => c.key === 'task:cabinet-fronts');
+        expect(cabinets.addOn.size).toBe('large');
+        const appliances = choicesFor(SHEET, form, room.id).find((c) => c.key === 'task:small-appliances');
+        expect(appliances.addOn.quantity).toBe(1);
+        expect(appliances.addOn.size).toBeUndefined();
+    });
+
+    test('one waiting or approved is not offered again; one declined is', () => {
+        const deepKey = `up:${stove.id}:deep-clean`;
+        const kept = [
+            { itemId: stove.id, options: ['deep-clean'], status: 'waiting' },
+            { roomId: room.id, task: 'oven-interior', status: 'declined' }
+        ];
+        const keys = choicesFor(SHEET, form, room.id, takenKeys(kept)).map((c) => c.key);
+        expect(keys).not.toContain(deepKey);
+        expect(keys).toContain('task:oven-interior');
+        expect(choiceKey(kept[0])).toBe(deepKey);
+        expect(roomOf(form, kept[0])).toBe(room.id);
+        expect(roomOf(form, { itemId: 'gone', options: ['x'] })).toBeNull();
+        expect(choicesFor(SHEET, form, 'no-such-room')).toEqual([]);
+        expect(choicesFor(null, form, room.id)).toEqual([]);
+        expect(priceOf(null, form, kept[0])).toEqual({ error: 'no-sheet' });
+        expect(addOnName(null, form, { task: 'oven-interior' })).toBe('oven-interior');
+    });
+
+    test('a proposal or decision read back is made safe, or refused', () => {
+        const id = 'A'.repeat(22);
+        expect(cleanProposal({ format: ADDON_FORMAT, id, roomId: 'r', task: 't', options: ['a', 3], size: 'large', quantity: 2, words: '  Baked   on.  ', price: 1 }))
+            .toEqual({ format: ADDON_FORMAT, id, roomId: 'r', task: 't', options: ['a'], size: 'large', quantity: 2, words: 'Baked on.' });
+        expect(cleanProposal({ format: ADDON_FORMAT, id, itemId: 'i', options: ['a'] })).toEqual({ format: ADDON_FORMAT, id, itemId: 'i', options: ['a'], words: '' });
+        expect(cleanProposal({ format: ADDON_FORMAT, id, itemId: 'i', options: ['a', 'b'] })).toBeNull();
+        expect(cleanProposal({ format: ADDON_FORMAT, id, roomId: 'r' })).toBeNull();
+        expect(cleanProposal({ format: 2, id, roomId: 'r', task: 't' })).toBeNull();
+        expect(cleanProposal({ format: ADDON_FORMAT, id: 'short', roomId: 'r', task: 't' })).toBeNull();
+        expect(cleanProposal({ format: ADDON_FORMAT, id, roomId: 'r', task: 't', words: 'x'.repeat(500) }).words).toHaveLength(WORDS_MAX);
+        expect(cleanDecision({ format: ADDON_FORMAT, id, status: 'approved', decidedAt: 'then' }, id)).toEqual({ format: ADDON_FORMAT, id, status: 'approved', decidedAt: 'then' });
+        expect(cleanDecision({ format: ADDON_FORMAT, id, status: 'maybe' }, id)).toBeNull();
+        expect(cleanDecision({ format: ADDON_FORMAT, id: 'B'.repeat(22), status: 'approved' }, id)).toBeNull();
+        expect(cleanKept([{ format: ADDON_FORMAT, id, roomId: 'r', task: 't', status: 'approved' }, { format: ADDON_FORMAT, id, roomId: 'r', task: 't', status: 'odd' }, 'junk']).map((a) => a.status))
+            .toEqual(['approved', 'waiting']);
+        expect(cleanKept('junk')).toEqual([]);
+    });
+});
+
+describe('add-ons on the page', () => {
+    async function visiting() {
+        const w = await published();
+        const { state } = await open(w, w.link);
+        await enter(state, w.checklist.published.pin);
+        return { w, state };
+    }
+    const find = (id) => all(view()).find((e) => e.id === id);
+    const summary = () => byClass('tasks-summary-line')[0].textContent;
+    const kept = (w) => JSON.parse(localStorage.getItem(page.STORAGE_KEY)).checklists[w.checklist.published.id];
+    const pick = (value) => {
+        const select = find('addon-choice-kitchen-1');
+        select.value = value;
+        fire(select, 'change');
+    };
+    async function proposeOven(state, words = '') {
+        fire(find('propose-kitchen-1'), 'click');
+        pick('task:oven-interior');
+        if (words) find('addon-words-kitchen-1').value = words;
+        fire(find('addon-send-kitchen-1'), 'click');
+        await state.pending;
+    }
+    /** The customer's answer, as the studio will send it (M5). */
+    async function decide(w, state, status) {
+        const id = w.checklist.published.id;
+        const key = await w.sealer.importKey(w.checklist.published.key);
+        const a = state.addOns[0];
+        const sealed = await w.sealer.sealJson(key, { format: ADDON_FORMAT, id: a.id, status, decidedAt: '2026-10-16T17:05:00Z' }, contextFor(id, 'decision', a.id));
+        const r = await w.api.decideAddOn(id, w.checklist.published.ownerToken, state.visitId, a.id, sealed);
+        if (!r.ok) throw new Error(r.error);
+    }
+    const live = () => timers.filter((t) => !t.cleared && !t.ran);
+    async function tick() {
+        const t = live()[0];
+        t.ran = true;
+        await t.fn();
+    }
+
+    test('every room offers one; the picker opens on the keyboard, shows the price, and Cancel closes it', async () => {
+        await visiting();
+        const btn = find('propose-kitchen-1');
+        expect(btn.getAttribute('aria-label')).toBe(COPY.proposeIn('Kitchen'));
+        expect(find('propose-bathroom-1')).toBeTruthy();
+        fire(btn, 'click');
+        expect(find('propose-kitchen-1').getAttribute('aria-expanded')).toBe('true');
+        expect(find('addon-choice-kitchen-1').focused).toBe(true);
+        pick('task:oven-interior');
+        const t = taskOf(SHEET, 'oven-interior');
+        expect(find('addon-price-kitchen-1').textContent).toBe(COPY.addOnAdds(formatMoney(t.cents), formatMinutes(t.minutes)));
+        expect(find('addon-choice-kitchen-1').focused).toBe(true);
+        fire(find('addon-cancel-kitchen-1'), 'click');
+        expect(find('addon-picker-kitchen-1')).toBeUndefined();
+        expect(find('propose-kitchen-1').focused).toBe(true);
+    });
+
+    test('sent: it waits under its room with the cleaner\'s words, is kept on the device, and is not offered twice', async () => {
+        const { w, state } = await visiting();
+        fire(find('propose-kitchen-1'), 'click');
+        // Nothing chosen yet: it asks.
+        fire(find('addon-send-kitchen-1'), 'click');
+        await state.pending;
+        expect(all(find('addon-picker-kitchen-1')).find((e) => e.className === 'skip-note').textContent).toBe(COPY.addOnPickFirst);
+        pick('task:oven-interior');
+        find('addon-words-kitchen-1').value = 'Baked-on grease from a spill.';
+        fire(find('addon-send-kitchen-1'), 'click');
+        await state.pending;
+        expect(state.addOns).toHaveLength(1);
+        const li = find(`addon-${state.addOns[0].id}`);
+        expect(li.className).toContain('is-waiting');
+        expect(li.textContent).toContain('Oven interior');
+        expect(li.textContent).toContain('Baked-on grease from a spill.');
+        expect(li.textContent).toContain(COPY.addOnStatus.waiting);
+        expect(find('propose-kitchen-1').focused).toBe(true);
+        expect(summary()).toContain(COPY.addOnsLine(COPY.addOnCount.waiting(1)));
+        expect(kept(w)).toMatchObject({ visitId: state.visitId, addOns: [{ id: state.addOns[0].id, task: 'oven-interior', status: 'waiting' }] });
+        fire(find('propose-kitchen-1'), 'click');
+        expect(all(find('addon-choice-kitchen-1')).some((e) => e.value === 'task:oven-interior')).toBe(false);
+        // Sealed: the stand-in holds no words of it.
+        const rows = (await w.api.listAddOns(w.checklist.published.id, kept(w).visitToken, state.visitId)).data.addons;
+        expect(Buffer.from(rows[0].proposal, 'base64url').toString('latin1')).not.toContain('grease');
+    });
+
+    test('asked after while it waits: an approval appears in place with a Done of its own, and the asking stops', async () => {
+        const { w, state } = await visiting();
+        await proposeOven(state);
+        expect(live()).toHaveLength(1);
+        expect(live()[0].ms).toBe(CONFIG.api.pollSeconds * 1000);
+        // Nothing new: still waiting, and asked again.
+        await tick();
+        expect(state.addOns[0].status).toBe('waiting');
+        expect(live()).toHaveLength(1);
+        await decide(w, state, 'approved');
+        await tick();
+        const id = state.addOns[0].id;
+        expect(find(`addon-${id}`).className).toContain('is-approved');
+        expect(find(`addon-${id}`).textContent).toContain(COPY.addOnStatus.approved);
+        expect(summary()).toContain(COPY.addOnsLine(COPY.addOnCount.approved(1)));
+        expect(live()).toHaveLength(0);
+        fire(find(`addon-done-${id}`), 'click');
+        expect(find(`addon-done-${id}`).getAttribute('aria-pressed')).toBe('true');
+        expect(find(`addon-done-${id}`).focused).toBe(true);
+        expect(kept(w).progress.marks[id]).toEqual({ status: 'done' });
+        // The checklist's own count is unchanged by it.
+        expect(summary()).toContain(COPY.summary(0, 0, state.form.items.length));
+    });
+
+    test('a decline appears too, with no Done, and the same task can be proposed again', async () => {
+        const { w, state } = await visiting();
+        await proposeOven(state);
+        await decide(w, state, 'declined');
+        await tick();
+        const id = state.addOns[0].id;
+        expect(find(`addon-${id}`).className).toContain('is-declined');
+        expect(find(`addon-done-${id}`)).toBeUndefined();
+        fire(find('propose-kitchen-1'), 'click');
+        expect(all(find('addon-choice-kitchen-1')).some((e) => e.value === 'task:oven-interior')).toBe(true);
+    });
+
+    test('a poll keeps what is being typed and where the keyboard is', async () => {
+        const { w, state } = await visiting();
+        await proposeOven(state);
+        fire(find('propose-kitchen-1'), 'click');
+        pick(`up:${w.stove.id}:deep-clean`);
+        find('addon-words-kitchen-1').value = 'Half typed';
+        find('addon-words-kitchen-1').focus();
+        await decide(w, state, 'approved');
+        await tick();
+        expect(find('addon-words-kitchen-1').value).toBe('Half typed');
+        expect(find('addon-words-kitchen-1').focused).toBe(true);
+        expect(find('addon-choice-kitchen-1').value).toBe(`up:${w.stove.id}:deep-clean`);
+    });
+
+    test('a task counted by the piece asks how many, and the price follows', async () => {
+        const { state } = await visiting();
+        fire(find('propose-kitchen-1'), 'click');
+        pick('task:small-appliances');
+        const t = taskOf(SHEET, 'small-appliances');
+        const qty = find('addon-qty-kitchen-1');
+        qty.value = '3';
+        fire(qty, 'change');
+        expect(find('addon-qty-kitchen-1').focused).toBe(true);
+        expect(find('addon-price-kitchen-1').textContent).toBe(COPY.addOnAdds(formatMoney(t.cents * 3), formatMinutes(t.minutes * 3)));
+        find('addon-qty-kitchen-1').value = '900';
+        fire(find('addon-qty-kitchen-1'), 'change');
+        expect(find('addon-qty-kitchen-1').value).toBe('50');
+        find('addon-qty-kitchen-1').value = '2';
+        fire(find('addon-qty-kitchen-1'), 'change');
+        fire(find('addon-send-kitchen-1'), 'click');
+        await state.pending;
+        expect(state.addOns[0]).toMatchObject({ task: 'small-appliances', quantity: 2 });
+    });
+
+    test('a send that fails says why and keeps the words; the next try reuses the visit', async () => {
+        const { w, state } = await visiting();
+        let starts = 0;
+        let refuse = 'offline';
+        const api = {
+            ...w.api,
+            startVisit: (...a) => { starts++; return w.api.startVisit(...a); },
+            putAddOn: (...a) => (refuse ? Promise.resolve({ ok: false, error: refuse }) : w.api.putAddOn(...a))
+        };
+        const again = await open({ ...w, api }, `https://www.scenexp.com/whitestone/tasks/?c=${w.checklist.published.id}`);
+        for (const [error, line] of [['offline', COPY.addOnOffline], ['too-many', COPY.addOnFull], ['denied', COPY.addOnExpired], ['http-500', COPY.addOnTrouble]]) {
+            refuse = error;
+            if (!find('addon-picker-kitchen-1')) fire(find('propose-kitchen-1'), 'click');
+            pick('task:oven-interior');
+            find('addon-words-kitchen-1').value = 'Please';
+            fire(find('addon-send-kitchen-1'), 'click');
+            await again.state.pending;
+            expect(all(find('addon-picker-kitchen-1')).find((e) => e.className === 'skip-note').textContent).toBe(line);
+            expect(find('addon-words-kitchen-1').value).toBe('Please');
+            expect(find('addon-send-kitchen-1').focused).toBe(true);
+        }
+        refuse = null;
+        fire(find('addon-send-kitchen-1'), 'click');
+        await again.state.pending;
+        expect(again.state.addOns).toHaveLength(1);
+        expect(starts).toBe(1);
+        expect(state).not.toBe(again.state);
+    });
+
+    test('opened again: the add-ons as the API has them, or as the device kept them when it cannot be reached', async () => {
+        const { w, state } = await visiting();
+        await proposeOven(state, 'Grease');
+        await decide(w, state, 'approved');
+        const bare = `https://www.scenexp.com/whitestone/tasks/?c=${w.checklist.published.id}`;
+        const back = await open(w, bare);
+        expect(back.state.addOns).toMatchObject([{ task: 'oven-interior', status: 'approved', words: 'Grease' }]);
+        expect(kept(w).addOns[0].status).toBe('approved');
+        const offline = await open({ ...w, api: { ...w.api, listAddOns: async () => ({ ok: false, error: 'offline' }) } }, bare);
+        expect(offline.state.addOns).toMatchObject([{ task: 'oven-interior', status: 'approved' }]);
+    });
+
+    test('out of view it stops asking, and back in view it asks at once', async () => {
+        const { w, state } = await visiting();
+        await proposeOven(state);
+        const doc = globalThis.document;
+        doc.visibilityState = 'hidden';
+        fire(doc, 'visibilitychange');
+        expect(live()).toHaveLength(0);
+        await decide(w, state, 'approved');
+        doc.visibilityState = 'visible';
+        fire(doc, 'visibilitychange');
+        await state.polled;
+        expect(state.addOns[0].status).toBe('approved');
+    });
+
+    test('without the sheet nothing can be priced, so nothing is offered', async () => {
+        const w = await published();
+        const { state } = await open(w, w.link, { fetchJson: async () => { throw new Error('offline'); } });
+        await enter(state, w.checklist.published.pin);
+        expect(find('propose-kitchen-1')).toBeUndefined();
     });
 });

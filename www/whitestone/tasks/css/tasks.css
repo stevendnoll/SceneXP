@@ -523,6 +523,155 @@ h1 {
     color: var(--muted);
 }
 
+/* ---- Add-ons (M4 piece 3) ---------------------------------------------------
+ *
+ * Under each room's tasks: its add-ons, each saying where it stands, then
+ * Propose an add-on, a quiet outlined button so it never reads as a task.
+ * Waiting is amber, approved is the accent, declined goes quiet.
+ */
+
+.addons-heading {
+    margin: 0.9rem 0 0.4rem;
+    font-size: 1rem;
+}
+
+.tasks-addons {
+    display: grid;
+    gap: 0.6rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.addon {
+    padding: 0.75rem 1rem;
+    border: 1px dashed #B9B3A9;
+    border-radius: 12px;
+    background: var(--white);
+}
+
+.addon.is-waiting {
+    border-color: var(--attention);
+}
+
+.addon.is-approved {
+    border-style: solid;
+    border-color: var(--accent);
+}
+
+.addon.is-declined {
+    background: var(--stone);
+    color: var(--muted);
+}
+
+.addon-name {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.addon-price,
+.addon-words {
+    margin: 0.3rem 0 0;
+}
+
+.addon-words {
+    font-style: italic;
+}
+
+.addon-status {
+    margin: 0.35rem 0 0;
+    font-weight: 600;
+}
+
+.addon.is-waiting .addon-status {
+    color: var(--attention);
+}
+
+.addon.is-approved .addon-status {
+    color: var(--accent);
+}
+
+.addon-propose {
+    width: 100%;
+    min-height: 2.9rem;
+    margin: 0.6rem 0 0;
+    padding: 0.45rem 0.75rem;
+    border: 1px dashed var(--accent);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.addon-propose[aria-expanded="true"] {
+    border-style: solid;
+}
+
+.addon-picker {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0.5rem 0 0;
+    padding: 0.75rem;
+    border-radius: 12px;
+    background: var(--white);
+    border: 1px solid var(--line);
+}
+
+.addon-label {
+    font-weight: 600;
+}
+
+.addon-choice,
+.addon-qty,
+.addon-words-input {
+    width: 100%;
+    min-height: 2.9rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid #B9B3A9;
+    border-radius: 10px;
+    background: var(--white);
+    color: var(--graphite);
+    font: inherit;
+}
+
+.addon-qty {
+    max-width: 7rem;
+}
+
+.addon-picker .addon-price {
+    margin: 0;
+    font-weight: 700;
+}
+
+.addon-send {
+    min-height: 2.9rem;
+    padding: 0.45rem 0.9rem;
+    border: 2px solid var(--accent);
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--white);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.addon-send:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.addon-propose:focus-visible,
+.addon-choice:focus-visible,
+.addon-qty:focus-visible,
+.addon-words-input:focus-visible,
+.addon-send:focus-visible {
+    outline: 3px solid var(--graphite);
+    outline-offset: 2px;
+}
+
 /* Where the visit stands: along the bottom while the list scrolls under. */
 .tasks-summary {
     position: sticky;

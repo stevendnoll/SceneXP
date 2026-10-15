@@ -19,9 +19,14 @@
  * tabs booking at the same instant are not held to one lock as the server's
  * are. The receipt says so (copy.js).
  *
- * SEALED BLOBS STAY SEALED. Checklists and photos arrive sealed with the
- * checklist's key (seal.js), which never reaches here, exactly as it never
- * reaches the server.
+ * SEALED BLOBS STAY SEALED. Checklists, photos, add-ons and decisions
+ * arrive sealed with the checklist's key (seal.js), which never reaches
+ * here, exactly as it never reaches the server.
+ *
+ * A VISIT (PLANNING 10.3) starts with the cleaner's first add-on or the
+ * report. A cleaner proposes an add-on once, and the customer decides it
+ * once: neither is ever rewritten, so what the customer approved is what
+ * the cleaner proposed.
  *
  * Everything outside is injected (`backend`, the four-method store of
  * photos.js; `now`; `getRandomValues`; `subtle`), so the suite runs it in
@@ -82,6 +87,10 @@ export function createStandin({
 
     const metaKey = (id) => `meta/${id}`;
     const blobKey = (id, name) => `blob/${id}/${name}`;
+
+    const visitsOf = (m) => (Array.isArray(m.visitRecords) ? m.visitRecords : []);
+    const visitKey = (id, visitId) => `blob/${id}/visit/${visitId}/`;
+    const small = (bytes) => bytes instanceof Uint8Array && bytes.length > 0 && bytes.length <= A.maxSmallBytes;
 
     async function forget(id) {
         for (const key of await backend.keys()) {
@@ -164,6 +173,62 @@ export function createStandin({
         const visits = [...m.visits.filter((v) => v.expiresAt > now()), { hash: await digest(visitToken), expiresAt }];
         await saveMeta({ ...m, fails: 0, lockedUntil: 0, visits });
         return answer(200, { visitToken, expiresAt: new Date(expiresAt).toISOString() });
+    }
+
+    /** A new visit, the oldest dropped (with its add-ons) past the most
+     *  kept. */
+    async function startVisit(m) {
+        const visitId = random(16);
+        const list = [...visitsOf(m), { visitId, createdAt: now(), reportAt: null, addOns: [], decided: [] }];
+        while (list.length > A.maxVisits) {
+            const old = list.shift();
+            for (const key of await backend.keys()) {
+                if (String(key).startsWith(visitKey(m.id, old.visitId))) await backend.delete(key);
+            }
+        }
+        await saveMeta({ ...m, visitRecords: list });
+        return answer(201, { visitId });
+    }
+
+    /** One visit's add-ons: propose (`PUT .../addons/:addonId`), decide
+     *  (`.../decision`), or list. */
+    async function addOns(m, parts, method, bytes, owner, reader) {
+        const visit = visitsOf(m).find((v) => v.visitId === parts[3]);
+        if (!visit) return reader ? fail(404, 'not-found') : denied();
+        const base = visitKey(m.id, visit.visitId);
+        if (parts.length === 5) {
+            if (method !== 'GET') return fail(405, 'method');
+            if (!reader) return denied();
+            const addons = [];
+            for (const addonId of visit.addOns) {
+                const proposal = await backend.get(`${base}addon/${addonId}`);
+                const decision = visit.decided.includes(addonId) ? await backend.get(`${base}decision/${addonId}`) : null;
+                addons.push({ addonId, proposal: toBase64url(proposal), decision: decision ? toBase64url(decision) : null });
+            }
+            return answer(200, { addons });
+        }
+        const addonId = parts[5];
+        if (!ID.test(addonId)) return fail(404, 'not-found');
+        const replace = (patch) => saveMeta({ ...m, visitRecords: visitsOf(m).map((v) => (v === visit ? { ...v, ...patch } : v)) });
+        if (parts.length === 6) {
+            if (method !== 'PUT') return fail(405, 'method');
+            // A cleaner proposes; the customer only decides.
+            if (owner || !reader) return denied();
+            if (!small(bytes)) return fail(400, 'bad-request');
+            if (visit.addOns.includes(addonId)) return fail(409, 'exists');
+            if (visit.addOns.length >= A.maxAddOns) return fail(409, 'too-many');
+            await backend.put(`${base}addon/${addonId}`, bytes);
+            await replace({ addOns: [...visit.addOns, addonId] });
+            return answer(201, { stored: true });
+        }
+        if (method !== 'PUT') return fail(405, 'method');
+        if (!owner) return denied();
+        if (!visit.addOns.includes(addonId)) return fail(404, 'not-found');
+        if (!small(bytes)) return fail(400, 'bad-request');
+        if (visit.decided.includes(addonId)) return fail(409, 'decided');
+        await backend.put(`${base}decision/${addonId}`, bytes);
+        await replace({ decided: [...visit.decided, addonId] });
+        return answer(201, { stored: true });
     }
 
     /** The first openings from `date` on, for a time refused as taken. */
@@ -262,6 +327,20 @@ export function createStandin({
         if (parts.length === 3 && parts[2] === 'booking') {
             if (!['POST', 'PUT', 'DELETE'].includes(method)) return fail(405, 'method');
             return owner ? book(m, json, method) : denied();
+        }
+        if (parts[2] === 'visits') {
+            if (parts.length === 3) {
+                if (method === 'POST') return reader && !owner ? startVisit(m) : denied();
+                if (method !== 'GET') return fail(405, 'method');
+                if (!owner) return denied();
+                return answer(200, { visits: visitsOf(m).map((v) => ({ visitId: v.visitId, createdAt: new Date(v.createdAt).toISOString(), reportAt: v.reportAt })) });
+            }
+            const decision = parts.length === 7 && parts[6] === 'decision';
+            if (ID.test(parts[3]) && (parts.length === 5 || parts.length === 6 || decision) && parts[4] === 'addons') {
+                if (!m) return denied();
+                return addOns(m, parts, method, bytes, owner, reader);
+            }
+            return fail(404, 'not-found');
         }
         const thumb = parts.length === 5 && parts[4] === 'thumb';
         if ((parts.length === 4 || thumb) && parts[2] === 'photos' && ID.test(parts[3])) {

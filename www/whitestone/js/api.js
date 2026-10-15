@@ -65,7 +65,18 @@ export function createApi(transport) {
          *  `next` openings. */
         book: (id, owner, request) => call('POST', `checklists/${enc(id)}/booking`, { token: owner, json: request }),
         rebook: (id, owner, request) => call('PUT', `checklists/${enc(id)}/booking`, { token: owner, json: request }),
-        cancelBooking: (id, owner) => call('DELETE', `checklists/${enc(id)}/booking`, { token: owner })
+        cancelBooking: (id, owner) => call('DELETE', `checklists/${enc(id)}/booking`, { token: owner }),
+        /** Start a visit (the first add-on or the report): `{ visitId }`. */
+        startVisit: (id, token) => call('POST', `checklists/${enc(id)}/visits`, { token }),
+        /** The visits: `{ visits: [{ visitId, createdAt, reportAt }] }`. */
+        listVisits: (id, owner) => call('GET', `checklists/${enc(id)}/visits`, { token: owner }),
+        /** The cleaner's sealed proposal, once. */
+        putAddOn: (id, token, visitId, addonId, bytes) => call('PUT', `checklists/${enc(id)}/visits/${enc(visitId)}/addons/${enc(addonId)}`, { token, bytes }),
+        /** The customer's sealed decision, once. */
+        decideAddOn: (id, owner, visitId, addonId, bytes) => call('PUT', `checklists/${enc(id)}/visits/${enc(visitId)}/addons/${enc(addonId)}/decision`, { token: owner, bytes }),
+        /** A visit's add-ons: `{ addons: [{ addonId, proposal, decision }] }`,
+         *  each sealed and in base64url, the decision null until made. */
+        listAddOns: (id, token, visitId) => call('GET', `checklists/${enc(id)}/visits/${enc(visitId)}/addons`, { token })
     };
 }
 

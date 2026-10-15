@@ -294,6 +294,85 @@ describe('sealed in, sealed out', () => {
     });
 });
 
+describe('a visit and its add-ons (M4 piece 3)', () => {
+    /** A published checklist, opened by a cleaner. */
+    async function visited() {
+        const w = setup();
+        const { id, ownerToken, pin } = (await w.api.reserve()).data;
+        await w.api.putChecklist(id, ownerToken, bytes(1));
+        const visit = (await w.api.open(id, pin)).data.visitToken;
+        return { ...w, id, owner: ownerToken, visit };
+    }
+    const addonId = (n) => `addon${String(n).padStart(17, '0')}`;
+
+    test('a cleaner starts a visit; the customer lists it but never starts one', async () => {
+        const { api, id, owner, visit } = await visited();
+        expect((await api.startVisit(id, owner)).error).toBe('denied');
+        expect((await api.startVisit(id, null)).error).toBe('denied');
+        const started = await api.startVisit(id, visit);
+        expect(started).toMatchObject({ ok: true, status: 201 });
+        expect(started.data.visitId).toMatch(ID);
+        const listed = await api.listVisits(id, owner);
+        expect(listed.data.visits).toEqual([{ visitId: started.data.visitId, createdAt: new Date(START).toISOString(), reportAt: null }]);
+        expect((await api.listVisits(id, visit)).error).toBe('denied');
+    });
+
+    test('the cleaner proposes once, the customer decides once, and both read where it stands', async () => {
+        const { api, id, owner, visit, backend } = await visited();
+        const v = (await api.startVisit(id, visit)).data.visitId;
+        const a = addonId(1);
+        // Only the cleaner proposes, and only a small sealed body.
+        expect((await api.putAddOn(id, owner, v, a, bytes(1))).error).toBe('denied');
+        expect((await api.putAddOn(id, visit, v, a, null)).error).toBe('bad-request');
+        expect((await api.putAddOn(id, visit, v, a, new Uint8Array(A.maxSmallBytes + 1))).error).toBe('bad-request');
+        expect((await api.putAddOn(id, visit, v, 'short', bytes(1))).status).toBe(404);
+        expect((await api.putAddOn(id, visit, 'B'.repeat(22), a, bytes(1))).status).toBe(404);
+        expect(await api.putAddOn(id, visit, v, a, bytes(7, 7))).toMatchObject({ ok: true, status: 201 });
+        // Never rewritten: what the customer decides is what was proposed.
+        expect((await api.putAddOn(id, visit, v, a, bytes(8))).error).toBe('exists');
+        const waiting = await api.listAddOns(id, visit, v);
+        expect(waiting.data.addons).toEqual([{ addonId: a, proposal: 'Bwc', decision: null }]);
+        // Only the customer decides, once, and only what was proposed.
+        expect((await api.decideAddOn(id, visit, v, a, bytes(1))).error).toBe('denied');
+        expect((await api.decideAddOn(id, owner, v, addonId(2), bytes(1))).status).toBe(404);
+        expect((await api.decideAddOn(id, owner, v, a, null)).error).toBe('bad-request');
+        expect(await api.decideAddOn(id, owner, v, a, bytes(9))).toMatchObject({ ok: true, status: 201 });
+        expect((await api.decideAddOn(id, owner, v, a, bytes(10))).error).toBe('decided');
+        expect((await api.listAddOns(id, owner, v)).data.addons[0].decision).toBe('CQ');
+        expect((await api.listAddOns(id, 'C'.repeat(43), v)).error).toBe('denied');
+        // Unpublishing takes the visit with it.
+        await api.deleteChecklist(id, owner);
+        expect((await backend.keys()).filter((k) => String(k).includes('/visit/'))).toEqual([]);
+    });
+
+    test('a visit takes up to its add-ons, and the oldest visit goes past the most kept', async () => {
+        const { api, id, owner, visit, backend } = await visited();
+        const first = (await api.startVisit(id, visit)).data.visitId;
+        for (let n = 0; n < A.maxAddOns; n++) expect((await api.putAddOn(id, visit, first, addonId(n), bytes(1))).ok).toBe(true);
+        expect((await api.putAddOn(id, visit, first, addonId(99), bytes(1))).error).toBe('too-many');
+        for (let n = 1; n < A.maxVisits; n++) await api.startVisit(id, visit);
+        expect((await api.listVisits(id, owner)).data.visits).toHaveLength(A.maxVisits);
+        await api.startVisit(id, visit);
+        const left = (await api.listVisits(id, owner)).data.visits;
+        expect(left).toHaveLength(A.maxVisits);
+        expect(left.map((x) => x.visitId)).not.toContain(first);
+        expect((await backend.keys()).filter((k) => String(k).includes(first))).toEqual([]);
+        expect((await api.listAddOns(id, visit, first)).status).toBe(404);
+    });
+
+    test('wrong methods and shapes under visits answer plainly', async () => {
+        const { standin, api, id, visit } = await visited();
+        const v = (await api.startVisit(id, visit)).data.visitId;
+        const ask = (method, path) => standin.handle({ method, path, token: visit });
+        expect((await ask('PUT', `checklists/${id}/visits`)).status).toBe(405);
+        expect((await ask('POST', `checklists/${id}/visits/${v}/addons`)).status).toBe(405);
+        expect((await ask('GET', `checklists/${id}/visits/${v}/addons/${addonId(1)}`)).status).toBe(405);
+        expect((await ask('GET', `checklists/${id}/visits/${v}/addons/${addonId(1)}/decision`)).status).toBe(405);
+        expect((await ask('GET', `checklists/${id}/visits/${v}/report`)).status).toBe(404);
+        expect((await ask('GET', `checklists/${'A'.repeat(22)}/visits/${v}/addons`)).json.error).toBe('denied');
+    });
+});
+
 describe('routes and failures', () => {
     test('unknown paths, wrong methods, and a backend that breaks all answer, never throw', async () => {
         const { standin } = setup();

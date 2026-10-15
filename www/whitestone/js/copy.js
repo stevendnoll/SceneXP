@@ -549,6 +549,9 @@ export const GUARDS = Object.freeze({
     health: 'There is no need to share health details. A preference such as fragrance-free products is enough, and anything written here is shared with your cleaner.'
 });
 
+/** "in the kitchen": a room as a place, for the tasks page. */
+const TASKS_PAGE_IN = (room) => `in the ${String(room).toLowerCase()}`;
+
 /** The cleaner's page. */
 export const TASKS_PAGE = Object.freeze({
     incomplete: 'Please enter all 6 digits of the PIN.',
@@ -574,7 +577,7 @@ export const TASKS_PAGE = Object.freeze({
     visitLine: (day, time) => `Visit ${day} at ${time}`,
     household: 'About the home:',
     startHere: 'Start here',
-    inRoom: (room) => `in the ${String(room).toLowerCase()}`,
+    inRoom: (room) => TASKS_PAGE_IN(room),
     emptyRoom: 'No tasks in this room.',
     starred: 'starred',
     notes: 'Notes:',
@@ -608,7 +611,38 @@ export const TASKS_PAGE = Object.freeze({
     starredToGo: (n) => `Starred: ${n} to go.`,
     starredDone: 'Starred: all done.',
     starredMarked: (done, skipped) => `Starred: ${done} done, ${skipped} skipped.`,
-    savedHere: 'Saved on this device as you go.'
+    savedHere: 'Saved on this device as you go.',
+    // Add-ons (M4 piece 3): proposed from a room, approved by the customer.
+    addOnsHeading: 'Add-ons',
+    propose: 'Propose an add-on',
+    proposeIn: (room) => `Propose an add-on ${TASKS_PAGE_IN(room)}`,
+    addOnWhat: 'What does it need?',
+    addOnChoose: 'Choose one',
+    addOnNewTask: 'Add a task',
+    addOnUpgrade: 'Upgrade a task',
+    addOnAdds: (money, time) => `Adds ${money}, ${time}, once the customer approves.`,
+    addOnPriced: (money, time) => `${money}, ${time}`,
+    addOnHowMany: 'How many',
+    addOnWords: 'A few words for the customer (optional)',
+    addOnSend: 'Send to the customer',
+    addOnSending: 'Sending',
+    addOnPickFirst: 'Please choose what it needs first.',
+    addOnOffline: 'That did not send. Please check your connection and try again.',
+    addOnFull: 'This visit has all the add-ons it can take.',
+    addOnExpired: 'Your visit pass has ended. Please reload the page and enter the PIN again.',
+    addOnTrouble: 'That did not send. Please try again in a moment.',
+    addOnStatus: Object.freeze({
+        waiting: 'Waiting for the customer',
+        approved: 'Approved by the customer',
+        declined: 'Declined by the customer'
+    }),
+    addOnCount: Object.freeze({
+        waiting: (n) => `${n} waiting`,
+        approved: (n) => `${n} approved`,
+        declined: (n) => `${n} declined`
+    }),
+    /** `counts` already joined: "1 approved, 1 waiting". */
+    addOnsLine: (counts) => `Add-ons: ${counts}.`
 });
 
 /** The calendar file for a booked visit (ics.js). */

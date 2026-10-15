@@ -22,6 +22,12 @@
  * for gloves and wet hands. Skip opens a few quick reasons, or room for a
  * few words, inside the task. A bar along the bottom says where the visit
  * stands, and that it is saved on the device as the cleaner goes.
+ *
+ * ADD-ONS (M4 piece 3): every room offers Propose an add-on, which opens a
+ * picker inside the room (a task it does not have, or an upgrade of one it
+ * does), shows the price before anything is sent, and takes a few words for
+ * the customer. Each add-on then sits under its room's tasks with where it
+ * stands, and once approved, a Done of its own.
  */
 
 import { h, clear } from '../../js/cards.min.js';
@@ -31,6 +37,7 @@ import { priceItem, formatMoney, formatMinutes } from '../../js/pricing.min.js';
 import { levelOf, roomName, preferenceLines as linesFor } from '../../js/taxonomy.min.js';
 import { dayLabel, clockLabel } from '../../js/booking.min.js';
 import { SKIP_REASONS, WORDS_MAX, summarize } from './visit.min.js';
+import { choicesFor, priceOf, addOnName, roomOf, takenKeys } from './addons.min.js';
 
 const byOrder = (a, b) => (a.order || 0) - (b.order || 0);
 
@@ -121,15 +128,123 @@ export function skipWhy(mark) {
 }
 
 /** Where the visit stands, in a line or two (PRD 12.4): "12 done, 1
- *  skipped, 7 to go." and how the starred tasks stand. */
-export function summaryLines(form, progress) {
+ *  skipped, 7 to go." and how the starred tasks stand, then the add-ons
+ *  ("Add-ons: 1 approved, 1 waiting."). */
+export function summaryLines(form, progress, addOns = []) {
     const s = summarize(form, progress);
     const lines = [COPY.summary(s.done, s.skipped, s.toGo)];
     if (s.starred) {
         lines.push(s.starredToGo ? COPY.starredToGo(s.starredToGo)
             : s.starredSkipped ? COPY.starredMarked(s.starredDone, s.starredSkipped) : COPY.starredDone);
     }
+    const parts = ['approved', 'waiting', 'declined']
+        .map((status) => [status, addOns.filter((a) => a.status === status).length])
+        .filter(([, n]) => n)
+        .map(([status, n]) => COPY.addOnCount[status](n));
+    if (parts.length) lines.push(COPY.addOnsLine(parts.join(', ')));
     return lines;
+}
+
+/** An add-on's price in words, or '' when the sheet cannot price it. */
+function priceWords(sheet, form, addOn, line) {
+    const p = priceOf(sheet, form, addOn);
+    return p.error ? '' : line(formatMoney(p.cents), formatMinutes(p.minutes));
+}
+
+/** One add-on under its room: what, what it adds, the customer's words,
+ *  where it stands, and Done once approved. */
+function addOnBlock(sheet, form, addOn, progress, on) {
+    const name = addOnName(sheet, form, addOn);
+    const done = Boolean(progress.marks[addOn.id]);
+    const price = priceWords(sheet, form, addOn, COPY.addOnPriced);
+    let doneBtn = null;
+    if (addOn.status === 'approved') {
+        doneBtn = h('button', {
+            type: 'button', className: `mark-done${done ? ' is-on' : ''}`, id: `addon-done-${addOn.id}`,
+            text: done ? COPY.isDone : COPY.done, attrs: { 'aria-pressed': done ? 'true' : 'false', 'aria-label': COPY.markDone(name), title: COPY.markDone(name) }
+        });
+        doneBtn.addEventListener('click', () => on.addOnDone(addOn.id));
+    }
+    return h('li', { className: `addon is-${addOn.status}${done ? ' is-done' : ''}`, id: `addon-${addOn.id}` }, [
+        h('p', { className: 'addon-name', text: name }),
+        price ? h('p', { className: 'addon-price', text: price }) : null,
+        addOn.words ? h('p', { className: 'addon-words', text: addOn.words }) : null,
+        h('p', { className: 'addon-status', text: COPY.addOnStatus[addOn.status] }),
+        doneBtn ? h('div', { className: 'task-marks' }, [doneBtn]) : null
+    ]);
+}
+
+/** The add-on picker inside a room: what it needs (a select, grouped into
+ *  new tasks and upgrades), how many for a task counted by the piece, the
+ *  price, a few words, then Send or Cancel. */
+function addOnPicker(sheet, form, roomId, roomLabel, choices, proposing, on) {
+    const id = roomId;
+    const select = h('select', { id: `addon-choice-${id}`, className: 'addon-choice' }, [
+        h('option', { value: '', text: COPY.addOnChoose, selected: !proposing.key }),
+        ...[['task', COPY.addOnNewTask], ['upgrade', COPY.addOnUpgrade]].map(([kind, label]) => {
+            const list = choices.filter((c) => c.kind === kind);
+            return list.length ? h('optgroup', { attrs: { label } }, list.map((c) => h('option', { value: c.key, text: c.name, selected: c.key === proposing.key }))) : null;
+        })
+    ]);
+    select.value = proposing.key || '';
+    select.addEventListener('change', () => on.pick(id, select.value));
+    const chosen = choices.find((c) => c.key === proposing.key) || null;
+    const counted = Boolean(chosen && chosen.addOn.quantity);
+    const addOn = chosen ? (counted ? { ...chosen.addOn, quantity: proposing.quantity } : chosen.addOn) : null;
+    let qty = null;
+    if (counted) {
+        qty = h('input', {
+            type: 'number', id: `addon-qty-${id}`, className: 'addon-qty', value: String(proposing.quantity),
+            attrs: { min: '1', max: '50', inputmode: 'numeric' }
+        });
+        qty.addEventListener('change', () => on.quantity(id, qty.value));
+    }
+    const price = addOn ? priceWords(sheet, form, addOn, COPY.addOnAdds) : '';
+    const words = h('input', {
+        type: 'text', id: `addon-words-${id}`, className: 'addon-words-input', value: proposing.words || '',
+        attrs: { maxlength: String(WORDS_MAX), autocomplete: 'off' }
+    });
+    const send = h('button', {
+        type: 'button', className: 'addon-send', id: `addon-send-${id}`,
+        text: proposing.sending ? COPY.addOnSending : COPY.addOnSend, disabled: Boolean(proposing.sending)
+    });
+    send.addEventListener('click', () => on.send(id));
+    const cancel = h('button', { type: 'button', className: 'skip-cancel', id: `addon-cancel-${id}`, text: COPY.cancel });
+    cancel.addEventListener('click', () => on.propose(null));
+    return h('div', { className: 'addon-picker', id: `addon-picker-${id}`, attrs: { role: 'group', 'aria-label': COPY.proposeIn(roomLabel) } }, [
+        h('label', { className: 'addon-label', attrs: { for: `addon-choice-${id}` } }, [h('span', { text: COPY.addOnWhat })]),
+        select,
+        counted ? h('label', { className: 'addon-label', attrs: { for: `addon-qty-${id}` } }, [h('span', { text: COPY.addOnHowMany })]) : null,
+        qty,
+        price ? h('p', { className: 'addon-price', id: `addon-price-${id}`, attrs: { 'aria-live': 'polite' }, text: price }) : null,
+        h('label', { className: 'addon-label', attrs: { for: `addon-words-${id}` } }, [h('span', { text: COPY.addOnWords })]),
+        words,
+        proposing.note ? h('p', { className: 'skip-note', attrs: { role: 'alert' }, text: proposing.note }) : null,
+        h('div', { className: 'skip-actions' }, [send, cancel])
+    ]);
+}
+
+/** A room's add-ons, and its way to propose one (none without the sheet,
+ *  which prices them). */
+function roomAddOns(sheet, form, r, visit, on) {
+    const mine = visit.addOns.filter((a) => roomOf(form, a) === r.room.id);
+    const choices = sheet ? choicesFor(sheet, form, r.room.id, takenKeys(visit.addOns)) : [];
+    const open = Boolean(visit.proposing && visit.proposing.roomId === r.room.id);
+    const out = [];
+    if (mine.length) {
+        out.push(h('h4', { className: 'addons-heading', text: COPY.addOnsHeading }));
+        out.push(h('ul', { className: 'tasks-addons' }, mine.map((a) => addOnBlock(sheet, form, a, visit.progress, on))));
+    }
+    if (choices.length || open) {
+        const btn = h('button', {
+            type: 'button', className: 'addon-propose', id: `propose-${r.room.id}`, text: COPY.propose,
+            attrs: { 'aria-expanded': open ? 'true' : 'false', 'aria-label': COPY.proposeIn(r.name), title: COPY.proposeIn(r.name) }
+        });
+        btn.addEventListener('click', () => on.propose(open ? null : r.room.id));
+        out.push(btn);
+        if (open) out.push(addOnPicker(sheet, form, r.room.id, r.name, choices, visit.proposing, on));
+    }
+    return out;
 }
 
 /** A photo's thumbnail button: its own image, or its place while it
@@ -234,10 +349,17 @@ function taskBlock(sheet, form, item, thumbs, on, visit) {
  * asked for with no reason). `on.photo(photoId, label)` opens one full
  * screen, `on.mark(itemId, mark)` marks a task (null clears it), and
  * `on.skip(itemId)` opens a task's skip picker (null closes it).
+ *
+ * Add-ons: `addOns` the visit's (addons.js), `proposing` the open picker
+ * (`{ roomId, key, quantity, words, note, sending }`, or null).
+ * `on.propose(roomId)` opens a room's picker (null closes it),
+ * `on.pick(roomId, key)` and `on.quantity(roomId, value)` change it,
+ * `on.send(roomId)` sends it, and `on.addOnDone(addonId)` marks an approved
+ * add-on done (or clears it).
  */
-export function renderChecklist(container, { form, quote, sheet, thumbs = new Map(), notice = '', progress = { marks: {} }, skipping = null, skipNote = '', on }) {
+export function renderChecklist(container, { form, quote, sheet, thumbs = new Map(), notice = '', progress = { marks: {} }, skipping = null, skipNote = '', addOns = [], proposing = null, on }) {
     clear(container);
-    const visit = { progress, skipping, skipNote };
+    const visit = { progress, skipping, skipNote, addOns, proposing };
     const prefs = preferenceLines(form);
     if (prefs.lines.length || prefs.note) {
         container.appendChild(h('section', { className: 'tasks-prefs', attrs: { 'aria-labelledby': 'prefs-heading' } }, [
@@ -275,13 +397,14 @@ export function renderChecklist(container, { form, quote, sheet, thumbs = new Ma
                 h('h3', { className: 'tasks-room-name', text: r.name }),
                 r.items.length
                     ? h('ul', { className: 'tasks-list' }, r.items.map((item) => taskBlock(sheet, form, item, thumbs, on, visit)))
-                    : h('p', { className: 'tasks-empty', text: COPY.emptyRoom })
+                    : h('p', { className: 'tasks-empty', text: COPY.emptyRoom }),
+                ...roomAddOns(sheet, form, r, visit, on)
             ]))
         ]));
     }
     // Where the visit stands, along the bottom, said as it changes.
     container.appendChild(h('div', { className: 'tasks-summary', id: 'tasks-summary' }, [
-        h('p', { className: 'tasks-summary-line', attrs: { role: 'status', 'aria-live': 'polite' }, text: summaryLines(form, progress).join(' ') }),
+        h('p', { className: 'tasks-summary-line', attrs: { role: 'status', 'aria-live': 'polite' }, text: summaryLines(form, progress, addOns).join(' ') }),
         h('p', { className: 'tasks-summary-saved', text: COPY.savedHere })
     ]));
 }
