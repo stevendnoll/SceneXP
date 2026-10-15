@@ -211,7 +211,8 @@ export function savedForm(guide) {
  *                          comes back ({ now }) saying what came of it
  *   homeMade               a checklist made outside the guide (the setup
  *                          card): straight on to the first room
- *   again, about, close    the Help menu, and closing what it opened
+ *   again, about, close    a tap on Maya, the Help menu's About, and
+ *                          closing what they opened
  *   restart, skip          start over, or leave the guide
  */
 export function step(guide, event) {

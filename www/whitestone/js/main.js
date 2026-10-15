@@ -20,9 +20,10 @@
  * turning, a floor opening. A still house costs a phone nothing.
  *
  * THE HOUSE TURNS, NOT THE CAMERA (turntable.js, PLANNING 6.2). A drag
- * turns the turntable and tilts the view, a pinch, the wheel or the + and -
- * keys zoom, and the arrow keys turn and tilt. A press that barely moves is
- * a tap, and a tap on the house opens a floor. This file reads the pointers
+ * or the left and right arrow keys turn the turntable, and the camera is
+ * the page's own: one view of the whole house, and a closer one of a floor
+ * while it is open. A press that barely moves is a tap, and a tap on the
+ * house opens a floor. This file reads the pointers
  * itself, since the shared pan part turns a camera.
  *
  * This is the one place the real clock and the real window are read.
@@ -143,7 +144,7 @@ let photoStore = null;
 let stage = null;
 /** The house model on the turntable (model.js). */
 let model = null;
-/** The visitor's view: the house's turn, the tilt, the zoom (turntable.js). */
+/** The view: the house's turn, the camera's tilt and distance (turntable.js). */
 let turntable = null;
 /** The room labels over a lifted level, and what they say. */
 const roomLabels = { nodes: [], key: '' };
@@ -164,7 +165,7 @@ let sun = null;
 let envTarget = null;
 /** The pointers down on the canvas, and what they are doing: a tap until
  *  one moves past the slop, then a drag; two make a pinch. */
-const gesture = { pointers: new Map(), start: null, dragging: false, lastMove: 0, spread: 0 };
+const gesture = { pointers: new Map(), start: null, dragging: false, lastMove: 0 };
 /** Whether the look was held still last frame (a card open), so the frame
  *  after a card opens or closes is drawn. */
 let wasLocked = null;
@@ -312,8 +313,9 @@ async function init() {
             requestRender();
             return turntable.yaw;
         },
-        /** The view now: the house's turn, the tilt, the zoom. */
-        look: () => ({ yaw: turntable.yaw, tilt: turntable.tilt, zoom: turntable.zoom })
+        /** The view now: the house's turn, the tilt, and how far over to
+         *  an open floor's closer view. */
+        look: () => ({ yaw: turntable.yaw, tilt: turntable.tilt, near: turntable.near })
     };
 
     // Whether the visitor came back to saved checklists rides in `outcome`,
@@ -348,8 +350,8 @@ function buildRenderer() {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = CONFIG.light.exposure;
     // The skylight's shadows. Only the house moves, so the map is drawn
-    // again only when it changes or turns (markShadows), never for a tilt
-    // or a zoom.
+    // again only when it changes or turns (markShadows), never for the
+    // camera moving.
     renderer.shadowMap.enabled = true;
     // PCFShadowMap is soft from r182 on, which retired PCFSoftShadowMap.
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -431,13 +433,22 @@ function liftLevel(level) {
     if (level && ui.halo && ui.halo.spec.kind === 'floor') ui.halo.used = true;
     // An open floor's open side is the house's front: turned to the visitor.
     if (level && turntable) turntable.faceFront(state.reducedMotion ? 0 : CONFIG.view.turn.face);
-    if (turntable) turntable.setHeight(frameHeight(), state.reducedMotion);
+    fitFrame(state.reducedMotion);
     markShadows();
     const c = active();
     const name = level ? levelOf(c ? c.serviceType : 'cleaning', level) : null;
     if (level && name) announce(MODEL_LINES.lifted(name.name));
     else if (!level && was) announce(MODEL_LINES.setDown);
     return true;
+}
+
+/** The frame fitted to the house as it now stands, and to its open
+ *  floor's closer view (the whole house with every floor closed): at once
+ *  with `now`, else eased. */
+function fitFrame(now) {
+    if (!turntable) return;
+    turntable.setHeight(frameHeight(), now);
+    turntable.setFocus(model ? model.focus() : null, now ? 0 : CONFIG.view.focus.seconds);
 }
 
 /** How tall the frame holds the house: as it stands closed, and with the
@@ -520,21 +531,17 @@ function onPanelRow(kind, id) {
 }
 
 /** The panel's back button: one step back, the keyboard kept in the panel,
- *  or on Help (where Rooms and tasks brings it back) once the panel has
- *  gone. */
+ *  or, once the panel has gone, on Maya's next step (everything is hers,
+ *  Steve, 2026-10-15), or on Help when she offers none. */
 function onPanelBack() {
     selectTo(stepOut(ui.selected), { focus: true });
     if (!ui.selected) {
+        if (host && host.shown && host.focusPrimary()) return;
         const help = el('ws-help');
         if (help && typeof help.focus === 'function') help.focus();
     }
 }
 
-/** The whole house in the panel, every floor, room and task, from the
- *  keyboard as well as the pointer (Help's Rooms and tasks). */
-function openRooms() {
-    selectTo({ scope: 'house', level: null, roomId: null, itemId: null }, { focus: true });
-}
 
 /** A task starred, or no longer: the ones that matter most, done first. */
 function toggleStar(itemId) {
@@ -602,7 +609,7 @@ function onPanelChip(area) {
 /**
  * The names of the open floor's rooms, each over its room, however the
  * house is turned. Called before every frame that is drawn, so they follow
- * a turn, a zoom and the lift itself. Rebuilt only when the rooms change,
+ * a turn, the closer view and the lift itself. Rebuilt only when the rooms change,
  * moved otherwise.
  */
 // ---- Halos (QA, 2026-10-14) ------------------------------------------------------
@@ -840,7 +847,7 @@ function handleSceneTap(clientX, clientY) {
     return hit.key;
 }
 
-// ---- The look: turning, tilting, zooming --------------------------------------------
+// ---- The look: turning the house -----------------------------------------------------
 
 /** Whether the visitor's look is held still: before the house is ready,
  *  and while any card is open (each card has the house behind it). */
@@ -848,17 +855,13 @@ function lookLocked() {
     return !state.loaded || anyOpen();
 }
 
-/** How far apart the first two pointers are, in pixels. */
-function spread() {
-    const [a, b] = [...gesture.pointers.values()];
-    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
-}
-
 /**
  * The canvas's pointers: one that barely moves and lifts soon is a tap,
- * one that moves turns and tilts the house, and two pinch. The wheel
- * zooms. A mouse that is not pressed says what answers a tap with its
- * cursor.
+ * and one that moves sideways turns the house. Nothing zooms or tilts the
+ * view (QA, 2026-10-15): a second finger and the wheel do nothing, though
+ * the wheel is still held back from the page, so a trackpad's pinch never
+ * zooms the page itself. A mouse that is not pressed says what answers a
+ * tap with its cursor.
  */
 function setupLook(signal) {
     if (canvas.style) canvas.style.touchAction = 'none';
@@ -874,9 +877,8 @@ function setupLook(signal) {
             gesture.start = { x: event.clientX, y: event.clientY, t };
             gesture.dragging = false;
         } else {
-            // A second finger: a pinch, and never a tap.
+            // A second finger: never a tap.
             gesture.dragging = true;
-            gesture.spread = spread();
         }
         gesture.lastMove = t;
         turntable.touch();
@@ -893,17 +895,14 @@ function setupLook(signal) {
         const now = { x: event.clientX, y: event.clientY };
         gesture.pointers.set(event.pointerId, now);
         if (gesture.pointers.size >= 2) {
-            const d = spread();
-            if (gesture.spread > 0 && d > 0) turntable.zoomBy(Math.log2(gesture.spread / d));
-            gesture.spread = d;
+            // Two fingers turn nothing until one lifts.
             gesture.lastMove = t;
-            requestRender();
             return;
         }
         if (!gesture.dragging && gesture.start
             && Math.hypot(now.x - gesture.start.x, now.y - gesture.start.y) > tap.slop) gesture.dragging = true;
         if (!gesture.dragging) return;
-        turntable.drag(now.x - prev.x, now.y - prev.y, window.innerHeight, (t - gesture.lastMove) / 1000);
+        turntable.drag(now.x - prev.x, window.innerHeight, (t - gesture.lastMove) / 1000);
         gesture.lastMove = t;
         requestRender();
     }, { signal });
@@ -912,8 +911,7 @@ function setupLook(signal) {
         gesture.pointers.delete(event.pointerId);
         const t = performance.now();
         if (gesture.pointers.size > 0) {
-            // One finger of a pinch lifted: the other carries on turning.
-            gesture.spread = 0;
+            // One of two fingers lifted: the other carries on turning.
             gesture.lastMove = t;
             return;
         }
@@ -927,10 +925,7 @@ function setupLook(signal) {
     canvas.addEventListener('pointerup', lift, { signal });
     canvas.addEventListener('pointercancel', lift, { signal });
     canvas.addEventListener('wheel', (event) => {
-        if (lookLocked()) return;
         if (event.cancelable) event.preventDefault();
-        turntable.zoomBy((event.deltaY || 0) * CONFIG.view.zoom.wheel);
-        requestRender();
     }, { passive: false, signal });
 }
 
@@ -950,18 +945,14 @@ function hover(event) {
 
 /**
  * The keys that move the view, from anywhere but a field or an open card:
- * the left and right arrows turn the house, up and down tilt the view, and
- * + and - zoom. Returns whether the key was one of them.
+ * the left and right arrows turn the house. Returns whether the key was
+ * one of them.
  */
 function lookKey(key) {
     const v = CONFIG.view;
     switch (key) {
     case 'ArrowLeft': turntable.turnBy(-v.turn.key); break;
     case 'ArrowRight': turntable.turnBy(v.turn.key); break;
-    case 'ArrowUp': turntable.tiltBy(v.turn.key / 2); break;
-    case 'ArrowDown': turntable.tiltBy(-v.turn.key / 2); break;
-    case '+': case '=': turntable.zoomBy(-v.zoom.key); break;
-    case '-': case '_': turntable.zoomBy(v.zoom.key); break;
     default: return false;
     }
     requestRender();
@@ -1612,8 +1603,9 @@ function closeHelp(refocus = false) {
     return true;
 }
 
-/** The Help menu: Maya again, the guide from the start, and the
- *  checklist's own cards. Each item closes the menu first. */
+/** The Help menu: what Whitestone is, and Start over. Everything else
+ *  is Maya's (Steve, 2026-10-15: one way to each thing). Each item closes
+ *  the menu first. */
 function setupHelp(signal) {
     const btn = el('ws-help');
     const menu = el('ws-help-menu');
@@ -1629,15 +1621,8 @@ function setupHelp(signal) {
         if (first && typeof first.focus === 'function') first.focus();
     }, { signal });
     const items = {
-        'help-again': () => guideTo({ type: 'again' }),
-        'help-reset': confirmStartOver,
-        'help-rooms': openRooms,
-        'help-checklist': openChecklistView,
-        'help-menu': openMenu,
-        'help-prefs': openPreferences,
-        'help-home': editHome,
-        'help-mine': openMine,
-        'help-about': () => guideTo({ type: 'about' })
+        'help-about': () => guideTo({ type: 'about' }),
+        'help-reset': confirmStartOver
     };
     for (const [id, act] of Object.entries(items)) {
         const item = el(id);
@@ -2264,10 +2249,6 @@ function refresh() {
     const c = active();
     const show = (id, on) => { const b = el(id); if (b) b.hidden = !on; };
     show('my-clear-example', hasSamples(state.doc));
-    show('help-checklist', Boolean(c));
-    show('help-rooms', Boolean(c));
-    show('help-home', Boolean(c));
-    show('help-prefs', Boolean(c));
     const chip = quoteChip(c, state.sheet);
     const note = el('storage-note');
     if (note) note.textContent = storageNote();
@@ -2285,7 +2266,7 @@ function refresh() {
         markShadows();
         // The frame fits the house as it now stands, eased to once the
         // visitor can see it.
-        if (turntable) turntable.setHeight(frameHeight(), !state.loaded || state.reducedMotion);
+        fitFrame(!state.loaded || state.reducedMotion);
     }
     // Maya's words that depend on the home (the rooms so far) keep up.
     if (host && host.view) updateHost();

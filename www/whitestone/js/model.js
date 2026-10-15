@@ -259,6 +259,33 @@ export function levelOffsets(slabs, lifted, lift) {
 }
 
 /**
+ * An open floor, measured for the closer view (turntable.js focusPoints):
+ * `{ bottom, top, radius }`, its floor plate's underside and the top of
+ * whatever stands highest on it (its walls, or under an attic's low walls a
+ * tall fixture), over the turntable's top, and how far its farthest corner
+ * reaches from the turntable's middle, in the stage's meters (the model's
+ * parts `inst` as instancesFor gives them, times its scale `k`). Null for a
+ * level with no parts. Its roof is not its own: that is lifted away.
+ */
+export function focusOf(inst, level, k) {
+    const of = (list) => (list || []).filter((p) => p.level === level);
+    const shell = [...of(inst.slabs), ...of(inst.tiles), ...of(inst.walls)];
+    if (!shell.length) return null;
+    const on = [...shell, ...of(inst.fixtures), ...of(inst.rounds), ...of(inst.blooms), ...of(inst.markers), ...of(inst.flags)];
+    let bottom = Infinity;
+    let top = -Infinity;
+    let radius = 0;
+    for (const p of shell) bottom = Math.min(bottom, p.position[1] - p.scale[1] / 2);
+    for (const p of on) {
+        const [x, , z] = p.position;
+        const [w, , d] = p.scale;
+        top = Math.max(top, p.top);
+        radius = Math.max(radius, Math.hypot(Math.abs(x) + w / 2, Math.abs(z) + d / 2));
+    }
+    return { bottom: bottom * k, top: top * k, radius: radius * k };
+}
+
+/**
  * The shift that centers a layout on the turntable, in model meters, and
  * stands its lowest slab on the turntable's top. The garage sits a step below
  * the floor beside it (layout.js), which beside the lowest story would sink
@@ -893,7 +920,7 @@ function fixtureFor(area, t, floorTop, x, z, bath = 'tub', wall = Infinity) {
         const extra = { roomId: t.roomId, color: own[p.color] || p.color, role: p.role };
         if (p.rot) extra.rotation = p.rot;
         const r = part(t.level, x + p.x * k, floorTop + p.up * k, back + p.z * k, p.w * k, p.h * k, p.d * k, extra);
-        if (p.rot) {
+        if (p.rot && p.shape === 'round') {
             // Turned on its side: its height is its diameter, not its depth.
             const tall = (p.rot[0] ? p.d : p.w) * k;
             r.position[1] = floorTop + p.up * k + tall / 2;
@@ -1313,7 +1340,9 @@ function prismGeometry() {
  *   lift(level, now)    lift a level (null to set it down), `now` to skip
  *                       the move; returns whether it is a level of the home
  *   lifted              the lifted level, or null
- *   tick(delta)         move the levels toward their lift; returns whether
+ *   focus()             the lifted level measured for the closer view
+ *                       (focusOf), or null
+ *   tick(delta)        move the levels toward their lift; returns whether
  *                       anything moved this frame
  *   labels()            the lifted level's rooms: [{ roomId, text, point }]
  *                       with `point` over the room in world meters
@@ -1593,6 +1622,13 @@ export function buildModel(config, at) {
         anchor() {
             const tops = Object.values(placed).flat().map((p) => p.top);
             return toWorld([0, Math.max(0, ...tops) + 0.14 / scaled, 0]);
+        },
+        /** The open floor as it will stand once lifted, for the closer
+         *  view (focusOf), or null with no floor open. */
+        focus() {
+            if (!lifted) return null;
+            const inst = instancesFor(layout, targets(), { lifted, areas, baths, site: siteFor(layout, turntable, scaled) });
+            return focusOf(inst, lifted, scaled);
         },
         /** How tall the house stands, unlifted (turntable.js frames it). */
         get height() {

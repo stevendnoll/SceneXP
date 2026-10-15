@@ -184,21 +184,25 @@ describe('the turntable', () => {
         expect(main.__test__.gesture.pointers.size).toBe(0);
     });
 
-    test('a wheel and the + and - keys zoom, the arrows turn and tilt, but never from a field or over a card', async () => {
+    test('the left and right arrows turn the house; the wheel, + and -, and up and down move nothing (QA, 2026-10-15); never from a field or over a card', async () => {
         const main = await boot();
         const tt = main.__test__.turntable();
         tt.touch();
-        fire(dom.el('game-canvas'), 'wheel', { deltaY: 200, cancelable: true, preventDefault() {} });
-        expect(tt.zoom).toBeGreaterThan(1);
-        const z = tt.zoom;
-        fire(dom.documentStub, 'keydown', { key: '+', target: dom.el('game-canvas'), preventDefault() {} });
-        expect(tt.zoom).toBeLessThan(z);
+        const pose = () => JSON.stringify(tt.pose(16 / 10));
+        const before = pose();
+        let prevented = false;
+        fire(dom.el('game-canvas'), 'wheel', { deltaY: 200, cancelable: true, preventDefault() { prevented = true; } });
+        // Held back from the page all the same, so a trackpad's pinch never
+        // zooms the page itself.
+        expect(prevented).toBe(true);
+        for (const key of ['+', '-', '=', 'ArrowUp', 'ArrowDown']) {
+            expect(main.__test__.lookKey(key)).toBe(false);
+            fire(dom.documentStub, 'keydown', { key, target: dom.el('game-canvas'), preventDefault() {} });
+        }
+        expect(pose()).toBe(before);
         const y = tt.yaw;
         fire(dom.documentStub, 'keydown', { key: 'ArrowRight', target: dom.el('game-canvas'), preventDefault() {} });
         expect(tt.yaw).toBeCloseTo(y + CONFIG.view.turn.key, 12);
-        const t = tt.tilt;
-        fire(dom.documentStub, 'keydown', { key: 'ArrowDown', target: dom.el('game-canvas'), preventDefault() {} });
-        expect(tt.tilt).toBeLessThan(t);
         fire(dom.documentStub, 'keydown', { key: 'ArrowRight', target: { tagName: 'INPUT' }, preventDefault() {} });
         expect(tt.yaw).toBeCloseTo(y + CONFIG.view.turn.key, 12);
         main.__test__.openMine();
@@ -234,7 +238,7 @@ describe('the turntable', () => {
         const main = await boot();
         const yaw = window.whitestone.look().yaw;
         expect(window.whitestone.turn(0.5)).toBeCloseTo(yaw + 0.5, 12);
-        expect(window.whitestone.look()).toEqual({ yaw: yaw + 0.5, tilt: main.__test__.turntable().tilt, zoom: 1 });
+        expect(window.whitestone.look()).toEqual({ yaw: yaw + 0.5, tilt: main.__test__.turntable().tilt, near: 0 });
     });
 });
 

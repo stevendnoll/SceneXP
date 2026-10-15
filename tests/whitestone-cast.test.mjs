@@ -189,7 +189,7 @@ describe('built with the real three.js', () => {
     test('in a wide frame she is on screen, right of the turntable, with room beside her head for her bubble', () => {
         for (const [W, H] of [[1280, 800], [1440, 900], [1024, 768], [1920, 1080]]) {
             const aspect = W / H;
-            const pose = framePose(aspect, 0.6, { tilt: CONFIG.view.tilt.start, zoom: 1 }, CONFIG);
+            const pose = framePose(aspect, 0.6, { tilt: CONFIG.view.tilt.start }, CONFIG);
             expect(pose.host).toBe(true);
             const cam = new REAL.PerspectiveCamera(pose.fov, aspect, 0.05, 120);
             cam.position.set(...pose.eye);

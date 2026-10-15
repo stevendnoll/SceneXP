@@ -1,15 +1,16 @@
 // © 2026 Continuum Commerce LLC. All rights reserved.
 /**
  * turntable.js - The camera on the house (PLANNING 6.2): where it stands,
- * and how the visitor turns, tilts and zooms the view.
+ * and how the visitor turns the house.
  *
  * THE HOUSE TURNS, NOT THE CAMERA. A sideways drag turns the turntable the
  * house stands on (`yaw`, main.js sets the stage's spin group to it), so
  * "turn the house" is exactly what it feels like, and the white cove behind
- * it never has to be seen from the side. An up and down drag tilts the
- * camera over the house (`tilt`, radians above level, within limits), and a
- * pinch, the wheel or the + and - keys move it closer or farther (`zoom`, a
- * multiple of the framed distance).
+ * it never has to be seen from the side. Turning is the visitor's only say
+ * over the view (QA, 2026-10-15: Whitestone is a business's site, not a
+ * world to explore). The camera's height (`tilt`) and distance are the
+ * page's: one composed view of the house closed, and a closer, lower one
+ * of a floor while it is open (`setFocus`).
  *
  * THE FRAME FITS THE SUBJECT TO THE SCREEN. `framePose` stands the camera
  * just far enough back that every point of the subject (the turntable's
@@ -79,6 +80,27 @@ export function aimFor(turntable, height) {
 }
 
 /**
+ * The points the closer view must hold for an open floor, `focus` = {
+ * bottom, top, radius } in meters (its floor and its walls' top over the
+ * turntable's top, and how far its farthest corner reaches from the
+ * turntable's middle): a ring of that reach at its floor and at its top.
+ * A ring, because the visitor may turn the house while the floor is open.
+ */
+export function focusPoints(turntable, focus, steps = 24) {
+    const pts = [];
+    const r = Math.max(0.05, focus.radius);
+    const lo = turntable.height + focus.bottom;
+    const hi = turntable.height + Math.max(focus.bottom, focus.top);
+    for (let i = 0; i < steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        pts.push([x, lo, z], [x, hi, z]);
+    }
+    return pts;
+}
+
+/**
  * How far back along `back` (a unit vector from the aim toward the camera)
  * the camera must stand to hold every point, with `tanH` and `tanV` the
  * tangents of half the usable width and height of the view. Exact for a
@@ -133,11 +155,34 @@ export function frameHeight(height, frame, config) {
 }
 
 /**
+ * Fit `points` to the usable view: `{ aim, distance }`. The near rim looms
+ * larger than the far one, so a subject fitted about its middle sits low in
+ * its share. Move the aim along the camera's up until the subject is
+ * centered, refitting each time (it settles in a few steps), so it fills
+ * its share rather than touching one edge.
+ */
+function fitPoints(points, start, back, up, tanH, tanV) {
+    let aim = start;
+    let fitted = fitDistance(points, aim, back, tanH, tanV);
+    for (let i = 0; i < 6; i++) {
+        const [lo, hi] = verticalSpan(points, aim, back, up, fitted);
+        const mid = (lo + hi) / 2;
+        if (Math.abs(mid) < 1e-7) break;
+        aim = aim.map((v, k) => v + up[k] * mid * fitted);
+        fitted = fitDistance(points, aim, back, tanH, tanV);
+    }
+    return { aim, distance: fitted };
+}
+
+/**
  * The camera's pose for a screen of `aspect`: `{ eye, aim, fov, offset }`,
  * with `offset` the view's shift as fractions of the screen's width and
- * height (positive moves the subject left and up). `look` is the visitor's
- * `{ tilt, zoom }`, `height` the house's height over the turntable, and
- * `far` the arrival's extra distance (1 once arrived).
+ * height (positive moves the subject left and up). `look` is `{ tilt }`,
+ * and while a floor is open `{ focus, near }` too: the open floor (see
+ * focusPoints) and how far over to its closer view (0 to 1). The closer
+ * view is never nearer than `view.focus.closest` of the whole house's
+ * distance, nor farther. `height` is the house's height over the
+ * turntable, and `far` the arrival's extra distance (1 once arrived).
  */
 export function framePose(aspect, height, look, config, far = 1) {
     const { view, stage } = config;
@@ -147,24 +192,22 @@ export function framePose(aspect, height, look, config, far = 1) {
     const tanHalf = Math.tan((fov * Math.PI) / 360);
     const tanV = tanHalf * frame.use[1];
     const tanH = tanHalf * Math.max(0.1, aspect) * frame.use[0];
-    const tilt = clamp(look.tilt, view.tilt.min, view.tilt.max);
+    const tilt = look.tilt;
     const back = [0, Math.sin(tilt), Math.cos(tilt)];
     const up = [0, Math.cos(tilt), -Math.sin(tilt)];
-    const points = subjectPoints(stage.turntable, height);
-    // The near rim looms larger than the far one, so a subject fitted about
-    // its middle sits low in its share. Move the aim along the camera's up
-    // until the subject is centered, refitting each time (it settles in a
-    // few steps), so it fills its share rather than touching one edge.
-    let aim = aimFor(stage.turntable, height);
-    let fitted = fitDistance(points, aim, back, tanH, tanV);
-    for (let i = 0; i < 6; i++) {
-        const [lo, hi] = verticalSpan(points, aim, back, up, fitted);
-        const mid = (lo + hi) / 2;
-        if (Math.abs(mid) < 1e-7) break;
-        aim = aim.map((v, k) => v + up[k] * mid * fitted);
-        fitted = fitDistance(points, aim, back, tanH, tanV);
+    const whole = fitPoints(subjectPoints(stage.turntable, height), aimFor(stage.turntable, height), back, up, tanH, tanV);
+    let aim = whole.aim;
+    let fitted = whole.distance;
+    const near = clamp(Number(look.near) || 0, 0, 1);
+    if (look.focus && near > 0) {
+        const f = look.focus;
+        const start = [0, stage.turntable.height + (f.bottom + Math.max(f.bottom, f.top)) / 2, 0];
+        const close = fitPoints(focusPoints(stage.turntable, f), start, back, up, tanH, tanV);
+        const d = clamp(close.distance, whole.distance * view.focus.closest, whole.distance);
+        aim = aim.map((v, k) => v + (close.aim[k] - v) * near);
+        fitted += (d - fitted) * near;
     }
-    const d = fitted * clamp(look.zoom, view.zoom.min, view.zoom.max) * far;
+    const d = fitted * far;
     return {
         eye: [aim[0] + back[0] * d, aim[1] + back[1] * d, aim[2] + back[2] * d],
         aim,
@@ -175,26 +218,37 @@ export function framePose(aspect, height, look, config, far = 1) {
     };
 }
 
+/** Partway from one open floor's measure to another's. */
+function mixFocus(a, b, k) {
+    if (!a || !b) return b || a;
+    return {
+        bottom: a.bottom + (b.bottom - a.bottom) * k,
+        top: a.top + (b.top - a.top) * k,
+        radius: a.radius + (b.radius - a.radius) * k
+    };
+}
+
 /**
  * The visitor's view of the turntable, stepped by main.js. Returns:
  *
- *   yaw, tilt, zoom      the turn of the house, the camera's tilt, the zoom
+ *   yaw, tilt            the turn of the house, the camera's tilt
+ *   near                 how far over to an open floor's closer view (0-1)
  *   height               the house height the frame is fitted to now
- *   drag(dx, dy, size, dt)  a drag of dx, dy pixels, `dt` seconds after
+ *   drag(dx, size, dt)   a sideways drag of dx pixels, `dt` seconds after
  *                        the last, on a screen `size` pixels tall: turns
- *                        and tilts, and stops any drift
+ *                        the house, and stops any drift
  *   release(still)       the drag has ended, the finger still for `still`
  *                        seconds: the turn carries on at the drag's last
  *                        pace and slows, unless it rested first
- *   zoomBy(steps)        closer (negative) or farther (positive), in
- *                        doublings of distance, within the limits
  *   turnBy(radians)      a turn from the keys or the console
  *   faceFront(seconds)   turn the house's front (its open side when a
  *                        floor is open) to the camera by the shorter way,
- *                        and lower the view to `tilt.open` if it is
- *                        higher, so the floors above do not hide the
- *                        rooms; eased over `seconds` (0 for at once)
- *   tiltBy(radians)
+ *                        eased over `seconds` (0 for at once)
+ *   setFocus(f, seconds) a floor opened: ease to its closer view, `f` =
+ *                        { bottom, top, radius } (focusPoints), lowered to
+ *                        `tilt.open` so the floors above do not hide its
+ *                        rooms; null eases back out to the whole house at
+ *                        `tilt.start` (0 seconds for at once)
  *   touch()              the visitor did something: no drift for a while,
  *                        and the arrival ends at once
  *   arrive(seconds)      start the arrival from farther out
@@ -210,7 +264,6 @@ export function createTurntable(config) {
     const look = {
         yaw: view.yaw.start,
         tilt: view.tilt.start,
-        zoom: 1,
         velocity: 0,
         holding: false,
         idle: 0,
@@ -221,25 +274,35 @@ export function createTurntable(config) {
     let heightTo = 0;
     let heightT = 1;
     let arrival = null;
-    /** A turn to the front under way: { from, to, tiltFrom, tiltTo,
-     *  elapsed, seconds }. */
+    /** A turn to the front under way: { from, to, elapsed, seconds }. */
     let seek = null;
+    /** The open floor framed now, how far over to its closer view, and an
+     *  ease between views under way: { from, to, elapsed, seconds }, each
+     *  end { focus, near, tilt }. */
+    let focus = null;
+    let near = 0;
+    let toward = null;
+
+    function setView(v) {
+        focus = v.focus;
+        near = v.near;
+        look.tilt = v.tilt;
+    }
 
     const api = {
         get yaw() { return look.yaw; },
         get tilt() { return look.tilt; },
-        get zoom() { return look.zoom; },
+        get near() { return near; },
         get height() { return height; },
         get arriving() { return Boolean(arrival); },
         get drifting() { return look.drifting; },
-        drag(dx, dy, size = 800, dt = 1 / 60) {
+        drag(dx, size = 800, dt = 1 / 60) {
             api.touch();
             // The same drag turns the house as far on any screen: a pixel
             // is worth more on a small one.
             const scale = 800 / Math.max(200, size);
             const turn = dx * view.turn.perPixel * scale;
             look.yaw += turn;
-            look.tilt = clamp(look.tilt + dy * view.turn.tiltPerPixel * scale, view.tilt.min, view.tilt.max);
             look.velocity = clamp(turn / Math.max(dt, 1 / 120), -view.turn.maxSpeed, view.turn.maxSpeed);
             look.holding = true;
         },
@@ -248,20 +311,11 @@ export function createTurntable(config) {
             // A finger that rested before lifting meant to stop there.
             if (still > view.turn.hold) look.velocity = 0;
         },
-        zoomBy(steps) {
-            api.touch();
-            look.zoom = clamp(look.zoom * Math.pow(2, steps), view.zoom.min, view.zoom.max);
-            return look.zoom;
-        },
         turnBy(radians) {
             api.touch();
             look.yaw += radians;
             look.velocity = 0;
             look.holding = false;
-        },
-        tiltBy(radians) {
-            api.touch();
-            look.tilt = clamp(look.tilt + radians, view.tilt.min, view.tilt.max);
         },
         faceFront(seconds = view.turn.face) {
             look.velocity = 0;
@@ -271,14 +325,29 @@ export function createTurntable(config) {
             const full = Math.PI * 2;
             // The nearest whole turn: the front again, the shorter way round.
             const to = Math.round(look.yaw / full) * full;
-            const tiltTo = Math.min(look.tilt, view.tilt.open);
             if (!(seconds > 0)) {
                 look.yaw = to;
-                look.tilt = tiltTo;
                 seek = null;
                 return;
             }
-            seek = { from: look.yaw, to, tiltFrom: look.tilt, tiltTo, elapsed: 0, seconds };
+            seek = { from: look.yaw, to, elapsed: 0, seconds };
+        },
+        setFocus(next, seconds = view.focus.seconds) {
+            // Already there (a refit of an unchanged house): nothing to ease.
+            const settled = next
+                ? near === 1 && focus && ['bottom', 'top', 'radius'].every((k) => Math.abs(focus[k] - next[k]) < 1e-9)
+                : near === 0 && look.tilt === view.tilt.start;
+            if (!toward && settled) return;
+            const to = next
+                ? { focus: next, near: 1, tilt: view.tilt.open }
+                : { focus, near: 0, tilt: view.tilt.start };
+            const from = { focus: focus || next, near, tilt: look.tilt };
+            if (!(seconds > 0)) {
+                toward = null;
+                setView(next ? to : { ...to, focus: null });
+                return;
+            }
+            toward = { from, to, elapsed: 0, seconds };
         },
         /** One slow, eased full turn, ending where it began: the house
          *  shown off when the first checklist is saved. */
@@ -288,7 +357,7 @@ export function createTurntable(config) {
             look.drifting = false;
             look.idle = 0;
             if (!(seconds > 0)) return;
-            seek = { from: look.yaw, to: look.yaw + Math.PI * 2, tiltFrom: look.tilt, tiltTo: look.tilt, elapsed: 0, seconds };
+            seek = { from: look.yaw, to: look.yaw + Math.PI * 2, elapsed: 0, seconds };
         },
         touch() {
             look.idle = 0;
@@ -320,8 +389,23 @@ export function createTurntable(config) {
                 seek.elapsed += t;
                 const k = reducedMotion ? 1 : smoothstep(seek.elapsed / seek.seconds);
                 look.yaw = seek.from + (seek.to - seek.from) * k;
-                look.tilt = seek.tiltFrom + (seek.tiltTo - seek.tiltFrom) * k;
                 if (k >= 1) seek = null;
+                moved = true;
+            }
+            if (toward) {
+                toward.elapsed += t;
+                const k = reducedMotion ? 1 : smoothstep(toward.elapsed / toward.seconds);
+                const { from, to } = toward;
+                setView({
+                    focus: mixFocus(from.focus, to.focus, k),
+                    near: from.near + (to.near - from.near) * k,
+                    tilt: from.tilt + (to.tilt - from.tilt) * k
+                });
+                if (k >= 1) {
+                    // Back out to the whole house: no floor framed any more.
+                    if (!(to.near > 0)) focus = null;
+                    toward = null;
+                }
                 moved = true;
             }
             if (arrival) {
@@ -359,7 +443,7 @@ export function createTurntable(config) {
         },
         pose(aspect) {
             const far = arrival ? 1 + (view.arrival.from - 1) * (1 - smoothstep(arrival.elapsed / arrival.seconds)) : 1;
-            return framePose(aspect, height, look, config, far);
+            return framePose(aspect, height, { tilt: look.tilt, focus, near }, config, far);
         }
     };
     return api;

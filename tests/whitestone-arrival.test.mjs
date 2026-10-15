@@ -22,6 +22,7 @@ import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { BRAND, GUIDE, HELP, PANEL, UI } from '../www/whitestone/js/copy.js';
+import { framePose } from '../www/whitestone/js/turntable.js';
 import { roomName } from '../www/whitestone/js/taxonomy.js';
 
 const WS = join(process.cwd(), 'www', 'whitestone');
@@ -59,12 +60,15 @@ describe('the markup', () => {
         // Maya's Back, beside Skip, ships hidden, in copy.js's word.
         expect(text(/id="host-back"[^>]*>([^<]+)</)).toBe(GUIDE.back);
         expect(HTML).toMatch(/<button id="host-back"[^>]*\shidden>/);
-        for (const key of ['again', 'reset', 'rooms', 'checklist', 'menu', 'prefs', 'home', 'mine', 'about']) {
+        // Help holds only About and Start over: the checklist is Maya's,
+        // one way to each thing (Steve, 2026-10-15).
+        expect([...HTML.matchAll(/<button id="help-([a-z]+)" class="help-item"/g)].map((m) => m[1])).toEqual(['about', 'reset']);
+        for (const key of ['about', 'reset']) {
             expect(text(new RegExp(`id="help-${key}"[^>]*>([^<]+)<`))).toBe(HELP[key]);
         }
         // The panel ships closed, its back button in copy.js's words. No
         // chips top left (Steve, 2026-10-14: lost against the studio): the
-        // quote and the visit are in Maya's bubble, the rooms in Help.
+        // quote and the visit are in Maya's bubble.
         expect(HTML).not.toMatch(/id="ws-back"/);
         expect(HTML).toMatch(/<aside id="ws-panel"[^>]*\shidden>/);
         expect(text(/id="panel-back"[^>]*>([^<]+)</)).toBe(PANEL.back(PANEL.wholeHouse));
@@ -73,14 +77,21 @@ describe('the markup', () => {
         // company, sized so the page does not jump as it loads, drawn as
         // plain paths with the house's header and nothing that runs or
         // reaches out.
-        expect(HTML).toMatch(/<div id="ws-brand" class="ui-float ws-brand">\s*<img src="assets\/logo-whitestone\.svg" alt="Whitestone Home Care" width="\d+" height="\d+">/);
         const logo = readFileSync(join(WS, 'assets', 'logo-whitestone.svg'), 'utf8');
         expect(logo.startsWith('<!-- © 2026 Continuum Commerce LLC. All rights reserved.')).toBe(true);
-        expect(logo).toMatch(/<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" role="img" aria-label="Whitestone Home Care" viewBox="0 0 1068 239"/);
+        const [, w, h] = logo.match(/<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" role="img" aria-label="Whitestone Home Care" viewBox="0 0 (\d+) (\d+)"/);
         expect(logo).not.toMatch(/<script|<text|<image|href=|url\(|font-family/i);
+        // Sized as the drawing is, so the page does not jump, and versioned,
+        // so a cached copy gives way when the drawing changes (QA,
+        // 2026-10-15: heavier strokes for a smooth roof at 46 px).
+        const img = `src="assets/logo-whitestone.svg?v=2" alt="Whitestone Home Care" width="${w}" height="${h}">`;
+        expect(HTML).toContain(`<div id="ws-brand" class="ui-float ws-brand">\n        <img ${img}`);
+        // Strokes of 13% of the 100 high capitals: 2.5 px at 46 px tall.
+        expect(logo).toMatch(/stroke-width="13\.00"/);
+        expect(logo).not.toMatch(/stroke-width="8\.50"/);
         // The loading screen shows the same wordmark in place of a typed
         // title, and the icon follows it: the gable over a W.
-        expect(HTML).toMatch(/<div class="loader-content">\s*<img class="loader-logo" src="assets\/logo-whitestone\.svg" alt="Whitestone Home Care" width="1068" height="239">/);
+        expect(HTML).toMatch(new RegExp(`<div class="loader-content">\\s*<img class="loader-logo" ${img.replace(/[.?]/g, '\\$&')}`));
         expect(HTML).not.toMatch(/class="loader-title"/);
         const icon = readFileSync(join(WS, 'favicon.svg'), 'utf8');
         expect(icon).toMatch(/THE GABLE\s+over a W|the gable\s+over a W/);
@@ -125,7 +136,7 @@ function serveSheet() {
 async function boot({ saved = null, sheet = false, quiet = false } = {}) {
     if (saved) localStorage.setItem(CONFIG.storage.key, JSON.stringify(saved));
     // What the markup ships hidden (the stub reads no markup).
-    for (const id of ['ws-host', 'ws-panel', 'ws-help-menu', 'help-checklist', 'help-prefs', 'help-home', 'help-rooms']) dom.el(id).hidden = true;
+    for (const id of ['ws-host', 'ws-panel', 'ws-help-menu']) dom.el(id).hidden = true;
     if (sheet) serveSheet();
     const main = await import('../www/whitestone/js/main.js');
     await flushAsync(20);
@@ -1151,14 +1162,14 @@ describe('Help and Undo', () => {
         expect(main.__test__.model().lifted).toBe('main');
     });
 
-    test("Show me again repeats the scene's hint, and after the guide a hint about the house", async () => {
-        await boot();
-        fire(dom.el('help-again'), 'click');
+    test("a tap on Maya repeats the scene's hint, and after the guide a hint about the house", async () => {
+        const main = await boot();
+        main.__test__.tapHost();
         expect(line()).toBe(GUIDE.helloAgain);
         press('start');
         pick('kind-house');
         fire(dom.el('host-skip'), 'click');
-        fire(dom.el('help-again'), 'click');
+        main.__test__.tapHost();
         expect(line()).toBe(GUIDE.hint);
         press('close');
         expect(line()).toBe(`${GUIDE.skipped} ${GUIDE.returningLegend}`);
@@ -1173,18 +1184,6 @@ describe('Help and Undo', () => {
         expect(dom.el('host-small').textContent).toBe(BRAND.honesty);
         press('close');
         expect(line()).toBe(GUIDE.floors);
-    });
-
-    test("the checklist's cards are in the menu once there is a checklist", async () => {
-        const main = await boot();
-        expect(dom.el('help-checklist').hidden).toBe(true);
-        press('start');
-        pick('kind-house');
-        for (const id of ['help-checklist', 'help-prefs', 'help-home']) expect(dom.el(id).hidden).toBe(false);
-        fire(dom.el('help-home'), 'click');
-        expect(openCards()).toEqual(['setup']);
-        expect(dom.el('ws-help-menu').hidden).toBe(true);
-        expect(main.__test__.active()).toBeTruthy();
     });
 
     test('Undo takes back a floor', async () => {
@@ -1273,7 +1272,7 @@ describe('tapping the house', () => {
         expect(main.__test__.model().lifted).toBeNull();
     });
 
-    test('two fingers pinch and are never a tap, and lifting one lets the other turn', async () => {
+    test('two fingers move nothing and are never a tap, and lifting one lets the other turn', async () => {
         const main = await boot();
         main.__test__.state.reducedMotion = true;
         main.__test__.showExample();
@@ -1281,15 +1280,62 @@ describe('tapping the house', () => {
         const canvas = dom.el('game-canvas');
         const tt = main.__test__.turntable();
         fire(canvas, 'pointerdown', { pointerId: 1, clientX: 100, clientY: 100 });
+        // (A touch ends the arrival, so the view is taken after it.)
+        const pose = JSON.stringify(tt.pose(16 / 10));
         fire(canvas, 'pointerdown', { pointerId: 2, clientX: 200, clientY: 100 });
         fire(canvas, 'pointermove', { pointerId: 2, clientX: 300, clientY: 100 });
-        expect(tt.zoom).toBeLessThan(1);
+        // No zoom (QA, 2026-10-15), and no turn from a pinch either.
+        expect(JSON.stringify(tt.pose(16 / 10))).toBe(pose);
         fire(canvas, 'pointerup', { pointerId: 2, clientX: 300, clientY: 100 });
         const yaw = tt.yaw;
         fire(canvas, 'pointermove', { pointerId: 1, clientX: 130, clientY: 100 });
         expect(tt.yaw).toBeGreaterThan(yaw);
         fire(canvas, 'pointerup', { pointerId: 1, clientX: 130, clientY: 100 });
         expect(main.__test__.model().lifted).toBe('main');
+    });
+});
+
+describe('the closer view of an open floor (QA, 2026-10-15)', () => {
+    test('opening a floor eases in close to it and lower, another floor moves to it, and closing eases back out', async () => {
+        const main = await boot();
+        main.__test__.showExample();
+        const tt = main.__test__.turntable();
+        const settle = () => { for (let i = 0; i < 120; i++) tt.step(1 / 60, { drift: false }); };
+        tt.touch();   // the arrival over
+        settle();
+        const whole = tt.pose(16 / 10).distance;
+        main.__test__.tapModel('main');
+        // Eased, not cut to.
+        expect(tt.near).toBe(0);
+        settle();
+        expect(tt.near).toBe(1);
+        expect(tt.tilt).toBe(CONFIG.view.tilt.open);
+        const main1 = tt.pose(16 / 10);
+        expect(main1.distance).toBeLessThan(whole);
+        // Framed on the model's own measure of the open floor.
+        const model = main.__test__.model();
+        expect(main1).toEqual(framePose(16 / 10, main.__test__.frameHeight(), { tilt: CONFIG.view.tilt.open, focus: model.focus(), near: 1 }, CONFIG));
+        main.__test__.liftLevel('second');
+        settle();
+        expect(tt.pose(16 / 10).aim[1]).toBeGreaterThan(main1.aim[1]);
+        main.__test__.liftLevel(null);
+        settle();
+        expect(tt.near).toBe(0);
+        expect(tt.tilt).toBe(CONFIG.view.tilt.start);
+        expect(tt.pose(16 / 10).distance).toBeCloseTo(whole, 9);
+    });
+
+    test('under reduced motion it is there at once, either way', async () => {
+        const main = await boot();
+        main.__test__.state.reducedMotion = true;
+        main.__test__.showExample();
+        const tt = main.__test__.turntable();
+        main.__test__.liftLevel('main');
+        expect(tt.near).toBe(1);
+        expect(tt.tilt).toBe(CONFIG.view.tilt.open);
+        main.__test__.liftLevel(null);
+        expect(tt.near).toBe(0);
+        expect(tt.tilt).toBe(CONFIG.view.tilt.start);
     });
 });
 

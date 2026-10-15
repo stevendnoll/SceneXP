@@ -19,7 +19,8 @@
  * the room's middle, `z` the piece's middle measured from the back wall
  * toward the front, `up` its foot above the floor. `shape` is 'round' for
  * a cylinder (a sink's basin, a stool, a lamp), 'blob' for leaves, else a
- * box. `rot` turns a round piece to face the room (a washer's door), and
+ * box. `rot` turns a round piece to face the room (a washer's door), or
+ * slopes a box about its middle (a stair's handrail), and
  * `wall` marks what hangs on the back wall (a mirror, a hood). Every
  * color is a key of CONFIG.model.palette, or `accent` and `accent2`, the
  * room's own colors.
@@ -445,10 +446,45 @@ function patio(P) {
     P.push({ role: 'umbrella', x: 0, z: 0.08, w: 0.11, d: 0.11, h: 0.006, up: 0.105, color: 'accent', shape: 'round' });
 }
 
-/** The stairs, oak treads rising toward the back wall. */
+/** The stairs' sizes: `steps` steps of `run` deep and `rise` high, `w`
+ *  wide, an oak tread `tread` thick with a `nose` over the riser below,
+ *  black stringers `side` thick standing `lip` proud of the treads, and a
+ *  handrail `rail` over each tread's nose. */
+export const STAIR = Object.freeze({ steps: 6, run: 0.02, rise: 0.011, w: 0.07, tread: 0.0025, nose: 0.0015, side: 0.003, lip: 0.004, rail: 0.03 });
+
+/**
+ * The stairs, climbing toward the back wall: white risers under oak
+ * treads, so every step is its own line, between black stringers that
+ * draw the flight's outline against the oak floor and the white wall, and
+ * a black handrail on balusters down the open side, like the porch's (QA,
+ * 2026-10-15: four oak blocks on an oak floor read as a lump).
+ */
 function stairs(P) {
-    [[0.02, 0.012], [0.05, 0.024], [0.075, 0.036], [0.1, 0.048]].forEach(([z, h]) => {
-        P.push({ role: 'stairs', x: 0, z: 0.12 - z, w: 0.07, d: 0.03, h, up: 0, color: 'oak' });
+    const S = STAIR;
+    const n = S.steps;
+    const railAt = (z) => S.rail + S.rise * n - ((z - S.run / 2) / S.run) * S.rise;
+    for (let i = 0; i < n; i++) {
+        const z = (n - 1 - i + 0.5) * S.run;      // step 0 at the front, the last at the wall
+        const top = (i + 1) * S.rise;
+        P.push({ role: 'stairs', x: 0, z, w: S.w, d: S.run, h: top - S.tread, up: 0, color: 'white' });
+        // Short of the riser behind it by a hair, so the two never share a face.
+        P.push({ role: 'tread', x: 0, z: z + S.nose / 2 + 0.0003, w: S.w, d: S.run + S.nose - 0.0006, h: S.tread, up: top - S.tread, color: 'oak' });
+        for (const sx of [-1, 1]) {
+            P.push({ role: 'stringer', x: sx * (S.w + S.side) / 2, z, w: S.side, d: S.run, h: top + S.lip, up: 0, color: 'frame' });
+        }
+        // A baluster from each tread up to the rail, on the open side.
+        P.push({ role: 'baluster', x: (S.w + S.side) / 2, z, w: 0.0018, d: 0.0018, h: railAt(z) - top - S.lip, up: top + S.lip, color: 'frame' });
+    }
+    // The rail, sloped from over the bottom step to over the top one.
+    const z0 = (n - 0.5) * S.run;
+    const z1 = 0.5 * S.run;
+    const y0 = railAt(z0);
+    const y1 = railAt(z1);
+    const length = Math.hypot(z0 - z1, y1 - y0);
+    const h = 0.0025;
+    P.push({
+        role: 'rail', x: (S.w + S.side) / 2, z: (z0 + z1) / 2, w: 0.003, d: length, h,
+        up: (y0 + y1) / 2 - h / 2, color: 'frame', rot: [Math.atan2(y1 - y0, z0 - z1), 0, 0]
     });
 }
 

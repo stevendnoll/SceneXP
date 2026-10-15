@@ -13,7 +13,7 @@ import { loadRealThree } from './helpers/real-three.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import {
     levelOffsets, centerOf, instancesFor, buildModel, fitScale, restack, wallHeight, EMPTY_HOME, HOUSE, ACCENTS, accentsFor,
-    openingsFor, WINDOW_OF, WINDOWS, columnsFor, siteFor, lawnRadius
+    openingsFor, WINDOW_OF, WINDOWS, columnsFor, siteFor, lawnRadius, focusOf
 } from '../www/whitestone/js/model.js';
 import { layoutHome, MODEL } from '../www/whitestone/js/layout.js';
 import { KIT_OF, kitFor } from '../www/whitestone/js/rooms.js';
@@ -792,22 +792,53 @@ describe('seen from the camera, the floor open and its front turned to the visit
             ...inst.canopies
         ].map(world);
         const misses = [];
-        const height = k * Math.max(...Object.values(instancesFor(layout, new Map(), { areas, site })).flat().map((b) => b.top));
-        const views = CONFIG.view.tilt;
+        // The frame as main.js fits it with the floor open (frameHeight,
+        // fitFrame): the floors above lifted away, and the closer view.
+        const height = k * Math.max(...Object.values(instancesFor(layout, new Map(), { areas, site })).flat().map((b) => b.top)) + LIFT.open * k;
+        const focus = focusOf(inst, level, k);
         for (const aspect of [16 / 10, 0.45]) {
-          // As a floor opens (turntable faceFront), and as low as it goes.
-          for (const tilt of [views.open, views.min]) {
-            const { eye } = framePose(aspect, height, { tilt, zoom: 1 }, CONFIG);
+          // As the floor opens (the whole house still framed), and once the
+          // closer view has eased in.
+          for (const near of [0, 1]) {
+            const tilt = CONFIG.view.tilt.open;
+            const { eye } = framePose(aspect, height, { tilt, focus, near }, CONFIG);
             for (const t of inst.tiles.filter((x) => x.level === level).map(world)) {
                 for (const [at, withPartitions] of pointsFor(t)) {
                     const blocked = solid(withPartitions).find((o) => crosses(eye, at, o));
-                    if (blocked) misses.push(`${level} ${t.roomId} at ${aspect.toFixed(2)}, tilt ${tilt}: ${blocked.level} ${blocked.role || ''}`);
+                    if (blocked) misses.push(`${level} ${t.roomId} at ${aspect.toFixed(2)}, near ${near}: ${blocked.level} ${blocked.role || ''}`);
                 }
             }
           }
         }
         return misses;
     }
+
+    test.each(['basement', 'main', 'second', 'third', 'attic', 'garage'])('the lifted %s, measured for the closer view, holds all of that floor and none of the floors above', (level) => {
+        const layout = layoutHome(FULL);
+        const k = fitScale(layout, T, CONFIG.model.scale);
+        const areas = new Map((FULL.rooms || []).map((r) => [r.id, r.area]));
+        const site = siteFor(layout, T, k);
+        const inst = instancesFor(layout, levelOffsets(layout.slabs, level, LIFT), { lifted: level, areas, site });
+        const f = focusOf(inst, level, k);
+        expect(f.top).toBeGreaterThan(f.bottom);
+        // Everything on it: its plate and walls, its furniture, its dots and flags.
+        const own = ['slabs', 'tiles', 'walls', 'fixtures', 'rounds', 'blooms', 'markers', 'flags'].flatMap((key) => inst[key].filter((p) => p.level === level));
+        expect(own.some((p) => p.itemId)).toBe(true);
+        for (const p of own) {
+            const [x, , z] = p.position.map((v) => v * k);
+            const [w, h, d] = p.scale.map((v) => v * k);
+            expect(Math.hypot(Math.abs(x) + w / 2, Math.abs(z) + d / 2)).toBeLessThanOrEqual(f.radius + 1e-9);
+            expect(p.top * k - h).toBeGreaterThanOrEqual(f.bottom - 1e-9);
+            expect(p.top * k).toBeLessThanOrEqual(f.top + 1e-9);
+        }
+        // What is lifted above it starts above it: the view is of this floor.
+        const above = [...inst.slabs, ...inst.walls].filter((p) => p.level !== level && p.level !== null && LIFT.open > 0
+            && levelOffsets(layout.slabs, level, LIFT).get(p.level) === LIFT.open);
+        for (const p of above) expect((p.position[1] - p.scale[1] / 2) * k).toBeGreaterThan(f.top);
+        // Inside the turntable, so a turn never takes it out of the ring.
+        expect(f.radius).toBeLessThanOrEqual(T.radius);
+        expect(focusOf(inst, 'no-such-level', k)).toBeNull();
+    });
 
     test.each(['basement', 'main', 'second', 'third', 'attic'])('every room of the lifted %s can be seen, on a wide screen and a phone', (level) => {
         const misses = seen(FULL, level, (t) => {

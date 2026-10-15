@@ -50,13 +50,16 @@ describe('the cove (pure)', () => {
         }
     });
 
-    test('its edges are never in frame, on any screen, at any tilt or zoom', () => {
+    test('its edges are never in frame, on any screen, in any view the page takes', () => {
         const half = cove.width / 2;
+        // The closest view there is: a floor so small the closer view stops
+        // at its limit.
+        const tiny = { bottom: 0, top: 0.02, radius: 0.05 };
         for (const aspect of [21 / 9, 16 / 10, 1, 0.45]) {
-            for (const tilt of [CONFIG.view.tilt.min, CONFIG.view.tilt.max]) {
-                // Closest, farthest, and the arrival's start (always at zoom 1).
-                for (const [zoom, far] of [[CONFIG.view.zoom.min, 1], [CONFIG.view.zoom.max, 1], [1, CONFIG.view.arrival.from]]) {
-                    const p = framePose(aspect, 1.6, { tilt, zoom }, CONFIG, far);
+            for (const tilt of [CONFIG.view.tilt.start, CONFIG.view.tilt.open]) {
+                // The whole house, the closest view, and the arrival's start.
+                for (const [near, far] of [[0, 1], [1, 1], [0, CONFIG.view.arrival.from]]) {
+                    const p = framePose(aspect, 1.6, { tilt, focus: tiny, near }, CONFIG, far);
                     // The camera stands on the floor's span, well inside its sides.
                     expect(p.eye[2]).toBeLessThan(cove.front - 2);
                     // What the widest corner of the frame can see at the wall
@@ -197,7 +200,7 @@ describe('built with the real three.js', () => {
         expect(at.y).toBeGreaterThan(T.height);
         // A ray from the camera to the house finds the model, through the
         // turned group.
-        const pose = framePose(16 / 10, model.height, { tilt: CONFIG.view.tilt.start, zoom: 1 }, CONFIG);
+        const pose = framePose(16 / 10, model.height, { tilt: CONFIG.view.tilt.start }, CONFIG);
         const ray = new REAL.Raycaster(new REAL.Vector3(...pose.eye), new REAL.Vector3(0, T.height + model.height / 2, 0).sub(new REAL.Vector3(...pose.eye)).normalize());
         const hit = firstPick(ray.intersectObjects([model.group], true));
         expect(hit && hit.key).toBe('model');

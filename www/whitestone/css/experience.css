@@ -2128,6 +2128,15 @@ textarea.ws-input {
  * buttons, no studio and no chrome, each room kept on one page where it fits.
  */
 @media print {
+    /* The shared sheet holds a 3D page to one screen (height 100%,
+       overflow hidden), which on paper is one page (QA, 2026-10-15): let
+       the checklist run on for as many pages as it needs. */
+    html,
+    body {
+        height: auto;
+        overflow: visible;
+    }
+
     body {
         background: #FFFFFF;
     }

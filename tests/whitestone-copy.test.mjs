@@ -74,3 +74,10 @@ test('nothing in the copy asks about health', () => {
         expect(text).not.toMatch(/allerg|asthma|medical|health|condition/i);
     }
 });
+
+test('no sentence sends the visitor to Help for the checklist: that is Maya\'s (Steve, 2026-10-15)', () => {
+    for (const { where, text } of COPY) {
+        if (where.startsWith('copy.HELP.')) continue;   // Help's own words
+        expect(`${where}: ${/\bHelp\b|Help menu|My checklists|Show me again/.test(text)}`).toBe(`${where}: false`);
+    }
+});

@@ -9,7 +9,7 @@
  * Plain numbers: rooms.js has no three.js. How it looks is the preview's
  * (scripts/whitestone-model-preview.mjs) and Steve's.
  */
-import { kitFor, kitExtent, KIT_OF, BATHS, SIDE } from '../www/whitestone/js/rooms.js';
+import { kitFor, kitExtent, KIT_OF, BATHS, SIDE, STAIR } from '../www/whitestone/js/rooms.js';
 import { TAXONOMY } from '../www/whitestone/js/taxonomy.js';
 import { CONFIG } from '../www/whitestone/js/config.js';
 
@@ -122,6 +122,83 @@ describe('a kitchen', () => {
         expect(roles(tiny)).toEqual(expect.arrayContaining(['counter', 'sink']));
         expect(roles(tiny)).not.toContain('range');
         expect(roles(tiny)).not.toContain('fridge');
+    });
+});
+
+describe('the stairs (QA, 2026-10-15: four oak blocks on an oak floor read as a lump)', () => {
+    const kit = kitFor('stairs', ...USUAL.stairs, { wall: 0.17 });
+    const of = (role) => kit.filter((p) => p.role === role);
+    const pal = CONFIG.model.palette;
+    /** WCAG's contrast between two hex colors. */
+    function contrast(a, b) {
+        const lum = (hex) => {
+            const [r, g, bl] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+                .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+            return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+        };
+        const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+        return (hi + 0.05) / (lo + 0.05);
+    }
+
+    test('a flight of steps climbing toward the back wall, each tread on its own riser', () => {
+        const steps = of('stairs').sort((a, b) => b.z - a.z);   // front to back
+        const treads = of('tread').sort((a, b) => b.z - a.z);
+        expect(steps).toHaveLength(STAIR.steps);
+        expect(treads).toHaveLength(STAIR.steps);
+        for (let i = 0; i < steps.length; i++) {
+            const top = steps[i].up + steps[i].h;
+            expect(treads[i].up).toBeCloseTo(top, 12);
+            expect(treads[i].up + treads[i].h).toBeCloseTo((i + 1) * STAIR.rise, 12);
+            if (i) expect(top).toBeGreaterThan(steps[i - 1].up + steps[i - 1].h);
+        }
+        // The top step meets the back wall.
+        expect(steps[steps.length - 1].z - steps[steps.length - 1].d / 2).toBeCloseTo(0, 12);
+    });
+
+    test('every step is its own line: oak treads on risers that are not the floor', () => {
+        for (const t of of('tread')) expect(t.color).toBe('oak');
+        for (const r of of('stairs')) expect(r.color).not.toBe('oak');
+        expect(contrast(pal[of('stairs')[0].color], pal.oak)).toBeGreaterThan(1.4);
+    });
+
+    test('black stringers and a black rail draw the flight against the oak floor and the white wall', () => {
+        const outline = [...of('stringer'), ...of('rail'), ...of('baluster')];
+        expect(of('stringer')).toHaveLength(STAIR.steps * 2);
+        for (const p of outline) {
+            expect(contrast(pal[p.color], pal.oak)).toBeGreaterThan(7);
+            expect(contrast(pal[p.color], pal.interior)).toBeGreaterThan(7);
+        }
+        // Each stringer stands a little proud of its tread, either side.
+        for (const st of of('stringer')) {
+            const tread = of('tread').find((t) => Math.abs(t.z - STAIR.nose / 2 - 0.0003 - st.z) < 1e-9);
+            expect(st.up + st.h).toBeCloseTo(tread.up + tread.h + STAIR.lip, 12);
+            expect(Math.abs(st.x)).toBeCloseTo((STAIR.w + STAIR.side) / 2, 12);
+        }
+    });
+
+    test('the handrail follows the pitch, and every baluster meets it', () => {
+        const [rail] = of('rail');
+        const pitch = Math.atan2(STAIR.rise, STAIR.run);
+        expect(rail.rot).toEqual([pitch, 0, 0]);
+        // The rail's line: its middle, sloping down toward the front (+z).
+        const mid = rail.up + rail.h / 2;
+        const at = (z) => mid - (z - rail.z) * Math.tan(pitch);
+        expect(of('baluster')).toHaveLength(STAIR.steps);
+        for (const b of of('baluster')) {
+            expect(b.x).toBeCloseTo(rail.x, 12);
+            expect(b.up + b.h).toBeCloseTo(at(b.z), 9);
+            // Rail height over its tread.
+            expect(at(b.z) - (b.up - STAIR.lip)).toBeCloseTo(STAIR.rail, 9);
+        }
+        // From over the bottom step to over the top one, no farther.
+        expect(rail.d * Math.cos(pitch)).toBeCloseTo((STAIR.steps - 1) * STAIR.run, 9);
+    });
+
+    test('a usual stairwell takes the whole flight at full size', () => {
+        const { half, deep } = kitExtent(kit);
+        const [w, d] = USUAL.stairs;
+        expect(half).toBeLessThanOrEqual(w / 2 - 0.004);
+        expect(deep).toBeLessThanOrEqual(d * BAND - 0.006);
     });
 });
 

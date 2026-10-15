@@ -1,17 +1,18 @@
 // © 2026 Continuum Commerce LLC. All rights reserved.
 /**
  * The camera on the house (www/whitestone/js/turntable.js): the frame holds
- * the turntable and the house on every screen shape and at every tilt and
- * zoom, a phone's frame sits above its bottom sheet, the house turns (the
- * camera never orbits), a released drag carries on and slows, the house
- * drifts only when left alone, the arrival eases in, and opening a floor
- * turns its open front to the visitor. Checked against the real three.js
+ * the turntable and the house on every screen shape at both of the page's
+ * tilts, a phone's frame sits above its bottom sheet, the house turns (the
+ * camera never orbits, tilts or zooms for the visitor), a released drag
+ * carries on and slows, the house drifts only when left alone, the arrival
+ * eases in, and opening a floor turns its open front to the visitor and
+ * eases to a closer view of it. Checked against the real three.js
  * where a projection says more than arithmetic.
  */
 import { loadRealThree } from './helpers/real-three.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import {
-    smoothstep, turnPoint, frameFor, subjectPoints, aimFor, fitDistance, framePose, createTurntable, frameHeight
+    smoothstep, turnPoint, frameFor, subjectPoints, focusPoints, aimFor, fitDistance, framePose, createTurntable, frameHeight
 } from '../www/whitestone/js/turntable.js';
 
 const V = CONFIG.view;
@@ -84,7 +85,7 @@ describe('the frame (pure)', () => {
 
     test('a pose looks at the subject from above and in front, its lens and shift the frame\'s', () => {
         for (const aspect of ASPECTS) {
-            const p = framePose(aspect, 0.9, { tilt: V.tilt.start, zoom: 1 }, CONFIG);
+            const p = framePose(aspect, 0.9, { tilt: V.tilt.start }, CONFIG);
             const f = frameFor(aspect, V);
             expect(p.fov).toBe(f.fov);
             expect(p.offset).toEqual(f.shift);
@@ -97,16 +98,43 @@ describe('the frame (pure)', () => {
         }
     });
 
-    test('zoom and tilt stay within their limits, however asked', () => {
-        const base = framePose(16 / 10, 0.9, { tilt: V.tilt.start, zoom: 1 }, CONFIG).distance;
-        expect(framePose(16 / 10, 0.9, { tilt: V.tilt.start, zoom: 99 }, CONFIG).distance).toBeCloseTo(base * V.zoom.max, 9);
-        expect(framePose(16 / 10, 0.9, { tilt: V.tilt.start, zoom: 0 }, CONFIG).distance).toBeCloseTo(base * V.zoom.min, 9);
-        const steep = framePose(16 / 10, 0.9, { tilt: 3, zoom: 1 }, CONFIG);
-        const d = steep.distance;
-        expect(Math.asin((steep.eye[1] - steep.aim[1]) / d)).toBeCloseTo(V.tilt.max, 9);
-        expect(V.tilt.min).toBeGreaterThan(0);
-        expect(V.tilt.open).toBeGreaterThanOrEqual(V.tilt.min);
-        expect(V.tilt.open).toBeLessThanOrEqual(V.tilt.start);
+    test("an open floor's closer view: nearer than the whole house, never past its limit, eased by `near`", () => {
+        expect(V.tilt.open).toBeGreaterThan(0);
+        expect(V.tilt.open).toBeLessThan(V.tilt.start);
+        expect(V.focus.closest).toBeGreaterThan(0);
+        expect(V.focus.closest).toBeLessThan(1);
+        const floor = { bottom: 0.3, top: 0.62, radius: 0.95 };
+        for (const aspect of ASPECTS) {
+            const look = { tilt: V.tilt.open };
+            const whole = framePose(aspect, 1.2, look, CONFIG);
+            // Nothing open, or not yet under way: the whole house.
+            expect(framePose(aspect, 1.2, { ...look, focus: floor, near: 0 }, CONFIG)).toEqual(whole);
+            expect(framePose(aspect, 1.2, { ...look, focus: null, near: 1 }, CONFIG)).toEqual(whole);
+            const close = framePose(aspect, 1.2, { ...look, focus: floor, near: 1 }, CONFIG);
+            expect(close.distance).toBeLessThan(whole.distance);
+            expect(close.distance).toBeGreaterThanOrEqual(whole.distance * V.focus.closest - 1e-9);
+            // On a laptop a full-size floor's own fit decides it (the house
+            // is at most 1.15 m from the middle to a corner), short of the
+            // limit.
+            if (aspect === 16 / 10) {
+                const big = framePose(aspect, 1.2, { ...look, focus: { ...floor, radius: 1.15 }, near: 1 }, CONFIG);
+                expect(big.distance).toBeGreaterThan(whole.distance * V.focus.closest + 1e-3);
+                expect(big.distance).toBeLessThan(whole.distance - 1e-3);
+            }
+            // Halfway over, halfway there, in both distance and aim.
+            const half = framePose(aspect, 1.2, { ...look, focus: floor, near: 0.5 }, CONFIG);
+            expect(half.distance).toBeCloseTo((whole.distance + close.distance) / 2, 9);
+            expect(half.aim[1]).toBeCloseTo((whole.aim[1] + close.aim[1]) / 2, 9);
+            // Still looking down at the page's tilt, through the frame's own lens.
+            expect(Math.asin((close.eye[1] - close.aim[1]) / close.distance)).toBeCloseTo(V.tilt.open, 9);
+            expect(close.offset).toEqual(whole.offset);
+            // A tiny floor stops at the limit, and one as wide as the whole
+            // never backs the camera away.
+            const tiny = framePose(aspect, 1.2, { ...look, focus: { bottom: 0.3, top: 0.32, radius: 0.05 }, near: 1 }, CONFIG);
+            expect(tiny.distance).toBeCloseTo(whole.distance * V.focus.closest, 9);
+            const huge = framePose(aspect, 1.2, { ...look, focus: { bottom: 0, top: 3, radius: 4 }, near: 1 }, CONFIG);
+            expect(huge.distance).toBeCloseTo(whole.distance, 9);
+        }
     });
 
     test('a point is turned as three turns it', () => {
@@ -143,8 +171,8 @@ describe('the frame with the real three.js', () => {
 
     test.each(ASPECTS)('at %f the turntable and the house fill their share of the screen and no more', (aspect) => {
         for (const height of HEIGHTS) {
-            for (const tilt of [V.tilt.min, V.tilt.start, V.tilt.max]) {
-                const pose = framePose(aspect, height, { tilt, zoom: 1 }, CONFIG);
+            for (const tilt of [V.tilt.open, V.tilt.start]) {
+                const pose = framePose(aspect, height, { tilt }, CONFIG);
                 const f = frameFor(aspect, V);
                 const pts = subjectPoints(T, frameHeight(height, f, CONFIG)).map((p) => onScreen(pose, aspect, p));
                 const xs = pts.map((p) => p[0]);
@@ -160,6 +188,31 @@ describe('the frame with the real three.js', () => {
                 // one edge: it fills its share one way or the other.
                 const fill = Math.max((Math.max(...xs) - Math.min(...xs)) / f.use[0], (Math.max(...ys) - Math.min(...ys)) / f.use[1]);
                 expect(fill).toBeGreaterThan(0.99);
+            }
+        }
+    });
+
+    test.each(ASPECTS)("at %f the closer view holds the open floor inside the house's share of the screen", (aspect) => {
+        const f = frameFor(aspect, V);
+        const whole = framePose(aspect, 1.3, { tilt: V.tilt.open }, CONFIG).distance;
+        for (const floor of [{ bottom: 0, top: 0.3, radius: 1.1 }, { bottom: 0.35, top: 0.65, radius: 0.8 }, { bottom: 0.7, top: 0.8, radius: 0.5 }]) {
+            const pose = framePose(aspect, 1.3, { tilt: V.tilt.open, focus: floor, near: 1 }, CONFIG);
+            const pts = focusPoints(T, floor).map((p) => onScreen(pose, aspect, p));
+            for (const p of pts) {
+                expect(p[2]).toBeLessThan(1);
+                for (const i of [0, 1]) {
+                    expect(p[i]).toBeGreaterThanOrEqual(0.5 - f.shift[i] - f.use[i] / 2 - 1e-6);
+                    expect(p[i]).toBeLessThanOrEqual(0.5 - f.shift[i] + f.use[i] / 2 + 1e-6);
+                }
+            }
+            // Short of its limits, the floor fills its share one way or the
+            // other: the view is about the floor, centered on it.
+            if (pose.distance > whole * V.focus.closest + 1e-6 && pose.distance < whole - 1e-6) {
+                const xs = pts.map((p) => p[0]);
+                const ys = pts.map((p) => p[1]);
+                const fill = Math.max((Math.max(...xs) - Math.min(...xs)) / f.use[0], (Math.max(...ys) - Math.min(...ys)) / f.use[1]);
+                expect(fill).toBeGreaterThan(0.99);
+                expect((Math.min(...ys) + Math.max(...ys)) / 2).toBeCloseTo(0.5 - f.shift[1], 3);
             }
         }
     });
@@ -192,32 +245,31 @@ describe('the controller', () => {
         const tt = createTurntable(CONFIG);
         expect(tt.yaw).toBe(V.yaw.start);
         expect(tt.tilt).toBe(V.tilt.start);
-        expect(tt.zoom).toBe(1);
-        expect(tt.pose(16 / 10)).toEqual(framePose(16 / 10, 0, { tilt: V.tilt.start, zoom: 1 }, CONFIG));
+        expect(tt.near).toBe(0);
+        expect(tt.pose(16 / 10)).toEqual(framePose(16 / 10, 0, { tilt: V.tilt.start }, CONFIG));
     });
 
-    test('a sideways drag turns the house, an upright one tilts the view, and a small screen turns as far', () => {
+    test('a drag turns the house and nothing else, and a small screen turns as far', () => {
         const tt = createTurntable(CONFIG);
-        tt.drag(100, 0, 800);
+        const pose = tt.pose(16 / 10);
+        tt.drag(100, 800);
         expect(tt.yaw).toBeCloseTo(V.yaw.start + 100 * V.turn.perPixel, 12);
+        // The camera stays where the page put it (QA, 2026-10-15).
         expect(tt.tilt).toBe(V.tilt.start);
-        tt.drag(0, 20, 800);
-        expect(tt.tilt).toBeCloseTo(V.tilt.start + 20 * V.turn.tiltPerPixel, 12);
-        tt.drag(0, 100000, 800);
-        expect(tt.tilt).toBe(V.tilt.max);
-        tt.drag(0, -100000, 800);
-        expect(tt.tilt).toBe(V.tilt.min);
+        expect(tt.pose(16 / 10)).toEqual(pose);
+        expect(tt.zoomBy).toBeUndefined();
+        expect(tt.tiltBy).toBeUndefined();
         // Half the screen, half the pixels: the same turn.
         const a = createTurntable(CONFIG);
         const b = createTurntable(CONFIG);
-        a.drag(200, 0, 800);
-        b.drag(100, 0, 400);
+        a.drag(200, 800);
+        b.drag(100, 400);
         expect(a.yaw).toBeCloseTo(b.yaw, 12);
     });
 
     test('a released drag carries on and slows to a stop, unless the finger rested first', () => {
         const tt = createTurntable(CONFIG);
-        tt.drag(30, 0, 800, 1 / 60);
+        tt.drag(30, 800, 1 / 60);
         // Held: nothing moves on its own.
         const held = tt.yaw;
         expect(tt.step(1 / 60)).toBe(false);
@@ -233,7 +285,7 @@ describe('the controller', () => {
         expect(stopped - held).toBeLessThan(30 * V.turn.perPixel * 60);
 
         const rest = createTurntable(CONFIG);
-        rest.drag(30, 0, 800, 1 / 60);
+        rest.drag(30, 800, 1 / 60);
         rest.release(V.turn.hold + 0.05);
         const at = rest.yaw;
         expect(rest.step(1 / 60)).toBe(false);
@@ -242,14 +294,14 @@ describe('the controller', () => {
 
     test('a fling is capped, and none carries on under reduced motion or behind a card', () => {
         const tt = createTurntable(CONFIG);
-        tt.drag(5000, 0, 800, 1 / 120);
+        tt.drag(5000, 800, 1 / 120);
         tt.release(0);
         const from = tt.yaw;
         tt.step(0.01);
         expect(tt.yaw - from).toBeLessThanOrEqual(V.turn.maxSpeed * 0.01 + 1e-12);
         for (const opts of [{ reducedMotion: true }, { locked: true }]) {
             const t2 = createTurntable(CONFIG);
-            t2.drag(30, 0, 800);
+            t2.drag(30, 800);
             t2.release(0);
             const y = t2.yaw;
             t2.step(1 / 60, opts);
@@ -286,16 +338,58 @@ describe('the controller', () => {
         expect(tt.drifting).toBe(false);
     });
 
-    test('the wheel, a pinch or a key zooms within the limits', () => {
+    test('a floor opened eases to its closer view, lower, and a floor closed eases back out', () => {
+        const floor = { bottom: 0.3, top: 0.62, radius: 0.95 };
         const tt = createTurntable(CONFIG);
-        expect(tt.zoomBy(-0.5)).toBeCloseTo(Math.pow(2, -0.5), 12);
-        expect(tt.zoomBy(-50)).toBe(V.zoom.min);
-        expect(tt.zoomBy(50)).toBe(V.zoom.max);
-        const near = createTurntable(CONFIG);
-        near.zoomBy(-0.5);
-        const far = createTurntable(CONFIG);
-        far.zoomBy(0.4);
-        expect(near.pose(16 / 10).distance).toBeLessThan(far.pose(16 / 10).distance);
+        tt.setHeight(1.2, true);
+        const whole = tt.pose(16 / 10);
+        tt.setFocus(floor);
+        // Eased: nothing yet, then part way, then there.
+        expect(tt.pose(16 / 10)).toEqual(whole);
+        expect(tt.step(V.focus.seconds / 2)).toBe(true);
+        expect(tt.near).toBeCloseTo(0.5, 9);
+        expect(tt.tilt).toBeCloseTo((V.tilt.start + V.tilt.open) / 2, 9);
+        steps(tt, V.focus.seconds, { drift: false });
+        expect(tt.near).toBe(1);
+        expect(tt.tilt).toBe(V.tilt.open);
+        const close = framePose(16 / 10, 1.2, { tilt: V.tilt.open, focus: floor, near: 1 }, CONFIG);
+        expect(tt.pose(16 / 10)).toEqual(close);
+        // Settled: nothing moves after, and the same floor asked for again
+        // (a refit of an unchanged house) starts no ease.
+        expect(tt.step(1 / 60, { drift: false })).toBe(false);
+        tt.setFocus({ ...floor });
+        expect(tt.step(1 / 60, { drift: false })).toBe(false);
+        // Another floor: from this one's view to that one's.
+        const upper = { bottom: 0.7, top: 0.98, radius: 0.9 };
+        tt.setFocus(upper);
+        tt.step(V.focus.seconds / 2);
+        expect(tt.near).toBe(1);
+        expect(tt.pose(16 / 10).aim[1]).toBeGreaterThan(close.aim[1]);
+        steps(tt, V.focus.seconds, { drift: false });
+        expect(tt.pose(16 / 10)).toEqual(framePose(16 / 10, 1.2, { tilt: V.tilt.open, focus: upper, near: 1 }, CONFIG));
+        // Closed: back out to the whole house at the start's tilt.
+        tt.setFocus(null);
+        tt.step(V.focus.seconds / 2);
+        expect(tt.near).toBeCloseTo(0.5, 9);
+        steps(tt, V.focus.seconds, { drift: false });
+        expect(tt.near).toBe(0);
+        expect(tt.tilt).toBe(V.tilt.start);
+        expect(tt.pose(16 / 10)).toEqual(whole);
+        // Closing with nothing open moves nothing.
+        tt.setFocus(null);
+        expect(tt.step(1 / 60, { drift: false })).toBe(false);
+        // At once when asked, either way, and under reduced motion.
+        const cut = createTurntable(CONFIG);
+        cut.setFocus(floor, 0);
+        expect(cut.near).toBe(1);
+        expect(cut.tilt).toBe(V.tilt.open);
+        cut.setFocus(null, 0);
+        expect(cut.near).toBe(0);
+        expect(cut.tilt).toBe(V.tilt.start);
+        const reduced = createTurntable(CONFIG);
+        reduced.setFocus(floor);
+        reduced.step(1 / 60, { reducedMotion: true });
+        expect(reduced.near).toBe(1);
     });
 
     test('the arrival starts farther out and eases in, and a touch ends it', () => {
@@ -356,14 +450,13 @@ describe('the controller', () => {
         expect(frameHeight(least + 0.4, V.wide, CONFIG)).toBeCloseTo(least + 0.4, 12);
         expect(frameHeight(0.3, V.tall, CONFIG)).toBe(0.3);
         expect(frameHeight(-1, V.tall, CONFIG)).toBe(0);
-        expect(framePose(16 / 10, 0.3, { tilt: V.tilt.start, zoom: 1 }, CONFIG).host).toBe(true);
-        expect(framePose(0.45, 0.3, { tilt: V.tilt.start, zoom: 1 }, CONFIG).host).toBe(false);
+        expect(framePose(16 / 10, 0.3, { tilt: V.tilt.start }, CONFIG).host).toBe(true);
+        expect(framePose(0.45, 0.3, { tilt: V.tilt.start }, CONFIG).host).toBe(false);
     });
 
     test('the first checklist saved: one slow full turn, ending where it began, and a drag takes over', () => {
         const tt = createTurntable(CONFIG);
         tt.turnBy(0.7);
-        tt.tiltBy(0.2);
         const [yaw, tilt] = [tt.yaw, tt.tilt];
         tt.spinOnce();
         tt.step(V.turn.celebrate / 2);
@@ -377,7 +470,7 @@ describe('the controller', () => {
         const busy = createTurntable(CONFIG);
         busy.spinOnce();
         busy.step(0.3);
-        busy.drag(10, 0, 800);
+        busy.drag(10, 800);
         busy.release(1);
         const y = busy.yaw;
         steps(busy, 3);
@@ -389,25 +482,21 @@ describe('the controller', () => {
         expect(none.yaw).toBe(V.yaw.start);
     });
 
-    test('opening a floor turns the front to the visitor the shorter way, and lowers a high view', () => {
+    test('opening a floor turns the front to the visitor the shorter way, the tilt left to setFocus', () => {
         const tt = createTurntable(CONFIG);
         tt.turnBy(Math.PI * 2 * 3 - 0.4);   // three turns round, less a little
-        tt.tiltBy(1);
         tt.faceFront(V.turn.face);
         steps(tt, V.turn.face + 0.1);
         expect(tt.yaw).toBeCloseTo(Math.PI * 2 * 3, 9);
-        expect(tt.tilt).toBeCloseTo(V.tilt.open, 9);
-        // A view already low enough stays.
-        const low = createTurntable(CONFIG);
-        low.tiltBy(-1);
-        low.faceFront(0);
-        expect(low.tilt).toBe(V.tilt.min);
-        expect(low.yaw).toBeCloseTo(0, 12);
+        expect(tt.tilt).toBe(V.tilt.start);
+        const now = createTurntable(CONFIG);
+        now.faceFront(0);
+        expect(now.yaw).toBeCloseTo(0, 12);
         // A drag on the way takes over.
         const busy = createTurntable(CONFIG);
         busy.faceFront(V.turn.face);
         busy.step(0.1);
-        busy.drag(50, 0, 800);
+        busy.drag(50, 800);
         const y = busy.yaw;
         busy.release(1);
         steps(busy, 1);
@@ -416,7 +505,7 @@ describe('the controller', () => {
 
     test('a turn from the keys stops any carry-on', () => {
         const tt = createTurntable(CONFIG);
-        tt.drag(30, 0, 800);
+        tt.drag(30, 800);
         tt.release(0);
         tt.turnBy(0.3);
         const y = tt.yaw;

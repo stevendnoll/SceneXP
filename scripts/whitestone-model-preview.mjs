@@ -22,7 +22,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { deflateSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { instancesFor, levelOffsets, fitScale, siteFor, bathsOf, assemblyPlan, EMPTY_HOME } from '../www/whitestone/js/model.js';
+import { instancesFor, levelOffsets, fitScale, siteFor, bathsOf, assemblyPlan, focusOf, EMPTY_HOME } from '../www/whitestone/js/model.js';
 import { framePose, turnPoint, smoothstep } from '../www/whitestone/js/turntable.js';
 import { contactAlpha } from '../www/whitestone/js/stage.js';
 import { loadRealThree } from '../tests/helpers/real-three.mjs';
@@ -264,9 +264,9 @@ function lit(poly, hex) {
  * the house (turned by `yaw`, at scale `k`) rasterized with a depth buffer
  * at twice the size, then shrunk.
  */
-function render(inst, { k, yaw, tilt, zoom = 1, houseHeight, width, height, gesture = null, camera = null }) {
+function render(inst, { k, yaw, tilt, near = 0, focus = null, houseHeight, width, height, gesture = null, camera = null }) {
     const aspect = width / height;
-    const pose = camera ? { ...camera, offset: [0, 0] } : framePose(aspect, houseHeight, { tilt, zoom }, CONFIG);
+    const pose = camera ? { ...camera, offset: [0, 0] } : framePose(aspect, houseHeight, { tilt, focus, near }, CONFIG);
     const W2 = width * 2;
     const H2 = height * 2;
     const eye = pose.eye;
@@ -417,7 +417,9 @@ function build(home, lifted = null, selection = null, assembleAt = null) {
     // The frame holds the floors lifted above an open one too (main.js
     // frameHeight).
     const houseHeight = k * Math.max(...Object.values(closed).flat().map((p) => p.top)) + (lifted ? CONFIG.model.lift.open * k : 0);
-    return { inst, k, houseHeight, home };
+    // An open floor's closer view (main.js fitFrame, model.js focus).
+    const focus = lifted ? focusOf(instancesFor(layout, levelOffsets(layout.slabs, lifted, CONFIG.model.lift), { lifted, areas, site, baths }), lifted, k) : null;
+    return { inst, k, houseHeight, home, focus };
 }
 
 const example = withExample(emptyDoc(CONFIG, NOW), CONFIG, NOW, null).doc.checklists[0];
@@ -435,10 +437,12 @@ const condoTwo = asKind({ kind: 'condo', attached: null }, ['main', 'second'], n
 const widest = { serviceType: 'cleaning', levels: ['basement', 'main', 'second', 'third', 'attic', 'garage', 'detached-garage'], rooms: [], items: [] };
 const V = CONFIG.view;
 const start = { yaw: V.yaw.start, tilt: V.tilt.start };
-const front = { yaw: 0, tilt: V.tilt.open };
+const front = { yaw: 0, tilt: V.tilt.open, near: 1 };
+/** A floor open but the view not yet closer: where the ease starts. */
+const frontWhole = { yaw: 0, tilt: V.tilt.open, near: 0 };
 const shot = (built, look, width, height) => ({ ...built, ...look, width, height });
 
-const close = { yaw: 0, tilt: 0.42, zoom: 0.6 };
+const close = front;
 
 /** Every kind of room, and both kinds of bath, for the close-ups. */
 const showcase = {
@@ -447,7 +451,7 @@ const showcase = {
         ['kitchen', 'main'], ['living', 'main'], ['dining', 'main'], ['office', 'main'], ['laundry', 'main'], ['powder-room', 'main'],
         ['primary-bedroom', 'second'], ['primary-bathroom', 'second'], ['bathroom', 'second'], ['bedroom', 'second'], ['nursery', 'second'], ['bathroom', 'second'],
         ['family', 'basement'], ['gym', 'basement'], ['playroom', 'basement'], ['bonus', 'basement'], ['mudroom', 'basement'], ['closet', 'basement'],
-        ['garage', 'garage']
+        ['garage', 'garage'], ['stairs', 'main']
     ].map(([area, level], i) => ({ id: `s${i}`, area, level, label: '', deletedAt: null }))
 };
 // The second floor's baths: a full primary bath, a shower bath, and a full bath.
@@ -494,7 +498,13 @@ const kindViews = [
 const views = [
     ['The example home on arrival, a laptop (1280 by 800)', shot(build(example), start, 1280, 800)],
     ['On arrival, a phone upright (390 by 844), the bottom 45% kept for the sheet', shot(build(example), start, 390, 844)],
-    ['Its main floor open, turned to face the visitor', shot(build(example, 'main'), front, 1280, 800)],
+    ['Its main floor open, the whole house still framed (the closer view eases in from here)', shot(build(example, 'main'), frontWhole, 1280, 800)],
+    ['Its main floor open, the closer view', shot(build(example, 'main'), front, 1280, 800)],
+    ['Its second floor open, the closer view', shot(build(example, 'second'), front, 1280, 800)],
+    ['Its basement open, the closer view', shot(build(example, 'basement'), front, 1280, 800)],
+    ['Its main floor open, the closer view, a narrower laptop (1024 by 768)', shot(build(example, 'main'), front, 1024, 768)],
+    ['Its main floor open, the closer view, a phone upright', shot(build(example, 'main'), front, 390, 844)],
+    ['Every level, the attic open, the closer view', shot(build(widest, 'attic'), front, 1280, 800)],
     ['An empty house, as a first visit will meet it', shot(build(EMPTY_HOME), start, 1280, 800)],
     ['The widest home there can be, with a garage', shot(build(withGarage), start, 1280, 800)],
     ['Every level, the tallest', shot(build(widest), start, 1280, 800)],
@@ -518,6 +528,9 @@ const views = [
     roomShot('basement', 's13', 'Gym'),
     roomShot('basement', 's14', 'Playroom'),
     roomShot('garage', 's18', 'Garage', 1.1),
+    roomShot('main', 's19', 'Stairs'),
+    ['Stairs, its floor open in the closer view, turned three-quarters', shot(build(showcase, 'main'), { ...front, yaw: -0.6 }, 1280, 800)],
+    ['Stairs, its floor open in the closer view, turned the other way', shot(build(showcase, 'main'), { ...front, yaw: 0.6 }, 1280, 800)],
     ['The main floor open, the kitchen selected and a task in it, the living room hovered', shot(build(example, 'main', {
         roomId: example.rooms.find((r) => r.area === 'kitchen').id,
         itemId: example.items.find((i) => i.roomId === example.rooms.find((r) => r.area === 'kitchen').id).id,
@@ -531,8 +544,13 @@ const views = [
 // assemble.html.
 const onlyKinds = process.argv.includes('--kinds');
 const onlyAssemble = process.argv.includes('--assemble');
-const list = onlyAssemble ? assembleViews : onlyKinds ? kindViews : [...views, ...kindViews, ...assembleViews];
-const prefix = onlyAssemble ? 'assemble' : onlyKinds ? 'kind' : 'model';
+// `--match <words>` renders only the views whose titles hold those words.
+const matchAt = process.argv.indexOf('--match');
+const match = matchAt > 0 ? String(process.argv[matchAt + 1] || '').toLowerCase() : '';
+const all = onlyAssemble ? assembleViews : onlyKinds ? kindViews : [...views, ...kindViews, ...assembleViews];
+const list = match ? all.filter(([title]) => title.toLowerCase().includes(match)) : all;
+// A matched few go to match-*.png and match.html, leaving the full set be.
+const prefix = match ? 'match' : onlyAssemble ? 'assemble' : onlyKinds ? 'kind' : 'model';
 await mkdir(path.dirname(OUT), { recursive: true });
 const shots = [];
 for (const [i, [title, opts]] of list.entries()) {
@@ -545,5 +563,6 @@ const page = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>
 <h1>The house on its turntable, through the page's camera</h1>
 ${shots.map(([title, file]) => `<section><h2>${title}</h2><img src="${file}" alt="${title}"></section>`).join('\n')}
 </body></html>`;
-await writeFile(onlyAssemble ? path.join(path.dirname(OUT), 'assemble.html') : onlyKinds ? path.join(path.dirname(OUT), 'kinds.html') : OUT, page);
-console.log(`Wrote ${path.relative(ROOT, OUT)} and ${shots.length} pictures.`);
+const pageName = match ? 'match.html' : onlyAssemble ? 'assemble.html' : onlyKinds ? 'kinds.html' : path.basename(OUT);
+await writeFile(path.join(path.dirname(OUT), pageName), page);
+console.log(`Wrote specs/whitestone/previews/${pageName} and ${shots.length} pictures.`);

@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=24" as="style">
+    <link rel="preload" href="css/experience.min.css?v=25" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -157,7 +157,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=24">
+    <link rel="stylesheet" href="css/experience.min.css?v=25">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -196,7 +196,7 @@
 
     <div id="loading-screen">
         <div class="loader-content">
-            <img class="loader-logo" src="assets/logo-whitestone.svg" alt="Whitestone Home Care" width="1068" height="239">
+            <img class="loader-logo" src="assets/logo-whitestone.svg?v=2" alt="Whitestone Home Care" width="1130" height="247">
             <p class="loader-tagline">Bright homes, kept with care.</p>
             <div class="loader-bar" aria-hidden="true">
                 <div class="loader-progress" id="load-progress"></div>
@@ -273,28 +273,20 @@
          chips were). Not a control: a tap passes through to the studio. Off
          on a phone, where the house needs the top of the screen. -->
     <div id="ws-brand" class="ui-float ws-brand">
-        <img src="assets/logo-whitestone.svg" alt="Whitestone Home Care" width="1068" height="239">
+        <img src="assets/logo-whitestone.svg?v=2" alt="Whitestone Home Care" width="1130" height="247">
     </div>
 
     <!-- HELP, top right (ONBOARDING section 3). Help opens a short menu:
-         Maya again, the guide from the start, and the checklist's own
-         cards, so nothing depends on tapping the house (PRD 8.1). Items
-         that need an open checklist stay hidden until there is one. Undo
-         is the toast's, beside what it takes back, and Ctrl or Command and
-         Z (Steve, 2026-10-14: a floating Undo confused once a visit was
-         booked, since it never takes back a booking). -->
+         what Whitestone is, and Start over. Building and managing the
+         checklist is Maya's alone, one way to each thing (Steve,
+         2026-10-15). Undo is the toast's, beside what it takes back, and
+         Ctrl or Command and Z (Steve, 2026-10-14: a floating Undo confused
+         once a visit was booked, since it never takes back a booking). -->
     <div id="ws-tools" class="ui-float ws-tools" role="group" aria-label="Help">
-        <button id="ws-help" class="tool-btn tool-help" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="ws-help-menu" aria-label="Help and your checklist">?</button>
-        <div id="ws-help-menu" class="help-menu" role="group" aria-label="Help and your checklist" hidden>
-            <button id="help-again" class="help-item" type="button">Show me again</button>
-            <button id="help-reset" class="help-item" type="button">Start over</button>
-            <button id="help-rooms" class="help-item" type="button" hidden>Rooms and tasks</button>
-            <button id="help-checklist" class="help-item" type="button" hidden>Your checklist</button>
-            <button id="help-menu" class="help-item" type="button">Service menu</button>
-            <button id="help-prefs" class="help-item" type="button" hidden>Care preferences</button>
-            <button id="help-home" class="help-item" type="button" hidden>Your home</button>
-            <button id="help-mine" class="help-item" type="button">My checklists</button>
+        <button id="ws-help" class="tool-btn tool-help" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="ws-help-menu" aria-label="Help">?</button>
+        <div id="ws-help-menu" class="help-menu" role="group" aria-label="Help" hidden>
             <button id="help-about" class="help-item" type="button">About Whitestone</button>
+            <button id="help-reset" class="help-item" type="button">Start over</button>
         </div>
     </div>
 

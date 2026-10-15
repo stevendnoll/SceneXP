@@ -490,7 +490,7 @@ export const GUIDE = Object.freeze({
     keepGoing: 'Keep going',
     illLook: "I'll look around",
 
-    hint: 'Tap a floor of the house to open it, and tap a blue dot to see a task. Your checklist is in the Help menu at the top.',
+    hint: 'Tap a floor of the house to open it, and tap a blue dot to see a task. I’m right here whenever you’d like a hand.',
     about: 'Whitestone Home Care builds your cleaning checklist room by room. Every task shows its price and its time as you add it, and your quote keeps up.',
     close: 'Close'
 });
@@ -548,8 +548,7 @@ export const PANEL = Object.freeze({
 /** The Help menu, top right (main.js). */
 export const HELP = Object.freeze({
     button: 'Help',
-    label: 'Help and your checklist',
-    again: 'Show me again',
+    label: 'Help',
     /** Start over: everything cleared, after the confirmation card. */
     reset: 'Start over',
     resetTitle: 'Start over from the beginning?',
@@ -560,12 +559,6 @@ export const HELP = Object.freeze({
     resetDetailPublished: 'This unpublishes what you published, so its links and PINs stop working and any booked visit is canceled. Then it clears your checklists, photos and answers from this browser, and Maya will greet you as on your first visit. It cannot be undone.',
     resetLocked: (hours) => `You have a visit less than ${hours} hours away, so Start over has to wait until after it.`,
     resetDone: 'Everything is cleared. You are back at the beginning.',
-    rooms: 'Rooms and tasks',
-    checklist: 'Your checklist',
-    menu: 'Service menu',
-    prefs: 'Care preferences',
-    home: 'Your home',
-    mine: 'My checklists',
     about: 'About Whitestone'
 });
 

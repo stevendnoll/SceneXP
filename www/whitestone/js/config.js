@@ -185,15 +185,17 @@ export const CONFIG = deepFreeze({
      *  part above the bottom sheet.
      *
      *  THE LOOK: the house's turn (`yaw`, from a three-quarter view of its
-     *  front), the camera's `tilt` above level, and the `zoom` as a share of
-     *  the framed distance. A drag of a pixel turns by `turn.perPixel` and
-     *  tilts by `turn.tiltPerPixel` (on an 800 pixel tall screen), a released
+     *  front) is the visitor's, and the camera's `tilt` above level is the
+     *  page's (QA, 2026-10-15: no free tilt or zoom). A drag of a pixel
+     *  turns by `turn.perPixel` (on an 800 pixel tall screen), a released
      *  turn slows at `turn.damping` per second (none if the finger rested
      *  `turn.hold` seconds before lifting), and after `idle.after`
      *  seconds untouched the house drifts round at `idle.speed` (never while
      *  a floor is open). Opening a floor turns the house's open front to the
-     *  camera over `turn.face` seconds, the view lowered to `tilt.open` so
-     *  the floors above do not hide its rooms. The arrival
+     *  camera over `turn.face` seconds and eases over `focus.seconds` to a
+     *  closer view of that floor, never nearer than `focus.closest` of the
+     *  whole house's distance, lowered to `tilt.open` so the floors above
+     *  do not hide its rooms. Closing it eases back to `tilt.start`. The arrival
      *  starts `arrival.from` times farther out. A frame refits over
      *  `subject.ease` seconds when the house grows or shrinks. A press that
      *  moves less than `tap.slop` pixels and lifts within `tap.ms` is a tap. */
@@ -202,9 +204,9 @@ export const CONFIG = deepFreeze({
         wide: { fov: 30, use: [0.48, 0.8], shift: [0.17, 0], host: true },
         tall: { fov: 34, use: [0.9, 0.48], shift: [0, 0.23], host: false },
         yaw: { start: -0.55 },
-        tilt: { start: 0.42, min: 0.16, max: 0.72, open: 0.3 },
-        zoom: { min: 0.6, max: 1.4, wheel: 0.0012, key: 0.25 },
-        turn: { perPixel: 0.007, tiltPerPixel: 0.0035, damping: 4.5, stop: 0.03, maxSpeed: 4, key: 0.3, hold: 0.12, face: 0.9, celebrate: 2.6 },
+        tilt: { start: 0.42, open: 0.3 },
+        focus: { closest: 0.7, seconds: 0.9 },
+        turn: { perPixel: 0.007, damping: 4.5, stop: 0.03, maxSpeed: 4, key: 0.3, hold: 0.12, face: 0.9, celebrate: 2.6 },
         idle: { after: 20, speed: 0.07 },
         arrival: { seconds: 2.5, from: 1.7 },
         subject: { ease: 0.8 },

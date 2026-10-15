@@ -26,6 +26,9 @@ const SHEET = JSON.parse(readFileSync(join(WS, 'data', 'prices', `${index.cleani
 const NOW = new Date('2026-10-12T16:00:00Z');
 const example = () => withExample(emptyDoc(CONFIG, NOW), CONFIG, NOW, null).doc.checklists[0];
 
+/** The whole house in the panel: every floor, room and task. */
+const wholeHouse = (main) => main.__test__.selectTo({ scope: 'house', level: null, roomId: null, itemId: null }, { focus: true });
+
 describe('what a tap selects (pure)', () => {
     test('inside the open floor: a dot its task, anything else in a room its room; elsewhere the floor', () => {
         expect(selectFromHit({ level: 'main', roomId: 'r', itemId: 'i' }, 'main')).toEqual({ scope: 'task', level: 'main', roomId: 'r', itemId: 'i' });
@@ -310,10 +313,9 @@ describe('the panel on the page', () => {
         expect(dom.el('task').hidden).toBe(false);
     });
 
-    test('Help\'s Rooms and tasks opens the whole house, and the keyboard moves through its floors and into one', async () => {
+    test('the whole house in the panel: the keyboard moves through its floors and into one', async () => {
         const main = await bootHome();
-        expect(dom.el('help-rooms').hidden).toBe(false);
-        fire(dom.el('help-rooms'), 'click');
+        wholeHouse(main);
         expect(shown()).toBe(true);
         expect(title()).toBe(checklist(main).title);
         expect(rows().map((r) => r.children[0].textContent)).toEqual(['Main floor', 'Second floor']);
@@ -328,11 +330,13 @@ describe('the panel on the page', () => {
         fire(rows()[1], 'click');
         expect(title()).toBe('Second floor');
         expect(main.__test__.model().lifted).toBe('second');
-        // Back from the whole house closes it, and focus goes to Help, where
-        // Rooms and tasks brings it back.
+        // Back from the whole house closes it, and focus goes to Maya's
+        // next step, or to Help when she has none.
         fire(dom.el('panel-back'), 'click');
         expect(shown()).toBe(false);
-        expect(dom.el('ws-help').focused).toBe(true);
+        const host = main.__test__.host();
+        if (host.shown) expect(dom.documentStub.activeElement).toBe(host.focusPrimary());
+        else expect(dom.el('ws-help').focused).toBe(true);
     });
 
     test('Escape steps back through the selection, one step a press', async () => {
@@ -568,7 +572,7 @@ describe('choosing a time and publishing, on the page', () => {
         const main = await bootHome();
         main.__test__.tapModel('main');
         fire(chip('kitchen'), 'click');
-        fire(dom.el('help-rooms'), 'click');
+        wholeHouse(main);
         return main;
     }
 
@@ -621,7 +625,7 @@ describe('choosing a time and publishing, on the page', () => {
         expect(main.__test__.active().published.id).toBe(c.published.id);
         // The whole house now offers the visit, and opens the receipt again.
         fire(dom.el('receipt-done'), 'click');
-        fire(dom.el('help-rooms'), 'click');
+        wholeHouse(main);
         expect(action('visit').textContent).toBe(PANEL.visit);
         expect(action('book')).toBeUndefined();
         fire(action('visit'), 'click');
@@ -648,7 +652,7 @@ describe('choosing a time and publishing, on the page', () => {
     test('the example offers no time to choose, and says why when asked', async () => {
         const main = await bootHome();
         main.__test__.showExample();
-        fire(dom.el('help-rooms'), 'click');
+        wholeHouse(main);
         expect(action('book')).toBeUndefined();
         await main.__test__.openBooking();
         expect(dom.el('booking').hidden).toBe(true);
@@ -688,7 +692,7 @@ describe('changing things after publishing, on the page', () => {
         main.__test__.toggleStar(stove.id);
         expect(factNote('visit')).toBe(UI.visitChipUnsent);
         expect(fact('visit').getAttribute('aria-label')).toMatch(/Changes not sent\.$/);
-        fire(dom.el('help-rooms'), 'click');
+        wholeHouse(main);
         expect(action('send').textContent).toBe(PANEL.send);
         fire(action('send'), 'click');
         // A star does not change the price, so nothing is asked.
@@ -772,7 +776,7 @@ describe('changing things after publishing, on the page', () => {
         expect(dom.el('receipt-calendar').hidden).toBe(true);
         expect(factValue('visit')).toBe(GUIDE.factNoVisit);
         fire(dom.el('receipt-done'), 'click');
-        fire(dom.el('help-rooms'), 'click');
+        wholeHouse(main);
         expect(action('book').textContent).toBe(PANEL.book);
         expect(action('visit').textContent).toBe(PANEL.link);
     });
