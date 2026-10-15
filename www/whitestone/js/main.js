@@ -744,12 +744,13 @@ function placeLabels() {
  */
 function tapModel(level = null, itemId = null, roomId = null) {
     if (!state.loaded) return false;
-    const c = active();
-    if (!c) {
-        // While Maya greets, a tap on the plain house is Let's start.
-        if (!(ui.guide && ui.guide.scene === 'hello' && guideTo({ type: 'start' }))) startOwn();
-        return true;
+    // Before the first room, the house is Maya's to explain: a tap on it
+    // opens nothing over her, and her next step pulses instead.
+    if (!houseAnswers()) {
+        if (host) host.nudge();
+        return false;
     }
+    const c = active();
     // A blue dot: its task (ONBOARDING Scene 4), wherever its floor is.
     const item = itemId ? c.items.find((i) => i.id === itemId && !i.deletedAt) : null;
     if (item) {
@@ -858,8 +859,19 @@ function handleSceneTap(clientX, clientY) {
         tapHost();
         return hit.key;
     }
-    tapModel(hit.level, hit.itemId, hit.roomId);
-    return hit.key;
+    return tapModel(hit.level, hit.itemId, hit.roomId) ? hit.key : null;
+}
+
+/**
+ * Whether a tap on the house opens its floors, rooms and tasks: once the
+ * home on the turntable has a room (QA, 2026-10-15). Before that the kind
+ * of home and its floors come first, from Maya, and a panel opened over
+ * her bubble only interrupted her (a room could even be added before the
+ * floors were chosen).
+ */
+function houseAnswers() {
+    const c = active();
+    return Boolean(c && liveRooms(c).length);
 }
 
 // ---- The look: turning the house -----------------------------------------------------
@@ -951,17 +963,20 @@ function setupLook(signal) {
     }, { passive: false, signal });
 }
 
-/** A mouse over the house (or Maya) points, over the lawn or the stone it
- *  offers to turn the turntable, and over the studio around it is the
- *  plain arrow, since nothing there turns. A room it is over is outlined.
- *  Asked no more than twenty times a second, unless `now`. */
+/** A mouse over Maya, or over the house once a tap on it opens something
+ *  (houseAnswers), points. Over the rest of the turntable (the house before
+ *  its first room, the lawn, the stone) it offers to turn it, and over the
+ *  studio around it is the plain arrow, since nothing there turns. A room
+ *  it is over is outlined. Asked no more than twenty times a second,
+ *  unless `now`. */
 function hover(event, now = false) {
     if (event.pointerType !== 'mouse' || !state.loaded || anyOpen() || !canvas.style) return;
     const t = performance.now();
     if (!now && t - lastHover < 50) return;
     lastHover = t;
-    const hit = pickAt(event.clientX, event.clientY);
-    canvas.style.cursor = hit ? 'pointer' : grabAt(event.clientX, event.clientY) ? 'grab' : '';
+    const found = pickAt(event.clientX, event.clientY);
+    const hit = found && (found.key !== 'model' || houseAnswers()) ? found : null;
+    canvas.style.cursor = hit ? 'pointer' : grabAt(event.clientX, event.clientY) ? 'grab' : 'default';
     // The room under the pointer, inside the open floor, faintly outlined.
     const room = hit && hit.key === 'model' && hit.roomId && hit.level === model.lifted ? hit.roomId : null;
     if (model && model.hover(room)) requestRender();

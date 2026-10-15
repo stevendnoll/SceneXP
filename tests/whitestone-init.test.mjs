@@ -234,6 +234,23 @@ describe('the turntable', () => {
         expect(main.getState().pose.offset).toEqual(CONFIG.view.tall.shift);
     });
 
+    test('the cursor offers a turn only where a drag turns something (QA, 2026-10-15)', async () => {
+        const main = await boot();
+        // The plain arrow until a mouse says otherwise, never a grab hand.
+        const css = readFileSync(join(process.cwd(), 'www', 'whitestone', 'css', 'experience.css'), 'utf8');
+        const rule = css.match(/#game-canvas \{[^}]*\}/)[0];
+        expect(rule).toMatch(/cursor: default;/);
+        expect(rule).not.toMatch(/grab/);
+        // Over the studio (the stub's rays meet nothing): the arrow, said
+        // outright so the sheet's rule cannot bring a hand back.
+        const canvas = dom.el('game-canvas');
+        canvas.style.cursor = 'grab';
+        jest.advanceTimersByTime(100);
+        fire(canvas, 'pointermove', { pointerId: 9, pointerType: 'mouse', clientX: 20, clientY: 20 });
+        expect(canvas.style.cursor).toBe('default');
+        expect(main.__test__.state.loaded).toBe(true);
+    });
+
     test('the look is held while a card is open', async () => {
         const main = await boot();
         expect(main.__test__.lookLocked()).toBe(false);

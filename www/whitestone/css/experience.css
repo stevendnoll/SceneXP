@@ -1134,14 +1134,16 @@ textarea.ws-input {
 
 /* ---- Turning the house (M2) ------------------------------------------------------
  *
- * The canvas reads every pointer itself (main.js setupLook): a drag turns
- * the house and a pinch zooms, so the browser must neither scroll nor zoom
- * the page under a finger. A grab cursor over the stage, a pointer over the
- * house (main.js hover).
+ * The canvas reads every pointer itself (main.js setupLook): a drag on the
+ * turntable turns the house, so the browser must neither scroll nor zoom
+ * the page under a finger. The plain arrow until main.js hover says
+ * otherwise: a pointer over what a tap opens, a grab hand over what a drag
+ * turns (QA, 2026-10-15: the hand showed over the studio, which turns
+ * nothing).
  */
 #game-canvas {
     touch-action: none;
-    cursor: grab;
+    cursor: default;
 }
 
 /* ---- The rooms of a lifted level (M2) -------------------------------------------

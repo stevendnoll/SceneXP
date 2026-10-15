@@ -290,6 +290,23 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             if (btn && typeof btn.focus === 'function') btn.focus();
             return btn || null;
         },
+        /** Her next step pulses now, once (a tap on the house before it
+         *  answers taps): the main button, else her first button, else her
+         *  first choice, as focusPrimary finds them, without moving focus.
+         *  Returns the button, or null. */
+        nudge() {
+            if (!view || covered) return null;
+            const all = actions ? Array.from(actions.children || []) : [];
+            const picks = choices && !choices.hidden && choices.children && choices.children[0] ? Array.from(choices.children[0].children || []) : [];
+            const btn = all.find((b) => b.classList && b.classList.contains('ws-btn-primary')) || all[0] || picks.find((b) => b.classList && b.classList.contains('host-pick'));
+            if (!btn || !btn.classList) return null;
+            btn.classList.remove('is-nudge');
+            // Read a layout value so the animation starts again on a repeat tap.
+            void btn.offsetWidth;
+            btn.classList.add('is-nudge');
+            timers.push(setTimeout(() => btn.classList.remove('is-nudge'), 1600));
+            return btn;
+        },
         /** The visitor did something: the wait for a nudge starts again. */
         poke() {
             if (view) schedule();

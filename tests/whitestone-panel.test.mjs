@@ -213,10 +213,19 @@ async function bootHome() {
     main.__test__.onHostButton('kind-house');
     main.__test__.onFloor('second', true);
     main.__test__.onHostButton('skip');
+    // The house answers a tap once the home has a room (QA, 2026-10-15): a
+    // bedroom upstairs, out of the way of the main floor these tests use.
+    main.__test__.addRoomOf('bedroom', 'second');
     return main;
 }
 
 const shown = () => !dom.el('ws-panel').hidden;
+/** The kitchen's live tasks, in the order they will be done. */
+const kitchenItems = (main) => {
+    const c = checklist(main);
+    const kitchen = c.rooms.find((r) => r.area === 'kitchen' && !r.deletedAt);
+    return c.items.filter((i) => !i.deletedAt && i.roomId === kitchen.id).sort((a, b) => a.order - b.order);
+};
 const title = () => dom.el('panel-title').textContent;
 const rows = () => dom.el('panel-list').children.map((li) => li.children[0]);
 const stars = () => dom.el('panel-list').children.map((li) => li.children[1]);
@@ -236,8 +245,9 @@ describe('the panel on the page', () => {
         expect(dom.el('panel-empty').textContent).toBe(PANEL.noRooms);
         fire(chip('kitchen'), 'click');
         const c = checklist(main);
-        expect(c.rooms).toHaveLength(1);
-        expect(c.items.filter((i) => !i.deletedAt)).toHaveLength(9);
+        // Beside the bedroom upstairs (bootHome).
+        expect(c.rooms.filter((r) => r.level === 'main')).toHaveLength(1);
+        expect(kitchenItems(main)).toHaveLength(9);
         expect(main.__test__.ui.selected.scope).toBe('room');
         expect(title()).toBe('Kitchen');
         expect(rows()).toHaveLength(9);
@@ -254,7 +264,7 @@ describe('the panel on the page', () => {
         const star = stars()[0];
         expect(star.getAttribute('aria-pressed')).toBe('false');
         fire(star, 'click');
-        const first = checklist(main).items.filter((i) => !i.deletedAt).sort((a, b) => a.order - b.order)[0];
+        const first = kitchenItems(main)[0];
         expect(first.important).toBe(true);
         expect(said()).toBe(PANEL.starred('Stovetop'));
         expect(stars()[0].getAttribute('aria-pressed')).toBe('true');
@@ -273,7 +283,7 @@ describe('the panel on the page', () => {
         fire(chip('kitchen'), 'click');
         const names = () => rows().map((r) => r.children[0].textContent);
         const before = names();
-        const first = checklist(main).items.filter((i) => !i.deletedAt).sort((a, b) => a.order - b.order)[0];
+        const first = kitchenItems(main)[0];
         main.__test__.moveTask(first.id, 1);
         expect(names()).toEqual([before[1], before[0], ...before.slice(2)]);
     });
@@ -417,15 +427,18 @@ describe('the panel on the page', () => {
         expect(el.style.maxHeight).toBe('');
     });
 
-    test('before the sheet, a chip waits and says so', async () => {
+    test("before the sheet, Maya's kitchen chip waits and says so", async () => {
         for (const id of ['ws-host', 'ws-panel']) dom.el(id).hidden = true;
         const main = await import('../www/whitestone/js/main.js');
         await flushAsync(20);
         await jest.advanceTimersByTimeAsync(CONFIG.loadingReveal + CONFIG.guide.delay * 1000 + 200);
         main.__test__.onHostButton('start');
         main.__test__.onHostButton('kind-house');
-        main.__test__.tapModel('main');
-        fire(chip('kitchen'), 'click');
+        main.__test__.onHostButton('next');
+        // The house opens nothing yet (no room): the first room is Maya's.
+        expect(main.__test__.tapModel('main')).toBe(false);
+        expect(shown()).toBe(false);
+        fire((dom.el('host-choices').children[0] || { children: [] }).children.find((b) => b.id === 'host-chip-kitchen'), 'click');
         expect(main.__test__.active().rooms).toHaveLength(0);
         expect(said()).toBe(UI.sheetLoading);
         expect(roomName('cleaning', { area: 'kitchen', label: '' })).toBe('Kitchen');
@@ -932,7 +945,7 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         expect(await until(() => !dom.el('booking').hidden)).toBe(true);
         fire(dom.el('booking-close'), 'click');
         await flushAsync(5);
-        expect(line()).toMatch(new RegExp(`^${GUIDE.afterNoTime} Our home has 1 room and 9 tasks, \\$\\d+ so far\\. ${esc(GUIDE.whatNext)}$`));
+        expect(line()).toMatch(new RegExp(`^${GUIDE.afterNoTime} Our home has 2 rooms and 12 tasks, \\$\\d+ so far\\. ${esc(GUIDE.whatNext)}$`));
         expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.editRooms, GUIDE.reviewChecklist, GUIDE.illLook]);
         expect(fact('visit') ? fact('visit').classList.contains('has-halo') : false).toBe(false);
     });
@@ -969,7 +982,7 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         expect(tucked()).toBe(true);
         fire(dom.el('checklist-close'), 'click');
         await flushAsync(5);
-        expect(line()).toMatch(new RegExp(`^Our home has 1 room and 9 tasks, \\$\\d+ so far\\. ${esc(GUIDE.whatNext)}$`));
+        expect(line()).toMatch(new RegExp(`^Our home has 2 rooms and 12 tasks, \\$\\d+ so far\\. ${esc(GUIDE.whatNext)}$`));
         expect(document.activeElement.id).toBe('host-chooseTime');
     });
 
@@ -1072,8 +1085,12 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         main.__test__.onHostButton('save');
         expect(line()).toBe(GUIDE.savedUnsent);
         expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-sendChanges', 'host-lookAround']);
-        // Sent from All set, she comes back to say so.
+        // Sent from All set, she comes back to say so. (The living room
+        // takes the quote past the visit minimum, so the new price is asked
+        // about first.)
         main.__test__.onHostButton('sendChanges');
+        expect(await until(() => !dom.el('confirm').hidden)).toBe(true);
+        fire(confirmButton(), 'click');
         expect(await until(() => main.__test__.ui.guide.outcome === 'sent')).toBe(true);
     });
 });

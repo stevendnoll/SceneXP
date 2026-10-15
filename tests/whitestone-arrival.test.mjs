@@ -177,6 +177,12 @@ const press = (id) => {
 };
 /** One of a few answers in the bubble (the kind of home). */
 const picks = () => (dom.el('host-choices').children[0] || { children: [] }).children;
+/** Whether Maya's button or answer of this id is pulsing (host.nudge). */
+const nudged = (id) => {
+    const b = [...dom.el('host-actions').children, ...picks()].find((x) => x.id === `host-${id}`);
+    if (!b) throw new Error(`no ${id} in ${buttons().join(', ')}`);
+    return b.classList.contains('is-nudge');
+};
 const pick = (id) => {
     const b = picks().find((x) => x.id === `host-${id}`);
     if (!b) throw new Error(`no ${id} in ${picks().map((x) => x.textContent).join(', ')}`);
@@ -558,8 +564,8 @@ describe('a first visit', () => {
         expect(dom.el('host-expand').hidden).toBe(false);
     });
 
-    test('Skip leaves the guide, saved, Maya staying with the ways on, and the house fully usable', async () => {
-        const main = await boot();
+    test('Skip leaves the guide, saved, Maya staying with the ways on, and the house answers once a room is added through her', async () => {
+        const main = await boot({ sheet: true });
         press('start');
         pick('kind-house');
         fire(dom.el('host-skip'), 'click');
@@ -569,6 +575,16 @@ describe('a first visit', () => {
         expect(dom.el('host-skip').hidden).toBe(true);
         expect(dom.el('host-back').hidden).toBe(true);
         expect(saved().settings.guide).toEqual({ scene: 'done', reviewed: false });
+        // No room yet: a tap on the house opens nothing over her, and her
+        // first way on pulses instead (QA, 2026-10-15).
+        expect(main.__test__.tapModel('main')).toBe(false);
+        expect(main.__test__.model().lifted).toBeNull();
+        expect(nudged('editRooms')).toBe(true);
+        jest.advanceTimersByTime(1700);
+        expect(nudged('editRooms')).toBe(false);
+        // A room added through her, and the house is fully usable.
+        pick('editRooms');
+        fire(roomChip('kitchen'), 'click');
         expect(main.__test__.tapModel('main')).toBe(true);
         expect(main.__test__.model().lifted).toBe('main');
     });
@@ -1230,17 +1246,29 @@ describe('tapping the house', () => {
         expect(openCards()).toEqual([]);
     });
 
-    test('the plain house tapped while Maya greets is Let\'s start, and after the guide opens the setup card', async () => {
-        const main = await boot();
-        main.__test__.tapModel();
-        expect(openCards()).toEqual([]);
-        expect(main.__test__.active().title).toBe(GUIDE.defaultTitle);
-        expect(line()).toBe(GUIDE.home);
-        fire(dom.el('host-skip'), 'click');
-        ctrlZ();
+    test('before the first room the house opens nothing, and Maya\'s next step pulses instead (QA, 2026-10-15)', async () => {
+        const main = await boot({ sheet: true });
+        // While she greets: nothing starts, nothing opens, Let's start pulses.
+        expect(main.__test__.tapModel()).toBe(false);
+        expect(main.__test__.tapModel('main')).toBe(false);
         expect(main.__test__.active()).toBeNull();
-        main.__test__.tapModel();
-        expect(openCards()).toEqual(['setup']);
+        expect(openCards()).toEqual([]);
+        expect(line()).toBe(GUIDE.hello);
+        expect(nudged('start')).toBe(true);
+        // The kind of home, then the floors: still hers, the panel closed.
+        press('start');
+        expect(main.__test__.tapModel('main')).toBe(false);
+        expect(line()).toBe(GUIDE.home);
+        pick('kind-house');
+        expect(main.__test__.tapModel('main')).toBe(false);
+        expect(main.__test__.model().lifted).toBeNull();
+        expect(panelShown()).toBe(false);
+        expect(line()).toBe(GUIDE.floors);
+        // The first room, from her chip: now a tap opens the house.
+        press('next');
+        fire(roomChip('kitchen'), 'click');
+        expect(main.__test__.tapModel('main')).toBe(true);
+        expect(main.__test__.model().lifted).toBe('main');
     });
 
     test('nothing answers before the house is ready', async () => {
