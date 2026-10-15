@@ -19,7 +19,6 @@ import { visitMinutes, calendarView, firstOpen } from '../www/whitestone/js/book
 import { publish, republish, cancelVisit, unpublish, quoteToSend, publishedForm } from '../www/whitestone/js/sync.js';
 import { receiptView } from '../www/whitestone/js/receipt.js';
 import { panelView } from '../www/whitestone/js/panel.js';
-import { checklistStatus } from '../www/whitestone/js/panels.js';
 import { createApi } from '../www/whitestone/js/api.js';
 import { createStandin } from '../www/whitestone/js/standin.js';
 import { createMemoryBackend, createPhotoStore } from '../www/whitestone/js/photos.js';
@@ -30,8 +29,7 @@ import {
 } from '../www/whitestone/js/store.js';
 import { checkChoice, presetFor } from '../www/whitestone/js/sheet.js';
 import { quoteChecklist } from '../www/whitestone/js/pricing.js';
-import { withExample } from '../www/whitestone/js/samples.js';
-import { BOOKING_ERRORS, CHANGES, DAY_STATUS, PANEL, RECEIPT, UI, allCopy } from '../www/whitestone/js/copy.js';
+import { BOOKING_ERRORS, CHANGES, DAY_STATUS, PANEL, RECEIPT, allCopy } from '../www/whitestone/js/copy.js';
 
 const WS = join(process.cwd(), 'www', 'whitestone');
 const SCHEDULE = JSON.parse(readFileSync(join(WS, 'data', 'schedule.json'), 'utf8'));
@@ -376,24 +374,18 @@ describe('what the page says (receipt.js, booking.js, panel.js, panels.js, copy.
         expect(calendarView('2026-10', days).weeks.flat().find((c) => c && c.date === '2026-10-20').open).toBe(true);
     });
 
-    test('the whole house leads with what to do next, and My checklists says where each stands', async () => {
+    test('the whole house leads with what to do next', async () => {
         const w = await booked();
         const house = (c) => panelView({ scope: 'house' }, c, SHEET).actions.map((a) => `${a.id}${a.primary ? '*' : ''}`);
         expect(house(w.c())).toEqual(['visit*', 'checklist', 'home']);
-        expect(checklistStatus(w.c())).toBe(UI.booked('Friday, October 16'));
         noteOnStove(w, 'x');
         expect(house(w.c())).toEqual(['send*', 'visit', 'checklist', 'home']);
-        expect(checklistStatus(w.c())).toBe(UI.withUnsent(UI.booked('Friday, October 16')));
         await republish(w.args());
         await cancelVisit(w.args());
         expect(house(w.c())).toEqual(['book*', 'visit', 'checklist', 'home']);
         expect(panelView({ scope: 'house' }, w.c(), SHEET).actions.find((a) => a.id === 'visit').label).toBe(PANEL.link);
-        expect(checklistStatus(w.c())).toBe(UI.published);
         await unpublish(w.args());
         expect(house(w.c())).toEqual(['book*', 'checklist', 'home']);
-        expect(checklistStatus(w.c())).toBe(UI.draft);
-        const example = withExample(emptyDoc(CONFIG, new Date(START)), CONFIG, new Date(START), null).doc.checklists[0];
-        expect(checklistStatus(example)).toBe(UI.example);
     });
 
     test('every new line is in the house sweep, and every refusal has words', () => {

@@ -157,11 +157,7 @@ export const CHANGES = Object.freeze({
     unpublishDetail: 'The link and PIN stop working now, and the copy kept for your cleaner is deleted. Your checklist stays here as a draft.',
     unpublishDetailBooked: (when) => `The link and PIN stop working now, the copy kept for your cleaner is deleted, and your visit on ${when} is canceled. Your checklist stays here as a draft.`,
     unpublishConfirm: 'Unpublish',
-    unpublished: (title) => `${title} is unpublished. It is a draft on this device again.`,
-    /** Removing a published checklist from My checklists unpublishes it. */
-    removePublished: 'It goes from this browser, and is unpublished first, so the link and PIN stop working.',
-    removeBooked: (when) => `It goes from this browser, and is unpublished first, so the link and PIN stop working and your visit on ${when} is canceled.`,
-    removeLocked: (hours) => `This checklist has a visit less than ${hours} hours away, so it cannot be removed until after the visit.`
+    unpublished: (title) => `${title} is unpublished. It is a draft on this device again.`
 });
 
 /** schedule.js `monthView` statuses, as the calendar labels a day. */
@@ -215,35 +211,19 @@ export const UI = Object.freeze({
     homeSaved: 'Your home details are saved.',
     preferencesSaved: 'Your care preferences are saved.',
     preferencesNone: 'No care preferences. That is fine.',
-    opened: (title) => `Opened ${title}.`,
-    duplicated: (title) => `Made ${title}.`,
-    removedChecklist: (title) => `Removed ${title}.`,
     undone: (label) => `Undone. ${label}`,
     nothingToUndo: 'There is nothing to undo.',
     levelsNeeded: 'Please tick at least one level.',
     sheetFailed: 'The service menu could not be loaded. Please check your connection and reload the page.',
-    noChecklists: 'No checklists yet. Start your own and it is kept here, in this browser.',
-    draft: 'Draft',
-    example: 'Example home',
     rooms: (n) => `${n} ${n === 1 ? 'room' : 'rooms'}`,
     tasks: (n) => `${n} ${n === 1 ? 'task' : 'tasks'}`,
-    open: 'Open',
-    current: 'Open now',
-    duplicate: 'Duplicate',
     remove: 'Remove',
-    removeTitle: (title) => `Remove ${title}?`,
-    removeDetail: 'It goes from this browser. You can bring it back with Undo until you leave the page.',
-    published: 'Published',
-    booked: (day) => `Visit booked for ${day}`,
-    withUnsent: (status) => `${status}, changes not sent`,
     notSaving: 'Not saving',
     otherTab: 'Your checklists were updated in another tab.',
     labels: Object.freeze({
         started: 'Started a checklist',
         home: 'Changed your home details',
         preferences: 'Changed care preferences',
-        duplicated: 'Duplicated a checklist',
-        removed: 'Removed a checklist',
         roomAdded: 'Added a room',
         roomChanged: 'Changed a room',
         bathChanged: 'Changed a type of bath',
@@ -251,10 +231,8 @@ export const UI = Object.freeze({
         taskAdded: 'Added a task',
         taskChanged: 'Changed a task',
         taskRemoved: 'Removed a task',
-        moved: 'Moved a task',
-        clearedExample: 'Cleared the example'
+        moved: 'Moved a task'
     }),
-    exampleCleared: 'The example home is cleared. Your own checklists are untouched.',
     editLinkFailed: 'That edit link did not open a checklist. It may have expired, or been unpublished.',
 
     // Rooms
@@ -331,17 +309,6 @@ export const UI = Object.freeze({
     taxExtra: 'Prices are before any sales tax.',
     cannotPrice: (n) => `${n} ${n === 1 ? 'task is' : 'tasks are'} not on the current service menu, so ${n === 1 ? 'it is' : 'they are'} not in the quote. Please edit or remove ${n === 1 ? 'it' : 'them'}.`,
     sheetVersion: (version) => `Priced on service menu ${version}.`,
-
-    // The service menu
-    menuEach: (money) => `${money} each time`,
-    menuCount: (money) => `${money} each`,
-    menuRoom: (small, medium, large) => `${small} small room, ${medium} medium, ${large} large`,
-    menuMinutes: (minutes) => `about ${minutes} minutes`,
-    menuOption: (name, money) => `${name} adds ${money}`,
-    menuAddTo: (room) => `Add to ${room}`,
-    // No article, so the sentence reads right for every kind of room (an entry, a kitchen).
-    menuNoRoom: (kind) => `Your checklist has no ${String(kind).toLowerCase()} yet. Add one to order these.`,
-    menuNoChecklist: 'Start your own checklist to order from the menu.',
 
     // Reordering, filtering, printing
     moveUp: 'Move up',
@@ -584,7 +551,35 @@ export const GUARDS = Object.freeze({
 /** The cleaner's page. */
 export const TASKS_PAGE = Object.freeze({
     incomplete: 'Please enter all 6 digits of the PIN.',
-    preview: 'Thank you. Shared checklists open here once Whitestone Home Care is live. This page is a preview.'
+    pageTitle: 'Whitestone Home Care',
+    untitled: 'Your checklist',
+    // Opening (M4): the PIN, and what can go wrong.
+    opening: 'Opening the checklist.',
+    denied: 'That PIN did not open the checklist. Please check it and try again.',
+    deniedMany: 'That PIN still did not open it. After several tries the checklist rests for a while, so please check the PIN with your customer.',
+    again: 'Please enter the PIN again to open the checklist.',
+    badLink: 'This link is missing part of its address. Please ask your customer to send it again.',
+    gone: 'This checklist is no longer shared. Please ask your customer for a new link.',
+    offline: 'The checklist could not be reached. Please check your connection and try again.',
+    trouble: 'Something went wrong opening the checklist. Please try again in a moment.',
+    unreadable: 'This link does not open this checklist. Please ask your customer to send it again.',
+    noSheet: 'The prices could not be loaded, so times and the quote are not shown. Every task is listed.',
+    quoteChanged: 'These figures are worked out again from the price sheet, and they differ from the quote your customer was given.',
+    // The checklist (view.js).
+    prefsHeading: 'Care preferences',
+    quoteLine: (money, time) => `Quote ${money}, ${time}`,
+    visitLine: (day, time) => `Visit ${day} at ${time}`,
+    household: 'About the home:',
+    startHere: 'Start here',
+    inRoom: (room) => `in the ${String(room).toLowerCase()}`,
+    emptyRoom: 'No tasks in this room.',
+    starred: 'starred',
+    notes: 'Notes:',
+    avoid: 'Avoid:',
+    products: 'Products:',
+    takes: (time) => `Takes ${time}`,
+    photoOf: (n, task) => `Photo ${n} of ${task}`,
+    close: 'Close'
 });
 
 /** The calendar file for a booked visit (ics.js). */

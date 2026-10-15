@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=29" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=30" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7109,7 +7109,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=2" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=29" rel="stylesheet"]
+    link [href="css/experience.min.css?v=30" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7195,22 +7195,6 @@ html [data-ui-theme="surf" lang="en"]
       span#toast-text
       button#toast-undo.ws-btn.ws-btn-small [hidden type="button"]
         "Undo"
-    div#my-checklists.card-overlay [hidden]
-      div#my-checklists-panel.card-panel.list-panel [aria-describedby="my-checklists-about" aria-labelledby="my-checklists-title" aria-modal="true" role="dialog" tabindex="-1"]
-        div.card-head
-          h2#my-checklists-title.card-title
-            "My checklists"
-          button#my-checklists-close.ws-btn.ws-btn-small [type="button"]
-            "Close"
-        p#my-checklists-about.card-meta
-          "Kept in this browser. Nothing is sent anywhere unless you choose to share a checklist."
-        p#storage-note.storage-note
-        ul#my-list.my-list
-        div.card-actions
-          button#my-clear-example.ws-btn [hidden type="button"]
-            "Clear the example"
-          button#my-new.ws-btn.ws-btn-primary [type="button"]
-            "Start a new checklist"
     div#setup.card-overlay [hidden]
       div#setup-panel.card-panel.form-panel [aria-describedby="setup-about" aria-labelledby="setup-title-text" aria-modal="true" role="dialog" tabindex="-1"]
         h2#setup-title-text.card-title
@@ -7267,21 +7251,6 @@ html [data-ui-theme="surf" lang="en"]
               "Not now"
             button#prefs-save.ws-btn.ws-btn-primary [type="submit"]
               "Save preferences"
-    div#menu.card-overlay.checklist-overlay [hidden]
-      div#menu-panel.card-panel.checklist-panel [aria-describedby="menu-about" aria-labelledby="menu-title" aria-modal="true" role="dialog" tabindex="-1"]
-        div.card-head
-          h2#menu-title.card-title
-            "Service menu"
-          button#menu-close.ws-btn.ws-btn-small [type="button"]
-            "Close"
-        p#menu-about.card-meta
-          "Every task has a set price and a time estimate. Options add a set amount. These are example prices."
-        div.form-row.menu-pick
-          label [for="menu-area"]
-            "Show tasks for"
-          select#menu-area.ws-select
-        p#menu-note.card-meta
-        ul#menu-list.menu-list
     div#quote.card-overlay [hidden]
       div#quote-panel.card-panel.list-panel [aria-labelledby="quote-title" aria-modal="true" role="dialog" tabindex="-1"]
         div.card-head
@@ -7417,6 +7386,7 @@ html [data-ui-theme="surf" lang="en"]
           button#checklist-close.ws-btn.ws-btn-small [type="button"]
             "Close"
         p#checklist-summary.card-meta
+        p#storage-note.storage-note
         div.checklist-actions
           button#checklist-add-room.ws-btn.ws-btn-primary.ws-btn-small [type="button"]
             "Add a room"
@@ -7537,7 +7507,7 @@ html [lang="en"]
   head
     meta [charset="UTF-8"]
     meta [content="width=device-width, initial-scale=1.0" name="viewport"]
-    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="no-referrer" name="referrer"]
     meta [content="noindex, nofollow" name="robots"]
     meta [content="Open the cleaning checklist your customer shared with you, room by room, with every task and note in one place." name="description"]
@@ -7563,8 +7533,8 @@ html [lang="en"]
     title
       "Your checklist | Whitestone Home Care"
     link [href="../favicon.svg?v=2" rel="icon" type="image/svg+xml"]
-    link [href="css/tasks.min.css?v=1" rel="stylesheet"]
-    script [src="js/main.min.js?v=1" type="module"]
+    link [href="css/tasks.min.css?v=2" rel="stylesheet"]
+    script [src="js/main.min.js?v=2" type="module"]
   body
     header.tasks-header
       svg.tasks-mark [aria-hidden="true" viewbox="0 0 32 32"]
@@ -7573,17 +7543,19 @@ html [lang="en"]
       span.tasks-brand
         "Whitestone Home Care"
     main.tasks-main
-      h1
-        "Your cleaning checklist"
-      p.tasks-lead
-        "A customer shared a checklist with you. Enter the 6 digit PIN that came with the link to open it."
-      form#pin-form.pin-form [hidden novalidate]
-        label [for="pin-input"]
-          "PIN"
-        input#pin-input [aria-describedby="pin-status" autocomplete="one-time-code" inputmode="numeric" maxlength="6" name="pin" pattern="[0-9]{6}" required type="text"]
-        button#pin-open [type="submit"]
-          "Open the checklist"
+      section#tasks-gate.tasks-gate
+        h1
+          "Your cleaning checklist"
+        p.tasks-lead
+          "A customer shared a checklist with you. Enter the 6 digit PIN that came with the link to open it."
+        form#pin-form.pin-form [hidden novalidate]
+          label [for="pin-input"]
+            "PIN"
+          input#pin-input [aria-describedby="pin-status" autocomplete="one-time-code" inputmode="numeric" maxlength="6" name="pin" pattern="[0-9]{6}" required type="text"]
+          button#pin-open [type="submit"]
+            "Open the checklist"
         p#pin-status.pin-status [aria-live="polite" role="status"]
+      div#tasks-view.tasks-view [hidden]
       noscript
         p.tasks-noscript
           "This page needs JavaScript to open a checklist. The checklist is locked in the link your customer shared, and it is only unlocked here, in your own browser, once you enter the PIN. Please allow JavaScript for this page and reload it."

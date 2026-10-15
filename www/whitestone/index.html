@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=29" as="style">
+    <link rel="preload" href="css/experience.min.css?v=30" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -157,7 +157,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=29">
+    <link rel="stylesheet" href="css/experience.min.css?v=30">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -288,27 +288,6 @@
 
     <!-- ==== THE CARDS, IN STACKING ORDER (cards.js CARD_ORDER) ==== -->
 
-    <!-- MY CHECKLISTS: every checklist in this browser. -->
-    <div id="my-checklists" class="card-overlay" hidden>
-        <div id="my-checklists-panel" class="card-panel list-panel" role="dialog" aria-modal="true"
-            aria-labelledby="my-checklists-title" aria-describedby="my-checklists-about" tabindex="-1">
-            <div class="card-head">
-                <h2 id="my-checklists-title" class="card-title">My checklists</h2>
-                <button id="my-checklists-close" class="ws-btn ws-btn-small" type="button">Close</button>
-            </div>
-            <p id="my-checklists-about" class="card-meta">Kept in this browser. Nothing is sent anywhere
-                unless you choose to share a checklist.</p>
-            <!-- Filled in only when the browser will not let the page save,
-                 or is running out of room. Empty and silent otherwise. -->
-            <p id="storage-note" class="storage-note"></p>
-            <ul id="my-list" class="my-list"></ul>
-            <div class="card-actions">
-                <button id="my-clear-example" class="ws-btn" type="button" hidden>Clear the example</button>
-                <button id="my-new" class="ws-btn ws-btn-primary" type="button">Start a new checklist</button>
-            </div>
-        </div>
-    </div>
-
     <!-- SETUP: a new home, or an edit of this one (forms.js). -->
     <div id="setup" class="card-overlay" hidden>
         <div id="setup-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
@@ -375,26 +354,6 @@
                     <button id="prefs-save" class="ws-btn ws-btn-primary" type="submit">Save preferences</button>
                 </div>
             </form>
-        </div>
-    </div>
-
-    <!-- THE SERVICE MENU: every task by kind of room, with its price, its
-         time and its options. Where "transparent pricing" can be seen. -->
-    <div id="menu" class="card-overlay checklist-overlay" hidden>
-        <div id="menu-panel" class="card-panel checklist-panel" role="dialog" aria-modal="true"
-            aria-labelledby="menu-title" aria-describedby="menu-about" tabindex="-1">
-            <div class="card-head">
-                <h2 id="menu-title" class="card-title">Service menu</h2>
-                <button id="menu-close" class="ws-btn ws-btn-small" type="button">Close</button>
-            </div>
-            <p id="menu-about" class="card-meta">Every task has a set price and a time estimate. Options
-                add a set amount. These are example prices.</p>
-            <div class="form-row menu-pick">
-                <label for="menu-area">Show tasks for</label>
-                <select id="menu-area" class="ws-select"></select>
-            </div>
-            <p id="menu-note" class="card-meta"></p>
-            <ul id="menu-list" class="menu-list"></ul>
         </div>
     </div>
 
@@ -534,6 +493,9 @@
                 <button id="checklist-close" class="ws-btn ws-btn-small" type="button">Close</button>
             </div>
             <p id="checklist-summary" class="card-meta"></p>
+            <!-- Filled in only when the browser will not let the page save,
+                 or is running out of room. Empty and silent otherwise. -->
+            <p id="storage-note" class="storage-note"></p>
             <div class="checklist-actions">
                 <button id="checklist-add-room" class="ws-btn ws-btn-primary ws-btn-small" type="button">Add a room</button>
                 <button id="checklist-print" class="ws-btn ws-btn-small" type="button">Print</button>

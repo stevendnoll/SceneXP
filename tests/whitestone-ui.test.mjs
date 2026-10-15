@@ -8,9 +8,8 @@
  *   - Every id a script looks up exists in the page, so a renamed field is a
  *     failing test rather than a button that silently does nothing.
  *   - Nothing anywhere under www/whitestone writes markup from a string.
- *   - Start your own, care preferences, undo (button and keyboard), My
- *     checklists (open, duplicate, remove), another tab, and a browser that
- *     will not save.
+ *   - Start your own, care preferences, undo (button and keyboard),
+ *     another tab, and a browser that will not save.
  *
  * A HEADLESS BOOT IS NOT A WORKING PAGE. These say the wiring runs and the
  * document is right. How it looks is Steve's QA.
@@ -41,7 +40,7 @@ describe('the markup', () => {
         const missing = [];
         // Ids built at run time (each checklist's title, each checkbox) are
         // made by the same code that uses them, so only literal lookups count.
-        const built = /^(my-title-|setup-levels-|prefs-)/;
+        const built = /^(setup-levels-|prefs-)/;
         for (const file of ['main.js', 'forms.js', 'panels.js', 'cards.js']) {
             const src = readFileSync(join(WS, 'js', file), 'utf8');
             const ids = [...src.matchAll(/\b(?:el|byId|on)\('([a-z][a-z0-9-]*)'/g)].map((m) => m[1]);
@@ -144,12 +143,10 @@ function prefsBox(key) {
 const saved = () => JSON.parse(localStorage.getItem(CONFIG.storage.key));
 const visible = (id) => !dom.el(id).hidden;
 
-/** A new checklist's setup card, reached without the guide: My
- *  checklists, then New. (Help no longer opens My checklists, Steve,
- *  2026-10-15: the card stays for the page's own use.) */
+/** A new checklist's setup card, reached without the guide (editHome's
+ *  own way, with no home open: startOwn). */
 function newHome(main) {
-    main.__test__.openMine();
-    fire(dom.el('my-new'), 'click');
+    main.__test__.startOwn();
 }
 
 /** Fill in and submit the setup card for a new home. */
@@ -168,7 +165,7 @@ test('the old Help items open nothing: the checklist is Maya\'s alone (Steve, 20
     expect(main.getState().storageStatus).toBe('restored');
     await startHome(main);
     fire(dom.el('prefs-skip'), 'click');
-    const cards = ['my-checklists', 'menu', 'checklist', 'setup', 'preferences'];
+    const cards = ['checklist', 'setup', 'preferences', 'quote'];
     const { closeCard } = await import('../www/whitestone/js/cards.min.js');
     for (const id of cards) closeCard(id);
     expect(cards.filter(visible)).toEqual([]);
@@ -252,54 +249,6 @@ test('undo takes back each step from the keyboard, but not inside a text field',
     expect(said()).toBe(UI.nothingToUndo);
 });
 
-test('My checklists: open, duplicate and remove, with undo for the last two', async () => {
-    const main = await boot();
-    await startHome(main, { title: 'First' });
-    fire(dom.el('prefs-skip'), 'click');
-    main.__test__.openMine();
-    await startHome(main, { title: 'Second' });
-    fire(dom.el('prefs-skip'), 'click');
-    const [first, second] = main.getDoc().checklists;
-    expect(main.getDoc().settings.activeId).toBe(second.id);
-
-    main.__test__.openMine();
-    expect(visible('my-checklists')).toBe(true);
-    const rows = () => dom.el('my-list').children;
-    expect(rows()).toHaveLength(2);
-    const buttonsOf = (row) => row.children[1].children;
-    const rowFor = (title) => [...rows()].find((r) => r.children[0].children[0].textContent === title);
-
-    // Open the first.
-    fire(buttonsOf(rowFor('First'))[0], 'click');
-    expect(main.getDoc().settings.activeId).toBe(first.id);
-    expect(said()).toBe(UI.opened('First'));
-    expect(visible('my-checklists')).toBe(false);
-    expect(main.__test__.history().size).toBe(2);   // opening is not an undo step
-
-    // Duplicate it.
-    main.__test__.openMine();
-    fire(buttonsOf(rowFor('First'))[1], 'click');
-    expect(main.getDoc().checklists.map((c) => c.title)).toEqual(['First', 'Second', 'Copy of First']);
-    expect(rows()).toHaveLength(3);
-
-    // Remove the second, through the confirmation card.
-    fire(buttonsOf(rowFor('Second'))[2], 'click');
-    expect(visible('confirm')).toBe(true);
-    fire(dom.el('confirm-actions').children[1], 'click');
-    expect(main.getDoc().checklists.find((c) => c.id === second.id).deletedAt).toBeTruthy();
-    expect(rows()).toHaveLength(2);
-
-    fire(dom.el('toast-undo'), 'click');
-    expect(main.getDoc().checklists.find((c) => c.id === second.id).deletedAt).toBeNull();
-    expect(rows()).toHaveLength(3);
-});
-
-test('an empty list says so, kindly', async () => {
-    const main = await boot();
-    main.__test__.openMine();
-    expect(dom.el('my-list').children[0].textContent).toBe(UI.noChecklists);
-});
-
 test('a change in another tab is followed, and undo steps from before it are dropped', async () => {
     const main = await boot();
     await startHome(main, { title: 'Mine' });
@@ -315,11 +264,10 @@ test('a change in another tab is followed, and undo steps from before it are dro
     expect(said()).toBe(UI.otherTab);
 });
 
-test('a browser that will not save says so under My checklists', async () => {
+test('a browser that will not save says so in the checklist card', async () => {
     localStorage.getItem = () => { throw new Error('denied'); };
     const main = await boot();
     expect(main.getState().storageStatus).toBe('unavailable');
-    main.__test__.openMine();
     expect(dom.el('storage-note').textContent).toMatch(/private window/);
 });
 
@@ -330,27 +278,6 @@ test('page hide saves the visit, then nothing more is written', async () => {
     expect(saved().meta.lastVisitAt).toBeTruthy();
     main.__test__.mutate((d) => ({ doc: { ...d, checklists: [] }, record: null, error: null }), 'x');
     expect(saved().checklists).toHaveLength(1);
-});
-
-test('with the price sheet loaded, My checklists shows each total', async () => {
-    globalThis.fetch = async (url) => {
-        const file = join(WS, String(url));
-        return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(file, 'utf8')) };
-    };
-    const main = await boot();
-    await flushAsync(20);
-    expect(main.getState().sheetStatus).toBe('ready');
-
-    await startHome(main, { title: 'Priced' });
-    fire(dom.el('prefs-skip'), 'click');
-    const { addRoom } = await import('../www/whitestone/js/store.js');
-    const id = main.getDoc().checklists[0].id;
-    main.__test__.mutate((d) => addRoom(d, id, { level: 'main', area: 'powder-room' }, CONFIG, new Date(),
-        { presetItems: [{ task: 'toilet' }, { task: 'bathroom-sink' }] }), 'Added a room');
-    main.__test__.openMine();
-    const summary = dom.el('my-list').children[0].children[0].children[2];
-    // Toilet $12 and sink $6 come to $18, topped up to the $120 visit minimum.
-    expect(summary.textContent).toBe('1 room, 2 tasks, $120');
 });
 
 // ---- Rooms, tasks and the checklist (M1 piece 2) ------------------------------
@@ -409,7 +336,6 @@ test('a first visit goes from preferences straight to the first room, however pr
     expect(dom.el('room-title').textContent).toBe(UI.addRoomTitle);
     // A second home, with preferences closed by Escape instead.
     fire(dom.el('room-cancel'), 'click');
-    main.__test__.openMine();
     await startHome(main, { title: 'Second' });
     fire(dom.documentStub, 'keydown', { key: 'Escape' });
     jest.advanceTimersByTime(10);
@@ -665,50 +591,6 @@ test('a big enough home says the minimum is met, and a task the menu no longer h
     expect(dom.el('quote-problems').textContent).toBe(UI.cannotPrice(1));
 });
 
-test('the service menu shows a room kind\'s tasks with their prices, and adds one to a room of that kind', async () => {
-    const main = await homeWithPrices();
-    const kitchen = await addKitchen(main);
-    main.__test__.openMenu();
-    expect(visible('menu')).toBe(true);
-    expect(dom.el('menu-area').value).toBe('kitchen');
-    const rows = dom.el('menu-list').children;
-    const row = (name) => [...rows].find((r) => r.children[0].children[0].textContent === name);
-    expect(row('Stovetop').children[0].children[1].textContent).toBe('$10 each time, about 5 minutes');
-    expect(row('Countertops').children[0].children[1].textContent).toBe('$7.50 small room, $10 medium, $15 large, about 8 minutes');
-    expect(row('Interior windows').children[0].children[1].textContent).toBe('$5 each, about 4 minutes');
-    expect(row('Stovetop').children[0].children[3].textContent).toBe('Deep clean adds $5');
-
-    fire(row('Oven interior').children[1].children[0], 'click');
-    expect(visible('task')).toBe(true);
-    expect(dom.el('task-task').value).toBe('oven-interior');
-    fire(dom.el('task-form'), 'submit');
-    expect(liveTasks(main).filter((i) => i.roomId === kitchen.id && i.task === 'oven-interior')).toHaveLength(1);
-
-    dom.el('menu-area').value = 'bathroom';
-    fire(dom.el('menu-area'), 'change');
-    expect(dom.el('menu-note').textContent).toBe('Your checklist has no bathroom yet. Add one to order these.');
-    expect([...dom.el('menu-list').children].every((r) => r.children.length === 1)).toBe(true);
-});
-
-test('the menu can be browsed before there is a checklist, and waits for prices', async () => {
-    let main = await boot();
-    main.__test__.openMenu();
-    expect(visible('menu')).toBe(false);
-    expect(said()).toBe(UI.sheetLoading);
-
-    jest.resetModules();
-    dom.uninstall();
-    installThree();
-    dom = installDom();
-    serveSheet();
-    main = await boot();
-    await flushAsync(20);
-    main.__test__.openMenu();
-    expect(visible('menu')).toBe(true);
-    expect(dom.el('menu-note').textContent).toBe(UI.menuNoChecklist);
-    expect(main.getState().sheetStatus).toBe('ready');
-});
-
 test('tasks move up and down in their room as one undo step each, and the ends cannot move further', async () => {
     const main = await homeWithPrices();
     const kitchen = await addKitchen(main);
@@ -790,27 +672,7 @@ test('the example, asked for on a first visit, is priced and opens in full, and 
     expect(dom.el('checklist-summary').textContent).toMatch(/^13 rooms, 27 tasks, \$/);
 });
 
-test('My checklists marks the example, offers no duplicate of it, and clears it with an undo', async () => {
-    const main = await boot({ example: true });
-    main.__test__.openMine();
-    const row = dom.el('my-list').children[0];
-    expect(row.children[0].children[1].textContent).toBe(UI.example);
-    expect(row.children[1].children.map((b) => b.textContent)).toEqual([UI.current, UI.remove]);
-    expect(visible('my-clear-example')).toBe(true);
-
-    fire(dom.el('my-clear-example'), 'click');
-    expect(main.getDoc().checklists).toHaveLength(0);
-    expect(main.getDoc().settings.activeId).toBeNull();
-    expect(visible('my-clear-example')).toBe(false);
-    expect(dom.el('toast-text').textContent).toBe(UI.exampleCleared);
-    // Cleared for good: the change is saved, so the next visit is not a first one.
-    expect(JSON.parse(localStorage.getItem(CONFIG.storage.key)).checklists).toHaveLength(0);
-
-    fire(dom.el('toast-undo'), 'click');
-    expect(main.getDoc().checklists[0].id).toBe('example-home-1');
-});
-
-test('starting your own from the example keeps the example in the list, and a returning visitor is not given it again', async () => {
+test('starting your own from the example keeps the example beside it, and makes your own the open one', async () => {
     const main = await boot({ example: true });
     await startHome(main, { title: 'Our place' });
     const doc = main.getDoc();
@@ -841,7 +703,6 @@ test('UNDO ACROSS EVERY KIND OF CHANGE walks the document back to exactly where 
     main.__test__.editHome();
     dom.el('setup-title').value = 'Renamed';
     fire(dom.el('setup-form'), 'submit'); record();
-    t.duplicate(checklist(main).id); record();
 
     // Each undo lands exactly on the document before that step.
     for (let i = steps.length - 2; i >= 0; i--) {

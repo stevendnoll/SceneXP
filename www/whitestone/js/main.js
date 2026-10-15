@@ -35,10 +35,10 @@ import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { createResolution } from '../../shared/js/resolution-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import {
-    createStore, findChecklist, createChecklist, updateChecklist, setLevels, setPreferences, deleteChecklist,
-    duplicateChecklist, setSettings, touchVisit, storageUse, isLive, addRoom, updateRoom, deleteRoom, addItem,
+    createStore, findChecklist, createChecklist, updateChecklist, setLevels, setPreferences,
+    setSettings, touchVisit, storageUse, isLive, addRoom, updateRoom, deleteRoom, addItem,
     updateItem, deleteItem, addPhoto, removePhoto, photoIdsInUse, newId, itemsIn, liveRooms, liveItems,
-    clearSamples, hasSamples, setBath, setResidence, emptyDoc, setPublication, keepServerFacts, importPublished,
+    setBath, setResidence, emptyDoc, setPublication, keepServerFacts, importPublished,
     hasUnsent
 } from './store.min.js';
 import { withExample } from './samples.min.js';
@@ -64,8 +64,7 @@ import {
     showResidence
 } from './forms.min.js';
 import {
-    renderMyChecklists, renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote,
-    renderMenu, fillMenuAreas
+    renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote
 } from './panels.min.js';
 import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKING, BOOKING_ERRORS, RECEIPT, CHANGES } from './copy.min.js';
 import { createTurntable, turnPoint } from './turntable.min.js';
@@ -111,13 +110,12 @@ const state = {
  *   task        the task card's room, item (null for a new task) and photos
  *   afterPrefs  open the room card once preferences close (first visit)
  *   filter      what the checklist view shows (panels.js filterChoices)
- *   menuArea    the kind of room the service menu shows
  *   guide       where Maya's guide is (guide.js)
  *   selected    what is selected on the house (panel.js): the whole house,
  *               a floor, a room or a task, or null
  */
 const ui = {
-    editing: null, room: null, task: null, afterPrefs: false, filter: 'all', menuArea: null, guide: null, selected: null,
+    editing: null, room: null, task: null, afterPrefs: false, filter: 'all', guide: null, selected: null,
     /** The Choose a time card while it is open, and the receipt shown. */
     booking: null, receipt: null,
     /** One card handing over to the next (the calendar to the receipt), so
@@ -2316,7 +2314,7 @@ function undo() {
     return step;
 }
 
-/** The line under My checklists about saving, or ''. */
+/** The note in the checklist card about saving, or ''. */
 function storageNote() {
     if (!store || !store.available) return STORAGE_NOTES.unavailable;
     if (state.storageStatus === 'newer') return STORAGE_NOTES.newer;
@@ -2328,12 +2326,9 @@ function storageNote() {
 function refresh() {
     if (!state.doc) return;
     const c = active();
-    const show = (id, on) => { const b = el(id); if (b) b.hidden = !on; };
-    show('my-clear-example', hasSamples(state.doc));
     const chip = quoteChip(c, state.sheet);
     const note = el('storage-note');
     if (note) note.textContent = storageNote();
-    if (isOpen('my-checklists')) drawMyChecklists();
     if (isOpen('checklist')) {
         if (c) drawChecklist();
         else closeCard('checklist');
@@ -2342,7 +2337,6 @@ function refresh() {
         if (chip) renderQuote({ checklist: c, sheet: state.sheet });
         else closeCard('quote');
     }
-    if (isOpen('menu')) drawMenu();
     if (model && model.show(c)) {
         markShadows();
         // The frame fits the house as it now stands, eased to once the
@@ -2363,21 +2357,7 @@ function refresh() {
 
 // ---- The cards --------------------------------------------------------------
 
-function drawMyChecklists() {
-    renderMyChecklists({
-        doc: state.doc,
-        sheet: state.sheet,
-        activeId: state.doc.settings.activeId,
-        on: { open: openChecklist, duplicate: duplicate, remove: remove }
-    });
-}
-
-function openMine() {
-    drawMyChecklists();
-    openCard('my-checklists');
-}
-
-/** The setup card for a new home. */
+/** The setup card for a new home (editHome, with no home open). */
 function startOwn() {
     ui.editing = null;
     fillSetupForm(null);
@@ -2515,39 +2495,13 @@ function moveTask(itemId, step) {
     return result;
 }
 
-// ---- The quote and the service menu -------------------------------------------
+// ---- The quote ------------------------------------------------------------------
 
 function openQuote() {
     const c = active();
     if (!c || !state.sheet || !liveItems(c).length) return;
     renderQuote({ checklist: c, sheet: state.sheet });
     openCard('quote');
-}
-
-function drawMenu() {
-    if (!state.sheet) return;
-    renderMenu({ sheet: state.sheet, area: ui.menuArea, checklist: active(), on: { add: addFromMenu } });
-}
-
-function openMenu() {
-    if (!state.sheet) {
-        announce(UI.sheetLoading);
-        toast(UI.sheetLoading);
-        return;
-    }
-    const c = active();
-    if (!ui.menuArea) {
-        const first = c ? liveRooms(c)[0] : null;
-        ui.menuArea = first ? first.area : 'kitchen';
-    }
-    fillMenuAreas(ui.menuArea);
-    drawMenu();
-    openCard('menu');
-}
-
-/** From the menu: the task card for this task in this room. */
-function addFromMenu(roomId, taskKey) {
-    openTask(roomId, null, taskKey);
 }
 
 function openChecklistView() {
@@ -2630,7 +2584,7 @@ function taskRoom() {
 
 /** The task card, for a new task in a room (perhaps a given task, from the
  *  menu) or an edit of an item. */
-function openTask(roomId, itemId, taskKey = null, { armed = false } = {}) {
+function openTask(roomId, itemId, { armed = false } = {}) {
     const c = active();
     if (!c) return;
     if (!state.sheet) {
@@ -2642,7 +2596,7 @@ function openTask(roomId, itemId, taskKey = null, { armed = false } = {}) {
     const room = c.rooms.find((r) => r.id === (item ? item.roomId : roomId));
     if (!room) return;
     ui.task = { roomId: room.id, itemId: item ? item.id : null, photos: item ? [...item.photos] : [] };
-    fillTaskForm({ sheet: state.sheet, room, item, roomLabel: roomName(c.serviceType, room), taskKey });
+    fillTaskForm({ sheet: state.sheet, room, item, roomLabel: roomName(c.serviceType, room) });
     updateTaskPrice();
     drawTaskPhotos();
     openCard('task', { armed, onClose: releaseTaskPhotos });
@@ -2788,74 +2742,11 @@ function removeTaskFromCard() {
     if (result && !result.error) closeCard('task');
 }
 
-function openChecklist(id) {
-    const result = mutate((d) => setSettings(d, { activeId: id }), null);
-    const c = active();
-    if (c) announce(UI.opened(c.title));
-    closeCard('my-checklists');
-    return result;
-}
-
-function duplicate(id) {
-    let made = null;
-    change((d) => {
-        const r = duplicateChecklist(d, id, CONFIG, now());
-        made = r.record;
-        return r;
-    }, UI.labels.duplicated, null);
-    if (made) {
-        const said = UI.duplicated(made.title);
-        announce(said);
-        toast(said, { undo });
-    }
-}
-
-function clearExample() {
-    return change((d) => clearSamples(d), UI.labels.clearedExample, UI.exampleCleared);
-}
-
 /**
- * Remove a checklist from this browser, asked first. A published one is
- * unpublished first (its visit cancelled with it), so no copy or booking is
- * left behind that nothing here could reach again; one whose visit is
- * inside the change window waits until after the visit.
- */
-async function remove(id) {
-    const c = findChecklist(state.doc, id);
-    if (!c) return;
-    const svc = isPublished(c) ? await connect() : null;
-    if (isBooked(c) && svc && !canChange(svc.schedule, c.booking, now().getTime())) {
-        const why = CHANGES.removeLocked(svc.schedule.cancelHours);
-        announce(why);
-        toast(why);
-        return;
-    }
-    const gone = () => change((d) => deleteChecklist(d, id, CONFIG, now()), UI.labels.removed, UI.removedChecklist(c.title));
-    confirmCard({
-        title: UI.removeTitle(c.title),
-        detail: !isPublished(c) ? UI.removeDetail : isBooked(c) ? CHANGES.removeBooked(visitWhen(c.booking)) : CHANGES.removePublished,
-        confirmLabel: UI.remove,
-        danger: true,
-        onConfirm: async () => {
-            const latest = findChecklist(state.doc, id);
-            if (isPublished(latest)) {
-                const r = svc ? await unpublish({ checklist: latest, api: svc.api, record: recordFor(id) }) : { ok: false, error: 'server' };
-                if (!r.ok) {
-                    const why = r.error === 'too-late' ? CHANGES.removeLocked(cancelHours()) : BOOKING_ERRORS[r.error] || BOOKING_ERRORS.server;
-                    announce(why);
-                    toast(why);
-                    return;
-                }
-            }
-            gone();
-        }
-    });
-}
-
-/**
- * Start over (the Help menu): asked first, on the confirmation card, since
- * it cannot be undone (QA, 2026-10-14). Everything this browser published
- * is unpublished first (Steve, 2026-10-14), its visits canceled with it,
+ * Start over (her bubble's foot, or beside Keep going): asked first, on
+ * the confirmation card, since it cannot be undone (QA, 2026-10-14).
+ * Everything this browser published is unpublished first (Steve,
+ * 2026-10-14), its visits canceled with it,
  * since clearing the owner tokens would leave those copies and bookings
  * where nothing could reach them. A visit inside the change window makes
  * it wait until after the visit, and a failure to unpublish clears
@@ -2914,7 +2805,7 @@ function startOver() {
     state.doc = emptyDoc(CONFIG, now());
     state.saved = false;
     state.storageStatus = 'fresh';
-    Object.assign(ui, { editing: null, room: null, task: null, afterPrefs: false, filter: 'all', menuArea: null });
+    Object.assign(ui, { editing: null, room: null, task: null, afterPrefs: false, filter: 'all' });
     refresh();
     guideTo({ type: 'restart' });
     announce(HELP.resetDone);
@@ -2981,8 +2872,6 @@ function setupEventListeners() {
     }, { signal });
 
     const on = (id, type, fn) => { const node = el(id); if (node) node.addEventListener(type, fn, { signal }); };
-    on('my-new', 'click', startOwn);
-    on('my-clear-example', 'click', clearExample);
     on('setup-form', 'submit', submitSetup);
     on('setup-cancel', 'click', () => closeCard('setup'));
     on('setup-household', 'input', () => showHints('setup-household', 'setup-household-hint'));
@@ -3051,10 +2940,6 @@ function setupEventListeners() {
         }
     });
     on('booking-cancel', 'click', () => closeCard('booking'));
-    on('menu-area', 'change', () => {
-        ui.menuArea = el('menu-area').value;
-        drawMenu();
-    });
     on('checklist-filter', 'change', () => {
         ui.filter = el('checklist-filter').value;
         drawChecklist();
@@ -3277,10 +3162,6 @@ export const __test__ = {
     confirmCancelVisit,
     confirmUnpublish,
     connect,
-    openMine,
-    openChecklist,
-    duplicate,
-    remove,
     history: () => history,
     store: () => store,
     photoStore: () => photoStore,
@@ -3294,9 +3175,7 @@ export const __test__ = {
     removeTask,
     drawTaskPhotos,
     moveTask,
-    clearExample,
     openQuote,
-    openMenu,
     requestRender,
     handleResize,
     lookLocked,

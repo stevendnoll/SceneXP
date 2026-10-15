@@ -13,25 +13,13 @@
 
 import { h, clear, button } from './cards.min.js';
 import { UI } from './copy.min.js';
-import { isLive, liveRooms, liveItems, itemsIn, hasUnsent } from './store.min.js';
-import { dayLabel } from './booking.min.js';
-import { quoteChecklist, priceItem, priceChoice, formatMoney, spokenMoney, formatMinutes } from './pricing.min.js';
-import { taskOf, optionOf, tasksFor, optionsFor } from './sheet.min.js';
-import { levelOf, areaOf, roomName, serviceType, bathAllows } from './taxonomy.min.js';
-
-const TAXONOMY_AREAS = () => serviceType('cleaning').areas;
+import { liveRooms, liveItems, itemsIn } from './store.min.js';
+import { quoteChecklist, priceItem, formatMoney, spokenMoney, formatMinutes } from './pricing.min.js';
+import { taskOf, optionOf } from './sheet.min.js';
+import { levelOf, areaOf, roomName } from './taxonomy.min.js';
 
 function byId(id) {
     return document.getElementById(id);
-}
-
-/** The checklists worth listing: live ones, the visitor's own first and the
- *  most recently changed at the top, the example last. */
-export function listedChecklists(doc) {
-    return doc.checklists
-        .filter(isLive)
-        .slice()
-        .sort((a, b) => (a.sample - b.sample) || String(b.updatedAt).localeCompare(String(a.updatedAt)));
 }
 
 /** One line about a checklist: its rooms, its tasks and, with a sheet, its
@@ -44,50 +32,6 @@ export function checklistSummary(checklist, sheet) {
         parts.push(formatMoney(quote.totalCents));
     }
     return { text: parts.join(', ') };
-}
-
-/** Where a checklist stands, for My checklists (PRD 8.6): the example, a
- *  draft, published, or its booked visit, and whether changes wait to be
- *  sent. */
-export function checklistStatus(checklist) {
-    if (checklist.sample) return UI.example;
-    const pub = checklist.published;
-    if (!pub || !pub.at) return UI.draft;
-    const status = checklist.booking ? UI.booked(dayLabel(checklist.booking.date)) : UI.published;
-    return hasUnsent(checklist) ? UI.withUnsent(status) : status;
-}
-
-/**
- * My checklists: every checklist in this browser, with Open, Duplicate and
- * Remove. `on` holds open(id), duplicate(id) and remove(id).
- */
-export function renderMyChecklists({ doc, sheet, activeId, on }) {
-    const list = byId('my-list');
-    if (!list) return;
-    clear(list);
-    const rows = listedChecklists(doc);
-    if (!rows.length) {
-        list.appendChild(h('li', { className: 'my-empty', text: UI.noChecklists }));
-        return;
-    }
-    for (const c of rows) {
-        const summary = checklistSummary(c, sheet);
-        const current = c.id === activeId;
-        const titleId = `my-title-${c.id}`;
-        list.appendChild(h('li', { className: current ? 'my-row is-current' : 'my-row' }, [
-            h('div', { className: 'my-text' }, [
-                h('span', { id: titleId, className: 'my-title', text: c.title }),
-                h('span', { className: 'my-status', text: checklistStatus(c) }),
-                h('span', { className: 'my-summary', text: summary.text })
-            ]),
-            h('div', { className: 'my-actions' }, [
-                button(current ? UI.current : UI.open, current ? 'ws-btn ws-btn-small' : 'ws-btn ws-btn-small ws-btn-primary',
-                    () => on.open(c.id), { 'aria-describedby': titleId }),
-                c.sample ? null : button(UI.duplicate, 'ws-btn ws-btn-small', () => on.duplicate(c.id), { 'aria-describedby': titleId }),
-                button(UI.remove, 'ws-btn ws-btn-small', () => on.remove(c.id), { 'aria-describedby': titleId })
-            ])
-        ]));
-    }
 }
 
 // ---- The checklist view -----------------------------------------------------
@@ -321,58 +265,4 @@ export function renderQuote({ checklist, sheet }) {
     sums.push([UI.totalLine, q.totalCents]);
     body.appendChild(h('div', { className: 'quote-sums' }, sums.map(([label, value]) =>
         h('div', { className: 'quote-line' }, [h('span', { text: label }), h('span', { text: formatMoney(value) })]))));
-}
-
-// ---- The service menu ---------------------------------------------------------
-
-/** How a task is priced, in words: per visit, each, or by room size. */
-export function menuPrice(sheet, task) {
-    if (task.unit === 'room') {
-        const at = (size) => formatMoney(priceChoice(sheet, { task: task.key, size }).cents);
-        return UI.menuRoom(at('small'), at('medium'), at('large'));
-    }
-    if (task.unit === 'count') return UI.menuCount(formatMoney(task.cents));
-    return UI.menuEach(formatMoney(task.cents));
-}
-
-/**
- * The menu for one kind of room. Each task can be added to any room of that
- * kind in the open checklist (`on.add(roomId, taskKey)`) whose type of bath
- * has it: a bathtub to a full bath, never a shower bath.
- */
-export function renderMenu({ sheet, area, checklist, on }) {
-    const list = byId('menu-list');
-    const note = byId('menu-note');
-    if (!list) return;
-    clear(list);
-    const kind = areaOf('cleaning', area);
-    const rooms = checklist ? liveRooms(checklist).filter((r) => r.area === area) : [];
-    if (note) {
-        note.textContent = !checklist ? UI.menuNoChecklist : (rooms.length ? '' : UI.menuNoRoom(kind ? kind.name : area));
-    }
-    const fits = (task) => rooms.filter((r) => bathAllows(checklist.serviceType, r.area, r.bath, task.key));
-    for (const task of tasksFor(sheet, area)) {
-        const nameId = `menu-task-${task.key}`;
-        const options = optionsFor(sheet, task.key);
-        list.appendChild(h('li', { className: 'menu-row' }, [
-            h('div', { className: 'menu-row-text' }, [
-                h('span', { id: nameId, className: 'menu-row-name', text: task.name }),
-                h('span', { className: 'menu-row-price', text: `${menuPrice(sheet, task)}, ${UI.menuMinutes(task.minutes)}` }),
-                h('span', { className: 'menu-row-about', text: task.description }),
-                options.length ? h('span', { className: 'menu-row-options', text: options.map((o) => UI.menuOption(o.name, formatMoney(o.cents))).join('. ') }) : null
-            ]),
-            fits(task).length ? h('div', { className: 'menu-row-actions' }, fits(task).map((r) =>
-                button(UI.menuAddTo(roomName(checklist.serviceType, r)), 'ws-btn ws-btn-small', () => on.add(r.id, task.key),
-                    { 'aria-describedby': nameId }))) : null
-        ]));
-    }
-}
-
-/** The menu's kinds of room, every one, so the whole menu can be browsed. */
-export function fillMenuAreas(current) {
-    const select = byId('menu-area');
-    if (!select) return;
-    clear(select);
-    for (const a of TAXONOMY_AREAS()) select.appendChild(h('option', { value: a.key, text: a.name }));
-    select.value = current;
 }

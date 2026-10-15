@@ -8,7 +8,7 @@
 
     <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <!-- no-referrer: the link that opens this page carries a checklist in its
          fragment, and nothing about it should follow the cleaner anywhere. -->
     <meta name="referrer" content="no-referrer">
@@ -50,8 +50,8 @@
     <title>Your checklist | Whitestone Home Care</title>
 
     <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
-    <link rel="stylesheet" href="css/tasks.min.css?v=1">
-    <script type="module" src="js/main.min.js?v=1"></script>
+    <link rel="stylesheet" href="css/tasks.min.css?v=2">
+    <script type="module" src="js/main.min.js?v=2"></script>
 </head>
 
 <body>
@@ -64,20 +64,27 @@
     </header>
 
     <main class="tasks-main">
-        <h1>Your cleaning checklist</h1>
-        <p class="tasks-lead">A customer shared a checklist with you. Enter the
-            6 digit PIN that came with the link to open it.</p>
+        <!-- THE GATE: the PIN, until the checklist is open (main.js). -->
+        <section id="tasks-gate" class="tasks-gate">
+            <h1>Your cleaning checklist</h1>
+            <p class="tasks-lead">A customer shared a checklist with you. Enter the
+                6 digit PIN that came with the link to open it.</p>
 
-        <!-- Hidden until main.js runs, so the form can never submit a PIN in
-             a page address without the script that handles it. -->
-        <form id="pin-form" class="pin-form" hidden novalidate>
-            <label for="pin-input">PIN</label>
-            <input id="pin-input" name="pin" type="text" inputmode="numeric"
-                autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}"
-                aria-describedby="pin-status" required>
-            <button id="pin-open" type="submit">Open the checklist</button>
+            <!-- Hidden until main.js runs, so the form can never submit a PIN in
+                 a page address without the script that handles it. -->
+            <form id="pin-form" class="pin-form" hidden novalidate>
+                <label for="pin-input">PIN</label>
+                <input id="pin-input" name="pin" type="text" inputmode="numeric"
+                    autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}"
+                    aria-describedby="pin-status" required>
+                <button id="pin-open" type="submit">Open the checklist</button>
+            </form>
             <p id="pin-status" class="pin-status" role="status" aria-live="polite"></p>
-        </form>
+        </section>
+
+        <!-- THE CHECKLIST, once open (view.js): care preferences first, the
+             home, Start here, then every room by level. -->
+        <div id="tasks-view" class="tasks-view" hidden></div>
 
         <noscript>
             <p class="tasks-noscript">This page needs JavaScript to open a

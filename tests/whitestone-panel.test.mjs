@@ -375,12 +375,13 @@ describe('the panel on the page', () => {
         fire(dom.el('room-remove'), 'click');
         expect(main.__test__.ui.selected.scope).toBe('floor');
         expect(title()).toBe('Main floor');
-        // A different checklist opened (My checklists): the selection goes,
-        // even though it has a main floor too.
-        main.__test__.duplicate(checklist(main).id);
+        // A different checklist opened (as a change in another tab can):
+        // the selection goes, even though it has a main floor too.
+        const { duplicateChecklist, setSettings } = await import('../www/whitestone/js/store.min.js');
+        main.__test__.mutate((d) => duplicateChecklist(d, checklist(main).id, CONFIG, new Date()), 'x');
         const copy = main.getDoc().checklists.find((x) => x.id !== main.__test__.ui.selected.checklistId);
         expect(copy.levels).toContain('main');
-        main.__test__.openChecklist(copy.id);
+        main.__test__.mutate((d) => setSettings(d, { activeId: copy.id }), null);
         expect(main.__test__.ui.selected).toBeNull();
         expect(shown()).toBe(false);
     });
@@ -552,18 +553,12 @@ describe('a bathroom\'s type of bath, on the page', () => {
         expect(dom.el('room-preset-list').textContent).not.toMatch(/Bathtub/);
     });
 
-    test('a shower bath is not offered the bathtub, on its task card or on the service menu', async () => {
+    test('a shower bath is not offered the bathtub on its task card', async () => {
         const { main, room } = await bathroom();
         fire(bathButton('shower'), 'click');
         main.__test__.openTask(room.id, null);
         expect(dom.el('task-task').children.map((o) => o.value)).not.toContain('bathtub');
         expect(dom.el('task-task').children.map((o) => o.value)).toContain('shower');
-        main.__test__.openMenu();
-        dom.el('menu-area').value = 'bathroom';
-        fire(dom.el('menu-area'), 'change');
-        const menuRow = (name) => dom.el('menu-list').children.find((r) => r.children[0].children[0].textContent === name);
-        expect(menuRow('Bathtub').children).toHaveLength(1);   // no "Add to"
-        expect(menuRow('Shower').children[1].children.map((b) => b.textContent)).toEqual(['Add to Bathroom']);
     });
 
     test('before the sheet, a type waits and says so', async () => {
@@ -817,10 +812,6 @@ describe('changing things after publishing, on the page', () => {
         expect(dom.el('receipt-locked').textContent).toBe(RECEIPT.locked(24));
         for (const id of ['receipt-reschedule', 'receipt-cancel-visit', 'receipt-unpublish']) expect(dom.el(id).hidden).toBe(true);
         expect(await main.__test__.openBooking()).toBeNull();
-        // Nor can it be removed until after the visit.
-        await main.__test__.remove(main.__test__.active().id);
-        expect(dom.el('confirm').hidden).toBe(true);
-        expect(main.__test__.active()).not.toBeNull();
     });
 
     test('Start over unpublishes first, a removed checklist\'s publication included', async () => {
@@ -865,17 +856,6 @@ describe('changing things after publishing, on the page', () => {
         } finally {
             svc.api.deleteChecklist = real;
         }
-    });
-
-    test('removing a published checklist unpublishes it first', async () => {
-        const main = await bookedHome();
-        const c = main.__test__.active();
-        const { api } = await main.__test__.connect();
-        await main.__test__.remove(c.id);
-        expect(dom.el('confirm-detail').textContent).toBe(CHANGES.removeBooked('Thursday, October 15 at 9:30 am'));
-        fire(confirmButton(), 'click');
-        expect(await until(() => main.__test__.active() === null)).toBe(true);
-        expect((await api.getChecklist(c.published.id, c.published.ownerToken)).error).toBe('denied');
     });
 });
 

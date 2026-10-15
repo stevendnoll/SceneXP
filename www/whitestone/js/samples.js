@@ -88,8 +88,9 @@ const ROOMS = [
  * sheet's rule (sheet.js checkChoice), so an example the current sheet cannot
  * price is refused here rather than shown. Returns { doc, error }.
  *
- * An example from before (removed from My checklists, and so kept for its
- * undo with the same fixed id) is replaced, never joined by a second record
+ * An example from before (removed, in a browser that saved it while the
+ * page still had My checklists, and so kept for its undo with the same
+ * fixed id) is replaced, never joined by a second record
  * of its id: the steps would find the removed one and refuse (QA,
  * 2026-10-14: a removed example would not come back).
  */

@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
-import { readPin, wire, COPY } from '../www/whitestone/tasks/js/main.js';
+import { readPin, COPY } from '../www/whitestone/tasks/js/main.js';
 
 let dom;
 
@@ -269,7 +269,7 @@ describe('the turntable', () => {
         expect(tt.yaw).toBeCloseTo(y + CONFIG.view.turn.key, 12);
         fire(dom.documentStub, 'keydown', { key: 'ArrowRight', target: { tagName: 'INPUT' }, preventDefault() {} });
         expect(tt.yaw).toBeCloseTo(y + CONFIG.view.turn.key, 12);
-        main.__test__.openMine();
+        main.__test__.startOwn();   // a card over the house (the setup card)
         fire(dom.documentStub, 'keydown', { key: 'ArrowRight', target: dom.el('game-canvas'), preventDefault() {} });
         expect(tt.yaw).toBeCloseTo(y + CONFIG.view.turn.key, 12);
         expect(main.__test__.lookKey('q')).toBe(false);
@@ -305,7 +305,7 @@ describe('the turntable', () => {
     test('the look is held while a card is open', async () => {
         const main = await boot();
         expect(main.__test__.lookLocked()).toBe(false);
-        main.__test__.openMine();
+        main.__test__.startOwn();   // the setup card
         expect(main.__test__.lookLocked()).toBe(true);
         // A drag over a card turns nothing.
         const tt = main.__test__.turntable();
@@ -352,10 +352,10 @@ describe('the model', () => {
         expect(shiny.length).toBe(main.__test__.model().shiny.length + main.__test__.stage().shiny.length);
     });
 
-    test('clearing the example leaves one empty floor, and the frame eases down to it', async () => {
+    test('putting the example away (back to the greeting) leaves one empty floor, and the frame eases down to it', async () => {
         const main = await bootExample();
         const tall = main.__test__.turntable().height;
-        main.__test__.clearExample();
+        main.__test__.guideTo({ type: 'restart' });
         expect(main.__test__.model().placed.tiles.length).toBe(0);
         expect(main.__test__.model().placed.slabs.length).toBe(1);
         stepFrames(Math.ceil((CONFIG.view.subject.ease * 1000) / 16) + 2);
@@ -379,12 +379,12 @@ describe('the model', () => {
         expect(names).toEqual(["Emma's room", 'Guest room', 'Hall bath', "Noah's room", 'Primary bathroom', 'Primary bedroom']);
         expect(list.children.every((li) => /^translate\(/.test(li.style.transform))).toBe(true);
         // A card over the house hides them, and closing it brings them back.
-        main.__test__.openMine();
+        main.__test__.startOwn();
         stepFrames(2);
         expect(list.hidden).toBe(true);
         // The page's own instance: main.js imports the built cards module.
         const { closeCard } = await import('../www/whitestone/js/cards.min.js');
-        closeCard('my-checklists');
+        closeCard('setup');
         stepFrames(2);
         expect(list.hidden).toBe(false);
         // The frame stepped back to hold the lifted floors too.
@@ -469,47 +469,7 @@ describe("the cleaner's PIN form", () => {
         expect(readPin('٤٨٢٩١٣')).toBeNull();   // Arabic-Indic digits are not \d in JavaScript
     });
 
-    function fakePage() {
-        const listeners = {};
-        const classes = new Set();
-        const page = {
-            form: { hidden: true, addEventListener: (type, fn) => { listeners[type] = fn; } },
-            input: { value: '', focused: 0, focus() { this.focused++; } },
-            status: {
-                textContent: '',
-                classList: { toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)) }
-            },
-            classes,
-            submit() {
-                const event = { prevented: false, preventDefault() { this.prevented = true; } };
-                listeners.submit(event);
-                return event;
-            }
-        };
-        const ids = { 'pin-form': page.form, 'pin-input': page.input, 'pin-status': page.status };
-        page.doc = { getElementById: (id) => ids[id] || null };
-        return page;
-    }
-
-    test('the form appears only once the script runs, and never submits a page address', () => {
-        const page = fakePage();
-        expect(wire(page.doc)).toBe(true);
-        expect(page.form.hidden).toBe(false);
-        page.input.value = '12345';
-        expect(page.submit().prevented).toBe(true);
-        expect(page.status.textContent).toBe(COPY.incomplete);
-        expect(page.classes.has('is-problem')).toBe(true);
-        expect(page.input.focused).toBe(1);
-
-        page.input.value = '123 456';
-        expect(page.submit().prevented).toBe(true);
-        expect(page.status.textContent).toBe(COPY.preview);
-        expect(page.classes.has('is-problem')).toBe(false);
-    });
-
-    test('a page without the form is left alone', () => {
-        expect(wire({ getElementById: () => null })).toBe(false);
-    });
+    // Opening, the PIN and the checklist itself: tests/whitestone-tasks.test.mjs.
 
     test('the markup ships the form hidden, so it cannot work without the script', () => {
         const html = readFileSync(join(process.cwd(), 'www', 'whitestone', 'tasks', 'index.html'), 'utf8');
@@ -518,7 +478,8 @@ describe("the cleaner's PIN form", () => {
     });
 
     test('the copy keeps house style', () => {
-        for (const line of Object.values(COPY)) {
+        for (const value of Object.values(COPY)) {
+            const line = typeof value === 'function' ? value('A', 'B') : value;
             expect(line).not.toMatch(/—|;/);
         }
     });

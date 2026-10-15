@@ -206,7 +206,7 @@ const tick = (key, on) => {
     box.checked = on;
     fire(box, 'change');
 };
-const openCards = () => ['my-checklists', 'setup', 'preferences', 'menu', 'quote', 'checklist', 'room', 'task', 'confirm']
+const openCards = () => ['setup', 'preferences', 'quote', 'checklist', 'room', 'task', 'confirm']
     .filter((id) => !dom.el(id).hidden);
 const saved = () => JSON.parse(localStorage.getItem(CONFIG.storage.key));
 const own = (main) => main.getDoc().checklists.find((c) => !c.sample && !c.deletedAt);
@@ -730,13 +730,15 @@ describe('the example', () => {
         expect(line()).toBe(GUIDE.home);
     });
 
-    test('removed from My checklists, the example comes back when asked for again, and after a reload too', async () => {
+    test('an example removed in an earlier version comes back when asked for again, and after a reload too', async () => {
         // QA, 2026-10-14: the removed example kept its fixed id for its
-        // undo, and a second one could not be built beside it.
+        // undo, and a second one could not be built beside it. (My
+        // checklists, which removed it, is gone; a browser may still hold
+        // one it removed.)
         const main = await boot();
         press('example');
-        main.__test__.remove('example-home-1');
-        fire(dom.el('confirm-actions').children[1], 'click');
+        const { deleteChecklist } = await import('../www/whitestone/js/store.min.js');
+        main.__test__.change((d) => deleteChecklist(d, 'example-home-1', CONFIG, new Date()), 'Removed a checklist', null);
         expect(main.__test__.active()).toBeNull();
         main.__test__.guideTo({ type: 'restart' });
         press('example');
@@ -1537,7 +1539,7 @@ describe('getting back out', () => {
         key('Escape');
         expect(main.__test__.model().lifted).toBeNull();
         main.__test__.tapModel('basement');
-        main.__test__.openMine();
+        main.__test__.openChecklistView();
         key('Escape');
         // The card's own Escape is the card's: it closes, and the floor
         // stays open until the next one.

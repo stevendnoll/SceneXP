@@ -58,7 +58,10 @@ const PERSISTENT = {
     'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaf Blower',
     // Unreleased (proto-1). Its privacy.html section is part of Whitestone's
     // M7, before release (PRD 15).
-    'www/whitestone/js/store.js': 'the checklists a visitor builds in Whitestone Home Care'
+    'www/whitestone/js/store.js': 'the checklists a visitor builds in Whitestone Home Care',
+    // The cleaner's page (M4): per shared checklist, its key (from the link),
+    // the 12 hour visit pass the PIN gives, and wrong PINs in a row.
+    'www/whitestone/tasks/js/main.js': 'on a cleaner’s device, the key and visit pass of a checklist shared with them'
 };
 
 /**
