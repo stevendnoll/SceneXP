@@ -72,6 +72,10 @@ describe('the markup', () => {
 // ---- The flows --------------------------------------------------------------
 
 let dom;
+/** A fact at a glance in Maya's bubble (quote, visit): its button, or
+ *  undefined; and its value and note, as shown. */
+const fact = (key) => dom.el('host-facts').children.find((b) => b.id === `host-fact-${key}`);
+const factValue = (key) => (fact(key) ? fact(key).children[1].textContent : undefined);
 /** Undo from the keyboard (the floating Undo is gone, Steve 2026-10-14). */
 const ctrlZ = () => fire(dom.windowStub, 'keydown', { key: 'z', ctrlKey: true, target: dom.documentStub.body });
 
@@ -166,7 +170,7 @@ test('an empty house offers My checklists and the service menu, and nothing that
     expect(visible('help-checklist')).toBe(false);
     expect(visible('help-home')).toBe(false);
     expect(visible('help-prefs')).toBe(false);
-    expect(visible('hud-home')).toBe(false);
+    expect(visible('help-rooms')).toBe(false);
     // No fetch here, so the price sheet waits and nothing breaks.
     expect(main.getState().sheetStatus).toBe('failed');
 });
@@ -184,8 +188,7 @@ test('Start your own: setup makes the checklist, opens it, and offers care prefe
 
     expect(visible('setup')).toBe(false);
     expect(visible('preferences')).toBe(true);
-    expect(dom.el('hud-home').textContent).toBe('Maple Street');
-    expect(visible('help-home') && visible('help-prefs') && visible('help-checklist')).toBe(true);
+    expect(visible('help-home') && visible('help-prefs') && visible('help-checklist') && visible('help-rooms')).toBe(true);
     expect(dom.el('toast-text').textContent).toBe(UI.started('Maple Street'));
 
     prefsBox('no-bleach').checked = true;
@@ -255,7 +258,7 @@ test('My checklists: open, duplicate and remove, with undo for the last two', as
     const [first, second] = main.getDoc().checklists;
     expect(main.getDoc().settings.activeId).toBe(second.id);
 
-    fire(dom.el('hud-home'), 'click');
+    fire(dom.el('help-mine'), 'click');
     expect(visible('my-checklists')).toBe(true);
     const rows = () => dom.el('my-list').children;
     expect(rows()).toHaveLength(2);
@@ -604,9 +607,10 @@ test('without the price sheet, a task waits politely rather than offering nothin
 
 // ---- The quote, the menu, and the checklist's tools (M1 piece 3) -------------
 
-test('the quote chip appears with the first task, in words for a screen reader, and opens the breakdown', async () => {
+test('the quote appears in Maya\'s bubble with the first task, in words for a screen reader, and opens the breakdown', async () => {
     const main = await homeWithPrices();
-    expect(visible('hud-quote')).toBe(false);
+    main.__test__.showGuide();
+    expect(fact('quote')).toBeUndefined();
     // A half bath alone: toilet $12 and sink $6, well under the $120 minimum.
     // A half bath is a bathroom's third type of bath on the card.
     dom.el('room-area').value = 'bathroom';
@@ -624,11 +628,10 @@ test('the quote chip appears with the first task, in words for a screen reader, 
     main.__test__.mutate((d) => addItem(d, checklist(main).id, { roomId: room.id, task: 'toilet' }, CONFIG, new Date()), 'x');
     main.__test__.mutate((d) => addItem(d, checklist(main).id, { roomId: room.id, task: 'bathroom-sink' }, CONFIG, new Date()), 'x');
 
-    expect(visible('hud-quote')).toBe(true);
-    expect(dom.el('hud-quote-text').textContent).toBe('Your quote: $120, about 10 minutes');
-    expect(dom.el('hud-quote').getAttribute('aria-label')).toBe('Your quote, 120 dollars, about 10 minutes. Example prices. Show the breakdown.');
+    expect(factValue('quote')).toBe('$120');
+    expect(fact('quote').getAttribute('aria-label')).toBe('Your quote, 120 dollars, about 10 minutes. Example prices. Show the breakdown.');
 
-    fire(dom.el('hud-quote'), 'click');
+    fire(fact('quote'), 'click');
     expect(visible('quote')).toBe(true);
     expect(dom.el('quote-total').textContent).toBe('Your quote: $120');
     expect(dom.el('quote-minimum').textContent).toBe('Visit minimum $120. Add $102 more to reach it, or it rounds up to $120.');
@@ -762,10 +765,9 @@ test('the example, asked for on a first visit, is priced and opens in full, and 
     expect(main.getState().storageStatus).toBe('fresh');
     const doc = main.getDoc();
     expect(doc.settings.activeId).toBe('example-home-1');
-    expect(dom.el('hud-home').textContent).toBe('Example home');
     expect(visible('help-checklist')).toBe(true);
-    expect(visible('hud-quote')).toBe(true);
-    expect(dom.el('hud-quote-text').textContent).toMatch(/^Your quote: \$\d+/);
+    main.__test__.showGuide();
+    expect(factValue('quote')).toMatch(/^\$\d+(\.\d\d)?$/);
     // Shown, not saved: nothing is written until the visitor changes something.
     expect(localStorage.getItem(CONFIG.storage.key)).toBeNull();
 
@@ -799,7 +801,6 @@ test('starting your own from the example keeps the example in the list, and a re
     const doc = main.getDoc();
     expect(doc.checklists.map((c) => c.title)).toEqual(['Example home', 'Our place']);
     expect(doc.settings.activeId).toBe(doc.checklists[1].id);
-    expect(dom.el('hud-home').textContent).toBe('Our place');
 });
 
 test('UNDO ACROSS EVERY KIND OF CHANGE walks the document back to exactly where it began', async () => {

@@ -174,6 +174,11 @@ describe('what the panel says (pure)', () => {
 // ---- Driven through the page ------------------------------------------------------------
 
 let dom;
+/** A fact at a glance in Maya's bubble (quote, visit): its button, or
+ *  undefined; and its value and note, as shown. */
+const fact = (key) => dom.el('host-facts').children.find((b) => b.id === `host-fact-${key}`);
+const factValue = (key) => (fact(key) ? fact(key).children[1].textContent : undefined);
+const factNote = (key) => (fact(key) && fact(key).children[2] ? fact(key).children[2].textContent : '');
 /** Undo from the keyboard (the floating Undo is gone, Steve 2026-10-14). */
 const ctrlZ = () => fire(dom.windowStub, 'keydown', { key: 'z', ctrlKey: true, target: dom.documentStub.body });
 /** The real setImmediate, kept before the fake timers stand in for it. */
@@ -196,7 +201,7 @@ afterEach(() => {
  *  and put her away, so the panel is what is being tried. */
 async function bootHome() {
     globalThis.fetch = async (url) => ({ ok: true, status: 200, json: async () => JSON.parse(readFileSync(join(WS, String(url)), 'utf8')) });
-    for (const id of ['ws-host', 'ws-panel', 'hud-rooms', 'ws-help-menu']) dom.el(id).hidden = true;
+    for (const id of ['ws-host', 'ws-panel', 'help-rooms', 'ws-help-menu']) dom.el(id).hidden = true;
     const main = await import('../www/whitestone/js/main.js');
     await flushAsync(20);
     await jest.advanceTimersByTimeAsync(CONFIG.loadingReveal + CONFIG.guide.delay * 1000 + 200);
@@ -305,10 +310,10 @@ describe('the panel on the page', () => {
         expect(dom.el('task').hidden).toBe(false);
     });
 
-    test('the Rooms chip opens the whole house, and the keyboard moves through its floors and into one', async () => {
+    test('Help\'s Rooms and tasks opens the whole house, and the keyboard moves through its floors and into one', async () => {
         const main = await bootHome();
-        expect(dom.el('hud-rooms').hidden).toBe(false);
-        fire(dom.el('hud-rooms'), 'click');
+        expect(dom.el('help-rooms').hidden).toBe(false);
+        fire(dom.el('help-rooms'), 'click');
         expect(shown()).toBe(true);
         expect(title()).toBe(checklist(main).title);
         expect(rows().map((r) => r.children[0].textContent)).toEqual(['Main floor', 'Second floor']);
@@ -323,10 +328,11 @@ describe('the panel on the page', () => {
         fire(rows()[1], 'click');
         expect(title()).toBe('Second floor');
         expect(main.__test__.model().lifted).toBe('second');
-        // Back to the whole house closes it, and focus goes to the Rooms chip.
+        // Back from the whole house closes it, and focus goes to Help, where
+        // Rooms and tasks brings it back.
         fire(dom.el('panel-back'), 'click');
         expect(shown()).toBe(false);
-        expect(dom.el('hud-rooms').focused).toBe(true);
+        expect(dom.el('ws-help').focused).toBe(true);
     });
 
     test('Escape steps back through the selection, one step a press', async () => {
@@ -562,7 +568,7 @@ describe('choosing a time and publishing, on the page', () => {
         const main = await bootHome();
         main.__test__.tapModel('main');
         fire(chip('kitchen'), 'click');
-        fire(dom.el('hud-rooms'), 'click');
+        fire(dom.el('help-rooms'), 'click');
         return main;
     }
 
@@ -615,7 +621,7 @@ describe('choosing a time and publishing, on the page', () => {
         expect(main.__test__.active().published.id).toBe(c.published.id);
         // The whole house now offers the visit, and opens the receipt again.
         fire(dom.el('receipt-done'), 'click');
-        fire(dom.el('hud-rooms'), 'click');
+        fire(dom.el('help-rooms'), 'click');
         expect(action('visit').textContent).toBe(PANEL.visit);
         expect(action('book')).toBeUndefined();
         fire(action('visit'), 'click');
@@ -642,7 +648,7 @@ describe('choosing a time and publishing, on the page', () => {
     test('the example offers no time to choose, and says why when asked', async () => {
         const main = await bootHome();
         main.__test__.showExample();
-        fire(dom.el('hud-rooms'), 'click');
+        fire(dom.el('help-rooms'), 'click');
         expect(action('book')).toBeUndefined();
         await main.__test__.openBooking();
         expect(dom.el('booking').hidden).toBe(true);
@@ -676,18 +682,17 @@ describe('changing things after publishing, on the page', () => {
 
     test('an edit is shown as not sent, and Send my changes sends it, with nothing to ask', async () => {
         const main = await bookedHome();
-        expect(dom.el('hud-visit').hidden).toBe(false);
-        expect(dom.el('hud-visit-text').textContent).toBe('Your visit: Thursday, October 15, 9:30 am');
-        expect(dom.el('hud-visit-note').hidden).toBe(true);
+        expect(factValue('visit')).toBe('Thursday, October 15, 9:30 am');
+        expect(factNote('visit')).toBe('');
         const stove = main.__test__.active().items.find((i) => i.task === 'stovetop');
         main.__test__.toggleStar(stove.id);
-        expect(dom.el('hud-visit-note').hidden).toBe(false);
-        expect(dom.el('hud-visit').getAttribute('aria-label')).toMatch(/Changes not sent\.$/);
-        fire(dom.el('hud-rooms'), 'click');
+        expect(factNote('visit')).toBe(UI.visitChipUnsent);
+        expect(fact('visit').getAttribute('aria-label')).toMatch(/Changes not sent\.$/);
+        fire(dom.el('help-rooms'), 'click');
         expect(action('send').textContent).toBe(PANEL.send);
         fire(action('send'), 'click');
         // A star does not change the price, so nothing is asked.
-        expect(await until(() => dom.el('hud-visit-note').hidden)).toBe(true);
+        expect(await until(() => factNote('visit') === '')).toBe(true);
         expect(dom.el('confirm').hidden).toBe(true);
         expect(main.__test__.active().published.version).toBe(2);
         expect(dom.el('toast-text').textContent).toBe(CHANGES.sent);
@@ -716,7 +721,7 @@ describe('changing things after publishing, on the page', () => {
 
     test('from the receipt: Change the time opens the calendar on the visit\'s own day, and moves it', async () => {
         const main = await bookedHome();
-        fire(dom.el('hud-visit'), 'click');
+        fire(fact('visit'), 'click');
         expect(await until(() => !dom.el('receipt').hidden)).toBe(true);
         expect(dom.el('receipt-reschedule').hidden).toBe(false);
         expect(dom.el('receipt-cancel-visit').hidden).toBe(false);
@@ -765,9 +770,9 @@ describe('changing things after publishing, on the page', () => {
         expect(dom.el('receipt-when').textContent).toBe(RECEIPT.noVisit);
         expect(dom.el('receipt-book').hidden).toBe(false);
         expect(dom.el('receipt-calendar').hidden).toBe(true);
-        expect(dom.el('hud-visit-text').textContent).toBe(UI.visitChipNone);
+        expect(factValue('visit')).toBe(GUIDE.factNoVisit);
         fire(dom.el('receipt-done'), 'click');
-        fire(dom.el('hud-rooms'), 'click');
+        fire(dom.el('help-rooms'), 'click');
         expect(action('book').textContent).toBe(PANEL.book);
         expect(action('visit').textContent).toBe(PANEL.link);
     });
@@ -780,7 +785,7 @@ describe('changing things after publishing, on the page', () => {
         fire(confirmButton(), 'click');
         expect(await until(() => main.__test__.active().published === null)).toBe(true);
         expect(dom.el('receipt').hidden).toBe(true);
-        expect(dom.el('hud-visit').hidden).toBe(true);
+        expect(fact('visit')).toBeUndefined();
         expect(main.__test__.active().booking).toBeNull();
     });
 
@@ -862,11 +867,6 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
     const line = () => dom.el('host-line').textContent;
     const picks = () => (dom.el('host-choices').children[0] || { children: [] }).children;
     const tucked = () => dom.el('ws-host').classList.contains('is-minimized');
-    /** What Maya's bubble says at a glance for `key` (quote, visit). */
-    const factOf = (key) => {
-        const f = dom.el('host-facts').children.find((d) => d.className === `host-fact host-fact-${key}`);
-        return f ? f.children[1].textContent : undefined;
-    };
     const esc = (text) => text.replace(/[.?$]/g, '\\$&');
     async function until(test) {
         for (let i = 0; i < 2000 && !test(); i++) await new Promise((r) => REAL_IMMEDIATE(r));
@@ -913,13 +913,13 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         expect(said()).toBe(line());
         expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.seeVisit, GUIDE.changeChecklist, GUIDE.illLook]);
         expect(document.activeElement.id).toBe('host-visit');
-        expect(dom.el('hud-visit').classList.contains('has-halo')).toBe(true);
+        expect(fact('visit').classList.contains('has-halo')).toBe(true);
         // At a glance under her name: the quote, and now the visit.
-        expect(factOf('quote')).toMatch(/^\$\d+$/);
-        expect(factOf('visit')).toBe('Thursday, October 15, 9:30 am');
+        expect(factValue('quote')).toMatch(/^\$\d+$/);
+        expect(factValue('visit')).toBe('Thursday, October 15, 9:30 am');
         // Used, the ring goes; I'll look around lets her words go.
-        fire(dom.el('hud-visit'), 'click');
-        expect(dom.el('hud-visit').classList.contains('has-halo')).toBe(false);
+        fire(fact('visit'), 'click');
+        expect(fact('visit').classList.contains('has-halo')).toBe(false);
     });
 
     test('Choose a time, closed without a time: "the time can wait", where the home stands, and the same ways on', async () => {
@@ -930,7 +930,7 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         await flushAsync(5);
         expect(line()).toMatch(new RegExp(`^${GUIDE.afterNoTime} Our home has 1 room and 9 tasks, \\$\\d+ so far\\. ${esc(GUIDE.whatNext)}$`));
         expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.editRooms, GUIDE.reviewChecklist, GUIDE.illLook]);
-        expect(dom.el('hud-visit').classList.contains('has-halo')).toBe(false);
+        expect(fact('visit') ? fact('visit').classList.contains('has-halo') : false).toBe(false);
     });
 
     test('the cards are settled once the last has closed, not while one is on its way in', async () => {
@@ -1020,7 +1020,7 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         fire(dom.el('receipt-done'), 'click');
         await flushAsync(5);
         expect(line()).toBe(`${GUIDE.afterMoved('Friday, October 16', '8:00 am')} ${GUIDE.whatNext}`);
-        expect(dom.el('hud-visit').classList.contains('has-halo')).toBe(true);
+        expect(fact('visit').classList.contains('has-halo')).toBe(true);
     });
 
     test('See my visit: canceled, then unpublished, each said once she is back', async () => {
@@ -1036,7 +1036,7 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         fire(dom.el('receipt-done'), 'click');
         await flushAsync(5);
         expect(line()).toBe(`${GUIDE.afterCanceled} ${GUIDE.whatNext}`);
-        expect(factOf('visit')).toBe(GUIDE.factNoVisit);
+        expect(factValue('visit')).toBe(GUIDE.factNoVisit);
         expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.seeLink, GUIDE.changeChecklist, GUIDE.illLook]);
         main.__test__.onHostButton('visit');
         expect(await until(() => !dom.el('receipt').hidden)).toBe(true);

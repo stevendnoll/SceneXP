@@ -269,15 +269,12 @@ export function quoteFor(checklist, sheet) {
     return quoteChecklist(sheet, { rooms: checklist.rooms, items: liveItems(checklist) });
 }
 
-/** The chip's words, or null when there is nothing to quote yet. */
+/** The quote in words for a screen reader (the quote at a glance in
+ *  Maya's bubble), or null when there is nothing to quote yet. */
 export function quoteChip(checklist, sheet) {
     if (!checklist || !sheet || !liveItems(checklist).length) return null;
     const q = quoteFor(checklist, sheet);
-    const time = formatMinutes(q.minutes);
-    return {
-        text: UI.quoteChip(formatMoney(q.totalCents), time),
-        spoken: UI.quoteChipSpoken(spokenMoney(q.totalCents), time)
-    };
+    return { spoken: UI.quoteChipSpoken(spokenMoney(q.totalCents), formatMinutes(q.minutes)) };
 }
 
 /** The quote card: total, time, the visit minimum, any task that cannot be

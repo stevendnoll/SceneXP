@@ -312,14 +312,12 @@ export const UI = Object.freeze({
     removePhoto: (n) => `Remove photo ${n}`,
     photoAlt: (task, n) => `Photo ${n} for ${task}`,
 
-    // The booked visit, under the quote (PRD 8.6)
-    visitChip: (day, time) => `Your visit: ${day}, ${time}`,
+    // The booked visit, at a glance in Maya's bubble (PRD 8.6)
     visitChipSpoken: (day, time) => `Your visit, ${day} at ${time}. Show the link, the PIN and the ways to change it.`,
     visitChipNone: 'Published, no visit booked',
     visitChipUnsent: 'Changes not sent',
 
     // The quote (PRD 8.5)
-    quoteChip: (money, time) => `Your quote: ${money}, ${time}`,
     quoteChipSpoken: (money, time) => `Your quote, ${money}, ${time}. Example prices. Show the breakdown.`,
     examplePrices: 'Example prices',
     quoteTotal: (money) => `Your quote: ${money}`,
@@ -542,8 +540,6 @@ export const PANEL = Object.freeze({
     visit: 'Your visit',
     link: 'Link and PIN',
     send: 'Send my changes',
-    open: 'Rooms',
-    openLabel: 'Your home, floor by floor: its floors, rooms and tasks',
     starred: (name) => `Starred ${name}. We start there.`,
     unstarred: (name) => `${name} is no longer starred.`,
     starStep: 'Starred a task'
@@ -564,6 +560,7 @@ export const HELP = Object.freeze({
     resetDetailPublished: 'This unpublishes what you published, so its links and PINs stop working and any booked visit is canceled. Then it clears your checklists, photos and answers from this browser, and Maya will greet you as on your first visit. It cannot be undone.',
     resetLocked: (hours) => `You have a visit less than ${hours} hours away, so Start over has to wait until after it.`,
     resetDone: 'Everything is cleared. You are back at the beginning.',
+    rooms: 'Rooms and tasks',
     checklist: 'Your checklist',
     menu: 'Service menu',
     prefs: 'Care preferences',

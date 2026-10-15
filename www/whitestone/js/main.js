@@ -520,13 +520,20 @@ function onPanelRow(kind, id) {
 }
 
 /** The panel's back button: one step back, the keyboard kept in the panel,
- *  or on the Rooms chip once the panel has gone. */
+ *  or on Help (where Rooms and tasks brings it back) once the panel has
+ *  gone. */
 function onPanelBack() {
     selectTo(stepOut(ui.selected), { focus: true });
     if (!ui.selected) {
-        const rooms = el('hud-rooms');
-        if (rooms && typeof rooms.focus === 'function') rooms.focus();
+        const help = el('ws-help');
+        if (help && typeof help.focus === 'function') help.focus();
     }
+}
+
+/** The whole house in the panel, every floor, room and task, from the
+ *  keyboard as well as the pointer (Help's Rooms and tasks). */
+function openRooms() {
+    selectTo({ scope: 'house', level: null, roomId: null, itemId: null }, { focus: true });
 }
 
 /** A task starred, or no longer: the ones that matter most, done first. */
@@ -1112,27 +1119,51 @@ function returningChoices(c) {
  *  head while she is speaking. Null when Maya has nothing to say. */
 function guideView() {
     const v = sceneView();
-    return v ? { ...v, facts: v.minimized ? null : hostFacts(active()) } : v;
+    return v ? { ...v, facts: hostFacts(active()) } : v;
 }
 
 /**
- * The home at a glance, under Maya's name (Steve, 2026-10-14): its quote
- * once a task is priced (the example's marked as such), and once published
- * its visit, or that none is booked. Null when there is nothing to show
- * yet (the greeting, the kind of home, the floors).
+ * The home at a glance, under Maya's name (Steve, 2026-10-14), tucked
+ * away or not, since nothing else on the page shows it now: its quote once
+ * a task is priced (the example's marked as such), a tap away from the
+ * breakdown; and once published its visit, or that none is booked, a tap
+ * away from the receipt, with changes not sent said under it. Null when
+ * there is nothing to show yet (the greeting, the kind of home, the
+ * floors).
  */
 function hostFacts(c) {
-    if (!c || !state.sheet || !liveItems(c).length) return null;
-    const quote = quoteChecklist(state.sheet, c);
-    const facts = [{ key: 'quote', label: c.sample ? GUIDE.factExample : GUIDE.factQuote, value: formatMoney(quote.totalCents) }];
+    if (!c) return null;
+    const facts = [];
+    if (state.sheet && liveItems(c).length) {
+        const quote = quoteChecklist(state.sheet, c);
+        const chip = quoteChip(c, state.sheet);
+        facts.push({
+            key: 'quote', label: c.sample ? GUIDE.factExample : GUIDE.factQuote, value: formatMoney(quote.totalCents),
+            // Every price on screen is labeled an example until launch (PRD 4).
+            spoken: chip ? chip.spoken : '', note: UI.examplePrices
+        });
+    }
     if (isPublished(c)) {
+        const when = isBooked(c) ? [dayLabel(c.booking.date), clockLabel(c.booking.time)] : null;
+        const unsent = hasUnsent(c);
+        const spoken = when ? UI.visitChipSpoken(...when) : `${UI.visitChipNone}.`;
         facts.push({
             key: 'visit',
             label: GUIDE.factVisit,
-            value: isBooked(c) ? GUIDE.factWhen(dayLabel(c.booking.date), clockLabel(c.booking.time)) : GUIDE.factNoVisit
+            value: when ? GUIDE.factWhen(...when) : GUIDE.factNoVisit,
+            note: unsent ? UI.visitChipUnsent : '',
+            spoken: unsent ? `${spoken} ${UI.visitChipUnsent}.` : spoken
         });
     }
-    return facts;
+    return facts.length ? facts : null;
+}
+
+/** A fact at a glance tapped: the quote's breakdown, or the receipt. */
+function onHostFact(key) {
+    if (!state.loaded) return;
+    if (host) host.poke();
+    if (key === 'quote') openQuote();
+    else if (key === 'visit') openReceipt();
 }
 
 /** The scene's bubble, with the floors to tick filled in from the open
@@ -1600,6 +1631,7 @@ function setupHelp(signal) {
     const items = {
         'help-again': () => guideTo({ type: 'again' }),
         'help-reset': confirmStartOver,
+        'help-rooms': openRooms,
         'help-checklist': openChecklistView,
         'help-menu': openMenu,
         'help-prefs': openPreferences,
@@ -2226,48 +2258,17 @@ function storageNote() {
     return storageUse(state.doc, CONFIG).nearlyFull ? STORAGE_NOTES.nearlyFull : '';
 }
 
-/** The visit chip beside the quote (PRD 8.6), once the checklist is
- *  published: when the visit is (or that none is booked), and changes not
- *  sent yet. */
-function drawVisitChip(c) {
-    const chip = el('hud-visit');
-    if (!chip) return;
-    chip.hidden = !isPublished(c);
-    if (chip.hidden) return;
-    const unsent = hasUnsent(c);
-    const text = isBooked(c) ? UI.visitChip(dayLabel(c.booking.date), clockLabel(c.booking.time)) : UI.visitChipNone;
-    const textEl = el('hud-visit-text');
-    if (textEl) textEl.textContent = text;
-    const note = el('hud-visit-note');
-    if (note) note.hidden = !unsent;
-    const spoken = isBooked(c) ? UI.visitChipSpoken(dayLabel(c.booking.date), clockLabel(c.booking.time)) : text;
-    chip.setAttribute('aria-label', unsent ? `${spoken} ${UI.visitChipUnsent}.` : spoken);
-}
-
 /** Draw everything on screen again from the document. */
 function refresh() {
     if (!state.doc) return;
     const c = active();
-    const home = el('hud-home');
-    if (home) {
-        home.hidden = !c;
-        home.textContent = c ? c.title : '';
-    }
     const show = (id, on) => { const b = el(id); if (b) b.hidden = !on; };
     show('my-clear-example', hasSamples(state.doc));
     show('help-checklist', Boolean(c));
-    show('hud-rooms', Boolean(c));
+    show('help-rooms', Boolean(c));
     show('help-home', Boolean(c));
     show('help-prefs', Boolean(c));
     const chip = quoteChip(c, state.sheet);
-    const quoteBtn = el('hud-quote');
-    if (quoteBtn) {
-        quoteBtn.hidden = !chip;
-        if (chip) quoteBtn.setAttribute('aria-label', chip.spoken);
-    }
-    const quoteText = el('hud-quote-text');
-    if (quoteText) quoteText.textContent = chip ? chip.text : '';
-    drawVisitChip(c);
     const note = el('storage-note');
     if (note) note.textContent = storageNote();
     if (isOpen('my-checklists')) drawMyChecklists();
@@ -2890,7 +2891,7 @@ function setupEventListeners() {
     host = createHost({
         signal,
         timing: { pulse: CONFIG.guide.pulse, again: CONFIG.guide.again },
-        on: { button: onHostButton, floor: onFloor, step: onHostStep, chip: onGuideChip }
+        on: { button: onHostButton, floor: onFloor, step: onHostStep, chip: onGuideChip, fact: onHostFact }
     });
     setupHelp(signal);
     panel = createPanel({
@@ -2919,7 +2920,6 @@ function setupEventListeners() {
     }, { signal });
 
     const on = (id, type, fn) => { const node = el(id); if (node) node.addEventListener(type, fn, { signal }); };
-    on('hud-home', 'click', openMine);
     on('my-new', 'click', startOwn);
     on('my-clear-example', 'click', clearExample);
     on('setup-form', 'submit', submitSetup);
@@ -2957,9 +2957,6 @@ function setupEventListeners() {
     on('task-photo-input', 'change', addTaskPhoto);
     on('task-notes', 'input', () => showHints('task-notes', 'task-notes-hint'));
     on('task-avoid', 'input', () => showHints('task-avoid', 'task-avoid-hint'));
-    on('hud-quote', 'click', openQuote);
-    on('hud-visit', 'click', () => openReceipt());
-    on('hud-rooms', 'click', () => selectTo({ scope: 'house', level: null, roomId: null, itemId: null }, { focus: true }));
     on('quote-open-checklist', 'click', openChecklistView);
     booking = createBooking({
         signal,

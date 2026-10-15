@@ -332,7 +332,7 @@ describe('short loops away from Maya, and back (QA, 2026-10-14)', () => {
     test('her words back: what main.js says, the ways on, and the visit chip ringed after a booking or a move', () => {
         const back = (outcome) => viewFor({ ...fresh(), scene: 'done', minimized: false, outcome }, { standby: 'Said.' });
         expect(back('booked')).toMatchObject({ text: 'Said.', choices: 'returning', halo: HALO.visit });
-        expect(back('moved').halo).toEqual({ kind: 'element', id: 'hud-visit' });
+        expect(back('moved').halo).toEqual({ kind: 'element', id: 'host-fact-visit' });
         for (const outcome of ['canceled', 'unpublished', 'sent', 'noTime', 'notSent', 'same', null]) expect(back(outcome).halo).toBeNull();
         // Tucked, nothing is ringed.
         expect(viewFor({ ...fresh(), scene: 'done', minimized: true, outcome: 'booked' }, {}).halo).toBeNull();
@@ -477,7 +477,7 @@ describe('what Maya says', () => {
         expect(halo('dots')).toEqual({ kind: 'dot' });
         expect(halo('rooms')).toEqual({ kind: 'floor' });
         expect(halo('look')).toEqual({ kind: 'floor' });
-        expect(halo('review')).toEqual({ kind: 'element', id: 'hud-quote' });
+        expect(halo('review')).toEqual({ kind: 'element', id: 'host-fact-quote' });
         expect(halo('hint')).toEqual({ kind: 'element', id: 'ws-help' });
         expect(halo('firstRoom')).toEqual({ kind: 'element', id: 'host-chip-kitchen' });
         for (const scene of ['hello', 'home', 'floors', 'added', 'saved', 'example1', 'welcome', 'about']) expect(halo(scene)).toBeNull();

@@ -74,10 +74,10 @@ export const HALO = Object.freeze({
     dots: Object.freeze({ kind: 'dot' }),
     rooms: Object.freeze({ kind: 'floor' }),
     look: Object.freeze({ kind: 'floor' }),
-    review: Object.freeze({ kind: 'element', id: 'hud-quote' }),
+    review: Object.freeze({ kind: 'element', id: 'host-fact-quote' }),
     hint: Object.freeze({ kind: 'element', id: 'ws-help' }),
     /** Not a scene's: standing by, just back from booking (viewFor). */
-    visit: Object.freeze({ kind: 'element', id: 'hud-visit' })
+    visit: Object.freeze({ kind: 'element', id: 'host-fact-visit' })
 });
 
 /**
@@ -428,8 +428,8 @@ export function viewFor(guide, ctx = {}) {
     case 'done':
         // Never silent (QA, 2026-10-14): where the home stands and the ways
         // on (`ctx.standby`, main.js), or tucked away as Need a hand?
-        // Back from booking or moving the visit, the visit chip is ringed:
-        // where it can be seen again.
+        // Back from booking or moving the visit, the visit at a glance is
+        // ringed: where it can be seen again.
         return {
             ...base, text: ctx.standby || GUIDE.standbyPlain, buttons: [], choices: 'returning', minimized: Boolean(guide.minimized),
             halo: !guide.minimized && (guide.outcome === 'booked' || guide.outcome === 'moved') ? HALO.visit : null

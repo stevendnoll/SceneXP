@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=21" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=24" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7107,9 +7107,9 @@ html [data-ui-theme="surf" lang="en"]
     link [href="js/layout.min.js" rel="modulepreload"]
     link [href="js/rooms.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
-    link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
+    link [href="favicon.svg?v=2" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=21" rel="stylesheet"]
+    link [href="css/experience.min.css?v=24" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7138,8 +7138,7 @@ html [data-ui-theme="surf" lang="en"]
                 "Privacy"
     div#loading-screen
       div.loader-content
-        div.loader-title
-          "WHITESTONE"
+        img.loader-logo [alt="Whitestone Home Care" height="239" src="assets/logo-whitestone.svg" width="1068"]
         p.loader-tagline
           "Bright homes, kept with care."
         div.loader-bar [aria-hidden="true"]
@@ -7158,7 +7157,7 @@ html [data-ui-theme="surf" lang="en"]
             "Maya"
           span.host-role
             "Whitestone Home Care"
-      dl#host-facts.host-facts [aria-label="Your home at a glance" hidden]
+      div#host-facts.host-facts [aria-label="Your home at a glance" hidden role="group"]
       button#host-expand.ws-btn.ws-btn-small.host-expand [aria-label="Maya, your host: need a hand?" hidden type="button"]
         "Need a hand?"
       ol#host-progress.host-progress [hidden]
@@ -7187,19 +7186,8 @@ html [data-ui-theme="surf" lang="en"]
       div#panel-chips.panel-chips [hidden]
       div#panel-actions.panel-actions
     p#ws-live.sr-only [aria-live="polite" role="status"]
-    div#ws-hud.ui-float.ws-hud [aria-label="Your checklist" role="group"]
-      button#hud-home.hud-chip [hidden type="button"]
-        "Our home"
-      button#hud-rooms.hud-chip [aria-label="Your home, floor by floor: its floors, rooms and tasks" hidden type="button"]
-        "Rooms"
-      button#hud-quote.hud-chip.hud-quote [hidden type="button"]
-        span#hud-quote-text
-        span.hud-example
-          "Example prices"
-      button#hud-visit.hud-chip.hud-visit [hidden type="button"]
-        span#hud-visit-text
-        span#hud-visit-note.hud-visit-note [hidden]
-          "Changes not sent"
+    div#ws-brand.ui-float.ws-brand
+      img [alt="Whitestone Home Care" height="239" src="assets/logo-whitestone.svg" width="1068"]
     div#ws-tools.ui-float.ws-tools [aria-label="Help" role="group"]
       button#ws-help.tool-btn.tool-help [aria-controls="ws-help-menu" aria-expanded="false" aria-haspopup="true" aria-label="Help and your checklist" type="button"]
         "?"
@@ -7208,6 +7196,8 @@ html [data-ui-theme="surf" lang="en"]
           "Show me again"
         button#help-reset.help-item [type="button"]
           "Start over"
+        button#help-rooms.help-item [hidden type="button"]
+          "Rooms and tasks"
         button#help-checklist.help-item [hidden type="button"]
           "Your checklist"
         button#help-menu.help-item [type="button"]
@@ -7591,7 +7581,7 @@ html [lang="en"]
     meta [content="The Whitestone Home Care mark, a white stone on slate blue, above the words Your cleaning checklist." name="twitter:image:alt"]
     title
       "Your checklist | Whitestone Home Care"
-    link [href="../favicon.svg?v=1" rel="icon" type="image/svg+xml"]
+    link [href="../favicon.svg?v=2" rel="icon" type="image/svg+xml"]
     link [href="css/tasks.min.css?v=1" rel="stylesheet"]
     script [src="js/main.min.js?v=1" type="module"]
   body

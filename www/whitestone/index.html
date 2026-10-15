@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=21" as="style">
+    <link rel="preload" href="css/experience.min.css?v=24" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -154,10 +154,10 @@
     <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
     <!-- END generated modulepreload -->
 
-    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=21">
+    <link rel="stylesheet" href="css/experience.min.css?v=24">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -196,7 +196,7 @@
 
     <div id="loading-screen">
         <div class="loader-content">
-            <div class="loader-title">WHITESTONE</div>
+            <img class="loader-logo" src="assets/logo-whitestone.svg" alt="Whitestone Home Care" width="1068" height="239">
             <p class="loader-tagline">Bright homes, kept with care.</p>
             <div class="loader-bar" aria-hidden="true">
                 <div class="loader-progress" id="load-progress"></div>
@@ -226,9 +226,13 @@
             <span class="host-portrait" aria-hidden="true">M</span>
             <p class="host-who"><span id="host-name" class="host-name">Maya</span> <span class="host-role">Whitestone Home Care</span></p>
         </div>
-        <!-- The home at a glance (host.js drawFacts): its quote, and once
-             published its visit. Hidden until there is a price to show. -->
-        <dl id="host-facts" class="host-facts" aria-label="Your home at a glance" hidden></dl>
+        <!-- THE HOME AT A GLANCE (host.js drawFacts): its quote (PRD 8.5),
+             and once published its visit (PRD 8.6), each a button to the
+             breakdown or the receipt. In view while she is tucked away too,
+             since nothing else on the page shows them (Steve, 2026-10-14:
+             the chips top left were lost against the studio). Hidden until
+             there is a price to show. -->
+        <div id="host-facts" class="host-facts" role="group" aria-label="Your home at a glance" hidden></div>
         <button id="host-expand" class="ws-btn ws-btn-small host-expand" type="button" aria-label="Maya, your host: need a hand?" hidden>Need a hand?</button>
         <ol id="host-progress" class="host-progress" hidden></ol>
         <p id="host-line" class="host-line"></p>
@@ -265,28 +269,11 @@
     <!-- Every change, said aloud. Polite, so it waits its turn. -->
     <p id="ws-live" class="sr-only" role="status" aria-live="polite"></p>
 
-    <!-- THE HOME, top left: which checklist is open, a tap away from the
-         list of them. A .ui-float, so it is display:none until main.js
-         reveals it after the loading screen. -->
-    <div id="ws-hud" class="ui-float ws-hud" role="group" aria-label="Your checklist">
-        <button id="hud-home" class="hud-chip" type="button" hidden>Our home</button>
-        <!-- The panel on the whole house: every floor, room and task, from
-             the keyboard as well as the pointer. -->
-        <button id="hud-rooms" class="hud-chip" type="button" aria-label="Your home, floor by floor: its floors, rooms and tasks" hidden>Rooms</button>
-        <!-- THE QUOTE, always in view once there is a task (PRD 8.5). Its
-             aria-label says the money in words and that the prices are
-             examples. -->
-        <button id="hud-quote" class="hud-chip hud-quote" type="button" hidden>
-            <span id="hud-quote-text"></span>
-            <span class="hud-example">Example prices</span>
-        </button>
-        <!-- THE VISIT, once the checklist is published (PRD 8.6): when it
-             is, or that none is booked, and changes not sent yet. Opens the
-             receipt, where it can be changed. -->
-        <button id="hud-visit" class="hud-chip hud-visit" type="button" hidden>
-            <span id="hud-visit-text"></span>
-            <span id="hud-visit-note" class="hud-visit-note" hidden>Changes not sent</span>
-        </button>
+    <!-- THE WORDMARK, top left (Steve, 2026-10-14: concept C, where the
+         chips were). Not a control: a tap passes through to the studio. Off
+         on a phone, where the house needs the top of the screen. -->
+    <div id="ws-brand" class="ui-float ws-brand">
+        <img src="assets/logo-whitestone.svg" alt="Whitestone Home Care" width="1068" height="239">
     </div>
 
     <!-- HELP, top right (ONBOARDING section 3). Help opens a short menu:
@@ -301,6 +288,7 @@
         <div id="ws-help-menu" class="help-menu" role="group" aria-label="Help and your checklist" hidden>
             <button id="help-again" class="help-item" type="button">Show me again</button>
             <button id="help-reset" class="help-item" type="button">Start over</button>
+            <button id="help-rooms" class="help-item" type="button" hidden>Rooms and tasks</button>
             <button id="help-checklist" class="help-item" type="button" hidden>Your checklist</button>
             <button id="help-menu" class="help-item" type="button">Service menu</button>
             <button id="help-prefs" class="help-item" type="button" hidden>Care preferences</button>

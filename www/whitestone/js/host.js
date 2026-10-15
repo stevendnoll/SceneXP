@@ -170,18 +170,25 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         choices.appendChild(h('label', { className: 'host-title-label', attrs: { for: 'host-title' } }, [h('span', { text: GUIDE.titleLabel }), titleField]));
     }
 
-    /** The home at a glance (`view.facts`, each `{ key, label, value }`):
-     *  its quote and its visit, small, under her name. */
+    /** The home at a glance (`view.facts`, each `{ key, label, value,
+     *  note, spoken }`): its quote and its visit, small, under her name,
+     *  each a button (`on.fact(key)`: the breakdown, the receipt). */
     function drawFacts() {
         if (!facts) return;
         clear(facts);
         const list = view.facts || [];
         facts.hidden = !list.length;
         for (const f of list) {
-            facts.appendChild(h('div', { className: `host-fact host-fact-${f.key}` }, [
-                h('dt', { text: f.label }),
-                h('dd', { id: `host-fact-${f.key}`, text: f.value })
-            ]));
+            const parts = [h('span', { className: 'host-fact-label', text: f.label }), h('span', { className: 'host-fact-value', text: f.value })];
+            if (f.note) parts.push(h('span', { className: 'host-fact-note', text: f.note }));
+            const btn = h('button', {
+                type: 'button', id: `host-fact-${f.key}`, className: `host-fact host-fact-${f.key}`,
+                attrs: f.spoken ? { 'aria-label': f.spoken } : {}
+            }, parts);
+            btn.addEventListener('click', () => {
+                if (typeof on.fact === 'function') on.fact(f.key);
+            }, { signal });
+            facts.appendChild(btn);
         }
     }
 
@@ -260,10 +267,10 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             covered = Boolean(on);
             place();
         },
-        /** A button she drew (a choice, a chip, an action) by its id, for
+        /** A button she drew (a fact, a choice, a chip, an action) by its id, for
          *  its halo; null when there is none. */
         nodeOf(id) {
-            for (const box of [choices, actions]) {
+            for (const box of [facts, choices, actions]) {
                 const stack = box ? [box] : [];
                 while (stack.length) {
                     const n = stack.pop();

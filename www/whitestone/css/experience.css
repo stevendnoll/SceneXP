@@ -27,10 +27,21 @@ body {
         #F4F2EE;
 }
 
-#loading-screen .loader-title {
-    color: #22252A;
-    letter-spacing: 0.22em;
-    font-weight: 500;
+/* The wordmark in place of the title (concept C, 2026-10-14), as wide as
+   the bar beneath it. */
+#loading-screen .loader-logo {
+    display: block;
+    width: 300px;
+    max-width: 80vw;
+    height: auto;
+    margin: 0 auto 2rem;
+}
+
+/* Where the shared bar narrows to 200 px. */
+@media (max-width: 768px) {
+    #loading-screen .loader-logo {
+        width: 220px;
+    }
 }
 
 #loading-screen .loader-bar {
@@ -657,39 +668,29 @@ textarea.ws-input {
     color: var(--ws-muted);
 }
 
-/* ---- The home chip, top left ---------------------------------------------- */
+/* ---- The wordmark, top left (Steve, 2026-10-14) ----------------------------- */
 
-.ws-hud {
+/* Concept C, the gable over the name (assets/logo-whitestone.svg). Under
+   Help and Maya, never in a pointer's way. */
+.ws-brand {
     position: fixed;
-    top: max(16px, env(safe-area-inset-top));
-    left: 16px;
+    top: max(18px, env(safe-area-inset-top));
+    left: max(20px, env(safe-area-inset-left));
     z-index: 30;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    /* Clear of Undo and Help, top right. */
-    max-width: calc(100vw - 32px - 9.5rem);
+    pointer-events: none;
 }
 
-.hud-chip {
-    min-height: 40px;
-    padding: 0.45rem 0.95rem;
-    border: 1px solid var(--ws-line);
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.94);
-    color: var(--ws-graphite);
-    font: inherit;
-    font-weight: 600;
-    box-shadow: 0 6px 18px rgba(34, 37, 42, 0.12);
-    cursor: pointer;
+.ws-brand img {
+    display: block;
+    width: auto;
+    height: 46px;
 }
 
-.hud-chip:focus-visible {
-    outline: 3px solid var(--ws-accent);
-    outline-offset: 2px;
-}
-
-.hud-chip[hidden] {
-    display: none;
+/* A phone gives the top of the screen to the house. */
+@media (max-width: 620px) {
+    .ws-brand.visible {
+        display: none;
+    }
 }
 
 /* ---- The toast ------------------------------------------------------------ */
@@ -971,55 +972,6 @@ textarea.ws-input {
     font-size: 0.88rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-}
-
-/* ---- The quote chip (M1 piece 3) ------------------------------------------- */
-
-.hud-quote {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.05rem;
-    border-color: var(--ws-accent);
-    text-align: left;
-}
-
-.hud-quote[hidden] {
-    display: none;
-}
-
-/* Every price on screen is labeled an example until launch (PRD 4). */
-.hud-example {
-    color: var(--ws-muted);
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-}
-
-/* ---- The visit chip (PRD 8.6), beside the quote ------------------------------ */
-
-.hud-visit {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.05rem;
-    text-align: left;
-}
-
-.hud-visit[hidden] {
-    display: none;
-}
-
-/* Changes the cleaner has not seen: said in words, and in the accent. */
-.hud-visit-note {
-    color: var(--ws-accent);
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-}
-
-.hud-visit-note[hidden] {
-    display: none;
 }
 
 /* ---- The quote card --------------------------------------------------------- */
@@ -1391,24 +1343,68 @@ textarea.ws-input {
 }
 
 /* The home at a glance (Steve, 2026-10-14): the quote and the visit, small
-   and set apart from what she says, on a stone band. Not a control, so no
-   border to read as one. */
+   and set apart from what she says, on a stone band, in view while she is
+   tucked away too, since nothing else on the page shows them. Each is a
+   button (the breakdown, the receipt): a quiet one, its chevron and a
+   white lift on hover saying so, never a fill at rest (a fill reads as
+   pressed). */
 .host-facts {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem 1.4rem;
+    gap: 0.3rem;
     margin: 0 0 0.8rem;
-    padding: 0.5rem 0.75rem;
-    border-radius: 10px;
+    padding: 0.3rem;
+    border-radius: 12px;
     background: var(--ws-stone);
 }
 
-.host-facts[hidden],
-.ws-host.is-minimized .host-facts {
+.host-facts[hidden] {
     display: none;
 }
 
-.host-fact dt {
+.ws-host.is-minimized .host-facts {
+    margin: 0 0 0.5rem;
+}
+
+.host-fact {
+    display: flex;
+    flex: 1 1 8rem;
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 44px;
+    padding: 0.35rem 1.6rem 0.4rem 0.55rem;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: none;
+    color: var(--ws-graphite);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    position: relative;
+}
+
+.host-fact::after {
+    content: '\203A';
+    content: '\203A' / '';
+    position: absolute;
+    top: 50%;
+    right: 0.55rem;
+    color: var(--ws-muted);
+    font-size: 1.1rem;
+    transform: translateY(-50%);
+}
+
+.host-fact:hover {
+    border-color: var(--ws-line);
+    background: #FFFFFF;
+}
+
+.host-fact:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 1px;
+}
+
+.host-fact-label {
     color: var(--ws-muted);
     font-size: 0.68rem;
     font-weight: 700;
@@ -1416,12 +1412,24 @@ textarea.ws-input {
     text-transform: uppercase;
 }
 
-.host-fact dd {
-    margin: 0.1rem 0 0;
+.host-fact-value {
+    margin-top: 0.1rem;
     color: var(--ws-accent-dark);
     font-size: 0.95rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+}
+
+.host-fact-note {
+    color: var(--ws-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+/* Changes the cleaner has not seen: said in words, and in the accent. */
+.host-fact-visit .host-fact-note {
+    color: var(--ws-accent);
+    font-weight: 700;
 }
 
 /* The progress strip: five steps, the one she is on in the accent, and

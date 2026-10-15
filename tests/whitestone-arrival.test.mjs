@@ -59,22 +59,45 @@ describe('the markup', () => {
         // Maya's Back, beside Skip, ships hidden, in copy.js's word.
         expect(text(/id="host-back"[^>]*>([^<]+)</)).toBe(GUIDE.back);
         expect(HTML).toMatch(/<button id="host-back"[^>]*\shidden>/);
-        for (const key of ['again', 'reset', 'checklist', 'menu', 'prefs', 'home', 'mine', 'about']) {
+        for (const key of ['again', 'reset', 'rooms', 'checklist', 'menu', 'prefs', 'home', 'mine', 'about']) {
             expect(text(new RegExp(`id="help-${key}"[^>]*>([^<]+)<`))).toBe(HELP[key]);
         }
-        // The panel ships closed, its back button in copy.js's words, and the
-        // Rooms chip that opens it says what it opens.
+        // The panel ships closed, its back button in copy.js's words. No
+        // chips top left (Steve, 2026-10-14: lost against the studio): the
+        // quote and the visit are in Maya's bubble, the rooms in Help.
         expect(HTML).not.toMatch(/id="ws-back"/);
         expect(HTML).toMatch(/<aside id="ws-panel"[^>]*\shidden>/);
         expect(text(/id="panel-back"[^>]*>([^<]+)</)).toBe(PANEL.back(PANEL.wholeHouse));
-        expect(text(/id="hud-rooms"[^>]*>([^<]+)</)).toBe(PANEL.open);
-        expect(text(/id="hud-rooms"[^>]*aria-label="([^"]+)"/)).toBe(PANEL.openLabel);
+        expect(HTML).not.toMatch(/id="ws-hud"|id="hud-/);
+        // In their place, the wordmark (concept C): an image named for the
+        // company, sized so the page does not jump as it loads, drawn as
+        // plain paths with the house's header and nothing that runs or
+        // reaches out.
+        expect(HTML).toMatch(/<div id="ws-brand" class="ui-float ws-brand">\s*<img src="assets\/logo-whitestone\.svg" alt="Whitestone Home Care" width="\d+" height="\d+">/);
+        const logo = readFileSync(join(WS, 'assets', 'logo-whitestone.svg'), 'utf8');
+        expect(logo.startsWith('<!-- © 2026 Continuum Commerce LLC. All rights reserved.')).toBe(true);
+        expect(logo).toMatch(/<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" role="img" aria-label="Whitestone Home Care" viewBox="0 0 1068 239"/);
+        expect(logo).not.toMatch(/<script|<text|<image|href=|url\(|font-family/i);
+        // The loading screen shows the same wordmark in place of a typed
+        // title, and the icon follows it: the gable over a W.
+        expect(HTML).toMatch(/<div class="loader-content">\s*<img class="loader-logo" src="assets\/logo-whitestone\.svg" alt="Whitestone Home Care" width="1068" height="239">/);
+        expect(HTML).not.toMatch(/class="loader-title"/);
+        const icon = readFileSync(join(WS, 'favicon.svg'), 'utf8');
+        expect(icon).toMatch(/THE GABLE\s+over a W|the gable\s+over a W/);
+        expect(icon).not.toMatch(/<script|<text|<image|href=|url\(|font-family/i);
+        expect(HTML).toMatch(/href="favicon\.svg\?v=2"/);
+        expect(HTML).toMatch(/<div id="host-facts"[^>]*\shidden>/);
     });
 });
 
 // ---- Driven through the page -------------------------------------------------------------
 
 let dom;
+/** A fact at a glance in Maya's bubble (quote, visit): its button, or
+ *  undefined; and its value and note, as shown. */
+const fact = (key) => dom.el('host-facts').children.find((b) => b.id === `host-fact-${key}`);
+const factValue = (key) => (fact(key) ? fact(key).children[1].textContent : undefined);
+const factNote = (key) => (fact(key) && fact(key).children[2] ? fact(key).children[2].textContent : '');
 /** Undo from the keyboard (the floating Undo is gone, Steve 2026-10-14). */
 const ctrlZ = () => fire(dom.windowStub, 'keydown', { key: 'z', ctrlKey: true, target: dom.documentStub.body });
 
@@ -102,7 +125,7 @@ function serveSheet() {
 async function boot({ saved = null, sheet = false, quiet = false } = {}) {
     if (saved) localStorage.setItem(CONFIG.storage.key, JSON.stringify(saved));
     // What the markup ships hidden (the stub reads no markup).
-    for (const id of ['ws-host', 'ws-panel', 'ws-help-menu', 'help-checklist', 'help-prefs', 'help-home', 'hud-rooms']) dom.el(id).hidden = true;
+    for (const id of ['ws-host', 'ws-panel', 'ws-help-menu', 'help-checklist', 'help-prefs', 'help-home', 'help-rooms']) dom.el(id).hidden = true;
     if (sheet) serveSheet();
     const main = await import('../www/whitestone/js/main.js');
     await flushAsync(20);
@@ -778,11 +801,9 @@ describe('a return', () => {
         const main = await boot({ saved: await bookedHome(true) });
         expect(line()).toBe(`${GUIDE.welcomeBack} ${GUIDE.homeBooked('Friday, October 16', '9:00 am')} ${GUIDE.homeUnsent} ${GUIDE.returningLegend}`);
         expect(picks().map((b) => b.textContent)).toEqual([GUIDE.sendChanges, GUIDE.seeVisit, GUIDE.changeChecklist, GUIDE.illLook]);
-        // The visit chip says when, and that changes wait.
-        const chip = dom.el('hud-visit');
-        expect(chip.hidden).toBe(false);
-        expect(dom.el('hud-visit-text').textContent).toBe('Your visit: Friday, October 16, 9:00 am');
-        expect(dom.el('hud-visit-note').hidden).toBe(false);
+        // At a glance in her bubble: when, and that changes wait.
+        expect(factValue('visit')).toBe('Friday, October 16, 9:00 am');
+        expect(factNote('visit')).toBe(UI.visitChipUnsent);
         expect(main.__test__.active().title).toBe('Maple Street');
     });
 });
@@ -938,7 +959,7 @@ describe('halos on the touch points (QA, 2026-10-14)', () => {
         press('kitchen');
         main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'review', reached: 4 };
         main.__test__.showGuide();
-        const quote = dom.el('hud-quote');
+        const quote = fact('quote');
         expect(quote.classList.contains('has-halo')).toBe(true);
         stepFrames(2);
         expect(ring().hidden).toBe(true);
@@ -956,9 +977,8 @@ describe('halos on the touch points (QA, 2026-10-14)', () => {
 
 describe('the home at a glance under Maya\'s name (Steve, 2026-10-14)', () => {
     const facts = () => dom.el('host-facts');
-    const fact = (key) => facts().children.find((d) => d.className === `host-fact host-fact-${key}`);
 
-    test('nothing until a task is priced; then the quote, keeping up as rooms come; gone while she is tucked', async () => {
+    test('nothing until a task is priced; then the quote, keeping up as rooms come, a tap from its breakdown, and kept while she is tucked', async () => {
         const main = await boot({ sheet: true });
         expect(facts().hidden).toBe(true);
         press('start');
@@ -970,9 +990,11 @@ describe('the home at a glance under Maya\'s name (Steve, 2026-10-14)', () => {
         expect(facts().children).toHaveLength(1);
         const money = () => fact('quote').children[1].textContent;
         expect(fact('quote').children[0].textContent).toBe(GUIDE.factQuote);
-        expect(money()).toMatch(/^\$\d+$/);
-        // The same total the quote chip shows.
-        expect(dom.el('hud-quote-text').textContent).toContain(money());
+        expect(money()).toMatch(/^\$\d+(\.\d\d)?$/);
+        // Every price is labeled an example until launch (PRD 4), and is a
+        // tap away from its breakdown.
+        expect(factNote('quote')).toBe(UI.examplePrices);
+        expect(fact('quote').getAttribute('aria-label')).toMatch(/^Your quote, \d+ dollars, about .+\. Example prices\. Show the breakdown\.$/);
         press('next');
         press('gotIt');
         // Rooms from her chips until the total passes the visit minimum.
@@ -982,13 +1004,16 @@ describe('the home at a glance under Maya\'s name (Steve, 2026-10-14)', () => {
             fire(chip, 'click');
         }
         expect(money()).not.toBe(before);
-        expect(dom.el('hud-quote-text').textContent).toContain(money());
+        fire(fact('quote'), 'click');
+        expect(dom.el('quote').hidden).toBe(false);
+        expect(dom.el('quote-total').textContent).toContain(money());
+        fire(dom.el('quote-close'), 'click');
+        // Tucked away, the price is still in view: nothing else shows it.
         fire(dom.el('host-skip'), 'click');
         pick('lookAround');
-        expect(facts().hidden).toBe(true);
-        fire(dom.el('host-expand'), 'click');
+        expect(main.__test__.ui.guide.minimized).toBe(true);
         expect(facts().hidden).toBe(false);
-        expect(main.__test__.ui.guide.minimized).toBe(false);
+        expect(money()).toMatch(/^\$\d+(\.\d\d)?$/);
     });
 
     test('the example\'s quote is marked as the example\'s', async () => {
