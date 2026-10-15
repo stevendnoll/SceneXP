@@ -440,7 +440,7 @@ export const GUIDE = Object.freeze({
     example2: 'Each room has its tasks, and every task has a price.',
     example3: 'Want to build yours?',
     buildOwn: 'Build my own',
-    look: 'Take your time. Drag to turn the house, and tap a floor to open it.',
+    look: 'Take your time. Drag the house to turn it, and tap a floor to open it.',
 
     welcome: 'Welcome back. Your home is just as you left it.',
     /** A returning visitor's home base (QA, 2026-10-14): where the home

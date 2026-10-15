@@ -104,6 +104,26 @@ export function firstPick(hits) {
     return null;
 }
 
+/**
+ * Whether a press whose ray met `hits` (nearest first) took hold of the
+ * turntable: the first thing shown under it is part of `spin`, the
+ * turntable and everything on it (the stone, the lawn, the house, a
+ * neighbor's sketch). Maya in front of it, or the cove and the air, is not
+ * (QA, 2026-10-15: the house turned from a drag anywhere on the screen).
+ */
+export function onTurntable(hits, spin) {
+    for (const hit of hits || []) {
+        let shown = true;
+        let ours = false;
+        for (let o = hit.object; o; o = o.parent) {
+            if (o.visible === false) { shown = false; break; }
+            if (o === spin) ours = true;
+        }
+        if (shown) return ours;
+    }
+    return false;
+}
+
 // ---- Building it (three) --------------------------------------------------------
 
 /** The cove as one mesh: the profile swept across its width. */

@@ -8,7 +8,7 @@
  */
 import { loadRealThree } from './helpers/real-three.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
-import { coveProfile, contactAlpha, contactRings, firstPick, pickOf, buildStage, buildLights } from '../www/whitestone/js/stage.js';
+import { coveProfile, contactAlpha, contactRings, firstPick, pickOf, onTurntable, buildStage, buildLights } from '../www/whitestone/js/stage.js';
 import { framePose, subjectPoints } from '../www/whitestone/js/turntable.js';
 import { buildModel } from '../www/whitestone/js/model.js';
 import { withExample } from '../www/whitestone/js/samples.js';
@@ -204,6 +204,49 @@ describe('built with the real three.js', () => {
         const ray = new REAL.Raycaster(new REAL.Vector3(...pose.eye), new REAL.Vector3(0, T.height + model.height / 2, 0).sub(new REAL.Vector3(...pose.eye)).normalize());
         const hit = firstPick(ray.intersectObjects([model.group], true));
         expect(hit && hit.key).toBe('model');
+    });
+
+    test('a press takes hold of the turntable on the house, its lawn or its stone, and not on Maya or the studio (QA, 2026-10-15)', async () => {
+        const stage = buildStage(CONFIG);
+        const model = buildModel(CONFIG, [0, stage.top, 0]);
+        stage.spin.add(model.group);
+        model.show(withExample(emptyDoc(CONFIG, NOW), CONFIG, NOW, null).doc.checklists[0]);
+        const { buildMaya } = await import('../www/whitestone/js/cast.js');
+        const maya = buildMaya(CONFIG);
+        stage.group.add(maya.group);
+        stage.group.updateMatrixWorld(true);
+        const pose = framePose(16 / 10, model.height, { tilt: CONFIG.view.tilt.start }, CONFIG);
+        const eye = new REAL.Vector3(...pose.eye);
+        const pressAt = (point) => {
+            const ray = new REAL.Raycaster(eye, new REAL.Vector3(...point).sub(eye).normalize());
+            return onTurntable(ray.intersectObjects([stage.spin, maya.group], true), stage.spin);
+        };
+        const M = CONFIG.cast.maya;
+        // The house's middle, the stone's front face, the lawn by the rim.
+        expect(pressAt([0, T.height + model.height / 2, 0])).toBe(true);
+        expect(pressAt([0, T.height / 2, T.radius])).toBe(true);
+        expect(pressAt([-T.radius * 0.85, T.height, T.radius * 0.3])).toBe(true);
+        // Maya, standing beside it; the studio floor past the rim; the
+        // cove's wall above the house.
+        expect(pressAt([M.x, M.height * 0.7, M.z])).toBe(false);
+        expect(pressAt([T.radius + 1, 0, 0])).toBe(false);
+        expect(pressAt([0, T.height + model.height + 2, -3])).toBe(false);
+        // Turned, it is the same turntable.
+        stage.spin.rotation.y = 2;
+        stage.group.updateMatrixWorld(true);
+        expect(pressAt([0, T.height / 2, T.radius])).toBe(true);
+    });
+
+    test('a press takes hold only of what is shown (pure)', () => {
+        const spin = { visible: true, parent: null };
+        const on = { visible: true, parent: spin };
+        const hidden = { visible: false, parent: spin };
+        const off = { visible: true, parent: null };
+        expect(onTurntable([{ object: on }], spin)).toBe(true);
+        expect(onTurntable([{ object: off }, { object: on }], spin)).toBe(false);
+        expect(onTurntable([{ object: { visible: true, parent: hidden } }, { object: on }], spin)).toBe(true);
+        expect(onTurntable([], spin)).toBe(false);
+        expect(onTurntable(undefined, spin)).toBe(false);
     });
 
     test("the skylight's shadow covers the turntable and the house, from high in front", () => {

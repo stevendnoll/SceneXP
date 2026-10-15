@@ -83,12 +83,12 @@ describe('the markup', () => {
         expect(logo).not.toMatch(/<script|<text|<image|href=|url\(|font-family/i);
         // Sized as the drawing is, so the page does not jump, and versioned,
         // so a cached copy gives way when the drawing changes (QA,
-        // 2026-10-15: heavier strokes for a smooth roof at 46 px).
-        const img = `src="assets/logo-whitestone.svg?v=2" alt="Whitestone Home Care" width="${w}" height="${h}">`;
+        // 2026-10-15: heavier strokes tried and taken back, v=3).
+        const img = `src="assets/logo-whitestone.svg?v=3" alt="Whitestone Home Care" width="${w}" height="${h}">`;
         expect(HTML).toContain(`<div id="ws-brand" class="ui-float ws-brand">\n        <img ${img}`);
-        // Strokes of 13% of the 100 high capitals: 2.5 px at 46 px tall.
-        expect(logo).toMatch(/stroke-width="13\.00"/);
-        expect(logo).not.toMatch(/stroke-width="8\.50"/);
+        // The chosen weight: strokes 8.5% of the 100 high capitals.
+        expect(logo).toMatch(/stroke-width="8\.50"/);
+        expect(logo).not.toMatch(/stroke-width="13\.00"/);
         // The loading screen shows the same wordmark in place of a typed
         // title, and the icon follows it: the gable over a W.
         expect(HTML).toMatch(new RegExp(`<div class="loader-content">\\s*<img class="loader-logo" ${img.replace(/[.?]/g, '\\$&')}`));
@@ -1280,6 +1280,7 @@ describe('tapping the house', () => {
         const canvas = dom.el('game-canvas');
         const tt = main.__test__.turntable();
         fire(canvas, 'pointerdown', { pointerId: 1, clientX: 100, clientY: 100 });
+        main.__test__.gesture.grab = true;   // the first finger on the house
         // (A touch ends the arrival, so the view is taken after it.)
         const pose = JSON.stringify(tt.pose(16 / 10));
         fire(canvas, 'pointerdown', { pointerId: 2, clientX: 200, clientY: 100 });

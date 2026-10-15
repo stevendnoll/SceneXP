@@ -7138,7 +7138,7 @@ html [data-ui-theme="surf" lang="en"]
                 "Privacy"
     div#loading-screen
       div.loader-content
-        img.loader-logo [alt="Whitestone Home Care" height="247" src="assets/logo-whitestone.svg?v=2" width="1130"]
+        img.loader-logo [alt="Whitestone Home Care" height="239" src="assets/logo-whitestone.svg?v=3" width="1068"]
         p.loader-tagline
           "Bright homes, kept with care."
         div.loader-bar [aria-hidden="true"]
@@ -7187,7 +7187,7 @@ html [data-ui-theme="surf" lang="en"]
       div#panel-actions.panel-actions
     p#ws-live.sr-only [aria-live="polite" role="status"]
     div#ws-brand.ui-float.ws-brand
-      img [alt="Whitestone Home Care" height="247" src="assets/logo-whitestone.svg?v=2" width="1130"]
+      img [alt="Whitestone Home Care" height="239" src="assets/logo-whitestone.svg?v=3" width="1068"]
     div#ws-tools.ui-float.ws-tools [aria-label="Help" role="group"]
       button#ws-help.tool-btn.tool-help [aria-controls="ws-help-menu" aria-expanded="false" aria-haspopup="true" aria-label="Help" type="button"]
         "?"

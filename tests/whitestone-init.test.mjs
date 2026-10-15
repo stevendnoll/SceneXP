@@ -169,7 +169,19 @@ describe('the turntable', () => {
         const canvas = dom.el('game-canvas');
         const tt = main.__test__.turntable();
         const yaw = tt.yaw;
+        // A drag on the studio around the turntable turns nothing (QA,
+        // 2026-10-15). The stub's rays meet nothing, so every press here is
+        // on the studio unless the test says it took hold of the turntable.
         fire(canvas, 'pointerdown', { pointerId: 1, clientX: 300, clientY: 300 });
+        expect(main.__test__.gesture.grab).toBe(false);
+        fire(canvas, 'pointermove', { pointerId: 1, clientX: 340, clientY: 300 });
+        fire(canvas, 'pointermove', { pointerId: 1, clientX: 400, clientY: 300 });
+        expect(tt.yaw).toBe(yaw);
+        fire(canvas, 'pointerup', { pointerId: 1, clientX: 400, clientY: 300 });
+        expect(tt.step(1 / 60, { drift: false })).toBe(false);
+        // A press on the house or its stone takes hold, and the drag turns it.
+        fire(canvas, 'pointerdown', { pointerId: 1, clientX: 300, clientY: 300 });
+        main.__test__.gesture.grab = true;
         fire(canvas, 'pointermove', { pointerId: 1, clientX: 340, clientY: 300 });
         fire(canvas, 'pointermove', { pointerId: 1, clientX: 400, clientY: 300 });
         expect(tt.yaw).toBeGreaterThan(yaw);
@@ -182,6 +194,7 @@ describe('the turntable', () => {
         // The end of a drag opens nothing.
         expect(main.__test__.model().lifted).toBe(before);
         expect(main.__test__.gesture.pointers.size).toBe(0);
+        expect(main.__test__.gesture.grab).toBe(false);
     });
 
     test('the left and right arrows turn the house; the wheel, + and -, and up and down move nothing (QA, 2026-10-15); never from a field or over a card', async () => {
@@ -230,6 +243,7 @@ describe('the turntable', () => {
         const tt = main.__test__.turntable();
         const yaw = tt.yaw;
         fire(dom.el('game-canvas'), 'pointerdown', { pointerId: 1, clientX: 300, clientY: 300 });
+        main.__test__.gesture.grab = true;
         fire(dom.el('game-canvas'), 'pointermove', { pointerId: 1, clientX: 400, clientY: 300 });
         expect(tt.yaw).toBe(yaw);
     });

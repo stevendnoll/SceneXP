@@ -69,7 +69,7 @@ import {
 } from './panels.min.js';
 import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKING, BOOKING_ERRORS, RECEIPT, CHANGES } from './copy.min.js';
 import { createTurntable, turnPoint } from './turntable.min.js';
-import { buildStage, buildLights, firstPick } from './stage.min.js';
+import { buildStage, buildLights, firstPick, onTurntable } from './stage.min.js';
 import { buildModel } from './model.min.js';
 import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, ringFloor, GUIDED, CHANGED } from './guide.min.js';
 import { createHost } from './host.min.js';
@@ -165,7 +165,7 @@ let sun = null;
 let envTarget = null;
 /** The pointers down on the canvas, and what they are doing: a tap until
  *  one moves past the slop, then a drag; two make a pinch. */
-const gesture = { pointers: new Map(), start: null, dragging: false, lastMove: 0 };
+const gesture = { pointers: new Map(), start: null, dragging: false, lastMove: 0, grab: false };
 /** Whether the look was held still last frame (a card open), so the frame
  *  after a card opens or closes is drawn. */
 let wasLocked = null;
@@ -799,11 +799,8 @@ function showExample() {
     return true;
 }
 
-/** What is under a point on the canvas: `{ key, level, roomId, itemId }`,
- *  or null. Only the
- *  house answers: the stone, the cove and the air are empty space. */
-function pickAt(clientX, clientY) {
-    if (!camera || !model) return null;
+/** The raycaster set through a point on the canvas. */
+function rayAt(clientX, clientY) {
     if (!raycaster) raycaster = new THREE.Raycaster();
     const rect = canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
@@ -811,6 +808,24 @@ function pickAt(clientX, clientY) {
         -((clientY - rect.top) / Math.max(1, rect.height)) * 2 + 1
     );
     raycaster.setFromCamera(ndc, camera);
+    return raycaster;
+}
+
+/** Whether a press at a point on the canvas takes hold of the turntable:
+ *  the house, its lawn or the stone under it, and not Maya in front of it
+ *  or the studio around it (stage.js onTurntable). */
+function grabAt(clientX, clientY) {
+    if (!camera || !stage) return false;
+    const targets = cast && cast.group.visible ? [stage.spin, cast.group] : [stage.spin];
+    return onTurntable(rayAt(clientX, clientY).intersectObjects(targets, true), stage.spin);
+}
+
+/** What is under a point on the canvas: `{ key, level, roomId, itemId }`,
+ *  or null. Only the
+ *  house answers: the stone, the cove and the air are empty space. */
+function pickAt(clientX, clientY) {
+    if (!camera || !model) return null;
+    rayAt(clientX, clientY);
     const pick = firstPick(raycaster.intersectObjects(cast && cast.group.visible ? [model.group, cast.group] : [model.group], true));
     if (!pick) return null;
     if (pick.key !== 'model') return { key: pick.key, level: null, roomId: null, itemId: null };
@@ -857,7 +872,10 @@ function lookLocked() {
 
 /**
  * The canvas's pointers: one that barely moves and lifts soon is a tap,
- * and one that moves sideways turns the house. Nothing zooms or tilts the
+ * and one that took hold of the turntable (the house, its lawn or its
+ * stone) turns it as it moves sideways. A drag on the studio around it
+ * turns nothing (QA, 2026-10-15), though a tap there still steps back.
+ * Nothing zooms or tilts the
  * view (QA, 2026-10-15): a second finger and the wheel do nothing, though
  * the wheel is still held back from the page, so a trackpad's pinch never
  * zooms the page itself. A mouse that is not pressed says what answers a
@@ -876,6 +894,8 @@ function setupLook(signal) {
         if (gesture.pointers.size === 1) {
             gesture.start = { x: event.clientX, y: event.clientY, t };
             gesture.dragging = false;
+            gesture.grab = grabAt(event.clientX, event.clientY);
+            if (gesture.grab && event.pointerType === 'mouse' && canvas.style) canvas.style.cursor = 'grabbing';
         } else {
             // A second finger: never a tap.
             gesture.dragging = true;
@@ -901,7 +921,7 @@ function setupLook(signal) {
         }
         if (!gesture.dragging && gesture.start
             && Math.hypot(now.x - gesture.start.x, now.y - gesture.start.y) > tap.slop) gesture.dragging = true;
-        if (!gesture.dragging) return;
+        if (!gesture.dragging || !gesture.grab) return;
         turntable.drag(now.x - prev.x, window.innerHeight, (t - gesture.lastMove) / 1000);
         gesture.lastMove = t;
         requestRender();
@@ -917,10 +937,12 @@ function setupLook(signal) {
         }
         const start = gesture.start;
         const tapped = event.type === 'pointerup' && !gesture.dragging && start && t - start.t <= tap.ms;
-        turntable.release((t - gesture.lastMove) / 1000);
+        if (gesture.grab) turntable.release((t - gesture.lastMove) / 1000);
         gesture.start = null;
         gesture.dragging = false;
+        gesture.grab = false;
         if (tapped) handleSceneTap(event.clientX, event.clientY);
+        else if (event.pointerType === 'mouse') hover(event, true);
     };
     canvas.addEventListener('pointerup', lift, { signal });
     canvas.addEventListener('pointercancel', lift, { signal });
@@ -929,15 +951,17 @@ function setupLook(signal) {
     }, { passive: false, signal });
 }
 
-/** A mouse over the house points, elsewhere it offers to turn it, and a
- *  room it is over is outlined. Asked no more than twenty times a second. */
-function hover(event) {
+/** A mouse over the house (or Maya) points, over the lawn or the stone it
+ *  offers to turn the turntable, and over the studio around it is the
+ *  plain arrow, since nothing there turns. A room it is over is outlined.
+ *  Asked no more than twenty times a second, unless `now`. */
+function hover(event, now = false) {
     if (event.pointerType !== 'mouse' || !state.loaded || anyOpen() || !canvas.style) return;
     const t = performance.now();
-    if (t - lastHover < 50) return;
+    if (!now && t - lastHover < 50) return;
     lastHover = t;
     const hit = pickAt(event.clientX, event.clientY);
-    canvas.style.cursor = hit ? 'pointer' : 'grab';
+    canvas.style.cursor = hit ? 'pointer' : grabAt(event.clientX, event.clientY) ? 'grab' : '';
     // The room under the pointer, inside the open floor, faintly outlined.
     const room = hit && hit.key === 'model' && hit.roomId && hit.level === model.lifted ? hit.roomId : null;
     if (model && model.hover(room)) requestRender();
