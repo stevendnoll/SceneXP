@@ -177,6 +177,18 @@ export function preferenceKeys(type) {
     return t ? t.preferences.flatMap((g) => g.items.map((i) => i.key)) : [];
 }
 
+/**
+ * A checklist's care preferences in words (PRD 10.8): `{ lines, note }`,
+ * each chosen preference by its name, then the customer's note, both
+ * empty when there are none. The quote card and the cleaner's page read
+ * them the same way.
+ */
+export function preferenceLines(type, preferences) {
+    const p = preferences || {};
+    const lines = (p.keys || []).map((k) => preferenceOf(type, k)).filter(Boolean).map((x) => x.name);
+    return { lines, note: String(p.note || '').trim() };
+}
+
 export function preferenceOf(type, key) {
     const t = serviceType(type);
     if (!t) return null;

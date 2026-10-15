@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=31" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=32" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7109,7 +7109,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=2" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=31" rel="stylesheet"]
+    link [href="css/experience.min.css?v=32" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7265,6 +7265,11 @@ html [data-ui-theme="surf" lang="en"]
         p#quote-minimum.quote-minimum
         p#quote-problems.form-hint [hidden]
         div#quote-breakdown.quote-breakdown
+        section#quote-prefs.quote-prefs [aria-labelledby="quote-prefs-title" hidden]
+          h3#quote-prefs-title.quote-prefs-title
+            "Care preferences"
+          ul#quote-prefs-list.quote-prefs-list
+          p#quote-prefs-note.quote-prefs-note
         p#quote-tax.card-meta
         p.card-meta.quote-promise
           "You will never pay more than your quote without approving it first. Anything we skip comes off your bill."

@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=31" as="style">
+    <link rel="preload" href="css/experience.min.css?v=32" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -157,7 +157,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=31">
+    <link rel="stylesheet" href="css/experience.min.css?v=32">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -372,6 +372,14 @@
             <p id="quote-minimum" class="quote-minimum"></p>
             <p id="quote-problems" class="form-hint" hidden></p>
             <div id="quote-breakdown" class="quote-breakdown"></div>
+            <!-- What the customer asked of the visit, part of what they agree
+                 to, though it changes no price (QA, 2026-10-15). Read-only:
+                 Maya's Review is where they change. -->
+            <section id="quote-prefs" class="quote-prefs" aria-labelledby="quote-prefs-title" hidden>
+                <h3 id="quote-prefs-title" class="quote-prefs-title">Care preferences</h3>
+                <ul id="quote-prefs-list" class="quote-prefs-list"></ul>
+                <p id="quote-prefs-note" class="quote-prefs-note"></p>
+            </section>
             <p id="quote-tax" class="card-meta"></p>
             <p class="card-meta quote-promise">You will never pay more than your quote without approving it
                 first. Anything we skip comes off your bill.</p>

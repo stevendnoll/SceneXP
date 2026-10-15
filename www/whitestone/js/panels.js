@@ -16,7 +16,7 @@ import { UI } from './copy.min.js';
 import { liveRooms, liveItems, itemsIn } from './store.min.js';
 import { quoteChecklist, priceItem, formatMoney, spokenMoney, formatMinutes } from './pricing.min.js';
 import { taskOf, optionOf } from './sheet.min.js';
-import { levelOf, areaOf, roomName } from './taxonomy.min.js';
+import { levelOf, areaOf, roomName, preferenceLines } from './taxonomy.min.js';
 
 function byId(id) {
     return document.getElementById(id);
@@ -265,4 +265,22 @@ export function renderQuote({ checklist, sheet }) {
     sums.push([UI.totalLine, q.totalCents]);
     body.appendChild(h('div', { className: 'quote-sums' }, sums.map(([label, value]) =>
         h('div', { className: 'quote-line' }, [h('span', { text: label }), h('span', { text: formatMoney(value) })]))));
+    drawQuotePrefs(checklist);
+}
+
+/** The care preferences on the quote (QA, 2026-10-15: part of what the
+ *  customer agrees to, though they change no price), read-only: Maya's
+ *  Review is where they change. Hidden when there are none. */
+function drawQuotePrefs(checklist) {
+    const box = byId('quote-prefs');
+    const list = byId('quote-prefs-list');
+    const note = byId('quote-prefs-note');
+    if (!box || !list || !note) return;
+    const p = preferenceLines(checklist.serviceType, checklist.preferences);
+    clear(list);
+    for (const line of p.lines) list.appendChild(h('li', { text: line }));
+    list.hidden = !p.lines.length;
+    note.textContent = p.note;
+    note.hidden = !p.note;
+    box.hidden = !p.lines.length && !p.note;
 }

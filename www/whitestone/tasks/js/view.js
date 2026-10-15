@@ -22,7 +22,7 @@ import { h, clear } from '../../js/cards.min.js';
 import { TASKS_PAGE as COPY, UI } from '../../js/copy.min.js';
 import { taskOf, optionOf } from '../../js/sheet.min.js';
 import { priceItem, formatMoney, formatMinutes } from '../../js/pricing.min.js';
-import { levelOf, roomName, preferenceOf } from '../../js/taxonomy.min.js';
+import { levelOf, roomName, preferenceLines as linesFor } from '../../js/taxonomy.min.js';
 import { dayLabel, clockLabel } from '../../js/booking.min.js';
 
 const byOrder = (a, b) => (a.order || 0) - (b.order || 0);
@@ -51,12 +51,11 @@ export function startHere(form) {
     return readingOrder(form).flatMap((l) => l.rooms.flatMap((r) => r.items.filter((i) => i.important).map((item) => ({ item, roomName: r.name }))));
 }
 
-/** The care preferences, each in its own words, then the customer's note.
- *  `{ lines, note }`; both empty when there are none. */
+/** The care preferences, each in its own words, then the customer's note
+ *  (taxonomy.js, as the quote card reads them). `{ lines, note }`; both
+ *  empty when there are none. */
 export function preferenceLines(form) {
-    const p = form.preferences || {};
-    const lines = (p.keys || []).map((k) => preferenceOf(form.serviceType, k)).filter(Boolean).map((x) => x.name);
-    return { lines, note: String(p.note || '').trim() };
+    return linesFor(form.serviceType, form.preferences);
 }
 
 /**

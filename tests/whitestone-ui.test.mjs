@@ -601,6 +601,28 @@ test('a big enough home says the minimum is met, and a task the menu no longer h
     expect(dom.el('quote-problems').textContent).toBe(UI.cannotPrice(1));
 });
 
+test('the quote shows the care preferences, read-only, and none when there are none (QA, 2026-10-15)', async () => {
+    const main = await homeWithPrices();
+    await addKitchen(main);
+    main.__test__.openQuote();
+    expect(dom.el('quote-prefs').hidden).toBe(true);
+    const { setPreferences } = await import('../www/whitestone/js/store.js');
+    main.__test__.mutate((d) => setPreferences(d, checklist(main).id, { keys: ['pets-home', 'no-bleach'], note: 'Please keep the gate closed.' }, CONFIG, new Date()), 'x');
+    expect(dom.el('quote-prefs').hidden).toBe(false);
+    // In the taxonomy's order and words, as the cleaner's page reads them.
+    expect(dom.el('quote-prefs-list').children.map((li) => li.textContent)).toEqual(['No bleach', 'Pets at home']);
+    expect(dom.el('quote-prefs-note').textContent).toBe('Please keep the gate closed.');
+    expect(dom.el('quote-prefs-note').hidden).toBe(false);
+    // A note alone shows the note alone; nothing, nothing.
+    main.__test__.mutate((d) => setPreferences(d, checklist(main).id, { keys: [], note: 'Gate code 1234.' }, CONFIG, new Date()), 'x');
+    expect(dom.el('quote-prefs').hidden).toBe(false);
+    expect(dom.el('quote-prefs-list').hidden).toBe(true);
+    main.__test__.mutate((d) => setPreferences(d, checklist(main).id, { keys: [], note: '' }, CONFIG, new Date()), 'x');
+    expect(dom.el('quote-prefs').hidden).toBe(true);
+    // Read-only: nothing in it to press.
+    expect(HTML.slice(HTML.indexOf('id="quote-prefs"'), HTML.indexOf('id="quote-tax"'))).not.toMatch(/<button|<a /);
+});
+
 test('tasks move up and down in their room as one undo step each, and the ends cannot move further', async () => {
     const main = await homeWithPrices();
     const kitchen = await addKitchen(main);

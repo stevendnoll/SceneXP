@@ -1002,6 +1002,41 @@ textarea.ws-input {
     font-weight: 600;
 }
 
+/* The care preferences under the breakdown (QA, 2026-10-15): read-only,
+   set apart, text-aligned left like the lines above. */
+.quote-prefs {
+    margin: 0.9rem 0 0.4rem;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 12px;
+    background: var(--ws-stone);
+    text-align: left;
+}
+
+.quote-prefs[hidden],
+.quote-prefs-list[hidden],
+.quote-prefs-note[hidden] {
+    display: none;
+}
+
+.quote-prefs-title {
+    margin: 0 0 0.3rem;
+    font-size: 0.95rem;
+}
+
+.quote-prefs-list {
+    margin: 0;
+    padding: 0 0 0 1.1rem;
+    font-size: 0.92rem;
+}
+
+.quote-prefs-note {
+    margin: 0.35rem 0 0;
+    color: var(--ws-muted);
+    font-size: 0.92rem;
+    overflow-wrap: anywhere;
+}
+
 /* ---- The checklist's filter ------------------------------------------------- */
 
 .checklist-filter-label {
