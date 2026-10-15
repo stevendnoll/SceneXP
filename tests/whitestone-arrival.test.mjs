@@ -1098,6 +1098,29 @@ describe('moving along the strip (QA, 2026-10-14)', () => {
         expect(line()).toBe(GUIDE.firstRoom);
     });
 
+    test('two rooms in, First room is closed on the strip, and Back from Your rooms goes to Floors (QA, 2026-10-15)', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        press('next');
+        press('kitchen');
+        press('next');
+        press('gotIt');
+        // One room: First room is still a tap away.
+        expect(stepButton(2).textContent).toBe('First room');
+        fire(roomChip('primary-bedroom'), 'click');
+        expect(main.__test__.active().rooms).toHaveLength(2);
+        // Two: its name only, not a button; the steps before it still are.
+        expect(steps()[2].children).toHaveLength(0);
+        expect(steps()[2].textContent).toBe('First room');
+        expect(stepButton(1).textContent).toBe('Floors');
+        fire(dom.el('host-back'), 'click');
+        expect(line()).toBe(GUIDE.floors);
+        // Next from Floors goes on to Your rooms (a room is there).
+        press('next');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+    });
+
     test('the steps reached are buttons that go there; the one she is on, and those ahead, are not', async () => {
         const main = await boot({ sheet: true });
         press('start');

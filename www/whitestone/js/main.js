@@ -1075,6 +1075,12 @@ function guiding() {
     return Boolean(ui.guide && GUIDED.includes(ui.guide.scene));
 }
 
+/** How many rooms the open home has (guide.js firstRoomClosed). */
+function ownRoomCount() {
+    const c = active();
+    return c ? liveRooms(c).length : 0;
+}
+
 /** What the words of a scene depend on: the sheet, the rooms so far, and
  *  the first room's line. */
 function guideContext() {
@@ -1559,7 +1565,7 @@ function onHostButton(id) {
         comeBack();
         break;
     case 'back':
-        guideTo({ type: 'back', roomId: firstRoomId() });
+        guideTo({ type: 'back', roomId: firstRoomId(), roomCount: ownRoomCount() });
         break;
     case 'startOver':
         confirmStartOver();
@@ -1588,7 +1594,7 @@ function firstRoomId() {
 function onHostStep(index) {
     if (!state.loaded) return;
     if (host) host.poke();
-    guideTo({ type: 'goto', step: index, roomId: firstRoomId() });
+    guideTo({ type: 'goto', step: index, roomId: firstRoomId(), roomCount: ownRoomCount() });
 }
 
 /**

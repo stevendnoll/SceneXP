@@ -264,7 +264,7 @@ function lit(poly, hex) {
  * the house (turned by `yaw`, at scale `k`) rasterized with a depth buffer
  * at twice the size, then shrunk.
  */
-function render(inst, { k, yaw, tilt, near = 0, focus = null, houseHeight, width, height, gesture = null, camera = null }) {
+function render(inst, { k, yaw, tilt, near = 0, focus = null, houseHeight, width, height, gesture = null, camera = null, withMaya = false }) {
     const aspect = width / height;
     const pose = camera ? { ...camera, offset: [0, 0] } : framePose(aspect, houseHeight, { tilt, focus, near }, CONFIG);
     const W2 = width * 2;
@@ -305,7 +305,7 @@ function render(inst, { k, yaw, tilt, near = 0, focus = null, houseHeight, width
     };
     const world = (p) => turnPoint([k * p[0], T.height + k * p[1], k * p[2]], yaw);
     // Maya stands beside the turntable on a wide frame (turntable.js host).
-    const maya = aspect >= CONFIG.view.tallBelow && !camera ? buildMaya(CONFIG) : null;
+    const maya = (aspect >= CONFIG.view.tallBelow && !camera) || withMaya ? buildMaya(CONFIG) : null;
     const faces = [
         ...turntableFaces().map(({ poly, hex }) => ({ poly, rgb: lit(poly, hex) })),
         ...(maya ? figureFaces(maya, gesture) : []).map(({ poly, hex }) => ({ poly, rgb: lit(poly, hex) })),
@@ -473,6 +473,24 @@ function closeOnDoor(built, dist = 0.5, fov = 38) {
     const c = [built.k * d.position[0], T0.height + built.k * d.position[1], built.k * d.position[2]];
     return { eye: [c[0] + dist * 0.25, c[1] + dist * 0.2, c[2] + dist], aim: c, fov };
 }
+/** A camera on Maya's face, `turn` radians round from straight on, `dist`
+ *  meters off: her smile checked by eye (QA, 2026-10-15). */
+function faceCamera(turn = 0, dist = 0.42, fov = 30) {
+    const maya = buildMaya(CONFIG);
+    maya.group.updateMatrixWorld(true);
+    let smile = null;
+    maya.group.traverse((o) => { if (o.name === 'smile') smile = o; });
+    const at = [0, 0, 0];
+    if (smile) {
+        const e = smile.matrixWorld.elements;
+        at[0] = e[12]; at[1] = e[13]; at[2] = e[14];
+    }
+    const a = CONFIG.cast.maya.facing + turn;
+    const mid = [at[0], at[1] + 0.045, at[2]];
+    return { eye: [mid[0] + Math.sin(a) * dist, mid[1] + 0.02, mid[2] + Math.cos(a) * dist], aim: mid, fov };
+}
+const faceShot = (title, turn, dist) => [title, { ...shot(build(EMPTY_HOME), start, 800, 800), camera: faceCamera(turn, dist), withMaya: true }];
+
 const doorShot = (home, title) => {
     const built = build(home);
     return [title, { ...shot(built, { yaw: 0, tilt: 0.4 }, 1000, 640), camera: closeOnDoor(built) }];
@@ -510,6 +528,10 @@ const views = [
     ['Every level, the tallest', shot(build(widest), start, 1280, 800)],
     ['Maya waving hello', { ...shot(build(EMPTY_HOME), start, 1280, 800), gesture: { name: 'wave', t: 1.0 } }],
     ['Maya pointing to the house', { ...shot(build(example), start, 1280, 800), gesture: { name: 'point', t: 1.0 } }],
+    faceShot("Maya's face, straight on", 0, 0.42),
+    faceShot("Maya's face, three-quarters to her left", 0.6, 0.42),
+    faceShot("Maya's face, three-quarters to her right", -0.6, 0.42),
+    faceShot("Maya's face at the bubble portrait's distance", 0, 0.9),
     ['A narrower laptop (1024 by 768)', shot(build(example), start, 1024, 768)],
     ['Close: the main floor (kitchen, living, dining, office, entry, half bath)', shot(build(example, 'main'), close, 1400, 900)],
     ['Close: the second floor (bedrooms, a shower primary bath, a full hall bath)', shot(build(example, 'second'), close, 1400, 900)],

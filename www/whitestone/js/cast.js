@@ -78,6 +78,38 @@ export function swayAt(t) {
 }
 
 /**
+ * The arc of a smile, `{ radius, arc }`: the part of a circle whose chord
+ * is `width` and whose ends rise `lift` above its lowest point.
+ */
+export function smileArc(width, lift) {
+    const half = width / 2;
+    const radius = (half * half + lift * lift) / (2 * lift);
+    return { radius, arc: 2 * Math.asin(half / radius) };
+}
+
+/**
+ * Her lips: a slim rose arc on the front of a head of `radius` whose middle
+ * is at `headY`, lowest at its middle and lifting at the corners, sunk a
+ * little into the face so it reads as lips, not a ribbon.
+ */
+function smileFor(m, headY, radius) {
+    const s = m.smile;
+    const { radius: r, arc } = smileArc(s.width, s.lift);
+    const lips = new THREE.Mesh(
+        new THREE.TorusGeometry(r, s.thickness, 6, 20, arc),
+        new THREE.MeshStandardMaterial({ color: m.lips, roughness: 0.55 })
+    );
+    lips.name = 'smile';
+    // The torus's arc starts at +x and runs counterclockwise: turned so its
+    // middle points straight down, its centre `r` above the smile's middle.
+    lips.rotation.z = Math.PI * 1.5 - arc / 2;
+    const y = headY - s.drop;
+    lips.position.set(0, y + r, Math.sqrt(radius * radius - s.drop * s.drop) - s.thickness * 0.4);
+    lips.castShadow = false;
+    return lips;
+}
+
+/**
  * Build Maya. Returns the controller main.js drives:
  *
  *   group              add it to the scene
@@ -108,6 +140,10 @@ export function buildMaya(config) {
         // more like a man's"): the rig's rounded hips and fuller thighs.
         hips: m.hips ?? 0
     });
+    // Her smile (QA, 2026-10-15): the shared rig has no mouth, so hers is
+    // added here, on the head's front below the nose (smileFor).
+    const head = person.children.find((o) => o.isMesh && o.geometry && o.geometry.parameters && o.geometry.parameters.radius === 0.12);
+    if (head && m.smile) person.add(smileFor(m, head.position.y, head.geometry.parameters.radius));
     // The Whitestone mark on the polo's chest, over her heart.
     const mark = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.032, 0.008), new THREE.MeshStandardMaterial({ color: m.accent, roughness: 0.6 }));
     mark.position.set(0.085, 1.17, 0.115);

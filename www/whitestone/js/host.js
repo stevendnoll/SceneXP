@@ -98,7 +98,9 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         const reached = view.reached ?? at;
         GUIDE.progress.forEach((name, i) => {
             const li = h('li', { className: `host-step${i < at ? ' is-done' : ''}${i === at ? ' is-now' : ''}${i > at && i <= reached ? ' is-reached' : ''}` });
-            if (i !== at && i <= reached) {
+            const closed = (view.closed || []).includes(i);
+            if (closed) li.classList.add('is-closed');
+            if (i !== at && i <= reached && !closed) {
                 const go = h('button', { type: 'button', className: 'host-step-btn', id: `host-step-${i}`, text: name, attrs: { 'aria-label': GUIDE.goToStep(name) } });
                 go.addEventListener('click', () => { if (typeof on.step === 'function') on.step(i); }, { signal });
                 li.appendChild(go);

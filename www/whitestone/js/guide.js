@@ -45,6 +45,12 @@ export const GUIDED = Object.freeze(['home', 'attached', 'floors', 'firstRoom', 
  *  (with a townhome's neighbors), Floors, First room, Your rooms, Review. */
 export const PROGRESS = Object.freeze({ home: 0, attached: 0, floors: 1, firstRoom: 2, added: 2, dots: 2, rooms: 3, review: 4 });
 
+/** Whether the strip's First room is closed: two rooms or more, so it is
+ *  done, and going back to it would only look odd (QA, 2026-10-15). */
+export function firstRoomClosed(roomCount) {
+    return (Number(roomCount) || 0) >= 2;
+}
+
 /**
  * Where each step of the strip begins, for a jump to it (a tap on the step)
  * or Back from the step after: the kind of home, the floors, the first room
@@ -232,7 +238,14 @@ export function step(guide, event) {
     if (GUIDED.includes(g.scene) && (type === 'back' || type === 'goto')) {
         const here = PROGRESS[g.scene];
         if (type === 'back' && g.scene === 'home') return to('hello');
-        const target = type === 'back' ? (g.scene === 'attached' ? 0 : here - 1) : event.step;
+        let target = type === 'back' ? (g.scene === 'attached' ? 0 : here - 1) : event.step;
+        // With two rooms or more, First room is closed (QA, 2026-10-15: back
+        // to it from Your rooms looked odd): Back steps over it to Floors,
+        // and a tap on it does nothing.
+        if (target === PROGRESS.firstRoom && firstRoomClosed(event.roomCount)) {
+            if (type === 'goto') return g;
+            target = PROGRESS.floors;
+        }
         const entry = Number.isInteger(target) && target <= (g.reached ?? -1) ? entryOf(target, event) : null;
         if (!entry || (entry.scene === g.scene && target === here && g.scene !== 'attached')) return g;
         const { scene, ...extra } = entry;
@@ -372,6 +385,7 @@ export function viewFor(guide, ctx = {}) {
     const base = {
         choices: null, progress: PROGRESS[guide.scene] ?? null, reached: guide.reached ?? -1,
         stepBack: GUIDED.includes(guide.scene), small: '', again: GUIDE[`${guide.scene}Again`] || '',
+        closed: firstRoomClosed(ctx.roomCount) ? [PROGRESS.firstRoom] : [],
         halo: HALO[guide.scene] || null
     };
     switch (guide.scene) {

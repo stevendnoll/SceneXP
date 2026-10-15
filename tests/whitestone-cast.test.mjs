@@ -10,7 +10,7 @@
  */
 import { loadRealThree } from './helpers/real-three.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
-import { REST, GESTURES, poseFor, swayAt, speakSeconds, buildMaya } from '../www/whitestone/js/cast.js';
+import { REST, GESTURES, poseFor, swayAt, speakSeconds, buildMaya, smileArc } from '../www/whitestone/js/cast.js';
 import { framePose, subjectPoints } from '../www/whitestone/js/turntable.js';
 import { firstPick, buildLights } from '../www/whitestone/js/stage.js';
 
@@ -92,6 +92,52 @@ describe('built with the real three.js', () => {
         }
         return maya;
     };
+
+    test('she smiles (QA, 2026-10-15): rose lips below her nose, centered, on her face, the corners lifted', () => {
+        const maya = buildMaya(CONFIG);
+        maya.group.updateMatrixWorld(true);
+        let smile = null;
+        let nose = null;
+        const pupils = [];
+        maya.group.traverse((o) => {
+            if (o.name === 'smile') smile = o;
+            if (o.isMesh && o.geometry.type === 'ConeGeometry' && !nose) nose = o;
+            if (o.userData && o.userData.isPupil) pupils.push(o);
+        });
+        expect(smile).not.toBeNull();
+        expect(`#${smile.material.color.getHexString().toUpperCase()}`).toBe(M.lips.toUpperCase());
+        // In the person's own frame: centered between the eyes, under the
+        // nose, at the head's front surface.
+        const own = (o) => o.position;
+        const s = smile.position;
+        const [l, r] = pupils.map(own);
+        expect(Math.abs(s.x - (l.x + r.x) / 2)).toBeLessThan(1e-9);
+        const lowest = s.y - smile.geometry.parameters.radius;
+        expect(lowest).toBeLessThan(own(nose).y - 0.03);
+        expect(lowest).toBeGreaterThan(own(nose).y - 0.08);
+        expect(s.z).toBeGreaterThan(0.09);
+        expect(s.z).toBeLessThan(0.12);
+        // Rose, deeper than her skin, never darker than her eyes.
+        const lum = (hex) => new REAL.Color(hex).getHSL({}).l;
+        expect(lum(M.lips)).toBeLessThan(lum(M.skin));
+        expect(lum(M.lips)).toBeGreaterThan(lum(M.eyes));
+        // A gentle arc: as wide as asked, its corners lifted as asked.
+        const { radius, arc } = smileArc(M.smile.width, M.smile.lift);
+        expect(2 * radius * Math.sin(arc / 2)).toBeCloseTo(M.smile.width, 12);
+        expect(radius * (1 - Math.cos(arc / 2))).toBeCloseTo(M.smile.lift, 12);
+        expect(arc).toBeLessThan(Math.PI * 0.75);
+        // A smile, not a frown: its drawn corners above its drawn middle.
+        smile.updateMatrix();
+        const pos = smile.geometry.attributes.position;
+        const pts = [];
+        for (let i = 0; i < pos.count; i++) pts.push(new REAL.Vector3().fromBufferAttribute(pos, i).applyMatrix4(smile.matrix));
+        const wide = Math.max(...pts.map((p) => Math.abs(p.x - s.x)));
+        const mean = (list) => list.reduce((a, p) => a + p.y, 0) / list.length;
+        const corners = mean(pts.filter((p) => Math.abs(p.x - s.x) > wide * 0.85));
+        const middle = mean(pts.filter((p) => Math.abs(p.x - s.x) < wide * 0.15));
+        expect(corners - middle).toBeGreaterThan(M.smile.lift * 0.4);
+        expect(Math.abs(middle - lowest)).toBeLessThan(M.smile.thickness * 1.5);
+    });
 
     test('she stands on the floor, about her height, a tap finds her, and her polo carries the mark', () => {
         const maya = buildMaya(CONFIG);

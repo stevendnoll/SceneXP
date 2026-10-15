@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { GUIDE, BRAND, countWord } from '../www/whitestone/js/copy.js';
 import {
-    GUIDED, PROGRESS, HALO, CHANGED, arrivalId, arrivalGuide, hasOwn, savedForm, step, presetSummary, addedLine, viewFor, outcomeOf, ringFloor
+    GUIDED, PROGRESS, HALO, CHANGED, firstRoomClosed, arrivalId, arrivalGuide, hasOwn, savedForm, step, presetSummary, addedLine, viewFor, outcomeOf, ringFloor
 } from '../www/whitestone/js/guide.js';
 import { presetFor } from '../www/whitestone/js/sheet.js';
 import { priceChoice, formatMoney } from '../www/whitestone/js/pricing.js';
@@ -68,6 +68,22 @@ describe('the way through', () => {
         expect(seen).toEqual(['home', 'floors', 'floors', 'firstRoom', 'added', 'dots', 'rooms', 'rooms', 'rooms', 'review', 'saved', 'rooms']);
         expect(g.reviewed).toBe(true);
         expect(g.rooms).toBe(2);
+    });
+
+    test('with two rooms or more First room is closed: Back from Your rooms steps over it, a tap on it does nothing (QA, 2026-10-15)', () => {
+        expect([0, 1, 2, 3].map(firstRoomClosed)).toEqual([false, false, true, true]);
+        const rooms = walk(fresh(), 'start', HOUSE, 'next', { type: 'roomAdded', roomId: 'k' }, 'next', 'gotIt');
+        expect(rooms.scene).toBe('rooms');
+        // One room: Back is First room, with that room's line.
+        expect(step(rooms, { type: 'back', roomId: 'k', roomCount: 1 })).toMatchObject({ scene: 'added', roomId: 'k' });
+        expect(step(rooms, { type: 'goto', step: 2, roomId: 'k', roomCount: 1 }).scene).toBe('added');
+        // Two: Back is Floors, and First room answers no tap.
+        expect(step(rooms, { type: 'back', roomId: 'k', roomCount: 2 }).scene).toBe('floors');
+        expect(step(rooms, { type: 'goto', step: 2, roomId: 'k', roomCount: 2 })).toBe(rooms);
+        expect(step(rooms, { type: 'goto', step: 1, roomId: 'k', roomCount: 2 }).scene).toBe('floors');
+        // And the strip shows it closed, only then.
+        expect(viewFor(rooms, { roomCount: 2 }).closed).toEqual([PROGRESS.firstRoom]);
+        expect(viewFor(rooms, { roomCount: 1 }).closed).toEqual([]);
     });
 
     test('Next from the floors: First room, or past it to Your rooms when the home has its first room already (QA, 2026-10-15)', () => {

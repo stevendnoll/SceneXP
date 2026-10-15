@@ -225,6 +225,10 @@ export const CONFIG = deepFreeze({
         maya: {
             x: 2.0, z: 0.1, facing: -0.55, height: 1.72,
             skin: '#BF8A66', hair: '#22170F', eyes: '#3A2416',
+            // Her smile (QA, 2026-10-15: friendlier, no teeth): a soft rose
+            // a little deeper than her skin, `width` across the corners, the
+            // corners `lift` above its middle, `drop` below her head's middle.
+            lips: '#A3564F', smile: { width: 0.04, lift: 0.0072, drop: 0.054, thickness: 0.0049 },
             shirt: '#F6F5F1', pants: '#2F353D', accent: '#3E5C76',
             // The rig's woman's build, 0 to 1 (people-1.0.0.js `hips`).
             hips: 1
