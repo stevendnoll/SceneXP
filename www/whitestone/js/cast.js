@@ -40,7 +40,9 @@ export const GESTURES = Object.freeze({ wave: 2.2, point: 1.9 });
  * is forward), `fore` the elbow's bend. The arms rise, hold, and come down
  * eased, so a gesture never snaps.
  *
- *   wave   the far arm raised high and swinging side to side
+ *   wave   the near arm raised high and swinging side to side: the one on
+ *          the house's side, clear of her bubble (QA, 2026-10-15: the far
+ *          arm waved behind it)
  *   point  the near arm out and forward, toward the house, the elbow a
  *          little bent
  */
@@ -55,7 +57,7 @@ export function poseFor(gesture, t) {
     const mix = (a, b) => a + (b - a) * k;
     if (gesture === 'wave') {
         const swing = 0.22 * Math.sin(t * Math.PI * 2 * 1.6) * k;
-        return { near: rest.near, far: { z: mix(REST.z, 2.55) + swing, x: mix(REST.x, -0.12), fore: mix(0, -0.12) } };
+        return { near: { z: mix(REST.z, 2.55) + swing, x: mix(REST.x, -0.12), fore: mix(0, -0.12) }, far: rest.far };
     }
     return { near: { z: mix(REST.z, 1.0), x: mix(REST.x, -0.62), fore: mix(0, -0.22) }, far: rest.far };
 }

@@ -18,8 +18,8 @@
  *   review     the quote, and care preferences offered once
  *   saved      all set
  *
- * and beside them the example's three beats (example1 to example3, then
- * look), a returning visitor's welcome, a hint, and About.
+ * and beside them the example's three beats (example1 to example3), a
+ * returning visitor's welcome, a hint, and About.
  *
  * EVENTS, NOT TIMERS, MOVE IT ON, and they come from wherever the visitor
  * acts: a button in the bubble, a card, the house, the keyboard. A room
@@ -73,7 +73,6 @@ export const HALO = Object.freeze({
     firstRoom: Object.freeze({ kind: 'element', id: 'host-chip-kitchen' }),
     dots: Object.freeze({ kind: 'dot' }),
     rooms: Object.freeze({ kind: 'floor' }),
-    look: Object.freeze({ kind: 'floor' }),
     review: Object.freeze({ kind: 'element', id: 'host-fact-quote' }),
     hint: Object.freeze({ kind: 'element', id: 'ws-help' }),
     /** Not a scene's: standing by, just back from booking (viewFor). */
@@ -141,10 +140,6 @@ export function outcomeOf(was, now, to) {
  *  home's standing again. */
 export const CHANGED = Object.freeze(['booked', 'moved', 'canceled', 'unpublished', 'sent']);
 
-/** Scenes a Skip can end: the guided ones. The greeting and the example
- *  have their own ways on. */
-const SKIPPABLE = GUIDED;
-
 /**
  * The checklist on the turntable when the visitor arrives: the one open
  * when they left, else their own most recently changed, else the example,
@@ -203,7 +198,7 @@ export function savedForm(guide) {
  *   roomAdded              a room was added, by any route
  *   dotOpened, gotIt       the dots
  *   review, saved          the end of the first build
- *   buildOwn, lookAround   from the example
+ *   buildOwn               from the example
  *   keepGoing              a returning visitor picks up where they stopped
  *   away, returned         a short loop: one of Maya's choices opens a card
  *                          ({ to, was }: where, and how the home stood),
@@ -213,7 +208,7 @@ export function savedForm(guide) {
  *                          card): straight on to the first room
  *   again, about, close    a tap on Maya, the Help menu's About, and
  *                          closing what they opened
- *   restart, skip          start over, or leave the guide
+ *   restart                start over
  */
 export function step(guide, event) {
     const g = guide;
@@ -230,11 +225,11 @@ export function step(guide, event) {
     const type = event && event.type;
     if (type === 'restart') return { ...to('hello', { back: null, tapped: false, rooms: 0, resume: null, answered: false, attachedAnswered: false }), reached: -1 };
     if (type === 'away' && SENDS_AWAY.includes(g.scene)) {
-        return to('done', { minimized: true, skipped: false, resume: null, away: { to: event.to || null, was: event.was || null }, outcome: null });
+        return to('done', { minimized: true, resume: null, away: { to: event.to || null, was: event.was || null }, outcome: null });
     }
     if (type === 'returned') {
         if (g.scene !== 'done' || !g.away) return g;
-        return to('done', { minimized: false, skipped: false, away: null, outcome: outcomeOf(g.away.was, event.now, g.away.to) });
+        return to('done', { minimized: false, away: null, outcome: outcomeOf(g.away.was, event.now, g.away.to) });
     }
     if (GUIDED.includes(g.scene) && (type === 'back' || type === 'goto')) {
         const here = PROGRESS[g.scene];
@@ -247,14 +242,13 @@ export function step(guide, event) {
     }
     if (type === 'about') return ASIDE.includes(g.scene) ? g : to('about', { back: g.scene });
     if (type === 'again') {
-        if (g.scene === 'done' || g.scene === 'look' || g.scene === 'saved') return to('hint', { back: g.scene });
+        if (g.scene === 'done' || g.scene === 'saved') return to('hint', { back: g.scene });
         return g;
     }
     if (type === 'close' && ASIDE.includes(g.scene)) return to(g.back || 'done', { back: null });
-    // Skipped, Maya stays, says so, and offers what can be done (QA,
-    // 2026-10-14: she should always have something to say).
-    if (type === 'skip' && SKIPPABLE.includes(g.scene)) return to('done', { skipped: true, minimized: false });
-    if (type === 'homeMade' && ['hello', 'example1', 'example2', 'example3', 'look'].includes(g.scene)) return to('firstRoom');
+    // No Skip (QA, 2026-10-15: "the guide is the UX"): Back and the strip
+    // move about in it, and Start over begins it again.
+    if (type === 'homeMade' && ['hello', 'example1', 'example2', 'example3'].includes(g.scene)) return to('firstRoom');
     switch (g.scene) {
     case 'hello':
         if (type === 'start') return to('home');
@@ -294,32 +288,31 @@ export function step(guide, event) {
     case 'review':
         if (type === 'saved') return to('saved', { reviewed: true });
         return g;
+    // No "I'll look around" (QA, 2026-10-15: visitors are here to book a
+    // cleaning): saved, the other way on is back to the rooms.
     case 'saved':
-        if (type === 'lookAround') return to('done', { skipped: false, minimized: true });
+        if (type === 'editRooms') return to('rooms', { reached: Math.max(g.reached ?? -1, PROGRESS.review) });
         return g;
     case 'example1':
         return type === 'next' ? to('example2') : g;
     case 'example2':
         return type === 'next' ? to('example3') : g;
     case 'example3':
-    case 'look':
         if (type === 'buildOwn') return to('home');
-        if (type === 'lookAround' && g.scene === 'example3') return to('look');
         return g;
     case 'welcome':
         if (type === 'keepGoing' && g.resume) return to(g.resume, { resume: null });
-        if (type === 'lookAround') return to('done', { resume: null, skipped: false, minimized: true });
         // Back to the rooms (QA, 2026-10-14): the build's own step, every
         // step behind it reached already.
         if (type === 'editRooms') return to('rooms', { resume: null, reached: Math.max(g.reached ?? -1, PROGRESS.review) });
         return g;
     case 'done':
-        // Standing by: tucked away (I'll look around), back at a tap (Need a
-        // hand?), and the same ways on as a return.
-        if (type === 'lookAround') return g.minimized ? g : to('done', { minimized: true, outcome: null });
-        if (type === 'expand') return g.minimized ? to('done', { minimized: false, skipped: false, outcome: null }) : g;
-        if (type === 'editRooms') return to('rooms', { minimized: false, skipped: false, reached: Math.max(g.reached ?? -1, PROGRESS.review) });
-        if (type === 'start' || type === 'buildOwn') return to('home', { minimized: false, skipped: false });
+        // Standing by: tucked away only while she has sent the visitor to a
+        // card (`away`), back at a tap (Need a hand?), and the same ways on
+        // as a return.
+        if (type === 'expand') return g.minimized ? to('done', { minimized: false, outcome: null }) : g;
+        if (type === 'editRooms') return to('rooms', { minimized: false, reached: Math.max(g.reached ?? -1, PROGRESS.review) });
+        if (type === 'start' || type === 'buildOwn') return to('home', { minimized: false });
         return g;
     default:
         return g;
@@ -365,7 +358,7 @@ export function addedLine(sheet, area, label, bath) {
 
 /**
  * What the bubble shows for a scene: `{ text, buttons, choices, progress,
- * reached, stepBack, skip, small, again }`. `buttons` are `{ id, label, primary }`, at most
+ * reached, stepBack, small, again }`. `buttons` are `{ id, label, primary }`, at most
  * two; `choices` is 'home' (the kinds of home, each a button in a group),
  * 'floors' or null; `progress` the step of the strip or
  * null; `again` the line said once, in other words, if nothing happens.
@@ -374,10 +367,10 @@ export function addedLine(sheet, area, label, bath) {
  */
 export function viewFor(guide, ctx = {}) {
     const b = (id, label, primary = false) => ({ id, label, primary });
-    // Back on every step of the strip, beside Skip (QA, 2026-10-14), and the
+    // Back on every step of the strip (QA, 2026-10-14), and the
     // steps reached so far, each a tap away.
     const base = {
-        choices: null, progress: PROGRESS[guide.scene] ?? null, reached: guide.reached ?? -1, skip: SKIPPABLE.includes(guide.scene),
+        choices: null, progress: PROGRESS[guide.scene] ?? null, reached: guide.reached ?? -1,
         stepBack: GUIDED.includes(guide.scene), small: '', again: GUIDE[`${guide.scene}Again`] || '',
         halo: HALO[guide.scene] || null
     };
@@ -403,33 +396,32 @@ export function viewFor(guide, ctx = {}) {
             ? { ...base, text: GUIDE.dotsSeen, again: GUIDE.dotsSeenAgain, halo: null, buttons: [b('gotIt', GUIDE.gotIt, true)] }
             : { ...base, text: GUIDE.dots, buttons: [b('gotIt', GUIDE.gotIt, true)] };
     case 'rooms': {
-        // Rooms as chips (QA, 2026-10-14); Review is offered once there are
-        // two rooms (ONBOARDING Scene 5).
-        const buttons = (ctx.roomCount || 0) >= 2 ? [b('review', GUIDE.reviewIt, true), b('otherRoom', GUIDE.otherRoom)] : [b('otherRoom', GUIDE.otherRoom)];
+        // Rooms as chips (QA, 2026-10-14). Review is offered from the first
+        // room on: a home may want only one room cleaned (QA, 2026-10-15).
+        const buttons = (ctx.roomCount || 0) >= 1 ? [b('review', GUIDE.reviewIt, true), b('otherRoom', GUIDE.otherRoom)] : [b('otherRoom', GUIDE.otherRoom)];
         return { ...base, text: guide.rooms >= 2 ? GUIDE.roomsMore : GUIDE.rooms, buttons, choices: 'rooms' };
     }
     case 'review':
         return { ...base, text: GUIDE.review, buttons: [b('save', GUIDE.save, true), b('preferences', GUIDE.preferences)] };
     case 'saved':
-        // Saved, the visit is a tap away (M3): Choose a time, or look around.
+        // Saved, the visit is a tap away (M3): Choose a time, or back to the
+        // rooms.
         // A published checklist changed through the guide offers what fits
         // it instead (`ctx.saved` { text, id, label }: Send my changes).
-        if (ctx.saved) return { ...base, text: ctx.saved.text, buttons: [b(ctx.saved.id, ctx.saved.label, true), b('lookAround', GUIDE.lookAround)] };
-        return { ...base, text: GUIDE.saved, buttons: [b('chooseTime', GUIDE.chooseTime, true), b('lookAround', GUIDE.lookAround)] };
+        if (ctx.saved) return { ...base, text: ctx.saved.text, buttons: [b(ctx.saved.id, ctx.saved.label, true), b('editRooms', GUIDE.editRooms)] };
+        return { ...base, text: GUIDE.saved, buttons: [b('chooseTime', GUIDE.chooseTime, true), b('editRooms', GUIDE.editRooms)] };
     case 'example1':
         return { ...base, text: GUIDE.example1, buttons: [b('next', GUIDE.next, true)] };
     case 'example2':
         return { ...base, text: GUIDE.example2, buttons: [b('next', GUIDE.next, true)] };
     case 'example3':
-        return { ...base, text: GUIDE.example3, buttons: [b('buildOwn', GUIDE.buildOwn, true), b('lookAround', GUIDE.lookAround)] };
-    case 'look':
-        return { ...base, text: GUIDE.look, buttons: [b('buildOwn', GUIDE.buildOwn, true)] };
+        return { ...base, text: GUIDE.example3, buttons: [b('buildOwn', GUIDE.buildOwn, true)] };
     case 'welcome':
         // A return mid-build picks up where it stopped. Any other return is
         // a home base (QA, 2026-10-14): where the home stands, in words
         // (`ctx.welcome`, main.js), and what can be done next as choices.
         return guide.resume
-            ? { ...base, text: GUIDE.welcomeResume, buttons: [b('keepGoing', GUIDE.keepGoing, true), b('lookAround', GUIDE.illLook)] }
+            ? { ...base, text: GUIDE.welcomeResume, buttons: [b('keepGoing', GUIDE.keepGoing, true)] }
             : { ...base, text: ctx.welcome || GUIDE.welcome, buttons: [], choices: 'returning' };
     case 'hint':
         return { ...base, text: GUIDE.hint, buttons: [b('close', GUIDE.gotIt, true)] };

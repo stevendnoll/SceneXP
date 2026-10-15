@@ -229,10 +229,12 @@ export const CONFIG = deepFreeze({
     },
 
     /** Maya's timing (host.js, ONBOARDING section 8), in seconds: she
-     *  speaks `delay` after the house arrives (at once under reduced
-     *  motion), the next step pulses after `pulse` seconds of nothing, and
-     *  she says the hint once more, in other words, after `again`. */
-    guide: { delay: 1.2, pulse: 8, again: 20 },
+     *  speaks `delay` after the loading screen lifts, while the house is
+     *  still coming in (at once under reduced motion; QA, 2026-10-15: 1.2
+     *  felt slow after a loading screen), the next step pulses after
+     *  `pulse` seconds of nothing, and she says the hint once more, in other
+     *  words, after `again`. */
+    guide: { delay: 0.4, pulse: 8, again: 20 },
 
     /** Soft daylight from an unseen skylight: an even sky over the white,
      *  one sun from high in front whose shadows cover the turntable only

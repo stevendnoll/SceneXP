@@ -212,7 +212,10 @@ async function bootHome() {
     main.__test__.onHostButton('start');
     main.__test__.onHostButton('kind-house');
     main.__test__.onFloor('second', true);
-    main.__test__.onHostButton('skip');
+    // Standing by, as after the first build (there is no Skip, QA
+    // 2026-10-15).
+    main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false };
+    main.__test__.showGuide();
     // The house answers a tap once the home has a room (QA, 2026-10-15): a
     // bedroom upstairs, out of the way of the main floor these tests use.
     main.__test__.addRoomOf('bedroom', 'second');
@@ -928,13 +931,13 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         expect(dom.el('ws-host').hidden).toBe(false);
         expect(line()).toBe(`${GUIDE.afterBooked('Thursday, October 15', '9:30 am')} ${GUIDE.whatNext}`);
         expect(said()).toBe(line());
-        expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.seeVisit, GUIDE.changeChecklist, GUIDE.illLook]);
+        expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.seeVisit, GUIDE.changeChecklist]);
         expect(document.activeElement.id).toBe('host-visit');
         expect(fact('visit').classList.contains('has-halo')).toBe(true);
         // At a glance under her name: the quote, and now the visit.
         expect(factValue('quote')).toMatch(/^\$\d+$/);
         expect(factValue('visit')).toBe('Thursday, October 15, 9:30 am');
-        // Used, the ring goes; I'll look around lets her words go.
+        // Used, the ring goes.
         fire(fact('visit'), 'click');
         expect(fact('visit').classList.contains('has-halo')).toBe(false);
     });
@@ -946,7 +949,7 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         fire(dom.el('booking-close'), 'click');
         await flushAsync(5);
         expect(line()).toMatch(new RegExp(`^${GUIDE.afterNoTime} Our home has 2 rooms and 12 tasks, \\$\\d+ so far\\. ${esc(GUIDE.whatNext)}$`));
-        expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.editRooms, GUIDE.reviewChecklist, GUIDE.illLook]);
+        expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.editRooms, GUIDE.reviewChecklist]);
         expect(fact('visit') ? fact('visit').classList.contains('has-halo') : false).toBe(false);
     });
 
@@ -966,13 +969,14 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
 
     test('a card opened some other way leaves her as she was', async () => {
         const main = await kitchenHome();
-        main.__test__.onHostButton('lookAround');
-        expect(tucked()).toBe(true);
+        const before = line();
+        expect(tucked()).toBe(false);
         await main.__test__.openBooking();
         fire(dom.el('booking-close'), 'click');
         await flushAsync(5);
-        expect(tucked()).toBe(true);
+        expect(tucked()).toBe(false);
         expect(main.__test__.ui.guide.outcome).toBeFalsy();
+        expect(line()).toBe(before);
     });
 
     test('Review my checklist: back from it, where the home stands and what next', async () => {
@@ -993,8 +997,6 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         await flushAsync(5);
         const stove = main.__test__.active().items.find((i) => i.task === 'stovetop');
         main.__test__.toggleStar(stove.id);
-        main.__test__.onHostButton('lookAround');
-        fire(dom.el('host-expand'), 'click');
         expect([...picks()].map((b) => b.id)[0]).toBe('host-sendChanges');
         main.__test__.onHostButton('sendChanges');
         expect(await until(() => main.__test__.ui.guide.outcome === 'sent')).toBe(true);
@@ -1054,7 +1056,7 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         await flushAsync(5);
         expect(line()).toBe(`${GUIDE.afterCanceled} ${GUIDE.whatNext}`);
         expect(factValue('visit')).toBe(GUIDE.factNoVisit);
-        expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.seeLink, GUIDE.changeChecklist, GUIDE.illLook]);
+        expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.seeLink, GUIDE.changeChecklist]);
         main.__test__.onHostButton('visit');
         expect(await until(() => !dom.el('receipt').hidden)).toBe(true);
         fire(dom.el('receipt-unpublish'), 'click');
@@ -1076,15 +1078,13 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         main.__test__.onHostButton('review');
         main.__test__.onHostButton('save');
         expect(line()).toBe(GUIDE.savedSame);
-        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-visit', 'host-lookAround']);
-        main.__test__.onHostButton('lookAround');
-        main.__test__.onHostButton('expand');
+        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-visit', 'host-editRooms']);
         main.__test__.onHostButton('editRooms');
         fire(dom.el('host-choices').children[0].children.find((b) => b.id === 'host-chip-living'), 'click');
         main.__test__.onHostButton('review');
         main.__test__.onHostButton('save');
         expect(line()).toBe(GUIDE.savedUnsent);
-        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-sendChanges', 'host-lookAround']);
+        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-sendChanges', 'host-editRooms']);
         // Sent from All set, she comes back to say so. (The living room
         // takes the quote past the visit minimum, so the new price is asked
         // about first.)

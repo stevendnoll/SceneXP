@@ -2,7 +2,7 @@
 /**
  * host.js - Maya's speech bubble (ONBOARDING sections 3 and 9): her
  * portrait and name, the progress strip, what she says, the floors to tick
- * when she asks, at most two buttons, the small print, and a quiet Skip.
+ * when she asks, at most two buttons, the small print, and a quiet Back.
  *
  * WHERE IT SITS: beside the house on a wide screen (the frame leaves the
  * right of the screen for it, turntable.js), a sheet along the bottom on a
@@ -38,7 +38,6 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     const choices = byId('host-choices');
     const actions = byId('host-actions');
     const small = byId('host-small');
-    const skip = byId('host-skip');
     const backBtn = byId('host-back');
     const expand = byId('host-expand');
     const facts = byId('host-facts');
@@ -55,7 +54,6 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         while (timers.length) clearTimeout(timers.pop());
     };
     if (signal) signal.addEventListener('abort', stopTimers);
-    if (skip) skip.addEventListener('click', () => { if (typeof on.button === 'function') on.button('skip'); }, { signal });
     if (backBtn) backBtn.addEventListener('click', () => { if (typeof on.button === 'function') on.button('back'); }, { signal });
     if (expand) expand.addEventListener('click', () => { if (typeof on.button === 'function') on.button('expand'); }, { signal });
 
@@ -223,7 +221,6 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             small.textContent = view.small || '';
             small.hidden = !view.small;
         }
-        if (skip) skip.hidden = !view.skip;
         if (backBtn) backBtn.hidden = !view.stepBack;
     }
 

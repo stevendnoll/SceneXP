@@ -1130,11 +1130,10 @@ function whereLine(c) {
     return GUIDE.homeDraft(c.title, PANEL.rooms(liveRooms(c).length), PANEL.tasks(liveItems(c).length), quote ? formatMoney(quote.totalCents) : '');
 }
 
-/** What Maya says standing by (QA, 2026-10-14): just after Skip, that she
- *  is here; back from Need a hand?, where the home stands; then the
- *  question. The example speaks for itself. */
+/** What Maya says standing by (QA, 2026-10-14): back from a card, what came
+ *  of it; otherwise where the home stands; then the question. The example
+ *  speaks for itself. */
 function standbyLine(c) {
-    if (ui.guide && ui.guide.skipped) return `${GUIDE.skipped} ${GUIDE.returningLegend}`;
     if (ui.guide && ui.guide.outcome) return afterLine(c, ui.guide.outcome);
     if (c && c.sample) return `${GUIDE.example3}`;
     return `${whereLine(c)} ${GUIDE.returningLegend}`;
@@ -1157,12 +1156,13 @@ function welcomeLine(c) {
 }
 
 /** A returning visitor's choices: changes to send; their visit, or a time
- *  to choose; the rooms; the checklist; or simply a look round. */
+ *  to choose; the rooms; the checklist. No "I'll look around" (QA,
+ *  2026-10-15: visitors are here to book a cleaning). */
 function returningChoices(c) {
     const o = (id, label) => ({ id, label });
     // No home of their own yet: the example's way on, or a start.
-    if (!c) return [o('start', GUIDE.start), o('lookAround', GUIDE.illLook)];
-    if (c.sample) return [o('buildOwn', GUIDE.buildOwn), o('lookAround', GUIDE.illLook)];
+    if (!c) return [o('start', GUIDE.start)];
+    if (c.sample) return [o('buildOwn', GUIDE.buildOwn)];
     const out = [];
     if (isPublished(c)) {
         if (hasUnsent(c)) out.push(o('sendChanges', GUIDE.sendChanges));
@@ -1174,7 +1174,6 @@ function returningChoices(c) {
         out.push(o('editRooms', GUIDE.editRooms));
         if (c && liveItems(c).length) out.push(o('reviewChecklist', GUIDE.reviewChecklist));
     }
-    out.push(o('lookAround', GUIDE.illLook));
     return out;
 }
 

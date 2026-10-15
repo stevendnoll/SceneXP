@@ -380,7 +380,6 @@ export const GUIDE = Object.freeze({
     label: 'Maya, your host',
     portrait: 'M',
     defaultTitle: 'Our home',
-    skip: 'Skip the guide',
     progressLabel: 'Your progress',
     progress: Object.freeze(['Home type', 'Floors', 'First room', 'Your rooms', 'Review']),
     progressStep: (n, total, name) => `Step ${n} of ${total}: ${name}`,
@@ -425,7 +424,7 @@ export const GUIDE = Object.freeze({
     dotsSeenAgain: 'Tap Got it whenever you’re ready to add your other rooms.',
     gotIt: 'Got it',
 
-    rooms: 'Now add your other rooms. Tap a floor to open it, or add a room here.',
+    rooms: "Now add your other rooms here, or tap a floor to open it. If that's everything, review your checklist.",
     roomsAgain: "Add as many rooms as you like. When you're done, review your checklist.",
     roomsMore: "Looking good. Add as many as you like, or review when you're ready.",
     addRoom: 'Add a room',
@@ -437,20 +436,17 @@ export const GUIDE = Object.freeze({
     save: 'Save my checklist',
     saved: 'All set. Your checklist is saved in this browser, so you can come back and change it anytime. When you are ready, choose a time for your visit.',
     chooseTime: 'Choose a time',
-    lookAround: 'Look around',
 
     example1: 'This is a four-bedroom home with a home office.',
     example2: 'Each room has its tasks, and every task has a price.',
     example3: 'Want to build yours?',
     buildOwn: 'Build my own',
-    look: 'Take your time. Drag the house to turn it, and tap a floor to open it.',
 
     welcome: 'Welcome back. Your home is just as you left it.',
     /** A returning visitor's home base (QA, 2026-10-14): where the home
      *  stands, then the choices. */
     welcomeBack: 'Welcome back.',
     /** Standing by, after Skip or I'll look around (QA, 2026-10-14). */
-    skipped: 'No problem. Explore at your own pace, and I\u2019m right here when you need me.',
     standbyPlain: 'I\u2019m right here when you need me.',
     noHome: 'There\u2019s no home here yet.',
     expand: 'Need a hand?',
@@ -491,7 +487,6 @@ export const GUIDE = Object.freeze({
     savedSame: 'Saved. Your checklist matches the one your cleaner has.',
     welcomeResume: 'Welcome back. Your home is just as you left it. Shall we pick up where we stopped?',
     keepGoing: 'Keep going',
-    illLook: "I'll look around",
 
     hint: 'Tap a floor of the house to open it, and tap a blue dot to see a task. I’m right here whenever you’d like a hand.',
     about: 'Whitestone Home Care builds your cleaning checklist room by room. Every task shows its price and its time as you add it, and your quote keeps up.',

@@ -1637,7 +1637,7 @@ textarea.ws-input {
     margin-top: 0.4rem;
 }
 
-/* Back and Skip, quiet, along the bubble's foot. */
+/* Back, quiet, along the bubble's foot (no Skip: QA, 2026-10-15). */
 .host-foot {
     display: flex;
     align-items: center;
@@ -1670,29 +1670,6 @@ textarea.ws-input {
 }
 
 .host-back[hidden] {
-    display: none;
-}
-
-.host-skip {
-    display: block;
-    min-height: 36px;
-    margin: 0 0 0 auto;
-    padding: 0.3rem 0;
-    border: 0;
-    background: none;
-    color: var(--ws-muted);
-    font: inherit;
-    font-size: 0.85rem;
-    text-decoration: underline;
-    cursor: pointer;
-}
-
-.host-skip:focus-visible {
-    outline: 3px solid var(--ws-accent);
-    outline-offset: 2px;
-}
-
-.host-skip[hidden] {
     display: none;
 }
 

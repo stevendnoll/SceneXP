@@ -1,8 +1,8 @@
 // © 2026 Continuum Commerce LLC. All rights reserved.
 /**
  * Maya's guide (www/whitestone/js/guide.js), pure: where a visit begins,
- * every way through the first build (straight through, skipping, by the
- * cards, by the example), what she says at each step, the price line built
+ * every way through the first build (straight through, by the cards, by
+ * the example; no Skip and no look around, QA 2026-10-15), what she says at each step, the price line built
  * from the sheet, and what is saved for a return. Every scene keeps to one
  * or two short sentences and at most two buttons (ONBOARDING section 9).
  */
@@ -28,7 +28,7 @@ const fresh = () => arrivalGuide(doc([]));
 const HOUSE = { type: 'residence', kind: 'house' };
 const walk = (g, ...types) => types.reduce((acc, t) => step(acc, typeof t === 'string' ? { type: t } : t), g);
 
-const ALL = ['hello', ...GUIDED, 'saved', 'example1', 'example2', 'example3', 'look', 'welcome', 'hint', 'about'];
+const ALL = ['hello', ...GUIDED, 'saved', 'example1', 'example2', 'example3', 'welcome', 'hint', 'about'];
 const EVENTS = ['start', 'example', 'floorTapped', 'next', 'roomAdded', 'dotOpened', 'gotIt', 'review', 'saved', 'buildOwn',
     'lookAround', 'keepGoing', 'homeMade', 'residence', 'again', 'about', 'close', 'restart', 'skip', 'away', 'returned', 'nonsense'];
 
@@ -58,14 +58,14 @@ describe('where a visit begins', () => {
 });
 
 describe('the way through', () => {
-    test('straight through: hello, the kind of home, floors, the kitchen, its line, the dots, the rooms, review, saved, done', () => {
+    test('straight through: hello, the kind of home, floors, the kitchen, its line, the dots, the rooms, review, saved, and back to the rooms', () => {
         const seen = [];
         let g = fresh();
-        for (const e of ['start', HOUSE, 'floorTapped', 'next', { type: 'roomAdded', roomId: 'k' }, 'next', 'gotIt', 'roomAdded', 'roomAdded', 'review', 'saved', 'lookAround']) {
+        for (const e of ['start', HOUSE, 'floorTapped', 'next', { type: 'roomAdded', roomId: 'k' }, 'next', 'gotIt', 'roomAdded', 'roomAdded', 'review', 'saved', 'editRooms']) {
             g = walk(g, e);
             seen.push(g.scene);
         }
-        expect(seen).toEqual(['home', 'floors', 'floors', 'firstRoom', 'added', 'dots', 'rooms', 'rooms', 'rooms', 'review', 'saved', 'done']);
+        expect(seen).toEqual(['home', 'floors', 'floors', 'firstRoom', 'added', 'dots', 'rooms', 'rooms', 'rooms', 'review', 'saved', 'rooms']);
         expect(g.reviewed).toBe(true);
         expect(g.rooms).toBe(2);
     });
@@ -82,7 +82,7 @@ describe('the way through', () => {
         for (const g of [home, attached]) {
             for (const e of ['next', 'floorTapped', 'roomAdded', 'gotIt']) expect(step(g, { type: e })).toBe(g);
         }
-        // Both are part of the first build: saved, resumed, skippable, on the strip's first step.
+        // Both are part of the first build: saved, resumed, on the strip's first step.
         for (const scene of ['home', 'attached']) {
             expect(GUIDED).toContain(scene);
             expect(PROGRESS[scene]).toBe(0);
@@ -191,7 +191,7 @@ describe('the way through', () => {
     });
 
     test('a checklist made by the setup card goes straight to the first room, from the greeting or the example', () => {
-        for (const from of [fresh(), walk(fresh(), 'example'), walk(fresh(), 'example', 'next', 'next'), walk(fresh(), 'example', 'next', 'next', 'lookAround')]) {
+        for (const from of [fresh(), walk(fresh(), 'example'), walk(fresh(), 'example', 'next', 'next')]) {
             expect(step(from, { type: 'homeMade' }).scene).toBe('firstRoom');
         }
         // In the middle of the build it changes nothing.
@@ -199,15 +199,19 @@ describe('the way through', () => {
         expect(step(rooms, { type: 'homeMade' })).toBe(rooms);
     });
 
-    test('Skip leaves any step of the first build, and only those', () => {
-        for (const scene of GUIDED) expect(step({ ...fresh(), scene }, { type: 'skip' }).scene).toBe('done');
-        for (const scene of ['hello', 'example1', 'welcome', 'saved', 'done']) {
+    test('no Skip and no look around: the guide is the way (QA, 2026-10-15)', () => {
+        for (const scene of ALL) {
             const g = { ...fresh(), scene };
             expect(step(g, { type: 'skip' })).toBe(g);
+            expect(step(g, { type: 'lookAround' })).toBe(g);
+            const v = viewFor(g, { welcome: 'Here.', standby: 'Here.', roomCount: 1 });
+            if (!v) continue;
+            expect(v.skip).toBeUndefined();
+            expect(v.buttons.map((b) => b.id)).not.toContain('lookAround');
         }
     });
 
-    test('the example: three beats, then build your own or look around', () => {
+    test('the example: three beats, then build your own', () => {
         const beats = [];
         let g = walk(fresh(), 'example');
         beats.push(g.scene);
@@ -217,24 +221,20 @@ describe('the way through', () => {
         beats.push(g.scene);
         expect(beats).toEqual(['example1', 'example2', 'example3']);
         expect(walk(g, 'buildOwn').scene).toBe('home');
-        const look = walk(g, 'lookAround');
-        expect(look.scene).toBe('look');
-        expect(walk(look, 'buildOwn').scene).toBe('home');
-        expect(step(look, { type: 'lookAround' })).toBe(look);
+        expect(viewFor(g).buttons).toEqual([{ id: 'buildOwn', label: GUIDE.buildOwn, primary: true }]);
     });
 
-    test('a return picks up where it stopped, or looks around', () => {
+    test('a return picks up where it stopped', () => {
         const back = arrivalGuide(doc([c('a')], { guide: { scene: 'dots', reviewed: false } }));
         expect(walk(back, 'keepGoing')).toMatchObject({ scene: 'dots', resume: null });
-        expect(walk(back, 'lookAround').scene).toBe('done');
         const done = arrivalGuide(doc([c('a')]));
         expect(step(done, { type: 'keepGoing' })).toBe(done);
-        expect(walk(done, 'lookAround').scene).toBe('done');
+        expect(walk(done, 'editRooms').scene).toBe('rooms');
     });
 
     test('Help: again shows a hint once the guide is over, About sits over any scene and goes back to it', () => {
         expect(walk({ ...fresh(), scene: 'done' }, 'again')).toMatchObject({ scene: 'hint', back: 'done' });
-        expect(walk({ ...fresh(), scene: 'look' }, 'again', 'close').scene).toBe('look');
+        expect(walk({ ...fresh(), scene: 'saved' }, 'again', 'close').scene).toBe('saved');
         // In the middle of the build, again is the scene's own hint (main.js says it).
         const floors = walk(fresh(), 'start', HOUSE);
         expect(step(floors, { type: 'again' })).toBe(floors);
@@ -320,10 +320,10 @@ describe('short loops away from Maya, and back (QA, 2026-10-14)', () => {
     test('from All set, a welcome or standing by, Maya steps aside remembering where they went', () => {
         for (const scene of ['saved', 'welcome', 'done']) {
             const g = step({ ...fresh(), scene, resume: 'rooms', outcome: 'sent' }, { type: 'away', to: 'booking', was: draft });
-            expect(g).toMatchObject({ scene: 'done', minimized: true, skipped: false, resume: null, away: { to: 'booking', was: draft }, outcome: null });
+            expect(g).toMatchObject({ scene: 'done', minimized: true, resume: null, away: { to: 'booking', was: draft }, outcome: null });
         }
         // Not in the middle of the build, nor from the example.
-        for (const scene of [...GUIDED, 'hello', 'example3', 'look', 'hint']) {
+        for (const scene of [...GUIDED, 'hello', 'example3', 'hint']) {
             const g = { ...fresh(), scene };
             expect(step(g, { type: 'away', to: 'booking', was: draft })).toBe(g);
         }
@@ -342,10 +342,9 @@ describe('short loops away from Maya, and back (QA, 2026-10-14)', () => {
         expect(step(walk(hint, 'close'), { type: 'returned', now: booked }).outcome).toBeNull();
     });
 
-    test('what she said back is let go: tucked again, Need a hand?, or any other scene', () => {
+    test('what she said back is let go: Need a hand?, or any other scene', () => {
         const back = { ...fresh(), scene: 'done', minimized: false, outcome: 'booked', away: null };
-        expect(walk(back, 'lookAround')).toMatchObject({ minimized: true, outcome: null });
-        expect(walk(back, 'lookAround', 'expand')).toMatchObject({ minimized: false, outcome: null });
+        expect(walk({ ...back, minimized: true }, 'expand')).toMatchObject({ minimized: false, outcome: null });
         expect(walk(back, 'editRooms')).toMatchObject({ scene: 'rooms', outcome: null });
         expect(walk(back, 'restart')).toMatchObject({ scene: 'hello', outcome: null, away: null });
         // Need a hand? while changes are on their way keeps the loop open.
@@ -363,19 +362,21 @@ describe('short loops away from Maya, and back (QA, 2026-10-14)', () => {
         expect(viewFor({ ...fresh(), scene: 'done', minimized: true, outcome: 'booked' }, {}).halo).toBeNull();
     });
 
-    test('All set for a published checklist offers what main.js says fits it', () => {
+    test('All set offers a time, or what main.js says fits a published checklist, and back to the rooms', () => {
         const g = { ...fresh(), scene: 'saved' };
-        expect(viewFor(g, {}).buttons.map((b) => b.id)).toEqual(['chooseTime', 'lookAround']);
+        expect(viewFor(g, {}).buttons.map((b) => [b.id, b.primary])).toEqual([['chooseTime', true], ['editRooms', false]]);
         const v = viewFor(g, { saved: { text: GUIDE.savedUnsent, id: 'sendChanges', label: GUIDE.sendChanges } });
         expect(v.text).toBe(GUIDE.savedUnsent);
-        expect(v.buttons).toEqual([{ id: 'sendChanges', label: GUIDE.sendChanges, primary: true }, { id: 'lookAround', label: GUIDE.lookAround, primary: false }]);
+        expect(v.buttons).toEqual([{ id: 'sendChanges', label: GUIDE.sendChanges, primary: true }, { id: 'editRooms', label: GUIDE.editRooms, primary: false }]);
+        // Add or change rooms: the build's own Your rooms step.
+        expect(step({ ...g, reached: 4 }, { type: 'editRooms' })).toMatchObject({ scene: 'rooms', reached: 4 });
     });
 });
 
 describe('what is saved for a return', () => {
     test('a step of the first build, else done, and whether it reached the review', () => {
         for (const scene of GUIDED) expect(savedForm({ scene, reviewed: false })).toEqual({ scene, reviewed: false });
-        for (const scene of ['hello', 'example2', 'look', 'saved', 'hint', 'about', 'done']) expect(savedForm({ scene, reviewed: true })).toEqual({ scene: 'done', reviewed: true });
+        for (const scene of ['hello', 'example2', 'saved', 'hint', 'about', 'done']) expect(savedForm({ scene, reviewed: true })).toEqual({ scene: 'done', reviewed: true });
         // A welcome not yet answered keeps the step it would resume.
         expect(savedForm({ scene: 'welcome', resume: 'rooms', reviewed: false })).toEqual({ scene: 'rooms', reviewed: false });
         expect(savedForm({ scene: 'welcome', resume: null, reviewed: false })).toEqual({ scene: 'done', reviewed: false });
@@ -443,7 +444,6 @@ describe('what Maya says', () => {
         expect(v.text).toBe("Hi, I'm Maya with Whitestone Home Care. Let's build a cleaning checklist for your home, room by room. It takes about two minutes.");
         expect(v.buttons.map((b) => [b.id, b.label, b.primary])).toEqual([['start', "Let's start", true], ['example', 'Show me an example', false]]);
         expect(v.small).toBe(BRAND.honesty);
-        expect(v.skip).toBe(false);
         expect(v.progress).toBeNull();
     });
 
@@ -463,7 +463,7 @@ describe('what Maya says', () => {
 
     test('the progress strip follows the first build and only the first build', () => {
         for (const scene of GUIDED) expect(viewFor({ ...fresh(), scene }, ctx).progress).toBe(PROGRESS[scene]);
-        for (const scene of ['hello', 'saved', 'example1', 'look', 'welcome', 'hint', 'about']) expect(viewFor({ ...fresh(), scene }, ctx).progress).toBeNull();
+        for (const scene of ['hello', 'saved', 'example1', 'welcome', 'hint', 'about']) expect(viewFor({ ...fresh(), scene }, ctx).progress).toBeNull();
         expect(GUIDE.progress).toHaveLength(Math.max(...Object.values(PROGRESS)) + 1);
         // Never backwards along the way.
         const order = GUIDED.map((s) => PROGRESS[s]);
@@ -475,12 +475,14 @@ describe('what Maya says', () => {
         expect(viewFor({ ...fresh(), scene: 'added' }, { roomLabel: 'Kitchen' }).text).toBe("There's your kitchen.");
     });
 
-    test('Review is offered once there are two rooms, and the rooms line warms after two more', () => {
+    test('Review is offered from the first room, and the rooms line warms after two more', () => {
         const rooms = (n, added) => viewFor({ ...fresh(), scene: 'rooms', rooms: added }, { roomCount: n });
-        // The rooms are chips (QA, 2026-10-14); the buttons are Review, once
-        // there are two, and every other kind of room.
-        expect(rooms(1, 0).buttons.map((b) => b.id)).toEqual(['otherRoom']);
+        // The rooms are chips (QA, 2026-10-14); the buttons are Review, from
+        // the first room (QA, 2026-10-15: one room may be all a home wants
+        // cleaned), and every other kind of room.
+        expect(rooms(1, 0).buttons.map((b) => [b.id, b.primary])).toEqual([['review', true], ['otherRoom', false]]);
         expect(rooms(1, 0).choices).toBe('rooms');
+        expect(rooms(0, 0).buttons.map((b) => b.id)).toEqual(['otherRoom']);
         expect(rooms(2, 1).buttons.map((b) => [b.id, b.primary])).toEqual([['review', true], ['otherRoom', false]]);
         expect(viewFor({ ...fresh(), scene: 'firstRoom' })).toMatchObject({ choices: 'rooms', halo: { kind: 'element', id: 'host-chip-kitchen' } });
         expect(rooms(2, 1).text).toBe(GUIDE.rooms);
@@ -488,7 +490,7 @@ describe('what Maya says', () => {
     });
 
     test('a return mid-build is offered Keep going; any other is a home base, its words and choices the page\'s', () => {
-        expect(viewFor({ ...fresh(), scene: 'welcome', resume: 'rooms' }).buttons.map((b) => b.id)).toEqual(['keepGoing', 'lookAround']);
+        expect(viewFor({ ...fresh(), scene: 'welcome', resume: 'rooms' }).buttons.map((b) => b.id)).toEqual(['keepGoing']);
         const base = viewFor({ ...fresh(), scene: 'welcome', resume: null }, { welcome: 'Welcome back. All is well. What would you like to do?' });
         expect(base).toMatchObject({ text: 'Welcome back. All is well. What would you like to do?', buttons: [], choices: 'returning' });
         expect(viewFor({ ...fresh(), scene: 'welcome', resume: null }).text).toBe(GUIDE.welcome);
@@ -501,7 +503,6 @@ describe('what Maya says', () => {
         const halo = (scene) => viewFor({ ...fresh(), scene }, { sheet: SHEET, roomCount: 2 }).halo;
         expect(halo('dots')).toEqual({ kind: 'dot' });
         expect(halo('rooms')).toEqual({ kind: 'floor' });
-        expect(halo('look')).toEqual({ kind: 'floor' });
         expect(halo('review')).toEqual({ kind: 'element', id: 'host-fact-quote' });
         expect(halo('hint')).toEqual({ kind: 'element', id: 'ws-help' });
         expect(halo('firstRoom')).toEqual({ kind: 'element', id: 'host-chip-kitchen' });
@@ -511,25 +512,20 @@ describe('what Maya says', () => {
 
     test('done is never silent: standing by with the ways on, or tucked away (QA, 2026-10-14)', () => {
         const by = viewFor({ ...fresh(), scene: 'done' }, { standby: 'Here. What would you like to do?' });
-        expect(by).toMatchObject({ text: 'Here. What would you like to do?', buttons: [], choices: 'returning', minimized: false, progress: null, skip: false, stepBack: false });
+        expect(by).toMatchObject({ text: 'Here. What would you like to do?', buttons: [], choices: 'returning', minimized: false, progress: null, stepBack: false });
         expect(viewFor({ ...fresh(), scene: 'done' }).text).toBe(GUIDE.standbyPlain);
-        // Skip: standing by, open. Look around: tucked. Need a hand?: open again.
-        const skipped = step({ ...fresh(), scene: 'rooms' }, { type: 'skip' });
-        expect(skipped).toMatchObject({ scene: 'done', skipped: true, minimized: false });
-        const tucked = step(skipped, { type: 'lookAround' });
+        // Tucked only while away at a card; Need a hand? opens her again.
+        const standing = { ...fresh(), scene: 'done', minimized: false };
+        const tucked = step({ ...fresh(), scene: 'saved' }, { type: 'away', to: 'booking', was: null });
         expect(tucked).toMatchObject({ scene: 'done', minimized: true });
         expect(viewFor(tucked).minimized).toBe(true);
-        expect(step(tucked, { type: 'lookAround' })).toBe(tucked);
-        expect(step(tucked, { type: 'expand' })).toMatchObject({ scene: 'done', minimized: false, skipped: false });
-        expect(step(skipped, { type: 'expand' })).toBe(skipped);
+        expect(step(tucked, { type: 'expand' })).toMatchObject({ scene: 'done', minimized: false });
+        expect(step(standing, { type: 'expand' })).toBe(standing);
         // Its ways on: the rooms, a start, or the example's build my own.
-        expect(step(skipped, { type: 'editRooms' })).toMatchObject({ scene: 'rooms', reached: 4 });
-        expect(step(skipped, { type: 'start' }).scene).toBe('home');
-        expect(step(skipped, { type: 'buildOwn' }).scene).toBe('home');
-        expect(step(skipped, { type: 'nonsense' })).toBe(skipped);
-        // From All set and a welcome, Look around tucks her too.
-        expect(step({ ...fresh(), scene: 'saved' }, { type: 'lookAround' })).toMatchObject({ scene: 'done', minimized: true });
-        expect(step({ ...fresh(), scene: 'welcome' }, { type: 'lookAround' })).toMatchObject({ scene: 'done', minimized: true });
+        expect(step(standing, { type: 'editRooms' })).toMatchObject({ scene: 'rooms', reached: 4 });
+        expect(step(standing, { type: 'start' }).scene).toBe('home');
+        expect(step(standing, { type: 'buildOwn' }).scene).toBe('home');
+        expect(step(standing, { type: 'nonsense' })).toBe(standing);
     });
 
     test('every scene of the first build has a hint to say again, in other words', () => {

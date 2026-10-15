@@ -43,12 +43,13 @@ describe('the markup', () => {
         expect(text(/id="game-canvas"[^>]*aria-label="([^"]+)"/)).toMatch(/turntable.*Drag to turn it, and tap a floor to open it\.$/);
     });
 
-    test("Maya's bubble ships hidden, with her name and the Skip in copy.js's words", () => {
+    test("Maya's bubble ships hidden, with her name in copy.js's words, and no Skip (QA, 2026-10-15)", () => {
         expect(HTML).toMatch(/<section id="ws-host"[^>]*\shidden>/);
         expect(text(/id="host-name"[^>]*>([^<]+)</)).toBe(GUIDE.name);
         expect(text(/class="host-role">([^<]+)</)).toBe(GUIDE.role);
         expect(text(/class="host-portrait"[^>]*>([^<]+)</)).toBe(GUIDE.portrait);
-        expect(text(/id="host-skip"[^>]*>([^<]+)</)).toBe(GUIDE.skip);
+        expect(HTML).not.toMatch(/host-skip|Skip the guide/);
+        expect(GUIDE.skip).toBeUndefined();
     });
 
     test('Help says what copy.js says, the menu ships closed, and there is no floating Undo', () => {
@@ -386,6 +387,10 @@ describe('the kind of home (ONBOARDING Scene 2a)', () => {
 });
 
 describe('a first visit', () => {
+    test('Maya starts within a second of "Ready", the loading screen lifting included (QA, 2026-10-15: the rest must be snappy)', () => {
+        expect(CONFIG.loadingReveal / 1000 + CONFIG.guide.delay).toBeLessThanOrEqual(1);
+    });
+
     test('a plain house, and Maya a moment after it arrives, with nothing saved', async () => {
         const main = await boot({ quiet: true });
         expect(main.__test__.active()).toBeNull();
@@ -397,7 +402,6 @@ describe('a first visit', () => {
         expect(said()).toBe(GUIDE.hello);
         expect(buttons()).toEqual([GUIDE.start, GUIDE.example]);
         expect(dom.el('host-small').textContent).toBe(BRAND.honesty);
-        expect(dom.el('host-skip').hidden).toBe(true);
         expect(dom.el('host-progress').hidden).toBe(true);
         expect(localStorage.getItem(CONFIG.storage.key)).toBeNull();
     });
@@ -491,7 +495,8 @@ describe('a first visit', () => {
         expect(buttons()).toEqual([GUIDE.gotIt]);
         press('gotIt');
         expect(line()).toBe(GUIDE.rooms);
-        expect(buttons()).toEqual([GUIDE.otherRoom]);
+        // Review from the first room on (QA, 2026-10-15).
+        expect(buttons()).toEqual([GUIDE.reviewIt, GUIDE.otherRoom]);
     });
 
     test('before the price sheet arrives, the kitchen waits and says so', async () => {
@@ -575,36 +580,30 @@ describe('a first visit', () => {
         press('save');
         expect(line()).toBe(GUIDE.saved);
         expect(saved().settings.guide).toEqual({ scene: 'done', reviewed: true });
-        // Look around tucks her away, never out of reach.
-        press('lookAround');
-        expect(shown()).toBe(true);
-        expect(dom.el('ws-host').classList.contains('is-minimized')).toBe(true);
-        expect(dom.el('host-expand').hidden).toBe(false);
+        // A time, or back to the rooms: no look around (QA, 2026-10-15).
+        expect(buttons()).toEqual([GUIDE.chooseTime, GUIDE.editRooms]);
+        press('editRooms');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        expect(line()).toBe(GUIDE.rooms);
     });
 
-    test('Skip leaves the guide, saved, Maya staying with the ways on, and the house answers once a room is added through her', async () => {
+    test('no Skip: the build is the way, Back and the strip to move about in it (QA, 2026-10-15: "the guide is the UX")', async () => {
         const main = await boot({ sheet: true });
         press('start');
         pick('kind-house');
-        fire(dom.el('host-skip'), 'click');
-        expect(shown()).toBe(true);
-        expect(line()).toBe(`${GUIDE.skipped} ${GUIDE.returningLegend}`);
-        expect(picks().map((b) => b.id)).toEqual(['host-editRooms', 'host-lookAround']);
-        expect(dom.el('host-skip').hidden).toBe(true);
-        expect(dom.el('host-back').hidden).toBe(true);
-        expect(saved().settings.guide).toEqual({ scene: 'done', reviewed: false });
-        // No room yet: a tap on the house opens nothing over her, and her
-        // first way on pulses instead (QA, 2026-10-15).
+        expect(line()).toBe(GUIDE.floors);
+        expect(dom.el('host-back').hidden).toBe(false);
+        // A skip asked for some other way changes nothing.
+        main.__test__.onHostButton('skip');
+        expect(main.__test__.ui.guide.scene).toBe('floors');
+        expect(line()).toBe(GUIDE.floors);
+        // No room yet: a tap on the house opens nothing over her, and Next
+        // pulses instead.
         expect(main.__test__.tapModel('main')).toBe(false);
         expect(main.__test__.model().lifted).toBeNull();
-        expect(nudged('editRooms')).toBe(true);
+        expect(nudged('next')).toBe(true);
         jest.advanceTimersByTime(1700);
-        expect(nudged('editRooms')).toBe(false);
-        // A room added through her, and the house is fully usable.
-        pick('editRooms');
-        fire(roomChip('kitchen'), 'click');
-        expect(main.__test__.tapModel('main')).toBe(true);
-        expect(main.__test__.model().lifted).toBe('main');
+        expect(nudged('next')).toBe(false);
     });
 });
 
@@ -622,10 +621,11 @@ describe('Maya on the stage', () => {
         expect(maya.gesturing).toBeNull();
         tick('second', true);
         expect(maya.gesturing).toBeNull();
-        // Tucked away, she stops talking.
-        fire(dom.el('host-skip'), 'click');
+        // Tucked away while a card is open, she stops talking.
         expect(maya.talking).toBeGreaterThan(0);
-        pick('lookAround');
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'saved' };
+        main.__test__.guideTo({ type: 'away', to: 'booking', was: null });
+        expect(main.__test__.ui.guide.minimized).toBe(true);
         expect(maya.talking).toBe(0);
     });
 
@@ -698,9 +698,9 @@ describe('Maya on the stage', () => {
         main.__test__.tapHost();
         expect(line()).toBe(GUIDE.helloAgain);
         expect(main.__test__.cast().gesturing).toBe('point');
-        press('start');
-        pick('kind-house');
-        fire(dom.el('host-skip'), 'click');
+        // Standing by after the guide (no Skip to get there quickly).
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false };
+        main.__test__.showGuide();
         main.__test__.tapHost();
         expect(line()).toBe(GUIDE.hint);
     });
@@ -717,22 +717,12 @@ describe('the example', () => {
         expect(line()).toBe(GUIDE.example2);
         expect(main.__test__.model().lifted).toBe('main');
         press('next');
-        expect(buttons()).toEqual([GUIDE.buildOwn, GUIDE.lookAround]);
+        expect(buttons()).toEqual([GUIDE.buildOwn]);
         press('buildOwn');
         expect(main.__test__.model().lifted).toBeNull();
         expect(main.__test__.active().sample).toBe(false);
         expect(main.__test__.active().title).toBe(GUIDE.defaultTitle);
         expect(line()).toBe(GUIDE.home);
-    });
-
-    test('Look around keeps Build my own at hand', async () => {
-        await boot();
-        press('example');
-        press('next');
-        press('next');
-        press('lookAround');
-        expect(line()).toBe(GUIDE.look);
-        expect(buttons()).toEqual([GUIDE.buildOwn]);
     });
 
     test('removed from My checklists, the example comes back when asked for again, and after a reload too', async () => {
@@ -768,18 +758,17 @@ describe('a return', () => {
         const main = await boot({ saved: await savedDoc([['home-mine', STAMP]], { activeId: 'home-mine', guide: { scene: 'rooms', reviewed: false } }) });
         expect(main.__test__.active().id).toBe('home-mine');
         expect(line()).toBe(GUIDE.welcomeResume);
-        expect(buttons()).toEqual([GUIDE.keepGoing, GUIDE.illLook]);
+        expect(buttons()).toEqual([GUIDE.keepGoing]);
         press('keepGoing');
         expect(line()).toBe(GUIDE.rooms);
     });
 
-    test('after the first build: welcomed to a home base, and the bubble goes with I\'ll look around', async () => {
+    test('after the first build: welcomed to a home base, its ways on and nothing else (QA, 2026-10-15: no look around)', async () => {
         await boot({ saved: await savedDoc([['home-mine', STAMP]], { guide: { scene: 'done', reviewed: true } }) });
         expect(line()).toBe(`${GUIDE.welcomeBack} ${GUIDE.homeEmpty('Home home-mine')} ${GUIDE.returningLegend}`);
         expect(dom.el('host-progress').hidden).toBe(true);
-        expect(picks().map((b) => b.id)).toEqual(['host-editRooms', 'host-lookAround']);
-        pick('lookAround');
-        expect(dom.el('ws-host').classList.contains('is-minimized')).toBe(true);
+        expect(picks().map((b) => b.id)).toEqual(['host-editRooms']);
+        expect(dom.el('ws-host').classList.contains('is-minimized')).toBe(false);
     });
 
     test('a home with rooms: its rooms, tasks and price so far, and a time to choose first', async () => {
@@ -793,7 +782,7 @@ describe('a return', () => {
         const main = await boot({ saved: doc, sheet: true });
         main.__test__.showGuide();
         expect(line()).toMatch(/^Welcome back\. Maple Street has 1 room and 9 tasks, \$\d+ so far\. What would you like to do\?$/);
-        expect(picks().map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.editRooms, GUIDE.reviewChecklist, GUIDE.illLook]);
+        expect(picks().map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.editRooms, GUIDE.reviewChecklist]);
         // Add or change rooms: back to the build's Your rooms, Maya at the step.
         pick('editRooms');
         expect(main.__test__.ui.guide.scene).toBe('rooms');
@@ -888,19 +877,22 @@ describe('Maya standing by (QA, 2026-10-14: she should always have something to 
         const main = await boot();
         press('start');
         pick('kind-house');
-        fire(dom.el('host-skip'), 'click');
+        // Tucked only while she has sent the visitor to a card (no look
+        // around, QA 2026-10-15).
+        const away = () => main.__test__.guideTo({ type: 'away', to: 'booking', was: null });
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'saved' };
         // What was said before is let land first; tucked, nothing more is
         // said aloud.
         await jest.advanceTimersByTimeAsync(500);
         dom.el('ws-live').textContent = 'quiet';
-        pick('lookAround');
+        away();
         expect(dom.el('ws-host').classList.contains('is-minimized')).toBe(true);
         await jest.advanceTimersByTimeAsync((CONFIG.guide.again + 1) * 1000);
         expect(dom.el('ws-live').textContent).toBe('quiet');
         fire(dom.el('host-expand'), 'click');
         expect(dom.el('ws-host').classList.contains('is-minimized')).toBe(false);
         expect(line()).toBe(`${GUIDE.homeEmpty('Our home')} ${GUIDE.returningLegend}`);
-        pick('lookAround');
+        away();
         main.__test__.tapHost();
         expect(main.__test__.ui.guide).toMatchObject({ scene: 'done', minimized: false });
         expect(line()).toBe(`${GUIDE.homeEmpty('Our home')} ${GUIDE.returningLegend}`);
@@ -915,14 +907,14 @@ describe('Maya standing by (QA, 2026-10-14: she should always have something to 
         main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false, skipped: false };
         main.__test__.showGuide();
         expect(line()).toBe(GUIDE.example3);
-        expect(picks().map((b) => b.id)).toEqual(['host-buildOwn', 'host-lookAround']);
+        expect(picks().map((b) => b.id)).toEqual(['host-buildOwn']);
         pick('buildOwn');
         expect(line()).toBe(GUIDE.home);
         main.__test__.startOver();
         main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false, skipped: false };
         main.__test__.showGuide();
         expect(line()).toBe(`${GUIDE.noHome} ${GUIDE.returningLegend}`);
-        expect(picks().map((b) => b.id)).toEqual(['host-start', 'host-lookAround']);
+        expect(picks().map((b) => b.id)).toEqual(['host-start']);
         pick('start');
         expect(line()).toBe(GUIDE.home);
     });
@@ -1053,9 +1045,10 @@ describe('the home at a glance under Maya\'s name (Steve, 2026-10-14)', () => {
         expect(dom.el('quote').hidden).toBe(false);
         expect(dom.el('quote-total').textContent).toContain(money());
         fire(dom.el('quote-close'), 'click');
-        // Tucked away, the price is still in view: nothing else shows it.
-        fire(dom.el('host-skip'), 'click');
-        pick('lookAround');
+        // Tucked away (sent to a card), the price is still in view: nothing
+        // else shows it.
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'saved' };
+        main.__test__.guideTo({ type: 'away', to: 'booking', was: null });
         expect(main.__test__.ui.guide.minimized).toBe(true);
         expect(facts().hidden).toBe(false);
         expect(money()).toMatch(/^\$\d+(\.\d\d)?$/);
@@ -1202,11 +1195,13 @@ describe('Help and Undo', () => {
         expect(line()).toBe(GUIDE.helloAgain);
         press('start');
         pick('kind-house');
-        fire(dom.el('host-skip'), 'click');
+        // Standing by after the guide.
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false };
+        main.__test__.showGuide();
         main.__test__.tapHost();
         expect(line()).toBe(GUIDE.hint);
         press('close');
-        expect(line()).toBe(`${GUIDE.skipped} ${GUIDE.returningLegend}`);
+        expect(line()).toBe(`${GUIDE.homeEmpty('Our home')} ${GUIDE.returningLegend}`);
     });
 
     test('About sits over the scene and goes back to it', async () => {
