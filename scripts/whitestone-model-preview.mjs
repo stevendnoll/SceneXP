@@ -499,6 +499,16 @@ const roomShot = (lifted, roomId, title, dist) => {
     const built = build(showcase, lifted, null);
     return [title, { ...shot(built, { yaw: 0, tilt: 0.4 }, 1000, 640), camera: closeOn(built, roomId, dist) }];
 };
+/** The roof from the side, the back and the back corner (QA, 2026-10-15:
+ *  the cross gable showed through the back slope, and its eave along the
+ *  side wall). */
+const roofViews = [
+    ['Roof check: the plain house from its left side', shot(build(EMPTY_HOME), { yaw: Math.PI / 2, tilt: V.tilt.start }, 1000, 640)],
+    ['Roof check: the plain house from the back', shot(build(EMPTY_HOME), { yaw: Math.PI, tilt: V.tilt.start }, 1000, 640)],
+    ['Roof check: the plain house from its back left corner', shot(build(EMPTY_HOME), { yaw: Math.PI * 0.75, tilt: V.tilt.start }, 1000, 640)],
+    ['Roof check: the example from its back right corner', shot(build(example), { yaw: -Math.PI * 0.75, tilt: V.tilt.start }, 1000, 640)],
+    ['Roof check: the widest home from its left side', shot(build(withGarage), { yaw: Math.PI / 2, tilt: V.tilt.start }, 1000, 640)]
+];
 const assembleViews = [0, 0.6, 1.2, 1.8].map((t) => [`The example building itself, ${t} seconds in`, shot(build(example, null, null, t), start, 1280, 800)]);
 const kindViews = [
     ['A townhome, an end unit, its garage tucked under', shot(build(townEnd), start, 1280, 800)],
@@ -569,7 +579,7 @@ const onlyAssemble = process.argv.includes('--assemble');
 // `--match <words>` renders only the views whose titles hold those words.
 const matchAt = process.argv.indexOf('--match');
 const match = matchAt > 0 ? String(process.argv[matchAt + 1] || '').toLowerCase() : '';
-const all = onlyAssemble ? assembleViews : onlyKinds ? kindViews : [...views, ...kindViews, ...assembleViews];
+const all = onlyAssemble ? assembleViews : onlyKinds ? kindViews : [...views, ...roofViews, ...kindViews, ...assembleViews];
 const list = match ? all.filter(([title]) => title.toLowerCase().includes(match)) : all;
 // A matched few go to match-*.png and match.html, leaving the full set be.
 const prefix = match ? 'match' : onlyAssemble ? 'assemble' : onlyKinds ? 'kind' : 'model';

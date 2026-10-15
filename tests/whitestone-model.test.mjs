@@ -1390,6 +1390,38 @@ describe('the front door, without z-fighting', () => {
         for (const home of homes) expect(`${home.id}: ${fights(home).join(', ') || 'none'}`).toBe(`${home.id}: none`);
     });
 
+    test('the cross gable stays inside the main roof: back no farther than its ridge, in from the side wall, below it (QA, 2026-10-15)', () => {
+        const R = HOUSE.roof;
+        const plain = (levels) => ({ id: levels.join('-'), serviceType: 'cleaning', levels, rooms: [], items: [] });
+        const homes = [plain(['main']), plain(['main', 'second']), plain(['basement', 'main', 'second', 'third']), example(), ...HOMES];
+        let checked = 0;
+        for (const home of homes) {
+            const layout = layoutHome(home);
+            const inst = instancesFor(layout, new Map(), {});
+            const cross = inst.roofs.filter((p) => p.role === 'cross');
+            if (!cross.length) continue;
+            checked++;
+            const top = cross[0].level;
+            const main = inst.roofs.filter((p) => p.role === 'roof' && p.level === top && p.rotation && p.rotation[0] !== 0);
+            expect(main).toHaveLength(2);
+            const ridgeZ = (main[0].position[2] + main[1].position[2]) / 2;
+            const slab = inst.slabs.find((p) => p.level === top);
+            const wallLeft = slab.position[0] - slab.scale[0] / 2;
+            for (const p of cross) {
+                const a = Math.abs(p.rotation[2]);
+                const back = p.position[2] - p.scale[2] / 2;
+                const outer = p.position[0] - (p.scale[0] / 2) * Math.cos(a) - (p.scale[1] / 2) * Math.sin(a);
+                // No farther back than the main ridge (its overhang's half aside).
+                expect(`${home.id} back ${back.toFixed(4)}`).toBe(`${home.id} back ${Math.max(back, ridgeZ - R.overhang / 2 - 1e-9).toFixed(4)}`);
+                // Its eave inside the side wall, by its gutter and more.
+                expect(outer).toBeGreaterThan(wallLeft + HOUSE.trim.gutter);
+                // Its ridge below the main one.
+                expect(p.top).toBeLessThan(Math.max(...main.map((m) => m.top)) - R.thickness);
+            }
+        }
+        expect(checked).toBeGreaterThan(50);
+    });
+
     test('the stone base stops at every window that comes down into it, all along the front', () => {
         const plain = { id: 'plain', serviceType: 'cleaning', levels: ['main', 'second'], rooms: [], items: [] };
         let cut = 0;

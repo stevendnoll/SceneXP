@@ -72,9 +72,12 @@ export const HOUSE = Object.freeze({
     garageDoor: Object.freeze({ width: 0.72, height: 0.12, glass: 0.018 }),
     roof: Object.freeze({ pitch: 0.45, overhang: 0.035, thickness: 0.012 }),
     /** The white board-and-batten cross gable over the top story's left
-     *  wing: its share of the front, and how far back it runs (it meets
-     *  the main roof before the ridge). */
-    cross: Object.freeze({ share: 0.44, maxWidth: 0.52, reach: 0.75, batten: 0.022, window: Object.freeze({ w: 0.05, h: 0.04, up: 0.3 }) }),
+     *  wing: its share of the front, and how far back it runs: to the
+     *  main ridge and no farther (QA, 2026-10-15: at 0.75 its end showed
+     *  through the back slope). It stands `clear` in from the side wall
+     *  past its own eave and gutter, so they stay under the main roof
+     *  (they showed along the gable end as a bar). */
+    cross: Object.freeze({ share: 0.44, maxWidth: 0.52, reach: 0.5, clear: 0.006, batten: 0.022, window: Object.freeze({ w: 0.05, h: 0.04, up: 0.3 }) }),
     lap: Object.freeze({ every: 0.012, line: 0.0016 }),
     stone: Object.freeze({ base: 0.05 }),
     frame: 0.006,               // a window frame's border round its glass
@@ -610,8 +613,13 @@ function gable(level, x, y, z, w, d, { alongZ = false, faceColor = 'wall', role 
  */
 function crossGable(level, top, roofY, cx, cz) {
     const c = HOUSE.cross;
+    const r = HOUSE.roof;
+    // Its valleys meet the main roof before the main ridge, since it is
+    // narrower than the story is deep (the model test holds it so).
     const w = Math.min(c.maxWidth, top.width * c.share);
-    const x = top.x + cx - top.width / 2 + w / 2 + 0.02;
+    // Its outer eave and gutter inside the side wall, under the main roof.
+    const inset = r.overhang * Math.cos(Math.atan(r.pitch)) + HOUSE.trim.gutter + c.clear;
+    const x = top.x + cx - top.width / 2 + inset + w / 2;
     const d = top.depth * c.reach;
     const zFront = top.z + cz + top.depth / 2;
     const g = gable(level, x, roofY, zFront - d / 2, w, d, { alongZ: true, faceColor: 'gable', role: 'cross' });
