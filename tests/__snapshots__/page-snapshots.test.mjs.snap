@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=32" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=33" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7109,7 +7109,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=3" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=32" rel="stylesheet"]
+    link [href="css/experience.min.css?v=33" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7216,10 +7216,6 @@ html [data-ui-theme="surf" lang="en"]
             div#setup-levels-list.form-columns
             p#setup-levels-note.form-hint
               "Every home has a main floor, so it is always ticked."
-          div.form-row
-            label [for="setup-title"]
-              "Name this checklist"
-            input#setup-title.ws-input [autocomplete="off" maxlength="80" placeholder="Our home" type="text"]
           div.form-row
             label [for="setup-frequency"]
               "How often would you like a visit?"
@@ -7541,7 +7537,7 @@ html [lang="en"]
       "Your checklist | Whitestone Home Care"
     link [href="../favicon.svg?v=3" rel="icon" type="image/svg+xml"]
     link [href="css/tasks.min.css?v=2" rel="stylesheet"]
-    script [src="js/main.min.js?v=2" type="module"]
+    script [src="js/main.min.js?v=3" type="module"]
   body
     header.tasks-header
       svg.tasks-mark [aria-hidden="true" viewbox="0 0 32 32"]

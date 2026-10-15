@@ -486,20 +486,19 @@ describe('a first visit', () => {
         expect(main.__test__.history().canUndo).toBe(true);
     });
 
-    test('the name typed is kept on Next, and an empty one changes nothing', async () => {
+    test('no name is asked for at the floors (QA, 2026-10-15): the home is "Our home", and Next goes on', async () => {
         const main = await boot();
         press('start');
         pick('kind-house');
-        main.__test__.host().titleField.value = '  Maple Street  ';
+        const inputs = [];
+        const walk = (n) => (n.children || []).forEach((c) => { if (c.tagName === 'INPUT') inputs.push(c); walk(c); });
+        walk(dom.el('host-choices'));
+        expect(inputs.length).toBeGreaterThan(0);
+        expect(inputs.every((i) => i.type === 'checkbox')).toBe(true);
         press('next');
-        expect(own(main).title).toBe('Maple Street');
+        expect(own(main).title).toBe(GUIDE.defaultTitle);
         expect(line()).toBe(GUIDE.firstRoom);
-        main.__test__.guideTo({ type: 'restart' });
-        press('start');
-        pick('kind-house');
-        main.__test__.host().titleField.value = '   ';
-        press('next');
-        expect(own(main).title).toBe('Maple Street');
+        expect(GUIDE.titleLabel).toBeUndefined();
     });
 
     test('the kitchen in one tap: its preset, its floor opened, and its line from the price sheet', async () => {

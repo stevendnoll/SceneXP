@@ -1545,30 +1545,6 @@ textarea.ws-input {
     outline-offset: 2px;
 }
 
-.host-title-label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    margin: 0 0 0.95rem;
-    color: var(--ws-muted);
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-.host-title {
-    min-height: 44px;
-    padding: 0.45rem 0.7rem;
-    border: 1px solid var(--ws-line);
-    border-radius: 10px;
-    color: var(--ws-graphite);
-    font: inherit;
-}
-
-.host-title:focus-visible {
-    outline: 3px solid var(--ws-accent);
-    outline-offset: 1px;
-}
-
 .host-actions {
     display: flex;
     flex-wrap: wrap;

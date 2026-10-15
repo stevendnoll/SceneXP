@@ -1422,6 +1422,29 @@ describe('the front door, without z-fighting', () => {
         expect(checked).toBeGreaterThan(50);
     });
 
+    test('a door a step or two up has its steps and its path straight out from its middle; a stair over a basement runs alongside (QA, 2026-10-15)', () => {
+        const plain = (levels) => ({ id: levels.join('-'), serviceType: 'cleaning', levels, rooms: [], items: [] });
+        const T0 = CONFIG.stage.turntable;
+        const parts = (home) => {
+            const layout = layoutHome(home);
+            const k = fitScale(layout, T0, CONFIG.model.scale);
+            const inst = instancesFor(layout, new Map(), { site: siteFor(layout, T0, k) });
+            const door = inst.windows.find((p) => p.color === 'door');
+            const path = inst.site.find((p) => p.role === 'path');
+            const steps = inst.site.filter((p) => p.role === 'stoop');
+            return { door, path, steps };
+        };
+        for (const levels of [['main'], ['main', 'second'], ['main', 'second', 'third']]) {
+            const { door, path, steps } = parts(plain(levels));
+            expect(path.position[0]).toBeCloseTo(door.position[0], 9);
+            for (const st of steps) expect(st.position[0]).toBeCloseTo(door.position[0], 9);
+        }
+        // Over a basement: the stair comes down beside the landing, and the
+        // path leaves from its foot.
+        const { door, path } = parts(plain(['basement', 'main']));
+        expect(Math.abs(path.position[0] - door.position[0])).toBeGreaterThan(0.05);
+    });
+
     test('the stone base stops at every window that comes down into it, all along the front', () => {
         const plain = { id: 'plain', serviceType: 'cleaning', levels: ['main', 'second'], rooms: [], items: [] };
         let cut = 0;

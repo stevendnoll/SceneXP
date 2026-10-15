@@ -507,7 +507,9 @@ const roofViews = [
     ['Roof check: the plain house from the back', shot(build(EMPTY_HOME), { yaw: Math.PI, tilt: V.tilt.start }, 1000, 640)],
     ['Roof check: the plain house from its back left corner', shot(build(EMPTY_HOME), { yaw: Math.PI * 0.75, tilt: V.tilt.start }, 1000, 640)],
     ['Roof check: the example from its back right corner', shot(build(example), { yaw: -Math.PI * 0.75, tilt: V.tilt.start }, 1000, 640)],
-    ['Roof check: the widest home from its left side', shot(build(withGarage), { yaw: Math.PI / 2, tilt: V.tilt.start }, 1000, 640)]
+    ['Roof check: the widest home from its left side', shot(build(withGarage), { yaw: Math.PI / 2, tilt: V.tilt.start }, 1000, 640)],
+    ['Path check: the plain house from above its front', shot(build(EMPTY_HOME), { yaw: 0, tilt: 1.2 }, 1000, 640)],
+    ['Path check: the example from above its front', shot(build(example), { yaw: 0, tilt: 1.2 }, 1000, 640)]
 ];
 const assembleViews = [0, 0.6, 1.2, 1.8].map((t) => [`The example building itself, ${t} seconds in`, shot(build(example, null, null, t), start, 1280, 800)]);
 const kindViews = [

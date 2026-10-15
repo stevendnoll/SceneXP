@@ -274,14 +274,16 @@ describe('what the cleaner reads', () => {
         expect(blocks[0].textContent).toContain('No bleach');
         expect(blocks[0].textContent).toContain('Please keep the gate closed.');
         expect(blocks[1].className).toBe('tasks-home');
-        expect(blocks[1].textContent).toContain('Maple Street');
+        // The cleaner's heading, not the customer's name for it (QA, 2026-10-15).
+        expect(blocks[1].children[0].textContent).toBe(COPY.heading);
+        expect(blocks[1].textContent).not.toContain('Maple Street');
         expect(blocks[1].textContent).toContain('Friday, October 16 at 9:00 am');
         expect(blocks[1].textContent).toMatch(/Quote \$\d+(\.\d\d)?, about /);
         expect(blocks[1].textContent).toContain('The side door sticks.');
         // Quoted on this sheet, worked out the same: no notice.
         expect(state.notice).toBe('');
         expect(state.quote.totalCents).toBe(state.form.quote.totalCents);
-        expect(globalThis.document.title).toBe(`Maple Street | ${COPY.pageTitle}`);
+        expect(globalThis.document.title).toBe(`${COPY.heading} | ${COPY.pageTitle}`);
     });
 
     test('no preferences, no banner', async () => {

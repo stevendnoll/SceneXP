@@ -374,7 +374,6 @@ export const GUIDE = Object.freeze({
     /** Under the floors: why the main floor cannot be unticked. */
     mainAlways: 'Every home has a main floor, so it is always ticked.',
     floorsLegend: 'Floors in your home',
-    titleLabel: 'Name this checklist',
     next: 'Next',
     back: 'Back',
 
@@ -554,7 +553,9 @@ export const GUARDS = Object.freeze({
 export const TASKS_PAGE = Object.freeze({
     incomplete: 'Please enter all 6 digits of the PIN.',
     pageTitle: 'Whitestone Home Care',
-    untitled: 'Your checklist',
+    /** The cleaner's heading: a checklist is no longer named by its
+     *  customer (QA, 2026-10-15), and "Our home" reads oddly from here. */
+    heading: 'Cleaning checklist',
     // Opening (M4): the PIN, and what can go wrong.
     opening: 'Opening the checklist.',
     denied: 'That PIN did not open the checklist. Please check it and try again.',

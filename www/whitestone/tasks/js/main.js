@@ -213,7 +213,7 @@ export async function boot(env) {
         }
         if (gate) gate.hidden = true;
         if (view) view.hidden = false;
-        if (opened.title) doc.title = `${opened.title} | ${COPY.pageTitle}`;
+        doc.title = `${COPY.heading} | ${COPY.pageTitle}`;
         draw();
         state.phase = 'open';
         // The thumbnails, then drawn again with them.

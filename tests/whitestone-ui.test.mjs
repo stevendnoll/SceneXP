@@ -150,7 +150,7 @@ function newHome(main) {
 }
 
 /** Fill in and submit the setup card for a new home. */
-async function startHome(main, { title = 'Maple Street', levels = ['main', 'second'] } = {}) {
+async function startHome(main, { levels = ['main', 'second'] } = {}) {
     newHome(main);
     expect(visible('setup')).toBe(true);
     // A box the card has locked (the main floor) is left as the card has it.
@@ -158,7 +158,6 @@ async function startHome(main, { title = 'Maple Street', levels = ['main', 'seco
         const input = box('setup-levels-list', key);
         if (!input.disabled) input.checked = levels.includes(key);
     }
-    dom.el('setup-title').value = title;
     dom.el('setup-household').value = 'Parking in the driveway.';
     fire(dom.el('setup-form'), 'submit');
     return main;
@@ -188,13 +187,15 @@ test('Start your own: setup makes the checklist, opens it, and offers care prefe
     const doc = main.getDoc();
     expect(doc.checklists).toHaveLength(1);
     const c = doc.checklists[0];
-    expect(c).toMatchObject({ title: 'Maple Street', levels: ['main', 'second'], household: 'Parking in the driveway.' });
+    // No name is asked for any more (QA, 2026-10-15): every home is "Our home".
+    expect(c).toMatchObject({ title: GUIDE.defaultTitle, levels: ['main', 'second'], household: 'Parking in the driveway.' });
+    expect(HTML).not.toMatch(/setup-title"|Name this checklist/);
     expect(doc.settings.activeId).toBe(c.id);
-    expect(saved().checklists[0].title).toBe('Maple Street');
+    expect(saved().checklists[0].title).toBe(GUIDE.defaultTitle);
 
     expect(visible('setup')).toBe(false);
     expect(visible('preferences')).toBe(true);
-    expect(dom.el('toast-text').textContent).toBe(UI.started('Maple Street'));
+    expect(dom.el('toast-text').textContent).toBe(UI.started(GUIDE.defaultTitle));
 
     prefsBox('no-bleach').checked = true;
     prefsBox('pets-home').checked = true;
@@ -224,12 +225,12 @@ test('editing the home changes its details and its levels, and a level with room
     await startHome(main);
     fire(dom.el('prefs-skip'), 'click');
     main.__test__.editHome();
-    expect(dom.el('setup-title').value).toBe('Maple Street');
+    expect(dom.el('setup-household').value).toBe('Parking in the driveway.');
     expect(box('setup-levels-list', 'second').checked).toBe(true);
-    dom.el('setup-title').value = 'The Maple house';
+    dom.el('setup-household').value = 'Parking on the street.';
     box('setup-levels-list', 'basement').checked = true;
     fire(dom.el('setup-form'), 'submit');
-    expect(main.getDoc().checklists[0]).toMatchObject({ title: 'The Maple house', levels: ['basement', 'main', 'second'] });
+    expect(main.getDoc().checklists[0]).toMatchObject({ household: 'Parking on the street.', levels: ['basement', 'main', 'second'] });
     expect(said()).toBe(UI.homeSaved);
 });
 
@@ -238,16 +239,16 @@ test('undo takes back each step from the keyboard, but not inside a text field',
     await startHome(main);
     fire(dom.el('prefs-skip'), 'click');
     main.__test__.editHome();
-    dom.el('setup-title').value = 'Renamed';
+    dom.el('setup-household').value = 'Gate code 1234.';
     fire(dom.el('setup-form'), 'submit');
-    expect(main.getDoc().checklists[0].title).toBe('Renamed');
+    expect(main.getDoc().checklists[0].household).toBe('Gate code 1234.');
 
     // Ctrl+Z typed into a text box is the text box's own undo.
     fire(dom.windowStub, 'keydown', { key: 'z', ctrlKey: true, target: { tagName: 'TEXTAREA' } });
-    expect(main.getDoc().checklists[0].title).toBe('Renamed');
+    expect(main.getDoc().checklists[0].household).toBe('Gate code 1234.');
 
     fire(dom.windowStub, 'keydown', { key: 'z', metaKey: true, target: dom.documentStub.body });
-    expect(main.getDoc().checklists[0].title).toBe('Maple Street');
+    expect(main.getDoc().checklists[0].household).toBe('Parking in the driveway.');
     expect(said()).toBe(UI.undone(UI.labels.home));
 
     // The last step: the home itself.
@@ -261,15 +262,15 @@ test('undo takes back each step from the keyboard, but not inside a text field',
 
 test('a change in another tab is followed, and undo steps from before it are dropped', async () => {
     const main = await boot();
-    await startHome(main, { title: 'Mine' });
+    await startHome(main);
     fire(dom.el('prefs-skip'), 'click');
     const theirs = saved();
-    theirs.checklists[0].title = 'Theirs';
+    theirs.checklists[0].household = 'Theirs';
     localStorage.setItem(CONFIG.storage.key, JSON.stringify(theirs));
     fire(dom.windowStub, 'storage', { key: 'some-other-scene' });
-    expect(main.getDoc().checklists[0].title).toBe('Mine');
+    expect(main.getDoc().checklists[0].household).toBe('Parking in the driveway.');
     fire(dom.windowStub, 'storage', { key: CONFIG.storage.key });
-    expect(main.getDoc().checklists[0].title).toBe('Theirs');
+    expect(main.getDoc().checklists[0].household).toBe('Theirs');
     expect(main.__test__.history().canUndo).toBe(false);
     expect(said()).toBe(UI.otherTab);
 });
@@ -346,7 +347,7 @@ test('a first visit goes from preferences straight to the first room, however pr
     expect(dom.el('room-title').textContent).toBe(UI.addRoomTitle);
     // A second home, with preferences closed by Escape instead.
     fire(dom.el('room-cancel'), 'click');
-    await startHome(main, { title: 'Second' });
+    await startHome(main);
     fire(dom.documentStub, 'keydown', { key: 'Escape' });
     jest.advanceTimersByTime(10);
     expect(visible('preferences')).toBe(false);
@@ -706,9 +707,9 @@ test('the example, asked for on a first visit, is priced and opens in full, and 
 
 test('starting your own from the example keeps the example beside it, and makes your own the open one', async () => {
     const main = await boot({ example: true });
-    await startHome(main, { title: 'Our place' });
+    await startHome(main);
     const doc = main.getDoc();
-    expect(doc.checklists.map((c) => c.title)).toEqual(['Example home', 'Our place']);
+    expect(doc.checklists.map((c) => c.title)).toEqual(['Example home', GUIDE.defaultTitle]);
     expect(doc.settings.activeId).toBe(doc.checklists[1].id);
 });
 
@@ -733,7 +734,7 @@ test('UNDO ACROSS EVERY KIND OF CHANGE walks the document back to exactly where 
     prefsBox('fragrance-free').checked = true;
     fire(dom.el('prefs-form'), 'submit'); record();
     main.__test__.editHome();
-    dom.el('setup-title').value = 'Renamed';
+    dom.el('setup-household').value = 'Gate code 1234.';
     fire(dom.el('setup-form'), 'submit'); record();
 
     // Each undo lands exactly on the document before that step.

@@ -113,7 +113,7 @@ export const HOUSE = Object.freeze({
     site: Object.freeze({
         lawn: 0.006,
         path: Object.freeze({ width: 0.075, height: 0.008 }),
-        stoop: Object.freeze({ rise: 0.032, tread: 0.022, landing: 0.045 }),
+        stoop: Object.freeze({ rise: 0.032, tread: 0.022, landing: 0.045, aheadUpTo: 2 }),
         drive: Object.freeze({ height: 0.007 }),
         bed: Object.freeze({ depth: 0.05, height: 0.01, shrub: 0.022, every: 0.05 }),
         tree: Object.freeze({ trunk: 0.11, trunkWidth: 0.012, radius: 0.06, inset: 0.085, clear: 0.025 }),
@@ -1129,8 +1129,13 @@ function landscape(out, site, layout, cx, cz, door, garages, front, doorOpen = f
         let foot = door.x;
         let from = door.z + P.depth;
         const sw = width * 0.62;   // a stair toward the street, narrower than its landing
+        // A step or two comes straight down in front of the door, so the
+        // path leaves from the door's middle (QA, 2026-10-15: one step
+        // turned sideways put the path off center). A real stair, over a
+        // basement, runs alongside the house as before.
+        const ahead = forward || n <= HOUSE.site.stoop.aheadUpTo;
         for (let k = 1; k < n; k++) {
-            if (forward) {
+            if (ahead) {
                 const zk = door.z + P.depth + (k - 0.5) * st.tread;
                 out.site.push(part(null, door.x, lawnTop, zk, sw, (rise * (n - k)) / n, st.tread, { color: 'path', role: 'stoop' }));
                 from = zk + st.tread / 2;

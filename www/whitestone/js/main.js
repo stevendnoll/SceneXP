@@ -1311,7 +1311,7 @@ function sceneView() {
         const allowed = levelsAllowed(typeKey, c ? c.residence : null);
         const levels = (type ? type.levels : []).filter((l) => allowed.includes(l.key))
             .map((l) => ({ key: l.key, name: l.name, on: Boolean(c && c.levels.includes(l.key)) || l.key === MAIN_LEVEL, locked: l.key === MAIN_LEVEL }));
-        return { ...v, choices: { kind: 'floors', levels, title: c ? c.title : GUIDE.defaultTitle, maxTitle: CONFIG.limits.title } };
+        return { ...v, choices: { kind: 'floors', levels } };
     }
     return v;
 }
@@ -1525,7 +1525,6 @@ function onHostButton(id) {
     if (host) host.poke();
     switch (id) {
     case 'next': {
-        if (ui.guide.scene === 'floors') commitTitle();
         const c = active();
         guideTo({ type: 'next', hasRooms: Boolean(c && liveRooms(c).length) });
         break;
@@ -1612,16 +1611,6 @@ function chooseResidence(patch) {
     }
     guideTo({ type: 'residence', kind: active().residence.kind });
     return result;
-}
-
-/** The name typed in the bubble, kept as the checklist's title. */
-function commitTitle() {
-    const c = active();
-    const typed = host ? host.title() : null;
-    if (!c || typed === null) return;
-    const title = typed.trim();
-    if (!title || title === c.title) return;
-    change((d) => updateChecklist(d, c.id, { title }, CONFIG, now()), UI.labels.home, null);
 }
 
 /** A floor ticked or unticked in the bubble: it rises onto the house, or

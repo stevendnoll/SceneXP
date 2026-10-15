@@ -176,7 +176,6 @@ export function fillSetupForm(checklist) {
     setValue('setup-attached', residence && residence.attached ? residence.attached : '');
     showResidence(type);
     setChecked('setup-levels', src.levels);
-    setValue('setup-title', checklist ? src.title : '');
     setValue('setup-frequency', src.visitFrequency || '');
     setValue('setup-household', src.household);
     const title = byId('setup-title-text');
@@ -193,7 +192,6 @@ export function readSetupForm(type = 'cleaning') {
     return {
         residence: residenceOf(type, { kind: value('setup-residence'), attached: value('setup-attached') }),
         levels: checked('setup-levels'),
-        title: value('setup-title'),
         visitFrequency: value('setup-frequency') || null,
         household: value('setup-household')
     };

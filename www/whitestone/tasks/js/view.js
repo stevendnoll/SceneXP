@@ -145,7 +145,7 @@ export function renderChecklist(container, { form, quote, sheet, thumbs = new Ma
     }
     const head = headerLines(form, quote);
     container.appendChild(h('header', { className: 'tasks-home' }, [
-        h('h1', { text: form.title || COPY.untitled }),
+        h('h1', { text: COPY.heading }),
         head.visit ? h('p', { className: 'tasks-visit', text: head.visit }) : null,
         head.quote ? h('p', { className: 'tasks-quote', text: head.quote }) : null,
         notice ? h('p', { className: 'tasks-notice', attrs: { role: 'note' }, text: notice }) : null,

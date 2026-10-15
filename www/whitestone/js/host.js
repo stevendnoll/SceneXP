@@ -48,8 +48,6 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     let view = null;
     let covered = false;
     let said = false;
-    /** The checklist's name field, while Maya asks for it. */
-    let titleField = null;
     /** Where the bubble was last put beside Maya, as a key. */
     let anchored = '';
     const timers = [];
@@ -146,12 +144,11 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         ]));
     }
 
-    /** The floors to tick, and the checklist's name, or one of a few, when
+    /** The floors to tick, or one of a few, when
      *  Maya asks. */
     function drawChoices() {
         if (!choices) return;
         clear(choices);
-        titleField = null;
         const c = view.choices;
         choices.hidden = !c;
         if (c && c.kind === 'pick') {
@@ -178,8 +175,6 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         });
         const note = c.levels.some((l) => l.locked) ? h('p', { className: 'host-floors-note', id: 'host-floors-note', text: GUIDE.mainAlways }) : null;
         choices.appendChild(h('fieldset', { className: 'host-floors' }, [h('legend', { text: GUIDE.floorsLegend }), ...boxes, note]));
-        titleField = h('input', { type: 'text', id: 'host-title', className: 'host-title', value: c.title || '', attrs: { maxlength: String(c.maxTitle || 80), autocomplete: 'off' } });
-        choices.appendChild(h('label', { className: 'host-title-label', attrs: { for: 'host-title' } }, [h('span', { text: GUIDE.titleLabel }), titleField]));
     }
 
     /** The home at a glance (`view.facts`, each `{ key, label, value,
@@ -274,11 +269,8 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         update(next) {
             if (!next) return api.show(null);
             const changed = (!view || next.text !== view.text) && !next.minimized;
-            const title = api.title();
             view = next;
             draw();
-            // A name being typed is kept as typed.
-            if (titleField && title !== null) titleField.value = title;
             if (changed && !covered) announce(view.text);
             place();
             return undefined;
@@ -336,10 +328,6 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         poke() {
             if (view) schedule();
         },
-        /** The name typed for the checklist, or null when it is not asked. */
-        title() {
-            return titleField && view && view.choices ? String(titleField.value || '') : null;
-        },
         /**
          * Beside Maya's head (`x`, `y` in pixels on a `w` by `h` screen),
          * where there is room for the bubble to the right of her; null, or
@@ -371,10 +359,6 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         },
         get anchored() {
             return anchored;
-        },
-        /** The checklist's name field, while Maya asks for it. */
-        get titleField() {
-            return titleField;
         },
         get shown() {
             return Boolean(view) && !covered;
