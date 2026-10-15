@@ -860,6 +860,11 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
     const line = () => dom.el('host-line').textContent;
     const picks = () => (dom.el('host-choices').children[0] || { children: [] }).children;
     const tucked = () => dom.el('ws-host').classList.contains('is-minimized');
+    /** What Maya's bubble says at a glance for `key` (quote, visit). */
+    const factOf = (key) => {
+        const f = dom.el('host-facts').children.find((d) => d.className === `host-fact host-fact-${key}`);
+        return f ? f.children[1].textContent : undefined;
+    };
     const esc = (text) => text.replace(/[.?$]/g, '\\$&');
     async function until(test) {
         for (let i = 0; i < 2000 && !test(); i++) await new Promise((r) => REAL_IMMEDIATE(r));
@@ -907,6 +912,9 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.seeVisit, GUIDE.changeChecklist, GUIDE.illLook]);
         expect(document.activeElement.id).toBe('host-visit');
         expect(dom.el('hud-visit').classList.contains('has-halo')).toBe(true);
+        // At a glance under her name: the quote, and now the visit.
+        expect(factOf('quote')).toMatch(/^\$\d+$/);
+        expect(factOf('visit')).toBe('Thursday, October 15, 9:30 am');
         // Used, the ring goes; I'll look around lets her words go.
         fire(dom.el('hud-visit'), 'click');
         expect(dom.el('hud-visit').classList.contains('has-halo')).toBe(false);
@@ -1026,6 +1034,7 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         fire(dom.el('receipt-done'), 'click');
         await flushAsync(5);
         expect(line()).toBe(`${GUIDE.afterCanceled} ${GUIDE.whatNext}`);
+        expect(factOf('visit')).toBe(GUIDE.factNoVisit);
         expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.seeLink, GUIDE.changeChecklist, GUIDE.illLook]);
         main.__test__.onHostButton('visit');
         expect(await until(() => !dom.el('receipt').hidden)).toBe(true);
@@ -1034,6 +1043,8 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         expect(await until(() => main.__test__.ui.guide.outcome === 'unpublished')).toBe(true);
         expect(dom.el('receipt').hidden).toBe(true);
         expect(line()).toBe(`${GUIDE.afterUnpublished} ${GUIDE.whatNext}`);
+        // A draft again: its quote, and no visit.
+        expect(dom.el('host-facts').children).toHaveLength(1);
     });
 
     test('Change my checklist on a published home: All set offers Send my changes, or the visit when nothing changed', async () => {

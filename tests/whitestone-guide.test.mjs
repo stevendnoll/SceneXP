@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { GUIDE, BRAND, countWord } from '../www/whitestone/js/copy.js';
 import {
-    GUIDED, PROGRESS, HALO, CHANGED, arrivalId, arrivalGuide, hasOwn, savedForm, step, presetSummary, addedLine, viewFor, outcomeOf
+    GUIDED, PROGRESS, HALO, CHANGED, arrivalId, arrivalGuide, hasOwn, savedForm, step, presetSummary, addedLine, viewFor, outcomeOf, ringFloor
 } from '../www/whitestone/js/guide.js';
 import { presetFor } from '../www/whitestone/js/sheet.js';
 import { priceChoice, formatMoney } from '../www/whitestone/js/pricing.js';
@@ -238,6 +238,32 @@ describe('the way through', () => {
         const g = fresh();
         expect(step(g, null)).toBe(g);
         expect(step(g, {})).toBe(g);
+    });
+});
+
+describe('the floor a ring goes on (QA, 2026-10-14)', () => {
+    const LEVELS = ['basement', 'main', 'second', 'garage'];
+    const ANNEX = ['garage', 'detached-garage'];
+
+    test('never the open floor: one with no rooms yet first, a garage last', () => {
+        expect(ringFloor(LEVELS, 'main', ['main'], ANNEX)).toBe('basement');
+        expect(ringFloor(LEVELS, 'main', ['main', 'basement'], ANNEX)).toBe('second');
+        expect(ringFloor(LEVELS, null, [], ANNEX)).toBe('basement');
+    });
+
+    test('every floor with rooms: the one above the open one, else the main floor, else the first', () => {
+        const all = ['basement', 'main', 'second'];
+        expect(ringFloor(LEVELS, 'main', all, ANNEX)).toBe('second');
+        expect(ringFloor(LEVELS, 'second', all, ANNEX)).toBe('main');
+        expect(ringFloor(LEVELS, null, all, ANNEX)).toBe('main');
+        expect(ringFloor(['basement', 'second'], 'second', ['basement', 'second'], ANNEX)).toBe('basement');
+    });
+
+    test('a one-story home with its floor open: nothing, or its garage if that is all there is', () => {
+        expect(ringFloor(['main'], 'main', ['main'], ANNEX)).toBeNull();
+        expect(ringFloor(['main', 'garage'], 'main', ['main'], ANNEX)).toBe('garage');
+        expect(ringFloor(['main'], null, [], ANNEX)).toBe('main');
+        expect(ringFloor([], null, [], ANNEX)).toBeNull();
     });
 });
 

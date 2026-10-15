@@ -70,7 +70,7 @@ import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKIN
 import { createTurntable, turnPoint } from './turntable.min.js';
 import { buildStage, buildLights, firstPick } from './stage.min.js';
 import { buildModel } from './model.min.js';
-import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, GUIDED, CHANGED } from './guide.min.js';
+import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, ringFloor, GUIDED, CHANGED } from './guide.min.js';
 import { createHost } from './host.min.js';
 import { buildMaya, speakSeconds } from './cast.min.js';
 import { createPanel, selectFromHit, stepOut, reconcile, panelView, homeSuggestions } from './panel.min.js';
@@ -427,6 +427,8 @@ function liftLevel(level) {
     if (!model) return false;
     const was = model.lifted;
     if (!model.lift(level, state.reducedMotion)) return false;
+    // Opening a floor is using the ring on one (a new scene rings afresh).
+    if (level && ui.halo && ui.halo.spec.kind === 'floor') ui.halo.used = true;
     // An open floor's open side is the house's front: turned to the visitor.
     if (level && turntable) turntable.faceFront(state.reducedMotion ? 0 : CONFIG.view.turn.face);
     if (turntable) turntable.setHeight(frameHeight(), state.reducedMotion);
@@ -643,17 +645,19 @@ function onGuideChip(area, level) {
 }
 
 /** Where the ring on the house goes, in the turntable's frame, or null when
- *  there is none to show: a floor while the house is closed and nothing is
- *  chosen (opening one is using it); the first dot of the room just added
+ *  there is none to show: a closed floor (guide.js ringFloor; opening one
+ *  is using it) while the panel is put away; the first dot of the room just added
  *  while its floor is open and no task is chosen yet. Never over a card. */
 function haloPoint() {
     const h = ui.halo;
     const c = active();
     if (!h || h.used || !model || !c || !state.loaded || lookLocked()) return null;
     if (h.spec.kind === 'floor') {
-        if (model.lifted || ui.selected || (panel && panel.shown)) return null;
-        const levels = model.levels();
-        return model.pointOf({ kind: 'floor', level: levels.includes('main') ? 'main' : levels[0] });
+        if (panel && panel.shown) return null;
+        const type = typeOf(c.serviceType);
+        const annex = type ? type.levels.filter((l) => l.annex).map((l) => l.key) : [];
+        const level = ringFloor(model.levels(), model.lifted, liveRooms(c).map((r) => r.level), annex);
+        return level ? model.pointOf({ kind: 'floor', level }) : null;
     }
     if (h.spec.kind === 'dot') {
         const room = ui.guide && c.rooms.find((r) => r.id === ui.guide.roomId && !r.deletedAt);
@@ -1104,9 +1108,36 @@ function returningChoices(c) {
     return out;
 }
 
-/** The bubble for the scene now, with the floors to tick filled in from
- *  the open checklist. Null when Maya has nothing to say. */
+/** The bubble for the scene now, with the home's quote and visit at its
+ *  head while she is speaking. Null when Maya has nothing to say. */
 function guideView() {
+    const v = sceneView();
+    return v ? { ...v, facts: v.minimized ? null : hostFacts(active()) } : v;
+}
+
+/**
+ * The home at a glance, under Maya's name (Steve, 2026-10-14): its quote
+ * once a task is priced (the example's marked as such), and once published
+ * its visit, or that none is booked. Null when there is nothing to show
+ * yet (the greeting, the kind of home, the floors).
+ */
+function hostFacts(c) {
+    if (!c || !state.sheet || !liveItems(c).length) return null;
+    const quote = quoteChecklist(state.sheet, c);
+    const facts = [{ key: 'quote', label: c.sample ? GUIDE.factExample : GUIDE.factQuote, value: formatMoney(quote.totalCents) }];
+    if (isPublished(c)) {
+        facts.push({
+            key: 'visit',
+            label: GUIDE.factVisit,
+            value: isBooked(c) ? GUIDE.factWhen(dayLabel(c.booking.date), clockLabel(c.booking.time)) : GUIDE.factNoVisit
+        });
+    }
+    return facts;
+}
+
+/** The scene's bubble, with the floors to tick filled in from the open
+ *  checklist. */
+function sceneView() {
     if (!ui.guide) return null;
     const v = viewFor(ui.guide, guideContext());
     const c = active();

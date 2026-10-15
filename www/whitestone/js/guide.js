@@ -80,6 +80,27 @@ export const HALO = Object.freeze({
     visit: Object.freeze({ kind: 'element', id: 'hud-visit' })
 });
 
+/**
+ * The floor a `floor` halo rings (QA, 2026-10-14: none was ever seen, as
+ * the ring waited for every floor to be closed, and in Your rooms one always
+ * is open): never the open one, since a tap on another is what opens it.
+ * One with no rooms yet first (Maya is asking for the other rooms), then the
+ * floor above the open one, then the first. Null when every floor is open
+ * (a one-story home with its floor open: her room chips are the way on).
+ * `levels` bottom to top, `withRooms` the levels that have rooms, `annex`
+ * the levels beside the house rather than in it (a garage, rung last: it is
+ * seldom where the other rooms are).
+ */
+export function ringFloor(levels, lifted, withRooms = [], annex = []) {
+    const all = (levels || []).filter((l) => l !== lifted);
+    const closed = all.filter((l) => !annex.includes(l));
+    if (!closed.length) return all[0] || null;
+    const empty = closed.find((l) => !withRooms.includes(l));
+    if (empty) return empty;
+    const above = lifted ? levels.slice(levels.indexOf(lifted) + 1).find((l) => closed.includes(l)) : null;
+    return above || (closed.includes('main') ? 'main' : closed[0]);
+}
+
 /** Scenes that sit over another for a moment and go back to it. */
 const ASIDE = ['hint', 'about'];
 

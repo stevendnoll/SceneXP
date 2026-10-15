@@ -468,6 +468,13 @@ export const GUIDE = Object.freeze({
     editRooms: 'Add or change rooms',
     changeChecklist: 'Change my checklist',
     reviewChecklist: 'Review my checklist',
+    /** The home at a glance, under her name (Steve, 2026-10-14). */
+    factsLabel: 'Your home at a glance',
+    factQuote: 'Your quote',
+    factExample: 'Example quote',
+    factVisit: 'Your visit',
+    factWhen: (day, time) => `${day}, ${time}`,
+    factNoVisit: 'Not booked yet',
     /** Back from one of her choices (a short loop, QA 2026-10-14): what
      *  came of it, then what next. */
     whatNext: 'What would you like to do next?',

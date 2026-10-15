@@ -41,6 +41,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     const skip = byId('host-skip');
     const backBtn = byId('host-back');
     const expand = byId('host-expand');
+    const facts = byId('host-facts');
     let view = null;
     let covered = false;
     let said = false;
@@ -169,6 +170,21 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         choices.appendChild(h('label', { className: 'host-title-label', attrs: { for: 'host-title' } }, [h('span', { text: GUIDE.titleLabel }), titleField]));
     }
 
+    /** The home at a glance (`view.facts`, each `{ key, label, value }`):
+     *  its quote and its visit, small, under her name. */
+    function drawFacts() {
+        if (!facts) return;
+        clear(facts);
+        const list = view.facts || [];
+        facts.hidden = !list.length;
+        for (const f of list) {
+            facts.appendChild(h('div', { className: `host-fact host-fact-${f.key}` }, [
+                h('dt', { text: f.label }),
+                h('dd', { id: `host-fact-${f.key}`, text: f.value })
+            ]));
+        }
+    }
+
     function drawActions() {
         if (!actions) return;
         clear(actions);
@@ -192,6 +208,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         if (root && root.classList) root.classList.toggle('is-minimized', tucked);
         if (expand) expand.hidden = !tucked;
         if (line) line.textContent = view.text;
+        drawFacts();
         drawProgress();
         drawChoices();
         drawActions();

@@ -907,6 +907,25 @@ describe('halos on the touch points (QA, 2026-10-14)', () => {
         expect(ring().hidden).toBe(true);
     });
 
+    test('Your rooms with the kitchen\'s floor still open: another floor is ringed, and opening it uses the ring', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        main.__test__.onFloor('second', true);
+        press('next');
+        press('kitchen');
+        press('next');
+        press('gotIt');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        expect(main.__test__.model().lifted).toBe('main');
+        stepFrames(2);
+        expect(ring().className).toBe('ws-halo is-floor');
+        expect(ring().hidden).toBe(false);
+        main.__test__.liftLevel('second');
+        stepFrames(2);
+        expect(ring().hidden).toBe(true);
+    });
+
     test('a control\'s glow (the quote at review) until it is tapped, and only one halo at a time', async () => {
         const main = await boot({ sheet: true });
         press('start');
@@ -928,6 +947,50 @@ describe('halos on the touch points (QA, 2026-10-14)', () => {
         main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'saved' };
         main.__test__.showGuide();
         expect(dom.el('ws-help').classList.contains('has-halo')).toBe(false);
+    });
+});
+
+describe('the home at a glance under Maya\'s name (Steve, 2026-10-14)', () => {
+    const facts = () => dom.el('host-facts');
+    const fact = (key) => facts().children.find((d) => d.className === `host-fact host-fact-${key}`);
+
+    test('nothing until a task is priced; then the quote, keeping up as rooms come; gone while she is tucked', async () => {
+        const main = await boot({ sheet: true });
+        expect(facts().hidden).toBe(true);
+        press('start');
+        pick('kind-house');
+        expect(facts().hidden).toBe(true);
+        press('next');
+        press('kitchen');
+        expect(facts().hidden).toBe(false);
+        expect(facts().children).toHaveLength(1);
+        const money = () => fact('quote').children[1].textContent;
+        expect(fact('quote').children[0].textContent).toBe(GUIDE.factQuote);
+        expect(money()).toMatch(/^\$\d+$/);
+        // The same total the quote chip shows.
+        expect(dom.el('hud-quote-text').textContent).toContain(money());
+        press('next');
+        press('gotIt');
+        // Rooms from her chips until the total passes the visit minimum.
+        const before = money();
+        for (let i = 0; i < 6 && money() === before; i++) {
+            const chip = dom.el('host-choices').children[0].children.find((x) => x.id && x.id.startsWith('host-chip-'));
+            fire(chip, 'click');
+        }
+        expect(money()).not.toBe(before);
+        expect(dom.el('hud-quote-text').textContent).toContain(money());
+        fire(dom.el('host-skip'), 'click');
+        pick('lookAround');
+        expect(facts().hidden).toBe(true);
+        fire(dom.el('host-expand'), 'click');
+        expect(facts().hidden).toBe(false);
+        expect(main.__test__.ui.guide.minimized).toBe(false);
+    });
+
+    test('the example\'s quote is marked as the example\'s', async () => {
+        await boot({ sheet: true });
+        press('example');
+        expect(fact('quote').children[0].textContent).toBe(GUIDE.factExample);
     });
 });
 
