@@ -72,6 +72,8 @@ describe('the markup', () => {
 // ---- The flows --------------------------------------------------------------
 
 let dom;
+/** Undo from the keyboard (the floating Undo is gone, Steve 2026-10-14). */
+const ctrlZ = () => fire(dom.windowStub, 'keydown', { key: 'z', ctrlKey: true, target: dom.documentStub.body });
 
 beforeEach(() => {
     jest.resetModules();
@@ -165,7 +167,6 @@ test('an empty house offers My checklists and the service menu, and nothing that
     expect(visible('help-home')).toBe(false);
     expect(visible('help-prefs')).toBe(false);
     expect(visible('hud-home')).toBe(false);
-    expect(dom.el('ws-undo').hidden).toBe(true);
     // No fetch here, so the price sheet waits and nothing breaks.
     expect(main.getState().sheetStatus).toBe('failed');
 });
@@ -218,7 +219,7 @@ test('editing the home changes its details and its levels, and a level with room
     expect(said()).toBe(UI.homeSaved);
 });
 
-test('undo takes back each step, from the button and from the keyboard, but not inside a text field', async () => {
+test('undo takes back each step from the keyboard, but not inside a text field', async () => {
     const main = await boot();
     await startHome(main);
     fire(dom.el('prefs-skip'), 'click');
@@ -226,7 +227,6 @@ test('undo takes back each step, from the button and from the keyboard, but not 
     dom.el('setup-title').value = 'Renamed';
     fire(dom.el('setup-form'), 'submit');
     expect(main.getDoc().checklists[0].title).toBe('Renamed');
-    expect(dom.el('ws-undo').hidden).toBe(false);
 
     // Ctrl+Z typed into a text box is the text box's own undo.
     fire(dom.windowStub, 'keydown', { key: 'z', ctrlKey: true, target: { tagName: 'TEXTAREA' } });
@@ -236,14 +236,10 @@ test('undo takes back each step, from the button and from the keyboard, but not 
     expect(main.getDoc().checklists[0].title).toBe('Maple Street');
     expect(said()).toBe(UI.undone(UI.labels.home));
 
-    // The last step undone from the button itself: Undo is put away, and
-    // the keyboard goes to Help rather than to nowhere.
-    dom.el('ws-undo').focus();
-    fire(dom.el('ws-undo'), 'click');
+    // The last step: the home itself.
+    ctrlZ();
     expect(main.getDoc().checklists).toHaveLength(0);
     expect(saved().checklists).toHaveLength(0);
-    expect(dom.el('ws-undo').hidden).toBe(true);
-    expect(document.activeElement).toBe(dom.el('ws-help'));
     // Ctrl+Z with nothing to undo says so.
     fire(dom.windowStub, 'keydown', { key: 'z', ctrlKey: true, target: dom.documentStub.body });
     expect(said()).toBe(UI.nothingToUndo);
@@ -721,7 +717,7 @@ test('tasks move up and down in their room as one undo step each, and the ends c
     expect(said()).toBe(UI.moved('Kitchen sink'));
     main.__test__.moveTask(second.id, -1);   // already first
     expect(order().slice(0, 2)).toEqual([before[1], before[0]]);
-    fire(dom.el('ws-undo'), 'click');
+    ctrlZ();
     expect(order()).toEqual(before);
 });
 

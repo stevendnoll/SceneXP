@@ -549,7 +549,7 @@ export const PANEL = Object.freeze({
     starStep: 'Starred a task'
 });
 
-/** The Help menu and Undo, top right (main.js). */
+/** The Help menu, top right (main.js). */
 export const HELP = Object.freeze({
     button: 'Help',
     label: 'Help and your checklist',
@@ -569,8 +569,7 @@ export const HELP = Object.freeze({
     prefs: 'Care preferences',
     home: 'Your home',
     mine: 'My checklists',
-    about: 'About Whitestone',
-    undo: 'Undo'
+    about: 'About Whitestone'
 });
 
 /** What the page says about saving, under the studio's storage note. */

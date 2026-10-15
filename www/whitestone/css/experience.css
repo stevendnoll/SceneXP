@@ -1778,26 +1778,6 @@ textarea.ws-input {
     font-weight: 700;
 }
 
-/* Undo appears with the first change it can take back, gently. */
-.tool-undo[hidden] {
-    display: none;
-}
-
-.tool-undo {
-    animation: tool-in 0.25s ease-out;
-}
-
-@keyframes tool-in {
-    from { opacity: 0; transform: translateX(6px); }
-    to { opacity: 1; transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .tool-undo {
-        animation: none;
-    }
-}
-
 .tool-btn:disabled {
     color: var(--ws-muted);
     box-shadow: none;

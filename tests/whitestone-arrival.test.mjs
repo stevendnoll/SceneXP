@@ -50,8 +50,10 @@ describe('the markup', () => {
         expect(text(/id="host-skip"[^>]*>([^<]+)</)).toBe(GUIDE.skip);
     });
 
-    test('Help and Undo say what copy.js says, and the menu ships closed', () => {
-        expect(text(/id="ws-undo"[^>]*>([^<]+)</)).toBe(HELP.undo);
+    test('Help says what copy.js says, the menu ships closed, and there is no floating Undo', () => {
+        // Undo is the toast's and the keyboard's (Steve, 2026-10-14).
+        expect(HTML).not.toMatch(/id="ws-undo"/);
+        expect(HTML).toMatch(/<button id="toast-undo"[^>]*>Undo</);
         expect(text(/id="ws-help"[^>]*aria-label="([^"]+)"/)).toBe(HELP.label);
         expect(HTML).toMatch(/<div id="ws-help-menu"[^>]*\shidden>/);
         // Maya's Back, beside Skip, ships hidden, in copy.js's word.
@@ -73,6 +75,8 @@ describe('the markup', () => {
 // ---- Driven through the page -------------------------------------------------------------
 
 let dom;
+/** Undo from the keyboard (the floating Undo is gone, Steve 2026-10-14). */
+const ctrlZ = () => fire(dom.windowStub, 'keydown', { key: 'z', ctrlKey: true, target: dom.documentStub.body });
 
 beforeEach(() => {
     jest.resetModules();
@@ -222,8 +226,8 @@ describe('the kind of home (ONBOARDING Scene 2a)', () => {
         expect(main.__test__.model().placed.massing.filter((p) => p.role === 'neighbor')).toHaveLength(1);
         pick('attached-middle');
         expect(main.__test__.model().placed.massing.filter((p) => p.role === 'neighbor')).toHaveLength(2);
-        fire(dom.el('ws-undo'), 'click');
-        fire(dom.el('ws-undo'), 'click');
+        ctrlZ();
+        ctrlZ();
         expect(main.__test__.model().placed.massing).toEqual([]);
         main.__test__.guideTo({ type: 'restart' });
         press('start');
@@ -262,7 +266,7 @@ describe('the kind of home (ONBOARDING Scene 2a)', () => {
         const main = await boot();
         press('start');
         pick('kind-condo');
-        fire(dom.el('ws-undo'), 'click');
+        ctrlZ();
         expect(main.__test__.active().residence.kind).toBe('house');
     });
 
@@ -294,7 +298,7 @@ describe('the kind of home (ONBOARDING Scene 2a)', () => {
         main.__test__.submitSetup();
         expect(main.__test__.active().residence).toEqual({ kind: 'condo', attached: null });
         // One undo takes the whole card back.
-        fire(dom.el('ws-undo'), 'click');
+        ctrlZ();
         expect(main.__test__.active().residence.kind).toBe('house');
     });
 
@@ -1089,7 +1093,7 @@ describe('Start over (QA, 2026-10-14)', () => {
         expect(said()).toBe(HELP.resetDone);
         expect(document.activeElement).toBe(dom.el('host-actions').children.find((b) => b.id === 'host-start'));
         // Nothing to undo, and nothing saved until a change.
-        fire(dom.el('ws-undo'), 'click');
+        ctrlZ();
         expect(main.__test__.state.doc.checklists).toEqual([]);
         expect(localStorage.getItem(CONFIG.storage.key)).toBeNull();
         // And the whole way in again works.
@@ -1163,8 +1167,7 @@ describe('Help and Undo', () => {
         press('start');
         pick('kind-house');
         tick('second', true);
-        expect(dom.el('ws-undo').hidden).toBe(false);
-        fire(dom.el('ws-undo'), 'click');
+        ctrlZ();
         expect(own(main).levels).toEqual(['main']);
     });
 });
@@ -1210,7 +1213,7 @@ describe('tapping the house', () => {
         expect(main.__test__.active().title).toBe(GUIDE.defaultTitle);
         expect(line()).toBe(GUIDE.home);
         fire(dom.el('host-skip'), 'click');
-        fire(dom.el('ws-undo'), 'click');
+        ctrlZ();
         expect(main.__test__.active()).toBeNull();
         main.__test__.tapModel();
         expect(openCards()).toEqual(['setup']);

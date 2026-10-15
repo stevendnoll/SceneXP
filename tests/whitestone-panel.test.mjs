@@ -174,6 +174,8 @@ describe('what the panel says (pure)', () => {
 // ---- Driven through the page ------------------------------------------------------------
 
 let dom;
+/** Undo from the keyboard (the floating Undo is gone, Steve 2026-10-14). */
+const ctrlZ = () => fire(dom.windowStub, 'keydown', { key: 'z', ctrlKey: true, target: dom.documentStub.body });
 /** The real setImmediate, kept before the fake timers stand in for it. */
 const REAL_IMMEDIATE = globalThis.setImmediate;
 
@@ -248,7 +250,7 @@ describe('the panel on the page', () => {
         expect(first.important).toBe(true);
         expect(said()).toBe(PANEL.starred('Stovetop'));
         expect(stars()[0].getAttribute('aria-pressed')).toBe('true');
-        fire(dom.el('ws-undo'), 'click');
+        ctrlZ();
         expect(checklist(main).items.find((i) => i.id === first.id).important).toBe(false);
         // Starred twice is starred no more.
         fire(stars()[0], 'click');
@@ -286,7 +288,7 @@ describe('the panel on the page', () => {
         expect(checklist(main).items.find((i) => i.id === id).deletedAt).toBeTruthy();
         expect(main.__test__.ui.selected.scope).toBe('room');
         expect(rows()).toHaveLength(8);
-        fire(dom.el('ws-undo'), 'click');
+        ctrlZ();
         expect(rows()).toHaveLength(9);
     });
 
@@ -465,7 +467,7 @@ describe('a bathroom\'s type of bath, on the page', () => {
         const doc = main.__test__.state.doc;
         fire(bathButton('shower'), 'click');
         expect(main.__test__.state.doc).toBe(doc);
-        fire(dom.el('ws-undo'), 'click');
+        ctrlZ();
         expect(checklist(main).rooms.find((r) => r.id === room.id).bath).toBe('tub');
         expect(tasksIn(main, room.id)).toEqual(before);
     });
@@ -497,7 +499,7 @@ describe('a bathroom\'s type of bath, on the page', () => {
         expect(now).toMatchObject({ bath: 'shower', label: 'Guest bath' });
         expect(tasksIn(main, room.id)).not.toContain('bathtub');
         expect(said()).toBe('Guest bath is now a shower bath. Took off the bathtub.');
-        fire(dom.el('ws-undo'), 'click');
+        ctrlZ();
         expect(checklist(main).rooms.find((r) => r.id === room.id)).toMatchObject({ bath: 'tub', label: '' });
         expect(tasksIn(main, room.id)).toContain('bathtub');
     });
@@ -609,7 +611,7 @@ describe('choosing a time and publishing, on the page', () => {
         expect(c.booking.date).toBe('2026-10-15');
         // Saved with it, and Undo cannot take it back.
         expect(JSON.parse(localStorage.getItem(CONFIG.storage.key)).checklists[0].published.pin).toBe(c.published.pin);
-        fire(dom.el('ws-undo'), 'click');
+        ctrlZ();
         expect(main.__test__.active().published.id).toBe(c.published.id);
         // The whole house now offers the visit, and opens the receipt again.
         fire(dom.el('receipt-done'), 'click');

@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=19" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=21" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7109,7 +7109,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=19" rel="stylesheet"]
+    link [href="css/experience.min.css?v=21" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7200,9 +7200,7 @@ html [data-ui-theme="surf" lang="en"]
         span#hud-visit-text
         span#hud-visit-note.hud-visit-note [hidden]
           "Changes not sent"
-    div#ws-tools.ui-float.ws-tools [aria-label="Help and undo" role="group"]
-      button#ws-undo.tool-btn.tool-undo [hidden title="Undo (Ctrl or Command and Z)" type="button"]
-        "Undo"
+    div#ws-tools.ui-float.ws-tools [aria-label="Help" role="group"]
       button#ws-help.tool-btn.tool-help [aria-controls="ws-help-menu" aria-expanded="false" aria-haspopup="true" aria-label="Help and your checklist" type="button"]
         "?"
       div#ws-help-menu.help-menu [aria-label="Help and your checklist" hidden role="group"]

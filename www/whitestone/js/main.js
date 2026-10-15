@@ -1560,7 +1560,7 @@ function bathSaid(c, room, to, record) {
     return UI.bathChanged(subject, to.name, record.removed.map(name), record.added.map(name));
 }
 
-// ---- Help and Undo ----------------------------------------------------------------
+// ---- Help -------------------------------------------------------------------------
 
 /** Whether the Help menu is open. */
 function helpOpen() {
@@ -2268,17 +2268,6 @@ function refresh() {
     const quoteText = el('hud-quote-text');
     if (quoteText) quoteText.textContent = chip ? chip.text : '';
     drawVisitChip(c);
-    // Undo only when there is something to undo (QA, 2026-10-14). Put away
-    // while it has the keyboard (the last step undone), Help takes it.
-    const undoBtn = el('ws-undo');
-    if (undoBtn) {
-        const away = !history.canUndo;
-        if (away && !undoBtn.hidden && document.activeElement === undoBtn) {
-            const help = el('ws-help');
-            if (help && typeof help.focus === 'function') help.focus();
-        }
-        undoBtn.hidden = away;
-    }
     const note = el('storage-note');
     if (note) note.textContent = storageNote();
     if (isOpen('my-checklists')) drawMyChecklists();
@@ -2930,7 +2919,6 @@ function setupEventListeners() {
     }, { signal });
 
     const on = (id, type, fn) => { const node = el(id); if (node) node.addEventListener(type, fn, { signal }); };
-    on('ws-undo', 'click', () => undo());
     on('hud-home', 'click', openMine);
     on('my-new', 'click', startOwn);
     on('my-clear-example', 'click', clearExample);

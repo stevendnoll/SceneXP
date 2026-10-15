@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=19" as="style">
+    <link rel="preload" href="css/experience.min.css?v=21" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -157,7 +157,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=19">
+    <link rel="stylesheet" href="css/experience.min.css?v=21">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -289,13 +289,14 @@
         </button>
     </div>
 
-    <!-- HELP AND UNDO, top right (ONBOARDING section 3). Help opens a short
-         menu: Maya again, the guide from the start, and the checklist's own
+    <!-- HELP, top right (ONBOARDING section 3). Help opens a short menu:
+         Maya again, the guide from the start, and the checklist's own
          cards, so nothing depends on tapping the house (PRD 8.1). Items
-         that need an open checklist stay hidden until there is one, and
-         Undo until there is something to undo. -->
-    <div id="ws-tools" class="ui-float ws-tools" role="group" aria-label="Help and undo">
-        <button id="ws-undo" class="tool-btn tool-undo" type="button" title="Undo (Ctrl or Command and Z)" hidden>Undo</button>
+         that need an open checklist stay hidden until there is one. Undo
+         is the toast's, beside what it takes back, and Ctrl or Command and
+         Z (Steve, 2026-10-14: a floating Undo confused once a visit was
+         booked, since it never takes back a booking). -->
+    <div id="ws-tools" class="ui-float ws-tools" role="group" aria-label="Help">
         <button id="ws-help" class="tool-btn tool-help" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="ws-help-menu" aria-label="Help and your checklist">?</button>
         <div id="ws-help-menu" class="help-menu" role="group" aria-label="Help and your checklist" hidden>
             <button id="help-again" class="help-item" type="button">Show me again</button>
