@@ -491,8 +491,9 @@ export const GUIDE = Object.freeze({
     startOver: 'Start over',
 
     hint: 'Tap a floor of the house to open it, and tap a blue dot to see a task. I’m right here whenever you’d like a hand.',
-    about: 'Whitestone Home Care builds your cleaning checklist room by room. Every task shows its price and its time as you add it, and your quote keeps up.',
-    close: 'Close'
+    /** The → by her name: her bubble's main step, from the top (QA,
+     *  2026-10-15: on a phone the buttons can sit below the fold). */
+    continueTo: (label) => `Continue: ${label}`
 });
 
 /** "the shower and the bathtub": task names in a sentence. */
@@ -557,9 +558,7 @@ export const HELP = Object.freeze({
      *  first (Steve, 2026-10-14). */
     resetDetailPublished: 'This unpublishes what you published, so its links and PINs stop working and any booked visit is canceled. Then it clears your checklists, photos and answers from this browser, and Maya will greet you as on your first visit. It cannot be undone.',
     resetLocked: (hours) => `You have a visit less than ${hours} hours away, so Start over has to wait until after it.`,
-    resetDone: 'Everything is cleared. You are back at the beginning.',
-    /** The ? by her name. */
-    about: 'About Whitestone'
+    resetDone: 'Everything is cleared. You are back at the beginning.'
 });
 
 /** What the page says about saving, under the studio's storage note. */

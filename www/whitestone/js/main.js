@@ -122,7 +122,10 @@ const ui = {
     booking: null, receipt: null,
     /** One card handing over to the next (the calendar to the receipt), so
      *  Maya waits for the second to close. */
-    handoff: false
+    handoff: false,
+    /** The house turning on its own while Maya greets (QA, 2026-10-15),
+     *  until the visitor takes hold of it or begins (endShowcase). */
+    showcase: false
 };
 
 /** Thumbnail addresses made for the task card, released when it closes. */
@@ -281,8 +284,10 @@ async function init() {
             toast(UI.editLinkFailed);
         }
         // The push-in: from farther out, eased in (a cut under reduced
-        // motion, PLANNING 4.1).
+        // motion, PLANNING 4.1). Then the house turns on its own while she
+        // greets, never under reduced motion.
         if (!state.reducedMotion) turntable.arrive();
+        ui.showcase = !state.reducedMotion;
         applyPose(turntable.pose(aspect()));
         refresh();
     }, CONFIG.loadingReveal);
@@ -570,8 +575,8 @@ function onPanelBack() {
     selectTo(stepOut(ui.selected), { focus: true });
     if (!ui.selected) {
         if (host && host.shown && host.focusPrimary()) return;
-        const about = el('host-about');
-        if (about && typeof about.focus === 'function') about.focus();
+        const to = hostFallback();
+        if (to && typeof to.focus === 'function') to.focus();
     }
 }
 
@@ -966,6 +971,8 @@ function setupLook(signal) {
         if (!gesture.dragging && gesture.start
             && Math.hypot(now.x - gesture.start.x, now.y - gesture.start.y) > tap.slop) gesture.dragging = true;
         if (!gesture.dragging || !gesture.grab) return;
+        // Taken hold of: from now on it stays where the visitor puts it.
+        endShowcase();
         turntable.drag(now.x - prev.x, window.innerHeight, (t - gesture.lastMove) / 1000);
         gesture.lastMove = t;
         requestRender();
@@ -1026,8 +1033,16 @@ function lookKey(key) {
     case 'ArrowRight': turntable.turnBy(v.turn.key); break;
     default: return false;
     }
+    endShowcase();
     requestRender();
     return true;
+}
+
+/** The house stops turning on its own, for good this visit: the visitor
+ *  has taken hold of it (a press on it, the arrow keys) or begun with
+ *  Maya. */
+function endShowcase() {
+    ui.showcase = false;
 }
 
 /** Set the camera to a pose (turntable.js framePose), its view shifted so
@@ -1180,7 +1195,30 @@ function returningChoices(c) {
  *  head while she is speaking. Null when Maya has nothing to say. */
 function guideView() {
     const v = sceneView();
-    return v ? { ...v, facts: hostFacts(active()), startOver: offersStartOver(v) } : v;
+    return v ? { ...v, facts: hostFacts(active()), startOver: offersStartOver(v), next: nextOf(v) } : v;
+}
+
+/**
+ * The → by her name (QA, 2026-10-15: on a phone her buttons can sit below
+ * the fold): `{ id, label }` of the step it takes, or null. Her main
+ * button; else, asked again, the answer already given; else a home base's
+ * first way on. Where the visitor must choose (the kind of home the first
+ * time, the first room), none.
+ */
+function nextOf(v) {
+    const primary = (v.buttons || []).find((b) => b.primary);
+    if (primary) return { id: primary.id, label: primary.label };
+    const c = v.choices;
+    if (!c || c.kind !== 'pick' || !c.options.length) return null;
+    const given = c.options.find((o) => o.on);
+    if (given) return { id: given.id, label: given.label };
+    return c.legend === GUIDE.returningLegend ? { id: c.options[0].id, label: c.options[0].label } : null;
+}
+
+/** Where the keyboard goes when what it was on has gone: her → if she has
+ *  a next step, else Start over, else Back. */
+function hostFallback() {
+    return ['host-next', 'host-reset', 'host-back'].map(el).find((b) => b && !b.hidden) || null;
 }
 
 /** Whether her bubble's foot offers Start over (QA, 2026-10-15: where Skip
@@ -1347,6 +1385,13 @@ function guideTo(event) {
         return false;
     }
     ui.guide = next;
+    // Begun (Let's start, the example, a welcome's choice): the turning
+    // stops, and the house comes back to the arrival's view, however far
+    // it had turned or been turned (QA, 2026-10-15).
+    if ((was.scene === 'hello' || was.scene === 'welcome') && next.scene !== was.scene) {
+        endShowcase();
+        if (turntable) turntable.turnHome(state.reducedMotion ? 0 : CONFIG.view.turn.face);
+    }
     enterScene(next.scene);
     persistGuide();
     showGuide();
@@ -1518,9 +1563,6 @@ function onHostButton(id) {
         break;
     case 'startOver':
         confirmStartOver();
-        break;
-    case 'about':
-        guideTo({ type: 'about' });
         break;
     default:
         if (id.startsWith('kind-')) chooseResidence({ kind: id.slice(5) });
@@ -2896,8 +2938,8 @@ function setupEventListeners() {
     installCardScrollReset({ signal });
     initCards({ signal });
     // When what opened a card has gone (a button of hers redrawn by the
-    // change the card made), focus lands on her About rather than nowhere.
-    setFocusFallback(() => el('host-about'));
+    // change the card made), focus lands on her bubble rather than nowhere.
+    setFocusFallback(hostFallback);
     // A moment after the last card closes, so a Yes that goes on to send or
     // open something else has begun by then.
     setOnSettled(() => Promise.resolve().then(comeBack));
@@ -3096,7 +3138,7 @@ function animate() {
     // The turntable: the push-in, a turn carrying on after a drag, the idle
     // drift, the frame easing to a taller or shorter house.
     if (turntable && camera) {
-        turntable.step(delta, { reducedMotion: state.reducedMotion, locked, drift: !away() });
+        turntable.step(delta, { reducedMotion: state.reducedMotion, locked, drift: ui.showcase && !away() });
         if (stage && turntable.yaw !== drawnYaw) {
             drawnYaw = turntable.yaw;
             stage.spin.rotation.y = drawnYaw;

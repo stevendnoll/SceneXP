@@ -94,8 +94,10 @@ test('without WebGL the page says so and goes to the standard site', async () =>
 
 test('a still house draws no frames, and a change draws exactly one', async () => {
     const main = await boot();
-    // Past the push-in and Maya's greeting, and touched so it does not drift.
+    // Past the push-in and Maya's greeting, and taken hold of, so it no
+    // longer turns on its own.
     stepFrames(Math.ceil(SETTLE_MS / 100), 100);
+    main.__test__.ui.showcase = false;
     main.__test__.turntable().touch();
     stepFrames(2);
     const settled = main.getState().frames;
@@ -147,13 +149,62 @@ describe('the turntable', () => {
         stepFrames(Math.ceil((CONFIG.view.arrival.seconds * 1000) / 16) + 2);
         expect(tt.arriving).toBe(false);
         expect(main.getState().pose).toEqual(tt.pose(aspectNow()));
-        // Once Maya has said her line, nothing more is drawn.
+        // Once Maya has said her line and the visitor has taken hold of the
+        // house, nothing more is drawn.
         stepFrames(Math.ceil(SETTLE_MS / 100), 100);
+        main.__test__.ui.showcase = false;
         tt.touch();
         stepFrames(2);
         const landed = main.getState().frames;
         stepFrames(20);
         expect(main.getState().frames).toBe(landed);
+    });
+
+    test('the push-in takes under a second (QA, 2026-10-15)', () => {
+        expect(CONFIG.view.arrival.seconds).toBeLessThanOrEqual(1);
+    });
+
+    test('while Maya greets, the house turns on its own; Let\'s start stops it and turns it home (QA, 2026-10-15)', async () => {
+        const main = await boot();
+        const tt = main.__test__.turntable();
+        expect(main.__test__.ui.showcase).toBe(true);
+        stepFrames(Math.ceil((CONFIG.view.arrival.seconds * 1000) / 16) + 2);
+        const y0 = tt.yaw;
+        stepFrames(30, 100);
+        expect(tt.yaw - y0).toBeCloseTo(3 * CONFIG.view.drift.speed, 1);
+        // A press on the studio is not taking hold of the house.
+        fire(dom.el('game-canvas'), 'pointerdown', { pointerId: 1, clientX: 5, clientY: 5 });
+        fire(dom.el('game-canvas'), 'pointerup', { pointerId: 1, clientX: 5, clientY: 5 });
+        expect(main.__test__.ui.showcase).toBe(true);
+        await jest.advanceTimersByTimeAsync(CONFIG.guide.delay * 1000 + 50);
+        main.__test__.onHostButton('start');
+        expect(main.__test__.ui.showcase).toBe(false);
+        stepFrames(Math.ceil((CONFIG.view.turn.face * 1000) / 16) + 4);
+        const turns = (tt.yaw - CONFIG.view.yaw.start) / (Math.PI * 2);
+        expect(Math.abs(turns - Math.round(turns))).toBeLessThan(1e-6);
+        const home = tt.yaw;
+        stepFrames(30, 100);
+        expect(tt.yaw).toBe(home);
+    });
+
+    test.each(['a drag on the house', 'the arrow keys'])('%s end the turning for good', async (how) => {
+        const main = await boot();
+        const tt = main.__test__.turntable();
+        stepFrames(Math.ceil((CONFIG.view.arrival.seconds * 1000) / 16) + 2);
+        if (how === 'a drag on the house') {
+            const canvas = dom.el('game-canvas');
+            fire(canvas, 'pointerdown', { pointerId: 1, clientX: 300, clientY: 300 });
+            main.__test__.gesture.grab = true;   // the stub's rays meet nothing
+            fire(canvas, 'pointermove', { pointerId: 1, clientX: 360, clientY: 300 });
+            fire(canvas, 'pointerup', { pointerId: 1, clientX: 360, clientY: 300 });
+        } else {
+            main.__test__.lookKey('ArrowRight');
+        }
+        expect(main.__test__.ui.showcase).toBe(false);
+        stepFrames(30, 100);
+        const y = tt.yaw;
+        stepFrames(30, 100);
+        expect(tt.yaw).toBe(y);
     });
 
     test('under reduced motion there is no push-in', async () => {
@@ -351,15 +402,16 @@ describe('the model', () => {
 
     test('the house never drifts while a floor is open', async () => {
         const main = await boot();
+        expect(main.__test__.ui.showcase).toBe(true);
         main.__test__.state.reducedMotion = true;
         main.__test__.liftLevel('main');
         stepFrames(2);
         main.__test__.state.reducedMotion = false;
         const yaw = main.__test__.turntable().yaw;
-        stepFrames(Math.ceil(((CONFIG.view.idle.after + 2) * 1000) / 100), 100);
+        stepFrames(30, 100);
         expect(main.__test__.turntable().yaw).toBe(yaw);
         main.__test__.liftLevel(null);
-        stepFrames(Math.ceil(((CONFIG.view.idle.after + 2) * 1000) / 100), 100);
+        stepFrames(30, 100);
         expect(main.__test__.turntable().yaw).toBeGreaterThan(yaw);
     });
 

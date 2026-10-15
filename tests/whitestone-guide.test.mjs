@@ -28,7 +28,7 @@ const fresh = () => arrivalGuide(doc([]));
 const HOUSE = { type: 'residence', kind: 'house' };
 const walk = (g, ...types) => types.reduce((acc, t) => step(acc, typeof t === 'string' ? { type: t } : t), g);
 
-const ALL = ['hello', ...GUIDED, 'saved', 'example1', 'example2', 'example3', 'welcome', 'hint', 'about'];
+const ALL = ['hello', ...GUIDED, 'saved', 'example1', 'example2', 'example3', 'welcome', 'hint'];
 const EVENTS = ['start', 'example', 'floorTapped', 'next', 'roomAdded', 'dotOpened', 'gotIt', 'review', 'saved', 'buildOwn',
     'lookAround', 'keepGoing', 'homeMade', 'residence', 'again', 'about', 'close', 'restart', 'skip', 'away', 'returned', 'nonsense'];
 
@@ -246,16 +246,14 @@ describe('the way through', () => {
         expect(walk(done, 'editRooms').scene).toBe('rooms');
     });
 
-    test('Help: again shows a hint once the guide is over, About sits over any scene and goes back to it', () => {
+    test('a tap on her: a hint once the guide is over; no About any more (QA, 2026-10-15)', () => {
         expect(walk({ ...fresh(), scene: 'done' }, 'again')).toMatchObject({ scene: 'hint', back: 'done' });
         expect(walk({ ...fresh(), scene: 'saved' }, 'again', 'close').scene).toBe('saved');
         // In the middle of the build, again is the scene's own hint (main.js says it).
         const floors = walk(fresh(), 'start', HOUSE);
         expect(step(floors, { type: 'again' })).toBe(floors);
-        const about = walk(floors, 'about');
-        expect(about).toMatchObject({ scene: 'about', back: 'floors' });
-        expect(step(about, { type: 'about' })).toBe(about);
-        expect(walk(about, 'close').scene).toBe('floors');
+        expect(step(floors, { type: 'about' })).toBe(floors);
+        expect(viewFor({ ...fresh(), scene: 'about' })).toBeNull();
         expect(walk({ ...fresh(), scene: 'hint', back: null }, 'close').scene).toBe('done');
     });
 
@@ -390,7 +388,7 @@ describe('short loops away from Maya, and back (QA, 2026-10-14)', () => {
 describe('what is saved for a return', () => {
     test('a step of the first build, else done, and whether it reached the review', () => {
         for (const scene of GUIDED) expect(savedForm({ scene, reviewed: false })).toEqual({ scene, reviewed: false });
-        for (const scene of ['hello', 'example2', 'saved', 'hint', 'about', 'done']) expect(savedForm({ scene, reviewed: true })).toEqual({ scene: 'done', reviewed: true });
+        for (const scene of ['hello', 'example2', 'saved', 'hint', 'done']) expect(savedForm({ scene, reviewed: true })).toEqual({ scene: 'done', reviewed: true });
         // A welcome not yet answered keeps the step it would resume.
         expect(savedForm({ scene: 'welcome', resume: 'rooms', reviewed: false })).toEqual({ scene: 'rooms', reviewed: false });
         expect(savedForm({ scene: 'welcome', resume: null, reviewed: false })).toEqual({ scene: 'done', reviewed: false });
@@ -477,7 +475,7 @@ describe('what Maya says', () => {
 
     test('the progress strip follows the first build and only the first build', () => {
         for (const scene of GUIDED) expect(viewFor({ ...fresh(), scene }, ctx).progress).toBe(PROGRESS[scene]);
-        for (const scene of ['hello', 'saved', 'example1', 'welcome', 'hint', 'about']) expect(viewFor({ ...fresh(), scene }, ctx).progress).toBeNull();
+        for (const scene of ['hello', 'saved', 'example1', 'welcome', 'hint']) expect(viewFor({ ...fresh(), scene }, ctx).progress).toBeNull();
         expect(GUIDE.progress).toHaveLength(Math.max(...Object.values(PROGRESS)) + 1);
         // Never backwards along the way.
         const order = GUIDED.map((s) => PROGRESS[s]);
@@ -524,7 +522,7 @@ describe('what Maya says', () => {
         // The hint rings nothing: the Help button it pointed to is gone (QA, 2026-10-15).
         expect(halo('hint')).toBeNull();
         expect(halo('firstRoom')).toEqual({ kind: 'element', id: 'host-chip-kitchen' });
-        for (const scene of ['hello', 'home', 'floors', 'added', 'saved', 'example1', 'welcome', 'about']) expect(halo(scene)).toBeNull();
+        for (const scene of ['hello', 'home', 'floors', 'added', 'saved', 'example1', 'welcome']) expect(halo(scene)).toBeNull();
         expect(Object.isFrozen(HALO)).toBe(true);
     });
 

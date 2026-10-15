@@ -19,7 +19,7 @@
  *   saved      all set
  *
  * and beside them the example's three beats (example1 to example3), a
- * returning visitor's welcome, a hint, and About.
+ * returning visitor's welcome, and a hint.
  *
  * EVENTS, NOT TIMERS, MOVE IT ON, and they come from wherever the visitor
  * acts: a button in the bubble, a card, the house, the keyboard. A room
@@ -100,7 +100,7 @@ export function ringFloor(levels, lifted, withRooms = [], annex = []) {
 }
 
 /** Scenes that sit over another for a moment and go back to it. */
-const ASIDE = ['hint', 'about'];
+const ASIDE = ['hint'];
 
 /** Scenes whose choices send the visitor off to a card (Choose a time, See
  *  my visit, Send my changes, Review my checklist), Maya coming back once
@@ -205,8 +205,7 @@ export function savedForm(guide) {
  *                          comes back ({ now }) saying what came of it
  *   homeMade               a checklist made outside the guide (the setup
  *                          card): straight on to the first room
- *   again, about, close    a tap on Maya, the Help menu's About, and
- *                          closing what they opened
+ *   again, close           a tap on Maya, and closing the hint it gave
  *   restart                start over
  */
 export function step(guide, event) {
@@ -239,7 +238,6 @@ export function step(guide, event) {
         const { scene, ...extra } = entry;
         return to(scene, extra);
     }
-    if (type === 'about') return ASIDE.includes(g.scene) ? g : to('about', { back: g.scene });
     if (type === 'again') {
         if (g.scene === 'done' || g.scene === 'saved') return to('hint', { back: g.scene });
         return g;
@@ -436,8 +434,6 @@ export function viewFor(guide, ctx = {}) {
             ...base, text: ctx.standby || GUIDE.standbyPlain, buttons: [], choices: 'returning', minimized: Boolean(guide.minimized),
             halo: !guide.minimized && (guide.outcome === 'booked' || guide.outcome === 'moved') ? HALO.visit : null
         };
-    case 'about':
-        return { ...base, text: GUIDE.about, buttons: [b('close', GUIDE.close, true)], small: BRAND.honesty };
     default:
         return null;
     }

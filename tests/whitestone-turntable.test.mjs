@@ -137,6 +137,15 @@ describe('the frame (pure)', () => {
         }
     });
 
+    test("a phone's frame leaves the wordmark its band at the top, down to a 667 pixel tall phone (QA, 2026-10-15)", () => {
+        const t = V.tall;
+        const top = 0.5 - t.shift[1] - t.use[1] / 2;
+        // experience.css: the wordmark 30 px tall, 14 px from the top.
+        expect(top * 667).toBeGreaterThanOrEqual(14 + 30);
+        // And the house still above the sheet over the bottom 45%.
+        expect(0.5 - t.shift[1] + t.use[1] / 2).toBeLessThanOrEqual(0.55);
+    });
+
     test('a point is turned as three turns it', () => {
         const p = [0.4, 0.2, -0.3];
         expect(turnPoint(p, 0)).toEqual(p);
@@ -310,32 +319,65 @@ describe('the controller', () => {
         }
     });
 
-    test('left alone it drifts round slowly, and stops at a touch', () => {
+    test('asked to drift, it turns slowly round at once, past the arrival and never during a drag', () => {
         const tt = createTurntable(CONFIG);
-        expect(steps(tt, V.idle.after - 0.1)).toBe(0);
-        expect(tt.drifting).toBe(false);
+        // Not asked: still.
+        expect(steps(tt, 30)).toBe(0);
         const y = tt.yaw;
-        steps(tt, 1);
+        expect(tt.step(1, { drift: true })).toBe(true);
         expect(tt.drifting).toBe(true);
-        expect(tt.yaw).toBeGreaterThan(y);
-        expect(tt.yaw - y).toBeLessThan(V.idle.speed * 1.01);
-        tt.touch();
+        expect(tt.yaw - y).toBeCloseTo(V.drift.speed, 9);
+        // Not during the arrival's push-in.
+        const arriving = createTurntable(CONFIG);
+        arriving.arrive();
+        const a = arriving.yaw;
+        arriving.step(V.arrival.seconds / 2, { drift: true });
+        expect(arriving.yaw).toBe(a);
+        arriving.step(V.arrival.seconds, { drift: true });
+        arriving.step(1, { drift: true });
+        expect(arriving.yaw).toBeGreaterThan(a);
+        // A drag holds it; asked no more, it stops.
+        tt.drag(10, 800);
+        const held = tt.yaw;
+        tt.step(1 / 60, { drift: true });
+        expect(tt.yaw).toBe(held);
         expect(tt.drifting).toBe(false);
+        tt.release(1);
         const z = tt.yaw;
-        expect(tt.step(1 / 60)).toBe(false);
+        expect(tt.step(1 / 60, { drift: false })).toBe(false);
         expect(tt.yaw).toBe(z);
     });
 
     test.each([
-        ['reduced motion', { reducedMotion: true }],
-        ['a card open', { locked: true }],
-        ['a floor open', { drift: false }]
+        ['reduced motion', { reducedMotion: true, drift: true }],
+        ['a card open', { locked: true, drift: true }],
+        ['the page not asking (a floor open, or the visitor begun)', { drift: false }]
     ])('it never drifts with %s', (_name, opts) => {
         const tt = createTurntable(CONFIG);
         const y = tt.yaw;
-        expect(steps(tt, V.idle.after + 5, opts)).toBe(0);
+        expect(steps(tt, 30, opts)).toBe(0);
         expect(tt.yaw).toBe(y);
         expect(tt.drifting).toBe(false);
+    });
+
+    test('turnHome comes back to the arrival\'s three-quarter view, the shorter way round, eased (QA, 2026-10-15)', () => {
+        const tt = createTurntable(CONFIG);
+        for (let i = 0; i < 200; i++) tt.step(0.5, { drift: true });
+        const far = tt.yaw;
+        expect(far - V.yaw.start).toBeGreaterThan(Math.PI * 2 * 1.5);
+        tt.turnHome(V.turn.face);
+        tt.step(V.turn.face / 2, { drift: true });
+        // A turn under way is not drifted over.
+        expect(tt.drifting).toBe(false);
+        steps(tt, V.turn.face + 0.1);
+        const turns = (tt.yaw - V.yaw.start) / (Math.PI * 2);
+        expect(Math.abs(turns - Math.round(turns))).toBeLessThan(1e-9);
+        expect(Math.abs(tt.yaw - far)).toBeLessThanOrEqual(Math.PI + 1e-9);
+        // At once when asked.
+        const now = createTurntable(CONFIG);
+        now.turnBy(2.5);
+        now.turnHome(0);
+        expect(now.yaw).toBeCloseTo(V.yaw.start, 12);
     });
 
     test('a floor opened eases to its closer view, lower, and a floor closed eases back out', () => {

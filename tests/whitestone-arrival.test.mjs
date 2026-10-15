@@ -52,14 +52,15 @@ describe('the markup', () => {
         expect(GUIDE.skip).toBeUndefined();
     });
 
-    test('no Help button: About is a ? by her name and Start over is at her foot, in copy.js\'s words, and there is no floating Undo', () => {
+    test('no Help and no About: a → by her name, Start over at her foot, in copy.js\'s words, and no floating Undo', () => {
         // Undo is the toast's and the keyboard's (Steve, 2026-10-14).
         expect(HTML).not.toMatch(/id="ws-undo"/);
         expect(HTML).toMatch(/<button id="toast-undo"[^>]*>Undo</);
         // The Help button and its menu are gone (QA, 2026-10-15).
         expect(HTML).not.toMatch(/id="ws-help|id="ws-tools|class="help-item/);
-        expect(text(/id="host-about"[^>]*aria-label="([^"]+)"/)).toBe(HELP.about);
-        expect(HTML).toMatch(/<div class="host-head">[\s\S]*?<button id="host-about"[^>]*>\?<\/button>\s*<\/div>/);
+        // About is gone too (QA, 2026-10-15); a → takes her main step.
+        expect(HTML).not.toMatch(/host-about|About Whitestone/);
+        expect(HTML).toMatch(/<div class="host-head">[\s\S]*?<button id="host-next" class="host-next" type="button" aria-label="Continue" hidden><svg[^>]*aria-hidden="true"[\s\S]*?<\/svg><\/button>\s*<\/div>/);
         // Maya's Back and Start over ship hidden along her foot, in copy.js's words.
         expect(text(/id="host-back"[^>]*>([^<]+)</)).toBe(GUIDE.back);
         expect(HTML).toMatch(/<button id="host-back"[^>]*\shidden>/);
@@ -1197,7 +1198,7 @@ describe('Start over (QA, 2026-10-14)', () => {
     });
 });
 
-describe("Maya's ? and Start over (QA, 2026-10-15: the Help menu's two items, now hers), and Undo", () => {
+describe("Maya's → and Start over (QA, 2026-10-15: no Help, no About), and Undo", () => {
     test('Start over sits at her foot once there is a home to clear, asked about first', async () => {
         await boot();
         // The greeting: nothing of their own yet, so nothing to start over.
@@ -1225,19 +1226,50 @@ describe("Maya's ? and Start over (QA, 2026-10-15: the Help menu's two items, no
         expect(line()).toBe(`${GUIDE.homeEmpty('Our home')} ${GUIDE.returningLegend}`);
     });
 
-    test('her ? opens About over the scene, and it goes back to it', async () => {
-        await boot();
-        fire(dom.el('host-about'), 'click');
-        expect(line()).toBe(GUIDE.about);
-        press('close');
-        expect(line()).toBe(GUIDE.hello);
+    test('her → takes her main step from the top of the bubble, and only where there is one (QA, 2026-10-15)', async () => {
+        const main = await boot({ sheet: true });
+        const next = dom.el('host-next');
+        // The greeting: Let's start.
+        expect(next.hidden).toBe(false);
+        expect(next.getAttribute('aria-label')).toBe(GUIDE.continueTo(GUIDE.start));
+        fire(next, 'click');
+        expect(line()).toBe(GUIDE.home);
+        // The kind of home, asked the first time: the visitor's to choose.
+        expect(next.hidden).toBe(true);
+        pick('kind-house');
+        expect(line()).toBe(GUIDE.floors);
+        // Asked again (Back), the answer given goes on.
+        fire(dom.el('host-back'), 'click');
+        expect(line()).toBe(GUIDE.homeAgainAsked);
+        const given = [...picks()].find((b) => b.classList.contains('is-on'));
+        expect(next.getAttribute('aria-label')).toBe(GUIDE.continueTo(given.textContent));
+        fire(next, 'click');
+        expect(line()).toBe(GUIDE.floors);
+        fire(next, 'click');
+        // The first room is chosen, not defaulted.
+        expect(line()).toBe(GUIDE.firstRoom);
+        expect(next.hidden).toBe(true);
+        press('kitchen');
+        fire(next, 'click');
+        expect(line()).toBe(GUIDE.dots);
+        // Standing by: a home base's first way on.
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false };
+        main.__test__.showGuide();
+        expect(next.hidden).toBe(false);
+        expect(next.getAttribute('aria-label')).toBe(GUIDE.continueTo(picks()[0].textContent));
+        // Tucked away: none.
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, minimized: true };
+        main.__test__.showGuide();
+        expect(next.hidden).toBe(true);
+    });
+
+    test('no About any more: asked for, nothing changes', async () => {
+        const main = await boot();
         press('start');
         pick('kind-house');
-        fire(dom.el('host-about'), 'click');
-        expect(line()).toBe(GUIDE.about);
-        expect(dom.el('host-small').textContent).toBe(BRAND.honesty);
-        press('close');
+        expect(main.__test__.guideTo({ type: 'about' })).toBe(false);
         expect(line()).toBe(GUIDE.floors);
+        expect(GUIDE.about).toBeUndefined();
     });
 
     test('Undo takes back a floor', async () => {

@@ -686,8 +686,22 @@ textarea.ws-input {
     height: 46px;
 }
 
-/* A phone gives the top of the screen to the house. */
-@media (max-width: 620px) {
+/* A phone upright: smaller, centered over the house, which the frame sets
+   a little lower to leave it room (QA, 2026-10-15). On its side, the house
+   needs the top of the screen. */
+@media (max-width: 620px) and (orientation: portrait) {
+    .ws-brand {
+        top: max(14px, env(safe-area-inset-top));
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .ws-brand img {
+        height: 30px;
+    }
+}
+
+@media (max-width: 620px) and (orientation: landscape) {
     .ws-brand.visible {
         display: none;
     }
@@ -1339,34 +1353,34 @@ textarea.ws-input {
     font-weight: 700;
 }
 
-/* About Whitestone, a ? by her name (QA, 2026-10-15: from the Help menu,
-   now gone): a small round button at the header's far end. */
-.host-about {
+/* Her main step, a → by her name (QA, 2026-10-15: on a phone her buttons
+   can sit below the fold): the accent, as her main button wears it. */
+.host-next {
     display: grid;
     flex: none;
     place-items: center;
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     margin-left: auto;
     padding: 0;
-    border: 1px solid var(--ws-line);
+    border: 0;
     border-radius: 50%;
-    background: #FFFFFF;
-    color: var(--ws-graphite);
-    font: inherit;
-    font-size: 0.95rem;
-    font-weight: 700;
+    background: var(--ws-accent);
+    color: #FFFFFF;
     cursor: pointer;
 }
 
-.host-about:hover {
-    border-color: var(--ws-accent);
-    color: var(--ws-accent);
+.host-next:hover {
+    background: var(--ws-accent-dark);
 }
 
-.host-about:focus-visible {
+.host-next:focus-visible {
     outline: 3px solid var(--ws-accent);
     outline-offset: 2px;
+}
+
+.host-next[hidden] {
+    display: none;
 }
 
 .host-role {

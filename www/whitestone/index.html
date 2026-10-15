@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=28" as="style">
+    <link rel="preload" href="css/experience.min.css?v=29" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -157,7 +157,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=28">
+    <link rel="stylesheet" href="css/experience.min.css?v=29">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -218,8 +218,8 @@
     <!-- MAYA, THE HOST (host.js, guide.js): her portrait and name, the
          progress through the first build, what she says, the floors to
          tick when she asks, at most two buttons, a quiet Back and Start
-         over, and a ? by her name for About (QA, 2026-10-15: no Help menu
-         any more). Beside
+         over, and a → by her name that takes her main step (QA, 2026-10-15:
+         no Help, and on a phone her buttons can sit below the fold). Beside
          the house on a wide screen, a sheet along the bottom on a phone.
          Built and shown by main.js once the house has arrived. Every line
          she says also goes through #ws-live, once. -->
@@ -227,7 +227,7 @@
         <div class="host-head">
             <span class="host-portrait" aria-hidden="true">M</span>
             <p class="host-who"><span id="host-name" class="host-name">Maya</span> <span class="host-role">Whitestone Home Care</span></p>
-            <button id="host-about" class="host-about" type="button" aria-label="About Whitestone">?</button>
+            <button id="host-next" class="host-next" type="button" aria-label="Continue" hidden><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 10h11M10.5 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         </div>
         <!-- THE HOME AT A GLANCE (host.js drawFacts): its quote (PRD 8.5),
              and once published its visit (PRD 8.6), each a button to the

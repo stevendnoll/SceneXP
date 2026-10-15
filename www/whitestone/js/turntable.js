@@ -21,9 +21,10 @@
  * house is moved on the screen, not seen at an angle.
  *
  * ARRIVAL, DRIFT AND INERTIA. The view arrives from farther out and eases
- * in, a released drag carries on a little and slows, and after a while
- * untouched the turntable drifts slowly round. Under reduced motion there
- * is none of the three.
+ * in, a released drag carries on a little and slows, and while the page
+ * asks for it (main.js: Maya greeting, before the visitor takes hold of
+ * the house or starts, QA 2026-10-15) the turntable drifts slowly round.
+ * Under reduced motion there is none of the three.
  *
  * Pure: plain numbers in, plain numbers out, no three.js and no clock. The
  * controller is stepped by main.js with the frame's seconds.
@@ -244,18 +245,21 @@ function mixFocus(a, b, k) {
  *   faceFront(seconds)   turn the house's front (its open side when a
  *                        floor is open) to the camera by the shorter way,
  *                        eased over `seconds` (0 for at once)
+ *   turnHome(seconds)    the same, back to the arrival's three-quarter view
+ *                        (`yaw.start`): the visitor has begun
  *   setFocus(f, seconds) a floor opened: ease to its closer view, `f` =
  *                        { bottom, top, radius } (focusPoints), lowered to
  *                        `tilt.open` so the floors above do not hide its
  *                        rooms; null eases back out to the whole house at
  *                        `tilt.start` (0 seconds for at once)
- *   touch()              the visitor did something: no drift for a while,
- *                        and the arrival ends at once
+ *   touch()              the visitor did something: the drift and the
+ *                        arrival end at once
  *   arrive(seconds)      start the arrival from farther out
  *   setHeight(m, now)    the house's new height, eased to unless `now`
  *   step(dt, opts)       advance by dt seconds; opts { reducedMotion,
  *                        locked, drift }; returns whether anything moved
- *                        (no idle drift while `drift` is false)
+ *                        (the drift only while `drift` is true, and never
+ *                        during the arrival, a turn under way or a drag)
  *   pose(aspect)         the camera's pose now (framePose)
  *   arriving             whether the arrival is still under way
  */
@@ -266,7 +270,6 @@ export function createTurntable(config) {
         tilt: view.tilt.start,
         velocity: 0,
         holding: false,
-        idle: 0,
         drifting: false
     };
     let height = 0;
@@ -317,14 +320,14 @@ export function createTurntable(config) {
             look.velocity = 0;
             look.holding = false;
         },
-        faceFront(seconds = view.turn.face) {
+        faceFront(seconds = view.turn.face, home = 0) {
             look.velocity = 0;
             look.holding = false;
             look.drifting = false;
-            look.idle = 0;
             const full = Math.PI * 2;
-            // The nearest whole turn: the front again, the shorter way round.
-            const to = Math.round(look.yaw / full) * full;
+            // The nearest whole turn from `home`: the front again, the
+            // shorter way round.
+            const to = home + Math.round((look.yaw - home) / full) * full;
             if (!(seconds > 0)) {
                 look.yaw = to;
                 seek = null;
@@ -349,18 +352,19 @@ export function createTurntable(config) {
             }
             toward = { from, to, elapsed: 0, seconds };
         },
+        turnHome(seconds = view.turn.face) {
+            api.faceFront(seconds, view.yaw.start);
+        },
         /** One slow, eased full turn, ending where it began: the house
          *  shown off when the first checklist is saved. */
         spinOnce(seconds = view.turn.celebrate) {
             look.velocity = 0;
             look.holding = false;
             look.drifting = false;
-            look.idle = 0;
             if (!(seconds > 0)) return;
             seek = { from: look.yaw, to: look.yaw + Math.PI * 2, elapsed: 0, seconds };
         },
         touch() {
-            look.idle = 0;
             look.drifting = false;
             arrival = null;
             seek = null;
@@ -382,7 +386,7 @@ export function createTurntable(config) {
             heightTo = h;
             heightT = 0;
         },
-        step(dt, { reducedMotion = false, locked = false, drift = true } = {}) {
+        step(dt, { reducedMotion = false, locked = false, drift = false } = {}) {
             const t = Math.max(0, dt);
             let moved = false;
             if (seek) {
@@ -428,16 +432,10 @@ export function createTurntable(config) {
                     moved = true;
                 }
             }
-            if (locked || reducedMotion || !drift || seek) {
-                look.idle = 0;
-                look.drifting = false;
-            } else {
-                look.idle += t;
-                if (look.idle >= view.idle.after && look.velocity === 0 && !look.holding && !arrival) look.drifting = true;
-                if (look.drifting) {
-                    look.yaw += view.idle.speed * t;
-                    moved = true;
-                }
+            look.drifting = Boolean(drift) && !locked && !reducedMotion && !seek && !arrival && !look.holding && look.velocity === 0;
+            if (look.drifting) {
+                look.yaw += view.drift.speed * t;
+                moved = true;
             }
             return moved;
         },
