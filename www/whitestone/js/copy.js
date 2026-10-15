@@ -487,6 +487,8 @@ export const GUIDE = Object.freeze({
     savedSame: 'Saved. Your checklist matches the one your cleaner has.',
     welcomeResume: 'Welcome back. Your home is just as you left it. Shall we pick up where we stopped?',
     keepGoing: 'Keep going',
+    /** Start over: beside Keep going, and at the foot of her bubble. */
+    startOver: 'Start over',
 
     hint: 'Tap a floor of the house to open it, and tap a blue dot to see a task. I’m right here whenever you’d like a hand.',
     about: 'Whitestone Home Care builds your cleaning checklist room by room. Every task shows its price and its time as you add it, and your quote keeps up.',
@@ -545,9 +547,8 @@ export const PANEL = Object.freeze({
 
 /** The Help menu, top right (main.js). */
 export const HELP = Object.freeze({
-    button: 'Help',
-    label: 'Help',
-    /** Start over: everything cleared, after the confirmation card. */
+    /** Start over (her bubble's foot, or beside Keep going): everything
+     *  cleared, after the confirmation card. */
     reset: 'Start over',
     resetTitle: 'Start over from the beginning?',
     resetDetail: 'This clears your checklists, photos and answers from this browser, and Maya will greet you as on your first visit. It cannot be undone.',
@@ -557,6 +558,7 @@ export const HELP = Object.freeze({
     resetDetailPublished: 'This unpublishes what you published, so its links and PINs stop working and any booked visit is canceled. Then it clears your checklists, photos and answers from this browser, and Maya will greet you as on your first visit. It cannot be undone.',
     resetLocked: (hours) => `You have a visit less than ${hours} hours away, so Start over has to wait until after it.`,
     resetDone: 'Everything is cleared. You are back at the beginning.',
+    /** The ? by her name. */
     about: 'About Whitestone'
 });
 

@@ -52,21 +52,19 @@ describe('the markup', () => {
         expect(GUIDE.skip).toBeUndefined();
     });
 
-    test('Help says what copy.js says, the menu ships closed, and there is no floating Undo', () => {
+    test('no Help button: About is a ? by her name and Start over is at her foot, in copy.js\'s words, and there is no floating Undo', () => {
         // Undo is the toast's and the keyboard's (Steve, 2026-10-14).
         expect(HTML).not.toMatch(/id="ws-undo"/);
         expect(HTML).toMatch(/<button id="toast-undo"[^>]*>Undo</);
-        expect(text(/id="ws-help"[^>]*aria-label="([^"]+)"/)).toBe(HELP.label);
-        expect(HTML).toMatch(/<div id="ws-help-menu"[^>]*\shidden>/);
-        // Maya's Back, beside Skip, ships hidden, in copy.js's word.
+        // The Help button and its menu are gone (QA, 2026-10-15).
+        expect(HTML).not.toMatch(/id="ws-help|id="ws-tools|class="help-item/);
+        expect(text(/id="host-about"[^>]*aria-label="([^"]+)"/)).toBe(HELP.about);
+        expect(HTML).toMatch(/<div class="host-head">[\s\S]*?<button id="host-about"[^>]*>\?<\/button>\s*<\/div>/);
+        // Maya's Back and Start over ship hidden along her foot, in copy.js's words.
         expect(text(/id="host-back"[^>]*>([^<]+)</)).toBe(GUIDE.back);
         expect(HTML).toMatch(/<button id="host-back"[^>]*\shidden>/);
-        // Help holds only About and Start over: the checklist is Maya's,
-        // one way to each thing (Steve, 2026-10-15).
-        expect([...HTML.matchAll(/<button id="help-([a-z]+)" class="help-item"/g)].map((m) => m[1])).toEqual(['about', 'reset']);
-        for (const key of ['about', 'reset']) {
-            expect(text(new RegExp(`id="help-${key}"[^>]*>([^<]+)<`))).toBe(HELP[key]);
-        }
+        expect(text(/id="host-reset"[^>]*>([^<]+)</)).toBe(GUIDE.startOver);
+        expect(HTML).toMatch(/<button id="host-reset"[^>]*\shidden>/);
         // The panel ships closed, its back button in copy.js's words. No
         // chips top left (Steve, 2026-10-14: lost against the studio): the
         // quote and the visit are in Maya's bubble.
@@ -137,7 +135,7 @@ function serveSheet() {
 async function boot({ saved = null, sheet = false, quiet = false } = {}) {
     if (saved) localStorage.setItem(CONFIG.storage.key, JSON.stringify(saved));
     // What the markup ships hidden (the stub reads no markup).
-    for (const id of ['ws-host', 'ws-panel', 'ws-help-menu']) dom.el(id).hidden = true;
+    for (const id of ['ws-host', 'ws-panel']) dom.el(id).hidden = true;
     if (sheet) serveSheet();
     const main = await import('../www/whitestone/js/main.js');
     await flushAsync(20);
@@ -758,7 +756,14 @@ describe('a return', () => {
         const main = await boot({ saved: await savedDoc([['home-mine', STAMP]], { activeId: 'home-mine', guide: { scene: 'rooms', reviewed: false } }) });
         expect(main.__test__.active().id).toBe('home-mine');
         expect(line()).toBe(GUIDE.welcomeResume);
-        expect(buttons()).toEqual([GUIDE.keepGoing]);
+        // Keep going, or Start over beside it (QA, 2026-10-15), and so not
+        // again at her foot.
+        expect(buttons()).toEqual([GUIDE.keepGoing, GUIDE.startOver]);
+        expect(dom.el('host-reset').hidden).toBe(true);
+        press('startOver');
+        expect(openCards()).toEqual(['confirm']);
+        expect(dom.el('confirm-title').textContent).toBe(HELP.resetTitle);
+        fire(dom.el('confirm-actions').children[0], 'click');
         press('keepGoing');
         expect(line()).toBe(GUIDE.rooms);
     });
@@ -1002,13 +1007,14 @@ describe('halos on the touch points (QA, 2026-10-14)', () => {
         expect(ring().hidden).toBe(true);
         fire(quote, 'click');
         expect(quote.classList.contains('has-halo')).toBe(false);
-        // A new scene takes the old glow away.
-        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'hint', back: 'done' };
+        // A new scene takes the old glow away: the quote's ring, put back
+        // at review, is gone at All set.
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'review' };
         main.__test__.showGuide();
-        expect(dom.el('ws-help').classList.contains('has-halo')).toBe(true);
+        expect(fact('quote').classList.contains('has-halo')).toBe(true);
         main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'saved' };
         main.__test__.showGuide();
-        expect(dom.el('ws-help').classList.contains('has-halo')).toBe(false);
+        expect(fact('quote').classList.contains('has-halo')).toBe(false);
     });
 });
 
@@ -1064,6 +1070,32 @@ describe('the home at a glance under Maya\'s name (Steve, 2026-10-14)', () => {
 describe('moving along the strip (QA, 2026-10-14)', () => {
     const steps = () => dom.el('host-progress').children;
     const stepButton = (i) => steps()[i].children[0];
+
+    test('back to Home type with a room chosen, Next from the floors goes on past First room to Your rooms (QA, 2026-10-15)', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        press('next');
+        press('kitchen');
+        press('next');
+        press('gotIt');
+        expect(line()).toBe(GUIDE.rooms);
+        // To Home type on the strip, another kind of home, and on.
+        fire(stepButton(0), 'click');
+        expect(line()).toBe(GUIDE.homeAgainAsked);
+        pick('kind-condo');
+        expect(line()).toBe(GUIDE.floors);
+        press('next');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        expect(line()).toBe(GUIDE.rooms);
+        expect(main.__test__.active().rooms).toHaveLength(1);
+        // Without a room, Next is First room, as ever.
+        main.__test__.startOver();
+        press('start');
+        pick('kind-house');
+        press('next');
+        expect(line()).toBe(GUIDE.firstRoom);
+    });
 
     test('the steps reached are buttons that go there; the one she is on, and those ahead, are not', async () => {
         const main = await boot({ sheet: true });
@@ -1126,8 +1158,7 @@ describe('Start over (QA, 2026-10-14)', () => {
         press('start');
         pick('kind-condo');
         const before = main.__test__.state.doc;
-        fire(dom.el('ws-help'), 'click');
-        fire(dom.el('help-reset'), 'click');
+        fire(dom.el('host-reset'), 'click');
         expect(openCards()).toEqual(['confirm']);
         expect(dom.el('confirm-title').textContent).toBe(HELP.resetTitle);
         expect(dom.el('confirm-detail').textContent).toBe(HELP.resetDetail);
@@ -1166,27 +1197,17 @@ describe('Start over (QA, 2026-10-14)', () => {
     });
 });
 
-describe('Help and Undo', () => {
-    test('Help opens and closes its menu, and says so', async () => {
+describe("Maya's ? and Start over (QA, 2026-10-15: the Help menu's two items, now hers), and Undo", () => {
+    test('Start over sits at her foot once there is a home to clear, asked about first', async () => {
         await boot();
-        fire(dom.el('ws-help'), 'click');
-        expect(dom.el('ws-help-menu').hidden).toBe(false);
-        expect(dom.el('ws-help').getAttribute('aria-expanded')).toBe('true');
-        fire(dom.el('ws-help'), 'click');
-        expect(dom.el('ws-help-menu').hidden).toBe(true);
-        expect(dom.el('ws-help').getAttribute('aria-expanded')).toBe('false');
-    });
-
-    test('Escape closes the menu first, and focus goes back to Help', async () => {
-        const main = await boot();
-        main.__test__.state.reducedMotion = true;
-        main.__test__.showExample();
-        main.__test__.tapModel('main');
-        fire(dom.el('ws-help'), 'click');
-        fire(dom.documentStub, 'keydown', { key: 'Escape', target: dom.documentStub.body });
-        expect(dom.el('ws-help-menu').hidden).toBe(true);
-        expect(dom.el('ws-help').focused).toBe(true);
-        expect(main.__test__.model().lifted).toBe('main');
+        // The greeting: nothing of their own yet, so nothing to start over.
+        expect(dom.el('host-reset').hidden).toBe(true);
+        press('start');
+        pick('kind-house');
+        expect(dom.el('host-reset').hidden).toBe(false);
+        fire(dom.el('host-reset'), 'click');
+        expect(openCards()).toEqual(['confirm']);
+        expect(dom.el('confirm-title').textContent).toBe(HELP.resetTitle);
     });
 
     test("a tap on Maya repeats the scene's hint, and after the guide a hint about the house", async () => {
@@ -1204,11 +1225,15 @@ describe('Help and Undo', () => {
         expect(line()).toBe(`${GUIDE.homeEmpty('Our home')} ${GUIDE.returningLegend}`);
     });
 
-    test('About sits over the scene and goes back to it', async () => {
+    test('her ? opens About over the scene, and it goes back to it', async () => {
         await boot();
+        fire(dom.el('host-about'), 'click');
+        expect(line()).toBe(GUIDE.about);
+        press('close');
+        expect(line()).toBe(GUIDE.hello);
         press('start');
         pick('kind-house');
-        fire(dom.el('help-about'), 'click');
+        fire(dom.el('host-about'), 'click');
         expect(line()).toBe(GUIDE.about);
         expect(dom.el('host-small').textContent).toBe(BRAND.honesty);
         press('close');

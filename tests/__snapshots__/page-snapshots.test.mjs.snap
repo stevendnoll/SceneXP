@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=27" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=28" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7109,7 +7109,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=2" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=27" rel="stylesheet"]
+    link [href="css/experience.min.css?v=28" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7157,6 +7157,8 @@ html [data-ui-theme="surf" lang="en"]
             "Maya"
           span.host-role
             "Whitestone Home Care"
+        button#host-about.host-about [aria-label="About Whitestone" type="button"]
+          "?"
       div#host-facts.host-facts [aria-label="Your home at a glance" hidden role="group"]
       button#host-expand.ws-btn.ws-btn-small.host-expand [aria-label="Maya, your host: need a hand?" hidden type="button"]
         "Need a hand?"
@@ -7168,6 +7170,8 @@ html [data-ui-theme="surf" lang="en"]
       div.host-foot
         button#host-back.host-back [hidden type="button"]
           "Back"
+        button#host-reset.host-reset [hidden type="button"]
+          "Start over"
     aside#ws-panel.ws-panel [aria-labelledby="panel-title" hidden]
       button#panel-back.panel-back [type="button"]
         "Back to the whole house"
@@ -7186,14 +7190,6 @@ html [data-ui-theme="surf" lang="en"]
     p#ws-live.sr-only [aria-live="polite" role="status"]
     div#ws-brand.ui-float.ws-brand
       img [alt="Whitestone Home Care" height="239" src="assets/logo-whitestone.svg?v=3" width="1068"]
-    div#ws-tools.ui-float.ws-tools [aria-label="Help" role="group"]
-      button#ws-help.tool-btn.tool-help [aria-controls="ws-help-menu" aria-expanded="false" aria-haspopup="true" aria-label="Help" type="button"]
-        "?"
-      div#ws-help-menu.help-menu [aria-label="Help" hidden role="group"]
-        button#help-about.help-item [type="button"]
-          "About Whitestone"
-        button#help-reset.help-item [type="button"]
-          "Start over"
     div#ws-toast.ws-toast [hidden]
       span#toast-text
       button#toast-undo.ws-btn.ws-btn-small [hidden type="button"]

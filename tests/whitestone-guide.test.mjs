@@ -70,6 +70,20 @@ describe('the way through', () => {
         expect(g.rooms).toBe(2);
     });
 
+    test('Next from the floors: First room, or past it to Your rooms when the home has its first room already (QA, 2026-10-15)', () => {
+        const floors = walk(fresh(), 'start', HOUSE);
+        expect(step(floors, { type: 'next' }).scene).toBe('firstRoom');
+        expect(step(floors, { type: 'next', hasRooms: false }).scene).toBe('firstRoom');
+        // Back from the rooms to change the kind of home, then on again.
+        const built = walk(fresh(), 'start', HOUSE, 'next', { type: 'roomAdded', roomId: 'k' }, 'next', 'gotIt');
+        expect(built.scene).toBe('rooms');
+        const again = walk(built, { type: 'goto', step: 0 }, HOUSE);
+        expect(again.scene).toBe('floors');
+        const on = step(again, { type: 'next', hasRooms: true });
+        expect(on.scene).toBe('rooms');
+        expect(PROGRESS[on.scene]).toBe(3);
+    });
+
     test('the kind of home comes first: a house or a condo on to the floors, a townhome asked once more', () => {
         const home = walk(fresh(), 'start');
         expect(home.scene).toBe('home');
@@ -490,7 +504,10 @@ describe('what Maya says', () => {
     });
 
     test('a return mid-build is offered Keep going; any other is a home base, its words and choices the page\'s', () => {
-        expect(viewFor({ ...fresh(), scene: 'welcome', resume: 'rooms' }).buttons.map((b) => b.id)).toEqual(['keepGoing']);
+        // Keep going, or Start over (QA, 2026-10-15).
+        expect(viewFor({ ...fresh(), scene: 'welcome', resume: 'rooms' }).buttons).toEqual([
+            { id: 'keepGoing', label: GUIDE.keepGoing, primary: true }, { id: 'startOver', label: GUIDE.startOver, primary: false }
+        ]);
         const base = viewFor({ ...fresh(), scene: 'welcome', resume: null }, { welcome: 'Welcome back. All is well. What would you like to do?' });
         expect(base).toMatchObject({ text: 'Welcome back. All is well. What would you like to do?', buttons: [], choices: 'returning' });
         expect(viewFor({ ...fresh(), scene: 'welcome', resume: null }).text).toBe(GUIDE.welcome);
@@ -504,7 +521,8 @@ describe('what Maya says', () => {
         expect(halo('dots')).toEqual({ kind: 'dot' });
         expect(halo('rooms')).toEqual({ kind: 'floor' });
         expect(halo('review')).toEqual({ kind: 'element', id: 'host-fact-quote' });
-        expect(halo('hint')).toEqual({ kind: 'element', id: 'ws-help' });
+        // The hint rings nothing: the Help button it pointed to is gone (QA, 2026-10-15).
+        expect(halo('hint')).toBeNull();
         expect(halo('firstRoom')).toEqual({ kind: 'element', id: 'host-chip-kitchen' });
         for (const scene of ['hello', 'home', 'floors', 'added', 'saved', 'example1', 'welcome', 'about']) expect(halo(scene)).toBeNull();
         expect(Object.isFrozen(HALO)).toBe(true);

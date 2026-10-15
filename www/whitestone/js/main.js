@@ -570,8 +570,8 @@ function onPanelBack() {
     selectTo(stepOut(ui.selected), { focus: true });
     if (!ui.selected) {
         if (host && host.shown && host.focusPrimary()) return;
-        const help = el('ws-help');
-        if (help && typeof help.focus === 'function') help.focus();
+        const about = el('host-about');
+        if (about && typeof about.focus === 'function') about.focus();
     }
 }
 
@@ -882,7 +882,6 @@ function tapHost() {
  *  back. Nothing answers while a card is open. */
 function handleSceneTap(clientX, clientY) {
     if (!state.loaded || anyOpen()) return null;
-    closeHelp();
     const hit = pickAt(clientX, clientY);
     if (!hit) {
         stepBack();
@@ -1181,7 +1180,14 @@ function returningChoices(c) {
  *  head while she is speaking. Null when Maya has nothing to say. */
 function guideView() {
     const v = sceneView();
-    return v ? { ...v, facts: hostFacts(active()) } : v;
+    return v ? { ...v, facts: hostFacts(active()), startOver: offersStartOver(v) } : v;
+}
+
+/** Whether her bubble's foot offers Start over (QA, 2026-10-15: where Skip
+ *  was, the Help menu gone): once there is a home of their own to clear,
+ *  and not where Start over is already one of her buttons. */
+function offersStartOver(view) {
+    return Boolean(state.doc && hasOwn(state.doc) && !(view.buttons || []).some((b) => b.id === 'startOver'));
 }
 
 /**
@@ -1469,10 +1475,12 @@ function onHostButton(id) {
     if (!state.loaded) return;
     if (host) host.poke();
     switch (id) {
-    case 'next':
+    case 'next': {
         if (ui.guide.scene === 'floors') commitTitle();
-        guideTo({ type: 'next' });
+        const c = active();
+        guideTo({ type: 'next', hasRooms: Boolean(c && liveRooms(c).length) });
         break;
+    }
     case 'kitchen':
         addKitchen();
         break;
@@ -1507,6 +1515,12 @@ function onHostButton(id) {
         break;
     case 'back':
         guideTo({ type: 'back', roomId: firstRoomId() });
+        break;
+    case 'startOver':
+        confirmStartOver();
+        break;
+    case 'about':
+        guideTo({ type: 'about' });
         break;
     default:
         if (id.startsWith('kind-')) chooseResidence({ kind: id.slice(5) });
@@ -1651,58 +1665,6 @@ function bathSaid(c, room, to, record) {
     const name = (i) => (taskOf(state.sheet, i.task) || { name: i.task }).name;
     const subject = room.label || `The ${roomName(c.serviceType, room).toLowerCase()}`;
     return UI.bathChanged(subject, to.name, record.removed.map(name), record.added.map(name));
-}
-
-// ---- Help -------------------------------------------------------------------------
-
-/** Whether the Help menu is open. */
-function helpOpen() {
-    const menu = el('ws-help-menu');
-    return Boolean(menu && !menu.hidden);
-}
-
-/** Close the Help menu, focus back on its button when asked. Returns
- *  whether it was open. */
-function closeHelp(refocus = false) {
-    if (!helpOpen()) return false;
-    el('ws-help-menu').hidden = true;
-    const btn = el('ws-help');
-    if (btn) {
-        btn.setAttribute('aria-expanded', 'false');
-        if (refocus && typeof btn.focus === 'function') btn.focus();
-    }
-    return true;
-}
-
-/** The Help menu: what Whitestone is, and Start over. Everything else
- *  is Maya's (Steve, 2026-10-15: one way to each thing). Each item closes
- *  the menu first. */
-function setupHelp(signal) {
-    const btn = el('ws-help');
-    const menu = el('ws-help-menu');
-    if (!btn || !menu) return;
-    btn.addEventListener('click', () => {
-        if (helpOpen()) {
-            closeHelp();
-            return;
-        }
-        menu.hidden = false;
-        btn.setAttribute('aria-expanded', 'true');
-        const first = Array.from(menu.children || []).find((b) => !b.hidden);
-        if (first && typeof first.focus === 'function') first.focus();
-    }, { signal });
-    const items = {
-        'help-about': () => guideTo({ type: 'about' }),
-        'help-reset': confirmStartOver
-    };
-    for (const [id, act] of Object.entries(items)) {
-        const item = el(id);
-        if (!item) continue;
-        item.addEventListener('click', () => {
-            closeHelp();
-            act();
-        }, { signal });
-    }
 }
 
 // ---- The price sheet --------------------------------------------------------
@@ -2933,9 +2895,9 @@ function setupEventListeners() {
     installCardFocusTrap({ signal });
     installCardScrollReset({ signal });
     initCards({ signal });
-    // When what opened a card has gone (a toolbar button hidden by the
-    // change the card made), focus lands on My checklists rather than nowhere.
-    setFocusFallback(() => el('ws-help'));
+    // When what opened a card has gone (a button of hers redrawn by the
+    // change the card made), focus lands on her About rather than nowhere.
+    setFocusFallback(() => el('host-about'));
     // A moment after the last card closes, so a Yes that goes on to send or
     // open something else has begun by then.
     setOnSettled(() => Promise.resolve().then(comeBack));
@@ -2945,7 +2907,6 @@ function setupEventListeners() {
         timing: { pulse: CONFIG.guide.pulse, again: CONFIG.guide.again },
         on: { button: onHostButton, floor: onFloor, step: onHostStep, chip: onGuideChip, fact: onHostFact }
     });
-    setupHelp(signal);
     panel = createPanel({
         signal,
         on: { back: onPanelBack, row: onPanelRow, star: toggleStar, bath: onPanelBath, chip: onPanelChip, action: onPanelAction }
@@ -2963,7 +2924,7 @@ function setupEventListeners() {
         if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName || '')) return;
         if (!state.loaded || anyOpen()) return;
         if (event.key === 'Escape') {
-            if (closeHelp(true) || stepBack()) event.preventDefault();
+            if (stepBack()) event.preventDefault();
             return;
         }
         // The panel's own lists take their arrow keys.

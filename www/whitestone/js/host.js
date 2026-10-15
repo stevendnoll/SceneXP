@@ -2,7 +2,9 @@
 /**
  * host.js - Maya's speech bubble (ONBOARDING sections 3 and 9): her
  * portrait and name, the progress strip, what she says, the floors to tick
- * when she asks, at most two buttons, the small print, and a quiet Back.
+ * when she asks, at most two buttons, the small print, a quiet Back and
+ * Start over, and a ? by her name for About (QA, 2026-10-15: the Help
+ * menu's two items, now hers).
  *
  * WHERE IT SITS: beside the house on a wide screen (the frame leaves the
  * right of the screen for it, turntable.js), a sheet along the bottom on a
@@ -39,6 +41,8 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     const actions = byId('host-actions');
     const small = byId('host-small');
     const backBtn = byId('host-back');
+    const resetBtn = byId('host-reset');
+    const aboutBtn = byId('host-about');
     const expand = byId('host-expand');
     const facts = byId('host-facts');
     let view = null;
@@ -55,6 +59,8 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     };
     if (signal) signal.addEventListener('abort', stopTimers);
     if (backBtn) backBtn.addEventListener('click', () => { if (typeof on.button === 'function') on.button('back'); }, { signal });
+    if (resetBtn) resetBtn.addEventListener('click', () => { if (typeof on.button === 'function') on.button('startOver'); }, { signal });
+    if (aboutBtn) aboutBtn.addEventListener('click', () => { if (typeof on.button === 'function') on.button('about'); }, { signal });
     if (expand) expand.addEventListener('click', () => { if (typeof on.button === 'function') on.button('expand'); }, { signal });
 
     function place() {
@@ -222,6 +228,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             small.hidden = !view.small;
         }
         if (backBtn) backBtn.hidden = !view.stepBack;
+        if (resetBtn) resetBtn.hidden = !view.startOver;
     }
 
     const api = {

@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=27" as="style">
+    <link rel="preload" href="css/experience.min.css?v=28" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -157,7 +157,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=27">
+    <link rel="stylesheet" href="css/experience.min.css?v=28">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -217,7 +217,9 @@
 
     <!-- MAYA, THE HOST (host.js, guide.js): her portrait and name, the
          progress through the first build, what she says, the floors to
-         tick when she asks, at most two buttons, and a quiet Back. Beside
+         tick when she asks, at most two buttons, a quiet Back and Start
+         over, and a ? by her name for About (QA, 2026-10-15: no Help menu
+         any more). Beside
          the house on a wide screen, a sheet along the bottom on a phone.
          Built and shown by main.js once the house has arrived. Every line
          she says also goes through #ws-live, once. -->
@@ -225,6 +227,7 @@
         <div class="host-head">
             <span class="host-portrait" aria-hidden="true">M</span>
             <p class="host-who"><span id="host-name" class="host-name">Maya</span> <span class="host-role">Whitestone Home Care</span></p>
+            <button id="host-about" class="host-about" type="button" aria-label="About Whitestone">?</button>
         </div>
         <!-- THE HOME AT A GLANCE (host.js drawFacts): its quote (PRD 8.5),
              and once published its visit (PRD 8.6), each a button to the
@@ -241,6 +244,7 @@
         <p id="host-small" class="host-small" hidden></p>
         <div class="host-foot">
             <button id="host-back" class="host-back" type="button" hidden>Back</button>
+            <button id="host-reset" class="host-reset" type="button" hidden>Start over</button>
         </div>
     </section>
 
@@ -273,20 +277,6 @@
          on a phone, where the house needs the top of the screen. -->
     <div id="ws-brand" class="ui-float ws-brand">
         <img src="assets/logo-whitestone.svg?v=3" alt="Whitestone Home Care" width="1068" height="239">
-    </div>
-
-    <!-- HELP, top right (ONBOARDING section 3). Help opens a short menu:
-         what Whitestone is, and Start over. Building and managing the
-         checklist is Maya's alone, one way to each thing (Steve,
-         2026-10-15). Undo is the toast's, beside what it takes back, and
-         Ctrl or Command and Z (Steve, 2026-10-14: a floating Undo confused
-         once a visit was booked, since it never takes back a booking). -->
-    <div id="ws-tools" class="ui-float ws-tools" role="group" aria-label="Help">
-        <button id="ws-help" class="tool-btn tool-help" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="ws-help-menu" aria-label="Help">?</button>
-        <div id="ws-help-menu" class="help-menu" role="group" aria-label="Help" hidden>
-            <button id="help-about" class="help-item" type="button">About Whitestone</button>
-            <button id="help-reset" class="help-item" type="button">Start over</button>
-        </div>
     </div>
 
     <!-- THE UNDO TOAST. Not a live region itself: its words also go through

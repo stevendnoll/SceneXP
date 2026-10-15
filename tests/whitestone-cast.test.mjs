@@ -41,10 +41,10 @@ describe('the gestures (pure)', () => {
         }
     });
 
-    test('a wave and a point both use the near arm, the far one left at rest', () => {
+    test('a wave raises the far arm and leaves the near one, a point the other way round (QA, 2026-10-15: the far arm looked better)', () => {
         const wave = poseFor('wave', 1);
-        expect(wave.far).toEqual(REST);
-        expect(wave.near.z).toBeGreaterThan(2);
+        expect(wave.near).toEqual(REST);
+        expect(wave.far.z).toBeGreaterThan(2);
         const point = poseFor('point', 1);
         expect(point.far).toEqual(REST);
         expect(point.near.z).toBeGreaterThan(0.9);
@@ -109,16 +109,8 @@ describe('built with the real three.js', () => {
         expect(colors).toContain(M.accent.toUpperCase());
     });
 
-    test('at rest she stands clear of the turntable', () => {
-        expect(boxOf(posed(null, 0).group).min.x).toBeGreaterThan(T.radius + 0.02);
-    });
-
-    test('waving, her raised hand is over the rim but never where a house can stand, and high above it', () => {
-        const maya = posed('wave', 1.1);
-        const houseReach = T.radius - T.rim - CONFIG.model.scale.margin;
-        expect(boxOf(maya.group).min.x).toBeGreaterThan(houseReach + 0.05);
-        // Only the raised arm reaches past the rim: her hand, above her head.
-        expect(hands(maya).near.y).toBeGreaterThan(M.height - 0.165);
+    test.each([['at rest', null, 0], ['waving', 'wave', 1.1]])('%s she stands clear of the turntable', (_name, g, t) => {
+        expect(boxOf(posed(g, t).group).min.x).toBeGreaterThan(T.radius + 0.02);
     });
 
     test('pointing, her hand reaches over the lawn but never to where a house can stand, and above the trees', () => {
@@ -130,16 +122,13 @@ describe('built with the real three.js', () => {
         expect(hands(posed('point', 1.0)).near.y).toBeGreaterThan(T.height + 0.6);
     });
 
-    test('her wave goes up, above her head, on the house\'s side, away from her bubble (QA, 2026-10-15)', () => {
+    test('her wave goes up, above her head, on her far side', () => {
         const rest = hands(posed(null, 0));
-        const maya = posed('wave', 1.1);
-        const wave = hands(maya);
+        const wave = hands(posed('wave', 1.1));
         const head = M.height - 0.165;
-        expect(wave.near.y).toBeGreaterThan(head);
-        expect(wave.far.distanceTo(rest.far)).toBeLessThan(1e-9);
-        // The bubble begins right of her head; the waving hand is left of it.
-        expect(maya.anchor()[0]).toBeGreaterThan(M.x);
-        expect(wave.near.x).toBeLessThan(M.x);
+        expect(wave.far.y).toBeGreaterThan(head);
+        expect(wave.near.distanceTo(rest.near)).toBeLessThan(1e-9);
+        expect(wave.far.x).toBeGreaterThan(M.x);
     });
 
     test('her point goes toward the house, at about chest height, the arm nearly straight', () => {

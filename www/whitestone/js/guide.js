@@ -74,7 +74,6 @@ export const HALO = Object.freeze({
     dots: Object.freeze({ kind: 'dot' }),
     rooms: Object.freeze({ kind: 'floor' }),
     review: Object.freeze({ kind: 'element', id: 'host-fact-quote' }),
-    hint: Object.freeze({ kind: 'element', id: 'ws-help' }),
     /** Not a scene's: standing by, just back from booking (viewFor). */
     visit: Object.freeze({ kind: 'element', id: 'host-fact-visit' })
 });
@@ -262,7 +261,10 @@ export function step(guide, event) {
         return g;
     case 'floors':
         if (type === 'floorTapped') return g.tapped ? g : to('floors', { tapped: true });
-        if (type === 'next') return to('firstRoom');
+        // A home that has its first room already (back here to change the
+        // kind of home or the floors) goes on past First room to Your rooms
+        // (QA, 2026-10-15: First room looked as if none had been chosen).
+        if (type === 'next') return event.hasRooms ? to('rooms') : to('firstRoom');
         if (type === 'roomAdded') return to('added', { roomId: event.roomId || null });
         return g;
     case 'firstRoom':
@@ -421,7 +423,7 @@ export function viewFor(guide, ctx = {}) {
         // a home base (QA, 2026-10-14): where the home stands, in words
         // (`ctx.welcome`, main.js), and what can be done next as choices.
         return guide.resume
-            ? { ...base, text: GUIDE.welcomeResume, buttons: [b('keepGoing', GUIDE.keepGoing, true)] }
+            ? { ...base, text: GUIDE.welcomeResume, buttons: [b('keepGoing', GUIDE.keepGoing, true), b('startOver', GUIDE.startOver)] }
             : { ...base, text: ctx.welcome || GUIDE.welcome, buttons: [], choices: 'returning' };
     case 'hint':
         return { ...base, text: GUIDE.hint, buttons: [b('close', GUIDE.gotIt, true)] };

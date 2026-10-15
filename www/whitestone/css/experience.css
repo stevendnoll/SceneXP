@@ -1339,6 +1339,36 @@ textarea.ws-input {
     font-weight: 700;
 }
 
+/* About Whitestone, a ? by her name (QA, 2026-10-15: from the Help menu,
+   now gone): a small round button at the header's far end. */
+.host-about {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin-left: auto;
+    padding: 0;
+    border: 1px solid var(--ws-line);
+    border-radius: 50%;
+    background: #FFFFFF;
+    color: var(--ws-graphite);
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.host-about:hover {
+    border-color: var(--ws-accent);
+    color: var(--ws-accent);
+}
+
+.host-about:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
 .host-role {
     color: var(--ws-muted);
     font-size: 0.82rem;
@@ -1637,7 +1667,7 @@ textarea.ws-input {
     margin-top: 0.4rem;
 }
 
-/* Back, quiet, along the bubble's foot (no Skip: QA, 2026-10-15). */
+/* Back and Start over, quiet, along the bubble's foot (QA, 2026-10-15). */
 .host-foot {
     display: flex;
     align-items: center;
@@ -1658,6 +1688,34 @@ textarea.ws-input {
 .host-back::before {
     content: '\2039\00a0';
     content: '\2039\00a0' / '';   /* a chevron, not read aloud */
+}
+
+/* Start over, opposite Back (QA, 2026-10-15: where Skip was): quiet, since
+   it is asked about first and clears everything. */
+.host-reset {
+    min-height: 36px;
+    margin: 0 0 0 auto;
+    padding: 0.3rem 0;
+    border: 0;
+    background: none;
+    color: var(--ws-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.host-reset:hover {
+    color: var(--ws-accent);
+}
+
+.host-reset:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.host-reset[hidden] {
+    display: none;
 }
 
 .host-back:hover {
@@ -1729,88 +1787,6 @@ textarea.ws-input {
         outline: 3px solid var(--ws-accent);
         outline-offset: 2px;
     }
-}
-
-/* ---- Help and Undo, top right (M2) -------------------------------------------------
- *
- * Two small buttons, and Help's short menu under them: Maya again, the
- * guide from the start, and the checklist's own cards.
- */
-.ws-tools {
-    position: fixed;
-    top: max(16px, env(safe-area-inset-top));
-    right: 16px;
-    z-index: 45;
-    align-items: flex-start;
-    gap: 0.5rem;
-}
-
-.tool-btn {
-    min-height: 44px;
-    padding: 0.45rem 1rem;
-    border: 1px solid var(--ws-line);
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.94);
-    color: var(--ws-graphite);
-    font: inherit;
-    font-weight: 600;
-    box-shadow: 0 6px 18px rgba(34, 37, 42, 0.12);
-    cursor: pointer;
-}
-
-.tool-help {
-    width: 44px;
-    padding: 0;
-    font-size: 1.15rem;
-    font-weight: 700;
-}
-
-.tool-btn:disabled {
-    color: var(--ws-muted);
-    box-shadow: none;
-    cursor: default;
-}
-
-.tool-btn:focus-visible {
-    outline: 3px solid var(--ws-accent);
-    outline-offset: 2px;
-}
-
-.help-menu {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    display: flex;
-    flex-direction: column;
-    min-width: 230px;
-    padding: 0.4rem;
-    border: 1px solid var(--ws-line);
-    border-radius: 14px;
-    background: #FFFFFF;
-    box-shadow: 0 18px 50px rgba(34, 37, 42, 0.18);
-}
-
-.help-menu[hidden],
-.help-item[hidden] {
-    display: none;
-}
-
-.help-item {
-    min-height: 44px;
-    padding: 0.55rem 0.8rem;
-    border: 0;
-    border-radius: 10px;
-    background: none;
-    color: var(--ws-graphite);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-}
-
-.help-item:hover,
-.help-item:focus-visible {
-    background: var(--ws-accent-soft);
-    outline: none;
 }
 
 /* ---- The panel beside the house (M2 step 3) ------------------------------------
