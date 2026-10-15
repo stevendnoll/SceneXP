@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=33" as="style">
+    <link rel="preload" href="css/experience.min.css?v=34" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -125,6 +125,7 @@
     <link rel="modulepreload" href="js/seal.min.js">
     <link rel="modulepreload" href="js/sync.min.js">
     <link rel="modulepreload" href="js/addons.min.js">
+    <link rel="modulepreload" href="js/report.min.js">
     <link rel="modulepreload" href="js/booking.min.js">
     <link rel="modulepreload" href="js/schedule.min.js">
     <link rel="modulepreload" href="js/receipt.min.js">
@@ -158,7 +159,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=33">
+    <link rel="stylesheet" href="css/experience.min.css?v=34">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -484,6 +485,26 @@
             <div class="card-actions">
                 <button id="receipt-unpublish" class="ws-btn ws-btn-small ws-btn-quiet receipt-unpublish" type="button" hidden>Unpublish this checklist</button>
                 <button id="receipt-done" class="ws-btn ws-btn-primary" type="button">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- A VISIT'S REPORT (M5, PRD 12.4): the bill worked out here, what was
+         skipped and why, what was not reached, the add-ons, and the
+         cleaner's words (panels.js renderVisitReport). -->
+    <div id="visit-report" class="card-overlay" hidden>
+        <div id="visit-report-panel" class="card-panel list-panel" role="dialog" aria-modal="true"
+            aria-labelledby="visit-report-title" tabindex="-1">
+            <div class="card-head">
+                <h2 id="visit-report-title" class="card-title">Your visit report</h2>
+                <button id="visit-report-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <p id="visit-report-when" class="card-meta"></p>
+            <div id="visit-report-body" class="visit-report-body"></div>
+            <p class="card-meta quote-promise">You will never pay more than your quote without approving it
+                first. Anything we skip comes off your bill.</p>
+            <div class="card-actions">
+                <button id="visit-report-book" class="ws-btn ws-btn-primary" type="button" hidden>Book your next visit</button>
             </div>
         </div>
     </div>

@@ -1019,6 +1019,40 @@ textarea.ws-input {
     display: none;
 }
 
+/* A visit's report (M5): the bill first, then what was not done. */
+.visit-report-body {
+    text-align: left;
+}
+
+.visit-report-bill,
+.visit-report-list,
+.visit-report-note {
+    margin: 0.75rem 0;
+}
+
+.visit-report-bill {
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--ws-line);
+    border-left: 4px solid #3F8F5A;
+    border-radius: 12px;
+    background: var(--ws-stone);
+}
+
+.visit-report-parts,
+.visit-report-list ul {
+    margin: 0.3rem 0 0;
+    padding: 0 0 0 1.1rem;
+    font-size: 0.92rem;
+}
+
+.visit-report-list .quote-line {
+    margin: 0.2rem 0;
+}
+
+#visit-report-skipped .quote-prefs-title {
+    color: #8A5A0B;
+}
+
 .quote-prefs-title {
     margin: 0 0 0.3rem;
     font-size: 0.95rem;

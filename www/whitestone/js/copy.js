@@ -489,6 +489,28 @@ export const GUIDE = Object.freeze({
     factWaiting: (n) => `${n} waiting`,
     factAddOnsSpoken: (n) => `${n} ${n === 1 ? 'add-on' : 'add-ons'} from your cleaner, waiting for your answer.`,
 
+    /** A visit's report come in (M5 piece 3): the bill, what was skipped
+     *  and why, what was not reached, and what next. */
+    reportPlain: 'Your visit report is in.',
+    reportLead: 'Your visit report is in.',
+    reportBilled: (billed, quote) => `You were billed ${billed} of your ${quote} quote.`,
+    reportNothing: 'Nothing was done, so there is no charge.',
+    reportAllDone: 'Everything on your checklist was done.',
+    reportSkipped: (list) => `Skipped: ${list}.`,
+    reportSkipItem: (name, why, off) => `${name}${why || off ? ` (${[String(why).toLowerCase(), off].filter(Boolean).join(', ')})` : ''}`,
+    reportMore: (n) => `and ${n} more`,
+    reportNotReached: (n) => `${n} ${n === 1 ? 'task was' : 'tasks were'} not reached.`,
+    reportHasNote: 'Your cleaner left you a note.',
+    reportColors: 'On the house, green is done, amber is skipped, and gray was not reached.',
+    bookNext: 'Book your next visit',
+    fullReport: 'See the full report',
+    reportLater: 'Not now',
+    factLastVisit: 'Last visit',
+    factBilled: (money) => `Billed ${money}`,
+    factReportIn: 'Report in',
+    factNew: 'New',
+    factLastVisitSpoken: (value, isNew) => `Last visit: ${value}.${isNew ? ' A new report.' : ''}`,
+
     hint: 'Tap a floor of the house to open it, and tap a blue dot to see a task. I’m right here whenever you’d like a hand.',
     /** The → by her name: her bubble's main step, from the top (QA,
      *  2026-10-15: on a phone the buttons can sit below the fold). */
@@ -580,6 +602,50 @@ export const GUARDS = Object.freeze({
 /** "in the kitchen": a room as a place, for the tasks page. */
 const TASKS_PAGE_IN = (room) => `in the ${String(room).toLowerCase()}`;
 
+/**
+ * The visit report in words, as both sides read it (report.js
+ * reportLines and billLines, M5): the bill, what was skipped and why, what
+ * was not reached, and what became of each add-on.
+ */
+export const REPORT = Object.freeze({
+    reasons: Object.freeze({
+        'no-time': 'Ran out of time',
+        'no-access': 'Could not reach it',
+        'already-clean': 'Already clean',
+        'customer-asked': 'The customer asked to skip it'
+    }),
+    billHeading: 'The bill',
+    billLine: (billed, quote) => `Billed ${billed} of the ${quote} quote.`,
+    billNothing: 'Nothing was done, so there is no charge.',
+    billNoSheet: 'The prices could not be loaded, so the bill is not shown yet.',
+    billDone: (money) => `Tasks done: ${money}`,
+    billAddOns: (money) => `Add-ons done: ${money}`,
+    billMinimum: (money) => `Visit minimum: ${money}`,
+    counts: (done, skipped, notReached) => `${done} done, ${skipped} skipped, ${notReached} not reached.`,
+    skippedHeading: 'Skipped',
+    notReachedHeading: 'Not reached',
+    addOnsHeading: 'Add-ons',
+    lineOff: (money) => `${money} off`,
+    inTheRoom: (task, room) => `${task}, ${TASKS_PAGE_IN(room)}`,
+    removedSince: 'A task removed since this visit',
+    /** The studio's report card (M5 piece 3). */
+    visitOn: (day) => `Visit on ${day}`,
+    cleanedBy: (name) => `Cleaned by ${name}.`,
+    onSite: (minutes) => {
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        const parts = [h ? `${h} ${h === 1 ? 'hour' : 'hours'}` : '', m ? `${m} minutes` : ''].filter(Boolean);
+        return `Time on site: ${parts.join(' ')}.`;
+    },
+    noteHeading: 'From your cleaner',
+    addOnOutcome: Object.freeze({
+        done: 'Approved and done',
+        approved: 'Approved, not done, so not charged',
+        declined: 'Declined',
+        lapsed: 'No answer in time, so not done'
+    })
+});
+
 /** The cleaner's page. */
 export const TASKS_PAGE = Object.freeze({
     incomplete: 'Please enter all 6 digits of the PIN.',
@@ -623,12 +689,7 @@ export const TASKS_PAGE = Object.freeze({
     markSkip: (task) => `Skip ${task}`,
     skipWhy: 'Why was it skipped?',
     skipWhyOf: (task) => `Why ${task} was skipped`,
-    reasons: Object.freeze({
-        'no-time': 'Ran out of time',
-        'no-access': 'Could not reach it',
-        'already-clean': 'Already clean',
-        'customer-asked': 'The customer asked to skip it'
-    }),
+    reasons: REPORT.reasons,
     skipWords: 'Or say why in a few words',
     skipWithWords: 'Skip with these words',
     cancel: 'Cancel',
@@ -682,25 +743,22 @@ export const TASKS_PAGE = Object.freeze({
     sentTitle: 'Visit report sent',
     sentLead: 'Thank you. Your customer can see the report now.',
     pendingTitle: 'Report waiting to send',
-    billHeading: 'The bill',
-    billLine: (billed, quote) => `Billed ${billed} of the ${quote} quote.`,
-    billNothing: 'Nothing was done, so there is no charge.',
+    // The report's own words are REPORT's, shared with the studio; only
+    // the line for a sheet that will not load speaks to the cleaner.
+    billHeading: REPORT.billHeading,
+    billLine: REPORT.billLine,
+    billNothing: REPORT.billNothing,
     billNoSheet: 'The prices could not be loaded here, so your customer’s page works out the bill.',
-    billDone: (money) => `Tasks done: ${money}`,
-    billAddOns: (money) => `Add-ons done: ${money}`,
-    billMinimum: (money) => `Visit minimum: ${money}`,
-    reportCounts: (done, skipped, notReached) => `${done} done, ${skipped} skipped, ${notReached} not reached.`,
-    skippedHeading: 'Skipped',
-    notReachedHeading: 'Not reached',
-    addOnsReportHeading: 'Add-ons',
-    lineOff: (money) => `${money} off`,
-    inTheRoom: (task, room) => `${task}, ${TASKS_PAGE_IN(room)}`,
-    addOnOutcome: Object.freeze({
-        done: 'Approved and done',
-        approved: 'Approved, not done, so not charged',
-        declined: 'Declined by the customer',
-        lapsed: 'No answer from the customer, so not done'
-    }),
+    billDone: REPORT.billDone,
+    billAddOns: REPORT.billAddOns,
+    billMinimum: REPORT.billMinimum,
+    reportCounts: REPORT.counts,
+    skippedHeading: REPORT.skippedHeading,
+    notReachedHeading: REPORT.notReachedHeading,
+    addOnsReportHeading: REPORT.addOnsHeading,
+    lineOff: REPORT.lineOff,
+    inTheRoom: REPORT.inTheRoom,
+    addOnOutcome: REPORT.addOnOutcome,
     nameLabel: 'Your first name (optional)',
     timeLabel: 'Time on site (optional)',
     hours: 'Hours',
@@ -736,6 +794,6 @@ export function allCopy() {
         else if (typeof value === 'function') out.push({ where, text: value(12) });
         else if (value && typeof value === 'object') Object.entries(value).forEach(([k, v]) => walk(v, `${where}.${k}`));
     };
-    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, BOOKING, RECEIPT, CHANGES, DAY_STATUS, STORE, FREQUENCIES, UI, MODEL_LINES, GUIDE, HELP, PANEL, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR }, 'copy');
+    walk({ BRAND, ITEM_ERRORS, BOOKING_ERRORS, BOOKING, RECEIPT, CHANGES, DAY_STATUS, STORE, FREQUENCIES, UI, MODEL_LINES, GUIDE, HELP, PANEL, STORAGE_NOTES, GUARDS, TASKS_PAGE, CALENDAR, REPORT }, 'copy');
     return out;
 }

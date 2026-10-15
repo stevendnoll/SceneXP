@@ -176,6 +176,20 @@ export const FLOOR_OF = Object.freeze({
     garage: 'concrete', patio: 'counter'
 });
 
+/**
+ * A task dot's paint (M5 piece 3): the chosen one darker; while a visit's
+ * report is shown (`results`, item id to `done`, `skipped` or
+ * `not-reached`), green, amber or gray; else the tasks' blue.
+ */
+export function markerPaintKey(marker, results) {
+    if (marker.selected) return 'markerSelected';
+    const status = results ? results.get(marker.itemId) : null;
+    if (status === 'done') return 'markerDone';
+    if (status === 'skipped') return 'markerSkipped';
+    if (status === 'not-reached') return 'markerNotReached';
+    return 'marker';
+}
+
 /** How many accent colors the palette carries (accent1 to accent6). */
 export const ACCENTS = 6;
 
@@ -1447,6 +1461,11 @@ export function buildModel(config, at) {
     const paint = Object.fromEntries(Object.entries(pal).map(([k, v]) => [k, new THREE.Color(v)]));
     paint.marker = new THREE.Color(colors.marker);
     paint.markerSelected = new THREE.Color(config.colors.accent);
+    // The report's colors (PLANNING 13): done green, skipped amber, not
+    // reached gray.
+    paint.markerDone = new THREE.Color(config.colors.done);
+    paint.markerSkipped = new THREE.Color(config.colors.attention);
+    paint.markerNotReached = new THREE.Color(config.colors.skipped);
     paint.outline = new THREE.Color(config.colors.accent);
     paint.outlineHover = new THREE.Color(colors.outlineHover || '#9FB3C4');
     const paintOf = (p) => paint[p.color] || paint.wall;
@@ -1465,6 +1484,8 @@ export function buildModel(config, at) {
     let lifted = null;
     /** The selected room and task, and the room under the pointer. */
     const selection = { roomId: null, itemId: null, hoverRoomId: null };
+    /** A visit's report on the dots (`report`), or null. */
+    let results = null;
     /** Each part's lift now, and the move toward its target. */
     const now = new Map();
     let move = null;
@@ -1517,7 +1538,7 @@ export function buildModel(config, at) {
         place(meshes.massing, placed.massing, paintOf);
         place(meshes.contextRoofs, placed.contextRoofs, paintOf);
         place(meshes.edges, placed.edges, paintOf);
-        place(meshes.markers, placed.markers, (p) => (p.selected ? paint.markerSelected : paint.marker));
+        place(meshes.markers, placed.markers, (p) => paint[markerPaintKey(p, results)]);
         place(meshes.outlines, placed.outlines, paintOf);
         place(meshes.flags, placed.flags);
     }
@@ -1701,6 +1722,20 @@ export function buildModel(config, at) {
         },
         /** Select a room and a task (either null): outlined and enlarged.
          *  Returns whether anything changed. */
+        /** A visit's report on the dots (`results`: item id to its
+         *  outcome), or null for the tasks' own blue. Returns whether
+         *  anything changed. */
+        report(next = null) {
+            const map = next instanceof Map && next.size ? next : null;
+            if (!map && !results) return false;
+            results = map;
+            draw();
+            return true;
+        },
+        /** Whether a report is on the dots. */
+        get reporting() {
+            return Boolean(results);
+        },
         select({ roomId = null, itemId = null } = {}) {
             if (selection.roomId === roomId && selection.itemId === itemId) return false;
             selection.roomId = roomId;

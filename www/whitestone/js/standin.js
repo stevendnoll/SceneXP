@@ -27,7 +27,8 @@
  * report. A cleaner proposes an add-on once, and the customer decides it
  * once: neither is ever rewritten, so what the customer approved is what
  * the cleaner proposed. The report is written once too, and closes the
- * visit: no add-on is proposed or decided after it (M5).
+ * visit: no add-on is proposed or decided after it, and its booking is
+ * done with, so the checklist can be booked again (M5).
  *
  * Everything outside is injected (`backend`, the four-method store of
  * photos.js; `now`; `getRandomValues`; `subtle`), so the suite runs it in
@@ -252,6 +253,9 @@ export function createStandin({
         await backend.put(key, bytes);
         const at = new Date(now()).toISOString();
         await saveMeta({ ...m, visitRecords: visitsOf(m).map((v) => (v === visit ? { ...v, reportAt: at } : v)) });
+        // The visit is done, so its booking is too: the checklist can be
+        // booked again (Book your next visit, PRD 10.4).
+        await saveBookings((await bookings()).filter((b) => b.id !== m.id));
         return answer(201, { stored: true, reportAt: at });
     }
 

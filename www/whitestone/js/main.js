@@ -40,14 +40,15 @@ import {
     setSettings, touchVisit, storageUse, isLive, addRoom, updateRoom, deleteRoom, addItem,
     updateItem, deleteItem, addPhoto, removePhoto, photoIdsInUse, newId, itemsIn, liveRooms, liveItems,
     setBath, setResidence, emptyDoc, setPublication, keepServerFacts, importPublished,
-    hasUnsent, MAIN_LEVEL
+    hasUnsent, MAIN_LEVEL, addVisits, markVisitSeen
 } from './store.min.js';
 import { withExample } from './samples.min.js';
 import { createApi, createFetchTransport } from './api.min.js';
 import { createStandin } from './standin.min.js';
 import { createSealer } from './seal.min.js';
 import { publish, openPublished, readPublished, republish, cancelVisit, unpublish, quoteToSend } from './sync.min.js';
-import { openAddOns, decideAddOn, addOnName, priceOf, roomOf } from './addons.min.js';
+import { decideAddOn, addOnName, priceOf, roomOf } from './addons.min.js';
+import { readVisits, reportBill, reportLines } from './report.min.js';
 import { createBooking, visitMinutes, shiftMonth, firstOpen, dayLabel, clockLabel } from './booking.min.js';
 import { canChange } from './schedule.min.js';
 import { createReceipt, receiptView } from './receipt.min.js';
@@ -66,7 +67,7 @@ import {
     showResidence
 } from './forms.min.js';
 import {
-    renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote
+    renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote, renderVisitReport
 } from './panels.min.js';
 import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKING, BOOKING_ERRORS, RECEIPT, CHANGES } from './copy.min.js';
 import { createTurntable, turnPoint } from './turntable.min.js';
@@ -1123,6 +1124,7 @@ function guideContext() {
         standby: standbyLine(c),
         saved: savedNext(c),
         addOn: addOnContext(),
+        report: reportContext(),
         ...exampleContext(c)
     };
 }
@@ -1312,6 +1314,12 @@ function hostFacts(c) {
             spoken: unsent ? `${spoken} ${UI.visitChipUnsent}.` : spoken
         });
     }
+    // The last visit's report (M5), a tap away from Maya showing it.
+    const last = c.visits && c.visits[0];
+    if (last && !c.sample) {
+        const value = last.bill ? GUIDE.factBilled(formatMoney(last.bill.billedCents)) : GUIDE.factReportIn;
+        facts.push({ key: 'report', label: GUIDE.factLastVisit, value, note: last.seen ? '' : GUIDE.factNew, spoken: GUIDE.factLastVisitSpoken(value, !last.seen) });
+    }
     // An add-on waiting for an answer (M5), a tap away from Maya asking.
     const waiting = waitingFor(c).length;
     if (waiting) facts.push({ key: 'addons', label: GUIDE.factAddOns, value: GUIDE.factWaiting(waiting), note: '', spoken: GUIDE.factAddOnsSpoken(waiting) });
@@ -1324,7 +1332,12 @@ function onHostFact(key) {
     if (host) host.poke();
     if (key === 'quote') openQuote();
     else if (key === 'visit') openReceipt();
-    else if (key === 'addons') {
+    else if (key === 'report') {
+        if (panel && panel.shown) selectTo(null);
+        // Showing it already, the full report; else Maya shows it.
+        if (ui.guide && ui.guide.scene === 'report') openVisitReport();
+        else offerReport({ asked: true });
+    } else if (key === 'addons') {
         // The panel steps aside, so she is seen asking.
         if (panel && panel.shown) selectTo(null);
         offerAddOn({ asked: true });
@@ -1345,6 +1358,15 @@ function sceneView() {
             return { area, level, label: name, aria: PANEL.chipLabel(name) };
         }) : [];
         return { ...v, choices: { kind: 'chips', legend: GUIDE.roomsLegend, chips } };
+    }
+    if (v && v.choices === 'report') {
+        // Book your next visit while none is booked, the full report, or
+        // not now (her → takes the first).
+        const c2 = active();
+        const options = [];
+        if (bookable(c2)) options.push({ id: 'bookNext', label: GUIDE.bookNext });
+        options.push({ id: 'fullReport', label: GUIDE.fullReport }, { id: 'reportLater', label: GUIDE.reportLater });
+        return { ...v, choices: { kind: 'pick', legend: GUIDE.returningLegend, options } };
     }
     if (v && v.choices === 'returning') {
         return { ...v, choices: { kind: 'pick', legend: GUIDE.returningLegend, options: returningChoices(c) } };
@@ -1376,7 +1398,7 @@ function sceneView() {
 const GESTURE_OF = {
     hello: 'wave', welcome: 'wave',
     home: 'point', attached: 'point', floors: 'point', saved: 'wave', firstRoom: 'point', added: 'point', dots: 'point', rooms: 'point', review: 'point',
-    example1: 'point', example2: 'point', example3: 'point', example4: 'point', look: 'point', addOn: 'point'
+    example1: 'point', example2: 'point', example3: 'point', example4: 'point', look: 'point', addOn: 'point', report: 'point'
 };
 
 /** Maya says the scene now (or is put away when there is none), with the
@@ -1445,6 +1467,7 @@ function guideTo(event) {
     }
     ui.guide = next;
     if (was.scene === 'addOn' && next.scene !== 'addOn') leaveAddOn(next.scene);
+    if (was.scene === 'report' && next.scene !== 'report') leaveReport(next.scene);
     // Begun (Let's start, the example, a welcome's choice): the turning
     // stops, and the house comes back to the arrival's view, however far
     // it had turned or been turned (QA, 2026-10-15).
@@ -1525,6 +1548,9 @@ function enterScene(to) {
     }
     case 'addOn':
         showAddOn();
+        break;
+    case 'report':
+        showReport();
         break;
     case 'review':
     case 'saved':
@@ -1660,6 +1686,16 @@ function onHostButton(id) {
         break;
     case 'approve':
         decide('approved');
+        break;
+    case 'bookNext':
+        goAway('booking');
+        handOff(() => openBooking());
+        break;
+    case 'fullReport':
+        openVisitReport();
+        break;
+    case 'reportLater':
+        guideTo({ type: 'reportDone' });
         break;
     case 'decline':
         decide('declined');
@@ -2373,18 +2409,26 @@ async function pollVisits({ quiet = false } = {}) {
     let got;
     try {
         const key = await svc.sealer.importKey(pub.key);
-        got = await openAddOns({ api: svc.api, sealer: svc.sealer, key, id: pub.id, token: pub.ownerToken });
+        got = await readVisits({ api: svc.api, sealer: svc.sealer, key, id: pub.id, token: pub.ownerToken, known: c.visits.map((v) => v.visitId) });
     } catch (e) {
         got = { ok: false };
     }
     // The open checklist may have changed while it asked.
     const still = active();
     if (!got.ok || !watchable(still) || still.published.id !== pub.id) return false;
-    const changed = visits.id !== pub.id || JSON.stringify(got.addOns) !== JSON.stringify(visits.addOns);
+    const changed = visits.id !== pub.id || JSON.stringify(got.open) !== JSON.stringify(visits.addOns);
     visits.id = pub.id;
-    visits.addOns = got.addOns;
+    visits.addOns = got.open;
     if (waitingFor(still).length) await pricedFor(still, svc);
-    if (!quiet) afterVisits(changed);
+    // A report come in: billed here, from the sheet the quote was locked
+    // on, and kept with the checklist (its booking done with).
+    if (got.reports.length) {
+        const priced = await pricedFor(still, svc, true);
+        const form = priced ? priced.form : null;
+        const kept = got.reports.map((v) => ({ ...v, bill: form ? reportBill(priced.sheet, form.quote, form, v.report) : null }));
+        mutate((d) => addVisits(d, still.id, kept, CONFIG, now()));
+    }
+    if (!quiet) afterVisits(changed || got.reports.length > 0);
     return true;
 }
 
@@ -2394,10 +2438,10 @@ async function pollVisits({ quiet = false } = {}) {
  * once for each version sent, and again when an add-on names a room this
  * copy does not have (sent from another device since).
  */
-async function pricedFor(c, svc) {
+async function pricedFor(c, svc, fresh = false) {
     const pub = c.published;
     const at = `${pub.id}:${pub.version}`;
-    const known = visits.priced && visits.priced.at === at
+    const known = !fresh && visits.priced && visits.priced.at === at
         && waitingFor(c).every((a) => roomOf(visits.priced.form, a));
     if (known) return visits.priced;
     const read = await readPublished({ api: svc.api, sealer: svc.sealer, link: pub });
@@ -2427,6 +2471,7 @@ function afterVisits(changed) {
         return;
     }
     if (offerAddOn()) return;
+    if (offerReport()) return;
     if (changed && host && host.view) updateHost();
 }
 
@@ -2536,6 +2581,107 @@ async function decide(status) {
     }
     if (host) host.focusPrimary();
     return r;
+}
+
+// ---- A visit's report, shown here (M5 piece 3, PRD 12.4) ---------------------
+
+/** The report Maya is showing, else the newest, as store.js keeps it. */
+function shownVisit(c = active()) {
+    const list = (c && c.visits) || [];
+    const id = ui.guide && ui.guide.scene === 'report' ? ui.guide.visitId : null;
+    return list.find((v) => v.visitId === id) || list[0] || null;
+}
+
+/** The published checklist and its sheet to read a report by, else the
+ *  customer's own and the current sheet. */
+function reportSource(c) {
+    const p = visits.priced;
+    return p && c && c.published && p.at.startsWith(`${c.published.id}:`) ? p : { form: c, sheet: state.sheet };
+}
+
+/**
+ * Maya shows the newest report not yet seen, of her own accord only where
+ * she is free to (guide.js), never over a card, the panel or a send, nor
+ * while an add-on waits; `asked`, from a tap, the newest at all. Returns
+ * whether she now shows it.
+ */
+function offerReport({ asked = false } = {}) {
+    const c = active();
+    const v = c && !c.sample ? (c.visits || [])[0] : null;
+    if (!ui.guide || !v || !state.loaded || (!asked && v.seen)) return false;
+    if (!asked && (anyOpen() || (panel && panel.shown) || state.sending || ui.handoff || waitingFor(c).length)) return false;
+    return guideTo({ type: 'visitReport', visitId: v.visitId, asked });
+}
+
+/**
+ * What Maya says of a report: that it is in, the bill against the quote,
+ * what was skipped (why, and what it took off; two named, the rest
+ * counted), how many were not reached, and that the cleaner left a note.
+ * `{ text }`, or null.
+ */
+function reportContext() {
+    if (!ui.guide || ui.guide.scene !== 'report') return null;
+    const c = active();
+    const v = shownVisit(c);
+    if (!v) return null;
+    const { form, sheet } = reportSource(c);
+    const lines = reportLines(sheet, form, v.report);
+    const parts = [GUIDE.reportLead];
+    if (v.bill) parts.push(v.bill.billedCents ? GUIDE.reportBilled(formatMoney(v.bill.billedCents), formatMoney(v.bill.quoteCents)) : GUIDE.reportNothing);
+    if (!lines.skipped.length && !lines.notReached.length) parts.push(GUIDE.reportAllDone);
+    if (lines.skipped.length) {
+        const named = lines.skipped.slice(0, 2).map((t) => GUIDE.reportSkipItem(t.label, t.why, t.off));
+        const more = lines.skipped.length - named.length;
+        parts.push(GUIDE.reportSkipped(more ? `${named.join(', ')}, ${GUIDE.reportMore(more)}` : named.join(' and ')));
+    }
+    if (lines.notReached.length) parts.push(GUIDE.reportNotReached(lines.notReached.length));
+    if (v.report.note) parts.push(GUIDE.reportHasNote);
+    return { text: parts.join(' ') };
+}
+
+/** The report on the house: every dot green, amber or gray by what became
+ *  of it, and the floor of the first task skipped (else not reached, else
+ *  the main floor) opened. Seen, from now on. */
+function showReport() {
+    const c = active();
+    const v = shownVisit(c);
+    if (ui.selected) selectTo(null);
+    if (!v || !c) return;
+    if (!v.seen) mutate((d) => markVisitSeen(d, c.id, v.visitId));
+    if (!model) return;
+    const results = new Map(v.report.results.map((r) => [r.itemId, r.status]));
+    if (model.report(results)) markShadows();
+    const item = (status) => {
+        const r = v.report.results.find((x) => x.status === status && liveItems(c).some((i) => i.id === x.itemId));
+        const i = r ? liveItems(c).find((x) => x.id === r.itemId) : null;
+        const room = i ? liveRooms(c).find((x) => x.id === i.roomId) : null;
+        return room ? room.level : null;
+    };
+    const levels = model.levels();
+    const level = item('skipped') || item('not-reached') || (levels.includes(MAIN_LEVEL) ? MAIN_LEVEL : levels[0]);
+    if (level) liftLevel(level);
+    requestRender();
+}
+
+/** The report put away: the dots blue again, and the whole house unless
+ *  the build she goes back to opens a floor of its own. */
+function leaveReport(to) {
+    if (!model) return;
+    if (model.report(null)) markShadows();
+    if (!GUIDED.includes(to)) liftLevel(null);
+    requestRender();
+}
+
+/** The full report in its card, Book your next visit offered while no
+ *  visit is booked. */
+function openVisitReport() {
+    const c = active();
+    const v = shownVisit(c);
+    if (!v) return;
+    const { form, sheet } = reportSource(c);
+    renderVisitReport({ visit: v, form, sheet, bookable: bookable(c) });
+    if (!v.seen) mutate((d) => markVisitSeen(d, c.id, v.visitId));
+    openCard('visit-report');
 }
 
 // ---- Photos -----------------------------------------------------------------
@@ -3233,6 +3379,10 @@ function setupEventListeners() {
     on('task-notes', 'input', () => showHints('task-notes', 'task-notes-hint'));
     on('task-avoid', 'input', () => showHints('task-avoid', 'task-avoid-hint'));
     on('quote-open-checklist', 'click', openChecklistView);
+    on('visit-report-book', 'click', () => {
+        closeCard('visit-report');
+        onHostButton('bookNext');
+    });
     booking = createBooking({
         signal,
         on: {
@@ -3497,6 +3647,8 @@ export const __test__ = {
     watchVisits,
     offerAddOn,
     decide,
+    offerReport,
+    openVisitReport,
     history: () => history,
     store: () => store,
     photoStore: () => photoStore,

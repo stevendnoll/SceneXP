@@ -47,6 +47,7 @@
 import { STORE, ITEM_ERRORS } from './copy.min.js';
 import { serviceType, levelOf, bathOf, bathChoices, residenceOf, levelsAllowed, KEY_PATTERN } from './taxonomy.min.js';
 import { ID as LINK_ID, SECRET } from './links.min.js';
+import { cleanReport } from './report.min.js';
 
 export const ID_PATTERN = /^[A-Za-z0-9_-]{8,36}$/;
 export const SIZES = Object.freeze(['small', 'medium', 'large']);
@@ -217,6 +218,46 @@ export function normalizeBooking(raw) {
     return ok ? { date: raw.date, time: raw.time, minutes: raw.minutes, start: raw.start, end: raw.end } : null;
 }
 
+/** The most visit reports a checklist keeps here, the oldest dropped first
+ *  (PRD 11.7). */
+export const MAX_VISITS = 20;
+
+/** A bill as this device keeps it with a report: whole cents, or null. */
+function normalizeBill(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const keys = ['doneCents', 'addOnCents', 'topUpCents', 'billedCents', 'quoteCents'];
+    if (!keys.every((k) => Number.isInteger(raw[k]) && raw[k] >= 0)) return null;
+    if (raw.billedCents !== raw.doneCents + raw.addOnCents + raw.topUpCents) return null;
+    return Object.fromEntries(keys.map((k) => [k, raw[k]]));
+}
+
+/**
+ * A visit's report as this device keeps it (M5 piece 3): the visit's id,
+ * when the report arrived, the report itself (report.js `cleanReport`,
+ * settled by the customer's own answers), the bill worked out here (or
+ * null), and whether the customer has seen it. Null for anything malformed.
+ */
+export function normalizeVisit(raw) {
+    if (!raw || typeof raw !== 'object' || !LINK_ID.test(String(raw.visitId))) return null;
+    const report = raw.report && typeof raw.report === 'object' ? cleanReport(raw.report, raw.report.id) : null;
+    const reportAt = stampOrNull(raw.reportAt);
+    if (!report || !reportAt) return null;
+    return { visitId: raw.visitId, reportAt, report, bill: normalizeBill(raw.bill), seen: raw.seen === true };
+}
+
+/** Visits made safe, each once, newest first, at most `MAX_VISITS`. */
+function normalizeVisits(raw) {
+    const out = [];
+    const seen = new Set();
+    for (const v of Array.isArray(raw) ? raw : []) {
+        const n = normalizeVisit(v);
+        if (!n || seen.has(n.visitId)) continue;
+        seen.add(n.visitId);
+        out.push(n);
+    }
+    return out.sort((a, b) => String(b.reportAt).localeCompare(String(a.reportAt))).slice(0, MAX_VISITS);
+}
+
 /** Levels as known keys, without repeats, in the taxonomy's order (bottom to
  *  top, the way the house model stacks them). */
 function normalizeLevels(raw, type) {
@@ -280,10 +321,10 @@ export function normalizeChecklist(raw, config, now) {
             household: text(raw.household, config.limits.household),
             preferences: normalizePreferences(raw.preferences, raw.serviceType, config),
             quote: normalizeQuote(raw.quote),
-            // Publishing and booking (M3); visit reports arrive with M5.
+            // Publishing and booking (M3), and the visits' reports (M5).
             published: normalizePublished(raw.published),
             booking: normalizeBooking(raw.booking),
-            visits: [],
+            visits: normalizeVisits(raw.visits),
             sample: raw.sample === true,
             createdAt: stampOrNull(raw.createdAt),
             updatedAt: stampOrNull(raw.updatedAt),
@@ -570,6 +611,35 @@ export function setPublication(doc, id, patch, config, now) {
 }
 
 /**
+ * Visit reports arrived from the API (M5 piece 3), kept with the checklist
+ * newest first (one already here is not replaced, so `seen` stays), and the
+ * booking a report closes let go: once a visit has its report, the time it
+ * was booked for is done with, so the visit can be booked again. Never an
+ * undo step: these are facts on the server too.
+ */
+export function addVisits(doc, id, visits, config, now) {
+    const found = liveChecklist(doc, id);
+    if (found.error) return refusal(doc, found.error);
+    const c = found.checklist;
+    const fresh = (Array.isArray(visits) ? visits : []).map((v) => normalizeVisit({ ...v, seen: false })).filter(Boolean)
+        .filter((v) => !c.visits.some((k) => k.visitId === v.visitId));
+    if (!fresh.length) return { doc, record: c, error: null };
+    const b = c.booking;
+    const closes = (v) => Boolean(b && v.report.booking && v.report.booking.date === b.date && v.report.booking.time === b.time);
+    const next = { ...c, visits: normalizeVisits([...fresh, ...c.visits]), booking: fresh.some(closes) ? null : c.booking };
+    const record = touched(next, now);
+    return { doc: replaceChecklist(doc, record), record, error: null };
+}
+
+/** A visit's report seen by the customer. */
+export function markVisitSeen(doc, id, visitId) {
+    const c = findChecklist(doc, id);
+    if (!c || !c.visits.some((v) => v.visitId === visitId && !v.seen)) return { doc, record: c, error: null };
+    const record = { ...c, visits: c.visits.map((v) => (v.visitId === visitId ? { ...v, seen: true } : v)) };
+    return { doc: replaceChecklist(doc, record), record, error: null };
+}
+
+/**
  * A published checklist brought to this device by its edit link (PLANNING
  * 7.3): `form` as sync.js `openPublished` opened it, `link` its id, key and
  * owner token (and `version`), made a checklist of this device's own, kept
@@ -606,8 +676,8 @@ export function importPublished(doc, form, link, config, now, opts = {}) {
 
 /**
  * A document from undo (`restored`) with the server's facts of `current`
- * kept: each checklist's publication, booking and locked quote stay as they
- * are now, since undoing an edit cannot unpublish or unbook anything, and
+ * kept: each checklist's publication, booking, locked quote and visit
+ * reports stay as they are now, since undoing an edit cannot unpublish or unbook anything, and
  * losing the key or the owner token would leave the published copy
  * orphaned (QA, 2026-10-14, planned with M3).
  */
@@ -617,7 +687,7 @@ export function keepServerFacts(restored, current) {
         ...restored,
         checklists: restored.checklists.map((c) => {
             const live = now.get(c.id);
-            return live ? { ...c, published: live.published, booking: live.booking, quote: live.quote } : c;
+            return live ? { ...c, published: live.published, booking: live.booking, quote: live.quote, visits: live.visits } : c;
         })
     };
 }

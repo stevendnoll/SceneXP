@@ -19,14 +19,23 @@
  * its own context (seal.js `report`, named by the visit), and the API keeps
  * the first and refuses the rest. A correction is a new visit's report.
  *
- * Pure, apart from `sendReport`, which takes the API and the sealer as
- * arguments.
+ * THE CUSTOMER'S ANSWERS WIN (M5 piece 3, `settleReport`). The report says
+ * what the cleaner knew of each add-on; the customer's page goes by the
+ * answers it gave itself (sealed by its own key, read back from the API),
+ * so an add-on the customer never approved is never billed, whatever a
+ * report says.
+ *
+ * Pure, apart from `sendReport` and `readVisits`, which take the API and
+ * the sealer as arguments.
  */
 
-import { billVisit } from './pricing.min.js';
+import { billVisit, priceItem, formatMoney } from './pricing.min.js';
 import { contextFor } from './seal.min.js';
 import { ID } from './links.min.js';
-import { cleanProposal } from './addons.min.js';
+import { cleanProposal, fetchAddOns, addOnName, priceOf } from './addons.min.js';
+import { taskOf } from './sheet.min.js';
+import { roomName } from './taxonomy.min.js';
+import { REPORT as WORDS } from './copy.min.js';
 
 export const REPORT_FORMAT = 1;
 
@@ -142,4 +151,117 @@ export async function sendReport({ api, sealer, key, id, token, visitId = null, 
     const put = await api.putReport(id, token, visit, sealed);
     if (!put.ok && put.error !== 'exists') return { ok: false, visitId: visit, error: put.error };
     return { ok: true, visitId: visit, error: null };
+}
+
+/**
+ * A report as the customer's page reads it (M5 piece 3): each add-on by the
+ * customer's own answer (`addOns`, as addons.js fetchAddOns reads them,
+ * proposals and decisions), approved or declined, else lapsed, and done
+ * only when approved and the cleaner marked it done. An add-on the report
+ * names that the API does not have is left out; one the API has that the
+ * report leaves out lapsed. Pure.
+ */
+export function settleReport(report, addOns) {
+    if (!report) return null;
+    const said = new Map((report.addOns || []).map((a) => [a.id, a]));
+    const settled = (addOns || []).map((a) => {
+        const status = a.status === 'approved' || a.status === 'declined' ? a.status : 'lapsed';
+        const r = said.get(a.id);
+        const proposal = cleanProposal(a);
+        return proposal ? { ...proposal, status, done: status === 'approved' && Boolean(r && r.done) } : null;
+    }).filter(Boolean);
+    return { ...report, addOns: settled };
+}
+
+/**
+ * Everything the customer's page asks after on a published checklist's
+ * visits, in one look (PLANNING 10.4): the add-ons of every visit still
+ * open (each with its `visitId`), and every report not yet `known` here
+ * (visit ids), each opened with the key, made safe and settled by the
+ * customer's own answers: `{ visitId, reportAt, report }`. `token` the
+ * owner token. `{ ok, open, reports, error }`; a report that will not open
+ * is left out, to be tried again.
+ */
+export async function readVisits({ api, sealer, key, id, token, known = [] }) {
+    const got = await api.listVisits(id, token);
+    if (!got.ok) return { ok: false, open: [], reports: [], error: got.error };
+    const visits = (got.data && Array.isArray(got.data.visits) ? got.data.visits : []).filter((v) => v && ID.test(String(v.visitId)));
+    const open = [];
+    const reports = [];
+    for (const v of visits) {
+        const isNew = v.reportAt && !known.includes(v.visitId);
+        if (v.reportAt && !isNew) continue;
+        const a = await fetchAddOns({ api, sealer, key, id, token, visitId: v.visitId });
+        if (!a.ok) return { ok: false, open: [], reports: [], error: a.error };
+        if (!v.reportAt) {
+            open.push(...a.addOns.map((x) => ({ ...x, visitId: v.visitId })));
+            continue;
+        }
+        const r = await api.getReport(id, token, v.visitId);
+        if (!r.ok) continue;
+        let report = null;
+        try {
+            report = cleanReport(await sealer.openJson(key, r.bytes, contextFor(id, 'report', v.visitId)), id);
+        } catch (e) {
+            report = null;
+        }
+        if (report) reports.push({ visitId: v.visitId, reportAt: v.reportAt, report: settleReport(report, a.addOns) });
+    }
+    return { ok: true, open, reports, error: null };
+}
+
+// ---- In words ----------------------------------------------------------------
+
+/** Why a task was skipped: its quick reason, its own words, or both. */
+export function skipWhy(mark) {
+    if (!mark || mark.status !== 'skipped') return '';
+    const reason = mark.reason ? WORDS.reasons[mark.reason] : '';
+    return [reason, mark.words].filter(Boolean).join('. ');
+}
+
+/**
+ * A report in lines to read, on either side: `{ skipped, notReached,
+ * addOns }`. A task is `{ id, label, why, off }` (its name and room, why it
+ * was skipped, and what it takes off the quote); one removed from the
+ * checklist since is named as such. An add-on is `{ id, label, outcome,
+ * money }`, `money` only for one done. Amounts are '' without the sheet.
+ * `form` the published checklist.
+ */
+export function reportLines(sheet, form, report) {
+    const items = new Map(((form && form.items) || []).map((i) => [i.id, i]));
+    const rooms = new Map(((form && form.rooms) || []).map((r) => [r.id, roomName(form.serviceType, r)]));
+    const task = (r) => {
+        const item = items.get(r.itemId);
+        if (!item) return { id: r.itemId, label: WORDS.removedSince, why: skipWhy(r), off: '' };
+        const p = sheet ? priceItem(sheet, item, form.rooms) : { error: 'no-sheet' };
+        const t = sheet ? taskOf(sheet, item.task) : null;
+        const name = t ? t.name : item.task;
+        return {
+            id: r.itemId,
+            label: rooms.has(item.roomId) ? WORDS.inTheRoom(name, rooms.get(item.roomId)) : name,
+            why: skipWhy(r),
+            off: p.error ? '' : WORDS.lineOff(formatMoney(p.cents))
+        };
+    };
+    const results = (report && report.results) || [];
+    return {
+        skipped: results.filter((r) => r.status === 'skipped').map(task),
+        notReached: results.filter((r) => r.status === 'not-reached').map(task),
+        addOns: ((report && report.addOns) || []).map((a) => {
+            const p = priceOf(sheet, form, a);
+            const outcome = a.done ? 'done' : a.status;
+            return { id: a.id, label: addOnName(sheet, form, a), outcome: WORDS.addOnOutcome[outcome], money: a.done && !p.error ? formatMoney(p.cents) : '' };
+        })
+    };
+}
+
+/** The bill in words: its line, then its parts, or that nothing is owed.
+ *  `noSheet` the line when there is no bill to show. */
+export function billLines(bill, noSheet = WORDS.billNoSheet) {
+    if (!bill) return { line: noSheet, parts: [] };
+    if (!bill.billedCents) return { line: WORDS.billNothing, parts: [] };
+    const parts = [WORDS.billDone(formatMoney(bill.doneCents))];
+    if (bill.addOnCents) parts.push(WORDS.billAddOns(formatMoney(bill.addOnCents)));
+    if (bill.topUpCents) parts.push(WORDS.billMinimum(formatMoney(bill.topUpCents)));
+    return { line: WORDS.billLine(formatMoney(bill.billedCents), formatMoney(bill.quoteCents)), parts };
 }

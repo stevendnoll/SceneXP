@@ -12,7 +12,9 @@
  */
 
 import { h, clear, button } from './cards.min.js';
-import { UI } from './copy.min.js';
+import { UI, REPORT } from './copy.min.js';
+import { reportLines, billLines, reportCounts } from './report.min.js';
+import { dayLabel } from './booking.min.js';
 import { liveRooms, liveItems, itemsIn } from './store.min.js';
 import { quoteChecklist, priceItem, formatMoney, spokenMoney, formatMinutes } from './pricing.min.js';
 import { taskOf, optionOf } from './sheet.min.js';
@@ -283,4 +285,61 @@ function drawQuotePrefs(checklist) {
     note.textContent = p.note;
     note.hidden = !p.note;
     box.hidden = !p.lines.length && !p.note;
+}
+
+/**
+ * A visit's report in its card (M5 piece 3, PRD 12.4): when, who and how
+ * long, then the bill first, what was skipped and why, what was not
+ * reached, what became of the add-ons, and the cleaner's note. `visit` as
+ * store.js keeps it, `form` the published checklist its names come from
+ * (the customer's own when the published one is not to hand), `sheet` for
+ * the amounts, `bookable` whether Book your next visit is offered.
+ */
+export function renderVisitReport({ visit, form, sheet, bookable = false }) {
+    const r = visit.report;
+    const when = byId('visit-report-when');
+    if (when) {
+        when.textContent = [
+            r.booking ? REPORT.visitOn(dayLabel(r.booking.date)) : '',
+            r.cleaner ? REPORT.cleanedBy(r.cleaner) : '',
+            r.minutesOnSite ? REPORT.onSite(r.minutesOnSite) : ''
+        ].filter(Boolean).join(' ');
+    }
+    const book = byId('visit-report-book');
+    if (book) book.hidden = !bookable;
+    const body = byId('visit-report-body');
+    if (!body) return;
+    clear(body);
+    const money = billLines(visit.bill);
+    const lines = reportLines(sheet, form, r);
+    const counts = reportCounts(r);
+    const list = (id, heading, rows, row) => (rows.length ? h('section', { className: 'visit-report-list', id, attrs: { 'aria-labelledby': `${id}-title` } }, [
+        h('h3', { id: `${id}-title`, className: 'quote-prefs-title', text: heading }),
+        h('ul', {}, rows.map(row))
+    ]) : null);
+    const parts = [
+        h('section', { className: 'visit-report-bill', attrs: { 'aria-labelledby': 'visit-report-bill-title' } }, [
+            h('h3', { id: 'visit-report-bill-title', className: 'quote-prefs-title', text: REPORT.billHeading }),
+            h('p', { className: 'quote-total', id: 'visit-report-billed', text: money.line }),
+            money.parts.length ? h('ul', { className: 'visit-report-parts' }, money.parts.map((p) => h('li', { text: p }))) : null
+        ]),
+        h('p', { className: 'card-meta', id: 'visit-report-counts', text: REPORT.counts(counts.done, counts.skipped, counts.notReached) }),
+        list('visit-report-skipped', REPORT.skippedHeading, lines.skipped, (t) => h('li', { className: 'quote-line' }, [
+            h('span', { text: t.why ? `${t.label} (${t.why})` : t.label }),
+            h('span', { text: t.off })
+        ])),
+        list('visit-report-not-reached', REPORT.notReachedHeading, lines.notReached, (t) => h('li', { className: 'quote-line' }, [
+            h('span', { text: t.label }),
+            h('span', { text: t.off })
+        ])),
+        list('visit-report-addons', REPORT.addOnsHeading, lines.addOns, (a) => h('li', { className: 'quote-line' }, [
+            h('span', { text: `${a.label} (${a.outcome})` }),
+            h('span', { text: a.money })
+        ])),
+        r.note ? h('section', { className: 'visit-report-note', attrs: { 'aria-labelledby': 'visit-report-note-title' } }, [
+            h('h3', { id: 'visit-report-note-title', className: 'quote-prefs-title', text: REPORT.noteHeading }),
+            h('p', { className: 'quote-prefs-note', text: r.note })
+        ]) : null
+    ];
+    parts.filter(Boolean).forEach((p) => body.appendChild(p));
 }

@@ -41,7 +41,7 @@ import { h, clear } from '../../js/cards.min.js';
 import { TASKS_PAGE as COPY, UI } from '../../js/copy.min.js';
 import { taskOf, optionOf } from '../../js/sheet.min.js';
 import { priceItem, formatMoney, formatMinutes } from '../../js/pricing.min.js';
-import { reportCounts, REPORT_LIMITS } from '../../js/report.min.js';
+import { reportCounts, REPORT_LIMITS, reportLines, billLines as sharedBillLines, skipWhy as reportSkipWhy } from '../../js/report.min.js';
 import { levelOf, roomName, preferenceLines as linesFor } from '../../js/taxonomy.min.js';
 import { dayLabel, clockLabel } from '../../js/booking.min.js';
 import { SKIP_REASONS, WORDS_MAX, summarize } from './visit.min.js';
@@ -130,9 +130,7 @@ export function findIn(root, id) {
 /** Why a task was skipped, in words: its quick reason, its own words, or
  *  both. */
 export function skipWhy(mark) {
-    if (!mark || mark.status !== 'skipped') return '';
-    const reason = mark.reason ? COPY.reasons[mark.reason] : '';
-    return [reason, mark.words].filter(Boolean).join('. ');
+    return reportSkipWhy(mark);
 }
 
 /** Where the visit stands, in a line or two (PRD 12.4): "12 done, 1
@@ -427,49 +425,14 @@ export function renderChecklist(container, { form, quote, sheet, thumbs = new Ma
 
 // ---- The report (M5 piece 2) ---------------------------------------------------
 
-/**
- * A report in lines for the cleaner and the customer to read: `{ skipped,
- * notReached, addOns }`. A task is `{ id, label, why, off }` (its name and
- * room, why it was skipped, and what it takes off the quote); an add-on
- * `{ id, label, outcome, money }`, `money` only for one done. Amounts are ''
- * without the sheet.
- */
-export function reportLines(sheet, form, report) {
-    const items = new Map(((form && form.items) || []).map((i) => [i.id, i]));
-    const rooms = new Map(readingOrder(form).flatMap((l) => l.rooms.map((r) => [r.room.id, r.name])));
-    const money = (cents) => (cents === null ? '' : formatMoney(cents));
-    const task = (r) => {
-        const item = items.get(r.itemId);
-        if (!item) return null;
-        const p = sheet ? priceItem(sheet, item, form.rooms) : { error: 'no-sheet' };
-        const name = taskDetail(sheet, form, item).name;
-        return {
-            id: r.itemId,
-            label: rooms.has(item.roomId) ? COPY.inTheRoom(name, rooms.get(item.roomId)) : name,
-            why: r.status === 'skipped' ? skipWhy(r) : '',
-            off: p.error ? '' : COPY.lineOff(money(p.cents))
-        };
-    };
-    const results = (report && report.results) || [];
-    return {
-        skipped: results.filter((r) => r.status === 'skipped').map(task).filter(Boolean),
-        notReached: results.filter((r) => r.status === 'not-reached').map(task).filter(Boolean),
-        addOns: ((report && report.addOns) || []).map((a) => {
-            const p = priceOf(sheet, form, a);
-            const outcome = a.done ? 'done' : a.status;
-            return { id: a.id, label: addOnName(sheet, form, a), outcome: COPY.addOnOutcome[outcome], money: a.done && !p.error ? money(p.cents) : '' };
-        })
-    };
-}
+// What a report says in words is shared with the studio (report.js), and
+// passed on from here.
+export { reportLines } from '../../js/report.min.js';
 
-/** The bill in words: its line, then its parts, or that nothing is owed. */
+/** The bill in words, as report.js says it, with the cleaner's own line
+ *  for a sheet that will not load. */
 export function billLines(bill) {
-    if (!bill) return { line: COPY.billNoSheet, parts: [] };
-    if (!bill.billedCents) return { line: COPY.billNothing, parts: [] };
-    const parts = [COPY.billDone(formatMoney(bill.doneCents))];
-    if (bill.addOnCents) parts.push(COPY.billAddOns(formatMoney(bill.addOnCents)));
-    if (bill.topUpCents) parts.push(COPY.billMinimum(formatMoney(bill.topUpCents)));
-    return { line: COPY.billLine(formatMoney(bill.billedCents), formatMoney(bill.quoteCents)), parts };
+    return sharedBillLines(bill, COPY.billNoSheet);
 }
 
 /** Time on site in words: "2 hours 30 minutes". */

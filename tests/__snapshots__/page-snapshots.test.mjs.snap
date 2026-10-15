@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=33" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=34" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7080,6 +7080,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="js/seal.min.js" rel="modulepreload"]
     link [href="js/sync.min.js" rel="modulepreload"]
     link [href="js/addons.min.js" rel="modulepreload"]
+    link [href="js/report.min.js" rel="modulepreload"]
     link [href="js/booking.min.js" rel="modulepreload"]
     link [href="js/schedule.min.js" rel="modulepreload"]
     link [href="js/receipt.min.js" rel="modulepreload"]
@@ -7110,7 +7111,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=3" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=33" rel="stylesheet"]
+    link [href="css/experience.min.css?v=34" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7382,6 +7383,20 @@ html [data-ui-theme="surf" lang="en"]
             "Unpublish this checklist"
           button#receipt-done.ws-btn.ws-btn-primary [type="button"]
             "Done"
+    div#visit-report.card-overlay [hidden]
+      div#visit-report-panel.card-panel.list-panel [aria-labelledby="visit-report-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.card-head
+          h2#visit-report-title.card-title
+            "Your visit report"
+          button#visit-report-close.ws-btn.ws-btn-small [type="button"]
+            "Close"
+        p#visit-report-when.card-meta
+        div#visit-report-body.visit-report-body
+        p.card-meta.quote-promise
+          "You will never pay more than your quote without approving it first. Anything we skip comes off your bill."
+        div.card-actions
+          button#visit-report-book.ws-btn.ws-btn-primary [hidden type="button"]
+            "Book your next visit"
     div#checklist.card-overlay.checklist-overlay [hidden]
       div#checklist-panel.card-panel.checklist-panel [aria-labelledby="checklist-title" aria-modal="true" role="dialog" tabindex="-1"]
         div.card-head

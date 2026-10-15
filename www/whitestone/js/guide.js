@@ -21,7 +21,9 @@
  * and beside them the example's four beats (example1 to example4: the
  * house, a floor open, the dots, and its total), a returning visitor's
  * welcome, a hint, and `addOn`: the cleaner asking for more, which Maya
- * puts to the customer, Approve or Decline (M5, PRD 9.5).
+ * puts to the customer, Approve or Decline (M5, PRD 9.5); and `report`: a
+ * visit's report come in, the bill and what was skipped, with the house lit
+ * (M5, PRD 12.4).
  *
  * EXAMPLE MODE IS A TOUR TO WATCH (QA, 2026-10-15). Maya shows the example
  * and the visitor only moves her on or back: the house answers no tap
@@ -148,12 +150,12 @@ const ASIDE = ['hint'];
  * the add-on waits there at a glance (main.js hostFacts), and a tap on it
  * asks from anywhere (`asked`).
  */
-const ASKS_FROM = ['done', 'welcome', 'saved', 'hint', 'addOn'];
+const ASKS_FROM = ['done', 'welcome', 'saved', 'hint', 'addOn', 'report'];
 
 /** Scenes whose choices send the visitor off to a card (Choose a time, See
  *  my visit, Send my changes, Review my checklist), Maya coming back once
  *  it is done: All set, a welcome, and standing by. */
-const SENDS_AWAY = ['saved', 'welcome', 'done'];
+const SENDS_AWAY = ['saved', 'welcome', 'done', 'report'];
 
 /**
  * What came of a short loop away from Maya (QA, 2026-10-14: every step of
@@ -224,8 +226,8 @@ export function arrivalGuide(doc) {
 /** What is saved in the document's settings: the scene of the first build
  *  the visitor is at (or done), and whether they reached the review. */
 export function savedForm(guide) {
-    // An add-on being asked about is saved as the scene beneath it.
-    const at = guide.scene === 'addOn' ? guide.back : guide.scene;
+    // An add-on or a report is saved as the scene beneath it.
+    const at = guide.scene === 'addOn' || guide.scene === 'report' ? guide.back : guide.scene;
     const scene = GUIDED.includes(at) ? at
         : at === 'welcome' && guide.resume ? guide.resume : 'done';
     return { scene, reviewed: Boolean(guide.reviewed) };
@@ -255,6 +257,9 @@ export function savedForm(guide) {
  *                          comes back ({ now }) saying what came of it
  *   homeMade               a checklist made outside the guide (the setup
  *                          card): straight on to the first room
+ *   visitReport, reportDone  a visit's report shown ({ visitId, asked },
+ *                          as a proposal), and put away: back where she
+ *                          was, as after an add-on
  *   proposal, decided      a cleaner's add-on put to the customer
  *                          ({ addonId, asked }: asked, a tap on it, from
  *                          any scene but the example's), and answered
@@ -306,22 +311,29 @@ export function step(guide, event) {
         return g;
     }
     if (type === 'close' && ASIDE.includes(g.scene)) return to(g.back || 'done', { back: null });
+    // An add-on or a report sits over where she was, and goes back to it:
+    // a hint's own scene, and past another of them to the scene before.
+    const asideFrom = (asked) => (asked ? !EXAMPLE.includes(g.scene) && g.scene !== 'hello' : ASKS_FROM.includes(g.scene) && !g.away);
+    const backOf = () => (['addOn', 'report', 'hint'].includes(g.scene) ? g.back || 'done' : g.scene);
+    // Back into the build, or a welcome that picks it up, as it was
+    // (main.js says what came of it); else standing by, saying so.
+    const goBack = (outcome) => {
+        const keep = GUIDED.includes(g.back) || (g.back === 'welcome' && g.resume);
+        if (keep) return to(g.back, { addonId: null, visitId: null, back: null });
+        return to('done', { addonId: null, visitId: null, back: null, minimized: false, away: null, outcome });
+    };
     if (type === 'proposal') {
-        const from = event.asked ? !EXAMPLE.includes(g.scene) && g.scene !== 'hello' : ASKS_FROM.includes(g.scene) && !g.away;
-        if (!from || !event.addonId || (g.scene === 'addOn' && g.addonId === event.addonId)) return g;
-        // Where she goes back to: a hint's own scene, and past one add-on
-        // to the scene before it.
-        const back = g.scene === 'addOn' || g.scene === 'hint' ? g.back || 'done' : g.scene;
-        return to('addOn', { addonId: event.addonId, back, minimized: false });
+        if (!asideFrom(event.asked) || !event.addonId || (g.scene === 'addOn' && g.addonId === event.addonId)) return g;
+        return to('addOn', { addonId: event.addonId, visitId: null, back: backOf(), minimized: false });
     }
     if (type === 'decided' && g.scene === 'addOn') {
-        // Back into the build, or a welcome that picks it up, as it was
-        // (main.js says what came of it); else standing by, saying so.
-        const keep = GUIDED.includes(g.back) || (g.back === 'welcome' && g.resume);
-        if (keep) return to(g.back, { addonId: null, back: null });
-        const outcome = event.status === 'approved' || event.status === 'declined' ? event.status : null;
-        return to('done', { addonId: null, back: null, minimized: false, away: null, outcome });
+        return goBack(event.status === 'approved' || event.status === 'declined' ? event.status : null);
     }
+    if (type === 'visitReport') {
+        if (!asideFrom(event.asked) || !event.visitId || (g.scene === 'report' && g.visitId === event.visitId)) return g;
+        return to('report', { visitId: event.visitId, addonId: null, back: backOf(), minimized: false });
+    }
+    if (type === 'reportDone' && g.scene === 'report') return goBack(null);
     // No Skip (QA, 2026-10-15: "the guide is the UX"): Back and the strip
     // move about in it, and Start over begins it again.
     if (type === 'homeMade' && (g.scene === 'hello' || EXAMPLE.includes(g.scene))) return to('firstRoom');
@@ -517,6 +529,10 @@ export function viewFor(guide, ctx = {}) {
             : { ...base, text: ctx.welcome || GUIDE.welcome, buttons: [], choices: 'returning' };
     case 'hint':
         return { ...base, text: GUIDE.hint, buttons: [b('close', GUIDE.gotIt, true)] };
+    case 'report':
+        // A visit's report (`ctx.report` { text }, main.js): the bill, what
+        // was skipped, and what next, the colors on the house in small print.
+        return { ...base, text: (ctx.report && ctx.report.text) || GUIDE.reportPlain, small: GUIDE.reportColors, buttons: [], choices: 'report', halo: null };
     case 'addOn':
         // The cleaner's add-on, what it adds and their words (`ctx.addOn`
         // { text }, main.js), and the guarantee in small print.

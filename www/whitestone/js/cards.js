@@ -36,7 +36,7 @@
 /** The dialogs, in the order they appear in the markup, which is the order
  *  they stack. The menu opens a task over itself, and the quote opens the
  *  checklist, so each comes before what it opens. */
-export const CARD_ORDER = ['setup', 'preferences', 'quote', 'booking', 'receipt', 'checklist', 'room', 'task', 'confirm'];
+export const CARD_ORDER = ['setup', 'preferences', 'quote', 'booking', 'receipt', 'visit-report', 'checklist', 'room', 'task', 'confirm'];
 
 const ARM_MS = 450;
 
