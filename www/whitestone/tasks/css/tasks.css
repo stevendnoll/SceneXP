@@ -56,21 +56,22 @@ a:visited {
 .tasks-header {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.9rem 1rem;
+    padding: 0.8rem 1rem;
     background: var(--white);
     border-bottom: 1px solid var(--line);
 }
 
-.tasks-mark {
-    width: 28px;
-    height: 28px;
-    flex: none;
+/* The wordmark at the studio's phone size, a little larger with room. */
+.tasks-logo {
+    display: block;
+    width: auto;
+    height: 30px;
 }
 
-.tasks-brand {
-    font-weight: 600;
-    letter-spacing: 0.02em;
+@media (min-width: 621px) {
+    .tasks-logo {
+        height: 38px;
+    }
 }
 
 /* ---- Main ------------------------------------------------------------------- */
@@ -737,6 +738,25 @@ h1 {
     color: var(--attention);
 }
 
+.tasks-print {
+    display: block;
+    min-height: 2.75rem;
+    margin: 0.9rem 0 0;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid #B9B3A9;
+    border-radius: 10px;
+    background: var(--white);
+    color: var(--graphite);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.tasks-print:focus-visible {
+    outline: 3px solid var(--graphite);
+    outline-offset: 2px;
+}
+
 /* ---- Footer ----------------------------------------------------------------- */
 
 .tasks-footer {
@@ -749,6 +769,167 @@ h1 {
 
 .tasks-footer p {
     margin: 0.25rem 0;
+}
+
+/* ---- Print: a work order (PRD 12.3) -------------------------------------------
+ *
+ * One or two pages: the care preferences banner at the top, the home, then
+ * every task with a box to tick, in black on white. Nothing to press is
+ * printed. A task already marked prints ticked (done) or with its reason
+ * (skipped), and an approved add-on prints with its own box.
+ */
+@media print {
+    @page {
+        margin: 12mm;
+    }
+
+    html,
+    body {
+        background: #FFFFFF;
+        color: #000000;
+        font-size: 10.5pt;
+    }
+
+    .tasks-header {
+        padding: 0 0 6pt;
+        border: 0;
+    }
+
+    .tasks-logo {
+        height: 20pt;
+    }
+
+    .tasks-main {
+        max-width: none;
+        padding: 0;
+    }
+
+    .tasks-footer,
+    .tasks-summary,
+    .tasks-print,
+    .tasks-notice,
+    .task-marks,
+    .skip-picker,
+    .addon-propose,
+    .addon-picker,
+    .task-photos,
+    .addon.is-waiting,
+    .addon.is-declined,
+    .photo-view {
+        display: none !important;
+    }
+
+    .tasks-prefs {
+        margin: 0 0 8pt;
+        padding: 6pt 8pt;
+        border: 2pt solid #000000;
+        border-radius: 0;
+        background: none;
+        break-inside: avoid;
+    }
+
+    .tasks-prefs h2,
+    .tasks-prefs ul {
+        color: #000000;
+        font-size: 11pt;
+    }
+
+    .tasks-home h1 {
+        margin: 0 0 2pt;
+        font-size: 15pt;
+    }
+
+    .tasks-start {
+        margin: 0 0 8pt;
+        padding: 0;
+        border: 0;
+        background: none;
+    }
+
+    .tasks-start h2,
+    .tasks-level-name {
+        font-size: 12pt;
+    }
+
+    .tasks-start a {
+        color: #000000;
+        text-decoration: none;
+    }
+
+    .tasks-level {
+        margin: 0 0 8pt;
+    }
+
+    .tasks-room {
+        margin: 6pt 0 0;
+    }
+
+    .tasks-room-name,
+    .addons-heading {
+        margin: 0 0 2pt;
+        font-size: 11pt;
+        break-after: avoid;
+    }
+
+    .tasks-list,
+    .tasks-addons {
+        gap: 0;
+    }
+
+    .task,
+    .addon {
+        position: relative;
+        padding: 3pt 0 3pt 16pt;
+        border: 0;
+        border-bottom: 0.5pt solid #999999;
+        border-radius: 0;
+        background: none;
+        box-shadow: none;
+        break-inside: avoid;
+    }
+
+    /* The box to tick, ticked when the task is done already. */
+    .task::before,
+    .addon::before {
+        content: "";
+        position: absolute;
+        top: 4pt;
+        left: 0;
+        width: 9pt;
+        height: 9pt;
+        border: 1pt solid #000000;
+        font-size: 9pt;
+        line-height: 9pt;
+        text-align: center;
+    }
+
+    .task.is-done::before,
+    .addon.is-done::before {
+        content: "\2713";
+    }
+
+    .task-name,
+    .addon-name {
+        font-size: 10.5pt;
+    }
+
+    .task-includes,
+    .task-minutes,
+    .task-notes,
+    .task-avoid,
+    .task-products,
+    .task-skipped,
+    .addon-price,
+    .addon-words,
+    .addon-status {
+        margin: 1pt 0 0;
+        color: #000000;
+        font-size: 9.5pt;
+    }
+
+    .task-avoid strong {
+        text-transform: uppercase;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

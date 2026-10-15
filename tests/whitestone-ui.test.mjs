@@ -195,7 +195,9 @@ test('Start your own: setup makes the checklist, opens it, and offers care prefe
 
     expect(visible('setup')).toBe(false);
     expect(visible('preferences')).toBe(true);
-    expect(dom.el('toast-text').textContent).toBe(UI.started(GUIDE.defaultTitle));
+    // Said, not shown: the Undo pill is for removals only (Steve, 2026-10-15).
+    expect(said()).toBe(UI.started(GUIDE.defaultTitle));
+    expect(dom.el('toast-text').textContent).not.toBe(UI.started(GUIDE.defaultTitle));
 
     prefsBox('no-bleach').checked = true;
     prefsBox('pets-home').checked = true;
@@ -364,13 +366,14 @@ test('a room arrives with its standard tasks in one step, and the checklist show
     const kitchen = await addKitchen(main);
     expect(kitchen).toMatchObject({ level: 'main', area: 'kitchen', label: '' });
     expect(liveTasks(main)).toHaveLength(9);
-    expect(dom.el('toast-text').textContent).toBe(UI.roomAdded('Kitchen', 9));
+    expect(said()).toBe(UI.roomAdded('Kitchen', 9));
+    expect(dom.el('toast-text').textContent).not.toBe(UI.roomAdded('Kitchen', 9));
     expect(visible('room')).toBe(false);
     expect(visible('checklist')).toBe(true);
     expect(dom.el('checklist-summary').textContent).toMatch(/^1 room, 9 tasks, \$/);
 
-    // One undo takes the room and all nine tasks back.
-    fire(dom.el('toast-undo'), 'click');
+    // One undo (from the keyboard now) takes the room and all nine tasks back.
+    main.__test__.undo();
     expect(checklist(main).rooms).toHaveLength(0);
     expect(checklist(main).items).toHaveLength(0);
 });
@@ -422,7 +425,8 @@ test('the task card offers only what the room allows, prices it as it is chosen,
     const oven = liveTasks(main).find((i) => i.task === 'oven-interior');
     expect(oven).toMatchObject({ options: ['deep-clean'], important: true, notes: 'The racks soak in the sink first, please.', size: null, quantity: null });
     expect(visible('task')).toBe(false);
-    expect(dom.el('toast-text').textContent).toBe(UI.taskAdded('Oven interior', 'Kitchen'));
+    expect(said()).toBe(UI.taskAdded('Oven interior', 'Kitchen'));
+    expect(dom.el('toast-text').textContent).not.toBe(UI.taskAdded('Oven interior', 'Kitchen'));
 });
 
 test('counted tasks take a quantity, room tasks a size, and a bad quantity is refused with the reason', async () => {
@@ -466,7 +470,10 @@ test('editing keeps the task, removing goes with an undo, and both are offered f
 
     fire(bodyButton(UI.remove, `task-name-${stove.id}`), 'click');
     expect(liveTasks(main).some((i) => i.id === stove.id)).toBe(false);
+    // A removal keeps its pill, with Undo.
+    expect(visible('ws-toast')).toBe(true);
     expect(dom.el('toast-text').textContent).toBe(UI.taskRemoved('Stovetop'));
+    expect(visible('toast-undo')).toBe(true);
     fire(dom.el('toast-undo'), 'click');
     expect(liveTasks(main).some((i) => i.id === stove.id)).toBe(true);
 });
@@ -478,6 +485,8 @@ test('removing a room takes its tasks, and undo brings them all back', async () 
     fire(dom.el('room-remove'), 'click');
     expect(liveTasks(main)).toHaveLength(0);
     expect(dom.el('checklist-body').children[0].textContent).toBe(UI.noRooms);
+    expect(dom.el('toast-text').textContent).toBe(UI.roomRemoved('Kitchen'));
+    expect(visible('toast-undo')).toBe(true);
     fire(dom.el('toast-undo'), 'click');
     expect(liveTasks(main)).toHaveLength(9);
 });

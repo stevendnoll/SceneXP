@@ -91,6 +91,8 @@ async function published({ prefs = true } = {}) {
     const c = findChecklist(box.doc, 'checklist-1');
     return {
         api, sealer, checklist: c, stove,
+        // This device's sealed copies (the page's IndexedDB cache).
+        cache: createMemoryBackend(),
         link: buildShare('https://www.scenexp.com', CONFIG, c.published.id, c.published.key),
         advance: (ms) => { t += ms; },
         now: () => t
@@ -110,7 +112,7 @@ async function open(w, href, extra = {}) {
     const state = await page.boot({
         doc: globalThis.document, href, storage: globalThis.localStorage,
         history: { replaceState: (_s, _t, url) => replaced.push(url) },
-        api: w.api, sealer: w.sealer, fetchJson, now: w.now,
+        api: w.api, sealer: w.sealer, fetchJson, now: w.now, cache: w.cache,
         makeUrl: (blob) => `blob:test/${blob.size}`,
         setTimer: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
         clearTimer: (n) => { if (timers[n - 1]) timers[n - 1].cleared = true; },
@@ -251,7 +253,8 @@ describe('opening it', () => {
         const bare = `https://www.scenexp.com/whitestone/tasks/?c=${w.checklist.published.id}`;
         for (const [error, line] of [['not-found', COPY.gone], ['offline', COPY.offline], ['http-500', COPY.trouble]]) {
             const api = { ...w.api, getChecklist: async () => ({ ok: false, error }) };
-            await open({ ...w, api }, bare);
+            // A device with no copy kept (one with a copy opens it: below).
+            await open({ ...w, api, cache: createMemoryBackend() }, bare);
             expect(status()).toBe(line);
         }
     });
@@ -789,5 +792,160 @@ describe('add-ons on the page', () => {
         const { state } = await open(w, w.link, { fetchJson: async () => { throw new Error('offline'); } });
         await enter(state, w.checklist.published.pin);
         expect(find('propose-kitchen-1')).toBeUndefined();
+    });
+});
+
+// ---- Offline, and print (M4 piece 4) -------------------------------------------
+
+describe('the copy kept on this device (pure)', () => {
+    test('kept sealed until the visit pass ends, then gone; one checklist forgotten leaves the others', async () => {
+        let t = Date.parse('2026-10-16T09:00:00Z');
+        const backend = createMemoryBackend();
+        const a = page.createKeeper(backend, 'aaaaaaaa', () => t);
+        const b = page.createKeeper(backend, 'bbbbbbbb', () => t);
+        await a.put('checklist', new Uint8Array([1]), '2026-10-16T21:00:00Z');
+        await b.put('checklist', new Uint8Array([2]), '2026-10-16T10:00:00Z');
+        expect([...(await a.get('checklist'))]).toEqual([1]);
+        expect(await a.get('photo/x')).toBeNull();
+        t = Date.parse('2026-10-16T11:00:00Z');
+        expect(await b.get('checklist')).toBeNull();
+        expect(await backend.keys()).toEqual(['aaaaaaaa/checklist']);
+        await a.forget();
+        expect(await backend.keys()).toEqual([]);
+        // No store, or a broken one: no copy, and nothing thrown.
+        expect(await page.createKeeper(null, 'aaaaaaaa', () => t).get('checklist')).toBeNull();
+        const broken = { get: async () => { throw new Error('disk'); }, put: async () => { throw new Error('full'); }, delete: async () => {}, keys: async () => { throw new Error('disk'); } };
+        const k = page.createKeeper(broken, 'aaaaaaaa', () => t);
+        await expect(k.put('checklist', new Uint8Array([1]), '2099-01-01T00:00:00Z')).resolves.toBeNull();
+        await expect(k.get('checklist')).resolves.toBeNull();
+        await expect(k.forget()).resolves.toBeNull();
+        await expect(page.sweepKept(broken, () => t)).resolves.toBeUndefined();
+    });
+
+    test('the sweep forgets every copy past its pass, whichever checklist', async () => {
+        const backend = createMemoryBackend();
+        await backend.put('x/checklist', { bytes: new Uint8Array([1]), until: '2026-10-16T10:00:00Z' });
+        await backend.put('y/checklist', { bytes: new Uint8Array([1]), until: '2026-10-16T22:00:00Z' });
+        await backend.put('z/checklist', { bytes: new Uint8Array([1]) });
+        await page.sweepKept(backend, () => Date.parse('2026-10-16T12:00:00Z'));
+        expect(await backend.keys()).toEqual(['y/checklist']);
+    });
+
+    test('the files the worker is asked to keep: this page and what it loaded from this site, never the API', () => {
+        const o = 'https://www.scenexp.com';
+        expect(page.offlineUrls(`${o}/whitestone/tasks/?c=abc#k=secret`, o, [
+            { name: `${o}/whitestone/js/copy.min.js` },
+            { name: `${o}/whitestone/js/copy.min.js` },
+            { name: `${o}/api/whitestone/checklists/abc` },
+            { name: 'https://elsewhere.example/a.js' },
+            { name: 'blob:https://www.scenexp.com/1' },
+            null
+        ])).toEqual([`${o}/whitestone/tasks/?c=abc`, `${o}/whitestone/js/copy.min.js`]);
+        expect(page.offlineUrls(`${o}/whitestone/tasks/`, o, null)).toEqual([`${o}/whitestone/tasks/`]);
+    });
+});
+
+describe('opening with no signal', () => {
+    const bare = (w) => `https://www.scenexp.com/whitestone/tasks/?c=${w.checklist.published.id}`;
+    const offline = (w) => ({
+        ...w.api,
+        getChecklist: async () => ({ ok: false, error: 'offline' }),
+        getThumb: async () => ({ ok: false, error: 'offline' }),
+        getPhoto: async () => ({ ok: false, error: 'offline' }),
+        listAddOns: async () => ({ ok: false, error: 'offline' })
+    });
+
+    test('opened once with a signal, it opens again without one: the checklist, its thumbnails, a photo, and the marks', async () => {
+        const w = await published();
+        const first = await open(w, w.link);
+        await enter(first.state, w.checklist.published.pin);
+        // Sealed as they arrived: the checklist, the thumbnail and the full photo.
+        expect((await w.cache.keys()).sort()).toEqual(['checklist', `photo/${PHOTO}`, `thumb/${PHOTO}`].map((n) => `${w.checklist.published.id}/${n}`).sort());
+        const kept = await w.cache.get(`${w.checklist.published.id}/checklist`);
+        expect(new TextDecoder().decode(kept.bytes)).not.toContain('Under the grates');
+        fire(all(view()).find((e) => e.id === `done-${w.stove.id}`), 'click');
+        const again = await open({ ...w, api: offline(w) }, bare(w));
+        expect(again.state.phase).toBe('open');
+        expect(again.state.fromDevice).toBe(true);
+        expect(byClass('tasks-notice')[0].textContent).toBe(COPY.keptCopy);
+        expect(again.state.thumbs.get(PHOTO)).toBe('blob:test/1');
+        expect(all(view()).find((e) => e.id === `done-${w.stove.id}`).getAttribute('aria-pressed')).toBe('true');
+        fire(byClass('task-photo')[0], 'click');
+        const overlayNow = () => globalThis.document.body.children.find((c) => c.className === 'photo-view');
+        for (let i = 0; i < 100 && !overlayNow(); i++) await new Promise((r) => setTimeout(r, 5));
+        expect(all(overlayNow()).find((e) => e.tagName === 'IMG').src).toBe('blob:test/3');
+    });
+
+    test('a copy never kept here: no signal is said, as before', async () => {
+        const w = await published();
+        const first = await open(w, w.link);
+        await enter(first.state, w.checklist.published.pin);
+        await w.cache.delete(`${w.checklist.published.id}/checklist`);
+        await open({ ...w, api: offline(w) }, bare(w));
+        expect(status()).toBe(COPY.offline);
+    });
+
+    test('past the visit pass the copies are swept, and the PIN is asked', async () => {
+        const w = await published();
+        const first = await open(w, w.link);
+        await enter(first.state, w.checklist.published.pin);
+        w.advance((CONFIG.api.visitHours + 1) * 3600000);
+        const later = await open({ ...w, api: offline(w) }, bare(w));
+        expect(later.state.phase).toBe('pin');
+        expect(await w.cache.keys()).toEqual([]);
+    });
+
+    test('a checklist the API no longer has: the copy is cleared, not opened', async () => {
+        const w = await published();
+        const first = await open(w, w.link);
+        await enter(first.state, w.checklist.published.pin);
+        await open({ ...w, api: { ...w.api, getChecklist: async () => ({ ok: false, error: 'not-found' }) } }, bare(w));
+        expect(status()).toBe(COPY.gone);
+        expect((await w.cache.keys()).filter((k) => k.endsWith('/checklist'))).toEqual([]);
+    });
+
+    test('a photo the API no longer has (the customer removed it) never comes back from the copy', async () => {
+        const w = await published();
+        const first = await open(w, w.link);
+        await enter(first.state, w.checklist.published.pin);
+        expect(await w.cache.get(`${w.checklist.published.id}/thumb/${PHOTO}`)).toBeTruthy();
+        const api = { ...w.api, getThumb: async () => ({ ok: false, error: 'not-found' }), getPhoto: async () => ({ ok: false, error: 'not-found' }) };
+        const again = await open({ ...w, api }, bare(w));
+        expect(again.state.phase).toBe('open');
+        expect(again.state.thumbs.has(PHOTO)).toBe(false);
+    });
+
+    test('a pass the API refuses (the PIN changed) clears the copy at once', async () => {
+        const w = await published();
+        const first = await open(w, w.link);
+        await enter(first.state, w.checklist.published.pin);
+        expect((await w.cache.keys()).length).toBeGreaterThan(0);
+        await w.api.resetPin(w.checklist.published.id, w.checklist.published.ownerToken);
+        await open(w, bare(w));
+        expect(status()).toBe(COPY.again);
+        expect(await w.cache.keys()).toEqual([]);
+    });
+});
+
+describe('print', () => {
+    test('Print a work order prints the page', async () => {
+        const w = await published();
+        const print = jest.fn();
+        const { state } = await open(w, w.link, { print });
+        await enter(state, w.checklist.published.pin);
+        const btn = all(view()).find((e) => e.id === 'tasks-print');
+        expect(btn.textContent).toBe(COPY.print);
+        fire(btn, 'click');
+        expect(print).toHaveBeenCalledTimes(1);
+    });
+
+    test('the print stylesheet keeps the banner, ticks boxes and leaves out everything to press', () => {
+        const css = readFileSync(join(WS, 'tasks', 'css', 'tasks.css'), 'utf8');
+        const print = css.slice(css.indexOf('@media print'));
+        const hidden = print.slice(0, print.indexOf('display: none !important'));
+        for (const sel of ['.tasks-summary', '.tasks-print', '.task-marks', '.skip-picker', '.addon-propose', '.addon-picker', '.addon.is-waiting']) expect(hidden).toContain(sel);
+        expect(print).toMatch(/\.task::before,[\s\S]*?border: 1pt solid/);
+        expect(print).toMatch(/\.task\.is-done::before[\s\S]*?content: "\\2713"/);
+        expect(hidden).not.toContain('.tasks-prefs');
     });
 });

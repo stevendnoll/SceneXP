@@ -12,7 +12,8 @@
  * (Corner Office's rule). Every change goes through `mutate`, which applies a
  * store.js mutation, keeps the document it replaced for undo, saves, and
  * calls `refresh` so everything on screen is drawn again from the new
- * document. `change` is mutate plus the spoken line and the undo toast.
+ * document. `change` is mutate plus the spoken line, and for a removal the
+ * toast with Undo.
  *
  * THE SCENE RENDERS ON DEMAND, as Corner Office does. The house mostly
  * sits still, so a frame is drawn only when something asks for one
@@ -1688,9 +1689,7 @@ function changeBath(roomId, key) {
     if (!made) return null;
     const result = mutate(made.step, UI.labels.bathChanged);
     if (!result.error) {
-        const said = bathSaid(c, room, made.to, result.record);
-        announce(said);
-        toast(said, { undo });
+        announce(bathSaid(c, room, made.to, result.record));
     }
     return result;
 }
@@ -2278,12 +2277,18 @@ function check(choice, area, bath) {
     return state.sheet ? checkChoice(state.sheet, choice, area, bath) : null;
 }
 
-/** A mutation that says what it did, with Undo on the toast. */
-function change(fn, label, said = label) {
+/**
+ * A mutation that says what it did. The words are spoken, and the toast
+ * with Undo appears only for a removal (`removal`), the one change a tap
+ * can make by mistake with nothing on screen to bring it back (Steve,
+ * 2026-10-15: the pill on every edit got in the way). Every step still
+ * undoes from the keyboard.
+ */
+function change(fn, label, said = label, { removal = false } = {}) {
     const result = mutate(fn, label);
     if (!result.error && said) {
         announce(said);
-        toast(said, { undo: label ? undo : null });
+        if (removal && label) toast(said, { undo });
     }
     return result;
 }
@@ -2393,9 +2398,7 @@ function submitSetup(event) {
     }
     closeCard('setup');
     guideTo({ type: 'homeMade' });
-    const said = UI.started(result.record.title);
-    announce(said);
-    toast(said, { undo });
+    announce(UI.started(result.record.title));
     // Care preferences are offered once, right after setup, and then the
     // first room (PRD 8.4).
     ui.afterPrefs = true;
@@ -2530,9 +2533,7 @@ function submitRoom(event) {
             return result;
         }
         const named = { ...room, label: fields.label };
-        const said = made ? bathSaid(c, named, made.to, result.record) : UI.roomChanged(roomName(c.serviceType, named));
-        announce(said);
-        toast(said, { undo });
+        announce(made ? bathSaid(c, named, made.to, result.record) : UI.roomChanged(roomName(c.serviceType, named)));
         closeCard('room');
         return result;
     }
@@ -2560,7 +2561,7 @@ function removeRoom() {
     const room = c && c.rooms.find((r) => r.id === ui.room);
     if (!room) return;
     const name = roomName(c.serviceType, room);
-    const result = change((d) => deleteRoom(d, c.id, room.id, CONFIG, now()), UI.labels.roomRemoved, UI.roomRemoved(name));
+    const result = change((d) => deleteRoom(d, c.id, room.id, CONFIG, now()), UI.labels.roomRemoved, UI.roomRemoved(name), { removal: true });
     if (!result.error) closeCard('room');
 }
 
@@ -2721,7 +2722,7 @@ function removeTask(itemId) {
     const item = c && c.items.find((i) => i.id === itemId);
     if (!item) return null;
     const name = taskName(state.sheet, item);
-    return change((d) => deleteItem(d, c.id, itemId, CONFIG, now()), UI.labels.taskRemoved, UI.taskRemoved(name));
+    return change((d) => deleteItem(d, c.id, itemId, CONFIG, now()), UI.labels.taskRemoved, UI.taskRemoved(name), { removal: true });
 }
 
 function removeTaskFromCard() {

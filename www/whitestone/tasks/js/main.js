@@ -25,6 +25,13 @@
  * one is waiting and the page is in view, so an approval appears in place
  * (addons.js). The visit and its add-ons are kept on the device too.
  *
+ * OFFLINE (M4 piece 4): the sealed checklist and its photos are kept on
+ * this device as they arrive (still sealed, in IndexedDB), for as long as
+ * the visit pass lasts, so a cleaner with no signal still opens the
+ * checklist, and the page says it is the copy kept here. The page's own
+ * files are kept by its service worker (sw.js). A refused pass (the PIN
+ * changed, or the checklist unpublished) clears the copy at once.
+ *
  * WRONG PINS: the API answers every failed try the same way ("denied"),
  * locked or not, so nothing is learned by guessing. The page counts the
  * tries on this device and, after a few, says the checklist may need a
@@ -122,6 +129,68 @@ export function tokenValid(entry, now) {
     return Boolean(entry && entry.visitToken && Date.parse(entry.expiresAt) > now);
 }
 
+/** Where the device keeps the sealed checklist and photos for reopening
+ *  offline (PLANNING 8.2). */
+export const CACHE_DATABASE = 'scenexp-whitestone-tasks';
+
+/**
+ * The sealed copies kept for one checklist, over a four-method backend
+ * (photos.js), each until the visit pass's end: `{ get(name), put(name,
+ * bytes, until), forget() }`, `name` 'checklist', 'thumb/<id>' or
+ * 'photo/<id>'. Never throws: a full or broken store only means no copy.
+ */
+export function createKeeper(backend, checklistId, now) {
+    const prefix = `${checklistId}/`;
+    const safe = async (act, fallback = null) => {
+        try {
+            return backend ? await act() : fallback;
+        } catch (e) {
+            return fallback;
+        }
+    };
+    return {
+        get: (name) => safe(async () => {
+            const kept = await backend.get(prefix + name);
+            if (!kept || !(kept.bytes instanceof Uint8Array)) return null;
+            if (!(Date.parse(kept.until) > now())) {
+                await backend.delete(prefix + name);
+                return null;
+            }
+            return kept.bytes;
+        }),
+        put: (name, bytes, until) => safe(() => backend.put(prefix + name, { bytes, until })),
+        forget: () => safe(async () => {
+            for (const key of await backend.keys()) if (String(key).startsWith(prefix)) await backend.delete(key);
+        })
+    };
+}
+
+/** Every copy past its visit pass forgotten, whatever checklist it is. */
+export async function sweepKept(backend, now) {
+    if (!backend) return;
+    try {
+        for (const key of await backend.keys()) {
+            const kept = await backend.get(key);
+            if (!kept || !(Date.parse(kept.until) > now())) await backend.delete(key);
+        }
+    } catch (e) {
+        // A broken store keeps nothing worth sweeping.
+    }
+}
+
+/** The page's own files, for the service worker to keep: the page itself
+ *  and what it loaded, from this site only, never the API. */
+export function offlineUrls(href, origin, entries) {
+    const page = String(href).split('#')[0];
+    const loaded = (entries || []).map((e) => e && e.name).filter((u) => typeof u === 'string');
+    return [...new Set([page, ...loaded])].filter((u) => u.startsWith(`${origin}/`) && !u.startsWith(`${origin}/api/`));
+}
+
+/** Whether the API refused (or no longer has) a checklist, so no copy kept
+ *  here may stand in for it. Anything else (no signal, a server in
+ *  trouble) and the copy opens. */
+const refused = (error) => error === 'denied' || error === 'not-found';
+
 /** The words for an API error while sending an add-on. */
 function addOnError(error) {
     if (error === 'offline') return COPY.addOnOffline;
@@ -145,7 +214,8 @@ function errorLine(error) {
 
 /**
  * Run the page. `env`: `{ doc, href, history, storage, api, sealer,
- * fetchJson, now, makeUrl, setTimer, clearTimer, newId }`. Resolves to the
+ * fetchJson, now, makeUrl, setTimer, clearTimer, newId, cache, print }` (`cache` a
+ * four-method backend for the sealed copies, or null). Resolves to the
  * page's state, for tests: `{ phase, id, form, quote, ... }`.
  */
 export async function boot(env) {
@@ -155,6 +225,8 @@ export async function boot(env) {
     const setTimer = env.setTimer || ((fn, ms) => setTimeout(fn, ms));
     const clearTimer = env.clearTimer || ((t) => clearTimeout(t));
     const newId = env.newId || newAddOnId;
+    const printPage = env.print || (() => globalThis.print());
+    await sweepKept(env.cache || null, now);
     const el = (id) => doc.getElementById(id);
     const form = el('pin-form');
     const input = el('pin-input');
@@ -189,6 +261,7 @@ export async function boot(env) {
         writeMemory(storage, memory);
     };
     remember({});
+    const keeper = createKeeper(env.cache || null, here.id, now);
     state.progress = cleanProgress(entry.progress);
     state.visitId = typeof entry.visitId === 'string' && ID.test(entry.visitId) ? entry.visitId : null;
     state.addOns = state.visitId ? cleanKept(entry.addOns) : [];
@@ -200,8 +273,19 @@ export async function boot(env) {
         setStatus(line, problem);
     };
 
-    /** Unseal what the API gave, and draw it. */
-    async function show(bytes) {
+    /** A sealed file from the API, or the copy kept on the device when the
+     *  API cannot be reached; kept when it arrives. */
+    async function sealedFile(name, ask) {
+        const got = await ask();
+        if (got.ok) {
+            await keeper.put(name, got.bytes, entry.expiresAt);
+            return got.bytes;
+        }
+        return refused(got.error) ? null : keeper.get(name);
+    }
+
+    /** Unseal what the API gave (or the device kept), and draw it. */
+    async function show(bytes, fromDevice = false) {
         let key;
         let opened;
         try {
@@ -226,13 +310,16 @@ export async function boot(env) {
         }
         state.quote = state.sheet ? quoteChecklist(state.sheet, opened) : null;
         const given = opened.quote ? opened.quote.totalCents : null;
-        state.notice = !state.sheet ? COPY.noSheet
-            : given !== null && state.quote.totalCents !== given ? COPY.quoteChanged : '';
+        state.notice = [
+            fromDevice ? COPY.keptCopy : '',
+            !state.sheet ? COPY.noSheet : given !== null && state.quote.totalCents !== given ? COPY.quoteChanged : ''
+        ].filter(Boolean).join(' ');
+        state.fromDevice = fromDevice;
         const draw = () => renderChecklist(view, {
             form: state.form, quote: state.quote, sheet: state.sheet, thumbs: state.thumbs, notice: state.notice,
             progress: state.progress, skipping: state.skipping, skipNote: state.skipNote,
             addOns: state.addOns, proposing: state.proposing,
-            on: { photo: openPhoto, mark, skip, propose, pick, quantity, send, addOnDone }
+            on: { photo: openPhoto, mark, skip, propose, pick, quantity, send, addOnDone, print: () => printPage() }
         });
         /** Drawn again for news from the API, keeping what is being typed
          *  and where the keyboard is. */
@@ -382,10 +469,10 @@ export async function boot(env) {
         }
         async function openPhoto(photoId, label) {
             const from = doc.activeElement;
-            const got = await api.getPhoto(here.id, entry.visitToken, photoId);
-            if (!got.ok) return;
+            const sealed = await sealedFile(`photo/${photoId}`, () => api.getPhoto(here.id, entry.visitToken, photoId));
+            if (!sealed) return;
             try {
-                const bytes = await sealer.open(key, got.bytes, contextFor(here.id, 'photo', photoId));
+                const bytes = await sealer.open(key, sealed, contextFor(here.id, 'photo', photoId));
                 showPhoto(doc, makeUrl(new Blob([bytes], { type: 'image/jpeg' })), label, from);
             } catch (e) {
                 // A photo that will not open stays a thumbnail.
@@ -399,16 +486,23 @@ export async function boot(env) {
         // The thumbnails, then drawn again with them.
         const photoIds = [...new Set((opened.items || []).flatMap((i) => (Array.isArray(i.photos) ? i.photos : [])))];
         for (const photoId of photoIds) {
-            const got = await api.getThumb(here.id, entry.visitToken, photoId);
-            if (!got.ok) continue;
+            const sealed = await sealedFile(`thumb/${photoId}`, () => api.getThumb(here.id, entry.visitToken, photoId));
+            if (!sealed) continue;
             try {
-                const bytes = await sealer.open(key, got.bytes, contextFor(here.id, 'thumb', photoId));
+                const bytes = await sealer.open(key, sealed, contextFor(here.id, 'thumb', photoId));
                 state.thumbs.set(photoId, makeUrl(new Blob([bytes], { type: 'image/jpeg' })));
             } catch (e) {
                 // Left as its place.
             }
         }
         if (state.thumbs.size) redraw();
+        // The full photos too, kept for a visit with no signal (each opens
+        // from the device then).
+        if (!fromDevice) {
+            for (const photoId of photoIds) {
+                if (!(await keeper.get(`photo/${photoId}`))) await sealedFile(`photo/${photoId}`, () => api.getPhoto(here.id, entry.visitToken, photoId));
+            }
+        }
         // The visit's add-ons as they stand now, then asked after.
         await refresh();
         ask();
@@ -420,13 +514,21 @@ export async function boot(env) {
         state.phase = 'opening';
         setStatus(COPY.opening);
         const got = await api.getChecklist(here.id, entry.visitToken);
-        if (got.ok) return show(got.bytes);
+        if (got.ok) {
+            await keeper.put('checklist', got.bytes, entry.expiresAt);
+            return show(got.bytes);
+        }
         if (got.error === 'denied') {
-            // The token ran out or the PIN was changed: ask again.
+            // The token ran out or the PIN was changed: ask again, and keep
+            // no copy the pass no longer opens.
+            await keeper.forget();
             remember({ visitToken: null, expiresAt: null });
             askPin(COPY.again);
             return state;
         }
+        if (got.error === 'not-found') await keeper.forget();
+        const copy = refused(got.error) ? null : await keeper.get('checklist');
+        if (copy) return show(copy, true);
         askPin(errorLine(got.error), true);
         return state;
     }
@@ -489,6 +591,20 @@ async function realApi(fetchJson) {
     return createApi((request) => standin.handle(request));
 }
 
+/** The service worker that keeps this page for a visit with no signal
+ *  (sw.js), and the files this first visit loaded before it was in charge. */
+function keepForOffline() {
+    const sw = typeof navigator !== 'undefined' ? navigator.serviceWorker : null;
+    // Service workers need a secure context (https, or this machine).
+    if (!sw || !globalThis.isSecureContext) return;
+    sw.register('sw.min.js').then(() => sw.ready).then((reg) => {
+        const entries = typeof performance !== 'undefined' && performance.getEntriesByType ? performance.getEntriesByType('resource') : [];
+        if (reg.active) reg.active.postMessage({ type: 'keep', urls: offlineUrls(location.href, location.origin, entries) });
+    }).catch((err) => {
+        console.warn('[Whitestone] This page will not open offline:', err);
+    });
+}
+
 async function start() {
     const fetchJson = async (url) => {
         const response = await fetch(url);
@@ -506,10 +622,17 @@ async function start() {
         if (status) status.textContent = COPY.offline;
         return;
     }
+    let cache = null;
+    try {
+        cache = await openIdbBackend(CONFIG, globalThis.indexedDB, { database: CACHE_DATABASE, store: 'cache' });
+    } catch (e) {
+        cache = null;
+    }
     await boot({
         doc: document, href: location.href, history, storage: browserStorage,
-        api, sealer: createSealer(), fetchJson
+        api, sealer: createSealer(), fetchJson, cache
     });
+    keepForOffline();
 }
 
 if (typeof document !== 'undefined' && typeof window !== 'undefined' && !window.__whitestoneTasksTest) {

@@ -355,7 +355,7 @@ function taskBlock(sheet, form, item, thumbs, on, visit) {
  * `on.propose(roomId)` opens a room's picker (null closes it),
  * `on.pick(roomId, key)` and `on.quantity(roomId, value)` change it,
  * `on.send(roomId)` sends it, and `on.addOnDone(addonId)` marks an approved
- * add-on done (or clears it).
+ * add-on done (or clears it). `on.print()` prints the work order.
  */
 export function renderChecklist(container, { form, quote, sheet, thumbs = new Map(), notice = '', progress = { marks: {} }, skipping = null, skipNote = '', addOns = [], proposing = null, on }) {
     clear(container);
@@ -369,12 +369,15 @@ export function renderChecklist(container, { form, quote, sheet, thumbs = new Ma
         ]));
     }
     const head = headerLines(form, quote);
+    const printBtn = h('button', { type: 'button', className: 'tasks-print', id: 'tasks-print', text: COPY.print });
+    printBtn.addEventListener('click', () => on.print());
     container.appendChild(h('header', { className: 'tasks-home' }, [
         h('h1', { text: COPY.heading }),
         head.visit ? h('p', { className: 'tasks-visit', text: head.visit }) : null,
         head.quote ? h('p', { className: 'tasks-quote', text: head.quote }) : null,
         notice ? h('p', { className: 'tasks-notice', attrs: { role: 'note' }, text: notice }) : null,
-        form.household ? h('p', { className: 'tasks-household' }, [h('strong', { text: COPY.household }), h('span', { text: ` ${form.household}` })]) : null
+        form.household ? h('p', { className: 'tasks-household' }, [h('strong', { text: COPY.household }), h('span', { text: ` ${form.household}` })]) : null,
+        printBtn
     ]));
     const first = startHere(form);
     if (first.length) {

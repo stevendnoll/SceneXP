@@ -61,7 +61,7 @@ const PERSISTENT = {
     'www/whitestone/js/store.js': 'the checklists a visitor builds in Whitestone Home Care',
     // The cleaner's page (M4): per shared checklist, its key (from the link),
     // the 12 hour visit pass the PIN gives, and wrong PINs in a row.
-    'www/whitestone/tasks/js/main.js': 'on a cleaner’s device, the key and visit pass of a checklist shared with them'
+    'www/whitestone/tasks/js/main.js': 'on a cleaner’s device, the key and visit pass of a checklist shared with them, and the visit’s marks and add-ons'
 };
 
 /**
@@ -75,7 +75,10 @@ const PERSISTENT_DATABASES = {
     // It opens the API stand-in's database too (standin.js, M3 option A):
     // published checklists, sealed with a key it never holds, until the
     // server runs.
-    'www/whitestone/js/photos.js': 'photos added to a Whitestone checklist, resized and stripped of location, and, until the server runs, the sealed checklists a visitor publishes'
+    // The cleaner's page opens one too (tasks/js/main.js CACHE_DATABASE): the
+    // sealed checklist and photos, kept for the visit pass's hours to reopen
+    // offline. Its service worker keeps only the page's own public files.
+    'www/whitestone/js/photos.js': 'photos added to a Whitestone checklist, resized and stripped of location; until the server runs, the sealed checklists a visitor publishes; and on a cleaner’s device, a sealed copy of a shared checklist for the hours of the visit'
 };
 
 /** Source files only. The built .min copies are the same code twice. */

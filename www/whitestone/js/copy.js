@@ -641,6 +641,8 @@ export const TASKS_PAGE = Object.freeze({
         approved: (n) => `${n} approved`,
         declined: (n) => `${n} declined`
     }),
+    print: 'Print a work order',
+    keptCopy: 'You are offline, so this is the copy kept on this device for your visit. Your marks are saved here as usual.',
     /** `counts` already joined: "1 approved, 1 waiting". */
     addOnsLine: (counts) => `Add-ons: ${counts}.`
 });
