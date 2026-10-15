@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { GUIDE, BRAND, countWord } from '../www/whitestone/js/copy.js';
 import {
-    GUIDED, PROGRESS, HALO, arrivalId, arrivalGuide, hasOwn, savedForm, step, presetSummary, addedLine, viewFor
+    GUIDED, PROGRESS, HALO, CHANGED, arrivalId, arrivalGuide, hasOwn, savedForm, step, presetSummary, addedLine, viewFor, outcomeOf
 } from '../www/whitestone/js/guide.js';
 import { presetFor } from '../www/whitestone/js/sheet.js';
 import { priceChoice, formatMoney } from '../www/whitestone/js/pricing.js';
@@ -30,7 +30,7 @@ const walk = (g, ...types) => types.reduce((acc, t) => step(acc, typeof t === 's
 
 const ALL = ['hello', ...GUIDED, 'saved', 'example1', 'example2', 'example3', 'look', 'welcome', 'hint', 'about'];
 const EVENTS = ['start', 'example', 'floorTapped', 'next', 'roomAdded', 'dotOpened', 'gotIt', 'review', 'saved', 'buildOwn',
-    'lookAround', 'keepGoing', 'homeMade', 'residence', 'again', 'about', 'close', 'restart', 'skip', 'nonsense'];
+    'lookAround', 'keepGoing', 'homeMade', 'residence', 'again', 'about', 'close', 'restart', 'skip', 'away', 'returned', 'nonsense'];
 
 describe('where a visit begins', () => {
     test('a first visit is greeted', () => {
@@ -238,6 +238,86 @@ describe('the way through', () => {
         const g = fresh();
         expect(step(g, null)).toBe(g);
         expect(step(g, {})).toBe(g);
+    });
+});
+
+describe('short loops away from Maya, and back (QA, 2026-10-14)', () => {
+    const draft = { id: 'a', published: false, booked: null, unsent: false };
+    const booked = { id: 'a', published: true, booked: '2026-10-16 09:00', unsent: false };
+
+    test('what came of a loop, from how the home stood before and after', () => {
+        expect(outcomeOf(draft, booked, 'booking')).toBe('booked');
+        expect(outcomeOf(booked, { ...booked, booked: '2026-10-17 09:00' }, 'receipt')).toBe('moved');
+        expect(outcomeOf(booked, { ...booked, booked: null }, 'receipt')).toBe('canceled');
+        expect(outcomeOf(booked, draft, 'receipt')).toBe('unpublished');
+        expect(outcomeOf({ ...booked, unsent: true }, booked, 'send')).toBe('sent');
+        // A published checklist with no visit, booked again.
+        expect(outcomeOf({ ...booked, booked: null }, booked, 'booking')).toBe('booked');
+        // A move with changes not sent takes them along: said as the move.
+        expect(outcomeOf({ ...booked, unsent: true }, { ...booked, booked: '2026-10-17 09:00' }, 'send')).toBe('moved');
+        // Nothing changed: said by where they went.
+        expect(outcomeOf(draft, draft, 'booking')).toBe('noTime');
+        expect(outcomeOf({ ...booked, unsent: true }, { ...booked, unsent: true }, 'send')).toBe('notSent');
+        expect(outcomeOf(booked, booked, 'receipt')).toBe('same');
+        expect(outcomeOf(draft, draft, 'checklist')).toBe('same');
+        // Another checklist open now, or nothing known: nothing claimed.
+        expect(outcomeOf(draft, { ...booked, id: 'b' }, 'booking')).toBe('same');
+        expect(outcomeOf(null, booked, 'booking')).toBe('same');
+        expect(CHANGED).toEqual(['booked', 'moved', 'canceled', 'unpublished', 'sent']);
+    });
+
+    test('from All set, a welcome or standing by, Maya steps aside remembering where they went', () => {
+        for (const scene of ['saved', 'welcome', 'done']) {
+            const g = step({ ...fresh(), scene, resume: 'rooms', outcome: 'sent' }, { type: 'away', to: 'booking', was: draft });
+            expect(g).toMatchObject({ scene: 'done', minimized: true, skipped: false, resume: null, away: { to: 'booking', was: draft }, outcome: null });
+        }
+        // Not in the middle of the build, nor from the example.
+        for (const scene of [...GUIDED, 'hello', 'example3', 'look', 'hint']) {
+            const g = { ...fresh(), scene };
+            expect(step(g, { type: 'away', to: 'booking', was: draft })).toBe(g);
+        }
+    });
+
+    test('back, she says what came of it, out of her tuck; with nothing to come back from, nothing moves', () => {
+        const away = walk({ ...fresh(), scene: 'saved' }, { type: 'away', to: 'booking', was: draft });
+        const back = step(away, { type: 'returned', now: booked });
+        expect(back).toMatchObject({ scene: 'done', minimized: false, away: null, outcome: 'booked' });
+        expect(step(back, { type: 'returned', now: booked })).toBe(back);
+        const plain = { ...fresh(), scene: 'done', minimized: true };
+        expect(step(plain, { type: 'returned', now: booked })).toBe(plain);
+        // Gone into another scene meanwhile (Help's hint): the loop is over.
+        const hint = walk(away, 'again');
+        expect(hint).toMatchObject({ scene: 'hint', away: null });
+        expect(step(walk(hint, 'close'), { type: 'returned', now: booked }).outcome).toBeNull();
+    });
+
+    test('what she said back is let go: tucked again, Need a hand?, or any other scene', () => {
+        const back = { ...fresh(), scene: 'done', minimized: false, outcome: 'booked', away: null };
+        expect(walk(back, 'lookAround')).toMatchObject({ minimized: true, outcome: null });
+        expect(walk(back, 'lookAround', 'expand')).toMatchObject({ minimized: false, outcome: null });
+        expect(walk(back, 'editRooms')).toMatchObject({ scene: 'rooms', outcome: null });
+        expect(walk(back, 'restart')).toMatchObject({ scene: 'hello', outcome: null, away: null });
+        // Need a hand? while changes are on their way keeps the loop open.
+        const sending = walk({ ...fresh(), scene: 'done' }, { type: 'away', to: 'send', was: { ...booked, unsent: true } }, 'expand');
+        expect(sending).toMatchObject({ minimized: false, away: { to: 'send' } });
+        expect(step(sending, { type: 'returned', now: booked }).outcome).toBe('sent');
+    });
+
+    test('her words back: what main.js says, the ways on, and the visit chip ringed after a booking or a move', () => {
+        const back = (outcome) => viewFor({ ...fresh(), scene: 'done', minimized: false, outcome }, { standby: 'Said.' });
+        expect(back('booked')).toMatchObject({ text: 'Said.', choices: 'returning', halo: HALO.visit });
+        expect(back('moved').halo).toEqual({ kind: 'element', id: 'hud-visit' });
+        for (const outcome of ['canceled', 'unpublished', 'sent', 'noTime', 'notSent', 'same', null]) expect(back(outcome).halo).toBeNull();
+        // Tucked, nothing is ringed.
+        expect(viewFor({ ...fresh(), scene: 'done', minimized: true, outcome: 'booked' }, {}).halo).toBeNull();
+    });
+
+    test('All set for a published checklist offers what main.js says fits it', () => {
+        const g = { ...fresh(), scene: 'saved' };
+        expect(viewFor(g, {}).buttons.map((b) => b.id)).toEqual(['chooseTime', 'lookAround']);
+        const v = viewFor(g, { saved: { text: GUIDE.savedUnsent, id: 'sendChanges', label: GUIDE.sendChanges } });
+        expect(v.text).toBe(GUIDE.savedUnsent);
+        expect(v.buttons).toEqual([{ id: 'sendChanges', label: GUIDE.sendChanges, primary: true }, { id: 'lookAround', label: GUIDE.lookAround, primary: false }]);
     });
 });
 

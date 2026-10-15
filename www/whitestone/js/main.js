@@ -56,7 +56,7 @@ import { loadSheet, currentVersion, checkChoice, presetFor, presetGains, taskOf 
 import { priceChoice, formatMoney, formatMinutes, quoteChecklist, roundMinutes } from './pricing.min.js';
 import { createPhotoStore, createMemoryBackend, openIdbBackend, preparePhoto } from './photos.min.js';
 import { roomName, levelOf, bathChoices, bathChoiceOf, residencesOf, levelsAllowed, serviceType as typeOf } from './taxonomy.min.js';
-import { h, clear, initCards, openCard, closeCard, isOpen, anyOpen, announce, toast, confirmCard, setFocusFallback } from './cards.min.js';
+import { h, clear, initCards, openCard, closeCard, isOpen, anyOpen, announce, toast, confirmCard, setFocusFallback, setOnSettled } from './cards.min.js';
 import {
     initForms, fillSetupForm, readSetupForm, validateSetup, showError, showHints, fillPreferencesForm, readPreferencesForm,
     fillRoomForm, readRoomForm, validateRoom, showPresetPreview, showBathChoices, fillTaskForm, showTaskChoices, readTaskForm,
@@ -70,7 +70,7 @@ import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKIN
 import { createTurntable, turnPoint } from './turntable.min.js';
 import { buildStage, buildLights, firstPick } from './stage.min.js';
 import { buildModel } from './model.min.js';
-import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, GUIDED } from './guide.min.js';
+import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, GUIDED, CHANGED } from './guide.min.js';
 import { createHost } from './host.min.js';
 import { buildMaya, speakSeconds } from './cast.min.js';
 import { createPanel, selectFromHit, stepOut, reconcile, panelView, homeSuggestions } from './panel.min.js';
@@ -118,7 +118,10 @@ const state = {
 const ui = {
     editing: null, room: null, task: null, afterPrefs: false, filter: 'all', menuArea: null, guide: null, selected: null,
     /** The Choose a time card while it is open, and the receipt shown. */
-    booking: null, receipt: null
+    booking: null, receipt: null,
+    /** One card handing over to the next (the calendar to the receipt), so
+     *  Maya waits for the second to close. */
+    handoff: false
 };
 
 /** Thumbnail addresses made for the task card, released when it closes. */
@@ -995,8 +998,49 @@ function guideContext() {
         roomLabel: room ? roomName(c.serviceType, room) : '',
         addedText: room ? addedLine(state.sheet, room.area, roomName(c.serviceType, room), room.bath) : '',
         welcome: welcomeLine(c),
-        standby: standbyLine(c)
+        standby: standbyLine(c),
+        saved: savedNext(c)
     };
+}
+
+/** All set, for a published checklist changed through the guide: the
+ *  changes to send, else the visit (or a time to choose). Null for a draft,
+ *  whose All set offers Choose a time. */
+function savedNext(c) {
+    if (!isPublished(c)) return null;
+    if (hasUnsent(c)) return { text: GUIDE.savedUnsent, id: 'sendChanges', label: GUIDE.sendChanges };
+    return isBooked(c)
+        ? { text: GUIDE.savedSame, id: 'visit', label: GUIDE.seeVisit }
+        : { text: GUIDE.savedSame, id: 'chooseTime', label: GUIDE.chooseTime };
+}
+
+/** How the open checklist stands, for what a loop away from Maya changed
+ *  (guide.js outcomeOf). */
+function standing(c) {
+    return {
+        id: c ? c.id : null,
+        published: isPublished(c),
+        booked: isBooked(c) ? `${c.booking.date} ${c.booking.time}` : null,
+        unsent: isPublished(c) && hasUnsent(c)
+    };
+}
+
+/** What Maya says back from a loop (QA, 2026-10-14): what came of it, in
+ *  its own words when something changed, else where the home stands; then
+ *  what next. */
+function afterLine(c, outcome) {
+    const when = c && c.booking ? [dayLabel(c.booking.date), clockLabel(c.booking.time)] : null;
+    const lead = {
+        booked: when ? GUIDE.afterBooked(...when) : '',
+        moved: when ? GUIDE.afterMoved(...when) : '',
+        canceled: GUIDE.afterCanceled,
+        unpublished: GUIDE.afterUnpublished,
+        sent: GUIDE.afterSent,
+        noTime: GUIDE.afterNoTime,
+        notSent: GUIDE.afterNotSent
+    }[outcome] || '';
+    const parts = CHANGED.includes(outcome) && lead ? [lead] : [lead, whereLine(c)];
+    return [...parts, GUIDE.whatNext].filter(Boolean).join(' ');
 }
 
 /** Where the home stands, in a sentence: its booked visit, else its rooms,
@@ -1017,6 +1061,7 @@ function whereLine(c) {
  *  question. The example speaks for itself. */
 function standbyLine(c) {
     if (ui.guide && ui.guide.skipped) return `${GUIDE.skipped} ${GUIDE.returningLegend}`;
+    if (ui.guide && ui.guide.outcome) return afterLine(c, ui.guide.outcome);
     if (c && c.sample) return `${GUIDE.example3}`;
     return `${whereLine(c)} ${GUIDE.returningLegend}`;
 }
@@ -1256,6 +1301,45 @@ function ensureOwn() {
     return result.error ? null : active();
 }
 
+/** One of Maya's choices sends the visitor to a card: she steps aside,
+ *  remembering where they went and how the home stood. */
+function goAway(to) {
+    guideTo({ type: 'away', to, was: standing(active()) });
+}
+
+/**
+ * Maya back from a loop (QA, 2026-10-14: hold their hand each step of the
+ * way): once the last card has closed and nothing is on its way (a card
+ * handing over to the next, changes being sent, a booking), she says what
+ * came of it and offers what next, the keyboard on her first choice. A
+ * card opened some other way, or nothing to come back from, leaves her be.
+ */
+function comeBack() {
+    const g = ui.guide;
+    if (!g || !g.away || g.scene !== 'done' || anyOpen() || ui.handoff || state.sending || (ui.booking && ui.booking.busy)) return false;
+    // Out from under the card now, not at the next frame, so she is heard.
+    if (host) host.setCovered(Boolean(panel && panel.shown));
+    if (!guideTo({ type: 'returned', now: standing(active()) })) return false;
+    if (host) host.focusPrimary();
+    if (cast && CHANGED.includes(ui.guide.outcome) && !state.reducedMotion) {
+        cast.gesture('wave');
+        requestRender();
+    }
+    return true;
+}
+
+/** Open a card that may stop short of opening (no sheet yet, the server
+ *  away): Maya waits while it opens, and comes back if it did not. */
+async function handOff(open) {
+    ui.handoff = true;
+    try {
+        return await open();
+    } finally {
+        ui.handoff = false;
+        comeBack();
+    }
+}
+
 /** A button in Maya's bubble. */
 function onHostButton(id) {
     if (!state.loaded) return;
@@ -1278,22 +1362,24 @@ function onHostButton(id) {
     case 'save':
         guideTo({ type: 'saved' });
         break;
+    // Maya steps aside for the card (from her All set, or a return), and
+    // comes back once it is done to say what came of it (comeBack).
     case 'chooseTime':
-        // Maya steps aside for the card (from her All set, or a return).
-        if (ui.guide && (ui.guide.scene === 'welcome' || ui.guide.scene === 'done')) guideTo({ type: 'lookAround' });
-        openBooking();
+        goAway('booking');
+        handOff(() => openBooking());
         break;
     case 'visit':
-        guideTo({ type: 'lookAround' });
-        openReceipt();
+        goAway('receipt');
+        handOff(() => openReceipt());
         break;
     case 'sendChanges':
-        guideTo({ type: 'lookAround' });
+        goAway('send');
         sendChanges();
         break;
     case 'reviewChecklist':
-        guideTo({ type: 'lookAround' });
+        goAway('checklist');
         openChecklistView();
+        comeBack();
         break;
     case 'back':
         guideTo({ type: 'back', roomId: firstRoomId() });
@@ -1808,15 +1894,18 @@ async function confirmBooking() {
         announce(b.error);
         return result;
     }
-    closeCard('booking');
-    ui.booking = null;
-    if (b.mode === 'move') {
-        const said = CHANGES.moved(visitWhen(result.checklist.booking));
-        announce(said);
-        toast(said);
-    }
-    afterServerChange();
-    openReceipt();
+    // The calendar hands over to the receipt.
+    await handOff(() => {
+        closeCard('booking');
+        ui.booking = null;
+        if (b.mode === 'move') {
+            const said = CHANGES.moved(visitWhen(result.checklist.booking));
+            announce(said);
+            toast(said);
+        }
+        afterServerChange();
+        return openReceipt();
+    });
     return result;
 }
 
@@ -1827,47 +1916,52 @@ async function confirmBooking() {
  */
 async function sendChanges() {
     const c = active();
-    if (!isPublished(c)) return null;
-    if (!hasUnsent(c)) {
-        announce(CHANGES.nothingToSend);
-        toast(CHANGES.nothingToSend);
+    // Stopped short, Maya (if she sent the visitor here) comes back to say
+    // the changes are still waiting.
+    const stop = (said) => {
+        if (said) {
+            announce(said);
+            toast(said);
+        }
+        comeBack();
         return null;
-    }
-    if (!state.sheet) {
-        announce(UI.sheetLoading);
-        toast(UI.sheetLoading);
-        return null;
-    }
+    };
+    if (!isPublished(c)) return stop('');
+    if (!hasUnsent(c)) return stop(CHANGES.nothingToSend);
+    if (!state.sheet) return stop(UI.sheetLoading);
     const svc = await connect();
-    if (!svc) {
-        toast(BOOKING_ERRORS.server);
-        return null;
-    }
+    if (!svc) return stop(BOOKING_ERRORS.server);
     return askPrice(c, async () => {
         if (state.sending) return null;
         state.sending = true;
-        announce(CHANGES.sending);
-        if (!photoStore) await openPhotos();
-        const result = await republish({
-            checklist: active(), api: svc.api, sealer: svc.sealer, photos: photoStore, sheet: state.sheet,
-            at: now().toISOString(), record: recordFor(c.id)
-        });
-        state.sending = false;
-        if (result.ok) {
-            announce(CHANGES.sent);
-            toast(CHANGES.sent);
-            afterServerChange();
+        try {
+            announce(CHANGES.sending);
+            if (!photoStore) await openPhotos();
+            const result = await republish({
+                checklist: active(), api: svc.api, sealer: svc.sealer, photos: photoStore, sheet: state.sheet,
+                at: now().toISOString(), record: recordFor(c.id)
+            });
+            if (result.ok) {
+                announce(CHANGES.sent);
+                toast(CHANGES.sent);
+                afterServerChange();
+                return result;
+            }
+            if (result.error === 'no-longer-fits') {
+                // Still sending as the receipt closes, so Maya waits for the
+                // calendar.
+                if (isOpen('receipt')) closeCard('receipt');
+                await openBooking({ error: BOOKING_ERRORS['no-longer-fits'] });
+                return result;
+            }
+            const why = result.error === 'too-late' ? CHANGES.tooLateLonger(svc.schedule.cancelHours) : BOOKING_ERRORS[result.error] || BOOKING_ERRORS.server;
+            announce(why);
+            toast(why);
             return result;
+        } finally {
+            state.sending = false;
+            comeBack();
         }
-        if (result.error === 'no-longer-fits') {
-            if (isOpen('receipt')) closeCard('receipt');
-            openBooking({ error: BOOKING_ERRORS['no-longer-fits'] });
-            return result;
-        }
-        const why = result.error === 'too-late' ? CHANGES.tooLateLonger(svc.schedule.cancelHours) : BOOKING_ERRORS[result.error] || BOOKING_ERRORS.server;
-        announce(why);
-        toast(why);
-        return result;
     });
 }
 
@@ -1968,8 +2062,10 @@ function redrawReceipt() {
 /** From the receipt: Change the time, or Choose a time after a cancel. The
  *  receipt steps aside for the calendar, and comes back once it is done. */
 function bookFromReceipt() {
-    closeCard('receipt');
-    openBooking();
+    return handOff(() => {
+        closeCard('receipt');
+        return openBooking();
+    });
 }
 
 /** Copy the link, the PIN or the edit link, and say so beside the button. */
@@ -2767,6 +2863,9 @@ function setupEventListeners() {
     // When what opened a card has gone (a toolbar button hidden by the
     // change the card made), focus lands on My checklists rather than nowhere.
     setFocusFallback(() => el('ws-help'));
+    // A moment after the last card closes, so a Yes that goes on to send or
+    // open something else has begun by then.
+    setOnSettled(() => Promise.resolve().then(comeBack));
     setupLook(signal);
     host = createHost({
         signal,

@@ -468,6 +468,19 @@ export const GUIDE = Object.freeze({
     editRooms: 'Add or change rooms',
     changeChecklist: 'Change my checklist',
     reviewChecklist: 'Review my checklist',
+    /** Back from one of her choices (a short loop, QA 2026-10-14): what
+     *  came of it, then what next. */
+    whatNext: 'What would you like to do next?',
+    afterBooked: (day, time) => `You’re all set for ${day} at ${time}. Your cleaner will open your checklist with the link and PIN. Tap Your visit to see it again anytime.`,
+    afterMoved: (day, time) => `Done. Your visit is now ${day} at ${time}.`,
+    afterCanceled: 'Your visit is canceled. Your checklist is still published, so you can choose a new time whenever you like.',
+    afterUnpublished: 'Your checklist is unpublished, so its link and PIN no longer work. It’s still saved here as a draft.',
+    afterSent: 'Your changes are sent. Your cleaner will see them the next time they open your checklist.',
+    afterNoTime: 'No problem, the time can wait.',
+    afterNotSent: 'Your changes are still saved here, ready to send whenever you like.',
+    /** Saved through the guide, a published checklist (Change my checklist). */
+    savedUnsent: 'Saved. Your cleaner won’t see these changes until you send them.',
+    savedSame: 'Saved. Your checklist matches the one your cleaner has.',
     welcomeResume: 'Welcome back. Your home is just as you left it. Shall we pick up where we stopped?',
     keepGoing: 'Keep going',
     illLook: "I'll look around",

@@ -44,6 +44,10 @@ let openIds = [];
 const returnFocus = new Map();
 const armedUntil = new Map();
 const onCloseHooks = new Map();
+/** Whether a card is being opened (its later cards closing first). */
+let opening = false;
+/** Called with the id of the last card to close, once none is open. */
+let onSettled = null;
 let liveTimer = null;
 let toastTimer = null;
 let toastHeld = false;
@@ -176,8 +180,14 @@ export function openCard(id, { armed = false, focus = null, onClose = null } = {
     const overlay = byId(id);
     if (!overlay) return null;
     const index = CARD_ORDER.indexOf(id);
-    for (const other of [...openIds]) {
-        if (CARD_ORDER.indexOf(other) > index) closeCard(other, { restoreFocus: false });
+    // The stack is not settled while a card is on its way in.
+    opening = true;
+    try {
+        for (const other of [...openIds]) {
+            if (CARD_ORDER.indexOf(other) > index) closeCard(other, { restoreFocus: false });
+        }
+    } finally {
+        opening = false;
     }
     if (openIds.includes(id)) {
         const previous = onCloseHooks.get(id);
@@ -233,9 +243,21 @@ export function closeCard(id, { restoreFocus = true } = {}) {
     const back = returnFocus.get(id);
     returnFocus.delete(id);
     if (hook) hook();
-    if (!restoreFocus) return;
-    const target = canTakeFocus(back) ? back : focusFallback && focusFallback(id);
-    if (canTakeFocus(target)) target.focus({ preventScroll: true });
+    if (restoreFocus) {
+        const target = canTakeFocus(back) ? back : focusFallback && focusFallback(id);
+        if (canTakeFocus(target)) target.focus({ preventScroll: true });
+    }
+    // The last card gone, focus handed back first.
+    if (!openIds.length && !opening && onSettled) onSettled(id);
+}
+
+/**
+ * What to do once the last open card has closed (setOnSettled): Maya
+ * coming back to say what happened, when it was she who sent the visitor
+ * to the card. Not called while a card is on its way in.
+ */
+export function setOnSettled(fn) {
+    onSettled = typeof fn === 'function' ? fn : null;
 }
 
 /** Close whatever is on top. Returns its id, or null when nothing was open. */
@@ -334,6 +356,7 @@ export function resetCards() {
     returnFocus.clear();
     armedUntil.clear();
     onCloseHooks.clear();
+    opening = false;
     hideToast();
 }
 

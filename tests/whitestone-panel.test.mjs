@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
-import { PANEL, UI, BOOKING, BOOKING_ERRORS, RECEIPT, CHANGES, DAY_STATUS, HELP, withArticle } from '../www/whitestone/js/copy.js';
+import { PANEL, UI, BOOKING, BOOKING_ERRORS, RECEIPT, CHANGES, DAY_STATUS, HELP, GUIDE, withArticle } from '../www/whitestone/js/copy.js';
 import { selectFromHit, stepOut, reconcile, suggestions, panelView, CHIPS, COMMON, homeSuggestions } from '../www/whitestone/js/panel.js';
 import { withExample } from '../www/whitestone/js/samples.js';
 import { emptyDoc } from '../www/whitestone/js/store.js';
@@ -849,6 +849,215 @@ describe('changing things after publishing, on the page', () => {
         fire(confirmButton(), 'click');
         expect(await until(() => main.__test__.active() === null)).toBe(true);
         expect((await api.getChecklist(c.published.id, c.published.ownerToken)).error).toBe('denied');
+    });
+});
+
+// ---- Maya's short loops (QA, 2026-10-14: hold their hand each step) ---------------------
+
+describe('Maya\'s short loops: sent to a card, back to say what came of it', () => {
+    const confirmButton = () => dom.el('confirm-actions').children[1];
+    const dayButton = (date) => dom.el('booking-days').children.flatMap((row) => row.children).find((b) => b.id === `booking-day-${date}`);
+    const line = () => dom.el('host-line').textContent;
+    const picks = () => (dom.el('host-choices').children[0] || { children: [] }).children;
+    const tucked = () => dom.el('ws-host').classList.contains('is-minimized');
+    const esc = (text) => text.replace(/[.?$]/g, '\\$&');
+    async function until(test) {
+        for (let i = 0; i < 2000 && !test(); i++) await new Promise((r) => REAL_IMMEDIATE(r));
+        return test();
+    }
+
+    /** A home with its kitchen, Maya standing by with its choices. */
+    async function kitchenHome() {
+        jest.setSystemTime(new Date('2026-10-14T16:00:00Z'));
+        const main = await bootHome();
+        main.__test__.tapModel('main');
+        fire(chip('kitchen'), 'click');
+        fire(dom.el('panel-back'), 'click');
+        fire(dom.el('panel-back'), 'click');
+        expect(shown()).toBe(false);
+        return main;
+    }
+
+    /** Choose a time from Maya, booked at the earliest start. */
+    async function bookFromMaya(main) {
+        main.__test__.onHostButton('chooseTime');
+        expect(await until(() => !dom.el('booking').hidden && !main.__test__.ui.booking.loading)).toBe(true);
+        expect((await main.__test__.confirmBooking()).ok).toBe(true);
+    }
+
+    test('Choose a time, booked: she waits through the calendar and the receipt, then says so, the visit chip ringed', async () => {
+        const main = await kitchenHome();
+        expect([...picks()].map((b) => b.id)[0]).toBe('host-chooseTime');
+        await bookFromMaya(main);
+        // The calendar handed over to the receipt: she is still standing aside.
+        expect(dom.el('receipt').hidden).toBe(false);
+        expect(main.__test__.ui.guide).toMatchObject({ scene: 'done', minimized: true, away: { to: 'booking' } });
+        // Out of sight under the card (a frame covers her), and heard as she
+        // comes out from under it, not a frame later.
+        jest.advanceTimersByTime(16);
+        dom.loops[dom.loops.length - 1]();
+        expect(dom.el('ws-host').hidden).toBe(true);
+        dom.el('ws-live').textContent = 'quiet';
+        fire(dom.el('receipt-done'), 'click');
+        await flushAsync(5);
+        expect(tucked()).toBe(false);
+        expect(dom.el('ws-host').hidden).toBe(false);
+        expect(line()).toBe(`${GUIDE.afterBooked('Thursday, October 15', '9:30 am')} ${GUIDE.whatNext}`);
+        expect(said()).toBe(line());
+        expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.seeVisit, GUIDE.changeChecklist, GUIDE.illLook]);
+        expect(document.activeElement.id).toBe('host-visit');
+        expect(dom.el('hud-visit').classList.contains('has-halo')).toBe(true);
+        // Used, the ring goes; I'll look around lets her words go.
+        fire(dom.el('hud-visit'), 'click');
+        expect(dom.el('hud-visit').classList.contains('has-halo')).toBe(false);
+    });
+
+    test('Choose a time, closed without a time: "the time can wait", where the home stands, and the same ways on', async () => {
+        const main = await kitchenHome();
+        main.__test__.onHostButton('chooseTime');
+        expect(await until(() => !dom.el('booking').hidden)).toBe(true);
+        fire(dom.el('booking-close'), 'click');
+        await flushAsync(5);
+        expect(line()).toMatch(new RegExp(`^${GUIDE.afterNoTime} Our home has 1 room and 9 tasks, \\$\\d+ so far\\. ${esc(GUIDE.whatNext)}$`));
+        expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.editRooms, GUIDE.reviewChecklist, GUIDE.illLook]);
+        expect(dom.el('hud-visit').classList.contains('has-halo')).toBe(false);
+    });
+
+    test('the cards are settled once the last has closed, not while one is on its way in', async () => {
+        const cards = await import('../www/whitestone/js/cards.js');
+        const settled = [];
+        cards.setOnSettled((id) => settled.push(id));
+        cards.openCard('receipt');
+        // Earlier in the order, so the receipt is closed first as it opens.
+        cards.openCard('booking');
+        expect(cards.isOpen('receipt')).toBe(false);
+        expect(settled).toEqual([]);
+        cards.closeCard('booking');
+        expect(settled).toEqual(['booking']);
+        cards.setOnSettled(null);
+    });
+
+    test('a card opened some other way leaves her as she was', async () => {
+        const main = await kitchenHome();
+        main.__test__.onHostButton('lookAround');
+        expect(tucked()).toBe(true);
+        await main.__test__.openBooking();
+        fire(dom.el('booking-close'), 'click');
+        await flushAsync(5);
+        expect(tucked()).toBe(true);
+        expect(main.__test__.ui.guide.outcome).toBeFalsy();
+    });
+
+    test('Review my checklist: back from it, where the home stands and what next', async () => {
+        const main = await kitchenHome();
+        main.__test__.onHostButton('reviewChecklist');
+        expect(dom.el('checklist').hidden).toBe(false);
+        expect(tucked()).toBe(true);
+        fire(dom.el('checklist-close'), 'click');
+        await flushAsync(5);
+        expect(line()).toMatch(new RegExp(`^Our home has 1 room and 9 tasks, \\$\\d+ so far\\. ${esc(GUIDE.whatNext)}$`));
+        expect(document.activeElement.id).toBe('host-chooseTime');
+    });
+
+    test('Send my changes: back once they are sent; Not now on a new price, back saying they wait', async () => {
+        const main = await kitchenHome();
+        await bookFromMaya(main);
+        fire(dom.el('receipt-done'), 'click');
+        await flushAsync(5);
+        const stove = main.__test__.active().items.find((i) => i.task === 'stovetop');
+        main.__test__.toggleStar(stove.id);
+        main.__test__.onHostButton('lookAround');
+        fire(dom.el('host-expand'), 'click');
+        expect([...picks()].map((b) => b.id)[0]).toBe('host-sendChanges');
+        main.__test__.onHostButton('sendChanges');
+        expect(await until(() => main.__test__.ui.guide.outcome === 'sent')).toBe(true);
+        expect(line()).toBe(`${GUIDE.afterSent} ${GUIDE.whatNext}`);
+        // Past the visit minimum, so the price is asked about; Not now.
+        for (const area of ['living', 'dining', 'office']) {
+            main.__test__.tapModel('main');
+            fire(chip(area), 'click');
+        }
+        fire(dom.el('panel-back'), 'click');
+        fire(dom.el('panel-back'), 'click');
+        main.__test__.onHostButton('sendChanges');
+        expect(await until(() => !dom.el('confirm').hidden)).toBe(true);
+        expect(tucked()).toBe(true);
+        fire(dom.el('confirm-actions').children[0], 'click');
+        await flushAsync(5);
+        expect(line()).toBe(`${GUIDE.afterNotSent} ${GUIDE.homeBooked('Thursday, October 15', '9:30 am')} ${GUIDE.homeUnsent} ${GUIDE.whatNext}`);
+        // Yes: nothing said until the changes have gone.
+        main.__test__.onHostButton('sendChanges');
+        await until(() => !dom.el('confirm').hidden);
+        fire(confirmButton(), 'click');
+        await flushAsync(5);
+        expect(main.__test__.ui.guide.outcome).toBeNull();
+        expect(await until(() => main.__test__.ui.guide.outcome === 'sent')).toBe(true);
+    });
+
+    test('See my visit: Change the time hands the receipt to the calendar, and she waits for the move', async () => {
+        const main = await kitchenHome();
+        await bookFromMaya(main);
+        fire(dom.el('receipt-done'), 'click');
+        await flushAsync(5);
+        main.__test__.onHostButton('visit');
+        expect(await until(() => !dom.el('receipt').hidden)).toBe(true);
+        fire(dom.el('receipt-reschedule'), 'click');
+        expect(await until(() => !dom.el('booking').hidden && !main.__test__.ui.booking.loading)).toBe(true);
+        // The receipt closed on its way to the calendar: she has not come back.
+        expect(main.__test__.ui.guide).toMatchObject({ minimized: true, away: { to: 'receipt' } });
+        fire(dayButton('2026-10-16'), 'click');
+        expect((await main.__test__.confirmBooking()).ok).toBe(true);
+        fire(dom.el('receipt-done'), 'click');
+        await flushAsync(5);
+        expect(line()).toBe(`${GUIDE.afterMoved('Friday, October 16', '8:00 am')} ${GUIDE.whatNext}`);
+        expect(dom.el('hud-visit').classList.contains('has-halo')).toBe(true);
+    });
+
+    test('See my visit: canceled, then unpublished, each said once she is back', async () => {
+        const main = await kitchenHome();
+        await bookFromMaya(main);
+        fire(dom.el('receipt-done'), 'click');
+        await flushAsync(5);
+        main.__test__.onHostButton('visit');
+        expect(await until(() => !dom.el('receipt').hidden)).toBe(true);
+        fire(dom.el('receipt-cancel-visit'), 'click');
+        fire(confirmButton(), 'click');
+        expect(await until(() => dom.el('receipt-title').textContent === RECEIPT.titlePublished)).toBe(true);
+        fire(dom.el('receipt-done'), 'click');
+        await flushAsync(5);
+        expect(line()).toBe(`${GUIDE.afterCanceled} ${GUIDE.whatNext}`);
+        expect([...picks()].map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.seeLink, GUIDE.changeChecklist, GUIDE.illLook]);
+        main.__test__.onHostButton('visit');
+        expect(await until(() => !dom.el('receipt').hidden)).toBe(true);
+        fire(dom.el('receipt-unpublish'), 'click');
+        fire(confirmButton(), 'click');
+        expect(await until(() => main.__test__.ui.guide.outcome === 'unpublished')).toBe(true);
+        expect(dom.el('receipt').hidden).toBe(true);
+        expect(line()).toBe(`${GUIDE.afterUnpublished} ${GUIDE.whatNext}`);
+    });
+
+    test('Change my checklist on a published home: All set offers Send my changes, or the visit when nothing changed', async () => {
+        const main = await kitchenHome();
+        await bookFromMaya(main);
+        fire(dom.el('receipt-done'), 'click');
+        await flushAsync(5);
+        main.__test__.onHostButton('editRooms');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        main.__test__.onHostButton('review');
+        main.__test__.onHostButton('save');
+        expect(line()).toBe(GUIDE.savedSame);
+        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-visit', 'host-lookAround']);
+        main.__test__.onHostButton('lookAround');
+        main.__test__.onHostButton('expand');
+        main.__test__.onHostButton('editRooms');
+        fire(dom.el('host-choices').children[0].children.find((b) => b.id === 'host-chip-living'), 'click');
+        main.__test__.onHostButton('review');
+        main.__test__.onHostButton('save');
+        expect(line()).toBe(GUIDE.savedUnsent);
+        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-sendChanges', 'host-lookAround']);
+        // Sent from All set, she comes back to say so.
+        main.__test__.onHostButton('sendChanges');
+        expect(await until(() => main.__test__.ui.guide.outcome === 'sent')).toBe(true);
     });
 });
 

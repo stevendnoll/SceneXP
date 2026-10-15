@@ -257,10 +257,12 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             return null;
         },
         /** Focus on the main button of what she says (Let's start, Next),
-         *  else her first: where a keyboard picks up after Start over. */
+         *  else her first, else her first choice (back from a card): where a
+         *  keyboard picks up after Start over. */
         focusPrimary() {
             const all = actions ? Array.from(actions.children || []) : [];
-            const btn = all.find((b) => b.classList && b.classList.contains('ws-btn-primary')) || all[0];
+            const picks = choices && !choices.hidden && choices.children && choices.children[0] ? Array.from(choices.children[0].children || []) : [];
+            const btn = all.find((b) => b.classList && b.classList.contains('ws-btn-primary')) || all[0] || picks.find((b) => b.classList && b.classList.contains('host-pick'));
             if (btn && typeof btn.focus === 'function') btn.focus();
             return btn || null;
         },
