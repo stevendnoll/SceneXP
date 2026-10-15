@@ -18,8 +18,15 @@
  *   review     the quote, and care preferences offered once
  *   saved      all set
  *
- * and beside them the example's three beats (example1 to example3), a
- * returning visitor's welcome, and a hint.
+ * and beside them the example's four beats (example1 to example4: the
+ * house, a floor open, the dots, and its total), a returning visitor's
+ * welcome, and a hint.
+ *
+ * EXAMPLE MODE IS A TOUR TO WATCH (QA, 2026-10-15). Maya shows the example
+ * and the visitor only moves her on or back: the house answers no tap
+ * meanwhile (main.js `houseAnswers`), so no panel opens over her with a
+ * way back of its own. Those who ask for an example are the least sure of
+ * themselves, and the tour gives them nothing to get lost in.
  *
  * EVENTS, NOT TIMERS, MOVE IT ON, and they come from wherever the visitor
  * acts: a button in the bubble, a card, the house, the keyboard. A room
@@ -40,6 +47,10 @@ import { priceChoice, formatMoney } from './pricing.min.js';
 /** The scenes of the first build, in order. Where the visitor is among
  *  these is saved, and offered again on a return. */
 export const GUIDED = Object.freeze(['home', 'attached', 'floors', 'firstRoom', 'added', 'dots', 'rooms', 'review']);
+
+/** The example's beats, in order: Back goes one beat back, and from the
+ *  first to the greeting. */
+export const EXAMPLE = Object.freeze(['example1', 'example2', 'example3', 'example4']);
 
 /** Which step of the progress strip each guided scene is on: Home type
  *  (with a townhome's neighbors), Floors, First room, Your rooms, Review. */
@@ -97,6 +108,8 @@ export function entryOf(stepIndex, { roomId = null } = {}) {
 export const HALO = Object.freeze({
     firstRoom: Object.freeze({ kind: 'element', id: 'host-chip-kitchen' }),
     dots: Object.freeze({ kind: 'dot' }),
+    /** The example's dots: one ringed to look at, not to tap. */
+    example3: Object.freeze({ kind: 'exampleDot' }),
     rooms: Object.freeze({ kind: 'floor' }),
     review: Object.freeze({ kind: 'element', id: 'host-fact-quote' }),
     /** Not a scene's: standing by, just back from booking (viewFor). */
@@ -222,7 +235,7 @@ export function savedForm(guide) {
  *   roomAdded              a room was added, by any route
  *   dotOpened, gotIt       the dots
  *   review, saved          the end of the first build
- *   buildOwn               from the example
+ *   next, back, buildOwn   along the example, back out of it, and from it
  *   keepGoing              a returning visitor picks up where they stopped
  *   away, returned         a short loop: one of Maya's choices opens a card
  *                          ({ to, was }: where, and how the home stood),
@@ -254,6 +267,10 @@ export function step(guide, event) {
         if (g.scene !== 'done' || !g.away) return g;
         return to('done', { minimized: false, away: null, outcome: outcomeOf(g.away.was, event.now, g.away.to) });
     }
+    if (type === 'back' && EXAMPLE.includes(g.scene)) {
+        const at = EXAMPLE.indexOf(g.scene);
+        return to(at ? EXAMPLE[at - 1] : 'hello');
+    }
     if (GUIDED.includes(g.scene) && (type === 'back' || type === 'goto')) {
         const here = PROGRESS[g.scene];
         if (type === 'back' && g.scene === 'home') return to('hello');
@@ -274,7 +291,7 @@ export function step(guide, event) {
     if (type === 'close' && ASIDE.includes(g.scene)) return to(g.back || 'done', { back: null });
     // No Skip (QA, 2026-10-15: "the guide is the UX"): Back and the strip
     // move about in it, and Start over begins it again.
-    if (type === 'homeMade' && ['hello', 'example1', 'example2', 'example3'].includes(g.scene)) return to('firstRoom');
+    if (type === 'homeMade' && (g.scene === 'hello' || EXAMPLE.includes(g.scene))) return to('firstRoom');
     switch (g.scene) {
     case 'hello':
         if (type === 'start') return to('home');
@@ -327,6 +344,8 @@ export function step(guide, event) {
     case 'example2':
         return type === 'next' ? to('example3') : g;
     case 'example3':
+        return type === 'next' ? to('example4') : g;
+    case 'example4':
         if (type === 'buildOwn') return to('home');
         return g;
     case 'welcome':
@@ -392,16 +411,20 @@ export function addedLine(sheet, area, label, bath) {
  * 'floors' or null; `progress` the step of the strip or
  * null; `again` the line said once, in other words, if nothing happens.
  * `ctx` gives what the words depend on: `{ sheet, roomLabel, roomCount,
- * addedText }`. Null for `done`, when the bubble is put away.
+ * addedText, exampleTask, exampleTotal }`. Null for `done`, when the bubble
+ * is put away.
  */
 export function viewFor(guide, ctx = {}) {
     const b = (id, label, primary = false) => ({ id, label, primary });
     // Back on every step of the strip (QA, 2026-10-14), and the
     // steps reached so far, each a tap away.
+    // The example's beats have Back too, one beat at a time, and out.
+    const exampleAt = EXAMPLE.indexOf(guide.scene);
     const base = {
         choices: null, progress: PROGRESS[guide.scene] ?? null, reached: guide.reached ?? -1,
-        stepBack: GUIDED.includes(guide.scene), small: '', again: GUIDE[`${guide.scene}Again`] || '',
-        backTo: GUIDED.includes(guide.scene) ? backLabel(guide.scene, ctx.roomCount) : '',
+        stepBack: GUIDED.includes(guide.scene) || exampleAt >= 0, small: '', again: GUIDE[`${guide.scene}Again`] || '',
+        backTo: GUIDED.includes(guide.scene) ? backLabel(guide.scene, ctx.roomCount)
+            : exampleAt === 0 ? GUIDE.backToStart : exampleAt > 0 ? GUIDE.backOneStep : '',
         closed: firstRoomClosed(ctx.roomCount) ? [PROGRESS.firstRoom] : [],
         halo: HALO[guide.scene] || null
     };
@@ -446,7 +469,12 @@ export function viewFor(guide, ctx = {}) {
     case 'example2':
         return { ...base, text: GUIDE.example2, buttons: [b('next', GUIDE.next, true)] };
     case 'example3':
-        return { ...base, text: GUIDE.example3, buttons: [b('buildOwn', GUIDE.buildOwn, true)] };
+        return { ...base, text: ctx.exampleTask ? GUIDE.example3(ctx.exampleTask) : GUIDE.example3Plain, buttons: [b('next', GUIDE.next, true)] };
+    case 'example4':
+        // The whole home's total, when the sheet has priced it.
+        return ctx.exampleTotal
+            ? { ...base, text: `${GUIDE.exampleTotal(ctx.exampleTotal.money, ctx.exampleTotal.time)} ${GUIDE.example4}`, small: GUIDE.examplePrices, buttons: [b('buildOwn', GUIDE.buildOwn, true)] }
+            : { ...base, text: GUIDE.example4, buttons: [b('buildOwn', GUIDE.buildOwn, true)] };
     case 'welcome':
         // A return mid-build picks up where it stopped. Any other return is
         // a home base (QA, 2026-10-14): where the home stands, in words

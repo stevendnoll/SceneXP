@@ -741,16 +741,28 @@ describe('Maya on the stage', () => {
 });
 
 describe('the example', () => {
-    test('three beats, its main floor opened on the second, and Build my own from it', async () => {
-        const main = await boot();
+    test('four beats: the house, its main floor, a dot ringed, the whole home\'s total; then Build my own (QA, 2026-10-15)', async () => {
+        const main = await boot({ sheet: true });
         press('example');
         expect(main.__test__.active().sample).toBe(true);
         expect(line()).toBe(GUIDE.example1);
         expect(localStorage.getItem(CONFIG.storage.key)).toBeNull();
+        expect(main.__test__.model().lifted).toBeNull();
         press('next');
         expect(line()).toBe(GUIDE.example2);
         expect(main.__test__.model().lifted).toBe('main');
         press('next');
+        // The dots, named by the one ringed: the kitchen's stovetop.
+        expect(line()).toBe(GUIDE.example3('Stovetop'));
+        expect(main.__test__.model().lifted).toBe('main');
+        stepFrames(2);
+        expect(dom.el('ws-halo').className).toBe('ws-halo is-exampleDot');
+        expect(dom.el('ws-halo').hidden).toBe(false);
+        press('next');
+        // The whole home again, and what it comes to, as example prices.
+        expect(main.__test__.model().lifted).toBeNull();
+        expect(line()).toMatch(/^Cleaned as listed, this home comes to \$[\d,]+(\.\d\d)?, about [\w ]+\. Want to build yours\?$/);
+        expect(dom.el('host-small').textContent).toBe(GUIDE.examplePrices);
         expect(buttons()).toEqual([GUIDE.buildOwn]);
         press('buildOwn');
         expect(main.__test__.model().lifted).toBeNull();
@@ -778,6 +790,55 @@ describe('the example', () => {
         // The removal was saved with the example in it, so a reload meets it too.
         const saved = JSON.parse(localStorage.getItem(CONFIG.storage.key));
         expect(saved.checklists.find((c) => c.id === 'example-home-1').deletedAt).not.toBeNull();
+    });
+
+    test('Example mode is a tour to watch: a tap on the house opens nothing, and Maya\'s Next pulses instead', async () => {
+        const main = await boot({ sheet: true });
+        press('example');
+        for (let beat = 0; beat < 4; beat++) {
+            const before = main.__test__.model().lifted;
+            expect(main.__test__.tapModel()).toBe(false);
+            expect(main.__test__.tapModel('second')).toBe(false);
+            const c = main.__test__.active();
+            const room = c.rooms.find((r) => r.level === 'main');
+            const item = c.items.find((i) => i.roomId === room.id);
+            expect(main.__test__.tapModel('main', item.id, room.id)).toBe(false);
+            expect(main.__test__.model().lifted).toBe(before);
+            expect(main.__test__.ui.selected).toBeNull();
+            expect(panelShown()).toBe(false);
+            expect(nudged(beat < 3 ? 'next' : 'buildOwn')).toBe(true);
+            jest.advanceTimersByTime(1700);
+            if (beat < 3) press('next');
+        }
+        // Built, the house answers again.
+        press('buildOwn');
+        expect(main.__test__.ui.guide.scene).toBe('home');
+    });
+
+    test('Back goes one beat back (the house as that beat had it, not built again), and from the first to the greeting', async () => {
+        const main = await boot({ sheet: true });
+        press('example');
+        press('next');
+        press('next');
+        press('next');
+        const back = () => fire(dom.el('host-back'), 'click');
+        expect(dom.el('host-back').hidden).toBe(false);
+        expect(dom.el('host-back').getAttribute('title')).toBe(GUIDE.backOneStep);
+        back();
+        expect(line()).toBe(GUIDE.example3('Stovetop'));
+        expect(main.__test__.model().lifted).toBe('main');
+        back();
+        expect(line()).toBe(GUIDE.example2);
+        expect(main.__test__.model().lifted).toBe('main');
+        const assemble = jest.spyOn(main.__test__.model(), 'assemble');
+        back();
+        expect(line()).toBe(GUIDE.example1);
+        expect(main.__test__.model().lifted).toBeNull();
+        expect(assemble).not.toHaveBeenCalled();
+        expect(dom.el('host-back').getAttribute('title')).toBe(GUIDE.backToStart);
+        back();
+        expect(line()).toBe(GUIDE.hello);
+        expect(main.__test__.active()).toBeNull();
     });
 
     test('restarting the guide puts the example back and shows the plain house again', async () => {
@@ -950,7 +1011,7 @@ describe('Maya standing by (QA, 2026-10-14: she should always have something to 
         press('example');
         main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false, skipped: false };
         main.__test__.showGuide();
-        expect(line()).toBe(GUIDE.example3);
+        expect(line()).toBe(GUIDE.example4);
         expect(picks().map((b) => b.id)).toEqual(['host-buildOwn']);
         pick('buildOwn');
         expect(line()).toBe(GUIDE.home);

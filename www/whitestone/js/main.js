@@ -71,7 +71,7 @@ import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKIN
 import { createTurntable, turnPoint } from './turntable.min.js';
 import { buildStage, buildLights, firstPick, onTurntable } from './stage.min.js';
 import { buildModel } from './model.min.js';
-import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, ringFloor, GUIDED, CHANGED, PROGRESS } from './guide.min.js';
+import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, ringFloor, GUIDED, CHANGED, PROGRESS, EXAMPLE } from './guide.min.js';
 import { createHost } from './host.min.js';
 import { buildMaya, speakSeconds } from './cast.min.js';
 import { createPanel, selectFromHit, stepOut, reconcile, panelView, homeSuggestions } from './panel.min.js';
@@ -710,6 +710,10 @@ function haloPoint() {
         const level = ringFloor(model.levels(), model.lifted, liveRooms(c).map((r) => r.level), annex);
         return level ? model.pointOf({ kind: 'floor', level }) : null;
     }
+    if (h.spec.kind === 'exampleDot') {
+        const item = exampleDot(c, model.lifted);
+        return item ? model.pointOf({ kind: 'dot', itemId: item.id }) : null;
+    }
     if (h.spec.kind === 'dot') {
         const room = ui.guide && c.rooms.find((r) => r.id === ui.guide.roomId && !r.deletedAt);
         if (!room || model.lifted !== room.level || (ui.selected && ui.selected.scope === 'task')) return null;
@@ -906,8 +910,30 @@ function handleSceneTap(clientX, clientY) {
  * floors were chosen).
  */
 function houseAnswers() {
+    // Example mode is a tour to watch (QA, 2026-10-15): Maya shows the
+    // house, and a tap only pulses her next step.
+    if (inExample()) return false;
     const c = active();
     return Boolean(c && liveRooms(c).length);
+}
+
+/** Whether Maya is showing the example (guide.js EXAMPLE). */
+function inExample() {
+    return Boolean(ui.guide && EXAMPLE.includes(ui.guide.scene));
+}
+
+/** The task whose dot the example's tour rings: the stovetop in the
+ *  kitchen on the open floor, else the first task of the first room there
+ *  that has one. Null with no floor open. */
+function exampleDot(c, lifted) {
+    if (!c || !lifted) return null;
+    const rooms = liveRooms(c).filter((r) => r.level === lifted).sort((a, b) => (a.area === 'kitchen' ? -1 : 0) - (b.area === 'kitchen' ? -1 : 0));
+    for (const room of rooms) {
+        const items = itemsIn(c, room.id);
+        const pick = items.find((i) => i.task === 'stovetop') || items[0];
+        if (pick) return pick;
+    }
+    return null;
 }
 
 // ---- The look: turning the house -----------------------------------------------------
@@ -1092,7 +1118,21 @@ function guideContext() {
         addedText: room ? addedLine(state.sheet, room.area, roomName(c.serviceType, room), room.bath) : '',
         welcome: welcomeLine(c),
         standby: standbyLine(c),
-        saved: savedNext(c)
+        saved: savedNext(c),
+        ...exampleContext(c)
+    };
+}
+
+/** The example's words: the task its dots beat rings (by name), and the
+ *  whole home's total, when the sheet has priced it. */
+function exampleContext(c) {
+    if (!inExample() || !c || !c.sample) return {};
+    const item = model ? exampleDot(c, model.lifted) : null;
+    const task = item && state.sheet ? taskOf(state.sheet, item.task) : null;
+    const quote = state.sheet ? quoteChecklist(state.sheet, c) : null;
+    return {
+        exampleTask: task ? task.name : '',
+        exampleTotal: quote && quote.totalCents ? { money: formatMoney(quote.totalCents), time: formatMinutes(quote.minutes) } : null
     };
 }
 
@@ -1154,7 +1194,7 @@ function whereLine(c) {
  *  speaks for itself. */
 function standbyLine(c) {
     if (ui.guide && ui.guide.outcome) return afterLine(c, ui.guide.outcome);
-    if (c && c.sample) return `${GUIDE.example3}`;
+    if (c && c.sample) return GUIDE.example4;
     return `${whereLine(c)} ${GUIDE.returningLegend}`;
 }
 
@@ -1322,7 +1362,7 @@ function sceneView() {
 const GESTURE_OF = {
     hello: 'wave', welcome: 'wave',
     home: 'point', attached: 'point', floors: 'point', saved: 'wave', firstRoom: 'point', added: 'point', dots: 'point', rooms: 'point', review: 'point',
-    example1: 'point', example2: 'point', look: 'point'
+    example1: 'point', example2: 'point', example3: 'point', example4: 'point', look: 'point'
 };
 
 /** Maya says the scene now (or is put away when there is none), with the
@@ -1423,14 +1463,33 @@ function enterScene(to) {
         liftLevel(null);
         ensureOwn();
         break;
-    case 'example1':
-        showExample();
-        break;
-    case 'example2': {
-        const levels = model.levels();
-        liftLevel(levels.includes('main') ? 'main' : levels[0]);
+    case 'example1': {
+        // Back here from a later beat, the example is already up: closed
+        // again, not built again.
+        const c = active();
+        if (c && c.sample) {
+            selectTo(null);
+            liftLevel(null);
+        } else {
+            showExample();
+        }
         break;
     }
+    case 'example2':
+    case 'example3': {
+        // Its main floor open, the dots in view (the third beat rings one).
+        selectTo(null);
+        if (model && !model.lifted) {
+            const levels = model.levels();
+            liftLevel(levels.includes('main') ? 'main' : levels[0]);
+        }
+        break;
+    }
+    case 'example4':
+        // The whole home, for its total.
+        selectTo(null);
+        liftLevel(null);
+        break;
     case 'rooms':
         // Rooms are added floor by floor, so a floor is open here (QA,
         // 2026-10-15: arriving from Review or the progress strip met a

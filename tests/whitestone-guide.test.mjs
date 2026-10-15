@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { GUIDE, BRAND, countWord } from '../www/whitestone/js/copy.js';
 import {
-    GUIDED, PROGRESS, HALO, CHANGED, firstRoomClosed, backTarget, arrivalId, arrivalGuide, hasOwn, savedForm, step, presetSummary, addedLine, viewFor, outcomeOf, ringFloor
+    GUIDED, EXAMPLE, PROGRESS, HALO, CHANGED, firstRoomClosed, backTarget, arrivalId, arrivalGuide, hasOwn, savedForm, step, presetSummary, addedLine, viewFor, outcomeOf, ringFloor
 } from '../www/whitestone/js/guide.js';
 import { presetFor } from '../www/whitestone/js/sheet.js';
 import { priceChoice, formatMoney } from '../www/whitestone/js/pricing.js';
@@ -28,7 +28,7 @@ const fresh = () => arrivalGuide(doc([]));
 const HOUSE = { type: 'residence', kind: 'house' };
 const walk = (g, ...types) => types.reduce((acc, t) => step(acc, typeof t === 'string' ? { type: t } : t), g);
 
-const ALL = ['hello', ...GUIDED, 'saved', 'example1', 'example2', 'example3', 'welcome', 'hint'];
+const ALL = ['hello', ...GUIDED, 'saved', 'example1', 'example2', 'example3', 'example4', 'welcome', 'hint'];
 const EVENTS = ['start', 'example', 'floorTapped', 'next', 'roomAdded', 'dotOpened', 'gotIt', 'review', 'saved', 'buildOwn',
     'lookAround', 'keepGoing', 'homeMade', 'residence', 'again', 'about', 'close', 'restart', 'skip', 'away', 'returned', 'nonsense'];
 
@@ -167,8 +167,8 @@ describe('the way through', () => {
         expect(back(at('rooms'), 'k1')).toMatchObject({ scene: 'added', roomId: 'k1' });
         expect(back(at('rooms')).scene).toBe('firstRoom');
         expect(back(at('review')).scene).toBe('rooms');
-        // Nothing outside the strip has a Back.
-        for (const scene of ['hello', 'saved', 'example1', 'welcome', 'done']) {
+        // Nothing outside the strip has a Back, but the example's beats.
+        for (const scene of ['hello', 'saved', 'welcome', 'done']) {
             const g = at(scene);
             expect(back(g)).toBe(g);
             expect(viewFor(g, { sheet: SHEET }) ? viewFor(g, { sheet: SHEET }).stepBack : false).toBe(false);
@@ -261,17 +261,44 @@ describe('the way through', () => {
         }
     });
 
-    test('the example: three beats, then build your own', () => {
+    test('the example: four beats to watch, Next through them, then build your own (QA, 2026-10-15)', () => {
         const beats = [];
         let g = walk(fresh(), 'example');
         beats.push(g.scene);
-        g = walk(g, 'next');
-        beats.push(g.scene);
-        g = walk(g, 'next');
-        beats.push(g.scene);
-        expect(beats).toEqual(['example1', 'example2', 'example3']);
+        for (let i = 0; i < 3; i++) {
+            g = walk(g, 'next');
+            beats.push(g.scene);
+        }
+        expect(beats).toEqual(EXAMPLE);
+        expect(walk(g, 'next')).toBe(g);
         expect(walk(g, 'buildOwn').scene).toBe('home');
         expect(viewFor(g).buttons).toEqual([{ id: 'buildOwn', label: GUIDE.buildOwn, primary: true }]);
+        // Every beat but the last moves on with Next, and only Next.
+        for (const scene of EXAMPLE.slice(0, 3)) {
+            expect(viewFor({ ...fresh(), scene }).buttons).toEqual([{ id: 'next', label: GUIDE.next, primary: true }]);
+            expect(walk({ ...fresh(), scene }, 'buildOwn').scene).toBe(scene);
+        }
+        // Nothing on the house moves the tour: no dot opens a task here.
+        expect(walk({ ...fresh(), scene: 'example3' }, 'dotOpened').scene).toBe('example3');
+    });
+
+    test('the example\'s Back goes one beat back, and from the first to the greeting', () => {
+        const back = (scene) => step({ ...fresh(), scene }, { type: 'back' }).scene;
+        expect(EXAMPLE.map(back)).toEqual(['hello', 'example1', 'example2', 'example3']);
+        expect(viewFor({ ...fresh(), scene: 'example1' })).toMatchObject({ stepBack: true, backTo: GUIDE.backToStart, progress: null });
+        for (const scene of EXAMPLE.slice(1)) expect(viewFor({ ...fresh(), scene })).toMatchObject({ stepBack: true, backTo: GUIDE.backOneStep });
+    });
+
+    test('the dots beat names the ringed task, and the last beat says the whole home\'s total when it is priced', () => {
+        const three = { ...fresh(), scene: 'example3' };
+        expect(viewFor(three, { exampleTask: 'Stovetop' })).toMatchObject({ text: GUIDE.example3('Stovetop'), halo: { kind: 'exampleDot' } });
+        expect(GUIDE.example3('Stovetop')).toContain('like the stovetop here');
+        expect(viewFor(three, {}).text).toBe(GUIDE.example3Plain);
+        const four = { ...fresh(), scene: 'example4' };
+        expect(viewFor(four, { exampleTotal: { money: '$412', time: 'about 4 hours' } })).toMatchObject({
+            text: `${GUIDE.exampleTotal('$412', 'about 4 hours')} ${GUIDE.example4}`, small: GUIDE.examplePrices
+        });
+        expect(viewFor(four, {})).toMatchObject({ text: GUIDE.example4, small: '' });
     });
 
     test('a return picks up where it stopped', () => {

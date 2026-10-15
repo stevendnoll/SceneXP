@@ -410,7 +410,13 @@ export const GUIDE = Object.freeze({
 
     example1: 'This is a four-bedroom home with a home office.',
     example2: 'Each room has its tasks, and every task has a price.',
-    example3: 'Want to build yours?',
+    /** The dots, shown and not tapped (Example mode, QA 2026-10-15). */
+    example3: (task) => `Each blue dot is a task, like the ${String(task).toLowerCase()} here. In your own home, you can tap a dot to see what’s included, or star the tasks that matter most.`,
+    example3Plain: 'Each blue dot is a task. In your own home, you can tap a dot to see what’s included, or star the tasks that matter most.',
+    exampleTotal: (money, time) => `Cleaned as listed, this home comes to ${money}, ${time}.`,
+    examplePrices: 'These are example prices.',
+    example4: 'Want to build yours?',
+    backOneStep: 'Back one step',
     buildOwn: 'Build my own',
 
     welcome: 'Welcome back. Your home is just as you left it.',
