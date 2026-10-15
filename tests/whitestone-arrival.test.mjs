@@ -102,7 +102,14 @@ describe('the markup', () => {
         const icon = readFileSync(join(WS, 'favicon.svg'), 'utf8');
         expect(icon).toMatch(/THE GABLE\s+over a W|the gable\s+over a W/);
         expect(icon).not.toMatch(/<script|<text|<image|href=|url\(|font-family/i);
-        expect(HTML).toMatch(/href="favicon\.svg\?v=2"/);
+        expect(HTML).toMatch(/href="favicon\.svg\?v=3"/);
+        // A W: three points up and two down, as the wordmark's (QA,
+        // 2026-10-15: it had four up, a VVV).
+        const ys = icon.match(/<path d="(M[^"]+)"[^>]*stroke-width="2\.4"/)[1].match(/[\d.]+,[\d.]+/g).map((p) => Number(p.split(',')[1]));
+        expect(ys).toHaveLength(5);
+        const tops = ys.filter((y, i) => (i === 0 || y < ys[i - 1]) && (i === ys.length - 1 || y < ys[i + 1]));
+        expect(tops).toHaveLength(3);
+        expect(ys.filter((y) => y === Math.max(...ys))).toHaveLength(2);
         expect(HTML).toMatch(/<div id="host-facts"[^>]*\shidden>/);
     });
 });
