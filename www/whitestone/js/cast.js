@@ -101,7 +101,10 @@ export function buildMaya(config) {
         shirtColor: color(m.shirt),
         pantsColor: color(m.pants),
         hairStyle: 'long',
-        shoulderRound: 0.45
+        shoulderRound: 0.45,
+        // A woman's build (Steve, 2026-10-14: "her hips and legs ... look
+        // more like a man's"): the rig's rounded hips and fuller thighs.
+        hips: m.hips ?? 0
     });
     // The Whitestone mark on the polo's chest, over her heart.
     const mark = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.032, 0.008), new THREE.MeshStandardMaterial({ color: m.accent, roughness: 0.6 }));

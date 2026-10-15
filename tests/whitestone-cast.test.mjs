@@ -144,6 +144,20 @@ describe('built with the real three.js', () => {
         expect(out.dot(toHouse)).toBeGreaterThan(0.7);
     });
 
+    test('she has a woman\'s build: the rig\'s hips, as her config asks (Steve, 2026-10-14)', () => {
+        expect(CONFIG.cast.maya.hips).toBe(1);
+        /** Her widest thigh's top radius. */
+        const thighOf = (cfg) => {
+            let r = 0;
+            buildMaya(cfg).group.traverse((o) => {
+                if (o.userData && o.userData.isLeg) for (const c of o.children) if (c.geometry && c.geometry.type === 'CylinderGeometry') r = Math.max(r, c.geometry.parameters.radiusTop);
+            });
+            return r;
+        };
+        const plain = { ...CONFIG, cast: { ...CONFIG.cast, maya: { ...CONFIG.cast.maya, hips: 0 } } };
+        expect(thighOf(CONFIG)).toBeGreaterThan(thighOf(plain) * 1.5);
+    });
+
     test('a gesture runs its course and rests; reduced motion rests at once; the sway lasts as long as the line', () => {
         const maya = buildMaya(CONFIG);
         expect(maya.tick(1 / 60)).toBe(false);

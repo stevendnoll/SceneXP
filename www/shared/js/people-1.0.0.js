@@ -91,6 +91,7 @@ export function createPerson(config) {
         tieColor = 0x8c1d2c,   // necktie color (used when hasSuit)
         dressShirt = false,    // button-down dress shirt: center placket + long sleeves, no jacket/tie
         shoulderRound = 0,     // 0 = square box torso; up to ~0.6 rounds the shoulders and softens every edge
+        hips = 0,              // 0 = straight (as before); up to 1 a woman's build: thighs full at the hip, meeting, tapering to the knee, a slimmer calf
         sleeveColor = null     // long sleeves in this color; null keeps bare forearms
     } = config;
 
@@ -161,6 +162,7 @@ export function createPerson(config) {
     const armRadius = 0.045 * (muscular ? 1.55 : 1);   // thicker arms
     const legLength = 0.75;
     const legRadius = 0.065 * (muscular ? 1.35 : 1);   // thicker legs on a muscular build
+    const hipShape = Math.max(0, Math.min(1, hips));
     const footLength = 0.18;
 
     // === HEAD ===
@@ -543,8 +545,13 @@ export function createPerson(config) {
         const legGroup = new THREE.Group();
 
         // Upper leg (thigh)
+        // With hips (a woman's build), the thighs make the hips: full at the
+        // top, their outer edges just past the shirt's sides and their inner
+        // edges meeting, tapering to the knee. Nothing is added beside them,
+        // so nothing sticks out (QA, 2026-10-14: a separate rounded pelvis
+        // bulged at the sides and read as a stomach in front).
         const thigh = new THREE.Mesh(
-            new THREE.CylinderGeometry(legRadius, legRadius * 1.1, legLength * 0.5, 8),
+            new THREE.CylinderGeometry(legRadius * (1 + 0.55 * hipShape), legRadius * (1.1 - 0.05 * hipShape), legLength * 0.5, hipShape > 0 ? 14 : 8),
             pantsMaterial
         );
         thigh.position.y = -legLength * 0.25;
@@ -552,7 +559,7 @@ export function createPerson(config) {
 
         // Knee
         const knee = new THREE.Mesh(
-            new THREE.SphereGeometry(legRadius * 0.95, 8, 8),
+            new THREE.SphereGeometry(legRadius * (0.95 + 0.1 * hipShape), 8, 8),
             pantsMaterial
         );
         knee.position.y = -legLength * 0.5;
@@ -560,7 +567,7 @@ export function createPerson(config) {
 
         // Lower leg (shin)
         const shin = new THREE.Mesh(
-            new THREE.CylinderGeometry(legRadius * 0.8, legRadius * 0.9, legLength * 0.48, 8),
+            new THREE.CylinderGeometry(legRadius * (0.8 + 0.1 * hipShape), legRadius * (0.9 - 0.2 * hipShape), legLength * 0.48, 8),
             pantsMaterial
         );
         shin.position.y = -legLength * 0.75;
@@ -579,7 +586,7 @@ export function createPerson(config) {
 
         // Position leg group at hip
         legGroup.position.set(
-            side * (torsoWidth / 4),
+            side * (torsoWidth / 4 + 0.006 * hipShape),
             legLength,
             0
         );

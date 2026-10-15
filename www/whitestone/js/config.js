@@ -220,7 +220,9 @@ export const CONFIG = deepFreeze({
         maya: {
             x: 2.0, z: 0.1, facing: -0.55, height: 1.72,
             skin: '#BF8A66', hair: '#22170F', eyes: '#3A2416',
-            shirt: '#F6F5F1', pants: '#2F353D', accent: '#3E5C76'
+            shirt: '#F6F5F1', pants: '#2F353D', accent: '#3E5C76',
+            // The rig's woman's build, 0 to 1 (people-1.0.0.js `hips`).
+            hips: 1
         }
     },
 
