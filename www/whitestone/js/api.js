@@ -79,6 +79,12 @@ export function createApi(transport) {
         listAddOns: (id, token, visitId) => call('GET', `checklists/${enc(id)}/visits/${enc(visitId)}/addons`, { token }),
         /** The cleaner's sealed report, once (`exists` after). */
         putReport: (id, token, visitId, bytes) => call('PUT', `checklists/${enc(id)}/visits/${enc(visitId)}/report`, { token, bytes }),
+        /** A proof photo of the visit (and its thumbnail), the cleaner's,
+         *  before the report; read by the customer. */
+        putProof: (id, token, visitId, photoId, bytes) => call('PUT', `checklists/${enc(id)}/visits/${enc(visitId)}/proof/${enc(photoId)}`, { token, bytes }),
+        putProofThumb: (id, token, visitId, photoId, bytes) => call('PUT', `checklists/${enc(id)}/visits/${enc(visitId)}/proof/${enc(photoId)}/thumb`, { token, bytes }),
+        getProof: (id, owner, visitId, photoId) => call('GET', `checklists/${enc(id)}/visits/${enc(visitId)}/proof/${enc(photoId)}`, { token: owner }),
+        getProofThumb: (id, owner, visitId, photoId) => call('GET', `checklists/${enc(id)}/visits/${enc(visitId)}/proof/${enc(photoId)}/thumb`, { token: owner }),
         /** A visit's sealed report, for the customer. */
         getReport: (id, owner, visitId) => call('GET', `checklists/${enc(id)}/visits/${enc(visitId)}/report`, { token: owner })
     };

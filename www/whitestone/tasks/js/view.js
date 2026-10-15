@@ -321,6 +321,50 @@ function markRow(item, name, mark, picking, on, note) {
     ];
 }
 
+/**
+ * A marked task's proof photos (M5 piece 4, PRD 11.7): each kept photo's
+ * thumbnail with Remove, and while there is room for another, Add a photo
+ * (a label for a hidden file input, which a phone opens on its camera),
+ * with `hint`, once on the page, saying photos are optional.
+ */
+function proofRow(item, name, ids, thumbs, on, hint = false) {
+    const shots = ids.map((photoId, n) => {
+        const label = COPY.proofOf(n + 1, name);
+        const url = thumbs.get(photoId);
+        const remove = h('button', {
+            type: 'button', className: 'skip-cancel proof-remove', id: `proof-remove-${photoId}`, text: COPY.removeProof,
+            attrs: { 'aria-label': COPY.removeProofOf(n + 1, name), title: COPY.removeProofOf(n + 1, name) }
+        });
+        remove.addEventListener('click', () => on.unproof(item.id, photoId));
+        return h('li', { className: 'proof', id: `proof-${photoId}` }, [
+            url ? h('img', { src: url, alt: label, width: 72, height: 72 }) : h('span', { className: 'proof-place', text: label }),
+            remove
+        ]);
+    });
+    const out = [];
+    if (shots.length) out.push(h('ul', { className: 'proofs', attrs: { 'aria-label': COPY.proofsOf(name) } }, shots));
+    if (ids.length < REPORT_LIMITS.photos) {
+        const input = h('input', {
+            type: 'file', id: `proof-input-${item.id}`, className: 'visually-hidden proof-input',
+            attrs: hint ? { accept: 'image/*', capture: 'environment', 'aria-describedby': 'proof-hint' } : { accept: 'image/*', capture: 'environment' }
+        });
+        input.addEventListener('change', () => {
+            const file = input.files && input.files[0];
+            input.value = '';
+            if (file) on.proof(item.id, file);
+        });
+        out.push(h('div', { className: 'proof-add' }, [
+            input,
+            h('label', { className: 'skip-cancel proof-label', attrs: { for: `proof-input-${item.id}`, title: COPY.addProofOf(name) } }, [
+                h('span', { text: COPY.addProof }),
+                h('span', { className: 'visually-hidden', text: ` ${COPY.ofTask(name)}` })
+            ]),
+            hint ? h('p', { className: 'proof-hint', id: 'proof-hint', text: COPY.proofsOptional }) : null
+        ]));
+    }
+    return out;
+}
+
 function taskBlock(sheet, form, item, thumbs, on, visit) {
     const d = taskDetail(sheet, form, item);
     const extra = [];
@@ -341,7 +385,9 @@ function taskBlock(sheet, form, item, thumbs, on, visit) {
             item.important ? h('span', { className: 'visually-hidden', text: ` (${COPY.starred})` }) : null
         ]),
         ...extra,
-        ...markRow(item, d.name, mark, visit.skipping === item.id, on, visit.skipNote)
+        ...markRow(item, d.name, mark, visit.skipping === item.id, on, visit.skipNote),
+        ...(mark ? proofRow(item, d.name, (visit.proofs || {})[item.id] || [], visit.proofThumbs || new Map(), on, visit.proofHint === item.id) : []),
+        visit.proofNote && visit.proofNote.itemId === item.id ? h('p', { className: 'skip-note', attrs: { role: 'alert' }, text: visit.proofNote.text }) : null
     ]);
 }
 
@@ -362,10 +408,19 @@ function taskBlock(sheet, form, item, thumbs, on, visit) {
  * `on.pick(roomId, key)` and `on.quantity(roomId, value)` change it,
  * `on.send(roomId)` sends it, and `on.addOnDone(addonId)` marks an approved
  * add-on done (or clears it). `on.print()` prints the work order.
+ *
+ * Proof photos (M5 piece 4): `proofs` the photo ids by task, `proofThumbs`
+ * photo id to object address, `proofNote` `{ itemId, text }` when one could
+ * not be added. `on.proof(itemId, file)` adds one, `on.unproof(itemId,
+ * photoId)` removes it.
  */
-export function renderChecklist(container, { form, quote, sheet, thumbs = new Map(), notice = '', progress = { marks: {} }, skipping = null, skipNote = '', addOns = [], proposing = null, on }) {
+export function renderChecklist(container, { form, quote, sheet, thumbs = new Map(), notice = '', progress = { marks: {} }, skipping = null, skipNote = '', addOns = [], proposing = null, proofs = {}, proofThumbs = new Map(), proofNote = null, on }) {
     clear(container);
-    const visit = { progress, skipping, skipNote, addOns, proposing };
+    // That photos are optional is said once: beside the first Add a photo,
+    // in the order the cleaner reads the tasks.
+    const proofHint = (readingOrder(form).flatMap((l) => l.rooms.flatMap((r) => r.items))
+        .find((i) => progress.marks[i.id] && ((proofs || {})[i.id] || []).length < REPORT_LIMITS.photos) || {}).id || null;
+    const visit = { progress, skipping, skipNote, addOns, proposing, proofs, proofThumbs, proofNote, proofHint };
     const prefs = preferenceLines(form);
     if (prefs.lines.length || prefs.note) {
         container.appendChild(h('section', { className: 'tasks-prefs', attrs: { 'aria-labelledby': 'prefs-heading' } }, [

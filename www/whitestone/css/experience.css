@@ -1049,6 +1049,32 @@ textarea.ws-input {
     margin: 0.2rem 0;
 }
 
+.visit-report-photos ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+    gap: 0.6rem;
+    margin: 0.3rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.visit-report-photos figure {
+    margin: 0;
+}
+
+.visit-report-photos img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+
+.visit-report-photos figcaption {
+    margin-top: 0.2rem;
+    color: var(--ws-muted);
+    font-size: 0.85rem;
+}
+
 #visit-report-skipped .quote-prefs-title {
     color: #8A5A0B;
 }

@@ -232,3 +232,86 @@ describe('the report in words (view.js reportLines, billLines)', () => {
         expect(billLines({ billedCents: 15000, doneCents: 10000, addOnCents: 0, topUpCents: 5000, quoteCents: 15000 }).parts).toEqual([COPY.billDone('$100'), COPY.billMinimum('$50')]);
     });
 });
+
+describe('proof photos (M5 piece 4, PRD 11.7)', () => {
+    const P = (n) => `photo${String(n).padStart(17, '0')}`;
+
+    test('a result keeps up to two photos, each once, of the API\'s shape; a report names them all once', async () => {
+        const { cleanProofs } = await import('../www/whitestone/tasks/js/visit.js');
+        const { proofIdsOf } = await import('../www/whitestone/js/report.js');
+        const r = cleanReport({
+            format: REPORT_FORMAT, id: ID,
+            results: [
+                { itemId: 'a', status: 'done', photos: [P(1), P(1), 'bad', P(2), P(3)] },
+                { itemId: 'b', status: 'skipped', reason: 'no-time', photos: [P(4)] },
+                { itemId: 'c', status: 'done', photos: 'nope' }
+            ]
+        }, ID);
+        expect(r.results[0].photos).toEqual([P(1), P(2)]);
+        expect(r.results[1].photos).toEqual([P(4)]);
+        expect('photos' in r.results[2]).toBe(false);
+        expect(proofIdsOf(r)).toEqual([P(1), P(2), P(4)]);
+        expect(proofIdsOf(null)).toEqual([]);
+        expect(cleanProofs({ a: [P(1), P(2), P(3)], b: ['bad'], c: 'x' })).toEqual({ a: [P(1), P(2)] });
+        expect(cleanProofs(null)).toEqual({});
+        // Only a task marked done or skipped carries its photos.
+        const f = form();
+        let p = applyMark(emptyProgress(), f.items[0].id, { status: 'done' });
+        p = applyMark(p, f.items[1].id, { status: 'skipped', reason: 'no-access' });
+        const built = buildReport(f, p, [], { proofs: { [f.items[0].id]: [P(1)], [f.items[1].id]: [P(2)], [f.items[2].id]: [P(3)] } });
+        expect(built.results.slice(0, 3).map((x) => x.photos)).toEqual([[P(1)], [P(2)], undefined]);
+    });
+
+    async function visit() {
+        const standin = createStandin({ backend: createMemoryBackend(), config: CONFIG, schedule: SCHEDULE, now: () => NOW.getTime() });
+        const api = createApi((req) => standin.handle(req));
+        const sealer = createSealer();
+        const r = (await api.reserve()).data;
+        await api.putChecklist(r.id, r.ownerToken, new Uint8Array([1]));
+        const token = (await api.open(r.id, r.pin)).data.visitToken;
+        const visitId = (await api.startVisit(r.id, token)).data.visitId;
+        return { api, sealer, key: await sealer.generateKey(), id: r.id, owner: r.ownerToken, token, visitId };
+    }
+
+    test('sent sealed before the report, read back by the customer, each size under its own name', async () => {
+        const { sendProof, fetchProofs } = await import('../www/whitestone/js/report.js');
+        const w = await visit();
+        const full = new Uint8Array([1, 2, 3]);
+        const thumb = new Uint8Array([4]);
+        expect(await sendProof({ ...w, photoId: P(1), full, thumb })).toEqual({ ok: true, error: null });
+        // Again (an answer lost on the way): as good as sent.
+        expect((await sendProof({ ...w, photoId: P(1), full, thumb })).ok).toBe(true);
+        const report = cleanReport({ format: REPORT_FORMAT, id: w.id, results: [{ itemId: 'a', status: 'done', photos: [P(1), P(2)] }] }, w.id);
+        const got = await fetchProofs({ ...w, token: w.owner, report });
+        expect(got).toEqual([{ photoId: P(1), full, thumb }]);
+        // The full size does not open as the thumbnail, nor the other way.
+        const raw = await w.api.getProof(w.id, w.owner, w.visitId, P(1));
+        await expect(w.sealer.open(w.key, raw.bytes, contextFor(w.id, 'proof', `${P(1)}-thumb`))).rejects.toThrow();
+        const rawThumb = await w.api.getProofThumb(w.id, w.owner, w.visitId, P(1));
+        await expect(w.sealer.open(w.key, rawThumb.bytes, contextFor(w.id, 'proof', P(1)))).rejects.toThrow();
+        // A refusal says so.
+        expect(await sendProof({ ...w, token: 'C'.repeat(43), photoId: P(3), full, thumb })).toEqual({ ok: false, error: 'denied' });
+        const other = await w.sealer.generateKey();
+        expect(await fetchProofs({ ...w, key: other, token: w.owner, report })).toEqual([]);
+    });
+
+    test('the stand-in: the cleaner sends, the customer reads, not after the report, not too many, not too large', async () => {
+        const w = await visit();
+        const put = (token, photoId, bytes, thumb = false) => (thumb ? w.api.putProofThumb : w.api.putProof)(w.id, token, w.visitId, photoId, bytes);
+        expect((await put(w.owner, P(1), new Uint8Array([1]))).error).toBe('denied');
+        expect((await put(w.token, P(1), null)).error).toBe('bad-request');
+        expect((await put(w.token, P(1), new Uint8Array(CONFIG.api.maxProofBytes + 1))).error).toBe('bad-request');
+        expect((await put(w.token, P(1), new Uint8Array([1]))).status).toBe(201);
+        expect((await put(w.token, P(1), new Uint8Array([2]))).error).toBe('exists');
+        expect((await put(w.token, P(1), new Uint8Array([3]), true)).status).toBe(201);
+        expect((await w.api.getProof(w.id, w.token, w.visitId, P(1))).error).toBe('denied');
+        expect((await w.api.getProof(w.id, w.owner, w.visitId, P(9))).status).toBe(404);
+        expect((await w.api.getProofThumb(w.id, w.owner, w.visitId, P(1))).bytes).toEqual(new Uint8Array([3]));
+        for (let n = 2; n <= CONFIG.api.maxProofs - 1; n++) await put(w.token, P(n), new Uint8Array([1]));
+        expect((await put(w.token, P(500), new Uint8Array([1]))).error).toBe('too-many');
+        const fresh = await visit();
+        await fresh.api.putReport(fresh.id, fresh.token, fresh.visitId, new Uint8Array([1]));
+        expect((await fresh.api.putProof(fresh.id, fresh.token, fresh.visitId, P(1), new Uint8Array([1]))).error).toBe('closed');
+        expect((await fresh.api.putProof(fresh.id, fresh.token, 'B'.repeat(22), P(1), new Uint8Array([1]))).status).toBe(404);
+    });
+});

@@ -16,13 +16,36 @@
  * Its ids are fixed, so the example is the same home on every visit and its
  * photos (Steve's close-ups, to come) can be matched to its tasks.
  *
- * Still to come: the finished visit report with a skip and an approved
- * add-on, once the store keeps reports (M5), and the photos.
+ * ITS LAST VISIT'S REPORT (M5 piece 4), for the example tour's report
+ * beat: almost everything done, the microwave skipped for time, the
+ * basement not reached, an oven cleaning the customer approved and the
+ * cleaner did, and a note. Kept as the studio keeps any report (store.js
+ * addVisits), already seen, so Maya never announces it. Its bill is worked
+ * out from the sheet when shown, as the example has no locked quote.
+ *
+ * Still to come: the photos.
  */
 
-import { createChecklist, setPreferences, addRoom, addItem, setSettings } from './store.min.js';
+import { createChecklist, setPreferences, addRoom, addItem, setSettings, addVisits, markVisitSeen } from './store.min.js';
+import { REPORT_FORMAT } from './report.min.js';
+import { ADDON_FORMAT } from './addons.min.js';
 
 export const EXAMPLE_ID = 'example-home-1';
+
+/** The example's last visit: its ids (the API's 22 characters), when, who,
+ *  the one task skipped and why, the room not reached, and the add-on. */
+export const EXAMPLE_VISIT = Object.freeze({
+    visitId: 'exampleVisit0000000001',
+    reportId: 'exampleReport000000001',
+    addOnId: 'exampleAddOn0000000001',
+    reportAt: '2026-10-02T19:00:00.000Z',
+    booking: Object.freeze({ date: '2026-10-02', time: '09:00' }),
+    cleaner: 'Steve',
+    minutesOnSite: 195,
+    note: 'Juniper kept me company from the yard. The oven had a spill, so I cleaned it as you approved.',
+    skipped: Object.freeze({ itemId: 'example-task-2-4', reason: 'no-time' }),
+    notReachedRoom: 13
+});
 
 /** The rooms, level by level, and each room's tasks as chosen, with a
  *  bathroom's type of bath last where it is not a full bath: the primary
@@ -116,6 +139,8 @@ export function withExample(doc, config, now, check) {
                 { id: `example-task-${r + 1}-${i + 1}`, sample: true, check }));
         });
     });
+    steps.push((d) => addVisits(d, EXAMPLE_ID, [exampleVisit()], config, now));
+    steps.push((d) => markVisitSeen(d, EXAMPLE_ID, EXAMPLE_VISIT.visitId));
     let current = start;
     for (const step of steps) {
         const result = step(current);
@@ -123,6 +148,31 @@ export function withExample(doc, config, now, check) {
         current = result.doc;
     }
     return { doc: setSettings(current, { activeId: EXAMPLE_ID }).doc, error: null };
+}
+
+/** The example's last visit, as the studio keeps a report: every task done
+ *  but the one skipped and the room not reached, and the add-on. */
+function exampleVisit() {
+    const V = EXAMPLE_VISIT;
+    const results = ROOMS.flatMap(([, , , tasks], r) => tasks.map((_, i) => {
+        const itemId = `example-task-${r + 1}-${i + 1}`;
+        if (itemId === V.skipped.itemId) return { itemId, status: 'skipped', reason: V.skipped.reason, words: '' };
+        if (r + 1 === V.notReachedRoom) return { itemId, status: 'not-reached' };
+        return { itemId, status: 'done' };
+    }));
+    return {
+        visitId: V.visitId,
+        reportAt: V.reportAt,
+        bill: null,
+        report: {
+            format: REPORT_FORMAT, id: V.reportId, booking: V.booking, cleaner: V.cleaner, submittedAt: V.reportAt,
+            minutesOnSite: V.minutesOnSite, note: V.note, results,
+            addOns: [{
+                format: ADDON_FORMAT, id: V.addOnId, roomId: 'example-room-2', task: 'oven-interior', options: [],
+                words: 'Baked-on grease from a spill.', status: 'approved', done: true
+            }]
+        }
+    };
 }
 
 /** For tests: the example's shape, as written above. */

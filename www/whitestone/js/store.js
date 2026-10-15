@@ -988,6 +988,8 @@ export function removePhoto(doc, checklistId, itemId, photoId, config, now) {
 export function photoIdsInUse(doc) {
     const ids = new Set();
     for (const c of doc.checklists) for (const i of c.items) i.photos.forEach((p) => ids.add(p));
+    // A visit report's proof photos too (M5), kept as long as the report.
+    for (const c of doc.checklists) for (const v of c.visits || []) for (const r of v.report.results) (r.photos || []).forEach((p) => ids.add(p));
     return ids;
 }
 

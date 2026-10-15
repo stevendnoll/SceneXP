@@ -21,7 +21,22 @@
  * still waiting lapsed, and an approved one done only when marked done.
  */
 
-import { REPORT_FORMAT, cleanReport, cleanMinutes } from '../../js/report.min.js';
+import { REPORT_FORMAT, REPORT_LIMITS, cleanReport, cleanMinutes } from '../../js/report.min.js';
+import { ID } from '../../js/links.min.js';
+
+/**
+ * The proof photos kept on the device, by task (M5 piece 4): `{ [itemId]:
+ * [photoId] }`, each id of the API's shape, at most two a task. Unknown
+ * shapes dropped.
+ */
+export function cleanProofs(raw) {
+    const out = {};
+    for (const [itemId, list] of Object.entries(raw && typeof raw === 'object' ? raw : {})) {
+        const ids = [...new Set((Array.isArray(list) ? list : []).filter((p) => ID.test(String(p))))].slice(0, REPORT_LIMITS.photos);
+        if (ids.length) out[itemId] = ids;
+    }
+    return out;
+}
 
 /** The quick reasons a task was skipped, in the order offered. */
 export const SKIP_REASONS = Object.freeze(['no-time', 'no-access', 'already-clean', 'customer-asked']);
@@ -100,15 +115,20 @@ export function summarize(form, progress) {
 /**
  * The visit report (PRD 11.7) from the published checklist (`form`), the
  * marks, the add-ons as last known here, and what the cleaner added
- * (`{ cleaner, minutesOnSite, note }`), sent at `at` (an ISO string). Made
+ * (`{ cleaner, minutesOnSite, note, proofs }`, `proofs` the photos by task,
+ * as `cleanProofs` keeps them), sent at `at` (an ISO string). Made
  * safe (report.js `cleanReport`), or null for a form with no id.
  */
-export function buildReport(form, progress, addOns, { cleaner = '', minutesOnSite = null, note = '' } = {}, at = null) {
+export function buildReport(form, progress, addOns, { cleaner = '', minutesOnSite = null, note = '', proofs = {} } = {}, at = null) {
     const marks = (progress && progress.marks) || {};
+    const kept = cleanProofs(proofs);
     const results = ((form && form.items) || []).map((item) => {
         const mark = marks[item.id];
-        if (mark && mark.status === 'done') return { itemId: item.id, status: 'done' };
-        if (mark && mark.status === 'skipped') return { itemId: item.id, status: 'skipped', reason: mark.reason, words: mark.words };
+        // Photos go with a task marked done or skipped (one not reached
+        // carries none, below).
+        const photos = kept[item.id] || [];
+        if (mark && mark.status === 'done') return { itemId: item.id, status: 'done', photos };
+        if (mark && mark.status === 'skipped') return { itemId: item.id, status: 'skipped', reason: mark.reason, words: mark.words, photos };
         return { itemId: item.id, status: 'not-reached' };
     });
     const outcomes = (addOns || []).map((a) => ({

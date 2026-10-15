@@ -413,6 +413,9 @@ export const GUIDE = Object.freeze({
     /** The dots, shown and not tapped (Example mode, QA 2026-10-15). */
     example3: (task) => `Each blue dot is a task, like the ${String(task).toLowerCase()} here. In your own home, you can tap a dot to see what’s included, or star the tasks that matter most.`,
     example3Plain: 'Each blue dot is a task. In your own home, you can tap a dot to see what’s included, or star the tasks that matter most.',
+    /** The example's last visit (M5): the report on the house, and its bill. */
+    exampleReport: (billed, quote) => `After each visit, your cleaner’s report lights up the house. Green is done, amber was skipped, and gray wasn’t reached. This visit came to ${billed} of the ${quote} quote, since skipped work comes off the bill.`,
+    exampleReportPlain: 'After each visit, your cleaner’s report lights up the house. Green is done, amber was skipped, and gray wasn’t reached. Skipped work comes off the bill.',
     exampleTotal: (money, time) => `Cleaned as listed, this home comes to ${money}, ${time}.`,
     examplePrices: 'These are example prices.',
     example4: 'Want to build yours?',
@@ -638,6 +641,8 @@ export const REPORT = Object.freeze({
         return `Time on site: ${parts.join(' ')}.`;
     },
     noteHeading: 'From your cleaner',
+    photosHeading: 'Photos from your cleaner',
+    photoOf: (task) => `Photo of ${task}`,
     addOnOutcome: Object.freeze({
         done: 'Approved and done',
         approved: 'Approved, not done, so not charged',
@@ -735,6 +740,16 @@ export const TASKS_PAGE = Object.freeze({
     /** `counts` already joined: "1 approved, 1 waiting". */
     addOnsLine: (counts) => `Add-ons: ${counts}.`,
     addOnClosed: 'The report for this visit is sent, so no more add-ons can be proposed.',
+    // Proof photos (M5 piece 4): an "after" shot or two on a marked task.
+    addProof: 'Add a photo',
+    addProofOf: (task) => `Add a photo of ${task} for your customer`,
+    ofTask: (task) => `of ${task}`,
+    proofOf: (n, task) => `Your photo ${n} of ${task}`,
+    proofsOf: (task) => `Your photos of ${task}`,
+    removeProof: 'Remove',
+    removeProofOf: (n, task) => `Remove your photo ${n} of ${task}`,
+    proofFailed: 'That photo could not be added. Please try another.',
+    proofsOptional: 'Photos are optional. Your customer sees them with the report.',
 
     // Finishing the visit (M5 piece 2): the report and the bill, then send.
     finish: 'Finish visit',

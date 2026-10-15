@@ -293,9 +293,10 @@ function drawQuotePrefs(checklist) {
  * reached, what became of the add-ons, and the cleaner's note. `visit` as
  * store.js keeps it, `form` the published checklist its names come from
  * (the customer's own when the published one is not to hand), `sheet` for
- * the amounts, `bookable` whether Book your next visit is offered.
+ * the amounts, `bookable` whether Book your next visit is offered, `photos`
+ * the cleaner's proof photos as `{ itemId, url }` (M5 piece 4).
  */
-export function renderVisitReport({ visit, form, sheet, bookable = false }) {
+export function renderVisitReport({ visit, form, sheet, bookable = false, photos = [] }) {
     const r = visit.report;
     const when = byId('visit-report-when');
     if (when) {
@@ -336,6 +337,15 @@ export function renderVisitReport({ visit, form, sheet, bookable = false }) {
             h('span', { text: `${a.label} (${a.outcome})` }),
             h('span', { text: a.money })
         ])),
+        photos.length ? h('section', { className: 'visit-report-photos', attrs: { 'aria-labelledby': 'visit-report-photos-title' } }, [
+            h('h3', { id: 'visit-report-photos-title', className: 'quote-prefs-title', text: REPORT.photosHeading }),
+            h('ul', {}, photos.map((p) => {
+                const item = ((form && form.items) || []).find((i) => i.id === p.itemId);
+                const t = item && sheet ? taskOf(sheet, item.task) : null;
+                const label = REPORT.photoOf(t ? t.name : (item ? item.task : REPORT.removedSince));
+                return h('li', {}, [h('figure', {}, [h('img', { src: p.url, alt: label }), h('figcaption', { text: label })])]);
+            }))
+        ]) : null,
         r.note ? h('section', { className: 'visit-report-note', attrs: { 'aria-labelledby': 'visit-report-note-title' } }, [
             h('h3', { id: 'visit-report-note-title', className: 'quote-prefs-title', text: REPORT.noteHeading }),
             h('p', { className: 'quote-prefs-note', text: r.note })

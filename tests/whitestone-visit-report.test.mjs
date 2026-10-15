@@ -23,7 +23,7 @@ import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { GUIDE, REPORT } from '../www/whitestone/js/copy.js';
 import { ADDON_FORMAT } from '../www/whitestone/js/addons.js';
-import { REPORT_FORMAT, settleReport, readVisits, sendReport, reportLines } from '../www/whitestone/js/report.js';
+import { REPORT_FORMAT, settleReport, readVisits, sendReport, sendProof, reportLines } from '../www/whitestone/js/report.js';
 import { proposeAddOn } from '../www/whitestone/tasks/js/addons.js';
 import { buildReport, emptyProgress, applyMark } from '../www/whitestone/tasks/js/visit.js';
 import { step, viewFor, savedForm } from '../www/whitestone/js/guide.js';
@@ -33,7 +33,7 @@ import { createStandin } from '../www/whitestone/js/standin.js';
 import { createMemoryBackend } from '../www/whitestone/js/photos.js';
 import { createSealer, contextFor } from '../www/whitestone/js/seal.js';
 import {
-    emptyDoc, createChecklist, setPublication, addVisits, markVisitSeen, keepServerFacts, findChecklist, validate, normalizeVisit, MAX_VISITS
+    emptyDoc, createChecklist, setPublication, addVisits, markVisitSeen, keepServerFacts, findChecklist, validate, normalizeVisit, MAX_VISITS, photoIdsInUse
 } from '../www/whitestone/js/store.js';
 import { priceItem, formatMoney } from '../www/whitestone/js/pricing.js';
 
@@ -338,6 +338,12 @@ describe('the studio shows the report (main.js)', () => {
                 visitId = p.visitId;
                 return p.addOn;
             },
+            /** A proof photo sent ahead of the report. */
+            async proof(photoId) {
+                if (!visitId) visitId = (await svc.api.startVisit(pub.id, token)).data.visitId;
+                const sent = await sendProof({ api: svc.api, sealer: svc.sealer, key, id: pub.id, token, visitId, photoId, full: new Uint8Array([9, 9]), thumb: new Uint8Array([9]) });
+                if (!sent.ok) throw new Error(sent.error);
+            },
             /** Marks as given, every other task done, and the report sent. */
             async report(marks = {}, extra = {}) {
                 let p = form.items.reduce((acc, i) => applyMark(acc, i.id, { status: 'done' }), emptyProgress());
@@ -459,6 +465,28 @@ describe('the studio shows the report (main.js)', () => {
         expect(w.t.ui.guide.scene).toBe('report');
         expect(w.t.active().booking).not.toBeNull();
         expect(picks().map((b) => b.textContent)).toEqual([GUIDE.fullReport, GUIDE.reportLater]);
+    });
+
+    test('the cleaner\'s photos: kept in this device\'s photo store, never tidied away, shown in the full report', async () => {
+        const w = await bookedStudio();
+        const photoId = 'photo0000000000000001A';
+        await w.cleaner.proof(photoId);
+        await w.cleaner.report({}, { proofs: { [w.stove.id]: [photoId] } });
+        await w.t.pollVisits();
+        const store = w.t.photoStore();
+        expect(await store.get(photoId, 'thumb')).toBeTruthy();
+        expect(photoIdsInUse(w.t.state.doc).has(photoId)).toBe(true);
+        expect(await store.prune(photoIdsInUse(w.t.state.doc))).toBe(0);
+        const made = jest.spyOn(URL, 'createObjectURL').mockReturnValue('blob:proof');
+        const freed = jest.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        await w.t.openVisitReport();
+        const photos = dom.el('visit-report-body').children.find((n) => n.className === 'visit-report-photos');
+        expect(photos.textContent).toContain(REPORT.photosHeading);
+        expect(photos.textContent).toContain(REPORT.photoOf('Stovetop'));
+        fire(dom.el('visit-report-close'), 'click');
+        expect(freed).toHaveBeenCalledWith('blob:proof');
+        made.mockRestore();
+        freed.mockRestore();
     });
 
     test('never over the build of her own accord: the report waits at a glance, marked new', async () => {

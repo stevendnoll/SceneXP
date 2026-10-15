@@ -18,8 +18,8 @@
  *   review     the quote, and care preferences offered once
  *   saved      all set
  *
- * and beside them the example's four beats (example1 to example4: the
- * house, a floor open, the dots, and its total), a returning visitor's
+ * and beside them the example's five beats (the house, a floor open, the
+ * dots, its last visit's report lighting the house, and its total), a returning visitor's
  * welcome, a hint, and `addOn`: the cleaner asking for more, which Maya
  * puts to the customer, Approve or Decline (M5, PRD 9.5); and `report`: a
  * visit's report come in, the bill and what was skipped, with the house lit
@@ -53,7 +53,7 @@ export const GUIDED = Object.freeze(['home', 'attached', 'floors', 'firstRoom', 
 
 /** The example's beats, in order: Back goes one beat back, and from the
  *  first to the greeting. */
-export const EXAMPLE = Object.freeze(['example1', 'example2', 'example3', 'example4']);
+export const EXAMPLE = Object.freeze(['example1', 'example2', 'example3', 'exampleReport', 'example4']);
 
 /** Which step of the progress strip each guided scene is on: Home type
  *  (with a townhome's neighbors), Floors, First room, Your rooms, Review. */
@@ -389,6 +389,8 @@ export function step(guide, event) {
     case 'example2':
         return type === 'next' ? to('example3') : g;
     case 'example3':
+        return type === 'next' ? to('exampleReport') : g;
+    case 'exampleReport':
         return type === 'next' ? to('example4') : g;
     case 'example4':
         if (type === 'buildOwn') return to('home');
@@ -515,6 +517,9 @@ export function viewFor(guide, ctx = {}) {
         return { ...base, text: GUIDE.example2, buttons: [b('next', GUIDE.next, true)] };
     case 'example3':
         return { ...base, text: ctx.exampleTask ? GUIDE.example3(ctx.exampleTask) : GUIDE.example3Plain, buttons: [b('next', GUIDE.next, true)] };
+    case 'exampleReport':
+        // Its last visit's report on the house (M5), and what it billed.
+        return { ...base, text: ctx.exampleBill ? GUIDE.exampleReport(ctx.exampleBill.billed, ctx.exampleBill.quote) : GUIDE.exampleReportPlain, buttons: [b('next', GUIDE.next, true)] };
     case 'example4':
         // The whole home's total, when the sheet has priced it.
         return ctx.exampleTotal

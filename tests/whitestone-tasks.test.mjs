@@ -816,7 +816,9 @@ describe('the copy kept on this device (pure)', () => {
         expect(await page.createKeeper(null, 'aaaaaaaa', () => t).get('checklist')).toBeNull();
         const broken = { get: async () => { throw new Error('disk'); }, put: async () => { throw new Error('full'); }, delete: async () => {}, keys: async () => { throw new Error('disk'); } };
         const k = page.createKeeper(broken, 'aaaaaaaa', () => t);
-        await expect(k.put('checklist', new Uint8Array([1]), '2099-01-01T00:00:00Z')).resolves.toBeNull();
+        // A put says whether it was kept (proof photos rely on it, M5).
+        await expect(k.put('checklist', new Uint8Array([1]), '2099-01-01T00:00:00Z')).resolves.toBe(false);
+        await expect(page.createKeeper(createMemoryBackend(), 'aaaaaaaa', () => t).put('checklist', new Uint8Array([1]), '2099-01-01T00:00:00Z')).resolves.toBe(true);
         await expect(k.get('checklist')).resolves.toBeNull();
         await expect(k.forget()).resolves.toBeNull();
         await expect(page.sweepKept(broken, () => t)).resolves.toBeUndefined();
@@ -1203,5 +1205,129 @@ describe('finishing the visit on the page', () => {
         expect(find(`done-${w.stove.id}`).getAttribute('aria-pressed')).toBe('false');
         expect(again.state.visitId).toBeNull();
         expect(kept(w)).toMatchObject({ sent: null, visitId: null, draft: { cleaner: 'Steve', note: '' } });
+    });
+});
+
+// ---- Proof photos (M5 piece 4) ----------------------------------------------------------
+
+describe('proof photos on the page', () => {
+    /** A photo as photos.js would make it, without a canvas. */
+    const prepared = (n = 1) => ({ full: new Blob([new Uint8Array([n, n, n])]), thumb: new Blob([new Uint8Array([n])]) });
+    async function visiting(extra = {}) {
+        const w = await published();
+        let n = 0;
+        const { state } = await open(w, w.link, { preparePhoto: async () => prepared(++n), ...extra });
+        await enter(state, w.checklist.published.pin);
+        return { w, state };
+    }
+    const find = (id) => all(view()).find((e) => e.id === id);
+    const kept = (w) => JSON.parse(localStorage.getItem(page.STORAGE_KEY)).checklists[w.checklist.published.id];
+    async function addPhoto(state, itemId) {
+        const input = find(`proof-input-${itemId}`);
+        input.files = [{ name: 'after.jpg' }];
+        fire(input, 'change');
+        await state.pending;
+    }
+
+    test('a marked task offers Add a photo, up to two, each shown with Remove; an unmarked one offers none', async () => {
+        const { w, state } = await visiting();
+        const id = w.stove.id;
+        expect(find(`proof-input-${id}`)).toBeUndefined();
+        fire(find(`done-${id}`), 'click');
+        const input = find(`proof-input-${id}`);
+        expect(input.getAttribute('accept')).toBe('image/*');
+        expect(input.getAttribute('capture')).toBe('environment');
+        await addPhoto(state, id);
+        const [first] = state.proofs[id];
+        expect(find(`proof-${first}`)).toBeTruthy();
+        expect(find(`proof-remove-${first}`).focused).toBe(true);
+        expect(find(`proof-remove-${first}`).getAttribute('aria-label')).toBe(COPY.removeProofOf(1, 'Stovetop'));
+        expect(kept(w).proofs).toEqual({ [id]: [first] });
+        await addPhoto(state, id);
+        expect(state.proofs[id]).toHaveLength(2);
+        expect(find(`proof-input-${id}`)).toBeUndefined();
+        // Remove: off the task and off the device.
+        fire(find(`proof-remove-${first}`), 'click');
+        await state.pending;
+        expect(state.proofs[id]).toHaveLength(1);
+        expect(find(`proof-input-${id}`)).toBeTruthy();
+        expect(await page.createKeeper(w.cache, w.checklist.published.id, w.now).get(`proof/${first}`)).toBeNull();
+    });
+
+    test('that photos are optional is said once, beside the first Add a photo in reading order', async () => {
+        const { state } = await visiting();
+        const hints = () => all(view()).filter((e) => e.id === 'proof-hint');
+        expect(hints()).toHaveLength(0);
+        const [first, second] = state.form.items;
+        fire(find(`done-${second.id}`), 'click');
+        expect(hints()).toHaveLength(1);
+        expect(hints()[0].textContent).toBe(COPY.proofsOptional);
+        expect(find(`proof-input-${second.id}`).getAttribute('aria-describedby')).toBe('proof-hint');
+        // A task marked earlier in the list takes it over; still only once.
+        fire(find(`done-${first.id}`), 'click');
+        expect(hints()).toHaveLength(1);
+        expect(find(`proof-input-${first.id}`).getAttribute('aria-describedby')).toBe('proof-hint');
+        expect(find(`proof-input-${second.id}`).getAttribute('aria-describedby')).toBeNull();
+        // A task with its two photos has no Add a photo, so the next one says it.
+        await addPhoto(state, first.id);
+        await addPhoto(state, first.id);
+        expect(hints()).toHaveLength(1);
+        expect(find(`proof-input-${second.id}`).getAttribute('aria-describedby')).toBe('proof-hint');
+    });
+
+    test('a photo that will not be made says so, and adds nothing', async () => {
+        const { w, state } = await visiting({ preparePhoto: async () => { throw new Error('not a picture'); } });
+        fire(find(`done-${w.stove.id}`), 'click');
+        await addPhoto(state, w.stove.id);
+        expect(state.proofs).toEqual({});
+        expect(view().textContent).toContain(COPY.proofFailed);
+    });
+
+    test('kept on the device: reopened, the thumbnails come back', async () => {
+        const { w, state } = await visiting();
+        fire(find(`done-${w.stove.id}`), 'click');
+        await addPhoto(state, w.stove.id);
+        const again = await open(w, `https://www.scenexp.com/whitestone/tasks/?c=${w.checklist.published.id}`);
+        const photoId = again.state.proofs[w.stove.id][0];
+        expect(again.state.proofThumbs.get(photoId)).toMatch(/^blob:test\//);
+        expect(all(find(`proof-${photoId}`)).find((e) => e.tagName === 'IMG')).toBeTruthy();
+    });
+
+    test('sent before the report, which names them; the customer reads them; off the device after', async () => {
+        const { w, state } = await visiting();
+        fire(find(`done-${w.stove.id}`), 'click');
+        await addPhoto(state, w.stove.id);
+        const photoId = state.proofs[w.stove.id][0];
+        const api = w.api;
+        // The page holds the API it opened with, so watch that one.
+        const putProof = jest.spyOn(api, 'putProof');
+        const putReport = jest.spyOn(api, 'putReport');
+        fire(find('tasks-finish'), 'click');
+        await state.polled;
+        fire(find('report-send'), 'click');
+        await state.reportSend;
+        expect(putProof).toHaveBeenCalled();
+        expect(putProof.mock.invocationCallOrder[0]).toBeLessThan(putReport.mock.invocationCallOrder[0]);
+        const sent = kept(w).sent;
+        expect(sent.report.results.find((r) => r.itemId === w.stove.id).photos).toEqual([photoId]);
+        const { fetchProofs } = await import('../www/whitestone/js/report.js');
+        const key = await w.sealer.importKey(w.checklist.published.key);
+        const got = await fetchProofs({ api, sealer: w.sealer, key, id: w.checklist.published.id, token: w.checklist.published.ownerToken, visitId: sent.visitId, report: sent.report });
+        expect(got.map((p) => [p.photoId, [...p.full]])).toEqual([[photoId, [1, 1, 1]]]);
+        expect(kept(w).proofs).toEqual({});
+        expect(await page.createKeeper(w.cache, w.checklist.published.id, w.now).get(`proof/${photoId}`)).toBeNull();
+    });
+
+    test('a photo gone from the device is passed over, and the report still goes', async () => {
+        const { w, state } = await visiting();
+        fire(find(`done-${w.stove.id}`), 'click');
+        await addPhoto(state, w.stove.id);
+        const photoId = state.proofs[w.stove.id][0];
+        await page.createKeeper(w.cache, w.checklist.published.id, w.now).drop(`proof/${photoId}`);
+        fire(find('tasks-finish'), 'click');
+        await state.polled;
+        fire(find('report-send'), 'click');
+        await state.reportSend;
+        expect(find('report-title').textContent).toBe(COPY.sentTitle);
     });
 });

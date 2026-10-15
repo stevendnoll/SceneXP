@@ -99,3 +99,33 @@ test('a refusal leaves the document untouched', () => {
     expect(out.error).toBeTruthy();
     expect(out.doc).toBe(doc);
 });
+
+describe('the example\'s last visit (M5 piece 4)', () => {
+    test('a report kept as any is, already seen: the microwave skipped for time, the basement not reached, the oven added and done', async () => {
+        const { EXAMPLE_VISIT } = await import('../www/whitestone/js/samples.js');
+        const { reportBill } = await import('../www/whitestone/js/report.js');
+        const { lockQuote, priceItem, priceAddOn } = await import('../www/whitestone/js/pricing.js');
+        const c = findChecklist(withExample(emptyDoc(CONFIG, NOW), CONFIG, NOW, check).doc, EXAMPLE_ID);
+        expect(c.visits).toHaveLength(1);
+        const v = c.visits[0];
+        expect(v).toMatchObject({ visitId: EXAMPLE_VISIT.visitId, seen: true, bill: null });
+        expect(v.report.results).toHaveLength(liveItems(c).length);
+        const statusOf = (id) => v.report.results.find((r) => r.itemId === id).status;
+        expect(statusOf(EXAMPLE_VISIT.skipped.itemId)).toBe('skipped');
+        const basement = liveRooms(c).find((r) => r.level === 'basement');
+        const below = liveItems(c).filter((i) => i.roomId === basement.id);
+        expect(below.every((i) => statusOf(i.id) === 'not-reached')).toBe(true);
+        expect(v.report.results.filter((r) => r.status === 'done')).toHaveLength(liveItems(c).length - 1 - below.length);
+        expect(v.report.addOns).toEqual([expect.objectContaining({ task: 'oven-interior', status: 'approved', done: true })]);
+        // What it came to: the quote, less the skip and the basement, with
+        // the oven, which the guarantee allows since it was approved.
+        const quote = lockQuote(quoteChecklist(SHEET, c), null);
+        const price = (id) => priceItem(SHEET, liveItems(c).find((i) => i.id === id), c.rooms).cents;
+        const oven = priceAddOn(SHEET, v.report.addOns[0], c.rooms, new Map()).cents;
+        const bill = reportBill(SHEET, quote, c, v.report);
+        expect(bill.billedCents).toBe(quote.totalCents - price(EXAMPLE_VISIT.skipped.itemId) - below.reduce((n, i) => n + price(i.id), 0) + oven);
+        expect(bill.errors).toEqual([]);
+        // The example's report goes with it.
+        expect(clearSamples(withExample(emptyDoc(CONFIG, NOW), CONFIG, NOW, check).doc).doc.checklists).toEqual([]);
+    });
+});

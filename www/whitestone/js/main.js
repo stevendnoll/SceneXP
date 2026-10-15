@@ -48,7 +48,7 @@ import { createStandin } from './standin.min.js';
 import { createSealer } from './seal.min.js';
 import { publish, openPublished, readPublished, republish, cancelVisit, unpublish, quoteToSend } from './sync.min.js';
 import { decideAddOn, addOnName, priceOf, roomOf } from './addons.min.js';
-import { readVisits, reportBill, reportLines } from './report.min.js';
+import { readVisits, reportBill, reportLines, fetchProofs } from './report.min.js';
 import { createBooking, visitMinutes, shiftMonth, firstOpen, dayLabel, clockLabel } from './booking.min.js';
 import { canChange } from './schedule.min.js';
 import { createReceipt, receiptView } from './receipt.min.js';
@@ -57,7 +57,7 @@ import { parseEdit } from './links.min.js';
 import { shareLink, flash } from '../../shared/js/share-1.0.0.min.js';
 import { createHistory } from './history.min.js';
 import { loadSheet, currentVersion, checkChoice, presetFor, presetGains, taskOf } from './sheet.min.js';
-import { priceChoice, formatMoney, formatMinutes, quoteChecklist, roundMinutes } from './pricing.min.js';
+import { priceChoice, formatMoney, formatMinutes, quoteChecklist, roundMinutes, lockQuote } from './pricing.min.js';
 import { createPhotoStore, createMemoryBackend, openIdbBackend, preparePhoto } from './photos.min.js';
 import { roomName, levelOf, bathChoices, bathChoiceOf, residencesOf, levelsAllowed, serviceType as typeOf } from './taxonomy.min.js';
 import { h, clear, initCards, openCard, closeCard, isOpen, anyOpen, announce, toast, confirmCard, setFocusFallback, setOnSettled } from './cards.min.js';
@@ -1136,10 +1136,21 @@ function exampleContext(c) {
     const item = model ? exampleDot(c, model.lifted) : null;
     const task = item && state.sheet ? taskOf(state.sheet, item.task) : null;
     const quote = state.sheet ? quoteChecklist(state.sheet, c) : null;
+    const visit = c.visits && c.visits[0];
+    const bill = visit ? billOf(c, visit) : null;
     return {
         exampleTask: task ? task.name : '',
-        exampleTotal: quote && quote.totalCents ? { money: formatMoney(quote.totalCents), time: formatMinutes(quote.minutes) } : null
+        exampleTotal: quote && quote.totalCents ? { money: formatMoney(quote.totalCents), time: formatMinutes(quote.minutes) } : null,
+        exampleBill: bill && bill.billedCents ? { billed: formatMoney(bill.billedCents), quote: formatMoney(bill.quoteCents) } : null
     };
+}
+
+/** A visit's bill: as kept, else (the example, which has no locked quote)
+ *  worked out from the current sheet. Null without one. */
+function billOf(c, visit) {
+    if (visit.bill) return visit.bill;
+    if (!state.sheet) return null;
+    return reportBill(state.sheet, lockQuote(quoteChecklist(state.sheet, c), null), c, visit.report);
 }
 
 /** All set, for a published checklist changed through the guide: the
@@ -1398,7 +1409,7 @@ function sceneView() {
 const GESTURE_OF = {
     hello: 'wave', welcome: 'wave',
     home: 'point', attached: 'point', floors: 'point', saved: 'wave', firstRoom: 'point', added: 'point', dots: 'point', rooms: 'point', review: 'point',
-    example1: 'point', example2: 'point', example3: 'point', example4: 'point', look: 'point', addOn: 'point', report: 'point'
+    example1: 'point', example2: 'point', example3: 'point', exampleReport: 'point', example4: 'point', look: 'point', addOn: 'point', report: 'point'
 };
 
 /** Maya says the scene now (or is put away when there is none), with the
@@ -1468,6 +1479,7 @@ function guideTo(event) {
     ui.guide = next;
     if (was.scene === 'addOn' && next.scene !== 'addOn') leaveAddOn(next.scene);
     if (was.scene === 'report' && next.scene !== 'report') leaveReport(next.scene);
+    if (was.scene === 'exampleReport' && next.scene !== 'exampleReport' && model && model.report(null)) markShadows();
     // Begun (Let's start, the example, a welcome's choice): the turning
     // stops, and the house comes back to the arrival's view, however far
     // it had turned or been turned (QA, 2026-10-15).
@@ -1521,6 +1533,19 @@ function enterScene(to) {
             const levels = model.levels();
             liftLevel(levels.includes('main') ? 'main' : levels[0]);
         }
+        break;
+    }
+    case 'exampleReport': {
+        // Its main floor open, the dots lit by its last visit's report.
+        selectTo(null);
+        const c = active();
+        if (model && !model.lifted) {
+            const levels = model.levels();
+            liftLevel(levels.includes('main') ? 'main' : levels[0]);
+        }
+        const v = c && c.visits && c.visits[0];
+        if (model && v && model.report(new Map(v.report.results.map((r) => [r.itemId, r.status])))) markShadows();
+        requestRender();
         break;
     }
     case 'example4':
@@ -2407,8 +2432,9 @@ async function pollVisits({ quiet = false } = {}) {
     if (!svc) return false;
     const pub = c.published;
     let got;
+    let key = null;
     try {
-        const key = await svc.sealer.importKey(pub.key);
+        key = await svc.sealer.importKey(pub.key);
         got = await readVisits({ api: svc.api, sealer: svc.sealer, key, id: pub.id, token: pub.ownerToken, known: c.visits.map((v) => v.visitId) });
     } catch (e) {
         got = { ok: false };
@@ -2426,6 +2452,20 @@ async function pollVisits({ quiet = false } = {}) {
         const priced = await pricedFor(still, svc, true);
         const form = priced ? priced.form : null;
         const kept = got.reports.map((v) => ({ ...v, bill: form ? reportBill(priced.sheet, form.quote, form, v.report) : null }));
+        // Its proof photos into this device's photo store, before the report
+        // is kept (so the store's tidying already counts them in).
+        if (photoStore) {
+            for (const v of got.reports) {
+                const proofs = await fetchProofs({ api: svc.api, sealer: svc.sealer, key, id: pub.id, token: pub.ownerToken, visitId: v.visitId, report: v.report });
+                for (const p of proofs) {
+                    try {
+                        await photoStore.put(p.photoId, { full: new Blob([p.full], { type: 'image/jpeg' }), thumb: new Blob([p.thumb], { type: 'image/jpeg' }) });
+                    } catch (e) {
+                        // One too large to be a photo made here is left out.
+                    }
+                }
+            }
+        }
         mutate((d) => addVisits(d, still.id, kept, CONFIG, now()));
     }
     if (!quiet) afterVisits(changed || got.reports.length > 0);
@@ -2673,15 +2713,26 @@ function leaveReport(to) {
 }
 
 /** The full report in its card, Book your next visit offered while no
- *  visit is booked. */
-function openVisitReport() {
+ *  visit is booked, and the cleaner's photos, let go when it closes. */
+async function openVisitReport() {
     const c = active();
     const v = shownVisit(c);
     if (!v) return;
     const { form, sheet } = reportSource(c);
-    renderVisitReport({ visit: v, form, sheet, bookable: bookable(c) });
+    const urls = [];
+    const photos = [];
+    for (const r of v.report.results) {
+        for (const photoId of r.photos || []) {
+            const blob = photoStore ? await photoStore.get(photoId, 'full').catch(() => null) : null;
+            if (!blob) continue;
+            const url = URL.createObjectURL(blob);
+            urls.push(url);
+            photos.push({ itemId: r.itemId, url });
+        }
+    }
+    renderVisitReport({ visit: v, form, sheet, bookable: bookable(c), photos });
     if (!v.seen) mutate((d) => markVisitSeen(d, c.id, v.visitId));
-    openCard('visit-report');
+    openCard('visit-report', { onClose: () => urls.forEach((u) => URL.revokeObjectURL(u)) });
 }
 
 // ---- Photos -----------------------------------------------------------------

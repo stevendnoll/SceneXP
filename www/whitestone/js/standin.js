@@ -259,6 +259,30 @@ export function createStandin({
         return answer(201, { stored: true, reportAt: at });
     }
 
+    /** One visit's proof photos (and thumbnails): the cleaner sends them
+     *  before the report, once each, and the customer reads them. */
+    async function proof(m, visitId, photoId, thumb, method, bytes, owner, reader) {
+        const visit = visitsOf(m).find((v) => v.visitId === visitId);
+        if (!visit) return reader ? fail(404, 'not-found') : denied();
+        const name = `${photoId}${thumb ? '-thumb' : ''}`;
+        const key = `${visitKey(m.id, visitId)}proof/${name}`;
+        if (method === 'GET') {
+            if (!owner) return denied();
+            const blob = await backend.get(key);
+            return blob ? { status: 200, bytes: blob } : fail(404, 'not-found');
+        }
+        if (method !== 'PUT') return fail(405, 'method');
+        if (owner || !reader) return denied();
+        if (!(bytes instanceof Uint8Array) || !bytes.length || bytes.length > A.maxProofBytes) return fail(400, 'bad-request');
+        if (visit.reportAt) return fail(409, 'closed');
+        const kept = Array.isArray(visit.proofs) ? visit.proofs : [];
+        if (kept.includes(name)) return fail(409, 'exists');
+        if (kept.length >= A.maxProofs) return fail(409, 'too-many');
+        await backend.put(key, bytes);
+        await saveMeta({ ...m, visitRecords: visitsOf(m).map((v) => (v === visit ? { ...v, proofs: [...kept, name] } : v)) });
+        return answer(201, { stored: true });
+    }
+
     /** The first openings from `date` on, for a time refused as taken. */
     function nextOpenings(list, date, minutes) {
         const out = [];
@@ -362,6 +386,11 @@ export function createStandin({
                 if (method !== 'GET') return fail(405, 'method');
                 if (!owner) return denied();
                 return answer(200, { visits: visitsOf(m).map((v) => ({ visitId: v.visitId, createdAt: new Date(v.createdAt).toISOString(), reportAt: v.reportAt })) });
+            }
+            const thumbOf = parts.length === 7 && parts[6] === 'thumb';
+            if ((parts.length === 6 || thumbOf) && parts[4] === 'proof' && ID.test(parts[3]) && ID.test(parts[5])) {
+                if (!m) return denied();
+                return proof(m, parts[3], parts[5], thumbOf, method, bytes, owner, reader);
             }
             if (parts.length === 5 && parts[4] === 'report' && ID.test(parts[3])) {
                 if (!m) return denied();

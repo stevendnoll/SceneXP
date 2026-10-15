@@ -28,7 +28,7 @@ const fresh = () => arrivalGuide(doc([]));
 const HOUSE = { type: 'residence', kind: 'house' };
 const walk = (g, ...types) => types.reduce((acc, t) => step(acc, typeof t === 'string' ? { type: t } : t), g);
 
-const ALL = ['hello', ...GUIDED, 'saved', 'example1', 'example2', 'example3', 'example4', 'welcome', 'hint'];
+const ALL = ['hello', ...GUIDED, 'saved', 'example1', 'example2', 'example3', 'exampleReport', 'example4', 'welcome', 'hint'];
 const EVENTS = ['start', 'example', 'floorTapped', 'next', 'roomAdded', 'dotOpened', 'gotIt', 'review', 'saved', 'buildOwn',
     'lookAround', 'keepGoing', 'homeMade', 'residence', 'again', 'about', 'close', 'restart', 'skip', 'away', 'returned', 'nonsense'];
 
@@ -261,11 +261,11 @@ describe('the way through', () => {
         }
     });
 
-    test('the example: four beats to watch, Next through them, then build your own (QA, 2026-10-15)', () => {
+    test('the example: five beats to watch (its report the fourth, M5), Next through them, then build your own (QA, 2026-10-15)', () => {
         const beats = [];
         let g = walk(fresh(), 'example');
         beats.push(g.scene);
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 4; i++) {
             g = walk(g, 'next');
             beats.push(g.scene);
         }
@@ -274,7 +274,7 @@ describe('the way through', () => {
         expect(walk(g, 'buildOwn').scene).toBe('home');
         expect(viewFor(g).buttons).toEqual([{ id: 'buildOwn', label: GUIDE.buildOwn, primary: true }]);
         // Every beat but the last moves on with Next, and only Next.
-        for (const scene of EXAMPLE.slice(0, 3)) {
+        for (const scene of EXAMPLE.slice(0, 4)) {
             expect(viewFor({ ...fresh(), scene }).buttons).toEqual([{ id: 'next', label: GUIDE.next, primary: true }]);
             expect(walk({ ...fresh(), scene }, 'buildOwn').scene).toBe(scene);
         }
@@ -284,9 +284,16 @@ describe('the way through', () => {
 
     test('the example\'s Back goes one beat back, and from the first to the greeting', () => {
         const back = (scene) => step({ ...fresh(), scene }, { type: 'back' }).scene;
-        expect(EXAMPLE.map(back)).toEqual(['hello', 'example1', 'example2', 'example3']);
+        expect(EXAMPLE.map(back)).toEqual(['hello', 'example1', 'example2', 'example3', 'exampleReport']);
         expect(viewFor({ ...fresh(), scene: 'example1' })).toMatchObject({ stepBack: true, backTo: GUIDE.backToStart, progress: null });
         for (const scene of EXAMPLE.slice(1)) expect(viewFor({ ...fresh(), scene })).toMatchObject({ stepBack: true, backTo: GUIDE.backOneStep });
+    });
+
+    test('the report beat says what the example\'s last visit came to, when it is priced', () => {
+        const beat = { ...fresh(), scene: 'exampleReport' };
+        expect(viewFor(beat, { exampleBill: { billed: '$300', quote: '$320' } }).text).toBe(GUIDE.exampleReport('$300', '$320'));
+        expect(viewFor(beat).text).toBe(GUIDE.exampleReportPlain);
+        expect(viewFor(beat).halo).toBeNull();
     });
 
     test('the dots beat names the ringed task, and the last beat says the whole home\'s total when it is priced', () => {

@@ -44,7 +44,7 @@ export const RESULTS = Object.freeze(['done', 'skipped', 'not-reached']);
 export const ADDON_RESULTS = Object.freeze(['approved', 'declined', 'lapsed']);
 
 /** How much a report may say (PRD 11.7). */
-export const REPORT_LIMITS = Object.freeze({ cleaner: 40, note: 500, words: 120, reason: 40, minMinutes: 15, maxMinutes: 960, results: 400, addOns: 20 });
+export const REPORT_LIMITS = Object.freeze({ cleaner: 40, note: 500, words: 120, reason: 40, minMinutes: 15, maxMinutes: 960, results: 400, addOns: 20, photos: 2 });
 
 const text = (value, max) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
 const stamp = (value) => (typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : null);
@@ -57,11 +57,66 @@ export function cleanMinutes(value) {
     return Math.min(REPORT_LIMITS.maxMinutes, Math.max(REPORT_LIMITS.minMinutes, n));
 }
 
-/** One task's result made safe, or null. */
+/** A result's proof photos (PRD 11.7, "after" shots): ids of the API's
+ *  shape, each once, at most two. */
+function cleanPhotos(raw) {
+    return [...new Set((Array.isArray(raw) ? raw : []).filter((p) => ID.test(String(p))))].slice(0, REPORT_LIMITS.photos);
+}
+
+/** One task's result made safe, or null; its photos only when it has any. */
 function cleanResult(raw) {
     if (!raw || typeof raw !== 'object' || typeof raw.itemId !== 'string' || !raw.itemId || !RESULTS.includes(raw.status)) return null;
-    if (raw.status !== 'skipped') return { itemId: raw.itemId.slice(0, 64), status: raw.status };
-    return { itemId: raw.itemId.slice(0, 64), status: 'skipped', reason: text(raw.reason, REPORT_LIMITS.reason) || null, words: text(raw.words, REPORT_LIMITS.words) };
+    const out = raw.status !== 'skipped'
+        ? { itemId: raw.itemId.slice(0, 64), status: raw.status }
+        : { itemId: raw.itemId.slice(0, 64), status: 'skipped', reason: text(raw.reason, REPORT_LIMITS.reason) || null, words: text(raw.words, REPORT_LIMITS.words) };
+    const photos = cleanPhotos(raw.photos);
+    return photos.length ? { ...out, photos } : out;
+}
+
+/** Every proof photo a report names, each once. */
+export function proofIdsOf(report) {
+    return [...new Set(((report && report.results) || []).flatMap((r) => r.photos || []))];
+}
+
+/** The seal context's name for a proof's thumbnail. */
+const thumbName = (photoId) => `${photoId}-thumb`;
+
+/**
+ * One proof photo sent, sealed, before the report that names it (PLANNING
+ * 9.2 `proof`): the full size, then its thumbnail. `full` and `thumb` as
+ * bytes. `{ ok, error }`; `exists` counts as sent.
+ */
+export async function sendProof({ api, sealer, key, id, token, visitId, photoId, full, thumb }) {
+    const one = async (bytes, name, put) => {
+        const r = await put(id, token, visitId, photoId, await sealer.seal(key, bytes, contextFor(id, 'proof', name)));
+        return r.ok || r.error === 'exists' ? null : r.error;
+    };
+    const error = (await one(full, photoId, api.putProof)) || (await one(thumb, thumbName(photoId), api.putProofThumb));
+    return { ok: !error, error: error || null };
+}
+
+/**
+ * A report's proof photos for the customer, opened with the key: `[{
+ * photoId, full, thumb }]`, bytes, leaving out any that will not come or
+ * will not open.
+ */
+export async function fetchProofs({ api, sealer, key, id, token, visitId, report }) {
+    const out = [];
+    for (const photoId of proofIdsOf(report)) {
+        try {
+            const full = await api.getProof(id, token, visitId, photoId);
+            const thumb = await api.getProofThumb(id, token, visitId, photoId);
+            if (!full.ok || !thumb.ok) continue;
+            out.push({
+                photoId,
+                full: await sealer.open(key, full.bytes, contextFor(id, 'proof', photoId)),
+                thumb: await sealer.open(key, thumb.bytes, contextFor(id, 'proof', thumbName(photoId)))
+            });
+        } catch (e) {
+            // One that will not open is left out.
+        }
+    }
+    return out;
 }
 
 /** One add-on's outcome made safe: its proposal's choices, what became of

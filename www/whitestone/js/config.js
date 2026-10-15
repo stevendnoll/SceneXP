@@ -340,6 +340,11 @@ export const CONFIG = deepFreeze({
         /** The most a sealed visit report may weigh: a line per task of a
          *  full checklist, its add-ons and a note, with room to spare. */
         maxReportBytes: 65536,
+        /** A sealed proof photo at most (a full photo's limit and the seal's
+         *  few bytes), and how many a visit may hold (two a task, PRD 11.7,
+         *  each with its thumbnail). */
+        maxProofBytes: 2000100,
+        maxProofs: 80,
         /** The cleaner's page asks after an add-on this often while one is
          *  waiting and the page is in view (PLANNING 10.3). Seconds. */
         pollSeconds: 5,

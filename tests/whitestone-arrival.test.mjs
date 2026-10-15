@@ -741,7 +741,7 @@ describe('Maya on the stage', () => {
 });
 
 describe('the example', () => {
-    test('four beats: the house, its main floor, a dot ringed, the whole home\'s total; then Build my own (QA, 2026-10-15)', async () => {
+    test('five beats: the house, its main floor, a dot ringed, its last visit\'s report, the whole home\'s total; then Build my own (QA, 2026-10-15)', async () => {
         const main = await boot({ sheet: true });
         press('example');
         expect(main.__test__.active().sample).toBe(true);
@@ -758,7 +758,16 @@ describe('the example', () => {
         stepFrames(2);
         expect(dom.el('ws-halo').className).toBe('ws-halo is-exampleDot');
         expect(dom.el('ws-halo').hidden).toBe(false);
+        // Its last visit (M5): the dots by outcome, and what it came to.
+        const paint = jest.spyOn(main.__test__.model(), 'report');
         press('next');
+        expect(main.__test__.model().lifted).toBe('main');
+        expect(line()).toMatch(/^After each visit, your cleaner’s report lights up the house\. .* This visit came to \$[\d,]+(\.\d\d)? of the \$[\d,]+(\.\d\d)? quote, since skipped work comes off the bill\.$/);
+        const lit = paint.mock.calls[paint.mock.calls.length - 1][0];
+        expect([lit.get('example-task-2-4'), lit.get('example-task-13-1'), lit.get('example-task-2-1')]).toEqual(['skipped', 'not-reached', 'done']);
+        expect(dom.el('ws-halo').hidden).toBe(true);
+        press('next');
+        expect(paint).toHaveBeenLastCalledWith(null);
         // The whole home again, and what it comes to, as example prices.
         expect(main.__test__.model().lifted).toBeNull();
         expect(line()).toMatch(/^Cleaned as listed, this home comes to \$[\d,]+(\.\d\d)?, about [\w ]+\. Want to build yours\?$/);
@@ -795,7 +804,7 @@ describe('the example', () => {
     test('Example mode is a tour to watch: a tap on the house opens nothing, and Maya\'s Next pulses instead', async () => {
         const main = await boot({ sheet: true });
         press('example');
-        for (let beat = 0; beat < 4; beat++) {
+        for (let beat = 0; beat < 5; beat++) {
             const before = main.__test__.model().lifted;
             expect(main.__test__.tapModel()).toBe(false);
             expect(main.__test__.tapModel('second')).toBe(false);
@@ -806,9 +815,9 @@ describe('the example', () => {
             expect(main.__test__.model().lifted).toBe(before);
             expect(main.__test__.ui.selected).toBeNull();
             expect(panelShown()).toBe(false);
-            expect(nudged(beat < 3 ? 'next' : 'buildOwn')).toBe(true);
+            expect(nudged(beat < 4 ? 'next' : 'buildOwn')).toBe(true);
             jest.advanceTimersByTime(1700);
-            if (beat < 3) press('next');
+            if (beat < 4) press('next');
         }
         // Built, the house answers again.
         press('buildOwn');
@@ -821,11 +830,16 @@ describe('the example', () => {
         press('next');
         press('next');
         press('next');
+        press('next');
         const back = () => fire(dom.el('host-back'), 'click');
         expect(dom.el('host-back').hidden).toBe(false);
         expect(dom.el('host-back').getAttribute('title')).toBe(GUIDE.backOneStep);
         back();
+        expect(line()).toMatch(/^After each visit/);
+        expect(main.__test__.model().reporting).toBe(true);
+        back();
         expect(line()).toBe(GUIDE.example3('Stovetop'));
+        expect(main.__test__.model().reporting).toBe(false);
         expect(main.__test__.model().lifted).toBe('main');
         back();
         expect(line()).toBe(GUIDE.example2);

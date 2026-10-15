@@ -33,6 +33,11 @@
  * page opened again). Sent, the page shows the report and nothing more is
  * marked. A new booking of the same checklist is a new visit.
  *
+ * PROOF PHOTOS (M5 piece 4): a marked task takes up to two "after" photos,
+ * made small and stripped of their details as the studio's are
+ * (photos.js preparePhoto), kept on the device with the sealed copies until
+ * the report goes, and sent sealed just before it.
+ *
  * OFFLINE (M4 piece 4): the sealed checklist and its photos are kept on
  * this device as they arrive (still sealed, in IndexedDB), for as long as
  * the visit pass lasts, so a cleaner with no signal still opens the
@@ -57,14 +62,14 @@ import { CONFIG } from '../../js/config.min.js';
 import { parseShare, withoutFragment, ID } from '../../js/links.min.js';
 import { createApi } from '../../js/api.min.js';
 import { createStandin } from '../../js/standin.min.js';
-import { openIdbBackend, createMemoryBackend } from '../../js/photos.min.js';
+import { openIdbBackend, createMemoryBackend, preparePhoto } from '../../js/photos.min.js';
 import { createSealer, contextFor } from '../../js/seal.min.js';
 import { loadSheet } from '../../js/sheet.min.js';
 import { quoteChecklist } from '../../js/pricing.min.js';
 import { PUBLISHED_FORMAT } from '../../js/sync.min.js';
 import { renderChecklist, renderReport, showPhoto, findIn } from './view.min.js';
-import { applyMark, cleanProgress, emptyProgress, buildReport, visitKeyOf } from './visit.min.js';
-import { sendReport, reportBill } from '../../js/report.min.js';
+import { applyMark, cleanProgress, emptyProgress, buildReport, visitKeyOf, cleanProofs } from './visit.min.js';
+import { sendReport, reportBill, sendProof, proofIdsOf, REPORT_LIMITS } from '../../js/report.min.js';
 import { choicesFor, proposeAddOn, fetchAddOns, cleanKept, takenKeys, waitingCount, newAddOnId } from './addons.min.js';
 
 export { COPY };
@@ -145,8 +150,10 @@ export const CACHE_DATABASE = 'scenexp-whitestone-tasks';
 /**
  * The sealed copies kept for one checklist, over a four-method backend
  * (photos.js), each until the visit pass's end: `{ get(name), put(name,
- * bytes, until), forget() }`, `name` 'checklist', 'thumb/<id>' or
- * 'photo/<id>'. Never throws: a full or broken store only means no copy.
+ * bytes, until), drop(name), forget() }`, `name` 'checklist', 'thumb/<id>'
+ * or 'photo/<id>'; and the cleaner's own proof photos ('proof/<id>',
+ * 'proofthumb/<id>', M5) until their report is sent. Never throws: a full
+ * or broken store only means no copy.
  */
 export function createKeeper(backend, checklistId, now) {
     const prefix = `${checklistId}/`;
@@ -167,7 +174,12 @@ export function createKeeper(backend, checklistId, now) {
             }
             return kept.bytes;
         }),
-        put: (name, bytes, until) => safe(() => backend.put(prefix + name, { bytes, until })),
+        /** Resolves to whether it was kept. */
+        put: (name, bytes, until) => safe(async () => {
+            await backend.put(prefix + name, { bytes, until });
+            return true;
+        }, false),
+        drop: (name) => safe(() => backend.delete(prefix + name)),
         forget: () => safe(async () => {
             for (const key of await backend.keys()) if (String(key).startsWith(prefix)) await backend.delete(key);
         })
@@ -227,6 +239,9 @@ export function cleanDraft(raw) {
         note: String(r.note || '').slice(0, 500)
     };
 }
+
+/** How long a proof photo waits on the device for its report, in days. */
+export const PROOF_DAYS = 30;
 
 /** The words for an API error while opening, from copy.js. */
 function errorLine(error) {
@@ -305,6 +320,10 @@ export async function boot(env) {
     state.visitId = typeof entry.visitId === 'string' && ID.test(entry.visitId) ? entry.visitId : null;
     state.addOns = state.visitId ? cleanKept(entry.addOns) : [];
     state.draft = cleanDraft(entry.draft);
+    state.proofs = cleanProofs(entry.proofs);
+    state.proofThumbs = new Map();
+    state.proofNote = null;
+    const prepare = env.preparePhoto || preparePhoto;
 
     const askPin = (line = '', problem = false) => {
         state.phase = 'pin';
@@ -349,7 +368,8 @@ export async function boot(env) {
             state.visitId = null;
             state.addOns = [];
             state.draft = { ...cleanDraft(null), cleaner: state.draft.cleaner };
-            remember({ sent: null, outbox: null, progress: state.progress, visitId: null, addOns: [], draft: state.draft });
+            state.proofs = {};
+            remember({ sent: null, outbox: null, progress: state.progress, visitId: null, addOns: [], draft: state.draft, proofs: {} });
         }
         try {
             const version = opened.quote && opened.quote.sheetVersion;
@@ -366,7 +386,7 @@ export async function boot(env) {
         state.fromDevice = fromDevice;
         /** The report as it would be sent now. */
         const currentReport = (at = null) => buildReport(state.form, state.progress, state.addOns, {
-            cleaner: state.draft.cleaner, minutesOnSite: state.draft.hours * 60 + state.draft.minutes, note: state.draft.note
+            cleaner: state.draft.cleaner, minutesOnSite: state.draft.hours * 60 + state.draft.minutes, note: state.draft.note, proofs: state.proofs
         }, at);
         /** Sent, waiting to send, finishing, or the checklist. */
         const modeNow = () => (entry.sent ? 'sent' : entry.outbox ? 'pending' : state.finishing ? 'finish' : null);
@@ -385,7 +405,8 @@ export async function boot(env) {
                 form: state.form, quote: state.quote, sheet: state.sheet, thumbs: state.thumbs, notice: state.notice,
                 progress: state.progress, skipping: state.skipping, skipNote: state.skipNote,
                 addOns: state.addOns, proposing: state.proposing,
-                on: { photo: openPhoto, mark, skip, propose, pick, quantity, send, addOnDone, finish, print: () => printPage() }
+                proofs: state.proofs, proofThumbs: state.proofThumbs, proofNote: state.proofNote,
+                on: { photo: openPhoto, mark, skip, propose, pick, quantity, send, addOnDone, finish, proof, unproof, print: () => printPage() }
             });
         };
         /** Drawn again for news from the API, keeping what is being typed
@@ -530,6 +551,58 @@ export async function boot(env) {
             if (entry.outbox) trySend();
         };
 
+        // ---- Proof photos (M5 piece 4) -------------------------------------------
+
+        /** A photo added to a marked task: made small, kept on the device
+         *  (the full size and its thumbnail), and shown. */
+        async function proofNow(itemId, file) {
+            const ids = state.proofs[itemId] || [];
+            if (ids.length >= REPORT_LIMITS.photos) return;
+            state.proofNote = null;
+            let kept = false;
+            const photoId = newId();
+            let prepared = null;
+            try {
+                prepared = await prepare(file, CONFIG);
+                const bytes = async (blob) => new Uint8Array(await blob.arrayBuffer());
+                const until = new Date(now() + PROOF_DAYS * 86400000).toISOString();
+                kept = (await keeper.put(`proof/${photoId}`, await bytes(prepared.full), until))
+                    && (await keeper.put(`proofthumb/${photoId}`, await bytes(prepared.thumb), until));
+            } catch (e) {
+                kept = false;
+            }
+            if (!kept) {
+                await keeper.drop(`proof/${photoId}`);
+                state.proofNote = { itemId, text: COPY.proofFailed };
+                draw();
+                focusOn(`done-${itemId}`);
+                return;
+            }
+            state.proofs = { ...state.proofs, [itemId]: [...ids, photoId] };
+            remember({ proofs: state.proofs });
+            state.proofThumbs.set(photoId, makeUrl(prepared.thumb));
+            draw();
+            focusOn(`proof-remove-${photoId}`);
+        }
+        function proof(itemId, file) {
+            state.pending = proofNow(itemId, file);
+            return state.pending;
+        }
+        /** A photo taken off a task, and off the device. */
+        function unproof(itemId, photoId) {
+            const left = (state.proofs[itemId] || []).filter((p) => p !== photoId);
+            const next = { ...state.proofs };
+            if (left.length) next[itemId] = left;
+            else delete next[itemId];
+            state.proofs = next;
+            state.proofThumbs.delete(photoId);
+            remember({ proofs: state.proofs });
+            state.pending = Promise.all([keeper.drop(`proof/${photoId}`), keeper.drop(`proofthumb/${photoId}`)]);
+            draw();
+            focusOn(`done-${itemId}`);
+            return state.pending;
+        }
+
         // ---- Finishing the visit (M5 piece 2) ----------------------------------
 
         /** The fields as typed, kept on the device (nothing is redrawn, so
@@ -587,14 +660,20 @@ export async function boot(env) {
             state.retryTimer = null;
             state.sendingReport = true;
             draw();
-            const r = await sendReport({ api, sealer, key, id: here.id, token: entry.visitToken, visitId: state.visitId, report: entry.outbox.report });
+            const r = await sendAll();
             state.sendingReport = false;
             if (r.visitId && r.visitId !== state.visitId) {
                 state.visitId = r.visitId;
                 remember({ visitId: r.visitId });
             }
             if (r.ok) {
-                remember({ sent: { ...entry.outbox, visitId: r.visitId }, outbox: null });
+                // The photos went with it: off the device now.
+                for (const photoId of proofIdsOf(entry.outbox.report)) {
+                    await keeper.drop(`proof/${photoId}`);
+                    await keeper.drop(`proofthumb/${photoId}`);
+                }
+                state.proofs = {};
+                remember({ sent: { ...entry.outbox, visitId: r.visitId }, outbox: null, proofs: {} });
                 state.retries = 0;
                 state.reportNote = '';
                 state.reportProblem = false;
@@ -633,6 +712,34 @@ export async function boot(env) {
                 return trySend();
             }, wait * 1000);
         }
+        /** The visit started if it has not been, each photo the report names
+         *  sent (once: a photo gone from the device is passed over, and the
+         *  customer is told it was not received), then the report. */
+        async function sendAll() {
+            let visitId = state.visitId;
+            const photos = proofIdsOf(entry.outbox.report);
+            if (!visitId && photos.length) {
+                const started = await api.startVisit(here.id, entry.visitToken);
+                if (!started.ok) return { ok: false, visitId: null, error: started.error };
+                visitId = started.data.visitId;
+                state.visitId = visitId;
+                remember({ visitId });
+            }
+            for (const photoId of photos) {
+                const sent = entry.outbox.proofsSent || [];
+                if (sent.includes(photoId)) continue;
+                const full = await keeper.get(`proof/${photoId}`);
+                const thumb = await keeper.get(`proofthumb/${photoId}`);
+                if (full && thumb) {
+                    const p = await sendProof({ api, sealer, key, id: here.id, token: entry.visitToken, visitId, photoId, full, thumb });
+                    // Refused as closed: the report is in already (an answer
+                    // lost on the way), which the report's own send settles.
+                    if (!p.ok && p.error !== 'closed') return { ok: false, visitId, error: p.error };
+                }
+                remember({ outbox: { ...entry.outbox, proofsSent: [...sent, photoId] } });
+            }
+            return sendReport({ api, sealer, key, id: here.id, token: entry.visitToken, visitId, report: entry.outbox.report });
+        }
         function trySend() {
             state.reportSend = trySendNow();
             return state.reportSend;
@@ -668,6 +775,12 @@ export async function boot(env) {
             return state;
         }
         if (entry.sent) return state;
+        // The proof photos kept on the device, their thumbnails shown again.
+        for (const photoId of Object.values(state.proofs).flat()) {
+            const bytes = await keeper.get(`proofthumb/${photoId}`);
+            if (bytes) state.proofThumbs.set(photoId, makeUrl(new Blob([bytes], { type: 'image/jpeg' })));
+        }
+        if (state.proofThumbs.size) redraw();
         // The thumbnails, then drawn again with them.
         const photoIds = [...new Set((opened.items || []).flatMap((i) => (Array.isArray(i.photos) ? i.photos : [])))];
         for (const photoId of photoIds) {
