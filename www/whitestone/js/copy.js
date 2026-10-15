@@ -420,6 +420,9 @@ export const GUIDE = Object.freeze({
 
     dots: "Each blue dot is a task. Tap one to see what's included, or star the ones that matter most.",
     dotsAgain: 'Tap any blue dot on the open floor to see that task.',
+    /** Back from a dot she pointed to (QA, 2026-10-15). */
+    dotsSeen: 'Every task works that way. Open another dot if you like, or tap Got it to add your other rooms.',
+    dotsSeenAgain: 'Tap Got it whenever you’re ready to add your other rooms.',
     gotIt: 'Got it',
 
     rooms: 'Now add your other rooms. Tap a floor to open it, or add a room here.',

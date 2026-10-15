@@ -519,14 +519,32 @@ describe('a first visit', () => {
         expect(dom.el('panel-title').textContent).toBe('Stovetop');
         stepFrames(2);
         expect(shown()).toBe(false);
-        expect(main.__test__.ui.guide.scene).toBe('rooms');
-        // Back out of the task, the room, the floor: the panel goes, and Maya
-        // is back with the step she is on.
-        for (let i = 0; i < 3; i++) fire(dom.el('panel-back'), 'click');
+        // Still on First room (QA, 2026-10-15), and the panel's one Back says
+        // where it goes.
+        expect(main.__test__.ui.guide.scene).toBe('dots');
+        expect(dom.el('panel-back').textContent).toBe(PANEL.back('First room'));
+        fire(dom.el('panel-back'), 'click');
         expect(panelShown()).toBe(false);
+        // The floor stays open with its dots, nothing selected.
+        expect(main.__test__.model().lifted).toBe('main');
+        expect(main.__test__.ui.selected).toBeNull();
         stepFrames(2);
         expect(shown()).toBe(true);
+        expect(line()).toBe(GUIDE.dotsSeen);
+        expect(document.activeElement.id).toBe('host-gotIt');
+        // Escape from another dot comes back the same way, in one press.
+        main.__test__.tapModel(null, own(main).items[1].id);
+        expect(panelShown()).toBe(true);
+        fire(dom.documentStub, 'keydown', { key: 'Escape', target: dom.documentStub.body, preventDefault() {} });
+        expect(panelShown()).toBe(false);
+        expect(main.__test__.model().lifted).toBe('main');
+        // Got it, the main button, moves on to Your rooms.
+        press('gotIt');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
         expect(line()).toBe(GUIDE.rooms);
+        // There, the panel's Back is its own again.
+        main.__test__.tapModel(null, own(main).items[0].id);
+        expect(dom.el('panel-back').textContent).toBe(PANEL.back('the kitchen'));
     });
 
     test('another room through the room card, then Review, preferences offered, and saved', async () => {

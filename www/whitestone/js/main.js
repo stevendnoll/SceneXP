@@ -71,7 +71,7 @@ import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKIN
 import { createTurntable, turnPoint } from './turntable.min.js';
 import { buildStage, buildLights, firstPick, onTurntable } from './stage.min.js';
 import { buildModel } from './model.min.js';
-import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, ringFloor, GUIDED, CHANGED } from './guide.min.js';
+import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, ringFloor, GUIDED, CHANGED, PROGRESS } from './guide.min.js';
 import { createHost } from './host.min.js';
 import { buildMaya, speakSeconds } from './cast.min.js';
 import { createPanel, selectFromHit, stepOut, reconcile, panelView, homeSuggestions } from './panel.min.js';
@@ -471,6 +471,10 @@ function away() {
  * on empty space.
  */
 function stepBack() {
+    if (ui.selected && onFirstRoomStep()) {
+        backToFirstRoom();
+        return true;
+    }
     if (ui.selected) {
         selectTo(stepOut(ui.selected));
         return true;
@@ -504,12 +508,37 @@ function selectTo(next, { focus = false } = {}) {
     return ui.selected;
 }
 
-/** The panel for the selection now, or put away. */
+/** The panel for the selection now, or put away. On Maya's First room
+ *  step its Back goes straight back to her (backToFirstRoom), and says so. */
 function showPanel() {
     if (!panel) return;
-    const view = ui.selected ? panelView(ui.selected, active(), state.sheet) : null;
+    let view = ui.selected ? panelView(ui.selected, active(), state.sheet) : null;
     if (!view) ui.selected = null;
+    else if (onFirstRoomStep()) view = { ...view, back: PANEL.back(GUIDE.progress[PROGRESS.dots]) };
     panel.show(view);
+}
+
+/** Whether Maya is on the First room step, past adding the room: a dot
+ *  opened there is a look at one task before she moves on, not a move into
+ *  the panel (QA, 2026-10-15: three Backs led out of it, to Your rooms). */
+function onFirstRoomStep() {
+    return Boolean(ui.guide && (ui.guide.scene === 'added' || ui.guide.scene === 'dots'));
+}
+
+/** Back to Maya's First room step from whatever the panel shows: the
+ *  selection let go, the floor left open with its dots, and the keyboard
+ *  on her next step. */
+function backToFirstRoom() {
+    ui.selected = null;
+    if (model && model.select({ roomId: null, itemId: null })) markShadows();
+    showPanel();
+    requestRender();
+    // Out from under the panel now, not at the next frame, so the keyboard
+    // can land on her next step.
+    if (host) {
+        host.setCovered(anyOpen() || Boolean(panel && panel.shown));
+        if (host.shown) host.focusPrimary();
+    }
 }
 
 /** A button in the panel's list: a floor, a room, or a task. */
@@ -534,6 +563,10 @@ function onPanelRow(kind, id) {
  *  or, once the panel has gone, on Maya's next step (everything is hers,
  *  Steve, 2026-10-15), or on Help when she offers none. */
 function onPanelBack() {
+    if (onFirstRoomStep()) {
+        backToFirstRoom();
+        return;
+    }
     selectTo(stepOut(ui.selected), { focus: true });
     if (!ui.selected) {
         if (host && host.shown && host.focusPrimary()) return;

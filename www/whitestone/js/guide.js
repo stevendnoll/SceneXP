@@ -274,13 +274,17 @@ export function step(guide, event) {
     case 'firstRoom':
         if (type === 'roomAdded') return to('added', { roomId: event.roomId || null });
         return g;
+    // A dot opened on the First room step keeps her there (QA, 2026-10-15:
+    // it skipped to Your rooms, three Backs away): the panel's Back comes
+    // straight back to her, and Got it moves on.
     case 'added':
-        if (type === 'next') return to('dots');
-        if (type === 'dotOpened') return to('rooms');
+        if (type === 'next') return to('dots', { opened: false });
+        if (type === 'dotOpened') return to('dots', { opened: true });
         if (type === 'roomAdded') return to('rooms', { rooms: g.rooms + 1 });
         return g;
     case 'dots':
-        if (type === 'gotIt' || type === 'dotOpened') return to('rooms');
+        if (type === 'dotOpened') return g.opened ? g : to('dots', { opened: true });
+        if (type === 'gotIt') return to('rooms');
         if (type === 'roomAdded') return to('rooms', { rooms: g.rooms + 1 });
         return g;
     case 'rooms':
@@ -394,7 +398,10 @@ export function viewFor(guide, ctx = {}) {
     case 'added':
         return { ...base, text: ctx.addedText || GUIDE.addedPlain(String(ctx.roomLabel || '').toLowerCase()), buttons: [b('next', GUIDE.next, true)] };
     case 'dots':
-        return { ...base, text: GUIDE.dots, buttons: [b('gotIt', GUIDE.gotIt)] };
+        // Once a dot has been opened, she says so, and Got it leads on.
+        return guide.opened
+            ? { ...base, text: GUIDE.dotsSeen, again: GUIDE.dotsSeenAgain, halo: null, buttons: [b('gotIt', GUIDE.gotIt, true)] }
+            : { ...base, text: GUIDE.dots, buttons: [b('gotIt', GUIDE.gotIt, true)] };
     case 'rooms': {
         // Rooms as chips (QA, 2026-10-14); Review is offered once there are
         // two rooms (ONBOARDING Scene 5).

@@ -152,9 +152,34 @@ describe('the way through', () => {
         expect(step(once, { type: 'floorTapped' })).toBe(once);
     });
 
-    test('a tapped dot moves on as Got it does, and from the line before it too', () => {
-        expect(walk(fresh(), 'start', HOUSE, 'next', 'roomAdded', 'next', 'dotOpened').scene).toBe('rooms');
-        expect(walk(fresh(), 'start', HOUSE, 'next', 'roomAdded', 'dotOpened').scene).toBe('rooms');
+    test('a tapped dot keeps her on First room, saying so, and Got it moves on (QA, 2026-10-15)', () => {
+        for (const g of [
+            walk(fresh(), 'start', HOUSE, 'next', 'roomAdded', 'next', 'dotOpened'),
+            walk(fresh(), 'start', HOUSE, 'next', 'roomAdded', 'dotOpened')
+        ]) {
+            expect(g.scene).toBe('dots');
+            expect(g.opened).toBe(true);
+            expect(PROGRESS[g.scene]).toBe(PROGRESS.firstRoom);
+            // A second dot changes nothing.
+            expect(step(g, { type: 'dotOpened' })).toBe(g);
+            const v = viewFor(g);
+            expect(v.text).toBe(GUIDE.dotsSeen);
+            expect(v.again).toBe(GUIDE.dotsSeenAgain);
+            expect(v.halo).toBeNull();
+            expect(v.buttons).toEqual([{ id: 'gotIt', label: GUIDE.gotIt, primary: true }]);
+            expect(step(g, { type: 'gotIt' }).scene).toBe('rooms');
+        }
+        // Before a dot: the first line, its ring on a dot, Got it the main button.
+        const before = walk(fresh(), 'start', HOUSE, 'next', 'roomAdded', 'next');
+        expect(before.opened).toBe(false);
+        expect(viewFor(before).text).toBe(GUIDE.dots);
+        expect(viewFor(before).halo).toEqual({ kind: 'dot' });
+        expect(viewFor(before).buttons).toEqual([{ id: 'gotIt', label: GUIDE.gotIt, primary: true }]);
+        // Back to First room later (its room known) starts the dots afresh.
+        const again = walk(before, 'dotOpened', 'gotIt');
+        const back = step(again, { type: 'back', roomId: 'r1' });
+        expect(back.scene).toBe('added');
+        expect(step(back, { type: 'next' })).toMatchObject({ scene: 'dots', opened: false });
     });
 
     test('a room added by the room card counts as much as the kitchen from the bubble, at any step', () => {
