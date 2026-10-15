@@ -259,12 +259,13 @@ export async function unpublish({ checklist, api, record }) {
 }
 
 /**
- * A published checklist opened by its edit link (PLANNING 7.3): fetched with
- * the owner token, opened with the key, held to the published form, its
- * photos and thumbnails brought into this device's photo store (any that
- * will not open are left out). Resolves to `{ ok, form, version, error }`.
+ * The published checklist as the server has it now, as the cleaner reads
+ * it: fetched with the owner token (`link`: `{ id, key, ownerToken }`),
+ * opened with the key, held to the published form. Resolves to `{ ok, form,
+ * version, key, error }`, `key` imported; `denied` for one that will not
+ * open.
  */
-export async function openPublished({ api, sealer, photos, link }) {
+export async function readPublished({ api, sealer, link }) {
     const got = await api.getChecklist(link.id, link.ownerToken);
     if (!got.ok) return { ok: false, error: got.error };
     let key;
@@ -276,6 +277,19 @@ export async function openPublished({ api, sealer, photos, link }) {
         return { ok: false, error: 'denied' };
     }
     if (!form || form.format !== PUBLISHED_FORMAT || form.id !== link.id) return { ok: false, error: 'denied' };
+    return { ok: true, form, version: Number(got.version) || 0, key, error: null };
+}
+
+/**
+ * A published checklist opened by its edit link (PLANNING 7.3): read as
+ * above, its photos and thumbnails brought into this device's photo store
+ * (any that will not open are left out). Resolves to `{ ok, form, version,
+ * error }`.
+ */
+export async function openPublished({ api, sealer, photos, link }) {
+    const read = await readPublished({ api, sealer, link });
+    if (!read.ok) return { ok: false, error: read.error };
+    const { form, key } = read;
     const ids = [...new Set((form.items || []).flatMap((i) => (Array.isArray(i.photos) ? i.photos : [])))];
     for (const photoId of ids) {
         try {
@@ -288,5 +302,5 @@ export async function openPublished({ api, sealer, photos, link }) {
             // A photo that will not open is left out; the task keeps its words.
         }
     }
-    return { ok: true, form, version: Number(got.version) || 0, error: null };
+    return { ok: true, form, version: read.version, error: null };
 }

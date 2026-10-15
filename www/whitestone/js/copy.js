@@ -467,6 +467,28 @@ export const GUIDE = Object.freeze({
     /** Start over: beside Keep going, and at the foot of her bubble. */
     startOver: 'Start over',
 
+    /** A cleaner's add-on, put to the customer (M5, PRD 9.5): where, what
+     *  and what it adds, their words, the question, and the promise. */
+    addOnAsk: (where, what) => `Your cleaner would like to add something ${where}. ${what}.`,
+    addOnInRoom: (room) => `in the ${String(room).toLowerCase()}`,
+    addOnInHome: 'while they are there',
+    addOnPriced: (name, money, time) => `${name}, for ${money} more, ${time}`,
+    addOnWords: (words) => `They say, “${words}”`,
+    addOnQuestion: 'Shall they go ahead?',
+    addOnPlain: 'Your cleaner would like to add something. Shall they go ahead?',
+    addOnAgain: 'Tap Approve and your cleaner can go ahead, or Decline and they will leave it.',
+    addOnPromise: 'You only pay for it if you approve it and it’s done.',
+    approve: 'Approve',
+    decline: 'Decline',
+    afterApproved: (name) => `Approved: ${name}. Your cleaner will see it in a moment and can go ahead.`,
+    afterDeclined: (name) => `Declined: ${name}. Your cleaner will see it in a moment, and you won’t be charged for it.`,
+    addOnOffline: 'I couldn’t reach Whitestone, so your answer isn’t sent yet. Please try again in a moment.',
+    addOnTrouble: 'Your answer didn’t go through. Please try again in a moment.',
+    /** At a glance, while one waits for an answer. */
+    factAddOns: 'Add-ons',
+    factWaiting: (n) => `${n} waiting`,
+    factAddOnsSpoken: (n) => `${n} ${n === 1 ? 'add-on' : 'add-ons'} from your cleaner, waiting for your answer.`,
+
     hint: 'Tap a floor of the house to open it, and tap a blue dot to see a task. I’m right here whenever you’d like a hand.',
     /** The → by her name: her bubble's main step, from the top (QA,
      *  2026-10-15: on a phone the buttons can sit below the fold). */

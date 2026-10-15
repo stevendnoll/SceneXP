@@ -389,7 +389,7 @@ describe('short loops away from Maya, and back (QA, 2026-10-14)', () => {
         // Another checklist open now, or nothing known: nothing claimed.
         expect(outcomeOf(draft, { ...booked, id: 'b' }, 'booking')).toBe('same');
         expect(outcomeOf(null, booked, 'booking')).toBe('same');
-        expect(CHANGED).toEqual(['booked', 'moved', 'canceled', 'unpublished', 'sent']);
+        expect(CHANGED).toEqual(['booked', 'moved', 'canceled', 'unpublished', 'sent', 'approved', 'declined']);
     });
 
     test('from All set, a welcome or standing by, Maya steps aside remembering where they went', () => {

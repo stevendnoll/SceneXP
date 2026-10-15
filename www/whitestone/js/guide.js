@@ -20,7 +20,8 @@
  *
  * and beside them the example's four beats (example1 to example4: the
  * house, a floor open, the dots, and its total), a returning visitor's
- * welcome, and a hint.
+ * welcome, a hint, and `addOn`: the cleaner asking for more, which Maya
+ * puts to the customer, Approve or Decline (M5, PRD 9.5).
  *
  * EXAMPLE MODE IS A TOUR TO WATCH (QA, 2026-10-15). Maya shows the example
  * and the visitor only moves her on or back: the house answers no tap
@@ -140,6 +141,15 @@ export function ringFloor(levels, lifted, withRooms = [], annex = []) {
 /** Scenes that sit over another for a moment and go back to it. */
 const ASIDE = ['hint'];
 
+/**
+ * Where Maya may put a cleaner's add-on to the customer of her own accord
+ * (M5): standing by, a welcome, All set, a hint, or another add-on. Never in
+ * the middle of the first build or the example, where the visitor is busy;
+ * the add-on waits there at a glance (main.js hostFacts), and a tap on it
+ * asks from anywhere (`asked`).
+ */
+const ASKS_FROM = ['done', 'welcome', 'saved', 'hint', 'addOn'];
+
 /** Scenes whose choices send the visitor off to a card (Choose a time, See
  *  my visit, Send my changes, Review my checklist), Maya coming back once
  *  it is done: All set, a welcome, and standing by. */
@@ -174,8 +184,8 @@ export function outcomeOf(was, now, to) {
 }
 
 /** Outcomes that changed something, said in their own words without the
- *  home's standing again. */
-export const CHANGED = Object.freeze(['booked', 'moved', 'canceled', 'unpublished', 'sent']);
+ *  home's standing again: a loop's, and an add-on answered. */
+export const CHANGED = Object.freeze(['booked', 'moved', 'canceled', 'unpublished', 'sent', 'approved', 'declined']);
 
 /**
  * The checklist on the turntable when the visitor arrives: the one open
@@ -214,8 +224,10 @@ export function arrivalGuide(doc) {
 /** What is saved in the document's settings: the scene of the first build
  *  the visitor is at (or done), and whether they reached the review. */
 export function savedForm(guide) {
-    const scene = GUIDED.includes(guide.scene) ? guide.scene
-        : guide.scene === 'welcome' && guide.resume ? guide.resume : 'done';
+    // An add-on being asked about is saved as the scene beneath it.
+    const at = guide.scene === 'addOn' ? guide.back : guide.scene;
+    const scene = GUIDED.includes(at) ? at
+        : at === 'welcome' && guide.resume ? guide.resume : 'done';
     return { scene, reviewed: Boolean(guide.reviewed) };
 }
 
@@ -243,6 +255,11 @@ export function savedForm(guide) {
  *                          comes back ({ now }) saying what came of it
  *   homeMade               a checklist made outside the guide (the setup
  *                          card): straight on to the first room
+ *   proposal, decided      a cleaner's add-on put to the customer
+ *                          ({ addonId, asked }: asked, a tap on it, from
+ *                          any scene but the example's), and answered
+ *                          ({ status }): back where she was, or standing
+ *                          by with what came of it
  *   again, close           a tap on Maya, and closing the hint it gave
  *   restart                start over
  */
@@ -289,6 +306,22 @@ export function step(guide, event) {
         return g;
     }
     if (type === 'close' && ASIDE.includes(g.scene)) return to(g.back || 'done', { back: null });
+    if (type === 'proposal') {
+        const from = event.asked ? !EXAMPLE.includes(g.scene) && g.scene !== 'hello' : ASKS_FROM.includes(g.scene) && !g.away;
+        if (!from || !event.addonId || (g.scene === 'addOn' && g.addonId === event.addonId)) return g;
+        // Where she goes back to: a hint's own scene, and past one add-on
+        // to the scene before it.
+        const back = g.scene === 'addOn' || g.scene === 'hint' ? g.back || 'done' : g.scene;
+        return to('addOn', { addonId: event.addonId, back, minimized: false });
+    }
+    if (type === 'decided' && g.scene === 'addOn') {
+        // Back into the build, or a welcome that picks it up, as it was
+        // (main.js says what came of it); else standing by, saying so.
+        const keep = GUIDED.includes(g.back) || (g.back === 'welcome' && g.resume);
+        if (keep) return to(g.back, { addonId: null, back: null });
+        const outcome = event.status === 'approved' || event.status === 'declined' ? event.status : null;
+        return to('done', { addonId: null, back: null, minimized: false, away: null, outcome });
+    }
     // No Skip (QA, 2026-10-15: "the guide is the UX"): Back and the strip
     // move about in it, and Start over begins it again.
     if (type === 'homeMade' && (g.scene === 'hello' || EXAMPLE.includes(g.scene))) return to('firstRoom');
@@ -484,6 +517,13 @@ export function viewFor(guide, ctx = {}) {
             : { ...base, text: ctx.welcome || GUIDE.welcome, buttons: [], choices: 'returning' };
     case 'hint':
         return { ...base, text: GUIDE.hint, buttons: [b('close', GUIDE.gotIt, true)] };
+    case 'addOn':
+        // The cleaner's add-on, what it adds and their words (`ctx.addOn`
+        // { text }, main.js), and the guarantee in small print.
+        return {
+            ...base, text: (ctx.addOn && ctx.addOn.text) || GUIDE.addOnPlain, small: GUIDE.addOnPromise, again: GUIDE.addOnAgain,
+            buttons: [b('approve', GUIDE.approve, true), b('decline', GUIDE.decline)]
+        };
     case 'done':
         // Never silent (QA, 2026-10-14): where the home stands and the ways
         // on (`ctx.standby`, main.js), or tucked away as Need a hand?

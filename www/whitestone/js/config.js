@@ -340,6 +340,11 @@ export const CONFIG = deepFreeze({
         /** The cleaner's page asks after an add-on this often while one is
          *  waiting and the page is in view (PLANNING 10.3). Seconds. */
         pollSeconds: 5,
+        /** The studio asks after its published checklist's visits (an
+         *  add-on to answer) this often while the page is in view, and
+         *  `firstPollSeconds` after it opens (PLANNING 10.4). Seconds. */
+        ownerPollSeconds: 10,
+        firstPollSeconds: 1.5,
         /** A quote is honored for 90 days (PRD 9.2), so a visit moved
          *  later than that is refused by the calendar. */
         quoteDays: 90

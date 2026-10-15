@@ -46,7 +46,8 @@ import { withExample } from './samples.min.js';
 import { createApi, createFetchTransport } from './api.min.js';
 import { createStandin } from './standin.min.js';
 import { createSealer } from './seal.min.js';
-import { publish, openPublished, republish, cancelVisit, unpublish, quoteToSend } from './sync.min.js';
+import { publish, openPublished, readPublished, republish, cancelVisit, unpublish, quoteToSend } from './sync.min.js';
+import { openAddOns, decideAddOn, addOnName, priceOf, roomOf } from './addons.min.js';
 import { createBooking, visitMinutes, shiftMonth, firstOpen, dayLabel, clockLabel } from './booking.min.js';
 import { canChange } from './schedule.min.js';
 import { createReceipt, receiptView } from './receipt.min.js';
@@ -289,6 +290,8 @@ async function init() {
         ui.showcase = !state.reducedMotion;
         applyPose(turntable.pose(aspect()));
         refresh();
+        // A published checklist's add-ons, asked after soon (M5).
+        watchVisits(CONFIG.api.firstPollSeconds);
     }, CONFIG.loadingReveal);
 
     // Console helpers for QA and screenshots.
@@ -1119,6 +1122,7 @@ function guideContext() {
         welcome: welcomeLine(c),
         standby: standbyLine(c),
         saved: savedNext(c),
+        addOn: addOnContext(),
         ...exampleContext(c)
     };
 }
@@ -1170,7 +1174,9 @@ function afterLine(c, outcome) {
         unpublished: GUIDE.afterUnpublished,
         sent: GUIDE.afterSent,
         noTime: GUIDE.afterNoTime,
-        notSent: GUIDE.afterNotSent
+        notSent: GUIDE.afterNotSent,
+        approved: visits.decided ? GUIDE.afterApproved(visits.decided.name) : '',
+        declined: visits.decided ? GUIDE.afterDeclined(visits.decided.name) : ''
     }[outcome] || '';
     const parts = CHANGED.includes(outcome) && lead ? [lead] : [lead, whereLine(c)];
     return [...parts, GUIDE.whatNext].filter(Boolean).join(' ');
@@ -1306,6 +1312,9 @@ function hostFacts(c) {
             spoken: unsent ? `${spoken} ${UI.visitChipUnsent}.` : spoken
         });
     }
+    // An add-on waiting for an answer (M5), a tap away from Maya asking.
+    const waiting = waitingFor(c).length;
+    if (waiting) facts.push({ key: 'addons', label: GUIDE.factAddOns, value: GUIDE.factWaiting(waiting), note: '', spoken: GUIDE.factAddOnsSpoken(waiting) });
     return facts.length ? facts : null;
 }
 
@@ -1315,6 +1324,11 @@ function onHostFact(key) {
     if (host) host.poke();
     if (key === 'quote') openQuote();
     else if (key === 'visit') openReceipt();
+    else if (key === 'addons') {
+        // The panel steps aside, so she is seen asking.
+        if (panel && panel.shown) selectTo(null);
+        offerAddOn({ asked: true });
+    }
 }
 
 /** The scene's bubble, with the floors to tick filled in from the open
@@ -1362,7 +1376,7 @@ function sceneView() {
 const GESTURE_OF = {
     hello: 'wave', welcome: 'wave',
     home: 'point', attached: 'point', floors: 'point', saved: 'wave', firstRoom: 'point', added: 'point', dots: 'point', rooms: 'point', review: 'point',
-    example1: 'point', example2: 'point', example3: 'point', example4: 'point', look: 'point'
+    example1: 'point', example2: 'point', example3: 'point', example4: 'point', look: 'point', addOn: 'point'
 };
 
 /** Maya says the scene now (or is put away when there is none), with the
@@ -1430,6 +1444,7 @@ function guideTo(event) {
         return false;
     }
     ui.guide = next;
+    if (was.scene === 'addOn' && next.scene !== 'addOn') leaveAddOn(next.scene);
     // Begun (Let's start, the example, a welcome's choice): the turning
     // stops, and the house comes back to the arrival's view, however far
     // it had turned or been turned (QA, 2026-10-15).
@@ -1508,6 +1523,9 @@ function enterScene(to) {
         if (room) liftLevel(room.level);
         break;
     }
+    case 'addOn':
+        showAddOn();
+        break;
     case 'review':
     case 'saved':
         selectTo(null);
@@ -1570,6 +1588,8 @@ function comeBack() {
     // Out from under the card now, not at the next frame, so she is heard.
     if (host) host.setCovered(Boolean(panel && panel.shown));
     if (!guideTo({ type: 'returned', now: standing(active()) })) return false;
+    // An add-on that came while the card was open is asked about now.
+    offerAddOn();
     if (host) host.focusPrimary();
     if (cast && CHANGED.includes(ui.guide.outcome) && !state.reducedMotion) {
         cast.gesture('wave');
@@ -1637,6 +1657,12 @@ function onHostButton(id) {
         break;
     case 'startOver':
         confirmStartOver();
+        break;
+    case 'approve':
+        decide('approved');
+        break;
+    case 'decline':
+        decide('declined');
         break;
     default:
         if (id.startsWith('kind-')) chooseResidence({ kind: id.slice(5) });
@@ -1775,17 +1801,19 @@ function bathSaid(c, room, to, record) {
 
 /** Load the price sheet index.json names, in the background. The house
  *  works without it, and says so where prices would be. */
+/** A JSON file of this site's, or a throw. */
+async function fetchJson(url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`${response.status} for ${url}`);
+    return response.json();
+}
+
 async function loadPrices() {
     if (typeof fetch !== 'function') {
         state.sheetStatus = 'failed';
         refresh();
         return;
     }
-    const fetchJson = async (url) => {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`${response.status} for ${url}`);
-        return response.json();
-    };
     try {
         const version = await currentVersion('cleaning', fetchJson);
         state.sheet = await loadSheet(version, fetchJson);
@@ -2275,6 +2303,241 @@ function shareFromReceipt(button) {
     shareLink({ title: RECEIPT.shareTitle, text: RECEIPT.shareText, url: v.link }, { onCopied: () => flash(button, el('receipt-status'), RECEIPT.copied) });
 }
 
+// ---- The cleaner's add-ons, answered here (M5, PRD 9.5, PLANNING 10.4) -------
+
+/**
+ * What the studio knows of its published checklist's visits, asked after
+ * every few seconds while the page is in view (`watchVisits`): whose they
+ * are (`id`, the published id), every add-on of every visit still open,
+ * each with its `visitId` (addons.js openAddOns), and, to name and price
+ * them as the cleaner saw them, the published form and the sheet its quote
+ * was locked on (`priced`, by published version). `decided` is the last
+ * answer, for what Maya says of it.
+ */
+const visits = { id: null, addOns: [], priced: null, timer: null, busy: false, deciding: false, decided: null };
+
+/** Whether the open checklist's visits are asked after: the visitor's own,
+ *  published. */
+const watchable = (c) => Boolean(isPublished(c) && !c.sample);
+
+/** The add-ons of the open checklist still waiting for an answer, the
+ *  first proposed first. */
+function waitingFor(c) {
+    if (!watchable(c) || visits.id !== c.published.id) return [];
+    return visits.addOns.filter((a) => a.status === 'waiting');
+}
+
+/** The add-on Maya is asking about, or null. */
+function askedAddOn() {
+    const g = ui.guide;
+    return g && g.scene === 'addOn' ? visits.addOns.find((a) => a.id === g.addonId) || null : null;
+}
+
+/**
+ * Ask after the visits again in `seconds` (the regular pace when not
+ * given), while the page is in view and the open checklist is published,
+ * and stop otherwise. Cheap to call as often as anything likes: a question
+ * already on its way schedules the next itself.
+ */
+function watchVisits(seconds = null) {
+    const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
+    if (!state.loaded || tornDown || !watchable(active()) || !visible) {
+        if (visits.timer) clearTimeout(visits.timer);
+        visits.timer = null;
+        return;
+    }
+    if (visits.busy || (visits.timer && seconds === null)) return;
+    if (visits.timer) clearTimeout(visits.timer);
+    visits.timer = setTimeout(() => {
+        visits.timer = null;
+        visits.busy = true;
+        pollVisits().finally(() => {
+            visits.busy = false;
+            watchVisits();
+        });
+    }, (seconds === null ? CONFIG.api.ownerPollSeconds : seconds) * 1000);
+}
+
+/**
+ * The open checklist's add-ons as the API has them now (sealed both ways,
+ * opened here with the key), then Maya told: an add-on waiting is asked
+ * about, and one answered elsewhere is let go. `quiet` only learns them.
+ * Resolves to whether it learned anything.
+ */
+async function pollVisits({ quiet = false } = {}) {
+    const c = active();
+    if (!watchable(c)) return false;
+    const svc = await connect();
+    if (!svc) return false;
+    const pub = c.published;
+    let got;
+    try {
+        const key = await svc.sealer.importKey(pub.key);
+        got = await openAddOns({ api: svc.api, sealer: svc.sealer, key, id: pub.id, token: pub.ownerToken });
+    } catch (e) {
+        got = { ok: false };
+    }
+    // The open checklist may have changed while it asked.
+    const still = active();
+    if (!got.ok || !watchable(still) || still.published.id !== pub.id) return false;
+    const changed = visits.id !== pub.id || JSON.stringify(got.addOns) !== JSON.stringify(visits.addOns);
+    visits.id = pub.id;
+    visits.addOns = got.addOns;
+    if (waitingFor(still).length) await pricedFor(still, svc);
+    if (!quiet) afterVisits(changed);
+    return true;
+}
+
+/**
+ * The published checklist as the cleaner has it, and the sheet its quote
+ * was locked on, to name and price an add-on exactly as they did: read
+ * once for each version sent, and again when an add-on names a room this
+ * copy does not have (sent from another device since).
+ */
+async function pricedFor(c, svc) {
+    const pub = c.published;
+    const at = `${pub.id}:${pub.version}`;
+    const known = visits.priced && visits.priced.at === at
+        && waitingFor(c).every((a) => roomOf(visits.priced.form, a));
+    if (known) return visits.priced;
+    const read = await readPublished({ api: svc.api, sealer: svc.sealer, link: pub });
+    if (!read.ok) return visits.priced;
+    const version = read.form.quote ? read.form.quote.sheetVersion : null;
+    let sheet = state.sheet && state.sheet.version === version ? state.sheet : null;
+    if (!sheet && version) {
+        try {
+            sheet = await loadSheet(version, fetchJson);
+        } catch (e) {
+            sheet = state.sheet;
+        }
+    }
+    visits.priced = { at, form: read.form, sheet: sheet || state.sheet };
+    return visits.priced;
+}
+
+/** Maya told what the API said: the add-on she is asking about, answered
+ *  elsewhere (another device), lets her go on to the next or back; one
+ *  waiting is asked about; and the count at a glance kept up. */
+function afterVisits(changed) {
+    const g = ui.guide;
+    const asked = g && g.scene === 'addOn' ? visits.addOns.find((a) => a.id === g.addonId) : null;
+    if (g && g.scene === 'addOn' && (!asked || asked.status !== 'waiting')) {
+        if (asked) visits.decided = { status: asked.status, name: (addOnContext(asked) || { name: '' }).name };
+        if (!offerAddOn({ asked: true })) guideTo({ type: 'decided', status: asked ? asked.status : null });
+        return;
+    }
+    if (offerAddOn()) return;
+    if (changed && host && host.view) updateHost();
+}
+
+/**
+ * Maya asks about the first add-on waiting, of her own accord only where
+ * she is free to (guide.js), and not over a card, the panel or a send in
+ * progress; `asked`, from a tap on it, from anywhere but the example.
+ * Returns whether she now asks.
+ */
+function offerAddOn({ asked = false } = {}) {
+    const next = waitingFor(active())[0];
+    if (!ui.guide || !next || visits.deciding || !state.loaded) return false;
+    if (!asked && (anyOpen() || (panel && panel.shown) || state.sending || ui.handoff)) return false;
+    return guideTo({ type: 'proposal', addonId: next.id, asked });
+}
+
+/**
+ * What Maya says of an add-on (`a`, else the one she is asking about):
+ * where and what, priced from the sheet the quote was locked on, the
+ * cleaner's words, and the question. `{ text, name }`, or null.
+ */
+function addOnContext(a = askedAddOn()) {
+    if (!a) return null;
+    const c = active();
+    const form = visits.priced ? visits.priced.form : c;
+    const sheet = visits.priced ? visits.priced.sheet : state.sheet;
+    if (!form) return null;
+    const name = addOnName(sheet, form, a);
+    const price = priceOf(sheet, form, a);
+    const roomId = roomOf(form, a);
+    const room = roomId ? (form.rooms || []).find((r) => r.id === roomId) : null;
+    const where = room ? GUIDE.addOnInRoom(roomName(form.serviceType, room)) : GUIDE.addOnInHome;
+    const what = price.error ? name : GUIDE.addOnPriced(name, formatMoney(price.cents), formatMinutes(price.minutes));
+    // Their words end as a sentence does, inside the quotation marks.
+    const words = a.words ? GUIDE.addOnWords(/[.!?]$/.test(a.words) ? a.words : `${a.words}.`) : '';
+    return { text: [GUIDE.addOnAsk(where, what), words, GUIDE.addOnQuestion].filter(Boolean).join(' '), name };
+}
+
+/** The add-on shown on the house as she asks: its room's floor open, the
+ *  room outlined, an upgraded task's dot enlarged. The panel steps aside. */
+function showAddOn() {
+    const a = askedAddOn();
+    const c = active();
+    if (ui.selected) selectTo(null);
+    const roomId = a ? roomOf(visits.priced ? visits.priced.form : c, a) : null;
+    const room = c && roomId ? liveRooms(c).find((r) => r.id === roomId) : null;
+    if (!room || !model) return;
+    liftLevel(room.level);
+    const item = a.itemId ? liveItems(c).find((i) => i.id === a.itemId) : null;
+    if (model.select({ roomId: room.id, itemId: item ? item.id : null })) markShadows();
+    requestRender();
+}
+
+/** Asked and answered: the outline gone, and the whole house again unless
+ *  the build she goes back to opens a floor of its own. */
+function leaveAddOn(to) {
+    if (!model) return;
+    if (model.select({ roomId: null, itemId: null })) markShadows();
+    if (!GUIDED.includes(to)) liftLevel(null);
+    requestRender();
+}
+
+/**
+ * The customer's answer, sealed and sent (addons.js decideAddOn), once.
+ * Then the next add-on waiting, or back where Maya was, saying what came
+ * of it. Answered already from another device, it goes by that answer.
+ * Resolves to the API's result, or null when there was nothing to answer.
+ */
+async function decide(status) {
+    const c = active();
+    const a = askedAddOn();
+    if (!a || !watchable(c) || visits.deciding) return null;
+    const said = addOnContext(a);
+    visits.deciding = true;
+    let r;
+    try {
+        const svc = await connect();
+        const key = svc ? await svc.sealer.importKey(c.published.key) : null;
+        r = svc
+            ? await decideAddOn({
+                api: svc.api, sealer: svc.sealer, key, id: c.published.id, token: c.published.ownerToken,
+                visitId: a.visitId, addonId: a.id, status, at: now().toISOString()
+            })
+            : { ok: false, error: 'offline' };
+    } catch (e) {
+        r = { ok: false, error: 'server' };
+    } finally {
+        visits.deciding = false;
+    }
+    if (!r.ok && r.error !== 'decided') {
+        toast(r.error === 'offline' ? GUIDE.addOnOffline : GUIDE.addOnTrouble);
+        return r;
+    }
+    let answer = status;
+    if (r.ok) {
+        visits.addOns = visits.addOns.map((x) => (x.id === a.id ? { ...x, status, decidedAt: r.decision.decidedAt } : x));
+    } else {
+        await pollVisits({ quiet: true });
+        const known = visits.addOns.find((x) => x.id === a.id);
+        if (known && known.status !== 'waiting') answer = known.status;
+    }
+    visits.decided = { status: answer, name: said ? said.name : '' };
+    if (!offerAddOn({ asked: true })) {
+        guideTo({ type: 'decided', status: answer });
+        // Back in the build she says nothing more, so it is said here.
+        if (ui.guide.scene !== 'done') announce(answer === 'declined' ? GUIDE.afterDeclined(visits.decided.name) : GUIDE.afterApproved(visits.decided.name));
+    }
+    if (host) host.focusPrimary();
+    return r;
+}
+
 // ---- Photos -----------------------------------------------------------------
 
 /** Keep photos in IndexedDB, or in memory for the visit when the browser
@@ -2416,6 +2679,8 @@ function refresh() {
         if (kept !== ui.selected) selectTo(kept);
         else showPanel();
     }
+    // A published checklist's visits asked after, and only then (M5).
+    watchVisits();
     requestRender();
 }
 
@@ -3036,8 +3301,11 @@ function setupEventListeners() {
         if (document.visibilityState === 'hidden') {
             endSession();
             stop();
+            watchVisits();
         } else if (state.loaded) {
             start();
+            // Back in view: asked after at once.
+            watchVisits(0);
         }
     }, { signal });
 
@@ -3135,6 +3403,8 @@ function poseChanged(pose) {
 function cleanup() {
     if (tornDown) return;
     tornDown = true;
+    if (visits.timer) clearTimeout(visits.timer);
+    visits.timer = null;
     if (store) store.tearDown();
     stop();
     if (cleanupController) cleanupController.abort();
@@ -3222,6 +3492,11 @@ export const __test__ = {
     confirmCancelVisit,
     confirmUnpublish,
     connect,
+    visits,
+    pollVisits,
+    watchVisits,
+    offerAddOn,
+    decide,
     history: () => history,
     store: () => store,
     photoStore: () => photoStore,

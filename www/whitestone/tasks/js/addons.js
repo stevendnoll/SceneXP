@@ -7,8 +7,8 @@
  * says, the cleaner proposes an add-on from the room it is in: a task the
  * room does not have yet (Oven interior), or an upgrade of one it does
  * (Deep clean on the stovetop), priced by the sheet the quote was locked
- * on. The customer approves or declines it (M5's decide card), and until
- * approved it is neither done nor charged.
+ * on. The customer approves or declines it in the studio, where Maya asks
+ * (M5), and until approved it is neither done nor charged.
  *
  * A PROPOSAL CARRIES CHOICES, NEVER PRICES, as checklist items do: the
  * customer's browser prices it again from the same sheet (pricing.js
@@ -19,48 +19,26 @@
  * checklist's key under their own contexts (seal.js `addon`, `decision`),
  * so the server holds neither the words nor the choice.
  *
- * Pure, apart from `proposeAddOn` and `fetchAddOns`, which take the API and
- * the sealer as arguments.
+ * What both sides read alike (a proposal made safe, its name and price, a
+ * visit's add-ons fetched) is the studio's js/addons.js, passed on from
+ * here. Pure, apart from `proposeAddOn`, which takes the API and the sealer
+ * as arguments.
  */
 
-import { taskOf, optionOf, tasksFor } from '../../js/sheet.min.js';
-import { priceAddOn, isLive } from '../../js/pricing.min.js';
-import { contextFor, toBase64url, fromBase64url } from '../../js/seal.min.js';
-import { ID } from '../../js/links.min.js';
-import { WORDS_MAX } from './visit.min.js';
+import { taskOf, tasksFor } from '../../js/sheet.min.js';
+import { isLive } from '../../js/pricing.min.js';
+import { contextFor, toBase64url } from '../../js/seal.min.js';
+import { ADDON_FORMAT, addOnName, priceOf, cleanProposal } from '../../js/addons.min.js';
 
-export const ADDON_FORMAT = 1;
-
-/** What a customer can say of an add-on. */
-export const DECISIONS = Object.freeze(['approved', 'declined']);
-
-const clip = (text) => String(text || '').replace(/\s+/g, ' ').trim().slice(0, WORDS_MAX);
+export {
+    ADDON_FORMAT, DECISIONS, addOnName, priceOf, cleanProposal, cleanDecision, fetchAddOns, roomOf, waitingCount
+} from '../../js/addons.min.js';
 
 /** The key a choice is known by in the picker: `task:<task>`, or
  *  `up:<itemId>:<option>` for an upgrade. */
 export function choiceKey(addOn) {
     if (addOn.itemId) return `up:${addOn.itemId}:${(addOn.options || [])[0]}`;
     return `task:${addOn.task}`;
-}
-
-/** An add-on in words: "Oven interior", or "Stovetop: Deep clean". */
-export function addOnName(sheet, form, addOn) {
-    if (addOn.itemId) {
-        const item = ((form && form.items) || []).find((i) => i.id === addOn.itemId);
-        const task = sheet && item ? taskOf(sheet, item.task) : null;
-        const option = sheet ? optionOf(sheet, (addOn.options || [])[0]) : null;
-        return `${task ? task.name : (item ? item.task : '')}: ${option ? option.name : (addOn.options || [])[0]}`;
-    }
-    const task = sheet ? taskOf(sheet, addOn.task) : null;
-    return task ? task.name : addOn.task;
-}
-
-/** What one add-on adds, `{ cents, minutes }`, or `{ error }`: by the sheet,
- *  in the home as published. */
-export function priceOf(sheet, form, addOn) {
-    if (!sheet) return { error: 'no-sheet' };
-    const items = new Map(((form && form.items) || []).filter(isLive).map((i) => [i.id, i]));
-    return priceAddOn(sheet, addOn, (form && form.rooms) || [], items);
 }
 
 /**
@@ -102,32 +80,6 @@ export function choicesFor(sheet, form, roomId, taken = new Set()) {
     return out;
 }
 
-/**
- * A proposal as it is sealed and read back, made safe: a new task in a room
- * (`{ id, roomId, task, options, size, quantity, words }`) or an upgrade
- * (`{ id, itemId, options: [one], words }`), or null.
- */
-export function cleanProposal(raw) {
-    if (!raw || typeof raw !== 'object' || raw.format !== ADDON_FORMAT || !ID.test(String(raw.id))) return null;
-    const words = clip(raw.words);
-    const options = Array.isArray(raw.options) ? raw.options.filter((o) => typeof o === 'string') : [];
-    if (typeof raw.itemId === 'string' && raw.itemId) {
-        if (options.length !== 1) return null;
-        return { format: ADDON_FORMAT, id: raw.id, itemId: raw.itemId, options, words };
-    }
-    if (typeof raw.roomId !== 'string' || !raw.roomId || typeof raw.task !== 'string' || !raw.task) return null;
-    const out = { format: ADDON_FORMAT, id: raw.id, roomId: raw.roomId, task: raw.task, options, words };
-    if (typeof raw.size === 'string') out.size = raw.size;
-    if (Number.isInteger(raw.quantity)) out.quantity = raw.quantity;
-    return out;
-}
-
-/** A decision made safe: `{ id, status, decidedAt }`, or null. */
-export function cleanDecision(raw, id) {
-    if (!raw || typeof raw !== 'object' || raw.format !== ADDON_FORMAT || raw.id !== id || !DECISIONS.includes(raw.status)) return null;
-    return { format: ADDON_FORMAT, id, status: raw.status, decidedAt: typeof raw.decidedAt === 'string' ? raw.decidedAt : null };
-}
-
 /** A fresh add-on id, the API's 22 characters. */
 export function newAddOnId(getRandomValues = (a) => globalThis.crypto.getRandomValues(a)) {
     return toBase64url(getRandomValues(new Uint8Array(16)));
@@ -153,31 +105,6 @@ export async function proposeAddOn({ api, sealer, key, id, token, visitId = null
     return { ok: true, visitId: visit, addOn: { ...proposal, status: 'waiting', decidedAt: null } };
 }
 
-/**
- * A visit's add-ons as they stand: each proposal unsealed, with its status
- * (`waiting`, `approved` or `declined`). `{ ok, addOns, error }`; one that
- * will not open is left out.
- */
-export async function fetchAddOns({ api, sealer, key, id, token, visitId }) {
-    const got = await api.listAddOns(id, token, visitId);
-    if (!got.ok) return { ok: false, addOns: [], error: got.error };
-    const out = [];
-    for (const row of (got.data && Array.isArray(got.data.addons) ? got.data.addons : [])) {
-        if (!row || !ID.test(String(row.addonId))) continue;
-        let proposal = null;
-        let decision = null;
-        try {
-            proposal = cleanProposal(await sealer.openJson(key, fromBase64url(row.proposal), contextFor(id, 'addon', row.addonId)));
-            if (row.decision) decision = cleanDecision(await sealer.openJson(key, fromBase64url(row.decision), contextFor(id, 'decision', row.addonId)), row.addonId);
-        } catch (e) {
-            proposal = null;
-        }
-        if (!proposal || proposal.id !== row.addonId) continue;
-        out.push({ ...proposal, status: decision ? decision.status : 'waiting', decidedAt: decision ? decision.decidedAt : null });
-    }
-    return { ok: true, addOns: out, error: null };
-}
-
 /** The add-ons kept on the device, made safe (piece 4 reopens offline). */
 export function cleanKept(raw) {
     if (!Array.isArray(raw)) return [];
@@ -189,19 +116,7 @@ export function cleanKept(raw) {
     }).filter(Boolean);
 }
 
-/** The room an add-on belongs to: its own, or its task's. */
-export function roomOf(form, addOn) {
-    if (addOn.roomId) return addOn.roomId;
-    const item = ((form && form.items) || []).find((i) => i.id === addOn.itemId);
-    return item ? item.roomId : null;
-}
-
 /** The choice keys of add-ons waiting or approved, not offered again. */
 export function takenKeys(addOns) {
     return new Set((addOns || []).filter((a) => a.status !== 'declined').map(choiceKey));
-}
-
-/** How many add-ons are still waiting for the customer. */
-export function waitingCount(addOns) {
-    return (addOns || []).filter((a) => a.status === 'waiting').length;
 }
