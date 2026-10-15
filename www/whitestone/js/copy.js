@@ -672,7 +672,53 @@ export const TASKS_PAGE = Object.freeze({
     print: 'Print a work order',
     keptCopy: 'You are offline, so this is the copy kept on this device for your visit. Your marks are saved here as usual.',
     /** `counts` already joined: "1 approved, 1 waiting". */
-    addOnsLine: (counts) => `Add-ons: ${counts}.`
+    addOnsLine: (counts) => `Add-ons: ${counts}.`,
+    addOnClosed: 'The report for this visit is sent, so no more add-ons can be proposed.',
+
+    // Finishing the visit (M5 piece 2): the report and the bill, then send.
+    finish: 'Finish visit',
+    finishTitle: 'Finish the visit',
+    finishLead: 'Check the report, then send it to your customer. Anything not marked is reported as not reached.',
+    sentTitle: 'Visit report sent',
+    sentLead: 'Thank you. Your customer can see the report now.',
+    pendingTitle: 'Report waiting to send',
+    billHeading: 'The bill',
+    billLine: (billed, quote) => `Billed ${billed} of the ${quote} quote.`,
+    billNothing: 'Nothing was done, so there is no charge.',
+    billNoSheet: 'The prices could not be loaded here, so your customer’s page works out the bill.',
+    billDone: (money) => `Tasks done: ${money}`,
+    billAddOns: (money) => `Add-ons done: ${money}`,
+    billMinimum: (money) => `Visit minimum: ${money}`,
+    reportCounts: (done, skipped, notReached) => `${done} done, ${skipped} skipped, ${notReached} not reached.`,
+    skippedHeading: 'Skipped',
+    notReachedHeading: 'Not reached',
+    addOnsReportHeading: 'Add-ons',
+    lineOff: (money) => `${money} off`,
+    inTheRoom: (task, room) => `${task}, ${TASKS_PAGE_IN(room)}`,
+    addOnOutcome: Object.freeze({
+        done: 'Approved and done',
+        approved: 'Approved, not done, so not charged',
+        declined: 'Declined by the customer',
+        lapsed: 'No answer from the customer, so not done'
+    }),
+    nameLabel: 'Your first name (optional)',
+    timeLabel: 'Time on site (optional)',
+    hours: 'Hours',
+    minutes: 'Minutes',
+    hoursValue: (n) => `${n} ${n === 1 ? 'hour' : 'hours'}`,
+    minutesValue: (n) => `${n} minutes`,
+    noteLabel: 'A note to your customer (optional)',
+    cleanerLine: (name) => `Cleaned by ${name}.`,
+    onSiteLine: (time) => `Time on site: ${time}.`,
+    noteLine: 'Note:',
+    sendReport: 'Send report',
+    sendingReport: 'Sending the report',
+    backToList: 'Back to the checklist',
+    retry: 'Try again now',
+    reportOffline: 'No signal right now. The report is saved on this device and will send itself when the connection returns.',
+    reportTrouble: 'The report did not send. It is saved on this device and will try again shortly.',
+    reportNeedsPin: 'Your visit pass has ended. Please enter the PIN again, and the report will send.',
+    reportTooLong: 'This report is too long to send. Please shorten the note and try again.'
 });
 
 /** The calendar file for a booked visit (ics.js). */

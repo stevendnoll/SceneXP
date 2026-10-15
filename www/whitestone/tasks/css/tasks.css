@@ -696,6 +696,157 @@ h1 {
     font-size: 0.85rem;
 }
 
+/* Finish visit sits beside the summary, in reach of a thumb. */
+.tasks-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+}
+
+.tasks-summary-text {
+    flex: 1 1 14rem;
+}
+
+.tasks-finish {
+    min-height: 3rem;
+    padding: 0.5rem 1rem;
+    border: 2px solid var(--accent);
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--white);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.tasks-finish:focus-visible,
+.report-input:focus-visible,
+.report-select:focus-visible,
+.report-note:focus-visible {
+    outline: 3px solid var(--graphite);
+    outline-offset: 2px;
+}
+
+/* The report (M5): the bill first, then what was not done and why. */
+.tasks-report h1 {
+    margin: 0 0 0.35rem;
+    font-size: 1.6rem;
+}
+
+.tasks-report h1:focus {
+    outline: none;
+}
+
+.tasks-report h2 {
+    margin: 0 0 0.4rem;
+    font-size: 1.1rem;
+}
+
+.report-bill {
+    margin: 1rem 0;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 10px;
+    background: var(--white);
+}
+
+.report-bill-line {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.report-bill ul,
+.report-list ul {
+    margin: 0.4rem 0 0;
+    padding-left: 1.2rem;
+}
+
+.report-counts {
+    font-weight: 700;
+}
+
+.report-list {
+    margin: 1rem 0;
+}
+
+.report-list li {
+    margin: 0.25rem 0;
+}
+
+.report-why {
+    color: var(--muted);
+}
+
+.report-off {
+    font-weight: 600;
+}
+
+#report-skipped h2 {
+    color: var(--attention);
+}
+
+.report-fields {
+    display: grid;
+    gap: 0.4rem;
+    margin: 1.25rem 0;
+}
+
+.report-time {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.3rem 0;
+    padding: 0;
+    border: 0;
+}
+
+.report-time legend {
+    margin-bottom: 0.35rem;
+    padding: 0;
+    font-weight: 600;
+}
+
+.report-input,
+.report-select,
+.report-note {
+    min-height: 2.9rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid #B9B3A9;
+    border-radius: 10px;
+    background: var(--white);
+    color: var(--graphite);
+    font: inherit;
+}
+
+.report-input,
+.report-note {
+    width: 100%;
+}
+
+.report-select {
+    flex: 1 1 8rem;
+}
+
+.report-said {
+    white-space: pre-line;
+}
+
+.report-status {
+    margin: 0.75rem 0;
+    font-weight: 600;
+}
+
+.report-status.is-problem {
+    color: var(--attention);
+}
+
+.report-actions {
+    margin-top: 0.75rem;
+}
+
 /* A photo full screen: dark around it, its Close always in reach. */
 .photo-view {
     position: fixed;
@@ -806,6 +957,9 @@ h1 {
 
     .tasks-footer,
     .tasks-summary,
+    .report-fields,
+    .report-actions,
+    .report-status,
     .tasks-print,
     .tasks-notice,
     .task-marks,

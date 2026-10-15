@@ -15,7 +15,13 @@
  * Progress is a plain object, `{ marks: { [itemId]: mark } }`, each mark
  * `{ status: 'done' }` or `{ status: 'skipped', reason, words }`. Pure:
  * every function returns a new object.
+ *
+ * THE REPORT (M5 piece 2, `buildReport`): every task as it was marked, an
+ * unmarked one "not reached"; every add-on as the customer answered it, one
+ * still waiting lapsed, and an approved one done only when marked done.
  */
+
+import { REPORT_FORMAT, cleanReport, cleanMinutes } from '../../js/report.min.js';
 
 /** The quick reasons a task was skipped, in the order offered. */
 export const SKIP_REASONS = Object.freeze(['no-time', 'no-access', 'already-clean', 'customer-asked']);
@@ -89,4 +95,44 @@ export function summarize(form, progress) {
         }
     }
     return out;
+}
+
+/**
+ * The visit report (PRD 11.7) from the published checklist (`form`), the
+ * marks, the add-ons as last known here, and what the cleaner added
+ * (`{ cleaner, minutesOnSite, note }`), sent at `at` (an ISO string). Made
+ * safe (report.js `cleanReport`), or null for a form with no id.
+ */
+export function buildReport(form, progress, addOns, { cleaner = '', minutesOnSite = null, note = '' } = {}, at = null) {
+    const marks = (progress && progress.marks) || {};
+    const results = ((form && form.items) || []).map((item) => {
+        const mark = marks[item.id];
+        if (mark && mark.status === 'done') return { itemId: item.id, status: 'done' };
+        if (mark && mark.status === 'skipped') return { itemId: item.id, status: 'skipped', reason: mark.reason, words: mark.words };
+        return { itemId: item.id, status: 'not-reached' };
+    });
+    const outcomes = (addOns || []).map((a) => ({
+        ...a,
+        status: a.status === 'approved' || a.status === 'declined' ? a.status : 'lapsed',
+        done: a.status === 'approved' && Boolean(marks[a.id] && marks[a.id].status === 'done')
+    }));
+    const b = form && form.booking;
+    return cleanReport({
+        format: REPORT_FORMAT,
+        id: form && form.id,
+        booking: b ? { date: b.date, time: b.time } : null,
+        cleaner,
+        submittedAt: at,
+        minutesOnSite: cleanMinutes(minutesOnSite),
+        note,
+        results,
+        addOns: outcomes
+    }, form && form.id);
+}
+
+/** Which booked visit a report or a pass belongs to, as a key: the date and
+ *  time, or '' with none. A new booking is a new visit (main.js). */
+export function visitKeyOf(form) {
+    const b = form && form.booking;
+    return b && b.date && b.time ? `${b.date} ${b.time}` : '';
 }

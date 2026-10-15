@@ -76,7 +76,11 @@ export function createApi(transport) {
         decideAddOn: (id, owner, visitId, addonId, bytes) => call('PUT', `checklists/${enc(id)}/visits/${enc(visitId)}/addons/${enc(addonId)}/decision`, { token: owner, bytes }),
         /** A visit's add-ons: `{ addons: [{ addonId, proposal, decision }] }`,
          *  each sealed and in base64url, the decision null until made. */
-        listAddOns: (id, token, visitId) => call('GET', `checklists/${enc(id)}/visits/${enc(visitId)}/addons`, { token })
+        listAddOns: (id, token, visitId) => call('GET', `checklists/${enc(id)}/visits/${enc(visitId)}/addons`, { token }),
+        /** The cleaner's sealed report, once (`exists` after). */
+        putReport: (id, token, visitId, bytes) => call('PUT', `checklists/${enc(id)}/visits/${enc(visitId)}/report`, { token, bytes }),
+        /** A visit's sealed report, for the customer. */
+        getReport: (id, owner, visitId) => call('GET', `checklists/${enc(id)}/visits/${enc(visitId)}/report`, { token: owner })
     };
 }
 

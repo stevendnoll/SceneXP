@@ -949,3 +949,259 @@ describe('print', () => {
         expect(hidden).not.toContain('.tasks-prefs');
     });
 });
+
+// ---- Finishing the visit (M5 piece 2) ------------------------------------------------
+
+describe('finishing the visit on the page', () => {
+    async function visiting(extra = {}) {
+        const w = await published();
+        const { state } = await open(w, w.link, extra);
+        await enter(state, w.checklist.published.pin);
+        return { w, state };
+    }
+    const find = (id) => all(view()).find((e) => e.id === id);
+    const text = (id) => (find(id) ? find(id).textContent : undefined);
+    const kept = (w) => JSON.parse(localStorage.getItem(page.STORAGE_KEY)).checklists[w.checklist.published.id];
+    const live = () => timers.filter((t) => !t.cleared && !t.ran);
+    async function tick() {
+        const t = live()[0];
+        t.ran = true;
+        await t.fn();
+    }
+    /** The report as the customer will read it (piece 3): fetched with the
+     *  owner token and opened with the key. */
+    async function customerReads(w, visitId) {
+        const id = w.checklist.published.id;
+        const key = await w.sealer.importKey(w.checklist.published.key);
+        const got = await w.api.getReport(id, w.checklist.published.ownerToken, visitId);
+        return got.ok ? w.sealer.openJson(key, got.bytes, contextFor(id, 'report', visitId)) : null;
+    }
+    const fill = ({ cleaner = '', hours = '0', minutes = '0', note = '' }) => {
+        find('report-cleaner').value = cleaner;
+        fire(find('report-cleaner'), 'input');
+        find('report-hours').value = hours;
+        find('report-minutes').value = minutes;
+        fire(find('report-minutes'), 'change');
+        find('report-note').value = note;
+        fire(find('report-note'), 'input');
+    };
+
+    test('Finish visit shows the report and the bill first: skips with why, the not reached, and Back keeps everything', async () => {
+        const { w, state } = await visiting();
+        const items = state.form.items;
+        for (const item of items) fire(find(`done-${item.id}`), 'click');
+        fire(find(`skip-${w.stove.id}`), 'click');
+        fire(find(`reason-${w.stove.id}-no-time`), 'click');
+        const last = items[items.length - 1];
+        fire(find(`done-${last.id}`), 'click');
+        expect(find('tasks-finish').textContent).toBe(COPY.finish);
+        fire(find('tasks-finish'), 'click');
+        await state.polled;
+        expect(text('report-title')).toBe(COPY.finishTitle);
+        expect(find('report-title').focused).toBe(true);
+        expect(text('report-bill').startsWith(COPY.billHeading)).toBe(true);
+        expect(all(find('report-bill')).find((e) => e.className === 'report-bill-line').textContent).toMatch(/^Billed \$\d+(\.\d\d)? of the \$\d+(\.\d\d)? quote\.$/);
+        expect(byClass('report-counts')[0].textContent).toBe(COPY.reportCounts(items.length - 2, 1, 1));
+        expect(text(`report-${w.stove.id}`)).toMatch(/^Stovetop, in the kitchen \(Ran out of time\) \$\d+(\.\d\d)? off$/);
+        expect(find('report-not-reached').textContent).toContain(text(`report-${last.id}`));
+        // Nothing is marked from here.
+        expect(find(`done-${w.stove.id}`)).toBeUndefined();
+        fire(find('report-back'), 'click');
+        expect(find('tasks-finish').focused).toBe(true);
+        expect(state.progress.marks[w.stove.id]).toMatchObject({ status: 'skipped' });
+        expect(kept(w).sent).toBeFalsy();
+    });
+
+    test('the cleaner\'s fields are kept on the device as typed, and come back', async () => {
+        const { w, state } = await visiting();
+        fire(find('tasks-finish'), 'click');
+        await state.polled;
+        fill({ cleaner: 'Steve', hours: '2', minutes: '30', note: 'The side gate was open, so I closed it.' });
+        expect(kept(w).draft).toEqual({ cleaner: 'Steve', hours: 2, minutes: 30, note: 'The side gate was open, so I closed it.' });
+        const again = await open(w, `https://www.scenexp.com/whitestone/tasks/?c=${w.checklist.published.id}`);
+        fire(find('tasks-finish'), 'click');
+        await again.state.polled;
+        expect([find('report-cleaner').value, find('report-hours').value, find('report-minutes').value, find('report-note').value]).toEqual(['Steve', '2', '30', 'The side gate was open, so I closed it.']);
+        expect(page.cleanDraft({ hours: 40, minutes: 10, cleaner: 'x'.repeat(60) })).toEqual({ cleaner: 'x'.repeat(40), hours: 0, minutes: 0, note: '' });
+    });
+
+    test('Send: sealed and sent once, the customer reads exactly it, and the page is the record of the visit', async () => {
+        const { w, state } = await visiting();
+        fire(find(`done-${w.stove.id}`), 'click');
+        fire(find('tasks-finish'), 'click');
+        await state.polled;
+        fill({ cleaner: 'Steve', hours: '1', minutes: '45', note: 'All good.' });
+        fire(find('report-send'), 'click');
+        await state.reportSend;
+        const k = kept(w);
+        expect(k.outbox).toBeNull();
+        expect(k.sent.visitKey).toBe('2026-10-16 09:00');
+        const read = await customerReads(w, k.sent.visitId);
+        expect(read).toEqual(k.sent.report);
+        expect(read).toMatchObject({ cleaner: 'Steve', minutesOnSite: 105, note: 'All good.', booking: { date: '2026-10-16', time: '09:00' }, submittedAt: new Date(START).toISOString() });
+        expect(read.results.find((r) => r.itemId === w.stove.id)).toEqual({ itemId: w.stove.id, status: 'done' });
+        expect(read.results.filter((r) => r.status === 'not-reached')).toHaveLength(state.form.items.length - 1);
+        // The record: no fields, no buttons to mark, what was said.
+        expect(text('report-title')).toBe(COPY.sentTitle);
+        expect(find('report-title').focused).toBe(true);
+        expect(find('report-cleaner')).toBeUndefined();
+        expect(find('report-send')).toBeUndefined();
+        expect(view().textContent).toContain(COPY.cleanerLine('Steve'));
+        expect(view().textContent).toContain(COPY.onSiteLine('1 hour 45 minutes'));
+        // Opened again, the same record.
+        await open(w, `https://www.scenexp.com/whitestone/tasks/?c=${w.checklist.published.id}`);
+        expect(text('report-title')).toBe(COPY.sentTitle);
+        expect(find(`done-${w.stove.id}`)).toBeUndefined();
+    });
+
+    test('add-ons in the report: one still waiting lapses, the asking stops, and the visit takes no more', async () => {
+        const { w, state } = await visiting();
+        fire(find('propose-kitchen-1'), 'click');
+        const select = find('addon-choice-kitchen-1');
+        select.value = 'task:oven-interior';
+        fire(select, 'change');
+        fire(find('addon-send-kitchen-1'), 'click');
+        await state.pending;
+        expect(live()).toHaveLength(1);
+        fire(find('tasks-finish'), 'click');
+        await state.polled;
+        expect(text(`report-${state.addOns[0].id}`)).toBe(`Oven interior (${COPY.addOnOutcome.lapsed})`);
+        fire(find('report-send'), 'click');
+        await state.reportSend;
+        expect(kept(w).sent.report.addOns[0]).toMatchObject({ task: 'oven-interior', status: 'lapsed', done: false });
+        // The asking stops with the send, and the stand-in takes nothing more.
+        expect(live()).toHaveLength(0);
+        const id = w.checklist.published.id;
+        expect((await w.api.putAddOn(id, kept(w).visitToken, state.visitId, 'addon00000000000000009', new Uint8Array([1]))).error).toBe('closed');
+    });
+
+    test('an answer that comes while the report is being checked is in it', async () => {
+        const { w, state } = await visiting();
+        fire(find('propose-kitchen-1'), 'click');
+        const select = find('addon-choice-kitchen-1');
+        select.value = 'task:oven-interior';
+        fire(select, 'change');
+        fire(find('addon-send-kitchen-1'), 'click');
+        await state.pending;
+        fire(find('tasks-finish'), 'click');
+        await state.polled;
+        expect(text(`report-${state.addOns[0].id}`)).toBe(`Oven interior (${COPY.addOnOutcome.lapsed})`);
+        // The customer approves it now, as the cleaner reads the report.
+        const id = w.checklist.published.id;
+        const key = await w.sealer.importKey(w.checklist.published.key);
+        const a = state.addOns[0];
+        const sealed = await w.sealer.sealJson(key, { format: ADDON_FORMAT, id: a.id, status: 'approved', decidedAt: 'x' }, contextFor(id, 'decision', a.id));
+        expect((await w.api.decideAddOn(id, w.checklist.published.ownerToken, state.visitId, a.id, sealed)).ok).toBe(true);
+        fire(find('report-send'), 'click');
+        await state.reportSend;
+        expect(kept(w).sent.report.addOns[0]).toMatchObject({ status: 'approved', done: false });
+    });
+
+    test('no signal: kept on the device, said so, tried again after a growing pause and when the connection returns', async () => {
+        let offline = true;
+        const w = await published();
+        // What the device holds as the report leaves: it is kept first, so
+        // a tab closed mid-send loses nothing.
+        const held = [];
+        const api = {
+            ...w.api,
+            putReport: (...args) => {
+                held.push(Boolean(kept(w).outbox));
+                return offline ? Promise.resolve({ ok: false, error: 'offline' }) : w.api.putReport(...args);
+            }
+        };
+        const { state } = await open({ ...w, api }, w.link);
+        await enter(state, w.checklist.published.pin);
+        fire(find('tasks-finish'), 'click');
+        await state.polled;
+        fire(find('report-send'), 'click');
+        await state.reportSend;
+        expect(text('report-title')).toBe(COPY.pendingTitle);
+        expect(text('report-status')).toBe(COPY.reportOffline);
+        expect(find('report-status').getAttribute('role')).toBe('alert');
+        expect(kept(w).outbox.report.id).toBe(w.checklist.published.id);
+        expect(live().map((t) => t.ms)).toEqual([CONFIG.api.reportRetrySeconds[0] * 1000]);
+        await tick();
+        await state.reportSend;
+        expect(live().map((t) => t.ms)).toEqual([CONFIG.api.reportRetrySeconds[1] * 1000]);
+        // Try again now, still nothing; then the connection returns.
+        fire(find('report-retry'), 'click');
+        await state.reportSend;
+        expect(text('report-title')).toBe(COPY.pendingTitle);
+        offline = false;
+        fire(dom.windowStub, 'online');
+        await state.reportSend;
+        expect(text('report-title')).toBe(COPY.sentTitle);
+        expect(kept(w).outbox).toBeNull();
+        expect(live()).toHaveLength(0);
+        expect(held).toEqual([true, true, true, true]);
+    });
+
+    test('a report waiting when the page closed goes as soon as it opens again', async () => {
+        let offline = true;
+        const w = await published();
+        const api = { ...w.api, putReport: (...args) => (offline ? Promise.resolve({ ok: false, error: 'server' }) : w.api.putReport(...args)) };
+        const first = await open({ ...w, api }, w.link);
+        await enter(first.state, w.checklist.published.pin);
+        fire(find('tasks-finish'), 'click');
+        await first.state.polled;
+        fire(find('report-send'), 'click');
+        await first.state.reportSend;
+        expect(text('report-status')).toBe(COPY.reportTrouble);
+        offline = false;
+        const again = await open({ ...w, api }, `https://www.scenexp.com/whitestone/tasks/?c=${w.checklist.published.id}`);
+        expect(again.state.phase).toBe('open');
+        expect(text('report-title')).toBe(COPY.sentTitle);
+        expect(await customerReads(w, kept(w).sent.visitId)).toEqual(kept(w).sent.report);
+    });
+
+    test('a visit pass that ran out: the PIN again, and then it sends', async () => {
+        const { w, state } = await visiting();
+        fire(find('tasks-finish'), 'click');
+        await state.polled;
+        w.advance(CONFIG.api.visitHours * 3600000 + 1000);
+        fire(find('report-send'), 'click');
+        await state.reportSend;
+        expect(status()).toBe(COPY.reportNeedsPin);
+        expect(view().hidden).toBe(true);
+        expect(dom.el('pin-form').hidden).toBe(false);
+        expect(kept(w).outbox).toBeTruthy();
+        await enter(state, w.checklist.published.pin);
+        expect(text('report-title')).toBe(COPY.sentTitle);
+        expect(await customerReads(w, kept(w).sent.visitId)).toEqual(kept(w).sent.report);
+    });
+
+    test('a report too long to send goes back to the fields, saying so', async () => {
+        const w = await published();
+        const api = { ...w.api, putReport: () => Promise.resolve({ ok: false, error: 'bad-request' }) };
+        const { state } = await open({ ...w, api }, w.link);
+        await enter(state, w.checklist.published.pin);
+        fire(find('tasks-finish'), 'click');
+        await state.polled;
+        fire(find('report-send'), 'click');
+        await state.reportSend;
+        expect(text('report-title')).toBe(COPY.finishTitle);
+        expect(text('report-status')).toBe(COPY.reportTooLong);
+        expect(find('report-note').focused).toBe(true);
+        expect(kept(w).outbox).toBeNull();
+    });
+
+    test('a new booking of the same checklist is a new visit: the marks cleared, the name kept', async () => {
+        const { w, state } = await visiting();
+        fire(find(`done-${w.stove.id}`), 'click');
+        fire(find('tasks-finish'), 'click');
+        await state.polled;
+        fill({ cleaner: 'Steve' });
+        fire(find('report-send'), 'click');
+        await state.reportSend;
+        // As if the sent report were for an earlier booking.
+        const memory = JSON.parse(localStorage.getItem(page.STORAGE_KEY));
+        memory.checklists[w.checklist.published.id].sent.visitKey = '2026-10-02 09:00';
+        localStorage.setItem(page.STORAGE_KEY, JSON.stringify(memory));
+        const again = await open(w, `https://www.scenexp.com/whitestone/tasks/?c=${w.checklist.published.id}`);
+        expect(find('tasks-finish')).toBeTruthy();
+        expect(find(`done-${w.stove.id}`).getAttribute('aria-pressed')).toBe('false');
+        expect(again.state.visitId).toBeNull();
+        expect(kept(w)).toMatchObject({ sent: null, visitId: null, draft: { cleaner: 'Steve', note: '' } });
+    });
+});

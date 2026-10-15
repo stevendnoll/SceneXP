@@ -368,8 +368,52 @@ describe('a visit and its add-ons (M4 piece 3)', () => {
         expect((await ask('POST', `checklists/${id}/visits/${v}/addons`)).status).toBe(405);
         expect((await ask('GET', `checklists/${id}/visits/${v}/addons/${addonId(1)}`)).status).toBe(405);
         expect((await ask('GET', `checklists/${id}/visits/${v}/addons/${addonId(1)}/decision`)).status).toBe(405);
-        expect((await ask('GET', `checklists/${id}/visits/${v}/report`)).status).toBe(404);
+        // The report is the customer's to read (M5).
+        expect((await ask('GET', `checklists/${id}/visits/${v}/report`)).json.error).toBe('denied');
+        expect((await ask('POST', `checklists/${id}/visits/${v}/report`)).status).toBe(405);
+        expect((await ask('GET', `checklists/${id}/visits/short/report`)).status).toBe(404);
         expect((await ask('GET', `checklists/${'A'.repeat(22)}/visits/${v}/addons`)).json.error).toBe('denied');
+        expect((await ask('GET', `checklists/${'A'.repeat(22)}/visits/${v}/report`)).json.error).toBe('denied');
+    });
+});
+
+describe('a visit\'s report (M5 piece 2)', () => {
+    async function visited() {
+        const w = setup();
+        const { id, ownerToken, pin } = (await w.api.reserve()).data;
+        await w.api.putChecklist(id, ownerToken, bytes(1));
+        const visit = (await w.api.open(id, pin)).data.visitToken;
+        const v = (await w.api.startVisit(id, visit)).data.visitId;
+        return { ...w, id, owner: ownerToken, visit, v };
+    }
+
+    test('the cleaner sends it once; the customer reads it, and the visit lists when', async () => {
+        const { api, id, owner, visit, v } = await visited();
+        expect((await api.getReport(id, owner, v)).status).toBe(404);
+        // Only the cleaner sends, a sealed body of a sensible size.
+        expect((await api.putReport(id, owner, v, bytes(1))).error).toBe('denied');
+        expect((await api.putReport(id, visit, v, null)).error).toBe('bad-request');
+        expect((await api.putReport(id, visit, v, new Uint8Array(A.maxReportBytes + 1))).error).toBe('bad-request');
+        expect((await api.putReport(id, visit, 'B'.repeat(22), bytes(1))).status).toBe(404);
+        const sent = await api.putReport(id, visit, v, bytes(5, 6));
+        expect(sent).toMatchObject({ ok: true, status: 201, data: { reportAt: new Date(START).toISOString() } });
+        // Never rewritten: a correction is a new visit's report.
+        expect((await api.putReport(id, visit, v, bytes(7))).error).toBe('exists');
+        expect((await api.getReport(id, owner, v)).bytes).toEqual(bytes(5, 6));
+        expect((await api.getReport(id, visit, v)).error).toBe('denied');
+        expect((await api.listVisits(id, owner)).data.visits[0].reportAt).toBe(new Date(START).toISOString());
+    });
+
+    test('a report closes the visit: no add-on is proposed or decided after it', async () => {
+        const { api, id, owner, visit, v } = await visited();
+        const a = 'addon00000000000000001';
+        expect((await api.putAddOn(id, visit, v, a, bytes(1))).ok).toBe(true);
+        expect((await api.putReport(id, visit, v, bytes(2))).ok).toBe(true);
+        expect((await api.putAddOn(id, visit, v, 'addon00000000000000002', bytes(1))).error).toBe('closed');
+        expect((await api.decideAddOn(id, owner, v, a, bytes(1))).error).toBe('closed');
+        // A new visit is open again.
+        const next = (await api.startVisit(id, visit)).data.visitId;
+        expect((await api.putAddOn(id, visit, next, 'addon00000000000000003', bytes(1))).ok).toBe(true);
     });
 });
 

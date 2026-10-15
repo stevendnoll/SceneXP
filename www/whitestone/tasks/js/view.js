@@ -28,12 +28,20 @@
  * does), shows the price before anything is sent, and takes a few words for
  * the customer. Each add-on then sits under its room's tasks with where it
  * stands, and once approved, a Done of its own.
+ *
+ * THE REPORT (M5 piece 2): Finish visit, along the bottom, shows the report
+ * before it is sent (`renderReport`): the bill first, then what was
+ * skipped and why, what was not reached, and what became of the add-ons,
+ * each with what it takes off the quote; then the cleaner's first name,
+ * time on site and a note, all optional, and Send. Waiting to send, it
+ * says so; sent, it is the record of the visit, with nothing to change.
  */
 
 import { h, clear } from '../../js/cards.min.js';
 import { TASKS_PAGE as COPY, UI } from '../../js/copy.min.js';
 import { taskOf, optionOf } from '../../js/sheet.min.js';
 import { priceItem, formatMoney, formatMinutes } from '../../js/pricing.min.js';
+import { reportCounts, REPORT_LIMITS } from '../../js/report.min.js';
 import { levelOf, roomName, preferenceLines as linesFor } from '../../js/taxonomy.min.js';
 import { dayLabel, clockLabel } from '../../js/booking.min.js';
 import { SKIP_REASONS, WORDS_MAX, summarize } from './visit.min.js';
@@ -406,9 +414,166 @@ export function renderChecklist(container, { form, quote, sheet, thumbs = new Ma
         ]));
     }
     // Where the visit stands, along the bottom, said as it changes.
+    const finish = h('button', { type: 'button', className: 'tasks-finish', id: 'tasks-finish', text: COPY.finish });
+    finish.addEventListener('click', () => on.finish());
     container.appendChild(h('div', { className: 'tasks-summary', id: 'tasks-summary' }, [
-        h('p', { className: 'tasks-summary-line', attrs: { role: 'status', 'aria-live': 'polite' }, text: summaryLines(form, progress, addOns).join(' ') }),
-        h('p', { className: 'tasks-summary-saved', text: COPY.savedHere })
+        h('div', { className: 'tasks-summary-text' }, [
+            h('p', { className: 'tasks-summary-line', attrs: { role: 'status', 'aria-live': 'polite' }, text: summaryLines(form, progress, addOns).join(' ') }),
+            h('p', { className: 'tasks-summary-saved', text: COPY.savedHere })
+        ]),
+        finish
+    ]));
+}
+
+// ---- The report (M5 piece 2) ---------------------------------------------------
+
+/**
+ * A report in lines for the cleaner and the customer to read: `{ skipped,
+ * notReached, addOns }`. A task is `{ id, label, why, off }` (its name and
+ * room, why it was skipped, and what it takes off the quote); an add-on
+ * `{ id, label, outcome, money }`, `money` only for one done. Amounts are ''
+ * without the sheet.
+ */
+export function reportLines(sheet, form, report) {
+    const items = new Map(((form && form.items) || []).map((i) => [i.id, i]));
+    const rooms = new Map(readingOrder(form).flatMap((l) => l.rooms.map((r) => [r.room.id, r.name])));
+    const money = (cents) => (cents === null ? '' : formatMoney(cents));
+    const task = (r) => {
+        const item = items.get(r.itemId);
+        if (!item) return null;
+        const p = sheet ? priceItem(sheet, item, form.rooms) : { error: 'no-sheet' };
+        const name = taskDetail(sheet, form, item).name;
+        return {
+            id: r.itemId,
+            label: rooms.has(item.roomId) ? COPY.inTheRoom(name, rooms.get(item.roomId)) : name,
+            why: r.status === 'skipped' ? skipWhy(r) : '',
+            off: p.error ? '' : COPY.lineOff(money(p.cents))
+        };
+    };
+    const results = (report && report.results) || [];
+    return {
+        skipped: results.filter((r) => r.status === 'skipped').map(task).filter(Boolean),
+        notReached: results.filter((r) => r.status === 'not-reached').map(task).filter(Boolean),
+        addOns: ((report && report.addOns) || []).map((a) => {
+            const p = priceOf(sheet, form, a);
+            const outcome = a.done ? 'done' : a.status;
+            return { id: a.id, label: addOnName(sheet, form, a), outcome: COPY.addOnOutcome[outcome], money: a.done && !p.error ? money(p.cents) : '' };
+        })
+    };
+}
+
+/** The bill in words: its line, then its parts, or that nothing is owed. */
+export function billLines(bill) {
+    if (!bill) return { line: COPY.billNoSheet, parts: [] };
+    if (!bill.billedCents) return { line: COPY.billNothing, parts: [] };
+    const parts = [COPY.billDone(formatMoney(bill.doneCents))];
+    if (bill.addOnCents) parts.push(COPY.billAddOns(formatMoney(bill.addOnCents)));
+    if (bill.topUpCents) parts.push(COPY.billMinimum(formatMoney(bill.topUpCents)));
+    return { line: COPY.billLine(formatMoney(bill.billedCents), formatMoney(bill.quoteCents)), parts };
+}
+
+/** Time on site in words: "2 hours 30 minutes". */
+function onSite(minutes) {
+    const hrs = Math.floor(minutes / 60);
+    const min = minutes % 60;
+    return [hrs ? COPY.hoursValue(hrs) : '', min ? COPY.minutesValue(min) : ''].filter(Boolean).join(' ');
+}
+
+/** A list under its heading, or nothing when it is empty. */
+function listOf(id, heading, rows, row) {
+    if (!rows.length) return null;
+    return h('section', { className: 'report-list', id, attrs: { 'aria-labelledby': `${id}-heading` } }, [
+        h('h2', { id: `${id}-heading`, text: heading }),
+        h('ul', {}, rows.map(row))
+    ]);
+}
+
+/** The cleaner's own fields: first name, time on site, a note. */
+function reportFields(draft, on) {
+    const name = h('input', {
+        type: 'text', id: 'report-cleaner', className: 'report-input', value: draft.cleaner || '',
+        attrs: { maxlength: String(REPORT_LIMITS.cleaner), autocomplete: 'given-name' }
+    });
+    const hours = h('select', { id: 'report-hours', className: 'report-select', attrs: { 'aria-label': COPY.hours } },
+        Array.from({ length: 17 }, (_, n) => h('option', { value: String(n), text: COPY.hoursValue(n), selected: n === (draft.hours || 0) })));
+    const mins = h('select', { id: 'report-minutes', className: 'report-select', attrs: { 'aria-label': COPY.minutes } },
+        [0, 15, 30, 45].map((n) => h('option', { value: String(n), text: COPY.minutesValue(n), selected: n === (draft.minutes || 0) })));
+    hours.value = String(draft.hours || 0);
+    mins.value = String(draft.minutes || 0);
+    const note = h('textarea', {
+        id: 'report-note', className: 'report-note', value: draft.note || '',
+        attrs: { maxlength: String(REPORT_LIMITS.note), rows: '3' }
+    });
+    for (const node of [name, note]) node.addEventListener('input', () => on.draft());
+    for (const node of [hours, mins]) node.addEventListener('change', () => on.draft());
+    return h('section', { className: 'report-fields' }, [
+        h('label', { className: 'addon-label', attrs: { for: 'report-cleaner' } }, [h('span', { text: COPY.nameLabel })]),
+        name,
+        h('fieldset', { className: 'report-time' }, [h('legend', { text: COPY.timeLabel }), hours, mins]),
+        h('label', { className: 'addon-label', attrs: { for: 'report-note' } }, [h('span', { text: COPY.noteLabel })]),
+        note
+    ]);
+}
+
+/**
+ * Draw a report into `container`: `mode` 'finish' (before sending, the
+ * cleaner's fields open), 'pending' (sent but waiting for a signal) or
+ * 'sent'. `report` from visit.js buildReport, `bill` from report.js
+ * reportBill (null without the sheet), `draft` the fields as typed, `note`
+ * a line about sending (`problem` when it went wrong), `sending` while a
+ * send is on its way. `on.send()`, `on.back()`, `on.retry()`, `on.draft()`.
+ */
+export function renderReport(container, { form, sheet, report, bill, mode, draft = {}, note = '', problem = false, sending = false, on }) {
+    clear(container);
+    const counts = reportCounts(report);
+    const lines = reportLines(sheet, form, report);
+    const money = billLines(bill);
+    const title = { finish: COPY.finishTitle, pending: COPY.pendingTitle, sent: COPY.sentTitle }[mode];
+    const told = [];
+    if (mode !== 'finish') {
+        if (report.cleaner) told.push(h('p', { text: COPY.cleanerLine(report.cleaner) }));
+        if (report.minutesOnSite) told.push(h('p', { text: COPY.onSiteLine(onSite(report.minutesOnSite)) }));
+        if (report.note) told.push(h('p', { className: 'report-said' }, [h('strong', { text: COPY.noteLine }), h('span', { text: ` ${report.note}` })]));
+    }
+    const actions = [];
+    if (mode === 'finish') {
+        const send = h('button', { type: 'button', className: 'addon-send', id: 'report-send', text: sending ? COPY.sendingReport : COPY.sendReport, disabled: sending });
+        send.addEventListener('click', () => on.send());
+        const back = h('button', { type: 'button', className: 'skip-cancel', id: 'report-back', text: COPY.backToList, disabled: sending });
+        back.addEventListener('click', () => on.back());
+        actions.push(send, back);
+    } else if (mode === 'pending') {
+        const retry = h('button', { type: 'button', className: 'addon-send', id: 'report-retry', text: sending ? COPY.sendingReport : COPY.retry, disabled: sending });
+        retry.addEventListener('click', () => on.retry());
+        actions.push(retry);
+    }
+    container.appendChild(h('section', { className: `tasks-report is-${mode}`, id: 'tasks-report', attrs: { 'aria-labelledby': 'report-title' } }, [
+        h('h1', { id: 'report-title', text: title, attrs: { tabindex: '-1' } }),
+        h('p', { className: 'tasks-lead', text: mode === 'sent' ? COPY.sentLead : COPY.finishLead }),
+        h('section', { className: 'report-bill', id: 'report-bill', attrs: { 'aria-labelledby': 'report-bill-heading' } }, [
+            h('h2', { id: 'report-bill-heading', text: COPY.billHeading }),
+            h('p', { className: 'report-bill-line', text: money.line }),
+            money.parts.length ? h('ul', {}, money.parts.map((p) => h('li', { text: p }))) : null
+        ]),
+        h('p', { className: 'report-counts', text: COPY.reportCounts(counts.done, counts.skipped, counts.notReached) }),
+        listOf('report-skipped', COPY.skippedHeading, lines.skipped, (t) => h('li', { id: `report-${t.id}` }, [
+            h('span', { className: 'report-label', text: t.label }),
+            t.why ? h('span', { className: 'report-why', text: ` (${t.why})` }) : null,
+            t.off ? h('span', { className: 'report-off', text: ` ${t.off}` }) : null
+        ])),
+        listOf('report-not-reached', COPY.notReachedHeading, lines.notReached, (t) => h('li', { id: `report-${t.id}` }, [
+            h('span', { className: 'report-label', text: t.label }),
+            t.off ? h('span', { className: 'report-off', text: ` ${t.off}` }) : null
+        ])),
+        listOf('report-addons', COPY.addOnsReportHeading, lines.addOns, (a) => h('li', { id: `report-${a.id}` }, [
+            h('span', { className: 'report-label', text: a.label }),
+            h('span', { className: 'report-why', text: ` (${a.outcome})` }),
+            a.money ? h('span', { className: 'report-off', text: ` ${a.money}` }) : null
+        ])),
+        ...told,
+        mode === 'finish' ? reportFields(draft, on) : null,
+        note ? h('p', { className: `report-status${problem ? ' is-problem' : ''}`, id: 'report-status', attrs: { role: problem ? 'alert' : 'status' }, text: note }) : null,
+        actions.length ? h('div', { className: 'skip-actions report-actions' }, actions) : null
     ]));
 }
 

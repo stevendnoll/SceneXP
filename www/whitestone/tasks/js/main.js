@@ -25,6 +25,14 @@
  * one is waiting and the page is in view, so an approval appears in place
  * (addons.js). The visit and its add-ons are kept on the device too.
  *
+ * FINISHING (M5 piece 2): Finish visit shows the report and the bill
+ * before anything is sent, and takes the cleaner's first name, time on site
+ * and a note. Send keeps the report on the device first (the outbox), then
+ * sends it, sealed, once; with no signal it waits and tries again on its
+ * own (a growing pause, the connection coming back, the page in view, the
+ * page opened again). Sent, the page shows the report and nothing more is
+ * marked. A new booking of the same checklist is a new visit.
+ *
  * OFFLINE (M4 piece 4): the sealed checklist and its photos are kept on
  * this device as they arrive (still sealed, in IndexedDB), for as long as
  * the visit pass lasts, so a cleaner with no signal still opens the
@@ -54,8 +62,9 @@ import { createSealer, contextFor } from '../../js/seal.min.js';
 import { loadSheet } from '../../js/sheet.min.js';
 import { quoteChecklist } from '../../js/pricing.min.js';
 import { PUBLISHED_FORMAT } from '../../js/sync.min.js';
-import { renderChecklist, showPhoto, findIn } from './view.min.js';
-import { applyMark, cleanProgress } from './visit.min.js';
+import { renderChecklist, renderReport, showPhoto, findIn } from './view.min.js';
+import { applyMark, cleanProgress, emptyProgress, buildReport, visitKeyOf } from './visit.min.js';
+import { sendReport, reportBill } from '../../js/report.min.js';
 import { choicesFor, proposeAddOn, fetchAddOns, cleanKept, takenKeys, waitingCount, newAddOnId } from './addons.min.js';
 
 export { COPY };
@@ -195,6 +204,7 @@ const refused = (error) => error === 'denied' || error === 'not-found';
 function addOnError(error) {
     if (error === 'offline') return COPY.addOnOffline;
     if (error === 'too-many') return COPY.addOnFull;
+    if (error === 'closed') return COPY.addOnClosed;
     if (error === 'denied') return COPY.addOnExpired;
     return COPY.addOnTrouble;
 }
@@ -203,6 +213,19 @@ function addOnError(error) {
 function readQuantity(value) {
     const n = Number.parseInt(String(value), 10);
     return Number.isInteger(n) ? Math.min(50, Math.max(1, n)) : 1;
+}
+
+/** The cleaner's fields as kept: `{ cleaner, hours, minutes, note }`. */
+export function cleanDraft(raw) {
+    const r = raw && typeof raw === 'object' ? raw : {};
+    const hours = Number.parseInt(r.hours, 10);
+    const minutes = Number.parseInt(r.minutes, 10);
+    return {
+        cleaner: String(r.cleaner || '').slice(0, 40),
+        hours: Number.isInteger(hours) && hours >= 0 && hours <= 16 ? hours : 0,
+        minutes: [0, 15, 30, 45].includes(minutes) ? minutes : 0,
+        note: String(r.note || '').slice(0, 500)
+    };
 }
 
 /** The words for an API error while opening, from copy.js. */
@@ -233,7 +256,23 @@ export async function boot(env) {
     const status = el('pin-status');
     const gate = el('tasks-gate');
     const view = el('tasks-view');
-    const state = { phase: 'start', id: null, form: null, quote: null, sheet: null, notice: '', thumbs: new Map(), progress: null, skipping: null, skipNote: '', visitId: null, addOns: [], proposing: null };
+    const state = {
+        phase: 'start', id: null, form: null, quote: null, sheet: null, notice: '', thumbs: new Map(), progress: null, skipping: null, skipNote: '',
+        visitId: null, addOns: [], proposing: null,
+        // Finishing (M5): the report's view open, the fields as typed, a send
+        // on its way, what it said, and the tries so far.
+        finishing: false, draft: null, sendingReport: false, reportNote: '', reportProblem: false, retries: 0, retryTimer: null
+    };
+    // One listener each for the page coming into view and the connection
+    // coming back, calling whatever the open checklist set (a PIN asked
+    // again opens it afresh).
+    const win = env.win || (typeof window !== 'undefined' ? window : null);
+    if (typeof doc.addEventListener === 'function') {
+        doc.addEventListener('visibilitychange', () => { if (state.onVisible) state.onVisible(); });
+    }
+    if (win && typeof win.addEventListener === 'function') {
+        win.addEventListener('online', () => { if (state.onOnline) state.onOnline(); });
+    }
 
     const setStatus = (text, problem = false) => {
         if (!status) return;
@@ -265,6 +304,7 @@ export async function boot(env) {
     state.progress = cleanProgress(entry.progress);
     state.visitId = typeof entry.visitId === 'string' && ID.test(entry.visitId) ? entry.visitId : null;
     state.addOns = state.visitId ? cleanKept(entry.addOns) : [];
+    state.draft = cleanDraft(entry.draft);
 
     const askPin = (line = '', problem = false) => {
         state.phase = 'pin';
@@ -302,6 +342,15 @@ export async function boot(env) {
             return state;
         }
         state.form = opened;
+        // A report sent for another booking: this is a new visit, begun
+        // afresh (the cleaner's name kept).
+        if (entry.sent && entry.sent.visitKey !== visitKeyOf(opened)) {
+            state.progress = emptyProgress();
+            state.visitId = null;
+            state.addOns = [];
+            state.draft = { ...cleanDraft(null), cleaner: state.draft.cleaner };
+            remember({ sent: null, outbox: null, progress: state.progress, visitId: null, addOns: [], draft: state.draft });
+        }
         try {
             const version = opened.quote && opened.quote.sheetVersion;
             state.sheet = version ? await loadSheet(version, fetchJson, '../data/prices/') : null;
@@ -315,16 +364,34 @@ export async function boot(env) {
             !state.sheet ? COPY.noSheet : given !== null && state.quote.totalCents !== given ? COPY.quoteChanged : ''
         ].filter(Boolean).join(' ');
         state.fromDevice = fromDevice;
-        const draw = () => renderChecklist(view, {
-            form: state.form, quote: state.quote, sheet: state.sheet, thumbs: state.thumbs, notice: state.notice,
-            progress: state.progress, skipping: state.skipping, skipNote: state.skipNote,
-            addOns: state.addOns, proposing: state.proposing,
-            on: { photo: openPhoto, mark, skip, propose, pick, quantity, send, addOnDone, print: () => printPage() }
-        });
+        /** The report as it would be sent now. */
+        const currentReport = (at = null) => buildReport(state.form, state.progress, state.addOns, {
+            cleaner: state.draft.cleaner, minutesOnSite: state.draft.hours * 60 + state.draft.minutes, note: state.draft.note
+        }, at);
+        /** Sent, waiting to send, finishing, or the checklist. */
+        const modeNow = () => (entry.sent ? 'sent' : entry.outbox ? 'pending' : state.finishing ? 'finish' : null);
+        const draw = () => {
+            const mode = modeNow();
+            if (mode) {
+                const report = mode === 'finish' ? currentReport() : (entry.sent || entry.outbox).report;
+                renderReport(view, {
+                    form: state.form, sheet: state.sheet, report, bill: reportBill(state.sheet, state.form.quote, state.form, report),
+                    mode, draft: state.draft, note: state.reportNote, problem: state.reportProblem, sending: state.sendingReport,
+                    on: { send: () => sendFinal(), back: backToList, retry: () => trySend(), draft: keepDraft }
+                });
+                return;
+            }
+            renderChecklist(view, {
+                form: state.form, quote: state.quote, sheet: state.sheet, thumbs: state.thumbs, notice: state.notice,
+                progress: state.progress, skipping: state.skipping, skipNote: state.skipNote,
+                addOns: state.addOns, proposing: state.proposing,
+                on: { photo: openPhoto, mark, skip, propose, pick, quantity, send, addOnDone, finish, print: () => printPage() }
+            });
+        };
         /** Drawn again for news from the API, keeping what is being typed
          *  and where the keyboard is. */
         const redraw = () => {
-            const typed = all(view).filter((n) => n.tagName === 'INPUT' && n.id).map((n) => [n.id, n.value]);
+            const typed = all(view).filter((n) => ['INPUT', 'TEXTAREA', 'SELECT'].includes(n.tagName) && n.id).map((n) => [n.id, n.value]);
             const focused = doc.activeElement && doc.activeElement.id;
             draw();
             for (const [id, value] of typed) {
@@ -439,25 +506,136 @@ export async function boot(env) {
             remember({ addOns: state.addOns });
             redraw();
         }
-        /** Asked after again in a few seconds, while one is waiting and the
-         *  page is in view. */
+        /** Asked after again in a few seconds, while one is waiting, the
+         *  page is in view and the report is not yet on its way. */
         function ask() {
-            if (state.timer || !waitingCount(state.addOns) || doc.visibilityState === 'hidden') return;
+            if (state.timer || !waitingCount(state.addOns) || doc.visibilityState === 'hidden' || modeNow() === 'sent' || modeNow() === 'pending') return;
             state.timer = setTimer(() => {
                 state.timer = null;
                 state.polled = refresh().then(ask);
                 return state.polled;
             }, CONFIG.api.pollSeconds * 1000);
         }
-        if (typeof doc.addEventListener === 'function') {
-            doc.addEventListener('visibilitychange', () => {
-                if (doc.visibilityState === 'hidden') {
-                    if (state.timer) clearTimer(state.timer);
-                    state.timer = null;
-                    return;
-                }
-                state.polled = refresh().then(ask);
-            });
+        state.onVisible = () => {
+            if (doc.visibilityState === 'hidden') {
+                if (state.timer) clearTimer(state.timer);
+                state.timer = null;
+                return;
+            }
+            // Back in view: a report waiting goes now, else the add-ons.
+            if (entry.outbox) trySend();
+            else if (!entry.sent) state.polled = refresh().then(ask);
+        };
+        state.onOnline = () => {
+            if (entry.outbox) trySend();
+        };
+
+        // ---- Finishing the visit (M5 piece 2) ----------------------------------
+
+        /** The fields as typed, kept on the device (nothing is redrawn, so
+         *  the keyboard stays put). */
+        function keepDraft() {
+            const value = (id) => {
+                const node = findIn(view, id);
+                return node ? node.value : undefined;
+            };
+            if (!findIn(view, 'report-cleaner')) return;
+            state.draft = cleanDraft({ cleaner: value('report-cleaner'), hours: value('report-hours'), minutes: value('report-minutes'), note: value('report-note') });
+            remember({ draft: state.draft });
+        }
+        /** The report and the bill before sending, with the add-ons asked
+         *  after once more, since an answer may be on its way. */
+        function finish() {
+            state.finishing = true;
+            state.reportNote = '';
+            state.reportProblem = false;
+            state.skipping = null;
+            state.proposing = null;
+            draw();
+            focusOn('report-title');
+            state.polled = refresh();
+            return state.polled;
+        }
+        function backToList() {
+            keepDraft();
+            state.finishing = false;
+            state.reportNote = '';
+            draw();
+            focusOn('tasks-finish');
+        }
+        /** Send: the add-ons as they stand now, the report kept on the
+         *  device (from here it waits to send, never lost), then sent. */
+        async function sendFinalNow() {
+            if (state.sendingReport || entry.outbox || entry.sent) return;
+            keepDraft();
+            state.sendingReport = true;
+            draw();
+            await refresh();
+            state.sendingReport = false;
+            remember({ outbox: { report: currentReport(new Date(now()).toISOString()), visitKey: visitKeyOf(state.form) } });
+            state.finishing = false;
+            await trySend();
+        }
+        function sendFinal() {
+            state.reportSend = sendFinalNow();
+            return state.reportSend;
+        }
+        /** One try at sending the report waiting on the device. */
+        async function trySendNow() {
+            if (!entry.outbox || state.sendingReport) return;
+            if (state.retryTimer) clearTimer(state.retryTimer);
+            state.retryTimer = null;
+            state.sendingReport = true;
+            draw();
+            const r = await sendReport({ api, sealer, key, id: here.id, token: entry.visitToken, visitId: state.visitId, report: entry.outbox.report });
+            state.sendingReport = false;
+            if (r.visitId && r.visitId !== state.visitId) {
+                state.visitId = r.visitId;
+                remember({ visitId: r.visitId });
+            }
+            if (r.ok) {
+                remember({ sent: { ...entry.outbox, visitId: r.visitId }, outbox: null });
+                state.retries = 0;
+                state.reportNote = '';
+                state.reportProblem = false;
+                if (state.timer) clearTimer(state.timer);
+                state.timer = null;
+                draw();
+                focusOn('report-title');
+                return;
+            }
+            if (r.error === 'denied') {
+                // The pass has ended: the PIN again, and the report goes
+                // once the checklist is open.
+                remember({ visitToken: null, expiresAt: null });
+                if (view) view.hidden = true;
+                askPin(COPY.reportNeedsPin, true);
+                return;
+            }
+            if (r.error === 'bad-request') {
+                // Too long to send: back to the fields to shorten it.
+                remember({ outbox: null });
+                state.finishing = true;
+                state.reportNote = COPY.reportTooLong;
+                state.reportProblem = true;
+                draw();
+                focusOn('report-note');
+                return;
+            }
+            state.reportNote = r.error === 'offline' ? COPY.reportOffline : COPY.reportTrouble;
+            state.reportProblem = true;
+            draw();
+            const steps = CONFIG.api.reportRetrySeconds;
+            const wait = steps[Math.min(state.retries, steps.length - 1)];
+            state.retries++;
+            state.retryTimer = setTimer(() => {
+                state.retryTimer = null;
+                return trySend();
+            }, wait * 1000);
+        }
+        function trySend() {
+            state.reportSend = trySendNow();
+            return state.reportSend;
         }
         /** A task's skip picker opened (or, with null, closed). */
         function skip(itemId) {
@@ -483,6 +661,13 @@ export async function boot(env) {
         doc.title = `${COPY.heading} | ${COPY.pageTitle}`;
         draw();
         state.phase = 'open';
+        // A report waiting from before (a closed tab, no signal, a pass that
+        // ran out) goes now; one sent leaves nothing more to do.
+        if (entry.outbox) {
+            await trySend();
+            return state;
+        }
+        if (entry.sent) return state;
         // The thumbnails, then drawn again with them.
         const photoIds = [...new Set((opened.items || []).flatMap((i) => (Array.isArray(i.photos) ? i.photos : [])))];
         for (const photoId of photoIds) {

@@ -337,6 +337,9 @@ export const CONFIG = deepFreeze({
         /** The most a sealed add-on or decision may weigh: a few hundred
          *  bytes of JSON, with room to spare. */
         maxSmallBytes: 4096,
+        /** The most a sealed visit report may weigh: a line per task of a
+         *  full checklist, its add-ons and a note, with room to spare. */
+        maxReportBytes: 65536,
         /** The cleaner's page asks after an add-on this often while one is
          *  waiting and the page is in view (PLANNING 10.3). Seconds. */
         pollSeconds: 5,
@@ -344,6 +347,10 @@ export const CONFIG = deepFreeze({
          *  add-on to answer) this often while the page is in view, and
          *  `firstPollSeconds` after it opens (PLANNING 10.4). Seconds. */
         ownerPollSeconds: 10,
+        /** A report that did not send tries again after these pauses, the
+         *  last repeated, as well as when the connection or the page comes
+         *  back. Seconds. */
+        reportRetrySeconds: [15, 30, 60, 120, 300],
         firstPollSeconds: 1.5,
         /** A quote is honored for 90 days (PRD 9.2), so a visit moved
          *  later than that is refused by the calendar. */

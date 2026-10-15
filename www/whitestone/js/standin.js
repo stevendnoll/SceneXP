@@ -26,7 +26,8 @@
  * A VISIT (PLANNING 10.3) starts with the cleaner's first add-on or the
  * report. A cleaner proposes an add-on once, and the customer decides it
  * once: neither is ever rewritten, so what the customer approved is what
- * the cleaner proposed.
+ * the cleaner proposed. The report is written once too, and closes the
+ * visit: no add-on is proposed or decided after it (M5).
  *
  * Everything outside is injected (`backend`, the four-method store of
  * photos.js; `now`; `getRandomValues`; `subtle`), so the suite runs it in
@@ -215,6 +216,7 @@ export function createStandin({
             // A cleaner proposes; the customer only decides.
             if (owner || !reader) return denied();
             if (!small(bytes)) return fail(400, 'bad-request');
+            if (visit.reportAt) return fail(409, 'closed');
             if (visit.addOns.includes(addonId)) return fail(409, 'exists');
             if (visit.addOns.length >= A.maxAddOns) return fail(409, 'too-many');
             await backend.put(`${base}addon/${addonId}`, bytes);
@@ -226,9 +228,31 @@ export function createStandin({
         if (!visit.addOns.includes(addonId)) return fail(404, 'not-found');
         if (!small(bytes)) return fail(400, 'bad-request');
         if (visit.decided.includes(addonId)) return fail(409, 'decided');
+        if (visit.reportAt) return fail(409, 'closed');
         await backend.put(`${base}decision/${addonId}`, bytes);
         await replace({ decided: [...visit.decided, addonId] });
         return answer(201, { stored: true });
+    }
+
+    /** One visit's report: the cleaner sends it once (`PUT`), and the
+     *  customer reads it (`GET`). */
+    async function report(m, visitId, method, bytes, owner, reader) {
+        const visit = visitsOf(m).find((v) => v.visitId === visitId);
+        if (!visit) return reader ? fail(404, 'not-found') : denied();
+        const key = `${visitKey(m.id, visitId)}report`;
+        if (method === 'GET') {
+            if (!owner) return denied();
+            const blob = visit.reportAt ? await backend.get(key) : null;
+            return blob ? { status: 200, bytes: blob } : fail(404, 'not-found');
+        }
+        if (method !== 'PUT') return fail(405, 'method');
+        if (owner || !reader) return denied();
+        if (!(bytes instanceof Uint8Array) || !bytes.length || bytes.length > A.maxReportBytes) return fail(400, 'bad-request');
+        if (visit.reportAt) return fail(409, 'exists');
+        await backend.put(key, bytes);
+        const at = new Date(now()).toISOString();
+        await saveMeta({ ...m, visitRecords: visitsOf(m).map((v) => (v === visit ? { ...v, reportAt: at } : v)) });
+        return answer(201, { stored: true, reportAt: at });
     }
 
     /** The first openings from `date` on, for a time refused as taken. */
@@ -334,6 +358,10 @@ export function createStandin({
                 if (method !== 'GET') return fail(405, 'method');
                 if (!owner) return denied();
                 return answer(200, { visits: visitsOf(m).map((v) => ({ visitId: v.visitId, createdAt: new Date(v.createdAt).toISOString(), reportAt: v.reportAt })) });
+            }
+            if (parts.length === 5 && parts[4] === 'report' && ID.test(parts[3])) {
+                if (!m) return denied();
+                return report(m, parts[3], method, bytes, owner, reader);
             }
             const decision = parts.length === 7 && parts[6] === 'decision';
             if (ID.test(parts[3]) && (parts.length === 5 || parts.length === 6 || decision) && parts[4] === 'addons') {
