@@ -374,6 +374,178 @@ h1 {
     outline-offset: 2px;
 }
 
+/* ---- The visit (M4 piece 2) -------------------------------------------------
+ *
+ * Done and Skip, big enough for gloves and wet hands, side by side under
+ * every task. A pressed one is filled: here the fill IS the state. A done
+ * task goes quiet, a skipped one turns amber with its reason.
+ */
+
+.task-marks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin: 0.75rem 0 0;
+}
+
+.mark-done,
+.mark-skip {
+    min-height: 3.25rem;
+    padding: 0.5rem 0.75rem;
+    border: 2px solid var(--accent);
+    border-radius: 12px;
+    background: var(--white);
+    color: var(--accent);
+    font: inherit;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.mark-skip {
+    border-color: #B9B3A9;
+    color: var(--graphite);
+}
+
+.mark-done.is-on {
+    background: var(--accent);
+    color: var(--white);
+}
+
+.mark-skip.is-on {
+    border-color: var(--attention);
+    background: #FFF8EC;
+    color: var(--attention);
+}
+
+.mark-done:focus-visible,
+.mark-skip:focus-visible,
+.skip-reason:focus-visible,
+.skip-with-words:focus-visible,
+.skip-cancel:focus-visible,
+.skip-words:focus-visible {
+    outline: 3px solid var(--graphite);
+    outline-offset: 2px;
+}
+
+.task.is-done {
+    border-color: #B7C6D4;
+    background: #F7F9FB;
+}
+
+.task.is-done .task-name {
+    color: var(--muted);
+}
+
+.task.is-skipped {
+    border-color: var(--attention);
+}
+
+.task-skipped {
+    margin: 0.5rem 0 0;
+    color: var(--attention);
+    font-weight: 600;
+}
+
+.skip-picker {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0.6rem 0 0;
+    padding: 0.75rem;
+    border-radius: 12px;
+    background: var(--stone);
+}
+
+.skip-why {
+    margin: 0;
+    font-weight: 700;
+}
+
+.skip-note {
+    margin: 0;
+    color: var(--attention);
+}
+
+.skip-reasons {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.skip-reason,
+.skip-with-words,
+.skip-cancel {
+    min-height: 2.9rem;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid #B9B3A9;
+    border-radius: 10px;
+    background: var(--white);
+    color: var(--graphite);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.skip-reason.is-on {
+    border-color: var(--attention);
+    background: #FFF8EC;
+}
+
+.skip-words-label {
+    margin-top: 0.2rem;
+    font-weight: 600;
+}
+
+.skip-words {
+    width: 100%;
+    min-height: 2.9rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid #B9B3A9;
+    border-radius: 10px;
+    font: inherit;
+}
+
+.skip-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.skip-with-words {
+    border-color: var(--attention);
+    font-weight: 600;
+}
+
+.tasks-start li.is-done a {
+    color: var(--muted);
+}
+
+.tasks-start-mark {
+    color: var(--muted);
+}
+
+/* Where the visit stands: along the bottom while the list scrolls under. */
+.tasks-summary {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin: 1.5rem -1rem 0;
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: var(--white);
+    box-shadow: 0 -6px 18px rgba(34, 37, 42, 0.08);
+}
+
+.tasks-summary-line {
+    margin: 0;
+    font-weight: 700;
+}
+
+.tasks-summary-saved {
+    margin: 0.15rem 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
 /* A photo full screen: dark around it, its Close always in reach. */
 .photo-view {
     position: fixed;

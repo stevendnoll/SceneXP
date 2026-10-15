@@ -26,6 +26,7 @@ import { emptyDoc, createChecklist, addRoom, addPhoto, setPublication, findCheck
 import { checkChoice, presetFor } from '../www/whitestone/js/sheet.js';
 import { buildShare } from '../www/whitestone/js/links.js';
 import { TASKS_PAGE as COPY } from '../www/whitestone/js/copy.js';
+import { SKIP_REASONS, WORDS_MAX, emptyProgress, cleanMark, cleanProgress, applyMark, summarize } from '../www/whitestone/tasks/js/visit.js';
 
 const WS = join(process.cwd(), 'www', 'whitestone');
 const SCHEDULE = JSON.parse(readFileSync(join(WS, 'data', 'schedule.json'), 'utf8'));
@@ -348,5 +349,150 @@ describe('what the cleaner reads', () => {
         expect(state.phase).toBe('open');
         expect(state.notice).toBe(COPY.noSheet);
         expect(byClass('task-minutes')).toHaveLength(0);
+    });
+});
+
+// ---- The visit (M4 piece 2) ---------------------------------------------------
+
+describe('the visit, as the cleaner marks it (pure)', () => {
+    const form = { items: [{ id: 'a', important: true }, { id: 'b', important: true }, { id: 'c' }, { id: 'd' }] };
+
+    test('a mark is done, or skipped with a quick reason or a few words; anything else is no mark', () => {
+        expect(cleanMark({ status: 'done', extra: 1 })).toEqual({ status: 'done' });
+        expect(cleanMark({ status: 'skipped', reason: 'no-time' })).toEqual({ status: 'skipped', reason: 'no-time', words: '' });
+        expect(cleanMark({ status: 'skipped', words: '  The   dog was asleep there.  ' })).toEqual({ status: 'skipped', reason: null, words: 'The dog was asleep there.' });
+        expect(cleanMark({ status: 'skipped', words: 'x'.repeat(500) }).words).toHaveLength(WORDS_MAX);
+        // A skip that does not say why is not yet a skip.
+        expect(cleanMark({ status: 'skipped' })).toBeNull();
+        expect(cleanMark({ status: 'skipped', reason: 'made-up', words: '   ' })).toBeNull();
+        expect(cleanMark({ status: 'later' })).toBeNull();
+        expect(cleanMark(null)).toBeNull();
+        expect(SKIP_REASONS.every((k) => typeof COPY.reasons[k] === 'string')).toBe(true);
+    });
+
+    test('outcomes, never a timeline: no time and no order is kept with a mark', () => {
+        const p = applyMark(emptyProgress(), 'a', { status: 'done', at: '2026-10-16T09:12:00Z', order: 3 });
+        expect(p.marks.a).toEqual({ status: 'done' });
+        expect(JSON.stringify(p)).not.toMatch(/\d{4}-\d{2}-\d{2}|"at"|"order"/);
+    });
+
+    test('marks change and clear, each a new progress; a mark that says nothing changes nothing', () => {
+        const p0 = emptyProgress();
+        const p1 = applyMark(p0, 'a', { status: 'done' });
+        expect(p0.marks).toEqual({});
+        const p2 = applyMark(p1, 'a', { status: 'skipped', reason: 'no-access' });
+        expect(p2.marks.a).toEqual({ status: 'skipped', reason: 'no-access', words: '' });
+        expect(applyMark(p2, 'a', null).marks).toEqual({});
+        expect(applyMark(p2, 'b', { status: 'skipped' })).toBe(p2);
+    });
+
+    test('progress read back from the device keeps only good marks', () => {
+        expect(cleanProgress({ marks: { a: { status: 'done' }, b: { status: 'nope' }, c: 'x' } })).toEqual({ marks: { a: { status: 'done' } } });
+        expect(cleanProgress(null)).toEqual({ marks: {} });
+        expect(cleanProgress('garbage')).toEqual({ marks: {} });
+    });
+
+    test('where it stands: done, skipped, to go, and the starred, over the checklist\'s own tasks', () => {
+        let p = emptyProgress();
+        expect(summarize(form, p)).toMatchObject({ total: 4, done: 0, skipped: 0, toGo: 4, starred: 2, starredToGo: 2 });
+        p = applyMark(p, 'a', { status: 'done' });
+        p = applyMark(p, 'c', { status: 'skipped', reason: 'no-time' });
+        // A mark for a task since taken off the checklist does not count.
+        p = applyMark(p, 'gone', { status: 'done' });
+        expect(summarize(form, p)).toEqual({ total: 4, done: 1, skipped: 1, toGo: 2, starred: 2, starredDone: 1, starredSkipped: 0, starredToGo: 1 });
+        p = applyMark(p, 'b', { status: 'skipped', reason: 'customer-asked' });
+        expect(summarize(form, p)).toMatchObject({ starredDone: 1, starredSkipped: 1, starredToGo: 0 });
+    });
+});
+
+describe('the visit on the page', () => {
+    async function visiting() {
+        const w = await published();
+        const { state } = await open(w, w.link);
+        await enter(state, w.checklist.published.pin);
+        return { w, state };
+    }
+    const summary = () => byClass('tasks-summary-line')[0].textContent;
+    const button = (id) => all(view()).find((e) => e.id === id);
+    const taskLi = (id) => all(view()).find((e) => e.id === `task-${id}`);
+
+    test('every task has Done and Skip, named for the task, and the summary starts with all to go', async () => {
+        const { state } = await visiting();
+        for (const item of state.form.items) {
+            expect(button(`done-${item.id}`).getAttribute('aria-pressed')).toBe('false');
+            expect(button(`skip-${item.id}`).getAttribute('aria-expanded')).toBe('false');
+        }
+        const n = state.form.items.length;
+        expect(summary()).toBe(`${COPY.summary(0, 0, n)} ${COPY.starredToGo(1)}`);
+        expect(byClass('tasks-summary-saved')[0].textContent).toBe(COPY.savedHere);
+        expect(byClass('tasks-summary-line')[0].getAttribute('role')).toBe('status');
+    });
+
+    test('Done marks a task, keeps it on the device at once, leaves the keyboard on it, and a second press clears it', async () => {
+        const { w, state } = await visiting();
+        const n = state.form.items.length;
+        fire(button(`done-${w.stove.id}`), 'click');
+        expect(button(`done-${w.stove.id}`).getAttribute('aria-pressed')).toBe('true');
+        expect(button(`done-${w.stove.id}`).focused).toBe(true);
+        expect(taskLi(w.stove.id).className).toContain('is-done');
+        expect(summary()).toBe(`${COPY.summary(1, 0, n - 1)} ${COPY.starredDone}`);
+        const kept = JSON.parse(localStorage.getItem(page.STORAGE_KEY)).checklists[w.checklist.published.id];
+        expect(kept.progress.marks[w.stove.id]).toEqual({ status: 'done' });
+        // Start here says so too.
+        expect(byClass('tasks-start-mark')[0].textContent).toBe(` (${COPY.isDone})`);
+        fire(button(`done-${w.stove.id}`), 'click');
+        expect(button(`done-${w.stove.id}`).getAttribute('aria-pressed')).toBe('false');
+        expect(summary()).toBe(`${COPY.summary(0, 0, n)} ${COPY.starredToGo(1)}`);
+    });
+
+    test('Skip opens its reasons in the task; one tap on a reason skips it, says why, and closes', async () => {
+        const { w, state } = await visiting();
+        const id = w.stove.id;
+        fire(button(`skip-${id}`), 'click');
+        expect(button(`skip-${id}`).getAttribute('aria-expanded')).toBe('true');
+        expect(button(`reason-${id}-no-time`).focused).toBe(true);
+        expect(SKIP_REASONS.map((k) => button(`reason-${id}-${k}`).textContent)).toEqual(SKIP_REASONS.map((k) => COPY.reasons[k]));
+        fire(button(`reason-${id}-no-access`), 'click');
+        expect(button(`picker-${id}`)).toBeUndefined();
+        expect(taskLi(id).className).toContain('is-skipped');
+        expect(all(taskLi(id)).find((e) => e.className === 'task-skipped').textContent).toBe(COPY.skippedBecause(COPY.reasons['no-access']));
+        expect(button(`skip-${id}`).focused).toBe(true);
+        expect(summary()).toBe(`${COPY.summary(0, 1, state.form.items.length - 1)} ${COPY.starredMarked(0, 1)}`);
+        // Opened again: the reason given is marked, and it can be taken back.
+        fire(button(`skip-${id}`), 'click');
+        expect(button(`reason-${id}-no-access`).getAttribute('aria-pressed')).toBe('true');
+        fire(button(`unskip-${id}`), 'click');
+        expect(taskLi(id).className).not.toContain('is-skipped');
+    });
+
+    test('a few words of the cleaner\'s own, or a prompt when there are none; Cancel changes nothing', async () => {
+        const { w } = await visiting();
+        const id = w.stove.id;
+        fire(button(`skip-${id}`), 'click');
+        fire(button(`skip-words-${id}`), 'click');
+        expect(all(button(`picker-${id}`)).find((e) => e.className === 'skip-note').textContent).toBe(COPY.skipNeedsWhy);
+        expect(button(`words-${id}`).focused).toBe(true);
+        button(`words-${id}`).value = 'The dog was asleep on it.';
+        fire(button(`skip-words-${id}`), 'click');
+        expect(all(taskLi(id)).find((e) => e.className === 'task-skipped').textContent).toBe(COPY.skippedBecause('The dog was asleep on it.'));
+        // Cancel leaves the mark as it was.
+        fire(button(`skip-${id}`), 'click');
+        fire(button(`skip-cancel-${id}`), 'click');
+        expect(button(`picker-${id}`)).toBeUndefined();
+        expect(taskLi(id).className).toContain('is-skipped');
+        expect(button(`skip-${id}`).focused).toBe(true);
+    });
+
+    test('closed and opened again, the marks are all still there', async () => {
+        const { w, state } = await visiting();
+        const others = state.form.items.filter((i) => i.id !== w.stove.id);
+        fire(button(`done-${w.stove.id}`), 'click');
+        fire(button(`skip-${others[0].id}`), 'click');
+        fire(button(`reason-${others[0].id}-already-clean`), 'click');
+        const again = await open(w, `https://www.scenexp.com/whitestone/tasks/?c=${w.checklist.published.id}`);
+        expect(again.state.phase).toBe('open');
+        expect(button(`done-${w.stove.id}`).getAttribute('aria-pressed')).toBe('true');
+        expect(taskLi(others[0].id).className).toContain('is-skipped');
+        expect(summary()).toBe(`${COPY.summary(1, 1, state.form.items.length - 2)} ${COPY.starredDone}`);
     });
 });

@@ -7536,8 +7536,8 @@ html [lang="en"]
     title
       "Your checklist | Whitestone Home Care"
     link [href="../favicon.svg?v=3" rel="icon" type="image/svg+xml"]
-    link [href="css/tasks.min.css?v=2" rel="stylesheet"]
-    script [src="js/main.min.js?v=3" type="module"]
+    link [href="css/tasks.min.css?v=3" rel="stylesheet"]
+    script [src="js/main.min.js?v=4" type="module"]
   body
     header.tasks-header
       svg.tasks-mark [aria-hidden="true" viewbox="0 0 32 32"]

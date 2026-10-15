@@ -16,6 +16,10 @@
  * the page says so and shows the new figures. Then the view (view.js), and
  * the photos' thumbnails as they arrive.
  *
+ * THE VISIT (M4 piece 2): the cleaner marks each task Done, or Skipped with
+ * a reason, and every mark is kept on this device at once, with the key, so
+ * a closed tab, a reload or a flat battery loses nothing (visit.js).
+ *
  * WRONG PINS: the API answers every failed try the same way ("denied"),
  * locked or not, so nothing is learned by guessing. The page counts the
  * tries on this device and, after a few, says the checklist may need a
@@ -38,12 +42,14 @@ import { createSealer, contextFor } from '../../js/seal.min.js';
 import { loadSheet } from '../../js/sheet.min.js';
 import { quoteChecklist } from '../../js/pricing.min.js';
 import { PUBLISHED_FORMAT } from '../../js/sync.min.js';
-import { renderChecklist, showPhoto } from './view.min.js';
+import { renderChecklist, showPhoto, findIn } from './view.min.js';
+import { applyMark, cleanProgress } from './visit.min.js';
 
 export { COPY };
 
 /** This device's memory of shared checklists (PLANNING 8.2): per id, the
- *  key, the visit token and its expiry, and wrong PINs in a row. */
+ *  key, the visit token and its expiry, wrong PINs in a row, and the
+ *  visit's marks. */
 export const STORAGE_KEY = 'scenexp-whitestone-tasks-v1';
 
 /** After this many wrong PINs in a row the page warns that the checklist
@@ -132,7 +138,7 @@ export async function boot(env) {
     const status = el('pin-status');
     const gate = el('tasks-gate');
     const view = el('tasks-view');
-    const state = { phase: 'start', id: null, form: null, quote: null, sheet: null, notice: '', thumbs: new Map() };
+    const state = { phase: 'start', id: null, form: null, quote: null, sheet: null, notice: '', thumbs: new Map(), progress: null, skipping: null, skipNote: '' };
 
     const setStatus = (text, problem = false) => {
         if (!status) return;
@@ -160,6 +166,7 @@ export async function boot(env) {
         writeMemory(storage, memory);
     };
     remember({});
+    state.progress = cleanProgress(entry.progress);
 
     const askPin = (line = '', problem = false) => {
         state.phase = 'pin';
@@ -198,8 +205,40 @@ export async function boot(env) {
             : given !== null && state.quote.totalCents !== given ? COPY.quoteChanged : '';
         const draw = () => renderChecklist(view, {
             form: state.form, quote: state.quote, sheet: state.sheet, thumbs: state.thumbs, notice: state.notice,
-            on: { photo: openPhoto }
+            progress: state.progress, skipping: state.skipping, skipNote: state.skipNote,
+            on: { photo: openPhoto, mark, skip }
         });
+        const focusOn = (id) => {
+            const node = findIn(view, id);
+            if (node && typeof node.focus === 'function') node.focus();
+        };
+        /** A task marked (null clears it): kept on the device at once, and
+         *  the keyboard left on the button that did it. */
+        function mark(itemId, next) {
+            const was = state.progress;
+            state.progress = applyMark(state.progress, itemId, next);
+            if (state.progress === was) {
+                // A skip with no reason and no words: the picker asks for one.
+                state.skipNote = COPY.skipNeedsWhy;
+                draw();
+                focusOn(`words-${itemId}`);
+                return;
+            }
+            remember({ progress: state.progress });
+            state.skipping = null;
+            state.skipNote = '';
+            draw();
+            const now = state.progress.marks[itemId];
+            focusOn(now && now.status === 'done' ? `done-${itemId}` : `skip-${itemId}`);
+        }
+        /** A task's skip picker opened (or, with null, closed). */
+        function skip(itemId) {
+            const closing = state.skipping;
+            state.skipping = itemId;
+            state.skipNote = '';
+            draw();
+            focusOn(itemId ? `reason-${itemId}-no-time` : `skip-${closing}`);
+        }
         async function openPhoto(photoId, label) {
             const from = doc.activeElement;
             const got = await api.getPhoto(here.id, entry.visitToken, photoId);

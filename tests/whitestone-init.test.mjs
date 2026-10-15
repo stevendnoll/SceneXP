@@ -478,8 +478,8 @@ describe("the cleaner's PIN form", () => {
     });
 
     test('the copy keeps house style', () => {
-        for (const value of Object.values(COPY)) {
-            const line = typeof value === 'function' ? value('A', 'B') : value;
+        const lines = (v) => (typeof v === 'function' ? [v('A', 'B')] : typeof v === 'object' ? Object.values(v).flatMap(lines) : [v]);
+        for (const line of Object.values(COPY).flatMap(lines)) {
             expect(line).not.toMatch(/—|;/);
         }
     });

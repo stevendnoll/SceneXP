@@ -14,8 +14,14 @@
  * cleaner has to open to find out what a task is.
  *
  * The helpers that decide what is shown (`readingOrder`, `startHere`,
- * `taskDetail`, `preferenceLines`) are pure. `renderChecklist` draws them
- * into a container, and `showPhoto` the full-screen photo.
+ * `taskDetail`, `preferenceLines`, `summaryLines`) are pure.
+ * `renderChecklist` draws them into a container, and `showPhoto` the
+ * full-screen photo.
+ *
+ * THE VISIT (M4 piece 2): every task has two big buttons, Done and Skip,
+ * for gloves and wet hands. Skip opens a few quick reasons, or room for a
+ * few words, inside the task. A bar along the bottom says where the visit
+ * stands, and that it is saved on the device as the cleaner goes.
  */
 
 import { h, clear } from '../../js/cards.min.js';
@@ -24,6 +30,7 @@ import { taskOf, optionOf } from '../../js/sheet.min.js';
 import { priceItem, formatMoney, formatMinutes } from '../../js/pricing.min.js';
 import { levelOf, roomName, preferenceLines as linesFor } from '../../js/taxonomy.min.js';
 import { dayLabel, clockLabel } from '../../js/booking.min.js';
+import { SKIP_REASONS, WORDS_MAX, summarize } from './visit.min.js';
 
 const byOrder = (a, b) => (a.order || 0) - (b.order || 0);
 
@@ -94,6 +101,37 @@ export function headerLines(form, quote) {
     };
 }
 
+/** The element of `id` inside `root`, or null: looked for in what was
+ *  drawn, so the keyboard lands on the button just drawn. */
+export function findIn(root, id) {
+    for (const child of Array.from((root && root.children) || [])) {
+        if (child.id === id) return child;
+        const deeper = findIn(child, id);
+        if (deeper) return deeper;
+    }
+    return null;
+}
+
+/** Why a task was skipped, in words: its quick reason, its own words, or
+ *  both. */
+export function skipWhy(mark) {
+    if (!mark || mark.status !== 'skipped') return '';
+    const reason = mark.reason ? COPY.reasons[mark.reason] : '';
+    return [reason, mark.words].filter(Boolean).join('. ');
+}
+
+/** Where the visit stands, in a line or two (PRD 12.4): "12 done, 1
+ *  skipped, 7 to go." and how the starred tasks stand. */
+export function summaryLines(form, progress) {
+    const s = summarize(form, progress);
+    const lines = [COPY.summary(s.done, s.skipped, s.toGo)];
+    if (s.starred) {
+        lines.push(s.starredToGo ? COPY.starredToGo(s.starredToGo)
+            : s.starredSkipped ? COPY.starredMarked(s.starredDone, s.starredSkipped) : COPY.starredDone);
+    }
+    return lines;
+}
+
 /** A photo's thumbnail button: its own image, or its place while it
  *  loads (`thumbs` maps a photo id to an object address). */
 function photoButton(photoId, n, name, thumbs, on) {
@@ -105,7 +143,64 @@ function photoButton(photoId, n, name, thumbs, on) {
     return btn;
 }
 
-function taskBlock(sheet, form, item, thumbs, on) {
+/** The skip picker inside a task: the quick reasons, a few words of the
+ *  cleaner's own, and, for a task already skipped, a way back. */
+function skipPicker(item, name, mark, on, note) {
+    const id = item.id;
+    const reasons = SKIP_REASONS.map((key) => {
+        const btn = h('button', {
+            type: 'button', className: `skip-reason${mark && mark.reason === key ? ' is-on' : ''}`, id: `reason-${id}-${key}`,
+            text: COPY.reasons[key], attrs: { 'aria-pressed': mark && mark.reason === key ? 'true' : 'false' }
+        });
+        btn.addEventListener('click', () => on.mark(id, { status: 'skipped', reason: key }));
+        return btn;
+    });
+    const words = h('input', {
+        type: 'text', id: `words-${id}`, className: 'skip-words', value: (mark && mark.words) || '',
+        attrs: { maxlength: String(WORDS_MAX), autocomplete: 'off' }
+    });
+    const withWords = h('button', { type: 'button', className: 'skip-with-words', id: `skip-words-${id}`, text: COPY.skipWithWords });
+    withWords.addEventListener('click', () => on.mark(id, { status: 'skipped', words: words.value }));
+    const cancel = h('button', { type: 'button', className: 'skip-cancel', id: `skip-cancel-${id}`, text: COPY.cancel });
+    cancel.addEventListener('click', () => on.skip(null));
+    const back = mark ? h('button', { type: 'button', className: 'skip-cancel', id: `unskip-${id}`, text: COPY.unskip }) : null;
+    if (back) back.addEventListener('click', () => on.mark(id, null));
+    return h('div', { className: 'skip-picker', id: `picker-${id}`, attrs: { role: 'group', 'aria-label': COPY.skipWhyOf(name) } }, [
+        h('p', { className: 'skip-why', text: COPY.skipWhy }),
+        note ? h('p', { className: 'skip-note', attrs: { role: 'alert' }, text: note }) : null,
+        h('div', { className: 'skip-reasons' }, reasons),
+        h('label', { className: 'skip-words-label', attrs: { for: `words-${id}` } }, [h('span', { text: COPY.skipWords })]),
+        words,
+        h('div', { className: 'skip-actions' }, [withWords, back, cancel])
+    ]);
+}
+
+/** Done and Skip, big, and what was said of a skip. */
+function markRow(item, name, mark, picking, on, note) {
+    const done = Boolean(mark && mark.status === 'done');
+    const skipped = Boolean(mark && mark.status === 'skipped');
+    const doneBtn = h('button', {
+        type: 'button', className: `mark-done${done ? ' is-on' : ''}`, id: `done-${item.id}`,
+        text: done ? COPY.isDone : COPY.done, attrs: { 'aria-pressed': done ? 'true' : 'false', 'aria-label': COPY.markDone(name), title: COPY.markDone(name) }
+    });
+    doneBtn.addEventListener('click', () => on.mark(item.id, done ? null : { status: 'done' }));
+    const skipBtn = h('button', {
+        type: 'button', className: `mark-skip${skipped ? ' is-on' : ''}`, id: `skip-${item.id}`,
+        text: skipped ? COPY.isSkipped : COPY.skip,
+        attrs: {
+            'aria-pressed': skipped ? 'true' : 'false', 'aria-expanded': picking ? 'true' : 'false',
+            'aria-label': COPY.markSkip(name), title: COPY.markSkip(name)
+        }
+    });
+    skipBtn.addEventListener('click', () => on.skip(picking ? null : item.id));
+    return [
+        skipped ? h('p', { className: 'task-skipped', text: COPY.skippedBecause(skipWhy(mark)) }) : null,
+        h('div', { className: 'task-marks' }, [doneBtn, skipBtn]),
+        picking ? skipPicker(item, name, skipped ? mark : null, on, note) : null
+    ];
+}
+
+function taskBlock(sheet, form, item, thumbs, on, visit) {
     const d = taskDetail(sheet, form, item);
     const extra = [];
     if (d.includes) extra.push(h('p', { className: 'task-includes', text: d.includes }));
@@ -116,13 +211,16 @@ function taskBlock(sheet, form, item, thumbs, on) {
     if (d.photos.length) {
         extra.push(h('div', { className: 'task-photos' }, d.photos.map((p, i) => photoButton(p, i + 1, d.name, thumbs, on))));
     }
-    return h('li', { className: item.important ? 'task is-starred' : 'task', id: `task-${item.id}` }, [
+    const mark = visit.progress.marks[item.id] || null;
+    const state = mark ? ` is-${mark.status}` : '';
+    return h('li', { className: `task${item.important ? ' is-starred' : ''}${state}`, id: `task-${item.id}` }, [
         h('h4', { className: 'task-name' }, [
             item.important ? h('span', { className: 'task-star', text: '★ ', attrs: { 'aria-hidden': 'true' } }) : null,
             h('span', { text: d.name }),
             item.important ? h('span', { className: 'visually-hidden', text: ` (${COPY.starred})` }) : null
         ]),
-        ...extra
+        ...extra,
+        ...markRow(item, d.name, mark, visit.skipping === item.id, on, visit.skipNote)
     ]);
 }
 
@@ -131,10 +229,15 @@ function taskBlock(sheet, form, item, thumbs, on) {
  * `quote` its recomputed quote (null without the sheet), `sheet` the named
  * price sheet (null when it would not load), `thumbs` photo id to object
  * address, `notice` a line to show above the home (a quote that changed),
- * `on.photo(photoId, label)` to open one full screen.
+ * `progress` the visit's marks (visit.js), `skipping` the task whose skip
+ * picker is open (or null), `skipNote` a line for that picker (a skip
+ * asked for with no reason). `on.photo(photoId, label)` opens one full
+ * screen, `on.mark(itemId, mark)` marks a task (null clears it), and
+ * `on.skip(itemId)` opens a task's skip picker (null closes it).
  */
-export function renderChecklist(container, { form, quote, sheet, thumbs = new Map(), notice = '', on }) {
+export function renderChecklist(container, { form, quote, sheet, thumbs = new Map(), notice = '', progress = { marks: {} }, skipping = null, skipNote = '', on }) {
     clear(container);
+    const visit = { progress, skipping, skipNote };
     const prefs = preferenceLines(form);
     if (prefs.lines.length || prefs.note) {
         container.appendChild(h('section', { className: 'tasks-prefs', attrs: { 'aria-labelledby': 'prefs-heading' } }, [
@@ -155,10 +258,14 @@ export function renderChecklist(container, { form, quote, sheet, thumbs = new Ma
     if (first.length) {
         container.appendChild(h('section', { className: 'tasks-start', attrs: { 'aria-labelledby': 'start-heading' } }, [
             h('h2', { id: 'start-heading', text: COPY.startHere }),
-            h('ol', {}, first.map(({ item, roomName: where }) => h('li', {}, [
-                h('a', { href: `#task-${item.id}`, text: taskDetail(sheet, form, item).name }),
-                h('span', { className: 'tasks-start-room', text: ` ${COPY.inRoom(where)}` })
-            ])))
+            h('ol', {}, first.map(({ item, roomName: where }) => {
+                const mark = progress.marks[item.id];
+                return h('li', { className: mark ? `is-${mark.status}` : '' }, [
+                    h('a', { href: `#task-${item.id}`, text: taskDetail(sheet, form, item).name }),
+                    h('span', { className: 'tasks-start-room', text: ` ${COPY.inRoom(where)}` }),
+                    mark ? h('span', { className: 'tasks-start-mark', text: ` (${mark.status === 'done' ? COPY.isDone : COPY.isSkipped})` }) : null
+                ]);
+            }))
         ]));
     }
     for (const level of readingOrder(form)) {
@@ -167,11 +274,16 @@ export function renderChecklist(container, { form, quote, sheet, thumbs = new Ma
             ...level.rooms.map((r) => h('section', { className: 'tasks-room', attrs: { 'aria-label': r.name } }, [
                 h('h3', { className: 'tasks-room-name', text: r.name }),
                 r.items.length
-                    ? h('ul', { className: 'tasks-list' }, r.items.map((item) => taskBlock(sheet, form, item, thumbs, on)))
+                    ? h('ul', { className: 'tasks-list' }, r.items.map((item) => taskBlock(sheet, form, item, thumbs, on, visit)))
                     : h('p', { className: 'tasks-empty', text: COPY.emptyRoom })
             ]))
         ]));
     }
+    // Where the visit stands, along the bottom, said as it changes.
+    container.appendChild(h('div', { className: 'tasks-summary', id: 'tasks-summary' }, [
+        h('p', { className: 'tasks-summary-line', attrs: { role: 'status', 'aria-live': 'polite' }, text: summaryLines(form, progress).join(' ') }),
+        h('p', { className: 'tasks-summary-saved', text: COPY.savedHere })
+    ]));
 }
 
 /**

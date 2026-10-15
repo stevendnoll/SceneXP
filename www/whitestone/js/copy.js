@@ -582,7 +582,33 @@ export const TASKS_PAGE = Object.freeze({
     products: 'Products:',
     takes: (time) => `Takes ${time}`,
     photoOf: (n, task) => `Photo ${n} of ${task}`,
-    close: 'Close'
+    close: 'Close',
+    // The visit (M4 piece 2): Done and Skip, why, and where it stands.
+    done: 'Done',
+    isDone: 'Done',
+    skip: 'Skip',
+    isSkipped: 'Skipped',
+    markDone: (task) => `Mark ${task} done`,
+    markSkip: (task) => `Skip ${task}`,
+    skipWhy: 'Why was it skipped?',
+    skipWhyOf: (task) => `Why ${task} was skipped`,
+    reasons: Object.freeze({
+        'no-time': 'Ran out of time',
+        'no-access': 'Could not reach it',
+        'already-clean': 'Already clean',
+        'customer-asked': 'The customer asked to skip it'
+    }),
+    skipWords: 'Or say why in a few words',
+    skipWithWords: 'Skip with these words',
+    cancel: 'Cancel',
+    unskip: 'Not skipped after all',
+    skipNeedsWhy: 'Please choose a reason, or write a few words.',
+    skippedBecause: (why) => `Skipped: ${why}`,
+    summary: (done, skipped, toGo) => `${done} done, ${skipped} skipped, ${toGo} to go.`,
+    starredToGo: (n) => `Starred: ${n} to go.`,
+    starredDone: 'Starred: all done.',
+    starredMarked: (done, skipped) => `Starred: ${done} done, ${skipped} skipped.`,
+    savedHere: 'Saved on this device as you go.'
 });
 
 /** The calendar file for a booked visit (ics.js). */
