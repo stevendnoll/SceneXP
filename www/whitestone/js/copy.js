@@ -371,6 +371,8 @@ export const GUIDE = Object.freeze({
     floors: 'Next, which floors does your home have?',
     floorsAgain: 'Tick each floor your home has. You can change them later.',
     floorsTaking: "That's your house taking shape.",
+    /** Under the floors: why the main floor cannot be unticked. */
+    mainAlways: 'Every home has a main floor, so it is always ticked.',
     floorsLegend: 'Floors in your home',
     titleLabel: 'Name this checklist',
     next: 'Next',

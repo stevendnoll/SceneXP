@@ -21,7 +21,7 @@ import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import { CARD_ORDER } from '../www/whitestone/js/cards.js';
-import { UI } from '../www/whitestone/js/copy.js';
+import { UI, GUIDE } from '../www/whitestone/js/copy.js';
 
 const WS = join(process.cwd(), 'www', 'whitestone');
 const HTML = readFileSync(join(WS, 'index.html'), 'utf8');
@@ -153,7 +153,11 @@ function newHome(main) {
 async function startHome(main, { title = 'Maple Street', levels = ['main', 'second'] } = {}) {
     newHome(main);
     expect(visible('setup')).toBe(true);
-    for (const key of ['basement', 'main', 'second', 'attic']) box('setup-levels-list', key).checked = levels.includes(key);
+    // A box the card has locked (the main floor) is left as the card has it.
+    for (const key of ['basement', 'main', 'second', 'attic']) {
+        const input = box('setup-levels-list', key);
+        if (!input.disabled) input.checked = levels.includes(key);
+    }
     dom.el('setup-title').value = title;
     dom.el('setup-household').value = 'Parking in the driveway.';
     fire(dom.el('setup-form'), 'submit');
@@ -201,12 +205,18 @@ test('Start your own: setup makes the checklist, opens it, and offers care prefe
     expect(said()).toBe(UI.preferencesSaved);
 });
 
-test('setup refuses a home with no levels, and says why', async () => {
+test('the setup card keeps the main floor ticked, says why, and a home with no other floor has just it (QA, 2026-10-15)', async () => {
     const main = await boot();
+    newHome(main);
+    const mainBox = box('setup-levels-list', 'main');
+    expect(mainBox.checked).toBe(true);
+    expect(mainBox.disabled).toBe(true);
+    expect(mainBox.getAttribute('aria-describedby')).toBe('setup-levels-note');
+    expect(HTML).toMatch(/<p id="setup-levels-note" class="form-hint">([^<]+)<\/p>/);
+    expect(HTML.match(/<p id="setup-levels-note" class="form-hint">([^<]+)<\/p>/)[1]).toBe(GUIDE.mainAlways);
+    fire(dom.el('setup-cancel'), 'click');
     await startHome(main, { levels: [] });
-    expect(main.getDoc().checklists).toHaveLength(0);
-    expect(visible('setup')).toBe(true);
-    expect(dom.el('setup-error').textContent).toBe(UI.levelsNeeded);
+    expect(main.getDoc().checklists[0].levels).toEqual(['main']);
 });
 
 test('editing the home changes its details and its levels, and a level with rooms cannot go', async () => {

@@ -140,7 +140,8 @@ describe('the store (store.js)', () => {
     test('the levels and the rooms keep to the kind', () => {
         const condo = home(['main'], { kind: 'condo' });
         expect(listOf(setLevels(condo, 'checklist-1', ['basement', 'main', 'second', 'garage'], CONFIG, LATER).doc).levels).toEqual(['main', 'second']);
-        expect(setLevels(condo, 'checklist-1', ['attic'], CONFIG, LATER).error).toBe(STORE.noLevels);
+        // A level the kind cannot have is dropped; the main floor stays.
+        expect(listOf(setLevels(condo, 'checklist-1', ['attic'], CONFIG, LATER).doc).levels).toEqual(['main']);
         const room = addRoom(condo, 'checklist-1', { level: 'basement', area: 'bedroom' }, CONFIG, LATER);
         expect(room.error).toBe(STORE.badLevel);
         expect(room.doc).toBe(condo);

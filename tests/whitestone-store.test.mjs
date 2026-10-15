@@ -14,7 +14,7 @@ import {
     newId, emptyDoc, validate, migrate, createChecklist, updateChecklist, setLevels, setPreferences,
     deleteChecklist, restoreChecklist, duplicateChecklist, addRoom, updateRoom, deleteRoom, restoreRoom, addItem, updateItem,
     deleteItem, restoreItem, addPhoto, removePhoto, photoIdsInUse, clearSamples, hasSamples, setSettings,
-    touchVisit, storageUse, liveRooms, liveItems, itemsIn, photoCount, findChecklist, createStore, ID_PATTERN, guideSetting
+    touchVisit, storageUse, liveRooms, liveItems, itemsIn, photoCount, findChecklist, createStore, ID_PATTERN, guideSetting, MAIN_LEVEL, setResidence
 } from '../www/whitestone/js/store.js';
 import { createHistory } from '../www/whitestone/js/history.js';
 import { checkChoice, presetFor } from '../www/whitestone/js/sheet.js';
@@ -110,7 +110,22 @@ describe('checklists', () => {
         expect(apply(doc, (d) => setLevels(d, 'checklist-1', ['attic', 'main', 'second', 'basement', 'moat'], CONFIG, LATER)).record.levels)
             .toEqual(['basement', 'main', 'second', 'attic']);
         expect(apply(doc, (d) => setLevels(d, 'checklist-1', ['main'], CONFIG, LATER)).error).toBe(STOREtext('levelInUse'));
-        expect(apply(doc, (d) => setLevels(d, 'checklist-1', [], CONFIG, LATER)).error).toBe(STOREtext('noLevels'));
+        // The main floor is kept, ticked or not (QA, 2026-10-15): with the
+        // bedroom upstairs, taking every level away only finds the second
+        // floor still in use.
+        expect(apply(doc, (d) => setLevels(d, 'checklist-1', [], CONFIG, LATER)).error).toBe(STOREtext('levelInUse'));
+    });
+
+    test('every home keeps its main floor: made without it, its floors set without it, or its kind changed (QA, 2026-10-15)', () => {
+        const made = createChecklist(emptyDoc(CONFIG, NOW), { levels: ['second', 'attic'] }, CONFIG, NOW, { id: 'checklist-1' });
+        expect(made.record.levels).toEqual(['main', 'second', 'attic']);
+        expect(createChecklist(emptyDoc(CONFIG, NOW), {}, CONFIG, NOW).record.levels).toEqual(['main']);
+        expect(setLevels(made.doc, 'checklist-1', ['second'], CONFIG, LATER).record.levels).toEqual(['main', 'second']);
+        expect(setLevels(made.doc, 'checklist-1', [], CONFIG, LATER).record.levels).toEqual(['main']);
+        // One saved before the rule, without it, gets it back when its kind changes.
+        const old = { ...made.doc, checklists: made.doc.checklists.map((c) => ({ ...c, levels: ['second'] })) };
+        expect(setResidence(old, 'checklist-1', { kind: 'condo' }, CONFIG, LATER).record.levels).toEqual(['main', 'second']);
+        expect(MAIN_LEVEL).toBe('main');
     });
 
     test('preferences keep only known keys, in the taxonomy\'s order, and a capped note', () => {

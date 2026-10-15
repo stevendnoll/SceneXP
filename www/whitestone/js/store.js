@@ -224,6 +224,16 @@ function normalizeLevels(raw, type) {
     return type.levels.map((l) => l.key).filter((k) => keys.includes(k));
 }
 
+/** The floor every home has, wherever its kind of residence allows it
+ *  (QA, 2026-10-15: it could be unticked once another floor was ticked). */
+export const MAIN_LEVEL = 'main';
+
+/** `levels` with the main floor kept in, where `allowed` has it, in the
+ *  type's own order. */
+function withMain(levels, allowed, type) {
+    return allowed.includes(MAIN_LEVEL) && !levels.includes(MAIN_LEVEL) ? normalizeLevels([...levels, MAIN_LEVEL], type) : levels;
+}
+
 /** One checklist rebuilt from untrusted input: { record, dropped } or null. */
 export function normalizeChecklist(raw, config, now) {
     if (!raw || typeof raw !== 'object') return null;
@@ -431,11 +441,13 @@ export function createChecklist(doc, fields, config, now, opts = {}) {
         return refusal(doc, STORE.tooManyChecklists(config.limits.checklists));
     }
     const src = fields || {};
+    const typeKey = src.serviceType || 'cleaning';
+    const type = serviceType(typeKey);
     const n = normalizeChecklist({
         ...src,
         id: opts.id || newId(),
-        serviceType: src.serviceType || 'cleaning',
-        levels: src.levels || ['main'],
+        serviceType: typeKey,
+        levels: type ? withMain(normalizeLevels(src.levels || [], type), levelsAllowed(typeKey, residenceOf(typeKey, src.residence)), type) : [MAIN_LEVEL],
         rooms: [],
         items: [],
         sample: opts.sample === true,
@@ -503,7 +515,8 @@ export function setLevels(doc, id, levels, config, now) {
     if (found.error) return refusal(doc, found.error);
     const c = found.checklist;
     const allowed = levelsAllowed(c.serviceType, c.residence);
-    const next = normalizeLevels(levels, serviceType(c.serviceType)).filter((l) => allowed.includes(l));
+    const type = serviceType(c.serviceType);
+    const next = withMain(normalizeLevels(levels, type).filter((l) => allowed.includes(l)), allowed, type);
     if (!next.length) return refusal(doc, STORE.noLevels);
     if (liveRooms(c).some((r) => !next.includes(r.level))) return refusal(doc, STORE.levelInUse);
     // A removed room on a level that goes is kept, on the first level, so its
@@ -527,8 +540,8 @@ export function setResidence(doc, id, residence, config, now) {
     const allowed = levelsAllowed(c.serviceType, next);
     const busy = c.levels.find((l) => !allowed.includes(l) && liveRooms(c).some((r) => r.level === l));
     if (busy) return refusal(doc, STORE.residenceLevelInUse((levelOf(c.serviceType, busy) || { name: busy }).name));
-    let levels = c.levels.filter((l) => allowed.includes(l));
-    if (!levels.length) levels = [allowed.includes('main') ? 'main' : allowed[0]];
+    let levels = withMain(c.levels.filter((l) => allowed.includes(l)), allowed, serviceType(c.serviceType));
+    if (!levels.length) levels = [allowed[0]];
     // A removed room on a level that goes is kept, on the first level, so its
     // undo still has somewhere to land (as in setLevels).
     const rooms = c.rooms.map((r) => (levels.includes(r.level) ? r : { ...r, level: levels[0] }));

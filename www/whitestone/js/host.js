@@ -166,12 +166,18 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         if (!c || c.kind !== 'floors') return;
         const boxes = c.levels.map((level) => {
             const input = h('input', { type: 'checkbox', value: level.key, checked: Boolean(level.on), id: `host-floor-${level.key}` });
+            // The main floor: every home has one, so it is ticked for good.
+            if (level.locked) {
+                input.disabled = true;
+                input.setAttribute('aria-describedby', 'host-floors-note');
+            }
             input.addEventListener('change', () => {
                 if (typeof on.floor === 'function') on.floor(level.key, Boolean(input.checked));
             }, { signal });
             return h('label', { className: 'host-chip', attrs: { for: `host-floor-${level.key}` } }, [input, h('span', { text: level.name })]);
         });
-        choices.appendChild(h('fieldset', { className: 'host-floors' }, [h('legend', { text: GUIDE.floorsLegend }), ...boxes]));
+        const note = c.levels.some((l) => l.locked) ? h('p', { className: 'host-floors-note', id: 'host-floors-note', text: GUIDE.mainAlways }) : null;
+        choices.appendChild(h('fieldset', { className: 'host-floors' }, [h('legend', { text: GUIDE.floorsLegend }), ...boxes, note]));
         titleField = h('input', { type: 'text', id: 'host-title', className: 'host-title', value: c.title || '', attrs: { maxlength: String(c.maxTitle || 80), autocomplete: 'off' } });
         choices.appendChild(h('label', { className: 'host-title-label', attrs: { for: 'host-title' } }, [h('span', { text: GUIDE.titleLabel }), titleField]));
     }

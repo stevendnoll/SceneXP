@@ -223,7 +223,8 @@ async function savedDoc(homes, settings = {}) {
 }
 
 describe('the kind of home (ONBOARDING Scene 2a)', () => {
-    const floorKeys = () => dom.el('host-choices').children[0].children.slice(1).map((l) => l.children[0].value);
+    // The floors' chips (the legend first, and the main floor's note last).
+    const floorKeys = () => dom.el('host-choices').children[0].children.filter((l) => l.className === 'host-chip').map((l) => l.children[0].value);
 
     test('Maya asks first, three answers in a group, on the strip\'s first step, with no other button', async () => {
         const main = await boot();
@@ -251,6 +252,25 @@ describe('the kind of home (ONBOARDING Scene 2a)', () => {
         expect(line()).toBe(GUIDE.floors);
         expect(floorKeys()).not.toContain('detached-garage');
         expect(floorKeys()).toContain('garage');
+    });
+
+    test('the main floor is ticked for good, says why, and stays when unticked any way (QA, 2026-10-15)', async () => {
+        const main = await boot();
+        press('start');
+        pick('kind-house');
+        const chips = dom.el('host-choices').children[0].children;
+        const mainBox = chips.find((l) => l.className === 'host-chip' && l.children[0].value === 'main').children[0];
+        expect(mainBox.checked).toBe(true);
+        expect(mainBox.disabled).toBe(true);
+        expect(mainBox.getAttribute('aria-describedby')).toBe('host-floors-note');
+        expect(chips[chips.length - 1].textContent).toBe(GUIDE.mainAlways);
+        // Steve's path: another floor ticked, then the main one unticked.
+        tick('second', true);
+        main.__test__.onFloor('main', false);
+        expect(main.__test__.active().levels).toEqual(['main', 'second']);
+        // The other floors come and go as ever.
+        tick('second', false);
+        expect(main.__test__.active().levels).toEqual(['main']);
     });
 
     test('a condo is offered one floor or two, and nothing else', async () => {
@@ -305,7 +325,7 @@ describe('the kind of home (ONBOARDING Scene 2a)', () => {
         fire(dom.el('host-back'), 'click');
         pick('kind-house');
         expect(main.__test__.active().residence.kind).toBe('house');
-        expect(dom.el('host-choices').children[0].children.slice(1).map((l) => l.children[0].value)).toContain('basement');
+        expect(floorKeys()).toContain('basement');
     });
 
     test('Undo takes the answer back', async () => {

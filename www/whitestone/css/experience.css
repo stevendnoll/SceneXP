@@ -1449,6 +1449,15 @@ textarea.ws-input {
     font-weight: 600;
 }
 
+/* Why the main floor is ticked for good (QA, 2026-10-15): a line of its
+   own under the chips. */
+.host-floors-note {
+    flex-basis: 100%;
+    margin: 0.1rem 0 0;
+    color: var(--ws-muted);
+    font-size: 0.8rem;
+}
+
 /* One of a few (a kind of home): a full-width button each, stacked, so
    each reads as an answer and is easy to hit on a phone. */
 .host-picks {

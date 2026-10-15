@@ -39,7 +39,7 @@ import {
     setSettings, touchVisit, storageUse, isLive, addRoom, updateRoom, deleteRoom, addItem,
     updateItem, deleteItem, addPhoto, removePhoto, photoIdsInUse, newId, itemsIn, liveRooms, liveItems,
     setBath, setResidence, emptyDoc, setPublication, keepServerFacts, importPublished,
-    hasUnsent
+    hasUnsent, MAIN_LEVEL
 } from './store.min.js';
 import { withExample } from './samples.min.js';
 import { createApi, createFetchTransport } from './api.min.js';
@@ -1310,7 +1310,7 @@ function sceneView() {
         // Only the floors this kind of home can have (a condo, one or two).
         const allowed = levelsAllowed(typeKey, c ? c.residence : null);
         const levels = (type ? type.levels : []).filter((l) => allowed.includes(l.key))
-            .map((l) => ({ key: l.key, name: l.name, on: Boolean(c && c.levels.includes(l.key)) }));
+            .map((l) => ({ key: l.key, name: l.name, on: Boolean(c && c.levels.includes(l.key)) || l.key === MAIN_LEVEL, locked: l.key === MAIN_LEVEL }));
         return { ...v, choices: { kind: 'floors', levels, title: c ? c.title : GUIDE.defaultTitle, maxTitle: CONFIG.limits.title } };
     }
     return v;

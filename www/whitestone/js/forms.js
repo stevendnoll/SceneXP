@@ -157,6 +157,12 @@ export function showResidence(type = 'cleaning') {
     for (const input of boxes.get('setup-levels') || []) {
         const r = rowsOf.get(input);
         if (r) r.hidden = !allowed.includes(input.value);
+        // The main floor: every home has one, so it is ticked for good.
+        if (input.value === 'main') {
+            input.checked = true;
+            input.disabled = true;
+            input.setAttribute('aria-describedby', 'setup-levels-note');
+        }
     }
     return residence;
 }
