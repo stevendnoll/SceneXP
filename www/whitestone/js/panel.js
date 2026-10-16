@@ -335,6 +335,12 @@ export function createPanel({ on = {}, signal } = {}) {
             backBtn.setAttribute('aria-label', view.back);
             backBtn.setAttribute('title', view.back);
         }
+        // A visit under way holds this task or room (QA, 2026-10-16).
+        const heldNote = byId('panel-held');
+        if (heldNote) {
+            heldNote.textContent = view.held || '';
+            heldNote.hidden = !view.held;
+        }
         if (summary) {
             summary.textContent = view.summary || '';
             summary.hidden = !view.summary;

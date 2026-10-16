@@ -153,7 +153,9 @@ export const CHANGES = Object.freeze({
     sent: 'Your changes are sent. Your link and PIN stay the same.',
     nothingToSend: 'Your cleaner already has everything. There is nothing new to send.',
     tooLateLonger: (hours) => `Your visit is less than ${hours} hours away, so changes that make it longer can no longer be sent online.`,
-    startedLonger: 'Your cleaner has already started, so changes that make the visit longer can’t be sent now.',
+    /** A visit under way (QA, 2026-10-16): add, never take away (held.js). */
+    held: 'Your cleaner is working on your home now, so what they already have can’t be removed or changed until the visit is done. You can still add tasks and rooms.',
+    heldSend: 'Some of your changes remove or change tasks your cleaner already has. Please put those back (Undo works), or send them after the visit.',
     moved: (when) => `Your visit is moved to ${when}.`,
     cancelTitle: 'Cancel your visit?',
     cancelDetail: (when) => `Your visit on ${when} is canceled and the time is given back. Your checklist stays published, so you can choose a new time.`,
@@ -725,6 +727,8 @@ export const TASKS_PAGE = Object.freeze({
     /** No visit booked (QA, 2026-10-15): cancelled while the page was open
      *  or since it was last opened here, or never booked. Nothing can be
      *  marked, and a new time shows here by itself. */
+    /** A task the customer added after the visit began (QA, 2026-10-16). */
+    addedDuring: 'Added during your visit',
     canceledHeading: 'This visit was canceled',
     canceledLine: (day, time) => `The customer canceled the visit for ${day} at ${time}. There is nothing to do here now. Thank you.`,
     canceledPlain: 'The customer canceled this visit. There is nothing to do here now. Thank you.',

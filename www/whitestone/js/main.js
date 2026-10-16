@@ -64,8 +64,9 @@ import { h, clear, initCards, openCard, closeCard, isOpen, anyOpen, announce, to
 import {
     initForms, fillSetupForm, readSetupForm, validateSetup, showError, showHints, fillPreferencesForm, readPreferencesForm,
     fillRoomForm, readRoomForm, validateRoom, showPresetPreview, showBathChoices, fillTaskForm, showTaskChoices, readTaskForm,
-    showResidence
+    showResidence, holdTaskCard, holdRoomCard
 } from './forms.min.js';
+import { holdOf, isHeld, changesHeldTask, heldChanges } from './held.min.js';
 import {
     renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote, renderVisitReport, renderAddOnList
 } from './panels.min.js';
@@ -524,6 +525,13 @@ function selectTo(next, { focus = false } = {}) {
 function showPanel() {
     if (!panel) return;
     let view = ui.selected ? panelView(ui.selected, active(), state.sheet) : null;
+    // What the cleaner already has: no Remove, no other type of bath, and why.
+    const hold = view ? currentHold() : null;
+    if (view && hold && view.scope === 'task' && isHeld(hold, 'item', ui.selected.itemId)) {
+        view = { ...view, held: CHANGES.held, actions: view.actions.filter((a) => a.id !== 'removeTask') };
+    } else if (view && hold && view.scope === 'room' && isHeld(hold, 'room', ui.selected.roomId)) {
+        view = { ...view, held: CHANGES.held, baths: null };
+    }
     if (!view) ui.selected = null;
     else if (onFirstRoomStep()) view = { ...view, back: PANEL.back(GUIDE.progress[PROGRESS.added]) };
     panel.show(view);
@@ -1874,6 +1882,7 @@ function changeBath(roomId, key) {
     }
     const made = bathStep(c, room, key);
     if (!made) return null;
+    if (isHeld(currentHold(c), 'room', room.id)) return refuseHeld();
     const result = mutate(made.step, UI.labels.bathChanged);
     if (!result.error) {
         announce(bathSaid(c, room, made.to, result.record));
@@ -2235,6 +2244,13 @@ async function sendChanges() {
     if (!state.sheet) return stop(UI.sheetLoading);
     const svc = await connect();
     if (!svc) return stop(BOOKING_ERRORS.server);
+    // A visit under way takes additions only (held.js): asked after now,
+    // and checked against the cleaner's copy as it is now.
+    if (isBooked(c)) await pollVisits({ quiet: true });
+    if (underWay(active())) {
+        const sent = await pricedFor(active(), svc, true);
+        if (!sent || heldChanges(sent.form, active()).length) return stop(sent ? CHANGES.heldSend : BOOKING_ERRORS.server);
+    }
     return askPrice(c, async () => {
         if (state.sending) return null;
         state.sending = true;
@@ -2258,11 +2274,9 @@ async function sendChanges() {
                 await openBooking({ error: BOOKING_ERRORS['no-longer-fits'] });
                 return result;
             }
-            const why = result.error === 'too-late' ? CHANGES.tooLateLonger(svc.schedule.cancelHours)
-                : result.error === 'started' ? CHANGES.startedLonger : BOOKING_ERRORS[result.error] || BOOKING_ERRORS.server;
+            const why = result.error === 'too-late' ? CHANGES.tooLateLonger(svc.schedule.cancelHours) : BOOKING_ERRORS[result.error] || BOOKING_ERRORS.server;
             announce(why);
             toast(why);
-            if (result.error === 'started') await learnStarted();
             return result;
         } finally {
             state.sending = false;
@@ -2432,6 +2446,23 @@ function underWay(c) {
     return visits.started;
 }
 
+/** What a visit under way holds (held.js): the tasks and rooms in the
+ *  checklist as the cleaner has it, or null when none is under way (or its
+ *  copy is not read yet, when only the send's own check holds). */
+function currentHold(c = active()) {
+    if (!underWay(c) || !visits.priced || !visits.priced.at.startsWith(`${c.published.id}:`)) return null;
+    return holdOf(visits.priced.form);
+}
+
+/** A change refused for what the cleaner already has, said where it was
+ *  asked (`errorId`, a card's error line) or as a toast. */
+function refuseHeld(errorId = null) {
+    if (errorId) showError(errorId, CHANGES.held);
+    else toast(CHANGES.held);
+    announce(CHANGES.held);
+    return { doc: state.doc, record: null, error: CHANGES.held };
+}
+
 /** Every add-on of the open checklist's visit under way, answered or not,
  *  the first proposed first. */
 function addOnsFor(c) {
@@ -2504,8 +2535,15 @@ async function pollVisits({ quiet = false } = {}) {
     visits.id = pub.id;
     visits.addOns = got.open;
     visits.started = got.started;
-    // Begun (or no longer): the receipt stops offering to move or cancel.
-    if (begun) redrawReceipt();
+    // Begun: what the cleaner has, read once for each version sent, so it
+    // can be held (held.js).
+    if (visits.started) await pricedFor(still, svc);
+    // Begun (or no longer): the receipt stops offering to move or cancel,
+    // and the panel what the cleaner has.
+    if (begun) {
+        redrawReceipt();
+        showPanel();
+    }
     if (waitingFor(still).length) await pricedFor(still, svc);
     // A report come in: billed here, from the sheet the quote was locked
     // on, and kept with the checklist (its booking done with).
@@ -3213,6 +3251,7 @@ function openRoom(roomId) {
     const room = roomId ? c.rooms.find((r) => r.id === roomId) || null : null;
     ui.room = room ? room.id : null;
     fillRoomForm(room, c);
+    holdRoomCard(room && isHeld(currentHold(c), 'room', room.id) ? CHANGES.held : '');
     showPresetPreview(state.sheet, room ? room.area : '', room ? room.bath : null);
     openCard('room');
 }
@@ -3229,6 +3268,8 @@ function submitRoom(event) {
         // A new type of bath goes in the same step as the name and level, so
         // one undo takes the whole card back.
         const made = room && fields.bathChoice && state.sheet ? bathStep(c, room, fields.bathChoice) : null;
+        // A room the cleaner has keeps its floor and its type of bath.
+        if (isHeld(currentHold(c), 'room', id) && (made || fields.level !== room.level)) return refuseHeld('room-error');
         const update = (d) => updateRoom(d, c.id, id, { label: fields.label, level: fields.level }, CONFIG, at);
         const result = mutate((d) => chain(d, made ? [made.step, update] : [update]), UI.labels.roomChanged);
         if (result.error) {
@@ -3263,6 +3304,10 @@ function removeRoom() {
     const c = active();
     const room = c && c.rooms.find((r) => r.id === ui.room);
     if (!room) return;
+    if (isHeld(currentHold(c), 'room', room.id)) {
+        refuseHeld('room-error');
+        return;
+    }
     const name = roomName(c.serviceType, room);
     const result = change((d) => deleteRoom(d, c.id, room.id, CONFIG, now()), UI.labels.roomRemoved, UI.roomRemoved(name), { removal: true });
     if (!result.error) closeCard('room');
@@ -3290,6 +3335,7 @@ function openTask(roomId, itemId, { armed = false } = {}) {
     if (!room) return;
     ui.task = { roomId: room.id, itemId: item ? item.id : null, photos: item ? [...item.photos] : [] };
     fillTaskForm({ sheet: state.sheet, room, item, roomLabel: roomName(c.serviceType, room) });
+    holdTaskCard(item && isHeld(currentHold(c), 'item', item.id) ? CHANGES.held : '');
     updateTaskPrice();
     drawTaskPhotos();
     openCard('task', { armed, onClose: releaseTaskPhotos });
@@ -3396,6 +3442,9 @@ function submitTask(event) {
     let result;
     if (itemId) {
         const item = c.items.find((i) => i.id === itemId);
+        // What a task the cleaner has is stays as it is; its notes, photos
+        // and star may change.
+        if (changesHeldTask(currentHold(c), item, fields)) return refuseHeld('task-error');
         const gone = item.photos.filter((p) => !photos.includes(p));
         const fresh = photos.filter((p) => !item.photos.includes(p));
         const name = taskName(state.sheet, item);
@@ -3424,6 +3473,7 @@ function removeTask(itemId) {
     const c = active();
     const item = c && c.items.find((i) => i.id === itemId);
     if (!item) return null;
+    if (isHeld(currentHold(c), 'item', item.id)) return refuseHeld(isOpen('task') ? 'task-error' : null);
     const name = taskName(state.sheet, item);
     return change((d) => deleteItem(d, c.id, itemId, CONFIG, now()), UI.labels.taskRemoved, UI.taskRemoved(name), { removal: true });
 }
@@ -3882,6 +3932,8 @@ export const __test__ = {
     openChecklistView,
     openRoom,
     submitRoom,
+    removeRoom,
+    changeBath,
     openTask,
     submitTask,
     addTaskPhoto,

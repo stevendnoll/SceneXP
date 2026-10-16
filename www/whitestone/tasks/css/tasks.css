@@ -237,6 +237,18 @@ h1 {
     color: var(--attention);
 }
 
+/* A task the customer added after the visit began (QA, 2026-10-16). */
+.task-added {
+    display: inline-block;
+    margin: 0.15rem 0 0.3rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    background: #FBEFD9;
+    color: var(--attention);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
 /* No visit to work on (QA, 2026-10-15): canceled, or none booked. */
 .tasks-novisit {
     margin: 1rem 0;

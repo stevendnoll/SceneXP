@@ -1894,6 +1894,21 @@ textarea.ws-input {
     gap: 0.7rem;
 }
 
+/* What a visit under way holds (QA, 2026-10-16): said under the title. */
+.panel-held {
+    margin: 0.4rem 0 0.2rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 10px;
+    background: var(--ws-accent-soft);
+    color: var(--ws-accent-dark);
+    font-size: 0.88rem;
+    line-height: 1.4;
+}
+
+.panel-held[hidden] {
+    display: none;
+}
+
 .panel-title {
     min-width: 0;
     margin: 0;

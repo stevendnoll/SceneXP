@@ -202,10 +202,13 @@ export async function republish({ checklist, api, sealer, photos, sheet, slot = 
     } else if (c.booking && c.booking.minutes !== minutes) {
         const b = await api.rebook(pub.id, pub.ownerToken, { date: c.booking.date, time: c.booking.time, minutes });
         if (b.ok) c = await record({ booking: b.data.booking });
-        else if (b.error === 'too-late' || b.error === 'started') {
-            if (minutes > c.booking.minutes) return stop(b.error);
-            // Shorter, and too close to change (or begun): the longer
-            // booking stands.
+        else if (b.error === 'started') {
+            // Begun (QA, 2026-10-16): the booking stands, longer or shorter.
+            // The cleaner does what the time allows, and what they skip is
+            // never charged.
+        } else if (b.error === 'too-late') {
+            if (minutes > c.booking.minutes) return stop('too-late');
+            // Shorter, and too close to change: the longer booking stands.
         } else if (!notAboutTime(b.error)) return stop('no-longer-fits', { next: (b.data && b.data.next) || [], minutes });
         else return stop(b.error);
     }

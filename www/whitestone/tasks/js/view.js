@@ -403,6 +403,8 @@ function taskBlock(sheet, form, item, thumbs, on, visit) {
             h('span', { text: d.name }),
             item.important ? h('span', { className: 'visually-hidden', text: ` (${COPY.starred})` }) : null
         ]),
+        // Added by the customer after the visit began (QA, 2026-10-16).
+        visit.added && visit.added.has(item.id) ? h('p', { className: 'task-added', text: COPY.addedDuring }) : null,
         ...extra,
         ...markRow(item, d.name, mark, visit.skipping === item.id, on, visit.skipNote),
         ...(mark ? proofRow(item, d.name, (visit.proofs || {})[item.id] || [], visit.proofThumbs || new Map(), on, visit.proofHint === item.id) : []),
@@ -433,13 +435,13 @@ function taskBlock(sheet, form, item, thumbs, on, visit) {
  * not be added. `on.proof(itemId, file)` adds one, `on.unproof(itemId,
  * photoId)` removes it.
  */
-export function renderChecklist(container, { form, quote, sheet, thumbs = new Map(), notice = '', progress = { marks: {} }, skipping = null, skipNote = '', addOns = [], proposing = null, proofs = {}, proofThumbs = new Map(), proofNote = null, on }) {
+export function renderChecklist(container, { form, quote, sheet, thumbs = new Map(), notice = '', progress = { marks: {} }, skipping = null, skipNote = '', addOns = [], proposing = null, added = new Set(), proofs = {}, proofThumbs = new Map(), proofNote = null, on }) {
     clear(container);
     // That photos are optional is said once: beside the first Add a photo,
     // in the order the cleaner reads the tasks.
     const proofHint = (readingOrder(form).flatMap((l) => l.rooms.flatMap((r) => r.items))
         .find((i) => progress.marks[i.id] && ((proofs || {})[i.id] || []).length < REPORT_LIMITS.photos) || {}).id || null;
-    const visit = { progress, skipping, skipNote, addOns, proposing, proofs, proofThumbs, proofNote, proofHint };
+    const visit = { progress, skipping, skipNote, addOns, proposing, added, proofs, proofThumbs, proofNote, proofHint };
     const prefs = preferenceLines(form);
     if (prefs.lines.length || prefs.note) {
         container.appendChild(h('section', { className: 'tasks-prefs', attrs: { 'aria-labelledby': 'prefs-heading' } }, [

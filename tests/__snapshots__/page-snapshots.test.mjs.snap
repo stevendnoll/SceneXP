@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=41" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=42" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7094,6 +7094,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="js/taxonomy.min.js" rel="modulepreload"]
     link [href="js/cards.min.js" rel="modulepreload"]
     link [href="js/forms.min.js" rel="modulepreload"]
+    link [href="js/held.min.js" rel="modulepreload"]
     link [href="js/panels.min.js" rel="modulepreload"]
     link [href="js/copy.min.js" rel="modulepreload"]
     link [href="js/turntable.min.js" rel="modulepreload"]
@@ -7111,7 +7112,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=3" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=41" rel="stylesheet"]
+    link [href="css/experience.min.css?v=42" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7183,6 +7184,7 @@ html [data-ui-theme="surf" lang="en"]
             path [d="M16 10H5M9.5 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"]
         h2#panel-title.panel-title
       p#panel-summary.panel-summary [hidden]
+      p#panel-held.panel-held [hidden]
       div#panel-baths.panel-baths [aria-labelledby="panel-baths-label" hidden role="group"]
         p#panel-baths-label.panel-chips-heading
           "Type of bath"
@@ -7460,6 +7462,7 @@ html [data-ui-theme="surf" lang="en"]
             label [for="room-preset"]
               "Add the standard tasks for this room"
           p#room-preset-list.form-note
+          p#room-held.form-note [hidden]
           p#room-error.form-error [hidden role="alert"]
           div.card-actions
             button#room-remove.ws-btn.ws-btn-quiet [hidden type="button"]
@@ -7521,6 +7524,7 @@ html [data-ui-theme="surf" lang="en"]
                 "Add a photo"
               p#task-photo-note.form-note
                 "Photos are resized and stripped of their location before they are kept."
+          p#task-held.form-note [hidden]
           p#task-error.form-error [hidden role="alert"]
           div.card-actions
             button#task-remove.ws-btn.ws-btn-quiet [hidden type="button"]
@@ -7570,7 +7574,7 @@ html [lang="en"]
     title
       "Your checklist | Whitestone Home Care"
     link [href="../favicon.svg?v=3" rel="icon" type="image/svg+xml"]
-    link [href="css/tasks.min.css?v=9" rel="stylesheet"]
+    link [href="css/tasks.min.css?v=10" rel="stylesheet"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="../js/copy.min.js" rel="modulepreload"]
     link [href="../js/config.min.js" rel="modulepreload"]

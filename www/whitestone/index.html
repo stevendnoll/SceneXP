@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=41" as="style">
+    <link rel="preload" href="css/experience.min.css?v=42" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -139,6 +139,7 @@
     <link rel="modulepreload" href="js/taxonomy.min.js">
     <link rel="modulepreload" href="js/cards.min.js">
     <link rel="modulepreload" href="js/forms.min.js">
+    <link rel="modulepreload" href="js/held.min.js">
     <link rel="modulepreload" href="js/panels.min.js">
     <link rel="modulepreload" href="js/copy.min.js">
     <link rel="modulepreload" href="js/turntable.min.js">
@@ -159,7 +160,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=41">
+    <link rel="stylesheet" href="css/experience.min.css?v=42">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -267,6 +268,7 @@
             <h2 id="panel-title" class="panel-title"></h2>
         </div>
         <p id="panel-summary" class="panel-summary" hidden></p>
+        <p id="panel-held" class="panel-held" hidden></p>
         <div id="panel-baths" class="panel-baths" role="group" aria-labelledby="panel-baths-label" hidden>
             <p id="panel-baths-label" class="panel-chips-heading">Type of bath</p>
             <div id="panel-baths-list" class="panel-baths-list"></div>
@@ -591,6 +593,7 @@
                     <label for="room-preset">Add the standard tasks for this room</label>
                 </div>
                 <p id="room-preset-list" class="form-note"></p>
+                <p id="room-held" class="form-note" hidden></p>
                 <p id="room-error" class="form-error" role="alert" hidden></p>
                 <div class="card-actions">
                     <button id="room-remove" class="ws-btn ws-btn-quiet" type="button" hidden>Remove this room</button>
@@ -657,6 +660,7 @@
                             before they are kept.</p>
                     </div>
                 </details>
+                <p id="task-held" class="form-note" hidden></p>
                 <p id="task-error" class="form-error" role="alert" hidden></p>
                 <div class="card-actions">
                     <button id="task-remove" class="ws-btn ws-btn-quiet" type="button" hidden>Remove this task</button>

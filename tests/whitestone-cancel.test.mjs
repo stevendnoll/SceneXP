@@ -25,6 +25,7 @@ import { GUIDE, TASKS_PAGE, BOOKING_ERRORS, HELP, CHANGES } from '../www/whitest
 import { dayLabel, clockLabel } from '../www/whitestone/js/booking.js';
 import { createSealer } from '../www/whitestone/js/seal.js';
 import { createMemoryBackend } from '../www/whitestone/js/photos.js';
+import { deleteItem } from '../www/whitestone/js/store.js';
 
 const WS = join(process.cwd(), 'www', 'whitestone');
 const REAL_IMMEDIATE = globalThis.setImmediate;
@@ -172,31 +173,116 @@ describe('begun by the cleaner, the visit stays', () => {
         expect(dom.el('receipt-reschedule').hidden).toBe(true);
     });
 
-    test('changes sent once begun: a longer visit is refused, saying why; a shorter one keeps its booking', async () => {
+    /** Send the studio's changes, yes to a new price if it asks, and wait
+     *  until the send is done; the toast it ended on. */
+    async function sendAll(w) {
+        const before = toastText();
+        w.s.sendChanges();
+        await until(() => !dom.el('confirm').hidden || (toastText() !== before && !w.s.state.sending));
+        if (!dom.el('confirm').hidden) confirmYes();
+        await until(() => toastText() !== before && !w.s.state.sending);
+        return toastText();
+    }
+    /** The cleaner's page, its checklist read again until `test` holds. */
+    const pollUntil = (w, test) => until(async () => (await w.poll(), test()));
+    const actionIds = () => dom.el('panel-actions').children.map((b) => b.id);
+
+    test('begun: the customer adds, never takes away (QA, 2026-10-16); additions reach the cleaner tagged, the booking kept', async () => {
         const w = await bothPages();
-        fire(w.find(`done-${w.page.form.items[0].id}`), 'click');
+        const kitchen = w.s.active().rooms[0];
+        const held = w.s.active().items.find((i) => i.roomId === kitchen.id && !i.deletedAt);
+        fire(w.find(`done-${held.id}`), 'click');
         expect(await until(() => Boolean(w.page.visitId))).toBe(true);
         await w.s.pollVisits();
         const minutes = w.s.active().booking.minutes;
-        // Longer: a bathroom more.
+        // What the cleaner has: not removed, not changed, and said why.
+        const r = w.s.removeTask(held.id);
+        expect(r.error).toBe(CHANGES.held);
+        expect(toastText()).toBe(CHANGES.held);
+        expect(w.s.active().items.find((i) => i.id === held.id).deletedAt).toBeFalsy();
+        w.s.selectTo({ scope: 'task', level: kitchen.level, roomId: kitchen.id, itemId: held.id });
+        expect(actionIds()).toContain('panel-editTask');
+        expect(actionIds()).not.toContain('panel-removeTask');
+        expect(dom.el('panel-held').hidden).toBe(false);
+        expect(dom.el('panel-held').textContent).toBe(CHANGES.held);
+        w.s.selectTo(null);
+        w.s.openTask(null, held.id);
+        expect(dom.el('task-held').hidden).toBe(false);
+        expect(dom.el('task-remove').hidden).toBe(true);
+        fire(dom.el('task-cancel'), 'click');
+        // Its card's guard, too, if a change gets past the held fields.
+        w.s.openTask(null, held.id);
+        const before = w.s.active().items.find((i) => i.id === held.id);
+        dom.el('task-quantity').value = String((before.quantity || 1) + 3);
+        dom.el('task-size').value = before.size === 'large' ? 'small' : 'large';
+        for (const box of all(dom.el('task-options-list')).filter((n) => n.type === 'checkbox')) box.checked = !box.checked;
+        const edit = w.s.submitTask();
+        if (edit && edit.error) expect(dom.el('task-error').textContent).toBe(CHANGES.held);
+        const after = w.s.active().items.find((i) => i.id === held.id);
+        expect([after.options, after.size, after.quantity]).toEqual([before.options, before.size, before.quantity]);
+        fire(dom.el('task-cancel'), 'click');
+        w.s.openRoom(kitchen.id);
+        expect(dom.el('room-held').hidden).toBe(false);
+        expect(dom.el('room-remove').hidden).toBe(true);
+        expect(dom.el('room-level').disabled).toBe(true);
+        w.s.removeRoom();
+        expect(dom.el('room-error').textContent).toBe(CHANGES.held);
+        expect(w.s.active().rooms.find((x) => x.id === kitchen.id).deletedAt).toBeFalsy();
+        fire(dom.el('room-cancel'), 'click');
+        // A bathroom added: sent, though the visit is longer; its booking as booked.
         w.s.addRoomOf('bathroom', 'main');
-        // The quote moves, so it is asked first.
-        w.s.sendChanges();
-        expect(await until(() => !dom.el('confirm').hidden)).toBe(true);
-        confirmYes();
-        expect(await until(() => toastText() === CHANGES.startedLonger)).toBe(true);
-        expect(await until(() => !w.s.state.sending)).toBe(true);
+        expect(await sendAll(w)).toBe(CHANGES.sent);
         expect(w.s.active().booking.minutes).toBe(minutes);
-        // Shorter: the bathroom and most of the kitchen taken off again.
+        // On the cleaner's page within its pace, the new tasks told apart.
+        const bath = w.s.active().rooms.find((x) => x.area === 'bathroom' && !x.deletedAt);
+        const bathTask = w.s.active().items.find((i) => i.roomId === bath.id && !i.deletedAt);
+        expect(await pollUntil(w, () => Boolean(w.find(`task-${bathTask.id}`)))).toBe(true);
+        const tag = (id) => all(w.find(`task-${id}`)).find((n) => n.className === 'task-added');
+        expect(tag(bathTask.id).textContent).toBe(TASKS_PAGE.addedDuring);
+        expect(tag(held.id)).toBeUndefined();
+        // Once sent, the bathroom's tasks are the cleaner's too.
+        await w.s.pollVisits();
+        expect(w.s.removeTask(bathTask.id).error).toBe(CHANGES.held);
+        // And the bathroom keeps its type of bath.
+        const type = bath.bath;
+        expect(w.s.changeBath(bath.id, type === 'shower' ? 'tub' : 'shower').error).toBe(CHANGES.held);
+        expect(w.s.active().rooms.find((x) => x.id === bath.id).bath).toBe(type);
+        // Nor from its card, should its held fields be got past.
+        w.s.openRoom(bath.id);
+        const radios = all(dom.el('room-bath-list')).filter((n) => n.type === 'radio');
+        for (const radio of radios) radio.checked = radio.value !== (type === 'tub' ? 'tub' : 'shower');
+        expect(w.s.submitRoom().error).toBe(CHANGES.held);
+        expect(dom.el('room-error').textContent).toBe(CHANGES.held);
+        expect(w.s.active().rooms.find((x) => x.id === bath.id).bath).toBe(type);
+        fire(dom.el('room-cancel'), 'click');
+        // A task added and not sent yet is the customer's own to take back.
+        w.s.addRoomOf('laundry', 'main');
+        const laundry = w.s.active().rooms.find((x) => x.area === 'laundry' && !x.deletedAt);
+        const fresh = w.s.active().items.find((i) => i.roomId === laundry.id && !i.deletedAt);
+        expect(w.s.removeTask(fresh.id).error).toBeFalsy();
+    });
+
+    test('a removal that gets past the studio (an old copy elsewhere): the send refuses it, and if it reaches the cleaner their marked task stays', async () => {
+        const w = await bothPages();
+        const held = w.page.form.items[0];
+        fire(w.find(`done-${held.id}`), 'click');
+        expect(await until(() => Boolean(w.page.visitId))).toBe(true);
+        await w.s.pollVisits();
+        const version = w.s.active().published.version;
+        // Taken away by a route that does not ask (an undo, say).
         const c = w.s.active();
-        const bath = c.rooms.find((r) => r.area === 'bathroom' && !r.deletedAt);
-        for (const i of c.items.filter((x) => !x.deletedAt && (x.roomId === bath.id || x !== c.items[0]))) w.s.removeTask(i.id);
-        // (Asked first only if the quote moves: the visit minimum may hold it.)
-        w.s.sendChanges();
-        await until(() => !dom.el('confirm').hidden || toastText() === CHANGES.sent);
-        if (!dom.el('confirm').hidden) confirmYes();
-        expect(await until(() => toastText() === CHANGES.sent)).toBe(true);
-        expect(w.s.active().booking.minutes).toBe(minutes);
+        w.s.mutate((d) => deleteItem(d, c.id, held.id, CONFIG, new Date()));
+        expect(await sendAll(w)).toBe(CHANGES.heldSend);
+        expect(w.s.active().published.version).toBe(version);
+        // A copy that never heard of the visit sends it anyway.
+        w.svc.api.listVisits = async () => ({ ok: true, status: 200, data: { visits: [] } });
+        w.s.visits.started = null;
+        expect(await sendAll(w)).toBe(CHANGES.sent);
+        expect(w.s.active().published.version).toBeGreaterThan(version);
+        // The cleaner's page keeps the task it marked, done, for its report.
+        await pollUntil(w, () => w.page.version === String(w.s.active().published.version));
+        expect(w.page.form.items.some((i) => i.id === held.id)).toBe(true);
+        expect(w.find(`done-${held.id}`).getAttribute('aria-pressed')).toBe('true');
     });
 
     test('a second phone, or a retry, joins the visit under way', async () => {

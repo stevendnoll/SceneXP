@@ -279,6 +279,9 @@ export async function boot(env) {
         // version read last, no visit to work on (`{ kind, booking }`), a
         // move said once, and a start on its way.
         version: null, noVisit: null, moved: '', starting: null, formTimer: null,
+        // The tasks the checklist had when the visit began, so the ones the
+        // customer adds after are told apart (QA, 2026-10-16).
+        startItems: null,
         // Finishing (M5): the report's view open, the fields as typed, a send
         // on its way, what it said, and the tries so far.
         finishing: false, draft: null, sendingReport: false, reportNote: '', reportProblem: false, retries: 0, retryTimer: null
@@ -324,6 +327,7 @@ export async function boot(env) {
     state.progress = cleanProgress(entry.progress);
     state.visitId = typeof entry.visitId === 'string' && ID.test(entry.visitId) ? entry.visitId : null;
     state.addOns = state.visitId ? cleanKept(entry.addOns) : [];
+    state.startItems = state.visitId && Array.isArray(entry.startItems) ? entry.startItems.filter((id) => typeof id === 'string') : null;
     state.draft = cleanDraft(entry.draft);
     state.proofs = cleanProofs(entry.proofs);
     state.proofThumbs = new Map();
@@ -394,7 +398,8 @@ export async function boot(env) {
             state.addOns = [];
             state.draft = { ...cleanDraft(null), cleaner: state.draft.cleaner };
             state.proofs = {};
-            remember({ sent: null, outbox: null, progress: state.progress, visitId: null, addOns: [], draft: state.draft, proofs: {} });
+            state.startItems = null;
+            remember({ sent: null, outbox: null, progress: state.progress, visitId: null, addOns: [], draft: state.draft, proofs: {}, startItems: null });
         }
         await price(opened, fromDevice);
         // No visit booked: cancelled since this device last saw it, else none.
@@ -424,7 +429,7 @@ export async function boot(env) {
             renderChecklist(view, {
                 form: state.form, quote: state.quote, sheet: state.sheet, thumbs: state.thumbs, notice: [state.notice, state.moved].filter(Boolean).join(' '),
                 progress: state.progress, skipping: state.skipping, skipNote: state.skipNote,
-                addOns: state.addOns, proposing: state.proposing,
+                addOns: state.addOns, proposing: state.proposing, added: addedSince(),
                 proofs: state.proofs, proofThumbs: state.proofThumbs, proofNote: state.proofNote,
                 on: { photo: openPhoto, mark, skip, propose, pick, quantity, send, addOnDone, finish, proof, unproof, print: () => printPage() }
             });
@@ -520,10 +525,7 @@ export async function boot(env) {
             // (QA, 2026-10-16: two starts at once lost a visit).
             await ensureStarted();
             const r = await proposeAddOn({ api, sealer, key, id: here.id, token: entry.visitToken, visitId: state.visitId, addOn, words: p.words, newId });
-            if (r.visitId && r.visitId !== state.visitId) {
-                state.visitId = r.visitId;
-                remember({ visitId: r.visitId });
-            }
+            if (r.visitId && r.visitId !== state.visitId) begun(r.visitId);
             if (!r.ok) {
                 p.sending = false;
                 // Cancelled since: the checklist read again says so.
@@ -591,6 +593,20 @@ export async function boot(env) {
         // ---- The visit as the customer has it (QA, 2026-10-15) -------------------
 
         const hasMarks = () => Object.keys(state.progress.marks).length > 0;
+        /** The visit begun (by any route): its id kept, and the tasks the
+         *  checklist has now, to tell later additions by. */
+        function begun(visitId) {
+            if (!visitId || state.visitId === visitId) return;
+            state.visitId = visitId;
+            state.startItems = (state.form.items || []).map((i) => i.id);
+            remember({ visitId, startItems: state.startItems });
+        }
+        /** The tasks the customer added after the visit began. */
+        function addedSince() {
+            if (!state.startItems) return new Set();
+            const had = new Set(state.startItems);
+            return new Set((state.form.items || []).map((i) => i.id).filter((id) => !had.has(id)));
+        }
         /**
          * The visit begun on the API at the cleaner's first piece of work (a
          * mark, a photo, Finish; an add-on begins it itself), so the customer
@@ -605,10 +621,7 @@ export async function boot(env) {
             state.starting = (async () => {
                 const r = await api.startVisit(here.id, entry.visitToken);
                 if (r.ok && r.data && ID.test(String(r.data.visitId))) {
-                    if (!state.visitId) {
-                        state.visitId = r.data.visitId;
-                        remember({ visitId: state.visitId });
-                    }
+                    begun(r.data.visitId);
                 } else if (r.error === 'no-booking') {
                     await readForm();
                 }
@@ -654,10 +667,24 @@ export async function boot(env) {
          * new time is a new visit; the customer's changes, as they are now.
          * What is being typed and where the keyboard is are kept.
          */
-        async function applyForm(next) {
+        async function applyForm(arrived) {
             const was = state.form;
             const before = visitKeyOf(was);
-            const after = visitKeyOf(next);
+            const after = visitKeyOf(arrived);
+            // A task this page has marked stays, with its room, even if the
+            // customer's copy no longer has it (QA, 2026-10-16: the studio
+            // holds what a visit under way has, but the API cannot check),
+            // so the work done still reaches the report.
+            let next = arrived;
+            if (after && after === before) {
+                const ids = new Set((next.items || []).map((i) => i.id));
+                const kept = (was.items || []).filter((i) => state.progress.marks[i.id] && !ids.has(i.id));
+                if (kept.length) {
+                    const roomIds = new Set((next.rooms || []).map((r) => r.id));
+                    const rooms = (was.rooms || []).filter((r) => !roomIds.has(r.id) && kept.some((i) => i.roomId === r.id));
+                    next = { ...next, items: [...(next.items || []), ...kept], rooms: [...(next.rooms || []), ...rooms] };
+                }
+            }
             state.form = next;
             await price(next, false);
             const wasOff = Boolean(state.noVisit);
@@ -674,7 +701,8 @@ export async function boot(env) {
                 if (after !== before) {
                     state.visitId = null;
                     state.addOns = [];
-                    remember({ visitId: null, addOns: [] });
+                    state.startItems = null;
+                    remember({ visitId: null, addOns: [], startItems: null });
                 }
                 remember({ booking: { date: next.booking.date, time: next.booking.time } });
             }
@@ -807,10 +835,7 @@ export async function boot(env) {
             draw();
             const r = await sendAll();
             state.sendingReport = false;
-            if (r.visitId && r.visitId !== state.visitId) {
-                state.visitId = r.visitId;
-                remember({ visitId: r.visitId });
-            }
+            if (r.visitId && r.visitId !== state.visitId) begun(r.visitId);
             if (r.ok) {
                 // The photos went with it: off the device now.
                 for (const photoId of proofIdsOf(entry.outbox.report)) {
@@ -878,8 +903,7 @@ export async function boot(env) {
                 const started = await api.startVisit(here.id, entry.visitToken);
                 if (!started.ok) return { ok: false, visitId: null, error: started.error };
                 visitId = started.data.visitId;
-                state.visitId = visitId;
-                remember({ visitId });
+                begun(visitId);
             }
             for (const photoId of photos) {
                 const sent = entry.outbox.proofsSent || [];

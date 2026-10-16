@@ -392,6 +392,44 @@ export function readTaskForm() {
     };
 }
 
+/**
+ * A task the cleaner already has, while the visit is under way (QA,
+ * 2026-10-16): what it is (its options, size, quantity) held and no
+ * Remove, with `note` saying why; its notes, photos and star still open.
+ * With no note, all open again.
+ */
+export function holdTaskCard(note) {
+    const held = Boolean(note);
+    for (const input of boxes.get('task-options') || []) input.disabled = held;
+    for (const id of ['task-size', 'task-quantity']) {
+        const el = byId(id);
+        if (el) el.disabled = held;
+    }
+    const remove = byId('task-remove');
+    if (remove && held) remove.hidden = true;
+    const p = byId('task-held');
+    if (p) {
+        p.textContent = note || '';
+        p.hidden = !held;
+    }
+}
+
+/** A room the cleaner already has, likewise: its floor and type of bath
+ *  held and no Remove; its name still open. */
+export function holdRoomCard(note) {
+    const held = Boolean(note);
+    const level = byId('room-level');
+    if (level) level.disabled = held;
+    for (const input of bathRadios) input.disabled = held;
+    const remove = byId('room-remove');
+    if (remove && held) remove.hidden = true;
+    const p = byId('room-held');
+    if (p) {
+        p.textContent = note || '';
+        p.hidden = !held;
+    }
+}
+
 /** The room's name for a title line: its label, or its kind. */
 export function roomTitle(type, room) {
     return roomName(type, room);
