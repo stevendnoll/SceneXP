@@ -388,10 +388,34 @@ export function columnsFor(len) {
     return Math.max(2, Math.round(len / HOUSE.column));
 }
 
+/** A story's four outside walls, by where each faces: `front` +z, `right`
+ *  +x, `back` -z, `left` -x, and the angle round from the front at which
+ *  each faces the camera. */
+export const SIDES = Object.freeze({ front: 0, right: Math.PI / 2, back: Math.PI, left: -Math.PI / 2 });
+
+/**
+ * The outside wall nearest the camera, for an open floor to leave out (QA,
+ * 2026-10-16: turned half round, the back wall hid the floor plan). The
+ * camera stands on the turntable's +z side and only the house turns, so in
+ * the house's own frame the camera lies at angle -yaw round from the front
+ * (turntable.js turnPoint). `current` is kept until the turn is `margin`
+ * radians past the corner between it and the next side, so a house held
+ * near a corner never flickers between the two.
+ */
+export function nearSide(yaw, current = null, margin = 0) {
+    const off = (side) => {
+        const d = (((-yaw - SIDES[side]) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+        return Math.abs(d);
+    };
+    if (current && SIDES[current] !== undefined && off(current) <= Math.PI / 4 + margin) return current;
+    return Object.keys(SIDES).reduce((best, side) => (off(side) < off(best) ? side : best), 'front');
+}
+
 /**
  * The walls, windows and siding round one level. `front` is the +z side,
- * the one facing the camera at first; a lifted level leaves it out (the dollhouse's
- * open side) along with its windows and its door. `openings` gives each
+ * the one facing the camera at first; a lifted level leaves out the side
+ * named by `open` (the dollhouse's open side, the one nearest the camera,
+ * nearSide) along with its windows and its door. `openings` gives each
  * side's windows by room (openingsFor); `door` the room the front door is
  * in (its id), or true for the middle of an empty front. Gray lap siding is
  * drawn as fine courses, a basement's stone as coarser ones. Returns
@@ -464,7 +488,7 @@ function shell(s, y, h, cx, cz, { open, door, garage, garageAt = null, basement,
         // `garageAt` puts it (a townhome's, beside the stoop).
         const gdoor = garage && f.side === 'front' ? (garageAt ? { c: garageAt.c, w: garageAt.w } : { c: mid, w: len * HOUSE.garageDoor.width }) : null;
         if (gdoor) out.garage = { x: gdoor.c, width: gdoor.w, z: f.at + t / 2, y };
-        if (f.side === 'front' && open) continue;
+        if (f.side === open) continue;
         out.walls.push(f.along === 'x'
             ? part(s.level, mid, y, f.at, len, h, t, { role: 'wall', side: f.side, color })
             : part(s.level, f.at, y, mid, t, h, len, { role: 'wall', side: f.side, color }));
@@ -666,7 +690,7 @@ function crossGable(level, top, roofY, cx, cz) {
  * its windows); `site` the yard's half width and depth (siteFor), and the
  * round lawn's radius when it has one.
  */
-export function instancesFor(layout, offsets, { lifted = null, areas = new Map(), site = null, selection = null, baths = new Map() } = {}) {
+export function instancesFor(layout, offsets, { lifted = null, cut = 'front', areas = new Map(), site = null, selection = null, baths = new Map() } = {}) {
     const [cx, cy, cz0] = centerOf(layout);
     // On a site, the house stands back a little, so the front yard has room
     // for its path, its drive and its beds (HOUSE.site.yard).
@@ -697,6 +721,10 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
     let door = null;
     const garages = [];
     const tilesOn = (level) => layout.tiles.filter((t) => t.level === level);
+    // A level whose front is open: the porch, a condo's balcony and a
+    // garage's stone base, all on the front, step aside with it. Opened on
+    // another side (`cut`), the front stays as it stands closed.
+    const frontOpen = (level) => level !== null && level === lifted && cut === 'front';
 
     // The front door's story first, so a townhome's garage below it can
     // take the side away from the stoop.
@@ -750,7 +778,7 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
             garageAt = { c: onLeft ? x0 + T.inset + w / 2 : x1 - T.inset - w / 2, w };
         }
         const sh = shell(s, y, h, cx, cz, {
-            open: s.level === lifted,
+            open: s.level === lifted ? cut : null,
             door: s.level === doorLevel ? doorRoom : null,
             garage: isGarage || tucked,
             garageAt,
@@ -768,7 +796,7 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
         // closed (a lift opens the house, not the garden).
         if (sh.door) door = { ...sh.door, y: cy + tops.get(s.level) };
         if (sh.garage) garages.push({ ...sh.garage, y: cy + tops.get(s.level) });
-        if (kind === 'condo' && s.level === (lowest || {}).level && s.level !== lifted) balcony(out, s, y, cx, cz);
+        if (kind === 'condo' && s.level === (lowest || {}).level && !frontOpen(s.level)) balcony(out, s, y, cx, cz);
         if (isGarage) {
             if (s.kind === 'annex') {
                 // A short wall joining the garage to the house, so it reads
@@ -787,7 +815,7 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
             // A stone base along the garage's front, as the porch piers have,
             // either side of its door: run across, it stood 0.4 mm behind
             // the door's face and fought it (measured, 2026-10-14).
-            if (s.level !== lifted) {
+            if (!frontOpen(s.level)) {
                 const fz = s.z + cz + s.depth / 2 + 0.003;
                 const a = s.x + cx - s.width / 2;
                 const b = s.x + cx + s.width / 2;
@@ -815,7 +843,7 @@ export function instancesFor(layout, offsets, { lifted = null, areas = new Map()
     if (roof !== null) massing(out, layout, { cx, cy, cz, wallTop: cy + roof, raised: lift('roof'), kind });
     const front = lowest ? { x0: lowest.x + cx - lowest.width / 2, x1: lowest.x + cx + lowest.width / 2, z: lowest.z + cz + lowest.depth / 2, z0: lowest.z + cz - lowest.depth / 2 } : null;
     if (site && kind === 'condo') plaza(out, site, layout, cx, cz);
-    else if (site) landscape(out, site, layout, cx, cz, door, garages, front, lifted !== null && lifted === doorLevel, { forward: kind === 'townhome' });
+    else if (site) landscape(out, site, layout, cx, cz, door, garages, front, frontOpen(doorLevel), { forward: kind === 'townhome' });
 
     // The rooms: a floor each, low walls between them with a doorway, a
     // fixture against the back, and the tasks in the front.
@@ -1377,6 +1405,9 @@ function prismGeometry() {
  *   lift(level, now)    lift a level (null to set it down), `now` to skip
  *                       the move; returns whether it is a level of the home
  *   lifted              the lifted level, or null
+ *   setCut(side), cut   the outside wall an open floor leaves out, the one
+ *                       nearest the camera (nearSide); returns whether
+ *                       anything is drawn differently
  *   focus()             the lifted level measured for the closer view
  *                       (focusOf), or null
  *   tick(delta)        move the levels toward their lift; returns whether
@@ -1507,6 +1538,8 @@ export function buildModel(config, at) {
     let baths = new Map();
     let key = '';
     let lifted = null;
+    /** The side an open floor leaves out: the one nearest the camera. */
+    let cut = 'front';
     /** The selected room and task, and the room under the pointer. */
     const selection = { roomId: null, itemId: null, hoverRoomId: null };
     /** A visit's report on the dots (`report`), or null. */
@@ -1544,7 +1577,7 @@ export function buildModel(config, at) {
     }
 
     function draw() {
-        placed = instancesFor(layout, now, { lifted, areas, baths, site: siteFor(layout, turntable, scaled), selection });
+        placed = instancesFor(layout, now, { lifted, cut, areas, baths, site: siteFor(layout, turntable, scaled), selection });
         place(meshes.slabs, placed.slabs, paintOf);
         place(meshes.walls, placed.walls, paintOf);
         place(meshes.siding, placed.siding, paintOf);
@@ -1669,6 +1702,20 @@ export function buildModel(config, at) {
         get moving() {
             return Boolean(move || build);
         },
+        /** The side an open floor leaves out (nearSide). */
+        get cut() {
+            return cut;
+        },
+        /** The house turned so another side is nearest the camera: an open
+         *  floor leaves that one out instead. Returns whether anything is
+         *  drawn differently (only with a floor open). */
+        setCut(side) {
+            if (SIDES[side] === undefined || side === cut) return false;
+            cut = side;
+            if (!lifted) return false;
+            draw();
+            return true;
+        },
         get assembling() {
             return Boolean(build);
         },
@@ -1686,7 +1733,7 @@ export function buildModel(config, at) {
          *  view (focusOf), or null with no floor open. */
         focus() {
             if (!lifted) return null;
-            const inst = instancesFor(layout, targets(), { lifted, areas, baths, site: siteFor(layout, turntable, scaled) });
+            const inst = instancesFor(layout, targets(), { lifted, cut, areas, baths, site: siteFor(layout, turntable, scaled) });
             return focusOf(inst, lifted, scaled);
         },
         /** How tall the house stands, unlifted (turntable.js frames it). */

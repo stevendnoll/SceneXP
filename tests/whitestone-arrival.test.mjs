@@ -645,7 +645,7 @@ describe('a first visit', () => {
         expect(main.__test__.openFloorFromList('attic')).toBeNull();
     });
 
-    test('another room through the room card, then Review, preferences offered, and saved', async () => {
+    test('another room through the room card, then Review, preferences offered, and straight on to a time (no Save, QA 2026-10-16)', async () => {
         const main = await boot({ sheet: true });
         press('start');
         pick('kind-house');
@@ -669,13 +669,22 @@ describe('a first visit', () => {
         press('preferences');
         expect(openCards()).toEqual(['preferences']);
         fire(dom.el('prefs-skip'), 'click');
-        press('save');
-        expect(line()).toBe(GUIDE.saved);
+        // Review's main button is the time itself: every change is kept as
+        // it is made, so there is nothing to save.
+        expect(buttons()).toEqual([GUIDE.chooseTime, GUIDE.preferences]);
+        press('chooseTime');
+        expect(main.__test__.ui.guide).toMatchObject({ scene: 'done', reviewed: true, away: { to: 'booking' } });
         expect(saved().settings.guide).toEqual({ scene: 'done', reviewed: true });
-        // A time, or back to the rooms: no look around (QA, 2026-10-15).
-        expect(buttons()).toEqual([GUIDE.chooseTime, GUIDE.editRooms]);
+        await jest.advanceTimersByTimeAsync(50);
+        if (!dom.el('booking').hidden) fire(dom.el('booking-close'), 'click');
+        await jest.advanceTimersByTimeAsync(50);
+        // Back without a time: where the home stands, and the ways on (no
+        // look around, QA 2026-10-15).
+        expect(main.__test__.ui.guide).toMatchObject({ scene: 'done', minimized: false, outcome: 'noTime' });
+        expect(line().startsWith(`${GUIDE.afterNoTime} `)).toBe(true);
+        expect(picks().map((b) => b.textContent)).toEqual([GUIDE.chooseTime, GUIDE.editRooms, GUIDE.reviewChecklist]);
         expect(main.__test__.model().lifted).toBeNull();
-        press('editRooms');
+        pick('editRooms');
         expect(main.__test__.ui.guide.scene).toBe('rooms');
         expect(line()).toBe(GUIDE.rooms);
         // Back at Your rooms, the main floor is open (QA, 2026-10-15).
@@ -718,7 +727,7 @@ describe('Maya on the stage', () => {
         expect(maya.gesturing).toBeNull();
         // Tucked away while a card is open, she stops talking.
         expect(maya.talking).toBeGreaterThan(0);
-        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'saved' };
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'review' };
         main.__test__.guideTo({ type: 'away', to: 'booking', was: null });
         expect(main.__test__.ui.guide.minimized).toBe(true);
         expect(maya.talking).toBe(0);
@@ -735,28 +744,6 @@ describe('Maya on the stage', () => {
         main.__test__.state.reducedMotion = true;
         press('example');
         expect(main.__test__.model().assembling).toBe(false);
-    });
-
-    test('the first checklist saved: the house turns once while Maya waves, and not under reduced motion', async () => {
-        const main = await boot();
-        main.__test__.state.reducedMotion = false;
-        press('start');
-        pick('kind-house');
-        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'review', reached: 4 };
-        const tt = main.__test__.turntable();
-        const yaw = tt.yaw;
-        main.__test__.onHostButton('save');
-        expect(line()).toBe(GUIDE.saved);
-        expect(main.__test__.cast().gesturing).toBe('wave');
-        stepFrames(Math.ceil((CONFIG.view.turn.celebrate + 0.5) * 1000 / 16));
-        expect(tt.yaw - yaw).toBeCloseTo(Math.PI * 2, 3);
-        // Under reduced motion, the words alone.
-        main.__test__.state.reducedMotion = true;
-        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'review' };
-        const still = tt.yaw;
-        main.__test__.onHostButton('save');
-        stepFrames(Math.ceil(3000 / 16));
-        expect(tt.yaw).toBe(still);
     });
 
     test('her bubble goes beside her head where there is room for it, and back to its own place where there is not', async () => {
@@ -802,7 +789,7 @@ describe('Maya on the stage', () => {
 });
 
 describe('the example', () => {
-    test('five beats: the house, its main floor, a dot ringed, its last visit\'s report, the whole home\'s total; then Build my own (QA, 2026-10-15)', async () => {
+    test('five beats: the house, its main floor, a dot named (never ringed), its last visit\'s report, the whole home\'s total; then Schedule my cleaning (QA, 2026-10-15)', async () => {
         const main = await boot({ sheet: true });
         press('example');
         expect(main.__test__.active().sample).toBe(true);
@@ -813,12 +800,12 @@ describe('the example', () => {
         expect(line()).toBe(GUIDE.example2);
         expect(main.__test__.model().lifted).toBe('main');
         press('next');
-        // The dots, named by the one ringed: the kitchen's stovetop.
-        expect(line()).toBe(GUIDE.example3('Stovetop'));
+        // The dots, named by one: the kitchen's stovetop. No ring, since
+        // nothing in the tour is tapped (QA, 2026-10-16).
+        expect(line()).toBe(GUIDE.example3('Stovetop', 'Kitchen'));
         expect(main.__test__.model().lifted).toBe('main');
         stepFrames(2);
-        expect(dom.el('ws-halo').className).toBe('ws-halo is-exampleDot');
-        expect(dom.el('ws-halo').hidden).toBe(false);
+        expect(dom.el('ws-halo').hidden).toBe(true);
         // Its last visit (M5): the dots by outcome, and what it came to.
         const paint = jest.spyOn(main.__test__.model(), 'report');
         press('next');
@@ -831,7 +818,7 @@ describe('the example', () => {
         expect(paint).toHaveBeenLastCalledWith(null);
         // The whole home again, and what it comes to, as example prices.
         expect(main.__test__.model().lifted).toBeNull();
-        expect(line()).toMatch(/^Cleaned as listed, this home comes to \$[\d,]+(\.\d\d)?, about [\w ]+\. Want to build yours\?$/);
+        expect(line()).toMatch(/^Cleaned as listed, this home comes to \$[\d,]+(\.\d\d)?, about [\w ]+\. Ready to schedule a cleaning of your own\?$/);
         expect(dom.el('host-small').textContent).toBe(GUIDE.examplePrices);
         expect(buttons()).toEqual([GUIDE.buildOwn]);
         press('buildOwn');
@@ -898,7 +885,7 @@ describe('the example', () => {
         expect(line()).toMatch(/^After each visit/);
         expect(main.__test__.model().reporting).toBe(true);
         back();
-        expect(line()).toBe(GUIDE.example3('Stovetop'));
+        expect(line()).toBe(GUIDE.example3('Stovetop', 'Kitchen'));
         expect(main.__test__.model().reporting).toBe(false);
         expect(main.__test__.model().lifted).toBe('main');
         back();
@@ -1059,7 +1046,7 @@ describe('Maya standing by (QA, 2026-10-14: she should always have something to 
         // Tucked only while she has sent the visitor to a card (no look
         // around, QA 2026-10-15).
         const away = () => main.__test__.guideTo({ type: 'away', to: 'booking', was: null });
-        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'saved' };
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'review' };
         // What was said before is let land first; tucked, nothing more is
         // said aloud.
         await jest.advanceTimersByTimeAsync(500);
@@ -1080,7 +1067,7 @@ describe('Maya standing by (QA, 2026-10-14: she should always have something to 
         expect(main.__test__.ui.guide.scene).toBe('hint');
     });
 
-    test('on the example, Build my own; with no home at all, Let\'s start', async () => {
+    test('on the example, Schedule my cleaning; with no home at all, Let\'s start', async () => {
         const main = await boot();
         press('example');
         main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false, skipped: false };
@@ -1195,11 +1182,11 @@ describe('halos on the touch points (QA, 2026-10-14)', () => {
         fire(quote, 'click');
         expect(quote.classList.contains('has-halo')).toBe(false);
         // A new scene takes the old glow away: the quote's ring, put back
-        // at review, is gone at All set.
+        // at review, is gone standing by.
         main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'review' };
         main.__test__.showGuide();
         expect(fact('quote').classList.contains('has-halo')).toBe(true);
-        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'saved' };
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false };
         main.__test__.showGuide();
         expect(fact('quote').classList.contains('has-halo')).toBe(false);
     });
@@ -1239,7 +1226,7 @@ describe('the home at a glance under Maya\'s name (Steve, 2026-10-14)', () => {
         fire(dom.el('quote-close'), 'click');
         // Tucked away (sent to a card), the price is still in view: nothing
         // else shows it.
-        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'saved' };
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'review' };
         main.__test__.guideTo({ type: 'away', to: 'booking', was: null });
         expect(main.__test__.ui.guide.minimized).toBe(true);
         expect(facts().hidden).toBe(false);
@@ -1739,5 +1726,29 @@ describe('getting back out', () => {
         main.__test__.handleSceneTap(10, 10);
         expect(main.__test__.model().lifted).toBeNull();
         expect(openCards()).toEqual([]);
+    });
+});
+
+describe('the open floor\'s missing wall follows the turn (QA, 2026-10-16)', () => {
+    test('turned half round, the back wall steps aside instead of the front; a quarter more, the right', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        press('next');
+        press('kitchen');
+        const model = main.__test__.model();
+        expect(model.lifted).toBe('main');
+        const sides = () => model.placed.walls.filter((w) => w.level === 'main' && w.role === 'wall').map((w) => w.side).sort();
+        expect(model.cut).toBe('front');
+        expect(sides()).toEqual(['back', 'left', 'right']);
+        const tt = main.__test__.turntable();
+        tt.turnBy(Math.PI);
+        stepFrames(2);
+        expect(model.cut).toBe('back');
+        expect(sides()).toEqual(['front', 'left', 'right']);
+        tt.turnBy(Math.PI / 2);
+        stepFrames(2);
+        expect(model.cut).toBe('right');
+        expect(sides()).toEqual(['back', 'front', 'left']);
     });
 });

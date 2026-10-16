@@ -926,6 +926,35 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         expect(fact('visit').classList.contains('has-halo')).toBe(false);
     });
 
+    /** Booked from Maya and back from the receipt: how far the house
+     *  turned in the frames after (the Save's celebration, now the
+     *  booking's, QA 2026-10-16). */
+    async function turnAfterBooking(reduced) {
+        const main = await kitchenHome();
+        main.__test__.state.reducedMotion = reduced;
+        await bookFromMaya(main);
+        const tt = main.__test__.turntable();
+        const yaw = tt.yaw;
+        fire(dom.el('receipt-done'), 'click');
+        await flushAsync(5);
+        expect(main.__test__.ui.guide.outcome).toBe('booked');
+        if (!reduced) expect(main.__test__.cast().gesturing).toBe('wave');
+        const loop = dom.loops[dom.loops.length - 1];
+        for (let i = 0; i < Math.ceil((CONFIG.view.turn.celebrate + 0.5) * 1000 / 16); i++) {
+            jest.advanceTimersByTime(16);
+            loop();
+        }
+        return tt.yaw - yaw;
+    }
+
+    test('a visit booked: the house turns once as Maya waves', async () => {
+        expect(await turnAfterBooking(false)).toBeCloseTo(Math.PI * 2, 3);
+    });
+
+    test('a visit booked under reduced motion: the words alone', async () => {
+        expect(await turnAfterBooking(true)).toBe(0);
+    });
+
     test('Choose a time, closed without a time: "the time can wait", where the home stands, and the same ways on', async () => {
         const main = await kitchenHome();
         main.__test__.onHostButton('chooseTime');
@@ -1052,7 +1081,7 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         expect(dom.el('host-facts').children).toHaveLength(1);
     });
 
-    test('Change my checklist on a published home: All set offers Send my changes, or the visit when nothing changed', async () => {
+    test('Change my checklist on a published home: Review offers Send my changes, or the visit when nothing changed', async () => {
         const main = await kitchenHome();
         await bookFromMaya(main);
         fire(dom.el('receipt-done'), 'click');
@@ -1060,16 +1089,17 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         main.__test__.onHostButton('editRooms');
         expect(main.__test__.ui.guide.scene).toBe('rooms');
         main.__test__.onHostButton('review');
-        main.__test__.onHostButton('save');
-        expect(line()).toBe(GUIDE.savedSame);
-        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-visit', 'host-editRooms']);
-        main.__test__.onHostButton('editRooms');
+        expect(line()).toBe(GUIDE.review);
+        expect(dom.el('host-small').textContent).toBe(GUIDE.reviewSame);
+        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-visit', 'host-preferences']);
+        // Back to the rooms (the strip's Your rooms), and a room added.
+        main.__test__.onHostButton('back');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
         fire(dom.el('host-choices').children[0].children.find((b) => b.id === 'host-chip-living'), 'click');
         main.__test__.onHostButton('review');
-        main.__test__.onHostButton('save');
-        expect(line()).toBe(GUIDE.savedUnsent);
-        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-sendChanges', 'host-editRooms']);
-        // Sent from All set, she comes back to say so. (The living room
+        expect(dom.el('host-small').textContent).toBe(GUIDE.reviewUnsent);
+        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-sendChanges', 'host-preferences']);
+        // Sent from Review, she comes back to say so. (The living room
         // takes the quote past the visit minimum, so the new price is asked
         // about first.)
         main.__test__.onHostButton('sendChanges');

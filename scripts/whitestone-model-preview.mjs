@@ -22,7 +22,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { deflateSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { instancesFor, levelOffsets, fitScale, siteFor, bathsOf, assemblyPlan, focusOf, EMPTY_HOME } from '../www/whitestone/js/model.js';
+import { instancesFor, levelOffsets, fitScale, siteFor, bathsOf, assemblyPlan, focusOf, nearSide, EMPTY_HOME } from '../www/whitestone/js/model.js';
 import { framePose, turnPoint, smoothstep } from '../www/whitestone/js/turntable.js';
 import { contactAlpha } from '../www/whitestone/js/stage.js';
 import { loadRealThree } from '../tests/helpers/real-three.mjs';
@@ -404,8 +404,9 @@ function png({ width, height, rgb }) {
 /** A home's parts on the turntable, its scale, and its closed height. Each
  *  bathroom drawn by its own type of bath, as the page draws it. With
  *  `assembleAt` (seconds), the home part way through building itself, as
- *  model.js assemble and tick have it then. */
-function build(home, lifted = null, selection = null, assembleAt = null) {
+ *  model.js assemble and tick have it then. `cut` the side an open floor
+ *  leaves out (model.js nearSide, the one nearest the camera). */
+function build(home, lifted = null, selection = null, assembleAt = null, cut = 'front') {
     const baths = bathsOf(home);
     const layout = layoutHome(home);
     const k = fitScale(layout, T, CONFIG.model.scale);
@@ -416,13 +417,13 @@ function build(home, lifted = null, selection = null, assembleAt = null) {
         const A = CONFIG.model.assemble;
         offsets = new Map(assemblyPlan(layout.slabs, A).map((q) => [q.key, q.from * (1 - smoothstep(Math.min(1, Math.max(0, (assembleAt - q.delay) / A.seconds))))]));
     }
-    const inst = instancesFor(layout, offsets, { lifted, areas, site, selection, baths });
+    const inst = instancesFor(layout, offsets, { lifted, cut, areas, site, selection, baths });
     const closed = instancesFor(layout, new Map(), { areas, site });
     // The frame holds the floors lifted above an open one too (main.js
     // frameHeight).
     const houseHeight = k * Math.max(...Object.values(closed).flat().map((p) => p.top)) + (lifted ? CONFIG.model.lift.open * k : 0);
     // An open floor's closer view (main.js fitFrame, model.js focus).
-    const focus = lifted ? focusOf(instancesFor(layout, levelOffsets(layout.slabs, lifted, CONFIG.model.lift), { lifted, areas, site, baths }), lifted, k) : null;
+    const focus = lifted ? focusOf(instancesFor(layout, levelOffsets(layout.slabs, lifted, CONFIG.model.lift), { lifted, cut, areas, site, baths }), lifted, k) : null;
     return { inst, k, houseHeight, home, focus };
 }
 
@@ -554,6 +555,13 @@ const views = [
     ['Its main floor open, the closer view, a narrower laptop (1024 by 768)', shot(build(example, 'main'), front, 1024, 768)],
     ['Its main floor open, the closer view, a phone upright', shot(build(example, 'main'), front, 390, 844)],
     ['Every level, the attic open, the closer view', shot(build(widest, 'attic'), front, 1280, 800)],
+    // The open side follows the turn (QA, 2026-10-16): the wall nearest the
+    // camera steps aside, whichever it is. The first is how it was.
+    ['Cutaway BEFORE: main floor open, turned half round, only the front ever left out', shot(build(example, 'main', null, null, 'front'), { ...front, yaw: Math.PI }, 1280, 800)],
+    ...[['half round, the back left out', Math.PI], ['a quarter clockwise, the right left out', -Math.PI / 2],
+        ['a quarter the other way, the left left out', Math.PI / 2], ['three-quarters from behind', Math.PI - 0.6],
+        ['second floor, from behind', Math.PI, 'second']]
+        .map(([words, yaw, level = 'main']) => [`Cutaway: ${words}`, shot(build(example, level, null, null, nearSide(yaw, null, V.cut.margin)), { ...front, yaw }, 1280, 800)]),
     ['An empty house, as a first visit will meet it', shot(build(EMPTY_HOME), start, 1280, 800)],
     ['The widest home there can be, with a garage', shot(build(withGarage), start, 1280, 800)],
     ['Every level, the tallest', shot(build(widest), start, 1280, 800)],

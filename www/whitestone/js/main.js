@@ -73,7 +73,7 @@ import {
 import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKING, BOOKING_ERRORS, RECEIPT, CHANGES } from './copy.min.js';
 import { createTurntable, turnPoint } from './turntable.min.js';
 import { buildStage, buildLights, firstPick, onTurntable } from './stage.min.js';
-import { buildModel } from './model.min.js';
+import { buildModel, nearSide } from './model.min.js';
 import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, ringFloor, GUIDED, CHANGED, PROGRESS, EXAMPLE } from './guide.min.js';
 import { createHost } from './host.min.js';
 import { buildMaya, speakSeconds } from './cast.min.js';
@@ -727,8 +727,7 @@ function onGuideChip(area, level) {
 
 /** Where the ring on the house goes, in the turntable's frame, or null when
  *  there is none to show: a closed floor (guide.js ringFloor; opening one
- *  is using it) while the panel is put away, or the example's dot to look
- *  at. Never over a card. */
+ *  is using it) while the panel is put away. Never over a card. */
 function haloPoint() {
     const h = ui.halo;
     const c = active();
@@ -739,10 +738,6 @@ function haloPoint() {
         const annex = type ? type.levels.filter((l) => l.annex).map((l) => l.key) : [];
         const level = ringFloor(model.levels(), model.lifted, liveRooms(c).map((r) => r.level), annex);
         return level ? model.pointOf({ kind: 'floor', level }) : null;
-    }
-    if (h.spec.kind === 'exampleDot') {
-        const item = exampleDot(c, model.lifted);
-        return item ? model.pointOf({ kind: 'dot', itemId: item.id }) : null;
     }
     return null;
 }
@@ -938,7 +933,7 @@ function inExample() {
     return Boolean(ui.guide && EXAMPLE.includes(ui.guide.scene));
 }
 
-/** The task whose dot the example's tour rings: the stovetop in the
+/** The task the example's tour names for its dots: the stovetop in the
  *  kitchen on the open floor, else the first task of the first room there
  *  that has one. Null with no floor open. */
 function exampleDot(c, lifted) {
@@ -1134,24 +1129,26 @@ function guideContext() {
         addedText: room ? addedLine(state.sheet, room.area, roomName(c.serviceType, room), room.bath) : '',
         welcome: welcomeLine(c),
         standby: standbyLine(c),
-        saved: savedNext(c),
+        reviewNext: reviewNext(c),
         addOn: addOnContext(),
         report: reportContext(),
         ...exampleContext(c)
     };
 }
 
-/** The example's words: the task its dots beat rings (by name), and the
+/** The example's words: the task its dots beat names, and its room, and the
  *  whole home's total, when the sheet has priced it. */
 function exampleContext(c) {
     if (!inExample() || !c || !c.sample) return {};
     const item = model ? exampleDot(c, model.lifted) : null;
     const task = item && state.sheet ? taskOf(state.sheet, item.task) : null;
+    const room = item ? liveRooms(c).find((r) => r.id === item.roomId) : null;
     const quote = state.sheet ? quoteChecklist(state.sheet, c) : null;
     const visit = c.visits && c.visits[0];
     const bill = visit ? billOf(c, visit) : null;
     return {
         exampleTask: task ? task.name : '',
+        exampleRoom: task && room ? roomName(c.serviceType, room) : '',
         exampleTotal: quote && quote.totalCents ? { money: formatMoney(quote.totalCents), time: formatMinutes(quote.minutes) } : null,
         exampleBill: bill && bill.billedCents ? { billed: formatMoney(bill.billedCents), quote: formatMoney(bill.quoteCents) } : null
     };
@@ -1165,15 +1162,16 @@ function billOf(c, visit) {
     return reportBill(state.sheet, lockQuote(quoteChecklist(state.sheet, c), null), c, visit.report);
 }
 
-/** All set, for a published checklist changed through the guide: the
- *  changes to send, else the visit (or a time to choose). Null for a draft,
- *  whose All set offers Choose a time. */
-function savedNext(c) {
+/** Review's next step, for a checklist the cleaner has, changed through
+ *  the guide: the changes to send, else the visit (or a time to choose),
+ *  with where it stands in small print. Null for a draft, whose next step
+ *  is Choose a time. */
+function reviewNext(c) {
     if (!isPublished(c)) return null;
-    if (hasUnsent(c)) return { text: GUIDE.savedUnsent, id: 'sendChanges', label: GUIDE.sendChanges };
+    if (hasUnsent(c)) return { small: GUIDE.reviewUnsent, id: 'sendChanges', label: GUIDE.sendChanges };
     return isBooked(c)
-        ? { text: GUIDE.savedSame, id: 'visit', label: GUIDE.seeVisit }
-        : { text: GUIDE.savedSame, id: 'chooseTime', label: GUIDE.chooseTime };
+        ? { small: GUIDE.reviewSame, id: 'visit', label: GUIDE.seeVisit }
+        : { small: GUIDE.reviewSame, id: 'chooseTime', label: GUIDE.chooseTime };
 }
 
 /** How the open checklist stands, for what a loop away from Maya changed
@@ -1444,7 +1442,7 @@ function sceneView() {
  *  as a step about it begins. */
 const GESTURE_OF = {
     hello: 'wave', welcome: 'wave',
-    home: 'point', attached: 'point', floors: 'point', saved: 'wave', firstRoom: 'point', added: 'point', rooms: 'point', review: 'point',
+    home: 'point', attached: 'point', floors: 'point', firstRoom: 'point', added: 'point', rooms: 'point', review: 'point',
     example1: 'point', example2: 'point', example3: 'point', exampleReport: 'point', example4: 'point', look: 'point', addOn: 'point', report: 'point'
 };
 
@@ -1563,7 +1561,7 @@ function enterScene(to) {
     }
     case 'example2':
     case 'example3': {
-        // Its main floor open, the dots in view (the third beat rings one).
+        // Its main floor open, the dots in view (the third beat names one).
         selectTo(null);
         if (model && !model.lifted) {
             const levels = model.levels();
@@ -1614,17 +1612,8 @@ function enterScene(to) {
         showReport();
         break;
     case 'review':
-    case 'saved':
         selectTo(null);
         liftLevel(null);
-        if (to === 'saved') {
-            save();
-            // A small celebration: one slow turn of the house, as Maya waves.
-            if (turntable && !state.reducedMotion) {
-                turntable.spinOnce();
-                requestRender();
-            }
-        }
         break;
     default:
         break;
@@ -1680,6 +1669,9 @@ function comeBack() {
     if (host) host.focusPrimary();
     if (cast && CHANGED.includes(ui.guide.outcome) && !state.reducedMotion) {
         cast.gesture('wave');
+        // A visit booked: a small celebration, one slow turn of the house
+        // (it was the Save's, QA 2026-10-16, and booking is the moment).
+        if (turntable && ui.guide.outcome === 'booked') turntable.spinOnce();
         requestRender();
     }
     return true;
@@ -1717,10 +1709,7 @@ function onHostButton(id) {
     case 'preferences':
         openPreferences();
         break;
-    case 'save':
-        guideTo({ type: 'saved' });
-        break;
-    // Maya steps aside for the card (from her All set, or a return), and
+    // Maya steps aside for the card (from Review, or a return), and
     // comes back once it is done to say what came of it (comeBack).
     case 'chooseTime':
         goAway('booking');
@@ -3786,6 +3775,9 @@ function animate() {
         if (stage && turntable.yaw !== drawnYaw) {
             drawnYaw = turntable.yaw;
             stage.spin.rotation.y = drawnYaw;
+            // An open floor leaves out whichever wall now faces the camera
+            // (QA, 2026-10-16: turned round, the back wall hid the rooms).
+            if (model) model.setCut(nearSide(drawnYaw, model.cut, CONFIG.view.cut.margin));
             markShadows();
         }
         const pose = turntable.pose(aspect());

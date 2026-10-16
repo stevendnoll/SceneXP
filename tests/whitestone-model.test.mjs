@@ -13,7 +13,7 @@ import { loadRealThree } from './helpers/real-three.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
 import {
     levelOffsets, centerOf, instancesFor, buildModel, fitScale, restack, wallHeight, EMPTY_HOME, HOUSE, ACCENTS, accentsFor,
-    openingsFor, WINDOW_OF, WINDOWS, columnsFor, siteFor, lawnRadius, focusOf
+    openingsFor, WINDOW_OF, WINDOWS, columnsFor, siteFor, lawnRadius, focusOf, nearSide, SIDES
 } from '../www/whitestone/js/model.js';
 import { layoutHome, MODEL } from '../www/whitestone/js/layout.js';
 import { KIT_OF, kitFor } from '../www/whitestone/js/rooms.js';
@@ -941,6 +941,25 @@ describe('built with the real three.js', () => {
         }
     });
 
+    test('setCut: the side an open floor leaves out, redrawn only while a floor is open (QA, 2026-10-16)', () => {
+        const m = buildModel(CONFIG, AT);
+        m.show(example());
+        const sides = () => m.placed.walls.filter((w) => w.level === 'main' && w.role === 'wall').map((w) => w.side).sort();
+        expect(m.cut).toBe('front');
+        // Closed, it is kept for the next floor opened, and nothing is redrawn.
+        expect(m.setCut('back')).toBe(false);
+        expect(m.cut).toBe('back');
+        m.lift('main', true);
+        expect(sides()).toEqual(['front', 'left', 'right']);
+        expect(m.setCut('back')).toBe(false);
+        expect(m.setCut('nonsense')).toBe(false);
+        expect(m.setCut('left')).toBe(true);
+        expect(sides()).toEqual(['back', 'front', 'right']);
+        expect(m.meshes.walls.count).toBe(m.placed.walls.length);
+        // The closer view measures the floor as it now stands.
+        expect(m.focus()).not.toBeNull();
+    });
+
     test('the example home: three levels, thirteen rooms, twenty-seven tasks, in twenty-one draw calls', () => {
         const m = buildModel(CONFIG, AT);
         const home = example();
@@ -1529,5 +1548,98 @@ describe('the front door, without z-fighting', () => {
         // Still a base the length of the front, short of the door and the windows.
         const front = stone.reduce((n, p) => n + p.scale[0], 0);
         expect(front).toBeGreaterThan(layout.slabs[0].width * 0.6);
+    });
+});
+
+// ---- The open side follows the camera ------------------------------------------------
+
+describe('the open side is the one nearest the camera (QA, 2026-10-16: turned half round, the back wall hid the floor plan)', () => {
+    const M = CONFIG.view.cut.margin;
+    const CORNER = Math.PI / 4;
+
+    test('nearSide: the camera at -yaw round from the front, any number of turns', () => {
+        expect(nearSide(0)).toBe('front');
+        expect(nearSide(CONFIG.view.yaw.start)).toBe('front');
+        // Turned a quarter clockwise from above (negative yaw), the right
+        // side comes round to the camera.
+        expect(nearSide(-Math.PI / 2)).toBe('right');
+        expect(nearSide(Math.PI / 2)).toBe('left');
+        expect(nearSide(Math.PI)).toBe('back');
+        expect(nearSide(-Math.PI)).toBe('back');
+        expect(nearSide(7 * Math.PI)).toBe('back');
+        expect(nearSide(-0.3 - 4 * Math.PI)).toBe('front');
+        // An unknown side kept is no side: the nearest instead.
+        expect(nearSide(Math.PI, 'nonsense', M)).toBe('back');
+        expect(Object.keys(SIDES)).toEqual(['front', 'right', 'back', 'left']);
+    });
+
+    test('nearSide keeps its side a margin past each corner, so a house held at a corner never flickers', () => {
+        expect(M).toBeGreaterThan(0);
+        expect(M).toBeLessThan(CORNER);
+        expect(nearSide(-(CORNER + M / 2), 'front', M)).toBe('front');
+        expect(nearSide(-(CORNER + M * 1.5), 'front', M)).toBe('right');
+        expect(nearSide(-(CORNER - M / 2), 'right', M)).toBe('right');
+        expect(nearSide(-(CORNER - M * 1.5), 'right', M)).toBe('front');
+        // Across the seam at half a turn.
+        expect(nearSide(3 * CORNER - M / 2)).toBe('left');
+        expect(nearSide(3 * CORNER - M / 2, 'back', M)).toBe('back');
+        // A whole turn, either way, in small steps: four changes, each side
+        // once, and back where it began; held still near a corner, none.
+        for (const dir of [-1, 1]) {
+            let side = nearSide(0, null, M);
+            const seen = [];
+            for (let i = 1; i <= 2000; i++) {
+                const next = nearSide((dir * 2 * Math.PI * i) / 2000, side, M);
+                if (next !== side) seen.push(next);
+                side = next;
+            }
+            expect(seen).toEqual(dir < 0 ? ['right', 'back', 'left', 'front'] : ['left', 'back', 'right', 'front']);
+        }
+        let held = nearSide(-CORNER, null, M);
+        for (const wobble of [0.05, -0.05, 0.1, -0.1, 0.15, -0.15]) {
+            const next = nearSide(-CORNER + wobble, held, M);
+            expect(next).toBe(held);
+            held = next;
+        }
+    });
+
+    function opened(home, lifted, cut) {
+        const layout = layoutHome(home);
+        const k = fitScale(layout, T, CONFIG.model.scale);
+        const areas = new Map((home.rooms || []).map((r) => [r.id, r.area]));
+        return instancesFor(layout, levelOffsets(layout.slabs, lifted, LIFT), { lifted, cut, areas, site: siteFor(layout, T, k) });
+    }
+    const wallSides = (inst, level) => inst.walls.filter((w) => w.level === level && w.role === 'wall').map((w) => w.side).sort();
+
+    test('an open floor leaves out that side, its windows and siding with it; every other wall stands', () => {
+        const home = example();
+        for (const cut of Object.keys(SIDES)) {
+            const inst = opened(home, 'main', cut);
+            expect(`${cut}: ${wallSides(inst, 'main')}`).toBe(`${cut}: ${Object.keys(SIDES).filter((x) => x !== cut).sort()}`);
+            for (const kind of ['windows', 'siding', 'trims']) {
+                expect(inst[kind].filter((p) => p.level === 'main' && p.side === cut)).toEqual([]);
+            }
+            expect(wallSides(inst, 'second')).toEqual(['back', 'front', 'left', 'right']);
+            // The front door, its porch and its posts stand unless the front
+            // is the side left out.
+            const front = cut !== 'front';
+            expect(inst.windows.some((w) => w.color === 'door')).toBe(front);
+            expect(inst.site.some((p) => p.role === 'porch')).toBe(front);
+            expect(inst.site.filter((p) => p.role === 'post')).toHaveLength(front ? 2 : 0);
+        }
+        // Closed, the cut changes nothing.
+        const closed = opened(home, null, 'back');
+        for (const level of ['basement', 'main', 'second']) expect(wallSides(closed, level)).toEqual(['back', 'front', 'left', 'right']);
+        expect(closed).toEqual(opened(home, null, 'front'));
+    });
+
+    test('a garage\'s stone base and a condo\'s balcony, both on the front, go only when the front is open', () => {
+        for (const cut of Object.keys(SIDES)) {
+            const stone = opened(FULL, 'garage', cut).siding.filter((b) => b.role === 'stoneBase' && b.level === 'garage');
+            expect(`${cut}: ${stone.length > 0}`).toBe(`${cut}: ${cut !== 'front'}`);
+            const condo = { id: 'condo', serviceType: 'cleaning', residence: { kind: 'condo', attached: null }, levels: ['main', 'second'], rooms: [], items: [] };
+            const balcony = opened(condo, 'main', cut).walls.filter((w) => w.role === 'balcony');
+            expect(`${cut}: ${balcony.length > 0}`).toBe(`${cut}: ${cut !== 'front'}`);
+        }
     });
 });

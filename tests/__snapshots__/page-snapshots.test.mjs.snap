@@ -6997,7 +6997,7 @@ html [data-ui-theme="surf" lang="en"]
     meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
     meta [content="noindex, nofollow" name="robots"]
-    meta [content="Build a room by room cleaning checklist on a 3D model of your home, see the price of every task as you go, and share the finished list with your cleaner." name="description"]
+    meta [content="Schedule a home cleaning on a 3D model of your home: choose what to clean room by room, see the price of every task as you go, then pick a time." name="description"]
     meta [content="#F4F2EE" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/whitestone/" rel="canonical"]
@@ -7123,7 +7123,7 @@ html [data-ui-theme="surf" lang="en"]
         h1
           "Whitestone Home Care"
         p
-          "This is a 3D model of your home, and it needs JavaScript to run. On it, you build a cleaning checklist room by room from a menu of tasks, each with a set price and a time estimate, so your quote and the expected length of the visit update as you go. When the list is ready, you can share it with your cleaner."
+          "This is a 3D model of your home, and it needs JavaScript to run. On it, you build a cleaning checklist room by room from a menu of tasks, each with a set price and a time estimate, so your quote and the expected length of the visit update as you go. When the list is ready, you choose a time for your cleaning."
         p
           "Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples."
         p
@@ -7322,7 +7322,7 @@ html [data-ui-theme="surf" lang="en"]
           button#booking-cancel.ws-btn [type="button"]
             "Not now"
           button#booking-confirm.ws-btn.ws-btn-primary [disabled type="button"]
-            "Book and publish"
+            "Book my visit"
     div#receipt.card-overlay [hidden]
       div#receipt-panel.card-panel.receipt-panel [aria-labelledby="receipt-title" aria-modal="true" role="dialog" tabindex="-1"]
         div.card-head
@@ -7385,7 +7385,7 @@ html [data-ui-theme="surf" lang="en"]
         p#receipt-status.sr-only [aria-live="polite" role="status"]
         div.card-actions
           button#receipt-unpublish.ws-btn.ws-btn-small.ws-btn-quiet.receipt-unpublish [hidden type="button"]
-            "Unpublish this checklist"
+            "Stop sharing this checklist"
           button#receipt-done.ws-btn.ws-btn-primary [type="button"]
             "Done"
     div#visit-report.card-overlay [hidden]

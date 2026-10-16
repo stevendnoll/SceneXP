@@ -201,7 +201,10 @@ export const CONFIG = deepFreeze({
      *  starts `arrival.from` times farther out and takes `arrival.seconds`
      *  (QA, 2026-10-15: under a second, after the loading screen). A frame refits over
      *  `subject.ease` seconds when the house grows or shrinks. A press that
-     *  moves less than `tap.slop` pixels and lifts within `tap.ms` is a tap. */
+     *  moves less than `tap.slop` pixels and lifts within `tap.ms` is a tap.
+     *  An open floor leaves out the outside wall nearest the camera, and
+     *  keeps the one it has until the house turns `cut.margin` radians (about
+     *  10 degrees) past a corner (model.js nearSide, QA 2026-10-16). */
     view: {
         tallBelow: 1,
         wide: { fov: 30, use: [0.48, 0.8], shift: [0.17, 0], host: true },
@@ -213,7 +216,8 @@ export const CONFIG = deepFreeze({
         drift: { speed: 0.1 },
         arrival: { seconds: 0.9, from: 1.45 },
         subject: { ease: 0.8 },
-        tap: { slop: 8, ms: 600 }
+        tap: { slop: 8, ms: 600 },
+        cut: { margin: 0.17 }
     },
 
     /** Maya on the stage (cast.js, PLANNING 6.4): a Hispanic woman, she

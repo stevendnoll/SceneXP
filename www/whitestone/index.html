@@ -19,7 +19,7 @@
          tests/directory.test.mjs and tests/page-rules.test.mjs). -->
     <meta name="robots" content="noindex, nofollow">
 
-    <meta name="description" content="Build a room by room cleaning checklist on a 3D model of your home, see the price of every task as you go, and share the finished list with your cleaner.">
+    <meta name="description" content="Schedule a home cleaning on a 3D model of your home: choose what to clean room by room, see the price of every task as you go, then pick a time.">
     <meta name="theme-color" content="#F4F2EE">
     <meta name="author" content="Steve Noll">
 
@@ -181,8 +181,8 @@
                 run. On it, you build a cleaning checklist room by room from a
                 menu of tasks, each with a set price and a time
                 estimate, so your quote and the expected length of the visit
-                update as you go. When the list is ready, you can share it with
-                your cleaner.</p>
+                update as you go. When the list is ready, you choose a time
+                for your cleaning.</p>
             <p>Whitestone Home Care is a SceneXP concept studio. Prices and
                 bookings are examples.</p>
             <p>SceneXP is a home for 3D experiences that run right in your
@@ -401,7 +401,7 @@
 
     <!-- CHOOSE A TIME (booking.js, PRD 10.3): the month's days a visit can
          start, the chosen day's start times with the earliest chosen, and
-         Book and publish. The days and times are drawn by script from the
+         Book my visit. The days and times are drawn by script from the
          API's answer. -->
     <div id="booking" class="card-overlay" hidden>
         <div id="booking-panel" class="card-panel booking-panel" role="dialog" aria-modal="true"
@@ -430,7 +430,7 @@
                 examples.</p>
             <div class="card-actions">
                 <button id="booking-cancel" class="ws-btn" type="button">Not now</button>
-                <button id="booking-confirm" class="ws-btn ws-btn-primary" type="button" disabled>Book and publish</button>
+                <button id="booking-confirm" class="ws-btn ws-btn-primary" type="button" disabled>Book my visit</button>
             </div>
         </div>
     </div>
@@ -493,7 +493,7 @@
             <p id="receipt-standin" class="form-note" hidden></p>
             <p id="receipt-status" class="sr-only" role="status" aria-live="polite"></p>
             <div class="card-actions">
-                <button id="receipt-unpublish" class="ws-btn ws-btn-small ws-btn-quiet receipt-unpublish" type="button" hidden>Unpublish this checklist</button>
+                <button id="receipt-unpublish" class="ws-btn ws-btn-small ws-btn-quiet receipt-unpublish" type="button" hidden>Stop sharing this checklist</button>
                 <button id="receipt-done" class="ws-btn ws-btn-primary" type="button">Done</button>
             </div>
         </div>

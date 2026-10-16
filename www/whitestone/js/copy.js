@@ -64,10 +64,10 @@ export const BOOKING_ERRORS = Object.freeze({
     denied: 'This checklist could not be updated. Please try again.',
     server: 'Something went wrong on our side. Please try again in a moment.',
     unpriced: 'Please add a task, or fix the ones the menu no longer offers, before choosing a time.',
-    sample: 'The example home cannot be booked. Build your own to choose a time.',
+    sample: 'The example home cannot be booked. Please schedule a cleaning for your own home instead.',
     // Sending changes and moving a visit (sync.js republish, PRD 10.4).
     'no-longer-fits': 'With your changes, your visit no longer fits at its booked time. Please choose a new time, and your changes are sent with it.',
-    'not-published': 'This checklist is not published yet. Please choose a time to publish it.'
+    'not-published': 'This checklist has no visit yet. Please choose a time first.'
 });
 
 /** The Choose a time card (booking.js, PRD 10.3). */
@@ -80,7 +80,7 @@ export const BOOKING = Object.freeze({
     noneThisMonth: 'No openings this month. Please try the next.',
     startsOn: (day) => `Start times on ${day}`,
     until: (time) => `until about ${time}`,
-    confirm: 'Book and publish',
+    confirm: 'Book my visit',
     working: 'Booking your visit…',
     /** Moving a booked visit, or booking again after a cancel. */
     newTitle: 'Choose a new time',
@@ -117,15 +117,17 @@ export const RECEIPT = Object.freeze({
     done: 'Done',
     open: 'Your visit',
     /** A checklist opened by its edit link: this device never saw its PIN. */
-    pinUnknown: 'Shown when you published.',
+    pinUnknown: 'Shown when you booked.',
     pinUnknownAdvice: 'This device opened your checklist with its edit link, so it does not know the PIN. Set a new one to send your cleaner.',
     newPin: 'Set a new PIN',
     newPinTitle: 'Set a new PIN?',
     newPinDetail: 'The old PIN stops working, so your cleaner will need the new one.',
     newPinDone: 'Your new PIN is on the receipt.',
 
-    /** Published, with no visit booked (after a cancel). */
-    titlePublished: 'Your checklist is published',
+    /** Published, with no visit booked (after a cancel). Customer copy
+     *  never says publish (QA, 2026-10-16): the link and PIN are what the
+     *  customer knows. */
+    titlePublished: 'Your link and PIN',
     noVisit: 'No visit is booked. Choose a time whenever you are ready.',
     /** Changing things afterward (PRD 10.4). */
     unsent: 'You have changes your cleaner has not seen yet.',
@@ -140,7 +142,7 @@ export const RECEIPT = Object.freeze({
     startedToday: (time) => `today at ${time}`,
     startedOn: (day, time) => `on ${day} at ${time}`,
     startedSoon: 'Your cleaner has started this visit, so it can’t be moved or canceled now.',
-    unpublish: 'Unpublish this checklist'
+    unpublish: 'Stop sharing this checklist'
 });
 
 /** Sending changes, moving, cancelling and unpublishing (PLANNING 10.2, PRD
@@ -158,16 +160,16 @@ export const CHANGES = Object.freeze({
     heldSend: 'Some of your changes remove or change tasks your cleaner already has. Please put those back (Undo works), or send them after the visit.',
     moved: (when) => `Your visit is moved to ${when}.`,
     cancelTitle: 'Cancel your visit?',
-    cancelDetail: (when) => `Your visit on ${when} is canceled and the time is given back. Your checklist stays published, so you can choose a new time.`,
+    cancelDetail: (when) => `Your visit on ${when} is canceled and the time is given back. Your link and PIN keep working, so you can choose a new time.`,
     cancelConfirm: 'Cancel my visit',
     keep: 'Keep it',
     notNow: 'Not now',
-    cancelled: 'Your visit is canceled. Your checklist is still published, ready for a new time.',
-    unpublishTitle: 'Unpublish this checklist?',
+    cancelled: 'Your visit is canceled. Your link and PIN still work, ready for a new time.',
+    unpublishTitle: 'Stop sharing this checklist?',
     unpublishDetail: 'The link and PIN stop working now, and the copy kept for your cleaner is deleted. Your checklist stays here as a draft.',
     unpublishDetailBooked: (when) => `The link and PIN stop working now, the copy kept for your cleaner is deleted, and your visit on ${when} is canceled. Your checklist stays here as a draft.`,
-    unpublishConfirm: 'Unpublish',
-    unpublished: (title) => `${title} is unpublished. It is a draft on this device again.`
+    unpublishConfirm: 'Stop sharing',
+    unpublished: (title) => `${title} is no longer shared. It is a draft on this device again.`
 });
 
 /** schedule.js `monthView` statuses, as the calendar labels a day. */
@@ -201,7 +203,7 @@ export const STORE = Object.freeze({
     tooManyChecklistPhotos: (n) => `A checklist can have up to ${n} photos.`,
     roomOfRemovedRoom: 'Its room was removed too. Please restore the room first.',
     notABath: 'Only a bathroom has a type of bath.',
-    sampleNotPublished: 'The example home cannot be booked. Build your own to choose a time.',
+    sampleNotPublished: 'The example home cannot be booked. Please schedule a cleaning for your own home instead.',
     residenceLevelInUse: (level) => `Your ${String(level).toLowerCase()} still has rooms. Please move or remove them before changing the kind of home.`,
     copyOf: (title) => `Copy of ${title}`
 });
@@ -243,7 +245,7 @@ export const UI = Object.freeze({
         taskRemoved: 'Removed a task',
         moved: 'Moved a task'
     }),
-    editLinkFailed: 'That edit link did not open a checklist. It may have expired, or been unpublished.',
+    editLinkFailed: 'That edit link did not open a checklist. It may have expired, or no longer be shared.',
 
     // Rooms
     addRoomTitle: 'Add a room',
@@ -302,7 +304,7 @@ export const UI = Object.freeze({
 
     // The booked visit, at a glance in Maya's bubble (PRD 8.6)
     visitChipSpoken: (day, time) => `Your visit, ${day} at ${time}. Show the link, the PIN and the ways to change it.`,
-    visitChipNone: 'Published, no visit booked',
+    visitChipNone: 'No visit booked yet',
     visitChipUnsent: 'Changes not sent',
 
     // The quote (PRD 8.5)
@@ -365,7 +367,9 @@ export const GUIDE = Object.freeze({
     backTo: (name) => `Back to ${name}`,
     backToStart: 'Back to the start',
 
-    hello: "Hi, I'm Maya with Whitestone Home Care. Let's build a cleaning checklist for your home, room by room. It takes about two minutes.",
+    /** What the visitor came for is a cleaning (QA, 2026-10-16): the
+     *  checklist is how, never the goal. */
+    hello: "Hi, I'm Maya with Whitestone Home Care. Let's schedule your cleaning: tell me what to clean, room by room, then choose a time. It takes about two minutes.",
     helloAgain: "Tap Let's start and I'll walk you through it, one step at a time.",
     start: "Let's start",
     example: 'Show me an example',
@@ -415,25 +419,28 @@ export const GUIDE = Object.freeze({
     reviewIt: 'Review my checklist',
 
     review: "Here's your home and your quote. One last thing: is there anything we should avoid, like strong scents or bleach?",
-    reviewAgain: 'Save your checklist when it looks right. Care preferences are optional.',
+    /** Review's main button is the next step itself (QA, 2026-10-16: a
+     *  Save button saved nothing, since every change is kept as it is
+     *  made): Choose a time, or for a checklist the cleaner has, Send my
+     *  changes or See my visit (`label`). */
+    reviewAgain: (label) => `Tap ${label} when everything looks right. Care preferences are optional.`,
     preferences: 'Choose preferences',
-    save: 'Save my checklist',
-    saved: 'All set. Your checklist is saved in this browser, so you can come back and change it anytime. When you are ready, choose a time for your visit.',
     chooseTime: 'Choose a time',
 
     example1: 'This is a four-bedroom home with a home office.',
     example2: 'Each room has its tasks, and every task has a price.',
-    /** The dots, shown and not tapped (Example mode, QA 2026-10-15). */
-    example3: (task) => `Each blue dot is a task, like the ${String(task).toLowerCase()} here. In your own home, you can tap a room to see what’s included, or star the tasks that matter most.`,
+    /** The dots, shown and not tapped (Example mode, QA 2026-10-15), named
+     *  by one task and its room, since none is ringed (QA, 2026-10-16). */
+    example3: (task, room) => `Each blue dot is a task, like the ${String(task).toLowerCase()}${room ? ` in the ${String(room).toLowerCase()}` : ''}. In your own home, you can tap a room to see what’s included, or star the tasks that matter most.`,
     example3Plain: 'Each blue dot is a task. In your own home, you can tap a room to see what’s included, or star the tasks that matter most.',
     /** The example's last visit (M5): the report on the house, and its bill. */
     exampleReport: (billed, quote) => `After each visit, your cleaner’s report lights up the house. Green is done, amber was skipped, and gray wasn’t reached. This visit came to ${billed} of the ${quote} quote, since skipped work comes off the bill.`,
     exampleReportPlain: 'After each visit, your cleaner’s report lights up the house. Green is done, amber was skipped, and gray wasn’t reached. Skipped work comes off the bill.',
     exampleTotal: (money, time) => `Cleaned as listed, this home comes to ${money}, ${time}.`,
     examplePrices: 'These are example prices.',
-    example4: 'Want to build yours?',
+    example4: 'Ready to schedule a cleaning of your own?',
     backOneStep: 'Back one step',
-    buildOwn: 'Build my own',
+    buildOwn: 'Schedule my cleaning',
 
     welcome: 'Welcome back. Your home is just as you left it.',
     /** A returning visitor's home base (QA, 2026-10-14): where the home
@@ -444,12 +451,11 @@ export const GUIDE = Object.freeze({
     noHome: 'There\u2019s no home here yet.',
     expand: 'Need a hand?',
     expandLabel: 'Maya, your host: need a hand?',
-    startOwn: 'Build my own',
     welcomeEditLink: 'Welcome, with your private edit link.',
     homeDraft: (title, rooms, tasks, money) => `${title} has ${rooms} and ${tasks}${money ? `, ${money} so far` : ''}.`,
     homeEmpty: (title) => `${title} has no rooms yet.`,
     homeBooked: (day, time) => `Your visit is booked for ${day} at ${time}.`,
-    homePublished: (title) => `${title} is published, with no visit booked yet.`,
+    homePublished: (title) => `${title} has no visit booked yet. Its link and PIN still work.`,
     homeUnsent: 'You have changes your cleaner has not seen yet.',
     /** After a visit (QA, 2026-10-15): how it went, then the next cleaning. */
     homeVisited: (day) => `Your cleaning on ${day} is complete.`,
@@ -477,14 +483,14 @@ export const GUIDE = Object.freeze({
     whatNext: 'What would you like to do next?',
     afterBooked: (day, time) => `You’re all set for ${day} at ${time}. Your cleaner will open your checklist with the link and PIN. Tap Your visit to see it again anytime.`,
     afterMoved: (day, time) => `Done. Your visit is now ${day} at ${time}.`,
-    afterCanceled: 'Your visit is canceled. Your checklist is still published, so you can choose a new time whenever you like.',
-    afterUnpublished: 'Your checklist is unpublished, so its link and PIN no longer work. It’s still saved here as a draft.',
+    afterCanceled: 'Your visit is canceled. Your link and PIN still work, so you can choose a new time whenever you like.',
+    afterUnpublished: 'Done. Your link and PIN no longer work, and your checklist is still saved here as a draft.',
     afterSent: 'Your changes are sent. Your cleaner will see them the next time they open your checklist.',
-    afterNoTime: 'No problem, the time can wait.',
+    afterNoTime: 'No problem. Your checklist is saved in this browser, so you can choose a time whenever you like.',
     afterNotSent: 'Your changes are still saved here, ready to send whenever you like.',
-    /** Saved through the guide, a published checklist (Change my checklist). */
-    savedUnsent: 'Saved. Your cleaner won’t see these changes until you send them.',
-    savedSame: 'Saved. Your checklist matches the one your cleaner has.',
+    /** Review, for a checklist the cleaner has (Change my checklist). */
+    reviewUnsent: 'Your cleaner won’t see these changes until you send them.',
+    reviewSame: 'Your checklist matches the one your cleaner has.',
     welcomeResume: 'Welcome back. Your home is just as you left it. Shall we pick up where we stopped?',
     keepGoing: 'Keep going',
     /** Start over: beside Keep going, and at the foot of her bubble. */
@@ -616,7 +622,7 @@ export const HELP = Object.freeze({
     resetConfirm: 'Clear and start over',
     /** With checklists published from this browser: they are unpublished
      *  first (Steve, 2026-10-14). */
-    resetDetailPublished: 'This unpublishes what you published, so its links and PINs stop working and any booked visit is canceled. Then it clears your checklists, photos and answers from this browser, and Maya will greet you as on your first visit. It cannot be undone.',
+    resetDetailPublished: 'This stops sharing your checklists, so their links and PINs stop working and any booked visit is canceled. Then it clears your checklists, photos and answers from this browser, and Maya will greet you as on your first visit. It cannot be undone.',
     resetLocked: (hours) => `You have a visit less than ${hours} hours away, so Start over has to wait until after it.`,
     resetStarted: 'Your cleaner is working on your home now, so Start over has to wait until the visit is done.',
     resetDone: 'Everything is cleared. You are back at the beginning.',

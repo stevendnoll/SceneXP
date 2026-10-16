@@ -16,8 +16,10 @@
  *              the blue dots on it are (QA, 2026-10-16: the dots are no
  *              longer tapped, so they have no step of their own)
  *   rooms      the rest of the home, then review
- *   review     the quote, and care preferences offered once
- *   saved      all set
+ *   review     the quote, care preferences offered once, and the next
+ *              step itself: Choose a time (QA, 2026-10-16: the All set
+ *              step after it was a Save that saved nothing, every change
+ *              being kept as it is made)
  *
  * and beside them the example's five beats (the house, a floor open, the
  * dots, its last visit's report lighting the house, and its total), a returning visitor's
@@ -53,7 +55,8 @@ import { priceChoice, formatMoney } from './pricing.min.js';
 export const GUIDED = Object.freeze(['home', 'attached', 'floors', 'firstRoom', 'added', 'rooms', 'review']);
 
 /** Scenes since retired, and where a guide saved at one resumes (QA,
- *  2026-10-16: the dots step folded into `added`). */
+ *  2026-10-16: the dots step folded into `added`). All set (`saved`) was
+ *  never saved as itself, so it needs no entry. */
 const RETIRED = Object.freeze({ dots: 'rooms' });
 
 /** The example's beats, in order: Back goes one beat back, and from the
@@ -109,14 +112,13 @@ export function entryOf(stepIndex, { roomId = null } = {}) {
 /**
  * The touch point a scene's words are about, ringed on screen (QA,
  * 2026-10-14): one at a time, and only while it is what Maya is speaking
- * of. `floor` a floor of the house, `element` a control by its id,
- * `exampleDot` the example's dot to look at. main.js finds where it is and
- * takes the ring away the moment it is used.
+ * of. `floor` a floor of the house, `element` a control by its id.
+ * main.js finds where it is and takes the ring away the moment it is used.
+ * Never in the example (QA, 2026-10-16: a ring there read as something to
+ * tap, and the example is a tour to watch).
  */
 export const HALO = Object.freeze({
     firstRoom: Object.freeze({ kind: 'element', id: 'host-chip-kitchen' }),
-    /** The example's dots: one ringed to look at, not to tap. */
-    example3: Object.freeze({ kind: 'exampleDot' }),
     rooms: Object.freeze({ kind: 'floor' }),
     review: Object.freeze({ kind: 'element', id: 'host-fact-quote' }),
     /** Not a scene's: standing by, just back from booking (viewFor). */
@@ -149,17 +151,17 @@ const ASIDE = ['hint'];
 
 /**
  * Where Maya may put a cleaner's add-on to the customer of her own accord
- * (M5): standing by, a welcome, All set, a hint, or another add-on. Never in
+ * (M5): standing by, a welcome, a hint, or another add-on. Never in
  * the middle of the first build or the example, where the visitor is busy;
  * the add-on waits there at a glance (main.js hostFacts), and a tap on it
  * asks from anywhere (`asked`).
  */
-const ASKS_FROM = ['done', 'welcome', 'saved', 'hint', 'addOn', 'report'];
+const ASKS_FROM = ['done', 'welcome', 'hint', 'addOn', 'report'];
 
 /** Scenes whose choices send the visitor off to a card (Choose a time, See
  *  my visit, Send my changes, Review my checklist), Maya coming back once
- *  it is done: All set, a welcome, and standing by. */
-const SENDS_AWAY = ['saved', 'welcome', 'done', 'report'];
+ *  it is done: Review, a welcome, and standing by. */
+const SENDS_AWAY = ['review', 'welcome', 'done', 'report'];
 
 /**
  * What came of a short loop away from Maya (QA, 2026-10-14: every step of
@@ -252,7 +254,8 @@ export function savedForm(guide) {
  *                          any step reached so far (QA, 2026-10-14)
  *   floorTapped, next      the floors, and moving on from them
  *   roomAdded              a room was added, by any route
- *   review, saved          the end of the first build
+ *   review                 the end of the first build (its next step is
+ *                          `away`, to the calendar)
  *   next, back, buildOwn   along the example, back out of it, and from it
  *   keepGoing              a returning visitor picks up where they stopped
  *   away, returned         a short loop: one of Maya's choices opens a card
@@ -290,11 +293,13 @@ export function step(guide, event) {
     if (type === 'restart') return { ...to('hello', { back: null, tapped: false, rooms: 0, resume: null, answered: false, attachedAnswered: false, nextVisit: false }), reached: -1 };
     // The next cleaning, from a home with a visit behind it (QA, 2026-10-15):
     // its rooms, every step of the build behind them reached.
-    if (type === 'nextCleaning' && ['welcome', 'done', 'saved'].includes(g.scene)) {
+    if (type === 'nextCleaning' && ['welcome', 'done'].includes(g.scene)) {
         return to('rooms', { resume: null, minimized: false, rooms: 0, nextVisit: true, reached: Math.max(g.reached ?? -1, PROGRESS.review) });
     }
     if (type === 'away' && SENDS_AWAY.includes(g.scene)) {
-        return to('done', { minimized: true, resume: null, away: { to: event.to || null, was: event.was || null }, outcome: null });
+        // Off from Review, the first build is done: reviewed.
+        const reviewed = Boolean(g.reviewed) || g.scene === 'review';
+        return to('done', { minimized: true, resume: null, reviewed, away: { to: event.to || null, was: event.was || null }, outcome: null });
     }
     if (type === 'returned') {
         if (g.scene !== 'done' || !g.away) return g;
@@ -318,7 +323,7 @@ export function step(guide, event) {
         return to(scene, extra);
     }
     if (type === 'again') {
-        if (g.scene === 'done' || g.scene === 'saved') return to('hint', { back: g.scene });
+        if (g.scene === 'done') return to('hint', { back: g.scene });
         return g;
     }
     if (type === 'close' && ASIDE.includes(g.scene)) return to(g.back || 'done', { back: null });
@@ -380,14 +385,6 @@ export function step(guide, event) {
     case 'rooms':
         if (type === 'roomAdded') return to('rooms', { rooms: g.rooms + 1 });
         if (type === 'review') return to('review');
-        return g;
-    case 'review':
-        if (type === 'saved') return to('saved', { reviewed: true });
-        return g;
-    // No "I'll look around" (QA, 2026-10-15: visitors are here to book a
-    // cleaning): saved, the other way on is back to the rooms.
-    case 'saved':
-        if (type === 'editRooms') return to('rooms', { reached: Math.max(g.reached ?? -1, PROGRESS.review) });
         return g;
     case 'example1':
         return type === 'next' ? to('example2') : g;
@@ -465,8 +462,7 @@ export function addedLine(sheet, area, label, bath) {
  * 'floors' or null; `progress` the step of the strip or
  * null; `again` the line said once, in other words, if nothing happens.
  * `ctx` gives what the words depend on: `{ sheet, roomLabel, roomCount,
- * addedText, exampleTask, exampleTotal }`. Null for `done`, when the bubble
- * is put away.
+ * addedText, exampleTask, exampleRoom, exampleTotal, reviewNext }`.
  */
 export function viewFor(guide, ctx = {}) {
     const b = (id, label, primary = false) => ({ id, label, primary });
@@ -506,21 +502,22 @@ export function viewFor(guide, ctx = {}) {
         const text = guide.nextVisit && !guide.rooms ? GUIDE.roomsNextVisit : guide.rooms >= 2 ? GUIDE.roomsMore : GUIDE.rooms;
         return { ...base, text, buttons, choices: 'rooms' };
     }
-    case 'review':
-        return { ...base, text: GUIDE.review, buttons: [b('save', GUIDE.save, true), b('preferences', GUIDE.preferences)] };
-    case 'saved':
-        // Saved, the visit is a tap away (M3): Choose a time, or back to the
-        // rooms.
-        // A published checklist changed through the guide offers what fits
-        // it instead (`ctx.saved` { text, id, label }: Send my changes).
-        if (ctx.saved) return { ...base, text: ctx.saved.text, buttons: [b(ctx.saved.id, ctx.saved.label, true), b('editRooms', GUIDE.editRooms)] };
-        return { ...base, text: GUIDE.saved, buttons: [b('chooseTime', GUIDE.chooseTime, true), b('editRooms', GUIDE.editRooms)] };
+    case 'review': {
+        // The next step itself (M3): Choose a time. A checklist the cleaner
+        // has already offers what fits it instead (`ctx.reviewNext` { id,
+        // label, small }: Send my changes, or See my visit).
+        const next = ctx.reviewNext || { id: 'chooseTime', label: GUIDE.chooseTime, small: '' };
+        return {
+            ...base, text: GUIDE.review, small: next.small || '', again: GUIDE.reviewAgain(next.label),
+            buttons: [b(next.id, next.label, true), b('preferences', GUIDE.preferences)]
+        };
+    }
     case 'example1':
         return { ...base, text: GUIDE.example1, buttons: [b('next', GUIDE.next, true)] };
     case 'example2':
         return { ...base, text: GUIDE.example2, buttons: [b('next', GUIDE.next, true)] };
     case 'example3':
-        return { ...base, text: ctx.exampleTask ? GUIDE.example3(ctx.exampleTask) : GUIDE.example3Plain, buttons: [b('next', GUIDE.next, true)] };
+        return { ...base, text: ctx.exampleTask ? GUIDE.example3(ctx.exampleTask, ctx.exampleRoom) : GUIDE.example3Plain, buttons: [b('next', GUIDE.next, true)] };
     case 'exampleReport':
         // Its last visit's report on the house (M5), and what it billed.
         return { ...base, text: ctx.exampleBill ? GUIDE.exampleReport(ctx.exampleBill.billed, ctx.exampleBill.quote) : GUIDE.exampleReportPlain, buttons: [b('next', GUIDE.next, true)] };

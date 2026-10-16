@@ -222,7 +222,7 @@ describe('the report on the house and in Maya\'s words (model.js, guide.js)', ()
     const show = (g, extra = {}) => step(g, { type: 'visitReport', visitId: 'v1', ...extra });
 
     test('Maya shows it as she asks about an add-on: where she is free to, or when asked', () => {
-        for (const scene of ['done', 'welcome', 'saved', 'hint', 'addOn']) expect(show(at(scene))).toMatchObject({ scene: 'report', visitId: 'v1' });
+        for (const scene of ['done', 'welcome', 'hint', 'addOn']) expect(show(at(scene))).toMatchObject({ scene: 'report', visitId: 'v1' });
         for (const scene of ['rooms', 'example1', 'hello']) expect(show(at(scene)).scene).toBe(scene);
         expect(show(at('rooms'), { asked: true })).toMatchObject({ scene: 'report', back: 'rooms' });
         expect(show(at('done', { away: { to: 'receipt' } })).scene).toBe('done');
@@ -443,7 +443,7 @@ describe('the studio shows the report (main.js)', () => {
         expect(line()).toBe(`${GUIDE.welcomeBack} ${GUIDE.homeVisited('Thursday, October 15')} ${GUIDE.homeBilled(billed)} ${GUIDE.returningLegend}`);
     });
 
-    test('Plan my next cleaning: the same home in Your rooms, then Review, Save and a time, with a new link and PIN', async () => {
+    test('Plan my next cleaning: the same home in Your rooms, then Review and a time, with a new link and PIN', async () => {
         const w = await bookedStudio();
         await w.cleaner.report();
         await w.t.pollVisits();
@@ -456,8 +456,8 @@ describe('the studio shows the report (main.js)', () => {
         expect(w.t.active().id).toBe(before.id);
         expect(w.t.active().items.length).toBe(before.items.length);
         w.t.onHostButton('review');
-        w.t.onHostButton('save');
-        expect(w.t.ui.guide.scene).toBe('saved');
+        // Review's main button is the time itself (QA, 2026-10-16).
+        expect(w.t.ui.guide.scene).toBe('review');
         w.t.onHostButton('chooseTime');
         expect(await until(() => !dom.el('booking').hidden)).toBe(true);
         expect((await w.t.confirmBooking()).ok).toBe(true);

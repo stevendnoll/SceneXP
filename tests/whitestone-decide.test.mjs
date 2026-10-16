@@ -144,7 +144,7 @@ describe('Maya asks about an add-on (guide.js)', () => {
     const ask = (g, extra = {}) => step(g, { type: 'proposal', addonId: 'a1', ...extra });
 
     test('of her own accord where she is free to, never in the build, the example, the greeting or while away', () => {
-        for (const scene of ['done', 'welcome', 'saved', 'hint']) {
+        for (const scene of ['done', 'welcome', 'hint']) {
             expect(ask(at(scene))).toMatchObject({ scene: 'addOn', addonId: 'a1', minimized: false });
         }
         for (const scene of ['rooms', 'review', 'floors', 'example2', 'hello']) {
@@ -177,7 +177,7 @@ describe('Maya asks about an add-on (guide.js)', () => {
         expect(step(fromRooms, { type: 'decided', status: 'approved' })).toMatchObject({ scene: 'rooms', addonId: null, back: null });
         const resume = ask(at('welcome', { resume: 'rooms' }));
         expect(step(resume, { type: 'decided', status: 'declined' })).toMatchObject({ scene: 'welcome', resume: 'rooms' });
-        for (const scene of ['done', 'saved', 'welcome']) {
+        for (const scene of ['done', 'welcome']) {
             expect(step(ask(at(scene)), { type: 'decided', status: 'declined' })).toMatchObject({ scene: 'done', outcome: 'declined', minimized: false, away: null });
         }
         expect(step(ask(at('done')), { type: 'decided', status: 'gone' }).outcome).toBeNull();
