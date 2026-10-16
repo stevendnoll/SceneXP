@@ -260,6 +260,27 @@ describe('built with the real three.js', () => {
         expect(hsl.l).toBeGreaterThan(0.45);
     });
 
+    test('a slender build: slimmer arms and a narrower shoe, and brown loafers instead of black (Steve, 2026-10-16)', () => {
+        /** Her upper arm's radius, and her shoe's width and color. */
+        const limbsOf = (cfg) => {
+            let arm = 0;
+            let shoe = null;
+            buildMaya(cfg).group.traverse((o) => {
+                if (o.userData && o.userData.isArm) for (const c of o.children) if (c.geometry && c.geometry.type === 'CylinderGeometry') arm = Math.max(arm, c.geometry.parameters.radiusTop);
+                if (o.userData && o.userData.isLeg) for (const c of o.children) if (c.geometry && c.geometry.type === 'BoxGeometry') shoe = c;
+            });
+            return { arm, shoeWidth: shoe.geometry.parameters.width, shoeColor: shoe.material.color.getHexString(REAL.SRGBColorSpace) };
+        };
+        expect(CONFIG.cast.maya.slender).toBe(1);
+        const mine = limbsOf(CONFIG);
+        const { slender, shoes, ...rest } = CONFIG.cast.maya;
+        const plain = limbsOf({ ...CONFIG, cast: { ...CONFIG.cast, maya: rest } });
+        expect(mine.arm).toBeCloseTo(plain.arm * 0.85, 9);
+        expect(mine.shoeWidth).toBeLessThan(plain.shoeWidth * 0.85);
+        expect(`#${mine.shoeColor}`).toBe(CONFIG.cast.maya.shoes.toLowerCase());
+        expect(plain.shoeColor).toBe('1a1a1a');
+    });
+
     test('a gesture runs its course and rests; reduced motion rests at once; the sway lasts as long as the line', () => {
         const maya = buildMaya(CONFIG);
         expect(maya.tick(1 / 60)).toBe(false);

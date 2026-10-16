@@ -225,7 +225,7 @@ export const CONFIG = deepFreeze({
      *  and her, standing on the cove's floor to the right of the turntable
      *  at `x`, `z`, turned `facing` radians toward the house, `height`
      *  meters tall with her hair. A white Whitestone polo with the accent's
-     *  mark, tan khakis, a warm medium skin tone, dark hair. */
+     *  mark, tan khakis, brown loafers, a warm medium skin tone, dark hair. */
     cast: {
         maya: {
             x: 2.0, z: 0.1, facing: -0.55, height: 1.72,
@@ -241,7 +241,13 @@ export const CONFIG = deepFreeze({
             // waist that much narrower than her shoulders and hips (Steve,
             // 2026-10-16: the torso read as a box).
             hips: 1,
-            waist: 0.2
+            waist: 0.2,
+            // A slender build, 0 to 1 (`slender`): slimmer arms and wrists,
+            // a smaller hand, a narrower shoe. Her shoes are brown loafers,
+            // with the khakis and the belt (Steve, 2026-10-16: the black
+            // blocks read heavy).
+            slender: 1,
+            shoes: '#7A4E33'
         }
     },
 

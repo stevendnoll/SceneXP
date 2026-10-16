@@ -163,7 +163,11 @@ export function buildMaya(config) {
         hips: m.hips ?? 0,
         // An hourglass (Steve, 2026-10-16: the torso read as a box): the
         // polo's sides curve in to a waist and out again.
-        waist: m.waist ?? 0
+        waist: m.waist ?? 0,
+        // Slimmer arms and wrists, and brown loafers instead of the rig's
+        // black blocks (Steve, 2026-10-16).
+        slender: m.slender ?? 0,
+        ...(m.shoes ? { shoeColor: color(m.shoes) } : {})
     });
     // Her smile (QA, 2026-10-15): the shared rig has no mouth, so hers is
     // added here, on the head's front below the nose (smileFor).

@@ -129,6 +129,8 @@ export function createPerson(config) {
         shoulderRound = 0,     // 0 = square box torso; up to ~0.6 rounds the shoulders and softens every edge
         hips = 0,              // 0 = straight (as before); up to 1 a woman's build: thighs full at the hip, meeting, tapering to the knee, a slimmer calf
         waist = 0,             // 0 = straight sides (as before); up to 0.3 an hourglass: the torso's sides curve in to a waist that much narrower (rounded torso only, shoulderRound > 0)
+        slender = 0,           // 0 = as before; up to 1 slimmer arms and wrists (15%), smaller hands and narrower shoes
+        shoeColor = 0x1a1a1a,  // the shoes' color (black, as every figure has worn them)
         sleeveColor = null     // long sleeves in this color; null keeps bare forearms
     } = config;
 
@@ -165,7 +167,7 @@ export function createPerson(config) {
     });
 
     const shoeMaterial = new THREE.MeshStandardMaterial({
-        color: 0x1a1a1a,
+        color: shoeColor,
         roughness: 0.6,
         metalness: 0.1
     });
@@ -196,7 +198,8 @@ export function createPerson(config) {
     const torsoWidth = 0.38 * (muscular ? 1.3 : 1);    // broader chest & shoulders
     const torsoDepth = 0.22 * (muscular ? 1.18 : 1);
     const armLength = 0.55;
-    const armRadius = 0.045 * (muscular ? 1.55 : 1);   // thicker arms
+    const slim = Math.max(0, Math.min(1, slender));
+    const armRadius = 0.045 * (muscular ? 1.55 : 1) * (1 - 0.15 * slim);   // thicker arms; slimmer on a slender build
     const legLength = 0.75;
     const legRadius = 0.065 * (muscular ? 1.35 : 1);   // thicker legs on a muscular build
     const hipShape = Math.max(0, Math.min(1, hips));
@@ -550,9 +553,10 @@ export function createPerson(config) {
         forearm.position.y = -armLength * 0.25;
         foreGroup.add(forearm);
 
-        // Hand (handScale enlarges it relative to the figure)
+        // Hand (handScale enlarges it relative to the figure; a slender
+        // build's is a little smaller, to suit its wrist)
         const hand = new THREE.Mesh(
-            new THREE.SphereGeometry(0.04 * handScale, 8, 8),
+            new THREE.SphereGeometry(0.04 * handScale * (1 - 0.1 * slim), 8, 8),
             skinMaterial
         );
         hand.position.y = -armLength * 0.5 - 0.02;
@@ -611,14 +615,17 @@ export function createPerson(config) {
         legGroup.add(shin);
 
         // Foot/shoe (footScale enlarges it; the sole stays at floor level, so
-        // the extra height grows upward and the extra length toward the toe)
+        // the extra height grows upward and the extra length toward the toe).
+        // A slender build's shoe is narrower and a little shorter: the
+        // standard one read as a heavy block under a slim leg.
         const shoeHeight = 0.06 * footScale;
+        const shoeLength = footLength * footScale * (1 - 0.08 * slim);
         const shoe = new THREE.Mesh(
-            new THREE.BoxGeometry(0.09 * footScale, shoeHeight, footLength * footScale),
+            new THREE.BoxGeometry(0.09 * footScale * (1 - 0.18 * slim), shoeHeight, shoeLength),
             shoeMaterial
         );
         shoe.position.y = -legLength - 0.05 + shoeHeight / 2;
-        shoe.position.z = footLength * footScale * 0.2;
+        shoe.position.z = shoeLength * 0.2;
         legGroup.add(shoe);
 
         // Position leg group at hip
