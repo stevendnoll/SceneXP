@@ -20,7 +20,15 @@ export const BRAND = Object.freeze({
     tagline: 'Bright homes, kept with care.',
     promise: 'You will never pay more than your quote without approving it first. Anything we skip comes off your bill.',
     /** Until Whitestone takes real customers (PRD 4). */
-    honesty: 'Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples.',
+    honesty: 'Whitestone Home Care is a demo by SceneXP, not a real company. Prices and bookings are examples.',
+    /** The notice at the top of the quote, the calendar and the receipt
+     *  (Steve, 2026-10-16: the small print at their foot went unseen, and
+     *  Whitestone is not a real company). Static in index.html, the same
+     *  words held here for its test. */
+    demoTitle: 'Just a demo',
+    demoQuote: 'Whitestone Home Care is not a real company. These prices are examples, and nothing is ever charged.',
+    demoBooking: 'Whitestone Home Care is not a real company. Choosing a time books nothing, and no cleaner will come.',
+    demoReceipt: 'Whitestone Home Care is not a real company. This visit is not real, and no cleaner will come.',
     exampleBooking: 'This is an example booking. No one will arrive.'
 });
 

@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=44" as="style">
+    <link rel="preload" href="css/experience.min.css?v=45" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -160,7 +160,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=44">
+    <link rel="stylesheet" href="css/experience.min.css?v=45">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -183,8 +183,8 @@
                 estimate, so your quote and the expected length of the visit
                 update as you go. When the list is ready, you choose a time
                 for your cleaning.</p>
-            <p>Whitestone Home Care is a SceneXP concept studio. Prices and
-                bookings are examples.</p>
+            <p>Whitestone Home Care is a demo by SceneXP, not a real company.
+                Prices and bookings are examples.</p>
             <p>SceneXP is a home for 3D experiences that run right in your
                 browser.</p>
             <nav aria-label="Site sections">
@@ -370,11 +370,15 @@
          breakdown by room and task. -->
     <div id="quote" class="card-overlay" hidden>
         <div id="quote-panel" class="card-panel list-panel" role="dialog" aria-modal="true"
-            aria-labelledby="quote-title" tabindex="-1">
+            aria-labelledby="quote-title" aria-describedby="demo-quote" tabindex="-1">
             <div class="card-head">
                 <h2 id="quote-title" class="card-title">Your quote</h2>
                 <button id="quote-close" class="ws-btn ws-btn-small" type="button">Close</button>
             </div>
+            <!-- JUST A DEMO, first and large (Steve, 2026-10-16: small print at
+                 a card's foot went unseen). The words are copy.js BRAND's. -->
+            <p id="demo-quote" class="demo-notice"><strong class="demo-notice-title">Just a demo</strong>
+                <span class="demo-notice-text">Whitestone Home Care is not a real company. These prices are examples, and nothing is ever charged.</span></p>
             <p id="quote-total" class="quote-total"></p>
             <p id="quote-time" class="card-meta"></p>
             <p id="quote-minimum" class="quote-minimum"></p>
@@ -391,8 +395,6 @@
             <p id="quote-tax" class="card-meta"></p>
             <p class="card-meta quote-promise">You will never pay more than your quote without approving it
                 first. Anything we skip comes off your bill.</p>
-            <p class="card-meta">Whitestone Home Care is a SceneXP concept studio. Prices and bookings are
-                examples.</p>
             <div class="card-actions">
                 <button id="quote-open-checklist" class="ws-btn ws-btn-primary" type="button">Open the checklist</button>
             </div>
@@ -405,11 +407,15 @@
          API's answer. -->
     <div id="booking" class="card-overlay" hidden>
         <div id="booking-panel" class="card-panel booking-panel" role="dialog" aria-modal="true"
-            aria-labelledby="booking-title" aria-describedby="booking-summary" tabindex="-1">
+            aria-labelledby="booking-title" aria-describedby="demo-booking booking-summary" tabindex="-1">
             <div class="card-head">
                 <h2 id="booking-title" class="card-title">Choose a time</h2>
                 <button id="booking-close" class="ws-btn ws-btn-small" type="button">Close</button>
             </div>
+            <!-- JUST A DEMO, first and large (Steve, 2026-10-16: small print at
+                 a card's foot went unseen). The words are copy.js BRAND's. -->
+            <p id="demo-booking" class="demo-notice"><strong class="demo-notice-title">Just a demo</strong>
+                <span class="demo-notice-text">Whitestone Home Care is not a real company. Choosing a time books nothing, and no cleaner will come.</span></p>
             <p id="booking-summary" class="card-meta"></p>
             <div class="booking-head">
                 <button id="booking-prev" class="ws-btn ws-btn-small booking-nav" type="button" aria-label="Previous month" title="Previous month">&lsaquo;</button>
@@ -426,8 +432,6 @@
             <h3 id="booking-day-title" class="booking-day-title" hidden></h3>
             <div id="booking-times" class="booking-times" role="radiogroup" aria-labelledby="booking-day-title" hidden></div>
             <p id="booking-error" class="form-error" role="alert" hidden></p>
-            <p class="card-meta">Whitestone Home Care is a SceneXP concept studio. Prices and bookings are
-                examples.</p>
             <div class="card-actions">
                 <button id="booking-cancel" class="ws-btn" type="button">Not now</button>
                 <button id="booking-confirm" class="ws-btn ws-btn-primary" type="button" disabled>Book my visit</button>
@@ -444,11 +448,15 @@
          change window allows it. -->
     <div id="receipt" class="card-overlay" hidden>
         <div id="receipt-panel" class="card-panel receipt-panel" role="dialog" aria-modal="true"
-            aria-labelledby="receipt-title" tabindex="-1">
+            aria-labelledby="receipt-title" aria-describedby="demo-receipt" tabindex="-1">
             <div class="card-head">
                 <h2 id="receipt-title" class="card-title">Your visit is booked</h2>
                 <button id="receipt-close" class="ws-btn ws-btn-small" type="button">Close</button>
             </div>
+            <!-- JUST A DEMO, first and large (Steve, 2026-10-16: small print at
+                 a card's foot went unseen). The words are copy.js BRAND's. -->
+            <p id="demo-receipt" class="demo-notice"><strong class="demo-notice-title">Just a demo</strong>
+                <span class="demo-notice-text">Whitestone Home Care is not a real company. This visit is not real, and no cleaner will come.</span></p>
             <div id="receipt-unsent" class="receipt-unsent" hidden>
                 <p>You have changes your cleaner has not seen yet.</p>
                 <button id="receipt-send" class="ws-btn ws-btn-small ws-btn-primary" type="button">Send my changes</button>

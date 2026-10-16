@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=44" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=45" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7112,7 +7112,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=3" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=44" rel="stylesheet"]
+    link [href="css/experience.min.css?v=45" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7125,7 +7125,7 @@ html [data-ui-theme="surf" lang="en"]
         p
           "This is a 3D model of your home, and it needs JavaScript to run. On it, you build a cleaning checklist room by room from a menu of tasks, each with a set price and a time estimate, so your quote and the expected length of the visit update as you go. When the list is ready, you choose a time for your cleaning."
         p
-          "Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples."
+          "Whitestone Home Care is a demo by SceneXP, not a real company. Prices and bookings are examples."
         p
           "SceneXP is a home for 3D experiences that run right in your browser."
         nav [aria-label="Site sections"]
@@ -7257,12 +7257,17 @@ html [data-ui-theme="surf" lang="en"]
             button#prefs-save.ws-btn.ws-btn-primary [type="submit"]
               "Save preferences"
     div#quote.card-overlay [hidden]
-      div#quote-panel.card-panel.list-panel [aria-labelledby="quote-title" aria-modal="true" role="dialog" tabindex="-1"]
+      div#quote-panel.card-panel.list-panel [aria-describedby="demo-quote" aria-labelledby="quote-title" aria-modal="true" role="dialog" tabindex="-1"]
         div.card-head
           h2#quote-title.card-title
             "Your quote"
           button#quote-close.ws-btn.ws-btn-small [type="button"]
             "Close"
+        p#demo-quote.demo-notice
+          strong.demo-notice-title
+            "Just a demo"
+          span.demo-notice-text
+            "Whitestone Home Care is not a real company. These prices are examples, and nothing is ever charged."
         p#quote-total.quote-total
         p#quote-time.card-meta
         p#quote-minimum.quote-minimum
@@ -7276,18 +7281,21 @@ html [data-ui-theme="surf" lang="en"]
         p#quote-tax.card-meta
         p.card-meta.quote-promise
           "You will never pay more than your quote without approving it first. Anything we skip comes off your bill."
-        p.card-meta
-          "Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples."
         div.card-actions
           button#quote-open-checklist.ws-btn.ws-btn-primary [type="button"]
             "Open the checklist"
     div#booking.card-overlay [hidden]
-      div#booking-panel.card-panel.booking-panel [aria-describedby="booking-summary" aria-labelledby="booking-title" aria-modal="true" role="dialog" tabindex="-1"]
+      div#booking-panel.card-panel.booking-panel [aria-describedby="demo-booking booking-summary" aria-labelledby="booking-title" aria-modal="true" role="dialog" tabindex="-1"]
         div.card-head
           h2#booking-title.card-title
             "Choose a time"
           button#booking-close.ws-btn.ws-btn-small [type="button"]
             "Close"
+        p#demo-booking.demo-notice
+          strong.demo-notice-title
+            "Just a demo"
+          span.demo-notice-text
+            "Whitestone Home Care is not a real company. Choosing a time books nothing, and no cleaner will come."
         p#booking-summary.card-meta
         div.booking-head
           button#booking-prev.ws-btn.ws-btn-small.booking-nav [aria-label="Previous month" title="Previous month" type="button"]
@@ -7316,20 +7324,23 @@ html [data-ui-theme="surf" lang="en"]
         h3#booking-day-title.booking-day-title [hidden]
         div#booking-times.booking-times [aria-labelledby="booking-day-title" hidden role="radiogroup"]
         p#booking-error.form-error [hidden role="alert"]
-        p.card-meta
-          "Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples."
         div.card-actions
           button#booking-cancel.ws-btn [type="button"]
             "Not now"
           button#booking-confirm.ws-btn.ws-btn-primary [disabled type="button"]
             "Book my visit"
     div#receipt.card-overlay [hidden]
-      div#receipt-panel.card-panel.receipt-panel [aria-labelledby="receipt-title" aria-modal="true" role="dialog" tabindex="-1"]
+      div#receipt-panel.card-panel.receipt-panel [aria-describedby="demo-receipt" aria-labelledby="receipt-title" aria-modal="true" role="dialog" tabindex="-1"]
         div.card-head
           h2#receipt-title.card-title
             "Your visit is booked"
           button#receipt-close.ws-btn.ws-btn-small [type="button"]
             "Close"
+        p#demo-receipt.demo-notice
+          strong.demo-notice-title
+            "Just a demo"
+          span.demo-notice-text
+            "Whitestone Home Care is not a real company. This visit is not real, and no cleaner will come."
         div#receipt-unsent.receipt-unsent [hidden]
           p
             "You have changes your cleaner has not seen yet."
@@ -7620,7 +7631,7 @@ html [lang="en"]
           "This page needs JavaScript to open a checklist. The checklist is locked in the link your customer shared, and it is only unlocked here, in your own browser, once you enter the PIN. Please allow JavaScript for this page and reload it."
     footer.tasks-footer
       p
-        "Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples."
+        "Whitestone Home Care is a demo by SceneXP, not a real company. Prices and bookings are examples."
       p
         a [href="/privacy.html"]
           "Privacy""

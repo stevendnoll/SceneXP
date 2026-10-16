@@ -60,8 +60,8 @@ test('every refusal store.js names exists', () => {
     used.forEach((k) => expect(`${k}: ${k in STORE}`).toBe(`${k}: true`));
 });
 
-test('the honesty line is the one the PRD gives, word for word, while bookings are examples', () => {
-    expect(BRAND.honesty).toBe('Whitestone Home Care is a SceneXP concept studio. Prices and bookings are examples.');
+test('the honesty line says plainly it is a demo, not a real company (Steve, 2026-10-16), while bookings are examples', () => {
+    expect(BRAND.honesty).toBe('Whitestone Home Care is a demo by SceneXP, not a real company. Prices and bookings are examples.');
     expect(BRAND.exampleBooking).toBe('This is an example booking. No one will arrive.');
     // And the studio's no-JavaScript fallback says the same.
     const page = readFileSync(join(process.cwd(), 'www', 'whitestone', 'index.html'), 'utf8').replace(/\s+/g, ' ');
@@ -80,4 +80,25 @@ test('no sentence sends the visitor to Help for the checklist: that is Maya\'s (
         if (where.startsWith('copy.HELP.')) continue;   // Help's own words
         expect(`${where}: ${/\bHelp\b|Help menu|My checklists|Show me again/.test(text)}`).toBe(`${where}: false`);
     }
+});
+
+test('JUST A DEMO at the top of the quote, the calendar and the receipt, said as each opens (Steve, 2026-10-16)', () => {
+    const page = readFileSync(join(process.cwd(), 'www', 'whitestone', 'index.html'), 'utf8').replace(/\s+/g, ' ');
+    for (const [card, words] of [['quote', BRAND.demoQuote], ['booking', BRAND.demoBooking], ['receipt', BRAND.demoReceipt]]) {
+        const panel = page.slice(page.indexOf(`id="${card}-panel"`), page.indexOf(`id="${card}-close"`) + 900);
+        // First thing under the card's heading, its title and its words.
+        const head = panel.indexOf('</div>');
+        const notice = panel.indexOf(`<p id="demo-${card}" class="demo-notice">`);
+        expect(`${card}: ${notice > head && notice - head < 200}`).toBe(`${card}: true`);
+        expect(panel).toContain(`<strong class="demo-notice-title">${BRAND.demoTitle}</strong> <span class="demo-notice-text">${words}</span>`);
+        // Read out as the card opens.
+        expect(panel.match(/aria-describedby="([^"]+)"/)[1].split(' ')).toContain(`demo-${card}`);
+        // Plain about it: not a real company.
+        expect(words).toMatch(/^Whitestone Home Care is not a real company\. /);
+        expect(words).not.toMatch(/—|;/);
+    }
+    // The old small print, at a card's foot, is gone; nothing calls it a studio.
+    expect(page).not.toContain('concept studio');
+    const css = readFileSync(join(process.cwd(), 'www', 'whitestone', 'css', 'experience.css'), 'utf8');
+    expect(css).toMatch(/\.demo-notice-title \{[^}]*font-size: 1\.25rem;[^}]*font-weight: 800;/);
 });

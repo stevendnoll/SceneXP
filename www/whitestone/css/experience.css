@@ -2143,6 +2143,38 @@ textarea.ws-input {
  * Print from the checklist card: only the checklist goes to paper, with no
  * buttons, no studio and no chrome, each room kept on one page where it fits.
  */
+/* JUST A DEMO, at the top of the quote, the calendar and the receipt
+   (Steve, 2026-10-16: the small print at their foot went unseen, and
+   Whitestone is not a real company). Large and warm, so it is the first thing
+   read: a saffron frame on cream, the title in dark amber capitals. */
+.demo-notice {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0 0 1rem;
+    padding: 0.85rem 1rem;
+    border: 2px solid #E0A93A;
+    border-radius: 12px;
+    background: #FFF6E0;
+    color: #4A3200;
+    text-align: left;
+}
+
+.demo-notice-title {
+    color: #7A4A00;
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.demo-notice-text {
+    font-size: 0.98rem;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
 /* The screenshot view (?clean=1, main.js cleanView; Steve, 2026-10-16):
    only Maya, the house and the turntable, the wordmark too put away. The
    house still turns and opens. */
