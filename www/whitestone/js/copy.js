@@ -443,6 +443,9 @@ export const GUIDE = Object.freeze({
     examplePrices: 'These are example prices.',
     example4: 'Ready to schedule a cleaning of your own?',
     backOneStep: 'Back one step',
+    /** Beside Next on the example's beats (QA, 2026-10-16): straight to the
+     *  build's first step, as Schedule my cleaning on the last. */
+    skipTour: 'Skip the tour',
     buildOwn: 'Schedule my cleaning',
 
     welcome: 'Welcome back. Your home is just as you left it.',

@@ -30,7 +30,7 @@ const walk = (g, ...types) => types.reduce((acc, t) => step(acc, typeof t === 's
 
 const ALL = ['hello', ...GUIDED, 'example1', 'example2', 'example3', 'exampleReport', 'example4', 'welcome', 'hint'];
 const EVENTS = ['start', 'example', 'floorTapped', 'next', 'roomAdded', 'review', 'saved', 'buildOwn',
-    'lookAround', 'keepGoing', 'homeMade', 'residence', 'again', 'about', 'close', 'restart', 'skip', 'away', 'returned', 'nonsense'];
+    'lookAround', 'keepGoing', 'homeMade', 'residence', 'again', 'about', 'close', 'restart', 'skip', 'skipTour', 'away', 'returned', 'nonsense'];
 
 describe('where a visit begins', () => {
     test('a first visit is greeted', () => {
@@ -257,10 +257,19 @@ describe('the way through', () => {
         expect(walk(g, 'next')).toBe(g);
         expect(walk(g, 'buildOwn').scene).toBe('home');
         expect(viewFor(g).buttons).toEqual([{ id: 'buildOwn', label: GUIDE.buildOwn, primary: true }]);
-        // Every beat but the last moves on with Next, and only Next.
+        // Every beat but the last moves on with Next, or out with Skip the
+        // tour beside it, to the build's first step (QA, 2026-10-16).
         for (const scene of EXAMPLE.slice(0, 4)) {
-            expect(viewFor({ ...fresh(), scene }).buttons).toEqual([{ id: 'next', label: GUIDE.next, primary: true }]);
+            expect(viewFor({ ...fresh(), scene }).buttons).toEqual([
+                { id: 'next', label: GUIDE.next, primary: true }, { id: 'skipTour', label: 'Skip the tour', primary: false }
+            ]);
             expect(walk({ ...fresh(), scene }, 'buildOwn').scene).toBe(scene);
+            expect(walk({ ...fresh(), scene, reached: -1 }, 'skipTour')).toMatchObject({ scene: 'home', reached: PROGRESS.home });
+        }
+        // Only out of the tour: nowhere else is there anything to skip.
+        for (const scene of ['hello', ...GUIDED, 'done', 'welcome']) {
+            const g = { ...fresh(), scene };
+            expect(step(g, { type: 'skipTour' })).toBe(g);
         }
     });
 

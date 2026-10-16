@@ -794,6 +794,24 @@ describe('Maya on the stage', () => {
 });
 
 describe('the example', () => {
+    test('Skip the tour, even with its last visit lit on the house: the example put away, the build\'s first step (QA, 2026-10-16)', async () => {
+        const main = await boot({ sheet: true });
+        press('example');
+        expect(buttons()).toEqual([GUIDE.next, GUIDE.skipTour]);
+        press('next');
+        press('next');
+        press('next');
+        expect(main.__test__.model().reporting).toBe(true);
+        expect(buttons()).toEqual([GUIDE.next, GUIDE.skipTour]);
+        press('skipTour');
+        expect(main.__test__.ui.guide.scene).toBe('home');
+        expect(line()).toBe(GUIDE.home);
+        expect(main.__test__.model().reporting).toBe(false);
+        expect(main.__test__.model().lifted).toBeNull();
+        expect(main.__test__.active().sample).toBe(false);
+        expect(dom.el('host-back').hidden).toBe(false);
+    });
+
     test('five beats: the house, its main floor, a dot named (never ringed), its last visit\'s report, the whole home\'s total; then Schedule my cleaning (QA, 2026-10-15)', async () => {
         const main = await boot({ sheet: true });
         press('example');

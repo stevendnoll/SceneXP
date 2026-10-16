@@ -257,6 +257,8 @@ export function savedForm(guide) {
  *   review                 the end of the first build (its next step is
  *                          `away`, to the calendar)
  *   next, back, buildOwn   along the example, back out of it, and from it
+ *   skipTour               from any beat of the example, straight to the
+ *                          kind of home (QA, 2026-10-16), as buildOwn
  *   keepGoing              a returning visitor picks up where they stopped
  *   away, returned         a short loop: one of Maya's choices opens a card
  *                          ({ to, was }: where, and how the home stood),
@@ -353,6 +355,9 @@ export function step(guide, event) {
     // No Skip (QA, 2026-10-15: "the guide is the UX"): Back and the strip
     // move about in it, and Start over begins it again.
     if (type === 'homeMade' && (g.scene === 'hello' || EXAMPLE.includes(g.scene))) return to('firstRoom');
+    // Out of the example's tour from any beat, to the build's first step.
+    // (Not a Skip in the build: the tour is only watched.)
+    if (type === 'skipTour' && EXAMPLE.includes(g.scene)) return to('home');
     switch (g.scene) {
     case 'hello':
         if (type === 'start') return to('home');
@@ -518,15 +523,17 @@ export function viewFor(guide, ctx = {}) {
             ]
         };
     }
+    // Each beat but the last: Next, and beside it Skip the tour (QA,
+    // 2026-10-16).
     case 'example1':
-        return { ...base, text: GUIDE.example1, buttons: [b('next', GUIDE.next, true)] };
+        return { ...base, text: GUIDE.example1, buttons: [b('next', GUIDE.next, true), b('skipTour', GUIDE.skipTour)] };
     case 'example2':
-        return { ...base, text: GUIDE.example2, buttons: [b('next', GUIDE.next, true)] };
+        return { ...base, text: GUIDE.example2, buttons: [b('next', GUIDE.next, true), b('skipTour', GUIDE.skipTour)] };
     case 'example3':
-        return { ...base, text: ctx.exampleTask ? GUIDE.example3(ctx.exampleTask, ctx.exampleRoom) : GUIDE.example3Plain, buttons: [b('next', GUIDE.next, true)] };
+        return { ...base, text: ctx.exampleTask ? GUIDE.example3(ctx.exampleTask, ctx.exampleRoom) : GUIDE.example3Plain, buttons: [b('next', GUIDE.next, true), b('skipTour', GUIDE.skipTour)] };
     case 'exampleReport':
         // Its last visit's report on the house (M5), and what it billed.
-        return { ...base, text: ctx.exampleBill ? GUIDE.exampleReport(ctx.exampleBill.billed, ctx.exampleBill.quote) : GUIDE.exampleReportPlain, buttons: [b('next', GUIDE.next, true)] };
+        return { ...base, text: ctx.exampleBill ? GUIDE.exampleReport(ctx.exampleBill.billed, ctx.exampleBill.quote) : GUIDE.exampleReportPlain, buttons: [b('next', GUIDE.next, true), b('skipTour', GUIDE.skipTour)] };
     case 'example4':
         // The whole home's total, when the sheet has priced it.
         return ctx.exampleTotal
