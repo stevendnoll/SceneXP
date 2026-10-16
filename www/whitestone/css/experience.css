@@ -2151,7 +2151,9 @@ textarea.ws-input {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    margin: 0 0 1rem;
+    /* Clear of the heading row above it (QA, 2026-10-16: its frame met
+       the Close button's): the row has no margin of its own. */
+    margin: 0.9rem 0 1rem;
     padding: 0.85rem 1rem;
     border: 2px solid #E0A93A;
     border-radius: 12px;

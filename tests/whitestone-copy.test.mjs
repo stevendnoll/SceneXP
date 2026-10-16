@@ -101,4 +101,6 @@ test('JUST A DEMO at the top of the quote, the calendar and the receipt, said as
     expect(page).not.toContain('concept studio');
     const css = readFileSync(join(process.cwd(), 'www', 'whitestone', 'css', 'experience.css'), 'utf8');
     expect(css).toMatch(/\.demo-notice-title \{[^}]*font-size: 1\.25rem;[^}]*font-weight: 800;/);
+    // Clear of the heading row and its Close button (QA, 2026-10-16).
+    expect(css).toMatch(/\.demo-notice \{[^}]*margin: 0\.9rem 0 1rem;/);
 });
