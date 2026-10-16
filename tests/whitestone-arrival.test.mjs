@@ -1792,3 +1792,83 @@ describe('the open floor\'s missing wall follows the turn (QA, 2026-10-16)', () 
         expect(sides()).toEqual(['back', 'front', 'left']);
     });
 });
+
+describe('the accessibility sweep (2026-10-16)', () => {
+    test('a pinch is the scene\'s only on the scene: Safari\'s gestures are stopped on the canvas, never on the page (WCAG 1.4.4)', async () => {
+        await boot();
+        for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+            let onCanvas = false;
+            fire(dom.el('game-canvas'), type, { preventDefault() { onCanvas = true; } });
+            expect(`${type} ${onCanvas}`).toBe(`${type} true`);
+            let onPage = false;
+            fire(dom.documentStub, type, { target: dom.el('ws-host'), preventDefault() { onPage = true; } });
+            expect(`${type} ${onPage}`).toBe(`${type} false`);
+        }
+    });
+
+    test('Maya\'s bubble drawn again keeps the keyboard: on the same control, else her next step', async () => {
+        await boot({ sheet: true });
+        const active = () => globalThis.document.activeElement;
+        // Let's start replaces itself: the keyboard goes to her first answer.
+        const start = dom.el('host-actions').children.find((b) => b.id === 'host-start');
+        start.focus();
+        press('start');
+        expect(active() && active().id).toMatch(/^host-kind-/);
+        // A ticked floor's box is drawn again: the keyboard stays on it.
+        pick('kind-house');
+        floor('second').focus();
+        tick('second', true);
+        expect(active() && active().id).toBe('host-floor-second');
+        // Next is drawn again on the next step: it keeps the keyboard.
+        const next = dom.el('host-actions').children.find((b) => b.id === 'host-next');
+        next.focus();
+        press('next');
+        expect(active() && active().id).toMatch(/^host-/);
+        expect(active().hidden).toBeFalsy();
+        // The keyboard somewhere else is left there.
+        const outside = dom.el('game-canvas');
+        outside.focus();
+        press('kitchen');
+        expect(active()).toBe(outside);
+    });
+
+    test('every button of hers that adds words to its own says its own first (WCAG 2.5.3)', async () => {
+        const main = await boot({ sheet: true });
+        const named = [];
+        // Each box she draws into (the stub lays out no page around them).
+        const sweep = () => {
+            const stack = ['host-progress', 'host-facts', 'host-choices', 'host-actions', 'host-expand', 'host-back', 'host-next'].map((id) => dom.el(id));
+            while (stack.length) {
+                const n = stack.pop();
+                if (n.tagName === 'BUTTON' && !n.hidden) {
+                    const name = n.getAttribute('aria-label');
+                    // The words on it, the glyphs (+, ★, arrows) aside. A
+                    // button of parts (Your quote, its price, a note) is
+                    // labeled by its first: the price is said as words there
+                    // (pricing.js spokenMoney), on purpose.
+                    const parts = (n.children || []).filter((c) => c && String(c.textContent || '').trim());
+                    const shown = parts.length > 1 ? parts[0].textContent : n.textContent;
+                    const text = String(shown || '').replace(/[+★☆←→‹›]/g, '').replace(/\s+/g, ' ').trim();
+                    if (name && text) named.push([text, name]);
+                }
+                for (const c of n.children || []) stack.push(c);
+            }
+        };
+        sweep();
+        press('start');
+        pick('kind-house');
+        sweep();
+        press('next');
+        press('kitchen');
+        sweep();
+        press('next');
+        sweep();
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: true };
+        main.__test__.showGuide();
+        sweep();
+        expect(named.length).toBeGreaterThan(5);
+        for (const [text, name] of named) {
+            expect(`"${name}" starts with "${text}": ${name.toLowerCase().startsWith(text.toLowerCase())}`).toBe(`"${name}" starts with "${text}": true`);
+        }
+    });
+});

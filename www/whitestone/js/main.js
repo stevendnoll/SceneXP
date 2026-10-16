@@ -3716,9 +3716,14 @@ function setupEventListeners() {
 
     // iOS Safari ignores `user-scalable=no`, so the only way to keep the 3D
     // view from being pinch-zoomed there is to block Safari's own gesture
-    // events. Scoped to this page: the 2D pages stay zoomable.
-    ['gesturestart', 'gesturechange', 'gestureend'].forEach((type) =>
-        document.addEventListener(type, (e) => e.preventDefault(), { passive: false, signal }));
+    // events. SCOPED TO THE CANVAS (the accessibility sweep, 2026-10-16: on
+    // the document it took the page's own zoom with it, so Maya's bubble
+    // and every card could not be pinched larger, a WCAG 1.4.4 failure). A
+    // pinch that starts on the scene still belongs to the scene.
+    if (canvas) {
+        ['gesturestart', 'gesturechange', 'gestureend'].forEach((type) =>
+            canvas.addEventListener(type, (e) => e.preventDefault(), { passive: false, signal }));
+    }
 
     // A hidden tab stops drawing, and comes back with one fresh frame.
     document.addEventListener('visibilitychange', () => {

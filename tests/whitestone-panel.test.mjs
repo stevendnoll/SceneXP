@@ -126,7 +126,8 @@ describe('what the panel says (pure)', () => {
         // The example has its kitchen: not offered again.
         expect(v.chips.map((ch) => ch.area)).not.toContain('kitchen');
         const office = panelView({ scope: 'floor', level: 'main' }, { ...c, rooms: [], items: [] }, SHEET).chips.find((ch) => ch.area === 'office');
-        expect(office).toEqual({ area: 'office', label: 'Office', aria: 'Add an office with its standard tasks' });
+        // Named by its shown words first (WCAG 2.5.3, the accessibility sweep 2026-10-16).
+        expect(office).toEqual({ area: 'office', label: 'Office', aria: 'Office: add it with its standard tasks' });
         expect(v.empty).toBeNull();
         expect(panelView({ scope: 'floor', level: 'main' }, { ...c, rooms: [], items: [] }, SHEET).empty).toBe(PANEL.noRooms);
     });
@@ -613,6 +614,26 @@ describe('choosing a time and publishing, on the page', () => {
         fire(dayButton('2026-10-16'), 'click');
         expect(dom.el('booking-day-title').textContent).toBe('Start times on Friday, October 16');
         expect(dom.el('booking-prev').disabled).toBe(true);
+    });
+
+    test('Next month at the last month it can reach hands the keyboard to Previous month, never to nothing (the accessibility sweep, 2026-10-16)', async () => {
+        const main = await kitchenHome();
+        await main.__test__.openBooking();
+        const next = dom.el('booking-next');
+        const prev = dom.el('booking-prev');
+        next.focus();
+        let months = 0;
+        while (!next.disabled && months < 6) {
+            const was = dom.el('booking-month').textContent;
+            fire(next, 'click');
+            await flushAsync(20);
+            expect(dom.el('booking-month').textContent).not.toBe(was);
+            months++;
+        }
+        expect(months).toBeGreaterThan(0);
+        expect(next.disabled).toBe(true);
+        expect(globalThis.document.activeElement).toBe(prev);
+        expect(prev.disabled).toBe(false);
     });
 
     test('Book and publish ends on the receipt: the time, the quote, the link, the PIN, a QR code, the edit link', async () => {

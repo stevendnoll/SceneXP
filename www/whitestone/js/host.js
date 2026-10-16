@@ -239,7 +239,67 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         }
     }
 
+    /** Whether `node` is one of hers: in a box she draws into, or one of
+     *  her own buttons (asked of each, not of her bubble as a whole). */
+    function inBubble(node) {
+        return Boolean(node) && [progress, facts, choices, actions, expand, backBtn, nextBtn, resetBtn]
+            .some((box) => box && typeof box.contains === 'function' && box.contains(node));
+    }
+
+    /** What has the keyboard in her bubble, if anything: drawing it again
+     *  replaces its buttons, so the one that had it is gone. */
+    function focusedInBubble() {
+        const now = typeof document !== 'undefined' ? document.activeElement : null;
+        return inBubble(now) ? now : null;
+    }
+
+    /** Whether `node` is still in her bubble and showing. */
+    function stillShown(node) {
+        if (!inBubble(node)) return false;
+        for (let n = node; n && n !== root; n = n.parentNode || n.parentElement) {
+            if (n.hidden) return false;
+        }
+        return true;
+    }
+
+    /** The keyboard put back after a redraw (the accessibility sweep,
+     *  2026-10-16: Let's start, Next and every choice replaced themselves,
+     *  and a ticked floor's box was drawn again, each leaving the keyboard on
+     *  nothing): on the control of the same id if it is drawn again, else on
+     *  her next step. */
+    function refocus(had) {
+        if (!had || stillShown(had)) return;
+        const now = typeof document !== 'undefined' ? document.activeElement : null;
+        // Something else took it meanwhile (a card that opened): leave it be.
+        if (now && now !== had && now !== document.body && !inBubble(now)) return;
+        const same = had.id ? findIn([progress, facts, choices, actions], had.id) : null;
+        if (same && stillShown(same) && typeof same.focus === 'function') {
+            same.focus();
+            return;
+        }
+        if (!api.focusPrimary() && nextBtn && !nextBtn.hidden && typeof nextBtn.focus === 'function') nextBtn.focus();
+    }
+
+    /** A control by id among the boxes she draws into. */
+    function findIn(boxes, id) {
+        for (const box of boxes) {
+            const stack = box ? [box] : [];
+            while (stack.length) {
+                const n = stack.pop();
+                if (n !== box && n.id === id) return n;
+                for (const child of Array.from(n.children || [])) stack.push(child);
+            }
+        }
+        return null;
+    }
+
     function draw() {
+        const had = focusedInBubble();
+        paint();
+        refocus(had);
+    }
+
+    function paint() {
         // Tucked away (standing by): only her portrait and Need a hand?
         const tucked = Boolean(view.minimized);
         if (root && root.classList) root.classList.toggle('is-minimized', tucked);

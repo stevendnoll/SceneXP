@@ -344,7 +344,16 @@ describe('what the cleaner reads', () => {
         const overlay = overlayNow();
         expect(overlay).toBeTruthy();
         expect(all(overlay).find((e) => e.tagName === 'IMG').src).toBe('blob:test/3');
-        fire(all(overlay).find((e) => e.tagName === 'BUTTON'), 'click');
+        // Modal for the keyboard too (the accessibility sweep, 2026-10-16):
+        // Tab stays on its one button, either way.
+        const closeBtn = all(overlay).find((e) => e.tagName === 'BUTTON');
+        for (const shiftKey of [false, true]) {
+            let kept = false;
+            fire(globalThis.document, 'keydown', { key: 'Tab', shiftKey, preventDefault() { kept = true; } });
+            expect(kept).toBe(true);
+            expect(globalThis.document.activeElement).toBe(closeBtn);
+        }
+        fire(closeBtn, 'click');
         expect(globalThis.document.body.children.includes(overlay)).toBe(false);
         expect(thumb.focused).toBe(true);
     });

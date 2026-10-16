@@ -7168,7 +7168,7 @@ html [data-ui-theme="surf" lang="en"]
             path [d="M4 10h11M10.5 5l5 5-5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"]
       ol#host-progress.host-progress [hidden]
       div#host-facts.host-facts [aria-label="Your home at a glance" hidden role="group"]
-      button#host-expand.ws-btn.ws-btn-small.host-expand [aria-label="Maya, your host: need a hand?" hidden type="button"]
+      button#host-expand.ws-btn.ws-btn-small.host-expand [aria-label="Need a hand? Ask Maya, your host." hidden type="button"]
         "Need a hand?"
       p#host-line.host-line
       div#host-choices.host-choices [hidden]

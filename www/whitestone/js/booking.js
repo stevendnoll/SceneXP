@@ -129,6 +129,20 @@ export function createBooking({ on = {}, signal } = {}) {
     if (next) next.addEventListener('click', () => call('month', 1), { signal });
     if (confirm) confirm.addEventListener('click', () => call('confirm'), { signal });
     let dayButtons = [];
+    const panel = byId('booking-panel');
+
+    /** Turn `btn` on or off, handing focus on first if it has it (the
+     *  accessibility sweep, 2026-10-16): a disabled button drops focus to
+     *  nothing, as Next month did on reaching the last month and Book my
+     *  visit while it books. To `to` if that is on, else the card. */
+    function setOn(btn, isOn, to) {
+        if (!btn) return;
+        if (!isOn && typeof document !== 'undefined' && document.activeElement === btn) {
+            const target = to && !to.disabled ? to : panel;
+            if (target && typeof target.focus === 'function') target.focus();
+        }
+        btn.disabled = !isOn;
+    }
 
     function show(v) {
         // Choose a time, or Choose a new time when moving a booked visit.
@@ -138,8 +152,10 @@ export function createBooking({ on = {}, signal } = {}) {
         if (title) title.textContent = monthLabel(v.month);
         const summary = byId('booking-summary');
         if (summary) summary.textContent = v.summary || '';
-        if (prev) prev.disabled = !v.canPrev;
-        if (next) next.disabled = !v.canNext;
+        if (prev) prev.disabled = false;
+        if (next) next.disabled = false;
+        setOn(prev, v.canPrev, next && v.canNext ? next : null);
+        setOn(next, v.canNext, prev && v.canPrev ? prev : null);
         const grid = byId('booking-days');
         dayButtons = [];
         if (grid) {
@@ -197,7 +213,7 @@ export function createBooking({ on = {}, signal } = {}) {
             error.hidden = !v.error;
         }
         if (confirm) {
-            confirm.disabled = Boolean(v.busy) || !day || !(day.times || []).length;
+            setOn(confirm, !(Boolean(v.busy) || !day || !(day.times || []).length), null);
             confirm.textContent = v.busy ? BOOKING.working : (v.confirmLabel || BOOKING.confirm);
         }
     }

@@ -329,7 +329,7 @@ function markRow(item, name, mark, picking, on, note) {
         text: skipped ? COPY.isSkipped : COPY.skip,
         attrs: {
             'aria-pressed': skipped ? 'true' : 'false', 'aria-expanded': picking ? 'true' : 'false',
-            'aria-label': COPY.markSkip(name), title: COPY.markSkip(name)
+            'aria-label': COPY.markSkip(name, skipped ? COPY.isSkipped : COPY.skip), title: COPY.markSkip(name, skipped ? COPY.isSkipped : COPY.skip)
         }
     });
     skipBtn.addEventListener('click', () => on.skip(picking ? null : item.id));
@@ -619,7 +619,7 @@ export function renderReport(container, { form, sheet, report, bill, mode, draft
 /**
  * The full-screen photo: `url` its object address, `label` what it is.
  * Closes on its button, a tap on the dark around it, or Escape, and gives
- * the keyboard back to `from`. Returns the overlay.
+ * the keyboard back to `from`. Tab stays on its button. Returns the overlay.
  */
 export function showPhoto(doc, url, label, from) {
     const close = h('button', { type: 'button', className: 'photo-close', text: COPY.close });
@@ -632,8 +632,15 @@ export function showPhoto(doc, url, label, from) {
         doc.removeEventListener('keydown', onKey);
         if (from && typeof from.focus === 'function') from.focus();
     };
+    // Modal for the keyboard too (the accessibility sweep, 2026-10-16): its
+    // one control keeps Tab, or Tab walked out onto the checklist hidden
+    // behind the dark.
     const onKey = (event) => {
         if (event.key === 'Escape') done();
+        else if (event.key === 'Tab') {
+            event.preventDefault();
+            close.focus();
+        }
     };
     close.addEventListener('click', done);
     overlay.addEventListener('click', (event) => {

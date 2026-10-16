@@ -362,7 +362,11 @@ export const GUIDE = Object.freeze({
     progressLabel: 'Your progress',
     progress: Object.freeze(['Home type', 'Floors', 'First room', 'Your rooms', 'Review']),
     progressStep: (n, total, name) => `Step ${n} of ${total}: ${name}`,
-    goToStep: (name) => `Go to ${name}`,
+    /** A step's name, spoken and in its tooltip: its shown words first (the
+     *  accessibility sweep, 2026-10-16, WCAG 2.5.3), so a voice saying what
+     *  it sees finds it. The same rule for every name below that adds to
+     *  the words on its button. */
+    goToStep: (name) => `${name}: go to this step`,
     /** Back's hover title: where it goes. */
     backTo: (name) => `Back to ${name}`,
     backToStart: 'Back to the start',
@@ -456,7 +460,7 @@ export const GUIDE = Object.freeze({
     standbyPlain: 'I\u2019m right here when you need me.',
     noHome: 'There\u2019s no home here yet.',
     expand: 'Need a hand?',
-    expandLabel: 'Maya, your host: need a hand?',
+    expandLabel: 'Need a hand? Ask Maya, your host.',
     welcomeEditLink: 'Welcome, with your private edit link.',
     homeDraft: (title, rooms, tasks, money) => `${title} has ${rooms} and ${tasks}${money ? `, ${money} so far` : ''}.`,
     homeEmpty: (title) => `${title} has no rooms yet.`,
@@ -583,7 +587,7 @@ export const PANEL = Object.freeze({
     rooms: (n) => (n === 1 ? '1 room' : `${n} rooms`),
     /** A floor's row, in the panel and in Maya's Your rooms (QA, 2026-10-16). */
     floorRooms: (n) => (n ? (n === 1 ? '1 room' : `${n} rooms`) : 'No rooms yet'),
-    floorOpen: (floor, rooms) => `Open the ${String(floor).toLowerCase()}: ${String(rooms).toLowerCase()}`,
+    floorOpen: (floor, rooms) => `${floor}, ${String(rooms).toLowerCase()}: open it`,
     tasks: (n) => (n === 1 ? '1 task' : `${n} tasks`),
     about: (time) => `about ${time}`,
     back: (name) => `Back to ${name}`,
@@ -595,7 +599,7 @@ export const PANEL = Object.freeze({
     noRooms: 'No rooms on this floor yet. Add one below.',
     noTasks: 'No tasks in this room yet. Add one below.',
     addRoom: 'Add a room',
-    chipLabel: (name) => `Add ${withArticle(name)} with its standard tasks`,
+    chipLabel: (name) => `${name}: add it with its standard tasks`,
     anotherRoom: 'Another kind of room',
     addTask: 'Add a task',
     editRoom: 'Edit this room',
@@ -773,8 +777,10 @@ export const TASKS_PAGE = Object.freeze({
     isDone: 'Done',
     skip: 'Skip',
     isSkipped: 'Skipped',
-    markDone: (task) => `Mark ${task} done`,
-    markSkip: (task) => `Skip ${task}`,
+    /** Done and Skip, named by their shown words first, then the task
+     *  (WCAG 2.5.3): `shown` is what the button says now. */
+    markDone: (task) => `Done: ${task}`,
+    markSkip: (task, shown = 'Skip') => `${shown}: ${task}`,
     skipWhy: 'Why was it skipped?',
     skipWhyOf: (task) => `Why ${task} was skipped`,
     reasons: REPORT.reasons,
