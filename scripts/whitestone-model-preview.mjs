@@ -502,6 +502,18 @@ function faceCamera(turn = 0, dist = 0.42, fov = 30) {
     return { eye: [mid[0] + Math.sin(a) * dist, mid[1] + 0.02, mid[2] + Math.cos(a) * dist], aim: mid, fov };
 }
 const faceShot = (title, turn, dist) => [title, { ...shot(build(EMPTY_HOME), start, 800, 800), camera: faceCamera(turn, dist), withMaya: true }];
+/** A camera on all of Maya, `turn` radians round from straight on: her
+ *  figure judged from the front, three-quarters and the side (QA,
+ *  2026-10-16: her waist). */
+function bodyCamera(turn = 0, dist = 3.6, fov = 30) {
+    const maya = buildMaya(CONFIG);
+    maya.group.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(maya.group);
+    const mid = [(box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2];
+    const a = CONFIG.cast.maya.facing + turn;
+    return { eye: [mid[0] + Math.sin(a) * dist, mid[1] + 0.05, mid[2] + Math.cos(a) * dist], aim: mid, fov };
+}
+const bodyShot = (title, turn) => [title, { ...shot(build(EMPTY_HOME), start, 700, 900), camera: bodyCamera(turn), withMaya: true }];
 /** The bubble's round portrait, framed as cast.js frames it
  *  (portraitPose), at five times its canvas. */
 const portraitShot = (title) => {
@@ -568,6 +580,9 @@ const views = [
     ['Maya waving hello', { ...shot(build(EMPTY_HOME), start, 1280, 800), gesture: { name: 'wave', t: 1.0 } }],
     ['Maya pointing to the house', { ...shot(build(example), start, 1280, 800), gesture: { name: 'point', t: 1.0 } }],
     faceShot("Maya's face, straight on", 0, 0.42),
+    bodyShot("Maya's figure, straight on", 0),
+    bodyShot("Maya's figure, three-quarters to her left", 0.7),
+    bodyShot("Maya's figure, from her side", Math.PI / 2),
     faceShot("Maya's face, three-quarters to her left", 0.6, 0.42),
     faceShot("Maya's face, three-quarters to her right", -0.6, 0.42),
     portraitShot("Maya's bubble portrait (crop to a circle)"),

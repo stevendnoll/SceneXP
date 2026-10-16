@@ -27,10 +27,21 @@
  * @param {number} w Finished width
  * @param {number} h Finished height
  * @param {number} d Finished depth
+ * WITH A WAIST (`waist` above 0) THE SIDES CURVE IN. Each side runs from
+ * the hip at the bottom in to a waist `waist` narrower than the full width,
+ * `WAIST_AT` of the way up, and back out to the shoulder, in two curves
+ * whose tangents are upright at the hip, the waist and the shoulder, so the
+ * outline has no corner anywhere. The hip, the shoulders and the depth stay
+ * exactly as they were: only the middle of each side moves in.
+ *
+ * @param {number} w Finished width
+ * @param {number} h Finished height
+ * @param {number} d Finished depth
  * @param {number} round Shoulder radius as a fraction of the half-width
+ * @param {number} [waist=0] How much narrower the waist is, 0 to 0.3 of the width
  * @returns {THREE.ExtrudeGeometry}
  */
-function roundedTorsoGeometry(w, h, d, round) {
+function roundedTorsoGeometry(w, h, d, round, waist = 0) {
     // Small enough that it never eats a face, large enough to catch a
     // highlight along each edge under the room's key light.
     const bevel = Math.min(0.02, w / 4, h / 4, d / 4);
@@ -41,20 +52,41 @@ function roundedTorsoGeometry(w, h, d, round) {
     const topR = Math.min(round * (w / 2), hw, hh);
     const botR = Math.min(0.02, hw, hh);
 
+    // The waist: how far in each side comes (in the shape's own half-width,
+    // so the bevel still finishes it to `w * (1 - pinch)`), and its height.
+    const pinch = Math.max(0, Math.min(0.3, waist));
+    const inset = (w / 2) * pinch;
+    const hip = -hh + botR;
+    const shoulder = hh - topR;
+    const at = -hh + h * WAIST_AT;
+    // One side, from `y0` to `y1` at its full half-width `x` (signed), in to
+    // the waist and out again, every tangent upright where it meets the next.
+    const side = (x, y0, y1) => {
+        if (!(inset > 0)) {
+            shape.lineTo(x, y1);
+            return;
+        }
+        const xw = x - Math.sign(x) * inset;
+        const half1 = (at - y0) / 2;
+        const half2 = (y1 - at) / 2;
+        shape.bezierCurveTo(x, y0 + half1, xw, at - half1, xw, at);
+        shape.bezierCurveTo(xw, at + half2, x, y1 - half2, x, y1);
+    };
+
     const shape = new THREE.Shape();
-    shape.moveTo(-hw, -hh + botR);
-    shape.lineTo(-hw, hh - topR);
+    shape.moveTo(-hw, hip);
+    side(-hw, hip, shoulder);
     shape.absarc(-hw + topR, hh - topR, topR, Math.PI, Math.PI / 2, true);
     shape.lineTo(hw - topR, hh);
     shape.absarc(hw - topR, hh - topR, topR, Math.PI / 2, 0, true);
-    shape.lineTo(hw, -hh + botR);
+    side(hw, shoulder, hip);
     shape.absarc(hw - botR, -hh + botR, botR, 0, -Math.PI / 2, true);
     shape.lineTo(-hw + botR, -hh);
     shape.absarc(-hw + botR, -hh + botR, botR, -Math.PI / 2, -Math.PI, true);
 
     const depth = d - 2 * bevel;
     const geometry = new THREE.ExtrudeGeometry(shape, {
-        depth, steps: 1, curveSegments: 5,
+        depth, steps: 1, curveSegments: inset > 0 ? 10 : 5,
         bevelEnabled: true, bevelSegments: 2,
         bevelThickness: bevel, bevelSize: bevel, bevelOffset: 0
     });
@@ -62,6 +94,10 @@ function roundedTorsoGeometry(w, h, d, round) {
     geometry.translate(0, 0, -depth / 2);
     return geometry;
 }
+
+/** Where a `waist` is drawn, as a share of the torso's height from its
+ *  foot: a natural waist, a little below the middle. */
+const WAIST_AT = 0.42;
 
 /**
  * Create a detailed person figure
@@ -92,6 +128,7 @@ export function createPerson(config) {
         dressShirt = false,    // button-down dress shirt: center placket + long sleeves, no jacket/tie
         shoulderRound = 0,     // 0 = square box torso; up to ~0.6 rounds the shoulders and softens every edge
         hips = 0,              // 0 = straight (as before); up to 1 a woman's build: thighs full at the hip, meeting, tapering to the knee, a slimmer calf
+        waist = 0,             // 0 = straight sides (as before); up to 0.3 an hourglass: the torso's sides curve in to a waist that much narrower (rounded torso only, shoulderRound > 0)
         sleeveColor = null     // long sleeves in this color; null keeps bare forearms
     } = config;
 
@@ -319,7 +356,7 @@ export function createPerson(config) {
     // points from any three-quarter angle.
     const torso = new THREE.Mesh(
         shoulderRound > 0
-            ? roundedTorsoGeometry(torsoWidth, torsoHeight, torsoDepth, shoulderRound)
+            ? roundedTorsoGeometry(torsoWidth, torsoHeight, torsoDepth, shoulderRound, waist)
             : new THREE.BoxGeometry(torsoWidth, torsoHeight, torsoDepth),
         shirtMaterial
     );

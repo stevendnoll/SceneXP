@@ -222,6 +222,44 @@ describe('built with the real three.js', () => {
         expect(thighOf(CONFIG)).toBeGreaterThan(thighOf(plain) * 1.5);
     });
 
+    test('an hourglass: her polo curves in to a waist, her shoulders and hips as wide as before; tan khakis (Steve, 2026-10-16)', () => {
+        /** Her torso (the rounded build's extrusion), measured: its box, and
+         *  its half-width at the height of a natural waist. */
+        const torsoOf = (cfg) => {
+            let torso = null;
+            buildMaya(cfg).group.traverse((o) => { if (o.isMesh && o.geometry.type === 'ExtrudeGeometry') torso = o; });
+            const g = torso.geometry;
+            g.computeBoundingBox();
+            const box = g.boundingBox;
+            const h = box.max.y - box.min.y;
+            const waistY = box.min.y + h * 0.42;
+            const pos = g.attributes.position;
+            let half = 0;
+            for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) - waistY) < h * 0.04) half = Math.max(half, Math.abs(pos.getX(i)));
+            return { box, half };
+        };
+        expect(CONFIG.cast.maya.waist).toBeGreaterThan(0);
+        const mine = torsoOf(CONFIG);
+        const plain = torsoOf({ ...CONFIG, cast: { ...CONFIG.cast, maya: { ...CONFIG.cast.maya, waist: 0 } } });
+        // The waist in, by about what her config asks. (Straight sides have
+        // no vertex at the waist: theirs is the full half-width.)
+        const full = (plain.box.max.x - plain.box.min.x) / 2;
+        expect(mine.half).toBeLessThan(full * (1 - CONFIG.cast.maya.waist * 0.75));
+        expect(mine.half).toBeGreaterThan(full * (1 - CONFIG.cast.maya.waist * 1.25));
+        // Her shoulders, her hips and her depth as they were, to a tenth of
+        // a millimeter (the bevel follows the curve near the hip).
+        for (const k of ['x', 'y', 'z']) {
+            expect(Math.abs((mine.box.max[k] - mine.box.min[k]) - (plain.box.max[k] - plain.box.min[k]))).toBeLessThan(1e-4);
+        }
+        // Tan khakis: a warm, light tan, not the dark jeans they were.
+        const pants = new REAL.Color(CONFIG.cast.maya.pants);
+        const hsl = {};
+        pants.getHSL(hsl, REAL.SRGBColorSpace);
+        expect(hsl.h * 360).toBeGreaterThan(25);
+        expect(hsl.h * 360).toBeLessThan(50);
+        expect(hsl.l).toBeGreaterThan(0.45);
+    });
+
     test('a gesture runs its course and rests; reduced motion rests at once; the sway lasts as long as the line', () => {
         const maya = buildMaya(CONFIG);
         expect(maya.tick(1 / 60)).toBe(false);

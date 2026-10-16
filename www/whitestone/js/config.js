@@ -225,7 +225,7 @@ export const CONFIG = deepFreeze({
      *  and her, standing on the cove's floor to the right of the turntable
      *  at `x`, `z`, turned `facing` radians toward the house, `height`
      *  meters tall with her hair. A white Whitestone polo with the accent's
-     *  mark, charcoal trousers, a warm medium skin tone, dark hair. */
+     *  mark, tan khakis, a warm medium skin tone, dark hair. */
     cast: {
         maya: {
             x: 2.0, z: 0.1, facing: -0.55, height: 1.72,
@@ -234,9 +234,14 @@ export const CONFIG = deepFreeze({
             // a little deeper than her skin, `width` across the corners, the
             // corners `lift` above its middle, `drop` below her head's middle.
             lips: '#A3564F', smile: { width: 0.04, lift: 0.0072, drop: 0.054, thickness: 0.0049 },
-            shirt: '#F6F5F1', pants: '#2F353D', accent: '#3E5C76',
-            // The rig's woman's build, 0 to 1 (people-1.0.0.js `hips`).
-            hips: 1
+            // Tan khakis (Steve, 2026-10-16: they were dark jeans).
+            shirt: '#F6F5F1', pants: '#AE9670', accent: '#3E5C76',
+            // The rig's woman's build, 0 to 1 (people-1.0.0.js `hips`), and
+            // her waist (`waist`, 0 to 0.3): the polo's sides curve in to a
+            // waist that much narrower than her shoulders and hips (Steve,
+            // 2026-10-16: the torso read as a box).
+            hips: 1,
+            waist: 0.2
         }
     },
 

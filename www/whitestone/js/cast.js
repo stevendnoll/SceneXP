@@ -160,7 +160,10 @@ export function buildMaya(config) {
         shoulderRound: 0.45,
         // A woman's build (Steve, 2026-10-14: "her hips and legs ... look
         // more like a man's"): the rig's rounded hips and fuller thighs.
-        hips: m.hips ?? 0
+        hips: m.hips ?? 0,
+        // An hourglass (Steve, 2026-10-16: the torso read as a box): the
+        // polo's sides curve in to a waist and out again.
+        waist: m.waist ?? 0
     });
     // Her smile (QA, 2026-10-15): the shared rig has no mouth, so hers is
     // added here, on the head's front below the nose (smileFor).
