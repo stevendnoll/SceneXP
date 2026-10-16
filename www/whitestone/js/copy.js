@@ -395,12 +395,12 @@ export const GUIDE = Object.freeze({
     added: (room, count, money) => `There's your ${room} with its ${countWord(count)} standard ${count === 1 ? 'task' : 'tasks'}, ${money} so far.`,
     addedMinimum: (money) => `Every visit starts at ${money}, so your next rooms fit inside that.`,
     addedPlain: (room) => `There's your ${room}.`,
+    /** The blue dots, on the room just added (QA, 2026-10-16: they are
+     *  not tapped, so the room is). */
+    addedDots: (room, count) => (count === 1
+        ? `The blue dot is that task. Tap the ${room} to see it, or star it if it matters most.`
+        : `Each blue dot is one of them. Tap the ${room} to see them all, or star the ones that matter most.`),
 
-    dots: "Each blue dot is a task. Tap one to see what's included, or star the ones that matter most.",
-    dotsAgain: 'Tap any blue dot on the open floor to see that task.',
-    /** Back from a dot she pointed to (QA, 2026-10-15). */
-    dotsSeen: 'Every task works that way. Open another dot if you like, or tap Got it to add your other rooms.',
-    dotsSeenAgain: 'Tap Got it whenever you’re ready to add your other rooms.',
     gotIt: 'Got it',
 
     rooms: "Now add your other rooms here, or tap a floor to open it. If that's everything, review your checklist.",
@@ -419,8 +419,8 @@ export const GUIDE = Object.freeze({
     example1: 'This is a four-bedroom home with a home office.',
     example2: 'Each room has its tasks, and every task has a price.',
     /** The dots, shown and not tapped (Example mode, QA 2026-10-15). */
-    example3: (task) => `Each blue dot is a task, like the ${String(task).toLowerCase()} here. In your own home, you can tap a dot to see what’s included, or star the tasks that matter most.`,
-    example3Plain: 'Each blue dot is a task. In your own home, you can tap a dot to see what’s included, or star the tasks that matter most.',
+    example3: (task) => `Each blue dot is a task, like the ${String(task).toLowerCase()} here. In your own home, you can tap a room to see what’s included, or star the tasks that matter most.`,
+    example3Plain: 'Each blue dot is a task. In your own home, you can tap a room to see what’s included, or star the tasks that matter most.',
     /** The example's last visit (M5): the report on the house, and its bill. */
     exampleReport: (billed, quote) => `After each visit, your cleaner’s report lights up the house. Green is done, amber was skipped, and gray wasn’t reached. This visit came to ${billed} of the ${quote} quote, since skipped work comes off the bill.`,
     exampleReportPlain: 'After each visit, your cleaner’s report lights up the house. Green is done, amber was skipped, and gray wasn’t reached. Skipped work comes off the bill.',
@@ -542,7 +542,7 @@ export const GUIDE = Object.freeze({
     factNew: 'New',
     factLastVisitSpoken: (value, isNew) => `Last visit: ${value}.${isNew ? ' A new report.' : ''}`,
 
-    hint: 'Tap a floor of the house to open it, and tap a blue dot to see a task. I’m right here whenever you’d like a hand.',
+    hint: 'Tap a floor of the house to open it, and tap a room to see its tasks. I’m right here whenever you’d like a hand.',
     /** The → by her name: her bubble's main step, from the top (QA,
      *  2026-10-15: on a phone the buttons can sit below the fold). */
     continueTo: (label) => `Continue: ${label}`

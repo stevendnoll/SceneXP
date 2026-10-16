@@ -8,7 +8,8 @@
  * has offered as chips, each added with its standard tasks in one tap. A
  * tap on a room lists its tasks, each with its price and a star, and a
  * bathroom's type of bath (Full, Shower, Half) to switch in one tap. A tap on a
- * task's dot shows that task, to edit, star or remove. Escape, the panel's
+ * task in that list shows it, to edit, star or remove (its dot on the house
+ * stands out; a tap on a dot itself is a tap on its room). Escape, the panel's
  * back button, or a tap on empty space goes one step back: task to room,
  * room to floor, floor to the closed house.
  *
@@ -37,14 +38,15 @@ import { hasUnsent } from './store.min.js';
 /**
  * The selection after a tap that met the house (`hit` is model.js hitOf's
  * `{ level, roomId, itemId }`), with `lifted` the floor open now. Inside the
- * open floor a dot selects its task and anything else in a room its room;
- * anywhere else the tap selects the floor it met. Null when the tap met
- * nothing of the house.
+ * open floor anything in a room, its dots too, selects the room; anywhere
+ * else the tap selects the floor it met. Null when the tap met nothing of
+ * the house.
  */
 export function selectFromHit(hit, lifted) {
     if (!hit || !hit.level) return null;
     const open = hit.level === lifted;
-    if (open && hit.itemId && hit.roomId) return { scope: 'task', level: hit.level, roomId: hit.roomId, itemId: hit.itemId };
+    // A dot counts as its room (QA, 2026-10-16): a task is chosen from the
+    // room's list, never from the house.
     if (open && hit.roomId) return { scope: 'room', level: hit.level, roomId: hit.roomId, itemId: null };
     return { scope: 'floor', level: hit.level, roomId: null, itemId: null };
 }

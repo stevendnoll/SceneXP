@@ -12,8 +12,9 @@
  *   attached   a townhome's neighbors: an end unit, or between two
  *   floors     tick the floors the home has; each rises on the house
  *   firstRoom  add the kitchen in one tap, or choose another room
- *   added      the room and its price, from the price sheet
- *   dots       what the blue dots are
+ *   added      the room and its price, from the price sheet, and what
+ *              the blue dots on it are (QA, 2026-10-16: the dots are no
+ *              longer tapped, so they have no step of their own)
  *   rooms      the rest of the home, then review
  *   review     the quote, and care preferences offered once
  *   saved      all set
@@ -49,7 +50,11 @@ import { priceChoice, formatMoney } from './pricing.min.js';
 
 /** The scenes of the first build, in order. Where the visitor is among
  *  these is saved, and offered again on a return. */
-export const GUIDED = Object.freeze(['home', 'attached', 'floors', 'firstRoom', 'added', 'dots', 'rooms', 'review']);
+export const GUIDED = Object.freeze(['home', 'attached', 'floors', 'firstRoom', 'added', 'rooms', 'review']);
+
+/** Scenes since retired, and where a guide saved at one resumes (QA,
+ *  2026-10-16: the dots step folded into `added`). */
+const RETIRED = Object.freeze({ dots: 'rooms' });
 
 /** The example's beats, in order: Back goes one beat back, and from the
  *  first to the greeting. */
@@ -57,7 +62,7 @@ export const EXAMPLE = Object.freeze(['example1', 'example2', 'example3', 'examp
 
 /** Which step of the progress strip each guided scene is on: Home type
  *  (with a townhome's neighbors), Floors, First room, Your rooms, Review. */
-export const PROGRESS = Object.freeze({ home: 0, attached: 0, floors: 1, firstRoom: 2, added: 2, dots: 2, rooms: 3, review: 4 });
+export const PROGRESS = Object.freeze({ home: 0, attached: 0, floors: 1, firstRoom: 2, added: 2, rooms: 3, review: 4 });
 
 /** Whether the strip's First room is closed: two rooms or more, so it is
  *  done, and going back to it would only look odd (QA, 2026-10-15). */
@@ -104,13 +109,12 @@ export function entryOf(stepIndex, { roomId = null } = {}) {
 /**
  * The touch point a scene's words are about, ringed on screen (QA,
  * 2026-10-14): one at a time, and only while it is what Maya is speaking
- * of. `dot` the first task of the room just added, `floor` a floor of the
- * house, `element` a control by its id. main.js finds where it is and
+ * of. `floor` a floor of the house, `element` a control by its id,
+ * `exampleDot` the example's dot to look at. main.js finds where it is and
  * takes the ring away the moment it is used.
  */
 export const HALO = Object.freeze({
     firstRoom: Object.freeze({ kind: 'element', id: 'host-chip-kitchen' }),
-    dots: Object.freeze({ kind: 'dot' }),
     /** The example's dots: one ringed to look at, not to tap. */
     example3: Object.freeze({ kind: 'exampleDot' }),
     rooms: Object.freeze({ kind: 'floor' }),
@@ -219,7 +223,8 @@ export function arrivalGuide(doc) {
     const saved = doc.settings && doc.settings.guide;
     const reviewed = Boolean(saved && saved.reviewed);
     if (!hasOwn(doc)) return { scene: 'hello', resume: null, reviewed, back: null, tapped: false, rooms: 0, reached: -1 };
-    const resume = saved && GUIDED.includes(saved.scene) ? saved.scene : null;
+    const at = saved ? RETIRED[saved.scene] || saved.scene : null;
+    const resume = GUIDED.includes(at) ? at : null;
     return { scene: 'welcome', resume, reviewed, back: null, tapped: false, rooms: 0, reached: -1 };
 }
 
@@ -247,7 +252,6 @@ export function savedForm(guide) {
  *                          any step reached so far (QA, 2026-10-14)
  *   floorTapped, next      the floors, and moving on from them
  *   roomAdded              a room was added, by any route
- *   dotOpened, gotIt       the dots
  *   review, saved          the end of the first build
  *   next, back, buildOwn   along the example, back out of it, and from it
  *   keepGoing              a returning visitor picks up where they stopped
@@ -366,17 +370,11 @@ export function step(guide, event) {
     case 'firstRoom':
         if (type === 'roomAdded') return to('added', { roomId: event.roomId || null });
         return g;
-    // A dot opened on the First room step keeps her there (QA, 2026-10-15:
-    // it skipped to Your rooms, three Backs away): the panel's Back comes
-    // straight back to her, and Got it moves on.
+    // The room just added, its tasks and its dots, then Your rooms. A tap on
+    // the room keeps her here: the panel's Back comes straight back to her
+    // (main.js backToFirstRoom).
     case 'added':
-        if (type === 'next') return to('dots', { opened: false });
-        if (type === 'dotOpened') return to('dots', { opened: true });
-        if (type === 'roomAdded') return to('rooms', { rooms: g.rooms + 1 });
-        return g;
-    case 'dots':
-        if (type === 'dotOpened') return g.opened ? g : to('dots', { opened: true });
-        if (type === 'gotIt') return to('rooms');
+        if (type === 'next') return to('rooms');
         if (type === 'roomAdded') return to('rooms', { rooms: g.rooms + 1 });
         return g;
     case 'rooms':
@@ -453,7 +451,9 @@ export function addedLine(sheet, area, label, bath) {
     const room = String(label || '').toLowerCase();
     const sum = presetSummary(sheet, area, bath);
     if (!sum || !sum.count) return GUIDE.addedPlain(room);
-    const line = GUIDE.added(room, sum.count, formatMoney(sum.cents));
+    // What the blue dots are, and that the room shows them all (QA,
+    // 2026-10-16: the dots themselves are not tapped).
+    const line = `${GUIDE.added(room, sum.count, formatMoney(sum.cents))} ${GUIDE.addedDots(room, sum.count)}`;
     const minimum = sheet.visitMinimumCents || 0;
     return sum.cents < minimum ? `${line} ${GUIDE.addedMinimum(formatMoney(minimum))}` : line;
 }
@@ -498,11 +498,6 @@ export function viewFor(guide, ctx = {}) {
         return { ...base, text: GUIDE.firstRoom, buttons: [b('otherRoom', GUIDE.otherRoom)], choices: 'rooms' };
     case 'added':
         return { ...base, text: ctx.addedText || GUIDE.addedPlain(String(ctx.roomLabel || '').toLowerCase()), buttons: [b('next', GUIDE.next, true)] };
-    case 'dots':
-        // Once a dot has been opened, she says so, and Got it leads on.
-        return guide.opened
-            ? { ...base, text: GUIDE.dotsSeen, again: GUIDE.dotsSeenAgain, halo: null, buttons: [b('gotIt', GUIDE.gotIt, true)] }
-            : { ...base, text: GUIDE.dots, buttons: [b('gotIt', GUIDE.gotIt, true)] };
     case 'rooms': {
         // Rooms as chips (QA, 2026-10-14). Review is offered from the first
         // room on: a home may want only one room cleaned (QA, 2026-10-15).

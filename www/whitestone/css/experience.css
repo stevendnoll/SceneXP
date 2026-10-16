@@ -1228,11 +1228,6 @@ textarea.ws-input {
     z-index: 21;
 }
 
-.ws-halo.is-dot {
-    width: 38px;
-    height: 38px;
-}
-
 .ws-halo[hidden] {
     display: none;
 }

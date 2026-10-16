@@ -522,15 +522,15 @@ function showPanel() {
     if (!panel) return;
     let view = ui.selected ? panelView(ui.selected, active(), state.sheet) : null;
     if (!view) ui.selected = null;
-    else if (onFirstRoomStep()) view = { ...view, back: PANEL.back(GUIDE.progress[PROGRESS.dots]) };
+    else if (onFirstRoomStep()) view = { ...view, back: PANEL.back(GUIDE.progress[PROGRESS.added]) };
     panel.show(view);
 }
 
-/** Whether Maya is on the First room step, past adding the room: a dot
- *  opened there is a look at one task before she moves on, not a move into
+/** Whether Maya is on the First room step, past adding the room: the room
+ *  opened there is a look at its tasks before she moves on, not a move into
  *  the panel (QA, 2026-10-15: three Backs led out of it, to Your rooms). */
 function onFirstRoomStep() {
-    return Boolean(ui.guide && (ui.guide.scene === 'added' || ui.guide.scene === 'dots'));
+    return Boolean(ui.guide && ui.guide.scene === 'added');
 }
 
 /** Back to Maya's First room step from whatever the panel shows: the
@@ -560,10 +560,7 @@ function onPanelRow(kind, id) {
     } else if (kind === 'task') {
         const item = c.items.find((i) => i.id === id);
         const room = item && c.rooms.find((r) => r.id === item.roomId);
-        if (room) {
-            selectTo({ scope: 'task', level: room.level, roomId: room.id, itemId: id }, { focus: true });
-            guideTo({ type: 'dotOpened' });
-        }
+        if (room) selectTo({ scope: 'task', level: room.level, roomId: room.id, itemId: id }, { focus: true });
     }
 }
 
@@ -701,8 +698,8 @@ function onGuideChip(area, level) {
 
 /** Where the ring on the house goes, in the turntable's frame, or null when
  *  there is none to show: a closed floor (guide.js ringFloor; opening one
- *  is using it) while the panel is put away; the first dot of the room just added
- *  while its floor is open and no task is chosen yet. Never over a card. */
+ *  is using it) while the panel is put away, or the example's dot to look
+ *  at. Never over a card. */
 function haloPoint() {
     const h = ui.halo;
     const c = active();
@@ -717,12 +714,6 @@ function haloPoint() {
     if (h.spec.kind === 'exampleDot') {
         const item = exampleDot(c, model.lifted);
         return item ? model.pointOf({ kind: 'dot', itemId: item.id }) : null;
-    }
-    if (h.spec.kind === 'dot') {
-        const room = ui.guide && c.rooms.find((r) => r.id === ui.guide.roomId && !r.deletedAt);
-        if (!room || model.lifted !== room.level || (ui.selected && ui.selected.scope === 'task')) return null;
-        const first = itemsIn(c, room.id)[0];
-        return first ? model.pointOf({ kind: 'dot', itemId: first.id }) : null;
     }
     return null;
 }
@@ -780,29 +771,21 @@ function placeLabels() {
 // ---- Tapping the house -------------------------------------------------------------
 
 /**
- * A tap on the house (ONBOARDING section 4). A tap on a blue dot selects
- * its task, inside the open floor a tap on a room selects the room, and a
- * tap anywhere else on a floor selects (and opens) it, the panel saying
- * what was chosen. With no checklist open it starts one. With nothing known
- * of where it landed, it opens the next floor up, and past the top one
- * closes the house again.
+ * A tap on the house (ONBOARDING section 4). Inside the open floor a tap on
+ * a room selects the room, a blue dot counting as its room (QA, 2026-10-16:
+ * a dot says nothing of which task it is until tapped, so its task is
+ * reached from the room's list instead), and a tap anywhere else on a floor
+ * selects (and opens) it, the panel saying what was chosen. With nothing
+ * known of where it landed, it opens the next floor up, and past the top
+ * one closes the house again.
  */
-function tapModel(level = null, itemId = null, roomId = null) {
+function tapModel(level = null, roomId = null) {
     if (!state.loaded) return false;
     // Before the first room, the house is Maya's to explain: a tap on it
     // opens nothing over her, and her next step pulses instead.
     if (!houseAnswers()) {
         if (host) host.nudge();
         return false;
-    }
-    const c = active();
-    // A blue dot: its task (ONBOARDING Scene 4), wherever its floor is.
-    const item = itemId ? c.items.find((i) => i.id === itemId && !i.deletedAt) : null;
-    if (item) {
-        const room = c.rooms.find((r) => r.id === item.roomId);
-        selectTo({ scope: 'task', level: room.level, roomId: room.id, itemId: item.id });
-        guideTo({ type: 'dotOpened' });
-        return true;
     }
     if (!level) {
         const levels = model.levels();
@@ -811,7 +794,7 @@ function tapModel(level = null, itemId = null, roomId = null) {
         selectTo(next ? { scope: 'floor', level: next, roomId: null, itemId: null } : null);
         return true;
     }
-    const sel = selectFromHit({ level, roomId, itemId: null }, model.lifted);
+    const sel = selectFromHit({ level, roomId }, model.lifted);
     if (!sel) return false;
     selectTo(sel);
     return Boolean(ui.selected);
@@ -903,7 +886,7 @@ function handleSceneTap(clientX, clientY) {
         tapHost();
         return hit.key;
     }
-    return tapModel(hit.level, hit.itemId, hit.roomId) ? hit.key : null;
+    return tapModel(hit.level, hit.roomId) ? hit.key : null;
 }
 
 /**
@@ -1424,7 +1407,7 @@ function sceneView() {
  *  as a step about it begins. */
 const GESTURE_OF = {
     hello: 'wave', welcome: 'wave',
-    home: 'point', attached: 'point', floors: 'point', saved: 'wave', firstRoom: 'point', added: 'point', dots: 'point', rooms: 'point', review: 'point',
+    home: 'point', attached: 'point', floors: 'point', saved: 'wave', firstRoom: 'point', added: 'point', rooms: 'point', review: 'point',
     example1: 'point', example2: 'point', example3: 'point', exampleReport: 'point', example4: 'point', look: 'point', addOn: 'point', report: 'point'
 };
 

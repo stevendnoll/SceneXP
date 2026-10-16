@@ -5,8 +5,8 @@
  *
  *   - a first visit meets a plain house, and Maya a moment later;
  *   - Let's start makes "Our home", the floors rise as they are ticked,
- *     the kitchen comes in one tap with its line from the price sheet, the
- *     dots, the rooms, the review, saved;
+ *     the kitchen comes in one tap with its line from the price sheet (and
+ *     what its dots are), the rooms, the review, saved;
  *   - Skip, the example's three beats, a return mid-build, the nudges;
  *   - she steps out of sight while a card is open;
  *   - Help and Undo, top right, and the way back out of an open floor.
@@ -519,12 +519,12 @@ describe('a first visit', () => {
         expect(c.rooms[0]).toMatchObject({ area: 'kitchen', level: 'main' });
         expect(c.items).toHaveLength(9);
         expect(main.__test__.model().lifted).toBe('main');
-        expect(line()).toBe("There's your kitchen with its nine standard tasks, $61 so far. Every visit starts at $120, so your next rooms fit inside that.");
+        expect(line()).toBe("There's your kitchen with its nine standard tasks, $61 so far. Each blue dot is one of them. "
+            + 'Tap the kitchen to see them all, or star the ones that matter most. Every visit starts at $120, so your next rooms fit inside that.');
         expect(dom.el('host-progress').children[2].getAttribute('aria-current')).toBe('step');
+        // Next goes on to Your rooms: the dots have no step of their own (QA, 2026-10-16).
+        expect(buttons()).toEqual([GUIDE.next]);
         press('next');
-        expect(line()).toBe(GUIDE.dots);
-        expect(buttons()).toEqual([GUIDE.gotIt]);
-        press('gotIt');
         expect(line()).toBe(GUIDE.rooms);
         // Review from the first room on (QA, 2026-10-15).
         expect(buttons()).toEqual([GUIDE.reviewIt, GUIDE.otherRoom]);
@@ -541,45 +541,47 @@ describe('a first visit', () => {
         expect(line()).toBe(GUIDE.firstRoom);
     });
 
-    test('a tapped dot shows its task in the panel, Maya stepping aside until it closes', async () => {
+    test('a tap on a dot is a tap on its room: the room in the panel, its tasks from the list, and Back to First room (QA, 2026-10-16)', async () => {
         const main = await boot({ sheet: true });
         press('start');
         pick('kind-house');
         press('next');
         press('kitchen');
-        press('next');
-        const dot = own(main).items[0];
-        main.__test__.tapModel(null, dot.id);
+        const kitchen = own(main).rooms[0];
+        const stove = own(main).items.find((i) => i.task === 'stovetop');
+        // A dot's hit carries its room, and the room is what opens.
+        expect(main.__test__.tapModel('main', kitchen.id)).toBe(true);
+        expect(main.__test__.ui.selected).toMatchObject({ scope: 'room', roomId: kitchen.id, itemId: null });
         expect(openCards()).toEqual([]);
         expect(panelShown()).toBe(true);
-        expect(dom.el('panel-title').textContent).toBe('Stovetop');
+        expect(dom.el('panel-title').textContent).toBe('Kitchen');
         stepFrames(2);
         expect(shown()).toBe(false);
-        // Still on First room (QA, 2026-10-15), and the panel's one Back says
-        // where it goes.
-        expect(main.__test__.ui.guide.scene).toBe('dots');
+        // Still on First room, and the panel's one Back says where it goes.
+        expect(main.__test__.ui.guide.scene).toBe('added');
         expect(dom.el('panel-back').textContent).toBe(PANEL.back('First room'));
         fire(dom.el('panel-back'), 'click');
         expect(panelShown()).toBe(false);
-        // The floor stays open with its dots, nothing selected.
+        // The floor stays open with its dots, nothing selected, Next ready.
         expect(main.__test__.model().lifted).toBe('main');
         expect(main.__test__.ui.selected).toBeNull();
         stepFrames(2);
         expect(shown()).toBe(true);
-        expect(line()).toBe(GUIDE.dotsSeen);
-        expect(document.activeElement.id).toBe('host-gotIt');
-        // Escape from another dot comes back the same way, in one press.
-        main.__test__.tapModel(null, own(main).items[1].id);
-        expect(panelShown()).toBe(true);
+        expect(main.__test__.ui.guide.scene).toBe('added');
+        expect(document.activeElement.id).toBe('host-next');
+        // A task from the room's list; Escape comes back in one press.
+        main.__test__.tapModel('main', kitchen.id);
+        main.__test__.onPanelRow('task', stove.id);
+        expect(dom.el('panel-title').textContent).toBe('Stovetop');
+        expect(main.__test__.ui.guide.scene).toBe('added');
         fire(dom.documentStub, 'keydown', { key: 'Escape', target: dom.documentStub.body, preventDefault() {} });
         expect(panelShown()).toBe(false);
         expect(main.__test__.model().lifted).toBe('main');
-        // Got it, the main button, moves on to Your rooms.
-        press('gotIt');
+        // Next moves on to Your rooms, where the panel's Back is its own again.
+        press('next');
         expect(main.__test__.ui.guide.scene).toBe('rooms');
-        expect(line()).toBe(GUIDE.rooms);
-        // There, the panel's Back is its own again.
-        main.__test__.tapModel(null, own(main).items[0].id);
+        main.__test__.tapModel('main', kitchen.id);
+        main.__test__.onPanelRow('task', stove.id);
         expect(dom.el('panel-back').textContent).toBe(PANEL.back('the kitchen'));
     });
 
@@ -591,7 +593,6 @@ describe('a first visit', () => {
         press('next');
         press('kitchen');
         press('next');
-        press('gotIt');
         press('otherRoom');
         expect(openCards()).toEqual(['room']);
         dom.el('room-level').value = 'second';
@@ -810,8 +811,7 @@ describe('the example', () => {
             expect(main.__test__.tapModel('second')).toBe(false);
             const c = main.__test__.active();
             const room = c.rooms.find((r) => r.level === 'main');
-            const item = c.items.find((i) => i.roomId === room.id);
-            expect(main.__test__.tapModel('main', item.id, room.id)).toBe(false);
+            expect(main.__test__.tapModel('main', room.id)).toBe(false);
             expect(main.__test__.model().lifted).toBe(before);
             expect(main.__test__.ui.selected).toBeNull();
             expect(panelShown()).toBe(false);
@@ -1042,40 +1042,16 @@ describe('Maya standing by (QA, 2026-10-14: she should always have something to 
 describe('halos on the touch points (QA, 2026-10-14)', () => {
     const ring = () => dom.el('ws-halo');
 
-    test('the first dot of the room just added, ringed until a task is opened; Got it moves on to a floor\'s ring', async () => {
+    test('the first room\'s line rings nothing (its dots are not tapped); Next moves on to a floor\'s ring', async () => {
         const main = await boot({ sheet: true });
         press('start');
         pick('kind-house');
         press('next');
         press('kitchen');
+        expect(main.__test__.ui.guide.scene).toBe('added');
+        stepFrames(2);
+        expect(ring().hidden).toBe(true);
         press('next');
-        expect(main.__test__.ui.guide.scene).toBe('dots');
-        stepFrames(2);
-        expect(ring().hidden).toBe(false);
-        expect(ring().className).toBe('ws-halo is-dot');
-        expect(ring().style.transform).toMatch(/^translate\(-?\d+px, -?\d+px\) translate\(-50%, -50%\)$/);
-        // A card over the scene hides it.
-        main.__test__.openChecklistView();
-        stepFrames(2);
-        expect(ring().hidden).toBe(true);
-        fire(dom.el('checklist-close'), 'click');
-        stepFrames(2);
-        expect(ring().hidden).toBe(false);
-        // A task opened is the dot used; its floor closed, the dot is gone.
-        const c = main.__test__.active();
-        const room = c.rooms[0];
-        const first = c.items.filter((i) => i.roomId === room.id).sort((a, b) => a.order - b.order)[0];
-        main.__test__.selectTo({ scope: 'task', level: room.level, roomId: room.id, itemId: first.id });
-        stepFrames(2);
-        expect(ring().hidden).toBe(true);
-        main.__test__.selectTo({ scope: 'room', level: room.level, roomId: room.id, itemId: null });
-        stepFrames(2);
-        expect(ring().hidden).toBe(false);
-        main.__test__.liftLevel(null);
-        stepFrames(2);
-        expect(ring().hidden).toBe(true);
-        main.__test__.liftLevel(room.level);
-        press('gotIt');
         expect(main.__test__.ui.guide.scene).toBe('rooms');
         // The rooms step rings a floor while the house is closed; opening one is using it.
         main.__test__.liftLevel(null);
@@ -1097,7 +1073,6 @@ describe('halos on the touch points (QA, 2026-10-14)', () => {
         press('next');
         press('kitchen');
         press('next');
-        press('gotIt');
         press('review');
         expect(main.__test__.model().lifted).toBeNull();
         fire(dom.el('host-progress').children[3].children[0], 'click');
@@ -1121,7 +1096,6 @@ describe('halos on the touch points (QA, 2026-10-14)', () => {
         press('next');
         press('kitchen');
         press('next');
-        press('gotIt');
         main.__test__.liftLevel('second');
         main.__test__.guideTo({ type: 'roomAdded' });
         expect(main.__test__.ui.guide.scene).toBe('rooms');
@@ -1136,7 +1110,6 @@ describe('halos on the touch points (QA, 2026-10-14)', () => {
         press('next');
         press('kitchen');
         press('next');
-        press('gotIt');
         expect(main.__test__.ui.guide.scene).toBe('rooms');
         expect(main.__test__.model().lifted).toBe('main');
         stepFrames(2);
@@ -1193,7 +1166,6 @@ describe('the home at a glance under Maya\'s name (Steve, 2026-10-14)', () => {
         expect(factNote('quote')).toBe(UI.examplePrices);
         expect(fact('quote').getAttribute('aria-label')).toMatch(/^Your quote, \d+ dollars, about .+\. Example prices\. Show the breakdown\.$/);
         press('next');
-        press('gotIt');
         // Rooms from her chips until the total passes the visit minimum.
         const before = money();
         for (let i = 0; i < 6 && money() === before; i++) {
@@ -1232,7 +1204,6 @@ describe('moving along the strip (QA, 2026-10-14)', () => {
         press('next');
         press('kitchen');
         press('next');
-        press('gotIt');
         expect(line()).toBe(GUIDE.rooms);
         // To Home type on the strip, another kind of home, and on.
         fire(stepButton(0), 'click');
@@ -1258,7 +1229,6 @@ describe('moving along the strip (QA, 2026-10-14)', () => {
         press('next');
         press('kitchen');
         press('next');
-        press('gotIt');
         // One room: First room is still a tap away.
         expect(stepButton(2).textContent).toBe('First room');
         fire(roomChip('primary-bedroom'), 'click');
@@ -1307,7 +1277,6 @@ describe('moving along the strip (QA, 2026-10-14)', () => {
         press('next');
         press('kitchen');
         press('next');
-        press('gotIt');
         expect(main.__test__.ui.guide.scene).toBe('rooms');
         fire(dom.el('host-back'), 'click');
         expect(main.__test__.ui.guide).toMatchObject({ scene: 'added', roomId: main.__test__.active().rooms[0].id });
@@ -1416,7 +1385,6 @@ describe("Maya's → and Start over (QA, 2026-10-15: no Help, no About), and Und
         expect(back.getAttribute('title')).toBe(GUIDE.backTo('Floors'));
         press('kitchen');
         press('next');
-        press('gotIt');
         // Your rooms: one room, Back is First room; two, Floors.
         expect(back.getAttribute('title')).toBe(GUIDE.backTo('First room'));
         expect(next.getAttribute('title')).toBe(GUIDE.continueTo(GUIDE.reviewIt));
@@ -1463,7 +1431,7 @@ describe("Maya's → and Start over (QA, 2026-10-15: no Help, no About), and Und
         expect(next.hidden).toBe(true);
         press('kitchen');
         fire(next, 'click');
-        expect(line()).toBe(GUIDE.dots);
+        expect(line()).toBe(GUIDE.rooms);
         // Standing by: a home base's first way on.
         main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false };
         main.__test__.showGuide();
@@ -1518,11 +1486,11 @@ describe('tapping the house', () => {
         expect(dom.el('panel-title').textContent).toBe('Second floor');
         expect(rowLabels()).toEqual(expect.arrayContaining(["Emma's room", 'Primary bedroom']));
         const room = main.getDoc().checklists[0].rooms.find((r) => r.level === 'second');
-        main.__test__.tapModel('second', null, room.id);
+        main.__test__.tapModel('second', room.id);
         expect(dom.el('panel-title').textContent).toBe(roomName('cleaning', room));
         expect(main.__test__.model().selection.roomId).toBe(room.id);
         // A room on a closed floor cannot be met; a tap on another floor opens that floor.
-        main.__test__.tapModel('main', null, room.id);
+        main.__test__.tapModel('main', room.id);
         expect(main.__test__.model().lifted).toBe('main');
         expect(main.__test__.ui.selected.scope).toBe('floor');
         expect(openCards()).toEqual([]);
@@ -1658,7 +1626,8 @@ describe('getting back out', () => {
         expect(panelShown()).toBe(false);
         const c = main.getDoc().checklists[0];
         const item = c.items.find((i) => c.rooms.find((r) => r.id === i.roomId).level === 'second');
-        main.__test__.tapModel(null, item.id);
+        // A task, as the room's list opens it.
+        main.__test__.selectTo({ scope: 'task', level: 'second', roomId: item.roomId, itemId: item.id });
         expect(main.__test__.ui.selected.scope).toBe('task');
         fire(dom.el('panel-back'), 'click');
         expect(main.__test__.ui.selected.scope).toBe('room');

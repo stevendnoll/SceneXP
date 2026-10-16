@@ -30,8 +30,9 @@ const example = () => withExample(emptyDoc(CONFIG, NOW), CONFIG, NOW, null).doc.
 const wholeHouse = (main) => main.__test__.selectTo({ scope: 'house', level: null, roomId: null, itemId: null }, { focus: true });
 
 describe('what a tap selects (pure)', () => {
-    test('inside the open floor: a dot its task, anything else in a room its room; elsewhere the floor', () => {
-        expect(selectFromHit({ level: 'main', roomId: 'r', itemId: 'i' }, 'main')).toEqual({ scope: 'task', level: 'main', roomId: 'r', itemId: 'i' });
+    test('inside the open floor: anything in a room, its dots too, the room; elsewhere the floor', () => {
+        // A dot is its room (QA, 2026-10-16): a task comes from the room's list.
+        expect(selectFromHit({ level: 'main', roomId: 'r', itemId: 'i' }, 'main')).toEqual({ scope: 'room', level: 'main', roomId: 'r', itemId: null });
         expect(selectFromHit({ level: 'main', roomId: 'r', itemId: null }, 'main')).toEqual({ scope: 'room', level: 'main', roomId: 'r', itemId: null });
         expect(selectFromHit({ level: 'main', roomId: null, itemId: null }, 'main')).toEqual({ scope: 'floor', level: 'main', roomId: null, itemId: null });
         // A closed floor, or another: the floor first.
