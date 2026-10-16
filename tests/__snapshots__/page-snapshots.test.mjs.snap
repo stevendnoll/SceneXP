@@ -2707,31 +2707,37 @@ html [lang="en"]
           },
           {
             "@type": "ItemList",
-            "@id": "https://www.scenexp.com/#small-business-tributes",
-            "name": "Small business tributes",
-            "description": "3D worlds built for real small businesses, in place of another template website.",
+            "@id": "https://www.scenexp.com/#small-business-showcases",
+            "name": "Small business showcases",
+            "description": "3D worlds built for small businesses, in place of another template website: tributes to real ones, and a working concept for a home cleaning company.",
             "itemListElement": [
               {
                 "@type": "ListItem",
                 "position": 1,
+                "url": "https://www.scenexp.com/whitestone/",
+                "name": "Whitestone Home Care"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
                 "url": "https://www.scenexp.com/automan/",
                 "name": "John Walker, The Auto Man"
               },
               {
                 "@type": "ListItem",
-                "position": 2,
+                "position": 3,
                 "url": "https://www.scenexp.com/interstate/",
                 "name": "The Interstate Tire Shop"
               },
               {
                 "@type": "ListItem",
-                "position": 3,
+                "position": 4,
                 "url": "https://www.scenexp.com/seedtoseed/",
                 "name": "The Seed to Seed Garden"
               },
               {
                 "@type": "ListItem",
-                "position": 4,
+                "position": 5,
                 "url": "https://www.scenexp.com/sunnyvalejenn/",
                 "name": "Sunnyvale Jenn Consulting"
               }
@@ -3035,10 +3041,26 @@ html [lang="en"]
                         "July 26, 2026"
                     span.experience-cta
                       "Step inside →"
-          section.experience-group [aria-labelledby="small-business-tributes" data-category="business"]
-            h2#small-business-tributes
-              "Small business tributes"
+          section.experience-group [aria-labelledby="small-business-showcases" data-category="business"]
+            h2#small-business-showcases
+              "Small business showcases"
             ul.experience-grid
+              li.experience-card [data-slug="whitestone"]
+                a [href="/whitestone/"]
+                  img [alt="A 3D model house on a round lawn on a white turntable, its roof lifted off the main floor to show furnished rooms dotted with small blue task markers, while Maya, a host in a white polo and khakis, gestures toward it." decoding="async" height="630" loading="lazy" src="/whitestone/assets/og-whitestone.webp?v=1" width="1200"]
+                  div.experience-card-body
+                    p.experience-eyebrow
+                      "A concept for a home cleaning company"
+                    h3
+                      "Whitestone Home Care"
+                    p
+                      "A concept, not a real company. Build a model of your own home room by room with Maya, your host, see every task priced as you go, then choose a time for a demo visit."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-10-16"]
+                        "October 16, 2026"
+                    span.experience-cta
+                      "Plan a cleaning →"
               li.experience-card [data-slug="automan"]
                 a [href="/automan/"]
                   img [alt="A 3D dealership desk seen across the showroom floor: three figures sit around a dark wood table holding a deal sheet and a small yellow model car, a whiteboard behind them reads Today's schedule, 2:00 John Walker, and the glass frontage looks out on trucks parked in the lot." decoding="async" height="630" loading="lazy" src="/automan/assets/card-automan.webp?v=1" width="1200"]
@@ -3203,10 +3225,10 @@ html [lang="en"]
                 "The ones built for their own sake. Keep your job search in a corner office above the bay, call the plays in a game of football, defend Earth from a Martian fleet, dive hundreds of billions of times deep into the Mandelbrot set, watch a modeled ocean shoal and break on a measured beach, or plant a garden of fractal trees and tend it through the seasons."
             li.audience-card
               h3
-                a [href="#small-business-tributes"]
-                  "Small business tributes"
+                a [href="#small-business-showcases"]
+                  "Small business showcases"
               p
-                "Real businesses, rebuilt as places you can visit. A dealership desk with a car buying advocate on the buyer's side of it, a tire shop on historic Railroad Ave with a car up on the lift, a backyard vegetable garden with a greenhouse, and a consultant's sunny home office."
+                "Real businesses, rebuilt as places you can visit. A dealership desk with a car buying advocate on the buyer's side of it, a tire shop on historic Railroad Ave with a car up on the lift, a backyard vegetable garden with a greenhouse, and a consultant's sunny home office. And one concept: a home cleaning company where you plan your cleaning on a model of your own home."
             li.audience-card
               h3
                 a [href="#personal-tributes"]
@@ -5198,6 +5220,10 @@ html [lang="en"]
               "The leaf blower game keeps the character you choose, their shirt and pants colors, skin tone, hair color and hair length, in your browser's local storage, so they are waiting for you when you come back. When you clear the whole lawn before the clock runs out, it also keeps your fastest time, just the number of seconds, so you have a time to beat. The Forget my choice button on the character card and the Forget my best time button on the welcome card clear them on the spot."
             li
               strong
+                "Your home in Whitestone Home Care."
+              "The Whitestone demo keeps the home you build in your browser's local storage, so it is waiting for you when you come back: the kind of home, its floors and rooms, the tasks you chose with their options, stars, and notes, your care preferences, and where you are in Maya's steps. Photos you add to a task are resized and stripped of their location before they are saved, in your browser's own database. There is no Whitestone server, so a checklist you book is kept only in this same browser too, sealed so that it opens only with its link and PIN. If you open a shared checklist on its cleaner's page, that page keeps the checklist's key, a pass that lasts for the visit, the visit's marks and add-ons, and a sealed copy for the hours of the visit, along with any photos taken as proof of the work, for up to 30 days. It also keeps a copy of its own page files so that it can reopen without a connection. Maya's Start over link clears everything the demo keeps on the spot, once you confirm it."
+            li
+              strong
                 "You can remove any of it whenever you like."
               "Apart from that puzzle token, everything above stays on your device and is never sent to us or to anyone else. Clearing this site's data in your browser settings removes all of it at once."
           h2
@@ -5223,7 +5249,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated October 9, 2026."
+              "Last updated October 16, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand
@@ -6699,14 +6725,17 @@ html [lang="en"]
               ", and the"
               a [href="/contribute.html"]
                 "contribute page"
-              "explains how to build an experience of your own."
+              "explains how to build an experience of your own. The one exception is"
+              a [href="/whitestone/"]
+                "Whitestone Home Care"
+              ": its code is published in the same repository so that it can be read, but it belongs to Continuum Commerce LLC with all rights reserved, and it is not covered by the MIT license."
             li
               strong
                 "Three.js."
               "The 3D rendering on this site is powered by"
               a [href="https://threejs.org/" rel="noopener noreferrer" target="_blank"]
                 "Three.js"
-              "(revision 160), copyright 2010 to 2023 the Three.js authors, and used under the MIT license. The bundled library file preserves its own license notice, and that notice governs the library rather than our license."
+              "(release r186), copyright 2010 to 2026 the Three.js authors, and used under the MIT license. The bundled library file preserves its own license notice, and that notice governs the library rather than our license."
           p
             "Everything else you load here, from fonts to icons, was made for this site. No other third-party code is served."
           h2
@@ -6746,10 +6775,14 @@ html [lang="en"]
             "These logos, the photographs that appear alongside them, and any other trademarks on the site are not covered by our MIT license. Please do not copy or reuse them without permission from their respective owners. That includes John Walker's three-blade W, which is drawn in the page itself rather than loaded as a picture, so it travels with our open source code without being covered by its license. The SceneXP name and mark belong to Continuum Commerce LLC."
           p
             "So do the X's and O's name, its orange X and blue O mascots, and the game's sound effects, which it shares with the original game at exesnohs.com. They ship with our open source code so the game can be played, but they are not covered by our MIT license either, and we would be grateful if they were not reused elsewhere."
+          p
+            "The Whitestone Home Care name and logo were made for a fictional company and belong to Continuum Commerce LLC as well. They are not covered by our MIT license either."
           h2
             "About the experiences"
           p
             "The collection holds several kinds of 3D experience. Some are games, simulations, or experiments and depict nobody in particular. Others were created to honor a real person or business, and every one of those is hosted with the blessing of the people it celebrates. Some of them begin as surprises, and if an honoree would prefer that theirs not be shown, it will be removed from the site. Those scenes are affectionate, stylized portraits rather than exact records, so please enjoy them in that spirit."
+          p
+            "One is a concept rather than a tribute. Whitestone Home Care is a fictional company, invented to show what a small business could offer its customers in 3D. It is not a real business and has no connection to any real company with a similar name. Its prices and bookings are examples, nothing booked there is a real appointment, and no one will come to clean."
           h2
             "Provided as is"
           p
@@ -6767,7 +6800,7 @@ html [lang="en"]
             ". We would be glad to help."
           p
             em
-              "Last updated September 14, 2026."
+              "Last updated October 16, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand
@@ -6996,13 +7029,12 @@ html [data-ui-theme="surf" lang="en"]
     meta [content="width=device-width, initial-scale=1.0" name="viewport"]
     meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
-    meta [content="noindex, nofollow" name="robots"]
-    meta [content="Schedule a home cleaning on a 3D model of your home: choose what to clean room by room, see the price of every task as you go, then pick a time." name="description"]
+    meta [content="A concept for a home cleaning company, not a real one: plan a cleaning on a 3D model of your home, see the price of every task as you go, then pick a time." name="description"]
     meta [content="#F4F2EE" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/whitestone/" rel="canonical"]
     meta [content="Whitestone Home Care" property="og:title"]
-    meta [content="Pick what you would like cleaned, room by room, and see your price as you go." property="og:description"]
+    meta [content="A home cleaning concept on a 3D model of your home. Pick what you would like cleaned, room by room, and see your price as you go." property="og:description"]
     meta [content="website" property="og:type"]
     meta [content="SceneXP" property="og:site_name"]
     meta [content="https://www.scenexp.com/whitestone/" property="og:url"]
@@ -7011,12 +7043,12 @@ html [data-ui-theme="surf" lang="en"]
     meta [content="image/jpeg" property="og:image:type"]
     meta [content="1200" property="og:image:width"]
     meta [content="630" property="og:image:height"]
-    meta [content="A model of a family home on a round stone turntable in a bright white studio." property="og:image:alt"]
+    meta [content="A 3D model house on a round lawn on a white turntable, its roof lifted off the main floor to show furnished rooms dotted with small blue task markers, while Maya, a host in a white polo and khakis, gestures toward it." property="og:image:alt"]
     meta [content="summary_large_image" name="twitter:card"]
     meta [content="Whitestone Home Care" name="twitter:title"]
-    meta [content="Pick what you would like cleaned, room by room, and see your price as you go." name="twitter:description"]
+    meta [content="A home cleaning concept on a 3D model of your home. Pick what you would like cleaned, room by room, and see your price as you go." name="twitter:description"]
     meta [content="https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1" name="twitter:image"]
-    meta [content="A model of a family home on a round stone turntable in a bright white studio." name="twitter:image:alt"]
+    meta [content="A 3D model house on a round lawn on a white turntable, its roof lifted off the main floor to show furnished rooms dotted with small blue task markers, while Maya, a host in a white polo and khakis, gestures toward it." name="twitter:image:alt"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
@@ -7024,9 +7056,11 @@ html [data-ui-theme="surf" lang="en"]
         "@id": "https://www.scenexp.com/whitestone/#app",
         "url": "https://www.scenexp.com/whitestone/",
         "name": "Whitestone Home Care",
-        "description": "A 3D model home in the browser on which a visitor builds a room by room cleaning checklist from a menu of priced tasks, sees the quote and the expected visit length update as they go, and shares the finished checklist with a cleaner.",
+        "image": "https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1",
+        "description": "A concept for a home cleaning company, not a real business, built as a portfolio piece: a 3D model home in the browser on which a visitor builds a room by room cleaning checklist from a menu of example prices, guided by a host named Maya, sees the quote and the expected visit length update as they go, and chooses a time for a demo booking.",
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "Any",
+        "datePublished": "2026-10-16",
         "browserRequirements": "Requires JavaScript and WebGL 2.",
         "inLanguage": "en-US",
         "isPartOf": {

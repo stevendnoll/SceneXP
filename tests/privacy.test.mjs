@@ -56,8 +56,8 @@ const PERSISTENT = {
     'www/xo/js/jump.js': 'whether Auto jump is on in X’s and O’s',
     'www/leaves/js/cast.js': 'the character chosen in Leaf Blower',
     'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaf Blower',
-    // Unreleased (proto-1). Its privacy.html section is part of Whitestone's
-    // M7, before release (PRD 15).
+    // Released 2026-10-16, described in privacy.html as "Your home in
+    // Whitestone Home Care".
     'www/whitestone/js/store.js': 'the checklists a visitor builds in Whitestone Home Care',
     // The cleaner's page (M4): per shared checklist, its key (from the link),
     // the 12 hour visit pass the PIN gives, and wrong PINs in a row.
@@ -71,7 +71,7 @@ const PERSISTENT = {
  * rule before the first database so the first one cannot slip past it).
  */
 const PERSISTENT_DATABASES = {
-    // Unreleased (proto-1), described in privacy.html with Whitestone's M7.
+    // Released 2026-10-16, described in privacy.html with Whitestone.
     // It opens the API stand-in's database too (standin.js, M3 option A):
     // published checklists, sealed with a key it never holds, until the
     // server runs.
@@ -152,6 +152,15 @@ test('and the policy actually describes them, in words a visitor would use', () 
     expect(text).toMatch(/keeps your fastest time, just the number of seconds/i);
     expect(text).toMatch(/Forget my best time button/i);
 
+    // Whitestone Home Care (released 2026-10-16): the home a visitor builds,
+    // photos stripped of location, the booked copy kept in this same browser
+    // (there is no server), the cleaner's page, and how to clear it.
+    expect(text).toMatch(/Whitestone demo keeps the home you build/i);
+    expect(text).toMatch(/stripped of their location/i);
+    expect(text).toMatch(/There is no Whitestone server/i);
+    expect(text).toMatch(/cleaner's page/i);
+    expect(text).toMatch(/Start over link clears everything/i);
+
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.
     expect(text).toMatch(/Start a new garden button/i);
@@ -161,6 +170,36 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // sentence that was wrong, and the one somebody would reintroduce while
     // tidying the two bullets back into one.
     expect(text).not.toMatch(/All of it lives in your browser.s session storage/i);
+});
+
+/**
+ * The experience each folder that keeps something is, as the policy names it.
+ * THE SENTENCES ABOVE ARE CHECKED ONE BY ONE, so an experience whose store
+ * is on the lists but whose sentence was never written passed them all: the
+ * lists only say a store is KNOWN. Whitestone was on both lists from its
+ * first day and missing from the page until its release (2026-10-16). A
+ * folder that keeps anything must be named here, and the page must name it.
+ */
+const NAMED_IN_POLICY = {
+    garden: 'Fractal Garden',
+    earthdefense: 'Earth Defense',
+    office: 'Corner Office',
+    xo: "X's and O's",
+    leaves: 'Leaf Blower',
+    whitestone: 'Whitestone Home Care',
+};
+
+test('every experience that keeps something is named in the policy', () => {
+    const text = readFileSync(join(WWW, 'privacy.html'), 'utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    // Site-wide files (www/js, www/shared) belong to no one experience.
+    const slugs = [...new Set([...Object.keys(PERSISTENT), ...Object.keys(PERSISTENT_DATABASES)]
+        .map((p) => p.split('/')[1])
+        .filter((s) => s !== 'js' && s !== 'shared'))].sort();
+    expect(slugs.length).toBeGreaterThan(4);
+    for (const slug of slugs) {
+        expect(`${slug}: ${slug in NAMED_IN_POLICY}`).toBe(`${slug}: true`);
+        expect(`${slug}: ${text.includes(NAMED_IN_POLICY[slug])}`).toBe(`${slug}: true`);
+    }
 });
 
 test('the policy keeps house style, like every other page of copy', () => {

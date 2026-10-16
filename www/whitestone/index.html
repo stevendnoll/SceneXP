@@ -13,13 +13,7 @@
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <!-- STILL BEING BUILT (the proto-1 prototype). Kept out of the directory,
-         the sitemap, llms.txt and search until release, which means a social
-         card, a directory card, and taking this tag off (see
-         tests/directory.test.mjs and tests/page-rules.test.mjs). -->
-    <meta name="robots" content="noindex, nofollow">
-
-    <meta name="description" content="Schedule a home cleaning on a 3D model of your home: choose what to clean room by room, see the price of every task as you go, then pick a time.">
+    <meta name="description" content="A concept for a home cleaning company, not a real one: plan a cleaning on a 3D model of your home, see the price of every task as you go, then pick a time.">
     <meta name="theme-color" content="#F4F2EE">
     <meta name="author" content="Steve Noll">
 
@@ -31,28 +25,28 @@
 
     <!-- Open Graph -->
     <meta property="og:title" content="Whitestone Home Care">
-    <meta property="og:description" content="Pick what you would like cleaned, room by room, and see your price as you go.">
+    <meta property="og:description" content="A home cleaning concept on a 3D model of your home. Pick what you would like cleaned, room by room, and see your price as you go.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/whitestone/">
     <meta property="og:locale" content="en_US">
-    <!-- THE SOCIAL CARD IS STILL TO COME. og-whitestone.jpg will be Steve's
-         capture of the house model on its turntable (1200 by 630, sRGB baked
-         in, see CONTRIBUTING), made once the look is approved. Exactly one
+    <!-- THE SOCIAL CARD: Steve's capture of Maya and the house on its
+         turntable (?clean=1, 2026-10-16), 1200 by 630, sRGB baked in (see
+         CONTRIBUTING). The directory card is its .webp. Exactly one
          og:image, as on every page, since Apple's link preview draws every
          one it finds. -->
     <meta property="og:image" content="https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1">
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="A model of a family home on a round stone turntable in a bright white studio.">
+    <meta property="og:image:alt" content="A 3D model house on a round lawn on a white turntable, its roof lifted off the main floor to show furnished rooms dotted with small blue task markers, while Maya, a host in a white polo and khakis, gestures toward it.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Whitestone Home Care">
-    <meta name="twitter:description" content="Pick what you would like cleaned, room by room, and see your price as you go.">
+    <meta name="twitter:description" content="A home cleaning concept on a 3D model of your home. Pick what you would like cleaned, room by room, and see your price as you go.">
     <meta name="twitter:image" content="https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1">
-    <meta name="twitter:image:alt" content="A model of a family home on a round stone turntable in a bright white studio.">
+    <meta name="twitter:image:alt" content="A 3D model house on a round lawn on a white turntable, its roof lifted off the main floor to show furnished rooms dotted with small blue task markers, while Maya, a host in a white polo and khakis, gestures toward it.">
 
     <!-- Structured data: site identity for search engines.
          JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
@@ -63,9 +57,11 @@
       "@id": "https://www.scenexp.com/whitestone/#app",
       "url": "https://www.scenexp.com/whitestone/",
       "name": "Whitestone Home Care",
-      "description": "A 3D model home in the browser on which a visitor builds a room by room cleaning checklist from a menu of priced tasks, sees the quote and the expected visit length update as they go, and shares the finished checklist with a cleaner.",
+      "image": "https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1",
+      "description": "A concept for a home cleaning company, not a real business, built as a portfolio piece: a 3D model home in the browser on which a visitor builds a room by room cleaning checklist from a menu of example prices, guided by a host named Maya, sees the quote and the expected visit length update as they go, and chooses a time for a demo booking.",
       "applicationCategory": "BusinessApplication",
       "operatingSystem": "Any",
+      "datePublished": "2026-10-16",
       "browserRequirements": "Requires JavaScript and WebGL 2.",
       "inLanguage": "en-US",
       "isPartOf": {

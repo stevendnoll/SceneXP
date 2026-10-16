@@ -66,10 +66,10 @@ const WITHHELD_CARDS = ['www/interstate/index.html', 'www/seedtoseed/index.html'
 // never be captured, and it stays here for as long as it stays unlisted.
 // The leaf lab (2026-10-06) waited for its card until the look was approved,
 // and left with Leaf Blower's release on 2026-10-09.
-// Whitestone Home Care (2026-10-12) waits for its two cards: the studio's,
-// and the generic one its cleaner's page shows for every shared link.
-const PENDING_CARDS = ['www/starfall/index.html', 'www/whitestone/index.html',
-  'www/whitestone/tasks/index.html'];
+// Whitestone Home Care (2026-10-12) waited for its two cards, the studio's
+// and the generic one its cleaner's page shows for every shared link, and
+// left with its release on 2026-10-16.
+const PENDING_CARDS = ['www/starfall/index.html'];
 
 /** Pages reached only through a link somebody shares, never by browsing.
  *  They carry full preview tags, so the link looks right in a message, and
