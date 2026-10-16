@@ -430,6 +430,26 @@ describe('the visit, as the cleaner marks it (pure)', () => {
     });
 });
 
+describe('the cleaner\'s usage beacons (Steve, 2026-10-16)', () => {
+    test('the PIN\'s result (never the PIN), then each tap one beacon, every action cleaner-...', async () => {
+        const w = await published();
+        const sent = [];
+        const { state } = await open(w, w.link, { track: (action, params) => sent.push([action, params]) });
+        const button = (id) => all(view()).find((e) => e.id === id);
+        await enter(state, '12');
+        const wrong = w.checklist.published.pin === '000000' ? '111111' : '000000';
+        await enter(state, wrong);
+        await enter(state, w.checklist.published.pin);
+        expect(sent.map(([a, p]) => `${a} ${p.outcome}`)).toEqual(['cleaner-open incomplete', 'cleaner-open denied', 'cleaner-open ok']);
+        expect(JSON.stringify(sent)).not.toContain(w.checklist.published.pin);
+        // A tap reaches the page's one listener as a browser bubbles it.
+        const done = button(`done-${w.stove.id}`);
+        fire(globalThis.document, 'click', { target: done });
+        fire(globalThis.document, 'click', { target: button(`skip-${w.stove.id}`) });
+        expect(sent.slice(3)).toEqual([['cleaner-done', {}], ['cleaner-skip', {}]]);
+    });
+});
+
 describe('the visit on the page', () => {
     async function visiting() {
         const w = await published();
@@ -853,6 +873,8 @@ describe('the copy kept on this device (pure)', () => {
             { name: `${o}/whitestone/js/copy.min.js` },
             { name: `${o}/whitestone/js/copy.min.js` },
             { name: `${o}/api/whitestone/checklists/abc` },
+            // A usage beacon (beacons.js): a new address every tap.
+            { name: `${o}/api.html?action=cleaner-done&scene=whitestone` },
             { name: 'https://elsewhere.example/a.js' },
             { name: 'blob:https://www.scenexp.com/1' },
             null

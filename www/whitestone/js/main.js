@@ -35,6 +35,7 @@ import { getProofOfWork, installCardFocusTrap, installCardScrollReset } from '..
 import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { createResolution } from '../../shared/js/resolution-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import { installBeacons, studioBeacon } from './beacons.min.js';
 import {
     createStore, findChecklist, createChecklist, updateChecklist, setLevels, setPreferences,
     setSettings, touchVisit, storageUse, isLive, addRoom, updateRoom, deleteRoom, addItem,
@@ -121,6 +122,8 @@ const state = {
  *               a floor, a room or a task, or null
  */
 const ui = {
+    /** The house turned this visit (one turn-house beacon, the first). */
+    turned: false,
     editing: null, room: null, task: null, afterPrefs: false, filter: 'all', guide: null, selected: null,
     /** The floor opened from Your rooms' list, whose row the keyboard goes
      *  back to (QA, 2026-10-16). */
@@ -349,9 +352,9 @@ async function init() {
     };
 
     // Whether the visitor came back to saved checklists rides in `outcome`,
-    // and nothing of what they hold (privacy.html).
+    // and nothing of what they hold (privacy.html). Phone or not is the
+    // shared part's `mobile` (a `device` sent here was never logged).
     track('session-start', {
-        device: state.mobile ? 'touch' : 'desktop',
         outcome: `returning=${state.storageStatus === 'restored'}`
     });
     sessionStart = Date.now();
@@ -834,12 +837,24 @@ function tapModel(level = null, roomId = null) {
         const at = levels.indexOf(model.lifted);
         const next = at + 1 < levels.length ? levels[at + 1] : null;
         selectTo(next ? { scope: 'floor', level: next, roomId: null, itemId: null } : null);
+        if (next) track('open-floor', { kind: 'house' });
         return true;
     }
     const sel = selectFromHit({ level, roomId }, model.lifted);
     if (!sel) return false;
     selectTo(sel);
+    // A tap on the house that opened something (beacons.js: where it was
+    // done, the house; never which room).
+    if (ui.selected) track(`open-${ui.selected.scope}`, { kind: 'house' });
     return Boolean(ui.selected);
+}
+
+/** The first turn of the house this visit, by hand or by key, is said once
+ *  (Steve, 2026-10-16: a beacon per drag would flood the log). */
+function noteTurn(kind) {
+    if (ui.turned) return;
+    ui.turned = true;
+    track('turn-house', { kind });
 }
 
 /**
@@ -1027,6 +1042,7 @@ function setupLook(signal) {
         if (!gesture.dragging || !gesture.grab) return;
         // Taken hold of: from now on it stays where the visitor puts it.
         endShowcase();
+        noteTurn('drag');
         turntable.drag(now.x - prev.x, window.innerHeight, (t - gesture.lastMove) / 1000);
         gesture.lastMove = t;
         requestRender();
@@ -2000,6 +2016,7 @@ async function arriveByEditLink(link) {
  *  asked first: the cleaner then needs the new one. */
 function confirmNewPin() {
     confirmCard({
+        beacon: 'new-pin',
         title: RECEIPT.newPinTitle,
         detail: RECEIPT.newPinDetail,
         confirmLabel: RECEIPT.newPin,
@@ -2167,6 +2184,7 @@ function askPrice(c, go) {
     const diff = priceChange(c);
     if (!diff) return go();
     confirmCard({
+        beacon: 'price-change',
         title: CHANGES.priceTitle,
         detail: CHANGES.priceDetail(diff.from, diff.to),
         confirmLabel: CHANGES.priceConfirm,
@@ -2206,6 +2224,9 @@ async function confirmBooking() {
         : await publish({ ...args, slot: { date: b.selected, time, minutes: b.minutes } });
     if (ui.booking !== b) return result;
     b.busy = false;
+    // Booked, or why not, as one beacon (its button is SKIP in beacons.js):
+    // a new visit or a move, and a refusal's code, never the day or time.
+    track('book', { kind: b.mode === 'move' ? 'move' : 'new', outcome: result.ok ? 'ok' : (/^[a-z-]{1,24}$/.test(String(result.error)) ? result.error : 'error') });
     if (!result.ok) {
         b.error = result.error === 'too-late' ? RECEIPT.locked(cancelHours()) : BOOKING_ERRORS[result.error] || BOOKING_ERRORS.server;
         if (result.error === 'taken' && result.next.length) {
@@ -2302,6 +2323,7 @@ function confirmCancelVisit() {
     const c = active();
     if (!isBooked(c)) return;
     confirmCard({
+        beacon: 'cancel-visit',
         title: CHANGES.cancelTitle,
         detail: CHANGES.cancelDetail(visitWhen(c.booking)),
         confirmLabel: CHANGES.cancelConfirm,
@@ -2327,6 +2349,7 @@ function confirmUnpublish() {
     const c = active();
     if (!isPublished(c)) return;
     confirmCard({
+        beacon: 'stop-sharing',
         title: CHANGES.unpublishTitle,
         detail: isBooked(c) ? CHANGES.unpublishDetailBooked(visitWhen(c.booking)) : CHANGES.unpublishDetail,
         confirmLabel: CHANGES.unpublishConfirm,
@@ -3529,6 +3552,7 @@ async function confirmStartOver() {
         return;
     }
     confirmCard({
+        beacon: 'start-over',
         title: HELP.resetTitle,
         detail: published.length ? HELP.resetDetailPublished : HELP.resetDetail,
         confirmLabel: HELP.resetConfirm,
@@ -3597,6 +3621,9 @@ function setupEventListeners() {
     // Make aria-modal true: Tab stays inside the open card. And every card
     // opens scrolled to its top (shared boot part).
     installCardFocusTrap({ signal });
+    // Every tap is a beacon (beacons.js): one listener, one vocabulary, and
+    // a link that leaves the page sent so that it outlives it.
+    installBeacons(document, { beaconOf: studioBeacon, send: track, leave: trackFinal, signal });
     installCardScrollReset({ signal });
     initCards({ signal });
     // When what opened a card has gone (a button of hers redrawn by the
@@ -3633,7 +3660,10 @@ function setupEventListeners() {
         }
         // The panel's own lists take their arrow keys.
         if (panel && panel.contains(target)) return;
-        if (lookKey(event.key)) event.preventDefault();
+        if (lookKey(event.key)) {
+            noteTurn('keys');
+            event.preventDefault();
+        }
     }, { signal });
 
     const on = (id, type, fn) => { const node = el(id); if (node) node.addEventListener(type, fn, { signal }); };

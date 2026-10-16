@@ -86,8 +86,8 @@ function itemRow(checklist, sheet, item, on, place) {
                 type: 'button', id: `move-down-${item.id}`, className: 'ws-btn ws-btn-small', disabled: place.last,
                 text: UI.moveDown, onClick: () => on.moveTask(item.id, 1), attrs: { 'aria-describedby': nameId }
             }),
-            button(UI.edit, 'ws-btn ws-btn-small', () => on.editTask(item.id), { 'aria-describedby': nameId }),
-            button(UI.remove, 'ws-btn ws-btn-small ws-btn-quiet', () => on.removeTask(item.id), { 'aria-describedby': nameId })
+            button(UI.edit, 'ws-btn ws-btn-small', () => on.editTask(item.id), { 'aria-describedby': nameId, 'data-beacon': 'edit-task:checklist' }),
+            button(UI.remove, 'ws-btn ws-btn-small ws-btn-quiet', () => on.removeTask(item.id), { 'aria-describedby': nameId, 'data-beacon': 'remove-task:checklist' })
         ])
     ]);
 }
@@ -169,8 +169,8 @@ export function renderChecklist({ checklist, sheet, on, filter = 'all' }) {
                         room.label && area ? h('span', { className: 'checklist-room-kind', text: area.name }) : null
                     ]),
                     h('div', { className: 'checklist-room-actions' }, [
-                        button(UI.addTask, 'ws-btn ws-btn-small ws-btn-primary', () => on.addTask(room.id), { 'aria-describedby': roomId }),
-                        button(UI.editRoom, 'ws-btn ws-btn-small', () => on.editRoom(room.id), { 'aria-describedby': roomId })
+                        button(UI.addTask, 'ws-btn ws-btn-small ws-btn-primary', () => on.addTask(room.id), { 'aria-describedby': roomId, 'data-beacon': 'add-task:checklist' }),
+                        button(UI.editRoom, 'ws-btn ws-btn-small', () => on.editRoom(room.id), { 'aria-describedby': roomId, 'data-beacon': 'edit-room:checklist' })
                     ])
                 ]),
                 items.length
@@ -203,7 +203,7 @@ export function renderTaskPhotos({ photos, taskLabel, on }) {
     photos.forEach((p, i) => {
         list.appendChild(h('li', { className: 'task-photo' }, [
             h('img', { src: p.url, alt: UI.photoAlt(taskLabel, i + 1), width: 96, height: 96 }),
-            button(UI.remove, 'ws-btn ws-btn-small', () => on.remove(p.id), { 'aria-label': UI.removePhoto(i + 1), title: UI.removePhoto(i + 1) })
+            button(UI.remove, 'ws-btn ws-btn-small', () => on.remove(p.id), { 'aria-label': UI.removePhoto(i + 1), title: UI.removePhoto(i + 1), 'data-beacon': 'remove-photo:task' })
         ]));
     });
 }

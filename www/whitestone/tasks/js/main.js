@@ -58,6 +58,9 @@
 
 // Every visitor sentence lives in copy.js, where one test sweeps them all.
 import { TASKS_PAGE as COPY } from '../../js/copy.min.js';
+import { installBeacons, cleanerBeacon } from '../../js/beacons.min.js';
+import { track as sendBeacon, trackFinal, setProofHash, setMobile } from '../../../shared/js/telemetry-1.0.0.min.js';
+import { getProofOfWork } from '../../../shared/js/boot-1.0.0.min.js';
 import { CONFIG } from '../../js/config.min.js';
 import { parseShare, withoutFragment, ID } from '../../js/links.min.js';
 import { createApi } from '../../js/api.min.js';
@@ -205,7 +208,9 @@ export async function sweepKept(backend, now) {
 export function offlineUrls(href, origin, entries) {
     const page = String(href).split('#')[0];
     const loaded = (entries || []).map((e) => e && e.name).filter((u) => typeof u === 'string');
-    return [...new Set([page, ...loaded])].filter((u) => u.startsWith(`${origin}/`) && !u.startsWith(`${origin}/api/`));
+    // Never the API, nor a usage beacon (beacons.js: /api.html?action=...,
+    // a new address every tap, worth nothing offline).
+    return [...new Set([page, ...loaded])].filter((u) => u.startsWith(`${origin}/`) && !u.startsWith(`${origin}/api/`) && !u.startsWith(`${origin}/api.html`));
 }
 
 /** Whether the API refused (or no longer has) a checklist, so no copy kept
@@ -265,6 +270,10 @@ export async function boot(env) {
     const clearTimer = env.clearTimer || ((t) => clearTimeout(t));
     const newId = env.newId || newAddOnId;
     const printPage = env.print || (() => globalThis.print());
+    // The usage log (beacons.js): every tap one beacon, `cleaner-...`, and the
+    // PIN's result said where it is known. Injected, so a test hears it.
+    const track = env.track || (() => {});
+    installBeacons(doc, { beaconOf: cleanerBeacon, send: track, leave: env.trackFinal || track });
     await sweepKept(env.cache || null, now);
     const el = (id) => doc.getElementById(id);
     const form = el('pin-form');
@@ -1032,6 +1041,8 @@ export async function boot(env) {
     async function tryPin(pin) {
         setStatus(COPY.opening);
         const opened = await api.open(here.id, pin);
+        // The PIN's result, never the PIN: opened, refused, or the reason.
+        track('cleaner-open', { outcome: opened.ok ? 'ok' : (/^[a-z-]{1,24}$/.test(String(opened.error)) ? opened.error : 'error') });
         if (!opened.ok) {
             if (opened.error !== 'denied') {
                 askPin(errorLine(opened.error), true);
@@ -1052,6 +1063,7 @@ export async function boot(env) {
             event.preventDefault();
             const pin = readPin(input.value);
             if (!pin) {
+                track('cleaner-open', { outcome: 'incomplete' });
                 setStatus(COPY.incomplete, true);
                 input.focus();
                 return;
@@ -1125,9 +1137,14 @@ async function start() {
     } catch (e) {
         cache = null;
     }
+    // The visit's usage token, shared with the studio in this tab's session
+    // (a-session-spans-scenes): found at once if the studio made it, else
+    // solved meanwhile, so the page never waits on it.
+    setMobile(Boolean(window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || Math.min(window.innerWidth, window.innerHeight) < 600);
+    getProofOfWork(CONFIG.telemetry.proofOfWork).then((proof) => setProofHash(proof && proof.hash)).catch(() => {});
     await boot({
         doc: document, href: location.href, history, storage: browserStorage,
-        api, sealer: createSealer(), fetchJson, cache
+        api, sealer: createSealer(), fetchJson, cache, track: sendBeacon, trackFinal
     });
     keepForOffline();
 }

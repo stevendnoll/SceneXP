@@ -160,6 +160,10 @@ test('and the policy actually describes them, in words a visitor would use', () 
     expect(text).toMatch(/There is no Whitestone server/i);
     expect(text).toMatch(/cleaner's page/i);
     expect(text).toMatch(/Start over link clears everything/i);
+    // And its usage pings (2026-10-16, beacons.js): which button and where,
+    // never what was typed, priced, dated, or the PIN.
+    expect(text).toMatch(/Whitestone Home Care sends a ping for each button you press/i);
+    expect(text).toMatch(/never sends anything you typed, a price, a date or time, or the PIN itself/i);
 
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.

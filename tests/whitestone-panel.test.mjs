@@ -636,6 +636,22 @@ describe('choosing a time and publishing, on the page', () => {
         expect(prev.disabled).toBe(false);
     });
 
+    test('booking says what came of it as one beacon, a new visit or a move, never the day or time (Steve, 2026-10-16)', async () => {
+        const sent = [];
+        globalThis.Image = class { set src(url) { sent.push(new URL(url, 'http://localhost:8000/whitestone/')); } };
+        try {
+            const main = await kitchenHome();
+            await main.__test__.openBooking();
+            const from = sent.length;
+            expect((await main.__test__.confirmBooking()).ok).toBe(true);
+            const books = sent.slice(from).filter((u) => u.searchParams.get('action') === 'book');
+            expect(books.map((u) => `${u.searchParams.get('kind')} ${u.searchParams.get('outcome')}`)).toEqual(['new ok']);
+            expect(books[0].search).not.toMatch(/2026-10|9%3A30|09:30/);
+        } finally {
+            delete globalThis.Image;
+        }
+    });
+
     test('Book and publish ends on the receipt: the time, the quote, the link, the PIN, a QR code, the edit link', async () => {
         const main = await kitchenHome();
         await main.__test__.openBooking();

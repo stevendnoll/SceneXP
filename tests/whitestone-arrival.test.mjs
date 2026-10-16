@@ -1912,3 +1912,52 @@ describe('the screenshot view, ?clean=1 (Steve, 2026-10-16: the directory card)'
         expect(main.__test__.state.clean).toBe(false);
     });
 });
+
+describe('the usage beacons (Steve, 2026-10-16: every tap a beacon)', () => {
+    /** The parameters the server's log keeps (specs/nginx-config.txt). */
+    const LOGGED = ['action', 'timestamp', 'mobile', 'scene', 'lang', 'hash', 'kind', 'outcome', 'seconds', 'saved', 'destroyed'];
+
+    test('each tap one beacon, its kind the thing chosen or the place; the first turn once; nothing else of the home', async () => {
+        const sent = [];
+        globalThis.Image = class { set src(url) { sent.push(new URL(url, 'http://localhost:8000/whitestone/')); } };
+        try {
+            const main = await boot({ sheet: true });
+            /** A tap as a browser delivers it: to the control, then up to
+             *  the page (the stub does not bubble). */
+            const tap = (node) => {
+                fire(node, 'click');
+                fire(dom.documentStub, 'click', { target: node });
+            };
+            const beaconsOf = (act) => {
+                const from = sent.length;
+                act();
+                return sent.slice(from).map((u) => {
+                    for (const k of u.searchParams.keys()) expect({ k, logged: LOGGED.includes(k) }).toEqual({ k, logged: true });
+                    return ['action', 'kind', 'outcome'].map((k) => u.searchParams.get(k) && `${k === 'action' ? '' : `${k}=`}${u.searchParams.get(k)}`).filter(Boolean).join(' ');
+                });
+            };
+            // The session's start, with no parameter the log would drop.
+            const start = sent.find((u) => u.searchParams.get('action') === 'session-start');
+            expect(start).toBeTruthy();
+            expect(start.searchParams.get('device')).toBeNull();
+            const host = (id) => [...dom.el('host-actions').children, ...picks()].find((b) => b.id === `host-${id}`);
+            expect(beaconsOf(() => tap(host('start')))).toEqual(['start kind=maya']);
+            expect(beaconsOf(() => tap(host('kind-house')))).toEqual(['home-type kind=house']);
+            expect(beaconsOf(() => { floor('second').checked = true; tap(floor('second')); })).toEqual(['floor kind=second']);
+            expect(beaconsOf(() => tap(host('next')))).toEqual(['next kind=maya']);
+            expect(beaconsOf(() => tap(roomChip('kitchen')))).toEqual(['add-room kind=kitchen outcome=via=maya']);
+            // The house: a tap that opens a room says where, never which.
+            const room = main.__test__.active().rooms[0];
+            expect(beaconsOf(() => main.__test__.tapModel('main', room.id))).toEqual(['open-room kind=house']);
+            // Turned twice by key: said the first time only.
+            const key = (k) => fire(dom.documentStub, 'keydown', { key: k, target: dom.documentStub.body, preventDefault() {} });
+            main.__test__.selectTo(null);
+            expect(beaconsOf(() => key('ArrowLeft'))).toEqual(['turn-house kind=keys']);
+            expect(beaconsOf(() => key('ArrowRight'))).toEqual([]);
+            // Nothing typed, priced or dated rides along, anywhere.
+            for (const u of sent) expect(u.search).not.toMatch(/%24|\$|2026-|Our%20home|Our\+home/);
+        } finally {
+            delete globalThis.Image;
+        }
+    });
+});

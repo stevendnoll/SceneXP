@@ -5236,6 +5236,8 @@ html [lang="en"]
             "As visitors explore the 3D experiences, the pages send simple pings to this same domain, such as "someone found the waterfall." Each ping names the experience it came from and carries your browser's language setting, a note of whether you are on a phone or a computer, and the puzzle token that groups one visit's pings together. The pings land in a separate log of their own, which never records your IP address or the description your browser gives of itself, and are summarized into anonymized daily counts. In the published summaries each visitor is known only by a throwaway label: no names, no IP addresses, and no browser fingerprints. Some experiences display these counts inside the world itself as a little visitor dashboard."
           p
             "X's and O's notes a little more, because the game is the plays. Each time you call a play, snap the ball, or throw it, and each time a play ends, it records the play and the defense, the receiver you picked, how it turned out and what it was worth, along with your running score, whether the sound was on, and whether your screen was held upright or sideways. It never records the size of your screen or anything else that could pick your device out from anyone else's."
+          p
+            "Whitestone Home Care sends a ping for each button you press, saying only which one and where, such as adding a kitchen from Maya's suggestions, along with whether a demo booking went through and whether a cleaner's PIN opened the checklist. It never sends anything you typed, a price, a date or time, or the PIN itself."
           h2
             "If you email us"
           p
@@ -7107,6 +7109,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/resolution-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/beacons.min.js" rel="modulepreload"]
     link [href="js/store.min.js" rel="modulepreload"]
     link [href="js/samples.min.js" rel="modulepreload"]
     link [href="js/api.min.js" rel="modulepreload"]
@@ -7624,6 +7627,9 @@ html [lang="en"]
     link [href="css/tasks.min.css?v=10" rel="stylesheet"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="../js/copy.min.js" rel="modulepreload"]
+    link [href="../js/beacons.min.js" rel="modulepreload"]
+    link [href="../../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
     link [href="../js/config.min.js" rel="modulepreload"]
     link [href="../js/links.min.js" rel="modulepreload"]
     link [href="../js/api.min.js" rel="modulepreload"]

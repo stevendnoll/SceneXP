@@ -331,7 +331,7 @@ export function initCards({ signal } = {}) {
  * Ask before something that cannot be undone, or is a lot to undo. The detail
  * spells out the consequence. `onConfirm` runs after the card closes.
  */
-export function confirmCard({ title, detail, confirmLabel = 'Yes', cancelLabel = 'Cancel', danger = false, onConfirm }) {
+export function confirmCard({ title, detail, confirmLabel = 'Yes', cancelLabel = 'Cancel', danger = false, onConfirm, beacon = 'confirm' }) {
     const titleEl = byId('confirm-title');
     const detailEl = byId('confirm-detail');
     const actions = byId('confirm-actions');
@@ -339,13 +339,14 @@ export function confirmCard({ title, detail, confirmLabel = 'Yes', cancelLabel =
     if (detailEl) detailEl.textContent = detail || '';
     if (actions) {
         clear(actions);
-        actions.appendChild(button(cancelLabel, 'ws-btn', () => closeCard('confirm')));
+        // Named for the usage log by what is being asked (beacons.js).
+        actions.appendChild(button(cancelLabel, 'ws-btn', () => closeCard('confirm'), { 'data-beacon': `confirm-no:${beacon}` }));
         actions.appendChild(button(confirmLabel,
             danger ? 'ws-btn ws-btn-danger' : 'ws-btn ws-btn-primary',
             () => {
                 closeCard('confirm');
                 if (onConfirm) onConfirm();
-            }));
+            }, { 'data-beacon': `confirm-yes:${beacon}` }));
     }
     openCard('confirm');
 }
