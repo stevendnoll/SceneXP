@@ -1397,8 +1397,12 @@ textarea.ws-input {
 }
 
 /* Her main step, a → by her name (QA, 2026-10-15: on a phone her buttons
-   can sit below the fold): the accent, as her main button wears it. */
-.host-next {
+   can sit below the fold): the accent, as her main button wears it. Its ←
+   twins, one step back before her portrait and beside the panel's title
+   (QA, 2026-10-16: the text links went unseen), wear it too. */
+.host-next,
+.host-back,
+.panel-back {
     display: grid;
     flex: none;
     place-items: center;
@@ -1413,13 +1417,27 @@ textarea.ws-input {
     cursor: pointer;
 }
 
-.host-next:hover {
+.host-next:hover,
+.host-back:hover,
+.panel-back:hover {
     background: var(--ws-accent-dark);
 }
 
-.host-next:focus-visible {
+.host-next:focus-visible,
+.host-back:focus-visible,
+.panel-back:focus-visible {
     outline: 3px solid var(--ws-accent);
     outline-offset: 2px;
+}
+
+/* The ←s sit at the start of their row: only the → is pushed to its end. */
+.host-back,
+.panel-back {
+    margin-left: 0;
+}
+
+.ws-host.is-minimized .host-back {
+    display: none;
 }
 
 .host-next[hidden] {
@@ -1709,31 +1727,15 @@ textarea.ws-input {
     margin-top: 0.4rem;
 }
 
-/* Back and Start over, quiet, along the bubble's foot (QA, 2026-10-15). */
+/* Start over, quiet, along the bubble's foot (QA, 2026-10-15; Back moved to her header as a ←, 2026-10-16). */
 .host-foot {
     display: flex;
     align-items: center;
     margin-top: 0.6rem;
 }
 
-.host-back {
-    min-height: 36px;
-    padding: 0.3rem 0;
-    border: 0;
-    background: none;
-    color: var(--ws-muted);
-    font: inherit;
-    font-size: 0.85rem;
-    cursor: pointer;
-}
-
-.host-back::before {
-    content: '\2039\00a0';
-    content: '\2039\00a0' / '';   /* a chevron, not read aloud */
-}
-
-/* Start over, opposite Back (QA, 2026-10-15: where Skip was): quiet, since
-   it is asked about first and clears everything. */
+/* Start over, alone at the foot now Back is a ← in her header (QA,
+   2026-10-16): quiet, since it is asked about first and clears everything. */
 .host-reset {
     min-height: 36px;
     margin: 0 0 0 auto;
@@ -1758,15 +1760,6 @@ textarea.ws-input {
 
 .host-reset[hidden] {
     display: none;
-}
-
-.host-back:hover {
-    color: var(--ws-accent);
-}
-
-.host-back:focus-visible {
-    outline: 3px solid var(--ws-accent);
-    outline-offset: 2px;
 }
 
 .host-back[hidden] {
@@ -1865,33 +1858,15 @@ textarea.ws-input {
     bottom: auto;
 }
 
-.panel-back {
-    align-self: flex-start;
-    min-height: 40px;
-    margin: 0 0 0.35rem -0.4rem;
-    padding: 0.3rem 0.5rem;
-    border: 0;
-    border-radius: 8px;
-    background: none;
-    color: var(--ws-accent);
-    font: inherit;
-    font-size: 0.9rem;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.panel-back::before {
-    content: '\2190';
-    margin-right: 0.4rem;
-}
-
-.panel-back:hover,
-.panel-back:focus-visible {
-    background: var(--ws-accent-soft);
-    outline: none;
+/* The ← and the title on one row, as Maya's name and her → are. */
+.panel-head {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
 }
 
 .panel-title {
+    min-width: 0;
     margin: 0;
     font-size: 1.25rem;
     line-height: 1.3;

@@ -330,7 +330,11 @@ export function createPanel({ on = {}, signal } = {}) {
 
     function draw() {
         if (title) title.textContent = view.title;
-        if (backBtn) backBtn.textContent = view.back;
+        // A round ← (QA, 2026-10-16): where it goes is its label and title.
+        if (backBtn) {
+            backBtn.setAttribute('aria-label', view.back);
+            backBtn.setAttribute('title', view.back);
+        }
         if (summary) {
             summary.textContent = view.summary || '';
             summary.hidden = !view.summary;

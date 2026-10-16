@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=37" as="style">
+    <link rel="preload" href="css/experience.min.css?v=38" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -159,7 +159,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=37">
+    <link rel="stylesheet" href="css/experience.min.css?v=38">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -219,14 +219,17 @@
 
     <!-- MAYA, THE HOST (host.js, guide.js): her portrait and name, the
          progress through the first build, what she says, the floors to
-         tick when she asks, at most two buttons, a quiet Back and Start
-         over, and a → by her name that takes her main step (QA, 2026-10-15:
-         no Help, and on a phone her buttons can sit below the fold). Beside
+         tick when she asks, at most two buttons, a quiet Start over, a →
+         by her name that takes her main step (QA, 2026-10-15: no Help, and on
+         a phone her buttons can sit below the fold), and a ← before her
+         portrait that goes one step back (QA, 2026-10-16: the quiet Back at
+         the foot went unseen). Beside
          the house on a wide screen, a sheet along the bottom on a phone.
          Built and shown by main.js once the house has arrived. Every line
          she says also goes through #ws-live, once. -->
     <section id="ws-host" class="ws-host" aria-labelledby="host-name" hidden>
         <div class="host-head">
+            <button id="host-back" class="host-back" type="button" aria-label="Back" title="Back" hidden><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M16 10H5M9.5 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             <span class="host-portrait" aria-hidden="true">M</span>
             <p class="host-who"><span id="host-name" class="host-name">Maya</span> <span class="host-role">Whitestone Home Care</span></p>
             <button id="host-next" class="host-next" type="button" aria-label="Continue" title="Continue" hidden><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 10h11M10.5 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -245,7 +248,6 @@
         <div id="host-actions" class="host-actions"></div>
         <p id="host-small" class="host-small" hidden></p>
         <div class="host-foot">
-            <button id="host-back" class="host-back" type="button" hidden>Back</button>
             <button id="host-reset" class="host-reset" type="button" title="Clear everything and start from the beginning" hidden>Start over</button>
         </div>
     </section>
@@ -253,11 +255,15 @@
     <!-- THE PANEL BESIDE THE HOUSE (panel.js): whatever is selected on the
          house, in words. A floor's rooms with rooms to add, a room's tasks
          with their stars (and a bathroom's type of bath), a task to edit. Its back button, Escape, or a tap
-         on empty space goes one step back. Where Maya's bubble is, and she
-         steps aside while it is open. -->
+         on empty space goes one step back: a round ← beside the title, as
+         Maya's → is (QA, 2026-10-16: the breadcrumb text went unseen), its
+         destination its label and hover title. Where Maya's bubble is, and
+         she steps aside while it is open. -->
     <aside id="ws-panel" class="ws-panel" aria-labelledby="panel-title" hidden>
-        <button id="panel-back" class="panel-back" type="button">Back to the whole house</button>
-        <h2 id="panel-title" class="panel-title"></h2>
+        <div class="panel-head">
+            <button id="panel-back" class="panel-back" type="button" aria-label="Back to the whole house" title="Back to the whole house"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M16 10H5M9.5 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <h2 id="panel-title" class="panel-title"></h2>
+        </div>
         <p id="panel-summary" class="panel-summary" hidden></p>
         <div id="panel-baths" class="panel-baths" role="group" aria-labelledby="panel-baths-label" hidden>
             <p id="panel-baths-label" class="panel-chips-heading">Type of bath</p>

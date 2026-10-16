@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=37" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=38" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7111,7 +7111,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=3" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=37" rel="stylesheet"]
+    link [href="css/experience.min.css?v=38" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7152,6 +7152,9 @@ html [data-ui-theme="surf" lang="en"]
     div#ws-halo.ws-halo [aria-hidden="true" hidden]
     section#ws-host.ws-host [aria-labelledby="host-name" hidden]
       div.host-head
+        button#host-back.host-back [aria-label="Back" hidden title="Back" type="button"]
+          svg [aria-hidden="true" focusable="false" height="18" viewbox="0 0 20 20" width="18"]
+            path [d="M16 10H5M9.5 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"]
         span.host-portrait [aria-hidden="true"]
           "M"
         p.host-who
@@ -7171,14 +7174,14 @@ html [data-ui-theme="surf" lang="en"]
       div#host-actions.host-actions
       p#host-small.host-small [hidden]
       div.host-foot
-        button#host-back.host-back [hidden type="button"]
-          "Back"
         button#host-reset.host-reset [hidden title="Clear everything and start from the beginning" type="button"]
           "Start over"
     aside#ws-panel.ws-panel [aria-labelledby="panel-title" hidden]
-      button#panel-back.panel-back [type="button"]
-        "Back to the whole house"
-      h2#panel-title.panel-title
+      div.panel-head
+        button#panel-back.panel-back [aria-label="Back to the whole house" title="Back to the whole house" type="button"]
+          svg [aria-hidden="true" focusable="false" height="18" viewbox="0 0 20 20" width="18"]
+            path [d="M16 10H5M9.5 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"]
+        h2#panel-title.panel-title
       p#panel-summary.panel-summary [hidden]
       div#panel-baths.panel-baths [aria-labelledby="panel-baths-label" hidden role="group"]
         p#panel-baths-label.panel-chips-heading

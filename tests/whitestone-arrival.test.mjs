@@ -52,7 +52,7 @@ describe('the markup', () => {
         expect(GUIDE.skip).toBeUndefined();
     });
 
-    test('no Help and no About: a → by her name, Start over at her foot, in copy.js\'s words, and no floating Undo', () => {
+    test('no Help and no About: a → by her name and a ← before her, Start over at her foot, in copy.js\'s words, and no floating Undo', () => {
         // Undo is the toast's and the keyboard's (Steve, 2026-10-14).
         expect(HTML).not.toMatch(/id="ws-undo"/);
         expect(HTML).toMatch(/<button id="toast-undo"[^>]*>Undo</);
@@ -61,9 +61,10 @@ describe('the markup', () => {
         // About is gone too (QA, 2026-10-15); a → takes her main step.
         expect(HTML).not.toMatch(/host-about|About Whitestone/);
         expect(HTML).toMatch(/<div class="host-head">[\s\S]*?<button id="host-next" class="host-next" type="button" aria-label="Continue" title="Continue" hidden><svg[^>]*aria-hidden="true"[\s\S]*?<\/svg><\/button>\s*<\/div>/);
-        // Maya's Back and Start over ship hidden along her foot, in copy.js's words.
-        expect(text(/id="host-back"[^>]*>([^<]+)</)).toBe(GUIDE.back);
-        expect(HTML).toMatch(/<button id="host-back"[^>]*\shidden>/);
+        // Maya's Back ships hidden, a round ← named in copy.js's words (QA,
+        // 2026-10-16), and Start over along her foot.
+        expect(text(/id="host-back"[^>]*aria-label="([^"]+)"/)).toBe(GUIDE.back);
+        expect(HTML).toMatch(/<button id="host-back"[^>]*\shidden><svg[^>]*aria-hidden="true"/);
         expect(text(/id="host-reset"[^>]*>([^<]+)</)).toBe(GUIDE.startOver);
         // Hover titles (QA, 2026-10-15): Start over says what it does, and
         // the calendar's arrows say which month.
@@ -77,7 +78,12 @@ describe('the markup', () => {
         // quote and the visit are in Maya's bubble.
         expect(HTML).not.toMatch(/id="ws-back"/);
         expect(HTML).toMatch(/<aside id="ws-panel"[^>]*\shidden>/);
-        expect(text(/id="panel-back"[^>]*>([^<]+)</)).toBe(PANEL.back(PANEL.wholeHouse));
+        // Its back button a round ← (QA, 2026-10-16), named for where it goes.
+        expect(text(/id="panel-back"[^>]*aria-label="([^"]+)"/)).toBe(PANEL.back(PANEL.wholeHouse));
+        expect(text(/id="panel-back"[^>]*title="([^"]+)"/)).toBe(PANEL.back(PANEL.wholeHouse));
+        // Maya's ← is in her header, before her portrait, not at the foot.
+        expect(HTML).toMatch(/<div class="host-head">\s*<button id="host-back"[^>]*\shidden>/);
+        expect(HTML).not.toMatch(/class="host-foot">\s*<button id="host-back"/);
         expect(HTML).not.toMatch(/id="ws-hud"|id="hud-/);
         // In their place, the wordmark (concept C): an image named for the
         // company, sized so the page does not jump as it loads, drawn as
@@ -559,7 +565,7 @@ describe('a first visit', () => {
         expect(shown()).toBe(false);
         // Still on First room, and the panel's one Back says where it goes.
         expect(main.__test__.ui.guide.scene).toBe('added');
-        expect(dom.el('panel-back').textContent).toBe(PANEL.back('First room'));
+        expect(dom.el('panel-back').getAttribute('aria-label')).toBe(PANEL.back('First room'));
         fire(dom.el('panel-back'), 'click');
         expect(panelShown()).toBe(false);
         // The floor stays open with its dots, nothing selected, Next ready.
@@ -582,7 +588,7 @@ describe('a first visit', () => {
         expect(main.__test__.ui.guide.scene).toBe('rooms');
         main.__test__.tapModel('main', kitchen.id);
         main.__test__.onPanelRow('task', stove.id);
-        expect(dom.el('panel-back').textContent).toBe(PANEL.back('the kitchen'));
+        expect(dom.el('panel-back').getAttribute('aria-label')).toBe(PANEL.back('the kitchen'));
     });
 
     test('another room through the room card, then Review, preferences offered, and saved', async () => {
@@ -1378,11 +1384,14 @@ describe("Maya's → and Start over (QA, 2026-10-15: no Help, no About), and Und
         expect(next.getAttribute('title')).toBe(GUIDE.continueTo(GUIDE.start));
         press('start');
         expect(back.getAttribute('title')).toBe(GUIDE.backToStart);
+        // A round ← (QA, 2026-10-16): its name for a screen reader is where it goes too.
+        expect(back.getAttribute('aria-label')).toBe(GUIDE.backToStart);
         pick('kind-house');
         expect(back.getAttribute('title')).toBe(GUIDE.backTo('Home type'));
         expect(next.getAttribute('title')).toBe(GUIDE.continueTo(GUIDE.next));
         press('next');
         expect(back.getAttribute('title')).toBe(GUIDE.backTo('Floors'));
+        expect(back.getAttribute('aria-label')).toBe(back.getAttribute('title'));
         press('kitchen');
         press('next');
         // Your rooms: one room, Back is First room; two, Floors.
@@ -1631,10 +1640,12 @@ describe('getting back out', () => {
         expect(main.__test__.ui.selected.scope).toBe('task');
         fire(dom.el('panel-back'), 'click');
         expect(main.__test__.ui.selected.scope).toBe('room');
-        expect(dom.el('panel-back').textContent).toBe(PANEL.back('the second floor'));
+        expect(dom.el('panel-back').getAttribute('aria-label')).toBe(PANEL.back('the second floor'));
+        // Its hover title says the same (QA, 2026-10-16: a round ← has no words of its own).
+        expect(dom.el('panel-back').getAttribute('title')).toBe(PANEL.back('the second floor'));
         fire(dom.el('panel-back'), 'click');
         expect(main.__test__.ui.selected.scope).toBe('floor');
-        expect(dom.el('panel-back').textContent).toBe(PANEL.back(PANEL.wholeHouse));
+        expect(dom.el('panel-back').getAttribute('aria-label')).toBe(PANEL.back(PANEL.wholeHouse));
         fire(dom.el('panel-back'), 'click');
         expect(panelShown()).toBe(false);
         expect(main.__test__.model().lifted).toBeNull();

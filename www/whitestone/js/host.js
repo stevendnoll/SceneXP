@@ -232,8 +232,11 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         }
         if (backBtn) {
             backBtn.hidden = !view.stepBack;
-            // Where it goes, on hover (QA, 2026-10-15).
-            if (view.backTo) backBtn.setAttribute('title', view.backTo);
+            // A round ← (QA, 2026-10-16): where it goes is its label, and on
+            // hover its title (QA, 2026-10-15).
+            const label = view.backTo || GUIDE.back;
+            backBtn.setAttribute('aria-label', label);
+            backBtn.setAttribute('title', label);
         }
         if (resetBtn) resetBtn.hidden = !view.startOver;
         if (nextBtn) {
