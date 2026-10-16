@@ -34,6 +34,29 @@ export const REST = Object.freeze({ z: 0.15, x: 0.1, fore: 0 });
 export const GESTURES = Object.freeze({ wave: 2.2, point: 1.9 });
 
 /**
+ * Her bubble portrait's framing (QA, 2026-10-16: framed on her head alone,
+ * her face and hair filled the oval): head and shoulders, in the oval's own
+ * 4:5, from `above` over the top of her hair down to her upper chest. In
+ * meters, from in front of her, `distance` away. The pixels are the
+ * canvas's, twice the oval's 40 by 50 for a sharp screen.
+ */
+export const PORTRAIT = Object.freeze({ width: 96, height: 120, distance: 1.0, span: 0.68, above: 0.08, hair: 0.165 });
+
+/**
+ * The portrait's camera for her head's middle (`head`, world meters, as
+ * buildMaya's head() gives it) and the way she faces: `{ eye, aim, fov,
+ * aspect }`, `fov` vertical in degrees. Pure, so the preview frames it the
+ * same way.
+ */
+export function portraitPose(head, facing, P = PORTRAIT) {
+    const top = head[1] + P.hair + P.above;
+    const aim = [head[0], top - P.span / 2, head[2]];
+    const eye = [aim[0] + Math.sin(facing) * P.distance, aim[1], aim[2] + Math.cos(facing) * P.distance];
+    const fov = (2 * Math.atan(P.span / 2 / P.distance) * 180) / Math.PI;
+    return { eye, aim, fov, aspect: P.width / P.height };
+}
+
+/**
  * Each arm's angles `t` seconds into a gesture: `{ near, far }`, the near
  * arm being the one on the house's side. `z` is the swing out from the
  * side (radians, before the side's sign), `x` the swing forward (negative
@@ -119,7 +142,8 @@ function smileFor(m, headY, radius) {
  *                      whether anything moved
  *   head()             her head's middle, in world meters
  *   anchor()           a point beside her head, where her bubble begins
- *   portrait(renderer, scene, size)  her face, drawn once into a canvas
+ *   portrait(renderer, scene)  her head and shoulders, drawn once into a
+ *                      canvas (portraitPose)
  *   setShown(on)       in or out of the frame (out on an upright phone)
  */
 export function buildMaya(config) {
@@ -245,36 +269,39 @@ export function buildMaya(config) {
             group.visible = Boolean(on);
         },
         /**
-         * Her face in a small canvas, for the bubble's portrait: the stage
-         * drawn once from in front of her head into a render target, read
-         * back, and painted upright. Null where the browser will not.
+         * Her head and shoulders in a small canvas, for the bubble's oval
+         * portrait (portraitPose): the stage drawn once from in front of
+         * her into a render target, read back, and painted upright. Null
+         * where the browser will not.
          */
-        portrait(renderer, scene, size = 96) {
+        portrait(renderer, scene) {
             try {
-                const target = new THREE.WebGLRenderTarget(size, size);
+                const w = PORTRAIT.width;
+                const size = PORTRAIT.height;
+                const pose = portraitPose(api.head(), m.facing);
+                const target = new THREE.WebGLRenderTarget(w, size);
                 if (target.texture && THREE.SRGBColorSpace) target.texture.colorSpace = THREE.SRGBColorSpace;
-                const cam = new THREE.PerspectiveCamera(24, 1, 0.05, 20);
-                const [hx, hy, hz] = api.head();
-                cam.position.set(hx + Math.sin(m.facing) * 0.7, hy + 0.02, hz + Math.cos(m.facing) * 0.7);
-                cam.lookAt(hx, hy, hz);
+                const cam = new THREE.PerspectiveCamera(pose.fov, pose.aspect, 0.05, 20);
+                cam.position.set(...pose.eye);
+                cam.lookAt(...pose.aim);
                 const shown = group.visible;
                 group.visible = true;
                 renderer.setRenderTarget(target);
                 renderer.render(scene, cam);
-                const pixels = new Uint8Array(size * size * 4);
-                renderer.readRenderTargetPixels(target, 0, 0, size, size, pixels);
+                const pixels = new Uint8Array(w * size * 4);
+                renderer.readRenderTargetPixels(target, 0, 0, w, size, pixels);
                 renderer.setRenderTarget(null);
                 group.visible = shown;
                 if (target.dispose) target.dispose();
                 const canvas = document.createElement('canvas');
-                canvas.width = size;
+                canvas.width = w;
                 canvas.height = size;
                 const ctx = canvas.getContext && canvas.getContext('2d');
                 if (!ctx || !ctx.createImageData) return null;
-                const image = ctx.createImageData(size, size);
+                const image = ctx.createImageData(w, size);
                 // Rows come back bottom first.
                 for (let y = 0; y < size; y++) {
-                    image.data.set(pixels.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4);
+                    image.data.set(pixels.subarray((size - 1 - y) * w * 4, (size - y) * w * 4), y * w * 4);
                 }
                 ctx.putImageData(image, 0, 0);
                 return canvas;

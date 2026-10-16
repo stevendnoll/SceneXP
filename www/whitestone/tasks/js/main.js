@@ -515,6 +515,10 @@ export async function boot(env) {
             p.sending = true;
             p.note = '';
             draw();
+            // A start on its way (the first mark's) is waited for, so the
+            // add-on joins that visit rather than starting one of its own
+            // (QA, 2026-10-16: two starts at once lost a visit).
+            await ensureStarted();
             const r = await proposeAddOn({ api, sealer, key, id: here.id, token: entry.visitToken, visitId: state.visitId, addOn, words: p.words, newId });
             if (r.visitId && r.visitId !== state.visitId) {
                 state.visitId = r.visitId;
@@ -866,6 +870,8 @@ export async function boot(env) {
          *  sent (once: a photo gone from the device is passed over, and the
          *  customer is told it was not received), then the report. */
         async function sendAll() {
+            // As an add-on does: a start on its way first (QA, 2026-10-16).
+            await ensureStarted();
             let visitId = state.visitId;
             const photos = proofIdsOf(entry.outbox.report);
             if (!visitId && photos.length) {

@@ -1354,10 +1354,11 @@ textarea.ws-input {
     display: grid;
     flex: none;
     place-items: center;
-    width: 44px;
-    height: 44px;
-    /* A rounded square (QA, 2026-10-16), apart from the round buttons. */
-    border-radius: 12px;
+    /* A tall oval, a cameo (QA, 2026-10-16: round beside the round ←, and
+       then a rounded square, both looked off). */
+    width: 40px;
+    height: 50px;
+    border-radius: 50%;
     background: var(--ws-accent);
     color: #FFFFFF;
     font-size: 1.15rem;
@@ -1370,6 +1371,8 @@ textarea.ws-input {
     display: block;
     width: 100%;
     height: 100%;
+    /* Her face is drawn square: cropped to the oval, never squeezed. */
+    object-fit: cover;
 }
 
 /* Beside Maya's head on a wide screen, wherever the camera puts her
@@ -1574,7 +1577,9 @@ textarea.ws-input {
 }
 
 .host-floor-rows .panel-list {
-    margin-bottom: 0.4rem;
+    /* A clear gap before her buttons (QA, 2026-10-16: the last floor all
+       but touched Review my checklist), as under the chips. */
+    margin-bottom: 1.1rem;
 }
 
 .host-step {
@@ -1826,9 +1831,8 @@ textarea.ws-input {
     }
 
     .host-portrait {
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
+        width: 32px;
+        height: 40px;
         font-size: 1rem;
     }
 

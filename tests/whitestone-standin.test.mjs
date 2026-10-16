@@ -303,7 +303,7 @@ describe('a visit and its add-ons (M4 piece 3)', () => {
         // A visit begins only under a booking (QA, 2026-10-15).
         await w.api.book(id, ownerToken, { date: '2026-10-16', time: '09:00', minutes: 120 });
         const visit = (await w.api.open(id, pin)).data.visitToken;
-        return { ...w, id, owner: ownerToken, visit };
+        return { ...w, id, owner: ownerToken, visit, pin };
     }
     const addonId = (n) => `addon${String(n).padStart(17, '0')}`;
 
@@ -393,6 +393,29 @@ describe('a visit and its add-ons (M4 piece 3)', () => {
         // Reported, the booking is done with, and nothing is under way.
         expect((await api.putReport(id, visit, started.data.visitId, bytes(1))).ok).toBe(true);
         expect((await api.cancelBooking(id, owner)).error).toBe('no-booking');
+    });
+
+    test('two phones beginning at once: one visit, both told it (QA, 2026-10-16: two starts at once lost one)', async () => {
+        // A slow disk, so two starts both read before either writes, every time.
+        const inner = createMemoryBackend();
+        const slow = { ...inner, get: async (k) => { await new Promise((r) => setTimeout(r, 2)); return inner.get(k); } };
+        const w = setup({ backend: slow });
+        const { id, ownerToken: owner, pin } = (await w.api.reserve()).data;
+        const api = w.api;
+        await api.putChecklist(id, owner, bytes(1));
+        await api.book(id, owner, { date: '2026-10-16', time: '09:00', minutes: 120 });
+        const visit = (await api.open(id, pin)).data.visitToken;
+        const second = (await api.open(id, pin)).data.visitToken;
+        for (let round = 0; round < 5; round++) {
+            const [a, b] = await Promise.all([api.startVisit(id, visit), api.startVisit(id, second)]);
+            expect(a.ok && b.ok).toBe(true);
+            expect(b.data.visitId).toBe(a.data.visitId);
+            const listed = (await api.listVisits(id, owner)).data.visits.filter((v) => !v.reportAt);
+            expect(listed.map((v) => v.visitId)).toEqual([a.data.visitId]);
+            // Done with, and booked again, for the next round.
+            await api.putReport(id, visit, a.data.visitId, bytes(1));
+            await api.book(id, owner, { date: '2026-10-16', time: '09:00', minutes: 120 });
+        }
     });
 
     test('cancelled before the cleaner begins: no visit can begin until it is booked again', async () => {

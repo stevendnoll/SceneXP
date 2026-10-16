@@ -441,6 +441,22 @@ describe('instances', () => {
         };
         const overlaps = (a, b) => Math.min(a[2], b[2]) - Math.max(a[0], b[0]) > 1e-9 && Math.min(a[3], b[3]) - Math.max(a[1], b[1]) > 1e-9;
 
+        /** One floor and a kitchen, no basement or garage (QA, 2026-10-16:
+         *  its door far left, the maple stood across the walk). */
+        const KITCHEN = {
+            id: 'kitchen-only', serviceType: 'cleaning', levels: ['main'],
+            rooms: [{ id: 'k', level: 'main', area: 'kitchen', label: '' }],
+            items: [0, 1, 2].map((n) => ({ id: `k${n}`, roomId: 'k', order: n + 1, important: false }))
+        };
+
+        test.each([['one floor and a kitchen', () => KITCHEN], ['the example', () => example()], ['every level', () => FULL],
+            ['an empty home', () => ({ ...EMPTY_HOME, id: 'e' })], ...HOMES.map((h, i) => [`random home ${i}`, () => h])])('%s: no tree stands on the front walk or in its line to the lawn\'s edge', (_name, make) => {
+            const { site, inst } = sited(make());
+            const walks = inst.site.filter((b) => b.role === 'path').map(rect).map(([x0, z0, x1]) => [x0, z0, x1, site.radius]);
+            const crowns = [...inst.canopies.filter((c) => ['maple', 'shade'].includes(c.role)), ...inst.firs, ...inst.site.filter((b) => b.role === 'trunk')].map(rect);
+            for (const walk of walks) for (const crown of crowns) expect(overlaps(walk, crown)).toBe(false);
+        });
+
         test.each([['the example', () => example()], ['every level', () => FULL], ['an empty home', () => ({ ...EMPTY_HOME, id: 'e' })],
             ...HOMES.slice(0, 60).map((h, i) => [`random home ${i}`, () => h])])('%s: everything on the site stays on the lawn, and nothing crosses anything', (_name, make) => {
             const { site, inst } = sited(make());
@@ -889,6 +905,26 @@ describe('built with the real three.js', () => {
         expect(tiles.instanceColor).not.toBeNull();
         expect(markers.instanceColor).not.toBeNull();
         expect(tiles.instanceColor.count).toBe(CONFIG.limits.rooms);
+    });
+
+    test('a hovered room\'s border is drawn as it is now, never from unwritten slots (QA, 2026-10-16: a gray box over an open floor)', () => {
+        const m = buildModel(CONFIG, AT);
+        // Out of the shadow pass, where three r186 uploads a mesh under the
+        // next render's frame number, so a change before that render was
+        // not uploaded.
+        expect(m.meshes.outlines.castShadow).toBe(false);
+        // Every slot of every mesh starts at nothing (not three's identity, a
+        // unit box), so one drawn before its part is written cannot show.
+        for (const [kind, mesh] of Object.entries(m.meshes)) {
+            const matrix = new REAL.Matrix4();
+            const size = new REAL.Vector3();
+            for (let i = mesh.count; i < mesh.instanceMatrix.count; i++) {
+                mesh.getMatrixAt(i, matrix);
+                size.setFromMatrixScale(matrix);
+                expect(`${kind} ${i} ${size.length()}`).toBe(`${kind} ${i} 0`);
+                expect(matrix.elements[15]).toBe(1);
+            }
+        }
     });
 
     test('the example home: three levels, thirteen rooms, twenty-seven tasks, in twenty-one draw calls', () => {

@@ -1062,6 +1062,67 @@ describe('finishing the visit on the page', () => {
         expect(find(`done-${w.stove.id}`)).toBeUndefined();
     });
 
+    /** The page on an API whose visit starts are held until a second one
+     *  arrives (or a moment passes), then let go together: two starts read
+     *  the visits before either writes, as two phones or a slow answer do. */
+    async function racing() {
+        const w = await published();
+        const starts = { count: 0 };
+        const held = [];
+        // The later first, so the earlier start writes last (the order that lost the visit).
+        const letGo = () => held.splice(0).reverse().forEach((go) => go());
+        const api = {
+            ...w.api,
+            startVisit: async (...args) => {
+                starts.count++;
+                await new Promise((go) => {
+                    held.push(go);
+                    if (held.length >= 2) letGo();
+                    else setTimeout(letGo, 30);
+                });
+                return w.api.startVisit(...args);
+            }
+        };
+        const { state } = await open(w, w.link, { api });
+        await enter(state, w.checklist.published.pin);
+        return { w, state, starts };
+    }
+
+    test('sent while the first mark\'s start is still on its way: one visit, and the report reaches it (QA, 2026-10-16: a race lost the visit)', async () => {
+        const { w, state, starts } = await racing();
+        // The first mark begins the visit; Finish and Send follow at once,
+        // before that start has answered.
+        fire(find(`done-${w.stove.id}`), 'click');
+        fire(find('tasks-finish'), 'click');
+        fill({ cleaner: 'Steve', hours: '1', minutes: '0', note: '' });
+        fire(find('report-send'), 'click');
+        await state.reportSend;
+        const k = kept(w);
+        expect(k.outbox).toBeNull();
+        const visits = (await w.api.listVisits(w.checklist.published.id, w.checklist.published.ownerToken)).data.visits;
+        expect(visits).toHaveLength(1);
+        expect(visits[0].visitId).toBe(k.sent.visitId);
+        expect(visits[0].reportAt).not.toBeNull();
+        // The send waited for the start on its way rather than making its own.
+        expect(starts.count).toBe(1);
+    });
+
+    test('an add-on sent while the first mark\'s start is still on its way joins that visit', async () => {
+        const { w, state, starts } = await racing();
+        fire(find(`done-${w.stove.id}`), 'click');
+        fire(find('propose-kitchen-1'), 'click');
+        const select = find('addon-choice-kitchen-1');
+        select.value = 'task:oven-interior';
+        fire(select, 'change');
+        fire(find('addon-send-kitchen-1'), 'click');
+        await state.pending;
+        expect(state.addOns).toHaveLength(1);
+        const visits = (await w.api.listVisits(w.checklist.published.id, w.checklist.published.ownerToken)).data.visits;
+        expect(visits).toHaveLength(1);
+        expect(visits[0].visitId).toBe(state.visitId);
+        expect(starts.count).toBe(1);
+    });
+
     test('add-ons in the report: one still waiting lapses, the asking stops, and the visit takes no more', async () => {
         const { w, state } = await visiting();
         fire(find('propose-kitchen-1'), 'click');

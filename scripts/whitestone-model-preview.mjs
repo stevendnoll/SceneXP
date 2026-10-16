@@ -29,7 +29,7 @@ import { loadRealThree } from '../tests/helpers/real-three.mjs';
 
 // Maya is built by cast.js with the real three.js, as the page builds her.
 globalThis.THREE = await loadRealThree();
-const { buildMaya, poseFor, GESTURES } = await import('../www/whitestone/js/cast.js');
+const { buildMaya, poseFor, GESTURES, portraitPose, PORTRAIT } = await import('../www/whitestone/js/cast.js');
 import { layoutHome } from '../www/whitestone/js/layout.js';
 import { withExample } from '../www/whitestone/js/samples.js';
 import { emptyDoc } from '../www/whitestone/js/store.js';
@@ -319,6 +319,10 @@ function render(inst, { k, yaw, tilt, near = 0, focus = null, houseHeight, width
         .sort((p, q) => p.d - q.d);
     for (const { poly, rgb: c, alpha } of [...solid, ...clear]) {
         const pts = poly.map(toScreen);
+        // Behind the eye (or at it), as a camera's near plane would cut it:
+        // projected, it would turn inside out across the picture (a close
+        // camera, the portrait's, has the turntable behind it).
+        if (pts.some((q) => !(q[2] > 0 && q[2] < 20))) continue;
         for (let i = 1; i + 1 < pts.length; i++) tri(pts[0], pts[i], pts[i + 1], c, alpha);
     }
     function tri(a, b, c, col, alpha = 1) {
@@ -434,6 +438,13 @@ const townNoGarage = asKind({ kind: 'townhome', attached: 'middle' }, ['main', '
 const townBasement = asKind({ kind: 'townhome', attached: 'end' }, ['basement', 'main', 'second', 'garage'], [...example.rooms, garageRoom]);
 const condoOne = asKind({ kind: 'condo', attached: null }, ['main'], example.rooms.filter((r) => r.level === 'main'));
 const condoTwo = asKind({ kind: 'condo', attached: null }, ['main', 'second'], notBasement);
+// One floor and a kitchen, no basement or garage (QA, 2026-10-16: its door
+// far left, the maple stood across the walk).
+const kitchenOnly = {
+    id: 'kitchen-only', serviceType: 'cleaning', levels: ['main'], residence: { kind: 'house' },
+    rooms: [{ id: 'k1', level: 'main', area: 'kitchen', label: '', deletedAt: null }],
+    items: [0, 1, 2].map((n) => ({ id: `k1-${n}`, roomId: 'k1', task: 'stovetop', order: n + 1, important: false, deletedAt: null }))
+};
 const widest = { serviceType: 'cleaning', levels: ['basement', 'main', 'second', 'third', 'attic', 'garage', 'detached-garage'], rooms: [], items: [] };
 const V = CONFIG.view;
 const start = { yaw: V.yaw.start, tilt: V.tilt.start };
@@ -490,6 +501,12 @@ function faceCamera(turn = 0, dist = 0.42, fov = 30) {
     return { eye: [mid[0] + Math.sin(a) * dist, mid[1] + 0.02, mid[2] + Math.cos(a) * dist], aim: mid, fov };
 }
 const faceShot = (title, turn, dist) => [title, { ...shot(build(EMPTY_HOME), start, 800, 800), camera: faceCamera(turn, dist), withMaya: true }];
+/** The bubble's oval portrait, framed as cast.js frames it (portraitPose),
+ *  at five times its canvas. */
+const portraitShot = (title) => {
+    const pose = portraitPose(buildMaya(CONFIG).head(), CONFIG.cast.maya.facing);
+    return [title, { ...shot(build(EMPTY_HOME), start, PORTRAIT.width * 5, PORTRAIT.height * 5), camera: { eye: pose.eye, aim: pose.aim, fov: pose.fov }, withMaya: true }];
+};
 
 const doorShot = (home, title) => {
     const built = build(home);
@@ -509,7 +526,9 @@ const roofViews = [
     ['Roof check: the example from its back right corner', shot(build(example), { yaw: -Math.PI * 0.75, tilt: V.tilt.start }, 1000, 640)],
     ['Roof check: the widest home from its left side', shot(build(withGarage), { yaw: Math.PI / 2, tilt: V.tilt.start }, 1000, 640)],
     ['Path check: the plain house from above its front', shot(build(EMPTY_HOME), { yaw: 0, tilt: 1.2 }, 1000, 640)],
-    ['Path check: the example from above its front', shot(build(example), { yaw: 0, tilt: 1.2 }, 1000, 640)]
+    ['Path check: the example from above its front', shot(build(example), { yaw: 0, tilt: 1.2 }, 1000, 640)],
+    ['Path check: one floor and a kitchen from above its front', shot(build(kitchenOnly), { yaw: 0, tilt: 1.2 }, 1000, 640)],
+    ['Path check: one floor and a kitchen on arrival', shot(build(kitchenOnly), start, 1280, 800)]
 ];
 const assembleViews = [0, 0.6, 1.2, 1.8].map((t) => [`The example building itself, ${t} seconds in`, shot(build(example, null, null, t), start, 1280, 800)]);
 const kindViews = [
@@ -543,7 +562,7 @@ const views = [
     faceShot("Maya's face, straight on", 0, 0.42),
     faceShot("Maya's face, three-quarters to her left", 0.6, 0.42),
     faceShot("Maya's face, three-quarters to her right", -0.6, 0.42),
-    faceShot("Maya's face at the bubble portrait's distance", 0, 0.9),
+    portraitShot("Maya's bubble portrait, head and shoulders (crop to an oval)"),
     ['A narrower laptop (1024 by 768)', shot(build(example), start, 1024, 768)],
     ['Close: the main floor (kitchen, living, dining, office, entry, half bath)', shot(build(example, 'main'), close, 1400, 900)],
     ['Close: the second floor (bedrooms, a shower primary bath, a full hall bath)', shot(build(example, 'second'), close, 1400, 900)],

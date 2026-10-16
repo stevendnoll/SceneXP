@@ -1267,19 +1267,27 @@ function landscape(out, site, layout, cx, cz, door, garages, front, doorOpen = f
     // a green shade tree at the sides, each only where it stands clear of
     // the house, the paving and the beds.
     const T = S.tree;
+    const ring = R > 0 ? R : Math.hypot(W, D);
     const keepOut = [
         ...[...layout.slabs, ...(layout.neighbors || [])].map((s) => [s.x + cx - s.width / 2, s.z + cz - s.depth / 2, s.x + cx + s.width / 2, s.z + cz + s.depth / 2]),
         ...out.site.filter((p) => ['path', 'drive', 'stoop', 'bed', 'porch', 'post', 'pier'].includes(p.role))
-            .map((p) => [p.position[0] - p.scale[0] / 2, p.position[2] - p.scale[2] / 2, p.position[0] + p.scale[0] / 2, p.position[2] + p.scale[2] / 2])
+            .map((p) => {
+                const box = [p.position[0] - p.scale[0] / 2, p.position[2] - p.scale[2] / 2, p.position[0] + p.scale[0] / 2, p.position[2] + p.scale[2] / 2];
+                // A walk runs on toward the street, past the yard to the
+                // lawn's edge, so nothing stands at its end either (QA,
+                // 2026-10-16: with the door far left, the maple stood
+                // across the walk, just past where it stopped).
+                if (p.role === 'path') box[3] = Math.max(box[3], ring);
+                return box;
+            })
     ];
     const clearOf = (x, z, r) => keepOut.every(([x0, z0, x1, z1]) => Math.hypot(Math.max(x0 - x, 0, x - x1), Math.max(z0 - z, 0, z - z1)) >= r);
     const placed = [];
     const room = (x, z, r) => clearOf(x, z, r) && placed.every(([px, pz, pr]) => Math.hypot(px - x, pz - z) >= pr + r);
     const trunk = (x, z, height) => out.site.push(part(null, x, lawnTop, z, T.trunkWidth, height, T.trunkWidth, { color: 'trunk', role: 'trunk' }));
-    // ROUND THE LAWN'S EDGE, where a round garden has its room: a spot at
-    // `angle` degrees (0 to the right, 90 to the front) as near the edge as
-    // a tree of `reach` fits, inside a small margin.
-    const ring = R > 0 ? R : Math.hypot(W, D);
+    // ROUND THE LAWN'S EDGE (`ring`), where a round garden has its room: a
+    // spot at `angle` degrees (0 to the right, 90 to the front) as near the
+    // edge as a tree of `reach` fits, inside a small margin.
     const spot = (angle, reach) => {
         const a = (angle * Math.PI) / 180;
         const rho = ring - reach - S.edge;
@@ -1410,6 +1418,12 @@ export function buildModel(config, at) {
         // different shader once a mesh has them, and that build belongs
         // behind the loading screen, not on the visitor's first room.
         if (colored) mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3).fill(1), 3);
+        // Every slot starts at nothing, not three's identity (a unit box):
+        // a slot drawn before its part is written can never show (QA,
+        // 2026-10-16: a gray box over an open floor, see `outlines`).
+        const slots = mesh.instanceMatrix.array;
+        slots.fill(0);
+        for (let i = 15; i < slots.length; i += 16) slots[i] = 1;
         inner.add(mesh);
         return mesh;
     };
@@ -1468,6 +1482,15 @@ export function buildModel(config, at) {
     paint.markerNotReached = new THREE.Color(config.colors.skipped);
     paint.outline = new THREE.Color(config.colors.accent);
     paint.outlineHover = new THREE.Color(colors.outlineHover || '#9FB3C4');
+    // The borders round a room cast no shadow (they are a highlight, not a
+    // thing), so they are left out of the shadow pass. That pass uploads a
+    // mesh's instances under the NEXT render's frame number (three r186
+    // counts the frame between its main and shadow passes), so a mesh it
+    // touched and then changed before the next render (the first hover
+    // after a floor opened, which refreshes the shadows) was drawn from its
+    // old data: unwritten slots, a gray box over the open floor (QA,
+    // 2026-10-16). Out of that pass, the main pass uploads it every time.
+    meshes.outlines.castShadow = false;
     const paintOf = (p) => paint[p.color] || paint.wall;
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();

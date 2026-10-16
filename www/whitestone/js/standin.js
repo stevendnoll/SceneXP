@@ -177,6 +177,16 @@ export function createStandin({
         return answer(200, { visitToken, expiresAt: new Date(expiresAt).toISOString() });
     }
 
+    /** Starts are taken one at a time (QA, 2026-10-16: two at once each
+     *  read no visit under way and wrote their own, the second's erasing
+     *  the first's), as the server's lock takes them. */
+    let queue = Promise.resolve();
+    const oneAtATime = (work) => {
+        const run = queue.then(work, work);
+        queue = run.catch(() => {});
+        return run;
+    };
+
     /** The visit under way for the booking `mine` (begun by the cleaner,
      *  no report yet), or null. While there is one the booking can be
      *  neither moved nor cancelled, nor the checklist unshared (QA,
@@ -190,7 +200,10 @@ export function createStandin({
      * the cleaner's page learns it. The oldest visit is dropped (with its
      * add-ons) past the most kept.
      */
-    async function startVisit(m) {
+    async function startVisit(was) {
+        // Read afresh inside the queue (`oneAtATime`): what the request read
+        // before it may be out of date.
+        const m = (await meta(was.id)) || was;
         const mine = (await bookings()).find((b) => b.id === m.id) || null;
         if (!mine) return fail(409, 'no-booking');
         const going = underWay(m, mine);
@@ -399,7 +412,7 @@ export function createStandin({
         }
         if (parts[2] === 'visits') {
             if (parts.length === 3) {
-                if (method === 'POST') return reader && !owner ? startVisit(m) : denied();
+                if (method === 'POST') return reader && !owner ? oneAtATime(() => startVisit(m)) : denied();
                 if (method !== 'GET') return fail(405, 'method');
                 if (!owner) return denied();
                 return answer(200, {
