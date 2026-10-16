@@ -235,19 +235,22 @@ function halfBath(P, W) {
 function bed(P, W, B, primary) {
     const bw = primary ? 0.15 : 0.12;
     const bl = 0.17;
-    P.push({ role: 'rug', x: 0, z: 0.11, w: bw + 0.09, d: 0.2, h: 0.002, up: 0, color: 'rug' });
+    // A rug in the room's second color, the frame charcoal and the
+    // nightstands white (QA, 2026-10-16: oak pieces and a pale rug on an oak
+    // floor left the room washed out).
+    P.push({ role: 'rug', x: 0, z: 0.11, w: bw + 0.09, d: 0.2, h: 0.002, up: 0, color: 'accent2' });
     P.push({ role: 'bed', x: 0, z: 0.008, w: bw + 0.012, d: 0.014, h: 0.06, up: 0, color: 'fabric' });
-    P.push({ role: 'bed', x: 0, z: 0.012 + bl / 2, w: bw, d: bl, h: 0.014, up: 0, color: 'oak' });
+    P.push({ role: 'bed', x: 0, z: 0.012 + bl / 2, w: bw, d: bl, h: 0.014, up: 0, color: 'charcoal' });
     P.push({ role: 'mattress', x: 0, z: 0.012 + bl / 2, w: bw - 0.004, d: bl - 0.004, h: 0.014, up: 0.014, color: 'duvet' });
     P.push({ role: 'pillow', x: -bw / 4, z: 0.03, w: bw * 0.4, d: 0.024, h: 0.01, up: 0.028, color: 'duvet' });
     P.push({ role: 'pillow', x: bw / 4, z: 0.03, w: bw * 0.4, d: 0.024, h: 0.01, up: 0.028, color: 'duvet' });
     P.push({ role: 'throw', x: 0, z: 0.012 + bl - 0.022, w: bw, d: 0.036, h: 0.003, up: 0.028, color: 'accent' });
     for (const side of [-1, 1]) {
         const nx = side * (bw / 2 + 0.024);
-        P.push({ role: 'nightstand', x: nx, z: 0.016, w: 0.03, d: 0.03, h: 0.03, up: 0, color: 'oak' });
+        P.push({ role: 'nightstand', x: nx, z: 0.016, w: 0.03, d: 0.03, h: 0.03, up: 0, color: 'white' });
         lamp(P, nx, 0.016, 0.03, 0.018);
     }
-    if (primary) P.push({ role: 'bench', x: 0, z: 0.012 + bl + 0.016, w: bw * 0.8, d: 0.022, h: 0.02, up: 0, color: 'accent2' });
+    if (primary) P.push({ role: 'bench', x: 0, z: 0.012 + bl + 0.016, w: bw * 0.8, d: 0.022, h: 0.02, up: 0, color: 'fabric' });
     if (W >= bw + 0.06 + 0.1 && B >= 0.1) {
         const dx = W / 2 - 0.016;
         P.push({ role: 'dresser', x: dx, z: 0.09, w: 0.03, d: 0.08, h: 0.04, up: 0, color: 'white' });
@@ -259,13 +262,15 @@ function bed(P, W, B, primary) {
  *  an armchair and a floor lamp where there is room, and a plant. */
 function living(P, W, B) {
     const sw = Math.min(0.2, W * 0.55);
-    P.push({ role: 'rug', x: 0, z: 0.1, w: sw + 0.04, d: 0.13, h: 0.002, up: 0, color: 'rug' });
+    // A rug in the room's own color under a charcoal coffee table (QA,
+    // 2026-10-16, as the bedroom's).
+    P.push({ role: 'rug', x: 0, z: 0.1, w: sw + 0.04, d: 0.13, h: 0.002, up: 0, color: 'accent' });
     P.push({ role: 'sofa', x: 0, z: 0.04, w: sw, d: 0.06, h: 0.022, up: 0, color: 'fabric' });
     P.push({ role: 'sofa', x: 0, z: 0.01, w: sw, d: 0.016, h: 0.045, up: 0, color: 'fabric' });
     for (const side of [-1, 1]) P.push({ role: 'sofa', x: side * (sw / 2 - 0.007), z: 0.04, w: 0.014, d: 0.06, h: 0.032, up: 0, color: 'fabric' });
     P.push({ role: 'cushion', x: -sw * 0.25, z: 0.026, w: 0.035, d: 0.012, h: 0.022, up: 0.022, color: 'accent' });
     P.push({ role: 'cushion', x: sw * 0.25, z: 0.026, w: 0.035, d: 0.012, h: 0.022, up: 0.022, color: 'accent2' });
-    P.push({ role: 'coffee-table', x: 0, z: 0.115, w: Math.min(0.08, sw * 0.45), d: 0.04, h: 0.016, up: 0, color: 'oak' });
+    P.push({ role: 'coffee-table', x: 0, z: 0.115, w: Math.min(0.08, sw * 0.45), d: 0.04, h: 0.016, up: 0, color: 'charcoal' });
     if (W >= sw + 0.1) {
         const ax = -(sw / 2 + 0.045);
         P.push({ role: 'armchair', x: ax, z: 0.09, w: 0.045, d: 0.045, h: 0.022, up: 0, color: 'accent2' });
@@ -281,7 +286,7 @@ function media(P, W, B) {
     living(P, W, B);
     if (W >= 0.24) {
         const cx = W / 2 - 0.014;
-        P.push({ role: 'console', x: cx, z: 0.09, w: 0.024, d: 0.08, h: 0.018, up: 0, color: 'oak' });
+        P.push({ role: 'console', x: cx, z: 0.09, w: 0.024, d: 0.08, h: 0.018, up: 0, color: 'white' });
         P.push({ role: 'tv', x: cx + 0.006, z: 0.09, w: 0.004, d: 0.07, h: 0.04, up: 0.024, color: 'appliance' });
     }
 }
@@ -291,9 +296,11 @@ function media(P, W, B) {
 function dining(P, W, B) {
     const tw = Math.min(0.16, W * 0.55);
     const tz = 0.1;
-    P.push({ role: 'rug', x: 0, z: tz, w: tw + 0.07, d: 0.14, h: 0.002, up: 0, color: 'rug' });
-    P.push({ role: 'table', x: 0, z: tz, w: tw, d: 0.075, h: 0.005, up: 0.032, color: 'oak' });
-    for (const side of [-1, 1]) P.push({ role: 'table', x: side * (tw / 2 - 0.02), z: tz, w: 0.006, d: 0.06, h: 0.032, up: 0, color: 'oak' });
+    // A white quartz top on charcoal legs, on a rug in the room's second
+    // color (QA, 2026-10-16, as the bedroom's).
+    P.push({ role: 'rug', x: 0, z: tz, w: tw + 0.07, d: 0.14, h: 0.002, up: 0, color: 'accent2' });
+    P.push({ role: 'table', x: 0, z: tz, w: tw, d: 0.075, h: 0.005, up: 0.032, color: 'counter' });
+    for (const side of [-1, 1]) P.push({ role: 'table', x: side * (tw / 2 - 0.02), z: tz, w: 0.006, d: 0.06, h: 0.032, up: 0, color: 'charcoal' });
     const per = tw >= 0.13 ? 3 : 2;
     for (const side of [-1, 1]) {
         for (let i = 0; i < per; i++) {
@@ -318,8 +325,8 @@ function dining(P, W, B) {
  *  wall where there is room, a rug and a plant. */
 function office(P, W, B) {
     const dw = Math.min(0.12, W * 0.6);
-    P.push({ role: 'rug', x: 0, z: 0.07, w: dw + 0.05, d: 0.11, h: 0.002, up: 0, color: 'rug' });
-    P.push({ role: 'desk', x: 0, z: 0.025, w: dw, d: 0.046, h: 0.005, up: 0.032, color: 'oak' });
+    P.push({ role: 'rug', x: 0, z: 0.07, w: dw + 0.05, d: 0.11, h: 0.002, up: 0, color: 'accent2' });
+    P.push({ role: 'desk', x: 0, z: 0.025, w: dw, d: 0.046, h: 0.005, up: 0.032, color: 'white' });
     for (const side of [-1, 1]) P.push({ role: 'desk', x: side * (dw / 2 - 0.006), z: 0.025, w: 0.008, d: 0.044, h: 0.032, up: 0, color: 'white' });
     P.push({ role: 'screen', x: 0, z: 0.01, w: 0.05, d: 0.003, h: 0.03, up: 0.042, color: 'appliance' });
     P.push({ role: 'screen', x: 0, z: 0.012, w: 0.006, d: 0.006, h: 0.006, up: 0.037, color: 'appliance' });
@@ -355,7 +362,7 @@ function laundry(P, W) {
 
 /** A crib, a changing dresser with its pad, and a rocking chair. */
 function nursery(P, W) {
-    P.push({ role: 'rug', x: 0, z: 0.08, w: 0.14, d: 0.12, h: 0.002, up: 0, color: 'rug' });
+    P.push({ role: 'rug', x: 0, z: 0.08, w: 0.14, d: 0.12, h: 0.002, up: 0, color: 'accent2' });
     // An open crib: a low base, its mattress, four corner posts and the
     // rails between them, so it reads as a crib and not a box.
     const cx = -0.02;
@@ -395,7 +402,7 @@ function entry(P, W, kind) {
         ['accent', 'charcoal', 'accent2'].forEach((color, i) => P.push({ role: 'coat', x: (i - 1) * 0.03, z: 0.006, w: 0.018, d: 0.01, h: 0.035, up: 0.04, color, wall: true }));
         return;
     }
-    P.push({ role: 'console', x: 0, z: 0.012, w: 0.08, d: 0.022, h: 0.032, up: 0, color: 'oak' });
+    P.push({ role: 'console', x: 0, z: 0.012, w: 0.08, d: 0.022, h: 0.032, up: 0, color: 'white' });
     if (kind === 'entry') P.push({ role: 'mirror', x: 0, z: 0.0012, w: 0.05, d: 0.002, h: 0.04, up: 0.045, color: 'mirror', wall: true });
     lamp(P, -0.03, 0.012, 0.032, 0.016);
     if (W >= 0.16) plant(P, W / 2 - 0.022, 0.016);
@@ -434,7 +441,7 @@ function garage(P, W, B) {
     }
     if (W >= 0.2) {
         P.push({ role: 'workbench', x: -W / 2 + 0.05, z: 0.012, w: 0.08, d: 0.022, h: 0.034, up: 0, color: 'oak' });
-        P.push({ role: 'shelves', x: W / 2 - 0.04, z: 0.01, w: 0.06, d: 0.018, h: 0.07, up: 0, color: 'concrete' });
+        P.push({ role: 'shelves', x: W / 2 - 0.04, z: 0.01, w: 0.06, d: 0.018, h: 0.07, up: 0, color: 'charcoal' });
     }
 }
 

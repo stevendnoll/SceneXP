@@ -1643,3 +1643,33 @@ describe('the open side is the one nearest the camera (QA, 2026-10-16: turned ha
         }
     });
 });
+
+describe('the outside walls are white inside (QA, 2026-10-16: the siding\'s gray showed behind every room)', () => {
+    test('every story\'s outside wall has a white lining on its inner face, clear of the wall\'s top; a garage has none; an open side neither', () => {
+        const t = HOUSE.wallThickness;
+        for (const [home, lifted, cut] of [[FULL, null, 'front'], [FULL, 'main', 'front'], [FULL, 'second', 'back'], [example(), 'main', 'left']]) {
+            const layout = layoutHome(home);
+            const inst = instancesFor(layout, levelOffsets(layout.slabs, lifted, LIFT), { lifted, cut });
+            const linings = inst.siding.filter((p) => p.role === 'lining');
+            for (const wall of inst.walls.filter((w) => w.role === 'wall')) {
+                const mine = linings.filter((l) => l.level === wall.level && l.side === wall.side);
+                const garage = ['garage', 'detached-garage'].includes(wall.level);
+                expect(`${wall.level} ${wall.side}: ${mine.length}`).toBe(`${wall.level} ${wall.side}: ${garage ? 0 : 1}`);
+                if (garage) continue;
+                const l = mine[0];
+                expect(l.color).toBe('interior');
+                // On the inner face, toward the house's middle, never in the
+                // wall's own planes.
+                const ax = ['front', 'back'].includes(wall.side) ? 2 : 0;
+                const outward = Math.sign(wall.position[ax] - l.position[ax]);
+                expect(outward).not.toBe(0);
+                const innerFace = wall.position[ax] - outward * t / 2;
+                expect(l.position[ax] + outward * l.scale[ax] / 2).toBeCloseTo(innerFace, 9);
+                expect(top(l)).toBeLessThan(top(wall) - 1e-4);
+                expect(bottom(l)).toBeCloseTo(bottom(wall), 9);
+            }
+            if (lifted) expect(linings.filter((l) => l.level === lifted && l.side === cut)).toEqual([]);
+        }
+    });
+});
+

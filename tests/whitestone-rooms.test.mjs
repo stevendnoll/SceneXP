@@ -10,6 +10,7 @@
  * (scripts/whitestone-model-preview.mjs) and Steve's.
  */
 import { kitFor, kitExtent, KIT_OF, BATHS, SIDE, STAIR } from '../www/whitestone/js/rooms.js';
+import { FLOOR_OF } from '../www/whitestone/js/model.js';
 import { TAXONOMY } from '../www/whitestone/js/taxonomy.js';
 import { CONFIG } from '../www/whitestone/js/config.js';
 
@@ -286,5 +287,19 @@ describe('the other rooms say what they are', () => {
 
     test('the same room is furnished the same way every time', () => {
         for (const area of Object.keys(KIT_OF)) expect(kitFor(area, 0.33, 0.31)).toEqual(kitFor(area, 0.33, 0.31));
+    });
+});
+
+describe('the rooms stand out from their floors (QA, 2026-10-16: oak pieces and pale rugs on oak floors read washed out)', () => {
+    test.each(Object.keys(USUAL))('%s: nothing that stands on its floor is the floor\'s own color, and its rugs are its own colors', (area) => {
+        const [w, d] = USUAL[area];
+        const floor = FLOOR_OF[area] || 'oak';
+        for (const bath of BATHS) {
+            const kit = kitFor(area, w, d, { bath, band: BAND });
+            for (const p of kit.filter((x) => x.up === 0)) {
+                expect(`${area} ${p.role} ${p.color}`).not.toBe(`${area} ${p.role} ${floor}`);
+            }
+            for (const rug of kit.filter((x) => x.role === 'rug')) expect(['accent', 'accent2']).toContain(rug.color);
+        }
     });
 });

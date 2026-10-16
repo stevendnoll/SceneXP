@@ -66,6 +66,7 @@ export const HOUSE = Object.freeze({
     knee: 0.05,                 // an attic's low walls, under the roof
     garageWall: 0.136,
     wallThickness: 0.012,
+    lining: 0.001,              // the white inside of an outside wall
     partition: Object.freeze({ height: 0.05, door: 0.07 }),
     window: Object.freeze({ depth: 0.004 }),
     door: Object.freeze({ width: 0.07, height: 0.125 }),
@@ -492,6 +493,19 @@ function shell(s, y, h, cx, cz, { open, door, garage, garageAt = null, basement,
         out.walls.push(f.along === 'x'
             ? part(s.level, mid, y, f.at, len, h, t, { role: 'wall', side: f.side, color })
             : part(s.level, f.at, y, mid, t, h, len, { role: 'wall', side: f.side, color }));
+        // White inside, as the rooms' own walls are (QA, 2026-10-16: the
+        // siding's gray showed on the inside of every outside wall, behind
+        // every room): a lining a millimeter proud of the inner face, between
+        // the side walls' inner faces, its top a millimeter under the wall's
+        // so the two never meet in one plane. A garage stays as it is.
+        if (!garage) {
+            const L = HOUSE.lining;
+            const inner = f.at - f.out * (t / 2 + L / 2);
+            const run = f.along === 'x' ? len - 2 * t : len;
+            out.siding.push(f.along === 'x'
+                ? part(s.level, mid, y, inner, run, h - L, L, { role: 'lining', side: f.side, color: 'interior' })
+                : part(s.level, inner, y, mid, L, h - L, run, { role: 'lining', side: f.side, color: 'interior' }));
+        }
         // The siding's courses, a hair proud of the wall.
         const course = HOUSE.lap;
         for (let cy2 = course.every; cy2 < h - course.line; cy2 += course.every) {

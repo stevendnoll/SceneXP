@@ -671,7 +671,12 @@ describe('a first visit', () => {
         fire(dom.el('prefs-skip'), 'click');
         // Review's main button is the time itself: every change is kept as
         // it is made, so there is nothing to save.
-        expect(buttons()).toEqual([GUIDE.chooseTime, GUIDE.preferences]);
+        // The main one last, the quote a button too (QA, 2026-10-16).
+        expect(buttons()).toEqual([GUIDE.preferences, GUIDE.reviewQuote, GUIDE.chooseTime]);
+        press('reviewQuote');
+        expect(openCards()).toEqual(['quote']);
+        fire(dom.el('quote-close'), 'click');
+        expect(main.__test__.ui.guide.scene).toBe('review');
         press('chooseTime');
         expect(main.__test__.ui.guide).toMatchObject({ scene: 'done', reviewed: true, away: { to: 'booking' } });
         expect(saved().settings.guide).toEqual({ scene: 'done', reviewed: true });
@@ -1188,6 +1193,23 @@ describe('halos on the touch points (QA, 2026-10-14)', () => {
         expect(fact('quote').classList.contains('has-halo')).toBe(true);
         main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'done', minimized: false };
         main.__test__.showGuide();
+        expect(fact('quote').classList.contains('has-halo')).toBe(false);
+    });
+
+    test('Review my quote opens the same breakdown, and the ring on Your quote is used all the same (QA, 2026-10-16)', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        press('next');
+        press('kitchen');
+        main.__test__.ui.guide = { ...main.__test__.ui.guide, scene: 'review', reached: 4 };
+        main.__test__.showGuide();
+        expect(fact('quote').classList.contains('has-halo')).toBe(true);
+        press('reviewQuote');
+        expect(dom.el('quote').hidden).toBe(false);
+        expect(fact('quote').classList.contains('has-halo')).toBe(false);
+        fire(dom.el('quote-close'), 'click');
+        await jest.advanceTimersByTimeAsync(50);
         expect(fact('quote').classList.contains('has-halo')).toBe(false);
     });
 });

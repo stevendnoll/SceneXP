@@ -455,12 +455,20 @@ describe('short loops away from Maya, and back (QA, 2026-10-14)', () => {
 
     test('Review\'s main button is the next step itself: a time, or what main.js says fits a published checklist (QA, 2026-10-16)', () => {
         const g = { ...fresh(), scene: 'review' };
-        const v = viewFor(g, {});
-        expect(v.buttons).toEqual([{ id: 'chooseTime', label: GUIDE.chooseTime, primary: true }, { id: 'preferences', label: GUIDE.preferences, primary: false }]);
+        // The main one last, past the preferences and, with a quote to open,
+        // Review my quote (QA, 2026-10-16: seen on the way to it).
+        const v = viewFor(g, { quoted: true });
+        expect(v.buttons).toEqual([
+            { id: 'preferences', label: GUIDE.preferences, primary: false },
+            { id: 'reviewQuote', label: 'Review my quote', primary: false },
+            { id: 'chooseTime', label: GUIDE.chooseTime, primary: true }
+        ]);
         expect(v).toMatchObject({ text: GUIDE.review, small: '', again: 'Tap Choose a time when everything looks right. Care preferences are optional.' });
-        const sent = viewFor(g, { reviewNext: { small: GUIDE.reviewUnsent, id: 'sendChanges', label: GUIDE.sendChanges } });
+        // Nothing priced yet, no quote to open: no button for it.
+        expect(viewFor(g, {}).buttons.map((b) => b.id)).toEqual(['preferences', 'chooseTime']);
+        const sent = viewFor(g, { quoted: true, reviewNext: { small: GUIDE.reviewUnsent, id: 'sendChanges', label: GUIDE.sendChanges } });
         expect(sent).toMatchObject({ text: GUIDE.review, small: GUIDE.reviewUnsent, again: GUIDE.reviewAgain(GUIDE.sendChanges) });
-        expect(sent.buttons).toEqual([{ id: 'sendChanges', label: GUIDE.sendChanges, primary: true }, { id: 'preferences', label: GUIDE.preferences, primary: false }]);
+        expect(sent.buttons.map((b) => [b.id, b.primary])).toEqual([['preferences', false], ['reviewQuote', false], ['sendChanges', true]]);
         // No Save: every change is kept as it is made.
         expect(GUIDE.save).toBeUndefined();
         expect(GUIDE.saved).toBeUndefined();

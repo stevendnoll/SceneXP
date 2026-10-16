@@ -425,6 +425,9 @@ export const GUIDE = Object.freeze({
      *  changes or See my visit (`label`). */
     reviewAgain: (label) => `Tap ${label} when everything looks right. Care preferences are optional.`,
     preferences: 'Choose preferences',
+    /** Review's quote as a button too, for those who go by her buttons (QA,
+     *  2026-10-16); Your quote at a glance opens it as well. */
+    reviewQuote: 'Review my quote',
     chooseTime: 'Choose a time',
 
     example1: 'This is a four-bedroom home with a home office.',

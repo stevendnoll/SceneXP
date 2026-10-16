@@ -109,7 +109,6 @@ export const CONFIG = deepFreeze({
             duvet: '#F6F3EE',
             fabric: '#CFC8BC',     // a greige sofa, an upholstered headboard
             charcoal: '#3E4146',   // dining chairs, a desk chair
-            rug: '#DCD4C6',
             pot: '#E9E5DD',        // white ceramic planters
             // The rooms' furnishings (rooms.js): stainless appliances, a
             // black cooktop and screens, a sink's basin, a bath's water and
@@ -124,14 +123,16 @@ export const CONFIG = deepFreeze({
             plant: '#5E8A4A',
             car: '#3A4452',
             carGlass: '#8EA3B4',
-            /** Each room's one muted accent and a second for a cushion, by
-             *  the room's id: navy, sage, rust, ochre, slate, clay. */
-            accent1: '#3E4F6A',
-            accent2: '#8DA08A',
-            accent3: '#B5683F',
-            accent4: '#C9A04E',
-            accent5: '#5F6B78',
-            accent6: '#C98F78',
+            /** Each room's two colors, by the room's id: navy, green, rust,
+             *  saffron, teal, coral. Deeper than they were (QA, 2026-10-16:
+             *  muted, and on a few small pieces only, the rooms read washed
+             *  out), and now on the rugs too. Still no walnut and no brass. */
+            accent1: '#2E4A7D',
+            accent2: '#5E9468',
+            accent3: '#C4572B',
+            accent4: '#E0A93A',
+            accent5: '#2F8A8A',
+            accent6: '#D9735A',
             lawn: '#8DAE68',
             // The context round a townhome or a condo (PRD 8.9), a sketch:
             // a faint slate fill (at model.context.opacity) and slate

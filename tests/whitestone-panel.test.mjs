@@ -1091,14 +1091,14 @@ describe('Maya\'s short loops: sent to a card, back to say what came of it', () 
         main.__test__.onHostButton('review');
         expect(line()).toBe(GUIDE.review);
         expect(dom.el('host-small').textContent).toBe(GUIDE.reviewSame);
-        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-visit', 'host-preferences']);
+        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-preferences', 'host-reviewQuote', 'host-visit']);
         // Back to the rooms (the strip's Your rooms), and a room added.
         main.__test__.onHostButton('back');
         expect(main.__test__.ui.guide.scene).toBe('rooms');
         fire(dom.el('host-choices').children[0].children.find((b) => b.id === 'host-chip-living'), 'click');
         main.__test__.onHostButton('review');
         expect(dom.el('host-small').textContent).toBe(GUIDE.reviewUnsent);
-        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-sendChanges', 'host-preferences']);
+        expect(dom.el('host-actions').children.map((b) => b.id)).toEqual(['host-preferences', 'host-reviewQuote', 'host-sendChanges']);
         // Sent from Review, she comes back to say so. (The living room
         // takes the quote past the visit minimum, so the new price is asked
         // about first.)

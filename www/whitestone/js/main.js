@@ -1130,6 +1130,7 @@ function guideContext() {
         welcome: welcomeLine(c),
         standby: standbyLine(c),
         reviewNext: reviewNext(c),
+        quoted: Boolean(c && state.sheet && liveItems(c).length),
         addOn: addOnContext(),
         report: reportContext(),
         ...exampleContext(c)
@@ -1708,6 +1709,9 @@ function onHostButton(id) {
         break;
     case 'preferences':
         openPreferences();
+        break;
+    case 'reviewQuote':
+        openQuote();
         break;
     // Maya steps aside for the card (from Review, or a return), and
     // comes back once it is done to say what came of it (comeBack).
@@ -3224,6 +3228,12 @@ function openQuote() {
     if (!c || !state.sheet || !liveItems(c).length) return;
     renderQuote({ checklist: c, sheet: state.sheet });
     openCard('quote');
+    // Opened from Review's button, the ring on Your quote is used all the same.
+    const h = ui.halo;
+    if (h && !h.used && h.spec.kind === 'element' && h.spec.id === 'host-fact-quote') {
+        h.used = true;
+        if (h.node && h.node.classList) h.node.classList.remove('has-halo');
+    }
 }
 
 function openChecklistView() {

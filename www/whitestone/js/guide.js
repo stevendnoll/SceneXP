@@ -4,8 +4,8 @@
  * which scene the visitor is in, what moves them on, and what Maya says.
  *
  * ONE NEXT STEP AT A TIME. Each scene is one or two short sentences, at
- * most two buttons, and for the floors a set of choices, so a first-time
- * visitor always knows the one thing to do next:
+ * most two buttons (Review and an add-on, three), and for the floors a set
+ * of choices, so a first-time visitor always knows the one thing to do next:
  *
  *   hello      the greeting: Let's start, or Show me an example
  *   home       what kind of home: a house, a townhome, a condo
@@ -458,11 +458,11 @@ export function addedLine(sheet, area, label, bath) {
 /**
  * What the bubble shows for a scene: `{ text, buttons, choices, progress,
  * reached, stepBack, small, again }`. `buttons` are `{ id, label, primary }`, at most
- * two; `choices` is 'home' (the kinds of home, each a button in a group),
+ * two (Review and an add-on, three); `choices` is 'home' (the kinds of home, each a button in a group),
  * 'floors' or null; `progress` the step of the strip or
  * null; `again` the line said once, in other words, if nothing happens.
  * `ctx` gives what the words depend on: `{ sheet, roomLabel, roomCount,
- * addedText, exampleTask, exampleRoom, exampleTotal, reviewNext }`.
+ * addedText, exampleTask, exampleRoom, exampleTotal, reviewNext, quoted }`.
  */
 export function viewFor(guide, ctx = {}) {
     const b = (id, label, primary = false) => ({ id, label, primary });
@@ -505,11 +505,17 @@ export function viewFor(guide, ctx = {}) {
     case 'review': {
         // The next step itself (M3): Choose a time. A checklist the cleaner
         // has already offers what fits it instead (`ctx.reviewNext` { id,
-        // label, small }: Send my changes, or See my visit).
+        // label, small }: Send my changes, or See my visit). It comes last,
+        // past the preferences and the quote (`ctx.quoted`, a quote to
+        // open), so they are seen on the way to it (QA, 2026-10-16).
         const next = ctx.reviewNext || { id: 'chooseTime', label: GUIDE.chooseTime, small: '' };
         return {
             ...base, text: GUIDE.review, small: next.small || '', again: GUIDE.reviewAgain(next.label),
-            buttons: [b(next.id, next.label, true), b('preferences', GUIDE.preferences)]
+            buttons: [
+                b('preferences', GUIDE.preferences),
+                ...(ctx.quoted ? [b('reviewQuote', GUIDE.reviewQuote)] : []),
+                b(next.id, next.label, true)
+            ]
         };
     }
     case 'example1':
