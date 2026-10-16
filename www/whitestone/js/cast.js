@@ -34,13 +34,13 @@ export const REST = Object.freeze({ z: 0.15, x: 0.1, fore: 0 });
 export const GESTURES = Object.freeze({ wave: 2.2, point: 1.9 });
 
 /**
- * Her bubble portrait's framing (QA, 2026-10-16: framed on her head alone,
- * her face and hair filled the oval): head and shoulders, in the oval's own
- * 4:5, from `above` over the top of her hair down to her upper chest. In
- * meters, from in front of her, `distance` away. The pixels are the
- * canvas's, twice the oval's 40 by 50 for a sharp screen.
+ * Her bubble portrait's framing: her face, square, for the round portrait
+ * (QA, 2026-10-16: back to the circle and its first framing, after an oval
+ * with her head and shoulders). In meters, from in front of her and a
+ * little above, `distance` away, `fov` degrees tall. The pixels are the
+ * canvas's, twice the circle's 44 for a sharp screen.
  */
-export const PORTRAIT = Object.freeze({ width: 96, height: 120, distance: 1.0, span: 0.68, above: 0.08, hair: 0.165 });
+export const PORTRAIT = Object.freeze({ width: 96, height: 96, distance: 0.7, fov: 24, lift: 0.02 });
 
 /**
  * The portrait's camera for her head's middle (`head`, world meters, as
@@ -49,11 +49,9 @@ export const PORTRAIT = Object.freeze({ width: 96, height: 120, distance: 1.0, s
  * same way.
  */
 export function portraitPose(head, facing, P = PORTRAIT) {
-    const top = head[1] + P.hair + P.above;
-    const aim = [head[0], top - P.span / 2, head[2]];
-    const eye = [aim[0] + Math.sin(facing) * P.distance, aim[1], aim[2] + Math.cos(facing) * P.distance];
-    const fov = (2 * Math.atan(P.span / 2 / P.distance) * 180) / Math.PI;
-    return { eye, aim, fov, aspect: P.width / P.height };
+    const aim = [head[0], head[1], head[2]];
+    const eye = [aim[0] + Math.sin(facing) * P.distance, aim[1] + P.lift, aim[2] + Math.cos(facing) * P.distance];
+    return { eye, aim, fov: P.fov, aspect: P.width / P.height };
 }
 
 /**
@@ -142,8 +140,8 @@ function smileFor(m, headY, radius) {
  *                      whether anything moved
  *   head()             her head's middle, in world meters
  *   anchor()           a point beside her head, where her bubble begins
- *   portrait(renderer, scene)  her head and shoulders, drawn once into a
- *                      canvas (portraitPose)
+ *   portrait(renderer, scene)  her face, drawn once into a canvas
+ *                      (portraitPose)
  *   setShown(on)       in or out of the frame (out on an upright phone)
  */
 export function buildMaya(config) {
@@ -269,10 +267,10 @@ export function buildMaya(config) {
             group.visible = Boolean(on);
         },
         /**
-         * Her head and shoulders in a small canvas, for the bubble's oval
-         * portrait (portraitPose): the stage drawn once from in front of
-         * her into a render target, read back, and painted upright. Null
-         * where the browser will not.
+         * Her face in a small canvas, for the bubble's round portrait
+         * (portraitPose): the stage drawn once from in front of her head
+         * into a render target, read back, and painted upright. Null where
+         * the browser will not.
          */
         portrait(renderer, scene) {
             try {

@@ -449,6 +449,20 @@ describe('instances', () => {
             items: [0, 1, 2].map((n) => ({ id: `k${n}`, roomId: 'k', order: n + 1, important: false }))
         };
 
+        test('the maple stands where it will stay: a main-floor room added, it does not move (QA, 2026-10-16)', () => {
+            const maple = (home) => sited(home).inst.canopies.filter((c) => c.role === 'maple').map((c) => c.position.join(','));
+            const empty = { ...KITCHEN, id: 'empty-main', rooms: [], items: [] };
+            expect(maple(empty)).toEqual(maple(KITCHEN));
+            // At the front, on the right (the door is put left of the middle).
+            const [x, , z] = sited(KITCHEN).inst.canopies.find((c) => c.role === 'maple').position;
+            expect(x).toBeGreaterThan(0);
+            expect(z).toBeGreaterThan(0);
+            // So on almost every home: the same floors, rooms or none, the same spot.
+            let moved = 0;
+            for (const h of HOMES) if (maple({ ...h, rooms: [], items: [] }).join() !== maple(h).join()) moved++;
+            expect(moved / HOMES.length).toBeLessThan(0.05);
+        });
+
         test.each([['one floor and a kitchen', () => KITCHEN], ['the example', () => example()], ['every level', () => FULL],
             ['an empty home', () => ({ ...EMPTY_HOME, id: 'e' })], ...HOMES.map((h, i) => [`random home ${i}`, () => h])])('%s: no tree stands on the front walk or in its line to the lawn\'s edge', (_name, make) => {
             const { site, inst } = sited(make());

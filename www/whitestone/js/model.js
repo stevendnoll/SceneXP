@@ -122,9 +122,11 @@ export const HOUSE = Object.freeze({
         edge: 0.02,
         /** Where each tree may stand, in degrees round the lawn (0 to the
          *  right, 90 to the front), tried in order: the maple at a front
-         *  corner, a fir at each back corner, a shade tree at each side. */
+         *  corner, the right first (QA, 2026-10-16: the door is put left of
+         *  the middle, so the right stays clear as rooms come and the maple
+         *  stays put), a fir at each back corner, a shade tree at each side. */
         angles: Object.freeze({
-            maple: Object.freeze([128, 52, 145, 35]),
+            maple: Object.freeze([52, 128, 35, 145]),
             firs: Object.freeze([Object.freeze([-128, -145, -110]), Object.freeze([-52, -35, -70])]),
             shade: Object.freeze([Object.freeze([180, 165, 195]), Object.freeze([0, 15, -15])])
         }),

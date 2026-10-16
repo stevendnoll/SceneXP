@@ -1354,10 +1354,10 @@ textarea.ws-input {
     display: grid;
     flex: none;
     place-items: center;
-    /* A tall oval, a cameo (QA, 2026-10-16: round beside the round ←, and
-       then a rounded square, both looked off). */
-    width: 40px;
-    height: 50px;
+    /* Round (QA, 2026-10-16: an oval and a rounded square were tried; with
+       the ← plain, not filled, the circle sits well beside it). */
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     background: var(--ws-accent);
     color: #FFFFFF;
@@ -1831,8 +1831,8 @@ textarea.ws-input {
     }
 
     .host-portrait {
-        width: 32px;
-        height: 40px;
+        width: 36px;
+        height: 36px;
         font-size: 1rem;
     }
 

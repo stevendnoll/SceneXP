@@ -501,8 +501,8 @@ function faceCamera(turn = 0, dist = 0.42, fov = 30) {
     return { eye: [mid[0] + Math.sin(a) * dist, mid[1] + 0.02, mid[2] + Math.cos(a) * dist], aim: mid, fov };
 }
 const faceShot = (title, turn, dist) => [title, { ...shot(build(EMPTY_HOME), start, 800, 800), camera: faceCamera(turn, dist), withMaya: true }];
-/** The bubble's oval portrait, framed as cast.js frames it (portraitPose),
- *  at five times its canvas. */
+/** The bubble's round portrait, framed as cast.js frames it
+ *  (portraitPose), at five times its canvas. */
 const portraitShot = (title) => {
     const pose = portraitPose(buildMaya(CONFIG).head(), CONFIG.cast.maya.facing);
     return [title, { ...shot(build(EMPTY_HOME), start, PORTRAIT.width * 5, PORTRAIT.height * 5), camera: { eye: pose.eye, aim: pose.aim, fov: pose.fov }, withMaya: true }];
@@ -562,7 +562,7 @@ const views = [
     faceShot("Maya's face, straight on", 0, 0.42),
     faceShot("Maya's face, three-quarters to her left", 0.6, 0.42),
     faceShot("Maya's face, three-quarters to her right", -0.6, 0.42),
-    portraitShot("Maya's bubble portrait, head and shoulders (crop to an oval)"),
+    portraitShot("Maya's bubble portrait (crop to a circle)"),
     ['A narrower laptop (1024 by 768)', shot(build(example), start, 1024, 768)],
     ['Close: the main floor (kitchen, living, dining, office, entry, half bath)', shot(build(example, 'main'), close, 1400, 900)],
     ['Close: the second floor (bedrooms, a shower primary bath, a full hall bath)', shot(build(example, 'second'), close, 1400, 900)],

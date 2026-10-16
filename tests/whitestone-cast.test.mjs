@@ -60,30 +60,20 @@ describe('the gestures (pure)', () => {
 });
 
 describe('the bubble portrait (pure)', () => {
-    // QA, 2026-10-16: framed on her head alone, her face and hair filled
-    // the oval. Head and shoulders now, in the oval's 4:5, with room above.
-    test('head and shoulders, in the oval\'s shape, with room above her hair and her face in the upper half', () => {
+    // QA, 2026-10-16: an oval with her head and shoulders was tried; back to
+    // the circle and its first framing, her face, square.
+    test('her face, square for the circle, from in front of her and a little above', () => {
         const head = [2, 1.5, 0.4];
         const pose = portraitPose(head, 0);
-        expect(pose.aspect).toBeCloseTo(4 / 5, 9);
-        expect(PORTRAIT.width / PORTRAIT.height).toBeCloseTo(4 / 5, 9);
-        // Straight in front of her, level, looking at the frame's middle.
-        expect(pose.eye[1]).toBeCloseTo(pose.aim[1], 9);
-        expect(pose.eye[2] - pose.aim[2]).toBeCloseTo(PORTRAIT.distance, 9);
-        const half = Math.tan((pose.fov * Math.PI) / 360) * PORTRAIT.distance;
-        const top = pose.aim[1] + half;
-        const bottom = pose.aim[1] - half;
-        const hairTop = head[1] + PORTRAIT.hair;
-        // Room above her hair, her head's middle in the upper half, her
-        // shoulders (some 0.25 m under it) in the frame.
-        expect(top - hairTop).toBeGreaterThanOrEqual(0.05);
-        expect(head[1]).toBeGreaterThan(pose.aim[1]);
-        expect(bottom).toBeLessThan(head[1] - 0.25);
-        // Her head (about 0.3 m with her hair) takes well under the width.
-        expect(0.3 / (2 * half * pose.aspect)).toBeLessThan(0.65);
+        expect(pose.aspect).toBe(1);
+        expect(PORTRAIT.width).toBe(PORTRAIT.height);
+        expect(pose.aim).toEqual(head);
+        expect(pose.eye[1] - head[1]).toBeCloseTo(PORTRAIT.lift, 9);
+        expect(pose.eye[2] - head[2]).toBeCloseTo(PORTRAIT.distance, 9);
+        expect(pose.fov).toBe(PORTRAIT.fov);
         // Turned with her: from in front of her, whichever way she faces.
         const turned = portraitPose(head, Math.PI / 2);
-        expect(turned.eye[0] - turned.aim[0]).toBeCloseTo(PORTRAIT.distance, 9);
+        expect(turned.eye[0] - head[0]).toBeCloseTo(PORTRAIT.distance, 9);
     });
 });
 
