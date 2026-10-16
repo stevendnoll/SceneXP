@@ -28,7 +28,8 @@ import { GUIDE } from './copy.min.js';
 
 /**
  * Drive the bubble in index.html. `on.button(id)` is called for a button,
- * `on.floor(key, checked)` for a floor ticked or unticked. `timing` gives
+ * `on.floor(key, checked)` for a floor ticked or unticked, `on.openFloor(key)`
+ * for a floor of Your rooms' list. `timing` gives
  * the seconds before the pulse and before the hint is said again. Returns
  * { show, update, hide, setCovered, poke, title, shown, view }.
  */
@@ -144,6 +145,27 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         ]));
     }
 
+    /** Your rooms' floors (`c.floors`, each `{ key, label, detail, aria }`),
+     *  as the panel lists a home's floors: each row a button that opens
+     *  that floor, as a tap on it on the house does (QA, 2026-10-16). */
+    function drawFloorRows(c) {
+        if (!c.floors || !c.floors.length) return;
+        const rows = c.floors.map((f) => {
+            const btn = h('button', { type: 'button', id: `host-open-${f.key}`, className: 'panel-row', attrs: { 'aria-label': f.aria, title: f.aria } }, [
+                h('span', { className: 'panel-row-label', text: f.label }),
+                h('span', { className: 'panel-row-detail', text: f.detail })
+            ]);
+            btn.addEventListener('click', () => {
+                if (typeof on.openFloor === 'function') on.openFloor(f.key);
+            }, { signal });
+            return h('li', { className: 'panel-item' }, [btn]);
+        });
+        choices.appendChild(h('section', { className: 'host-floor-rows', attrs: { 'aria-labelledby': 'host-floor-rows-heading' } }, [
+            h('h3', { className: 'panel-heading', id: 'host-floor-rows-heading', text: c.floorsHeading }),
+            h('ul', { className: 'panel-list' }, rows)
+        ]));
+    }
+
     /** The floors to tick, or one of a few, when
      *  Maya asks. */
     function drawChoices() {
@@ -157,7 +179,8 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         }
         if (c && c.kind === 'chips') {
             if (c.chips.length) drawChips(c);
-            else choices.hidden = true;
+            drawFloorRows(c);
+            if (!c.chips.length && !(c.floors && c.floors.length)) choices.hidden = true;
             return;
         }
         if (!c || c.kind !== 'floors') return;

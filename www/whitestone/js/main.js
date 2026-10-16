@@ -119,6 +119,9 @@ const state = {
  */
 const ui = {
     editing: null, room: null, task: null, afterPrefs: false, filter: 'all', guide: null, selected: null,
+    /** The floor opened from Your rooms' list, whose row the keyboard goes
+     *  back to (QA, 2026-10-16). */
+    fromFloorRow: null,
     /** The Choose a time card while it is open, and the receipt shown. */
     booking: null, receipt: null,
     /** One card handing over to the next (the calendar to the receipt), so
@@ -564,6 +567,16 @@ function onPanelRow(kind, id) {
     }
 }
 
+/** A floor from Your rooms' list (QA, 2026-10-16): opened, and the panel
+ *  listing its rooms, as a tap on it on the house does, the keyboard in the
+ *  panel. Its row takes the keyboard again once the panel is put away. */
+function openFloorFromList(level) {
+    const c = active();
+    if (!c || !c.levels.includes(level)) return null;
+    ui.fromFloorRow = level;
+    return selectTo({ scope: 'floor', level, roomId: null, itemId: null }, { focus: true });
+}
+
 /** The panel's back button: one step back, the keyboard kept in the panel,
  *  or, once the panel has gone, on Maya's next step (everything is hers,
  *  Steve, 2026-10-15), or on Help when she offers none. */
@@ -574,6 +587,14 @@ function onPanelBack() {
     }
     selectTo(stepOut(ui.selected), { focus: true });
     if (!ui.selected) {
+        // Opened from Your rooms' list: back on its row.
+        const row = ui.fromFloorRow && host ? host.nodeOf(`host-open-${ui.fromFloorRow}`) : null;
+        ui.fromFloorRow = null;
+        if (host) host.setCovered(anyOpen() || Boolean(panel && panel.shown));
+        if (row && typeof row.focus === 'function') {
+            row.focus();
+            return;
+        }
         if (host && host.shown && host.focusPrimary()) return;
         const to = hostFallback();
         if (to && typeof to.focus === 'function') to.focus();
@@ -1370,7 +1391,15 @@ function sceneView() {
             const name = roomName(typeKey, { area, label: '' });
             return { area, level, label: name, aria: PANEL.chipLabel(name) };
         }) : [];
-        return { ...v, choices: { kind: 'chips', legend: GUIDE.roomsLegend, chips } };
+        // On Your rooms, the home's floors too, each opening as a tap on it
+        // on the house does (QA, 2026-10-16). Not on First room, where the
+        // kitchen is the one thing asked.
+        const floors = c && ui.guide.scene === 'rooms' ? c.levels.map((key) => {
+            const name = (levelOf(typeKey, key) || { name: key }).name;
+            const detail = PANEL.floorRooms(liveRooms(c).filter((r) => r.level === key).length);
+            return { key, label: name, detail, aria: PANEL.floorOpen(name, detail) };
+        }) : [];
+        return { ...v, choices: { kind: 'chips', legend: GUIDE.roomsLegend, chips, floors, floorsHeading: GUIDE.floorsHeading } };
     }
     if (v && v.choices === 'report') {
         // The full report, or Done (her → takes the first). No booking here
@@ -3513,7 +3542,7 @@ function setupEventListeners() {
     host = createHost({
         signal,
         timing: { pulse: CONFIG.guide.pulse, again: CONFIG.guide.again },
-        on: { button: onHostButton, floor: onFloor, step: onHostStep, chip: onGuideChip, fact: onHostFact }
+        on: { button: onHostButton, floor: onFloor, step: onHostStep, chip: onGuideChip, fact: onHostFact, openFloor: openFloorFromList }
     });
     panel = createPanel({
         signal,
@@ -3888,6 +3917,7 @@ export const __test__ = {
     addRoomOf,
     onPanelRow,
     onPanelBack,
+    openFloorFromList,
     onPanelAction,
     onPanelChip,
     placeHost,

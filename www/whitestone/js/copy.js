@@ -390,6 +390,9 @@ export const GUIDE = Object.freeze({
     addKitchen: 'Add the kitchen',
     otherRoom: 'Another kind of room',
     roomsLegend: 'Add a room',
+    /** Your rooms' list of floors, each opening as a tap on it does (QA,
+     *  2026-10-16: a floor was reached only from the house). */
+    floorsHeading: 'Floors',
 
     /** Said once the first room is in, from the price sheet. */
     added: (room, count, money) => `There's your ${room} with its ${countWord(count)} standard ${count === 1 ? 'task' : 'tasks'}, ${money} so far.`,
@@ -564,6 +567,9 @@ export function withArticle(name) {
 export const PANEL = Object.freeze({
     label: 'Your home, floor by floor',
     rooms: (n) => (n === 1 ? '1 room' : `${n} rooms`),
+    /** A floor's row, in the panel and in Maya's Your rooms (QA, 2026-10-16). */
+    floorRooms: (n) => (n ? (n === 1 ? '1 room' : `${n} rooms`) : 'No rooms yet'),
+    floorOpen: (floor, rooms) => `Open the ${String(floor).toLowerCase()}: ${String(rooms).toLowerCase()}`,
     tasks: (n) => (n === 1 ? '1 task' : `${n} tasks`),
     about: (time) => `about ${time}`,
     back: (name) => `Back to ${name}`,

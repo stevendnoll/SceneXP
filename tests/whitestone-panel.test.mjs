@@ -109,6 +109,9 @@ describe('what the panel says (pure)', () => {
         expect(v.back).toBe(PANEL.close);
         expect(v.rows.map((r) => r.id)).toEqual(c.levels);
         expect(v.rows[0]).toMatchObject({ kind: 'floor', label: 'Basement', detail: PANEL.rooms(c.rooms.filter((r) => r.level === 'basement').length) });
+        // A floor with nothing on it yet says so (QA, 2026-10-16).
+        expect(panelView({ scope: 'house' }, { ...c, rooms: [], items: [] }, SHEET).rows[0].detail).toBe('No rooms yet');
+        expect([0, 1, 2].map(PANEL.floorRooms)).toEqual(['No rooms yet', '1 room', '2 rooms']);
         expect(v.actions.map((a) => a.id)).toEqual(['checklist', 'home']);
         // The kind of home first, which Your home can change.
         expect(v.summary).toMatch(/^A house\. 13 rooms, 27 tasks, \$\d+/);

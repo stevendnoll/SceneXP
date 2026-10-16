@@ -1356,7 +1356,8 @@ textarea.ws-input {
     place-items: center;
     width: 44px;
     height: 44px;
-    border-radius: 50%;
+    /* A rounded square (QA, 2026-10-16), apart from the round buttons. */
+    border-radius: 12px;
     background: var(--ws-accent);
     color: #FFFFFF;
     font-size: 1.15rem;
@@ -1399,7 +1400,9 @@ textarea.ws-input {
 /* Her main step, a → by her name (QA, 2026-10-15: on a phone her buttons
    can sit below the fold): the accent, as her main button wears it. Its ←
    twins, one step back before her portrait and beside the panel's title
-   (QA, 2026-10-16: the text links went unseen), wear it too. */
+   (QA, 2026-10-16: the text links went unseen), share its shape, in the
+   plain button's colors (QA, 2026-10-16: forward is the main step, back
+   is not). */
 .host-next,
 .host-back,
 .panel-back {
@@ -1430,10 +1433,20 @@ textarea.ws-input {
     outline-offset: 2px;
 }
 
-/* The ←s sit at the start of their row: only the → is pushed to its end. */
+/* The ←s sit at the start of their row (only the → is pushed to its
+   end), white with a fine line, as .ws-btn is. */
 .host-back,
 .panel-back {
     margin-left: 0;
+    border: 1px solid #C9C3B9;
+    background: var(--ws-panel);
+    color: var(--ws-graphite);
+}
+
+.host-back:hover,
+.panel-back:hover {
+    border-color: var(--ws-accent);
+    background: var(--ws-accent-soft);
 }
 
 .ws-host.is-minimized .host-back {
@@ -1551,6 +1564,17 @@ textarea.ws-input {
 
 .host-progress[hidden] {
     display: none;
+}
+
+/* Your rooms' floors (QA, 2026-10-16), as the panel lists them, under the
+   chips and above her buttons. */
+.host-floor-rows {
+    margin: 0.2rem 0 0;
+    text-align: left;
+}
+
+.host-floor-rows .panel-list {
+    margin-bottom: 0.4rem;
 }
 
 .host-step {
@@ -1804,6 +1828,7 @@ textarea.ws-input {
     .host-portrait {
         width: 36px;
         height: 36px;
+        border-radius: 10px;
         font-size: 1rem;
     }
 

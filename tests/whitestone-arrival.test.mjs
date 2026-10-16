@@ -84,6 +84,8 @@ describe('the markup', () => {
         // Maya's ← is in her header, before her portrait, not at the foot.
         expect(HTML).toMatch(/<div class="host-head">\s*<button id="host-back"[^>]*\shidden>/);
         expect(HTML).not.toMatch(/class="host-foot">\s*<button id="host-back"/);
+        // The five steps right under her header, above the quote (QA, 2026-10-16).
+        expect(HTML).toMatch(/<\/button>\s*<\/div>\s*<!--[^>]*-->\s*<ol id="host-progress"[^>]*>[\s\S]*?<div id="host-facts"/);
         expect(HTML).not.toMatch(/id="ws-hud"|id="hud-/);
         // In their place, the wordmark (concept C): an image named for the
         // company, sized so the page does not jump as it loads, drawn as
@@ -179,6 +181,14 @@ function said() {
 
 const line = () => dom.el('host-line').textContent;
 const panelShown = () => !dom.el('ws-panel').hidden;
+/** Every element under a node, depth first. */
+function all(node, out = []) {
+    for (const c of node.children || []) {
+        out.push(c);
+        all(c, out);
+    }
+    return out;
+}
 const rows = () => dom.el('panel-list').children.map((li) => li.children[0]);
 const rowLabels = () => rows().map((b) => b.children[0].textContent);
 const shown = () => !dom.el('ws-host').hidden;
@@ -589,6 +599,50 @@ describe('a first visit', () => {
         main.__test__.tapModel('main', kitchen.id);
         main.__test__.onPanelRow('task', stove.id);
         expect(dom.el('panel-back').getAttribute('aria-label')).toBe(PANEL.back('the kitchen'));
+    });
+
+    test('Your rooms lists the home\'s floors as the panel does; a row opens its floor, and Back returns to it (QA, 2026-10-16)', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        tick('second', true);
+        press('next');
+        // Not on First room: there, the kitchen is the one thing asked.
+        const section = () => all(dom.el('host-choices')).find((n) => n.className === 'host-floor-rows');
+        expect(section()).toBeUndefined();
+        press('kitchen');
+        press('next');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        const box = section();
+        expect(box).toBeDefined();
+        // Under the chips, above her buttons.
+        const kids = dom.el('host-choices').children;
+        expect(kids.indexOf(box)).toBe(kids.length - 1);
+        expect(kids[0].className).toContain('host-room-chips');
+        expect(box.children[0].textContent).toBe(GUIDE.floorsHeading);
+        const rows = () => all(section()).filter((n) => n.className === 'panel-row');
+        expect(rows().map((b) => b.children.map((x) => x.textContent))).toEqual([['Main floor', '1 room'], ['Second floor', 'No rooms yet']]);
+        expect(rows()[1].getAttribute('aria-label')).toBe(PANEL.floorOpen('Second floor', 'No rooms yet'));
+        expect(rows()[1].getAttribute('title')).toBe(rows()[1].getAttribute('aria-label'));
+        // A row opens its floor, as a tap on the house does.
+        fire(rows()[1], 'click');
+        expect(main.__test__.ui.selected).toMatchObject({ scope: 'floor', level: 'second' });
+        expect(main.__test__.model().lifted).toBe('second');
+        expect(panelShown()).toBe(true);
+        expect(dom.el('panel-title').textContent).toBe('Second floor');
+        stepFrames(2);
+        expect(shown()).toBe(false);
+        // Back: Maya again, on Your rooms, the keyboard on that row.
+        fire(dom.el('panel-back'), 'click');
+        expect(panelShown()).toBe(false);
+        expect(shown()).toBe(true);
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        expect(document.activeElement.id).toBe('host-open-second');
+        // A room added there is counted on its row.
+        main.__test__.addRoomOf('bedroom', 'second');
+        expect(rows().map((b) => b.children[1].textContent)).toEqual(['1 room', '1 room']);
+        // An unknown floor opens nothing.
+        expect(main.__test__.openFloorFromList('attic')).toBeNull();
     });
 
     test('another room through the room card, then Review, preferences offered, and saved', async () => {

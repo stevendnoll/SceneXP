@@ -217,7 +217,7 @@ export function panelView(sel, checklist, sheet) {
     if (sel.scope === 'house') {
         const rows = checklist.levels.map((key) => {
             const here = rooms.filter((r) => r.level === key);
-            return { kind: 'floor', id: key, label: (levelOf(type, key) || { name: key }).name, detail: PANEL.rooms(here.length) };
+            return { kind: 'floor', id: key, label: (levelOf(type, key) || { name: key }).name, detail: PANEL.floorRooms(here.length) };
         });
         // The kind of home first ("A townhome, end unit."), which Your home
         // below can change.
