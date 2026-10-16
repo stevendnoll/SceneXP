@@ -2143,6 +2143,18 @@ textarea.ws-input {
  * Print from the checklist card: only the checklist goes to paper, with no
  * buttons, no studio and no chrome, each room kept on one page where it fits.
  */
+/* The screenshot view (?clean=1, main.js cleanView; Steve, 2026-10-16):
+   only Maya, the house and the turntable, the wordmark too put away. The
+   house still turns and opens. */
+body.is-clean #ws-brand,
+body.is-clean #ws-host,
+body.is-clean #ws-panel,
+body.is-clean #ws-halo,
+body.is-clean #ws-rooms,
+body.is-clean #ws-toast {
+    display: none !important;
+}
+
 @media print {
     /* The shared sheet holds a 3D page to one screen (height 100%,
        overflow hidden), which on paper is one page (QA, 2026-10-15): let

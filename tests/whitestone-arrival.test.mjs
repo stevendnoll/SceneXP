@@ -1872,3 +1872,43 @@ describe('the accessibility sweep (2026-10-16)', () => {
         }
     });
 });
+
+describe('the screenshot view, ?clean=1 (Steve, 2026-10-16: the directory card)', () => {
+    test('read from the address: only clean=1', async () => {
+        const { cleanView } = await import('../www/whitestone/js/main.js');
+        expect(cleanView('?clean=1')).toBe(true);
+        expect(cleanView('?qa&clean=1')).toBe(true);
+        for (const s of ['', '?clean=0', '?clean', '?clean=true', '?cleaner=1', null, undefined]) expect(cleanView(s)).toBe(false);
+    });
+
+    test('Maya\'s words and every overlay hidden by the stylesheet; the house still turns and opens', async () => {
+        Object.assign(dom.windowStub.location, { search: '?clean=1', href: 'http://localhost:8000/whitestone/?clean=1' });
+        const main = await boot({ sheet: true });
+        expect(dom.documentStub.body.classList.contains('is-clean')).toBe(true);
+        expect(main.__test__.state.clean).toBe(true);
+        // Hidden by one rule, every one of them.
+        const css = readFileSync(join(process.cwd(), 'www/whitestone/css/experience.css'), 'utf8');
+        const rule = css.match(/((?:body\.is-clean #[\w-]+,?\s*)+)\{\s*display: none !important;\s*\}/);
+        expect(rule).not.toBeNull();
+        const ids = [...rule[1].matchAll(/#([\w-]+)/g)].map((m) => m[1]).sort();
+        expect(ids).toEqual(['ws-brand', 'ws-halo', 'ws-host', 'ws-panel', 'ws-rooms', 'ws-toast']);
+        for (const id of ids) expect(dom.el(id)).toBeTruthy();
+        // The house is the same house: it turns and opens as ever.
+        press('start');
+        pick('kind-house');
+        press('next');
+        press('kitchen');
+        expect(main.__test__.model().lifted).toBe('main');
+        const tt = main.__test__.turntable();
+        const yaw = tt.yaw;
+        tt.turnBy(0.5);
+        expect(tt.yaw).toBeCloseTo(yaw + 0.5, 9);
+    });
+
+    test('without it, nothing is hidden', async () => {
+        Object.assign(dom.windowStub.location, { search: '', href: 'http://localhost:8000/whitestone/' });
+        const main = await boot();
+        expect(dom.documentStub.body.classList.contains('is-clean')).toBe(false);
+        expect(main.__test__.state.clean).toBe(false);
+    });
+});

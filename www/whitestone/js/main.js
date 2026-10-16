@@ -84,6 +84,8 @@ import { createPanel, selectFromHit, stepOut, reconcile, panelView, homeSuggesti
 const state = {
     mobile: false,
     reducedMotion: false,
+    /** The screenshot view, `?clean=1` (cleanView). */
+    clean: false,
     loaded: false,
     running: false,
     dirty: false,
@@ -208,10 +210,26 @@ function aspect() {
 
 // ---- Initialization ---------------------------------------------------------
 
+/**
+ * The screenshot view (Steve, 2026-10-16: the directory card): with `?clean=1`
+ * in the address, Maya's bubble, the panel, the halo, the room labels, the
+ * toast and the wordmark are not shown (CSS `body.is-clean`), leaving Maya, the house and the
+ * turntable, which still turns and opens as ever. Nothing else changes.
+ */
+export function cleanView(search) {
+    try {
+        return new URLSearchParams(String(search || '')).get('clean') === '1';
+    } catch (e) {
+        return false;
+    }
+}
+
 async function init() {
     state.mobile = detectMobile();
     state.reducedMotion = prefersReducedMotion();
     setMobile(state.mobile);
+    state.clean = cleanView(window.location && window.location.search);
+    if (state.clean && document.body && document.body.classList) document.body.classList.add('is-clean');
 
     canvas = el('game-canvas');
     if (!canvas) return;
