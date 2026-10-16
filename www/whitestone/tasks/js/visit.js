@@ -23,6 +23,7 @@
 
 import { REPORT_FORMAT, REPORT_LIMITS, cleanReport, cleanMinutes } from '../../js/report.min.js';
 import { ID } from '../../js/links.min.js';
+import { visitKey } from '../../js/schedule.min.js';
 
 /**
  * The proof photos kept on the device, by task (M5 piece 4): `{ [itemId]:
@@ -153,6 +154,5 @@ export function buildReport(form, progress, addOns, { cleaner = '', minutesOnSit
 /** Which booked visit a report or a pass belongs to, as a key: the date and
  *  time, or '' with none. A new booking is a new visit (main.js). */
 export function visitKeyOf(form) {
-    const b = form && form.booking;
-    return b && b.date && b.time ? `${b.date} ${b.time}` : '';
+    return visitKey(form && form.booking);
 }

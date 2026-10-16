@@ -57,6 +57,7 @@ export const BOOKING_ERRORS = Object.freeze({
     // The API's own refusals (api.js, standin.js).
     'already-booked': 'This checklist already has a visit booked.',
     'too-late': 'This visit is too close to change online. Please contact Whitestone.',
+    started: 'Your cleaner has already started this visit, so it can’t be moved or canceled now.',
     'no-booking': 'This checklist has no visit booked.',
     expired: 'That took a while, so the reservation lapsed. Please choose your time again.',
     offline: 'Whitestone could not be reached. Please check your connection and try again.',
@@ -133,6 +134,12 @@ export const RECEIPT = Object.freeze({
     cancelVisit: 'Cancel my visit',
     book: 'Choose a time',
     locked: (hours) => `Your visit is less than ${hours} hours away, so it can no longer be changed online.`,
+    /** Begun by the cleaner (QA, 2026-10-15): when, and why the visit
+     *  stays as it is. `when` is startedToday's or startedOn's. */
+    started: (when) => `Your cleaner started this visit ${when}, so it can’t be moved or canceled now.`,
+    startedToday: (time) => `today at ${time}`,
+    startedOn: (day, time) => `on ${day} at ${time}`,
+    startedSoon: 'Your cleaner has started this visit, so it can’t be moved or canceled now.',
     unpublish: 'Unpublish this checklist'
 });
 
@@ -146,6 +153,7 @@ export const CHANGES = Object.freeze({
     sent: 'Your changes are sent. Your link and PIN stay the same.',
     nothingToSend: 'Your cleaner already has everything. There is nothing new to send.',
     tooLateLonger: (hours) => `Your visit is less than ${hours} hours away, so changes that make it longer can no longer be sent online.`,
+    startedLonger: 'Your cleaner has already started, so changes that make the visit longer can’t be sent now.',
     moved: (when) => `Your visit is moved to ${when}.`,
     cancelTitle: 'Cancel your visit?',
     cancelDetail: (when) => `Your visit on ${when} is canceled and the time is given back. Your checklist stays published, so you can choose a new time.`,
@@ -506,6 +514,8 @@ export const GUIDE = Object.freeze({
     /** At a glance while the visit is open, a tap away from the list:
      *  how many wait, else that every one is answered. */
     factAddOns: 'Add-ons',
+    /** The visit at a glance, once the cleaner has begun. */
+    factUnderWay: 'In progress',
     factWaiting: (n) => `${n} waiting`,
     factAnswered: (n) => `${n} answered`,
     factAddOnsSpoken: (n) => `${n} ${n === 1 ? 'add-on' : 'add-ons'} from your cleaner, waiting for your answer.`,
@@ -600,6 +610,7 @@ export const HELP = Object.freeze({
      *  first (Steve, 2026-10-14). */
     resetDetailPublished: 'This unpublishes what you published, so its links and PINs stop working and any booked visit is canceled. Then it clears your checklists, photos and answers from this browser, and Maya will greet you as on your first visit. It cannot be undone.',
     resetLocked: (hours) => `You have a visit less than ${hours} hours away, so Start over has to wait until after it.`,
+    resetStarted: 'Your cleaner is working on your home now, so Start over has to wait until the visit is done.',
     resetDone: 'Everything is cleared. You are back at the beginning.',
     /** Start over's hover title. */
     resetHover: 'Clear everything and start from the beginning'
@@ -705,6 +716,16 @@ export const TASKS_PAGE = Object.freeze({
     again: 'Please enter the PIN again to open the checklist.',
     badLink: 'This link is missing part of its address. Please ask your customer to send it again.',
     gone: 'This checklist is no longer shared. Please ask your customer for a new link.',
+    /** No visit booked (QA, 2026-10-15): cancelled while the page was open
+     *  or since it was last opened here, or never booked. Nothing can be
+     *  marked, and a new time shows here by itself. */
+    canceledHeading: 'This visit was canceled',
+    canceledLine: (day, time) => `The customer canceled the visit for ${day} at ${time}. There is nothing to do here now. Thank you.`,
+    canceledPlain: 'The customer canceled this visit. There is nothing to do here now. Thank you.',
+    noVisitHeading: 'No visit is booked',
+    noVisitLine: 'This checklist has no visit booked right now, so there is nothing to do here yet.',
+    newTimeShows: 'If the customer books a new time, this page will show it.',
+    moved: (day, time) => `The customer moved this visit to ${day} at ${time}.`,
     offline: 'The checklist could not be reached. Please check your connection and try again.',
     trouble: 'Something went wrong opening the checklist. Please try again in a moment.',
     unreadable: 'This link does not open this checklist. Please ask your customer to send it again.',

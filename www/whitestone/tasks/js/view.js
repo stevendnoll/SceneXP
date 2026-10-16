@@ -116,6 +116,25 @@ export function headerLines(form, quote) {
     };
 }
 
+/**
+ * No visit to work on (QA, 2026-10-15): `kind` 'canceled' (with the
+ * `booking` it had, when known) or 'none'. Said, with nothing to mark, until
+ * a new time is booked.
+ */
+export function renderNoVisit(container, { kind, booking = null }) {
+    clear(container);
+    const canceled = kind === 'canceled';
+    const line = canceled && booking && booking.date && booking.time
+        ? COPY.canceledLine(dayLabel(booking.date), clockLabel(booking.time))
+        : canceled ? COPY.canceledPlain : COPY.noVisitLine;
+    container.appendChild(h('header', { className: 'tasks-home' }, [h('h1', { text: COPY.heading })]));
+    container.appendChild(h('section', { className: 'tasks-novisit', id: 'tasks-novisit', attrs: { role: 'status', 'aria-labelledby': 'novisit-heading' } }, [
+        h('h2', { id: 'novisit-heading', tabIndex: -1, text: canceled ? COPY.canceledHeading : COPY.noVisitHeading }),
+        h('p', { text: line }),
+        h('p', { className: 'tasks-novisit-more', text: COPY.newTimeShows })
+    ]));
+}
+
 /** The element of `id` inside `root`, or null: looked for in what was
  *  drawn, so the keyboard lands on the button just drawn. */
 export function findIn(root, id) {

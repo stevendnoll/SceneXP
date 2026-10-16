@@ -231,6 +231,13 @@ export function monthView(schedule, bookings, month, minutes, now) {
     return days;
 }
 
+/** Which booked visit something belongs to, as a key: the date and time,
+ *  or '' with none. Both sides and the API read a visit by it, so a new
+ *  booking is a new visit. */
+export function visitKey(booking) {
+    return booking && booking.date && booking.time ? `${booking.date} ${booking.time}` : '';
+}
+
 /** Whether a booking can still be changed or cancelled online: until
  *  `cancelHours` before it starts. */
 export function canChange(schedule, booking, now) {

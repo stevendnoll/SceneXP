@@ -237,6 +237,31 @@ h1 {
     color: var(--attention);
 }
 
+/* No visit to work on (QA, 2026-10-15): canceled, or none booked. */
+.tasks-novisit {
+    margin: 1rem 0;
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--attention);
+    border-radius: 12px;
+    background: var(--white);
+}
+
+.tasks-novisit h2 {
+    margin: 0 0 0.4rem;
+    font-size: 1.15rem;
+}
+
+.tasks-novisit p {
+    margin: 0.3rem 0 0;
+    line-height: 1.5;
+}
+
+.tasks-novisit-more {
+    color: var(--muted);
+    font-size: 0.92rem;
+}
+
 .tasks-household {
     margin: 0.6rem 0 0;
 }

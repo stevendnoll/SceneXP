@@ -32,6 +32,7 @@
 import { billVisit, priceItem, formatMoney } from './pricing.min.js';
 import { contextFor } from './seal.min.js';
 import { ID } from './links.min.js';
+import { visitKey } from './schedule.min.js';
 import { cleanProposal, fetchAddOns, addOnName, priceOf } from './addons.min.js';
 import { taskOf } from './sheet.min.js';
 import { roomName } from './taxonomy.min.js';
@@ -230,25 +231,34 @@ export function settleReport(report, addOns) {
 
 /**
  * Everything the customer's page asks after on a published checklist's
- * visits, in one look (PLANNING 10.4): the add-ons of every visit still
- * open (each with its `visitId`), and every report not yet `known` here
- * (visit ids), each opened with the key, made safe and settled by the
- * customer's own answers: `{ visitId, reportAt, report }`. `token` the
- * owner token. `{ ok, open, reports, error }`; a report that will not open
- * is left out, to be tried again.
+ * visits, in one look (PLANNING 10.4): the visit under way for `booking`
+ * (the checklist's own, else none) as `started` `{ visitId, at }` (begun,
+ * no report yet), with its add-ons in `open` (each with its `visitId`),
+ * and every report not yet `known` here (visit ids), each opened with the
+ * key, made safe and settled by the customer's own answers: `{ visitId,
+ * reportAt, report }`. A visit begun under another booking (one since
+ * cancelled or moved) shows nothing (QA, 2026-10-15: its add-ons stayed
+ * "waiting"). `token` the owner token. `{ ok, started, open, reports,
+ * error }`; a report that will not open is left out, to be tried again.
  */
-export async function readVisits({ api, sealer, key, id, token, known = [] }) {
+export async function readVisits({ api, sealer, key, id, token, known = [], booking = null }) {
     const got = await api.listVisits(id, token);
-    if (!got.ok) return { ok: false, open: [], reports: [], error: got.error };
+    const none = { started: null, open: [], reports: [] };
+    if (!got.ok) return { ok: false, ...none, error: got.error };
     const visits = (got.data && Array.isArray(got.data.visits) ? got.data.visits : []).filter((v) => v && ID.test(String(v.visitId)));
+    const current = visitKey(booking);
+    let started = null;
     const open = [];
     const reports = [];
     for (const v of visits) {
         const isNew = v.reportAt && !known.includes(v.visitId);
         if (v.reportAt && !isNew) continue;
+        const under = !v.reportAt && Boolean(current) && v.booking === current;
+        if (!v.reportAt && !under) continue;
         const a = await fetchAddOns({ api, sealer, key, id, token, visitId: v.visitId });
-        if (!a.ok) return { ok: false, open: [], reports: [], error: a.error };
-        if (!v.reportAt) {
+        if (!a.ok) return { ok: false, ...none, error: a.error };
+        if (under) {
+            if (!started) started = { visitId: v.visitId, at: typeof v.createdAt === 'string' ? v.createdAt : null };
             open.push(...a.addOns.map((x) => ({ ...x, visitId: v.visitId })));
             continue;
         }
@@ -262,7 +272,7 @@ export async function readVisits({ api, sealer, key, id, token, known = [] }) {
         }
         if (report) reports.push({ visitId: v.visitId, reportAt: v.reportAt, report: settleReport(report, a.addOns) });
     }
-    return { ok: true, open, reports, error: null };
+    return { ok: true, started, open, reports, error: null };
 }
 
 // ---- In words ----------------------------------------------------------------

@@ -66,9 +66,12 @@ export function createApi(transport) {
         book: (id, owner, request) => call('POST', `checklists/${enc(id)}/booking`, { token: owner, json: request }),
         rebook: (id, owner, request) => call('PUT', `checklists/${enc(id)}/booking`, { token: owner, json: request }),
         cancelBooking: (id, owner) => call('DELETE', `checklists/${enc(id)}/booking`, { token: owner }),
-        /** Start a visit (the first add-on or the report): `{ visitId }`. */
+        /** Start a visit (the cleaner's first mark, add-on or photo, else the
+         *  report): `{ visitId }`, the one under way if there is one;
+         *  `no-booking` once the visit is cancelled. */
         startVisit: (id, token) => call('POST', `checklists/${enc(id)}/visits`, { token }),
-        /** The visits: `{ visits: [{ visitId, createdAt, reportAt }] }`. */
+        /** The visits: `{ visits: [{ visitId, createdAt, booking, reportAt }] }`,
+         *  `booking` the visit key (schedule.js visitKey) it began under. */
         listVisits: (id, owner) => call('GET', `checklists/${enc(id)}/visits`, { token: owner }),
         /** The cleaner's sealed proposal, once. */
         putAddOn: (id, token, visitId, addonId, bytes) => call('PUT', `checklists/${enc(id)}/visits/${enc(visitId)}/addons/${enc(addonId)}`, { token, bytes }),

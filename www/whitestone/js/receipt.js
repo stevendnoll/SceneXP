@@ -22,7 +22,7 @@ import { RECEIPT } from './copy.min.js';
 import { buildShare, buildEdit } from './links.min.js';
 import { formatMoney, formatMinutes, roundMinutes } from './pricing.min.js';
 import { bookingIcs, icsFilename } from './ics.min.js';
-import { toWall, parseInstant } from './zoned.min.js';
+import { toWall, parseInstant, todayIn } from './zoned.min.js';
 import { dayLabel, clockLabel, finishOf } from './booking.min.js';
 import { qrMatrix, qrSvgPath } from './qr.min.js';
 import { canChange } from './schedule.min.js';
@@ -36,20 +36,23 @@ const QUIET = 4;
  * `origin` is the site's (location.origin), `timezone` the business's, `now`
  * for the calendar file's stamp and the change window, `schedule` (the
  * built schedule.json) for that window: without it, changes are offered.
+ * `started` (`{ at }`, main.js underWay), the visit the cleaner has begun:
+ * it can be neither moved nor cancelled, nor the checklist unpublished.
  */
-export function receiptView(checklist, { origin, config, timezone, now, schedule = null }) {
+export function receiptView(checklist, { origin, config, timezone, now, schedule = null, started = null }) {
     const pub = checklist && checklist.published;
     const booking = checklist && checklist.booking;
     if (!pub || !pub.at) return null;
     const quote = checklist.quote;
     const expires = parseInstant(pub.expiresAt);
-    const changeable = !booking || !schedule || canChange(schedule, booking, now);
+    const begun = Boolean(booking && started);
+    const changeable = !begun && (!booking || !schedule || canChange(schedule, booking, now));
     return {
         booked: Boolean(booking),
         title: booking ? RECEIPT.title : RECEIPT.titlePublished,
         unsent: hasUnsent(checklist),
         changeable,
-        locked: changeable ? '' : RECEIPT.locked(schedule.cancelHours),
+        locked: begun ? startedLine(started.at, timezone, now) : changeable ? '' : RECEIPT.locked(schedule.cancelHours),
         when: booking ? RECEIPT.when(dayLabel(booking.date), clockLabel(booking.time), clockLabel(finishOf(booking.time, booking.minutes))) : RECEIPT.noVisit,
         quote: quote ? RECEIPT.quote(formatMoney(quote.totalCents), formatMinutes(roundMinutes(quote.minutes))) : '',
         link: buildShare(origin, config, pub.id, pub.key),
@@ -61,6 +64,16 @@ export function receiptView(checklist, { origin, config, timezone, now, schedule
         icsName: booking ? icsFilename(booking) : '',
         standin: config.api.mode === 'standin'
     };
+}
+
+/** When the cleaner began, in the business's time: today at 9:05 AM, or
+ *  on another day; without a time, that they have. */
+function startedLine(at, timezone, now) {
+    const instant = parseInstant(at);
+    if (instant === null || instant === undefined || !timezone) return RECEIPT.startedSoon;
+    const w = toWall(instant, timezone);
+    const when = w.date === todayIn(now, timezone) ? RECEIPT.startedToday(clockLabel(w.time)) : RECEIPT.startedOn(dayLabel(w.date), clockLabel(w.time));
+    return RECEIPT.started(when);
 }
 
 /** The QR code of `text` as an <svg>, dark modules in one path. */

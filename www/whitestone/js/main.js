@@ -1328,12 +1328,14 @@ function hostFacts(c) {
         const when = isBooked(c) ? [dayLabel(c.booking.date), clockLabel(c.booking.time)] : null;
         const unsent = hasUnsent(c);
         const spoken = when ? UI.visitChipSpoken(...when) : `${UI.visitChipNone}.`;
+        // Begun, the visit says so; else changes not sent, if any.
+        const note = underWay(c) ? GUIDE.factUnderWay : unsent ? UI.visitChipUnsent : '';
         facts.push({
             key: 'visit',
             label: GUIDE.factVisit,
             value: when ? GUIDE.factWhen(...when) : GUIDE.factNoVisit,
-            note: unsent ? UI.visitChipUnsent : '',
-            spoken: unsent ? `${spoken} ${UI.visitChipUnsent}.` : spoken
+            note,
+            spoken: note ? `${spoken} ${note}.` : spoken
         });
     }
     // The last visit's report (M5), a tap away from Maya showing it.
@@ -2086,8 +2088,8 @@ async function openBooking({ error = '' } = {}) {
         return null;
     }
     const moving = isBooked(c);
-    if (moving && !canChange(svc.schedule, c.booking, now().getTime())) {
-        const why = RECEIPT.locked(svc.schedule.cancelHours);
+    if (moving && (underWay(c) || !canChange(svc.schedule, c.booking, now().getTime()))) {
+        const why = underWay(c) ? BOOKING_ERRORS.started : RECEIPT.locked(svc.schedule.cancelHours);
         announce(why);
         toast(why);
         return null;
@@ -2244,9 +2246,11 @@ async function sendChanges() {
                 await openBooking({ error: BOOKING_ERRORS['no-longer-fits'] });
                 return result;
             }
-            const why = result.error === 'too-late' ? CHANGES.tooLateLonger(svc.schedule.cancelHours) : BOOKING_ERRORS[result.error] || BOOKING_ERRORS.server;
+            const why = result.error === 'too-late' ? CHANGES.tooLateLonger(svc.schedule.cancelHours)
+                : result.error === 'started' ? CHANGES.startedLonger : BOOKING_ERRORS[result.error] || BOOKING_ERRORS.server;
             announce(why);
             toast(why);
+            if (result.error === 'started') await learnStarted();
             return result;
         } finally {
             state.sending = false;
@@ -2275,6 +2279,7 @@ function confirmCancelVisit() {
             announce(said);
             toast(said);
             if (r.ok) afterServerChange();
+            else if (r.error === 'started') await learnStarted();
         }
     });
 }
@@ -2299,6 +2304,7 @@ function confirmUnpublish() {
                 const why = r.error === 'too-late' ? RECEIPT.locked(svc.schedule.cancelHours) : BOOKING_ERRORS[r.error] || BOOKING_ERRORS.server;
                 announce(why);
                 toast(why);
+                if (r.error === 'started') await learnStarted();
                 return;
             }
             if (isOpen('receipt')) closeCard('receipt');
@@ -2308,6 +2314,14 @@ function confirmUnpublish() {
             afterServerChange();
         }
     });
+}
+
+/** Refused because the cleaner has begun, before this page had heard: the
+ *  visits asked after now, so the receipt says so at once. */
+async function learnStarted() {
+    await pollVisits({ quiet: true });
+    redrawReceipt();
+    updateHost();
 }
 
 /** After a send, a move, a cancel or an unpublish: the receipt (if open)
@@ -2332,7 +2346,7 @@ async function openReceipt() {
 }
 
 function receiptFor(c) {
-    return receiptView(c, { origin: window.location.origin, config: CONFIG, timezone: service.schedule.timezone, now: now().getTime(), schedule: service.schedule });
+    return receiptView(c, { origin: window.location.origin, config: CONFIG, timezone: service.schedule.timezone, now: now().getTime(), schedule: service.schedule, started: underWay(c) });
 }
 
 /** The receipt drawn again while it is open, from the checklist as it now
@@ -2391,11 +2405,20 @@ function shareFromReceipt(button) {
  * was locked on (`priced`, by published version). `decided` is the last
  * answer, for what Maya says of it.
  */
-const visits = { id: null, addOns: [], priced: null, timer: null, busy: false, deciding: false, decided: null };
+const visits = { id: null, addOns: [], started: null, priced: null, timer: null, busy: false, deciding: false, decided: null };
 
 /** Whether the open checklist's visits are asked after: the visitor's own,
  *  published. */
 const watchable = (c) => Boolean(isPublished(c) && !c.sample);
+
+/** The visit the cleaner has begun for the open checklist's booking (their
+ *  first mark, add-on or photo; no report yet), `{ visitId, at }`, or null.
+ *  While there is one, the visit can be neither moved nor cancelled (QA,
+ *  2026-10-15). */
+function underWay(c) {
+    if (!watchable(c) || !c.booking || visits.id !== c.published.id) return null;
+    return visits.started;
+}
 
 /** Every add-on of the open checklist's visit under way, answered or not,
  *  the first proposed first. */
@@ -2457,16 +2480,20 @@ async function pollVisits({ quiet = false } = {}) {
     let key = null;
     try {
         key = await svc.sealer.importKey(pub.key);
-        got = await readVisits({ api: svc.api, sealer: svc.sealer, key, id: pub.id, token: pub.ownerToken, known: c.visits.map((v) => v.visitId) });
+        got = await readVisits({ api: svc.api, sealer: svc.sealer, key, id: pub.id, token: pub.ownerToken, known: c.visits.map((v) => v.visitId), booking: c.booking });
     } catch (e) {
         got = { ok: false };
     }
     // The open checklist may have changed while it asked.
     const still = active();
     if (!got.ok || !watchable(still) || still.published.id !== pub.id) return false;
-    const changed = visits.id !== pub.id || JSON.stringify(got.open) !== JSON.stringify(visits.addOns);
+    const begun = JSON.stringify(got.started) !== JSON.stringify(visits.started);
+    const changed = visits.id !== pub.id || begun || JSON.stringify(got.open) !== JSON.stringify(visits.addOns);
     visits.id = pub.id;
     visits.addOns = got.open;
+    visits.started = got.started;
+    // Begun (or no longer): the receipt stops offering to move or cancel.
+    if (begun) redrawReceipt();
     if (waitingFor(still).length) await pricedFor(still, svc);
     // A report come in: billed here, from the sheet the quote was locked
     // on, and kept with the checklist (its booking done with).
@@ -3411,6 +3438,11 @@ async function confirmStartOver() {
     // and a publish stopped part way included.
     const published = state.doc ? state.doc.checklists.filter((c) => c.published) : [];
     const svc = published.length ? await connect() : null;
+    if (underWay(active())) {
+        announce(HELP.resetStarted);
+        toast(HELP.resetStarted);
+        return;
+    }
     if (svc && published.some((c) => c.booking && !canChange(svc.schedule, c.booking, now().getTime()))) {
         const why = HELP.resetLocked(svc.schedule.cancelHours);
         announce(why);
@@ -3436,7 +3468,7 @@ async function unpublishAllThenStartOver(svc) {
         const record = c.deletedAt ? async () => c : recordFor(c.id);
         const r = svc ? await unpublish({ checklist: c, api: svc.api, record }) : { ok: false, error: 'server' };
         if (!r.ok) {
-            const why = r.error === 'too-late' ? HELP.resetLocked(cancelHours()) : BOOKING_ERRORS[r.error] || BOOKING_ERRORS.server;
+            const why = r.error === 'too-late' ? HELP.resetLocked(cancelHours()) : r.error === 'started' ? HELP.resetStarted : BOOKING_ERRORS[r.error] || BOOKING_ERRORS.server;
             announce(why);
             toast(why);
             return null;

@@ -80,6 +80,7 @@ describe('add-ons as both sides read them (addons.js)', () => {
         const sealer = createSealer();
         const r = (await api.reserve()).data;
         expect((await api.putChecklist(r.id, r.ownerToken, new Uint8Array([1]))).ok).toBe(true);
+        expect((await api.book(r.id, r.ownerToken, { date: '2026-10-16', time: '09:00', minutes: 60 })).ok).toBe(true);
         const visitToken = (await api.open(r.id, r.pin)).data.visitToken;
         const key = await sealer.importKey(KEY);
         const p = await proposeAddOn({ api, sealer, key, id: r.id, token: visitToken, addOn: { roomId: 'kitchen-1', task: 'oven-interior', options: [] }, words: 'Spill' });

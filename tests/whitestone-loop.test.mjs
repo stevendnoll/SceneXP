@@ -116,7 +116,8 @@ test('the demo, end to end: book, open, propose, approve, mark, send, report, pl
     fire(dom.el('host-actions').children.find((b) => b.id === 'host-approve'), 'click');
     expect(await until(() => s.ui.guide.scene === 'done')).toBe(true);
     // The cleaner's page asks again on its own pace, and it turns approved.
-    const poll = timers.find((t) => !t.cleared && !t.ran);
+    // Its add-on asking, not the checklist's own (checklistPollSeconds).
+    const poll = timers.find((t) => !t.cleared && !t.ran && t.ms === CONFIG.api.pollSeconds * 1000);
     poll.ran = true;
     await poll.fn();
     const oven = page.addOns[0];

@@ -57,7 +57,7 @@ export function publishedForm(checklist, quote) {
 
 /** The API's answers that say nothing about the time itself: the request
  *  never arrived, or was refused for who sent it. */
-const NOT_ABOUT_TIME = new Set(['offline', 'denied', 'server', 'too-late', 'no-booking']);
+const NOT_ABOUT_TIME = new Set(['offline', 'denied', 'server', 'too-late', 'started', 'no-booking']);
 const notAboutTime = (error) => NOT_ABOUT_TIME.has(error) || /^http-/.test(String(error));
 
 /**
@@ -202,9 +202,10 @@ export async function republish({ checklist, api, sealer, photos, sheet, slot = 
     } else if (c.booking && c.booking.minutes !== minutes) {
         const b = await api.rebook(pub.id, pub.ownerToken, { date: c.booking.date, time: c.booking.time, minutes });
         if (b.ok) c = await record({ booking: b.data.booking });
-        else if (b.error === 'too-late') {
-            if (minutes > c.booking.minutes) return stop('too-late');
-            // Shorter, and too close to change: the longer booking stands.
+        else if (b.error === 'too-late' || b.error === 'started') {
+            if (minutes > c.booking.minutes) return stop(b.error);
+            // Shorter, and too close to change (or begun): the longer
+            // booking stands.
         } else if (!notAboutTime(b.error)) return stop('no-longer-fits', { next: (b.data && b.data.next) || [], minutes });
         else return stop(b.error);
     }

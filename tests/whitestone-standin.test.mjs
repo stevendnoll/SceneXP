@@ -300,6 +300,8 @@ describe('a visit and its add-ons (M4 piece 3)', () => {
         const w = setup();
         const { id, ownerToken, pin } = (await w.api.reserve()).data;
         await w.api.putChecklist(id, ownerToken, bytes(1));
+        // A visit begins only under a booking (QA, 2026-10-15).
+        await w.api.book(id, ownerToken, { date: '2026-10-16', time: '09:00', minutes: 120 });
         const visit = (await w.api.open(id, pin)).data.visitToken;
         return { ...w, id, owner: ownerToken, visit };
     }
@@ -313,7 +315,7 @@ describe('a visit and its add-ons (M4 piece 3)', () => {
         expect(started).toMatchObject({ ok: true, status: 201 });
         expect(started.data.visitId).toMatch(ID);
         const listed = await api.listVisits(id, owner);
-        expect(listed.data.visits).toEqual([{ visitId: started.data.visitId, createdAt: new Date(START).toISOString(), reportAt: null }]);
+        expect(listed.data.visits).toEqual([{ visitId: started.data.visitId, createdAt: new Date(START).toISOString(), booking: '2026-10-16 09:00', reportAt: null }]);
         expect((await api.listVisits(id, visit)).error).toBe('denied');
     });
 
@@ -340,8 +342,11 @@ describe('a visit and its add-ons (M4 piece 3)', () => {
         expect((await api.decideAddOn(id, owner, v, a, bytes(10))).error).toBe('decided');
         expect((await api.listAddOns(id, owner, v)).data.addons[0].decision).toBe('CQ');
         expect((await api.listAddOns(id, 'C'.repeat(43), v)).error).toBe('denied');
-        // Unpublishing takes the visit with it.
-        await api.deleteChecklist(id, owner);
+        // Not unpublished while the visit is under way; once reported, it
+        // takes the visit with it.
+        expect((await api.deleteChecklist(id, owner)).error).toBe('started');
+        expect((await api.putReport(id, visit, v, bytes(3))).ok).toBe(true);
+        expect((await api.deleteChecklist(id, owner)).ok).toBe(true);
         expect((await backend.keys()).filter((k) => String(k).includes('/visit/'))).toEqual([]);
     });
 
@@ -350,14 +355,53 @@ describe('a visit and its add-ons (M4 piece 3)', () => {
         const first = (await api.startVisit(id, visit)).data.visitId;
         for (let n = 0; n < A.maxAddOns; n++) expect((await api.putAddOn(id, visit, first, addonId(n), bytes(1))).ok).toBe(true);
         expect((await api.putAddOn(id, visit, first, addonId(99), bytes(1))).error).toBe('too-many');
-        for (let n = 1; n < A.maxVisits; n++) await api.startVisit(id, visit);
+        // Each visit reported and the checklist booked again, so the next
+        // start is a new visit, not the one under way.
+        let v = first;
+        const again = async () => {
+            await api.putReport(id, visit, v, bytes(1));
+            await api.book(id, owner, { date: '2026-10-16', time: '09:00', minutes: 120 });
+            v = (await api.startVisit(id, visit)).data.visitId;
+        };
+        for (let n = 1; n < A.maxVisits; n++) await again();
         expect((await api.listVisits(id, owner)).data.visits).toHaveLength(A.maxVisits);
-        await api.startVisit(id, visit);
+        await again();
         const left = (await api.listVisits(id, owner)).data.visits;
         expect(left).toHaveLength(A.maxVisits);
         expect(left.map((x) => x.visitId)).not.toContain(first);
         expect((await backend.keys()).filter((k) => String(k).includes(first))).toEqual([]);
         expect((await api.listAddOns(id, visit, first)).status).toBe(404);
+    });
+
+    test('begun, the visit stays (QA, 2026-10-15): not moved, cancelled or unshared; a second phone joins it', async () => {
+        const { api, id, owner, visit } = await visited();
+        // Before the cleaner begins, the customer may still change it.
+        const moved = { date: '2026-10-19', time: '09:00', minutes: 120 };
+        expect((await api.rebook(id, owner, moved)).ok).toBe(true);
+        const started = await api.startVisit(id, visit);
+        expect(started).toMatchObject({ ok: true, status: 201 });
+        expect((await api.listVisits(id, owner)).data.visits[0].booking).toBe('2026-10-19 09:00');
+        // Once begun: refused, and the booking as it was.
+        expect((await api.cancelBooking(id, owner)).error).toBe('started');
+        expect((await api.rebook(id, owner, { date: '2026-10-16', time: '09:00', minutes: 120 })).error).toBe('started');
+        expect((await api.deleteChecklist(id, owner)).error).toBe('started');
+        // Begun again (another phone, a retry): the same visit.
+        const again = await api.startVisit(id, visit);
+        expect(again).toMatchObject({ ok: true, status: 200 });
+        expect(again.data.visitId).toBe(started.data.visitId);
+        expect((await api.listVisits(id, owner)).data.visits).toHaveLength(1);
+        // Reported, the booking is done with, and nothing is under way.
+        expect((await api.putReport(id, visit, started.data.visitId, bytes(1))).ok).toBe(true);
+        expect((await api.cancelBooking(id, owner)).error).toBe('no-booking');
+    });
+
+    test('cancelled before the cleaner begins: no visit can begin until it is booked again', async () => {
+        const { api, id, owner, visit } = await visited();
+        expect((await api.cancelBooking(id, owner)).ok).toBe(true);
+        expect((await api.startVisit(id, visit)).error).toBe('no-booking');
+        expect((await api.listVisits(id, owner)).data.visits).toEqual([]);
+        await api.book(id, owner, { date: '2026-10-16', time: '09:00', minutes: 120 });
+        expect((await api.startVisit(id, visit)).ok).toBe(true);
     });
 
     test('wrong methods and shapes under visits answer plainly', async () => {
@@ -382,6 +426,7 @@ describe('a visit\'s report (M5 piece 2)', () => {
         const w = setup();
         const { id, ownerToken, pin } = (await w.api.reserve()).data;
         await w.api.putChecklist(id, ownerToken, bytes(1));
+        await w.api.book(id, ownerToken, { date: '2026-10-16', time: '09:00', minutes: 120 });
         const visit = (await w.api.open(id, pin)).data.visitToken;
         const v = (await w.api.startVisit(id, visit)).data.visitId;
         return { ...w, id, owner: ownerToken, visit, v };
@@ -411,8 +456,11 @@ describe('a visit\'s report (M5 piece 2)', () => {
         expect((await api.putReport(id, visit, v, bytes(2))).ok).toBe(true);
         expect((await api.putAddOn(id, visit, v, 'addon00000000000000002', bytes(1))).error).toBe('closed');
         expect((await api.decideAddOn(id, owner, v, a, bytes(1))).error).toBe('closed');
-        // A new visit is open again.
+        // Booked again, a new visit is open.
+        expect((await api.startVisit(id, visit)).error).toBe('no-booking');
+        await api.book(id, owner, { date: '2026-10-16', time: '09:00', minutes: 120 });
         const next = (await api.startVisit(id, visit)).data.visitId;
+        expect(next).not.toBe(v);
         expect((await api.putAddOn(id, visit, next, 'addon00000000000000003', bytes(1))).ok).toBe(true);
     });
 });

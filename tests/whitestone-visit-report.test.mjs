@@ -82,14 +82,18 @@ describe('a report settled by the customer\'s own answers (report.js settleRepor
     });
 });
 
+const SLOT = { date: '2026-10-16', time: '09:00', minutes: 60 };
+
 /** A checklist reserved on the stand-in, published (one byte will do for
- *  these), opened by the cleaner. */
+ *  these), booked, opened by the cleaner. */
 async function onStandin() {
     const standin = createStandin({ backend: createMemoryBackend(), config: CONFIG, schedule: SCHEDULE, now: () => NOW.getTime() });
     const api = createApi((req) => standin.handle(req));
     const sealer = createSealer();
     const r = (await api.reserve()).data;
     await api.putChecklist(r.id, r.ownerToken, new Uint8Array([1]));
+    // Booked: a visit begins only under a booking (QA, 2026-10-15).
+    await api.book(r.id, r.ownerToken, SLOT);
     const token = (await api.open(r.id, r.pin)).data.visitToken;
     const key = await sealer.generateKey();
     return { api, sealer, key, id: r.id, owner: r.ownerToken, token };
@@ -99,13 +103,20 @@ describe('the visits read in one look (report.js readVisits)', () => {
     test('open visits give their add-ons; a reported one its report, settled, once', async () => {
         const w = await onStandin();
         const p = await proposeAddOn({ api: w.api, sealer: w.sealer, key: w.key, id: w.id, token: w.token, addOn: { roomId: 'kitchen-1', task: 'oven-interior', options: [] } });
-        const first = await readVisits({ api: w.api, sealer: w.sealer, key: w.key, id: w.id, token: w.owner });
+        // Read under the booking it began under: under way, with its add-on.
+        const first = await readVisits({ api: w.api, sealer: w.sealer, key: w.key, id: w.id, token: w.owner, booking: SLOT });
         expect(first.open.map((a) => [a.id, a.visitId, a.status])).toEqual([[p.addOn.id, p.visitId, 'waiting']]);
+        expect(first.started).toEqual({ visitId: p.visitId, at: NOW.toISOString() });
+        // Under no booking, or another (QA, 2026-10-15): nothing under way.
+        for (const booking of [null, { ...SLOT, time: '11:00' }]) {
+            expect(await readVisits({ api: w.api, sealer: w.sealer, key: w.key, id: w.id, token: w.owner, booking })).toMatchObject({ ok: true, started: null, open: [] });
+        }
         expect(first.reports).toEqual([]);
         const sent = { format: REPORT_FORMAT, id: w.id, results: [{ itemId: 'a', status: 'done' }], addOns: [{ ...p.addOn, status: 'approved', done: true }] };
         expect((await sendReport({ api: w.api, sealer: w.sealer, key: w.key, id: w.id, token: w.token, visitId: p.visitId, report: sent })).ok).toBe(true);
         const second = await readVisits({ api: w.api, sealer: w.sealer, key: w.key, id: w.id, token: w.owner });
         expect(second.open).toEqual([]);
+        expect(second.started).toBeNull();
         expect(second.reports).toHaveLength(1);
         expect(second.reports[0]).toMatchObject({ visitId: p.visitId, reportAt: NOW.toISOString() });
         // The customer never approved it, so it lapsed, whatever was sent.
@@ -132,8 +143,7 @@ describe('the visits read in one look (report.js readVisits)', () => {
 
     test('the report lets the booking go, so the checklist can be booked again', async () => {
         const w = await onStandin();
-        const slot = { date: '2026-10-16', time: '09:00', minutes: 60 };
-        expect((await w.api.book(w.id, w.owner, slot)).ok).toBe(true);
+        const slot = SLOT;
         expect((await w.api.book(w.id, w.owner, { ...slot, date: '2026-10-19' })).error).toBe('already-booked');
         await sendReport({ api: w.api, sealer: w.sealer, key: w.key, id: w.id, token: w.token, report: { format: REPORT_FORMAT, id: w.id, results: [] } });
         expect((await w.api.book(w.id, w.owner, { ...slot, date: '2026-10-19' })).ok).toBe(true);

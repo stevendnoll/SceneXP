@@ -35,7 +35,7 @@
  * memory.
  */
 
-import { checkBooking, openStarts, monthView, canChange } from './schedule.min.js';
+import { checkBooking, openStarts, monthView, canChange, visitKey as keyOfBooking } from './schedule.min.js';
 import { addDays, isDate } from './zoned.min.js';
 import { toBase64url } from './seal.min.js';
 import { ID } from './links.min.js';
@@ -177,11 +177,26 @@ export function createStandin({
         return answer(200, { visitToken, expiresAt: new Date(expiresAt).toISOString() });
     }
 
-    /** A new visit, the oldest dropped (with its add-ons) past the most
-     *  kept. */
+    /** The visit under way for the booking `mine` (begun by the cleaner,
+     *  no report yet), or null. While there is one the booking can be
+     *  neither moved nor cancelled, nor the checklist unshared (QA,
+     *  2026-10-15: a visit was cancelled with the cleaner at work). */
+    const underWay = (m, mine) => (mine ? visitsOf(m).find((v) => !v.reportAt && v.booking === keyOfBooking(mine)) || null : null);
+
+    /**
+     * The cleaner begins (their first mark, add-on or photo): a visit for
+     * the booking as it stands, or the one already under way for it, so a
+     * second phone joins the first. Refused with no booking (cancelled), so
+     * the cleaner's page learns it. The oldest visit is dropped (with its
+     * add-ons) past the most kept.
+     */
     async function startVisit(m) {
+        const mine = (await bookings()).find((b) => b.id === m.id) || null;
+        if (!mine) return fail(409, 'no-booking');
+        const going = underWay(m, mine);
+        if (going) return answer(200, { visitId: going.visitId });
         const visitId = random(16);
-        const list = [...visitsOf(m), { visitId, createdAt: now(), reportAt: null, addOns: [], decided: [] }];
+        const list = [...visitsOf(m), { visitId, createdAt: now(), booking: keyOfBooking(mine), reportAt: null, addOns: [], decided: [] }];
         while (list.length > A.maxVisits) {
             const old = list.shift();
             for (const key of await backend.keys()) {
@@ -299,6 +314,7 @@ export function createStandin({
         await sweep();
         const all = await bookings();
         const mine = all.find((b) => b.id === m.id) || null;
+        if ((method === 'DELETE' || method === 'PUT') && underWay(m, mine)) return fail(409, 'started');
         if (method === 'DELETE') {
             if (!mine) return fail(404, 'no-booking');
             if (!canChange(schedule, mine, now())) return fail(409, 'too-late');
@@ -359,6 +375,7 @@ export function createStandin({
                 // Unpublishing cancels the visit, so it keeps the
                 // cancel window's rule (PRD 10.4).
                 const mine = (await bookings()).find((b) => b.id === id);
+                if (underWay(m, mine)) return fail(409, 'started');
                 if (mine && !canChange(schedule, mine, now())) return fail(409, 'too-late');
                 await forget(id);
                 return answer(200, { deleted: true });
@@ -385,7 +402,11 @@ export function createStandin({
                 if (method === 'POST') return reader && !owner ? startVisit(m) : denied();
                 if (method !== 'GET') return fail(405, 'method');
                 if (!owner) return denied();
-                return answer(200, { visits: visitsOf(m).map((v) => ({ visitId: v.visitId, createdAt: new Date(v.createdAt).toISOString(), reportAt: v.reportAt })) });
+                return answer(200, {
+                    visits: visitsOf(m).map((v) => ({
+                        visitId: v.visitId, createdAt: new Date(v.createdAt).toISOString(), booking: v.booking || '', reportAt: v.reportAt
+                    }))
+                });
             }
             const thumbOf = parts.length === 7 && parts[6] === 'thumb';
             if ((parts.length === 6 || thumbOf) && parts[4] === 'proof' && ID.test(parts[3]) && ID.test(parts[5])) {

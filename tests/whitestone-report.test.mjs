@@ -174,6 +174,7 @@ describe('sending it (report.js sendReport)', () => {
         const sealer = createSealer();
         const r = (await api.reserve()).data;
         await api.putChecklist(r.id, r.ownerToken, new Uint8Array([1]));
+        await api.book(r.id, r.ownerToken, { date: '2026-10-16', time: '09:00', minutes: 60 });
         const token = (await api.open(r.id, r.pin)).data.visitToken;
         const key = await sealer.generateKey();
         const report = { format: REPORT_FORMAT, id: r.id, results: [{ itemId: 'a', status: 'done' }], addOns: [], note: 'Done and dusted.' };
@@ -268,6 +269,7 @@ describe('proof photos (M5 piece 4, PRD 11.7)', () => {
         const sealer = createSealer();
         const r = (await api.reserve()).data;
         await api.putChecklist(r.id, r.ownerToken, new Uint8Array([1]));
+        await api.book(r.id, r.ownerToken, { date: '2026-10-16', time: '09:00', minutes: 60 });
         const token = (await api.open(r.id, r.pin)).data.visitToken;
         const visitId = (await api.startVisit(r.id, token)).data.visitId;
         return { api, sealer, key: await sealer.generateKey(), id: r.id, owner: r.ownerToken, token, visitId };

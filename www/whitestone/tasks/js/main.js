@@ -67,7 +67,8 @@ import { createSealer, contextFor } from '../../js/seal.min.js';
 import { loadSheet } from '../../js/sheet.min.js';
 import { quoteChecklist } from '../../js/pricing.min.js';
 import { PUBLISHED_FORMAT } from '../../js/sync.min.js';
-import { renderChecklist, renderReport, showPhoto, findIn } from './view.min.js';
+import { renderChecklist, renderReport, renderNoVisit, showPhoto, findIn } from './view.min.js';
+import { dayLabel, clockLabel } from '../../js/booking.min.js';
 import { applyMark, cleanProgress, emptyProgress, buildReport, visitKeyOf, cleanProofs } from './visit.min.js';
 import { sendReport, reportBill, sendProof, proofIdsOf, REPORT_LIMITS } from '../../js/report.min.js';
 import { choicesFor, proposeAddOn, fetchAddOns, cleanKept, takenKeys, waitingCount, newAddOnId } from './addons.min.js';
@@ -274,6 +275,10 @@ export async function boot(env) {
     const state = {
         phase: 'start', id: null, form: null, quote: null, sheet: null, notice: '', thumbs: new Map(), progress: null, skipping: null, skipNote: '',
         visitId: null, addOns: [], proposing: null,
+        // The visit as the API has it (QA, 2026-10-15): the checklist's
+        // version read last, no visit to work on (`{ kind, booking }`), a
+        // move said once, and a start on its way.
+        version: null, noVisit: null, moved: '', starting: null, formTimer: null,
         // Finishing (M5): the report's view open, the fields as typed, a send
         // on its way, what it said, and the tries so far.
         finishing: false, draft: null, sendingReport: false, reportNote: '', reportProblem: false, retries: 0, retryTimer: null
@@ -343,6 +348,26 @@ export async function boot(env) {
         return refused(got.error) ? null : keeper.get(name);
     }
 
+    /** The sheet the checklist's quote was locked on (the one in hand when
+     *  it is the same), the quote by it, and what to say of either. */
+    async function price(opened, fromDevice) {
+        const version = opened.quote && opened.quote.sheetVersion;
+        if (!state.sheet || state.sheet.version !== version) {
+            try {
+                state.sheet = version ? await loadSheet(version, fetchJson, '../data/prices/') : null;
+            } catch (e) {
+                state.sheet = null;
+            }
+        }
+        state.quote = state.sheet ? quoteChecklist(state.sheet, opened) : null;
+        const given = opened.quote ? opened.quote.totalCents : null;
+        state.notice = [
+            fromDevice ? COPY.keptCopy : '',
+            !state.sheet ? COPY.noSheet : given !== null && state.quote.totalCents !== given ? COPY.quoteChanged : ''
+        ].filter(Boolean).join(' ');
+        state.fromDevice = fromDevice;
+    }
+
     /** Unseal what the API gave (or the device kept), and draw it. */
     async function show(bytes, fromDevice = false) {
         let key;
@@ -371,19 +396,10 @@ export async function boot(env) {
             state.proofs = {};
             remember({ sent: null, outbox: null, progress: state.progress, visitId: null, addOns: [], draft: state.draft, proofs: {} });
         }
-        try {
-            const version = opened.quote && opened.quote.sheetVersion;
-            state.sheet = version ? await loadSheet(version, fetchJson, '../data/prices/') : null;
-        } catch (e) {
-            state.sheet = null;
-        }
-        state.quote = state.sheet ? quoteChecklist(state.sheet, opened) : null;
-        const given = opened.quote ? opened.quote.totalCents : null;
-        state.notice = [
-            fromDevice ? COPY.keptCopy : '',
-            !state.sheet ? COPY.noSheet : given !== null && state.quote.totalCents !== given ? COPY.quoteChanged : ''
-        ].filter(Boolean).join(' ');
-        state.fromDevice = fromDevice;
+        await price(opened, fromDevice);
+        // No visit booked: cancelled since this device last saw it, else none.
+        state.noVisit = opened.booking ? null : { kind: entry.booking ? 'canceled' : 'none', booking: entry.booking || null };
+        if (opened.booking) remember({ booking: { date: opened.booking.date, time: opened.booking.time } });
         /** The report as it would be sent now. */
         const currentReport = (at = null) => buildReport(state.form, state.progress, state.addOns, {
             cleaner: state.draft.cleaner, minutesOnSite: state.draft.hours * 60 + state.draft.minutes, note: state.draft.note, proofs: state.proofs
@@ -392,6 +408,10 @@ export async function boot(env) {
         const modeNow = () => (entry.sent ? 'sent' : entry.outbox ? 'pending' : state.finishing ? 'finish' : null);
         const draw = () => {
             const mode = modeNow();
+            if (!mode && state.noVisit) {
+                renderNoVisit(view, state.noVisit);
+                return;
+            }
             if (mode) {
                 const report = mode === 'finish' ? currentReport() : (entry.sent || entry.outbox).report;
                 renderReport(view, {
@@ -402,7 +422,7 @@ export async function boot(env) {
                 return;
             }
             renderChecklist(view, {
-                form: state.form, quote: state.quote, sheet: state.sheet, thumbs: state.thumbs, notice: state.notice,
+                form: state.form, quote: state.quote, sheet: state.sheet, thumbs: state.thumbs, notice: [state.notice, state.moved].filter(Boolean).join(' '),
                 progress: state.progress, skipping: state.skipping, skipNote: state.skipNote,
                 addOns: state.addOns, proposing: state.proposing,
                 proofs: state.proofs, proofThumbs: state.proofThumbs, proofNote: state.proofNote,
@@ -441,6 +461,7 @@ export async function boot(env) {
             state.skipping = null;
             state.skipNote = '';
             draw();
+            if (next) ensureStarted();
             const now = state.progress.marks[itemId];
             focusOn(now && now.status === 'done' ? `done-${itemId}` : `skip-${itemId}`);
         }
@@ -501,6 +522,11 @@ export async function boot(env) {
             }
             if (!r.ok) {
                 p.sending = false;
+                // Cancelled since: the checklist read again says so.
+                if (r.error === 'no-booking') {
+                    await readForm();
+                    if (state.noVisit) return;
+                }
                 p.note = addOnError(r.error);
                 draw();
                 focusOn(`addon-send-${roomId}`);
@@ -541,15 +567,128 @@ export async function boot(env) {
             if (doc.visibilityState === 'hidden') {
                 if (state.timer) clearTimer(state.timer);
                 state.timer = null;
+                if (state.formTimer) clearTimer(state.formTimer);
+                state.formTimer = null;
                 return;
             }
-            // Back in view: a report waiting goes now, else the add-ons.
+            // Back in view: a report waiting goes now, else the checklist
+            // and the add-ons.
             if (entry.outbox) trySend();
-            else if (!entry.sent) state.polled = refresh().then(ask);
+            else if (!entry.sent) {
+                state.formPolled = readForm().then(watchForm);
+                state.polled = refresh().then(ask);
+            }
         };
         state.onOnline = () => {
             if (entry.outbox) trySend();
+            else if (hasMarks()) ensureStarted();
         };
+
+        // ---- The visit as the customer has it (QA, 2026-10-15) -------------------
+
+        const hasMarks = () => Object.keys(state.progress.marks).length > 0;
+        /**
+         * The visit begun on the API at the cleaner's first piece of work (a
+         * mark, a photo, Finish; an add-on begins it itself), so the customer
+         * can no longer move or cancel it. Once: a try that does not reach
+         * the API is made again at the next piece of work or when the
+         * connection is back. Refused for want of a booking, the visit was
+         * cancelled, which the checklist read now shows.
+         */
+        function ensureStarted() {
+            if (state.visitId || !entry.visitToken || state.noVisit) return Promise.resolve();
+            if (state.starting) return state.starting;
+            state.starting = (async () => {
+                const r = await api.startVisit(here.id, entry.visitToken);
+                if (r.ok && r.data && ID.test(String(r.data.visitId))) {
+                    if (!state.visitId) {
+                        state.visitId = r.data.visitId;
+                        remember({ visitId: state.visitId });
+                    }
+                } else if (r.error === 'no-booking') {
+                    await readForm();
+                }
+            })().finally(() => { state.starting = null; });
+            return state.starting;
+        }
+        /** Asked after again in a few seconds, while the page is in view and
+         *  the visit is not yet reported. */
+        function watchForm() {
+            if (state.formTimer || state.phase !== 'open' || doc.visibilityState === 'hidden' || modeNow() === 'sent' || modeNow() === 'pending') return;
+            state.formTimer = setTimer(() => {
+                state.formTimer = null;
+                state.formPolled = readForm().then(watchForm);
+                return state.formPolled;
+            }, CONFIG.api.checklistPollSeconds * 1000);
+        }
+        /** The checklist read again, and shown if it changed. Refused (the
+         *  pass run out, the PIN changed, or no longer shared, which the API
+         *  answers alike), the PIN is asked for again as on opening; offline,
+         *  the next try. */
+        async function readForm() {
+            if (state.phase !== 'open' || !entry.visitToken) return;
+            const got = await api.getChecklist(here.id, entry.visitToken);
+            if (!got.ok) {
+                if (refused(got.error)) await shut(got.error === 'not-found' ? COPY.gone : COPY.again);
+                return;
+            }
+            if (got.version && got.version === state.version) return;
+            let next = null;
+            try {
+                next = await sealer.openJson(key, got.bytes, contextFor(here.id, 'checklist'));
+            } catch (e) {
+                next = null;
+            }
+            if (!next || next.format !== PUBLISHED_FORMAT || next.id !== here.id || state.phase !== 'open') return;
+            await keeper.put('checklist', got.bytes, entry.expiresAt);
+            state.version = got.version;
+            await applyForm(next);
+        }
+        /**
+         * A new version of the checklist shown: cancelled, nothing to mark
+         * (the time it had said); a booking again or moved, its time, and a
+         * new time is a new visit; the customer's changes, as they are now.
+         * What is being typed and where the keyboard is are kept.
+         */
+        async function applyForm(next) {
+            const was = state.form;
+            const before = visitKeyOf(was);
+            const after = visitKeyOf(next);
+            state.form = next;
+            await price(next, false);
+            const wasOff = Boolean(state.noVisit);
+            if (!next.booking) {
+                const last = was.booking || entry.booking || null;
+                state.noVisit = { kind: last ? 'canceled' : 'none', booking: last ? { date: last.date, time: last.time } : null };
+                state.finishing = false;
+                state.skipping = null;
+                state.proposing = null;
+                state.moved = '';
+            } else {
+                state.noVisit = null;
+                if (before && after !== before) state.moved = COPY.moved(dayLabel(next.booking.date), clockLabel(next.booking.time));
+                if (after !== before) {
+                    state.visitId = null;
+                    state.addOns = [];
+                    remember({ visitId: null, addOns: [] });
+                }
+                remember({ booking: { date: next.booking.date, time: next.booking.time } });
+            }
+            redraw();
+            if (state.noVisit && !wasOff) focusOn('novisit-heading');
+        }
+        /** Refused while open: the asking stopped, the copy kept here let
+         *  go, the marks kept, and the PIN asked for again, saying `line`. */
+        async function shut(line) {
+            for (const t of ['timer', 'formTimer']) {
+                if (state[t]) clearTimer(state[t]);
+                state[t] = null;
+            }
+            await keeper.forget();
+            remember({ visitToken: null, expiresAt: null });
+            if (view) view.hidden = true;
+            askPin(line, line === COPY.gone);
+        }
 
         // ---- Proof photos (M5 piece 4) -------------------------------------------
 
@@ -582,6 +721,7 @@ export async function boot(env) {
             remember({ proofs: state.proofs });
             state.proofThumbs.set(photoId, makeUrl(prepared.thumb));
             draw();
+            ensureStarted();
             focusOn(`proof-remove-${photoId}`);
         }
         function proof(itemId, file) {
@@ -626,6 +766,7 @@ export async function boot(env) {
             state.proposing = null;
             draw();
             focusOn('report-title');
+            ensureStarted();
             state.polled = refresh();
             return state.polled;
         }
@@ -677,8 +818,10 @@ export async function boot(env) {
                 state.retries = 0;
                 state.reportNote = '';
                 state.reportProblem = false;
-                if (state.timer) clearTimer(state.timer);
-                state.timer = null;
+                for (const t of ['timer', 'formTimer']) {
+                    if (state[t]) clearTimer(state[t]);
+                    state[t] = null;
+                }
                 draw();
                 focusOn('report-title');
                 return;
@@ -690,6 +833,13 @@ export async function boot(env) {
                 if (view) view.hidden = true;
                 askPin(COPY.reportNeedsPin, true);
                 return;
+            }
+            if (r.error === 'no-booking') {
+                // Cancelled before the visit could begin (marked with no
+                // signal): nothing to report, and the checklist says so.
+                remember({ outbox: null });
+                await readForm();
+                if (state.noVisit) return;
             }
             if (r.error === 'bad-request') {
                 // Too long to send: back to the fields to shorten it.
@@ -801,9 +951,13 @@ export async function boot(env) {
                 if (!(await keeper.get(`photo/${photoId}`))) await sealedFile(`photo/${photoId}`, () => api.getPhoto(here.id, entry.visitToken, photoId));
             }
         }
-        // The visit's add-ons as they stand now, then asked after.
+        // The visit's add-ons as they stand now, then asked after, and the
+        // checklist too. Marks made before the visit could begin (no signal)
+        // begin it now.
         await refresh();
         ask();
+        watchForm();
+        if (hasMarks()) await ensureStarted();
         return state;
     }
 
@@ -826,6 +980,7 @@ export async function boot(env) {
         const got = await api.getChecklist(here.id, entry.visitToken);
         if (got.ok) {
             await keeper.put('checklist', got.bytes, entry.expiresAt);
+            state.version = got.version;
             return show(got.bytes);
         }
         if (entry.sent && refused(got.error)) return visitOver();

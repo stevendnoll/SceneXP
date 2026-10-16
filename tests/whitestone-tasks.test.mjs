@@ -46,6 +46,10 @@ let dom;
 let page;
 /** The page's timers, held here to run by hand: a poll is a call, not a wait. */
 let timers;
+/** How often the page asks after the checklist itself (QA, 2026-10-15). */
+const FORM_POLL = CONFIG.api.checklistPollSeconds * 1000;
+/** Those timers, still to run. */
+const formTimers = () => timers.filter((t) => !t.cleared && !t.ran && t.ms === FORM_POLL);
 
 beforeEach(async () => {
     // The DOM stub wraps the three.js stub, so it goes in first (the page
@@ -611,7 +615,8 @@ describe('add-ons on the page', () => {
         const r = await w.api.decideAddOn(id, w.checklist.published.ownerToken, state.visitId, a.id, sealed);
         if (!r.ok) throw new Error(r.error);
     }
-    const live = () => timers.filter((t) => !t.cleared && !t.ran);
+    // The add-on and report timers; the checklist's own (formTimers) apart.
+    const live = () => timers.filter((t) => !t.cleared && !t.ran && t.ms !== FORM_POLL);
     async function tick() {
         const t = live()[0];
         t.ran = true;
@@ -964,7 +969,8 @@ describe('finishing the visit on the page', () => {
     const find = (id) => all(view()).find((e) => e.id === id);
     const text = (id) => (find(id) ? find(id).textContent : undefined);
     const kept = (w) => JSON.parse(localStorage.getItem(page.STORAGE_KEY)).checklists[w.checklist.published.id];
-    const live = () => timers.filter((t) => !t.cleared && !t.ran);
+    // The add-on and report timers; the checklist's own (formTimers) apart.
+    const live = () => timers.filter((t) => !t.cleared && !t.ran && t.ms !== FORM_POLL);
     async function tick() {
         const t = live()[0];
         t.ran = true;

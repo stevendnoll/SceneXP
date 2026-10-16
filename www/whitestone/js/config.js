@@ -348,6 +348,10 @@ export const CONFIG = deepFreeze({
         /** The cleaner's page asks after an add-on this often while one is
          *  waiting and the page is in view (PLANNING 10.3). Seconds. */
         pollSeconds: 5,
+        /** It asks after the checklist itself this often while in view and
+         *  the visit is not yet reported, so a cancel, a new time or the
+         *  customer's changes show (QA, 2026-10-15). Seconds. */
+        checklistPollSeconds: 10,
         /** The studio asks after its published checklist's visits (an
          *  add-on to answer) this often while the page is in view, and
          *  `firstPollSeconds` after it opens (PLANNING 10.4). Seconds. */
