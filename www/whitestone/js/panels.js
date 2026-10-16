@@ -12,7 +12,7 @@
  */
 
 import { h, clear, button } from './cards.min.js';
-import { UI, REPORT } from './copy.min.js';
+import { UI, REPORT, ADDON_LIST } from './copy.min.js';
 import { reportLines, billLines, reportCounts } from './report.min.js';
 import { dayLabel } from './booking.min.js';
 import { liveRooms, liveItems, itemsIn } from './store.min.js';
@@ -348,6 +348,53 @@ export function renderVisitReport({ visit, form, sheet, photos = [] }) {
             h('h3', { id: 'visit-report-note-title', className: 'quote-prefs-title', text: REPORT.noteHeading }),
             h('p', { className: 'quote-prefs-note', text: r.note })
         ]) : null
+    ];
+    parts.filter(Boolean).forEach((p) => body.appendChild(p));
+}
+
+/**
+ * The add-ons card (QA, 2026-10-15): every add-on of the visit under way,
+ * the ones waiting first, each with Approve and Decline in place, then the
+ * ones answered and what they add. `rows` as main.js names and prices them
+ * (`{ id, name, room, money, time, cents, words, status }`, the oldest
+ * first), `busy` while an answer is on its way (the buttons wait), and
+ * `on.approve(id)` / `on.decline(id)`.
+ */
+export function renderAddOnList({ rows, busy = false, on = {} }) {
+    const waiting = rows.filter((r) => r.status === 'waiting');
+    const answered = rows.filter((r) => r.status !== 'waiting');
+    const lead = byId('addons-lead');
+    if (lead) lead.textContent = waiting.length ? ADDON_LIST.leadWaiting(waiting.length) : (rows.length ? ADDON_LIST.leadAnswered : ADDON_LIST.leadNone);
+    const body = byId('addons-body');
+    if (!body) return;
+    clear(body);
+    const top = (r) => [
+        h('div', { className: 'quote-line addon-line' }, [
+            h('span', { className: 'addon-name', text: r.name }),
+            h('span', { text: r.money || ADDON_LIST.noPrice })
+        ]),
+        h('p', { className: 'addon-meta', text: ADDON_LIST.meta(r.room, r.time) })
+    ];
+    const section = (id, heading, list, row) => (list.length ? h('section', { className: 'addon-section', id, attrs: { 'aria-labelledby': `${id}-title` } }, [
+        h('h3', { id: `${id}-title`, className: 'quote-prefs-title', text: heading }),
+        h('ul', { className: 'addon-list' }, list.map(row))
+    ]) : null);
+    const approved = answered.filter((r) => r.status === 'approved' && r.cents);
+    const sum = approved.reduce((n, r) => n + r.cents, 0);
+    const parts = [
+        section('addons-waiting', ADDON_LIST.waitingHeading, waiting, (r) => h('li', { className: 'addon-row addon-row-waiting' }, [
+            ...top(r),
+            r.words ? h('p', { className: 'addon-words', text: `“${r.words}”` }) : null,
+            h('div', { className: 'addon-actions' }, [
+                h('button', { type: 'button', id: `addon-approve-${r.id}`, className: 'ws-btn ws-btn-small ws-btn-primary', disabled: busy, text: ADDON_LIST.approve, onClick: () => on.approve && on.approve(r.id), attrs: { 'aria-label': ADDON_LIST.approveLabel(r.name), title: ADDON_LIST.approveLabel(r.name) } }),
+                h('button', { type: 'button', id: `addon-decline-${r.id}`, className: 'ws-btn ws-btn-small', disabled: busy, text: ADDON_LIST.decline, onClick: () => on.decline && on.decline(r.id), attrs: { 'aria-label': ADDON_LIST.declineLabel(r.name), title: ADDON_LIST.declineLabel(r.name) } })
+            ])
+        ])),
+        section('addons-answered', ADDON_LIST.answeredHeading, answered, (r) => h('li', { className: `addon-row addon-row-${r.status}` }, [
+            ...top(r),
+            h('p', { className: `addon-status addon-status-${r.status}`, text: ADDON_LIST.status[r.status] || r.status })
+        ])),
+        sum ? h('p', { className: 'addon-sum', id: 'addons-sum', text: ADDON_LIST.approvedSum(formatMoney(sum)) }) : null
     ];
     parts.filter(Boolean).forEach((p) => body.appendChild(p));
 }

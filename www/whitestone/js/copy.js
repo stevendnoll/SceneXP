@@ -482,6 +482,15 @@ export const GUIDE = Object.freeze({
     addOnAsk: (where, what) => `Your cleaner would like to add something ${where}. ${what}.`,
     addOnInRoom: (room) => `in the ${String(room).toLowerCase()}`,
     addOnInHome: 'while they are there',
+    /** Two or more waiting (QA, 2026-10-15: "2 waiting" read as one): how
+     *  many, then the first, and after an answer, the next. `place` is
+     *  addOnInRoom's, else addOnForHome. */
+    addOnAskMany: (n, place, what) => `Your cleaner would like to add ${n} things. The first is ${place}. ${what}.`,
+    addOnAskNext: (place, what) => `The next one is ${place}. ${what}.`,
+    addOnForHome: 'for your home',
+    addOnMoreWaiting: (n) => `${n} more are waiting.`,
+    addOnAnswered: (status, name) => (status === 'declined' ? `Declined: ${name}.` : `Approved: ${name}.`),
+    seeAllAddOns: (n) => `See all ${n}`,
     addOnPriced: (name, money, time) => `${name}, for ${money} more, ${time}`,
     addOnWords: (words) => `They say, “${words}”`,
     addOnQuestion: 'Shall they go ahead?',
@@ -494,10 +503,13 @@ export const GUIDE = Object.freeze({
     afterDeclined: (name) => `Declined: ${name}. Your cleaner will see it in a moment, and you won’t be charged for it.`,
     addOnOffline: 'I couldn’t reach Whitestone, so your answer isn’t sent yet. Please try again in a moment.',
     addOnTrouble: 'Your answer didn’t go through. Please try again in a moment.',
-    /** At a glance, while one waits for an answer. */
+    /** At a glance while the visit is open, a tap away from the list:
+     *  how many wait, else that every one is answered. */
     factAddOns: 'Add-ons',
     factWaiting: (n) => `${n} waiting`,
+    factAnswered: (n) => `${n} answered`,
     factAddOnsSpoken: (n) => `${n} ${n === 1 ? 'add-on' : 'add-ons'} from your cleaner, waiting for your answer.`,
+    factAnsweredSpoken: (n) => `${n} ${n === 1 ? 'add-on' : 'add-ons'} from your cleaner, all answered.`,
 
     /** A visit's report come in (M5 piece 3): the bill, what was skipped
      *  and why, what was not reached, and what next. */
@@ -655,6 +667,28 @@ export const REPORT = Object.freeze({
         declined: 'Declined',
         lapsed: 'No answer in time, so not done'
     })
+});
+
+/** The studio's add-ons card (QA, 2026-10-15): every add-on of the visit
+ *  under way, opened from Add-ons at a glance, each answered in place. */
+export const ADDON_LIST = Object.freeze({
+    leadWaiting: (n) => `Your cleaner is waiting for your answer on ${n} ${n === 1 ? 'add-on' : 'add-ons'}.`,
+    leadAnswered: 'Every add-on has your answer. Your cleaner will see them in a moment.',
+    leadNone: 'Your cleaner hasn’t asked for anything extra on this visit.',
+    waitingHeading: 'Waiting for your answer',
+    answeredHeading: 'Your answers',
+    /** Where and how long: "Kitchen, about 30 minutes". */
+    meta: (room, time) => [room, time].filter(Boolean).join(', '),
+    noPrice: 'Price not available yet',
+    approve: GUIDE.approve,
+    decline: GUIDE.decline,
+    approveLabel: (name) => `Approve ${name}`,
+    declineLabel: (name) => `Decline ${name}`,
+    status: Object.freeze({
+        approved: 'Approved',
+        declined: 'Declined'
+    }),
+    approvedSum: (money) => `Approved so far: ${money} more`
 });
 
 /** The cleaner's page. */

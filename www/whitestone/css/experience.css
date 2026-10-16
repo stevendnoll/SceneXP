@@ -1069,6 +1069,75 @@ textarea.ws-input {
     border-radius: 8px;
 }
 
+/* The cleaner's add-ons (QA, 2026-10-15): the ones waiting first, each
+   answered in place, then the answers given. */
+.addons-body {
+    text-align: left;
+}
+
+.addon-section {
+    margin: 0.75rem 0;
+}
+
+.addon-list {
+    margin: 0.3rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.addon-row {
+    padding: 0.65rem 0.85rem;
+    margin: 0.45rem 0;
+    border: 1px solid var(--ws-line);
+    border-radius: 12px;
+    background: var(--ws-panel);
+}
+
+.addon-row-waiting {
+    border-left: 4px solid var(--ws-accent);
+    background: var(--ws-stone);
+}
+
+.addon-name {
+    font-weight: 700;
+}
+
+.addon-meta,
+.addon-words,
+.addon-status {
+    margin: 0.2rem 0 0;
+    font-size: 0.9rem;
+    color: var(--ws-muted);
+}
+
+.addon-words {
+    font-style: italic;
+    color: var(--ws-graphite);
+}
+
+.addon-status {
+    font-weight: 600;
+}
+
+.addon-status-approved {
+    color: #2F6B43;
+}
+
+.addon-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.55rem;
+}
+
+.addon-sum {
+    margin: 0.6rem 0 0;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--ws-line);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
 .visit-report-photos figcaption {
     margin-top: 0.2rem;
     color: var(--ws-muted);

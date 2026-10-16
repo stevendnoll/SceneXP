@@ -109,7 +109,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=35" as="style">
+    <link rel="preload" href="css/experience.min.css?v=36" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -159,7 +159,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=35">
+    <link rel="stylesheet" href="css/experience.min.css?v=36">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -505,6 +505,26 @@
                 first. Anything we skip comes off your bill.</p>
             <div class="card-actions">
                 <button id="visit-report-done" class="ws-btn ws-btn-primary" type="button">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE CLEANER'S ADD-ONS (QA, 2026-10-15): every add-on of the visit
+         under way, opened from Add-ons in Maya's bubble, each answered in
+         place (panels.js renderAddOnList). -->
+    <div id="addons" class="card-overlay" hidden>
+        <div id="addons-panel" class="card-panel list-panel" role="dialog" aria-modal="true"
+            aria-labelledby="addons-title" tabindex="-1">
+            <div class="card-head">
+                <h2 id="addons-title" class="card-title">Add-ons from your cleaner</h2>
+                <button id="addons-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <p id="addons-lead" class="card-meta"></p>
+            <div id="addons-body" class="addons-body"></div>
+            <p class="card-meta quote-promise">You only pay for an add-on if you approve it and it is done.</p>
+            <p id="addons-status" class="sr-only" role="status" aria-live="polite"></p>
+            <div class="card-actions">
+                <button id="addons-done" class="ws-btn ws-btn-primary" type="button">Done</button>
             </div>
         </div>
     </div>

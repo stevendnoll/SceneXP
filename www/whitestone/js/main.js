@@ -67,7 +67,7 @@ import {
     showResidence
 } from './forms.min.js';
 import {
-    renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote, renderVisitReport
+    renderChecklist, renderTaskPhotos, taskName, fillChecklistFilter, quoteChip, renderQuote, renderVisitReport, renderAddOnList
 } from './panels.min.js';
 import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKING, BOOKING_ERRORS, RECEIPT, CHANGES } from './copy.min.js';
 import { createTurntable, turnPoint } from './turntable.min.js';
@@ -1342,9 +1342,15 @@ function hostFacts(c) {
         const value = last.bill ? GUIDE.factBilled(formatMoney(last.bill.billedCents)) : GUIDE.factReportIn;
         facts.push({ key: 'report', label: GUIDE.factLastVisit, value, note: last.seen ? '' : GUIDE.factNew, spoken: GUIDE.factLastVisitSpoken(value, !last.seen) });
     }
-    // An add-on waiting for an answer (M5), a tap away from Maya asking.
+    // The visit's add-ons (M5), a tap away from the list of them: how many
+    // wait for an answer, else that all are answered, until the report.
+    const all = addOnsFor(c).length;
     const waiting = waitingFor(c).length;
-    if (waiting) facts.push({ key: 'addons', label: GUIDE.factAddOns, value: GUIDE.factWaiting(waiting), note: '', spoken: GUIDE.factAddOnsSpoken(waiting) });
+    if (all) {
+        facts.push(waiting
+            ? { key: 'addons', label: GUIDE.factAddOns, value: GUIDE.factWaiting(waiting), note: '', spoken: GUIDE.factAddOnsSpoken(waiting) }
+            : { key: 'addons', label: GUIDE.factAddOns, value: GUIDE.factAnswered(all), note: '', spoken: GUIDE.factAnsweredSpoken(all) });
+    }
     return facts.length ? facts : null;
 }
 
@@ -1360,9 +1366,9 @@ function onHostFact(key) {
         if (ui.guide && ui.guide.scene === 'report') openVisitReport();
         else offerReport({ asked: true });
     } else if (key === 'addons') {
-        // The panel steps aside, so she is seen asking.
-        if (panel && panel.shown) selectTo(null);
-        offerAddOn({ asked: true });
+        // Every add-on, in its card, as Your quote opens the breakdown (QA,
+        // 2026-10-15: a tap on the count did nothing while she was asking).
+        openAddOnList();
     }
 }
 
@@ -1731,6 +1737,9 @@ function onHostButton(id) {
         break;
     case 'decline':
         decide('declined');
+        break;
+    case 'allAddOns':
+        openAddOnList();
         break;
     default:
         if (id.startsWith('kind-')) chooseResidence({ kind: id.slice(5) });
@@ -2388,11 +2397,17 @@ const visits = { id: null, addOns: [], priced: null, timer: null, busy: false, d
  *  published. */
 const watchable = (c) => Boolean(isPublished(c) && !c.sample);
 
+/** Every add-on of the open checklist's visit under way, answered or not,
+ *  the first proposed first. */
+function addOnsFor(c) {
+    if (!watchable(c) || visits.id !== c.published.id) return [];
+    return visits.addOns;
+}
+
 /** The add-ons of the open checklist still waiting for an answer, the
  *  first proposed first. */
 function waitingFor(c) {
-    if (!watchable(c) || visits.id !== c.published.id) return [];
-    return visits.addOns.filter((a) => a.status === 'waiting');
+    return addOnsFor(c).filter((a) => a.status === 'waiting');
 }
 
 /** The add-on Maya is asking about, or null. */
@@ -2527,6 +2542,8 @@ async function pricedFor(c, svc, fresh = false) {
  *  elsewhere (another device), lets her go on to the next or back; one
  *  waiting is asked about; and the count at a glance kept up. */
 function afterVisits(changed) {
+    // The list, if open, shows what came: a new one, or one answered elsewhere.
+    if (changed && isOpen('addons')) drawAddOnList();
     const g = ui.guide;
     const asked = g && g.scene === 'addOn' ? visits.addOns.find((a) => a.id === g.addonId) : null;
     if (g && g.scene === 'addOn' && (!asked || asked.status !== 'waiting')) {
@@ -2553,25 +2570,95 @@ function offerAddOn({ asked = false } = {}) {
 }
 
 /**
- * What Maya says of an add-on (`a`, else the one she is asking about):
- * where and what, priced from the sheet the quote was locked on, the
- * cleaner's words, and the question. `{ text, name }`, or null.
+ * An add-on named and priced as the cleaner saw it: from the published
+ * checklist and the sheet its quote was locked on, else the customer's own
+ * and the current sheet. `{ name, room, price }`: `room` the room's name
+ * or '', `price` priceOf's. Null with no checklist to read it by.
  */
-function addOnContext(a = askedAddOn()) {
-    if (!a) return null;
+function addOnFacts(a) {
     const c = active();
     const form = visits.priced ? visits.priced.form : c;
     const sheet = visits.priced ? visits.priced.sheet : state.sheet;
     if (!form) return null;
-    const name = addOnName(sheet, form, a);
-    const price = priceOf(sheet, form, a);
     const roomId = roomOf(form, a);
     const room = roomId ? (form.rooms || []).find((r) => r.id === roomId) : null;
-    const where = room ? GUIDE.addOnInRoom(roomName(form.serviceType, room)) : GUIDE.addOnInHome;
+    return { name: addOnName(sheet, form, a), room: room ? roomName(form.serviceType, room) : '', price: priceOf(sheet, form, a) };
+}
+
+/**
+ * What Maya says of an add-on (`a`, else the one she is asking about):
+ * where and what, priced from the sheet the quote was locked on, the
+ * cleaner's words, and the question. With others waiting too (QA,
+ * 2026-10-15: "2 waiting" over the words for one), how many and that this
+ * is the first; straight after an answer, that answer and the next.
+ * `{ text, name, waiting }`, or null.
+ */
+function addOnContext(a = askedAddOn()) {
+    if (!a) return null;
+    const facts = addOnFacts(a);
+    if (!facts) return null;
+    const { name, room, price } = facts;
     const what = price.error ? name : GUIDE.addOnPriced(name, formatMoney(price.cents), formatMinutes(price.minutes));
+    const waiting = waitingFor(active()).length;
+    const place = room ? GUIDE.addOnInRoom(room) : GUIDE.addOnForHome;
+    const after = visits.decided && visits.decided.next === a.id ? visits.decided : null;
+    let ask;
+    if (after) ask = [GUIDE.addOnAnswered(after.status, after.name), waiting > 1 ? GUIDE.addOnMoreWaiting(waiting) : '', GUIDE.addOnAskNext(place, what)];
+    else if (waiting > 1) ask = [GUIDE.addOnAskMany(waiting, place, what)];
+    else ask = [GUIDE.addOnAsk(room ? place : GUIDE.addOnInHome, what)];
     // Their words end as a sentence does, inside the quotation marks.
     const words = a.words ? GUIDE.addOnWords(/[.!?]$/.test(a.words) ? a.words : `${a.words}.`) : '';
-    return { text: [GUIDE.addOnAsk(where, what), words, GUIDE.addOnQuestion].filter(Boolean).join(' '), name };
+    return { text: [...ask, words, GUIDE.addOnQuestion].filter(Boolean).join(' '), name, waiting };
+}
+
+/** The add-ons card's rows: every add-on of the visit, named and priced as
+ *  Maya says them (panels.js renderAddOnList). */
+function addOnRows(c) {
+    return addOnsFor(c).map((a) => {
+        const f = addOnFacts(a) || { name: '', room: '', price: { error: 'no-form' } };
+        const priced = !f.price.error;
+        return {
+            id: a.id, name: f.name, room: f.room, words: a.words || '', status: a.status,
+            cents: priced ? f.price.cents : 0,
+            money: priced ? formatMoney(f.price.cents) : '',
+            time: priced ? formatMinutes(f.price.minutes) : ''
+        };
+    });
+}
+
+/** The add-ons card drawn from what the studio knows now. */
+function drawAddOnList() {
+    renderAddOnList({
+        rows: addOnRows(active()),
+        busy: visits.deciding,
+        on: { approve: (id) => decide('approved', id), decline: (id) => decide('declined', id) }
+    });
+}
+
+/**
+ * Every add-on of the visit in its card (QA, 2026-10-15), from Add-ons at a
+ * glance or See all in Maya's bubble. Named by the published checklist,
+ * read first when nothing has read it yet (a reload with every add-on
+ * answered). Resolves to whether it opened.
+ */
+async function openAddOnList() {
+    const c = active();
+    if (!addOnsFor(c).length) return false;
+    if (panel && panel.shown) selectTo(null);
+    if (!visits.priced) {
+        try {
+            const svc = await connect();
+            if (svc) await pricedFor(c, svc);
+        } catch (e) {
+            // Named from the customer's own copy instead.
+        }
+    }
+    if (!addOnsFor(active()).length) return false;
+    drawAddOnList();
+    const status = el('addons-status');
+    if (status) status.textContent = '';
+    openCard('addons');
+    return true;
 }
 
 /** The add-on shown on the house as she asks: its room's floor open, the
@@ -2602,14 +2689,20 @@ function leaveAddOn(to) {
  * The customer's answer, sealed and sent (addons.js decideAddOn), once.
  * Then the next add-on waiting, or back where Maya was, saying what came
  * of it. Answered already from another device, it goes by that answer.
- * Resolves to the API's result, or null when there was nothing to answer.
+ * `addonId`, from the add-ons card, answers that one there instead: the
+ * card redrawn and the answer said in it, and Maya, if she was asking
+ * about it, moved on beneath. Resolves to the API's result, or null when
+ * there was nothing to answer.
  */
-async function decide(status) {
+async function decide(status, addonId = null) {
     const c = active();
-    const a = askedAddOn();
-    if (!a || !watchable(c) || visits.deciding) return null;
-    const said = addOnContext(a);
+    const asked = askedAddOn();
+    const a = addonId ? addOnsFor(c).find((x) => x.id === addonId) || null : asked;
+    if (!a || a.status !== 'waiting' || !watchable(c) || visits.deciding) return null;
+    const inList = Boolean(addonId) && isOpen('addons');
+    const said = addOnFacts(a);
     visits.deciding = true;
+    if (inList) drawAddOnList();
     let r;
     try {
         const svc = await connect();
@@ -2626,6 +2719,7 @@ async function decide(status) {
         visits.deciding = false;
     }
     if (!r.ok && r.error !== 'decided') {
+        if (inList) drawAddOnList();
         toast(r.error === 'offline' ? GUIDE.addOnOffline : GUIDE.addOnTrouble);
         return r;
     }
@@ -2637,11 +2731,25 @@ async function decide(status) {
         const known = visits.addOns.find((x) => x.id === a.id);
         if (known && known.status !== 'waiting') answer = known.status;
     }
-    visits.decided = { status: answer, name: said ? said.name : '' };
+    // `next`, the one she asks about now, which begins with this answer.
+    const next = waitingFor(active())[0];
+    visits.decided = { status: answer, name: said ? said.name : '', next: next ? next.id : null };
+    const spoken = answer === 'declined' ? GUIDE.afterDeclined(visits.decided.name) : GUIDE.afterApproved(visits.decided.name);
+    if (inList) {
+        drawAddOnList();
+        const live = el('addons-status');
+        if (live) live.textContent = spoken;
+        // Focus on to the next one waiting, else Done.
+        const to = (next && el(`addon-approve-${next.id}`)) || el('addons-done');
+        if (to && typeof to.focus === 'function') to.focus({ preventScroll: true });
+        if (asked && asked.id === a.id && !offerAddOn({ asked: true })) guideTo({ type: 'decided', status: answer });
+        else updateHost();
+        return r;
+    }
     if (!offerAddOn({ asked: true })) {
         guideTo({ type: 'decided', status: answer });
         // Back in the build she says nothing more, so it is said here.
-        if (ui.guide.scene !== 'done') announce(answer === 'declined' ? GUIDE.afterDeclined(visits.decided.name) : GUIDE.afterApproved(visits.decided.name));
+        if (ui.guide.scene !== 'done') announce(spoken);
     }
     if (host) host.focusPrimary();
     return r;
@@ -3455,6 +3563,7 @@ function setupEventListeners() {
     on('task-avoid', 'input', () => showHints('task-avoid', 'task-avoid-hint'));
     on('quote-open-checklist', 'click', openChecklistView);
     on('visit-report-done', 'click', () => closeCard('visit-report'));
+    on('addons-done', 'click', () => closeCard('addons'));
     booking = createBooking({
         signal,
         on: {
@@ -3719,6 +3828,7 @@ export const __test__ = {
     watchVisits,
     offerAddOn,
     decide,
+    openAddOnList,
     offerReport,
     openVisitReport,
     history: () => history,

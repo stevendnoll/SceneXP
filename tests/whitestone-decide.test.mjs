@@ -21,7 +21,7 @@ import { join } from 'node:path';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
-import { GUIDE } from '../www/whitestone/js/copy.js';
+import { GUIDE, ADDON_LIST } from '../www/whitestone/js/copy.js';
 import {
     ADDON_FORMAT, WORDS_MAX, addOnName, priceOf, cleanProposal, cleanDecision, fetchAddOns, openAddOns, decideAddOn, roomOf, waitingCount
 } from '../www/whitestone/js/addons.js';
@@ -196,6 +196,13 @@ describe('Maya asks about an add-on (guide.js)', () => {
         expect(viewFor(ask(at('done'))).text).toBe(GUIDE.addOnPlain);
     });
 
+    test('with more than one waiting, the whole list a tap away', () => {
+        const v = viewFor(ask(at('done')), { addOn: { text: 'x', waiting: 2 } });
+        expect(v.buttons.map((b) => b.id)).toEqual(['approve', 'decline', 'allAddOns']);
+        expect(v.buttons[2]).toEqual({ id: 'allAddOns', label: GUIDE.seeAllAddOns(2), primary: false });
+        expect(viewFor(ask(at('done')), { addOn: { text: 'x', waiting: 1 } }).buttons.map((b) => b.id)).toEqual(['approve', 'decline']);
+    });
+
     test('saved as the scene beneath it, so a reload mid-build still resumes', () => {
         expect(savedForm(ask(at('rooms'), { asked: true })).scene).toBe('rooms');
         expect(savedForm(ask(at('welcome', { resume: 'review' }))).scene).toBe('review');
@@ -234,6 +241,14 @@ const buttons = () => dom.el('host-actions').children.map((b) => b.textContent);
 const press = (id) => fire(dom.el('host-actions').children.find((b) => b.id === `host-${id}`), 'click');
 const fact = (key) => dom.el('host-facts').children.find((b) => b.id === `host-fact-${key}`);
 const factValue = (key) => (fact(key) ? fact(key).children[1].textContent : undefined);
+/** The add-ons card's rows, waiting and answered, and a row's button. */
+const rowsIn = (id) => {
+    const section = dom.el('addons-body').children.find((c) => c.id === id);
+    return section ? section.children[1].children : [];
+};
+const waitingRows = () => rowsIn('addons-waiting');
+const answeredRows = () => rowsIn('addons-answered');
+const listButton = (kind, i) => waitingRows()[i].children.at(-1).children[kind === 'approve' ? 0 : 1];
 
 /** The studio with a kitchen published and booked, Maya standing by, and
  *  the cleaner's side: the PIN opened, the key, and a way to propose. */
@@ -306,7 +321,9 @@ describe('the studio answers the cleaner (main.js)', () => {
         expect(await until(() => w.t.ui.guide.scene === 'done')).toBe(true);
         expect(w.t.ui.guide.outcome).toBe('approved');
         expect(line()).toBe(`${GUIDE.afterApproved('Oven interior')} ${GUIDE.whatNext}`);
-        expect(fact('addons')).toBeUndefined();
+        // Still at a glance, answered, until the visit's report.
+        expect(factValue('addons')).toBe('1 answered');
+        expect(fact('addons').getAttribute('aria-label')).toBe(GUIDE.factAnsweredSpoken(1));
         expect(w.t.model().lifted).toBeNull();
         // Asked again later, it is not asked again.
         await w.t.pollVisits();
@@ -319,12 +336,16 @@ describe('the studio answers the cleaner (main.js)', () => {
         const deep = await w.cleaner.propose({ itemId: w.stove.id, options: ['deep-clean'] });
         await w.cleaner.propose(w.oven);
         await w.t.pollVisits();
-        expect(line()).toMatch(/^Your cleaner would like to add something in the kitchen\. Stovetop: Deep clean, for \$\d+ more, about \d+ minutes\. Shall they go ahead\?$/);
+        // Two waiting (QA, 2026-10-15): how many, then the first.
+        expect(line()).toMatch(/^Your cleaner would like to add 2 things\. The first is in the kitchen\. Stovetop: Deep clean, for \$\d+ more, about \d+ minutes\. Shall they go ahead\?$/);
+        expect(buttons()).toEqual([GUIDE.approve, GUIDE.decline, GUIDE.seeAllAddOns(2)]);
         expect(select).toHaveBeenLastCalledWith({ roomId: w.kitchen.id, itemId: w.stove.id });
         expect(factValue('addons')).toBe('2 waiting');
         press('decline');
         expect(await until(() => w.t.ui.guide.addonId && w.t.ui.guide.addonId !== deep.id)).toBe(true);
-        expect(line()).toMatch(/^Your cleaner would like to add something in the kitchen\. Oven interior,/);
+        // The answer, then the next.
+        expect(line()).toMatch(/^Declined: Stovetop: Deep clean\. The next one is in the kitchen\. Oven interior, for \$\d+ more,/);
+        expect(buttons()).toEqual([GUIDE.approve, GUIDE.decline]);
         expect(factValue('addons')).toBe('1 waiting');
         expect((await w.cleaner.seen()).map((a) => a.status)).toEqual(['declined', 'waiting']);
         press('approve');
@@ -359,7 +380,7 @@ describe('the studio answers the cleaner (main.js)', () => {
         expect(list).not.toHaveBeenCalled();
     });
 
-    test('never in the build of her own accord, but a tap on the count asks, and the build goes on after', async () => {
+    test('never in the build of her own accord, but a tap on the count opens the list, and the build goes on', async () => {
         const w = await bookedStudio();
         w.t.onHostButton('editRooms');
         expect(w.t.ui.guide.scene).toBe('rooms');
@@ -367,11 +388,76 @@ describe('the studio answers the cleaner (main.js)', () => {
         await w.t.pollVisits();
         expect(w.t.ui.guide.scene).toBe('rooms');
         fire(fact('addons'), 'click');
-        expect(w.t.ui.guide).toMatchObject({ scene: 'addOn', back: 'rooms' });
-        press('decline');
-        expect(await until(() => w.t.ui.guide.scene === 'rooms')).toBe(true);
-        jest.advanceTimersByTime(50);
-        expect(dom.el('ws-live').textContent).toBe(GUIDE.afterDeclined('Oven interior'));
+        expect(await until(() => !dom.el('addons').hidden)).toBe(true);
+        expect(w.t.ui.guide.scene).toBe('rooms');
+        fire(listButton('decline', 0), 'click');
+        expect(await until(async () => (await w.cleaner.seen())[0].status === 'declined')).toBe(true);
+        expect(await until(() => waitingRows().length === 0)).toBe(true);
+        expect(w.t.ui.guide.scene).toBe('rooms');
+        expect(dom.el('addons-status').textContent).toBe(GUIDE.afterDeclined('Oven interior'));
+        expect(answeredRows().map((li) => li.children[2].textContent)).toEqual(['Declined']);
+        expect(dom.el('addons-lead').textContent).toBe(ADDON_LIST.leadAnswered);
+    });
+
+    test('the list: every add-on, each priced, with their words, answered in place, the sum approved', async () => {
+        const w = await bookedStudio();
+        const deep = await w.cleaner.propose({ itemId: w.stove.id, options: ['deep-clean'] });
+        const oven = await w.cleaner.propose(w.oven, 'Baked-on grease');
+        await w.t.pollVisits();
+        expect(w.t.ui.guide).toMatchObject({ scene: 'addOn', addonId: deep.id });
+        press('allAddOns');
+        expect(await until(() => !dom.el('addons').hidden)).toBe(true);
+        expect(dom.el('addons-lead').textContent).toBe(ADDON_LIST.leadWaiting(2));
+        const ovenPrice = priceOf(SHEET, w.c, w.oven);
+        const deepPrice = priceOf(SHEET, w.c, { itemId: w.stove.id, options: ['deep-clean'] });
+        const rows = waitingRows();
+        expect(rows.map((li) => li.children[0].children.map((s) => s.textContent))).toEqual([
+            ['Stovetop: Deep clean', formatMoney(deepPrice.cents)],
+            ['Oven interior', formatMoney(ovenPrice.cents)]
+        ]);
+        expect(rows[1].children[1].textContent).toBe(`Kitchen, ${formatMinutes(ovenPrice.minutes)}`);
+        expect(rows[1].children[2].textContent).toBe('“Baked-on grease”');
+        expect(listButton('approve', 1).getAttribute('aria-label')).toBe(ADDON_LIST.approveLabel('Oven interior'));
+        // The second answered in the list: Maya, asking about the first, keeps asking about it.
+        fire(listButton('approve', 1), 'click');
+        expect(await until(() => waitingRows().length === 1)).toBe(true);
+        expect((await w.cleaner.seen()).find((a) => a.id === oven.id).status).toBe('approved');
+        expect(w.t.ui.guide).toMatchObject({ scene: 'addOn', addonId: deep.id });
+        expect(dom.el('addons-body').children.find((c) => c.id === 'addons-sum').textContent).toBe(ADDON_LIST.approvedSum(formatMoney(ovenPrice.cents)));
+        // The first answered in the list: Maya, beneath, lets it go.
+        fire(listButton('decline', 0), 'click');
+        expect(await until(() => waitingRows().length === 0)).toBe(true);
+        expect(w.t.ui.guide).toMatchObject({ scene: 'done', outcome: 'declined' });
+        expect(answeredRows().map((li) => li.children[2].textContent)).toEqual(['Declined', 'Approved']);
+        expect(factValue('addons')).toBe('2 answered');
+        // Done closes it; a tap on the count opens it again, answered.
+        fire(dom.el('addons-done'), 'click');
+        expect(dom.el('addons').hidden).toBe(true);
+        fire(fact('addons'), 'click');
+        expect(await until(() => !dom.el('addons').hidden)).toBe(true);
+        expect(waitingRows()).toHaveLength(0);
+        // Nothing to answer twice.
+        expect(await w.t.decide('approved', oven.id)).toBeNull();
+    });
+
+    test('the list keeps up with the cleaner: a new add-on appears while it is open', async () => {
+        const w = await bookedStudio();
+        await w.cleaner.propose(w.oven);
+        await w.t.pollVisits();
+        expect(await w.t.openAddOnList()).toBe(true);
+        expect(waitingRows()).toHaveLength(1);
+        await w.cleaner.propose({ itemId: w.stove.id, options: ['deep-clean'] });
+        await w.t.pollVisits();
+        expect(waitingRows()).toHaveLength(2);
+        expect(dom.el('addons-lead').textContent).toBe(ADDON_LIST.leadWaiting(2));
+    });
+
+    test('no add-ons, no list', async () => {
+        const w = await bookedStudio();
+        await w.t.pollVisits();
+        expect(fact('addons')).toBeUndefined();
+        expect(await w.t.openAddOnList()).toBe(false);
+        expect(dom.el('addons').hidden).toBe(true);
     });
 
     test('answered on another device: let go, saying what it was', async () => {

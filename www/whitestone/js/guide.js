@@ -549,10 +549,14 @@ export function viewFor(guide, ctx = {}) {
         return { ...base, text: (ctx.report && ctx.report.text) || GUIDE.reportPlain, small: GUIDE.reportColors, buttons: [], choices: 'report', halo: null };
     case 'addOn':
         // The cleaner's add-on, what it adds and their words (`ctx.addOn`
-        // { text }, main.js), and the guarantee in small print.
+        // { text, waiting }, main.js), and the guarantee in small print.
+        // With more than one waiting, the whole list a tap away.
         return {
             ...base, text: (ctx.addOn && ctx.addOn.text) || GUIDE.addOnPlain, small: GUIDE.addOnPromise, again: GUIDE.addOnAgain,
-            buttons: [b('approve', GUIDE.approve, true), b('decline', GUIDE.decline)]
+            buttons: [
+                b('approve', GUIDE.approve, true), b('decline', GUIDE.decline),
+                ...(ctx.addOn && ctx.addOn.waiting > 1 ? [b('allAddOns', GUIDE.seeAllAddOns(ctx.addOn.waiting))] : [])
+            ]
         };
     case 'done':
         // Never silent (QA, 2026-10-14): where the home stands and the ways

@@ -7065,7 +7065,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=35" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=36" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7111,7 +7111,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=3" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=35" rel="stylesheet"]
+    link [href="css/experience.min.css?v=36" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7396,6 +7396,21 @@ html [data-ui-theme="surf" lang="en"]
           "You will never pay more than your quote without approving it first. Anything we skip comes off your bill."
         div.card-actions
           button#visit-report-done.ws-btn.ws-btn-primary [type="button"]
+            "Done"
+    div#addons.card-overlay [hidden]
+      div#addons-panel.card-panel.list-panel [aria-labelledby="addons-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.card-head
+          h2#addons-title.card-title
+            "Add-ons from your cleaner"
+          button#addons-close.ws-btn.ws-btn-small [type="button"]
+            "Close"
+        p#addons-lead.card-meta
+        div#addons-body.addons-body
+        p.card-meta.quote-promise
+          "You only pay for an add-on if you approve it and it is done."
+        p#addons-status.sr-only [aria-live="polite" role="status"]
+        div.card-actions
+          button#addons-done.ws-btn.ws-btn-primary [type="button"]
             "Done"
     div#checklist.card-overlay.checklist-overlay [hidden]
       div#checklist-panel.card-panel.checklist-panel [aria-labelledby="checklist-title" aria-modal="true" role="dialog" tabindex="-1"]
