@@ -99,6 +99,89 @@ function roundedTorsoGeometry(w, h, d, round, waist = 0) {
  *  foot: a natural waist, a little below the middle. */
 const WAIST_AT = 0.42;
 
+/** A mary jane's sizes, meters: the shoe's height at its sides, and the
+ *  instep's rise above it. */
+const MARY_JANE = Object.freeze({ height: 0.026, instep: 0.024, toe: 0.016, strap: 0.004 });
+
+/**
+ * A mary jane, `w` wide and `l` long, its sole at y 0 and its plan centered
+ * (the toe toward +z): a low shoe with a rounded toe and heel and every edge
+ * softened, a raised toe box over the toes, the top of the foot rising out
+ * of the opening behind it, a short ankle up to the hem, and a strap arched
+ * over the instep.
+ *
+ * THE SHOE IS A FOOTPRINT EXTRUDED UPWARD, SHRUNK BY ITS BEVEL, as the
+ * rounded torso is, so its box is exactly (w, height, l). The ankle reaches
+ * up inside the trouser leg, so no gap ever shows between the hem and the
+ * foot.
+ *
+ * @returns {THREE.Group}
+ */
+function maryJaneShoe(w, l, shoeMaterial, skinMaterial) {
+    const M = MARY_JANE;
+    const H = M.height;
+    const group = new THREE.Group();
+    group.userData.isShoe = true;
+    const bevel = Math.min(0.005, H / 4, w / 4);
+    const hw = w / 2 - bevel;
+    const hl = l / 2 - bevel;
+    const toe = hw;             // a fully round toe
+    const heel = hw * 0.85;
+    // The footprint, its `y` running toward the toe.
+    const shape = new THREE.Shape();
+    shape.moveTo(-hw, -hl + heel);
+    shape.lineTo(-hw, hl - toe);
+    shape.absarc(0, hl - toe, toe, Math.PI, 0, true);
+    shape.lineTo(hw, -hl + heel);
+    shape.absarc(hw - heel, -hl + heel, heel, 0, -Math.PI / 2, true);
+    shape.lineTo(-hw + heel, -hl);
+    shape.absarc(-hw + heel, -hl + heel, heel, -Math.PI / 2, -Math.PI, true);
+    const depth = H - 2 * bevel;
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth, steps: 1, curveSegments: 8,
+        bevelEnabled: true, bevelSegments: 2, bevelThickness: bevel, bevelSize: bevel, bevelOffset: 0
+    });
+    // Stood up: the footprint's `y` becomes +z (toward the toe), and the
+    // extrusion runs from the floor up.
+    geometry.rotateX(Math.PI / 2);
+    geometry.translate(0, depth + bevel, 0);
+    const shoe = new THREE.Mesh(geometry, shoeMaterial);
+    shoe.name = 'shoe';
+    group.add(shoe);
+    // The ankle stands over the heel's end of the shoe, a fifth of its
+    // length behind its middle (where the leg is).
+    const ankleZ = -l * 0.2;
+    // The toe box: the front of the shoe rising over the toes, so the foot
+    // shows only in the opening behind it (QA, 2026-10-16: without it the
+    // shoe read as a slipper).
+    const toeLength = l * 0.23;
+    const toeBox = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), shoeMaterial);
+    toeBox.scale.set(w * 0.46, M.toe, toeLength);
+    toeBox.position.set(0, H - 0.004, l / 2 - toeLength);
+    toeBox.name = 'toe';
+    group.add(toeBox);
+    // The top of the foot, rising out of the opening toward the toe box.
+    const instep = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), skinMaterial);
+    instep.scale.set(w * 0.38, M.instep, l * 0.24);
+    instep.position.set(0, H - 0.002, ankleZ + 0.015);
+    instep.name = 'instep';
+    group.add(instep);
+    // The ankle, from the instep up inside the trouser leg.
+    const ankle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.033, 0.05, 10), skinMaterial);
+    ankle.position.set(0, H + 0.022, ankleZ);
+    ankle.name = 'ankle';
+    group.add(ankle);
+    // The strap: an arch over the instep, ahead of the ankle, flattened to
+    // follow the foot's rise.
+    const r = w * 0.4;
+    const strap = new THREE.Mesh(new THREE.TorusGeometry(r, M.strap, 6, 14, Math.PI), shoeMaterial);
+    strap.scale.set(1, (M.instep + 0.002) / r, 1);
+    strap.position.set(0, H - 0.003, ankleZ + 0.03);
+    strap.name = 'strap';
+    group.add(strap);
+    return group;
+}
+
 /**
  * Create a detailed person figure
  * @param {Object} config - Person configuration
@@ -131,6 +214,7 @@ export function createPerson(config) {
         waist = 0,             // 0 = straight sides (as before); up to 0.3 an hourglass: the torso's sides curve in to a waist that much narrower (rounded torso only, shoulderRound > 0)
         slender = 0,           // 0 = as before; up to 1 slimmer arms and wrists (15%), smaller hands and narrower shoes
         shoeColor = 0x1a1a1a,  // the shoes' color (black, as every figure has worn them)
+        shoeStyle = 'block',   // 'block' (the box every figure has worn) | 'maryJane': a low rounded shoe, the instep showing, a strap across it
         sleeveColor = null     // long sleeves in this color; null keeps bare forearms
     } = config;
 
@@ -620,13 +704,20 @@ export function createPerson(config) {
         // standard one read as a heavy block under a slim leg.
         const shoeHeight = 0.06 * footScale;
         const shoeLength = footLength * footScale * (1 - 0.08 * slim);
-        const shoe = new THREE.Mesh(
-            new THREE.BoxGeometry(0.09 * footScale * (1 - 0.18 * slim), shoeHeight, shoeLength),
-            shoeMaterial
-        );
-        shoe.position.y = -legLength - 0.05 + shoeHeight / 2;
-        shoe.position.z = shoeLength * 0.2;
-        legGroup.add(shoe);
+        const shoeWidth = 0.09 * footScale * (1 - 0.18 * slim);
+        if (shoeStyle === 'maryJane') {
+            const mj = maryJaneShoe(shoeWidth, shoeLength, shoeMaterial, skinMaterial);
+            mj.position.set(0, -legLength - 0.05, shoeLength * 0.2);
+            legGroup.add(mj);
+        } else {
+            const shoe = new THREE.Mesh(
+                new THREE.BoxGeometry(shoeWidth, shoeHeight, shoeLength),
+                shoeMaterial
+            );
+            shoe.position.y = -legLength - 0.05 + shoeHeight / 2;
+            shoe.position.z = shoeLength * 0.2;
+            legGroup.add(shoe);
+        }
 
         // Position leg group at hip
         legGroup.position.set(

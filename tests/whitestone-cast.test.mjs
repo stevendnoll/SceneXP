@@ -227,7 +227,8 @@ describe('built with the real three.js', () => {
          *  its half-width at the height of a natural waist. */
         const torsoOf = (cfg) => {
             let torso = null;
-            buildMaya(cfg).group.traverse((o) => { if (o.isMesh && o.geometry.type === 'ExtrudeGeometry') torso = o; });
+            // The torso, not a mary jane (an extrusion too, inside its shoe group).
+            buildMaya(cfg).group.traverse((o) => { if (o.isMesh && o.geometry.type === 'ExtrudeGeometry' && !(o.parent && o.parent.userData.isShoe)) torso = o; });
             const g = torso.geometry;
             g.computeBoundingBox();
             const box = g.boundingBox;
@@ -260,25 +261,79 @@ describe('built with the real three.js', () => {
         expect(hsl.l).toBeGreaterThan(0.45);
     });
 
-    test('a slender build: slimmer arms and a narrower shoe, and brown loafers instead of black (Steve, 2026-10-16)', () => {
-        /** Her upper arm's radius, and her shoe's width and color. */
-        const limbsOf = (cfg) => {
-            let arm = 0;
-            let shoe = null;
-            buildMaya(cfg).group.traverse((o) => {
-                if (o.userData && o.userData.isArm) for (const c of o.children) if (c.geometry && c.geometry.type === 'CylinderGeometry') arm = Math.max(arm, c.geometry.parameters.radiusTop);
-                if (o.userData && o.userData.isLeg) for (const c of o.children) if (c.geometry && c.geometry.type === 'BoxGeometry') shoe = c;
-            });
-            return { arm, shoeWidth: shoe.geometry.parameters.width, shoeColor: shoe.material.color.getHexString(REAL.SRGBColorSpace) };
-        };
+    /** Her upper arm's radius, and her shoe: its width, color, and parts
+     *  (a mary jane is a group, the rig's block one box). */
+    const limbsOf = (cfg) => {
+        let arm = 0;
+        let shoe = null;
+        let leg = null;
+        buildMaya(cfg).group.traverse((o) => {
+            if (o.userData && o.userData.isArm) for (const c of o.children) if (c.geometry && c.geometry.type === 'CylinderGeometry') arm = Math.max(arm, c.geometry.parameters.radiusTop);
+            if (o.userData && o.userData.isLeg && !leg) {
+                leg = o;
+                shoe = o.children.find((c) => c.userData.isShoe) || o.children.find((c) => c.geometry && c.geometry.type === 'BoxGeometry');
+            }
+        });
+        const body = shoe.isGroup ? shoe.children.find((c) => c.name === 'shoe') : shoe;
+        body.geometry.computeBoundingBox();
+        const b = body.geometry.boundingBox;
+        return { arm, leg, shoe, size: [b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z], shoeColor: body.material.color.getHexString(REAL.SRGBColorSpace) };
+    };
+    const plainMaya = () => {
+        const { slender, shoes, shoeStyle, ...rest } = CONFIG.cast.maya;
+        return { ...CONFIG, cast: { ...CONFIG.cast, maya: rest } };
+    };
+
+    test('a slender build: slimmer arms and a narrower, shorter shoe (Steve, 2026-10-16)', () => {
         expect(CONFIG.cast.maya.slender).toBe(1);
         const mine = limbsOf(CONFIG);
-        const { slender, shoes, ...rest } = CONFIG.cast.maya;
-        const plain = limbsOf({ ...CONFIG, cast: { ...CONFIG.cast, maya: rest } });
+        const plain = limbsOf(plainMaya());
         expect(mine.arm).toBeCloseTo(plain.arm * 0.85, 9);
-        expect(mine.shoeWidth).toBeLessThan(plain.shoeWidth * 0.85);
-        expect(`#${mine.shoeColor}`).toBe(CONFIG.cast.maya.shoes.toLowerCase());
+        expect(mine.size[0]).toBeLessThan(plain.size[0] * 0.85);
+        expect(mine.size[2]).toBeLessThan(plain.size[2]);
         expect(plain.shoeColor).toBe('1a1a1a');
+    });
+
+    test('black mary janes, not the rig\'s blocks: low and rounded, a toe box, the instep showing with a strap over it, the ankle up inside the hem (Steve, 2026-10-16)', () => {
+        expect(CONFIG.cast.maya.shoeStyle).toBe('maryJane');
+        const { shoe, size, shoeColor, leg } = limbsOf(CONFIG);
+        const plain = limbsOf(plainMaya());
+        expect(shoe.isGroup).toBe(true);
+        expect(`#${shoeColor}`).toBe(CONFIG.cast.maya.shoes.toLowerCase());
+        const hsl = {};
+        new REAL.Color(CONFIG.cast.maya.shoes).getHSL(hsl, REAL.SRGBColorSpace);
+        expect(hsl.l).toBeLessThan(0.15);
+        // Rounded (an extrusion, not a box), lower than the block, as wide
+        // and as long as the slender build's shoe.
+        const body = shoe.children.find((c) => c.name === 'shoe');
+        expect(body.geometry.type).toBe('ExtrudeGeometry');
+        expect(size[1]).toBeLessThan(plain.size[1] * 0.5);
+        expect(size[0]).toBeCloseTo(plain.size[0] * 0.82, 3);
+        expect(size[2]).toBeCloseTo(plain.size[2] * 0.92, 3);
+        // Its sole on the floor, where the block's was.
+        expect(shoe.position.y + body.geometry.boundingBox.min.y).toBeCloseTo(plain.shoe.position.y - plain.size[1] / 2, 6);
+        for (const part of ['toe', 'instep', 'ankle', 'strap']) expect(shoe.children.some((c) => c.name === part)).toBe(true);
+        // Her feet a little bigger (the rig's footScale): longer and wider
+        // than at 1, as long and wide as the rig's own figures' or more.
+        expect(CONFIG.cast.maya.feet).toBeGreaterThan(1);
+        const { feet, ...unscaled } = CONFIG.cast.maya;
+        const smaller = limbsOf({ ...CONFIG, cast: { ...CONFIG.cast, maya: unscaled } });
+        expect(size[2]).toBeCloseTo(smaller.size[2] * CONFIG.cast.maya.feet, 4);
+        expect(size[0]).toBeCloseTo(smaller.size[0] * CONFIG.cast.maya.feet, 4);
+        expect(size[2]).toBeGreaterThan(0.18);
+        // The strap and the toe box in the shoe's color, the instep and
+        // ankle skin.
+        const named = (n) => shoe.children.find((c) => c.name === n);
+        expect(named('strap').material).toBe(body.material);
+        expect(named('toe').material).toBe(body.material);
+        expect(named('instep').material.color.getHexString(REAL.SRGBColorSpace)).toBe(CONFIG.cast.maya.skin.slice(1).toLowerCase());
+        // No gap at the hem: the ankle reaches up inside the trouser leg.
+        const shin = leg.children.filter((c) => c.geometry && c.geometry.type === 'CylinderGeometry').sort((a, b) => a.position.y - b.position.y)[0];
+        const shinBottom = shin.position.y - shin.geometry.parameters.height / 2;
+        const ankle = named('ankle');
+        const ankleTop = shoe.position.y + ankle.position.y + ankle.geometry.parameters.height / 2;
+        expect(ankleTop).toBeGreaterThan(shinBottom + 0.005);
+        expect(ankle.geometry.parameters.radiusTop).toBeLessThan(shin.geometry.parameters.radiusBottom);
     });
 
     test('a gesture runs its course and rests; reduced motion rests at once; the sway lasts as long as the line', () => {
