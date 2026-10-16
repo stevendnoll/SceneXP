@@ -289,6 +289,21 @@ describe('the way through', () => {
         for (const scene of EXAMPLE.slice(1)) expect(viewFor({ ...fresh(), scene })).toMatchObject({ stepBack: true, backTo: GUIDE.backOneStep });
     });
 
+    test('Plan my next cleaning: from standing by, a welcome or All set, to Your rooms as the home was left (QA, 2026-10-15)', () => {
+        for (const scene of ['done', 'welcome', 'saved']) {
+            const g = step({ ...fresh(), scene, reached: -1, minimized: true }, { type: 'nextCleaning' });
+            expect(g).toMatchObject({ scene: 'rooms', nextVisit: true, minimized: false, rooms: 0, reached: PROGRESS.review });
+            expect(viewFor(g, { roomCount: 3 }).text).toBe(GUIDE.roomsNextVisit);
+            // A room added, and she moves on to her usual words.
+            expect(viewFor(step(g, { type: 'roomAdded' }), { roomCount: 4 }).text).toBe(GUIDE.rooms);
+        }
+        for (const scene of ['hello', 'rooms', 'example1']) {
+            const g = { ...fresh(), scene };
+            expect(step(g, { type: 'nextCleaning' })).toBe(g);
+        }
+        expect(step({ ...fresh(), scene: 'done', nextVisit: true }, { type: 'restart' }).nextVisit).toBe(false);
+    });
+
     test('the report beat says what the example\'s last visit came to, when it is priced', () => {
         const beat = { ...fresh(), scene: 'exampleReport' };
         expect(viewFor(beat, { exampleBill: { billed: '$300', quote: '$320' } }).text).toBe(GUIDE.exampleReport('$300', '$320'));

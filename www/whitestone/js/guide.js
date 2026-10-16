@@ -257,6 +257,8 @@ export function savedForm(guide) {
  *                          comes back ({ now }) saying what came of it
  *   homeMade               a checklist made outside the guide (the setup
  *                          card): straight on to the first room
+ *   nextCleaning           after a visit, the next one planned from the
+ *                          same home: Your rooms, as it was left
  *   visitReport, reportDone  a visit's report shown ({ visitId, asked },
  *                          as a proposal), and put away: back where she
  *                          was, as after an add-on
@@ -281,7 +283,12 @@ export function step(guide, event) {
         return at === undefined ? next : { ...next, reached: Math.max(next.reached ?? -1, at) };
     };
     const type = event && event.type;
-    if (type === 'restart') return { ...to('hello', { back: null, tapped: false, rooms: 0, resume: null, answered: false, attachedAnswered: false }), reached: -1 };
+    if (type === 'restart') return { ...to('hello', { back: null, tapped: false, rooms: 0, resume: null, answered: false, attachedAnswered: false, nextVisit: false }), reached: -1 };
+    // The next cleaning, from a home with a visit behind it (QA, 2026-10-15):
+    // its rooms, every step of the build behind them reached.
+    if (type === 'nextCleaning' && ['welcome', 'done', 'saved'].includes(g.scene)) {
+        return to('rooms', { resume: null, minimized: false, rooms: 0, nextVisit: true, reached: Math.max(g.reached ?? -1, PROGRESS.review) });
+    }
     if (type === 'away' && SENDS_AWAY.includes(g.scene)) {
         return to('done', { minimized: true, resume: null, away: { to: event.to || null, was: event.was || null }, outcome: null });
     }
@@ -500,7 +507,9 @@ export function viewFor(guide, ctx = {}) {
         // Rooms as chips (QA, 2026-10-14). Review is offered from the first
         // room on: a home may want only one room cleaned (QA, 2026-10-15).
         const buttons = (ctx.roomCount || 0) >= 1 ? [b('review', GUIDE.reviewIt, true), b('otherRoom', GUIDE.otherRoom)] : [b('otherRoom', GUIDE.otherRoom)];
-        return { ...base, text: guide.rooms >= 2 ? GUIDE.roomsMore : GUIDE.rooms, buttons, choices: 'rooms' };
+        // The next cleaning's first look at its rooms says so.
+        const text = guide.nextVisit && !guide.rooms ? GUIDE.roomsNextVisit : guide.rooms >= 2 ? GUIDE.roomsMore : GUIDE.rooms;
+        return { ...base, text, buttons, choices: 'rooms' };
     }
     case 'review':
         return { ...base, text: GUIDE.review, buttons: [b('save', GUIDE.save, true), b('preferences', GUIDE.preferences)] };

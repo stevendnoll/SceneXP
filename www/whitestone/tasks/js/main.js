@@ -807,6 +807,18 @@ export async function boot(env) {
         return state;
     }
 
+    /** The visit's report sent, and the checklist no longer shared (the
+     *  customer's page closes it once the report is in): nothing more to
+     *  open, said plainly rather than asking for a PIN that cannot work. */
+    async function visitOver() {
+        await keeper.forget();
+        remember({ visitToken: null, expiresAt: null });
+        askPin(COPY.visitOver);
+        if (form) form.hidden = true;
+        state.phase = 'over';
+        return state;
+    }
+
     /** With a visit token: fetch and show, or ask for the PIN again. */
     async function fetchAndShow() {
         state.phase = 'opening';
@@ -816,6 +828,7 @@ export async function boot(env) {
             await keeper.put('checklist', got.bytes, entry.expiresAt);
             return show(got.bytes);
         }
+        if (entry.sent && refused(got.error)) return visitOver();
         if (got.error === 'denied') {
             // The token ran out or the PIN was changed: ask again, and keep
             // no copy the pass no longer opens.
@@ -839,6 +852,7 @@ export async function boot(env) {
                 askPin(errorLine(opened.error), true);
                 return state;
             }
+            if (entry.sent) return visitOver();
             remember({ fails: (entry.fails || 0) + 1 });
             askPin(entry.fails >= WARN_AFTER ? COPY.deniedMany : COPY.denied, true);
             if (input && typeof input.focus === 'function') input.focus();

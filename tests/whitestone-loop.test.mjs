@@ -5,8 +5,9 @@
  * the cleaner's page by its link and PIN, an add-on proposed there and
  * approved by Maya here, the tasks marked (one skipped), the visit
  * finished and sent, the report shown here with the house lit and the bill
- * under the quote plus the approved add-on, and the next visit booked,
- * which the cleaner's page takes as a new visit.
+ * under the quote plus the approved add-on, the checklist closed (the old
+ * link says the visit is over), and the next cleaning planned from the same
+ * home with a new link of its own.
  *
  * The studio runs on the fake clock and its own timers; the cleaner's page
  * on timers held here and run by hand, as in its own suite.
@@ -35,6 +36,9 @@ beforeEach(() => {
     dom = installDom();
 });
 afterEach(() => {
+    // The studio torn down as a closing tab would, so nothing it was asking
+    // reaches a page that is gone (a failure would otherwise end the run).
+    fire(dom.windowStub, 'pagehide');
     dom.uninstall();
     jest.useRealTimers();
     delete globalThis.fetch;
@@ -52,7 +56,7 @@ function all(node, out = []) {
     return out;
 }
 
-test('the demo, end to end: book, open, propose, approve, mark, send, report, book again', async () => {
+test('the demo, end to end: book, open, propose, approve, mark, send, report, plan the next cleaning', async () => {
     // ---- The studio: a kitchen, booked (demo steps 3 to 5) ----
     jest.setSystemTime(new Date('2026-10-14T16:00:00Z'));
     globalThis.fetch = async (url) => ({ ok: true, status: 200, json: async () => JSON.parse(readFileSync(join(WS, String(url)), 'utf8')) });
@@ -139,16 +143,29 @@ test('the demo, end to end: book, open, propose, approve, mark, send, report, bo
     expect(dom.el('host-line').textContent).toContain(GUIDE.reportBilled(formatMoney(billed), formatMoney(quote)));
     expect(paint.mock.calls[paint.mock.calls.length - 1][0].get(stove.id)).toBe('skipped');
 
-    // ---- Book your next visit, and the cleaner's page starts afresh ----
-    fire((dom.el('host-choices').children[0] || { children: [] }).children.find((b) => b.id === 'host-bookNext'), 'click');
+    // ---- Done; the next cleaning planned from the same home ----
+    s.onHostButton('reportLater');
+    expect(await until(() => s.active().published === null)).toBe(true);
+    // The cleaner's link now says the visit is over, not to try a PIN.
+    const over = await tasks.boot({ ...env, href: link.split('#')[0] });
+    expect(over.phase).toBe('over');
+    expect(dom.el('pin-status').textContent).toBe(TASKS_PAGE.visitOver);
+    expect(dom.el('pin-form').hidden).toBe(true);
+    s.onHostButton('nextCleaning');
+    s.onHostButton('review');
+    s.onHostButton('save');
+    s.onHostButton('chooseTime');
     expect(await until(() => !dom.el('booking').hidden)).toBe(true);
-    s.ui.booking.selected = '2026-10-20';
     expect((await s.confirmBooking()).ok).toBe(true);
     fire(dom.el('receipt-done'), 'click');
     expect(await until(() => s.ui.guide.outcome === 'booked')).toBe(true);
-    const again = await tasks.boot({ ...env, href: link.split('#')[0] });
+    const next = dom.el('receipt-link').value;
+    expect(next.split('#')[0]).not.toBe(link.split('#')[0]);
+    // The new link opens a new visit on the cleaner's page.
+    const again = await tasks.boot({ ...env, href: next });
+    dom.el('pin-input').value = dom.el('receipt-pin').textContent;
+    fire(dom.el('pin-form'), 'submit', { preventDefault() {} });
+    await again.pending;
     expect(again.phase).toBe('open');
-    expect(again.form.booking.date).not.toBe(form.booking.date);
     expect(find('tasks-finish')).toBeTruthy();
-    expect(find(`done-${stove.id}`).getAttribute('aria-pressed')).toBe('false');
 }, 30000);

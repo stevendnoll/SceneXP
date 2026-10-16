@@ -256,10 +256,9 @@ describe('the report\'s card (panels.js renderVisitReport)', () => {
             results: [{ itemId: 'stove', status: 'skipped', reason: 'no-time', words: '' }, { itemId: 'sink', status: 'not-reached' }],
             addOns: [{ ...proposal(1), status: 'declined', done: false }]
         });
-        renderVisitReport({ visit: { report: r, bill: { doneCents: 0, addOnCents: 0, topUpCents: 0, billedCents: 0, quoteCents: 12000 } }, form, sheet: SHEET, bookable: true });
+        renderVisitReport({ visit: { report: r, bill: { doneCents: 0, addOnCents: 0, topUpCents: 0, billedCents: 0, quoteCents: 12000 } }, form, sheet: SHEET });
         expect(dom.el('visit-report-when').textContent).toBe(`${REPORT.visitOn('Friday, October 16')} ${REPORT.cleanedBy('Steve')} ${REPORT.onSite(150)}`);
         expect(REPORT.onSite(150)).toBe('Time on site: 2 hours 30 minutes.');
-        expect(dom.el('visit-report-book').hidden).toBe(false);
         const text = dom.el('visit-report-body').textContent;
         expect(text.indexOf(REPORT.billNothing)).toBeLessThan(text.indexOf(REPORT.skippedHeading));
         expect(text).toContain(`Stovetop, in the kitchen (${REPORT.reasons['no-time']})${REPORT.lineOff(formatMoney(priceItem(SHEET, form.items[0], form.rooms).cents))}`);
@@ -271,7 +270,6 @@ describe('the report\'s card (panels.js renderVisitReport)', () => {
         // Nothing to say, nothing said; a task removed since is named so.
         renderVisitReport({ visit: { report: report({ results: [{ itemId: 'gone', status: 'not-reached' }] }), bill: null }, form, sheet: SHEET });
         expect(dom.el('visit-report-when').textContent).toBe(REPORT.visitOn('Friday, October 16'));
-        expect(dom.el('visit-report-book').hidden).toBe(true);
         expect(dom.el('visit-report-body').textContent).toContain(REPORT.removedSince);
         expect(dom.el('visit-report-body').textContent).toContain(REPORT.billNoSheet);
     });
@@ -374,7 +372,8 @@ describe('the studio shows the report (main.js)', () => {
             GUIDE.reportHasNote
         ].join(' '));
         expect(dom.el('host-small').textContent).toBe(GUIDE.reportColors);
-        expect(picks().map((b) => b.textContent)).toEqual([GUIDE.bookNext, GUIDE.fullReport, GUIDE.reportLater]);
+        // No booking pitch here (QA, 2026-10-15): the full report, or Done.
+        expect(picks().map((b) => b.textContent)).toEqual([GUIDE.fullReport, GUIDE.reportLater]);
         // The house: every dot by outcome, the skip's floor open.
         const results = paint.mock.calls[paint.mock.calls.length - 1][0];
         expect(results.get(w.stove.id)).toBe('skipped');
@@ -385,18 +384,22 @@ describe('the studio shows the report (main.js)', () => {
         expect(c.booking).toBeNull();
         expect(fact('report').children[1].textContent).toBe(GUIDE.factBilled(formatMoney(quote - stovePrice)));
         expect(fact('report').children[2]).toBeUndefined();
-        expect(fact('visit').children[1].textContent).toBe(GUIDE.factNoVisit);
+        // Done with, the checklist is no longer shared: its own draft again,
+        // the report kept, and no visit at a glance (QA, 2026-10-15).
+        expect(await until(() => w.t.active().published === null)).toBe(true);
+        expect(fact('visit')).toBeUndefined();
+        expect((await w.svc.api.getChecklist(w.pub.id, w.pub.ownerToken)).error).toBe('denied');
     });
 
-    test('See the full report opens its card; Not now puts it away; a tap at a glance brings it back', async () => {
+    test('See the full report opens its card; Done puts it away; a tap at a glance brings it back', async () => {
         const w = await bookedStudio();
         await w.cleaner.report();
         await w.t.pollVisits();
         expect(line()).toBe(`${GUIDE.reportLead} ${GUIDE.reportBilled(formatMoney(w.form.quote.totalCents), formatMoney(w.form.quote.totalCents))} ${GUIDE.reportAllDone}`);
         pick('fullReport');
         expect(dom.el('visit-report').hidden).toBe(false);
-        expect(dom.el('visit-report-book').hidden).toBe(false);
-        fire(dom.el('visit-report-close'), 'click');
+        fire(dom.el('visit-report-done'), 'click');
+        expect(dom.el('visit-report').hidden).toBe(true);
         expect(w.t.ui.guide.scene).toBe('report');
         const paint = jest.spyOn(w.t.model(), 'report');
         pick('reportLater');
@@ -413,21 +416,47 @@ describe('the studio shows the report (main.js)', () => {
         expect(dom.el('visit-report').hidden).toBe(false);
     });
 
-    test('Book your next visit: the calendar, a new time, and Maya says so', async () => {
+    test('after a visit, standing by: how it went, then Plan my next cleaning or See my last report', async () => {
         const w = await bookedStudio();
         await w.cleaner.report();
         await w.t.pollVisits();
-        pick('bookNext');
+        pick('reportLater');
+        const billed = formatMoney(w.t.active().visits[0].bill.billedCents);
+        expect(line()).toBe(`${GUIDE.homeVisited('Thursday, October 15')} ${GUIDE.homeBilled(billed)} ${GUIDE.returningLegend}`);
+        expect(picks().map((b) => b.textContent)).toEqual([GUIDE.nextCleaning, GUIDE.lastReport]);
+        pick('lastReport');
+        expect(w.t.ui.guide.scene).toBe('report');
+        pick('reportLater');
+        // A welcome back says the same.
+        w.t.ui.guide = { ...w.t.ui.guide, scene: 'welcome', resume: null };
+        w.t.showGuide();
+        expect(line()).toBe(`${GUIDE.welcomeBack} ${GUIDE.homeVisited('Thursday, October 15')} ${GUIDE.homeBilled(billed)} ${GUIDE.returningLegend}`);
+    });
+
+    test('Plan my next cleaning: the same home in Your rooms, then Review, Save and a time, with a new link and PIN', async () => {
+        const w = await bookedStudio();
+        await w.cleaner.report();
+        await w.t.pollVisits();
+        pick('reportLater');
+        const before = w.t.active();
+        pick('nextCleaning');
+        expect(w.t.ui.guide).toMatchObject({ scene: 'rooms', nextVisit: true });
+        expect(line()).toBe(GUIDE.roomsNextVisit);
+        expect(w.t.model().lifted).toBe('main');
+        expect(w.t.active().id).toBe(before.id);
+        expect(w.t.active().items.length).toBe(before.items.length);
+        w.t.onHostButton('review');
+        w.t.onHostButton('save');
+        expect(w.t.ui.guide.scene).toBe('saved');
+        w.t.onHostButton('chooseTime');
         expect(await until(() => !dom.el('booking').hidden)).toBe(true);
-        const r = await w.t.confirmBooking();
-        expect(r.ok).toBe(true);
-        fire(dom.el('receipt-done'), 'click');
-        expect(await until(() => w.t.ui.guide.outcome === 'booked')).toBe(true);
-        expect(w.t.active().booking).not.toBeNull();
-        expect(w.t.active().visits).toHaveLength(1);
-        // From the card too, and only while no visit is booked.
-        w.t.openVisitReport();
-        expect(dom.el('visit-report-book').hidden).toBe(true);
+        expect((await w.t.confirmBooking()).ok).toBe(true);
+        const after = w.t.active();
+        expect(after.published.id).not.toBe(w.pub.id);
+        expect(after.published.pin).toMatch(/^\d{6}$/);
+        expect(after.booking).not.toBeNull();
+        // The last visit's report stays with the home.
+        expect(after.visits).toHaveLength(1);
     });
 
     test('an add-on is billed only when the customer approved it and it was done', async () => {
@@ -458,12 +487,13 @@ describe('the studio shows the report (main.js)', () => {
         expect(w.t.model().lifted).toBe('second');
     });
 
-    test('a report for an earlier booking leaves this one, so no next visit is offered', async () => {
+    test('a report for an earlier booking leaves this one booked, and the checklist shared', async () => {
         const w = await bookedStudio();
         await w.cleaner.report({}, { override: { booking: { date: '2026-10-02', time: '09:00' } } });
         await w.t.pollVisits();
         expect(w.t.ui.guide.scene).toBe('report');
         expect(w.t.active().booking).not.toBeNull();
+        expect(w.t.active().published).not.toBeNull();
         expect(picks().map((b) => b.textContent)).toEqual([GUIDE.fullReport, GUIDE.reportLater]);
     });
 

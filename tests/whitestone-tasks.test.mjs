@@ -1173,6 +1173,27 @@ describe('finishing the visit on the page', () => {
         expect(await customerReads(w, kept(w).sent.visitId)).toEqual(kept(w).sent.report);
     });
 
+    test('after the report, the customer stops sharing it: the page says the visit is over, by the pass or the PIN', async () => {
+        const { w, state } = await visiting();
+        fire(find('tasks-finish'), 'click');
+        await state.polled;
+        fire(find('report-send'), 'click');
+        await state.reportSend;
+        // The customer's page closes the checklist once the report is in.
+        expect((await w.api.deleteChecklist(w.checklist.published.id, w.checklist.published.ownerToken)).ok).toBe(true);
+        const href = `https://www.scenexp.com/whitestone/tasks/?c=${w.checklist.published.id}`;
+        const byPass = await open(w, href);
+        expect(byPass.state.phase).toBe('over');
+        expect(status()).toBe(COPY.visitOver);
+        expect(dom.el('pin-form').hidden).toBe(true);
+        // Later, with no pass left, the PIN says the same.
+        const byPin = await open(w, href);
+        expect(byPin.state.phase).toBe('pin');
+        await enter(byPin.state, w.checklist.published.pin);
+        expect(status()).toBe(COPY.visitOver);
+        expect(dom.el('pin-form').hidden).toBe(true);
+    });
+
     test('a report too long to send goes back to the fields, saying so', async () => {
         const w = await published();
         const api = { ...w.api, putReport: () => Promise.resolve({ ok: false, error: 'bad-request' }) };

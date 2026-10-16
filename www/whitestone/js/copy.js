@@ -438,6 +438,13 @@ export const GUIDE = Object.freeze({
     homeBooked: (day, time) => `Your visit is booked for ${day} at ${time}.`,
     homePublished: (title) => `${title} is published, with no visit booked yet.`,
     homeUnsent: 'You have changes your cleaner has not seen yet.',
+    /** After a visit (QA, 2026-10-15): how it went, then the next cleaning. */
+    homeVisited: (day) => `Your cleaning on ${day} is complete.`,
+    homeVisitedPlain: 'Your last cleaning is complete.',
+    homeBilled: (money) => `You were billed ${money}.`,
+    nextCleaning: 'Plan my next cleaning',
+    lastReport: 'See my last report',
+    roomsNextVisit: 'Here is your home from last time. Change anything you like, then review your checklist to choose a time.',
     sendChanges: 'Send my changes',
     seeLink: 'See my link and PIN',
     returningLegend: 'What would you like to do?',
@@ -505,9 +512,8 @@ export const GUIDE = Object.freeze({
     reportNotReached: (n) => `${n} ${n === 1 ? 'task was' : 'tasks were'} not reached.`,
     reportHasNote: 'Your cleaner left you a note.',
     reportColors: 'On the house, green is done, amber is skipped, and gray was not reached.',
-    bookNext: 'Book your next visit',
     fullReport: 'See the full report',
-    reportLater: 'Not now',
+    reportLater: 'Done',
     factLastVisit: 'Last visit',
     factBilled: (money) => `Billed ${money}`,
     factReportIn: 'Report in',
@@ -750,6 +756,7 @@ export const TASKS_PAGE = Object.freeze({
     removeProofOf: (n, task) => `Remove your photo ${n} of ${task}`,
     proofFailed: 'That photo could not be added. Please try another.',
     proofsOptional: 'Photos are optional. Your customer sees them with the report.',
+    visitOver: 'This visit is complete and your report was sent. The customer’s checklist is no longer shared, so there is nothing more to open here. Thank you.',
 
     // Finishing the visit (M5 piece 2): the report and the bill, then send.
     finish: 'Finish visit',

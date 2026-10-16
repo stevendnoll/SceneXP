@@ -293,10 +293,10 @@ function drawQuotePrefs(checklist) {
  * reached, what became of the add-ons, and the cleaner's note. `visit` as
  * store.js keeps it, `form` the published checklist its names come from
  * (the customer's own when the published one is not to hand), `sheet` for
- * the amounts, `bookable` whether Book your next visit is offered, `photos`
- * the cleaner's proof photos as `{ itemId, url }` (M5 piece 4).
+ * the amounts, `photos` the cleaner's proof photos as `{ itemId, url }` (M5
+ * piece 4). Nothing to book from here (QA, 2026-10-15).
  */
-export function renderVisitReport({ visit, form, sheet, bookable = false, photos = [] }) {
+export function renderVisitReport({ visit, form, sheet, photos = [] }) {
     const r = visit.report;
     const when = byId('visit-report-when');
     if (when) {
@@ -306,8 +306,6 @@ export function renderVisitReport({ visit, form, sheet, bookable = false, photos
             r.minutesOnSite ? REPORT.onSite(r.minutesOnSite) : ''
         ].filter(Boolean).join(' ');
     }
-    const book = byId('visit-report-book');
-    if (book) book.hidden = !bookable;
     const body = byId('visit-report-body');
     if (!body) return;
     clear(body);

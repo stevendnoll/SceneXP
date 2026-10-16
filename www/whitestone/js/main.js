@@ -1203,6 +1203,13 @@ function whereLine(c) {
         const visit = isBooked(c) ? GUIDE.homeBooked(dayLabel(c.booking.date), clockLabel(c.booking.time)) : GUIDE.homePublished(c.title);
         return hasUnsent(c) ? `${visit} ${GUIDE.homeUnsent}` : visit;
     }
+    // A visit done, and the next not yet booked: how it went, briefly.
+    const last = !c.sample && c.visits && c.visits[0];
+    if (last) {
+        const day = last.report.booking ? dayLabel(last.report.booking.date) : '';
+        const billed = last.bill && last.bill.billedCents ? GUIDE.homeBilled(formatMoney(last.bill.billedCents)) : '';
+        return [day ? GUIDE.homeVisited(day) : GUIDE.homeVisitedPlain, billed].filter(Boolean).join(' ');
+    }
     if (!liveRooms(c).length) return GUIDE.homeEmpty(c.title);
     const quote = state.sheet ? quoteChecklist(state.sheet, c) : null;
     return GUIDE.homeDraft(c.title, PANEL.rooms(liveRooms(c).length), PANEL.tasks(liveItems(c).length), quote ? formatMoney(quote.totalCents) : '');
@@ -1247,6 +1254,10 @@ function returningChoices(c) {
         if (isBooked(c)) out.push(o('visit', GUIDE.seeVisit));
         else out.push(o('chooseTime', GUIDE.chooseTime), o('visit', GUIDE.seeLink));
         out.push(o('editRooms', GUIDE.changeChecklist));
+    } else if (c.visits && c.visits.length) {
+        // After a visit (QA, 2026-10-15): the next cleaning starts from this
+        // home, and the last report is a tap away.
+        out.push(o('nextCleaning', GUIDE.nextCleaning), o('lastReport', GUIDE.lastReport));
     } else {
         if (bookable(c)) out.push(o('chooseTime', GUIDE.chooseTime));
         out.push(o('editRooms', GUIDE.editRooms));
@@ -1371,12 +1382,9 @@ function sceneView() {
         return { ...v, choices: { kind: 'chips', legend: GUIDE.roomsLegend, chips } };
     }
     if (v && v.choices === 'report') {
-        // Book your next visit while none is booked, the full report, or
-        // not now (her → takes the first).
-        const c2 = active();
-        const options = [];
-        if (bookable(c2)) options.push({ id: 'bookNext', label: GUIDE.bookNext });
-        options.push({ id: 'fullReport', label: GUIDE.fullReport }, { id: 'reportLater', label: GUIDE.reportLater });
+        // The full report, or Done (her → takes the first). No booking here
+        // (QA, 2026-10-15): the next cleaning is planned from standing by.
+        const options = [{ id: 'fullReport', label: GUIDE.fullReport }, { id: 'reportLater', label: GUIDE.reportLater }];
         return { ...v, choices: { kind: 'pick', legend: GUIDE.returningLegend, options } };
     }
     if (v && v.choices === 'returning') {
@@ -1712,12 +1720,11 @@ function onHostButton(id) {
     case 'approve':
         decide('approved');
         break;
-    case 'bookNext':
-        goAway('booking');
-        handOff(() => openBooking());
-        break;
     case 'fullReport':
         openVisitReport();
+        break;
+    case 'lastReport':
+        offerReport({ asked: true });
         break;
     case 'reportLater':
         guideTo({ type: 'reportDone' });
@@ -2469,7 +2476,24 @@ async function pollVisits({ quiet = false } = {}) {
         mutate((d) => addVisits(d, still.id, kept, CONFIG, now()));
     }
     if (!quiet) afterVisits(changed || got.reports.length > 0);
+    await closeFinished(svc);
     return true;
+}
+
+/**
+ * A visit done and reported, with no other booked (QA, 2026-10-15: what came
+ * after the report was confusing): the checklist stops being shared, so the
+ * server's copy, its link and PIN are gone, and the home is the visitor's own
+ * draft again, its report kept with it. The next cleaning starts from it
+ * (Plan my next cleaning) and gets a link and PIN of its own. Resolves to
+ * whether it closed one.
+ */
+async function closeFinished(svc) {
+    const c = active();
+    if (!watchable(c) || c.booking || !c.visits.length) return false;
+    const r = await unpublish({ checklist: c, api: svc.api, record: recordFor(c.id) });
+    if (r.ok) updateHost();
+    return r.ok;
 }
 
 /**
@@ -2712,8 +2736,8 @@ function leaveReport(to) {
     requestRender();
 }
 
-/** The full report in its card, Book your next visit offered while no
- *  visit is booked, and the cleaner's photos, let go when it closes. */
+/** The full report in its card, with the cleaner's photos, let go when it
+ *  closes. */
 async function openVisitReport() {
     const c = active();
     const v = shownVisit(c);
@@ -2730,7 +2754,7 @@ async function openVisitReport() {
             photos.push({ itemId: r.itemId, url });
         }
     }
-    renderVisitReport({ visit: v, form, sheet, bookable: bookable(c), photos });
+    renderVisitReport({ visit: v, form, sheet, photos });
     if (!v.seen) mutate((d) => markVisitSeen(d, c.id, v.visitId));
     openCard('visit-report', { onClose: () => urls.forEach((u) => URL.revokeObjectURL(u)) });
 }
@@ -3430,10 +3454,7 @@ function setupEventListeners() {
     on('task-notes', 'input', () => showHints('task-notes', 'task-notes-hint'));
     on('task-avoid', 'input', () => showHints('task-avoid', 'task-avoid-hint'));
     on('quote-open-checklist', 'click', openChecklistView);
-    on('visit-report-book', 'click', () => {
-        closeCard('visit-report');
-        onHostButton('bookNext');
-    });
+    on('visit-report-done', 'click', () => closeCard('visit-report'));
     booking = createBooking({
         signal,
         on: {
