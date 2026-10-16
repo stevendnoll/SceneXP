@@ -1763,11 +1763,15 @@ textarea.ws-input {
     margin-top: 0.6rem;
 }
 
-/* Start over, alone at the foot now Back is a ← in her header (QA,
-   2026-10-16): quiet, since it is asked about first and clears everything. */
-.host-reset {
+/* Start over at the foot's right now Back is a ← in her header (QA,
+   2026-10-16): quiet, since it is asked about first and clears everything.
+   Across from it on the left, the way back to SceneXP's directory (Steve,
+   2026-10-16), in the same quiet style. */
+.host-reset,
+.host-explore {
+    display: inline-flex;
+    align-items: center;
     min-height: 36px;
-    margin: 0 0 0 auto;
     padding: 0.3rem 0;
     border: 0;
     background: none;
@@ -1778,11 +1782,21 @@ textarea.ws-input {
     cursor: pointer;
 }
 
-.host-reset:hover {
+.host-reset {
+    margin: 0 0 0 auto;
+}
+
+.host-explore {
+    margin: 0 1rem 0 0;
+}
+
+.host-reset:hover,
+.host-explore:hover {
     color: var(--ws-accent);
 }
 
-.host-reset:focus-visible {
+.host-reset:focus-visible,
+.host-explore:focus-visible {
     outline: 3px solid var(--ws-accent);
     outline-offset: 2px;
 }
