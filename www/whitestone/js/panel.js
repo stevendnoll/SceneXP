@@ -115,20 +115,25 @@ export const COMMON = Object.freeze([
 const ONE_PER_HOME = new Set(['kitchen', 'primary-bedroom', 'primary-bathroom', 'entry', 'mudroom', 'laundry', 'dining', 'living']);
 const ONE_PER_FLOOR = new Set(['garage', 'hallway', 'family', 'gym', 'bonus']);
 
+const GARAGES = new Set(['garage', 'detached-garage']);
+
 /**
  * The common rooms the whole home is offered (Maya's chips): `[{ area,
  * level }]`, each on the first of its usual floors the home has (a garage
  * only where there is one), none of a kind the home has its one of, at
- * most `max`.
+ * most `max`. With a floor open (`on`, not a garage), every room but a
+ * garage goes on that floor (QA, 2026-10-16: a bathroom added with the main
+ * floor open went upstairs).
  */
-export function homeSuggestions(checklist, max = 6) {
+export function homeSuggestions(checklist, max = 6, on = null) {
     const levels = checklist.levels || [];
     const rooms = (checklist.rooms || []).filter((r) => !r.deletedAt);
-    const fallback = levels.includes('main') ? 'main' : levels.find((l) => l !== 'garage' && l !== 'detached-garage') || levels[0];
+    const fallback = levels.includes('main') ? 'main' : levels.find((l) => !GARAGES.has(l)) || levels[0];
+    const open = on && levels.includes(on) && !GARAGES.has(on) ? on : null;
     const out = [];
     for (const { area, floors } of COMMON) {
         if (ONE_PER_HOME.has(area) && rooms.some((r) => r.area === area)) continue;
-        const level = floors.find((f) => levels.includes(f)) || (area === 'garage' ? null : fallback);
+        const level = (area !== 'garage' && open) || floors.find((f) => levels.includes(f)) || (area === 'garage' ? null : fallback);
         if (!level) continue;
         if (ONE_PER_FLOOR.has(area) && rooms.some((r) => r.area === area && r.level === level)) continue;
         out.push({ area, level });

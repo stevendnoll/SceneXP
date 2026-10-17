@@ -78,6 +78,7 @@ import { buildModel, nearSide } from './model.min.js';
 import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, ringFloor, GUIDED, CHANGED, PROGRESS, EXAMPLE } from './guide.min.js';
 import { createHost } from './host.min.js';
 import { buildMaya, speakSeconds } from './cast.min.js';
+import { createMeet } from './meet.min.js';
 import { createPanel, selectFromHit, stepOut, reconcile, panelView, homeSuggestions } from './panel.min.js';
 
 // ---- State ------------------------------------------------------------------
@@ -135,7 +136,9 @@ const ui = {
     handoff: false,
     /** The house turning on its own while Maya greets (QA, 2026-10-15),
      *  until the visitor takes hold of it or begins (endShowcase). */
-    showcase: false
+    showcase: false,
+    /** A step of Maya's beginning (guideTo), its bubble not yet drawn. */
+    entering: false
 };
 
 /** Thumbnail addresses made for the task card, released when it closes. */
@@ -165,6 +168,8 @@ const roomLabels = { nodes: [], key: '' };
 let host = null;
 /** Maya on the stage (cast.js). */
 let cast = null;
+/** Meet Maya's card figure (meet.js), made the first time it opens. */
+let meet = null;
 /** The panel beside the house (panel.js). */
 let panel = null;
 /** The Choose a time card (booking.js) and the receipt (receipt.js). */
@@ -472,6 +477,9 @@ function liftLevel(level) {
     const name = level ? levelOf(c ? c.serviceType : 'cleaning', level) : null;
     if (level && name) announce(MODEL_LINES.lifted(name.name));
     else if (!level && was) announce(MODEL_LINES.setDown);
+    // Maya's room chips add to the open floor, so they are drawn again for
+    // it. Not while a step begins: its bubble is drawn whole after.
+    if (level !== was && !ui.entering && host && host.view && host.view.choices && host.view.choices.kind === 'chips') updateHost();
     return true;
 }
 
@@ -1427,11 +1435,15 @@ function sceneView() {
     const c = active();
     const typeKey = c ? c.serviceType : 'cleaning';
     if (v && v.choices === 'rooms') {
-        // The rooms most homes have, each on its usual floor (panel.js).
-        const chips = c ? homeSuggestions(c).map(({ area, level }) => {
+        // The rooms most homes have, each on its usual floor, or on the
+        // floor that is open (panel.js), the heading naming it.
+        const open = model ? model.lifted : null;
+        const chips = c ? homeSuggestions(c, 6, open).map(({ area, level }) => {
             const name = roomName(typeKey, { area, label: '' });
             return { area, level, label: name, aria: PANEL.chipLabel(name) };
         }) : [];
+        const onFloor = open && chips.some((ch) => ch.level === open) ? levelOf(typeKey, open) : null;
+        const legend = onFloor ? GUIDE.roomsLegendOn(onFloor.name) : GUIDE.roomsLegend;
         // On Your rooms, the home's floors too, each opening as a tap on it
         // on the house does (QA, 2026-10-16). Not on First room, where the
         // kitchen is the one thing asked.
@@ -1440,7 +1452,7 @@ function sceneView() {
             const detail = PANEL.floorRooms(liveRooms(c).filter((r) => r.level === key).length);
             return { key, label: name, detail, aria: PANEL.floorOpen(name, detail) };
         }) : [];
-        return { ...v, choices: { kind: 'chips', legend: GUIDE.roomsLegend, chips, floors, floorsHeading: GUIDE.floorsHeading } };
+        return { ...v, choices: { kind: 'chips', legend, chips, floors, floorsHeading: GUIDE.floorsHeading } };
     }
     if (v && v.choices === 'report') {
         // The full report, or Done (her → takes the first). No booking here
@@ -1556,7 +1568,12 @@ function guideTo(event) {
         endShowcase();
         if (turntable) turntable.turnHome(state.reducedMotion ? 0 : CONFIG.view.turn.face);
     }
-    enterScene(next.scene);
+    ui.entering = true;
+    try {
+        enterScene(next.scene);
+    } finally {
+        ui.entering = false;
+    }
     persistGuide();
     showGuide();
     return true;
@@ -1710,6 +1727,29 @@ function comeBack() {
         requestRender();
     }
     return true;
+}
+
+/**
+ * Meet Maya (QA, 2026-10-16): her portrait opens her whole figure, facing
+ * the visitor and waving now and then (meet.js). A phone never sees her in
+ * the studio. Where no second canvas can be had, the card keeps her words
+ * without her figure.
+ */
+function openMeet() {
+    if (!state.loaded) return null;
+    if (host) host.poke();
+    const panelEl = openCard('meet', { onClose: () => { if (meet) meet.close(); } });
+    if (!meet) {
+        meet = createMeet(CONFIG, {
+            canvas: el('meet-canvas'),
+            mobile: state.mobile,
+            reducedMotion: () => state.reducedMotion
+        });
+    }
+    const drawn = meet.open();
+    const figure = el('meet-canvas');
+    if (figure && figure.parentNode) figure.parentNode.hidden = !drawn;
+    return panelEl;
 }
 
 /** Open a card that may stop short of opening (no sheet yet, the server
@@ -3636,8 +3676,9 @@ function setupEventListeners() {
     host = createHost({
         signal,
         timing: { pulse: CONFIG.guide.pulse, again: CONFIG.guide.again },
-        on: { button: onHostButton, floor: onFloor, step: onHostStep, chip: onGuideChip, fact: onHostFact, openFloor: openFloorFromList }
+        on: { button: onHostButton, floor: onFloor, step: onHostStep, chip: onGuideChip, fact: onHostFact, openFloor: openFloorFromList, meet: openMeet }
     });
+    signal.addEventListener('abort', () => { if (meet) meet.dispose(); });
     panel = createPanel({
         signal,
         on: { back: onPanelBack, row: onPanelRow, star: toggleStar, bath: onPanelBath, chip: onPanelChip, action: onPanelAction }
@@ -3948,6 +3989,11 @@ if (typeof document !== 'undefined') {
 export const __test__ = {
     state,
     ui,
+    openMeet,
+    updateHost,
+    get meet() {
+        return meet;
+    },
     mutate,
     change,
     undo,

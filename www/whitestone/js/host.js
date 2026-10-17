@@ -26,10 +26,12 @@
 import { h, clear, announce } from './cards.min.js';
 import { GUIDE } from './copy.min.js';
 
+const ARM_MS = 450;
+
 /**
  * Drive the bubble in index.html. `on.button(id)` is called for a button,
  * `on.floor(key, checked)` for a floor ticked or unticked, `on.openFloor(key)`
- * for a floor of Your rooms' list. `timing` gives
+ * for a floor of Your rooms' list, `on.meet()` for her portrait. `timing` gives
  * the seconds before the pulse and before the hint is said again. Returns
  * { show, update, hide, setCovered, poke, title, shown, view }.
  */
@@ -51,6 +53,8 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     let said = false;
     /** Where the bubble was last put beside Maya, as a key. */
     let anchored = '';
+    /** Until when a new scene's buttons ignore a tap (see below). */
+    let armedUntil = 0;
     const timers = [];
 
     const stopTimers = () => {
@@ -61,6 +65,21 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     if (resetBtn) resetBtn.addEventListener('click', () => { if (typeof on.button === 'function') on.button('startOver'); }, { signal });
     if (nextBtn) nextBtn.addEventListener('click', () => { if (view && view.next && typeof on.button === 'function') on.button(view.next.id); }, { signal });
     if (expand) expand.addEventListener('click', () => { if (typeof on.button === 'function') on.button('expand'); }, { signal });
+    // Her portrait: Meet Maya (meet.js, QA 2026-10-16).
+    const portrait = byId('host-portrait');
+    if (portrait) portrait.addEventListener('click', () => { if (typeof on.meet === 'function') on.meet(); }, { signal });
+    // A new scene's buttons are ARMED FOR 450 MS (as a tap-opened card is,
+    // cards.js): on a phone they are drawn where the finger already is, so
+    // a quick second tap on Let's start would answer the next question
+    // (QA, 2026-10-16). A keyboard press (`detail` 0) always goes through.
+    if (root) {
+        root.addEventListener('click', (event) => {
+            if (event.detail > 0 && Date.now() < armedUntil) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+        }, { capture: true, signal });
+    }
 
     function place() {
         if (root) root.hidden = covered || !view;
@@ -339,6 +358,7 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         show(next) {
             view = next;
             said = false;
+            armedUntil = next ? Date.now() + ARM_MS : 0;
             stopTimers();
             if (view) {
                 draw();

@@ -1238,6 +1238,24 @@ describe('the common rooms only, each on its usual floor', () => {
         // Removed rooms do not count.
         expect(homeSuggestions({ levels: ['main'], rooms: [{ id: 'k', area: 'kitchen', level: 'main', deletedAt: 'x' }] })[0].area).toBe('kitchen');
     });
+
+    test('an open floor takes every room but a garage; an open garage, or a floor the home lacks, changes nothing', () => {
+        const h = home(['basement', 'main', 'second', 'garage']);
+        const on = (level) => Object.fromEntries(homeSuggestions(h, 12, level).map((x) => [x.area, x.level]));
+        const usual = on(null);
+        const main = on('main');
+        expect(main.bathroom).toBe('main');
+        expect(main['primary-bedroom']).toBe('main');
+        expect(main.family).toBe('main');
+        expect(main.garage).toBe('garage');
+        expect(on('basement').kitchen).toBe('basement');
+        expect(on('garage')).toEqual(usual);
+        expect(on('attic')).toEqual(usual);
+        // One family room a floor, counted on the open one.
+        const fam = home(['basement', 'main'], [['family', 'main']]);
+        expect(homeSuggestions(fam, 12, 'main').map((x) => x.area)).not.toContain('family');
+        expect(homeSuggestions(fam, 12, 'basement').map((x) => x.area)).toContain('family');
+    });
 });
 
 describe('Maya\'s room chips on the page', () => {
@@ -1252,6 +1270,7 @@ describe('Maya\'s room chips on the page', () => {
         t.refresh();
         expect(chipOf('kitchen').classList.contains('has-halo')).toBe(true);
         t.ui.guide = { ...t.ui.guide, scene: 'rooms', reached: 3, rooms: 0 };
+        t.liftLevel(null);
         t.showGuide();
         fire(chipOf('primary-bedroom'), 'click');
         const bed = t.active().rooms.find((r) => r.area === 'primary-bedroom');
@@ -1260,5 +1279,30 @@ describe('Maya\'s room chips on the page', () => {
         expect(t.ui.guide).toMatchObject({ scene: 'rooms', rooms: 1 });
         // Not offered twice.
         expect(chipOf('primary-bedroom')).toBeUndefined();
+    });
+
+    test('with a floor open, every chip adds to that floor, and the heading says which (QA, 2026-10-16)', async () => {
+        const main = await bootHome();
+        const t = main.__test__;
+        t.ui.guide = { ...t.ui.guide, scene: 'rooms', reached: 3, rooms: 0 };
+        t.liftLevel(null);
+        t.showGuide();
+        const box = () => dom.el('host-choices').children[0] || { children: [] };
+        const chipOf = (area) => box().children.find((b) => b.id === `host-chip-${area}`);
+        expect(box().children[0].textContent).toBe(GUIDE.roomsLegend);
+        // The main floor opened under her bubble: the chips are drawn for it.
+        t.liftLevel('main');
+        expect(box().children[0].textContent).toBe(GUIDE.roomsLegendOn('Main floor'));
+        fire(chipOf('bathroom'), 'click');
+        fire(chipOf('primary-bedroom'), 'click');
+        const levelOfArea = (area) => t.active().rooms.find((r) => r.area === area && !r.deletedAt).level;
+        expect(levelOfArea('bathroom')).toBe('main');
+        expect(levelOfArea('primary-bedroom')).toBe('main');
+        expect(t.model().lifted).toBe('main');
+        // The second floor open instead: there.
+        t.liftLevel('second');
+        expect(box().children[0].textContent).toBe(GUIDE.roomsLegendOn('Second floor'));
+        fire(chipOf('primary-bathroom'), 'click');
+        expect(levelOfArea('primary-bathroom')).toBe('second');
     });
 });

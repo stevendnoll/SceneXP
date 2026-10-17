@@ -143,6 +143,29 @@ body {
     line-height: 1.5;
 }
 
+/* Meet Maya (meet.js): her whole figure in the studio's white, as tall as
+   the screen allows, her words under her. meet.js fits the camera to
+   whatever shape this comes out. */
+.meet-stage {
+    height: min(26rem, 58vh);
+    max-width: 100%;
+    aspect-ratio: 3 / 4;
+    margin: 0.9rem auto 0;
+    border-radius: 12px;
+    background: #F1F0EC;
+    overflow: hidden;
+}
+
+.meet-stage[hidden] {
+    display: none;
+}
+
+.meet-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
 .card-meta {
     margin: 0.5rem 0 0;
     color: var(--ws-muted);
@@ -188,9 +211,14 @@ body {
     transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.ws-btn:hover {
-    border-color: var(--ws-accent);
-    background: var(--ws-accent-soft);
+/* Every hover on this page is for a pointer that hovers (QA, 2026-10-16):
+   a phone keeps :hover on whatever was last tapped, so a button drawn
+   where the finger was (A townhome, under Let's start) read as chosen. */
+@media (hover: hover) {
+    .ws-btn:hover {
+        border-color: var(--ws-accent);
+        background: var(--ws-accent-soft);
+    }
 }
 
 .ws-btn:focus-visible {
@@ -204,9 +232,11 @@ body {
     color: #FFFFFF;
 }
 
-.ws-btn-primary:hover {
-    border-color: var(--ws-accent-dark);
-    background: var(--ws-accent-dark);
+@media (hover: hover) {
+    .ws-btn-primary:hover {
+        border-color: var(--ws-accent-dark);
+        background: var(--ws-accent-dark);
+    }
 }
 
 .ws-btn-small {
@@ -400,8 +430,10 @@ textarea.ws-input {
     cursor: pointer;
 }
 
-.booking-day.is-open:hover {
-    border-color: var(--ws-accent);
+@media (hover: hover) {
+    .booking-day.is-open:hover {
+        border-color: var(--ws-accent);
+    }
 }
 
 /* The chosen day, filled: a fill here is the state it reads as. */
@@ -737,9 +769,11 @@ textarea.ws-input {
     color: var(--ws-danger);
 }
 
-.ws-btn-quiet:hover {
-    border-color: var(--ws-danger);
-    background: #FBEDEA;
+@media (hover: hover) {
+    .ws-btn-quiet:hover {
+        border-color: var(--ws-danger);
+        background: #FBEDEA;
+    }
 }
 
 /* The task card's running price, the answer to "what will this cost?". */
@@ -1365,6 +1399,22 @@ textarea.ws-input {
     font-weight: 700;
     box-shadow: 0 0 0 3px var(--ws-accent-soft);
     overflow: hidden;
+    /* A button: a tap meets her (meet.js, QA 2026-10-16). */
+    padding: 0;
+    border: 0;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.host-portrait:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 3px;
+}
+
+@media (hover: hover) {
+    .host-portrait:hover {
+        box-shadow: 0 0 0 3px var(--ws-accent);
+    }
 }
 
 .host-face {
@@ -1423,10 +1473,12 @@ textarea.ws-input {
     cursor: pointer;
 }
 
-.host-next:hover,
-.host-back:hover,
-.panel-back:hover {
-    background: var(--ws-accent-dark);
+@media (hover: hover) {
+    .host-next:hover,
+    .host-back:hover,
+    .panel-back:hover {
+        background: var(--ws-accent-dark);
+    }
 }
 
 .host-next:focus-visible,
@@ -1446,10 +1498,12 @@ textarea.ws-input {
     color: var(--ws-graphite);
 }
 
-.host-back:hover,
-.panel-back:hover {
-    border-color: var(--ws-accent);
-    background: var(--ws-accent-soft);
+@media (hover: hover) {
+    .host-back:hover,
+    .panel-back:hover {
+        border-color: var(--ws-accent);
+        background: var(--ws-accent-soft);
+    }
 }
 
 .ws-host.is-minimized .host-back {
@@ -1517,9 +1571,11 @@ textarea.ws-input {
     transform: translateY(-50%);
 }
 
-.host-fact:hover {
-    border-color: var(--ws-line);
-    background: #FFFFFF;
+@media (hover: hover) {
+    .host-fact:hover {
+        border-color: var(--ws-line);
+        background: #FFFFFF;
+    }
 }
 
 .host-fact:focus-visible {
@@ -1618,9 +1674,11 @@ textarea.ws-input {
     cursor: pointer;
 }
 
-.host-step-btn:hover {
-    color: var(--ws-accent);
-    text-decoration: underline;
+@media (hover: hover) {
+    .host-step-btn:hover {
+        color: var(--ws-accent);
+        text-decoration: underline;
+    }
 }
 
 .host-step-btn:focus-visible {
@@ -1792,9 +1850,11 @@ textarea.ws-input {
     margin: 0 1rem 0 0;
 }
 
-.host-reset:hover,
-.host-explore:hover {
-    color: var(--ws-accent);
+@media (hover: hover) {
+    .host-reset:hover,
+    .host-explore:hover {
+        color: var(--ws-accent);
+    }
 }
 
 .host-reset:focus-visible,
@@ -1988,10 +2048,15 @@ textarea.ws-input {
     cursor: pointer;
 }
 
-.panel-row:hover,
 .panel-row:focus-visible {
     border-color: var(--ws-accent);
     outline: none;
+}
+
+@media (hover: hover) {
+    .panel-row:hover {
+        border-color: var(--ws-accent);
+    }
 }
 
 .panel-row:focus-visible {
@@ -2083,10 +2148,15 @@ textarea.ws-input {
     cursor: pointer;
 }
 
-.panel-bath:hover,
 .panel-bath:focus-visible {
     background: var(--ws-accent-soft);
     outline: none;
+}
+
+@media (hover: hover) {
+    .panel-bath:hover {
+        background: var(--ws-accent-soft);
+    }
 }
 
 .panel-bath:focus-visible {
@@ -2123,10 +2193,15 @@ textarea.ws-input {
     cursor: pointer;
 }
 
-.panel-chip:hover,
 .panel-chip:focus-visible {
     background: var(--ws-accent-soft);
     outline: none;
+}
+
+@media (hover: hover) {
+    .panel-chip:hover {
+        background: var(--ws-accent-soft);
+    }
 }
 
 .panel-chip:focus-visible {

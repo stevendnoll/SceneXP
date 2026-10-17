@@ -408,6 +408,8 @@ export const GUIDE = Object.freeze({
     addKitchen: 'Add the kitchen',
     otherRoom: 'Another kind of room',
     roomsLegend: 'Add a room',
+    /** With a floor open, the chips add to it (QA, 2026-10-16). */
+    roomsLegendOn: (floor) => `Add a room to the ${String(floor).toLowerCase()}`,
     /** Your rooms' list of floors, each opening as a tap on it does (QA,
      *  2026-10-16: a floor was reached only from the house). */
     floorsHeading: 'Floors',

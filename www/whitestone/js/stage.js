@@ -127,7 +127,7 @@ export function onTurntable(hits, spin) {
 // ---- Building it (three) --------------------------------------------------------
 
 /** The cove as one mesh: the profile swept across its width. */
-function buildCove(cove, material) {
+export function buildCove(cove, material) {
     const pts = coveProfile(cove);
     const half = cove.width / 2;
     const positions = [];

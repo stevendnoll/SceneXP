@@ -32,10 +32,10 @@ export const SKIP = Object.freeze({ skip: true });
 const kebab = (s) => String(s).replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 
 /** Maya's buttons whose ids do not read well as an action. */
-const MAYA_RENAMES = Object.freeze({ buildOwn: 'schedule-my-cleaning', visit: 'see-visit' });
+const MAYA_RENAMES = Object.freeze({ buildOwn: 'schedule-my-cleaning', visit: 'see-visit', portrait: 'meet-maya' });
 
 /** The studio's cards, whose static controls are `<card>-<what>`. */
-const CARDS = ['visit-report', 'setup', 'prefs', 'quote', 'booking', 'receipt', 'addons', 'checklist', 'room', 'task'];
+const CARDS = ['visit-report', 'setup', 'prefs', 'quote', 'booking', 'receipt', 'addons', 'checklist', 'room', 'task', 'meet'];
 
 /** The cleaner's skip reasons (tasks/js/visit.js SKIP_REASONS). */
 const REASONS = ['no-time', 'no-access', 'already-clean', 'customer-asked'];

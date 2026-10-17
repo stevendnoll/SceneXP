@@ -255,6 +255,14 @@ export const CONFIG = deepFreeze({
         }
     },
 
+    /** Meet Maya (meet.js, QA 2026-10-16): her whole figure from in front,
+     *  `fov` degrees tall, with room for a raised hand (`reach` meters over
+     *  her head) and an arm out (`half` meters either side of her middle),
+     *  `margin` to spare, the camera `lift` meters over the frame's middle.
+     *  She waves `first` seconds after the card opens and every `every`
+     *  seconds after that. */
+    meet: { fov: 24, reach: 0.3, half: 0.62, margin: 1.08, lift: 0.18, first: 0.4, every: 6 },
+
     /** Maya's timing (host.js, ONBOARDING section 8), in seconds: she
      *  speaks `delay` after the loading screen lifts, while the house is
      *  still coming in (at once under reduced motion; QA, 2026-10-15: 1.2

@@ -7101,7 +7101,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=48" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=49" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7140,6 +7140,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="js/guide.min.js" rel="modulepreload"]
     link [href="js/host.min.js" rel="modulepreload"]
     link [href="js/cast.min.js" rel="modulepreload"]
+    link [href="js/meet.min.js" rel="modulepreload"]
     link [href="js/panel.min.js" rel="modulepreload"]
     link [href="js/ics.min.js" rel="modulepreload"]
     link [href="js/qr.min.js" rel="modulepreload"]
@@ -7149,7 +7150,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=3" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=48" rel="stylesheet"]
+    link [href="css/experience.min.css?v=49" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7193,7 +7194,7 @@ html [data-ui-theme="surf" lang="en"]
         button#host-back.host-back [aria-label="Back" hidden title="Back" type="button"]
           svg [aria-hidden="true" focusable="false" height="18" viewbox="0 0 20 20" width="18"]
             path [d="M16 10H5M9.5 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"]
-        span.host-portrait [aria-hidden="true"]
+        button#host-portrait.host-portrait [aria-label="Meet Maya" title="Meet Maya" type="button"]
           "M"
         p.host-who
           span#host-name.host-name
@@ -7583,6 +7584,17 @@ html [data-ui-theme="surf" lang="en"]
               "Cancel"
             button#task-save.ws-btn.ws-btn-primary [type="submit"]
               "Add task"
+    div#meet.card-overlay [hidden]
+      div#meet-panel.card-panel.meet-panel [aria-describedby="meet-line" aria-labelledby="meet-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.card-head
+          h2#meet-title.card-title
+            "Meet Maya"
+          button#meet-close.ws-btn.ws-btn-small [type="button"]
+            "Close"
+        div.meet-stage
+          canvas#meet-canvas.meet-canvas [aria-hidden="true"]
+        p#meet-line.card-detail.meet-line
+          "Hi there! I'm Maya, your host at Whitestone Home Care. I'm right here whenever you'd like a hand."
     div#confirm.card-overlay [hidden]
       div#confirm-panel.card-panel [aria-describedby="confirm-detail" aria-labelledby="confirm-title" aria-modal="true" role="dialog" tabindex="-1"]
         h2#confirm-title.card-title
