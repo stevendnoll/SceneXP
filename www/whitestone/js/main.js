@@ -3991,6 +3991,7 @@ export const __test__ = {
     ui,
     openMeet,
     updateHost,
+    cleanup,
     get meet() {
         return meet;
     },

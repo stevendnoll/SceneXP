@@ -1186,9 +1186,17 @@ describe('arriving by the edit link', () => {
         expect(dom.el('confirm').hidden).toBe(false);
         // The PIN is stretched on a real thread: real time to wait for it.
         jest.useRealTimers();
-        fire(dom.el('confirm-actions').children[1], 'click');
-        for (let i = 0; i < 200 && !main.__test__.active().published.pin; i++) await new Promise((r) => setTimeout(r, 10));
-        expect(main.__test__.active().published.pin).toMatch(/^\d{6}$/);
+        try {
+            fire(dom.el('confirm-actions').children[1], 'click');
+            for (let i = 0; i < 200 && !main.__test__.active().published.pin; i++) await new Promise((r) => setTimeout(r, 10));
+            expect(main.__test__.active().published.pin).toMatch(/^\d{6}$/);
+        } finally {
+            // On real timers the page's visits poll (10 s) outlives this test,
+            // and outlives this file: Jest 30 then deletes its globals, so the
+            // poll's `document` throws in whatever test the worker is running
+            // ("document is not defined", a different test each time).
+            main.__test__.cleanup();
+        }
     });
 
     test('a link that opens nothing changes nothing, and is said', async () => {
