@@ -59,7 +59,7 @@
 // Every visitor sentence lives in copy.js, where one test sweeps them all.
 import { TASKS_PAGE as COPY } from '../../js/copy.min.js';
 import { installBeacons, cleanerBeacon } from '../../js/beacons.min.js';
-import { track as sendBeacon, trackFinal, setProofHash, setMobile } from '../../../shared/js/telemetry-1.0.0.min.js';
+import { track as sendBeacon, trackFinal, setProofHash, setMobile, setPage } from '../../../shared/js/telemetry-1.0.0.min.js';
 import { getProofOfWork } from '../../../shared/js/boot-1.0.0.min.js';
 import { CONFIG } from '../../js/config.min.js';
 import { parseShare, withoutFragment, ID } from '../../js/links.min.js';
@@ -86,6 +86,10 @@ export const STORAGE_KEY = 'scenexp-whitestone-tasks-v1';
 /** After this many wrong PINs in a row the page warns that the checklist
  *  may need a rest (the API locks it at its own count, unseen). */
 export const WARN_AFTER = 3;
+
+/** Where this page's usage pings go (telemetry's `setPage`): the site-root
+ *  api.html from two folders deep, counted under the studio's scene. */
+export const TELEMETRY_PAGE = { endpoint: '../../api.html', scene: 'whitestone' };
 
 /** The digits of a PIN as typed, or null when it is not exactly six of
  *  them. Spaces and dashes are forgiven, since people copy PINs from
@@ -1139,7 +1143,10 @@ async function start() {
     }
     // The visit's usage token, shared with the studio in this tab's session
     // (a-session-spans-scenes): found at once if the studio made it, else
-    // solved meanwhile, so the page never waits on it.
+    // solved meanwhile, so the page never waits on it. This page sits two
+    // folders deep, so its pings name the site-root api.html and count under
+    // the studio's scene (its actions are all `cleaner-...`).
+    setPage(TELEMETRY_PAGE);
     setMobile(Boolean(window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || Math.min(window.innerWidth, window.innerHeight) < 600);
     getProofOfWork(CONFIG.telemetry.proofOfWork).then((proof) => setProofHash(proof && proof.hash)).catch(() => {});
     await boot({

@@ -158,6 +158,29 @@ describe('the scene parameter', () => {
     expect(queryOf(lastImageSrc).get('scene')).toBe('seedtoseed');
   });
 
+  test('setPage gives a deeper page its endpoint and scene; the rest keep the defaults', async () => {
+    globalThis.window = { location: { pathname: '/whitestone/tasks/' } };
+    let { track, setPage } = await loadTelemetry();
+    track('cleaner-open');
+    // Unset, a page two folders deep misses the site root and names its subfolder.
+    expect(new URL(lastImageSrc, 'https://www.scenexp.com/whitestone/tasks/').pathname).toBe('/whitestone/api.html');
+    expect(queryOf(lastImageSrc).get('scene')).toBe('tasks');
+
+    setPage({ endpoint: '../../api.html', scene: 'whitestone' });
+    track('cleaner-open');
+    const url = new URL(lastImageSrc, 'https://www.scenexp.com/whitestone/tasks/');
+    expect(url.pathname).toBe('/api.html');
+    expect(url.searchParams.get('scene')).toBe('whitestone');
+
+    // Either half alone, or nothing, leaves the other as it was.
+    ({ track, setPage } = await loadTelemetry());
+    setPage({ scene: 'whitestone' });
+    setPage();
+    track('ping');
+    expect(lastImageSrc.split('?')[0]).toBe('../api.html');
+    expect(queryOf(lastImageSrc).get('scene')).toBe('whitestone');
+  });
+
   test('is omitted at the site root and when location is unavailable', async () => {
     globalThis.window = { location: { pathname: '/index.html' } };
     let { track } = await loadTelemetry();

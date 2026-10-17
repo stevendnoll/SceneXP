@@ -18,6 +18,8 @@ const PAGE = `${ORIGIN}/whitestone/tasks/`;
 const SOURCE = readFileSync(join(process.cwd(), 'www', 'whitestone', 'tasks', 'sw.js'), 'utf8');
 const BUILT = readFileSync(join(process.cwd(), 'www', 'whitestone', 'tasks', 'sw.min.js'), 'utf8');
 
+const CACHE = 'whitestone-tasks-v2';
+
 const withoutSearch = (url) => url.split('?')[0];
 
 /** Cache Storage, in memory: caches by name, each a map of url to body. */
@@ -79,13 +81,16 @@ function worker({ source = SOURCE, caches = fakeCaches(), fetch = async (r) => r
     return { self, listeners, caches, fetchEvent, extendable };
 }
 
-const kept = async (caches, url) => (await (await caches.open('whitestone-tasks-v1')).match(url));
+const kept = async (caches, url) => (await (await caches.open(CACHE)).match(url));
 
 describe('what it answers', () => {
-    test('never the API, another site, or anything but a GET: those go straight to the network', async () => {
+    test('never the API, a usage beacon, another site, or anything but a GET: those go straight to the network', async () => {
         const w = worker();
         for (const [url, opts] of [
             [`${ORIGIN}/api/whitestone/checklists/abc`, {}],
+            [`${ORIGIN}/api.html?action=cleaner-open&timestamp=1`, { mode: 'no-cors' }],
+            // a beacon in any folder (telemetry's default `../api.html` from a page two deep)
+            [`${ORIGIN}/whitestone/api.html?action=cleaner-open&timestamp=2`, { mode: 'no-cors' }],
             ['https://elsewhere.example/x.js', {}],
             [`${PAGE}js/main.min.js`, { method: 'POST' }],
             ['not a url', {}]
@@ -107,8 +112,19 @@ describe('what it answers', () => {
         }
     });
 
-    test('no signal: the kept copy, and for the page itself, the copy kept under any checklist', async () => {
-        const caches = fakeCaches({ 'whitestone-tasks-v1': { [`${PAGE}js/main.min.js`]: 'kept-main', [`${PAGE}?c=first`]: 'kept-page' } });
+    test('the page is kept once, under its address without a checklist id', async () => {
+        const w = worker();
+        await w.fetchEvent(`${PAGE}?c=first`, { mode: 'navigate' });
+        await w.fetchEvent(`${PAGE}?c=second`, { mode: 'navigate' });
+        await w.fetchEvent(`${PAGE}index.html?c=third`, { mode: 'navigate' });
+        await w.fetchEvent(`${PAGE}js/main.min.js`);
+        const keys = [...(await w.caches.open(CACHE)).map.keys()];
+        expect(keys.sort()).toEqual([PAGE, `${PAGE}index.html`, `${PAGE}js/main.min.js`]);
+        expect((await kept(w.caches, PAGE)).body).toBe(`net:${PAGE}?c=second`);
+    });
+
+    test('no signal: the kept copy, and for the page itself, the one copy under any checklist', async () => {
+        const caches = fakeCaches({ [CACHE]: { [`${PAGE}js/main.min.js`]: 'kept-main', [PAGE]: 'kept-page' } });
         const w = worker({ caches, fetch: async () => { throw new TypeError('offline'); } });
         expect((await w.fetchEvent(`${PAGE}js/main.min.js`)).response).toBe('kept-main');
         expect((await w.fetchEvent(`${PAGE}?c=second`, { mode: 'navigate' })).response).toBe('kept-page');
@@ -121,7 +137,7 @@ describe('what it answers', () => {
         jest.useFakeTimers();
         try {
             let finish;
-            const caches = fakeCaches({ 'whitestone-tasks-v1': { [`${PAGE}css/tasks.min.css`]: 'old' } });
+            const caches = fakeCaches({ [CACHE]: { [`${PAGE}css/tasks.min.css`]: 'old' } });
             const w = worker({ caches, fetch: () => new Promise((r) => { finish = r; }), setTimeout, clearTimeout });
             let answer;
             w.listeners.fetch({ request: { url: `${PAGE}css/tasks.min.css`, method: 'GET', mode: 'no-cors' }, respondWith: (p) => { answer = p; } });
@@ -158,26 +174,31 @@ describe('what it answers', () => {
 
 describe('its life', () => {
     test('installed, it takes over at once; activated, it clears its old caches only, and claims the open pages', async () => {
-        const caches = fakeCaches({ 'whitestone-tasks-v0': {}, 'whitestone-tasks-v1': {}, 'someone-else': {} });
+        const caches = fakeCaches({ 'whitestone-tasks-v0': {}, 'whitestone-tasks-v1': {}, [CACHE]: {}, 'someone-else': {} });
         const w = worker({ caches });
         w.listeners.install({});
         expect(w.self.skipWaiting).toHaveBeenCalled();
         await w.extendable('activate');
-        expect([...caches.store.keys()].sort()).toEqual(['someone-else', 'whitestone-tasks-v1']);
+        expect([...caches.store.keys()].sort()).toEqual(['someone-else', CACHE]);
         expect(w.self.clients.claim).toHaveBeenCalled();
     });
 
     test('asked to keep a first visit\'s files: this site\'s only, never the API, and nothing fetched twice', async () => {
         const fetched = [];
-        const caches = fakeCaches({ 'whitestone-tasks-v1': { [`${PAGE}js/view.min.js`]: 'already' } });
+        const caches = fakeCaches({ [CACHE]: { [`${PAGE}js/view.min.js`]: 'already' } });
         const w = worker({ caches, fetch: async (r) => { fetched.push(r.url); return response(r.url); } });
-        await w.extendable('message', { type: 'keep', urls: [PAGE, `${PAGE}js/view.min.js`, `${ORIGIN}/api/whitestone/health`, 'https://elsewhere.example/a.js', 42] });
-        expect(fetched).toEqual([PAGE]);
-        expect((await kept(caches, PAGE)).body).toBe(PAGE);
+        await w.extendable('message', { type: 'keep', urls: [`${PAGE}?c=abc`, `${PAGE}js/view.min.js`, `${ORIGIN}/api/whitestone/health`, `${ORIGIN}/api.html?action=x`, 'https://elsewhere.example/a.js', 42] });
+        expect(fetched).toEqual([`${PAGE}?c=abc`]);
+        // The page as offlineUrls hands it over (with its `?c=`), kept without the id.
+        expect([...(await caches.open(CACHE)).map.keys()].sort()).toEqual([PAGE, `${PAGE}js/view.min.js`]);
+        expect((await kept(caches, PAGE)).body).toBe(`${PAGE}?c=abc`);
+        // Asked again, the page is already kept under any checklist.
+        await w.extendable('message', { type: 'keep', urls: [`${PAGE}?c=other`] });
+        expect(fetched).toEqual([`${PAGE}?c=abc`]);
         // Anything else said to it is ignored.
         await w.extendable('message', { type: 'other', urls: [`${PAGE}x`] });
         await w.extendable('message', null);
-        expect(fetched).toEqual([PAGE]);
+        expect(fetched).toEqual([`${PAGE}?c=abc`]);
     });
 
     test('a file it cannot fetch while keeping is left for a later visit', async () => {
@@ -191,5 +212,8 @@ describe('its life', () => {
         expect(Object.keys(w.listeners).sort()).toEqual(['activate', 'fetch', 'install', 'message']);
         expect((await w.fetchEvent(`${PAGE}js/main.min.js`)).response.body).toBe(`net:${PAGE}js/main.min.js`);
         expect((await w.fetchEvent(`${ORIGIN}/api/whitestone/health`)).answered).toBe(false);
+        expect((await w.fetchEvent(`${ORIGIN}/whitestone/api.html?action=x`)).answered).toBe(false);
+        await w.fetchEvent(`${PAGE}?c=abc`, { mode: 'navigate' });
+        expect((await kept(w.caches, PAGE)).body).toBe(`net:${PAGE}?c=abc`);
     });
 });

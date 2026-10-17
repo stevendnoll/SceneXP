@@ -18,8 +18,9 @@
  *
  * NOTHING PRIVATE. Only this site's own files are kept. The API is never
  * kept here (the checklist is sealed with its key and kept by the page
- * itself), nor anything from another origin, nor anything but a GET with a
- * whole, ordinary answer.
+ * itself), nor a usage beacon, nor anything from another origin, nor
+ * anything but a GET with a whole, ordinary answer. The page is kept once,
+ * without its `?c=`, so no checklist's id is written here.
  *
  * A classic script, with no imports, so it runs in every browser that has
  * service workers. tests/whitestone-sw.test.mjs runs it against fakes.
@@ -28,15 +29,18 @@
 /* global self, caches, fetch */
 
 /** This worker's cache. A new name (with its version) clears the old ones
- *  when it takes over. */
-const CACHE = 'whitestone-tasks-v1';
+ *  when it takes over. v2 (2026-10-17): the page kept once, not once per
+ *  checklist, so v1's copies (each under a checklist's id) are cleared. */
+const CACHE = 'whitestone-tasks-v2';
 const CACHE_PREFIX = 'whitestone-tasks-';
 
 /** How long the network may keep the cleaner waiting before the kept copy
  *  answers instead. Milliseconds. */
 const WAIT_MS = 4000;
 
-/** Whether a request may be answered from, and kept in, this cache. */
+/** Whether a request may be answered from, and kept in, this cache. Never
+ *  the API, nor a usage beacon (telemetry's `api.html?action=...`, from any
+ *  folder: a new address every tap, worth nothing offline). */
 function keepable(url, method) {
     let at;
     try {
@@ -46,21 +50,27 @@ function keepable(url, method) {
     }
     return method === 'GET' && at.origin === self.location.origin
         && (at.protocol === 'https:' || at.protocol === 'http:')
-        && !at.pathname.startsWith('/api/');
+        && !at.pathname.startsWith('/api/') && !at.pathname.endsWith('/api.html');
 }
 
-/** The kept copy of a request, or undefined. A page asked for by another
- *  `?c=` (another checklist) is still the same page. */
-async function kept(cache, request) {
-    const hit = await cache.match(request);
-    if (hit || request.mode !== 'navigate') return hit;
-    return cache.match(request, { ignoreSearch: true });
+/** Where a request is kept. A page (an address ending in `/` or `.html`) is
+ *  kept once, without its query: every checklist's `?c=` is the same page,
+ *  and its id is not written here. Anything else, under its own address.
+ *  Only for an address `keepable` has passed. */
+function keyOf(url) {
+    const at = new URL(url);
+    return at.pathname.endsWith('/') || at.pathname.endsWith('.html') ? `${at.origin}${at.pathname}` : url;
+}
+
+/** The kept copy of a request, or undefined. */
+function kept(cache, request) {
+    return cache.match(keyOf(request.url));
 }
 
 /** The network's answer, kept when it is whole and ordinary. */
 async function fromNetwork(cache, request) {
     const response = await fetch(request);
-    if (response && response.ok && response.type === 'basic') await cache.put(request, response.clone());
+    if (response && response.ok && response.type === 'basic') await cache.put(keyOf(request.url), response.clone());
     return response;
 }
 
@@ -99,7 +109,7 @@ async function keepAll(urls) {
     for (const url of Array.isArray(urls) ? urls.slice(0, 200) : []) {
         if (typeof url !== 'string' || !keepable(url, 'GET')) continue;
         try {
-            if (!(await cache.match(url))) await fromNetwork(cache, new Request(url));
+            if (!(await cache.match(keyOf(url)))) await fromNetwork(cache, new Request(url));
         } catch (e) {
             // Offline already: kept on a later visit.
         }

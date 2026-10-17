@@ -867,6 +867,12 @@ describe('the copy kept on this device (pure)', () => {
         expect(await backend.keys()).toEqual(['y/checklist']);
     });
 
+    test('its usage pings reach the site-root api.html, counted under the studio\'s scene', () => {
+        const at = new URL(`${page.TELEMETRY_PAGE.endpoint}?action=cleaner-open`, 'https://www.scenexp.com/whitestone/tasks/?c=abc');
+        expect(at.pathname).toBe('/api.html');
+        expect(page.TELEMETRY_PAGE.scene).toBe('whitestone');
+    });
+
     test('the files the worker is asked to keep: this page and what it loaded from this site, never the API', () => {
         const o = 'https://www.scenexp.com';
         expect(page.offlineUrls(`${o}/whitestone/tasks/?c=abc#k=secret`, o, [
