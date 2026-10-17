@@ -81,11 +81,13 @@ test('each category runs newest first', () => {
 
 // STEVE, 2026-10-09: "change the heading over the slider from 'Just
 // released' to 'Featured'", Leaf Blower, Corner Office and Fractal Garden.
-// The picks are his. What holds is that the newest release leads, and a
-// handful at most, since every slide's picture loads with the page.
+// The picks are his. What holds is that the newest world or game leads, and a
+// handful at most, since every slide's picture loads with the page. A newer
+// release in another category need not lead (Steve, 2026-10-16: Whitestone, a
+// concept among the small business showcases, stays out of Featured).
 test('the spotlight is "Featured": the newest world first, then a few picked by hand', () => {
     expect(spotlight).toMatch(/<h2 id="spotlight-heading">Featured<\/h2>/);
-    const newest = [...cards].sort((a, b) => (a.date < b.date ? 1 : -1))[0].slug;
+    const newest = cards.filter((c) => c.category === 'worlds').sort((a, b) => (a.date < b.date ? 1 : -1))[0].slug;
     expect(slides[0].slug).toBe(newest);
     expect(slides.length).toBeGreaterThanOrEqual(3);
     expect(slides.length).toBeLessThanOrEqual(4);
