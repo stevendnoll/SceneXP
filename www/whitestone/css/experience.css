@@ -943,6 +943,16 @@ textarea.ws-input {
     border-top: 1px solid var(--ws-line);
 }
 
+/* The star, then the task's words: one column down the left (QA,
+   2026-10-17), to scroll and star. */
+.task-row-main {
+    display: flex;
+    flex: 1 1 16rem;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+}
+
 .task-row-text {
     display: flex;
     flex-wrap: wrap;
@@ -955,8 +965,11 @@ textarea.ws-input {
     font-weight: 600;
 }
 
-/* The star, in words and in the accent, so it never rests on color alone. */
+/* The star, in words and in the accent, so it never rests on color alone.
+   On screen the star button left of the name says it (QA, 2026-10-17), so
+   the words are for the printout only, where no button is printed. */
 .task-row-star {
+    display: none;
     padding: 0.05rem 0.5rem;
     border-radius: 999px;
     background: var(--ws-accent);
@@ -2344,6 +2357,11 @@ body.is-clean #ws-toast {
     #checklist select,
     #checklist .checklist-filter-label {
         display: none !important;
+    }
+
+    /* The star button is not printed, so a starred task says so in words. */
+    .task-row-star {
+        display: inline;
     }
 
     .checklist-room {

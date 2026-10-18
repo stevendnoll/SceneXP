@@ -55,7 +55,7 @@ export function studioBeacon({ id = '', className = '', beacon = '' } = {}) {
     if (beacon) return parseOwn(beacon);
     const classes = ` ${className} `;
     let m;
-    if (/^booking-(day-|prev$|next$|confirm$)/.test(id) || /^panel-star-/.test(id)) return SKIP;
+    if (/^booking-(day-|prev$|next$|confirm$)/.test(id) || /^(panel|checklist)-star-/.test(id)) return SKIP;
     if (id === 'explore-link') return { action: 'explore' };
     if (id === 'toast-undo') return { action: 'undo', kind: 'toast' };
     // Maya: her header, her foot, and what she draws.

@@ -12,7 +12,7 @@
  */
 
 import { h, clear, button } from './cards.min.js';
-import { UI, REPORT, ADDON_LIST } from './copy.min.js';
+import { UI, PANEL, REPORT, ADDON_LIST } from './copy.min.js';
 import { reportLines, billLines, reportCounts } from './report.min.js';
 import { dayLabel } from './booking.min.js';
 import { liveRooms, liveItems, itemsIn } from './store.min.js';
@@ -70,12 +70,23 @@ function itemRow(checklist, sheet, item, on, place) {
             price = h('span', { className: 'task-row-price', text: UI.priceAndTime(formatMoney(p.cents), formatMinutes(p.minutes)) });
         }
     }
+    // The star, left of the name, as the panel's (QA, 2026-10-17: the
+    // checklist is where tasks are changed, so starring is here too).
+    const star = h('button', {
+        type: 'button', id: `checklist-star-${item.id}`, className: `panel-star task-star${item.important ? ' is-on' : ''}`,
+        text: item.important ? '★' : '☆', onClick: () => on.toggleStar(item.id),
+        attrs: { 'aria-pressed': item.important ? 'true' : 'false', 'aria-label': PANEL.starLabel(name), title: PANEL.starLabel(name) }
+    });
     return h('li', { className: item.important ? 'task-row is-important' : 'task-row' }, [
-        h('div', { className: 'task-row-text' }, [
-            h('span', { id: nameId, className: 'task-row-name', text: name }),
-            item.important ? h('span', { className: 'task-row-star', text: UI.important }) : null,
-            h('span', { className: 'task-row-facts', text: facts.filter(Boolean).join(', ') }),
-            price
+        h('div', { className: 'task-row-main' }, [
+            star,
+            h('div', { className: 'task-row-text' }, [
+                h('span', { id: nameId, className: 'task-row-name', text: name }),
+                // In words for the printout, where the star button is not.
+                item.important ? h('span', { className: 'task-row-star', text: UI.important }) : null,
+                h('span', { className: 'task-row-facts', text: facts.filter(Boolean).join(', ') }),
+                price
+            ])
         ]),
         h('div', { className: 'task-row-actions' }, [
             h('button', {

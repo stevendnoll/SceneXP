@@ -3300,9 +3300,20 @@ function drawChecklist() {
             editRoom: openRoom,
             editTask: (itemId) => openTask(null, itemId),
             removeTask,
-            moveTask
+            moveTask,
+            toggleStar: starFromChecklist
         }
     });
+}
+
+/** A star from the checklist's rows (QA, 2026-10-17): toggled as the
+ *  panel's is, and the keyboard kept on it once the list is drawn again
+ *  (or on the card, when the Important filter has just let the row go). */
+function starFromChecklist(itemId) {
+    const result = toggleStar(itemId);
+    const again = el(`checklist-star-${itemId}`) || el('checklist-panel');
+    if (again && typeof again.focus === 'function') again.focus({ preventScroll: true });
+    return result;
 }
 
 /**

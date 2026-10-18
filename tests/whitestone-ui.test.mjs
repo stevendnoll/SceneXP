@@ -652,6 +652,56 @@ test('tasks move up and down in their room as one undo step each, and the ends c
     expect(order()).toEqual(before);
 });
 
+/** A node in the checklist body by its id (the stub's getElementById only
+ *  makes up a fresh one for an id built in the page). */
+function bodyNode(id) {
+    let hit = null;
+    (function walk(node) {
+        for (const child of node.children || []) {
+            if (hit) return;
+            if (child.id === id) hit = child;
+            else walk(child);
+        }
+    }(dom.el('checklist-body')));
+    if (!hit) throw new Error(`no #${id} in the checklist`);
+    return hit;
+}
+
+test('a task is starred from its checklist row, the star left of its name (QA, 2026-10-17)', async () => {
+    const main = await homeWithPrices();
+    await addKitchen(main);
+    main.__test__.openChecklistView();
+    const stove = () => liveTasks(main).find((i) => i.task === 'stovetop');
+    const star = () => bodyNode(`checklist-star-${stove().id}`);
+    expect(star().textContent).toBe('☆');
+    expect(star().getAttribute('aria-pressed')).toBe('false');
+    expect(star().getAttribute('aria-label')).toBe('Star Stovetop');
+    // First in its row, the task's words after it.
+    const lead = star().parentNode;
+    expect(lead.className).toBe('task-row-main');
+    expect(lead.children[0]).toBe(star());
+    expect(lead.children[1].children[0].id).toBe(`task-name-${stove().id}`);
+    // Starred: drawn again filled and pressed, said as the panel says it,
+    // and in words for the printout.
+    fire(star(), 'click');
+    expect(stove().important).toBe(true);
+    expect(star().textContent).toBe('★');
+    expect(star().getAttribute('aria-pressed')).toBe('true');
+    expect(said()).toBe('Starred Stovetop. We start there.');
+    expect(star().parentNode.children[1].children[1]).toMatchObject({ className: 'task-row-star', textContent: UI.important });
+    // Under the Important filter, un-starring lets the row go.
+    dom.el('checklist-filter').value = 'important';
+    fire(dom.el('checklist-filter'), 'change');
+    expect(dom.el('checklist-showing').textContent).toBe('Showing 1 of 9 tasks.');
+    fire(star(), 'click');
+    expect(stove().important).toBe(false);
+    expect(dom.el('checklist-showing').textContent).toBe('Showing 0 of 9 tasks.');
+    // The words show on paper only: on screen the star says it.
+    const css = readFileSync(join(WS, 'css', 'experience.css'), 'utf8');
+    expect(css).toMatch(/\.task-row-star \{\s*display: none;/);
+    expect(css.slice(css.indexOf('@media print {'))).toMatch(/\.task-row-star \{\s*display: inline;\s*\}/);
+});
+
 test('the filter shows the important tasks, or one level, and says how many it shows', async () => {
     const main = await homeWithPrices();
     await addKitchen(main);

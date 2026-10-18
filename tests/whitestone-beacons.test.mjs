@@ -80,7 +80,9 @@ describe('the vocabulary', () => {
     });
 
     test('the chatty and the self-reporting say nothing here (booking reports its own result)', () => {
-        for (const id of ['booking-day-2026-10-15', 'booking-prev', 'booking-next', 'booking-confirm', 'panel-star-i0abcdefg']) {
+        // Stars, in the panel and in the checklist's rows (Steve, 2026-10-16:
+        // skip the stars), never with a task's id in an action.
+        for (const id of ['booking-day-2026-10-15', 'booking-prev', 'booking-next', 'booking-confirm', 'panel-star-i0abcdefg', 'checklist-star-i0abcdefg']) {
             expect(studioBeacon({ id })).toBe(SKIP);
         }
         expect(cleanerBeacon({ id: 'pin-open' })).toBe(SKIP);
