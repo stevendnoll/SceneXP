@@ -391,7 +391,7 @@ describe('the panel on the page', () => {
         expect(shown()).toBe(false);
     });
 
-    test("Maya steps aside while the panel is open, and the guide counts rooms added from it", async () => {
+    test('no panel in the build; after it, Maya steps aside while the panel is open', async () => {
         globalThis.fetch = async (url) => ({ ok: true, status: 200, json: async () => JSON.parse(readFileSync(join(WS, String(url)), 'utf8')) });
         for (const id of ['ws-host', 'ws-panel']) dom.el(id).hidden = true;
         const main = await import('../www/whitestone/js/main.js');
@@ -406,18 +406,28 @@ describe('the panel on the page', () => {
         t.onHostButton('next');
         t.onHostButton('gotIt');
         expect(t.ui.guide.scene).toBe('rooms');
+        // On Your rooms the house opens a floor and no panel (QA, 2026-10-17).
         t.tapModel('main');
         const loop = dom.loops[dom.loops.length - 1];
         jest.advanceTimersByTime(16);
         loop();
+        expect(dom.el('ws-panel').hidden).toBe(true);
+        expect(dom.el('ws-host').hidden).toBe(false);
+        // Standing by, after the build, the panel opens and she steps aside.
+        t.ui.guide = { ...t.ui.guide, scene: 'done', minimized: false };
+        t.showGuide();
+        t.liftLevel(null);
+        t.tapModel('main');
+        jest.advanceTimersByTime(16);
+        loop();
         expect(dom.el('ws-host').hidden).toBe(true);
+        // A room added from the panel's chips; then back out to her.
         fire(chip('living'), 'click');
-        expect(t.ui.guide.rooms).toBe(1);
+        expect(t.active().rooms.some((r) => r.area === 'living')).toBe(true);
         for (let i = 0; i < 2; i++) fire(dom.el('panel-back'), 'click');
         jest.advanceTimersByTime(16);
         loop();
         expect(dom.el('ws-host').hidden).toBe(false);
-        expect(dom.el('host-actions').children.map((b) => b.textContent)).toContain('Review my checklist');
     });
 
     test('the panel goes beside Maya where there is room, and runs down toward the bottom', async () => {

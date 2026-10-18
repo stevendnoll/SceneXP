@@ -404,6 +404,9 @@ export const GUIDE = Object.freeze({
     back: 'Back',
 
     firstRoom: 'Most people start with the kitchen. Shall we add it?',
+    /** A home of more than one floor: the floor she has opened for it (QA,
+     *  2026-10-17: which floor the chips add to was not said). */
+    firstRoomOn: (floor) => `Let's start on the ${String(floor).toLowerCase()}. Most people begin with the kitchen. Shall we add it?`,
     firstRoomAgain: 'Adding the kitchen brings its standard tasks with it. You can change any of them.',
     addKitchen: 'Add the kitchen',
     otherRoom: 'Another kind of room',
@@ -418,15 +421,16 @@ export const GUIDE = Object.freeze({
     added: (room, count, money) => `There's your ${room} with its ${countWord(count)} standard ${count === 1 ? 'task' : 'tasks'}, ${money} so far.`,
     addedMinimum: (money) => `Every visit starts at ${money}, so your next rooms fit inside that.`,
     addedPlain: (room) => `There's your ${room}.`,
-    /** The blue dots, on the room just added (QA, 2026-10-16: they are
-     *  not tapped, so the room is). */
-    addedDots: (room, count) => (count === 1
-        ? `The blue dot is that task. Tap the ${room} to see it, or star it if it matters most.`
-        : `Each blue dot is one of them. Tap the ${room} to see them all, or star the ones that matter most.`),
+    /** The blue dots, on the room just added, and where its tasks are
+     *  changed (QA, 2026-10-17: the house is not tapped until Your rooms,
+     *  and tasks are changed from the quote). */
+    addedDots: (count) => (count === 1
+        ? 'The blue dot is that task. You can change it anytime from Your quote.'
+        : 'Each blue dot is one of them. You can change them anytime from Your quote.'),
 
     gotIt: 'Got it',
 
-    rooms: "Now add your other rooms here, or tap a floor to open it. If that's everything, review your checklist.",
+    rooms: "Now add your other rooms here. Tap a floor to add rooms to it. If that's everything, review your checklist.",
     roomsAgain: "Add as many rooms as you like. When you're done, review your checklist.",
     roomsMore: "Looking good. Add as many as you like, or review when you're ready.",
     addRoom: 'Add a room',

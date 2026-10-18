@@ -152,7 +152,7 @@ describe('every control on both pages is named (a new one is named or this fails
         // Realistic stand-ins for each template's value: a step's number, a
         // pick's or an action's own id, a floor, a kind of room, a bath, a
         // reason, and otherwise a record's random key.
-        const STAND_IN = { i: '1', n: '1', 'o.id': 'chooseTime', 'b.id': 'start', 'a.id': 'addTask', 'f.key': 'main', 'ch.area': 'kitchen', 'c.area': 'office', 'k.key': 'shower', key: 'no-time', 'level.key': 'second', 'r.kind': 'room' };
+        const STAND_IN = { i: '1', n: '1', 'o.id': 'chooseTime', 'b.id': 'start', 'a.id': 'addTask', 'f.key': 'main', 'ch.area': 'kitchen', 'c.area': 'office', 'c.other.id': 'otherRoom', 'k.key': 'shower', key: 'no-time', 'level.key': 'second', 'r.kind': 'room' };
         const sample = (id) => id.replace(/\$\{([^}]+)\}/g, (_, v) => STAND_IN[v] || 'x1y2z3w4');
         for (const [src, beaconOf] of [[sources, studioBeacon], [tasks, cleanerBeacon]]) {
             // A window on each call, enough for its id and class (a template's

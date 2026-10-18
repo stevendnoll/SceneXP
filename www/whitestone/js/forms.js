@@ -243,13 +243,15 @@ export function showBathChoices(type, area, current = null) {
 }
 
 /** Fill the room card for a new room (`room` null) or an edit. A new room
- *  goes on the main floor when the home has one. */
-export function fillRoomForm(room, checklist) {
+ *  goes on `level` when the home has it (the floor open on the house, QA
+ *  2026-10-17), else on the main floor when the home has one. */
+export function fillRoomForm(room, checklist, level = null) {
     const levels = checklist.levels;
     const type = checklist.serviceType;
     setValue('room-area', room ? listedArea(type, room.area) : '');
     showBathChoices(type, room ? room.area : '', room ? bathChoiceOf(type, room) : null);
-    setValue('room-level', room ? room.level : (levels.includes('main') ? 'main' : levels[0]));
+    const fresh = level && levels.includes(level) ? level : (levels.includes('main') ? 'main' : levels[0]);
+    setValue('room-level', room ? room.level : fresh);
     setValue('room-label', room ? room.label : '');
     const area = byId('room-area');
     if (area) area.disabled = Boolean(room);   // a room keeps its kind (store.js)

@@ -7101,7 +7101,7 @@ html [data-ui-theme="surf" lang="en"]
     title
       "Whitestone Home Care | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=49" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=50" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -7150,7 +7150,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=3" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=49" rel="stylesheet"]
+    link [href="css/experience.min.css?v=50" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -7310,6 +7310,9 @@ html [data-ui-theme="surf" lang="en"]
             "Whitestone Home Care is not a real company. These prices are examples, and nothing is ever charged."
         p#quote-total.quote-total
         p#quote-time.card-meta
+        div.card-actions.quote-actions
+          button#quote-open-checklist.ws-btn.ws-btn-primary [type="button"]
+            "Change tasks"
         p#quote-minimum.quote-minimum
         p#quote-problems.form-hint [hidden]
         div#quote-breakdown.quote-breakdown
@@ -7321,9 +7324,6 @@ html [data-ui-theme="surf" lang="en"]
         p#quote-tax.card-meta
         p.card-meta.quote-promise
           "You will never pay more than your quote without approving it first. Anything we skip comes off your bill."
-        div.card-actions
-          button#quote-open-checklist.ws-btn.ws-btn-primary [type="button"]
-            "Open the checklist"
     div#booking.card-overlay [hidden]
       div#booking-panel.card-panel.booking-panel [aria-describedby="demo-booking booking-summary" aria-labelledby="booking-title" aria-modal="true" role="dialog" tabindex="-1"]
         div.card-head

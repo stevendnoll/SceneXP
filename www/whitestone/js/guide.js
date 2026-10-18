@@ -3,19 +3,30 @@
  * guide.js - Maya's guided first visit (PLANNING 4.2, ONBOARDING section 5):
  * which scene the visitor is in, what moves them on, and what Maya says.
  *
- * ONE NEXT STEP AT A TIME. Each scene is one or two short sentences, at
- * most two buttons (Review and an add-on, three), and for the floors a set
- * of choices, so a first-time visitor always knows the one thing to do next:
+ * ONE NEXT STEP AT A TIME. Each scene is one or two short sentences, a
+ * few buttons, at most one of them the main one (Steve, 2026-10-17: the
+ * two-button rule dropped, as one more button at a step's end often makes
+ * it simpler),
+ * and for the floors a set of choices, so a first-time visitor always
+ * knows the one thing to do next:
  *
  *   hello      the greeting: Let's start, or Show me an example
  *   home       what kind of home: a house, a townhome, a condo
  *   attached   a townhome's neighbors: an end unit, or between two
  *   floors     tick the floors the home has; each rises on the house
- *   firstRoom  add the kitchen in one tap, or choose another room
+ *   firstRoom  add the kitchen in one tap, or choose another room, on
+ *              the main floor, opened for it
  *   added      the room and its price, from the price sheet, and what
  *              the blue dots on it are (QA, 2026-10-16: the dots are no
  *              longer tapped, so they have no step of their own)
- *   rooms      the rest of the home, then review
+ *   rooms      the rest of the home, floor by floor, then review
+ *
+ * THE HOUSE ONLY OPENS FLOORS IN THE BUILD (QA, 2026-10-17). Before Your
+ * rooms a tap on it only pulses her next step (turning it still works).
+ * On Your rooms a tap on a floor, on the house or in her list, opens that
+ * floor and no more, and her room chips add to it. The panel, with its own
+ * chips and Backs, is for after the build: two ways to add a room on one
+ * step lost the visitor's place.
  *   review     the quote, care preferences offered once, and the next
  *              step itself: Choose a time (QA, 2026-10-16: the All set
  *              step after it was a Save that saved nothing, every change
@@ -455,19 +466,21 @@ export function addedLine(sheet, area, label, bath) {
     if (!sum || !sum.count) return GUIDE.addedPlain(room);
     // What the blue dots are, and that the room shows them all (QA,
     // 2026-10-16: the dots themselves are not tapped).
-    const line = `${GUIDE.added(room, sum.count, formatMoney(sum.cents))} ${GUIDE.addedDots(room, sum.count)}`;
+    const line = `${GUIDE.added(room, sum.count, formatMoney(sum.cents))} ${GUIDE.addedDots(sum.count)}`;
     const minimum = sheet.visitMinimumCents || 0;
     return sum.cents < minimum ? `${line} ${GUIDE.addedMinimum(formatMoney(minimum))}` : line;
 }
 
 /**
- * What the bubble shows for a scene: `{ text, buttons, choices, progress,
- * reached, stepBack, small, again }`. `buttons` are `{ id, label, primary }`, at most
- * two (Review and an add-on, three); `choices` is 'home' (the kinds of home, each a button in a group),
- * 'floors' or null; `progress` the step of the strip or
+ * What the bubble shows for a scene: `{ text, buttons, choices, other,
+ * progress, reached, stepBack, small, again }`. `buttons` are `{ id, label,
+ * primary }`, a few, at most one the main one; `choices` is 'home' (the kinds of home, each a button in a group),
+ * 'floors', 'rooms' or null; `other` with the room chips, Another kind of
+ * room as the last of them; `progress` the step of the strip or
  * null; `again` the line said once, in other words, if nothing happens.
  * `ctx` gives what the words depend on: `{ sheet, roomLabel, roomCount,
- * addedText, exampleTask, exampleRoom, exampleTotal, reviewNext, quoted }`.
+ * addedText, exampleTask, exampleRoom, exampleTotal, reviewNext, quoted,
+ * firstFloor }`.
  */
 export function viewFor(guide, ctx = {}) {
     const b = (id, label, primary = false) => ({ id, label, primary });
@@ -495,17 +508,26 @@ export function viewFor(guide, ctx = {}) {
         return { ...base, text: guide.tapped ? `${GUIDE.floorsTaking} ${GUIDE.floors}` : GUIDE.floors, buttons: [b('next', GUIDE.next, true)], choices: 'floors' };
     case 'firstRoom':
         // The rooms most homes have as chips, the kitchen first and ringed
-        // (QA, 2026-10-14), every other kind one tap away.
-        return { ...base, text: GUIDE.firstRoom, buttons: [b('otherRoom', GUIDE.otherRoom)], choices: 'rooms' };
+        // (QA, 2026-10-14), every other kind one tap away, the last chip
+        // (`other`, QA 2026-10-17: it sat at the bubble's foot). In a home
+        // of more than one floor she names the floor she opened for it.
+        return {
+            ...base, text: ctx.firstFloor ? GUIDE.firstRoomOn(ctx.firstFloor) : GUIDE.firstRoom,
+            buttons: [], choices: 'rooms', other: b('otherRoom', GUIDE.otherRoom)
+        };
     case 'added':
         return { ...base, text: ctx.addedText || GUIDE.addedPlain(String(ctx.roomLabel || '').toLowerCase()), buttons: [b('next', GUIDE.next, true)] };
     case 'rooms': {
-        // Rooms as chips (QA, 2026-10-14). Review is offered from the first
-        // room on: a home may want only one room cleaned (QA, 2026-10-15).
-        const buttons = (ctx.roomCount || 0) >= 1 ? [b('review', GUIDE.reviewIt, true), b('otherRoom', GUIDE.otherRoom)] : [b('otherRoom', GUIDE.otherRoom)];
+        // Rooms as chips (QA, 2026-10-14), Another kind of room the last of
+        // them. Review is offered from the first room on: a home may want
+        // only one room cleaned (QA, 2026-10-15), with the quote a button
+        // before it, as on Review (QA, 2026-10-17).
+        const buttons = (ctx.roomCount || 0) >= 1
+            ? [...(ctx.quoted ? [b('reviewQuote', GUIDE.reviewQuote)] : []), b('review', GUIDE.reviewIt, true)]
+            : [];
         // The next cleaning's first look at its rooms says so.
         const text = guide.nextVisit && !guide.rooms ? GUIDE.roomsNextVisit : guide.rooms >= 2 ? GUIDE.roomsMore : GUIDE.rooms;
-        return { ...base, text, buttons, choices: 'rooms' };
+        return { ...base, text, buttons, choices: 'rooms', other: b('otherRoom', GUIDE.otherRoom) };
     }
     case 'review': {
         // The next step itself (M3): Choose a time. A checklist the cleaner

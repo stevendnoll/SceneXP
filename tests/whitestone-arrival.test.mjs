@@ -198,9 +198,15 @@ const roomChip = (area) => {
     const group = dom.el('host-choices').children[0];
     return group ? group.children.find((x) => x.id === `host-chip-${area}`) : undefined;
 };
+/** Another kind of room, the last of her room chips (QA, 2026-10-17). */
+const otherChip = () => {
+    const group = dom.el('host-choices').children[0];
+    return group ? group.children.find((x) => x.id === 'host-otherRoom') : undefined;
+};
 const press = (id) => {
-    // A button, or (the kitchen, a bedroom) one of her room chips.
-    const b = dom.el('host-actions').children.find((x) => x.id === `host-${id}`) || roomChip(id);
+    // A button, or (the kitchen, a bedroom, another kind) one of her room chips.
+    const b = dom.el('host-actions').children.find((x) => x.id === `host-${id}`) || roomChip(id)
+        || (id === 'otherRoom' ? otherChip() : undefined);
     if (!b) throw new Error(`no ${id} in ${buttons().join(', ')}`);
     fire(b, 'click');
 };
@@ -524,10 +530,16 @@ describe('a first visit', () => {
         // On the main floor, not the first floor listed.
         tick('basement', true);
         press('next');
-        expect(buttons()).toEqual([GUIDE.otherRoom]);
+        // Her floor is open already and named (QA, 2026-10-17), and every
+        // other kind of room is the last chip, not a button at her foot.
+        expect(main.__test__.model().lifted).toBe('main');
+        expect(line()).toBe(GUIDE.firstRoomOn('Main floor'));
+        expect(buttons()).toEqual([]);
         // The rooms most homes have, as chips, the kitchen first and ringed.
-        expect(dom.el('host-choices').children[0].children.slice(1).map((b) => b.textContent)).toEqual(
-            ['+ Kitchen', '+ Living room', '+ Primary bedroom', '+ Primary bathroom', '+ Bedroom', '+ Bathroom']);
+        const group = dom.el('host-choices').children[0];
+        expect(group.children[0].textContent).toBe(GUIDE.roomsLegendOn('Main floor'));
+        expect(group.children.slice(1).map((b) => b.textContent)).toEqual(
+            ['+ Kitchen', '+ Living room', '+ Primary bedroom', '+ Primary bathroom', '+ Bedroom', '+ Bathroom', `+ ${GUIDE.otherRoom}`]);
         expect(roomChip('kitchen').classList.contains('has-halo')).toBe(true);
         press('kitchen');
         const c = own(main);
@@ -536,14 +548,62 @@ describe('a first visit', () => {
         expect(c.items).toHaveLength(9);
         expect(main.__test__.model().lifted).toBe('main');
         expect(line()).toBe("There's your kitchen with its nine standard tasks, $61 so far. Each blue dot is one of them. "
-            + 'Tap the kitchen to see them all, or star the ones that matter most. Every visit starts at $120, so your next rooms fit inside that.');
+            + 'You can change them anytime from Your quote. Every visit starts at $120, so your next rooms fit inside that.');
         expect(dom.el('host-progress').children[2].getAttribute('aria-current')).toBe('step');
         // Next goes on to Your rooms: the dots have no step of their own (QA, 2026-10-16).
         expect(buttons()).toEqual([GUIDE.next]);
         press('next');
         expect(line()).toBe(GUIDE.rooms);
-        // Review from the first room on (QA, 2026-10-15).
-        expect(buttons()).toEqual([GUIDE.reviewIt, GUIDE.otherRoom]);
+        // Review from the first room on (QA, 2026-10-15), the quote before
+        // it as on Review (QA, 2026-10-17).
+        expect(buttons()).toEqual([GUIDE.reviewQuote, GUIDE.reviewIt]);
+        expect(otherChip().textContent).toBe(`+ ${GUIDE.otherRoom}`);
+        press('reviewQuote');
+        expect(openCards()).toEqual(['quote']);
+    });
+
+    test('each new step opens at the top of her bubble, and a chip added keeps it where it was (QA, 2026-10-17)', async () => {
+        const main = await boot({ sheet: true });
+        const bubble = dom.el('ws-host');
+        press('start');
+        pick('kind-house');
+        tick('second', true);
+        press('next');
+        press('kitchen');
+        // Scrolled down, as on a phone, then Next: Your rooms from its top.
+        bubble.scrollTop = 300;
+        press('next');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        expect(bubble.scrollTop).toBe(0);
+        // Down among the chips, adding rooms: it stays put.
+        bubble.scrollTop = 240;
+        press('living');
+        press('dining');
+        expect(bubble.scrollTop).toBe(240);
+        // Back to the floors, and on again, each from the top.
+        fire(dom.el('host-back'), 'click');
+        expect(main.__test__.ui.guide.scene).toBe('floors');
+        expect(bubble.scrollTop).toBe(0);
+        bubble.scrollTop = 120;
+        press('next');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        expect(bubble.scrollTop).toBe(0);
+    });
+
+    test('Your quote\'s Change tasks sits under the total, above the breakdown (QA, 2026-10-17)', () => {
+        const at = (id) => HTML.indexOf(`id="${id}"`);
+        expect(HTML).toMatch(/<button id="quote-open-checklist"[^>]*>Change tasks<\/button>/);
+        expect(at('quote-total')).toBeLessThan(at('quote-open-checklist'));
+        expect(at('quote-open-checklist')).toBeLessThan(at('quote-breakdown'));
+    });
+
+    test('a home of one floor: its floor opened too, and the kitchen asked plainly', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        press('next');
+        expect(main.__test__.model().lifted).toBe('main');
+        expect(line()).toBe(GUIDE.firstRoom);
     });
 
     test('before the price sheet arrives, the kitchen waits and says so', async () => {
@@ -557,51 +617,108 @@ describe('a first visit', () => {
         expect(line()).toBe(GUIDE.firstRoom);
     });
 
-    test('a tap on a dot is a tap on its room: the room in the panel, its tasks from the list, and Back to First room (QA, 2026-10-16)', async () => {
+    test('in the build the house opens floors and no more (QA, 2026-10-17): nothing before Your rooms, then a floor at a tap, never the panel', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        tick('second', true);
+        press('next');
+        // First room: her floor open, and a tap on the house only pulses her.
+        expect(main.__test__.model().lifted).toBe('main');
+        expect(main.__test__.tapModel('second')).toBe(false);
+        expect(main.__test__.model().lifted).toBe('main');
+        expect(panelShown()).toBe(false);
+        press('kitchen');
+        const kitchen = own(main).rooms[0];
+        // Its tasks and price: a tap on the room opens nothing, Next pulses.
+        expect(main.__test__.ui.guide.scene).toBe('added');
+        expect(main.__test__.tapModel('main', kitchen.id)).toBe(false);
+        expect(main.__test__.ui.selected).toBeNull();
+        expect(panelShown()).toBe(false);
+        expect(nudged('next')).toBe(true);
+        // Escape leaves her floor open.
+        fire(dom.documentStub, 'keydown', { key: 'Escape', target: dom.documentStub.body, preventDefault() {} });
+        expect(main.__test__.model().lifted).toBe('main');
+        press('next');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        // Your rooms: a tap on a room is a tap on its floor, open already.
+        expect(main.__test__.tapModel('main', kitchen.id)).toBe(true);
+        expect(main.__test__.ui.selected).toBeNull();
+        expect(panelShown()).toBe(false);
+        // Another floor opens, and her chips add to it, the panel never shown.
+        expect(main.__test__.tapModel('second')).toBe(true);
+        expect(main.__test__.model().lifted).toBe('second');
+        expect(panelShown()).toBe(false);
+        expect(shown()).toBe(true);
+        expect(dom.el('host-choices').children[0].children[0].textContent).toBe(GUIDE.roomsLegendOn('Second floor'));
+        press('bedroom');
+        press('bathroom');
+        expect(own(main).rooms.filter((r) => r.level === 'second').map((r) => r.area)).toEqual(['bedroom', 'bathroom']);
+        expect(main.__test__.model().lifted).toBe('second');
+        expect(main.__test__.ui.guide.scene).toBe('rooms');
+        // A tap on the house that says no floor goes up one, and past the
+        // top back to the first: a floor stays open on Your rooms.
+        expect(main.__test__.tapModel()).toBe(true);
+        expect(main.__test__.model().lifted).toBe('main');
+        // Escape and empty space never close it here.
+        expect(main.__test__.stepBack()).toBe(false);
+        expect(main.__test__.model().lifted).toBe('main');
+    });
+
+    test('Another kind of room begins on the floor open on Your rooms (QA, 2026-10-17)', async () => {
+        const main = await boot({ sheet: true });
+        press('start');
+        pick('kind-house');
+        tick('second', true);
+        press('next');
+        press('kitchen');
+        press('next');
+        expect(main.__test__.model().lifted).toBe('main');
+        press('otherRoom');
+        expect(openCards()).toEqual(['room']);
+        expect(dom.el('room-level').value).toBe('main');
+        fire(dom.el('room-cancel'), 'click');
+        expect(main.__test__.tapModel('second')).toBe(true);
+        press('otherRoom');
+        expect(dom.el('room-level').value).toBe('second');
+        // A room made there lands on it, and the floor stays open.
+        dom.el('room-area').value = 'office';
+        dom.el('room-preset').checked = true;
+        fire(dom.el('room-form'), 'submit');
+        expect(own(main).rooms.find((r) => r.area === 'office').level).toBe('second');
+        expect(main.__test__.model().lifted).toBe('second');
+    });
+
+    test('after the build the panel is as it was: a tap on a room opens it', async () => {
         const main = await boot({ sheet: true });
         press('start');
         pick('kind-house');
         press('next');
         press('kitchen');
         const kitchen = own(main).rooms[0];
-        const stove = own(main).items.find((i) => i.task === 'stovetop');
-        // A dot's hit carries its room, and the room is what opens.
+        press('next');
+        press('review');
+        press('chooseTime');
+        expect(main.__test__.ui.guide.scene).toBe('done');
+        await jest.advanceTimersByTimeAsync(50);
+        if (!dom.el('booking').hidden) fire(dom.el('booking-close'), 'click');
+        await jest.advanceTimersByTimeAsync(50);
+        // A closed house opens its floor first, then the room, in the panel.
         expect(main.__test__.tapModel('main', kitchen.id)).toBe(true);
-        expect(main.__test__.ui.selected).toMatchObject({ scope: 'room', roomId: kitchen.id, itemId: null });
-        expect(openCards()).toEqual([]);
+        expect(main.__test__.ui.selected).toMatchObject({ scope: 'floor', level: 'main' });
+        expect(main.__test__.tapModel('main', kitchen.id)).toBe(true);
+        expect(main.__test__.ui.selected).toMatchObject({ scope: 'room', roomId: kitchen.id });
         expect(panelShown()).toBe(true);
         expect(dom.el('panel-title').textContent).toBe('Kitchen');
-        stepFrames(2);
-        expect(shown()).toBe(false);
-        // Still on First room, and the panel's one Back says where it goes.
-        expect(main.__test__.ui.guide.scene).toBe('added');
-        expect(dom.el('panel-back').getAttribute('aria-label')).toBe(PANEL.back('First room'));
-        fire(dom.el('panel-back'), 'click');
-        expect(panelShown()).toBe(false);
-        // The floor stays open with its dots, nothing selected, Next ready.
-        expect(main.__test__.model().lifted).toBe('main');
+        // Stepping back goes a room to its floor, then the floor closes.
+        expect(main.__test__.stepBack()).toBe(true);
+        expect(main.__test__.ui.selected).toMatchObject({ scope: 'floor', level: 'main' });
+        expect(main.__test__.stepBack()).toBe(true);
         expect(main.__test__.ui.selected).toBeNull();
-        stepFrames(2);
-        expect(shown()).toBe(true);
-        expect(main.__test__.ui.guide.scene).toBe('added');
-        expect(document.activeElement.id).toBe('host-next');
-        // A task from the room's list; Escape comes back in one press.
-        main.__test__.tapModel('main', kitchen.id);
-        main.__test__.onPanelRow('task', stove.id);
-        expect(dom.el('panel-title').textContent).toBe('Stovetop');
-        expect(main.__test__.ui.guide.scene).toBe('added');
-        fire(dom.documentStub, 'keydown', { key: 'Escape', target: dom.documentStub.body, preventDefault() {} });
-        expect(panelShown()).toBe(false);
-        expect(main.__test__.model().lifted).toBe('main');
-        // Next moves on to Your rooms, where the panel's Back is its own again.
-        press('next');
-        expect(main.__test__.ui.guide.scene).toBe('rooms');
-        main.__test__.tapModel('main', kitchen.id);
-        main.__test__.onPanelRow('task', stove.id);
-        expect(dom.el('panel-back').getAttribute('aria-label')).toBe(PANEL.back('the kitchen'));
+        expect(main.__test__.model().lifted).toBeNull();
     });
 
-    test('Your rooms lists the home\'s floors as the panel does; a row opens its floor, and Back returns to it (QA, 2026-10-16)', async () => {
+    test('Your rooms lists the home\'s floors as the panel does; a row opens its floor and no more, shown as chosen (QA, 2026-10-16, 2026-10-17)', async () => {
         const main = await boot({ sheet: true });
         press('start');
         pick('kind-house');
@@ -620,23 +737,27 @@ describe('a first visit', () => {
         expect(kids.indexOf(box)).toBe(kids.length - 1);
         expect(kids[0].className).toContain('host-room-chips');
         expect(box.children[0].textContent).toBe(GUIDE.floorsHeading);
-        const rows = () => all(section()).filter((n) => n.className === 'panel-row');
+        const rows = () => all(section()).filter((n) => n.classList && n.classList.contains('panel-row'));
         expect(rows().map((b) => b.children.map((x) => x.textContent))).toEqual([['Main floor', '1 room'], ['Second floor', 'No rooms yet']]);
         expect(rows()[1].getAttribute('aria-label')).toBe(PANEL.floorOpen('Second floor', 'No rooms yet'));
         expect(rows()[1].getAttribute('title')).toBe(rows()[1].getAttribute('aria-label'));
-        // A row opens its floor, as a tap on the house does.
+        // The open floor is shown as chosen: it is where her chips add.
+        const pressed = () => rows().map((b) => b.getAttribute('aria-pressed'));
+        expect(pressed()).toEqual(['true', 'false']);
+        expect(rows()[0].classList.contains('is-on')).toBe(true);
+        // A row opens its floor, as a tap on the house does, and no more:
+        // no panel, Maya still on Your rooms, her chips now for that floor.
+        rows()[1].focus();
         fire(rows()[1], 'click');
-        expect(main.__test__.ui.selected).toMatchObject({ scope: 'floor', level: 'second' });
         expect(main.__test__.model().lifted).toBe('second');
-        expect(panelShown()).toBe(true);
-        expect(dom.el('panel-title').textContent).toBe('Second floor');
-        stepFrames(2);
-        expect(shown()).toBe(false);
-        // Back: Maya again, on Your rooms, the keyboard on that row.
-        fire(dom.el('panel-back'), 'click');
+        expect(main.__test__.ui.selected).toBeNull();
         expect(panelShown()).toBe(false);
+        stepFrames(2);
         expect(shown()).toBe(true);
         expect(main.__test__.ui.guide.scene).toBe('rooms');
+        expect(pressed()).toEqual(['false', 'true']);
+        expect(dom.el('host-choices').children[0].children[0].textContent).toBe(GUIDE.roomsLegendOn('Second floor'));
+        // Drawn again for the floor, the keyboard stays on its row.
         expect(document.activeElement.id).toBe('host-open-second');
         // A room added there is counted on its row.
         main.__test__.addRoomOf('bedroom', 'second');
@@ -662,7 +783,7 @@ describe('a first visit', () => {
         // Shown on the house, not in the checklist, while Maya is guiding.
         expect(openCards()).toEqual([]);
         expect(own(main).rooms).toHaveLength(2);
-        expect(buttons()).toEqual([GUIDE.reviewIt, GUIDE.otherRoom]);
+        expect(buttons()).toEqual([GUIDE.reviewQuote, GUIDE.reviewIt]);
         press('review');
         expect(main.__test__.model().lifted).toBeNull();
         expect(line()).toBe(GUIDE.review);
@@ -1604,11 +1725,17 @@ describe('tapping the house', () => {
         expect(main.__test__.model().lifted).toBeNull();
         expect(panelShown()).toBe(false);
         expect(line()).toBe(GUIDE.floors);
-        // The first room, from her chip: now a tap opens the house.
+        // The first room, from her chip, and its line: still hers (QA,
+        // 2026-10-17: a tap there broke her step).
         press('next');
         fire(roomChip('kitchen'), 'click');
+        expect(main.__test__.tapModel('main')).toBe(false);
+        expect(panelShown()).toBe(false);
+        // Your rooms: now a tap answers, opening a floor.
+        press('next');
         expect(main.__test__.tapModel('main')).toBe(true);
         expect(main.__test__.model().lifted).toBe('main');
+        expect(panelShown()).toBe(false);
     });
 
     test('nothing answers before the house is ready', async () => {
@@ -1943,12 +2070,16 @@ describe('the usage beacons (Steve, 2026-10-16: every tap a beacon)', () => {
             const host = (id) => [...dom.el('host-actions').children, ...picks()].find((b) => b.id === `host-${id}`);
             expect(beaconsOf(() => tap(host('start')))).toEqual(['start kind=maya']);
             expect(beaconsOf(() => tap(host('kind-house')))).toEqual(['home-type kind=house']);
-            expect(beaconsOf(() => { floor('second').checked = true; tap(floor('second')); })).toEqual(['floor kind=second']);
+            // The click is the beacon, the change what adds the floor.
+            expect(beaconsOf(() => { floor('second').checked = true; tap(floor('second')); fire(floor('second'), 'change'); })).toEqual(['floor kind=second']);
             expect(beaconsOf(() => tap(host('next')))).toEqual(['next kind=maya']);
             expect(beaconsOf(() => tap(roomChip('kitchen')))).toEqual(['add-room kind=kitchen outcome=via=maya']);
-            // The house: a tap that opens a room says where, never which.
+            // The house, on Your rooms: a tap that opens a floor says where,
+            // never which room; one on the floor already open says nothing.
+            expect(beaconsOf(() => tap(host('next')))).toEqual(['next kind=maya']);
             const room = main.__test__.active().rooms[0];
-            expect(beaconsOf(() => main.__test__.tapModel('main', room.id))).toEqual(['open-room kind=house']);
+            expect(beaconsOf(() => main.__test__.tapModel('main', room.id))).toEqual([]);
+            expect(beaconsOf(() => main.__test__.tapModel('second'))).toEqual(['open-floor kind=house']);
             // Turned twice by key: said the first time only.
             const key = (k) => fire(dom.documentStub, 'keydown', { key: k, target: dom.documentStub.body, preventDefault() {} });
             main.__test__.selectTo(null);

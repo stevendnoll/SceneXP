@@ -510,7 +510,7 @@ describe('the price line, from the sheet', () => {
         expect(sum.cents).toBeLessThan(SHEET.visitMinimumCents);
         expect(addedLine(SHEET, 'kitchen', 'Kitchen')).toBe(
             `There's your kitchen with its ${countWord(sum.count)} standard tasks, ${formatMoney(sum.cents)} so far. `
-            + 'Each blue dot is one of them. Tap the kitchen to see them all, or star the ones that matter most. '
+            + 'Each blue dot is one of them. You can change them anytime from Your quote. '
             + `Every visit starts at ${formatMoney(SHEET.visitMinimumCents)}, so your next rooms fit inside that.`);
     });
 
@@ -518,7 +518,7 @@ describe('the price line, from the sheet', () => {
         const sum = presetSummary(SHEET, 'kitchen');
         const rich = { ...SHEET, visitMinimumCents: sum.cents };
         expect(addedLine(rich, 'kitchen', 'Kitchen')).toBe(`There's your kitchen with its ${countWord(sum.count)} standard tasks, ${formatMoney(sum.cents)} so far. `
-            + 'Each blue dot is one of them. Tap the kitchen to see them all, or star the ones that matter most.');
+            + 'Each blue dot is one of them. You can change them anytime from Your quote.');
         expect(addedLine(null, 'kitchen', 'Kitchen')).toBe("There's your kitchen.");
         // A room with no standard tasks says nothing about a price.
         expect(addedLine(SHEET, 'no-such-room', "Emma's room")).toBe("There's your emma's room.");
@@ -530,9 +530,10 @@ describe('the price line, from the sheet', () => {
         expect(countWord(12)).toBe('twelve');
         expect(countWord(13)).toBe('13');
         expect(GUIDE.added('kitchen', 1, '$10')).toBe("There's your kitchen with its one standard task, $10 so far.");
-        // The dots, one or more (QA, 2026-10-16): the room is what is tapped.
-        expect(GUIDE.addedDots('laundry room', 1)).toBe('The blue dot is that task. Tap the laundry room to see it, or star it if it matters most.');
-        expect(GUIDE.addedDots('kitchen', 9)).toBe('Each blue dot is one of them. Tap the kitchen to see them all, or star the ones that matter most.');
+        // The dots, one or more, and where tasks are changed (QA, 2026-10-17:
+        // the house is not tapped until Your rooms).
+        expect(GUIDE.addedDots(1)).toBe('The blue dot is that task. You can change it anytime from Your quote.');
+        expect(GUIDE.addedDots(9)).toBe('Each blue dot is one of them. You can change them anytime from Your quote.');
     });
 });
 
@@ -540,17 +541,21 @@ describe('what Maya says', () => {
     const ctx = { sheet: SHEET, roomCount: 1, roomLabel: 'Kitchen', addedText: 'There is your kitchen.' };
     const views = ALL.map((scene) => [scene, viewFor({ ...fresh(), scene, rooms: 0 }, ctx)]);
 
-    test.each(views)('%s: one or two short sentences, at most two buttons, one of them the main one', (_scene, v) => {
+    test.each(views)('%s: a few short sentences, a few buttons, at most one of them the main one', (_scene, v) => {
         expect(v.text.length).toBeGreaterThan(10);
         const sentences = v.text.split(/(?<=[.?])\s+/).filter(Boolean);
         expect(sentences.length).toBeLessThanOrEqual(3);
-        // A question of a few answers has them as its choices instead.
+        // A question of a few answers has them as its choices instead, and
+        // the room chips end with every other kind of room (QA, 2026-10-17).
         if (v.choices === 'home' || v.choices === 'returning') expect(v.buttons).toEqual([]);
         else if (v.choices === 'attached') expect(v.buttons).toEqual([]);
+        else if (v.choices === 'rooms') expect(v.other).toMatchObject({ id: 'otherRoom', label: GUIDE.otherRoom });
         else expect(v.buttons.length).toBeGreaterThanOrEqual(1);
-        expect(v.buttons.length).toBeLessThanOrEqual(2);
+        // The two-button rule is dropped (Steve, 2026-10-17), but a step
+        // still offers only a few.
+        expect(v.buttons.length).toBeLessThanOrEqual(3);
         expect(v.buttons.filter((b) => b.primary).length).toBeLessThanOrEqual(1);
-        for (const line of [v.text, v.again, v.small, ...v.buttons.map((b) => b.label)]) {
+        for (const line of [v.text, v.again, v.small, ...v.buttons.map((b) => b.label), ...(v.other ? [v.other.label] : [])]) {
             expect(line).not.toMatch(/—|;|!/);
         }
     });
@@ -594,14 +599,22 @@ describe('what Maya says', () => {
 
     test('Review is offered from the first room, and the rooms line warms after two more', () => {
         const rooms = (n, added) => viewFor({ ...fresh(), scene: 'rooms', rooms: added }, { roomCount: n });
-        // The rooms are chips (QA, 2026-10-14); the buttons are Review, from
-        // the first room (QA, 2026-10-15: one room may be all a home wants
-        // cleaned), and every other kind of room.
-        expect(rooms(1, 0).buttons.map((b) => [b.id, b.primary])).toEqual([['review', true], ['otherRoom', false]]);
-        expect(rooms(1, 0).choices).toBe('rooms');
-        expect(rooms(0, 0).buttons.map((b) => b.id)).toEqual(['otherRoom']);
-        expect(rooms(2, 1).buttons.map((b) => [b.id, b.primary])).toEqual([['review', true], ['otherRoom', false]]);
-        expect(viewFor({ ...fresh(), scene: 'firstRoom' })).toMatchObject({ choices: 'rooms', halo: { kind: 'element', id: 'host-chip-kitchen' } });
+        // The rooms are chips (QA, 2026-10-14), every other kind of room the
+        // last of them (QA, 2026-10-17); the buttons are Review, from the
+        // first room (QA, 2026-10-15: one room may be all a home wants
+        // cleaned), with the quote before it once there is one, as on Review.
+        expect(rooms(1, 0).buttons.map((b) => [b.id, b.primary])).toEqual([['review', true]]);
+        expect(rooms(1, 0)).toMatchObject({ choices: 'rooms', other: { id: 'otherRoom', primary: false } });
+        expect(rooms(0, 0).buttons).toEqual([]);
+        expect(rooms(0, 0).other.id).toBe('otherRoom');
+        const quoted = viewFor({ ...fresh(), scene: 'rooms', rooms: 1 }, { roomCount: 2, quoted: true });
+        expect(quoted.buttons.map((b) => [b.id, b.label, b.primary])).toEqual([['reviewQuote', GUIDE.reviewQuote, false], ['review', GUIDE.reviewIt, true]]);
+        expect(viewFor({ ...fresh(), scene: 'firstRoom' })).toMatchObject({ choices: 'rooms', buttons: [], other: { id: 'otherRoom' }, halo: { kind: 'element', id: 'host-chip-kitchen' } });
+        // First room names the floor it opened, in a home of more than one
+        // (QA, 2026-10-17), and says only the kitchen in a home of one.
+        expect(viewFor({ ...fresh(), scene: 'firstRoom' }).text).toBe(GUIDE.firstRoom);
+        expect(viewFor({ ...fresh(), scene: 'firstRoom' }, { firstFloor: 'Main floor' }).text)
+            .toBe("Let's start on the main floor. Most people begin with the kitchen. Shall we add it?");
         expect(rooms(2, 1).text).toBe(GUIDE.rooms);
         expect(rooms(4, 2).text).toBe(GUIDE.roomsMore);
     });

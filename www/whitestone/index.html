@@ -105,7 +105,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=49" as="style">
+    <link rel="preload" href="css/experience.min.css?v=50" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -158,7 +158,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=49">
+    <link rel="stylesheet" href="css/experience.min.css?v=50">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -384,6 +384,12 @@
                 <span class="demo-notice-text">Whitestone Home Care is not a real company. These prices are examples, and nothing is ever charged.</span></p>
             <p id="quote-total" class="quote-total"></p>
             <p id="quote-time" class="card-meta"></p>
+            <!-- Where the tasks are changed, under the total and above the
+                 breakdown, which runs long on a phone (QA, 2026-10-17: the
+                 build no longer opens rooms, so this is the way in). -->
+            <div class="card-actions quote-actions">
+                <button id="quote-open-checklist" class="ws-btn ws-btn-primary" type="button">Change tasks</button>
+            </div>
             <p id="quote-minimum" class="quote-minimum"></p>
             <p id="quote-problems" class="form-hint" hidden></p>
             <div id="quote-breakdown" class="quote-breakdown"></div>
@@ -398,9 +404,6 @@
             <p id="quote-tax" class="card-meta"></p>
             <p class="card-meta quote-promise">You will never pay more than your quote without approving it
                 first. Anything we skip comes off your bill.</p>
-            <div class="card-actions">
-                <button id="quote-open-checklist" class="ws-btn ws-btn-primary" type="button">Open the checklist</button>
-            </div>
         </div>
     </div>
 

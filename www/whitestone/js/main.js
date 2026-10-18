@@ -75,7 +75,7 @@ import { UI, MODEL_LINES, STORAGE_NOTES, ITEM_ERRORS, GUIDE, PANEL, HELP, BOOKIN
 import { createTurntable, turnPoint } from './turntable.min.js';
 import { buildStage, buildLights, firstPick, onTurntable } from './stage.min.js';
 import { buildModel, nearSide } from './model.min.js';
-import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, ringFloor, GUIDED, CHANGED, PROGRESS, EXAMPLE } from './guide.min.js';
+import { arrivalId, arrivalGuide, step as guideStep, viewFor, addedLine, savedForm, hasOwn, ringFloor, GUIDED, CHANGED, EXAMPLE } from './guide.min.js';
 import { createHost } from './host.min.js';
 import { buildMaya, speakSeconds } from './cast.min.js';
 import { createMeet } from './meet.min.js';
@@ -126,9 +126,6 @@ const ui = {
     /** The house turned this visit (one turn-house beacon, the first). */
     turned: false,
     editing: null, room: null, task: null, afterPrefs: false, filter: 'all', guide: null, selected: null,
-    /** The floor opened from Your rooms' list, whose row the keyboard goes
-     *  back to (QA, 2026-10-16). */
-    fromFloorRow: null,
     /** The Choose a time card while it is open, and the receipt shown. */
     booking: null, receipt: null,
     /** One card handing over to the next (the calendar to the receipt), so
@@ -177,6 +174,8 @@ let booking = null;
 let receipt = null;
 /** The scene Maya last gestured for, so each new one gets its gesture. */
 let gesturedFor = null;
+/** The scene her bubble last showed, so each new one opens at its top. */
+let shownScene = null;
 let raycaster = null;
 let lastHover = 0;
 let sun = null;
@@ -509,17 +508,15 @@ function away() {
  * One step back (QA, 2026-10-13: "once I click on a floor of the model
  * house it's hard to exit out"): a task to its room, a room to its floor, a
  * floor to the closed house. By the panel's back button, Escape, or a tap
- * on empty space.
+ * on empty space. In the build Maya's floor stays open (QA, 2026-10-17):
+ * it is where her room chips add.
  */
 function stepBack() {
-    if (ui.selected && onFirstRoomStep()) {
-        backToFirstRoom();
-        return true;
-    }
     if (ui.selected) {
         selectTo(stepOut(ui.selected));
         return true;
     }
+    if (building()) return false;
     if (model && model.lifted) {
         liftLevel(null);
         return true;
@@ -549,8 +546,7 @@ function selectTo(next, { focus = false } = {}) {
     return ui.selected;
 }
 
-/** The panel for the selection now, or put away. On Maya's First room
- *  step its Back goes straight back to her (backToFirstRoom), and says so. */
+/** The panel for the selection now, or put away. */
 function showPanel() {
     if (!panel) return;
     let view = ui.selected ? panelView(ui.selected, active(), state.sheet) : null;
@@ -562,31 +558,13 @@ function showPanel() {
         view = { ...view, held: CHANGES.held, baths: null };
     }
     if (!view) ui.selected = null;
-    else if (onFirstRoomStep()) view = { ...view, back: PANEL.back(GUIDE.progress[PROGRESS.added]) };
     panel.show(view);
 }
 
-/** Whether Maya is on the First room step, past adding the room: the room
- *  opened there is a look at its tasks before she moves on, not a move into
- *  the panel (QA, 2026-10-15: three Backs led out of it, to Your rooms). */
-function onFirstRoomStep() {
-    return Boolean(ui.guide && ui.guide.scene === 'added');
-}
-
-/** Back to Maya's First room step from whatever the panel shows: the
- *  selection let go, the floor left open with its dots, and the keyboard
- *  on her next step. */
-function backToFirstRoom() {
-    ui.selected = null;
-    if (model && model.select({ roomId: null, itemId: null })) markShadows();
-    showPanel();
-    requestRender();
-    // Out from under the panel now, not at the next frame, so the keyboard
-    // can land on her next step.
-    if (host) {
-        host.setCovered(anyOpen() || Boolean(panel && panel.shown));
-        if (host.shown) host.focusPrimary();
-    }
+/** Whether Maya is guiding the first build (guide.js GUIDED): the house
+ *  only opens floors meanwhile, and only on Your rooms. */
+function building() {
+    return Boolean(ui.guide && GUIDED.includes(ui.guide.scene));
 }
 
 /** A button in the panel's list: a floor, a room, or a task. */
@@ -604,34 +582,25 @@ function onPanelRow(kind, id) {
     }
 }
 
-/** A floor from Your rooms' list (QA, 2026-10-16): opened, and the panel
- *  listing its rooms, as a tap on it on the house does, the keyboard in the
- *  panel. Its row takes the keyboard again once the panel is put away. */
+/** A floor from Your rooms' list (QA, 2026-10-16): opened on the house, as
+ *  a tap on it there does, and no more (QA, 2026-10-17: the panel it used
+ *  to open had its own chips, and lost the visitor's place on Your rooms).
+ *  Her chips are drawn again for it, the keyboard kept on its row. Returns
+ *  the floor open, or null for one the home does not have. */
 function openFloorFromList(level) {
     const c = active();
     if (!c || !c.levels.includes(level)) return null;
-    ui.fromFloorRow = level;
-    return selectTo({ scope: 'floor', level, roomId: null, itemId: null }, { focus: true });
+    liftLevel(level);
+    return model ? model.lifted : null;
 }
 
 /** The panel's back button: one step back, the keyboard kept in the panel,
  *  or, once the panel has gone, on Maya's next step (everything is hers,
  *  Steve, 2026-10-15), or on Help when she offers none. */
 function onPanelBack() {
-    if (onFirstRoomStep()) {
-        backToFirstRoom();
-        return;
-    }
     selectTo(stepOut(ui.selected), { focus: true });
     if (!ui.selected) {
-        // Opened from Your rooms' list: back on its row.
-        const row = ui.fromFloorRow && host ? host.nodeOf(`host-open-${ui.fromFloorRow}`) : null;
-        ui.fromFloorRow = null;
         if (host) host.setCovered(anyOpen() || Boolean(panel && panel.shown));
-        if (row && typeof row.focus === 'function') {
-            row.focus();
-            return;
-        }
         if (host && host.shown && host.focusPrimary()) return;
         const to = hostFallback();
         if (to && typeof to.focus === 'function') to.focus();
@@ -658,12 +627,7 @@ function onPanelAction(id) {
     case 'book': openBooking(); break;
     case 'visit': openReceipt(); break;
     case 'send': sendChanges(); break;
-    case 'anotherRoom': {
-        openRoom(null);
-        const levelField = el('room-level');
-        if (sel && levelField) levelField.value = sel.level;
-        break;
-    }
+    case 'anotherRoom': openRoom(null, { level: sel ? sel.level : null }); break;
     case 'addTask': if (sel) openTask(sel.roomId, null); break;
     case 'editRoom': if (sel) openRoom(sel.roomId); break;
     case 'editTask': if (sel) openTask(null, sel.itemId); break;
@@ -749,8 +713,14 @@ function updateHost() {
 function onGuideChip(area, level) {
     if (!state.loaded) return null;
     if (host) host.poke();
+    // The floor open as the chip was tapped, before the room moves the
+    // guide on (which opens the main floor when none is).
+    const chosen = model ? model.lifted : null;
     const result = addRoomOf(area, level);
-    if (result && !result.error && ui.guide && ui.guide.scene === 'rooms') liftLevel(level);
+    // The floor stays as the visitor chose it (QA, 2026-10-17): a chip adds
+    // to the open floor, and only a garage goes elsewhere, beside the house.
+    // With none chosen, the room's own floor opens.
+    if (result && !result.error && ui.guide && ui.guide.scene === 'rooms' && !chosen) liftLevel(level);
     return result;
 }
 
@@ -840,6 +810,7 @@ function tapModel(level = null, roomId = null) {
         if (host) host.nudge();
         return false;
     }
+    if (building()) return openFloorOnly(level);
     if (!level) {
         const levels = model.levels();
         const at = levels.indexOf(model.lifted);
@@ -855,6 +826,28 @@ function tapModel(level = null, roomId = null) {
     // done, the house; never which room).
     if (ui.selected) track(`open-${ui.selected.scope}`, { kind: 'house' });
     return Boolean(ui.selected);
+}
+
+/**
+ * A tap on the house on Your rooms (QA, 2026-10-17): the floor it landed on
+ * opens, a room on it counting as its floor, and nothing else does, so her
+ * chips go on adding to the floor the visitor chose. With nothing known of
+ * where it landed, the next floor up, and past the top one the first again
+ * (a floor stays open on Your rooms). Returns whether a floor is open.
+ */
+function openFloorOnly(level) {
+    const levels = model.levels();
+    let to = level;
+    if (!to) {
+        const at = levels.indexOf(model.lifted);
+        to = levels[(at + 1) % levels.length] || null;
+    }
+    if (!to || !levels.includes(to)) return false;
+    if (to !== model.lifted) {
+        liftLevel(to);
+        track('open-floor', { kind: 'house' });
+    }
+    return true;
 }
 
 /** The first turn of the house this visit, by hand or by key, is said once
@@ -959,12 +952,14 @@ function handleSceneTap(clientX, clientY) {
  * home on the turntable has a room (QA, 2026-10-15). Before that the kind
  * of home and its floors come first, from Maya, and a panel opened over
  * her bubble only interrupted her (a room could even be added before the
- * floors were chosen).
+ * floors were chosen). In the build, only on Your rooms, where it opens a
+ * floor and no more (QA, 2026-10-17: a tap on First room broke her step).
  */
 function houseAnswers() {
     // Example mode is a tour to watch (QA, 2026-10-15): Maya shows the
     // house, and a tap only pulses her next step.
     if (inExample()) return false;
+    if (building()) return ui.guide.scene === 'rooms' && Boolean(active());
     const c = active();
     return Boolean(c && liveRooms(c).length);
 }
@@ -1092,10 +1087,14 @@ function hover(event, now = false) {
     if (!now && t - lastHover < 50) return;
     lastHover = t;
     const found = pickAt(event.clientX, event.clientY);
-    const hit = found && (found.key !== 'model' || houseAnswers()) ? found : null;
+    // In the build only another floor answers (openFloorOnly): the open one
+    // and its rooms offer the turn, not a tap that would do nothing.
+    const answers = (f) => houseAnswers() && !(building() && f.level && f.level === model.lifted);
+    const hit = found && (found.key !== 'model' || answers(found)) ? found : null;
     canvas.style.cursor = hit ? 'pointer' : grabAt(event.clientX, event.clientY) ? 'grab' : 'default';
-    // The room under the pointer, inside the open floor, faintly outlined.
-    const room = hit && hit.key === 'model' && hit.roomId && hit.level === model.lifted ? hit.roomId : null;
+    // The room under the pointer, inside the open floor, faintly outlined
+    // (not in the build, where a room is not opened).
+    const room = hit && hit.key === 'model' && hit.roomId && hit.level === model.lifted && !building() ? hit.roomId : null;
     if (model && model.hover(room)) requestRender();
 }
 
@@ -1159,6 +1158,20 @@ function ownRoomCount() {
     return c ? liveRooms(c).length : 0;
 }
 
+/** The floor First room opens (the main floor, as Your rooms does), named
+ *  for her line, in a home of more than one floor. Empty in a home of one,
+ *  where there is no other floor to tell it from. */
+function firstFloorName(c) {
+    if (!c || c.levels.length < 2) return '';
+    const level = levelOf(c.serviceType, firstFloorOf(c));
+    return level ? level.name : '';
+}
+
+/** The floor the first room is added to: the main floor, else the first. */
+function firstFloorOf(c) {
+    return c.levels.includes(MAIN_LEVEL) ? MAIN_LEVEL : c.levels[0];
+}
+
 /** What the words of a scene depend on: the sheet, the rooms so far, and
  *  the first room's line. */
 function guideContext() {
@@ -1173,6 +1186,7 @@ function guideContext() {
         standby: standbyLine(c),
         reviewNext: reviewNext(c),
         quoted: Boolean(c && state.sheet && liveItems(c).length),
+        firstFloor: firstFloorName(c),
         addOn: addOnContext(),
         report: reportContext(),
         ...exampleContext(c)
@@ -1445,14 +1459,15 @@ function sceneView() {
         const onFloor = open && chips.some((ch) => ch.level === open) ? levelOf(typeKey, open) : null;
         const legend = onFloor ? GUIDE.roomsLegendOn(onFloor.name) : GUIDE.roomsLegend;
         // On Your rooms, the home's floors too, each opening as a tap on it
-        // on the house does (QA, 2026-10-16). Not on First room, where the
-        // kitchen is the one thing asked.
+        // on the house does (QA, 2026-10-16), the open one shown as chosen
+        // (QA, 2026-10-17: it is where the chips add). Not on First room,
+        // where the kitchen is the one thing asked.
         const floors = c && ui.guide.scene === 'rooms' ? c.levels.map((key) => {
             const name = (levelOf(typeKey, key) || { name: key }).name;
             const detail = PANEL.floorRooms(liveRooms(c).filter((r) => r.level === key).length);
-            return { key, label: name, detail, aria: PANEL.floorOpen(name, detail) };
+            return { key, label: name, detail, aria: PANEL.floorOpen(name, detail), on: key === open };
         }) : [];
-        return { ...v, choices: { kind: 'chips', legend, chips, floors, floorsHeading: GUIDE.floorsHeading } };
+        return { ...v, choices: { kind: 'chips', legend, chips, other: v.other || null, floors, floorsHeading: GUIDE.floorsHeading } };
     }
     if (v && v.choices === 'report') {
         // The full report, or Done (her → takes the first). No booking here
@@ -1499,10 +1514,13 @@ function showGuide() {
     if (!host || !state.loaded) return;
     const view = guideView();
     host.show(view);
+    // A new step opens at her name and the strip, never part way down.
+    const scene = ui.guide ? ui.guide.scene : null;
+    if (view && scene !== shownScene) host.toTop();
+    shownScene = view ? scene : null;
     setHalo(view ? view.halo : null);
     if (!cast) return;
     cast.speaking(view && !view.minimized ? speakSeconds(view.text) : 0);
-    const scene = ui.guide ? ui.guide.scene : null;
     if (view && scene !== gesturedFor) {
         gesturedFor = scene;
         if (GESTURE_OF[scene] && !state.reducedMotion) cast.gesture(GESTURE_OF[scene]);
@@ -1639,17 +1657,21 @@ function enterScene(to) {
         selectTo(null);
         liftLevel(null);
         break;
-    case 'rooms':
+    case 'firstRoom':
+    case 'rooms': {
         // Rooms are added floor by floor, so a floor is open here (QA,
         // 2026-10-15: arriving from Review or the progress strip met a
-        // closed house and a ring asking for a tap that told nothing new).
-        // One already open stays open (the floor of a room just added); with
-        // none, the main floor. The ring moves on to the next floor.
-        if (model && !model.lifted) {
-            const levels = model.levels();
-            if (levels.length) liftLevel(levels.includes(MAIN_LEVEL) ? MAIN_LEVEL : levels[0]);
-        }
+        // closed house and a ring asking for a tap that told nothing new;
+        // QA, 2026-10-17: First room too, so the floor her chips add to is
+        // in view and named). One already open stays open (the floor of a
+        // room just added); with none, the main floor. The ring moves on to
+        // the next floor. Nothing stays selected: the panel is for after
+        // the build.
+        if (ui.selected) selectTo(null);
+        const c = active();
+        if (model && c && c.levels.length && !model.lifted) liftLevel(firstFloorOf(c));
         break;
+    }
     case 'added': {
         // The new room's floor opens, its dots in view.
         const c = active();
@@ -1779,7 +1801,9 @@ function onHostButton(id) {
         break;
     case 'otherRoom':
     case 'addRoom':
-        openRoom(null);
+        // On the floor open on the house, as her room chips add (QA,
+        // 2026-10-17: the card always began on the main floor).
+        openRoom(null, { level: model ? model.lifted : null });
         break;
     case 'preferences':
         openPreferences();
@@ -3325,12 +3349,14 @@ function openChecklistView() {
 
 // ---- Rooms --------------------------------------------------------------------
 
-function openRoom(roomId) {
+/** The room card: a room to edit, or a new one (`roomId` null), begun on
+ *  `level` when the home has it. */
+function openRoom(roomId, { level = null } = {}) {
     const c = active();
     if (!c) return;
     const room = roomId ? c.rooms.find((r) => r.id === roomId) || null : null;
     ui.room = room ? room.id : null;
-    fillRoomForm(room, c);
+    fillRoomForm(room, c, level);
     holdRoomCard(room && isHeld(currentHold(c), 'room', room.id) ? CHANGES.held : '');
     showPresetPreview(state.sheet, room ? room.area : '', room ? room.bath : null);
     openCard('room');

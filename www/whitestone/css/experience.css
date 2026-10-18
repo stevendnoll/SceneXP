@@ -181,6 +181,11 @@ body {
     gap: 0.5rem;
 }
 
+/* Your quote's Change tasks, under the total (QA, 2026-10-17). */
+.card-actions.quote-actions {
+    margin: 0.6rem 0 1rem;
+}
+
 /* Empty and silent unless the browser will not keep the checklists. */
 .storage-note {
     margin: 0.6rem 0 0;
@@ -1636,6 +1641,13 @@ textarea.ws-input {
     /* A clear gap before her buttons (QA, 2026-10-16: the last floor all
        but touched Review my checklist), as under the chips. */
     margin-bottom: 1.1rem;
+}
+
+/* The open floor, where her chips add (QA, 2026-10-17): pressed, as an
+   answer already given is (.host-pick.is-on). */
+.host-floor-rows .panel-row.is-on {
+    border-color: var(--ws-accent);
+    background: var(--ws-accent-soft);
 }
 
 .host-step {

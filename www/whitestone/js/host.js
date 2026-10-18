@@ -150,7 +150,9 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     }
 
     /** Rooms to add, as the panel's dashed chips (`{ kind: 'chips', legend,
-     *  chips }`, each `{ area, level, label, aria }`): one tap adds it. */
+     *  chips, other }`, each chip `{ area, level, label, aria }`): one tap
+     *  adds it. `other` (`{ id, label }`), every other kind of room, is the
+     *  last of them (QA, 2026-10-17: at the bubble's foot it was missed). */
     function drawChips(c) {
         const chips = c.chips.map((ch) => {
             const btn = h('button', { type: 'button', id: `host-chip-${ch.area}`, className: 'panel-chip', text: `+ ${ch.label}`, attrs: { 'aria-label': ch.aria, title: ch.aria } });
@@ -159,18 +161,29 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             }, { signal });
             return btn;
         });
+        if (c.other) {
+            const other = h('button', { type: 'button', id: `host-${c.other.id}`, className: 'panel-chip host-chip-other', text: `+ ${c.other.label}` });
+            other.addEventListener('click', () => {
+                if (typeof on.button === 'function') on.button(c.other.id);
+            }, { signal });
+            chips.push(other);
+        }
         choices.appendChild(h('div', { className: 'panel-chips host-room-chips', attrs: { role: 'group', 'aria-label': c.legend } }, [
             h('p', { className: 'panel-chips-heading', text: c.legend }), ...chips
         ]));
     }
 
-    /** Your rooms' floors (`c.floors`, each `{ key, label, detail, aria }`),
-     *  as the panel lists a home's floors: each row a button that opens
-     *  that floor, as a tap on it on the house does (QA, 2026-10-16). */
+    /** Your rooms' floors (`c.floors`, each `{ key, label, detail, aria,
+     *  on }`), as the panel lists a home's floors: each row a button that
+     *  opens that floor, as a tap on it on the house does (QA, 2026-10-16),
+     *  the open one pressed, since her chips add to it (QA, 2026-10-17). */
     function drawFloorRows(c) {
         if (!c.floors || !c.floors.length) return;
         const rows = c.floors.map((f) => {
-            const btn = h('button', { type: 'button', id: `host-open-${f.key}`, className: 'panel-row', attrs: { 'aria-label': f.aria, title: f.aria } }, [
+            const btn = h('button', {
+                type: 'button', id: `host-open-${f.key}`, className: `panel-row${f.on ? ' is-on' : ''}`,
+                attrs: { 'aria-label': f.aria, title: f.aria, 'aria-pressed': f.on ? 'true' : 'false' }
+            }, [
                 h('span', { className: 'panel-row-label', text: f.label }),
                 h('span', { className: 'panel-row-detail', text: f.detail })
             ]);
@@ -197,9 +210,9 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
             return;
         }
         if (c && c.kind === 'chips') {
-            if (c.chips.length) drawChips(c);
+            if (c.chips.length || c.other) drawChips(c);
             drawFloorRows(c);
-            if (!c.chips.length && !(c.floors && c.floors.length)) choices.hidden = true;
+            if (!c.chips.length && !c.other && !(c.floors && c.floors.length)) choices.hidden = true;
             return;
         }
         if (!c || c.kind !== 'floors') return;
@@ -383,6 +396,12 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         },
         hide() {
             api.show(null);
+        },
+        /** Scrolled back to her name and the strip (QA, 2026-10-17: Next
+         *  left Your rooms half scrolled, its header out of sight). For a
+         *  new step only: a chip added keeps the bubble where it was. */
+        toTop() {
+            if (root) root.scrollTop = 0;
         },
         /** Out of sight while a card is open, back when it closes. */
         setCovered(on) {
