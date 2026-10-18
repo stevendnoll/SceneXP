@@ -1,0 +1,49 @@
+key,name,description,unit,price,minutes,areas
+stovetop,Stovetop,"Burners, grates and the surface around them, wiped clean.",each,10.00,5,kitchen
+oven-interior,Oven interior,"Racks, walls and door glass inside the oven.",each,30.00,25,kitchen
+microwave,Microwave,"Inside and out, including the turntable.",each,6.00,5,kitchen
+refrigerator,Refrigerator,"Doors, handles and the top, outside.",each,6.00,5,kitchen garage
+dishwasher,Dishwasher,"Front panel, handle and controls.",each,4.00,3,kitchen
+countertops,Countertops,"Cleared, wiped and dried, with your things put back.",room,10.00,8,kitchen pantry laundry primary-bathroom bathroom powder-room
+kitchen-sink,Kitchen sink,"Basin, drain and faucet.",each,6.00,4,kitchen laundry
+cabinet-fronts,Cabinet fronts,Doors and handles wiped down.,room,12.00,10,kitchen pantry laundry primary-bathroom bathroom
+backsplash,Backsplash,The tile or panel behind the counters.,each,6.00,5,kitchen
+small-appliances,Small appliances,"A toaster, coffee maker or the like, per appliance.",count,3.00,3,kitchen
+load-dishwasher,Load the dishwasher,"Dishes rinsed, loaded and the machine started.",each,8.00,8,kitchen
+empty-trash,Empty trash,"Bins emptied and relined, per bin.",count,2.00,2,kitchen office primary-bedroom bedroom nursery primary-bathroom bathroom powder-room laundry garage playroom
+toilet,Toilet,"Bowl, seat, base and tank.",each,12.00,8,primary-bathroom bathroom powder-room
+shower,Shower,"Walls, floor, door or curtain, and fixtures.",each,20.00,15,primary-bathroom bathroom
+bathtub,Bathtub,"The tub, its surround and fixtures.",each,15.00,12,primary-bathroom bathroom
+bathroom-sink,Bathroom sink,"Basin, faucet and the vanity top around it.",each,6.00,4,primary-bathroom bathroom powder-room
+mirrors,Mirrors,"Left streak-free, per mirror.",count,3.00,2,primary-bathroom bathroom powder-room entry hallway primary-bedroom bedroom gym closet
+fresh-towels,Fresh towels,"Clean towels hung, and used ones taken to the laundry.",each,4.00,3,primary-bathroom bathroom powder-room
+make-bed,Make the bed,"Sheets straightened and pillows arranged, per bed.",count,5.00,5,primary-bedroom bedroom nursery bonus
+change-linens,Change bed linens,"Fresh sheets and pillowcases, per bed.",count,8.00,7,primary-bedroom bedroom nursery bonus
+vacuum-floor,Vacuum floors,"Every open area of the floor, rugs included.",room,8.00,6,entry hallway living family dining kitchen office primary-bedroom bedroom nursery playroom gym bonus closet mudroom other
+mop-floor,Mop hard floors,Hard floors mopped and left to dry.,room,9.00,8,entry hallway living family dining kitchen pantry office primary-bathroom bathroom powder-room laundry mudroom playroom gym other
+dust-surfaces,Dust surfaces,"Shelves, tables and ledges within reach.",room,8.00,8,entry hallway living family dining kitchen office primary-bedroom bedroom nursery playroom gym bonus closet other
+baseboards,Baseboards,Wiped along every wall.,room,10.00,10,entry hallway stairs living family dining kitchen office primary-bedroom bedroom nursery primary-bathroom bathroom powder-room laundry mudroom playroom gym bonus other
+tidy-room,Tidy up,Things returned to their places and surfaces cleared.,room,8.00,8,living family dining office primary-bedroom bedroom nursery playroom bonus other
+upholstery,Vacuum upholstery,"Sofas and chairs with the cushions lifted, per piece.",count,8.00,8,living family bonus playroom office
+high-touch,Switches and handles,"Light switches, door handles and pulls wiped.",room,3.00,3,entry hallway stairs living family dining kitchen pantry office primary-bedroom bedroom nursery primary-bathroom bathroom powder-room laundry mudroom closet playroom gym bonus garage other
+interior-windows,Interior windows,"The glass on the inside, per window.",count,5.00,4,entry hallway stairs living family dining kitchen office primary-bedroom bedroom nursery primary-bathroom bathroom laundry mudroom playroom gym bonus garage other
+glass-doors,Sliding glass doors,"Both panes on the inside, per door.",count,6.00,5,living family dining kitchen patio bonus
+ceiling-fan,Ceiling fan,"Blades and fixture dusted, per fan.",count,6.00,5,living family primary-bedroom bedroom office bonus patio playroom gym
+blinds,Blinds,"Slats dusted, per window.",count,6.00,6,living family dining kitchen office primary-bedroom bedroom nursery primary-bathroom bathroom playroom gym bonus other
+doors,Doors and frames,"Both sides and the frame, per door.",count,3.00,2,entry hallway mudroom closet primary-bedroom bedroom
+vacuum-stairs,Vacuum stairs,Each tread and riser.,room,12.00,10,stairs
+railings,Railings,Handrail and balusters wiped.,each,5.00,5,stairs
+table-chairs,Table and chairs,The tabletop and chair seats wiped.,each,6.00,5,dining kitchen patio
+desk,Desk,"The surface wiped around your things, which stay where they are.",each,5.00,4,office bedroom primary-bedroom bonus
+electronics,Screens and electronics,Dusted with a dry cloth.,each,4.00,4,office living family bonus
+laundry-load,Wash and dry a load,"One load washed and dried, per load.",count,10.00,10,laundry
+fold-laundry,Fold laundry,"One load folded and set out, per load.",count,8.00,10,laundry primary-bedroom bedroom
+washer-dryer,Washer and dryer,"Tops and fronts wiped, and the lint trap cleared.",each,5.00,4,laundry
+organize-shelves,Organize shelves,Items grouped and squared on the shelves.,room,15.00,15,pantry closet garage laundry
+sweep-floor,Sweep,The floor swept and the debris bagged.,room,10.00,10,garage patio mudroom entry
+patio-furniture,Patio furniture,"Seats and tables wiped, per piece.",count,5.00,5,patio
+cobwebs,Cobwebs,Corners and ceilings cleared.,room,4.00,4,garage patio stairs hallway entry other
+gym-equipment,Gym equipment,"Handles, seats and screens wiped, per machine.",count,4.00,3,gym
+toys,Put toys away,Toys sorted into their bins and shelves.,room,10.00,10,playroom nursery bonus
+changing-table,Changing table,The pad and surface wiped.,each,5.00,4,nursery
+shoe-area,Shoes and coats,Shoes paired and coats hung.,each,6.00,6,entry mudroom closet

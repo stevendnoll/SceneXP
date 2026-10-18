@@ -497,3 +497,64 @@ describe('the legs swing from the hip', () => {
         }
     });
 });
+
+// ---- A woman's build (`hips`, Whitestone's Maya, 2026-10-14) -------------
+
+describe('the rig\'s hips: off by default, a woman\'s build from the legs when asked', () => {
+    const legsOf = (person) => person.children.filter((c) => c.isGroup && c.userData.isLeg);
+    /** A leg's thigh and shin: the cylinders centered a quarter and three
+     *  quarters of the way down it. */
+    const meshAt = (leg, y) => leg.children.find((c) => c.geometry && c.geometry.type === 'CylinderGeometry' && Math.abs(c.position.y - y) < 1e-6);
+    const pieces = (leg) => ({ thigh: meshAt(leg, -0.1875).geometry.parameters, shin: meshAt(leg, -0.5625).geometry.parameters });
+    const torsoOf = (person) => person.children.find((c) => c.isMesh && c.geometry.type === 'BoxGeometry' && Math.abs(c.position.y - 1.025) < 1e-6);
+    const boxOf = (obj, person) => {
+        person.updateMatrixWorld(true);
+        return new THREE.Box3().setFromObject(obj);
+    };
+
+    test('every figure built before the option is unchanged: the legs where they were, as they were', () => {
+        const person = createPerson({ role: 'customer' });
+        const legs = legsOf(person);
+        expect(legs.map((l) => Math.abs(l.position.x))).toEqual([0.095, 0.095]);
+        const { thigh, shin } = pieces(legs[0]);
+        expect(thigh.radiusTop).toBeCloseTo(0.065, 9);
+        expect(thigh.radiusBottom).toBeCloseTo(0.0715, 9);
+        expect(thigh.radialSegments).toBe(8);
+        expect(shin.radiusBottom).toBeCloseTo(0.0585, 9);
+    });
+
+    test('hips: the thighs make them, full at the hip and meeting, tapering to the knee, a slimmer ankle, and nothing added', () => {
+        const plain = createPerson({ role: 'customer' });
+        const person = createPerson({ role: 'customer', hips: 1 });
+        // Nothing beside the legs to bulge (QA, 2026-10-14: a separate
+        // pelvis stuck out at the sides and read as a stomach in front).
+        expect(person.children).toHaveLength(plain.children.length);
+        const [left, right] = legsOf(person).sort((a, b) => a.position.x - b.position.x);
+        const thighBox = (leg) => boxOf(meshAt(leg, -0.1875), person);
+        const torso = boxOf(torsoOf(person), person);
+        // The hip line runs just past the shirt's sides, a centimeter or so.
+        expect(thighBox(right).max.x).toBeGreaterThan(torso.max.x);
+        expect(thighBox(right).max.x).toBeLessThan(torso.max.x + 0.03);
+        expect(thighBox(left).min.x).toBeLessThan(torso.min.x);
+        // The thighs meet in the middle.
+        expect(thighBox(right).min.x - thighBox(left).max.x).toBeLessThan(0.01);
+        // Front to back, inside the shirt: never a belly.
+        expect(thighBox(right).max.z).toBeLessThan(torso.max.z);
+        const { thigh, shin } = pieces(right);
+        const was = pieces(legsOf(plain)[0]);
+        expect(thigh.radiusTop).toBeGreaterThan(was.thigh.radiusTop * 1.5);
+        expect(thigh.radiusBottom).toBeLessThan(thigh.radiusTop * 0.75);
+        expect(shin.radiusBottom).toBeLessThan(was.shin.radiusBottom);
+        // The legs still swing from the hip, tagged as before.
+        expect(legsOf(person).map((l) => l.position.y)).toEqual([0.75, 0.75]);
+    });
+
+    test('more than 1 is 1, and less than 0 is none', () => {
+        const one = createPerson({ role: 'customer', hips: 1 });
+        const many = createPerson({ role: 'customer', hips: 5 });
+        const none = createPerson({ role: 'customer', hips: -2 });
+        expect(legsOf(many)[0].position.x).toBe(legsOf(one)[0].position.x);
+        expect(pieces(legsOf(many)[0]).thigh.radiusTop).toBe(pieces(legsOf(one)[0]).thigh.radiusTop);
+        expect(pieces(legsOf(none)[0]).thigh.radiusTop).toBeCloseTo(0.065, 9);
+    });
+});

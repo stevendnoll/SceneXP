@@ -416,7 +416,7 @@ source of truth either way.
 6. **Add your world to the directory.** The directory is grouped into
    categories, so start by choosing the one your world belongs to:
    `worlds` (Worlds and games) for anything built for its own sake,
-   `business` (Small business tributes), or `personal` (Personal tributes).
+   `business` (Small business showcases), or `personal` (Personal tributes).
    Then add one card in `www/index.html`, at the top of that category's
    group, and add your world at the top of that same category's JSON-LD
    `ItemList` in the head of the same file, renumbering that list only.

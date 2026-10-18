@@ -51,19 +51,28 @@ async function graphOf(entry) {
 }
 
 const PAGES = [];
+const dirs = [];
 for (const entry of await readdir(WWW, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
-    const page = join(WWW, entry.name, 'index.html');
+    dirs.push({ scene: entry.name, nested: false });
+    // A page one folder further in, with its own js/main (whitestone/tasks/).
+    for (const sub of await readdir(join(WWW, entry.name), { withFileTypes: true })) {
+        if (sub.isDirectory()) dirs.push({ scene: `${entry.name}/${sub.name}`, nested: true });
+    }
+}
+for (const { scene, nested } of dirs) {
+    const page = join(WWW, scene, 'index.html');
     if (!existsSync(page)) continue;
     const html = await readFile(page, 'utf8');
-    if (html.includes('src="js/main.min.js"')) PAGES.push({ scene: entry.name, page, html });
+    if (html.includes('src="js/main.min.js"')) PAGES.push({ scene, page, html, nested });
 }
 
-test('the scene pages were found', () => {
-    expect(PAGES.length).toBeGreaterThanOrEqual(18);
+test('the scene pages were found, and the Whitestone cleaner\'s page among them', () => {
+    expect(PAGES.filter((p) => !p.nested).length).toBeGreaterThanOrEqual(18);
+    expect(PAGES.map((p) => p.scene)).toContain('whitestone/tasks');
 });
 
-describe.each(PAGES.map((p) => [p.scene, p]))('%s', (_scene, { page, html }) => {
+describe.each(PAGES.map((p) => [p.scene, p]))('%s', (_scene, { page, html, nested }) => {
     test('preloads exactly the modules it imports, starting with its own main', async () => {
         const begin = html.indexOf(BEGIN);
         const end = html.indexOf(END);
@@ -81,10 +90,14 @@ describe.each(PAGES.map((p) => [p.scene, p]))('%s', (_scene, { page, html }) => 
         for (const href of listed) expect(`${href} exists: ${existsSync(join(dir, href))}`).toBe(`${href} exists: true`);
     });
 
-    test('the list sits in the head, after the three.js preload', () => {
+    test('the list sits in the head, after the three.js preload (a page without three.js: before its script)', () => {
         const three = html.search(/<link rel="modulepreload" href="\.\.\/lib\/three\//);
-        expect(three).toBeGreaterThan(-1);
-        expect(html.indexOf(BEGIN)).toBeGreaterThan(three);
+        if (nested && three === -1) {
+            expect(html.indexOf(END)).toBeLessThan(html.indexOf('src="js/main.min.js"'));
+        } else {
+            expect(three).toBeGreaterThan(-1);
+            expect(html.indexOf(BEGIN)).toBeGreaterThan(three);
+        }
         expect(html.indexOf(END)).toBeLessThan(html.indexOf('</head>'));
     });
 });

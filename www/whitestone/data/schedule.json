@@ -1,0 +1,94 @@
+{
+  "format": 1,
+  "timezone": "America/Los_Angeles",
+  "cleaners": 1,
+  "mode": "day",
+  "gapMinutes": 240,
+  "slotStepMinutes": 30,
+  "leadHours": 24,
+  "horizonDays": 60,
+  "cancelHours": 24,
+  "hours": {
+    "monday": {
+      "open": "08:00",
+      "close": "20:00"
+    },
+    "tuesday": {
+      "open": "08:00",
+      "close": "20:00"
+    },
+    "wednesday": {
+      "open": "08:00",
+      "close": "20:00"
+    },
+    "thursday": {
+      "open": "08:00",
+      "close": "20:00"
+    },
+    "friday": {
+      "open": "08:00",
+      "close": "20:00"
+    },
+    "saturday": {
+      "open": "08:00",
+      "close": "16:00"
+    },
+    "sunday": null
+  },
+  "holidays": [
+    {
+      "date": "2026-11-26",
+      "name": "Thanksgiving",
+      "open": null,
+      "close": null
+    },
+    {
+      "date": "2026-11-27",
+      "name": "Day after Thanksgiving",
+      "open": null,
+      "close": null
+    },
+    {
+      "date": "2026-12-24",
+      "name": "Christmas Eve",
+      "open": "08:00",
+      "close": "12:00"
+    },
+    {
+      "date": "2026-12-25",
+      "name": "Christmas Day",
+      "open": null,
+      "close": null
+    },
+    {
+      "date": "2026-12-31",
+      "name": "New Year's Eve",
+      "open": "08:00",
+      "close": "12:00"
+    },
+    {
+      "date": "2027-01-01",
+      "name": "New Year's Day",
+      "open": null,
+      "close": null
+    },
+    {
+      "date": "2027-05-31",
+      "name": "Memorial Day",
+      "open": null,
+      "close": null
+    },
+    {
+      "date": "2027-07-05",
+      "name": "Independence Day (observed)",
+      "open": null,
+      "close": null
+    },
+    {
+      "date": "2027-09-06",
+      "name": "Labor Day",
+      "open": null,
+      "close": null
+    }
+  ]
+}

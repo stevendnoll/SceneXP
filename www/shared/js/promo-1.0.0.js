@@ -59,6 +59,7 @@ export const EXPERIENCES = Object.freeze([
     { slug: 'earthdefense', category: 'worlds', title: 'Earth Defense', line: 'Built for the joy of flying through space', art: '/earthdefense/assets/og-earthdefense.webp?v=2' },
     { slug: 'mandelbrot', category: 'worlds', title: 'The Mandelbrot Set', line: 'For Benoit Mandelbrot', art: '/mandelbrot/assets/og-mandelbrot.webp' },
     { slug: 'steve', category: 'worlds', title: "Steve's Home Office", line: 'Where SceneXP gets built', art: '/steve/assets/og-steve.webp' },
+    { slug: 'whitestone', category: 'business', title: 'Whitestone Home Care', line: 'A concept for a home cleaning company', art: '/whitestone/assets/og-whitestone.webp?v=1' },
     { slug: 'automan', category: 'business', title: 'John Walker, The Auto Man', line: 'For a car buying advocate', art: '/automan/assets/card-automan.webp?v=1' },
     { slug: 'interstate', category: 'business', title: 'The Interstate Tire Shop', line: 'For a neighborhood tire shop', art: '/interstate/assets/og-interstate.webp' },
     { slug: 'seedtoseed', category: 'business', title: 'The Seed to Seed Garden', line: 'For a gardening business', art: '/seedtoseed/assets/og-seedtoseed.webp' },

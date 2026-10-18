@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<!-- © 2026 Continuum Commerce LLC. All rights reserved. -->
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles). -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <!-- no-referrer: the link that opens this page carries a checklist in its
+         fragment, and nothing about it should follow the cleaner anywhere. -->
+    <meta name="referrer" content="no-referrer">
+    <!-- PERMANENTLY UNLISTED (PLANNING, PRIVATE_LINKS). This page only ever
+         opens from a link a customer shares, so it carries full preview tags
+         for that link and never appears in search, the sitemap or the
+         directory. -->
+    <meta name="robots" content="noindex, nofollow">
+
+    <meta name="description" content="Open the cleaning checklist your customer shared with you, room by room, with every task and note in one place.">
+    <meta name="theme-color" content="#F4F2EE">
+    <meta name="author" content="Steve Noll">
+
+    <link rel="canonical" href="https://www.scenexp.com/whitestone/tasks/">
+
+    <!-- Open Graph. A GENERIC card, the same for every checklist, so a link
+         preview in a message thread says nothing about anybody's home. -->
+    <meta property="og:title" content="Your Whitestone checklist">
+    <meta property="og:description" content="A cleaning checklist was shared with you. Open it with the 6 digit PIN that came with the link.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/whitestone/tasks/">
+    <meta property="og:locale" content="en_US">
+    <!-- THE SOCIAL CARD IS STILL TO COME (og-whitestone-tasks.jpg, 1200 by
+         630, a generic Whitestone card with no home in it). -->
+    <meta property="og:image" content="https://www.scenexp.com/whitestone/tasks/assets/og-whitestone-tasks.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="The Whitestone Home Care wordmark, a low slate gable over the name, on warm stone.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Your Whitestone checklist">
+    <meta name="twitter:description" content="A cleaning checklist was shared with you. Open it with the 6 digit PIN that came with the link.">
+    <meta name="twitter:image" content="https://www.scenexp.com/whitestone/tasks/assets/og-whitestone-tasks.jpg?v=1">
+    <meta name="twitter:image:alt" content="The Whitestone Home Care wordmark, a low slate gable over the name, on warm stone.">
+
+    <title>Your checklist | Whitestone Home Care</title>
+
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=3">
+    <link rel="stylesheet" href="css/tasks.min.css?v=10">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="../js/copy.min.js">
+    <link rel="modulepreload" href="../js/beacons.min.js">
+    <link rel="modulepreload" href="../../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="../../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="../js/config.min.js">
+    <link rel="modulepreload" href="../js/links.min.js">
+    <link rel="modulepreload" href="../js/api.min.js">
+    <link rel="modulepreload" href="../js/standin.min.js">
+    <link rel="modulepreload" href="../js/photos.min.js">
+    <link rel="modulepreload" href="../js/seal.min.js">
+    <link rel="modulepreload" href="../js/sheet.min.js">
+    <link rel="modulepreload" href="../js/pricing.min.js">
+    <link rel="modulepreload" href="../js/sync.min.js">
+    <link rel="modulepreload" href="js/view.min.js">
+    <link rel="modulepreload" href="../js/booking.min.js">
+    <link rel="modulepreload" href="js/visit.min.js">
+    <link rel="modulepreload" href="../js/report.min.js">
+    <link rel="modulepreload" href="js/addons.min.js">
+    <link rel="modulepreload" href="../js/schedule.min.js">
+    <link rel="modulepreload" href="../js/zoned.min.js">
+    <link rel="modulepreload" href="../js/store.min.js">
+    <link rel="modulepreload" href="../js/taxonomy.min.js">
+    <link rel="modulepreload" href="../js/cards.min.js">
+    <link rel="modulepreload" href="../js/addons.min.js">
+    <!-- END generated modulepreload -->
+    <script type="module" src="js/main.min.js"></script>
+</head>
+
+<body>
+    <!-- The studio's own wordmark (assets/logo-whitestone.svg), so the
+         cleaner sees the same company the customer did. -->
+    <header class="tasks-header">
+        <img class="tasks-logo" src="../assets/logo-whitestone.svg?v=3" alt="Whitestone Home Care" width="1068" height="239">
+    </header>
+
+    <main class="tasks-main">
+        <!-- THE GATE: the PIN, until the checklist is open (main.js). -->
+        <section id="tasks-gate" class="tasks-gate">
+            <h1>Your cleaning checklist</h1>
+            <p class="tasks-lead">A customer shared a checklist with you. Enter the
+                6 digit PIN that came with the link to open it.</p>
+
+            <!-- Hidden until main.js runs, so the form can never submit a PIN in
+                 a page address without the script that handles it. -->
+            <form id="pin-form" class="pin-form" hidden novalidate>
+                <label for="pin-input">PIN</label>
+                <input id="pin-input" name="pin" type="text" inputmode="numeric"
+                    autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}"
+                    aria-describedby="pin-status" required>
+                <button id="pin-open" type="submit">Open the checklist</button>
+            </form>
+            <p id="pin-status" class="pin-status" role="status" aria-live="polite"></p>
+        </section>
+
+        <!-- THE CHECKLIST, once open (view.js): care preferences first, the
+             home, Start here, then every room by level. -->
+        <div id="tasks-view" class="tasks-view" hidden></div>
+
+        <noscript>
+            <p class="tasks-noscript">This page needs JavaScript to open a
+                checklist. The checklist is locked in the link your customer
+                shared, and it is only unlocked here, in your own browser,
+                once you enter the PIN. Please allow JavaScript for this page
+                and reload it.</p>
+        </noscript>
+    </main>
+
+    <footer class="tasks-footer">
+        <p>Whitestone Home Care is a demo by SceneXP, not a real company.
+            Prices and bookings are examples.</p>
+        <p><a href="/privacy.html">Privacy</a></p>
+    </footer>
+</body>
+
+</html>

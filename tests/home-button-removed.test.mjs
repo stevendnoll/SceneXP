@@ -48,7 +48,7 @@ const ROOT = new URL('../', import.meta.url);
  *  and took the link at launch (2026-09-14, 2026-09-23 and 2026-09-28) so a
  *  visitor arriving from a shared link can find the rest. */
 const WITH_LINK = ['dad', 'earthdefense', 'family', 'garden', 'gavin', 'highwater',
-  'mandelbrot', 'office', 'roqui', 'steve', 'tornado', 'xo'];
+  'mandelbrot', 'office', 'roqui', 'steve', 'tornado', 'whitestone', 'xo'];
 /** The five stripped first, which deliberately carry no directory link. */
 const WITHOUT_LINK = ['automan', 'interstate', 'jamar', 'seedtoseed', 'sunnyvalejenn'];
 const ALL = [...WITH_LINK, ...WITHOUT_LINK].sort();
@@ -57,8 +57,18 @@ const ALL = [...WITH_LINK, ...WITHOUT_LINK].sort();
  *  its Begin button, so its link needs no shield and deliberately has none.
  *  X's and O's is the same: its welcome card is dismissed by a button. So is
  *  Tornado Alley's, which is the shared player's, as High Water's is, and
- *  Corner Office's, whose card is dismissed only by its own buttons. */
-const NO_SHIELD_NEEDED = ['highwater', 'office', 'tornado', 'xo'];
+ *  Corner Office's, whose card is dismissed only by its own buttons.
+ *  Whitestone has no welcome overlay at all: its link sits at the foot of
+ *  Maya's bubble. */
+const NO_SHIELD_NEEDED = ['highwater', 'office', 'tornado', 'whitestone', 'xo'];
+
+/** Scenes that REPLACE their address, adding no history entry, and why.
+ *  Back is still one press: only pushState and a hash write add an entry. */
+const REPLACES_ONLY = {
+  // An edit link's keys come off the address bar before anything else, so a
+  // screen share never shows them (PLANNING 7.3).
+  whitestone: 'strips an edit link’s keys from the address bar',
+};
 
 const SLOT_PITCH = 62;   // a 50px button plus a 12px gap
 const FIRST_SLOT = 20;   // the corner
@@ -235,8 +245,10 @@ test('no scene writes to history, so Back is one press to the directory', async 
   // tab becomes a trap rather than a way out. This test is the tripwire.
   for (const scene of ALL) {
     const main = await read(`www/${scene}/js/main.js`);
-    const writes = /history\.(pushState|replaceState)|location\.hash\s*=/.test(main);
-    expect(`${scene} writes history: ${writes}`).toBe(`${scene} writes history: false`);
+    const adds = /history\.pushState|location\.hash\s*=/.test(main);
+    expect(`${scene} adds history: ${adds}`).toBe(`${scene} adds history: false`);
+    const replaces = /history\.replaceState/.test(main);
+    expect(`${scene} replaces its address: ${replaces}`).toBe(`${scene} replaces its address: ${scene in REPLACES_ONLY}`);
   }
 });
 

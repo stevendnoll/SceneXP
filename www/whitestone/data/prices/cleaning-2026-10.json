@@ -1,0 +1,1480 @@
+{
+  "format": 1,
+  "serviceType": "cleaning",
+  "version": "cleaning-2026-10",
+  "effective": "2026-10-01",
+  "currency": "USD",
+  "taxIncluded": false,
+  "visitMinimumCents": 12000,
+  "sizes": {
+    "small": 75,
+    "medium": 100,
+    "large": 150
+  },
+  "options": [
+    {
+      "key": "deep-clean",
+      "name": "Deep clean",
+      "description": "Extra time on built-up grime."
+    },
+    {
+      "key": "polish",
+      "name": "Polish fixtures",
+      "description": "Faucets and metal polished to a shine."
+    },
+    {
+      "key": "descale",
+      "name": "Descale",
+      "description": "Hard water spots and limescale removed."
+    },
+    {
+      "key": "under-furniture",
+      "name": "Under furniture",
+      "description": "Light furniture moved and cleaned under."
+    },
+    {
+      "key": "inside",
+      "name": "Inside too",
+      "description": "The inside as well as the outside."
+    },
+    {
+      "key": "edges",
+      "name": "Edges by hand",
+      "description": "Edges and corners done by hand."
+    },
+    {
+      "key": "disinfect",
+      "name": "Disinfect",
+      "description": "High-touch spots disinfected after cleaning."
+    },
+    {
+      "key": "tracks",
+      "name": "Tracks and sills",
+      "description": "Window tracks and sills cleaned."
+    }
+  ],
+  "tasks": [
+    {
+      "key": "stovetop",
+      "name": "Stovetop",
+      "description": "Burners, grates and the surface around them, wiped clean.",
+      "unit": "each",
+      "cents": 1000,
+      "minutes": 5,
+      "areas": [
+        "kitchen"
+      ],
+      "options": [
+        {
+          "key": "deep-clean",
+          "cents": 500,
+          "minutes": 5
+        }
+      ]
+    },
+    {
+      "key": "oven-interior",
+      "name": "Oven interior",
+      "description": "Racks, walls and door glass inside the oven.",
+      "unit": "each",
+      "cents": 3000,
+      "minutes": 25,
+      "areas": [
+        "kitchen"
+      ],
+      "options": [
+        {
+          "key": "deep-clean",
+          "cents": 1000,
+          "minutes": 10
+        }
+      ]
+    },
+    {
+      "key": "microwave",
+      "name": "Microwave",
+      "description": "Inside and out, including the turntable.",
+      "unit": "each",
+      "cents": 600,
+      "minutes": 5,
+      "areas": [
+        "kitchen"
+      ],
+      "options": [
+        {
+          "key": "deep-clean",
+          "cents": 300,
+          "minutes": 3
+        }
+      ]
+    },
+    {
+      "key": "refrigerator",
+      "name": "Refrigerator",
+      "description": "Doors, handles and the top, outside.",
+      "unit": "each",
+      "cents": 600,
+      "minutes": 5,
+      "areas": [
+        "kitchen",
+        "garage"
+      ],
+      "options": [
+        {
+          "key": "polish",
+          "cents": 300,
+          "minutes": 3
+        },
+        {
+          "key": "inside",
+          "cents": 2500,
+          "minutes": 25
+        }
+      ]
+    },
+    {
+      "key": "dishwasher",
+      "name": "Dishwasher",
+      "description": "Front panel, handle and controls.",
+      "unit": "each",
+      "cents": 400,
+      "minutes": 3,
+      "areas": [
+        "kitchen"
+      ],
+      "options": []
+    },
+    {
+      "key": "countertops",
+      "name": "Countertops",
+      "description": "Cleared, wiped and dried, with your things put back.",
+      "unit": "room",
+      "cents": 1000,
+      "minutes": 8,
+      "areas": [
+        "kitchen",
+        "pantry",
+        "laundry",
+        "primary-bathroom",
+        "bathroom",
+        "powder-room"
+      ],
+      "options": [
+        {
+          "key": "disinfect",
+          "cents": 200,
+          "minutes": 2
+        }
+      ]
+    },
+    {
+      "key": "kitchen-sink",
+      "name": "Kitchen sink",
+      "description": "Basin, drain and faucet.",
+      "unit": "each",
+      "cents": 600,
+      "minutes": 4,
+      "areas": [
+        "kitchen",
+        "laundry"
+      ],
+      "options": [
+        {
+          "key": "polish",
+          "cents": 300,
+          "minutes": 3
+        }
+      ]
+    },
+    {
+      "key": "cabinet-fronts",
+      "name": "Cabinet fronts",
+      "description": "Doors and handles wiped down.",
+      "unit": "room",
+      "cents": 1200,
+      "minutes": 10,
+      "areas": [
+        "kitchen",
+        "pantry",
+        "laundry",
+        "primary-bathroom",
+        "bathroom"
+      ],
+      "options": [
+        {
+          "key": "inside",
+          "cents": 2000,
+          "minutes": 20
+        }
+      ]
+    },
+    {
+      "key": "backsplash",
+      "name": "Backsplash",
+      "description": "The tile or panel behind the counters.",
+      "unit": "each",
+      "cents": 600,
+      "minutes": 5,
+      "areas": [
+        "kitchen"
+      ],
+      "options": []
+    },
+    {
+      "key": "small-appliances",
+      "name": "Small appliances",
+      "description": "A toaster, coffee maker or the like, per appliance.",
+      "unit": "count",
+      "cents": 300,
+      "minutes": 3,
+      "areas": [
+        "kitchen"
+      ],
+      "options": []
+    },
+    {
+      "key": "load-dishwasher",
+      "name": "Load the dishwasher",
+      "description": "Dishes rinsed, loaded and the machine started.",
+      "unit": "each",
+      "cents": 800,
+      "minutes": 8,
+      "areas": [
+        "kitchen"
+      ],
+      "options": []
+    },
+    {
+      "key": "empty-trash",
+      "name": "Empty trash",
+      "description": "Bins emptied and relined, per bin.",
+      "unit": "count",
+      "cents": 200,
+      "minutes": 2,
+      "areas": [
+        "kitchen",
+        "office",
+        "primary-bedroom",
+        "bedroom",
+        "nursery",
+        "primary-bathroom",
+        "bathroom",
+        "powder-room",
+        "laundry",
+        "garage",
+        "playroom"
+      ],
+      "options": []
+    },
+    {
+      "key": "toilet",
+      "name": "Toilet",
+      "description": "Bowl, seat, base and tank.",
+      "unit": "each",
+      "cents": 1200,
+      "minutes": 8,
+      "areas": [
+        "primary-bathroom",
+        "bathroom",
+        "powder-room"
+      ],
+      "options": [
+        {
+          "key": "deep-clean",
+          "cents": 600,
+          "minutes": 6
+        }
+      ]
+    },
+    {
+      "key": "shower",
+      "name": "Shower",
+      "description": "Walls, floor, door or curtain, and fixtures.",
+      "unit": "each",
+      "cents": 2000,
+      "minutes": 15,
+      "areas": [
+        "primary-bathroom",
+        "bathroom"
+      ],
+      "options": [
+        {
+          "key": "descale",
+          "cents": 1000,
+          "minutes": 10
+        }
+      ]
+    },
+    {
+      "key": "bathtub",
+      "name": "Bathtub",
+      "description": "The tub, its surround and fixtures.",
+      "unit": "each",
+      "cents": 1500,
+      "minutes": 12,
+      "areas": [
+        "primary-bathroom",
+        "bathroom"
+      ],
+      "options": [
+        {
+          "key": "descale",
+          "cents": 800,
+          "minutes": 8
+        }
+      ]
+    },
+    {
+      "key": "bathroom-sink",
+      "name": "Bathroom sink",
+      "description": "Basin, faucet and the vanity top around it.",
+      "unit": "each",
+      "cents": 600,
+      "minutes": 4,
+      "areas": [
+        "primary-bathroom",
+        "bathroom",
+        "powder-room"
+      ],
+      "options": [
+        {
+          "key": "polish",
+          "cents": 300,
+          "minutes": 3
+        }
+      ]
+    },
+    {
+      "key": "mirrors",
+      "name": "Mirrors",
+      "description": "Left streak-free, per mirror.",
+      "unit": "count",
+      "cents": 300,
+      "minutes": 2,
+      "areas": [
+        "primary-bathroom",
+        "bathroom",
+        "powder-room",
+        "entry",
+        "hallway",
+        "primary-bedroom",
+        "bedroom",
+        "gym",
+        "closet"
+      ],
+      "options": []
+    },
+    {
+      "key": "fresh-towels",
+      "name": "Fresh towels",
+      "description": "Clean towels hung, and used ones taken to the laundry.",
+      "unit": "each",
+      "cents": 400,
+      "minutes": 3,
+      "areas": [
+        "primary-bathroom",
+        "bathroom",
+        "powder-room"
+      ],
+      "options": []
+    },
+    {
+      "key": "make-bed",
+      "name": "Make the bed",
+      "description": "Sheets straightened and pillows arranged, per bed.",
+      "unit": "count",
+      "cents": 500,
+      "minutes": 5,
+      "areas": [
+        "primary-bedroom",
+        "bedroom",
+        "nursery",
+        "bonus"
+      ],
+      "options": []
+    },
+    {
+      "key": "change-linens",
+      "name": "Change bed linens",
+      "description": "Fresh sheets and pillowcases, per bed.",
+      "unit": "count",
+      "cents": 800,
+      "minutes": 7,
+      "areas": [
+        "primary-bedroom",
+        "bedroom",
+        "nursery",
+        "bonus"
+      ],
+      "options": []
+    },
+    {
+      "key": "vacuum-floor",
+      "name": "Vacuum floors",
+      "description": "Every open area of the floor, rugs included.",
+      "unit": "room",
+      "cents": 800,
+      "minutes": 6,
+      "areas": [
+        "entry",
+        "hallway",
+        "living",
+        "family",
+        "dining",
+        "kitchen",
+        "office",
+        "primary-bedroom",
+        "bedroom",
+        "nursery",
+        "playroom",
+        "gym",
+        "bonus",
+        "closet",
+        "mudroom",
+        "other"
+      ],
+      "options": [
+        {
+          "key": "under-furniture",
+          "cents": 400,
+          "minutes": 4
+        }
+      ]
+    },
+    {
+      "key": "mop-floor",
+      "name": "Mop hard floors",
+      "description": "Hard floors mopped and left to dry.",
+      "unit": "room",
+      "cents": 900,
+      "minutes": 8,
+      "areas": [
+        "entry",
+        "hallway",
+        "living",
+        "family",
+        "dining",
+        "kitchen",
+        "pantry",
+        "office",
+        "primary-bathroom",
+        "bathroom",
+        "powder-room",
+        "laundry",
+        "mudroom",
+        "playroom",
+        "gym",
+        "other"
+      ],
+      "options": [
+        {
+          "key": "under-furniture",
+          "cents": 400,
+          "minutes": 4
+        },
+        {
+          "key": "edges",
+          "cents": 400,
+          "minutes": 5
+        }
+      ]
+    },
+    {
+      "key": "dust-surfaces",
+      "name": "Dust surfaces",
+      "description": "Shelves, tables and ledges within reach.",
+      "unit": "room",
+      "cents": 800,
+      "minutes": 8,
+      "areas": [
+        "entry",
+        "hallway",
+        "living",
+        "family",
+        "dining",
+        "kitchen",
+        "office",
+        "primary-bedroom",
+        "bedroom",
+        "nursery",
+        "playroom",
+        "gym",
+        "bonus",
+        "closet",
+        "other"
+      ],
+      "options": []
+    },
+    {
+      "key": "baseboards",
+      "name": "Baseboards",
+      "description": "Wiped along every wall.",
+      "unit": "room",
+      "cents": 1000,
+      "minutes": 10,
+      "areas": [
+        "entry",
+        "hallway",
+        "stairs",
+        "living",
+        "family",
+        "dining",
+        "kitchen",
+        "office",
+        "primary-bedroom",
+        "bedroom",
+        "nursery",
+        "primary-bathroom",
+        "bathroom",
+        "powder-room",
+        "laundry",
+        "mudroom",
+        "playroom",
+        "gym",
+        "bonus",
+        "other"
+      ],
+      "options": []
+    },
+    {
+      "key": "tidy-room",
+      "name": "Tidy up",
+      "description": "Things returned to their places and surfaces cleared.",
+      "unit": "room",
+      "cents": 800,
+      "minutes": 8,
+      "areas": [
+        "living",
+        "family",
+        "dining",
+        "office",
+        "primary-bedroom",
+        "bedroom",
+        "nursery",
+        "playroom",
+        "bonus",
+        "other"
+      ],
+      "options": []
+    },
+    {
+      "key": "upholstery",
+      "name": "Vacuum upholstery",
+      "description": "Sofas and chairs with the cushions lifted, per piece.",
+      "unit": "count",
+      "cents": 800,
+      "minutes": 8,
+      "areas": [
+        "living",
+        "family",
+        "bonus",
+        "playroom",
+        "office"
+      ],
+      "options": []
+    },
+    {
+      "key": "high-touch",
+      "name": "Switches and handles",
+      "description": "Light switches, door handles and pulls wiped.",
+      "unit": "room",
+      "cents": 300,
+      "minutes": 3,
+      "areas": [
+        "entry",
+        "hallway",
+        "stairs",
+        "living",
+        "family",
+        "dining",
+        "kitchen",
+        "pantry",
+        "office",
+        "primary-bedroom",
+        "bedroom",
+        "nursery",
+        "primary-bathroom",
+        "bathroom",
+        "powder-room",
+        "laundry",
+        "mudroom",
+        "closet",
+        "playroom",
+        "gym",
+        "bonus",
+        "garage",
+        "other"
+      ],
+      "options": [
+        {
+          "key": "disinfect",
+          "cents": 200,
+          "minutes": 2
+        }
+      ]
+    },
+    {
+      "key": "interior-windows",
+      "name": "Interior windows",
+      "description": "The glass on the inside, per window.",
+      "unit": "count",
+      "cents": 500,
+      "minutes": 4,
+      "areas": [
+        "entry",
+        "hallway",
+        "stairs",
+        "living",
+        "family",
+        "dining",
+        "kitchen",
+        "office",
+        "primary-bedroom",
+        "bedroom",
+        "nursery",
+        "primary-bathroom",
+        "bathroom",
+        "laundry",
+        "mudroom",
+        "playroom",
+        "gym",
+        "bonus",
+        "garage",
+        "other"
+      ],
+      "options": [
+        {
+          "key": "tracks",
+          "cents": 200,
+          "minutes": 2
+        }
+      ]
+    },
+    {
+      "key": "glass-doors",
+      "name": "Sliding glass doors",
+      "description": "Both panes on the inside, per door.",
+      "unit": "count",
+      "cents": 600,
+      "minutes": 5,
+      "areas": [
+        "living",
+        "family",
+        "dining",
+        "kitchen",
+        "patio",
+        "bonus"
+      ],
+      "options": [
+        {
+          "key": "tracks",
+          "cents": 300,
+          "minutes": 3
+        }
+      ]
+    },
+    {
+      "key": "ceiling-fan",
+      "name": "Ceiling fan",
+      "description": "Blades and fixture dusted, per fan.",
+      "unit": "count",
+      "cents": 600,
+      "minutes": 5,
+      "areas": [
+        "living",
+        "family",
+        "primary-bedroom",
+        "bedroom",
+        "office",
+        "bonus",
+        "patio",
+        "playroom",
+        "gym"
+      ],
+      "options": []
+    },
+    {
+      "key": "blinds",
+      "name": "Blinds",
+      "description": "Slats dusted, per window.",
+      "unit": "count",
+      "cents": 600,
+      "minutes": 6,
+      "areas": [
+        "living",
+        "family",
+        "dining",
+        "kitchen",
+        "office",
+        "primary-bedroom",
+        "bedroom",
+        "nursery",
+        "primary-bathroom",
+        "bathroom",
+        "playroom",
+        "gym",
+        "bonus",
+        "other"
+      ],
+      "options": []
+    },
+    {
+      "key": "doors",
+      "name": "Doors and frames",
+      "description": "Both sides and the frame, per door.",
+      "unit": "count",
+      "cents": 300,
+      "minutes": 2,
+      "areas": [
+        "entry",
+        "hallway",
+        "mudroom",
+        "closet",
+        "primary-bedroom",
+        "bedroom"
+      ],
+      "options": []
+    },
+    {
+      "key": "vacuum-stairs",
+      "name": "Vacuum stairs",
+      "description": "Each tread and riser.",
+      "unit": "room",
+      "cents": 1200,
+      "minutes": 10,
+      "areas": [
+        "stairs"
+      ],
+      "options": [
+        {
+          "key": "edges",
+          "cents": 400,
+          "minutes": 4
+        }
+      ]
+    },
+    {
+      "key": "railings",
+      "name": "Railings",
+      "description": "Handrail and balusters wiped.",
+      "unit": "each",
+      "cents": 500,
+      "minutes": 5,
+      "areas": [
+        "stairs"
+      ],
+      "options": []
+    },
+    {
+      "key": "table-chairs",
+      "name": "Table and chairs",
+      "description": "The tabletop and chair seats wiped.",
+      "unit": "each",
+      "cents": 600,
+      "minutes": 5,
+      "areas": [
+        "dining",
+        "kitchen",
+        "patio"
+      ],
+      "options": []
+    },
+    {
+      "key": "desk",
+      "name": "Desk",
+      "description": "The surface wiped around your things, which stay where they are.",
+      "unit": "each",
+      "cents": 500,
+      "minutes": 4,
+      "areas": [
+        "office",
+        "bedroom",
+        "primary-bedroom",
+        "bonus"
+      ],
+      "options": []
+    },
+    {
+      "key": "electronics",
+      "name": "Screens and electronics",
+      "description": "Dusted with a dry cloth.",
+      "unit": "each",
+      "cents": 400,
+      "minutes": 4,
+      "areas": [
+        "office",
+        "living",
+        "family",
+        "bonus"
+      ],
+      "options": []
+    },
+    {
+      "key": "laundry-load",
+      "name": "Wash and dry a load",
+      "description": "One load washed and dried, per load.",
+      "unit": "count",
+      "cents": 1000,
+      "minutes": 10,
+      "areas": [
+        "laundry"
+      ],
+      "options": []
+    },
+    {
+      "key": "fold-laundry",
+      "name": "Fold laundry",
+      "description": "One load folded and set out, per load.",
+      "unit": "count",
+      "cents": 800,
+      "minutes": 10,
+      "areas": [
+        "laundry",
+        "primary-bedroom",
+        "bedroom"
+      ],
+      "options": []
+    },
+    {
+      "key": "washer-dryer",
+      "name": "Washer and dryer",
+      "description": "Tops and fronts wiped, and the lint trap cleared.",
+      "unit": "each",
+      "cents": 500,
+      "minutes": 4,
+      "areas": [
+        "laundry"
+      ],
+      "options": []
+    },
+    {
+      "key": "organize-shelves",
+      "name": "Organize shelves",
+      "description": "Items grouped and squared on the shelves.",
+      "unit": "room",
+      "cents": 1500,
+      "minutes": 15,
+      "areas": [
+        "pantry",
+        "closet",
+        "garage",
+        "laundry"
+      ],
+      "options": []
+    },
+    {
+      "key": "sweep-floor",
+      "name": "Sweep",
+      "description": "The floor swept and the debris bagged.",
+      "unit": "room",
+      "cents": 1000,
+      "minutes": 10,
+      "areas": [
+        "garage",
+        "patio",
+        "mudroom",
+        "entry"
+      ],
+      "options": []
+    },
+    {
+      "key": "patio-furniture",
+      "name": "Patio furniture",
+      "description": "Seats and tables wiped, per piece.",
+      "unit": "count",
+      "cents": 500,
+      "minutes": 5,
+      "areas": [
+        "patio"
+      ],
+      "options": []
+    },
+    {
+      "key": "cobwebs",
+      "name": "Cobwebs",
+      "description": "Corners and ceilings cleared.",
+      "unit": "room",
+      "cents": 400,
+      "minutes": 4,
+      "areas": [
+        "garage",
+        "patio",
+        "stairs",
+        "hallway",
+        "entry",
+        "other"
+      ],
+      "options": []
+    },
+    {
+      "key": "gym-equipment",
+      "name": "Gym equipment",
+      "description": "Handles, seats and screens wiped, per machine.",
+      "unit": "count",
+      "cents": 400,
+      "minutes": 3,
+      "areas": [
+        "gym"
+      ],
+      "options": [
+        {
+          "key": "disinfect",
+          "cents": 200,
+          "minutes": 2
+        }
+      ]
+    },
+    {
+      "key": "toys",
+      "name": "Put toys away",
+      "description": "Toys sorted into their bins and shelves.",
+      "unit": "room",
+      "cents": 1000,
+      "minutes": 10,
+      "areas": [
+        "playroom",
+        "nursery",
+        "bonus"
+      ],
+      "options": []
+    },
+    {
+      "key": "changing-table",
+      "name": "Changing table",
+      "description": "The pad and surface wiped.",
+      "unit": "each",
+      "cents": 500,
+      "minutes": 4,
+      "areas": [
+        "nursery"
+      ],
+      "options": [
+        {
+          "key": "disinfect",
+          "cents": 200,
+          "minutes": 2
+        }
+      ]
+    },
+    {
+      "key": "shoe-area",
+      "name": "Shoes and coats",
+      "description": "Shoes paired and coats hung.",
+      "unit": "each",
+      "cents": 600,
+      "minutes": 6,
+      "areas": [
+        "entry",
+        "mudroom",
+        "closet"
+      ],
+      "options": []
+    }
+  ],
+  "presets": {
+    "entry": [
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "mop-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "mirrors",
+        "options": [],
+        "quantity": 1
+      },
+      {
+        "task": "shoe-area",
+        "options": []
+      },
+      {
+        "task": "baseboards",
+        "options": [],
+        "size": "medium"
+      }
+    ],
+    "hallway": [
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "dust-surfaces",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "baseboards",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "high-touch",
+        "options": [],
+        "size": "medium"
+      }
+    ],
+    "stairs": [
+      {
+        "task": "vacuum-stairs",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "railings",
+        "options": []
+      }
+    ],
+    "living": [
+      {
+        "task": "tidy-room",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "dust-surfaces",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "upholstery",
+        "options": [],
+        "quantity": 1
+      },
+      {
+        "task": "baseboards",
+        "options": [],
+        "size": "medium"
+      }
+    ],
+    "family": [
+      {
+        "task": "tidy-room",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "dust-surfaces",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "upholstery",
+        "options": [],
+        "quantity": 1
+      },
+      {
+        "task": "baseboards",
+        "options": [],
+        "size": "medium"
+      }
+    ],
+    "dining": [
+      {
+        "task": "table-chairs",
+        "options": []
+      },
+      {
+        "task": "dust-surfaces",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "mop-floor",
+        "options": [],
+        "size": "medium"
+      }
+    ],
+    "kitchen": [
+      {
+        "task": "stovetop",
+        "options": []
+      },
+      {
+        "task": "kitchen-sink",
+        "options": []
+      },
+      {
+        "task": "countertops",
+        "options": [
+          "disinfect"
+        ],
+        "size": "medium"
+      },
+      {
+        "task": "microwave",
+        "options": []
+      },
+      {
+        "task": "refrigerator",
+        "options": []
+      },
+      {
+        "task": "dishwasher",
+        "options": []
+      },
+      {
+        "task": "backsplash",
+        "options": []
+      },
+      {
+        "task": "mop-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "empty-trash",
+        "options": [],
+        "quantity": 1
+      }
+    ],
+    "pantry": [
+      {
+        "task": "countertops",
+        "options": [],
+        "size": "small"
+      },
+      {
+        "task": "mop-floor",
+        "options": [],
+        "size": "small"
+      }
+    ],
+    "office": [
+      {
+        "task": "desk",
+        "options": []
+      },
+      {
+        "task": "dust-surfaces",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "electronics",
+        "options": []
+      },
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "empty-trash",
+        "options": [],
+        "quantity": 1
+      }
+    ],
+    "primary-bedroom": [
+      {
+        "task": "make-bed",
+        "options": [],
+        "quantity": 1
+      },
+      {
+        "task": "dust-surfaces",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "mirrors",
+        "options": [],
+        "quantity": 1
+      },
+      {
+        "task": "empty-trash",
+        "options": [],
+        "quantity": 1
+      }
+    ],
+    "bedroom": [
+      {
+        "task": "make-bed",
+        "options": [],
+        "quantity": 1
+      },
+      {
+        "task": "dust-surfaces",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "medium"
+      }
+    ],
+    "nursery": [
+      {
+        "task": "changing-table",
+        "options": [
+          "disinfect"
+        ]
+      },
+      {
+        "task": "dust-surfaces",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "toys",
+        "options": [],
+        "size": "medium"
+      }
+    ],
+    "primary-bathroom": [
+      {
+        "task": "toilet",
+        "options": []
+      },
+      {
+        "task": "shower",
+        "options": []
+      },
+      {
+        "task": "bathroom-sink",
+        "options": []
+      },
+      {
+        "task": "mirrors",
+        "options": [],
+        "quantity": 1
+      },
+      {
+        "task": "countertops",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "mop-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "fresh-towels",
+        "options": []
+      }
+    ],
+    "bathroom": [
+      {
+        "task": "toilet",
+        "options": []
+      },
+      {
+        "task": "shower",
+        "options": []
+      },
+      {
+        "task": "bathroom-sink",
+        "options": []
+      },
+      {
+        "task": "mirrors",
+        "options": [],
+        "quantity": 1
+      },
+      {
+        "task": "mop-floor",
+        "options": [],
+        "size": "small"
+      }
+    ],
+    "powder-room": [
+      {
+        "task": "toilet",
+        "options": []
+      },
+      {
+        "task": "bathroom-sink",
+        "options": []
+      },
+      {
+        "task": "mirrors",
+        "options": [],
+        "quantity": 1
+      },
+      {
+        "task": "mop-floor",
+        "options": [],
+        "size": "small"
+      }
+    ],
+    "laundry": [
+      {
+        "task": "washer-dryer",
+        "options": []
+      },
+      {
+        "task": "countertops",
+        "options": [],
+        "size": "small"
+      },
+      {
+        "task": "mop-floor",
+        "options": [],
+        "size": "small"
+      }
+    ],
+    "mudroom": [
+      {
+        "task": "shoe-area",
+        "options": []
+      },
+      {
+        "task": "sweep-floor",
+        "options": [],
+        "size": "small"
+      },
+      {
+        "task": "mop-floor",
+        "options": [],
+        "size": "small"
+      }
+    ],
+    "closet": [
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "small"
+      },
+      {
+        "task": "dust-surfaces",
+        "options": [],
+        "size": "small"
+      }
+    ],
+    "playroom": [
+      {
+        "task": "toys",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "dust-surfaces",
+        "options": [],
+        "size": "medium"
+      }
+    ],
+    "gym": [
+      {
+        "task": "gym-equipment",
+        "options": [],
+        "quantity": 2
+      },
+      {
+        "task": "mirrors",
+        "options": [],
+        "quantity": 1
+      },
+      {
+        "task": "mop-floor",
+        "options": [],
+        "size": "medium"
+      }
+    ],
+    "bonus": [
+      {
+        "task": "tidy-room",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "dust-surfaces",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "medium"
+      }
+    ],
+    "garage": [
+      {
+        "task": "sweep-floor",
+        "options": [],
+        "size": "large"
+      },
+      {
+        "task": "cobwebs",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "empty-trash",
+        "options": [],
+        "quantity": 1
+      }
+    ],
+    "patio": [
+      {
+        "task": "sweep-floor",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "patio-furniture",
+        "options": [],
+        "quantity": 4
+      },
+      {
+        "task": "cobwebs",
+        "options": [],
+        "size": "medium"
+      }
+    ],
+    "other": [
+      {
+        "task": "tidy-room",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "dust-surfaces",
+        "options": [],
+        "size": "medium"
+      },
+      {
+        "task": "vacuum-floor",
+        "options": [],
+        "size": "medium"
+      }
+    ]
+  }
+}

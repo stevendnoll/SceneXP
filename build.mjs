@@ -152,10 +152,20 @@ async function moduleGraph(entry) {
   return order;
 }
 
-let preloaded = 0;
+// The scene pages, and a page one folder further in with its own js/main
+// (the Whitestone cleaner's page, whitestone/tasks/). A nested page carries
+// its own marker comments, since it may have no three.js to sit after.
+const pageDirs = [];
 for (const entry of await readdir(wwwDir, { withFileTypes: true })) {
   if (!entry.isDirectory()) continue;
-  const pageDir = path.join(wwwDir, entry.name);
+  pageDirs.push(path.join(wwwDir, entry.name));
+  for (const sub of await readdir(path.join(wwwDir, entry.name), { withFileTypes: true })) {
+    if (sub.isDirectory()) pageDirs.push(path.join(wwwDir, entry.name, sub.name));
+  }
+}
+
+let preloaded = 0;
+for (const pageDir of pageDirs) {
   const page = path.join(pageDir, 'index.html');
   const main = path.join(pageDir, 'js', 'main.min.js');
   let html;
@@ -165,6 +175,8 @@ for (const entry of await readdir(wwwDir, { withFileTypes: true })) {
     continue;
   }
   if (!html.includes('src="js/main.min.js"')) continue;
+  const nested = path.dirname(pageDir) !== wwwDir;
+  if (nested && !html.includes(PRELOAD_BEGIN)) continue;
 
   const graph = await moduleGraph(main);
   const links = graph.map((file) =>

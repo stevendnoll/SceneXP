@@ -1,0 +1,10 @@
+key,value
+service_type,cleaning
+version,cleaning-2026-10
+effective,2026-10-01
+currency,USD
+tax_included,false
+visit_minimum,120.00
+size_small,75
+size_medium,100
+size_large,150

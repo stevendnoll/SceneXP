@@ -66,7 +66,18 @@ const WITHHELD_CARDS = ['www/interstate/index.html', 'www/seedtoseed/index.html'
 // never be captured, and it stays here for as long as it stays unlisted.
 // The leaf lab (2026-10-06) waited for its card until the look was approved,
 // and left with Leaf Blower's release on 2026-10-09.
+// Whitestone Home Care (2026-10-12) waited for its two cards, the studio's
+// and the generic one its cleaner's page shows for every shared link, and
+// left with its release on 2026-10-16.
 const PENDING_CARDS = ['www/starfall/index.html'];
+
+/** Pages reached only through a link somebody shares, never by browsing.
+ *  They carry full preview tags, so the link looks right in a message, and
+ *  are PERMANENTLY kept out of search and every list of the site: noindex,
+ *  nofollow, no referrer (the link's fragment can carry private data), and
+ *  no mention in the home page, the sitemap or llms.txt. Unlike a pending
+ *  card's scene, nothing here is ever released. */
+const PRIVATE_LINKS = ['www/whitestone/tasks/index.html'];
 
 // ---- Reading the pages -------------------------------------------------------
 
@@ -215,6 +226,28 @@ test('the scan finds the site, and each rule group has pages to hold', () => {
     const page = PAGES.find((p) => p.rel === rel);
     expect(`${rel} exists: ${Boolean(page)}`).toBe(`${rel} exists: true`);
     expect(`${rel} robots: ${metas(page, 'robots')[0]}`).toBe(`${rel} robots: noindex, nofollow`);
+  });
+});
+
+// ---- Private links -----------------------------------------------------------
+
+describe('private links', () => {
+  const listed = ['www/index.html', 'www/sitemap.xml', 'www/llms.txt'];
+
+  test.each(PRIVATE_LINKS)('%s previews like a shared page and stays out of sight', async (rel) => {
+    const page = PAGES.find((p) => p.rel === rel);
+    expect(`${rel} exists: ${Boolean(page)}`).toBe(`${rel} exists: true`);
+    // Half one: it is shared, so it is held to every sharing rule above.
+    expect(`${rel} is shared: ${SHARED.includes(page)}`).toBe(`${rel} is shared: true`);
+    expect(`${rel} og:image: ${metas(page, 'og:image').length}`).toBe(`${rel} og:image: 1`);
+    // Half two: it is never found.
+    expect(`${rel} robots: ${metas(page, 'robots')[0]}`).toBe(`${rel} robots: noindex, nofollow`);
+    expect(`${rel} referrer: ${metas(page, 'referrer')[0]}`).toBe(`${rel} referrer: no-referrer`);
+    const path = rel.replace(/^www/, '').replace(/index\.html$/, '');
+    for (const file of listed) {
+      const text = await readFile(new URL(file, ROOT), 'utf8');
+      expect(`${file} mentions ${path}: ${text.includes(path)}`).toBe(`${file} mentions ${path}: false`);
+    }
   });
 });
 

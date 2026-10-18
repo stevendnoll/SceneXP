@@ -2707,31 +2707,37 @@ html [lang="en"]
           },
           {
             "@type": "ItemList",
-            "@id": "https://www.scenexp.com/#small-business-tributes",
-            "name": "Small business tributes",
-            "description": "3D worlds built for real small businesses, in place of another template website.",
+            "@id": "https://www.scenexp.com/#small-business-showcases",
+            "name": "Small business showcases",
+            "description": "3D worlds built for small businesses, in place of another template website: tributes to real ones, and a working concept for a home cleaning company.",
             "itemListElement": [
               {
                 "@type": "ListItem",
                 "position": 1,
+                "url": "https://www.scenexp.com/whitestone/",
+                "name": "Whitestone Home Care"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
                 "url": "https://www.scenexp.com/automan/",
                 "name": "John Walker, The Auto Man"
               },
               {
                 "@type": "ListItem",
-                "position": 2,
+                "position": 3,
                 "url": "https://www.scenexp.com/interstate/",
                 "name": "The Interstate Tire Shop"
               },
               {
                 "@type": "ListItem",
-                "position": 3,
+                "position": 4,
                 "url": "https://www.scenexp.com/seedtoseed/",
                 "name": "The Seed to Seed Garden"
               },
               {
                 "@type": "ListItem",
-                "position": 4,
+                "position": 5,
                 "url": "https://www.scenexp.com/sunnyvalejenn/",
                 "name": "Sunnyvale Jenn Consulting"
               }
@@ -3035,10 +3041,26 @@ html [lang="en"]
                         "July 26, 2026"
                     span.experience-cta
                       "Step inside →"
-          section.experience-group [aria-labelledby="small-business-tributes" data-category="business"]
-            h2#small-business-tributes
-              "Small business tributes"
+          section.experience-group [aria-labelledby="small-business-showcases" data-category="business"]
+            h2#small-business-showcases
+              "Small business showcases"
             ul.experience-grid
+              li.experience-card [data-slug="whitestone"]
+                a [href="/whitestone/"]
+                  img [alt="A 3D model house on a round lawn on a white turntable, its roof lifted off the main floor to show furnished rooms dotted with small blue task markers, while Maya, a host in a white polo and khakis, gestures toward it." decoding="async" height="630" loading="lazy" src="/whitestone/assets/og-whitestone.webp?v=1" width="1200"]
+                  div.experience-card-body
+                    p.experience-eyebrow
+                      "A concept for a home cleaning company"
+                    h3
+                      "Whitestone Home Care"
+                    p
+                      "A concept, not a real company. Build a model of your own home room by room with Maya, your host, see every task priced as you go, then choose a time for a demo visit."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-10-16"]
+                        "October 16, 2026"
+                    span.experience-cta
+                      "Plan a cleaning →"
               li.experience-card [data-slug="automan"]
                 a [href="/automan/"]
                   img [alt="A 3D dealership desk seen across the showroom floor: three figures sit around a dark wood table holding a deal sheet and a small yellow model car, a whiteboard behind them reads Today's schedule, 2:00 John Walker, and the glass frontage looks out on trucks parked in the lot." decoding="async" height="630" loading="lazy" src="/automan/assets/card-automan.webp?v=1" width="1200"]
@@ -3203,10 +3225,10 @@ html [lang="en"]
                 "The ones built for their own sake. Keep your job search in a corner office above the bay, call the plays in a game of football, defend Earth from a Martian fleet, dive hundreds of billions of times deep into the Mandelbrot set, watch a modeled ocean shoal and break on a measured beach, or plant a garden of fractal trees and tend it through the seasons."
             li.audience-card
               h3
-                a [href="#small-business-tributes"]
-                  "Small business tributes"
+                a [href="#small-business-showcases"]
+                  "Small business showcases"
               p
-                "Real businesses, rebuilt as places you can visit. A dealership desk with a car buying advocate on the buyer's side of it, a tire shop on historic Railroad Ave with a car up on the lift, a backyard vegetable garden with a greenhouse, and a consultant's sunny home office."
+                "Real businesses, rebuilt as places you can visit. A dealership desk with a car buying advocate on the buyer's side of it, a tire shop on historic Railroad Ave with a car up on the lift, a backyard vegetable garden with a greenhouse, and a consultant's sunny home office. And one concept: a home cleaning company where you plan your cleaning on a model of your own home."
             li.audience-card
               h3
                 a [href="#personal-tributes"]
@@ -5198,6 +5220,10 @@ html [lang="en"]
               "The leaf blower game keeps the character you choose, their shirt and pants colors, skin tone, hair color and hair length, in your browser's local storage, so they are waiting for you when you come back. When you clear the whole lawn before the clock runs out, it also keeps your fastest time, just the number of seconds, so you have a time to beat. The Forget my choice button on the character card and the Forget my best time button on the welcome card clear them on the spot."
             li
               strong
+                "Your home in Whitestone Home Care."
+              "The Whitestone demo keeps the home you build in your browser's local storage, so it is waiting for you when you come back: the kind of home, its floors and rooms, the tasks you chose with their options, stars, and notes, your care preferences, and where you are in Maya's steps. Photos you add to a task are resized and stripped of their location before they are saved, in your browser's own database. There is no Whitestone server, so a checklist you book is kept only in this same browser too, sealed so that it opens only with its link and PIN. If you open a shared checklist on its cleaner's page, that page keeps the checklist's key, a pass that lasts for the visit, the visit's marks and add-ons, and a sealed copy for the hours of the visit, along with any photos taken as proof of the work, for up to 30 days. It also keeps a copy of its own page files so that it can reopen without a connection. Maya's Start over link clears everything the demo keeps on the spot, once you confirm it."
+            li
+              strong
                 "You can remove any of it whenever you like."
               "Apart from that puzzle token, everything above stays on your device and is never sent to us or to anyone else. Clearing this site's data in your browser settings removes all of it at once."
           h2
@@ -5210,6 +5236,8 @@ html [lang="en"]
             "As visitors explore the 3D experiences, the pages send simple pings to this same domain, such as "someone found the waterfall." Each ping names the experience it came from and carries your browser's language setting, a note of whether you are on a phone or a computer, and the puzzle token that groups one visit's pings together. The pings land in a separate log of their own, which never records your IP address or the description your browser gives of itself, and are summarized into anonymized daily counts. In the published summaries each visitor is known only by a throwaway label: no names, no IP addresses, and no browser fingerprints. Some experiences display these counts inside the world itself as a little visitor dashboard."
           p
             "X's and O's notes a little more, because the game is the plays. Each time you call a play, snap the ball, or throw it, and each time a play ends, it records the play and the defense, the receiver you picked, how it turned out and what it was worth, along with your running score, whether the sound was on, and whether your screen was held upright or sideways. It never records the size of your screen or anything else that could pick your device out from anyone else's."
+          p
+            "Whitestone Home Care sends a ping for each button you press, saying only which one and where, such as adding a kitchen from Maya's suggestions, along with whether a demo booking went through and whether a cleaner's PIN opened the checklist. It never sends anything you typed, a price, a date or time, or the PIN itself."
           h2
             "If you email us"
           p
@@ -5223,7 +5251,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated October 9, 2026."
+              "Last updated October 16, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand
@@ -6699,14 +6727,17 @@ html [lang="en"]
               ", and the"
               a [href="/contribute.html"]
                 "contribute page"
-              "explains how to build an experience of your own."
+              "explains how to build an experience of your own. The one exception is"
+              a [href="/whitestone/"]
+                "Whitestone Home Care"
+              ": its code is published in the same repository so that it can be read, but it belongs to Continuum Commerce LLC with all rights reserved, and it is not covered by the MIT license."
             li
               strong
                 "Three.js."
               "The 3D rendering on this site is powered by"
               a [href="https://threejs.org/" rel="noopener noreferrer" target="_blank"]
                 "Three.js"
-              "(revision 160), copyright 2010 to 2023 the Three.js authors, and used under the MIT license. The bundled library file preserves its own license notice, and that notice governs the library rather than our license."
+              "(release r186), copyright 2010 to 2026 the Three.js authors, and used under the MIT license. The bundled library file preserves its own license notice, and that notice governs the library rather than our license."
           p
             "Everything else you load here, from fonts to icons, was made for this site. No other third-party code is served."
           h2
@@ -6746,10 +6777,14 @@ html [lang="en"]
             "These logos, the photographs that appear alongside them, and any other trademarks on the site are not covered by our MIT license. Please do not copy or reuse them without permission from their respective owners. That includes John Walker's three-blade W, which is drawn in the page itself rather than loaded as a picture, so it travels with our open source code without being covered by its license. The SceneXP name and mark belong to Continuum Commerce LLC."
           p
             "So do the X's and O's name, its orange X and blue O mascots, and the game's sound effects, which it shares with the original game at exesnohs.com. They ship with our open source code so the game can be played, but they are not covered by our MIT license either, and we would be grateful if they were not reused elsewhere."
+          p
+            "The Whitestone Home Care name and logo were made for a fictional company and belong to Continuum Commerce LLC as well. They are not covered by our MIT license either."
           h2
             "About the experiences"
           p
             "The collection holds several kinds of 3D experience. Some are games, simulations, or experiments and depict nobody in particular. Others were created to honor a real person or business, and every one of those is hosted with the blessing of the people it celebrates. Some of them begin as surprises, and if an honoree would prefer that theirs not be shown, it will be removed from the site. Those scenes are affectionate, stylized portraits rather than exact records, so please enjoy them in that spirit."
+          p
+            "One is a concept rather than a tribute. Whitestone Home Care is a fictional company, invented to show what a small business could offer its customers in 3D. It is not a real business and has no connection to any real company with a similar name. Its prices and bookings are examples, nothing booked there is a real appointment, and no one will come to clean."
           h2
             "Provided as is"
           p
@@ -6767,7 +6802,7 @@ html [lang="en"]
             ". We would be glad to help."
           p
             em
-              "Last updated September 14, 2026."
+              "Last updated October 16, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand
@@ -6986,6 +7021,677 @@ html [data-ui-theme="surf" lang="en"]
         "More 3D worlds to explore at SceneXP.com"
     script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
+`;
+
+exports[`www/whitestone/index.html 1`] = `
+"<!doctype html>
+html [data-ui-theme="surf" lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="A concept for a home cleaning company, not a real one: plan a cleaning on a 3D model of your home, see the price of every task as you go, then pick a time." name="description"]
+    meta [content="#F4F2EE" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/whitestone/" rel="canonical"]
+    meta [content="Whitestone Home Care" property="og:title"]
+    meta [content="A home cleaning concept on a 3D model of your home. Pick what you would like cleaned, room by room, and see your price as you go." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/whitestone/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="A 3D model house on a round lawn on a white turntable, its roof lifted off the main floor to show furnished rooms dotted with small blue task markers, while Maya, a host in a white polo and khakis, gestures toward it." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Whitestone Home Care" name="twitter:title"]
+    meta [content="A home cleaning concept on a 3D model of your home. Pick what you would like cleaned, room by room, and see your price as you go." name="twitter:description"]
+    meta [content="https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1" name="twitter:image"]
+    meta [content="A 3D model house on a round lawn on a white turntable, its roof lifted off the main floor to show furnished rooms dotted with small blue task markers, while Maya, a host in a white polo and khakis, gestures toward it." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "@id": "https://www.scenexp.com/whitestone/#app",
+        "url": "https://www.scenexp.com/whitestone/",
+        "name": "Whitestone Home Care",
+        "image": "https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1",
+        "description": "A concept for a home cleaning company, not a real business, built as a portfolio piece: a 3D model home in the browser on which a visitor builds a room by room cleaning checklist from a menu of example prices, guided by a host named Maya, sees the quote and the expected visit length update as they go, and chooses a time for a demo booking.",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Any",
+        "datePublished": "2026-10-16",
+        "browserRequirements": "Requires JavaScript and WebGL 2.",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
+        "isAccessibleForFree": true,
+        "author": {
+          "@type": "Person",
+          "name": "Steve Noll"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Continuum Commerce LLC"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Whitestone Home Care",
+            "item": "https://www.scenexp.com/whitestone/"
+          }
+        ]
+      }
+    title
+      "Whitestone Home Care | SceneXP"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=53" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/resolution-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/beacons.min.js" rel="modulepreload"]
+    link [href="js/store.min.js" rel="modulepreload"]
+    link [href="js/samples.min.js" rel="modulepreload"]
+    link [href="js/api.min.js" rel="modulepreload"]
+    link [href="js/standin.min.js" rel="modulepreload"]
+    link [href="js/seal.min.js" rel="modulepreload"]
+    link [href="js/sync.min.js" rel="modulepreload"]
+    link [href="js/addons.min.js" rel="modulepreload"]
+    link [href="js/report.min.js" rel="modulepreload"]
+    link [href="js/booking.min.js" rel="modulepreload"]
+    link [href="js/schedule.min.js" rel="modulepreload"]
+    link [href="js/receipt.min.js" rel="modulepreload"]
+    link [href="js/zoned.min.js" rel="modulepreload"]
+    link [href="js/links.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/history.min.js" rel="modulepreload"]
+    link [href="js/sheet.min.js" rel="modulepreload"]
+    link [href="js/pricing.min.js" rel="modulepreload"]
+    link [href="js/photos.min.js" rel="modulepreload"]
+    link [href="js/taxonomy.min.js" rel="modulepreload"]
+    link [href="js/cards.min.js" rel="modulepreload"]
+    link [href="js/forms.min.js" rel="modulepreload"]
+    link [href="js/held.min.js" rel="modulepreload"]
+    link [href="js/panels.min.js" rel="modulepreload"]
+    link [href="js/copy.min.js" rel="modulepreload"]
+    link [href="js/turntable.min.js" rel="modulepreload"]
+    link [href="js/stage.min.js" rel="modulepreload"]
+    link [href="js/model.min.js" rel="modulepreload"]
+    link [href="js/guide.min.js" rel="modulepreload"]
+    link [href="js/host.min.js" rel="modulepreload"]
+    link [href="js/cast.min.js" rel="modulepreload"]
+    link [href="js/meet.min.js" rel="modulepreload"]
+    link [href="js/panel.min.js" rel="modulepreload"]
+    link [href="js/ics.min.js" rel="modulepreload"]
+    link [href="js/qr.min.js" rel="modulepreload"]
+    link [href="js/guards.min.js" rel="modulepreload"]
+    link [href="js/layout.min.js" rel="modulepreload"]
+    link [href="js/rooms.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="favicon.svg?v=3" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="css/experience.min.css?v=53" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body
+    h1.sr-only
+      "Whitestone Home Care"
+    noscript
+      div.noscript-fallback
+        h1
+          "Whitestone Home Care"
+        p
+          "This is a 3D model of your home, and it needs JavaScript to run. On it, you build a cleaning checklist room by room from a menu of tasks, each with a set price and a time estimate, so your quote and the expected length of the visit update as you go. When the list is ready, you choose a time for your cleaning."
+        p
+          "Whitestone Home Care is a demo by SceneXP, not a real company. Prices and bookings are examples."
+        p
+          "SceneXP is a home for 3D experiences that run right in your browser."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/"]
+                "Explore SceneXP"
+            li
+              a [href="/contact.html"]
+                "Contact the developer"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    div#loading-screen
+      div.loader-content
+        img.loader-logo [alt="Whitestone Home Care" height="239" src="assets/logo-whitestone.svg?v=3" width="1068"]
+        p.loader-tagline
+          "Bright homes, kept with care."
+        div.loader-bar [aria-hidden="true"]
+          div.loader-progress#load-progress
+        div.loader-status#load-status [aria-live="polite" role="status"]
+          "Loading…"
+    canvas#game-canvas [aria-label="A model of your home on a round stone turntable in a bright white studio. Drag to turn it, and tap a floor to open it." role="img"]
+    ol#ws-rooms.ws-rooms [hidden]
+    div#ws-halo.ws-halo [aria-hidden="true" hidden]
+    section#ws-host.ws-host [aria-labelledby="host-name" hidden]
+      div.host-head
+        button#host-back.host-back [aria-label="Back" hidden title="Back" type="button"]
+          svg [aria-hidden="true" focusable="false" height="18" viewbox="0 0 20 20" width="18"]
+            path [d="M16 10H5M9.5 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"]
+        button#host-portrait.host-portrait [aria-label="Meet Maya" title="Meet Maya" type="button"]
+          "M"
+        p.host-who
+          span#host-name.host-name
+            "Maya"
+          span.host-role
+            "Whitestone Home Care"
+        button#host-next.host-next [aria-label="Continue" hidden title="Continue" type="button"]
+          svg [aria-hidden="true" focusable="false" height="18" viewbox="0 0 20 20" width="18"]
+            path [d="M4 10h11M10.5 5l5 5-5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"]
+      ol#host-progress.host-progress [hidden]
+      div#host-facts.host-facts [aria-label="Your home at a glance" hidden role="group"]
+      button#host-expand.ws-btn.ws-btn-small.host-expand [aria-label="Need a hand? Ask Maya, your host." hidden type="button"]
+        "Need a hand?"
+      p#host-line.host-line
+      div#host-choices.host-choices [hidden]
+      div#host-actions.host-actions
+      p#host-small.host-small [hidden]
+      div.host-foot
+        a#explore-link.host-explore [href="/"]
+          "More 3D worlds at SceneXP.com"
+        button#host-reset.host-reset [hidden title="Clear everything and start from the beginning" type="button"]
+          "Start over"
+    aside#ws-panel.ws-panel [aria-labelledby="panel-title" hidden]
+      div.panel-head
+        button#panel-back.panel-back [aria-label="Back to the whole house" title="Back to the whole house" type="button"]
+          svg [aria-hidden="true" focusable="false" height="18" viewbox="0 0 20 20" width="18"]
+            path [d="M16 10H5M9.5 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"]
+        h2#panel-title.panel-title
+      p#panel-summary.panel-summary [hidden]
+      p#panel-held.panel-held [hidden]
+      div#panel-baths.panel-baths [aria-labelledby="panel-baths-label" hidden role="group"]
+        p#panel-baths-label.panel-chips-heading
+          "Type of bath"
+        div#panel-baths-list.panel-baths-list
+      h3#panel-heading.panel-heading [hidden]
+      ul#panel-list.panel-list [hidden]
+      p#panel-empty.panel-empty [hidden]
+      div#panel-detail.panel-detail [hidden]
+      div#panel-chips.panel-chips [hidden]
+      div#panel-actions.panel-actions
+    p#ws-live.sr-only [aria-live="polite" role="status"]
+    div#ws-brand.ui-float.ws-brand
+      img [alt="Whitestone Home Care" height="239" src="assets/logo-whitestone.svg?v=3" width="1068"]
+    div#ws-toast.ws-toast [hidden]
+      span#toast-text
+      button#toast-undo.ws-btn.ws-btn-small [hidden type="button"]
+        "Undo"
+    div#setup.card-overlay [hidden]
+      div#setup-panel.card-panel.form-panel [aria-describedby="setup-about" aria-labelledby="setup-title-text" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#setup-title-text.card-title
+          "Start your own"
+        p#setup-about.card-meta
+          "Tell us a little about your home. You can change any of this later."
+        form#setup-form.ws-form [novalidate]
+          div.form-row
+            label [for="setup-residence"]
+              "What kind of home is it?"
+            select#setup-residence.ws-select
+          div#setup-attached-row.form-row [hidden]
+            label [for="setup-attached"]
+              "Its neighbors"
+            select#setup-attached.ws-select
+          fieldset.form-group
+            legend
+              "Which levels does your home have?"
+            div#setup-levels-list.form-columns
+            p#setup-levels-note.form-hint
+              "Every home has a main floor, so it is always ticked."
+          div.form-row
+            label [for="setup-frequency"]
+              "How often would you like a visit?"
+            select#setup-frequency.ws-select
+          div.form-row
+            label [for="setup-household"]
+              "Anything your cleaner should know"
+            textarea#setup-household.ws-input [aria-describedby="setup-household-hint" maxlength="500" placeholder="Parking, where supplies are kept, pets at home" rows="3"]
+            p#setup-household-hint.form-hint [hidden]
+          p#setup-error.form-error [hidden role="alert"]
+          div.card-actions
+            button#setup-cancel.ws-btn [type="button"]
+              "Cancel"
+            button#setup-save.ws-btn.ws-btn-primary [type="submit"]
+              "Start my checklist"
+    div#preferences.card-overlay [hidden]
+      div#preferences-panel.card-panel.form-panel [aria-describedby="preferences-about" aria-labelledby="preferences-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#preferences-title.card-title
+          "Anything we should avoid?"
+        p#preferences-about.card-meta
+          "Care preferences apply to the whole visit, and your cleaner sees them first. They are optional."
+        form#prefs-form.ws-form [novalidate]
+          div#prefs-groups
+          div.form-row
+            label [for="prefs-note"]
+              "Anything else we should know"
+            textarea#prefs-note.ws-input [aria-describedby="prefs-note-hint" maxlength="300" rows="3"]
+            p#prefs-note-hint.form-hint [hidden]
+          div.card-actions
+            button#prefs-skip.ws-btn [type="button"]
+              "Not now"
+            button#prefs-save.ws-btn.ws-btn-primary [type="submit"]
+              "Save preferences"
+    div#quote.card-overlay [hidden]
+      div#quote-panel.card-panel.list-panel [aria-describedby="demo-quote" aria-labelledby="quote-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.card-head
+          h2#quote-title.card-title
+            "Your quote"
+          button#quote-close.ws-btn.ws-btn-small [type="button"]
+            "Close"
+        p#demo-quote.demo-notice
+          strong.demo-notice-title
+            "Just a demo"
+          span.demo-notice-text
+            "Whitestone Home Care is not a real company. These prices are examples, and nothing is ever charged."
+        p#quote-total.quote-total
+        p#quote-time.card-meta
+        div.card-actions.quote-actions
+          button#quote-open-checklist.ws-btn.ws-btn-primary [type="button"]
+            "Change tasks"
+        p#quote-minimum.quote-minimum
+        p#quote-problems.form-hint [hidden]
+        div#quote-breakdown.quote-breakdown
+        section#quote-prefs.quote-prefs [aria-labelledby="quote-prefs-title" hidden]
+          h3#quote-prefs-title.quote-prefs-title
+            "Care preferences"
+          ul#quote-prefs-list.quote-prefs-list
+          p#quote-prefs-note.quote-prefs-note
+        p#quote-tax.card-meta
+        p.card-meta.quote-promise
+          "You will never pay more than your quote without approving it first. Anything we skip comes off your bill."
+    div#booking.card-overlay [hidden]
+      div#booking-panel.card-panel.booking-panel [aria-describedby="demo-booking booking-summary" aria-labelledby="booking-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.card-head
+          h2#booking-title.card-title
+            "Choose a time"
+          button#booking-close.ws-btn.ws-btn-small [type="button"]
+            "Close"
+        p#demo-booking.demo-notice
+          strong.demo-notice-title
+            "Just a demo"
+          span.demo-notice-text
+            "Whitestone Home Care is not a real company. Choosing a time books nothing, and no cleaner will come."
+        p#booking-summary.card-meta
+        div.booking-head
+          button#booking-prev.ws-btn.ws-btn-small.booking-nav [aria-label="Previous month" title="Previous month" type="button"]
+            "&lsaquo;"
+          h3#booking-month.booking-month [aria-live="polite"]
+          button#booking-next.ws-btn.ws-btn-small.booking-nav [aria-label="Next month" title="Next month" type="button"]
+            "&rsaquo;"
+        div.booking-calendar [aria-labelledby="booking-month" role="group"]
+          div.booking-week.booking-weekdays [aria-hidden="true"]
+            span
+              "Sun"
+            span
+              "Mon"
+            span
+              "Tue"
+            span
+              "Wed"
+            span
+              "Thu"
+            span
+              "Fri"
+            span
+              "Sat"
+          div#booking-days
+        p#booking-status.form-note [hidden]
+        h3#booking-day-title.booking-day-title [hidden]
+        div#booking-times.booking-times [aria-labelledby="booking-day-title" hidden role="radiogroup"]
+        p#booking-error.form-error [hidden role="alert"]
+        div.card-actions
+          button#booking-cancel.ws-btn [type="button"]
+            "Not now"
+          button#booking-confirm.ws-btn.ws-btn-primary [disabled type="button"]
+            "Book my visit"
+    div#receipt.card-overlay [hidden]
+      div#receipt-panel.card-panel.receipt-panel [aria-describedby="demo-receipt" aria-labelledby="receipt-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.card-head
+          h2#receipt-title.card-title
+            "Your visit is booked"
+          button#receipt-close.ws-btn.ws-btn-small [type="button"]
+            "Close"
+        p#demo-receipt.demo-notice
+          strong.demo-notice-title
+            "Just a demo"
+          span.demo-notice-text
+            "Whitestone Home Care is not a real company. This visit is not real, and no cleaner will come."
+        div#receipt-unsent.receipt-unsent [hidden]
+          p
+            "You have changes your cleaner has not seen yet."
+          button#receipt-send.ws-btn.ws-btn-small.ws-btn-primary [type="button"]
+            "Send my changes"
+        p#receipt-when.receipt-when
+        div.receipt-visit
+          a#receipt-calendar.ws-btn.ws-btn-small [download href="#"]
+            "Add to calendar"
+          button#receipt-reschedule.ws-btn.ws-btn-small [hidden type="button"]
+            "Change the time"
+          button#receipt-cancel-visit.ws-btn.ws-btn-small [hidden type="button"]
+            "Cancel my visit"
+          button#receipt-book.ws-btn.ws-btn-small.ws-btn-primary [hidden type="button"]
+            "Choose a time"
+        p#receipt-locked.form-note [hidden]
+        p#receipt-quote.receipt-quote
+        p.card-meta
+          "You will never pay more than your quote without approving it first."
+        div.receipt-share
+          div.receipt-link
+            label.receipt-label [for="receipt-link"]
+              "Link for your cleaner"
+            input#receipt-link.ws-input [readonly type="text"]
+            div.receipt-buttons
+              button#receipt-copy-link.ws-btn.ws-btn-small [type="button"]
+                "Copy"
+              button#receipt-share.ws-btn.ws-btn-small [type="button"]
+                "Share"
+            p.receipt-label
+              "PIN"
+            p#receipt-pin.receipt-pin
+            button#receipt-copy-pin.ws-btn.ws-btn-small [type="button"]
+              "Copy"
+            button#receipt-new-pin.ws-btn.ws-btn-small [hidden type="button"]
+              "Set a new PIN"
+            p#receipt-pin-note.form-note
+              "Send the PIN separately, for example by text."
+          figure.receipt-qr
+            div#receipt-qr-box.receipt-qr-box
+            figcaption
+              "Scan to open the checklist"
+        p#receipt-expires.card-meta
+        div.receipt-edit
+          label.receipt-label [for="receipt-edit-link"]
+            "Your private edit link"
+          p.form-note
+            "Keep this one to yourself. It lets you edit this checklist, approve add-ons, and read visit reports from any device."
+          input#receipt-edit-link.ws-input [readonly type="text"]
+          button#receipt-copy-edit.ws-btn.ws-btn-small [type="button"]
+            "Copy"
+        p#receipt-standin.form-note [hidden]
+        p#receipt-status.sr-only [aria-live="polite" role="status"]
+        div.card-actions
+          button#receipt-unpublish.ws-btn.ws-btn-small.ws-btn-quiet.receipt-unpublish [hidden type="button"]
+            "Stop sharing this checklist"
+          button#receipt-done.ws-btn.ws-btn-primary [type="button"]
+            "Done"
+    div#visit-report.card-overlay [hidden]
+      div#visit-report-panel.card-panel.list-panel [aria-labelledby="visit-report-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.card-head
+          h2#visit-report-title.card-title
+            "Your visit report"
+          button#visit-report-close.ws-btn.ws-btn-small [type="button"]
+            "Close"
+        p#visit-report-when.card-meta
+        div#visit-report-body.visit-report-body
+        p.card-meta.quote-promise
+          "You will never pay more than your quote without approving it first. Anything we skip comes off your bill."
+        div.card-actions
+          button#visit-report-done.ws-btn.ws-btn-primary [type="button"]
+            "Done"
+    div#addons.card-overlay [hidden]
+      div#addons-panel.card-panel.list-panel [aria-labelledby="addons-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.card-head
+          h2#addons-title.card-title
+            "Add-ons from your cleaner"
+          button#addons-close.ws-btn.ws-btn-small [type="button"]
+            "Close"
+        p#addons-lead.card-meta
+        div#addons-body.addons-body
+        p.card-meta.quote-promise
+          "You only pay for an add-on if you approve it and it is done."
+        p#addons-status.sr-only [aria-live="polite" role="status"]
+        div.card-actions
+          button#addons-done.ws-btn.ws-btn-primary [type="button"]
+            "Done"
+    div#checklist.card-overlay.checklist-overlay [hidden]
+      div#checklist-panel.card-panel.checklist-panel [aria-labelledby="checklist-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.card-head
+          h2#checklist-title.card-title
+            "Checklist"
+          div.card-head-actions
+            button#checklist-send.ws-btn.ws-btn-primary.ws-btn-small [hidden type="button"]
+              "Send my changes"
+            button#checklist-close.ws-btn.ws-btn-small [type="button"]
+              "Close"
+        p#checklist-summary.card-meta
+        p#storage-note.storage-note
+        div.checklist-actions
+          button#checklist-add-room.ws-btn.ws-btn-primary.ws-btn-small [type="button"]
+            "Add a room"
+          button#checklist-print.ws-btn.ws-btn-small [type="button"]
+            "Print"
+          label.checklist-filter-label [for="checklist-filter"]
+            "Show"
+          select#checklist-filter.ws-select.checklist-filter
+        p#checklist-showing.card-meta [hidden]
+        div#checklist-body.checklist-body
+    div#room.card-overlay [hidden]
+      div#room-panel.card-panel.form-panel [aria-labelledby="room-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#room-title.card-title
+          "Add a room"
+        form#room-form.ws-form [novalidate]
+          div.form-row
+            label [for="room-area"]
+              "Kind of room"
+            select#room-area.ws-select
+          fieldset#room-bath-row.form-group [hidden]
+            legend
+              "Type of bath"
+            div#room-bath-list
+          div.form-row
+            label [for="room-level"]
+              "Level"
+            select#room-level.ws-select
+          div.form-row
+            label [for="room-label"]
+              "Its name, if it needs one"
+            input#room-label.ws-input [autocomplete="off" maxlength="40" placeholder="Emma's room, or the guest bath" type="text"]
+          div#room-preset-row.form-row.form-check
+            input#room-preset [aria-describedby="room-preset-list" checked type="checkbox"]
+            label [for="room-preset"]
+              "Add the standard tasks for this room"
+          p#room-preset-list.form-note
+          p#room-held.form-note [hidden]
+          p#room-error.form-error [hidden role="alert"]
+          div.card-actions
+            button#room-remove.ws-btn.ws-btn-quiet [hidden type="button"]
+              "Remove this room"
+            button#room-cancel.ws-btn [type="button"]
+              "Cancel"
+            button#room-save.ws-btn.ws-btn-primary [type="submit"]
+              "Add room"
+    div#task.card-overlay [hidden]
+      div#task-panel.card-panel.form-panel [aria-labelledby="task-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#task-title.card-title
+          "Add a task"
+        form#task-form.ws-form [novalidate]
+          div.form-row
+            label [for="task-task"]
+              "Task"
+            select#task-task.ws-select [aria-describedby="task-about"]
+            p#task-about.form-note
+          fieldset#task-options-row.form-group
+            legend
+              "Options"
+            div#task-options-list
+          div#task-size-row.form-row
+            label [for="task-size"]
+              "Size of the room"
+            select#task-size.ws-select
+          div#task-quantity-row.form-row
+            label [for="task-quantity"]
+              "How many"
+            input#task-quantity.ws-input.ws-input-short [inputmode="numeric" max="50" min="1" step="1" type="number"]
+          div.form-row.form-check
+            input#task-important [type="checkbox"]
+            label [for="task-important"]
+              "Important. Please start here."
+          p#task-price.task-price [aria-live="polite"]
+          details#task-more.form-more
+            summary
+              "Notes, things to avoid, and photos"
+            div.form-row
+              label [for="task-notes"]
+                "How you would like it done"
+              textarea#task-notes.ws-input [aria-describedby="task-notes-hint" maxlength="500" rows="2"]
+              p#task-notes-hint.form-hint [hidden]
+            div.form-row
+              label [for="task-avoid"]
+                "Anything to avoid"
+              textarea#task-avoid.ws-input [aria-describedby="task-avoid-hint" maxlength="500" placeholder="No abrasives on the marble" rows="2"]
+              p#task-avoid-hint.form-hint [hidden]
+            div.form-row
+              label [for="task-products"]
+                "Products to use or skip"
+              input#task-products.ws-input [autocomplete="off" maxlength="200" type="text"]
+            div.form-row
+              p#task-photos-label.form-label
+                "Photos"
+              ul#task-photos.task-photos [aria-labelledby="task-photos-label"]
+              input#task-photo-input.sr-only [accept="image/*" type="file"]
+              label#task-photo-add.ws-btn.ws-btn-small.ws-file [for="task-photo-input"]
+                "Add a photo"
+              p#task-photo-note.form-note
+                "Photos are resized and stripped of their location before they are kept."
+          p#task-held.form-note [hidden]
+          p#task-error.form-error [hidden role="alert"]
+          div.card-actions
+            button#task-remove.ws-btn.ws-btn-quiet [hidden type="button"]
+              "Remove this task"
+            button#task-cancel.ws-btn [type="button"]
+              "Cancel"
+            button#task-save.ws-btn.ws-btn-primary [type="submit"]
+              "Add task"
+    div#meet.card-overlay [hidden]
+      div#meet-panel.card-panel.meet-panel [aria-describedby="meet-line" aria-labelledby="meet-title" aria-modal="true" role="dialog" tabindex="-1"]
+        div.card-head
+          h2#meet-title.card-title
+            "Meet Maya"
+          button#meet-close.ws-btn.ws-btn-small [type="button"]
+            "Close"
+        div.meet-stage
+          canvas#meet-canvas.meet-canvas [aria-hidden="true"]
+        p#meet-line.card-detail.meet-line
+          "Hi there! I'm Maya, your host at Whitestone Home Care. I'm right here whenever you'd like a hand."
+    div#confirm.card-overlay [hidden]
+      div#confirm-panel.card-panel [aria-describedby="confirm-detail" aria-labelledby="confirm-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#confirm-title.card-title
+        p#confirm-detail.card-detail
+        div#confirm-actions.card-actions
+    script [src="../lib/three/r186/three.min.js" type="module"]
+    script [src="js/main.min.js" type="module"]"
+`;
+
+exports[`www/whitestone/tasks/index.html 1`] = `
+"<!doctype html>
+html [lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="no-referrer" name="referrer"]
+    meta [content="noindex, nofollow" name="robots"]
+    meta [content="Open the cleaning checklist your customer shared with you, room by room, with every task and note in one place." name="description"]
+    meta [content="#F4F2EE" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/whitestone/tasks/" rel="canonical"]
+    meta [content="Your Whitestone checklist" property="og:title"]
+    meta [content="A cleaning checklist was shared with you. Open it with the 6 digit PIN that came with the link." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/whitestone/tasks/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/whitestone/tasks/assets/og-whitestone-tasks.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="The Whitestone Home Care wordmark, a low slate gable over the name, on warm stone." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Your Whitestone checklist" name="twitter:title"]
+    meta [content="A cleaning checklist was shared with you. Open it with the 6 digit PIN that came with the link." name="twitter:description"]
+    meta [content="https://www.scenexp.com/whitestone/tasks/assets/og-whitestone-tasks.jpg?v=1" name="twitter:image"]
+    meta [content="The Whitestone Home Care wordmark, a low slate gable over the name, on warm stone." name="twitter:image:alt"]
+    title
+      "Your checklist | Whitestone Home Care"
+    link [href="../favicon.svg?v=3" rel="icon" type="image/svg+xml"]
+    link [href="css/tasks.min.css?v=10" rel="stylesheet"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="../js/copy.min.js" rel="modulepreload"]
+    link [href="../js/beacons.min.js" rel="modulepreload"]
+    link [href="../../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../js/config.min.js" rel="modulepreload"]
+    link [href="../js/links.min.js" rel="modulepreload"]
+    link [href="../js/api.min.js" rel="modulepreload"]
+    link [href="../js/standin.min.js" rel="modulepreload"]
+    link [href="../js/photos.min.js" rel="modulepreload"]
+    link [href="../js/seal.min.js" rel="modulepreload"]
+    link [href="../js/sheet.min.js" rel="modulepreload"]
+    link [href="../js/pricing.min.js" rel="modulepreload"]
+    link [href="../js/sync.min.js" rel="modulepreload"]
+    link [href="js/view.min.js" rel="modulepreload"]
+    link [href="../js/booking.min.js" rel="modulepreload"]
+    link [href="js/visit.min.js" rel="modulepreload"]
+    link [href="../js/report.min.js" rel="modulepreload"]
+    link [href="js/addons.min.js" rel="modulepreload"]
+    link [href="../js/schedule.min.js" rel="modulepreload"]
+    link [href="../js/zoned.min.js" rel="modulepreload"]
+    link [href="../js/store.min.js" rel="modulepreload"]
+    link [href="../js/taxonomy.min.js" rel="modulepreload"]
+    link [href="../js/cards.min.js" rel="modulepreload"]
+    link [href="../js/addons.min.js" rel="modulepreload"]
+    script [src="js/main.min.js" type="module"]
+  body
+    header.tasks-header
+      img.tasks-logo [alt="Whitestone Home Care" height="239" src="../assets/logo-whitestone.svg?v=3" width="1068"]
+    main.tasks-main
+      section#tasks-gate.tasks-gate
+        h1
+          "Your cleaning checklist"
+        p.tasks-lead
+          "A customer shared a checklist with you. Enter the 6 digit PIN that came with the link to open it."
+        form#pin-form.pin-form [hidden novalidate]
+          label [for="pin-input"]
+            "PIN"
+          input#pin-input [aria-describedby="pin-status" autocomplete="one-time-code" inputmode="numeric" maxlength="6" name="pin" pattern="[0-9]{6}" required type="text"]
+          button#pin-open [type="submit"]
+            "Open the checklist"
+        p#pin-status.pin-status [aria-live="polite" role="status"]
+      div#tasks-view.tasks-view [hidden]
+      noscript
+        p.tasks-noscript
+          "This page needs JavaScript to open a checklist. The checklist is locked in the link your customer shared, and it is only unlocked here, in your own browser, once you enter the PIN. Please allow JavaScript for this page and reload it."
+    footer.tasks-footer
+      p
+        "Whitestone Home Care is a demo by SceneXP, not a real company. Prices and bookings are examples."
+      p
+        a [href="/privacy.html"]
+          "Privacy""
 `;
 
 exports[`www/xo/index.html 1`] = `

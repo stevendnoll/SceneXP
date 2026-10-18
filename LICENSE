@@ -30,13 +30,20 @@ third-party assets or the trademarks and likenesses of the people and
 businesses these experiences honor. The full list, with the details, is in
 the "License, credits, and trademarks" section of README.md. In short:
 
-- www/lib/three.min.js is by the Three.js Authors and keeps its own license.
+- www/lib/three/ (Three.js r186) is by the Three.js Authors and keeps its own
+  license.
 - The Earth Defense planet and moon textures are by Solar System Scope, used
   under CC BY 4.0. See www/earthdefense/assets/CREDITS.md.
 - The Interstate Tire, Seed to Seed, Sunnyvale Jenn Consulting, and The Auto
   Man names, logos, and related graphics belong to their owners and appear
   here by permission, as part of tribute experiences. Photographs of the
   people these experiences honor belong to them as well.
+- WHITESTONE HOME CARE IS NOT MIT LICENSED. Everything in www/whitestone/,
+  scripts/whitestone/, scripts/whitestone-*.mjs and tests/whitestone-*.test.mjs
+  is (c) 2026 Continuum Commerce LLC, all rights reserved, as the header of
+  each source file there says. It is published so it can be read, not reused.
+  The shared parts it is built from, in www/shared/, stay under the MIT license
+  above. Whitestone Home Care is a fictional company, invented for this demo.
 
 Most of that artwork is kept out of this repository through .gitignore. ONE
 TRADEMARK IS PRESENT IN THE SOURCE: John Walker's three-blade W. It is drawn

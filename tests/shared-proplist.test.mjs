@@ -354,6 +354,11 @@ describe('one tab stop, arrow keys, and Escape', () => {
 });
 
 describe('the panel in the page', () => {
+  /** Pages with a list that arrive without a welcome card, by design. None
+   *  now: www/whitestone was one until its places list retired (2026-10-13,
+   *  the house-first experience). */
+  const NO_WELCOME_CARD = [];
+
   test('every page with a list places it after the welcome card and the 3D view', async () => {
     const www = new URL('../www/', import.meta.url);
     const found = [];
@@ -367,8 +372,11 @@ describe('the panel in the page', () => {
       const blocker = html.indexOf('<div id="blocker"');
       const canvas = html.indexOf('<canvas id="game-canvas"');
       const script = html.indexOf('<script src=');
-      // Named so a failure says which page and which neighbour.
-      expect(`${entry.name} after the welcome card: ${blocker >= 0 && panel > blocker}`)
+      // Named so a failure says which page and which neighbour. A page with
+      // no welcome card at all says so here, by name, so a card renamed or
+      // lost elsewhere still fails.
+      const noWelcome = NO_WELCOME_CARD.includes(entry.name);
+      expect(`${entry.name} after the welcome card: ${noWelcome ? blocker < 0 : blocker >= 0 && panel > blocker}`)
         .toBe(`${entry.name} after the welcome card: true`);
       expect(`${entry.name} after the 3D view: ${canvas >= 0 && panel > canvas}`)
         .toBe(`${entry.name} after the 3D view: true`);

@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<!-- © 2026 Continuum Commerce LLC. All rights reserved. -->
+<html lang="en" data-ui-theme="surf">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         img-src allows blob: for one thing only: a task's photos, shown from
+         the browser's own storage (photos.js) through URL.createObjectURL.
+         Nothing from another site can be a blob: URL here. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="description" content="A concept for a home cleaning company, not a real one: plan a cleaning on a 3D model of your home, see the price of every task as you go, then pick a time.">
+    <meta name="theme-color" content="#F4F2EE">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they stay literal absolute URLs naming where this page is served
+         (www.scenexp.com/whitestone). When serving from a new domain, update
+         the canonical, og:url, og:image, twitter:image, and the JSON-LD ids. -->
+    <link rel="canonical" href="https://www.scenexp.com/whitestone/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Whitestone Home Care">
+    <meta property="og:description" content="A home cleaning concept on a 3D model of your home. Pick what you would like cleaned, room by room, and see your price as you go.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/whitestone/">
+    <meta property="og:locale" content="en_US">
+    <!-- THE SOCIAL CARD: Steve's capture of Maya and the house on its
+         turntable (?clean=1, 2026-10-16), 1200 by 630, sRGB baked in (see
+         CONTRIBUTING). The directory card is its .webp. Exactly one
+         og:image, as on every page, since Apple's link preview draws every
+         one it finds. -->
+    <meta property="og:image" content="https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A 3D model house on a round lawn on a white turntable, its roof lifted off the main floor to show furnished rooms dotted with small blue task markers, while Maya, a host in a white polo and khakis, gestures toward it.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Whitestone Home Care">
+    <meta name="twitter:description" content="A home cleaning concept on a 3D model of your home. Pick what you would like cleaned, room by room, and see your price as you go.">
+    <meta name="twitter:image" content="https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1">
+    <meta name="twitter:image:alt" content="A 3D model house on a round lawn on a white turntable, its roof lifted off the main floor to show furnished rooms dotted with small blue task markers, while Maya, a host in a white polo and khakis, gestures toward it.">
+
+    <!-- Structured data: site identity for search engines.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "@id": "https://www.scenexp.com/whitestone/#app",
+      "url": "https://www.scenexp.com/whitestone/",
+      "name": "Whitestone Home Care",
+      "image": "https://www.scenexp.com/whitestone/assets/og-whitestone.jpg?v=1",
+      "description": "A concept for a home cleaning company, not a real business, built as a portfolio piece: a 3D model home in the browser on which a visitor builds a room by room cleaning checklist from a menu of example prices, guided by a host named Maya, sees the quote and the expected visit length update as they go, and chooses a time for a demo booking.",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Any",
+      "datePublished": "2026-10-16",
+      "browserRequirements": "Requires JavaScript and WebGL 2.",
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
+      "isAccessibleForFree": true,
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Continuum Commerce LLC"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this scene), so a result for
+         this page names the collection it belongs to. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Whitestone Home Care",
+          "item": "https://www.scenexp.com/whitestone/"
+        }
+      ]
+    }
+    </script>
+
+    <title>Whitestone Home Care | SceneXP</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
+    <link rel="preload" href="css/experience.min.css?v=53" as="style">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/resolution-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="js/beacons.min.js">
+    <link rel="modulepreload" href="js/store.min.js">
+    <link rel="modulepreload" href="js/samples.min.js">
+    <link rel="modulepreload" href="js/api.min.js">
+    <link rel="modulepreload" href="js/standin.min.js">
+    <link rel="modulepreload" href="js/seal.min.js">
+    <link rel="modulepreload" href="js/sync.min.js">
+    <link rel="modulepreload" href="js/addons.min.js">
+    <link rel="modulepreload" href="js/report.min.js">
+    <link rel="modulepreload" href="js/booking.min.js">
+    <link rel="modulepreload" href="js/schedule.min.js">
+    <link rel="modulepreload" href="js/receipt.min.js">
+    <link rel="modulepreload" href="js/zoned.min.js">
+    <link rel="modulepreload" href="js/links.min.js">
+    <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
+    <link rel="modulepreload" href="js/history.min.js">
+    <link rel="modulepreload" href="js/sheet.min.js">
+    <link rel="modulepreload" href="js/pricing.min.js">
+    <link rel="modulepreload" href="js/photos.min.js">
+    <link rel="modulepreload" href="js/taxonomy.min.js">
+    <link rel="modulepreload" href="js/cards.min.js">
+    <link rel="modulepreload" href="js/forms.min.js">
+    <link rel="modulepreload" href="js/held.min.js">
+    <link rel="modulepreload" href="js/panels.min.js">
+    <link rel="modulepreload" href="js/copy.min.js">
+    <link rel="modulepreload" href="js/turntable.min.js">
+    <link rel="modulepreload" href="js/stage.min.js">
+    <link rel="modulepreload" href="js/model.min.js">
+    <link rel="modulepreload" href="js/guide.min.js">
+    <link rel="modulepreload" href="js/host.min.js">
+    <link rel="modulepreload" href="js/cast.min.js">
+    <link rel="modulepreload" href="js/meet.min.js">
+    <link rel="modulepreload" href="js/panel.min.js">
+    <link rel="modulepreload" href="js/ics.min.js">
+    <link rel="modulepreload" href="js/qr.min.js">
+    <link rel="modulepreload" href="js/guards.min.js">
+    <link rel="modulepreload" href="js/layout.min.js">
+    <link rel="modulepreload" href="js/rooms.min.js">
+    <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
+    <!-- END generated modulepreload -->
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
+    <link rel="stylesheet" href="css/experience.min.css?v=53">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <!-- The live page's heading, for anybody navigating by heading. -->
+    <h1 class="sr-only">Whitestone Home Care</h1>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers). -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Whitestone Home Care</h1>
+            <p>This is a 3D model of your home, and it needs JavaScript to
+                run. On it, you build a cleaning checklist room by room from a
+                menu of tasks, each with a set price and a time
+                estimate, so your quote and the expected length of the visit
+                update as you go. When the list is ready, you choose a time
+                for your cleaning.</p>
+            <p>Whitestone Home Care is a demo by SceneXP, not a real company.
+                Prices and bookings are examples.</p>
+            <p>SceneXP is a home for 3D experiences that run right in your
+                browser.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/">Explore SceneXP</a></li>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <img class="loader-logo" src="assets/logo-whitestone.svg?v=3" alt="Whitestone Home Care" width="1068" height="239">
+            <p class="loader-tagline">Bright homes, kept with care.</p>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <canvas id="game-canvas" role="img" aria-label="A model of your home on a round stone turntable in a bright white studio. Drag to turn it, and tap a floor to open it."></canvas>
+
+    <!-- THE ROOMS OF A LIFTED LEVEL, named over the house model (main.js
+         placeLabels). Hidden until a level is lifted. -->
+    <ol id="ws-rooms" class="ws-rooms" hidden></ol>
+    <!-- A HALO on the touch point Maya is speaking of (guide.js HALO), one
+         at a time, gone once it is used. Decoration only: her words say
+         what to do. -->
+    <div id="ws-halo" class="ws-halo" aria-hidden="true" hidden></div>
+
+    <!-- MAYA, THE HOST (host.js, guide.js): her portrait and name, the
+         progress through the first build, what she says, the floors to
+         tick when she asks, at most two buttons, a quiet Start over, a →
+         by her name that takes her main step (QA, 2026-10-15: no Help, and on
+         a phone her buttons can sit below the fold), and a ← before her
+         portrait that goes one step back (QA, 2026-10-16: the quiet Back at
+         the foot went unseen). Beside
+         the house on a wide screen, a sheet along the bottom on a phone.
+         Built and shown by main.js once the house has arrived. Every line
+         she says also goes through #ws-live, once. -->
+    <section id="ws-host" class="ws-host" aria-labelledby="host-name" hidden>
+        <div class="host-head">
+            <button id="host-back" class="host-back" type="button" aria-label="Back" title="Back" hidden><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M16 10H5M9.5 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <!-- Her portrait opens Meet Maya (meet.js; QA, 2026-10-16). -->
+            <button id="host-portrait" class="host-portrait" type="button" aria-label="Meet Maya" title="Meet Maya">M</button>
+            <p class="host-who"><span id="host-name" class="host-name">Maya</span> <span class="host-role">Whitestone Home Care</span></p>
+            <button id="host-next" class="host-next" type="button" aria-label="Continue" title="Continue" hidden><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 10h11M10.5 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+        <!-- The first build's five steps, right under her ← and → (QA,
+             2026-10-16: they move along these), above the quote. -->
+        <ol id="host-progress" class="host-progress" hidden></ol>
+        <!-- THE HOME AT A GLANCE (host.js drawFacts): its quote (PRD 8.5),
+             and once published its visit (PRD 8.6), each a button to the
+             breakdown or the receipt. In view while she is tucked away too,
+             since nothing else on the page shows them (Steve, 2026-10-14:
+             the chips top left were lost against the studio). Hidden until
+             there is a price to show. -->
+        <div id="host-facts" class="host-facts" role="group" aria-label="Your home at a glance" hidden></div>
+        <button id="host-expand" class="ws-btn ws-btn-small host-expand" type="button" aria-label="Need a hand? Ask Maya, your host." hidden>Need a hand?</button>
+        <p id="host-line" class="host-line"></p>
+        <div id="host-choices" class="host-choices" hidden></div>
+        <div id="host-actions" class="host-actions"></div>
+        <p id="host-small" class="host-small" hidden></p>
+        <div class="host-foot">
+            <!-- The way back to the directory (Steve, 2026-10-16), the house
+                 pattern since the Home buttons went (tests/home-button-removed):
+                 named, the same tab, no aria-label. Left, across from Start over. -->
+            <a id="explore-link" class="host-explore" href="/">More 3D worlds at SceneXP.com</a>
+            <button id="host-reset" class="host-reset" type="button" title="Clear everything and start from the beginning" hidden>Start over</button>
+        </div>
+    </section>
+
+    <!-- THE PANEL BESIDE THE HOUSE (panel.js): whatever is selected on the
+         house, in words. A floor's rooms with rooms to add, a room's tasks
+         with their stars (and a bathroom's type of bath), a task to edit. Its back button, Escape, or a tap
+         on empty space goes one step back: a round ← beside the title, as
+         Maya's → is (QA, 2026-10-16: the breadcrumb text went unseen), its
+         destination its label and hover title. Where Maya's bubble is, and
+         she steps aside while it is open. -->
+    <aside id="ws-panel" class="ws-panel" aria-labelledby="panel-title" hidden>
+        <div class="panel-head">
+            <button id="panel-back" class="panel-back" type="button" aria-label="Back to the whole house" title="Back to the whole house"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M16 10H5M9.5 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <h2 id="panel-title" class="panel-title"></h2>
+        </div>
+        <p id="panel-summary" class="panel-summary" hidden></p>
+        <p id="panel-held" class="panel-held" hidden></p>
+        <div id="panel-baths" class="panel-baths" role="group" aria-labelledby="panel-baths-label" hidden>
+            <p id="panel-baths-label" class="panel-chips-heading">Type of bath</p>
+            <div id="panel-baths-list" class="panel-baths-list"></div>
+        </div>
+        <h3 id="panel-heading" class="panel-heading" hidden></h3>
+        <ul id="panel-list" class="panel-list" hidden></ul>
+        <p id="panel-empty" class="panel-empty" hidden></p>
+        <div id="panel-detail" class="panel-detail" hidden></div>
+        <div id="panel-chips" class="panel-chips" hidden></div>
+        <div id="panel-actions" class="panel-actions"></div>
+    </aside>
+
+    <!-- Every change, said aloud. Polite, so it waits its turn. -->
+    <p id="ws-live" class="sr-only" role="status" aria-live="polite"></p>
+
+    <!-- THE WORDMARK, top left (Steve, 2026-10-14: concept C, where the
+         chips were). Not a control: a tap passes through to the studio. Off
+         on a phone, where the house needs the top of the screen. -->
+    <div id="ws-brand" class="ui-float ws-brand">
+        <img src="assets/logo-whitestone.svg?v=3" alt="Whitestone Home Care" width="1068" height="239">
+    </div>
+
+    <!-- THE UNDO TOAST. Not a live region itself: its words also go through
+         #ws-live, so they are heard once. -->
+    <div id="ws-toast" class="ws-toast" hidden>
+        <span id="toast-text"></span>
+        <button id="toast-undo" class="ws-btn ws-btn-small" type="button" hidden>Undo</button>
+    </div>
+
+    <!-- ==== THE CARDS, IN STACKING ORDER (cards.js CARD_ORDER) ==== -->
+
+    <!-- SETUP: a new home, or an edit of this one (forms.js). -->
+    <div id="setup" class="card-overlay" hidden>
+        <div id="setup-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="setup-title-text" aria-describedby="setup-about" tabindex="-1">
+            <h2 id="setup-title-text" class="card-title">Start your own</h2>
+            <p id="setup-about" class="card-meta">Tell us a little about your home. You can change any
+                of this later.</p>
+            <form id="setup-form" class="ws-form" novalidate>
+                <div class="form-row">
+                    <label for="setup-residence">What kind of home is it?</label>
+                    <select id="setup-residence" class="ws-select"></select>
+                </div>
+                <div id="setup-attached-row" class="form-row" hidden>
+                    <label for="setup-attached">Its neighbors</label>
+                    <select id="setup-attached" class="ws-select"></select>
+                </div>
+                <fieldset class="form-group">
+                    <legend>Which levels does your home have?</legend>
+                    <div id="setup-levels-list" class="form-columns"></div>
+                    <p id="setup-levels-note" class="form-hint">Every home has a main floor, so it is always ticked.</p>
+                </fieldset>
+                <div class="form-row">
+                    <label for="setup-frequency">How often would you like a visit?</label>
+                    <select id="setup-frequency" class="ws-select"></select>
+                </div>
+                <div class="form-row">
+                    <label for="setup-household">Anything your cleaner should know</label>
+                    <textarea id="setup-household" class="ws-input" rows="3" maxlength="500"
+                        placeholder="Parking, where supplies are kept, pets at home"
+                        aria-describedby="setup-household-hint"></textarea>
+                    <p id="setup-household-hint" class="form-hint" hidden></p>
+                </div>
+                <p id="setup-error" class="form-error" role="alert" hidden></p>
+                <div class="card-actions">
+                    <button id="setup-cancel" class="ws-btn" type="button">Cancel</button>
+                    <button id="setup-save" class="ws-btn ws-btn-primary" type="submit">Start my checklist</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CARE PREFERENCES for the whole visit (PRD 11.8). Offered once after
+         setup, and from the toolbar any time. About the work, never about
+         anybody's health. -->
+    <div id="preferences" class="card-overlay" hidden>
+        <div id="preferences-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="preferences-title" aria-describedby="preferences-about" tabindex="-1">
+            <h2 id="preferences-title" class="card-title">Anything we should avoid?</h2>
+            <p id="preferences-about" class="card-meta">Care preferences apply to the whole visit, and your
+                cleaner sees them first. They are optional.</p>
+            <form id="prefs-form" class="ws-form" novalidate>
+                <div id="prefs-groups"></div>
+                <div class="form-row">
+                    <label for="prefs-note">Anything else we should know</label>
+                    <textarea id="prefs-note" class="ws-input" rows="3" maxlength="300"
+                        aria-describedby="prefs-note-hint"></textarea>
+                    <p id="prefs-note-hint" class="form-hint" hidden></p>
+                </div>
+                <div class="card-actions">
+                    <button id="prefs-skip" class="ws-btn" type="button">Not now</button>
+                    <button id="prefs-save" class="ws-btn ws-btn-primary" type="submit">Save preferences</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- THE QUOTE: the total, the time, the visit minimum, and the
+         breakdown by room and task. -->
+    <div id="quote" class="card-overlay" hidden>
+        <div id="quote-panel" class="card-panel list-panel" role="dialog" aria-modal="true"
+            aria-labelledby="quote-title" aria-describedby="demo-quote" tabindex="-1">
+            <div class="card-head">
+                <h2 id="quote-title" class="card-title">Your quote</h2>
+                <button id="quote-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <!-- JUST A DEMO, first and large (Steve, 2026-10-16: small print at
+                 a card's foot went unseen). The words are copy.js BRAND's. -->
+            <p id="demo-quote" class="demo-notice"><strong class="demo-notice-title">Just a demo</strong>
+                <span class="demo-notice-text">Whitestone Home Care is not a real company. These prices are examples, and nothing is ever charged.</span></p>
+            <p id="quote-total" class="quote-total"></p>
+            <p id="quote-time" class="card-meta"></p>
+            <!-- Where the tasks are changed, under the total and above the
+                 breakdown, which runs long on a phone (QA, 2026-10-17: the
+                 build no longer opens rooms, so this is the way in). -->
+            <div class="card-actions quote-actions">
+                <button id="quote-open-checklist" class="ws-btn ws-btn-primary" type="button">Change tasks</button>
+            </div>
+            <p id="quote-minimum" class="quote-minimum"></p>
+            <p id="quote-problems" class="form-hint" hidden></p>
+            <div id="quote-breakdown" class="quote-breakdown"></div>
+            <!-- What the customer asked of the visit, part of what they agree
+                 to, though it changes no price (QA, 2026-10-15). Read-only:
+                 Maya's Review is where they change. -->
+            <section id="quote-prefs" class="quote-prefs" aria-labelledby="quote-prefs-title" hidden>
+                <h3 id="quote-prefs-title" class="quote-prefs-title">Care preferences</h3>
+                <ul id="quote-prefs-list" class="quote-prefs-list"></ul>
+                <p id="quote-prefs-note" class="quote-prefs-note"></p>
+            </section>
+            <p id="quote-tax" class="card-meta"></p>
+            <p class="card-meta quote-promise">You will never pay more than your quote without approving it
+                first. Anything we skip comes off your bill.</p>
+        </div>
+    </div>
+
+    <!-- CHOOSE A TIME (booking.js, PRD 10.3): the month's days a visit can
+         start, the chosen day's start times with the earliest chosen, and
+         Book my visit. The days and times are drawn by script from the
+         API's answer. -->
+    <div id="booking" class="card-overlay" hidden>
+        <div id="booking-panel" class="card-panel booking-panel" role="dialog" aria-modal="true"
+            aria-labelledby="booking-title" aria-describedby="demo-booking booking-summary" tabindex="-1">
+            <div class="card-head">
+                <h2 id="booking-title" class="card-title">Choose a time</h2>
+                <button id="booking-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <!-- JUST A DEMO, first and large (Steve, 2026-10-16: small print at
+                 a card's foot went unseen). The words are copy.js BRAND's. -->
+            <p id="demo-booking" class="demo-notice"><strong class="demo-notice-title">Just a demo</strong>
+                <span class="demo-notice-text">Whitestone Home Care is not a real company. Choosing a time books nothing, and no cleaner will come.</span></p>
+            <p id="booking-summary" class="card-meta"></p>
+            <div class="booking-head">
+                <button id="booking-prev" class="ws-btn ws-btn-small booking-nav" type="button" aria-label="Previous month" title="Previous month">&lsaquo;</button>
+                <h3 id="booking-month" class="booking-month" aria-live="polite"></h3>
+                <button id="booking-next" class="ws-btn ws-btn-small booking-nav" type="button" aria-label="Next month" title="Next month">&rsaquo;</button>
+            </div>
+            <div class="booking-calendar" role="group" aria-labelledby="booking-month">
+                <div class="booking-week booking-weekdays" aria-hidden="true">
+                    <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                </div>
+                <div id="booking-days"></div>
+            </div>
+            <p id="booking-status" class="form-note" hidden></p>
+            <h3 id="booking-day-title" class="booking-day-title" hidden></h3>
+            <div id="booking-times" class="booking-times" role="radiogroup" aria-labelledby="booking-day-title" hidden></div>
+            <p id="booking-error" class="form-error" role="alert" hidden></p>
+            <div class="card-actions">
+                <button id="booking-cancel" class="ws-btn" type="button">Not now</button>
+                <button id="booking-confirm" class="ws-btn ws-btn-primary" type="button" disabled>Book my visit</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE RECEIPT (receipt.js, PRD 13.1): the appointment with Add to
+         calendar, the quote, the link for the cleaner with Copy and Share,
+         the PIN, a QR code of the link, when it expires, and the private
+         edit link set apart. Filled by script. It is also where a visit is
+         changed afterward (PRD 10.4): changes sent, the time moved or
+         cancelled, the checklist unpublished, each shown only when the
+         change window allows it. -->
+    <div id="receipt" class="card-overlay" hidden>
+        <div id="receipt-panel" class="card-panel receipt-panel" role="dialog" aria-modal="true"
+            aria-labelledby="receipt-title" aria-describedby="demo-receipt" tabindex="-1">
+            <div class="card-head">
+                <h2 id="receipt-title" class="card-title">Your visit is booked</h2>
+                <button id="receipt-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <!-- JUST A DEMO, first and large (Steve, 2026-10-16: small print at
+                 a card's foot went unseen). The words are copy.js BRAND's. -->
+            <p id="demo-receipt" class="demo-notice"><strong class="demo-notice-title">Just a demo</strong>
+                <span class="demo-notice-text">Whitestone Home Care is not a real company. This visit is not real, and no cleaner will come.</span></p>
+            <div id="receipt-unsent" class="receipt-unsent" hidden>
+                <p>You have changes your cleaner has not seen yet.</p>
+                <button id="receipt-send" class="ws-btn ws-btn-small ws-btn-primary" type="button">Send my changes</button>
+            </div>
+            <p id="receipt-when" class="receipt-when"></p>
+            <div class="receipt-visit">
+                <a id="receipt-calendar" class="ws-btn ws-btn-small" href="#" download>Add to calendar</a>
+                <button id="receipt-reschedule" class="ws-btn ws-btn-small" type="button" hidden>Change the time</button>
+                <button id="receipt-cancel-visit" class="ws-btn ws-btn-small" type="button" hidden>Cancel my visit</button>
+                <button id="receipt-book" class="ws-btn ws-btn-small ws-btn-primary" type="button" hidden>Choose a time</button>
+            </div>
+            <p id="receipt-locked" class="form-note" hidden></p>
+            <p id="receipt-quote" class="receipt-quote"></p>
+            <p class="card-meta">You will never pay more than your quote without approving it first.</p>
+            <div class="receipt-share">
+                <div class="receipt-link">
+                    <label for="receipt-link" class="receipt-label">Link for your cleaner</label>
+                    <input id="receipt-link" class="ws-input" type="text" readonly>
+                    <div class="receipt-buttons">
+                        <button id="receipt-copy-link" class="ws-btn ws-btn-small" type="button">Copy</button>
+                        <button id="receipt-share" class="ws-btn ws-btn-small" type="button">Share</button>
+                    </div>
+                    <p class="receipt-label">PIN</p>
+                    <p id="receipt-pin" class="receipt-pin"></p>
+                    <button id="receipt-copy-pin" class="ws-btn ws-btn-small" type="button">Copy</button>
+                    <button id="receipt-new-pin" class="ws-btn ws-btn-small" type="button" hidden>Set a new PIN</button>
+                    <p id="receipt-pin-note" class="form-note">Send the PIN separately, for example by text.</p>
+                </div>
+                <figure class="receipt-qr">
+                    <div id="receipt-qr-box" class="receipt-qr-box"></div>
+                    <figcaption>Scan to open the checklist</figcaption>
+                </figure>
+            </div>
+            <p id="receipt-expires" class="card-meta"></p>
+            <div class="receipt-edit">
+                <label for="receipt-edit-link" class="receipt-label">Your private edit link</label>
+                <p class="form-note">Keep this one to yourself. It lets you edit this checklist, approve add-ons,
+                    and read visit reports from any device.</p>
+                <input id="receipt-edit-link" class="ws-input" type="text" readonly>
+                <button id="receipt-copy-edit" class="ws-btn ws-btn-small" type="button">Copy</button>
+            </div>
+            <p id="receipt-standin" class="form-note" hidden></p>
+            <p id="receipt-status" class="sr-only" role="status" aria-live="polite"></p>
+            <div class="card-actions">
+                <button id="receipt-unpublish" class="ws-btn ws-btn-small ws-btn-quiet receipt-unpublish" type="button" hidden>Stop sharing this checklist</button>
+                <button id="receipt-done" class="ws-btn ws-btn-primary" type="button">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- A VISIT'S REPORT (M5, PRD 12.4): the bill worked out here, what was
+         skipped and why, what was not reached, the add-ons, and the
+         cleaner's words (panels.js renderVisitReport). -->
+    <div id="visit-report" class="card-overlay" hidden>
+        <div id="visit-report-panel" class="card-panel list-panel" role="dialog" aria-modal="true"
+            aria-labelledby="visit-report-title" tabindex="-1">
+            <div class="card-head">
+                <h2 id="visit-report-title" class="card-title">Your visit report</h2>
+                <button id="visit-report-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <p id="visit-report-when" class="card-meta"></p>
+            <div id="visit-report-body" class="visit-report-body"></div>
+            <p class="card-meta quote-promise">You will never pay more than your quote without approving it
+                first. Anything we skip comes off your bill.</p>
+            <div class="card-actions">
+                <button id="visit-report-done" class="ws-btn ws-btn-primary" type="button">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE CLEANER'S ADD-ONS (QA, 2026-10-15): every add-on of the visit
+         under way, opened from Add-ons in Maya's bubble, each answered in
+         place (panels.js renderAddOnList). -->
+    <div id="addons" class="card-overlay" hidden>
+        <div id="addons-panel" class="card-panel list-panel" role="dialog" aria-modal="true"
+            aria-labelledby="addons-title" tabindex="-1">
+            <div class="card-head">
+                <h2 id="addons-title" class="card-title">Add-ons from your cleaner</h2>
+                <button id="addons-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <p id="addons-lead" class="card-meta"></p>
+            <div id="addons-body" class="addons-body"></div>
+            <p class="card-meta quote-promise">You only pay for an add-on if you approve it and it is done.</p>
+            <p id="addons-status" class="sr-only" role="status" aria-live="polite"></p>
+            <div class="card-actions">
+                <button id="addons-done" class="ws-btn ws-btn-primary" type="button">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THE CHECKLIST: every task, grouped by level and room (PRD 8.7). The
+         complete keyboard and screen reader path through a home. Rooms and
+         tasks open over it, so their cards come after it. -->
+    <div id="checklist" class="card-overlay checklist-overlay" hidden>
+        <div id="checklist-panel" class="card-panel checklist-panel" role="dialog" aria-modal="true"
+            aria-labelledby="checklist-title" tabindex="-1">
+            <div class="card-head">
+                <h2 id="checklist-title" class="card-title">Checklist</h2>
+                <!-- Send my changes beside Close, only while the cleaner's
+                     copy is behind this one (main.js drawChecklist; QA,
+                     2026-10-17). -->
+                <div class="card-head-actions">
+                    <button id="checklist-send" class="ws-btn ws-btn-primary ws-btn-small" type="button" hidden>Send my changes</button>
+                    <button id="checklist-close" class="ws-btn ws-btn-small" type="button">Close</button>
+                </div>
+            </div>
+            <p id="checklist-summary" class="card-meta"></p>
+            <!-- Filled in only when the browser will not let the page save,
+                 or is running out of room. Empty and silent otherwise. -->
+            <p id="storage-note" class="storage-note"></p>
+            <div class="checklist-actions">
+                <button id="checklist-add-room" class="ws-btn ws-btn-primary ws-btn-small" type="button">Add a room</button>
+                <button id="checklist-print" class="ws-btn ws-btn-small" type="button">Print</button>
+                <label for="checklist-filter" class="checklist-filter-label">Show</label>
+                <select id="checklist-filter" class="ws-select checklist-filter"></select>
+            </div>
+            <p id="checklist-showing" class="card-meta" hidden></p>
+            <div id="checklist-body" class="checklist-body"></div>
+        </div>
+    </div>
+
+    <!-- A ROOM: its level, its kind, an optional label, and its standard
+         tasks in the same step (PRD 8.4). -->
+    <div id="room" class="card-overlay" hidden>
+        <div id="room-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="room-title" tabindex="-1">
+            <h2 id="room-title" class="card-title">Add a room</h2>
+            <form id="room-form" class="ws-form" novalidate>
+                <div class="form-row">
+                    <label for="room-area">Kind of room</label>
+                    <select id="room-area" class="ws-select"></select>
+                </div>
+                <fieldset id="room-bath-row" class="form-group" hidden>
+                    <legend>Type of bath</legend>
+                    <div id="room-bath-list"></div>
+                </fieldset>
+                <div class="form-row">
+                    <label for="room-level">Level</label>
+                    <select id="room-level" class="ws-select"></select>
+                </div>
+                <div class="form-row">
+                    <label for="room-label">Its name, if it needs one</label>
+                    <input id="room-label" class="ws-input" type="text" maxlength="40" autocomplete="off"
+                        placeholder="Emma's room, or the guest bath">
+                </div>
+                <div id="room-preset-row" class="form-row form-check">
+                    <input id="room-preset" type="checkbox" checked aria-describedby="room-preset-list">
+                    <label for="room-preset">Add the standard tasks for this room</label>
+                </div>
+                <p id="room-preset-list" class="form-note"></p>
+                <p id="room-held" class="form-note" hidden></p>
+                <p id="room-error" class="form-error" role="alert" hidden></p>
+                <div class="card-actions">
+                    <button id="room-remove" class="ws-btn ws-btn-quiet" type="button" hidden>Remove this room</button>
+                    <button id="room-cancel" class="ws-btn" type="button">Cancel</button>
+                    <button id="room-save" class="ws-btn ws-btn-primary" type="submit">Add room</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- A TASK: only tasks offered in its kind of room, only the options the
+         task accepts, a size or a quantity where the price needs one, the
+         star, the notes, and up to 5 photos. -->
+    <div id="task" class="card-overlay" hidden>
+        <div id="task-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
+            aria-labelledby="task-title" tabindex="-1">
+            <h2 id="task-title" class="card-title">Add a task</h2>
+            <form id="task-form" class="ws-form" novalidate>
+                <div class="form-row">
+                    <label for="task-task">Task</label>
+                    <select id="task-task" class="ws-select" aria-describedby="task-about"></select>
+                    <p id="task-about" class="form-note"></p>
+                </div>
+                <fieldset id="task-options-row" class="form-group">
+                    <legend>Options</legend>
+                    <div id="task-options-list"></div>
+                </fieldset>
+                <div id="task-size-row" class="form-row">
+                    <label for="task-size">Size of the room</label>
+                    <select id="task-size" class="ws-select"></select>
+                </div>
+                <div id="task-quantity-row" class="form-row">
+                    <label for="task-quantity">How many</label>
+                    <input id="task-quantity" class="ws-input ws-input-short" type="number" min="1" max="50" step="1" inputmode="numeric">
+                </div>
+                <div class="form-row form-check">
+                    <input id="task-important" type="checkbox">
+                    <label for="task-important">Important. Please start here.</label>
+                </div>
+                <p id="task-price" class="task-price" aria-live="polite"></p>
+                <details id="task-more" class="form-more">
+                    <summary>Notes, things to avoid, and photos</summary>
+                    <div class="form-row">
+                        <label for="task-notes">How you would like it done</label>
+                        <textarea id="task-notes" class="ws-input" rows="2" maxlength="500" aria-describedby="task-notes-hint"></textarea>
+                        <p id="task-notes-hint" class="form-hint" hidden></p>
+                    </div>
+                    <div class="form-row">
+                        <label for="task-avoid">Anything to avoid</label>
+                        <textarea id="task-avoid" class="ws-input" rows="2" maxlength="500" placeholder="No abrasives on the marble"
+                            aria-describedby="task-avoid-hint"></textarea>
+                        <p id="task-avoid-hint" class="form-hint" hidden></p>
+                    </div>
+                    <div class="form-row">
+                        <label for="task-products">Products to use or skip</label>
+                        <input id="task-products" class="ws-input" type="text" maxlength="200" autocomplete="off">
+                    </div>
+                    <div class="form-row">
+                        <p id="task-photos-label" class="form-label">Photos</p>
+                        <ul id="task-photos" class="task-photos" aria-labelledby="task-photos-label"></ul>
+                        <input id="task-photo-input" class="sr-only" type="file" accept="image/*">
+                        <label id="task-photo-add" for="task-photo-input" class="ws-btn ws-btn-small ws-file">Add a photo</label>
+                        <p id="task-photo-note" class="form-note">Photos are resized and stripped of their location
+                            before they are kept.</p>
+                    </div>
+                </details>
+                <p id="task-held" class="form-note" hidden></p>
+                <p id="task-error" class="form-error" role="alert" hidden></p>
+                <div class="card-actions">
+                    <button id="task-remove" class="ws-btn ws-btn-quiet" type="button" hidden>Remove this task</button>
+                    <button id="task-cancel" class="ws-btn" type="button">Cancel</button>
+                    <button id="task-save" class="ws-btn ws-btn-primary" type="submit">Add task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MEET MAYA (meet.js; QA, 2026-10-16): her portrait in the bubble opens
+         her whole figure, facing the visitor, waving now and then. Her own
+         small canvas, drawn only while she moves. A phone never sees her in
+         the studio, so this is where a phone visitor meets her. -->
+    <div id="meet" class="card-overlay" hidden>
+        <div id="meet-panel" class="card-panel meet-panel" role="dialog" aria-modal="true"
+            aria-labelledby="meet-title" aria-describedby="meet-line" tabindex="-1">
+            <div class="card-head">
+                <h2 id="meet-title" class="card-title">Meet Maya</h2>
+                <button id="meet-close" class="ws-btn ws-btn-small" type="button">Close</button>
+            </div>
+            <div class="meet-stage">
+                <canvas id="meet-canvas" class="meet-canvas" aria-hidden="true"></canvas>
+            </div>
+            <p id="meet-line" class="card-detail meet-line">Hi there! I'm Maya, your host at Whitestone Home Care. I'm right here whenever you'd like a hand.</p>
+        </div>
+    </div>
+
+    <!-- THE CONFIRMATION CARD, last, so it stacks over everything. -->
+    <div id="confirm" class="card-overlay" hidden>
+        <div id="confirm-panel" class="card-panel" role="dialog" aria-modal="true"
+            aria-labelledby="confirm-title" aria-describedby="confirm-detail" tabindex="-1">
+            <h2 id="confirm-title" class="card-title"></h2>
+            <p id="confirm-detail" class="card-detail"></p>
+            <div id="confirm-actions" class="card-actions"></div>
+        </div>
+    </div>
+
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

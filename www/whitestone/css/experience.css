@@ -1,0 +1,2378 @@
+/* © 2026 Continuum Commerce LLC. All rights reserved. */
+/*
+ * experience.css - Whitestone Home Care specifics, loaded after the shared
+ * stylesheet.
+ *
+ * A BRIGHT STUDIO, SO A BRIGHT LOADER. Every other scene opens on a dark
+ * loading screen, but this one opens on white stone and daylight, and a dark
+ * screen fading into a white room would flash. The loader wears the studio's
+ * own palette (PLANNING 13): white stone, graphite text, warm gray status,
+ * and the slate blue accent on the progress bar.
+ *
+ * THE CHROME WEARS THE SHARED `surf` THEME until the cards arrive in M1. A
+ * theme of Whitestone's own would have to live in the shared sheet (see
+ * tests/ui-theme.test.mjs), so the cards will carry the palette themselves,
+ * the way Corner Office's do.
+ */
+
+/* The page behind the canvas: the studio's own white, so the moment before
+ * the first frame and the overscroll on a phone match the room. */
+body {
+    background: #F4F2EE;
+}
+
+#loading-screen {
+    background:
+        radial-gradient(120% 80% at 50% 0%, #FFFFFF 0%, transparent 65%),
+        #F4F2EE;
+}
+
+/* The wordmark in place of the title (concept C, 2026-10-14), as wide as
+   the bar beneath it. */
+#loading-screen .loader-logo {
+    display: block;
+    width: 300px;
+    max-width: 80vw;
+    height: auto;
+    margin: 0 auto 2rem;
+}
+
+/* Where the shared bar narrows to 200 px. */
+@media (max-width: 768px) {
+    #loading-screen .loader-logo {
+        width: 220px;
+    }
+}
+
+#loading-screen .loader-bar {
+    background: #E2DED6;
+}
+
+#loading-screen .loader-progress {
+    background: #3E5C76;
+}
+
+#loading-screen .loader-status {
+    color: #6F6A62;
+}
+
+#loading-screen .loader-tagline {
+    margin: -1.25rem 0 2rem;
+    color: #6F6A62;
+    font-size: 0.95rem;
+    letter-spacing: 0.04em;
+}
+
+/* ==== THE 2D INTERFACE (M1) ==================================================
+ *
+ * Whitestone's own cards, buttons and forms, in the studio's palette rather
+ * than a shared theme: white stone panels, graphite text, warm gray detail,
+ * and the one slate blue accent for primary actions and focus. Corner
+ * Office's structure, re-colored for a bright room.
+ *
+ * Every text color here is checked against the surface it actually sits on
+ * (the house lesson: contrast is against the neighborhood). On the white
+ * panel: graphite 15.4:1, muted #5E5952 6.9:1, slate blue #3E5C76 7.0:1,
+ * white on slate blue 7.0:1, the amber hint 5.9:1 (5.4:1 on its note).
+ */
+
+:root {
+    --ws-stone: #F4F2EE;
+    --ws-panel: #FFFFFF;
+    --ws-line: #E2DED6;
+    --ws-graphite: #22252A;
+    --ws-muted: #5E5952;
+    --ws-accent: #3E5C76;
+    --ws-accent-dark: #2F4759;
+    --ws-accent-soft: #E6ECF2;
+    --ws-attention: #8A5A0B;
+    --ws-danger: #9B2C1F;
+}
+
+/* ---- Cards ---------------------------------------------------------------- */
+
+.card-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(34, 37, 42, 0.45);
+}
+
+.card-overlay[hidden] {
+    display: none;
+}
+
+.card-panel {
+    width: min(30rem, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 1.4rem 1.5rem 1.6rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 16px;
+    background: var(--ws-panel);
+    color: var(--ws-graphite);
+    box-shadow: 0 24px 60px rgba(34, 37, 42, 0.28);
+    text-align: center;
+}
+
+.card-panel:focus {
+    outline: none;
+}
+
+.card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+/* Two buttons at a card's head (the checklist's Send my changes and Close,
+   QA 2026-10-17): side by side, wrapping under each other on a phone. */
+.card-head-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.card-head-actions [hidden] {
+    display: none;
+}
+
+.card-title {
+    margin: 0.2rem 0 0;
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--ws-graphite);
+}
+
+.card-detail {
+    margin: 0.6rem 0 0;
+    color: var(--ws-graphite);
+    line-height: 1.5;
+}
+
+/* Meet Maya (meet.js): her whole figure in the studio's white, as tall as
+   the screen allows, her words under her. meet.js fits the camera to
+   whatever shape this comes out. */
+.meet-stage {
+    height: min(26rem, 58vh);
+    max-width: 100%;
+    aspect-ratio: 3 / 4;
+    margin: 0.9rem auto 0;
+    border-radius: 12px;
+    background: #F1F0EC;
+    overflow: hidden;
+}
+
+.meet-stage[hidden] {
+    display: none;
+}
+
+.meet-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.card-meta {
+    margin: 0.5rem 0 0;
+    color: var(--ws-muted);
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.card-actions {
+    margin-top: 1.2rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+/* Your quote's Change tasks, under the total (QA, 2026-10-17). */
+.card-actions.quote-actions {
+    margin: 0.6rem 0 1rem;
+}
+
+/* Empty and silent unless the browser will not keep the checklists. */
+.storage-note {
+    margin: 0.6rem 0 0;
+    padding: 0.6rem 0.8rem;
+    border-radius: 10px;
+    background: #FBF3E4;
+    color: var(--ws-attention);
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.storage-note:empty {
+    display: none;
+}
+
+/* ---- Buttons -------------------------------------------------------------- */
+
+.ws-btn {
+    min-height: 44px;
+    padding: 0.55rem 1.1rem;
+    border: 1px solid #C9C3B9;
+    border-radius: 999px;
+    background: var(--ws-panel);
+    color: var(--ws-graphite);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Every hover on this page is for a pointer that hovers (QA, 2026-10-16):
+   a phone keeps :hover on whatever was last tapped, so a button drawn
+   where the finger was (A townhome, under Let's start) read as chosen. */
+@media (hover: hover) {
+    .ws-btn:hover {
+        border-color: var(--ws-accent);
+        background: var(--ws-accent-soft);
+    }
+}
+
+.ws-btn:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.ws-btn-primary {
+    border-color: var(--ws-accent);
+    background: var(--ws-accent);
+    color: #FFFFFF;
+}
+
+@media (hover: hover) {
+    .ws-btn-primary:hover {
+        border-color: var(--ws-accent-dark);
+        background: var(--ws-accent-dark);
+    }
+}
+
+.ws-btn-small {
+    min-height: 36px;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.88rem;
+}
+
+.ws-btn-danger {
+    border-color: var(--ws-danger);
+    background: var(--ws-danger);
+    color: #FFFFFF;
+}
+
+.ws-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.ws-btn[hidden] {
+    display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ws-btn {
+        transition: none;
+    }
+}
+
+/* ---- Forms ---------------------------------------------------------------- */
+
+.form-panel {
+    width: min(34rem, 100%);
+    text-align: left;
+}
+
+.ws-form {
+    margin-top: 0.9rem;
+}
+
+.form-row {
+    margin: 0 0 0.9rem;
+}
+
+.form-row > label,
+.form-group > legend {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: var(--ws-graphite);
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.form-group {
+    margin: 0 0 1rem;
+    padding: 0;
+    border: 0;
+}
+
+.form-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    gap: 0 0.8rem;
+}
+
+.form-check {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0 0 0.45rem;
+    min-height: 32px;
+}
+
+.form-check > label {
+    margin: 0;
+    font-weight: 500;
+}
+
+.form-check input {
+    width: 1.2rem;
+    height: 1.2rem;
+    flex: none;
+    accent-color: var(--ws-accent);
+}
+
+.ws-input,
+.ws-select {
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #B9B3A9;
+    border-radius: 10px;
+    background: var(--ws-panel);
+    color: var(--ws-graphite);
+    font: inherit;
+    font-size: 1rem;
+}
+
+textarea.ws-input {
+    resize: vertical;
+    line-height: 1.45;
+}
+
+.ws-input:focus-visible,
+.ws-select:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 1px;
+    border-color: var(--ws-accent);
+}
+
+/* A gentle note under a field (guards.js), never an error. */
+.form-hint {
+    margin: 0.4rem 0 0;
+    color: var(--ws-attention);
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.form-hint[hidden],
+.form-error[hidden] {
+    display: none;
+}
+
+.form-error {
+    margin: 0 0 0.6rem;
+    color: var(--ws-danger);
+    font-weight: 600;
+}
+
+.form-panel .card-actions {
+    justify-content: flex-end;
+}
+
+/* ---- Choose a time (booking.js) ------------------------------------------- */
+
+.booking-panel,
+.receipt-panel {
+    width: min(32rem, 100%);
+    text-align: left;
+}
+
+.booking-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0.8rem 0 0.4rem;
+}
+
+.booking-month {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.booking-nav {
+    min-width: 44px;
+    font-size: 1.2rem;
+}
+
+.booking-calendar {
+    margin-bottom: 0.8rem;
+}
+
+.booking-week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.booking-weekdays span {
+    color: var(--ws-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+.booking-day {
+    min-height: 40px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: none;
+    color: var(--ws-muted);
+    font: inherit;
+    font-size: 0.92rem;
+}
+
+.booking-day.is-open {
+    border-color: var(--ws-line);
+    background: var(--ws-panel);
+    color: var(--ws-graphite);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+@media (hover: hover) {
+    .booking-day.is-open:hover {
+        border-color: var(--ws-accent);
+    }
+}
+
+/* The chosen day, filled: a fill here is the state it reads as. */
+.booking-day.is-selected {
+    border-color: var(--ws-accent);
+    background: var(--ws-accent);
+    color: #FFFFFF;
+}
+
+.booking-day:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.booking-day:focus-visible,
+.booking-time:focus-within {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.booking-day-title {
+    margin: 0.4rem 0 0.4rem;
+    font-size: 0.95rem;
+}
+
+.booking-day-title[hidden],
+.booking-times[hidden] {
+    display: none;
+}
+
+.booking-times {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: 0.4rem;
+    max-height: 13rem;
+    margin-bottom: 0.6rem;
+    overflow-y: auto;
+}
+
+.booking-time {
+    display: flex;
+    flex-direction: column;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.booking-time input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.booking-time:has(input:checked) {
+    border-color: var(--ws-accent);
+    background: var(--ws-accent-soft);
+}
+
+.booking-time-start {
+    font-weight: 700;
+}
+
+.booking-time-until {
+    color: var(--ws-muted);
+    font-size: 0.8rem;
+}
+
+/* ---- The receipt (receipt.js) ---------------------------------------------- */
+
+.receipt-when {
+    margin: 0.6rem 0 0.4rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.receipt-quote {
+    margin: 0.6rem 0 0;
+    font-weight: 600;
+}
+
+.receipt-share {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    align-items: start;
+    margin: 0.9rem 0;
+    padding: 0.9rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 12px;
+}
+
+.receipt-label {
+    display: block;
+    margin: 0 0 0.3rem;
+    color: var(--ws-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.receipt-buttons {
+    display: flex;
+    gap: 0.4rem;
+    margin: 0.4rem 0 0.8rem;
+}
+
+.receipt-pin {
+    margin: 0 0 0.3rem;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    font-variant-numeric: tabular-nums;
+}
+
+.receipt-qr {
+    width: 9.5rem;
+    margin: 0;
+    text-align: center;
+}
+
+.receipt-qr-box svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.receipt-qr figcaption {
+    margin-top: 0.3rem;
+    color: var(--ws-muted);
+    font-size: 0.75rem;
+}
+
+/* Changes not sent yet: first on the receipt, with the way to send them. */
+.receipt-unsent {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin: 0.6rem 0 0.2rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--ws-accent);
+    border-radius: 12px;
+    background: var(--ws-accent-soft);
+}
+
+.receipt-unsent[hidden] {
+    display: none;
+}
+
+.receipt-unsent p {
+    margin: 0;
+    font-weight: 600;
+}
+
+/* The visit's own buttons: Add to calendar, Change the time, Cancel. */
+.receipt-visit {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.4rem;
+}
+
+.receipt-visit a.ws-btn {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.receipt-visit a.ws-btn[hidden] {
+    display: none;
+}
+
+/* Unpublish sits apart from Done, on the far side. */
+.receipt-unpublish {
+    margin-right: auto;
+}
+
+.receipt-edit {
+    margin-top: 0.9rem;
+    padding: 0.9rem;
+    border: 1px dashed var(--ws-line);
+    border-radius: 12px;
+    background: var(--ws-stone);
+}
+
+.receipt-edit .ws-input {
+    margin: 0.4rem 0;
+}
+
+@media (max-width: 30rem) {
+    .receipt-share {
+        grid-template-columns: 1fr;
+    }
+
+    .receipt-qr {
+        width: 11rem;
+        margin: 0 auto;
+    }
+}
+
+/* ---- The wordmark, top left (Steve, 2026-10-14) ----------------------------- */
+
+/* Concept C, the gable over the name (assets/logo-whitestone.svg). Under
+   Help and Maya, never in a pointer's way. */
+.ws-brand {
+    position: fixed;
+    top: max(18px, env(safe-area-inset-top));
+    left: max(20px, env(safe-area-inset-left));
+    z-index: 30;
+    pointer-events: none;
+}
+
+.ws-brand img {
+    display: block;
+    width: auto;
+    height: 46px;
+}
+
+/* A phone upright: smaller, centered over the house, which the frame sets
+   a little lower to leave it room (QA, 2026-10-15). On its side, the house
+   needs the top of the screen. */
+@media (max-width: 620px) and (orientation: portrait) {
+    .ws-brand {
+        top: max(14px, env(safe-area-inset-top));
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .ws-brand img {
+        height: 30px;
+    }
+}
+
+@media (max-width: 620px) and (orientation: landscape) {
+    .ws-brand.visible {
+        display: none;
+    }
+}
+
+/* ---- The toast ------------------------------------------------------------ */
+
+.ws-toast {
+    position: fixed;
+    left: 50%;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    z-index: 160;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    max-width: calc(100vw - 32px);
+    padding: 0.55rem 0.6rem 0.55rem 1rem;
+    border-radius: 12px;
+    background: var(--ws-graphite);
+    color: #FFFFFF;
+    font-weight: 600;
+    box-shadow: 0 10px 30px rgba(34, 37, 42, 0.3);
+}
+
+/* On a phone the toolbar may wrap, so the toast moves to the top, under the
+   home chip, where it can never cover the toolbar. */
+@media (max-width: 620px) {
+    .ws-toast {
+        top: calc(max(16px, env(safe-area-inset-top)) + 52px);
+        bottom: auto;
+    }
+}
+
+.ws-toast[hidden] {
+    display: none;
+}
+
+.ws-toast .ws-btn {
+    border-color: #FFFFFF;
+    background: #FFFFFF;
+    color: var(--ws-graphite);
+}
+
+/* ---- Form extras (M1 piece 2) ---------------------------------------------- */
+
+.form-note {
+    margin: 0.35rem 0 0;
+    color: var(--ws-muted);
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.form-note:empty,
+.form-note[hidden] {
+    display: none;
+}
+
+.form-label {
+    margin: 0 0 0.35rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.form-group[hidden],
+.form-row[hidden] {
+    display: none;
+}
+
+.ws-input-short {
+    width: 7rem;
+}
+
+.form-more {
+    margin: 0.4rem 0 1rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 12px;
+}
+
+.form-more > summary {
+    min-height: 32px;
+    cursor: pointer;
+    color: var(--ws-accent);
+    font-weight: 600;
+}
+
+.form-more[open] > summary {
+    margin-bottom: 0.8rem;
+}
+
+/* A quiet button for removing things: never the one the eye goes to first. */
+.ws-btn-quiet {
+    border-color: transparent;
+    background: transparent;
+    color: var(--ws-danger);
+}
+
+@media (hover: hover) {
+    .ws-btn-quiet:hover {
+        border-color: var(--ws-danger);
+        background: #FBEDEA;
+    }
+}
+
+/* The task card's running price, the answer to "what will this cost?". */
+.task-price {
+    margin: 0.2rem 0 0.9rem;
+    color: var(--ws-accent);
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.task-price:empty {
+    display: none;
+}
+
+/* A file input is visually hidden (.sr-only), and its label is the button.
+   The focus ring follows the input onto the label. */
+.ws-file {
+    display: inline-flex;
+    align-items: center;
+}
+
+#task-photo-input:focus-visible + .ws-file {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.task-photos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 0 0 0.6rem;
+    padding: 0;
+    list-style: none;
+}
+
+.task-photos:empty {
+    display: none;
+}
+
+.task-photo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.task-photo img {
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 10px;
+    background: var(--ws-stone);
+}
+
+/* ---- The checklist view ---------------------------------------------------- */
+
+.checklist-overlay {
+    padding: clamp(0rem, 2vw, 1.5rem);
+}
+
+.checklist-panel {
+    width: min(48rem, 100%);
+    height: 100%;
+    text-align: left;
+}
+
+@media (max-width: 620px) {
+    .checklist-panel {
+        border-radius: 0;
+        padding: 1rem 1rem 1.4rem;
+    }
+}
+
+.checklist-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.9rem 0 0.4rem;
+}
+
+.checklist-level {
+    margin-top: 1.4rem;
+}
+
+.checklist-level-name {
+    margin: 0 0 0.4rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 2px solid var(--ws-graphite);
+    font-size: 1.05rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.checklist-room {
+    margin: 0.9rem 0 0;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 12px;
+    background: #FBFAF8;
+}
+
+.checklist-room-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.checklist-room-name {
+    margin: 0;
+    font-size: 1.05rem;
+    overflow-wrap: anywhere;
+}
+
+.checklist-room-kind {
+    margin-left: 0.5rem;
+    color: var(--ws-muted);
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+
+.checklist-room-actions,
+.task-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.checklist-empty {
+    margin: 0.5rem 0 0;
+    color: var(--ws-muted);
+    font-size: 0.92rem;
+}
+
+.task-list {
+    margin: 0.6rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.task-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem 1rem;
+    padding: 0.55rem 0;
+    border-top: 1px solid var(--ws-line);
+}
+
+/* The star, then the task's words: one column down the left (QA,
+   2026-10-17), to scroll and star. */
+.task-row-main {
+    display: flex;
+    flex: 1 1 16rem;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+}
+
+.task-row-text {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0.6rem;
+    min-width: 0;
+}
+
+.task-row-name {
+    font-weight: 600;
+}
+
+/* The star, in words and in the accent, so it never rests on color alone.
+   On screen the star button left of the name says it (QA, 2026-10-17), so
+   the words are for the printout only, where no button is printed. */
+.task-row-star {
+    display: none;
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    background: var(--ws-accent);
+    color: #FFFFFF;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.task-row-facts {
+    color: var(--ws-muted);
+    font-size: 0.88rem;
+}
+
+.task-row-price {
+    color: var(--ws-graphite);
+    font-size: 0.88rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- The quote card --------------------------------------------------------- */
+
+.quote-total {
+    margin: 0.8rem 0 0;
+    color: var(--ws-graphite);
+    font-size: 1.6rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.quote-minimum {
+    margin: 0.6rem 0 0;
+    padding: 0.6rem 0.8rem;
+    border-radius: 10px;
+    background: var(--ws-accent-soft);
+    color: var(--ws-accent-dark);
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+.quote-minimum:empty {
+    display: none;
+}
+
+.quote-breakdown {
+    margin: 1rem 0 0.4rem;
+}
+
+.quote-room {
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--ws-line);
+}
+
+.quote-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.quote-line > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.quote-room-line {
+    font-weight: 700;
+}
+
+.quote-tasks {
+    margin: 0.25rem 0 0;
+    padding: 0 0 0 0.9rem;
+    list-style: none;
+    color: var(--ws-muted);
+    font-size: 0.9rem;
+}
+
+.quote-tasks .quote-line {
+    padding: 0.12rem 0;
+}
+
+.quote-sums {
+    padding-top: 0.5rem;
+    border-top: 2px solid var(--ws-graphite);
+}
+
+.quote-sums .quote-line:last-child {
+    margin-top: 0.2rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.quote-promise {
+    color: var(--ws-graphite);
+    font-weight: 600;
+}
+
+/* The care preferences under the breakdown (QA, 2026-10-15): read-only,
+   set apart, text-aligned left like the lines above. */
+.quote-prefs {
+    margin: 0.9rem 0 0.4rem;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 12px;
+    background: var(--ws-stone);
+    text-align: left;
+}
+
+.quote-prefs[hidden],
+.quote-prefs-list[hidden],
+.quote-prefs-note[hidden] {
+    display: none;
+}
+
+/* A visit's report (M5): the bill first, then what was not done. */
+.visit-report-body {
+    text-align: left;
+}
+
+.visit-report-bill,
+.visit-report-list,
+.visit-report-note {
+    margin: 0.75rem 0;
+}
+
+.visit-report-bill {
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--ws-line);
+    border-left: 4px solid #3F8F5A;
+    border-radius: 12px;
+    background: var(--ws-stone);
+}
+
+.visit-report-parts,
+.visit-report-list ul {
+    margin: 0.3rem 0 0;
+    padding: 0 0 0 1.1rem;
+    font-size: 0.92rem;
+}
+
+.visit-report-list .quote-line {
+    margin: 0.2rem 0;
+}
+
+.visit-report-photos ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+    gap: 0.6rem;
+    margin: 0.3rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.visit-report-photos figure {
+    margin: 0;
+}
+
+.visit-report-photos img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+
+/* The cleaner's add-ons (QA, 2026-10-15): the ones waiting first, each
+   answered in place, then the answers given. */
+.addons-body {
+    text-align: left;
+}
+
+.addon-section {
+    margin: 0.75rem 0;
+}
+
+.addon-list {
+    margin: 0.3rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.addon-row {
+    padding: 0.65rem 0.85rem;
+    margin: 0.45rem 0;
+    border: 1px solid var(--ws-line);
+    border-radius: 12px;
+    background: var(--ws-panel);
+}
+
+.addon-row-waiting {
+    border-left: 4px solid var(--ws-accent);
+    background: var(--ws-stone);
+}
+
+.addon-name {
+    font-weight: 700;
+}
+
+.addon-meta,
+.addon-words,
+.addon-status {
+    margin: 0.2rem 0 0;
+    font-size: 0.9rem;
+    color: var(--ws-muted);
+}
+
+.addon-words {
+    font-style: italic;
+    color: var(--ws-graphite);
+}
+
+.addon-status {
+    font-weight: 600;
+}
+
+.addon-status-approved {
+    color: #2F6B43;
+}
+
+.addon-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.55rem;
+}
+
+.addon-sum {
+    margin: 0.6rem 0 0;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--ws-line);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.visit-report-photos figcaption {
+    margin-top: 0.2rem;
+    color: var(--ws-muted);
+    font-size: 0.85rem;
+}
+
+#visit-report-skipped .quote-prefs-title {
+    color: #8A5A0B;
+}
+
+.quote-prefs-title {
+    margin: 0 0 0.3rem;
+    font-size: 0.95rem;
+}
+
+.quote-prefs-list {
+    margin: 0;
+    padding: 0 0 0 1.1rem;
+    font-size: 0.92rem;
+}
+
+.quote-prefs-note {
+    margin: 0.35rem 0 0;
+    color: var(--ws-muted);
+    font-size: 0.92rem;
+    overflow-wrap: anywhere;
+}
+
+/* ---- The checklist's filter ------------------------------------------------- */
+
+.checklist-filter-label {
+    margin-left: auto;
+    align-self: center;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.checklist-filter {
+    width: auto;
+    min-width: 12rem;
+}
+
+@media (max-width: 620px) {
+    .checklist-filter-label {
+        margin-left: 0;
+    }
+
+    .checklist-filter {
+        width: 100%;
+    }
+}
+
+.task-row-actions .ws-btn:disabled {
+    opacity: 0.35;
+}
+
+/* ---- Turning the house (M2) ------------------------------------------------------
+ *
+ * The canvas reads every pointer itself (main.js setupLook): a drag on the
+ * turntable turns the house, so the browser must neither scroll nor zoom
+ * the page under a finger. The plain arrow until main.js hover says
+ * otherwise: a pointer over what a tap opens, a grab hand over what a drag
+ * turns (QA, 2026-10-15: the hand showed over the studio, which turns
+ * nothing).
+ */
+#game-canvas {
+    touch-action: none;
+    cursor: default;
+}
+
+/* ---- The rooms of a lifted level (M2) -------------------------------------------
+ *
+ * Each room's name over its tile on the house model, placed by main.js
+ * placeLabels as the camera moves. Never in a pointer's way, and under the
+ * HUD, the toolbar and the cards.
+ */
+/* A halo on the touch point Maya is speaking of: a ring on the house,
+   placed each frame (main.js placeHalo), or a glow on a control. One at a
+   time, and still under reduced motion. */
+.ws-halo {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 21;
+}
+
+.ws-halo[hidden] {
+    display: none;
+}
+
+.ws-halo::before,
+.ws-halo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 3px solid var(--ws-accent);
+    border-radius: 50%;
+}
+
+/* The ring itself stays put, solid with a white edge so it reads on the
+   white house and the stone alike, and the pulse rides over it (QA,
+   2026-10-14: a pulse alone faded to nothing for most of each beat, and in
+   every screenshot). */
+.ws-halo::after {
+    box-shadow: 0 0 0 2px #FFFFFF, inset 0 0 0 2px #FFFFFF, 0 2px 10px rgba(34, 37, 42, 0.3);
+}
+
+.ws-halo::before {
+    animation: halo-ring 1.6s ease-out infinite;
+}
+
+@keyframes halo-ring {
+    from { opacity: 0.85; transform: scale(1); }
+    to { opacity: 0; transform: scale(1.7); }
+}
+
+/* A control's glow: a solid accent ring hugging its shape, a white gap so
+   it never reads as the control's own border, and a pulse beyond it. */
+.has-halo {
+    box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 5px var(--ws-accent);
+    animation: halo-glow 1.6s ease-out infinite;
+}
+
+@keyframes halo-glow {
+    from { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 5px rgba(62, 92, 118, 1), 0 0 0 5px rgba(62, 92, 118, 0.5); }
+    to { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 5px rgba(62, 92, 118, 1), 0 0 0 18px rgba(62, 92, 118, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ws-halo::before {
+        animation: none;
+        opacity: 0.35;
+        transform: scale(1.3);
+    }
+
+    .has-halo {
+        animation: none;
+        box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 5px var(--ws-accent), 0 0 0 10px rgba(62, 92, 118, 0.25);
+    }
+}
+
+.ws-rooms {
+    position: fixed;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    pointer-events: none;
+    z-index: 20;
+}
+
+.ws-room {
+    position: absolute;
+    left: 0;
+    top: 0;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94);
+    color: #22252A;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    box-shadow: 0 1px 4px rgba(34, 37, 42, 0.18);
+}
+
+.ws-room[hidden] {
+    display: none;
+}
+
+/* ---- Maya's bubble (M2) ------------------------------------------------------------
+ *
+ * Beside the house on a wide screen, in the part of the screen the frame
+ * leaves free (turntable.js), and a sheet along the bottom on a phone, with
+ * the house above it. White, soft, and one accent: the portrait, the step
+ * of the progress strip she is on, and the main button.
+ */
+.ws-host {
+    position: fixed;
+    top: 50%;
+    right: max(24px, env(safe-area-inset-right));
+    z-index: 40;
+    width: clamp(280px, 27vw, 380px);
+    max-height: calc(100vh - 160px);
+    overflow: auto;
+    padding: 1.1rem 1.2rem 1rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.97);
+    color: var(--ws-graphite);
+    box-shadow: 0 18px 50px rgba(34, 37, 42, 0.16);
+    transform: translateY(-50%);
+    animation: host-in 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.ws-host[hidden] {
+    display: none;
+}
+
+.host-head {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 0.7rem;
+}
+
+/* Her portrait: her face, drawn once from the 3D Maya (cast.js), or her
+ * initial in the accent where it cannot be. */
+.host-portrait {
+    display: grid;
+    flex: none;
+    place-items: center;
+    /* Round (QA, 2026-10-16: an oval and a rounded square were tried; with
+       the ← plain, not filled, the circle sits well beside it). */
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--ws-accent);
+    color: #FFFFFF;
+    font-size: 1.15rem;
+    font-weight: 700;
+    box-shadow: 0 0 0 3px var(--ws-accent-soft);
+    overflow: hidden;
+    /* A button: a tap meets her (meet.js, QA 2026-10-16). */
+    padding: 0;
+    border: 0;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.host-portrait:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 3px;
+}
+
+@media (hover: hover) {
+    .host-portrait:hover {
+        box-shadow: 0 0 0 3px var(--ws-accent);
+    }
+}
+
+.host-face {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* Her face is drawn square: cropped to the oval, never squeezed. */
+    object-fit: cover;
+}
+
+/* Beside Maya's head on a wide screen, wherever the camera puts her
+ * (main.js placeHost). It fades in rather than sliding, since it already
+ * stands where it belongs. */
+.ws-host.is-anchored {
+    right: auto;
+    transform: none;
+    animation-name: host-fade;
+}
+
+@keyframes host-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.host-who {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    line-height: 1.25;
+}
+
+.host-name {
+    font-weight: 700;
+}
+
+/* Her main step, a → by her name (QA, 2026-10-15: on a phone her buttons
+   can sit below the fold): the accent, as her main button wears it. Its ←
+   twins, one step back before her portrait and beside the panel's title
+   (QA, 2026-10-16: the text links went unseen), share its shape, in the
+   plain button's colors (QA, 2026-10-16: forward is the main step, back
+   is not). */
+.host-next,
+.host-back,
+.panel-back {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--ws-accent);
+    color: #FFFFFF;
+    cursor: pointer;
+}
+
+@media (hover: hover) {
+    .host-next:hover,
+    .host-back:hover,
+    .panel-back:hover {
+        background: var(--ws-accent-dark);
+    }
+}
+
+.host-next:focus-visible,
+.host-back:focus-visible,
+.panel-back:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+/* The ←s sit at the start of their row (only the → is pushed to its
+   end), white with a fine line, as .ws-btn is. */
+.host-back,
+.panel-back {
+    margin-left: 0;
+    border: 1px solid #C9C3B9;
+    background: var(--ws-panel);
+    color: var(--ws-graphite);
+}
+
+@media (hover: hover) {
+    .host-back:hover,
+    .panel-back:hover {
+        border-color: var(--ws-accent);
+        background: var(--ws-accent-soft);
+    }
+}
+
+.ws-host.is-minimized .host-back {
+    display: none;
+}
+
+.host-next[hidden] {
+    display: none;
+}
+
+.host-role {
+    color: var(--ws-muted);
+    font-size: 0.82rem;
+}
+
+/* The home at a glance (Steve, 2026-10-14): the quote and the visit, small
+   and set apart from what she says, on a stone band, in view while she is
+   tucked away too, since nothing else on the page shows them. Each is a
+   button (the breakdown, the receipt): a quiet one, its chevron and a
+   white lift on hover saying so, never a fill at rest (a fill reads as
+   pressed). */
+.host-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin: 0 0 0.8rem;
+    padding: 0.3rem;
+    border-radius: 12px;
+    background: var(--ws-stone);
+}
+
+.host-facts[hidden] {
+    display: none;
+}
+
+.ws-host.is-minimized .host-facts {
+    margin: 0 0 0.5rem;
+}
+
+.host-fact {
+    display: flex;
+    flex: 1 1 8rem;
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 44px;
+    padding: 0.35rem 1.6rem 0.4rem 0.55rem;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: none;
+    color: var(--ws-graphite);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    position: relative;
+}
+
+.host-fact::after {
+    content: '\203A';
+    content: '\203A' / '';
+    position: absolute;
+    top: 50%;
+    right: 0.55rem;
+    color: var(--ws-muted);
+    font-size: 1.1rem;
+    transform: translateY(-50%);
+}
+
+@media (hover: hover) {
+    .host-fact:hover {
+        border-color: var(--ws-line);
+        background: #FFFFFF;
+    }
+}
+
+.host-fact:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 1px;
+}
+
+.host-fact-label {
+    color: var(--ws-muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.host-fact-value {
+    margin-top: 0.1rem;
+    color: var(--ws-accent-dark);
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.host-fact-note {
+    color: var(--ws-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+/* Changes the cleaner has not seen: said in words, and in the accent. */
+.host-fact-visit .host-fact-note {
+    color: var(--ws-accent);
+    font-weight: 700;
+}
+
+/* The progress strip: five steps, the one she is on in the accent, and
+   those reached so far a tap away. */
+.host-progress {
+    display: flex;
+    gap: 0.35rem;
+    margin: 0 0 0.8rem;
+    padding: 0;
+    list-style: none;
+}
+
+.host-progress[hidden] {
+    display: none;
+}
+
+/* Your rooms' floors (QA, 2026-10-16), as the panel lists them, under the
+   chips and above her buttons. */
+.host-floor-rows {
+    margin: 0.2rem 0 0;
+    text-align: left;
+}
+
+.host-floor-rows .panel-list {
+    /* A clear gap before her buttons (QA, 2026-10-16: the last floor all
+       but touched Review my checklist), as under the chips. */
+    margin-bottom: 1.1rem;
+}
+
+/* The open floor, where her chips add (QA, 2026-10-17): pressed, as an
+   answer already given is (.host-pick.is-on). */
+.host-floor-rows .panel-row.is-on {
+    border-color: var(--ws-accent);
+    background: var(--ws-accent-soft);
+}
+
+.host-step {
+    flex: 1;
+    padding-top: 0.4rem;
+    border-top: 3px solid var(--ws-line);
+    color: var(--ws-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.host-step.is-done {
+    border-color: #9FB3C4;
+}
+
+.host-step.is-now {
+    border-color: var(--ws-accent);
+    color: var(--ws-graphite);
+}
+
+.host-step.is-reached {
+    border-color: #9FB3C4;
+}
+
+.host-step-btn {
+    display: block;
+    width: 100%;
+    min-height: 32px;
+    margin: -0.4rem 0 0;
+    padding: 0.4rem 0 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+@media (hover: hover) {
+    .host-step-btn:hover {
+        color: var(--ws-accent);
+        text-decoration: underline;
+    }
+}
+
+.host-step-btn:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.host-line {
+    margin: 0 0 0.95rem;
+    font-size: 1.06rem;
+    line-height: 1.45;
+}
+
+.host-choices[hidden] {
+    display: none;
+}
+
+.host-floors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.9rem;
+    padding: 0;
+    border: 0;
+}
+
+.host-floors legend {
+    margin-bottom: 0.4rem;
+    padding: 0;
+    color: var(--ws-muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+/* Why the main floor is ticked for good (QA, 2026-10-15): a line of its
+   own under the chips. */
+.host-floors-note {
+    flex-basis: 100%;
+    margin: 0.1rem 0 0;
+    color: var(--ws-muted);
+    font-size: 0.8rem;
+}
+
+/* One of a few (a kind of home): a full-width button each, stacked, so
+   each reads as an answer and is easy to hit on a phone. */
+.host-picks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin: 0 0 0.6rem;
+}
+
+.host-pick {
+    width: 100%;
+    min-height: 46px;
+    text-align: left;
+}
+
+/* The answer already given, when Maya asks again after Back. */
+.host-pick.is-on {
+    border-color: var(--ws-accent);
+    background: var(--ws-accent-soft);
+}
+
+/* A floor to tick: a chip, its box kept (a checkbox reads as one). */
+.host-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 44px;
+    padding: 0.35rem 0.85rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 999px;
+    background: #FFFFFF;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.host-chip input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--ws-accent);
+}
+
+.host-chip:has(input:checked) {
+    border-color: var(--ws-accent);
+}
+
+.host-chip:focus-within {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.host-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.host-small {
+    margin: 0.85rem 0 0;
+    color: var(--ws-muted);
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.host-small[hidden] {
+    display: none;
+}
+
+/* Standing by, tucked away: her portrait and Need a hand?, nothing else. */
+.host-expand[hidden] {
+    display: none;
+}
+
+.ws-host.is-minimized {
+    width: auto;
+    padding-bottom: 0.9rem;
+}
+
+.ws-host.is-minimized .host-progress,
+.ws-host.is-minimized .host-line,
+.ws-host.is-minimized .host-choices,
+.ws-host.is-minimized .host-actions,
+.ws-host.is-minimized .host-small,
+.ws-host.is-minimized .host-foot {
+    display: none;
+}
+
+.host-expand {
+    margin-top: 0.4rem;
+}
+
+/* Start over, quiet, along the bubble's foot (QA, 2026-10-15; Back moved to her header as a ←, 2026-10-16). */
+.host-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 0.2rem;
+    margin-top: 0.6rem;
+}
+
+/* Start over at the foot's right now Back is a ← in her header (QA,
+   2026-10-16): quiet, since it is asked about first and clears everything.
+   Across from it on the left, the way back to SceneXP's directory (Steve,
+   2026-10-16), in the same quiet style. */
+.host-reset,
+.host-explore {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0.3rem 0;
+    border: 0;
+    background: none;
+    color: var(--ws-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.host-reset {
+    margin: 0 0 0 auto;
+}
+
+.host-explore {
+    margin: 0 1rem 0 0;
+}
+
+@media (hover: hover) {
+    .host-reset:hover,
+    .host-explore:hover {
+        color: var(--ws-accent);
+    }
+}
+
+.host-reset:focus-visible,
+.host-explore:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 2px;
+}
+
+.host-reset[hidden] {
+    display: none;
+}
+
+.host-back[hidden] {
+    display: none;
+}
+
+/* Nothing has happened for a while: the next step pulses, once. */
+.ws-btn.is-nudge {
+    animation: host-nudge 1.6s ease-in-out;
+}
+
+@keyframes host-nudge {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(62, 92, 118, 0); }
+    40% { box-shadow: 0 0 0 9px rgba(62, 92, 118, 0.3); }
+}
+
+@keyframes host-in {
+    from { opacity: 0; transform: translateY(calc(-50% + 12px)); }
+    to { opacity: 1; transform: translateY(-50%); }
+}
+
+@keyframes host-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: none; }
+}
+
+/* A phone upright: a sheet along the bottom, the house above it. */
+@media (max-aspect-ratio: 999/1000) {
+    .ws-host {
+        top: auto;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: auto;
+        max-height: 46vh;
+        padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+        border-radius: 20px 20px 0 0;
+        transform: none;
+        animation-name: host-up;
+    }
+
+    .host-portrait {
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
+    }
+
+    .host-actions .ws-btn {
+        flex: 1 1 auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ws-host {
+        animation: none;
+    }
+
+    .ws-btn.is-nudge {
+        animation: none;
+        outline: 3px solid var(--ws-accent);
+        outline-offset: 2px;
+    }
+}
+
+/* ---- The panel beside the house (M2 step 3) ------------------------------------
+ *
+ * Where Maya's bubble is: beside her on a wide screen (main.js placeHost),
+ * the right edge where there is no room, a sheet along the bottom on a
+ * phone. Whatever is selected on the house, in words.
+ */
+.ws-panel {
+    position: fixed;
+    top: 76px;
+    right: max(24px, env(safe-area-inset-right));
+    bottom: 16px;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    width: clamp(280px, 27vw, 380px);
+    overflow: auto;
+    padding: 0.9rem 1.1rem 1rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.97);
+    color: var(--ws-graphite);
+    box-shadow: 0 18px 50px rgba(34, 37, 42, 0.16);
+}
+
+.ws-panel[hidden] {
+    display: none;
+}
+
+/* Beside Maya: its own top and height, set by main.js. */
+.ws-panel.is-anchored {
+    right: auto;
+    bottom: auto;
+}
+
+/* The ← and the title on one row, as Maya's name and her → are. */
+.panel-head {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
+
+/* What a visit under way holds (QA, 2026-10-16): said under the title. */
+.panel-held {
+    margin: 0.4rem 0 0.2rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 10px;
+    background: var(--ws-accent-soft);
+    color: var(--ws-accent-dark);
+    font-size: 0.88rem;
+    line-height: 1.4;
+}
+
+.panel-held[hidden] {
+    display: none;
+}
+
+.panel-title {
+    min-width: 0;
+    margin: 0;
+    font-size: 1.25rem;
+    line-height: 1.3;
+}
+
+.panel-summary {
+    margin: 0.25rem 0 0.8rem;
+    color: var(--ws-muted);
+    font-size: 0.9rem;
+}
+
+.panel-heading {
+    margin: 0.2rem 0 0.4rem;
+    color: var(--ws-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.panel-summary[hidden],
+.panel-heading[hidden],
+.panel-list[hidden],
+.panel-empty[hidden],
+.panel-detail[hidden],
+.panel-chips[hidden] {
+    display: none;
+}
+
+.panel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin: 0 0 0.9rem;
+    padding: 0;
+    list-style: none;
+}
+
+.panel-item {
+    display: flex;
+    gap: 0.3rem;
+}
+
+/* A floor, a room or a task: the whole row is its button. */
+.panel-row {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--ws-line);
+    border-radius: 10px;
+    background: #FFFFFF;
+    color: var(--ws-graphite);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.panel-row:focus-visible {
+    border-color: var(--ws-accent);
+    outline: none;
+}
+
+@media (hover: hover) {
+    .panel-row:hover {
+        border-color: var(--ws-accent);
+    }
+}
+
+.panel-row:focus-visible {
+    box-shadow: 0 0 0 3px var(--ws-accent-soft);
+}
+
+.panel-row-label {
+    font-weight: 600;
+}
+
+.panel-row-detail {
+    color: var(--ws-muted);
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+/* A task's star: hollow until it matters most. */
+.panel-star {
+    flex: none;
+    width: 44px;
+    min-height: 44px;
+    border: 1px solid var(--ws-line);
+    border-radius: 10px;
+    background: #FFFFFF;
+    color: var(--ws-muted);
+    font-size: 1.15rem;
+    cursor: pointer;
+}
+
+.panel-star.is-on {
+    color: var(--ws-accent);
+}
+
+.panel-star:focus-visible {
+    outline: 3px solid var(--ws-accent);
+    outline-offset: 1px;
+}
+
+.panel-empty {
+    margin: 0 0 0.9rem;
+    color: var(--ws-muted);
+    font-size: 0.92rem;
+}
+
+.panel-detail {
+    margin: 0 0 0.9rem;
+}
+
+.panel-detail-line {
+    margin: 0 0 0.35rem;
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.panel-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.9rem;
+}
+
+/* A bathroom's type of bath: one of three, the one it is filled, since a
+   fill here is the state it reads as. */
+.panel-baths {
+    margin: 0 0 0.9rem;
+}
+
+.panel-baths[hidden] {
+    display: none;
+}
+
+.panel-baths-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.3rem;
+}
+
+.panel-bath {
+    min-height: 40px;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--ws-accent);
+    border-radius: 999px;
+    background: #FFFFFF;
+    color: var(--ws-accent);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.panel-bath:focus-visible {
+    background: var(--ws-accent-soft);
+    outline: none;
+}
+
+@media (hover: hover) {
+    .panel-bath:hover {
+        background: var(--ws-accent-soft);
+    }
+}
+
+.panel-bath:focus-visible {
+    box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px var(--ws-accent);
+}
+
+.panel-bath.is-on,
+.panel-bath.is-on:hover {
+    background: var(--ws-accent);
+    color: #FFFFFF;
+    cursor: default;
+}
+
+.panel-chips-heading {
+    flex-basis: 100%;
+    margin: 0 0 0.1rem;
+    color: var(--ws-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.panel-chip {
+    min-height: 40px;
+    padding: 0.35rem 0.8rem;
+    border: 1px dashed var(--ws-accent);
+    border-radius: 999px;
+    background: #FFFFFF;
+    color: var(--ws-accent);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.panel-chip:focus-visible {
+    background: var(--ws-accent-soft);
+    outline: none;
+}
+
+@media (hover: hover) {
+    .panel-chip:hover {
+        background: var(--ws-accent-soft);
+    }
+}
+
+.panel-chip:focus-visible {
+    box-shadow: 0 0 0 3px var(--ws-accent);
+}
+
+.panel-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: auto;
+}
+
+/* A phone upright: a sheet along the bottom, the house above it. */
+@media (max-aspect-ratio: 999/1000) {
+    .ws-panel {
+        top: auto;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: auto;
+        max-height: 50vh;
+        padding: 0.8rem 1rem calc(1rem + env(safe-area-inset-bottom));
+        border-radius: 20px 20px 0 0;
+    }
+}
+
+/* ---- Printing the checklist -------------------------------------------------
+ *
+ * Print from the checklist card: only the checklist goes to paper, with no
+ * buttons, no studio and no chrome, each room kept on one page where it fits.
+ */
+/* JUST A DEMO, at the top of the quote, the calendar and the receipt
+   (Steve, 2026-10-16: the small print at their foot went unseen, and
+   Whitestone is not a real company). Large and warm, so it is the first thing
+   read: a saffron frame on cream, the title in dark amber capitals. */
+.demo-notice {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    /* Clear of the heading row above it (QA, 2026-10-16: its frame met
+       the Close button's): the row has no margin of its own. */
+    margin: 0.9rem 0 1rem;
+    padding: 0.85rem 1rem;
+    border: 2px solid #E0A93A;
+    border-radius: 12px;
+    background: #FFF6E0;
+    color: #4A3200;
+    text-align: left;
+}
+
+.demo-notice-title {
+    color: #7A4A00;
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.demo-notice-text {
+    font-size: 0.98rem;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+/* The screenshot view (?clean=1, main.js cleanView; Steve, 2026-10-16):
+   only Maya, the house and the turntable, the wordmark too put away. The
+   house still turns and opens. */
+body.is-clean #ws-brand,
+body.is-clean #ws-host,
+body.is-clean #ws-panel,
+body.is-clean #ws-halo,
+body.is-clean #ws-rooms,
+body.is-clean #ws-toast {
+    display: none !important;
+}
+
+@media print {
+    /* The shared sheet holds a 3D page to one screen (height 100%,
+       overflow hidden), which on paper is one page (QA, 2026-10-15): let
+       the checklist run on for as many pages as it needs. */
+    html,
+    body {
+        height: auto;
+        overflow: visible;
+    }
+
+    body {
+        background: #FFFFFF;
+    }
+
+    body > *:not(#checklist) {
+        display: none !important;
+    }
+
+    #checklist {
+        position: static;
+        display: block !important;
+        padding: 0;
+        background: none;
+    }
+
+    #checklist .card-panel {
+        width: 100%;
+        height: auto;
+        max-height: none;
+        overflow: visible;
+        padding: 0;
+        border: 0;
+        box-shadow: none;
+    }
+
+    #checklist button,
+    #checklist select,
+    #checklist .checklist-filter-label {
+        display: none !important;
+    }
+
+    /* The star button is not printed, so a starred task says so with a star
+       and in words, dark on white: a browser prints no backgrounds unless
+       asked, so the screen's white-on-blue pill came out blank (QA,
+       2026-10-17). */
+    .task-row-star {
+        display: inline;
+        padding: 0;
+        background: none;
+        color: #000000;
+        font-weight: 700;
+    }
+
+    .checklist-room {
+        break-inside: avoid;
+        background: none;
+    }
+}

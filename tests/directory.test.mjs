@@ -28,7 +28,7 @@ const CATEGORY_IDS = ['worlds', 'business', 'personal'];
 // drift into testing a grouping the site does not actually have.
 const CATEGORY_OF = {
     dad: 'personal', family: 'personal', roqui: 'personal', gavin: 'personal', jamar: 'personal',
-    automan: 'business', interstate: 'business', seedtoseed: 'business', sunnyvalejenn: 'business',
+    whitestone: 'business', automan: 'business', interstate: 'business', seedtoseed: 'business', sunnyvalejenn: 'business',
     steve: 'worlds', mandelbrot: 'worlds', earthdefense: 'worlds', highwater: 'worlds', garden: 'worlds',
     xo: 'worlds', tornado: 'worlds', office: 'worlds', leaves: 'worlds',
 };
@@ -104,6 +104,7 @@ const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
 // kept it as an unlisted proof of concept rather than a directory scene.
 // The leaf lab (www/leaves), M0 of the leaf blower scene, joined on
 // 2026-10-06 and left at its release as Leaf Blower on 2026-10-09.
+// Whitestone Home Care joined at M0 on 2026-10-12, on the proto-1 branch.
 const UNRELEASED = ['starfall'];
 
 const sceneSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true })

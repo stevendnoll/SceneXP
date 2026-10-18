@@ -1,0 +1,21 @@
+<!-- © 2026 Continuum Commerce LLC. All rights reserved.
+     WHITESTONE HOME CARE, THE WORDMARK (concept C, chosen 2026-10-14): a low
+     gable over the name, in geometric monoline capitals drawn from scratch
+     (specs/whitestone/previews/logo_make.py), so no font is involved. -->
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Whitestone Home Care" viewBox="0 0 1068 239" width="1068" height="239"><path d="M472.0,46.0 L534.0,6.0 L596.0,46.0" fill="none" stroke="#3E5C76" stroke-width="8.50" stroke-linejoin="miter" stroke-miterlimit="6"/><path transform="translate(6.00,61.00) scale(1.0)" d="M0,0 L27,100 L56,0 L85,100 L112,0" fill="none" stroke="#22252A" stroke-width="8.50" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(162.00,61.00) scale(1.0)" d="M0,0 V100 M68,0 V100 M0,50 H68" fill="none" stroke="#22252A" stroke-width="8.50" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(274.00,61.00) scale(1.0)" d="M0,0 V100" fill="none" stroke="#22252A" stroke-width="8.50" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(318.00,61.00) scale(1.0)" d="M0,0 H70 M35,0 V100" fill="none" stroke="#22252A" stroke-width="8.50" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(432.00,61.00) scale(1.0)" d="M54,0 H0 V100 H54 M0,50 H46" fill="none" stroke="#22252A" stroke-width="8.50" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(530.00,61.00) scale(1.0)" d="M55.44,11.75 A30.0,25 0 1 0 30.0,50 A30.0,25 0 1 1 4.56,88.25" fill="none" stroke="#22252A" stroke-width="8.50" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(634.00,61.00) scale(1.0)" d="M0,0 H70 M35,0 V100" fill="none" stroke="#22252A" stroke-width="8.50" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(748.00,61.00) scale(1.0)" d="M50,0 A50,50 0 1 0 50,100 A50,50 0 1 0 50,0 Z" fill="none" stroke="#22252A" stroke-width="8.50" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(892.00,61.00) scale(1.0)" d="M0,100 V0 L72,100 V0" fill="none" stroke="#22252A" stroke-width="8.50" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(1008.00,61.00) scale(1.0)" d="M54,0 H0 V100 H54 M0,50 H46" fill="none" stroke="#22252A" stroke-width="8.50" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/><path transform="translate(286.62,191.00) scale(0.42)" d="M0,0 V100 M68,0 V100 M0,50 H68" fill="none" stroke="#3E5C76" stroke-width="14.29" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(344.58,191.00) scale(0.42)" d="M50,0 A50,50 0 1 0 50,100 A50,50 0 1 0 50,0 Z" fill="none" stroke="#3E5C76" stroke-width="14.29" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(415.98,191.00) scale(0.42)" d="M0,100 V0 L40,74 L80,0 V100" fill="none" stroke="#3E5C76" stroke-width="14.29" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(478.98,191.00) scale(0.42)" d="M54,0 H0 V100 H54 M0,50 H46" fill="none" stroke="#3E5C76" stroke-width="14.29" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(577.26,191.00) scale(0.42)" d="M85.97,15.27 A50,50 0 1 0 85.97,84.73" fill="none" stroke="#3E5C76" stroke-width="14.29" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(643.62,191.00) scale(0.42)" d="M0,100 L36,0 L72,100 M13,64 H59" fill="none" stroke="#3E5C76" stroke-width="14.29" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(703.26,191.00) scale(0.42)" d="M0,100 V0 H32 A25,25 0 0 1 32,50 H0 M28,50 L62,100" fill="none" stroke="#3E5C76" stroke-width="14.29" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/>
+<path transform="translate(758.70,191.00) scale(0.42)" d="M54,0 H0 V100 H54 M0,50 H46" fill="none" stroke="#3E5C76" stroke-width="14.29" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="3"/></svg>

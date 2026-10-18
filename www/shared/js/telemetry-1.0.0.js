@@ -19,7 +19,9 @@
  * is wrapped so a failure here can't throw into the caller.
  */
 
-const ENDPOINT = '../api.html';
+// Where pings go, resolved against the page: the site-root api.html from a
+// page one folder deep. A deeper page says otherwise with setPage.
+let _endpoint = '../api.html';
 
 // The browser's preferred UI language (e.g. 'en-US'), captured once. Sent on
 // every ping so the log can show the rough language mix of visitors. Falls back
@@ -30,8 +32,9 @@ const LANG = (typeof navigator !== 'undefined' && navigator.language) || '';
 // page at /interstate/ or /interstate/index.html), captured once. Sent on
 // every ping as `scene=` so the access log can split traffic by experience
 // without any per-experience configuration. Empty (and omitted) when the
-// page has no folder or location is unavailable.
-const SCENE = (() => {
+// page has no folder or location is unavailable. A deeper page names its
+// scene with setPage.
+let _scene = (() => {
     try {
         const parts = window.location.pathname.split('/').filter(Boolean);
         // Drop a trailing document name (index.html, …); keep the folder.
@@ -68,6 +71,21 @@ export function setMobile(isMobile) {
 }
 
 /**
+ * For a page more than one folder deep (e.g. the Whitestone cleaner's page at
+ * /whitestone/tasks/), where `../api.html` misses the site root and the
+ * page's own folder is not the scene's name. Call once during startup, before
+ * the first ping. A page one folder deep never needs it.
+ *
+ * @param {object} page
+ * @param {string} [page.endpoint] api.html relative to the page, e.g. '../../api.html'
+ * @param {string} [page.scene]    the scene to count the pings under, e.g. 'whitestone'
+ */
+export function setPage({ endpoint, scene } = {}) {
+    if (endpoint) _endpoint = endpoint;
+    if (scene) _scene = scene;
+}
+
+/**
  * Fire a fire-and-forget GET to api.html describing one interaction.
  *
  * @param {string} action  short kebab-case verb, e.g. 'open-piece', 'leave-store'
@@ -78,12 +96,12 @@ function buildUrl(action, params) {
         action,
         timestamp: Date.now(),
         mobile: _isMobile,
-        ...(SCENE ? { scene: SCENE } : {}),
+        ...(_scene ? { scene: _scene } : {}),
         ...(LANG ? { lang: LANG } : {}),
         ...(_proofHash ? { hash: _proofHash } : {}),
         ...params
     });
-    return `${ENDPOINT}?${query.toString()}`;
+    return `${_endpoint}?${query.toString()}`;
 }
 
 export function track(action, params = {}) {

@@ -1,0 +1,12 @@
+<!-- © 2026 Continuum Commerce LLC. All rights reserved.
+     WHITESTONE'S ICON, AFTER THE WORDMARK (concept C, 2026-10-14): the gable
+     over a W, as the wordmark is the gable over the name, in white on the
+     slate blue accent. At 16 pixels only the roof and the W's zigzag survive,
+     so that is the whole mark: bold strokes, and a clear gap between them.
+     The W is the wordmark's: three points up, two down (QA, 2026-10-15: it
+     had four up, a VVV). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Whitestone Home Care">
+  <rect width="32" height="32" rx="7" fill="#3E5C76"/>
+  <path d="M9.5,12.4 L16,7 L22.5,12.4" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linejoin="miter" stroke-miterlimit="6"/>
+  <path d="M7.4,15.6 L11.7,25 L16,16.9 L20.3,25 L24.6,15.6" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="miter" stroke-miterlimit="4"/>
+</svg>

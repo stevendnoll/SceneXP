@@ -55,7 +55,30 @@ const PERSISTENT = {
     'www/xo/js/colors.js': 'the team and field colors chosen in X’s and O’s',
     'www/xo/js/jump.js': 'whether Auto jump is on in X’s and O’s',
     'www/leaves/js/cast.js': 'the character chosen in Leaf Blower',
-    'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaf Blower'
+    'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaf Blower',
+    // Released 2026-10-16, described in privacy.html as "Your home in
+    // Whitestone Home Care".
+    'www/whitestone/js/store.js': 'the checklists a visitor builds in Whitestone Home Care',
+    // The cleaner's page (M4): per shared checklist, its key (from the link),
+    // the 12 hour visit pass the PIN gives, and wrong PINs in a row.
+    'www/whitestone/tasks/js/main.js': 'on a cleaner’s device, the key and visit pass of a checklist shared with them, and the visit’s marks and add-ons'
+};
+
+/**
+ * Every source file allowed to open an IndexedDB database, which outlives the
+ * tab exactly as local storage does, and what it keeps. Empty until a scene
+ * needs one (Whitestone's photos, M0 of that scene, 2026-10-12, added the
+ * rule before the first database so the first one cannot slip past it).
+ */
+const PERSISTENT_DATABASES = {
+    // Released 2026-10-16, described in privacy.html with Whitestone.
+    // It opens the API stand-in's database too (standin.js, M3 option A):
+    // published checklists, sealed with a key it never holds, until the
+    // server runs.
+    // The cleaner's page opens one too (tasks/js/main.js CACHE_DATABASE): the
+    // sealed checklist and photos, kept for the visit pass's hours to reopen
+    // offline. Its service worker keeps only the page's own public files.
+    'www/whitestone/js/photos.js': 'photos added to a Whitestone checklist, resized and stripped of location; until the server runs, the sealed checklists a visitor publishes; and on a cleaner’s device, a sealed copy of a shared checklist for the hours of the visit'
 };
 
 /** Source files only. The built .min copies are the same code twice. */
@@ -88,6 +111,19 @@ test('NOTHING OUTLIVES THE VISIT THAT THE PRIVACY POLICY DOES NOT KNOW ABOUT', (
     expect(writers).toEqual(Object.keys(PERSISTENT).sort());
 });
 
+test('NOR ANY DATABASE: opening IndexedDB is held to the same rule', () => {
+    // A database is a second door to the same room. Without this, a scene
+    // could keep a visitor's photos for years while the list above, and the
+    // policy it guards, said nothing.
+    const openers = [];
+    for (const full of sourceFiles(WWW)) {
+        if (/\bindexedDB\.open\s*\(/.test(readFileSync(full, 'utf8'))) {
+            openers.push(full.slice(process.cwd().length + 1));
+        }
+    }
+    expect(openers.sort()).toEqual(Object.keys(PERSISTENT_DATABASES).sort());
+});
+
 test('and the policy actually describes them, in words a visitor would use', () => {
     const html = readFileSync(join(WWW, 'privacy.html'), 'utf8');
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
@@ -116,6 +152,19 @@ test('and the policy actually describes them, in words a visitor would use', () 
     expect(text).toMatch(/keeps your fastest time, just the number of seconds/i);
     expect(text).toMatch(/Forget my best time button/i);
 
+    // Whitestone Home Care (released 2026-10-16): the home a visitor builds,
+    // photos stripped of location, the booked copy kept in this same browser
+    // (there is no server), the cleaner's page, and how to clear it.
+    expect(text).toMatch(/Whitestone demo keeps the home you build/i);
+    expect(text).toMatch(/stripped of their location/i);
+    expect(text).toMatch(/There is no Whitestone server/i);
+    expect(text).toMatch(/cleaner's page/i);
+    expect(text).toMatch(/Start over link clears everything/i);
+    // And its usage pings (2026-10-16, beacons.js): which button and where,
+    // never what was typed, priced, dated, or the PIN.
+    expect(text).toMatch(/Whitestone Home Care sends a ping for each button you press/i);
+    expect(text).toMatch(/never sends anything you typed, a price, a date or time, or the PIN itself/i);
+
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.
     expect(text).toMatch(/Start a new garden button/i);
@@ -125,6 +174,36 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // sentence that was wrong, and the one somebody would reintroduce while
     // tidying the two bullets back into one.
     expect(text).not.toMatch(/All of it lives in your browser.s session storage/i);
+});
+
+/**
+ * The experience each folder that keeps something is, as the policy names it.
+ * THE SENTENCES ABOVE ARE CHECKED ONE BY ONE, so an experience whose store
+ * is on the lists but whose sentence was never written passed them all: the
+ * lists only say a store is KNOWN. Whitestone was on both lists from its
+ * first day and missing from the page until its release (2026-10-16). A
+ * folder that keeps anything must be named here, and the page must name it.
+ */
+const NAMED_IN_POLICY = {
+    garden: 'Fractal Garden',
+    earthdefense: 'Earth Defense',
+    office: 'Corner Office',
+    xo: "X's and O's",
+    leaves: 'Leaf Blower',
+    whitestone: 'Whitestone Home Care',
+};
+
+test('every experience that keeps something is named in the policy', () => {
+    const text = readFileSync(join(WWW, 'privacy.html'), 'utf8').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    // Site-wide files (www/js, www/shared) belong to no one experience.
+    const slugs = [...new Set([...Object.keys(PERSISTENT), ...Object.keys(PERSISTENT_DATABASES)]
+        .map((p) => p.split('/')[1])
+        .filter((s) => s !== 'js' && s !== 'shared'))].sort();
+    expect(slugs.length).toBeGreaterThan(4);
+    for (const slug of slugs) {
+        expect(`${slug}: ${slug in NAMED_IN_POLICY}`).toBe(`${slug}: true`);
+        expect(`${slug}: ${text.includes(NAMED_IN_POLICY[slug])}`).toBe(`${slug}: true`);
+    }
 });
 
 test('the policy keeps house style, like every other page of copy', () => {
