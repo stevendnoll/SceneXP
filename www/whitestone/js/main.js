@@ -2535,7 +2535,7 @@ function shareFromReceipt(button) {
  * was locked on (`priced`, by published version). `decided` is the last
  * answer, for what Maya says of it.
  */
-const visits = { id: null, addOns: [], started: null, priced: null, timer: null, busy: false, deciding: false, decided: null };
+const visits = { id: null, addOns: [], started: null, priced: null, timer: null, busy: false, owed: false, deciding: false, decided: null };
 
 /** Whether the open checklist's visits are asked after: the visitor's own,
  *  published. */
@@ -2590,7 +2590,9 @@ function askedAddOn() {
  * Ask after the visits again in `seconds` (the regular pace when not
  * given), while the page is in view and the open checklist is published,
  * and stop otherwise. Cheap to call as often as anything likes: a question
- * already on its way schedules the next itself.
+ * already on its way schedules the next itself, and one asked for at once
+ * meanwhile (back in view) is OWED, not dropped: asked the moment the one
+ * on its way is back (CI, 2026-10-17: dropped, it waited a whole interval).
  */
 function watchVisits(seconds = null) {
     const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
@@ -2599,14 +2601,20 @@ function watchVisits(seconds = null) {
         visits.timer = null;
         return;
     }
-    if (visits.busy || (visits.timer && seconds === null)) return;
+    if (visits.busy) {
+        if (seconds === 0) visits.owed = true;
+        return;
+    }
+    if (visits.timer && seconds === null) return;
     if (visits.timer) clearTimeout(visits.timer);
     visits.timer = setTimeout(() => {
         visits.timer = null;
         visits.busy = true;
         pollVisits().finally(() => {
             visits.busy = false;
-            watchVisits();
+            const owed = visits.owed;
+            visits.owed = false;
+            watchVisits(owed ? 0 : null);
         });
     }, (seconds === null ? CONFIG.api.ownerPollSeconds : seconds) * 1000);
 }

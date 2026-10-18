@@ -506,7 +506,9 @@ describe('the studio answers the cleaner (main.js)', () => {
         const w = await bookedStudio();
         const list = jest.spyOn(w.svc.api, 'listVisits');
         await jest.advanceTimersByTimeAsync(CONFIG.api.ownerPollSeconds * 1000 + 10);
-        expect(await until(() => list.mock.calls.length >= 1)).toBe(true);
+        // The first question asked and back (CI, 2026-10-17: only asked, it
+        // was still on its way as the tab came back, a slower machine's race).
+        expect(await until(() => list.mock.calls.length >= 1 && !w.t.visits.busy)).toBe(true);
         const calls = list.mock.calls.length;
         // A hidden tab asks nothing.
         dom.documentStub.visibilityState = 'hidden';
@@ -523,5 +525,30 @@ describe('the studio answers the cleaner (main.js)', () => {
         w.t.mutate((d) => ({ doc: { ...d, checklists: d.checklists.map((c) => ({ ...c, published: null })) }, record: null, error: null }));
         expect(await w.t.pollVisits()).toBe(false);
         expect(w.t.offerAddOn({ asked: true })).toBe(false);
+    });
+
+    test('back in view while a question is on its way: the one asked at once is owed, not dropped (CI, 2026-10-17)', async () => {
+        const w = await bookedStudio();
+        const original = w.svc.api.listVisits;
+        const list = jest.spyOn(w.svc.api, 'listVisits');
+        // The next question is held on its way until let go.
+        let letGo;
+        const gate = new Promise((r) => { letGo = r; });
+        list.mockImplementationOnce(async (...args) => { await gate; return original.apply(w.svc.api, args); });
+        await jest.advanceTimersByTimeAsync(CONFIG.api.ownerPollSeconds * 1000 + 10);
+        expect(await until(() => list.mock.calls.length === 1)).toBe(true);
+        expect(w.t.visits.busy).toBe(true);
+        // Away and back while it is out.
+        dom.documentStub.visibilityState = 'hidden';
+        fire(dom.documentStub, 'visibilitychange');
+        dom.documentStub.visibilityState = 'visible';
+        fire(dom.documentStub, 'visibilitychange');
+        expect(w.t.visits.owed).toBe(true);
+        // Back: the owed one goes at once, not a whole interval later.
+        letGo();
+        expect(await until(() => !w.t.visits.busy)).toBe(true);
+        expect(w.t.visits.owed).toBe(false);
+        await jest.advanceTimersByTimeAsync(10);
+        expect(await until(() => list.mock.calls.length === 2)).toBe(true);
     });
 });
