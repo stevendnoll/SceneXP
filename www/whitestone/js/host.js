@@ -132,13 +132,14 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
     }
 
     /** One of a few, when Maya asks (`{ kind: 'pick', legend, options }`,
-     *  each option `{ id, label }`): a button each, in a labeled group, the
-     *  answer moving the guide on. */
+     *  each option `{ id, label, on, primary }`): a button each, in a
+     *  labeled group, the answer moving the guide on. A `primary` one is the
+     *  main thing to do (Send my changes, QA 2026-10-17). */
     function drawPick(c) {
         const buttons = c.options.map((o) => {
             // The answer already given, when Maya asks again, shown as chosen.
             const btn = h('button', {
-                type: 'button', id: `host-${o.id}`, className: `ws-btn host-pick${o.on ? ' is-on' : ''}`, text: o.label,
+                type: 'button', id: `host-${o.id}`, className: `ws-btn host-pick${o.primary ? ' ws-btn-primary' : ''}${o.on ? ' is-on' : ''}`, text: o.label,
                 attrs: { 'aria-pressed': o.on ? 'true' : 'false' }
             });
             btn.addEventListener('click', () => {

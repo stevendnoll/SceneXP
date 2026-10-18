@@ -1139,12 +1139,44 @@ describe('a return', () => {
         await boot({ saved: await bookedHome() });
         expect(line()).toBe(`${GUIDE.welcomeBack} ${GUIDE.homeBooked('Friday, October 16', '9:00 am')} ${GUIDE.returningLegend}`);
         expect(picks().map((b) => b.textContent)).toEqual([GUIDE.seeVisit, GUIDE.changeChecklist, GUIDE.illLook]);
+        // Nothing waiting to send: no main button among them.
+        expect(picks().filter((b) => b.classList.contains('ws-btn-primary'))).toEqual([]);
+    });
+
+    test('Change my checklist, with a visit booked, opens the checklist, not the build (QA, 2026-10-17)', async () => {
+        const main = await boot({ saved: await bookedHome() });
+        pick('changeChecklist');
+        expect(openCards()).toEqual(['checklist']);
+        expect(main.__test__.ui.guide).toMatchObject({ scene: 'done', away: { to: 'checklist' } });
+        expect(main.__test__.model().lifted).toBeNull();
+        // In step with the cleaner's copy: no Send my changes beside Close.
+        expect(dom.el('checklist-send').hidden).toBe(true);
+        // A change made here: Send my changes appears, the main button.
+        main.__test__.state.doc = (await import('../www/whitestone/js/store.js'))
+            .updateChecklist(main.__test__.state.doc, 'home-mine', { title: 'Maple Street' }, CONFIG, new Date(STAMP)).doc;
+        main.__test__.refresh();
+        expect(dom.el('checklist-send').hidden).toBe(false);
+        expect(HTML).toMatch(/<button id="checklist-send" class="ws-btn ws-btn-primary[^"]*"[^>]*hidden>Send my changes<\/button>\s*<button id="checklist-close"/);
+        // A tap on it sends them: here, with no price sheet loaded, the send
+        // gets as far as needing one (sendChanges, past the published and
+        // unsent checks), and says so.
+        fire(dom.el('checklist-send'), 'click');
+        await jest.advanceTimersByTimeAsync(200);
+        expect(said()).toBe(UI.sheetLoading);
+        // Closed: Maya back, standing by, Send my changes her main choice.
+        fire(dom.el('checklist-close'), 'click');
+        await jest.advanceTimersByTimeAsync(50);
+        expect(openCards()).toEqual([]);
+        expect(main.__test__.ui.guide.scene).toBe('done');
+        expect(picks()[0].id).toBe('host-sendChanges');
     });
 
     test('a booked visit changed since it was sent: said, and Send my changes first', async () => {
         const main = await boot({ saved: await bookedHome(true) });
         expect(line()).toBe(`${GUIDE.welcomeBack} ${GUIDE.homeBooked('Friday, October 16', '9:00 am')} ${GUIDE.homeUnsent} ${GUIDE.returningLegend}`);
         expect(picks().map((b) => b.textContent)).toEqual([GUIDE.sendChanges, GUIDE.seeVisit, GUIDE.changeChecklist, GUIDE.illLook]);
+        // Sending them is the main thing to do (QA, 2026-10-17), and only that.
+        expect(picks().filter((b) => b.classList.contains('ws-btn-primary')).map((b) => b.id)).toEqual(['host-sendChanges']);
         // At a glance in her bubble: when, and that changes wait.
         expect(factValue('visit')).toBe('Friday, October 16, 9:00 am');
         expect(factNote('visit')).toBe(UI.visitChipUnsent);

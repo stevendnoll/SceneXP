@@ -105,7 +105,7 @@
     <title>Whitestone Home Care | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=50" as="style">
+    <link rel="preload" href="css/experience.min.css?v=51" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -158,7 +158,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=3">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=50">
+    <link rel="stylesheet" href="css/experience.min.css?v=51">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -561,7 +561,13 @@
             aria-labelledby="checklist-title" tabindex="-1">
             <div class="card-head">
                 <h2 id="checklist-title" class="card-title">Checklist</h2>
-                <button id="checklist-close" class="ws-btn ws-btn-small" type="button">Close</button>
+                <!-- Send my changes beside Close, only while the cleaner's
+                     copy is behind this one (main.js drawChecklist; QA,
+                     2026-10-17). -->
+                <div class="card-head-actions">
+                    <button id="checklist-send" class="ws-btn ws-btn-primary ws-btn-small" type="button" hidden>Send my changes</button>
+                    <button id="checklist-close" class="ws-btn ws-btn-small" type="button">Close</button>
+                </div>
             </div>
             <p id="checklist-summary" class="card-meta"></p>
             <!-- Filled in only when the browser will not let the page save,

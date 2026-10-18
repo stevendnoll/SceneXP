@@ -1311,16 +1311,21 @@ function welcomeLine(c) {
  *  to choose; the rooms; the checklist. No "I'll look around" (QA,
  *  2026-10-15: visitors are here to book a cleaning). */
 function returningChoices(c) {
-    const o = (id, label) => ({ id, label });
+    const o = (id, label, primary = false) => ({ id, label, primary });
     // No home of their own yet: the example's way on, or a start.
     if (!c) return [o('start', GUIDE.start)];
     if (c.sample) return [o('buildOwn', GUIDE.buildOwn)];
     const out = [];
     if (isPublished(c)) {
-        if (hasUnsent(c)) out.push(o('sendChanges', GUIDE.sendChanges));
+        // Changes the cleaner has not seen: sending them is the main thing
+        // to do (QA, 2026-10-17).
+        if (hasUnsent(c)) out.push(o('sendChanges', GUIDE.sendChanges, true));
         if (isBooked(c)) out.push(o('visit', GUIDE.seeVisit));
         else out.push(o('chooseTime', GUIDE.chooseTime), o('visit', GUIDE.seeLink));
-        out.push(o('editRooms', GUIDE.changeChecklist));
+        // The checklist itself, its tasks to change, not the build's steps
+        // again (QA, 2026-10-17: back at Your rooms with a visit booked was
+        // confusing). Its card offers Send my changes too.
+        out.push(o('changeChecklist', GUIDE.changeChecklist));
     } else if (c.visits && c.visits.length) {
         // After a visit (QA, 2026-10-15): the next cleaning starts from this
         // home, and the last report is a tap away.
@@ -1826,6 +1831,7 @@ function onHostButton(id) {
         sendChanges();
         break;
     case 'reviewChecklist':
+    case 'changeChecklist':
         goAway('checklist');
         openChecklistView();
         comeBack();
@@ -3280,6 +3286,10 @@ function submitPreferences(event) {
 function drawChecklist() {
     const c = active();
     if (!c) return;
+    // Send my changes beside Close, while the cleaner's copy is behind this
+    // one (QA, 2026-10-17); gone once they are sent.
+    const send = el('checklist-send');
+    if (send) send.hidden = !(isPublished(c) && hasUnsent(c));
     ui.filter = fillChecklistFilter(c, ui.filter);
     renderChecklist({
         checklist: c,
@@ -3740,6 +3750,7 @@ function setupEventListeners() {
     on('prefs-form', 'submit', submitPreferences);
     on('prefs-skip', 'click', () => closeCard('preferences'));
     on('checklist-add-room', 'click', () => openRoom(null));
+    on('checklist-send', 'click', () => { sendChanges(); });
     on('room-form', 'submit', submitRoom);
     on('room-cancel', 'click', () => closeCard('room'));
     on('room-remove', 'click', removeRoom);

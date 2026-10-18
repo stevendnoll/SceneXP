@@ -130,6 +130,19 @@ body {
     gap: 1rem;
 }
 
+/* Two buttons at a card's head (the checklist's Send my changes and Close,
+   QA 2026-10-17): side by side, wrapping under each other on a phone. */
+.card-head-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.card-head-actions [hidden] {
+    display: none;
+}
+
 .card-title {
     margin: 0.2rem 0 0;
     font-size: 1.45rem;
