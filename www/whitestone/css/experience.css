@@ -2359,9 +2359,16 @@ body.is-clean #ws-toast {
         display: none !important;
     }
 
-    /* The star button is not printed, so a starred task says so in words. */
+    /* The star button is not printed, so a starred task says so with a star
+       and in words, dark on white: a browser prints no backgrounds unless
+       asked, so the screen's white-on-blue pill came out blank (QA,
+       2026-10-17). */
     .task-row-star {
         display: inline;
+        padding: 0;
+        background: none;
+        color: #000000;
+        font-weight: 700;
     }
 
     .checklist-room {

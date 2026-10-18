@@ -82,8 +82,9 @@ function itemRow(checklist, sheet, item, on, place) {
             star,
             h('div', { className: 'task-row-text' }, [
                 h('span', { id: nameId, className: 'task-row-name', text: name }),
-                // In words for the printout, where the star button is not.
-                item.important ? h('span', { className: 'task-row-star', text: UI.important }) : null,
+                // A star and words for the printout, where the star button is
+                // not (shown in print only, experience.css).
+                item.important ? h('span', { className: 'task-row-star', text: `★ ${UI.important}` }) : null,
                 h('span', { className: 'task-row-facts', text: facts.filter(Boolean).join(', ') }),
                 price
             ])

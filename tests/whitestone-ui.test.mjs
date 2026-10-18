@@ -688,7 +688,7 @@ test('a task is starred from its checklist row, the star left of its name (QA, 2
     expect(star().textContent).toBe('★');
     expect(star().getAttribute('aria-pressed')).toBe('true');
     expect(said()).toBe('Starred Stovetop. We start there.');
-    expect(star().parentNode.children[1].children[1]).toMatchObject({ className: 'task-row-star', textContent: UI.important });
+    expect(star().parentNode.children[1].children[1]).toMatchObject({ className: 'task-row-star', textContent: `★ ${UI.important}` });
     // Under the Important filter, un-starring lets the row go.
     dom.el('checklist-filter').value = 'important';
     fire(dom.el('checklist-filter'), 'change');
@@ -696,10 +696,16 @@ test('a task is starred from its checklist row, the star left of its name (QA, 2
     fire(star(), 'click');
     expect(stove().important).toBe(false);
     expect(dom.el('checklist-showing').textContent).toBe('Showing 0 of 9 tasks.');
-    // The words show on paper only: on screen the star says it.
+    // The words show on paper only: on screen the star says it. On paper
+    // they are dark with no background to lean on (a browser prints none
+    // unless asked: white on blue came out blank).
     const css = readFileSync(join(WS, 'css', 'experience.css'), 'utf8');
     expect(css).toMatch(/\.task-row-star \{\s*display: none;/);
-    expect(css.slice(css.indexOf('@media print {'))).toMatch(/\.task-row-star \{\s*display: inline;\s*\}/);
+    const print = css.slice(css.indexOf('@media print {'));
+    const rule = (/\.task-row-star \{([^}]*)\}/.exec(print) || [])[1] || '';
+    expect(rule).toMatch(/display: inline;/);
+    expect(rule).toMatch(/background: none;/);
+    expect(rule).toMatch(/color: #000000;/);
 });
 
 test('the filter shows the important tasks, or one level, and says how many it shows', async () => {
