@@ -295,20 +295,48 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
         return true;
     }
 
+    /** Whether `node` is one of her room chips (Other kind of room too). */
+    function isChip(node) {
+        return Boolean(node && node.classList && node.classList.contains('panel-chip'));
+    }
+
+    /** Her room chips as drawn now, in order. */
+    function roomChips() {
+        const group = choices ? Array.from(choices.children || []).find((n) => n.classList && n.classList.contains('host-room-chips')) : null;
+        return group ? Array.from(group.children || []).filter(isChip) : [];
+    }
+
+    /** Where `node` sits among her room chips, taken before a redraw
+     *  replaces them, or -1 when it is not one. */
+    function chipSlot(node) {
+        return isChip(node) ? roomChips().indexOf(node) : -1;
+    }
+
     /** The keyboard put back after a redraw (the accessibility sweep,
      *  2026-10-16: Let's start, Next and every choice replaced themselves,
      *  and a ticked floor's box was drawn again, each leaving the keyboard on
      *  nothing): on the control of the same id if it is drawn again, else on
-     *  her next step. */
-    function refocus(had) {
+     *  the room chip now in its place, else on her next step. Never
+     *  scrolling the bubble (QA, 2026-10-19: a chip added is not offered
+     *  again, so the keyboard went on to Review my checklist and Your rooms
+     *  scrolled to its foot). */
+    function refocus(had, slot = -1) {
         if (!had || stillShown(had)) return;
         const now = typeof document !== 'undefined' ? document.activeElement : null;
         // Something else took it meanwhile (a card that opened): leave it be.
         if (now && now !== had && now !== document.body && !inBubble(now)) return;
         const same = had.id ? findIn([progress, facts, choices, actions], had.id) : null;
         if (same && stillShown(same) && typeof same.focus === 'function') {
-            same.focus();
+            same.focus({ preventScroll: true });
             return;
+        }
+        if (slot >= 0) {
+            const chips = roomChips();
+            const near = chips[Math.min(slot, chips.length - 1)];
+            if (near && stillShown(near) && typeof near.focus === 'function') {
+                near.focus({ preventScroll: true });
+                return;
+            }
         }
         if (!api.focusPrimary() && nextBtn && !nextBtn.hidden && typeof nextBtn.focus === 'function') nextBtn.focus();
     }
@@ -328,8 +356,9 @@ export function createHost({ on = {}, timing = { pulse: 8, again: 20 }, signal }
 
     function draw() {
         const had = focusedInBubble();
+        const slot = chipSlot(had);
         paint();
-        refocus(had);
+        refocus(had, slot);
     }
 
     function paint() {

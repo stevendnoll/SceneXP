@@ -4444,7 +4444,7 @@ html [lang="en"]
     title
       "Corner Office | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=4" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=5" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -4501,7 +4501,7 @@ html [lang="en"]
     link [href="js/posting.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=4" rel="stylesheet"]
+    link [href="css/experience.min.css?v=5" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -4887,6 +4887,8 @@ html [lang="en"]
             "Close"
     div#application-form.card-overlay [hidden]
       div#application-form-panel.card-panel.form-panel [aria-labelledby="application-form-title" aria-modal="true" role="dialog" tabindex="-1"]
+        button#application-form-close.card-x [aria-label="Close" title="Close (Escape)" type="button"]
+          "&times;"
         h2#application-form-title.card-title
           "New application"
         form#af-form.office-form [novalidate]
@@ -4964,6 +4966,8 @@ html [lang="en"]
               "Save application"
     div#event-form.card-overlay [hidden]
       div#event-form-panel.card-panel.form-panel [aria-describedby="event-form-about" aria-labelledby="event-form-title" aria-modal="true" role="dialog" tabindex="-1"]
+        button#event-form-close.card-x [aria-label="Close" title="Close (Escape)" type="button"]
+          "&times;"
         h2#event-form-title.card-title
           "Log an event"
         p#event-form-about.card-meta
@@ -5009,6 +5013,8 @@ html [lang="en"]
               "Save"
     div#task-form.card-overlay [hidden]
       div#task-form-panel.card-panel.form-panel [aria-describedby="task-form-about" aria-labelledby="task-form-title" aria-modal="true" role="dialog" tabindex="-1"]
+        button#task-form-close.card-x [aria-label="Close" title="Close (Escape)" type="button"]
+          "&times;"
         h2#task-form-title.card-title
           "Add a follow-up"
         p#task-form-about.card-meta
@@ -5029,6 +5035,8 @@ html [lang="en"]
               "Save"
     div#contact-form.card-overlay [hidden]
       div#contact-form-panel.card-panel.form-panel [aria-describedby="contact-form-about" aria-labelledby="contact-form-title" aria-modal="true" role="dialog" tabindex="-1"]
+        button#contact-form-close.card-x [aria-label="Close" title="Close (Escape)" type="button"]
+          "&times;"
         h2#contact-form-title.card-title
           "New contact"
         p#contact-form-about.card-meta

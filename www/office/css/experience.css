@@ -361,6 +361,56 @@ textarea.office-input {
     text-align: left;
 }
 
+/* A form's X, in its top right corner. A click beside a form no longer
+ * closes it (cards.js), so the way out is in plain sight. */
+.form-panel {
+    position: relative;
+}
+
+.card-x {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ui-subtitle);
+    font: inherit;
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.card-x:focus-visible {
+    outline: 2px solid var(--ui-accent-strong);
+    outline-offset: 2px;
+    color: #eef0f3;
+}
+
+@media (hover: hover) {
+    .card-x:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #eef0f3;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .card-x {
+        transition: none;
+    }
+}
+
+/* The title clears the X. */
+.card-x + .card-title {
+    padding-right: 2.75rem;
+}
+
 .office-form {
     margin-top: 0.8rem;
 }
