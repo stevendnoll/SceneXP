@@ -277,5 +277,111 @@ export const DERBY_CONFIG = Object.freeze({
         easy: Object.freeze([0, 1, 2]),
         medium: Object.freeze([3, 4, 5]),
         hard: Object.freeze([6, 7, 8])
+    }),
+
+    /** Each neighbor's paint, by field id (M1, graybox). */
+    fieldColors: Object.freeze({
+        brick: 0x9a4b34, hotdog: 0xd9a441, loaf: 0xe2607a, streak: 0x2f6fd6, tiger: 0xe8852b,
+        comet: 0x2fb38a, owl: 0x5b4588, arrow: 0xb8bcc4, phantom: 0x26262c
+    }),
+
+    /**
+     * The visitor's cars until the workshop opens (M1): four builds from the
+     * starting designs, from the box to the full treatment, so a first race
+     * shows what each kind of work is worth. In Time Trial, one to four of
+     * them race each other.
+     */
+    presets: Object.freeze([
+        {
+            id: 'box', name: 'Straight from the Box', blurb: 'The uncut block, no weights, the axles as they came',
+            design: 'block', ballast: null, color: 0xd63c3c,
+            tune: { deburr: false, polish: 0, graphite: false, align: false, sand: 0 }
+        },
+        {
+            id: 'weekend', name: 'Weekend Wedge', blurb: 'A wedge at 5 ounces, weight in the middle, a puff of graphite',
+            design: 'wedge', ballast: { mass: 5, balance: 2.2 }, color: 0x3aa0e8,
+            tune: { deburr: false, polish: 0, graphite: true, align: false, sand: 0 }
+        },
+        {
+            id: 'tuned', name: 'Rear-Weighted Wedge', blurb: 'Weight toward the back, polished axles, graphite, aligned',
+            design: 'wedge', ballast: { mass: 5, balance: 1 }, color: 0x39b54a,
+            tune: { deburr: true, polish: 3, graphite: true, align: true, sand: 0.5 }
+        },
+        {
+            id: 'full', name: 'The Full Treatment', blurb: 'A thin wedge with everything done right',
+            design: 'thinWedge', ballast: { mass: 5, balance: 0.8 }, color: 0xf2c230,
+            tune: { deburr: true, polish: 5, graphite: true, align: true, sand: 1 }
+        }
+    ]),
+
+    // ---- M1: the hall and the race on screen --------------------------------
+
+    site: Object.freeze({ home: Object.freeze({ path: '/' }) }),
+
+    render: Object.freeze({ maxPixelRatio: 2, mobilePixelRatio: 1.5, exposure: 1.05, shadows: true, mobileShadows: false }),
+
+    /**
+     * The track as drawn (M1). The sim's track is a line. This is the
+     * aluminum around it: four lanes side by side, a guide strip down the
+     * middle of each that the wheels straddle, and a braking run past the
+     * finish. Heights are above the hall floor.
+     */
+    track3d: Object.freeze({
+        lanePitch: 0.095,
+        edge: 0.02,
+        thickness: 0.012,
+        strip: Object.freeze({ width: 1.625 * IN, height: 0.25 * IN }),
+        /** The flat run's surface above the floor. */
+        floorGap: 0.08,
+        /** Track behind the start pin, for the cars' tails. */
+        behind: 0.6,
+        /** Past the finish line, where the cars run out and stop. */
+        braking: 2.2,
+        /** Every this many meters, a cross section. */
+        step: 0.02
+    }),
+
+    /** The race's pace on screen (M1), in seconds. */
+    timing: Object.freeze({
+        staging: 1.8,
+        /** The gate drops this long before the cars roll. */
+        gate: 0.25,
+        /** After the last car crosses, before the times show. */
+        settle: 0.5,
+        /** The times on the board, before the next heat. */
+        times: 2.6,
+        /** A finish this close gets a slow replay (PRD, The heats). */
+        closeGap: 0.02,
+        replayRate: 0.25,
+        /** The replay starts this long before the first car crosses. */
+        replayLead: 0.35,
+        replayTail: 0.12,
+        /** Past the line, a car runs out over this many meters. */
+        runOut: 1.6,
+        /** Samples a run is recorded at, a second apart. */
+        record: 1 / 120
+    }),
+
+    camera: Object.freeze({
+        fov: 45,
+        near: 0.02,
+        far: 120,
+        /** When the leader is this close to the line, the finish camera. */
+        finishFrom: 3.2,
+        /** Half the width a shot must hold: the four lanes and a margin. */
+        holdHalfWidth: 0.26,
+        follow: 6
+    }),
+
+    look: Object.freeze({
+        background: 0x2b2420,
+        fog: Object.freeze({ color: 0x2b2420, near: 14, far: 60 }),
+        floor: 0xb98a55,
+        wall: 0xe9dfcf,
+        aluminum: 0xc7ccd3,
+        strip: 0x8e949c,
+        bleachers: 0x6f7f96,
+        wheel: 0x1d1d1f,
+        gate: 0xd9c43a
     })
 });

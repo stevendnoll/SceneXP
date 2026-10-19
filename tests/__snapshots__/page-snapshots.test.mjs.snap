@@ -1315,6 +1315,203 @@ html [data-ui-theme="garden" lang="en"]
     script [src="js/main.min.js" type="module"]"
 `;
 
+exports[`www/derby/index.html 1`] = `
+"<!doctype html>
+html [data-ui-theme="ember" lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="noindex, nofollow" name="robots"]
+    meta [content="Race a wooden derby car down a four-lane track against the neighbors' cars, four heats, every car in every lane, timed to the thousandth, live in your browser." name="description"]
+    meta [content="#1f4e8c" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/derby/" rel="canonical"]
+    meta [content="Derby Day" property="og:title"]
+    meta [content="Race a wooden derby car down a four-lane track against the neighbors' cars." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/derby/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/derby/assets/og-derby.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="Four wooden derby cars racing side by side down an aluminum track in a community hall." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Derby Day" name="twitter:title"]
+    meta [content="Race a wooden derby car down a four-lane track against the neighbors' cars." name="twitter:description"]
+    meta [content="https://www.scenexp.com/derby/assets/og-derby.jpg?v=1" name="twitter:image"]
+    meta [content="Four wooden derby cars racing side by side down an aluminum track in a community hall." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "@id": "https://www.scenexp.com/derby/#game",
+        "url": "https://www.scenexp.com/derby/",
+        "name": "Derby Day",
+        "image": "https://www.scenexp.com/derby/assets/og-derby.jpg?v=1",
+        "description": "A browser-based 3D derby car race. Race a wooden derby car down a four-lane aluminum track against the neighbors' cars, four heats with every car in every lane, timed to the thousandth of a second by real physics: weight, balance, axle friction and drag.",
+        "genre": [
+          "Racing",
+          "Simulation"
+        ],
+        "gamePlatform": "Web browser",
+        "applicationCategory": "Game",
+        "operatingSystem": "Any",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
+        "isAccessibleForFree": true,
+        "playMode": "SinglePlayer",
+        "author": {
+          "@type": "Person",
+          "name": "Steve Noll"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Continuum Commerce LLC"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Derby Day",
+            "item": "https://www.scenexp.com/derby/"
+          }
+        ]
+      }
+    title
+      "Derby Day | SceneXP"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=1" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="js/car.min.js" rel="modulepreload"]
+    link [href="js/sim.min.js" rel="modulepreload"]
+    link [href="js/track.min.js" rel="modulepreload"]
+    link [href="js/hall.min.js" rel="modulepreload"]
+    link [href="js/carmesh.min.js" rel="modulepreload"]
+    link [href="js/playback.min.js" rel="modulepreload"]
+    link [href="js/director.min.js" rel="modulepreload"]
+    link [href="js/board.min.js" rel="modulepreload"]
+    link [href="js/copy.min.js" rel="modulepreload"]
+    link [href="js/phases.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="css/experience.min.css?v=1" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body
+    h1.sr-only
+      "Derby Day"
+    noscript
+      div.noscript-fallback
+        h1
+          "Derby Day"
+        p
+          "This is a wooden derby car race, and it needs JavaScript to run. Your car lines up at the top of a four-lane aluminum track against three of the neighbors' cars, and races four heats so every car runs in every lane. The times are averaged, and the fastest average wins."
+        h2
+          "What makes a derby car fast"
+        p
+          "The axles matter most. A nail straight from the kit has a burr under its head and crimp marks along its shaft. Filing them off, polishing through finer and finer sandpaper, and adding dry graphite can save more than a tenth of a second."
+        p
+          "Weight comes next. Air drag and the spinning wheels do not grow with a car's mass, so a car at the full five ounces loses less of its speed to them than a lighter one."
+        p
+          "Where the weight sits matters too. A car with its weight about three quarters of an inch in front of the rear axle keeps its center of mass higher up the slope for longer, so it has further to fall. Too far back and the front goes light, and the car wobbles."
+        p
+          "The shape matters least of the three a builder works hardest on, though a slim wedge still beats a plain block."
+        p
+          "SceneXP is a home for 3D experiences that run right in your browser."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/contact.html"]
+                "Contact the developer"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    div#loading-screen
+      div.loader-content
+        div.loader-title
+          "DERBY DAY"
+        div.loader-bar [aria-hidden="true"]
+          div.loader-progress#load-progress
+        div.loader-status#load-status [aria-live="polite" role="status"]
+          "Loading…"
+    div#blocker [tabindex="-1"]
+      div#instructions.checkin
+        p.title
+          "DERBY DAY"
+        p.subtitle
+          "Race a wooden derby car down a four-lane track"
+        fieldset.choice-group
+          legend
+            "Your race"
+          div#event-options.choices
+        fieldset.choice-group
+          legend#car-legend
+            "Your car"
+          div#car-options.choices
+        p#checkin-note.checkin-note [hidden role="alert"]
+        button#go-btn.go-btn [type="button"]
+          "Go!"
+        p.checkin-more
+          a#explore-link.checkin-explore [href="/"]
+            "More 3D worlds to explore at SceneXP.com"
+    canvas#game-canvas [aria-label="A four-lane aluminum derby track running down the length of a community hall, with wooden derby cars at the starting gate" role="img"]
+    button#help-btn.ui-float.menu-btn.help-btn [aria-label="Back to check-in" title="Back to check-in (Esc)" type="button"]
+      svg [aria-hidden="true" viewbox="0 0 24 24"]
+        path [d="M14.5 6.5L9 12l5.5 5.5" stroke-linejoin="round"]
+    div#timer.timer [aria-hidden="true"]
+    p#caption.caption [aria-hidden="true"]
+    p#race-status.sr-only [aria-live="polite" role="status"]
+    span#you-tag.you-tag [aria-hidden="true"]
+      "You"
+    button#skip-btn.ui-float.skip-btn [type="button"]
+      "Skip to results"
+    div#results-modal.results-modal.hidden [aria-labelledby="results-title" aria-modal="true" role="dialog"]
+      div.results-card
+        p#results-event.results-event
+        h2#results-title.results-title [tabindex="-1"]
+          "Results"
+        table#results-table.results-table
+        h3.results-sub
+          "Each lane’s average"
+        ul#results-lanes.results-lanes
+        h3#results-why-heading.results-sub
+          "Why your car ran as it did"
+        ul#results-why.results-why
+        div.results-actions
+          button#results-again.go-btn [type="button"]
+            "Race again"
+          button#results-another.results-another [type="button"]
+            "Choose another race"
+        p#results-status.sr-only [aria-live="polite" role="status"]
+        p.results-mark [aria-hidden="true"]
+          "Derby Day &middot; SceneXP.com"
+    script [src="../lib/three/r186/three.min.js" type="module"]
+    script [src="js/main.min.js" type="module"]"
+`;
+
 exports[`www/earthdefense/index.html 1`] = `
 "<!doctype html>
 html [data-ui-theme="ember" lang="en"]

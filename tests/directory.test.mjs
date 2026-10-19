@@ -105,7 +105,8 @@ const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
 // The leaf lab (www/leaves), M0 of the leaf blower scene, joined on
 // 2026-10-06 and left at its release as Leaf Blower on 2026-10-09.
 // Whitestone Home Care joined at M0 on 2026-10-12, on the proto-1 branch.
-const UNRELEASED = ['starfall'];
+// Derby Day joined at M1 on 2026-10-19, its graybox race in the open.
+const UNRELEASED = ['starfall', 'derby'];
 
 const sceneSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true })
     .filter((d) => d.isDirectory() && !IGNORED_DIRS.includes(d.name))

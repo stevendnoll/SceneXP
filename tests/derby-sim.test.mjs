@@ -266,6 +266,7 @@ describe('the track and the race', () => {
 
 describe('why a car ran as it did', () => {
     const refs = {
+        kitMass: Car.describeCar(Car.buildFromDesign('block')).mass,
         blockCdA: Car.describeCar(Car.buildFromDesign('block')).cdA,
         bestCdA: field[8].cdA,
         idealBalance: 0.75 * IN

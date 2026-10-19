@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en" data-ui-theme="ember">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         No media-src yet: M1 makes no sound and plays no video. The share
+         clip (M2) adds media-src 'self' blob: for its preview. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <!-- STILL BEING BUILT (M1, graybox): kept out of search and every list of
+         the site until its release (tests/directory.test.mjs UNRELEASED,
+         tests/page-rules.test.mjs PENDING_CARDS). -->
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description" content="Race a wooden derby car down a four-lane track against the neighbors' cars, four heats, every car in every lane, timed to the thousandth, live in your browser.">
+    <meta name="theme-color" content="#1f4e8c">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they stay literal absolute URLs naming where this page is served
+         (www.scenexp.com/derby). When serving from a new domain, update
+         the canonical, og:url, og:image, twitter:image, and the JSON-LD ids. -->
+    <link rel="canonical" href="https://www.scenexp.com/derby/">
+
+    <!-- Open Graph. THE SOCIAL CARD is captured once the look is approved
+         (M7): a JPEG, exactly one og:image. -->
+    <meta property="og:title" content="Derby Day">
+    <meta property="og:description" content="Race a wooden derby car down a four-lane track against the neighbors' cars.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/derby/">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:image" content="https://www.scenexp.com/derby/assets/og-derby.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Four wooden derby cars racing side by side down an aluminum track in a community hall.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Derby Day">
+    <meta name="twitter:description" content="Race a wooden derby car down a four-lane track against the neighbors' cars.">
+    <meta name="twitter:image" content="https://www.scenexp.com/derby/assets/og-derby.jpg?v=1">
+    <meta name="twitter:image:alt" content="Four wooden derby cars racing side by side down an aluminum track in a community hall.">
+
+    <!-- Structured data: JSON-LD is a data block (not executed), so it is
+         allowed under the CSP. datePublished joins at release. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "VideoGame",
+      "@id": "https://www.scenexp.com/derby/#game",
+      "url": "https://www.scenexp.com/derby/",
+      "name": "Derby Day",
+      "image": "https://www.scenexp.com/derby/assets/og-derby.jpg?v=1",
+      "description": "A browser-based 3D derby car race. Race a wooden derby car down a four-lane aluminum track against the neighbors' cars, four heats with every car in every lane, timed to the thousandth of a second by real physics: weight, balance, axle friction and drag.",
+      "genre": ["Racing", "Simulation"],
+      "gamePlatform": "Web browser",
+      "applicationCategory": "Game",
+      "operatingSystem": "Any",
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
+      "isAccessibleForFree": true,
+      "playMode": "SinglePlayer",
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Continuum Commerce LLC"
+      }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Derby Day",
+          "item": "https://www.scenexp.com/derby/"
+        }
+      ]
+    }
+    </script>
+
+    <title>Derby Day | SceneXP</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
+    <link rel="preload" href="css/experience.min.css?v=1" as="style">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="js/car.min.js">
+    <link rel="modulepreload" href="js/sim.min.js">
+    <link rel="modulepreload" href="js/track.min.js">
+    <link rel="modulepreload" href="js/hall.min.js">
+    <link rel="modulepreload" href="js/carmesh.min.js">
+    <link rel="modulepreload" href="js/playback.min.js">
+    <link rel="modulepreload" href="js/director.min.js">
+    <link rel="modulepreload" href="js/board.min.js">
+    <link rel="modulepreload" href="js/copy.min.js">
+    <link rel="modulepreload" href="js/phases.min.js">
+    <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <!-- END generated modulepreload -->
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
+    <link rel="stylesheet" href="css/experience.min.css?v=1">
+
+    <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
+         A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body>
+    <h1 class="sr-only">Derby Day</h1>
+
+    <!-- Shown when JavaScript is disabled, and read by crawlers that do not
+         run it: what the scene is, and the physics it is built on (PRD, SEO:
+         the explainer is the educational hook). -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Derby Day</h1>
+            <p>This is a wooden derby car race, and it needs JavaScript to run.
+                Your car lines up at the top of a four-lane aluminum track
+                against three of the neighbors' cars, and races four heats so
+                every car runs in every lane. The times are averaged, and the
+                fastest average wins.</p>
+            <h2>What makes a derby car fast</h2>
+            <p>The axles matter most. A nail straight from the kit has a burr
+                under its head and crimp marks along its shaft. Filing them off,
+                polishing through finer and finer sandpaper, and adding dry
+                graphite can save more than a tenth of a second.</p>
+            <p>Weight comes next. Air drag and the spinning wheels do not grow
+                with a car's mass, so a car at the full five ounces loses less
+                of its speed to them than a lighter one.</p>
+            <p>Where the weight sits matters too. A car with its weight about
+                three quarters of an inch in front of the rear axle keeps its
+                center of mass higher up the slope for longer, so it has further
+                to fall. Too far back and the front goes light, and the car
+                wobbles.</p>
+            <p>The shape matters least of the three a builder works hardest on,
+                though a slim wedge still beats a plain block.</p>
+            <p>SceneXP is a home for 3D experiences that run right in your
+                browser.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/contact.html">Contact the developer</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <div id="loading-screen">
+        <div class="loader-content">
+            <div class="loader-title">DERBY DAY</div>
+            <div class="loader-bar" aria-hidden="true">
+                <div class="loader-progress" id="load-progress"></div>
+            </div>
+            <div class="loader-status" id="load-status" role="status" aria-live="polite">Loading…</div>
+        </div>
+    </div>
+
+    <!-- CHECK-IN (M1): the welcome card is the registration table. Pick an
+         event and a car, then Go, the one filled button. The choices are
+         radio buttons (checkboxes for Time Trial), built by main.js from
+         js/copy.js and the presets in js/config.js. -->
+    <div id="blocker" tabindex="-1">
+        <div id="instructions" class="checkin">
+            <p class="title">DERBY DAY</p>
+            <p class="subtitle">Race a wooden derby car down a four-lane track</p>
+            <fieldset class="choice-group">
+                <legend>Your race</legend>
+                <div id="event-options" class="choices"></div>
+            </fieldset>
+            <fieldset class="choice-group">
+                <legend id="car-legend">Your car</legend>
+                <div id="car-options" class="choices"></div>
+            </fieldset>
+            <p id="checkin-note" class="checkin-note" role="alert" hidden></p>
+            <button id="go-btn" class="go-btn" type="button">Go!</button>
+            <p class="checkin-more">
+                <a id="explore-link" class="checkin-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
+            </p>
+        </div>
+    </div>
+
+    <canvas id="game-canvas" role="img" aria-label="A four-lane aluminum derby track running down the length of a community hall, with wooden derby cars at the starting gate"></canvas>
+
+    <!-- Back to check-in, exactly as Escape does: a back arrow, since that
+         is what it does. Hidden until a race is on: .ui-float is
+         display:none until main.js adds .visible. -->
+    <button id="help-btn" class="ui-float menu-btn help-btn" type="button" title="Back to check-in (Esc)" aria-label="Back to check-in">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14.5 6.5L9 12l5.5 5.5" stroke-linejoin="round" />
+        </svg>
+    </button>
+
+    <!-- The track's timer (js/board.js), for the eye only: a screen reader
+         hears each heat through #race-status. -->
+    <div id="timer" class="timer" aria-hidden="true"></div>
+
+    <!-- The announcer, as a caption (js/copy.js). For the eye: the same
+         heat results reach a screen reader through #race-status. -->
+    <p id="caption" class="caption" aria-hidden="true"></p>
+    <p id="race-status" class="sr-only" role="status" aria-live="polite"></p>
+
+    <!-- Over the visitor's car while it races. -->
+    <span id="you-tag" class="you-tag" aria-hidden="true">You</span>
+
+    <button id="skip-btn" class="ui-float skip-btn" type="button">Skip to results</button>
+
+    <!-- THE RESULTS (js/board.js): a real table, the lane row, and why the
+         visitor's car ran as it did. Race again takes focus last on purpose:
+         the title takes it first, so a screen reader hears what this is. -->
+    <div id="results-modal" class="results-modal hidden" role="dialog" aria-modal="true" aria-labelledby="results-title">
+        <div class="results-card">
+            <p id="results-event" class="results-event"></p>
+            <h2 id="results-title" class="results-title" tabindex="-1">Results</h2>
+            <table id="results-table" class="results-table"></table>
+            <h3 class="results-sub">Each lane’s average</h3>
+            <ul id="results-lanes" class="results-lanes"></ul>
+            <h3 id="results-why-heading" class="results-sub">Why your car ran as it did</h3>
+            <ul id="results-why" class="results-why"></ul>
+            <div class="results-actions">
+                <button id="results-again" class="go-btn" type="button">Race again</button>
+                <button id="results-another" class="results-another" type="button">Choose another race</button>
+            </div>
+            <p id="results-status" class="sr-only" role="status" aria-live="polite"></p>
+            <p class="results-mark" aria-hidden="true">Derby Day &middot; SceneXP.com</p>
+        </div>
+    </div>
+
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

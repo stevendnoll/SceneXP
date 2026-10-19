@@ -142,15 +142,17 @@ export function shownTime(seconds) {
 /**
  * A race (PRD, The heats): one to four cars, four heats, each car moving one
  * lane over every heat, so every car runs every lane once. Averages are the
- * four heats', as the timer shows them. Standings are by average, a tie
- * kept in entry order. Also each lane's average over the heats it ran, for
- * the results' lane row.
+ * four heats', as the timer shows them. Standings are by average, a tie on
+ * the board broken by the unrounded times, and only a dead heat kept in
+ * entry order. Also each lane's average over the heats it ran, for
+ * the results' lane row. With `record`, every run's samples come back too
+ * (`runs[car][lane]`), so the hall plays exactly the race the board scores.
  */
-export function runRace(cars, C = DERBY_CONFIG) {
+export function runRace(cars, C = DERBY_CONFIG, { record = 0 } = {}) {
     const lanes = C.track.lanes;
     const times = cars.map((car) => {
         const row = [];
-        for (let lane = 0; lane < lanes; lane++) row.push(runCar(car, lane, {}, C));
+        for (let lane = 0; lane < lanes; lane++) row.push(runCar(car, lane, { record }, C));
         return row;
     });
     const heats = [];
@@ -166,12 +168,19 @@ export function runRace(cars, C = DERBY_CONFIG) {
         for (const heat of heats) sum += heat[i].time;
         return shownTime(sum / heats.length);
     });
+    // A tie on the board goes to the faster time the timer measured before
+    // rounding, as a real timer reading finer than it shows would decide it.
+    const exact = cars.map((_, i) => {
+        let sum = 0;
+        for (let lane = 0; lane < lanes; lane++) sum += times[i][lane].time;
+        return sum;
+    });
     const best = cars.map((_, i) => {
         let pick = heats[0][i];
         for (const heat of heats) if (heat[i].time < pick.time) pick = heat[i];
         return pick;
     });
-    const standings = cars.map((_, i) => i).sort((a, b) => average[a] - average[b] || a - b);
+    const standings = cars.map((_, i) => i).sort((a, b) => average[a] - average[b] || exact[a] - exact[b] || a - b);
     const laneAverage = [];
     for (let lane = 0; lane < lanes; lane++) {
         let sum = 0;
@@ -179,7 +188,7 @@ export function runRace(cars, C = DERBY_CONFIG) {
         for (const heat of heats) for (const r of heat) if (r.lane === lane) { sum += r.time; n++; }
         laneAverage.push(n ? shownTime(sum / n) : null);
     }
-    return { heats, average, best, standings, laneAverage };
+    return { heats, average, best, standings, laneAverage, runs: times };
 }
 
 /** A car's time in a lane with no defect, for comparing one change. */
@@ -194,12 +203,15 @@ export function neutralTime(car, C = DERBY_CONFIG) {
  * again with that one thing changed. Outlaw cars are measured against the
  * Outlaw limits.
  *
- * The references: the rule sheet's full weight, `idealBalance` (meters in
- * front of the rear axle), every axle tune-up, and for the shape the kit
- * block's drag area (`blockCdA`) and the best shape's (`bestCdA`), passed
- * in since they come from car.js.
+ * The references: the kit block's own weight (`kitMass`) and the rule
+ * sheet's full weight, `idealBalance` (meters in front of the rear axle),
+ * every axle tune-up, and for the shape the kit block's drag area
+ * (`blockCdA`) and the best shape's (`bestCdA`), passed in since they come
+ * from car.js. Weight is measured against the kit's weight, not against
+ * the car with its weights taken out: a carved wedge with no weights is a
+ * car nobody races.
  */
-export function explain(car, { blockCdA, bestCdA, idealBalance }, C = DERBY_CONFIG) {
+export function explain(car, { kitMass, blockCdA, bestCdA, idealBalance }, C = DERBY_CONFIG) {
     const base = neutralTime(car, C);
     const R = C.rules[car.rules] || C.rules.standard;
     const stock = C.physics.axleFriction.stock;
@@ -207,9 +219,8 @@ export function explain(car, { blockCdA, bestCdA, idealBalance }, C = DERBY_CONF
         * C.physics.axleFriction.polish.reduce((a, f) => a * f, 1) * C.physics.axleFriction.graphite;
     const variant = (patch) => neutralTime({ ...car, ...patch }, C);
     const withBalance = (balance) => ({ balance, comX: car.rearAxle - balance });
-    const kitMass = car.mass - car.ballast;
     const lines = [
-        // Weight: the ballast against none, and against the sheet's limit.
+        // Weight: against the kit's own weight, and against the sheet's limit.
         { id: 'weight', saved: variant({ mass: kitMass }) - base, more: base - variant({ mass: R.maxMass }) },
         // Balance: against a centered car (halfway between the axles), and
         // against the ideal.

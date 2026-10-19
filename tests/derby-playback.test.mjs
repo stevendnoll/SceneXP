@@ -1,0 +1,349 @@
+// © 2026 Continuum Commerce LLC. MIT licensed.
+/**
+ * Derby Day's race on screen (M1), from SOURCE: the pure parts under the
+ * hall. playback.js (where every car is, the day's timeline), director.js
+ * (which shot, where the camera goes), track.js's path and car pose,
+ * phases.js, copy.js's sentences, carmesh.js's outline, and the tie-break.
+ *
+ * What is held here, and why:
+ * - PLAYBACK IS THE RACE THE BOARD SCORES: a car crosses the line at
+ *   exactly its recorded time, and slow motion never changes a time.
+ * - EVERY SHOT HOLDS THE FOUR LANES on a portrait phone.
+ * - A tie on the board goes to the finer reading, never to whoever is
+ *   listed first (the visitor always is).
+ * - The copy keeps the house style.
+ */
+import { installThree } from './helpers/three-stub.mjs';
+
+installThree();
+const { DERBY_CONFIG: C, IN } = await import('../www/derby/js/config.js');
+const Car = await import('../www/derby/js/car.js');
+const Sim = await import('../www/derby/js/sim.js');
+const P = await import('../www/derby/js/playback.js');
+const D = await import('../www/derby/js/director.js');
+const T = await import('../www/derby/js/track.js');
+const Ph = await import('../www/derby/js/phases.js');
+const Copy = await import('../www/derby/js/copy.js');
+const Mesh = await import('../www/derby/js/carmesh.js');
+
+const preset = (id) => {
+    const p = C.presets.find((x) => x.id === id);
+    return Car.describeCar(Car.buildFromDesign(p.design, { tune: p.tune, ballast: p.ballast }));
+};
+const fieldCar = (i) => Car.describeCar(Car.buildFromField(C.field[i]));
+const raceOf = (cars) => Sim.runRace(cars, C, { record: C.timing.record });
+
+describe('playback', () => {
+    const race = raceOf([preset('tuned'), ...C.divisions.medium.map(fieldCar)]);
+    const run = race.runs[0][0];
+
+    test('a car is at the pin before the gate, crosses the line at exactly its time, and runs out to a stop', () => {
+        expect(P.positionAt(run, -1)).toBe(0);
+        expect(P.positionAt(run, 0)).toBe(0);
+        expect(P.positionAt(run, run.time)).toBeCloseTo(C.track.courseLength, 9);
+        // Always forward.
+        let last = 0;
+        for (let t = 0; t < run.time + 3; t += 0.01) {
+            const s = P.positionAt(run, t);
+            expect(s).toBeGreaterThanOrEqual(last - 1e-12);
+            last = s;
+        }
+        // It stops within the run-out, and stays stopped.
+        const stopped = C.track.courseLength + C.timing.runOut;
+        expect(P.positionAt(run, run.time + 10)).toBeCloseTo(stopped, 9);
+        expect(P.positionAt(run, run.time + 20)).toBe(P.positionAt(run, run.time + 10));
+    });
+
+    test('between samples it is linear, and a run with no samples is at the pin', () => {
+        const fake = { time: 2, speed: 4, samples: [{ t: 0, s: 0 }, { t: 1, s: 2 }, { t: 2, s: C.track.courseLength }] };
+        expect(P.positionAt(fake, 0.5)).toBe(1);
+        expect(P.positionAt({ time: 1, samples: [] }, 0.5)).toBe(0);
+        // A car that stopped short stays where it stopped.
+        expect(P.positionAt({ time: 10, dnf: true, stoppedAt: 5, samples: [{ t: 0, s: 0 }] }, 12)).toBe(5);
+        expect(P.positionAt({ time: 10, dnf: true, samples: [{ t: 0, s: 0 }, { t: 9, s: 4 }] }, 12)).toBe(4);
+        // A car that finished at no speed sits on the line.
+        expect(P.positionAt({ time: 1, speed: 0, samples: [{ t: 0, s: 0 }] }, 2)).toBe(C.track.courseLength);
+    });
+
+    test('a close finish is two times within 0.02 s, the visitor\'s when they are racing', () => {
+        const heat = [{ car: 0, time: 3.2 }, { car: 1, time: 3.215 }, { car: 2, time: 3.3 }, { car: 3, time: 3.301 }];
+        expect(P.closeFinish(heat)).toMatchObject({ first: 2, second: 3 });
+        expect(P.closeFinish(heat, { focus: 0 })).toMatchObject({ first: 0, second: 1 });
+        expect(P.closeFinish(heat, { focus: 0, closeGap: 0.01 })).toBeNull();
+        expect(P.closeFinish([{ car: 0, time: 3, dnf: true }, { car: 1, time: 3.1 }])).toBeNull();
+    });
+
+    test('the day: four heats, each staged, gated, run, maybe replayed, then timed, back to back', () => {
+        const plan = P.planDay(race, { focus: 0 });
+        expect(plan.heats).toHaveLength(4);
+        let clock = 0;
+        for (const h of plan.heats) {
+            expect(h.start).toBeCloseTo(clock, 9);
+            const kinds = h.segments.map((s) => s.kind);
+            expect(kinds[0]).toBe('staging');
+            expect(kinds[1]).toBe('gate');
+            expect(kinds[2]).toBe('run');
+            expect(kinds[kinds.length - 1]).toBe('times');
+            for (let i = 1; i < h.segments.length; i++) expect(h.segments[i].from).toBeCloseTo(h.segments[i - 1].to, 9);
+            clock = h.end;
+        }
+        expect(plan.total).toBeCloseTo(clock, 9);
+        // About half a minute to three quarters of one.
+        expect(plan.total).toBeGreaterThan(25);
+        expect(plan.total).toBeLessThan(75);
+    });
+
+    test('a replay runs slowly over the finish, and reduced motion has none', () => {
+        const close = raceOf([preset('full'), ...C.divisions.hard.map(fieldCar)]);
+        const plan = P.planDay(close, { focus: 0 });
+        const replays = plan.heats.flatMap((h) => h.segments.filter((s) => s.kind === 'replay'));
+        expect(replays.length).toBeGreaterThan(0);
+        for (const r of replays) {
+            expect(r.rate).toBe(C.timing.replayRate);
+            expect(r.to - r.from).toBeCloseTo((r.runTo - r.runFrom) / r.rate, 9);
+            expect(r.runFrom).toBeLessThan(r.close.at);
+            expect(r.runTo).toBeGreaterThan(r.close.at + r.close.gap);
+        }
+        const still = P.planDay(close, { focus: 0, reducedMotion: true });
+        expect(still.heats.every((h) => h.segments.every((s) => s.kind !== 'replay'))).toBe(true);
+    });
+
+    test('momentAt: the run time rises through the run, crawls in a replay, holds through the times, and the day ends', () => {
+        const close = raceOf([preset('full'), ...C.divisions.hard.map(fieldCar)]);
+        const plan = P.planDay(close, { focus: 0 });
+        const h = plan.heats.find((x) => x.close);
+        const seg = (kind) => h.segments.find((s) => s.kind === kind);
+        expect(P.momentAt(plan, seg('staging').from + 0.1)).toMatchObject({ heat: h.index, runTime: 0, done: false });
+        expect(P.momentAt(plan, seg('gate').from + 0.01).runTime).toBe(0);
+        expect(P.momentAt(plan, seg('run').from + 1).runTime).toBeCloseTo(1, 9);
+        const rp = seg('replay');
+        const mid = P.momentAt(plan, (rp.from + rp.to) / 2);
+        expect(mid.segment.kind).toBe('replay');
+        expect(mid.runTime).toBeCloseTo((rp.runFrom + rp.runTo) / 2, 9);
+        const times = P.momentAt(plan, seg('times').from + 0.1);
+        expect(times.runTime).toBeCloseTo(seg('run').to - seg('run').from, 9);
+        const end = P.momentAt(plan, plan.total + 1);
+        expect(end.done).toBe(true);
+        expect(end.heat).toBe(3);
+        expect(P.momentAt({ heats: [], total: 0 }, 0).done).toBe(true);
+    });
+
+    test('a car crosses the line on screen at the time the board shows', () => {
+        const plan = P.planDay(race, { focus: 0 });
+        const h = plan.heats[1];
+        const runSeg = h.segments.find((s) => s.kind === 'run');
+        for (const r of race.heats[1]) {
+            const recorded = race.runs[r.car][r.lane];
+            const at = (dt) => P.positionAt(recorded, P.momentAt(plan, runSeg.from + recorded.time + dt).runTime);
+            expect(at(-0.002)).toBeLessThan(C.track.courseLength);
+            expect(at(0.002)).toBeGreaterThan(C.track.courseLength);
+            expect(Math.abs(Sim.shownTime(recorded.time) - r.time)).toBeLessThan(1e-12);
+        }
+    });
+});
+
+describe('the tie-break', () => {
+    test('a tie on the board goes to the finer reading, not to whoever is listed first', () => {
+        // The Full Treatment and The Phantom both average 3.190 on the board.
+        const race = Sim.runRace([preset('full'), fieldCar(8)]);
+        expect(race.average[0]).toBe(race.average[1]);
+        const exact = (i) => race.runs[i].reduce((a, r) => a + r.time, 0);
+        const faster = exact(0) < exact(1) ? 0 : 1;
+        expect(race.standings[0]).toBe(faster);
+        // Listed the other way round, the same car wins.
+        const flipped = Sim.runRace([fieldCar(8), preset('full')]);
+        expect(flipped.standings[0]).toBe(1 - faster);
+    });
+});
+
+describe('the director', () => {
+    const path = T.pathOf();
+
+    test('the shots: the gate while staging, the chase down the slope, the finish near the line, the photo for a replay', () => {
+        expect(D.shotFor('staging', 0)).toBe('start');
+        expect(D.shotFor('gate', 0)).toBe('start');
+        expect(D.shotFor('run', 1)).toBe('chase');
+        expect(D.shotFor('run', C.track.courseLength - 1)).toBe('finish');
+        expect(D.shotFor('replay', 0)).toBe('photo');
+        expect(D.shotFor('times', 0)).toBe('finish');
+        // Reduced motion: no chase, ever.
+        expect(D.shotFor('run', 1, { reducedMotion: true })).toBe('finish');
+    });
+
+    test('every shot holds the four lanes on a portrait phone and a wide screen', () => {
+        const lanesHalf = T.trackWidth() / 2;
+        for (const aspect of [390 / 844, 1, 16 / 9]) {
+            for (const shot of ['start', 'chase', 'finish', 'photo']) {
+                const f = D.framing(shot, path, 3, aspect);
+                const dist = Math.hypot(f.position.x - f.target.x, f.position.y - f.target.y, f.position.z - f.target.z);
+                // The half-width the camera holds at its target is at least the lanes'.
+                const halfH = Math.atan(Math.tan((C.camera.fov * Math.PI) / 360) * aspect);
+                expect(dist * Math.tan(halfH)).toBeGreaterThanOrEqual(lanesHalf - 1e-9);
+                expect(f.position.y).toBeGreaterThan(0);
+            }
+        }
+        // A portrait phone backs off further than a wide screen.
+        expect(D.fitDistance(0.3, 45, 0.46)).toBeGreaterThan(D.fitDistance(0.3, 45, 1.78));
+        // An unknown shot is the finish camera.
+        expect(D.framing('nope', path, 0, 1)).toEqual(D.framing('finish', path, 0, 1));
+    });
+
+    test('the chase follows the leader down the track', () => {
+        const a = D.framing('chase', path, 1, 1);
+        const b = D.framing('chase', path, 5, 1);
+        expect(b.target.x).toBeGreaterThan(a.target.x);
+        expect(b.position.x).toBeGreaterThan(a.position.x);
+    });
+});
+
+describe('the track in the hall', () => {
+    const path = T.pathOf();
+
+    test('the pin at the origin, about four feet up, sloping down, then flat to the finish and beyond', () => {
+        const pin = path.at(0);
+        expect(pin.x).toBe(0);
+        expect(pin.y).toBeCloseTo(C.track3d.floorGap + Sim.startHeight(), 9);
+        expect(Math.sin(-pin.angle)).toBeCloseTo(C.track.slopeSine, 2);
+        const finish = path.at(C.track.courseLength);
+        expect(finish.y).toBeCloseTo(C.track3d.floorGap, 9);
+        expect(finish.angle).toBe(0);
+        // Clamped at both ends.
+        expect(path.at(-99)).toEqual(path.at(path.start));
+        expect(path.at(999)).toEqual(path.at(path.end));
+        // The hall's x grows with s, and never faster than s does.
+        for (let s = path.start + 0.1; s < path.end; s += 0.25) {
+            const d = path.at(s).x - path.at(s - 0.1).x;
+            expect(d).toBeGreaterThan(0);
+            expect(d).toBeLessThanOrEqual(0.1 + 1e-9);
+        }
+    });
+
+    test('lanes sit side by side across z, lane 1 at -z, and a car rides with both axles on the track', () => {
+        expect(T.laneZ(0)).toBeLessThan(T.laneZ(3));
+        expect(T.laneZ(1) - T.laneZ(0)).toBeCloseTo(C.track3d.lanePitch, 12);
+        expect(T.laneZ(0) + T.laneZ(3)).toBeCloseTo(0, 12);
+        const car = fieldCar(8);
+        for (const s of [0, 2, 4, 8, C.track.courseLength]) {
+            const pose = T.carPose(path, s, 2, car);
+            const rear = path.at(s - car.rearAxle);
+            const front = path.at(s - car.frontAxle);
+            const axle = (x) => ({ x: pose.x + x * Math.cos(pose.angle), y: pose.y + x * Math.sin(pose.angle) });
+            expect(axle(-car.rearAxle).x).toBeCloseTo(rear.x, 9);
+            expect(axle(-car.rearAxle).y).toBeCloseTo(rear.y, 9);
+            // The front axle lands on the track too (to the chord's sag).
+            expect(Math.abs(axle(-car.frontAxle).y - front.y)).toBeLessThan(0.002);
+            expect(pose.z).toBe(T.laneZ(2));
+        }
+    });
+
+    test('a lofted strip has a ring for each step and closes both ends', () => {
+        const square = [[-1, 0], [1, 0], [1, 1], [-1, 1]];
+        const { positions, indices } = T.loft(path, square, 0, 1, 0.25);
+        expect(positions.length).toBe(5 * 4 * 3);
+        // Two triangles per side per span, two per end cap.
+        expect(indices.length).toBe((4 * 4 * 2 + 2 * 2) * 3);
+        expect(Math.max(...indices)).toBeLessThan(positions.length / 3);
+    });
+});
+
+describe('a car\'s outline', () => {
+    test('top from nose to tail, back along the bottom, all above the track by the clearance', () => {
+        const build = Car.buildFromDesign('wedge');
+        const out = Mesh.outlineOf(build.stations);
+        expect(out).toHaveLength(build.stations.length * 2);
+        expect(out[0][0]).toBe(-0);
+        expect(out[build.stations.length - 1][0]).toBeCloseTo(-7 * IN, 12);
+        const base = C.kit.wheel.radius - C.kit.axleHeight;
+        for (const [, y] of out) expect(y).toBeGreaterThanOrEqual(base - 1e-12);
+    });
+
+    test('four wheels at the axle slots, either side of the body', () => {
+        const car = fieldCar(3);
+        const spots = Mesh.wheelSpots(car);
+        expect(spots.map((s) => s[0])).toEqual([-car.frontAxle, -car.frontAxle, -car.rearAxle, -car.rearAxle]);
+        for (const [, y, z] of spots) {
+            expect(y).toBe(C.kit.wheel.radius);
+            expect(Math.abs(z)).toBeGreaterThan(car.dims.wheelGap / 2);
+        }
+    });
+});
+
+describe('phases', () => {
+    test('check-in to the race to the results, and back', () => {
+        expect(Ph.nextPhase('loading', 'loaded')).toBe('checkin');
+        expect(Ph.nextPhase('checkin', 'go')).toBe('race');
+        expect(Ph.nextPhase('race', 'finish')).toBe('results');
+        expect(Ph.nextPhase('race', 'skip')).toBe('results');
+        expect(Ph.nextPhase('race', 'back')).toBe('checkin');
+        expect(Ph.nextPhase('results', 'again')).toBe('race');
+        expect(Ph.nextPhase('results', 'another')).toBe('checkin');
+        // An action that means nothing there stays put.
+        expect(Ph.nextPhase('checkin', 'skip')).toBe('checkin');
+        expect(Ph.nextPhase('nowhere', 'go')).toBe('nowhere');
+        expect(Ph.PHASES).toEqual(['loading', 'checkin', 'race', 'results']);
+    });
+});
+
+describe('the words', () => {
+    const style = (s) => {
+        expect(s).not.toMatch(/[—;]/);
+        expect(s).not.toMatch(/pinewood/i);
+    };
+
+    test('places, heats and clocks', () => {
+        expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 101].map(Copy.placeWord)).toEqual(['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '101st']);
+        expect(Copy.heatOf(2, 4)).toBe('Heat 2 of 4');
+        expect(Copy.clock(3.1)).toBe('3.100');
+        expect(Copy.eventLabel('easy')).toBe('Easy division');
+        expect(Copy.eventLabel('trial')).toBe('Time Trial');
+        expect(Copy.eventLabel('nope')).toBe('');
+    });
+
+    test('the announcer says the lane defect once, before the first heat, and it is true', () => {
+        expect(Copy.staging(1, 4)).toMatch(/Lane 4 runs a hair slow/);
+        const slowest = C.laneDefects.indexOf(Math.max(...C.laneDefects));
+        expect(slowest).toBe(3);
+        expect(Copy.staging(2, 4)).not.toMatch(/Lane 4/);
+        expect(Copy.staging(4, 4)).toMatch(/last heat/);
+        for (const n of [1, 2, 3, 4]) style(Copy.staging(n, 4));
+        style(Copy.OFF);
+        style(Copy.heatWinner(2, 'Blue Streak', 3.2));
+    });
+
+    test('what a screen reader hears, heat by heat and at the end', () => {
+        expect(Copy.heatSpoken(1, [{ name: 'A', time: 3.2, place: 1 }, { name: 'B', time: 3.3, place: 2 }]))
+            .toBe('Heat 1: A 1st, 3.200 seconds. B 2nd, 3.300 seconds.');
+        expect(Copy.resultsSpoken('hard', [{ name: 'A', average: 3.19, place: 1 }]))
+            .toBe('Hard division results. 1st, A, averaging 3.190 seconds.');
+    });
+
+    test('the Why lines: the best thing the build did, the two biggest gains, and a word when little is left', () => {
+        const kit = Car.describeCar(Car.buildFromDesign('block'));
+        const refs = { kitMass: kit.mass, blockCdA: kit.cdA, bestCdA: fieldCar(8).cdA, idealBalance: 0.75 * IN };
+        const box = preset('box');
+        const lines = Copy.whyLines(Sim.explain(box, refs), box, refs.idealBalance);
+        expect(lines.length).toBe(2);
+        expect(lines[0]).toMatch(/Polished axles and graphite would save/);
+        const full = preset('full');
+        const fullLines = Copy.whyLines(Sim.explain(full, refs), full, refs.idealBalance);
+        expect(fullLines[0]).toMatch(/axles was worth/);
+        expect(fullLines[fullLines.length - 1]).toMatch(/very little left/);
+        // A car weighted behind the ideal is told to move it forward.
+        const back = { ...full, balance: 0.3 * IN, comX: full.rearAxle - 0.3 * IN };
+        const backLines = Copy.whyLines(Sim.explain(back, refs), back, refs.idealBalance);
+        expect(backLines.join(' ')).toMatch(/forward/);
+        for (const l of [...lines, ...fullLines, ...backLines]) style(l);
+    });
+
+    test('the Time Trial compares each car with the one behind it', () => {
+        expect(Copy.trialLines([{ name: 'A', average: 3.2 }])).toEqual(['A averaged 3.200 seconds over the four lanes.']);
+        expect(Copy.trialLines([{ name: 'A', average: 3.2 }, { name: 'B', average: 3.25 }, { name: 'C', average: 3.25 }]))
+            .toEqual(['A beat B by 0.050 seconds.', 'B and C tied.']);
+    });
+
+    test('every fixed sentence keeps the house style', () => {
+        for (const e of Copy.EVENTS) { style(e.label); style(e.blurb); }
+        for (const v of Object.values(Copy.UI)) style(v);
+        for (const p of C.presets) { style(p.name); style(p.blurb); }
+    });
+});
