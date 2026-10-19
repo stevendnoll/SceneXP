@@ -1,0 +1,281 @@
+// © 2026 Continuum Commerce LLC. MIT licensed.
+/**
+ * config.js - every number in Derby Day (www/derby).
+ *
+ * M0, THE PHYSICS BENCH (2026-10-19). Derby Day starts as a question rather
+ * than a scene: does a car's build decide its race in honest proportion,
+ * with the nine neighbors' cars finishing in the order their builds deserve?
+ * So this first build is only the kit, the rules, the track, the physics and
+ * the field, run under Node by scripts/derby-field.mjs. The hall comes in M1.
+ *
+ * UNITS. Everything here is SI (meters, kilograms, seconds) except where a
+ * key says otherwise. The derby's own numbers are written in inches and
+ * ounces, because that is how a rule sheet or a kit says them, and multiplied
+ * by IN and OZ on the spot so the original figure stays readable.
+ *
+ * EVERY FIGURE MARKED "verify" is from memory of real kits and tracks, to
+ * check against a real kit and published derby tests before release (PRD,
+ * The kit). None of them changes the shape of the model, only its tuning.
+ *
+ * NOTHING HERE IS COMPUTED WITH Math.sin, cos, pow or exp. The race must run
+ * the same on every device (PRD, Determinism), and only + - * / and sqrt are
+ * exact in every JavaScript engine. Slopes are given as sines.
+ */
+
+/** One inch and one ounce, in meters and kilograms. */
+export const IN = 0.0254;
+export const OZ = 0.028349523125;
+
+/** A side profile station, in inches: [x from the nose, bottom, top, width].
+ *  Bottom and top are above the block's own bottom face. */
+const st = (x, bottom, top, width) => Object.freeze([x * IN, bottom * IN, top * IN, width * IN]);
+
+export const DERBY_CONFIG = Object.freeze({
+    // Solved once per visit and cached in sessionStorage by the shared boot
+    // part; the same key every scene uses, so one solve covers the site.
+    proofOfWork: { prefix: '11', storageKey: 'gallery-pow' },
+
+    /** The kit, as it comes in the box (verify). */
+    kit: Object.freeze({
+        length: 7 * IN,
+        width: 1.75 * IN,
+        height: 1.25 * IN,
+        /** Soft pine, kg per cubic meter (verify: kit blocks run 350 to 450). */
+        woodDensity: 400,
+        /** The axle slots, measured from the nose. Wheelbase 4.375 in. */
+        frontAxle: 1.75 * IN,
+        rearAxle: 6.125 * IN,
+        /** How far the axles sit above the block's bottom face. */
+        axleHeight: 0.2 * IN,
+        wheel: Object.freeze({
+            radius: 0.59 * IN,
+            mass: 2.6e-3,
+            /** I = k m r squared. A plastic wheel's mass sits at its rim. */
+            inertiaK: 0.55,
+            thickness: 0.38 * IN
+        }),
+        axle: Object.freeze({ radius: 0.0435 * IN, mass: 0.9e-3 }),
+        /** Paint and clear coat, spread over the body. */
+        paintMass: 1.5e-3
+    }),
+
+    /** The weights a builder drops in. Tungsten goes in drilled pockets
+     *  (the wood they replace comes out); zinc strips stick on. */
+    weights: Object.freeze({
+        cylinder: Object.freeze({ label: 'Tungsten cylinder', mass: 0.25 * OZ, density: 19250, pocket: true }),
+        cube: Object.freeze({ label: 'Tungsten cube', mass: 0.2 * OZ, density: 19250, pocket: true }),
+        strip: Object.freeze({ label: 'Zinc strip', mass: 0.1 * OZ, density: 7140, pocket: false }),
+        // The last few hundredths, pressed in by hand: its mass is the
+        // piece's own (`mass` on the weight), up to `mass` here.
+        putty: Object.freeze({ label: 'Tungsten putty', mass: 0.1 * OZ, density: 11000, pocket: false })
+    }),
+
+    /** The two rule sheets (PRD, Two classes). Outlaw drops the sheet but
+     *  keeps what the track itself demands. Every limit is checked on the
+     *  rounded figure the scale or the gauge would show. */
+    rules: Object.freeze({
+        standard: Object.freeze({
+            label: 'Standard',
+            maxMass: 5 * OZ,
+            maxLength: 7 * IN,
+            maxWidth: 2.75 * IN,
+            minWheelGap: 1.75 * IN,
+            minClearance: 0.375 * IN
+        }),
+        outlaw: Object.freeze({
+            label: 'Outlaw',
+            // The sim's sane ceiling, not a rule: past this a car is a brick
+            // on wheels and the plastic would not hold it.
+            maxMass: 16 * OZ,
+            maxLength: 7 * IN,
+            // The lane between its guide rails.
+            maxWidth: 2.75 * IN,
+            // Clears the lane's center guide strip.
+            minWheelGap: 1.75 * IN,
+            minClearance: 0.3 * IN
+        })
+    }),
+
+    /**
+     * The track (verify against a real 42 ft aluminum track). Measured along
+     * the track from the start pin, where every car's nose rests, to the
+     * finish line. Three parts: a straight slope, a transition whose slope
+     * eases to flat, and the flat run. In the transition the SINE of the
+     * slope falls linearly with distance, which keeps the whole profile
+     * exact in plain arithmetic (no trig) and its height a quadratic.
+     */
+    track: Object.freeze({
+        /** Sine of the slope (about 26.7 degrees). */
+        slopeSine: 0.45,
+        /** From the start pin to where the transition begins. */
+        slopeLength: 1.511,
+        transitionLength: 2.4,
+        /** Start pin to finish line, 40 ft. */
+        courseLength: 12.192,
+        lanes: 4
+    }),
+
+    /**
+     * Each lane's quiet defect (PRD, The heats): a hair more rolling
+     * resistance, worth one to three thousandths of a second. Rotation
+     * cancels it, and the results say so. Lane 4 runs slowest.
+     */
+    laneDefects: Object.freeze([0.00004, 0.00012, 0.0, 0.0003]),
+
+    physics: Object.freeze({
+        g: 9.80665,
+        airDensity: 1.204,
+        /** Fixed timestep. The frame rate never touches the sim. */
+        dt: 0.0005,
+        /** A car slower than this has stopped. */
+        maxSeconds: 10,
+
+        /**
+         * Axle friction, a coefficient on the load each wheel carries, acting
+         * at the axle (so scaled by axle radius over wheel radius). A nail as
+         * it comes from the kit has a burr under its head and crimp marks
+         * along its shaft. Each tune-up multiplies it, polish by less each
+         * grit (verify against published axle tests).
+         */
+        axleFriction: Object.freeze({
+            stock: 0.3,
+            deburred: 0.8,
+            /** 400, 800, 1200 and 2000 grit, then polishing compound. */
+            polish: Object.freeze([0.85, 0.88, 0.92, 0.95, 0.97]),
+            graphite: 0.45
+        }),
+
+        /** Plastic wheels on aluminum, a coefficient on the load. */
+        rollingResistance: 0.0025,
+
+        /**
+         * Wheel hubs rubbing the body and treads brushing the guide rail, a
+         * FORCE in newtons, not a share of the load: it comes from the car
+         * wandering side to side, which its weight does not set. That is one
+         * reason a heavy car is faster (Mann, Gibbs and Sah, "Dynamics of a
+         * gravity car race", Mechanical Sciences 3, 2012, measured heavier
+         * cars faster). Alignment brings it down.
+         */
+        sideRub: Object.freeze({ misaligned: 0.009, aligned: 0.005 }),
+
+        /**
+         * Too far back is a real mistake, though a mild one: Mann et al. saw
+         * cars with their weight at the extremes wobble, and still win on
+         * balance. With the center of mass closer than `safe` in front of the
+         * rear axle, the front goes light through the transition and the car
+         * hunts from rail to rail: the side rub grows with the square of how
+         * far inside `safe` it is, to `extra` newtons at the axle itself.
+         * Behind the axle, the front lifts clear (`wheelie`).
+         */
+        wobble: Object.freeze({ safe: 0.75 * IN, extra: 0.024, wheelie: 0.04 }),
+
+        /**
+         * Drag coefficient from the body's shape: blunt at both ends is a
+         * block, a fine nose and tail is a teardrop. Sanding rounds every
+         * edge and takes off up to `sanding` of what is left. Kept the
+         * smallest lever on purpose: Mann et al.'s sensitivity analysis found
+         * race time least sensitive to the car's cross section.
+         */
+        drag: Object.freeze({
+            teardrop: 0.4,
+            block: 0.52,
+            noseWeight: 0.7,
+            /** Where the nose and tail are read, as a fraction of the length. */
+            noseAt: 0.08,
+            tailAt: 0.92,
+            sanding: 0.1,
+            /** The exposed wheels, all four together. */
+            wheelArea: 0.0004,
+            wheelCd: 0.9
+        }),
+
+        /** Slices a profile is integrated over, for volume and balance. */
+        slices: 140
+    }),
+
+    /**
+     * The starting designs (PRD, Time to first race), as side profiles. Each
+     * is the stations along the car from nose to tail, in inches, linearly
+     * joined: [x from the nose, bottom, top, width]. A full block is 1.25 in
+     * tall and 1.75 in wide.
+     */
+    designs: Object.freeze({
+        block: Object.freeze({ label: 'Block', stations: Object.freeze([st(0, 0, 1.25, 1.75), st(7, 0, 1.25, 1.75)]) }),
+        wedge: Object.freeze({
+            label: 'Wedge',
+            stations: Object.freeze([st(0, 0, 0.25, 1.75), st(6.25, 0, 1.0, 1.75), st(7, 0, 1.0, 1.75)])
+        }),
+        thinWedge: Object.freeze({
+            label: 'Thin Wedge',
+            stations: Object.freeze([st(0, 0, 0.15, 1.75), st(6.5, 0, 0.6, 1.75), st(7, 0, 0.6, 1.75)])
+        }),
+        bullet: Object.freeze({
+            label: 'Bullet',
+            stations: Object.freeze([
+                st(0, 0.15, 0.35, 0.9), st(0.8, 0, 0.7, 1.5), st(1.5, 0, 0.85, 1.75), st(6.0, 0, 0.9, 1.75), st(7, 0.1, 0.7, 1.75)
+            ])
+        }),
+        classic: Object.freeze({
+            label: 'Classic',
+            stations: Object.freeze([
+                st(0, 0, 0.5, 1.75), st(1.5, 0, 0.65, 1.75), st(3.0, 0, 1.1, 1.75), st(4.5, 0, 1.1, 1.75), st(5.5, 0, 0.75, 1.75), st(7, 0, 0.75, 1.75)
+            ])
+        }),
+        lowRider: Object.freeze({
+            label: 'Low Rider',
+            stations: Object.freeze([st(0, 0, 0.3, 1.75), st(1.5, 0, 0.5, 1.75), st(7, 0, 0.5, 1.75)])
+        }),
+        loaf: Object.freeze({
+            label: 'Loaf',
+            stations: Object.freeze([
+                st(0, 0, 0.7, 1.75), st(0.8, 0, 1.15, 1.75), st(6.2, 0, 1.15, 1.75), st(7, 0, 0.7, 1.75)
+            ])
+        }),
+        hotDog: Object.freeze({
+            label: 'Hot Dog',
+            // A bun with the sausage poking out of both ends, blunt and tall.
+            stations: Object.freeze([
+                st(0, 0.3, 1.05, 0.8), st(0.5, 0, 1.25, 1.75), st(6.5, 0, 1.25, 1.75), st(7, 0.3, 1.05, 0.8)
+            ])
+        })
+    }),
+
+    /** A car's tune-ups as it comes from the box. */
+    stockTune: Object.freeze({ deburr: false, polish: 0, graphite: false, align: false, sand: 0 }),
+
+    /**
+     * The neighbors' nine cars (PRD, The neighbors' cars), slowest first.
+     * Built in the workshop's own model and timed by the same sim, so their
+     * order is an output of the physics, and tests/derby-sim.test.mjs holds
+     * it. `ballast` is what Auto-weigh is asked for: a weight in ounces and a
+     * balance point in inches in front of the rear axle. Names are
+     * placeholders.
+     */
+    field: Object.freeze([
+        { id: 'brick', name: 'The Brick', design: 'block', ballast: null,
+            tune: { deburr: false, polish: 0, graphite: false, align: false, sand: 0 } },
+        { id: 'hotdog', name: 'Hot Dog', design: 'hotDog', ballast: { mass: 4.5, balance: 3.4 },
+            tune: { deburr: false, polish: 0, graphite: true, align: false, sand: 0 } },
+        { id: 'loaf', name: 'Rainbow Loaf', design: 'loaf', ballast: { mass: 4.4, balance: 2.4 },
+            tune: { deburr: true, polish: 0, graphite: true, align: false, sand: 0.5 } },
+        { id: 'streak', name: 'Blue Streak', design: 'wedge', ballast: { mass: 4.8, balance: 2.0 },
+            tune: { deburr: true, polish: 1, graphite: true, align: false, sand: 0 } },
+        { id: 'tiger', name: 'Tiger Tail', design: 'lowRider', ballast: { mass: 5.0, balance: 2.0 },
+            tune: { deburr: true, polish: 0, graphite: true, align: false, sand: 0 } },
+        { id: 'comet', name: 'The Comet', design: 'bullet', ballast: { mass: 5.0, balance: 1.8 },
+            tune: { deburr: true, polish: 2, graphite: true, align: false, sand: 0.5 } },
+        { id: 'owl', name: 'Night Owl', design: 'thinWedge', ballast: { mass: 5.0, balance: 1.25 },
+            tune: { deburr: true, polish: 3, graphite: true, align: false, sand: 0.5 } },
+        { id: 'arrow', name: 'Silver Arrow', design: 'wedge', ballast: { mass: 5.0, balance: 1.0 },
+            tune: { deburr: true, polish: 4, graphite: true, align: true, sand: 0.5 } },
+        { id: 'phantom', name: 'The Phantom', design: 'thinWedge', ballast: { mass: 5.0, balance: 0.875 },
+            tune: { deburr: true, polish: 5, graphite: true, align: true, sand: 1 } }
+    ]),
+
+    /** Who each division faces, by field index (PRD, Check-in). */
+    divisions: Object.freeze({
+        easy: Object.freeze([0, 1, 2]),
+        medium: Object.freeze([3, 4, 5]),
+        hard: Object.freeze([6, 7, 8])
+    })
+});

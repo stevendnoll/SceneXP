@@ -54,7 +54,9 @@ const PERSISTENT = {
     'www/xo/js/progress.js': 'a game of X’s and O’s that has not finished yet',
     'www/xo/js/colors.js': 'the team and field colors chosen in X’s and O’s',
     'www/xo/js/jump.js': 'whether Auto jump is on in X’s and O’s',
-    'www/leaves/js/cast.js': 'the character chosen in Leaf Blower',
+    // The shared figure store (promoted from www/leaves/js/cast.js on
+    // 2026-10-19), under each scene's own key: Leaf Blower's character.
+    'www/shared/js/cast-1.0.0.js': 'the character chosen in Leaf Blower',
     'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaf Blower',
     // Released 2026-10-16, described in privacy.html as "Your home in
     // Whitestone Home Care".
