@@ -35,6 +35,9 @@ import { createBench } from './bench.min.js';
 import { createTools } from './tools.min.js';
 import { createTuneups } from './tuneups.min.js';
 import { buildCheckinTable, planWeighIn, weighMoment, readingShare } from './checkin.min.js';
+import { createCrowd, bleacherSeats, crowdLooks, familyOf, familyPlaces, lookOf, seeded } from './crowd.min.js';
+import { buildDressing } from './dressing.min.js';
+import { createFamilyStore, familyMembers } from './family.min.js';
 import { curvesOf } from './profile.min.js';
 import { bestBalance } from './weights.min.js';
 import * as U from './units.min.js';
@@ -42,8 +45,8 @@ import { planDay, momentAt, positionAt } from './playback.min.js';
 import { shotFor, framing } from './director.min.js';
 import { createTimer, fillResults, h } from './board.min.js';
 import {
-    EVENTS, UI, OFF, ENTRY, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock,
-    gains, moreLine, sheetLines, trophyLine, harderLabel, HARDER, tuneupLines, WEIGH, ruleNote
+    EVENTS, UI, ENTRY, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock,
+    gains, moreLine, sheetLines, trophyLine, harderLabel, HARDER, tuneupLines, WEIGH, ruleNote, CALLS, gateCall
 } from './copy.min.js';
 import { nextPhase } from './phases.min.js';
 import { createSound } from './sound.min.js';
@@ -78,6 +81,12 @@ const state = {
     drag: null,
     /** How far Align has rolled the car off the turntable, meters. */
     benchOffset: 0,
+    /** What the bench camera looks at: the car, or the family (M6.3). */
+    benchView: 'car',
+    /** The race's entries the families stand for, and the announcer's
+     *  calls made in this heat (M6). */
+    crowdEntries: [],
+    called: '',
     /** The race day being played: { entries, cars, race, plan }. */
     day: null,
     clock: 0,
@@ -113,6 +122,11 @@ let holder = null;
 let tools = null;
 let tuneups = null;
 let registration = null;
+let crowd = null;
+let dressing = null;
+let familyStore = null;
+/** The bleachers' crowd, made once a visit. */
+let bleachers = null;
 let pencil = null;
 let cleanupController = null;
 const el = {};
@@ -219,6 +233,11 @@ async function init() {
     workbench.spinner.add(tuneups.onBench);
     registration = buildCheckinTable(CONFIG);
     scene.add(registration.group);
+    dressing = buildDressing(CONFIG);
+    scene.add(dressing.group);
+    crowd = createCrowd(CONFIG);
+    scene.add(crowd.group);
+    familyStore = createFamilyStore();
     timer = createTimer(el.timer);
     // The cars waiting at the pin behind the check-in card: the visitor's
     // chosen car and the first division's, so the track is not empty.
@@ -235,7 +254,16 @@ async function init() {
             showCheckin();
         },
         units: () => showBenchCar(garage.bench()),
+        family: {
+            store: familyStore,
+            changed: () => placeCrowd(),
+            view: (v) => {
+                state.benchView = v;
+                if (state.phase === 'bench') benchCamera();
+            }
+        },
         forgot: (b) => {
+            familyStore.forget();
             state.entrant = b.id;
             state.trial = new Set([b.id]);
             state.event = 'easy';
@@ -391,6 +419,8 @@ function checkinShown() {
 function showCheckin() {
     hideWeighIn();
     state.phase = 'checkin';
+    sound.murmur(true);
+    if (dressing) dressing.timer.set(null);
     hideResults();
     hideBench();
     setRaceChrome(false);
@@ -426,6 +456,8 @@ function hideBench() {
 function showBench(kind = 'back', tip = null) {
     hideWeighIn();
     state.phase = 'bench';
+    sound.murmur(false);
+    placeCrowd();
     hideResults();
     setRaceChrome(false);
     if (el.blocker) el.blocker.classList.add('hidden');
@@ -509,13 +541,16 @@ function benchCamera() {
     if (!camera || !workbench) return;
     const W = window.innerWidth;
     const H = window.innerHeight;
-    const f = benchFraming({ width: W, height: H, panel: benchPanel() }, CONFIG);
+    const family = state.benchView === 'family';
+    const f = benchFraming({ width: W, height: H, panel: benchPanel(), hold: family ? CONFIG.crowd.familyHold : null }, CONFIG);
     camera.aspect = W / H;
     camera.updateProjectionMatrix();
     if (camera.setViewOffset) camera.setViewOffset(W, H, f.offsetX, f.offsetY, W, H);
     const [dx, dy, dz] = CONFIG.workbench.dir;
     const n = Math.hypot(dx, dy, dz);
-    const t = workbench.target;
+    // The family card turns the camera to the two of them, beside the table.
+    const spot = CONFIG.crowd.benchSpot;
+    const t = family ? { x: CONFIG.workbench.at.x + spot.x, y: 0.85, z: CONFIG.workbench.at.z + spot.z } : workbench.target;
     camera.position.set(t.x + (dx / n) * f.distance, t.y + (dy / n) * f.distance, t.z + (dz / n) * f.distance);
     camera.lookAt(t.x, t.y, t.z);
 }
@@ -559,6 +594,71 @@ function stageCars(entries) {
     });
     meshes.forEach((m, i) => placeCar(m, 0, i));
     if (trackParts) trackParts.gate.set(0);
+    state.crowdEntries = entries;
+    placeCrowd();
+}
+
+// ---- The people in the hall (M6) ----------------------------------------------
+
+/**
+ * Everyone in the hall, put where they stand for what is showing: the crowd
+ * on the bleachers, the volunteer at the weigh-in table, the families of
+ * the cars racing by the finish (the visitor's at the front, the kid
+ * holding the car's name), and on the bench, the visitor's family beside
+ * the table instead.
+ */
+function placeCrowd() {
+    if (!crowd || !crowd.ready) return;
+    if (!bleachers) {
+        const seats = bleacherSeats(CONFIG);
+        const looks = crowdLooks(seats.length, CONFIG);
+        const rand = seeded(CONFIG.crowd.seed + 3);
+        bleachers = seats.map((at, i) => ({ group: 'crowd', look: looks[i], at: { ...at, ry: (rand() - 0.5) * 0.4 }, keen: rand() < 0.35, phase: rand() * 6 }));
+    }
+    const list = bleachers.slice();
+    const W = CONFIG.weighIn;
+    list.push({ group: 'volunteer', look: lookOf({ shirt: 'mustard', pants: 'khaki', skin: 'medium', hair: 'gray', length: 'short' }, {}, CONFIG), at: { x: W.at.x - 0.25, y: 0, z: W.at.z - 0.55, ry: 0 }, phase: 0 });
+    const mineEntry = state.crowdEntries.find((e) => e.mine);
+    const carName = mineEntry ? mineEntry.name.replace(/ \(Outlaw\)$/, '') : garage.nameOf(garage.bench());
+    const family = familyMembers(familyStore.load(), carName, CONFIG).map((m) => ({ ...m, group: 'mine', phase: 1.3 }));
+    if (state.phase === 'bench' || state.phase === 'loading') {
+        const spot = CONFIG.crowd.benchSpot;
+        family.forEach((m, i) => list.push({ ...m, at: { x: CONFIG.workbench.at.x + spot.x + (i ? 0.22 : -0.2), y: 0, z: CONFIG.workbench.at.z + spot.z, ry: 0 } }));
+    } else {
+        const groups = [{ key: 'mine', members: family }];
+        for (const e of state.crowdEntries) {
+            if (!e.mine && CONFIG.families[e.id]) groups.push({ key: e.id, members: familyOf(e.id, CONFIG).map((m, i) => ({ ...m, group: e.id, phase: i * 0.7 + 0.4 })) });
+        }
+        for (const place of familyPlaces(groups, CONFIG)) {
+            const g = groups.find((x) => x.key === place.key);
+            g.members.forEach((m, i) => list.push({ ...m, at: { ...place.at[i], ry: 0 } }));
+        }
+    }
+    crowd.set(list, crowdMoment(performance.now()));
+}
+
+/** What the people are doing now (crowd.poseAt's moment). */
+function crowdMoment(now) {
+    const day = state.day;
+    const t = now / 1000;
+    if (state.phase === 'race' && day) {
+        const m = momentAt(day.plan, state.clock);
+        const heat = day.race.heats[m.heat];
+        const groups = new Set(day.entries.map((e) => (e.mine ? 'mine' : e.id)));
+        let won = null;
+        if (m.segment.kind === 'times' && heat) {
+            const first = heat.slice().sort((a, b) => a.time - b.time || a.car - b.car)[0];
+            const e = day.entries[first.car];
+            won = e.mine ? 'mine' : e.id;
+        }
+        return { kind: m.segment.kind, t, cheering: groups, won };
+    }
+    if (state.phase === 'results' && day) {
+        const e = day.entries[day.race.standings[0]];
+        return { kind: 'times', t, won: e.mine ? 'mine' : e.id };
+    }
+    if (state.phase === 'checkin' || state.phase === 'weighin') return { kind: 'staging', t };
+    return { kind: 'idle', t };
 }
 
 function placeCar(mesh, s, lane) {
@@ -817,6 +917,17 @@ function stepRace(dt) {
         byLane[r.lane] = { car: r.car, time: across ? r.time : null, place: across ? order.indexOf(r) + 1 : null };
     }
     timer.lanes(byLane);
+    // The timer over the finish line shows the same (M6.1).
+    if (dressing) dressing.timer.set({ heat: m.heat + 1, total: day.race.heats.length, lanes: byLane });
+
+    // The announcer calls the leader as the field comes off the slope.
+    const callKey = `${m.heat}:lead`;
+    if (kind === 'run' && m.runTime > 1.5 && state.called !== callKey) {
+        state.called = callKey;
+        const lead = heat.slice().sort((a, b) => day.race.runs[a.car][a.lane].time - day.race.runs[b.car][b.lane].time)[0];
+        const e = day.entries[lead.car];
+        caption(e.mine && state.event !== 'trial' ? CALLS.leadMine(e.name) : CALLS.lead(e.name));
+    }
 
     const key = `${m.heat}:${kind}`;
     if (key !== state.said) {
@@ -826,13 +937,19 @@ function stepRace(dt) {
         timer.heat(n, total, kind === 'replay' ? UI.replay : '');
         if (kind === 'staging') caption(staging(n, total));
         else if (kind === 'gate') {
-            caption(OFF);
+            caption(gateCall(n, total));
             sound.gate();
         } else if (kind === 'replay') caption(UI.replay);
         else if (kind === 'times') {
             const first = order[0];
             sound.cheer(0.55);
-            caption(heatWinner(n, day.entries[first.car].name, first.time));
+            const second = order[1];
+            caption(second && second.time - first.time < 0.005
+                ? CALLS.close(n, day.entries[first.car].name, first.time)
+                : heatWinner(n, day.entries[first.car].name, first.time));
+            // The visitor's car last in the heat: the crowd's groan.
+            const mineLast = state.event !== 'trial' && order.length > 1 && order[order.length - 1].car === 0;
+            if (mineLast) sound.groan();
             announce(heatSpoken(n, order.map((r, i) => ({ name: day.entries[r.car].name, time: r.time, place: i + 1 }))));
         }
         // Skip, once the first heat has been seen through.
@@ -1046,6 +1163,8 @@ function markSound() {
 function toggleSound(how) {
     const on = sound.toggle();
     markSound();
+    // The hall's murmur, if the hall is what is showing.
+    sound.murmur(on && state.phase !== 'bench' && state.phase !== 'loading');
     if (garage) garage.setSetting('sound', on);
     track('sound', { outcome: on ? 'on' : 'off', kind: how });
 }
@@ -1476,6 +1595,7 @@ function animate() {
     state.lastTime = now;
     if (state.phase === 'race') stepRace(dt);
     if (state.phase === 'weighin') stepWeighIn(dt);
+    if (crowd) crowd.pose(crowdMoment(now));
     if (state.phase === 'bench' && workbench) {
         tools.update(dt);
         // Align rolls the car off the turntable and back.
@@ -1544,5 +1664,10 @@ export function getState() {
 
 export const __test__ = {
     startRace, finishRace, stepBack, openClip, closeClip, shareStill, shareClip, showBench, tuneCar, sound,
-    meshes: () => meshes, benchMesh: () => benchMesh, garage: () => garage, bench: () => bench, holder: () => holder, el
+    meshes: () => meshes, benchMesh: () => benchMesh, garage: () => garage, bench: () => bench, holder: () => holder, crowd: () => crowd,
+    familyView: (v) => {
+        state.benchView = v;
+        if (state.phase === 'bench') benchCamera();
+    },
+    el
 };

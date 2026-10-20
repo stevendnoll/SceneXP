@@ -258,7 +258,7 @@ body {
     font-weight: 700;
 }
 
-/* The announcer, low and centered. */
+/* The announcer, low and centered, labeled as the announcer (M6.5). */
 .caption {
     display: none;
     position: fixed;
@@ -280,6 +280,16 @@ body {
 
 .caption.visible {
     display: block;
+}
+
+.caption::before {
+    content: "ANNOUNCER";
+    display: block;
+    margin-bottom: 0.15rem;
+    color: #ffcf6e;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
 }
 
 .skip-btn {

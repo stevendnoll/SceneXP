@@ -22,10 +22,12 @@ import { DERBY_CONFIG } from './config.min.js';
 /**
  * Where the camera goes for the bench on a `width` by `height` screen with
  * the panel covering `panel` ({ side: 'left' | 'bottom' | 'none', size } in
- * CSS pixels). Returns { distance, offsetX, offsetY }: the offsets are what
+ * CSS pixels), `hold` what it must hold (the turntable's radius unless told:
+ * the family card holds the two of them). Returns { distance, offsetX,
+ * offsetY }: the offsets are what
  * camera.setViewOffset takes to move the car into the clear part. Pure.
  */
-export function benchFraming({ width, height, panel = { side: 'none', size: 0 } }, C = DERBY_CONFIG) {
+export function benchFraming({ width, height, panel = { side: 'none', size: 0 }, hold = null }, C = DERBY_CONFIG) {
     const B = C.workbench;
     const left = panel.side === 'left' ? Math.min(panel.size, width * 0.8) : 0;
     const bottom = panel.side === 'bottom' ? Math.min(panel.size, height * 0.8) : 0;
@@ -35,7 +37,7 @@ export function benchFraming({ width, height, panel = { side: 'none', size: 0 } 
     const aspect = width / height;
     const half = tan * Math.min(freeH / height, aspect * (freeW / width));
     return {
-        distance: Math.max(B.minDistance, B.holdRadius / (B.fill * half)),
+        distance: Math.max(B.minDistance, (hold === null ? B.holdRadius : hold) / (B.fill * half)),
         offsetX: width / 2 - (left + freeW / 2),
         offsetY: height / 2 - freeH / 2
     };

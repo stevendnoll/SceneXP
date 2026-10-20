@@ -38,6 +38,7 @@ import { stationsFrom } from './profile.min.js';
 import { tuneGain } from './sim.min.js';
 import { createCarver } from './carve.min.js';
 import { createLivery } from './livery.min.js';
+import { createFamilyCard, familySummary } from './family.min.js';
 import * as U from './units.min.js';
 import {
     UI, POLISH, SAND, SAY, WEIGH, polishButton, ruleNote, RULE_NAMES, bestLine, trophyList, hostFirst, hostBack, hostStep, hostTune, FIX_SECTION
@@ -115,7 +116,9 @@ const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
  * bench-host-actions, bench-summary, bench-race, bench-status). `hooks`:
  * changed(build), race(build), units(units), forgot(build), raceAgain(event),
  * track(action, params), and for the workshop draft(carve | null),
- * cut(from, to, done), sand(build) and tune(kind, from, to, done). Returns
+ * cut(from, to, done), sand(build) and tune(kind, from, to, done), and for
+ * the family card family: { store, changed(family), view('family' | 'car') }.
+ * Returns
  * { build, update, arrive, say, openBox }.
  */
 export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}) {
@@ -220,6 +223,20 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
         ui.liverySum = livery.sum;
         ui.livery = createLivery(livery.body, kit(), C);
         body.appendChild(livery.d);
+
+        // Your family (M6.3): opening it turns the camera to the two of them.
+        if (hooks.family) {
+            const fam = box('family', UI.family, false);
+            ui.familySum = fam.sum;
+            ui.family = createFamilyCard(fam.body, kit(), hooks.family.store, (f) => {
+                ui.familySum.textContent = familySummary(f);
+                hooks.family.changed(f);
+            });
+            ui.familySum.textContent = familySummary(ui.family.family());
+            listen(fam.d, 'toggle', () => hooks.family.view(fam.d.open ? 'family' : 'car'));
+            body.appendChild(fam.d);
+            ui.familyBox = fam.d;
+        }
 
         // Paint.
         const paint = box('paint', UI.paint, true);
@@ -757,6 +774,7 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
         tool = 'cylinder';
         update();
         hooks.forgot(build);
+        if (ui.family) ui.family.reset();
         say(SAY.forgot(garage.nameOf(build)));
         hooks.track('garage-forget', {});
     }

@@ -108,8 +108,36 @@ export const UI = Object.freeze({
     tuneHelp: 'One tap a step. Each one shows what it does, and the host says what it was worth on the track.',
     tuneupsHeading: 'What each tune-up was worth',
     skipWeighIn: 'Skip the weigh-in',
-    weighInBack: 'Back to the workbench'
+    weighInBack: 'Back to the workbench',
+    // M6, the family card.
+    family: 'Your family',
+    dressing: 'Dressing',
+    grownUp: 'The grown-up',
+    kid: 'The kid',
+    shirt: 'Shirt',
+    pants: 'Pants',
+    skin: 'Skin tone',
+    hairColor: 'Hair color',
+    hairLength: 'Hair'
 });
+
+/**
+ * The announcer (M6.5), a few more calls than M1's: the gate, a different
+ * one each heat, the leader as the field comes off the slope, and a finish
+ * by a nose.
+ */
+export const CALLS = Object.freeze({
+    off: Object.freeze(['And they’re off!', 'There goes the gate!', 'Off they go!', 'Here they come, one last time!']),
+    lead: (name) => `${name} out in front!`,
+    leadMine: (name) => `${name} out in front, and the family is on its feet!`,
+    close: (n, name, time) => `By a nose! ${name} takes heat ${n} in ${clock(time)} seconds.`,
+    weighIn: 'Cars to the registration table, please.'
+});
+
+/** The gate's call for heat `n` of `total`. */
+export function gateCall(n, total) {
+    return n === total ? CALLS.off[3] : CALLS.off[(n - 1) % 3];
+}
 
 /** The polish button for the next step (four grits, then compound). */
 export function polishButton(level) {

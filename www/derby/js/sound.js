@@ -65,6 +65,7 @@ export function createSound(S, { win = typeof window === 'undefined' ? null : wi
     let includeSound = true;
     let noise = null;
     let rollVoice = null;
+    let murmurVoice = null;
 
     function build() {
         if (ctx || failed) return Boolean(ctx);
@@ -294,6 +295,44 @@ export function createSound(S, { win = typeof window === 'undefined' ? null : wi
             depth.connect(strokes.gain);
             lfo.start(ctx.currentTime + S.ahead);
             envelope(shot.gain, W.gain, 0.05, seconds, [shot.source, lfo]);
+        },
+        /** The crowd's murmur in the hall (M6.4), on or off: a band of
+         *  noise swaying slowly, faded in and out. */
+        murmur(onOff) {
+            if (!ctx) return;
+            const M = S.murmur;
+            if (!murmurVoice) {
+                const source = ctx.createBufferSource();
+                source.buffer = noise;
+                source.loop = true;
+                const band = ctx.createBiquadFilter();
+                band.type = 'bandpass';
+                band.frequency.value = M.hz;
+                band.Q.value = M.q;
+                const sway = ctx.createOscillator();
+                sway.frequency.value = M.wobbleHz;
+                const depth = ctx.createGain();
+                depth.gain.value = M.hz * 0.25;
+                sway.connect(depth);
+                depth.connect(band.frequency);
+                const gain = ctx.createGain();
+                gain.gain.value = 0;
+                source.connect(band);
+                band.connect(gain);
+                gain.connect(bus);
+                source.start(ctx.currentTime);
+                sway.start(ctx.currentTime);
+                murmurVoice = { gain };
+            }
+            glide(murmurVoice.gain.gain, onOff && audible() ? M.gain : 0, 0.6);
+        },
+        /** The crowd's groan: a fall of low voices. */
+        groan() {
+            if (!audible()) return;
+            const G = S.groan;
+            const shot = noiseShot('bandpass', G.from, 1.2);
+            shot.filter.frequency.exponentialRampToValueAtTime(G.to, ctx.currentTime + S.ahead + G.seconds);
+            envelope(shot.gain, G.gain, 0.12, G.seconds, [shot.source]);
         },
         /** A puff of graphite: a short breath of low noise. */
         puff() {

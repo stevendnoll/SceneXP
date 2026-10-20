@@ -272,6 +272,53 @@ export const DERBY_CONFIG = Object.freeze({
             tune: { deburr: true, polish: 5, graphite: true, align: true, sand: 1 } }
     ]),
 
+    /**
+     * The neighbors' families (M6.2, PRD The neighbors' cars), cheering by
+     * the track for their own car: who they are, as the shared figure draws
+     * them, and what they hold. Shirts default to their car's paint (team
+     * spirit); `shirt` overrides it. Skin and hair are cast-1.0.0 ids, `kid`
+     * a child's size. Props: thermos, sign, camcorder, megaphone, finger,
+     * clipboard, trophy. A sign says `sign`.
+     */
+    families: Object.freeze({
+        brick: Object.freeze([{ skin: 'light', hair: 'gray', length: 'short', pants: 'khaki', prop: 'thermos' }]),
+        hotdog: Object.freeze([
+            { kid: true, skin: 'tan', hair: 'black', length: 'short', pants: 'denim' },
+            { kid: true, skin: 'tan', hair: 'black', length: 'short', pants: 'denim' },
+            { skin: 'tan', hair: 'black', length: 'long', pants: 'black', shirt: 0xc8322b }
+        ]),
+        loaf: Object.freeze([
+            { kid: true, skin: 'fair', hair: 'auburn', length: 'long', pants: 'denim', prop: 'sign', sign: 'GO LOAF!' },
+            { skin: 'fair', hair: 'auburn', length: 'short', pants: 'khaki', shirt: 0x39b54a }
+        ]),
+        streak: Object.freeze([
+            { skin: 'medium', hair: 'darkBrown', length: 'buzz', pants: 'khaki', prop: 'camcorder' },
+            { kid: true, skin: 'medium', hair: 'darkBrown', length: 'short', pants: 'navy' }
+        ]),
+        tiger: Object.freeze([
+            { skin: 'brown', hair: 'black', length: 'short', pants: 'denim' },
+            { skin: 'brown', hair: 'black', length: 'long', pants: 'black' },
+            { kid: true, skin: 'brown', hair: 'black', length: 'buzz', pants: 'denim' },
+            { kid: true, skin: 'brown', hair: 'black', length: 'long', pants: 'navy', prop: 'sign', sign: 'ROAR!' }
+        ]),
+        comet: Object.freeze([
+            { skin: 'light', hair: 'blond', length: 'long', pants: 'denim', prop: 'megaphone' },
+            { kid: true, skin: 'light', hair: 'blond', length: 'short', pants: 'khaki' }
+        ]),
+        owl: Object.freeze([
+            { skin: 'deep', hair: 'black', length: 'buzz', pants: 'charcoal', prop: 'finger' },
+            { skin: 'fair', hair: 'brown', length: 'long', pants: 'denim', prop: 'finger' }
+        ]),
+        arrow: Object.freeze([
+            { skin: 'medium', hair: 'gray', length: 'long', pants: 'navy', prop: 'clipboard', shirt: 0xf2f2f2 },
+            { kid: true, skin: 'medium', hair: 'darkBrown', length: 'short', pants: 'khaki' }
+        ]),
+        phantom: Object.freeze([
+            { kid: true, skin: 'fair', hair: 'brown', length: 'long', pants: 'black', prop: 'trophy' },
+            { skin: 'fair', hair: 'brown', length: 'buzz', pants: 'charcoal' }
+        ])
+    }),
+
     /** Who each division faces, by field index (PRD, Check-in). The Outlaw
      *  exhibition (D4) faces the Hard division's three, the fastest. */
     divisions: Object.freeze({
@@ -492,6 +539,34 @@ export const DERBY_CONFIG = Object.freeze({
     }),
 
     /**
+     * The people in the hall (M6): the crowd standing on the bleachers, the
+     * families by the far side of the track near the finish, the visitor's
+     * own two at the front, and the volunteer behind the weigh-in table.
+     * All drawn from one baked figure (shared/js/crowd-1.0.0.js).
+     */
+    crowd: Object.freeze({
+        seed: 1971,
+        /** On the bleachers: a place this far apart, this share taken. */
+        spacing: 0.62,
+        fill: 0.6,
+        /** A share of the crowd is children, this size. */
+        kids: 0.22,
+        kidScale: 0.62,
+        /** Where the families stand: from this far before the finish line
+         *  back up the track, back from its far edge, a family this far
+         *  apart, where the finish camera sees them. */
+        familyFrom: 0.8,
+        familyGap: 0.95,
+        familyZ: -0.55,
+        /** How high a cheer hops, meters. */
+        hop: 0.07,
+        /** The visitor's family on the bench, beside the table (from the
+         *  table's middle), and the camera's reach when it looks at them. */
+        benchSpot: Object.freeze({ x: -1.15, z: 0.15 }),
+        familyHold: 0.95
+    }),
+
+    /**
      * The workbench on screen (M3, graybox): a table in its own small room
      * beyond the hall's start wall, the car on a turntable, the camera close
      * on it. The panel covers part of the screen (a bottom sheet on a phone,
@@ -583,7 +658,11 @@ export const DERBY_CONFIG = Object.freeze({
         drill: Object.freeze({ gain: 0.1, hz: 1100, q: 7, strokeHz: 30 }),
         puff: Object.freeze({ gain: 0.32, hz: 700, q: 0.6, seconds: 0.35 }),
         tap: Object.freeze({ gain: 0.42, hz: 260, seconds: 0.12 }),
-        buzz: Object.freeze({ gain: 0.16, hz: 140, seconds: 0.45 })
+        buzz: Object.freeze({ gain: 0.16, hz: 140, seconds: 0.45 }),
+        /** The hall (M6.4): the crowd's murmur under everything, and a
+         *  groan when the visitor's car comes in last in a heat. */
+        murmur: Object.freeze({ gain: 0.07, hz: 480, q: 0.9, wobbleHz: 0.35 }),
+        groan: Object.freeze({ gain: 0.22, from: 520, to: 260, seconds: 0.9 })
     }),
 
     look: Object.freeze({

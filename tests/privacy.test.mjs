@@ -55,8 +55,9 @@ const PERSISTENT = {
     'www/xo/js/colors.js': 'the team and field colors chosen in X’s and O’s',
     'www/xo/js/jump.js': 'whether Auto jump is on in X’s and O’s',
     // The shared figure store (promoted from www/leaves/js/cast.js on
-    // 2026-10-19), under each scene's own key: Leaf Blower's character.
-    'www/shared/js/cast-1.0.0.js': 'the character chosen in Leaf Blower',
+    // 2026-10-19), under each scene's own key: Leaf Blower's character, and
+    // Derby Day's family (M6, key derby-family).
+    'www/shared/js/cast-1.0.0.js': 'the character chosen in Leaf Blower, and the family dressed in Derby Day',
     'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaf Blower',
     // Released 2026-10-16, described in privacy.html as "Your home in
     // Whitestone Home Care".
@@ -173,6 +174,8 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // Derby Day's garage (M3, 2026-10-19): the cars, and how to clear them.
     expect(text).toMatch(/Derby Day saves your cars/i);
     expect(text).toMatch(/Forget my cars button/i);
+    // And the family dressed on the family card (M6), forgotten with them.
+    expect(text).toMatch(/how you dressed your family/i);
 
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.

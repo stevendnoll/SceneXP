@@ -1398,7 +1398,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Derby Day | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=5" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=6" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -1413,6 +1413,9 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/tools.min.js" rel="modulepreload"]
     link [href="js/tuneups.min.js" rel="modulepreload"]
     link [href="js/checkin.min.js" rel="modulepreload"]
+    link [href="js/crowd.min.js" rel="modulepreload"]
+    link [href="js/dressing.min.js" rel="modulepreload"]
+    link [href="js/family.min.js" rel="modulepreload"]
     link [href="js/profile.min.js" rel="modulepreload"]
     link [href="js/weights.min.js" rel="modulepreload"]
     link [href="js/units.min.js" rel="modulepreload"]
@@ -1430,9 +1433,12 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/decals.min.js" rel="modulepreload"]
     link [href="js/carve.min.js" rel="modulepreload"]
     link [href="js/livery.min.js" rel="modulepreload"]
+    link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=5" rel="stylesheet"]
+    link [href="css/experience.min.css?v=6" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -5499,7 +5505,7 @@ html [lang="en"]
             li
               strong
                 "Your cars in Derby Day."
-              "Derby Day saves your cars in your browser's local storage, up to four of them, so they are waiting on the workbench when you come back: each car's name, number, shape, paint, decals, weights and axle work, its best result in each race, your last race, the trophies you have won, and whether you chose metric units or turned the sound on. The Forget my cars button in the workbench's settings clears all of it on the spot."
+              "Derby Day saves your cars in your browser's local storage, up to four of them, so they are waiting on the workbench when you come back: each car's name, number, shape, paint, decals, weights and axle work, its best result in each race, your last race, the trophies you have won, how you dressed your family on the family card, and whether you chose metric units or turned the sound on. The Forget my cars button in the workbench's settings clears all of it on the spot."
             li
               strong
                 "Your home in Whitestone Home Care."
@@ -8102,6 +8108,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/fans.min.js" rel="modulepreload"]
     link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
     link [href="js/playbook.min.js" rel="modulepreload"]
+    link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=18" rel="stylesheet"]

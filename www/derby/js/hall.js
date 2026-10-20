@@ -1,8 +1,10 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * hall.js - the community hall around the track (M1, graybox): a gym
- * floor, the walls, bleachers along the far side, a banner, and the lights.
- * Dressed in M6 (pennants, the trophy table, the snack table, the crowd).
+ * hall.js - the community hall around the track (M1): a gym floor with its
+ * court lines (M6), the walls, bleachers along the far side, a banner, and
+ * the lights. Its dressing for the day (pennants, windows, hoops, chairs,
+ * the trophy and snack tables, the timer over the finish) is dressing.js,
+ * and the people in it are crowd.js.
  *
  * The cameras all sit on the +z side of the track (director.js), so the
  * bleachers stand on the -z side, behind the track in every shot, where a
@@ -27,7 +29,7 @@ export function buildHall(C = DERBY_CONFIG, { shadows = false } = {}) {
     const d = HALL.z1 - HALL.z0;
     const cx = (HALL.x0 + HALL.x1) / 2;
 
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ color: L.floor, roughness: 0.62 }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ map: courtTexture(L.floor), roughness: 0.55 }));
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(cx, 0, 0);
     floor.receiveShadow = shadows;
@@ -78,6 +80,42 @@ export function buildHall(C = DERBY_CONFIG, { shadows = false } = {}) {
     }
     group.add(sun);
     return { group, sun };
+}
+
+/** The gym floor: maple planks and a basketball court's lines, on a
+ *  canvas the size of the hall (24 m by 14 m, 40 px a meter). */
+function courtTexture(color) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 960;
+    canvas.height = 560;
+    const g = canvas.getContext('2d');
+    const px = 40;
+    g.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
+    g.fillRect(0, 0, canvas.width, canvas.height);
+    // The planks, a shade either way of the floor.
+    for (let y = 0; y < canvas.height; y += 6) {
+        g.fillStyle = (y / 6) % 3 === 0 ? 'rgba(90, 55, 20, 0.08)' : 'rgba(255, 240, 210, 0.05)';
+        g.fillRect(0, y, canvas.width, 3);
+    }
+    // The court: a center circle and two keys, the long way down the hall.
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    g.strokeStyle = 'rgba(250, 250, 245, 0.85)';
+    g.lineWidth = 3;
+    g.strokeRect(1 * px, 1 * px, canvas.width - 2 * px, canvas.height - 2 * px);
+    g.beginPath();
+    g.moveTo(cx, 1 * px);
+    g.lineTo(cx, canvas.height - 1 * px);
+    g.stroke();
+    g.beginPath();
+    g.arc(cx, cy, 1.8 * px, 0, Math.PI * 2);
+    g.stroke();
+    g.strokeStyle = 'rgba(31, 78, 140, 0.8)';
+    for (const x of [1 * px, canvas.width - 1 * px - 5.8 * px]) g.strokeRect(x, cy - 2.4 * px, 5.8 * px, 4.8 * px);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    return tex;
 }
 
 /** A banner's words on canvas. */
