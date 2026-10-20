@@ -998,6 +998,43 @@ describe('the faces are on screen (Steve\'s QA: "I never see the faces")', () =>
         }
     });
 
+    test('the timer\'s board reads from both sides: the LED on its broad faces, toward the cameras and the bleachers (Steve\'s QA, 2026-10-20)', async () => {
+        const Dr = await import('../www/derby/js/dressing.js');
+        const dressing = Dr.buildDressing(C);
+        dressing.group.updateMatrixWorld(true);
+        const board = dressing.group.getObjectByName('timer-board');
+        const geo = board.geometry;
+        const pos = geo.attributes.position;
+        const nrm = geo.attributes.normal;
+        const index = geo.index;
+        const isLed = (m) => Boolean(m.map);
+        const faces = [];
+        for (const g of geo.groups) {
+            const mat = board.material[g.materialIndex];
+            // The face's size and which way it looks, in the hall.
+            const pts = [];
+            for (let k = g.start; k < g.start + g.count; k++) pts.push(new THREE.Vector3().fromBufferAttribute(pos, index.getX(k)).applyMatrix4(board.matrixWorld));
+            const b = new THREE.Box3().setFromPoints(pts);
+            const size = b.getSize(new THREE.Vector3());
+            const area = [size.x * size.y, size.y * size.z, size.x * size.z].sort((p, q) => q - p)[0];
+            const n = new THREE.Vector3().fromBufferAttribute(nrm, index.getX(g.start)).transformDirection(board.matrixWorld);
+            faces.push({ led: isLed(mat), area, n });
+        }
+        const led = faces.filter((f) => f.led);
+        expect(led).toHaveLength(2);
+        // The two biggest faces are the LED's, one each way across the track.
+        const biggest = Math.max(...faces.map((f) => f.area));
+        for (const f of led) {
+            expect(f.area).toBeCloseTo(biggest, 6);
+            expect(Math.abs(f.n.z)).toBeCloseTo(1, 6);
+        }
+        expect(Math.sign(led[0].n.z)).toBe(-Math.sign(led[1].n.z));
+        // The near side, where the race and crowd cameras stand, sees one.
+        expect(led.some((f) => f.n.z > 0.9)).toBe(true);
+        // And it says what the timer says.
+        expect(dressing.timer.set({ heat: 3, total: 4, lanes: [{ time: 3.204, place: 3 }, null, null, null] })).toBe(true);
+    });
+
     test('the hoops wear nets', async () => {
         const Dr = await import('../www/derby/js/dressing.js');
         const d = Dr.buildDressing(C);

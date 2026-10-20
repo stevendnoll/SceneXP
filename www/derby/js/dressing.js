@@ -387,10 +387,15 @@ export function buildDressing(C = DERBY_CONFIG) {
     beam.position.set(fx, 1.3, 0);
     gantry.add(beam);
     const led = canvasTex(512, 256, () => {});
-    const display = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.38, 0.78), [post, post, post, post,
-        new THREE.MeshBasicMaterial({ map: led.tex }), post]);
+    // The board across the track, the LED on both broad faces: toward the
+    // near side's cameras and toward the bleachers (Steve's QA, 2026-10-20:
+    // it had been on the box's thin edge, so the board read as a black
+    // slab with color down one side). BoxGeometry's faces go +x, -x, +y,
+    // -y, +z, -z, and each reads the right way round from outside.
+    const ledFace = new THREE.MeshBasicMaterial({ map: led.tex });
+    const display = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.38, 0.06), [post, post, post, post, ledFace, ledFace]);
+    display.name = 'timer-board';
     display.position.set(fx, 1.52, 0);
-    display.rotation.y = -Math.PI / 2;
     gantry.add(display);
     let shown = timerRows(null).join('|');
     const draw = (rows) => {
