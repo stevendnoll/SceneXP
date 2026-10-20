@@ -1,11 +1,14 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * sound.js - Derby Day's sound (M2): the gate dropping, the wheels on the
- * aluminum, the timer's beep as each car crosses, and the crowd's murmur.
+ * aluminum, the countdown before each heat, and the timer's beep as each
+ * car crosses.
  *
- * NO CHEER, NO GROAN (Steve's QA, 2026-10-19): a crowd made from noise
- * trembling a few times a second read as a rasp, not applause, so both
- * came out. A crowd's reaction is the families jumping, not a sound.
+ * NO CROWD AT ALL (Steve's QA): a crowd made from noise reads as a rasp or
+ * as static, not as people. The cheer and the groan came out 2026-10-19,
+ * and the hall's murmur under everything 2026-10-20 (it sounded like
+ * static, and it hid the countdown's beeps). A crowd's reaction is the
+ * people moving, not a sound.
  *
  * MUTED BY DEFAULT (D2), with the floating speaker button and M, as
  * www/leaves has. Nothing is remembered yet: the settings join the garage's
@@ -54,7 +57,7 @@ function quietly(p) {
 /**
  * The sound, off. `S` is config.sound, `win` the window (for its
  * AudioContext). Returns { isOn, setOn, toggle, setLevel, ensure, roll,
- * gate, beep, work, puff, tap, buzz, murmur, recordStream, setRecording,
+ * gate, count, beep, work, puff, tap, buzz, recordStream, setRecording,
  * dispose }.
  */
 export function createSound(S, { win = typeof window === 'undefined' ? null : window } = {}) {
@@ -70,7 +73,6 @@ export function createSound(S, { win = typeof window === 'undefined' ? null : wi
     let includeSound = true;
     let noise = null;
     let rollVoice = null;
-    let murmurVoice = null;
 
     function build() {
         if (ctx || failed) return Boolean(ctx);
@@ -243,12 +245,14 @@ export function createSound(S, { win = typeof window === 'undefined' ? null : wi
             const t = tone('sine', B.hz);
             envelope(t.gain, B.gain, 0.004, B.seconds, [t.osc]);
         },
-        /** The countdown's beep (3, 2, 1), and the octave above for Go. */
+        /** The countdown's beep (3, 2, 1), and the octave above, held
+         *  longer, for Go: a triangle, brighter than the crossing's sine, so
+         *  it carries on a laptop's speakers. */
         count(go = false) {
             if (!audible()) return;
             const K = S.count;
-            const t = tone('sine', go ? K.goHz : K.hz);
-            envelope(t.gain, K.gain, 0.004, K.seconds, [t.osc]);
+            const t = tone(K.type, go ? K.goHz : K.hz);
+            envelope(t.gain, K.gain, 0.006, go ? K.goSeconds : K.seconds, [t.osc]);
         },
         /** The saw (`saw`) or the sandpaper (`sand`), for `seconds`: noise
          *  through a band, its loudness pulsing with each stroke. */
@@ -274,36 +278,6 @@ export function createSound(S, { win = typeof window === 'undefined' ? null : wi
             depth.connect(strokes.gain);
             lfo.start(ctx.currentTime + S.ahead);
             envelope(shot.gain, W.gain, 0.05, seconds, [shot.source, lfo]);
-        },
-        /** The crowd's murmur in the hall (M6.4), on or off: a band of
-         *  noise swaying slowly, faded in and out. */
-        murmur(onOff) {
-            if (!ctx) return;
-            const M = S.murmur;
-            if (!murmurVoice) {
-                const source = ctx.createBufferSource();
-                source.buffer = noise;
-                source.loop = true;
-                const band = ctx.createBiquadFilter();
-                band.type = 'bandpass';
-                band.frequency.value = M.hz;
-                band.Q.value = M.q;
-                const sway = ctx.createOscillator();
-                sway.frequency.value = M.wobbleHz;
-                const depth = ctx.createGain();
-                depth.gain.value = M.hz * 0.25;
-                sway.connect(depth);
-                depth.connect(band.frequency);
-                const gain = ctx.createGain();
-                gain.gain.value = 0;
-                source.connect(band);
-                band.connect(gain);
-                gain.connect(bus);
-                source.start(ctx.currentTime);
-                sway.start(ctx.currentTime);
-                murmurVoice = { gain };
-            }
-            glide(murmurVoice.gain.gain, onOff && audible() ? M.gain : 0, 0.6);
         },
         /** A puff of graphite: a short breath of low noise. */
         puff() {

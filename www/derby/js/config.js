@@ -663,9 +663,10 @@ export const DERBY_CONFIG = Object.freeze({
         roll: Object.freeze({ gain: 0.26, hz: 900, q: 0.8, top: 3200 }),
         gate: Object.freeze({ gain: 0.5, clickHz: 2400, thunkHz: 150, seconds: 0.14 }),
         beep: Object.freeze({ gain: 0.16, hz: 1568, seconds: 0.09 }),
-        /** The countdown: a low beep a count, and the octave above as the
-         *  gate drops. */
-        count: Object.freeze({ gain: 0.14, hz: 784, goHz: 1568, seconds: 0.16 }),
+        /** The countdown: a beep a count, and the octave above, held
+         *  longer, as the gate drops (Steve's QA, 2026-10-20: the first
+         *  beeps, a soft sine, were not heard over the murmur). */
+        count: Object.freeze({ type: 'triangle', gain: 0.3, hz: 880, goHz: 1760, seconds: 0.22, goSeconds: 0.45 }),
         /** The workshop (M4): the coping saw's rasp, a stroke a fifth of a
          *  second, and the sandpaper's hush, slower. */
         saw: Object.freeze({ gain: 0.22, hz: 2200, q: 1.4, strokeHz: 5 }),
@@ -677,9 +678,7 @@ export const DERBY_CONFIG = Object.freeze({
         drill: Object.freeze({ gain: 0.1, hz: 1100, q: 7, strokeHz: 30 }),
         puff: Object.freeze({ gain: 0.32, hz: 700, q: 0.6, seconds: 0.35 }),
         tap: Object.freeze({ gain: 0.42, hz: 260, seconds: 0.12 }),
-        buzz: Object.freeze({ gain: 0.16, hz: 140, seconds: 0.45 }),
-        /** The hall (M6.4): the crowd's murmur under everything. */
-        murmur: Object.freeze({ gain: 0.07, hz: 480, q: 0.9, wobbleHz: 0.35 })
+        buzz: Object.freeze({ gain: 0.16, hz: 140, seconds: 0.45 })
     }),
 
     look: Object.freeze({

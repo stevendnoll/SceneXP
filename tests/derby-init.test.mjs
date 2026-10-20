@@ -148,16 +148,22 @@ test('Race it opens check-in with the five events and the garage\'s car, and Go 
     const first = state.day.plan.heats[0];
     const stage = first.segments.find((s) => s.kind === 'staging');
     const counts = [];
+    const beeps = jest.spyOn(main.__test__.sound, 'count');
     for (const left of [2, 1.2, 0.4]) {
         frames(main, stage.to - left - state.clock);
         counts.push(shown('countdown') ? dom.el('countdown').textContent : '');
     }
     expect(counts).toEqual(['3', '2', '1']);
+    // A beep as each number appears (Steve's QA, 2026-10-20).
+    expect(beeps.mock.calls).toEqual([[false], [false], [false]]);
     // The gate's call is spoken as well as captioned.
     const gate = first.segments.find((s) => s.kind === 'gate');
     frames(main, (gate.from + gate.to) / 2 - state.clock);
     expect(dom.el('race-status').textContent).toBe('And they’re off!');
     expect(dom.el('countdown').textContent).toBe('Go!');
+    // And the high one for Go.
+    expect(beeps.mock.calls).toEqual([[false], [false], [false], [true]]);
+    beeps.mockRestore();
     frames(main, 1.5);
     expect(shown('countdown')).toBe(false);
     frames(main, first.end - 0.4 - state.clock);

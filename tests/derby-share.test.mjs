@@ -147,6 +147,37 @@ describe('the sound', () => {
         expect(roll.gain.value).toBe(0);
     });
 
+    test('the countdown beeps (Steve\'s QA, 2026-10-20): a bright beep a count, the octave above held longer for Go', () => {
+        const a = fakeAudio();
+        const s = Sound.createSound(C.sound, { win: a.win });
+        s.setOn(true);
+        s.count();
+        const beep = a.made.filter((n) => n.kind === 'osc').pop();
+        expect(beep.type).toBe('triangle');
+        expect(beep.frequency.value).toBe(C.sound.count.hz);
+        s.count(true);
+        const go = a.made.filter((n) => n.kind === 'osc').pop();
+        expect(go.frequency.value).toBe(2 * C.sound.count.hz);
+        expect(C.sound.count.goSeconds).toBeGreaterThan(C.sound.count.seconds);
+        // Louder than a car crossing the line, so it is heard over the wheels.
+        expect(C.sound.count.gain).toBeGreaterThan(C.sound.beep.gain);
+        // Muted, nothing.
+        s.setOn(false);
+        const before = a.made.length;
+        s.count();
+        expect(a.made.length).toBe(before);
+    });
+
+    test('no crowd noise at all (Steve\'s QA, 2026-10-20: the murmur sounded like static)', () => {
+        const a = fakeAudio();
+        const s = Sound.createSound(C.sound, { win: a.win });
+        s.setOn(true);
+        expect(s.murmur).toBeUndefined();
+        expect(C.sound.murmur).toBeUndefined();
+        // The only noise that loops is the wheels'.
+        expect(a.count('source')).toBe(1);
+    });
+
     test('a one-shot lets go of its nodes when it ends', () => {
         const a = fakeAudio();
         const s = Sound.createSound(C.sound, { win: a.win });

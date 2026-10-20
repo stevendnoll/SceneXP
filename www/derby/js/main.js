@@ -434,7 +434,6 @@ function checkinShown() {
 function showCheckin() {
     hideWeighIn();
     state.phase = 'checkin';
-    sound.murmur(true);
     if (dressing) dressing.timer.set(null);
     hideResults();
     hideBench();
@@ -471,7 +470,6 @@ function hideBench() {
 function showBench(kind = 'back', tip = null) {
     hideWeighIn();
     state.phase = 'bench';
-    sound.murmur(false);
     placeCrowd();
     hideResults();
     setRaceChrome(false);
@@ -1310,8 +1308,6 @@ function markSound() {
 function toggleSound(how) {
     const on = sound.toggle();
     markSound();
-    // The hall's murmur, if the hall is what is showing.
-    sound.murmur(on && state.phase !== 'bench' && state.phase !== 'loading');
     if (garage) garage.setSetting('sound', on);
     track('sound', { outcome: on ? 'on' : 'off', kind: how });
 }
