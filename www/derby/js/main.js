@@ -1,11 +1,15 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * main.js - Derby Day's orchestrator (M1, graybox): the boot, the check-in
- * card, a race day played back in the hall, and the results.
+ * main.js - Derby Day's orchestrator (graybox): the boot, the workbench
+ * (M3), the check-in card, a race day played back in the hall, the results
+ * and the share clip.
  *
- * THE LOOP, M1 (TASKS, M1): pick an event (Easy, Medium, Hard, Time Trial)
- * and a car (the four presets until the workshop opens), Go, four heats with
- * every car in every lane, the board. Race again, or choose another race.
+ * THE LOOP (TASKS, M3): every arrival lands at the workbench, the
+ * visitor's car on the turntable and the host saying where things stand.
+ * Race it, pick an event (Easy, Medium, Hard, Time Trial, the Outlaw
+ * exhibition), Go, four heats with every car in every lane, the board. Race
+ * again, tune the car, or choose another race. The garage (garage.js) keeps
+ * the cars, their results and the trophies in this browser.
  *
  * THE RACE IS DECIDED BEFORE THE FIRST HEAT (PLANNING, Principles). Go runs
  * the sim for every car in every lane with its samples recorded (sim.js,
@@ -19,17 +23,22 @@
  * copy.js every word, phases.js where an action leads.
  */
 
-import { DERBY_CONFIG, IN } from './config.min.js';
+import { DERBY_CONFIG, IN, OZ } from './config.min.js';
 import { describeCar, buildFromDesign, buildFromField } from './car.min.js';
 import { runRace, explain } from './sim.min.js';
 import { buildTrack, carPose } from './track.min.js';
 import { buildHall } from './hall.min.js';
 import { buildCarMesh } from './carmesh.min.js';
+import { buildWorkbench, benchFraming } from './workbench.min.js';
+import { createGarage, canEnter } from './garage.min.js';
+import { createBench } from './bench.min.js';
+import * as U from './units.min.js';
 import { planDay, momentAt, positionAt } from './playback.min.js';
 import { shotFor, framing } from './director.min.js';
 import { createTimer, fillResults, h } from './board.min.js';
 import {
-    EVENTS, UI, OFF, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock
+    EVENTS, UI, OFF, ENTRY, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock,
+    gains, moreLine, sheetLines, trophyLine, harderLabel, HARDER
 } from './copy.min.js';
 import { nextPhase } from './phases.min.js';
 import { createSound } from './sound.min.js';
@@ -51,10 +60,14 @@ const state = {
     isMobile: false,
     reducedMotion: false,
     lastTime: 0,
-    /** The check-in card's choices. */
+    /** The check-in card's choices: the event, the car racing it (a
+     *  garage id, the bench car to start), and the Time Trial's cars. */
     event: 'easy',
-    preset: 'weekend',
-    trial: new Set(['weekend', 'full']),
+    entrant: null,
+    trial: new Set(),
+    /** The turntable's turn, and a drag turning it by hand. */
+    spin: 0,
+    drag: null,
     /** The race day being played: { entries, cars, race, plan }. */
     day: null,
     clock: 0,
@@ -80,6 +93,10 @@ let camera;
 let trackParts;
 let meshes = [];
 let timer;
+let garage;
+let bench;
+let workbench;
+let benchMesh = null;
 let cleanupController = null;
 const el = {};
 
@@ -110,16 +127,18 @@ function updateLoadingStatus(message, progress) {
 
 async function init() {
     for (const id of ['game-canvas', 'blocker', 'event-options', 'car-options', 'car-legend', 'go-btn', 'checkin-note',
-        'help-btn', 'timer', 'skip-btn', 'you-tag', 'caption', 'race-status', 'results-modal', 'results-title',
+        'checkin-back', 'help-btn', 'timer', 'skip-btn', 'you-tag', 'caption', 'race-status', 'results-modal', 'results-title',
         'results-event', 'results-table', 'results-lanes', 'results-why', 'results-why-heading', 'results-again',
-        'results-another', 'results-status', 'explore-link', 'sound-btn', 'results-share', 'clip-modal', 'clip-title',
-        'clip-stage', 'clip-progress', 'clip-sound', 'clip-share', 'clip-image', 'clip-again', 'clip-close', 'clip-status']) {
+        'results-another', 'results-tune', 'results-harder', 'results-trophy', 'results-status', 'explore-link', 'sound-btn',
+        'results-share', 'clip-modal', 'clip-title', 'clip-stage', 'clip-progress', 'clip-sound', 'clip-share', 'clip-image',
+        'clip-again', 'clip-close', 'clip-status', 'bench', 'bench-title', 'bench-body', 'bench-host', 'bench-host-actions',
+        'bench-summary', 'bench-race', 'bench-status']) {
         el[id] = document.getElementById(id);
     }
     if (!el['game-canvas'] || typeof THREE === 'undefined') return;
     // The markup starts the cards hidden. Said again here, so the page never
     // begins believing one is up.
-    for (const id of ['results-modal', 'clip-modal']) if (el[id]) el[id].classList.add('hidden');
+    for (const id of ['results-modal', 'clip-modal', 'bench']) if (el[id]) el[id].classList.add('hidden');
     // The clip's sound starts on every visit (D2), whatever a browser that
     // restores form state across a reload remembers.
     if (el['clip-sound']) el['clip-sound'].checked = true;
@@ -128,8 +147,21 @@ async function init() {
     state.reducedMotion = prefersReducedMotion();
     setMobile(state.isMobile);
     sound.setLevel(state.isMobile ? CONFIG.sound.masterMobile : CONFIG.sound.master);
+    garage = createGarage({ C: CONFIG });
+    // The sound as the visitor left it (D20). The audio itself waits for the
+    // first tap or key, which is all a browser allows.
+    if (garage.settings().sound) {
+        sound.setOn(true);
+        const wake = () => sound.ensure();
+        window.addEventListener('pointerdown', wake, { once: true });
+        window.addEventListener('keydown', wake, { once: true });
+    }
     markSound();
     if (el['explore-link']) el['explore-link'].href = CONFIG.site.home.path;
+    const last = garage.last();
+    if (last && last.event) state.event = last.event;
+    state.entrant = garage.bench().id;
+    state.trial = new Set([garage.bench().id]);
     buildCheckin();
 
     updateLoadingStatus('Verifying your browser…', 10);
@@ -154,6 +186,8 @@ async function init() {
     scene.add(buildHall(CONFIG, { shadows }).group);
     trackParts = buildTrack(CONFIG, { shadows });
     scene.add(trackParts.group);
+    workbench = buildWorkbench(CONFIG);
+    scene.add(workbench.group);
     timer = createTimer(el.timer);
     // The cars waiting at the pin behind the check-in card: the visitor's
     // chosen car and the first division's, so the track is not empty.
@@ -161,6 +195,30 @@ async function init() {
     idleCamera();
 
     setupEventListeners();
+    bench = createBench(el, garage, {
+        changed: showBenchCar,
+        race: () => {
+            track('bench-race', { kind: garage.bench().design, outcome: `class=${garage.bench().rules}&cars=${garage.cars().length}` });
+            state.entrant = garage.bench().id;
+            if (!state.trial.has(state.entrant)) state.trial = new Set([state.entrant]);
+            showCheckin();
+        },
+        units: () => showBenchCar(garage.bench()),
+        forgot: (b) => {
+            state.entrant = b.id;
+            state.trial = new Set([b.id]);
+            state.event = 'easy';
+            showBenchCar(b);
+        },
+        raceAgain: (event) => {
+            state.event = event;
+            state.entrant = garage.bench().id;
+            showCheckin();
+            startRace('host');
+        },
+        track
+    }, CONFIG, { signal: cleanupController.signal });
+    showBenchCar(garage.bench());
 
     updateLoadingStatus('Warming up…', 85);
     await warmShaders(renderer, [{ scene, camera }]);
@@ -171,6 +229,9 @@ async function init() {
         state.isLoaded = true;
         state.phase = nextPhase(state.phase, 'loaded');
         if (el['sound-btn']) el['sound-btn'].classList.add('visible');
+        // The car the host is about to introduce is kept from the start.
+        if (garage.firstVisit) garage.keep();
+        showBench(garage.firstVisit ? 'first' : 'back');
     }, 400);
 
     track('session-start', { kind: state.isMobile ? 'touch' : 'desktop' });
@@ -198,8 +259,9 @@ function option(type, name, value, label, blurb, checked, onChange) {
 
 const checkin = { events: [], cars: [] };
 
-/** The event and car choices, from copy.js and the presets. Rebuilt when
- *  Time Trial (several cars) and the divisions (one) trade places. */
+/** The event and car choices, from copy.js and the garage. Rebuilt when
+ *  Time Trial (several cars) and the other events (one) trade places, and
+ *  each time the card opens, since the bench may have changed a car. */
 function buildCheckin() {
     const box = el['event-options'];
     if (box) {
@@ -218,6 +280,16 @@ function buildCheckin() {
     buildCars();
 }
 
+/** A car's line on the check-in card: its shape, weight and class, or why
+ *  it cannot enter this event. */
+function carBlurb(build, why) {
+    if (why === 'illegal') return ENTRY.illegal;
+    if (why === 'outlawOnly') return ENTRY.outlawOnly;
+    if (why === 'standardOnly') return ENTRY.standardOnly;
+    const units = garage.settings().units;
+    return `${CONFIG.designs[build.design].label} · ${U.mass(describeCar(build, CONFIG).mass, units)} · ${build.rules === 'outlaw' ? UI.outlaw : UI.standard}`;
+}
+
 function buildCars() {
     const box = el['car-options'];
     const trial = state.event === 'trial';
@@ -225,21 +297,32 @@ function buildCars() {
     note('');
     if (!box) return;
     box.textContent = '';
-    checkin.cars = CONFIG.presets.map((p) => {
-        const on = trial ? state.trial.has(p.id) : p.id === state.preset;
-        const o = option(trial ? 'checkbox' : 'radio', 'car', p.id, p.name, p.blurb, on, (input) => {
+    const cars = garage.cars();
+    const why = new Map(cars.map((c) => [c.id, canEnter(c, state.event, CONFIG)]));
+    // The car racing a single event: the one chosen, or the first that may.
+    if (!trial && why.get(state.entrant) !== 'ok') {
+        const first = cars.find((c) => why.get(c.id) === 'ok');
+        if (first) state.entrant = first.id;
+    }
+    checkin.cars = cars.map((c) => {
+        const ok = why.get(c.id) === 'ok';
+        const on = ok && (trial ? state.trial.has(c.id) : c.id === state.entrant);
+        const o = option(trial ? 'checkbox' : 'radio', 'car', c.id, garage.nameOf(c), carBlurb(c, why.get(c.id)), on, (input) => {
             if (trial) {
-                if (input.checked) state.trial.add(p.id);
-                else state.trial.delete(p.id);
-                note(state.trial.size ? '' : UI.pickOne);
+                if (input.checked) state.trial.add(c.id);
+                else state.trial.delete(c.id);
+                note(entriesFor('trial').length ? '' : UI.pickOne);
             } else if (input.checked) {
-                state.preset = p.id;
+                state.entrant = c.id;
             }
             if (state.phase === 'checkin') stageCars(entriesFor(state.event));
         });
+        o.input.disabled = !ok;
+        if (!ok) o.wrap.classList.add('is-off');
         box.appendChild(o.wrap);
         return o;
     });
+    if (!cars.some((c) => why.get(c.id) === 'ok')) note(ENTRY.noneEligible);
 }
 
 function note(text) {
@@ -256,7 +339,9 @@ function checkinShown() {
 function showCheckin() {
     state.phase = 'checkin';
     hideResults();
+    hideBench();
     setRaceChrome(false);
+    buildCheckin();
     if (el.blocker) el.blocker.classList.remove('hidden');
     stageCars(entriesFor(state.event));
     idleCamera();
@@ -264,27 +349,101 @@ function showCheckin() {
     if (go && typeof go.focus === 'function') go.focus({ preventScroll: true });
 }
 
-// ---- A race day -------------------------------------------------------------
+// ---- The workbench (M3) ---------------------------------------------------------
 
-/** A preset's build. */
-function presetBuild(p) {
-    return buildFromDesign(p.design, { tune: p.tune, ballast: p.ballast }, CONFIG);
+function benchShown() {
+    return Boolean(el.bench) && !el.bench.classList.contains('hidden');
+}
+
+function hideBench() {
+    if (el.bench) el.bench.classList.add('hidden');
+    if (camera && camera.clearViewOffset) camera.clearViewOffset();
 }
 
 /**
- * The cars an event races: the visitor's preset and the division's three
- * neighbors, or the Time Trial's chosen presets. Each { build, name, color,
- * mine }.
+ * The bench (every arrival, back from check-in, and Tune my car): the panel
+ * up, the camera on the turntable. `kind` is what the host says: 'first',
+ * 'back', 'step' or 'tune'.
+ */
+function showBench(kind = 'back', tip = null) {
+    state.phase = 'bench';
+    hideResults();
+    setRaceChrome(false);
+    if (el.blocker) el.blocker.classList.add('hidden');
+    if (el.bench) el.bench.classList.remove('hidden');
+    bench.arrive(kind, { tip, last: garage.last() });
+    showBenchCar(garage.bench());
+    benchCamera();
+    const title = el['bench-title'];
+    if (title && typeof title.focus === 'function') title.focus({ preventScroll: true });
+}
+
+/** The car on the turntable, the sheet on the pegboard, the scale's
+ *  reading and the trophy shelf, from the bench's build. */
+function showBenchCar(build) {
+    if (!workbench) return;
+    if (benchMesh) {
+        workbench.spinner.remove(benchMesh.group);
+        benchMesh.dispose();
+    }
+    const car = describeCar(build, CONFIG);
+    benchMesh = buildCarMesh(build, car, { paint: build.paint, pockets: true }, CONFIG);
+    benchMesh.group.position.set(CONFIG.kit.length / 2, 0, 0);
+    workbench.spinner.add(benchMesh.group);
+    const R = CONFIG.rules[build.rules];
+    workbench.setSheet(sheetLines(build.rules, R, {
+        mass: (kg) => `${(kg / OZ).toFixed(2)} oz`,
+        length: (m) => `${Math.round((m / IN) * 1000) / 1000} in`
+    }), build.rules === 'outlaw');
+    workbench.setScale(U.mass(car.mass, garage.settings().units));
+    workbench.setTrophies(garage.trophies());
+}
+
+/** The panel's size on screen, for framing the car beside or above it. */
+function benchPanel() {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const side = W >= CONFIG.workbench.sideFrom;
+    const r = el.bench && el.bench.getBoundingClientRect ? el.bench.getBoundingClientRect() : null;
+    const size = r ? (side ? r.right : H - r.top) : 0;
+    return { side: side ? 'left' : 'bottom', size: Math.max(0, size || 0) };
+}
+
+function benchCamera() {
+    if (!camera || !workbench) return;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const f = benchFraming({ width: W, height: H, panel: benchPanel() }, CONFIG);
+    camera.aspect = W / H;
+    camera.updateProjectionMatrix();
+    if (camera.setViewOffset) camera.setViewOffset(W, H, f.offsetX, f.offsetY, W, H);
+    const [dx, dy, dz] = CONFIG.workbench.dir;
+    const n = Math.hypot(dx, dy, dz);
+    const t = workbench.target;
+    camera.position.set(t.x + (dx / n) * f.distance, t.y + (dy / n) * f.distance, t.z + (dz / n) * f.distance);
+    camera.lookAt(t.x, t.y, t.z);
+}
+
+// ---- A race day -------------------------------------------------------------
+
+/**
+ * The cars an event races: the visitor's entrant and the event's three
+ * neighbors, or the Time Trial's chosen cars from the garage (an Outlaw car
+ * named as one, so the board marks it, D4). Each { build, name, paint,
+ * color, mine, id, outlaw }. Only cars that may enter are entered.
  */
 export function entriesFor(eventId) {
+    const mine = (b, mark) => ({
+        build: b, name: mark && b.rules === 'outlaw' ? `${garage.nameOf(b)} (Outlaw)` : garage.nameOf(b),
+        paint: b.paint, mine: true, id: b.id, outlaw: b.rules === 'outlaw'
+    });
     if (eventId === 'trial') {
-        return CONFIG.presets.filter((p) => state.trial.has(p.id))
-            .map((p) => ({ build: presetBuild(p), name: p.name, color: p.color, mine: true, id: p.id }));
+        return garage.cars().filter((c) => state.trial.has(c.id) && canEnter(c, 'trial', CONFIG) === 'ok').map((c) => mine(c, true));
     }
-    const p = CONFIG.presets.find((x) => x.id === state.preset) || CONFIG.presets[0];
+    const car = garage.cars().find((c) => c.id === state.entrant) || garage.bench();
     const field = (CONFIG.divisions[eventId] || CONFIG.divisions.easy).map((i) => CONFIG.field[i]);
-    return [{ build: presetBuild(p), name: p.name, color: p.color, mine: true, id: p.id }]
-        .concat(field.map((f) => ({ build: buildFromField(f, CONFIG), name: f.name, color: CONFIG.fieldColors[f.id], mine: false, id: f.id })));
+    const neighbors = field.map((f) => ({ build: buildFromField(f, CONFIG), name: f.name, color: CONFIG.fieldColors[f.id], mine: false, id: f.id }));
+    return canEnter(car, eventId, CONFIG) === 'ok' ? [mine(car, false)].concat(neighbors) : neighbors;
 }
 
 /** Put cars on the track, at the pin, each in its first lane. */
@@ -297,7 +456,7 @@ function stageCars(entries) {
     const shadows = CONFIG.render.shadows && !state.isMobile;
     meshes = entries.map((e) => {
         const car = describeCar(e.build, CONFIG);
-        const m = buildCarMesh(e.build, car, { color: e.color, shadows }, CONFIG);
+        const m = buildCarMesh(e.build, car, { paint: e.paint, color: e.color, shadows, pockets: e.mine }, CONFIG);
         m.car = car;
         scene.add(m.group);
         return m;
@@ -318,20 +477,21 @@ function placeCar(mesh, s, lane) {
 function startRace(how = 'go') {
     if (!state.isLoaded) return false;
     const entries = entriesFor(state.event);
-    if (!entries.length) {
-        note(UI.pickOne);
+    if (!entries.some((e) => e.mine)) {
+        note(state.event === 'trial' ? UI.pickOne : ENTRY.noneEligible);
         return false;
     }
     if (entries.length > LANES) {
         note(UI.tooMany);
         return false;
     }
+    hideBench();
     stageCars(entries);
     const cars = meshes.map((m) => m.car);
     const race = runRace(cars, CONFIG, { record: CONFIG.timing.record });
     const focus = state.event === 'trial' ? null : 0;
     const plan = planDay(race, { focus, reducedMotion: state.reducedMotion }, CONFIG);
-    state.day = { entries, cars, race, plan, mine: new Set(entries.map((e, i) => (e.mine ? i : -1)).filter((i) => i >= 0)) };
+    state.day = { entries, cars, race, plan, event: state.event, mine: new Set(entries.map((e, i) => (e.mine ? i : -1)).filter((i) => i >= 0)) };
     state.clock = 0;
     state.said = '';
     state.lastS = entries.map(() => 0);
@@ -481,6 +641,7 @@ function finishRace(how) {
     last.forEach((r, i) => placeCar(meshes[i], positionAt(day.race.runs[i][r.lane], 99, CONFIG), r.lane));
     setRaceChrome(false);
     aim(framing('finish', trackParts.path, CONFIG.track.courseLength, window.innerWidth / window.innerHeight, CONFIG));
+    day.won = recordDay(day);
     showResults();
     const place = day.race.standings.indexOf(0) + 1;
     sound.roll(0);
@@ -488,36 +649,111 @@ function finishRace(how) {
     track(how === 'skip' ? 'race-skip' : 'race-end', { kind: state.event, outcome: state.event === 'trial' ? `cars=${day.entries.length}` : `place=${place}` });
 }
 
-/** The visitor's Why lines: their car against the kit and the best. */
-export function whyFor(day) {
-    if (state.event === 'trial') {
-        return trialLines(day.race.standings.map((i) => ({ name: day.entries[i].name, average: day.race.average[i] })));
+/**
+ * The race into the garage (M3.6): each of the visitor's cars' result, its
+ * best kept, and a division won put on the trophy shelf. Returns
+ * { event, isNew } for a win, or null.
+ */
+function recordDay(day) {
+    const event = day.event;
+    if (event === 'trial') {
+        // The winner last, so it is the result the host remembers.
+        for (const i of day.race.standings.slice().reverse()) garage.record(day.entries[i].id, 'trial', { average: day.race.average[i] });
+        return null;
     }
-    const car = day.cars[0];
+    const place = day.race.standings.indexOf(0) + 1;
+    garage.record(day.entries[0].id, event, { place, average: day.race.average[0] });
+    if (place !== 1) return null;
+    const isNew = garage.award(event);
+    return { event, isNew };
+}
+
+/** What the Why lines are measured against: the kit block, and the best
+ *  shape in the hall. */
+function whyRefs() {
     const kit = describeCar(buildFromDesign('block', {}, CONFIG), CONFIG);
-    const refs = {
+    return {
         kitMass: kit.mass,
         blockCdA: kit.cdA,
         bestCdA: describeCar(buildFromField(CONFIG.field[CONFIG.field.length - 1], CONFIG), CONFIG).cdA,
         idealBalance: 0.75 * IN
     };
-    return whyLines(explain(car, refs, CONFIG), car, refs.idealBalance);
+}
+
+/** The limit and the sweet spot as the Why lines say them. */
+function whyWords(car) {
+    const units = garage.settings().units;
+    return {
+        maxMass: car.rules === 'outlaw' ? '16 ounces' : '5 ounces',
+        idealText: units === 'metric' ? U.length(0.75 * IN, 'metric') : 'three quarters of an inch'
+    };
+}
+
+/** The visitor's Why lines: their car against the kit and the best. */
+export function whyFor(day) {
+    if (day.event === 'trial') {
+        return trialLines(day.race.standings.map((i) => ({ name: day.entries[i].name, average: day.race.average[i] })));
+    }
+    const car = day.cars[0];
+    const refs = whyRefs();
+    day.explained = explain(car, refs, CONFIG);
+    return whyLines(day.explained, car, refs.idealBalance, whyWords(car));
+}
+
+/** The host's tip back at the bench: the biggest gain left, said. */
+function tuneTip(day) {
+    if (!day || day.event === 'trial' || !day.explained) return null;
+    const top = gains(day.explained)[0] || null;
+    const car = day.cars[0];
+    return { top, sentence: top ? moreLine(top, car, 0.75 * IN, whyWords(car)) : '' };
 }
 
 function showResults() {
     const day = state.day;
     const names = day.entries.map((e) => e.name);
+    const trial = day.event === 'trial';
     fillResults({
         table: el['results-table'], lanesEl: el['results-lanes'], whyEl: el['results-why'], whyHeading: el['results-why-heading']
-    }, day.race, names, state.event === 'trial' ? new Set() : day.mine, whyFor(day),
-    state.event === 'trial' ? UI.trialHeading : UI.whyHeading);
-    if (el['results-event']) el['results-event'].textContent = eventLabel(state.event);
+    }, day.race, names, trial ? new Set() : day.mine, whyFor(day),
+    trial ? UI.trialHeading : UI.whyHeading);
+    if (el['results-event']) el['results-event'].textContent = eventLabel(day.event);
+    // A win: the trophy, and the next division up (PRD, Next steps).
+    const trophy = el['results-trophy'];
+    if (trophy) {
+        trophy.textContent = day.won ? trophyLine(day.won.event, day.won.isNew) : '';
+        trophy.hidden = !day.won;
+    }
+    const harder = el['results-harder'];
+    if (harder) {
+        const label = day.won ? harderLabel(day.event) : '';
+        harder.textContent = label;
+        harder.hidden = !label;
+    }
     const modal = el['results-modal'];
     if (modal) modal.classList.remove('hidden');
     const rows = day.race.standings.map((i, k) => ({ name: names[i], average: day.race.average[i], place: k + 1 }));
-    if (el['results-status']) el['results-status'].textContent = resultsSpoken(state.event, rows);
+    if (el['results-status']) el['results-status'].textContent = resultsSpoken(day.event, rows);
     const title = el['results-title'];
     if (title && typeof title.focus === 'function') title.focus({ preventScroll: true });
+}
+
+/** Tune my car: the car that raced back on the bench, the host saying what
+ *  would help it most. */
+function tuneCar() {
+    const day = state.day;
+    if (!day || state.phase !== 'results') return;
+    const first = day.entries.find((e) => e.mine);
+    if (first) garage.setBench(day.event === 'trial' ? day.entries[day.race.standings[0]].id : first.id);
+    track('race-tune', { kind: day.event });
+    showBench('tune', tuneTip(day));
+}
+
+/** Try the next division up, straight away, with the same car. */
+function raceHarder() {
+    const day = state.day;
+    if (!day || !HARDER[day.event]) return;
+    state.event = HARDER[day.event];
+    startRace('harder');
 }
 
 function hideResults() {
@@ -528,12 +764,13 @@ function resultsShown() {
     return Boolean(el['results-modal']) && !el['results-modal'].classList.contains('hidden');
 }
 
-/** Escape and the help button: one step back. */
+/** Escape and the back buttons: one step back. */
 function stepBack(how) {
     if (!state.isLoaded) return;
     if (state.phase === 'race') track('race-leave', { kind: state.event, outcome: `how=${how}` });
     sound.roll(0);
     if (state.phase === 'race' || state.phase === 'results') showCheckin();
+    else if (state.phase === 'checkin') showBench('step');
 }
 
 // ---- The sound (M2) -------------------------------------------------------------
@@ -549,6 +786,7 @@ function markSound() {
 function toggleSound(how) {
     const on = sound.toggle();
     markSound();
+    if (garage) garage.setSetting('sound', on);
     track('sound', { outcome: on ? 'on' : 'off', kind: how });
 }
 
@@ -903,6 +1141,19 @@ function setupEventListeners() {
         startRace('again');
     });
     on('results-another', 'click', () => stepBack('another'));
+    on('results-tune', 'click', tuneCar);
+    on('results-harder', 'click', raceHarder);
+    on('checkin-back', 'click', () => stepBack('checkin-back'));
+    // The turntable turned by hand: a drag on the car's part of the screen.
+    on('game-canvas', 'pointerdown', (e) => {
+        if (state.phase === 'bench') state.drag = { x: e.clientX };
+    });
+    window.addEventListener('pointermove', (e) => {
+        if (!state.drag) return;
+        state.spin += (e.clientX - state.drag.x) * 0.012;
+        state.drag.x = e.clientX;
+    }, { signal });
+    for (const type of ['pointerup', 'pointercancel']) window.addEventListener(type, () => { state.drag = null; }, { signal });
     on('results-share', 'click', openClip);
     on('clip-share', 'click', shareClip);
     on('clip-image', 'click', shareStill);
@@ -935,7 +1186,7 @@ function onKeyDown(event) {
             closeClip();
             return;
         }
-        if (state.phase === 'race' || resultsShown()) {
+        if (state.phase === 'race' || resultsShown() || (state.phase === 'checkin' && checkinShown())) {
             event.preventDefault();
             stepBack('escape');
         }
@@ -948,7 +1199,8 @@ function onResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    if (state.phase !== 'race') idleCamera();
+    if (state.phase === 'bench') benchCamera();
+    else if (state.phase !== 'race') idleCamera();
 }
 
 function cleanup() {
@@ -962,6 +1214,10 @@ function animate() {
     const dt = Math.min(0.1, Math.max(0, (now - state.lastTime) / 1000));
     state.lastTime = now;
     if (state.phase === 'race') stepRace(dt);
+    if (state.phase === 'bench' && workbench) {
+        if (!state.reducedMotion && !state.drag) state.spin += dt * CONFIG.workbench.spin;
+        workbench.spinner.rotation.y = state.spin;
+    }
     // While a clip is made, only the clip is drawn: the hall behind the card
     // holds still, and a phone draws one picture a frame, not two.
     if (state.clip && state.clip.recording) {
@@ -1013,4 +1269,7 @@ export function getState() {
     return state;
 }
 
-export const __test__ = { startRace, finishRace, stepBack, openClip, closeClip, shareStill, shareClip, sound, meshes: () => meshes, el };
+export const __test__ = {
+    startRace, finishRace, stepBack, openClip, closeClip, shareStill, shareClip, showBench, tuneCar, sound,
+    meshes: () => meshes, benchMesh: () => benchMesh, garage: () => garage, bench: () => bench, el
+};

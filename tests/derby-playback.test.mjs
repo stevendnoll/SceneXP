@@ -26,8 +26,15 @@ const Ph = await import('../www/derby/js/phases.js');
 const Copy = await import('../www/derby/js/copy.js');
 const Mesh = await import('../www/derby/js/carmesh.js');
 
+// The builds M1's presets were (config.presets until M3 replaced them with
+// the garage), kept here as fixtures so these numbers stay comparable.
+const PRESETS = {
+    box: { design: 'block', ballast: null, tune: { deburr: false, polish: 0, graphite: false, align: false, sand: 0 } },
+    tuned: { design: 'wedge', ballast: { mass: 5, balance: 1 }, tune: { deburr: true, polish: 3, graphite: true, align: true, sand: 0.5 } },
+    full: { design: 'thinWedge', ballast: { mass: 5, balance: 0.8 }, tune: { deburr: true, polish: 5, graphite: true, align: true, sand: 1 } }
+};
 const preset = (id) => {
-    const p = C.presets.find((x) => x.id === id);
+    const p = PRESETS[id];
     return Car.describeCar(Car.buildFromDesign(p.design, { tune: p.tune, ballast: p.ballast }));
 };
 const fieldCar = (i) => Car.describeCar(Car.buildFromField(C.field[i]));
@@ -269,8 +276,12 @@ describe('a car\'s outline', () => {
 });
 
 describe('phases', () => {
-    test('check-in to the race to the results, and back', () => {
-        expect(Ph.nextPhase('loading', 'loaded')).toBe('checkin');
+    test('the bench to check-in to the race to the results, and back', () => {
+        // Every arrival lands at the bench (M3).
+        expect(Ph.nextPhase('loading', 'loaded')).toBe('bench');
+        expect(Ph.nextPhase('bench', 'race')).toBe('checkin');
+        expect(Ph.nextPhase('checkin', 'back')).toBe('bench');
+        expect(Ph.nextPhase('results', 'tune')).toBe('bench');
         expect(Ph.nextPhase('checkin', 'go')).toBe('race');
         expect(Ph.nextPhase('race', 'finish')).toBe('results');
         expect(Ph.nextPhase('race', 'skip')).toBe('results');
@@ -280,7 +291,8 @@ describe('phases', () => {
         // An action that means nothing there stays put.
         expect(Ph.nextPhase('checkin', 'skip')).toBe('checkin');
         expect(Ph.nextPhase('nowhere', 'go')).toBe('nowhere');
-        expect(Ph.PHASES).toEqual(['loading', 'checkin', 'race', 'results']);
+        expect(Ph.nextPhase('bench', 'go')).toBe('bench');
+        expect(Ph.PHASES).toEqual(['loading', 'bench', 'checkin', 'race', 'results']);
     });
 });
 
@@ -344,6 +356,5 @@ describe('the words', () => {
     test('every fixed sentence keeps the house style', () => {
         for (const e of Copy.EVENTS) { style(e.label); style(e.blurb); }
         for (const v of Object.values(Copy.UI)) style(v);
-        for (const p of C.presets) { style(p.name); style(p.blurb); }
     });
 });

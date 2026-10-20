@@ -272,11 +272,13 @@ export const DERBY_CONFIG = Object.freeze({
             tune: { deburr: true, polish: 5, graphite: true, align: true, sand: 1 } }
     ]),
 
-    /** Who each division faces, by field index (PRD, Check-in). */
+    /** Who each division faces, by field index (PRD, Check-in). The Outlaw
+     *  exhibition (D4) faces the Hard division's three, the fastest. */
     divisions: Object.freeze({
         easy: Object.freeze([0, 1, 2]),
         medium: Object.freeze([3, 4, 5]),
-        hard: Object.freeze([6, 7, 8])
+        hard: Object.freeze([6, 7, 8]),
+        outlaw: Object.freeze([6, 7, 8])
     }),
 
     /** Each neighbor's paint, by field id (M1, graybox). */
@@ -285,34 +287,74 @@ export const DERBY_CONFIG = Object.freeze({
         comet: 0x2fb38a, owl: 0x5b4588, arrow: 0xb8bcc4, phantom: 0x26262c
     }),
 
+    // ---- M3: the quick build ----------------------------------------------
+    //
+    // M1's four preset cars stood in for the workshop until it opened. They
+    // are gone: the visitor's cars are now their own, built on the bench and
+    // kept in the garage (garage.js).
+
     /**
-     * The visitor's cars until the workshop opens (M1): four builds from the
-     * starting designs, from the box to the full treatment, so a first race
-     * shows what each kind of work is worth. In Time Trial, one to four of
-     * them race each other.
+     * The workbench (M3, PRD The workshop). A first-time visitor finds a car
+     * already on it, legal and sensible, so a race is two taps away (PRD,
+     * Time to first race).
      */
-    presets: Object.freeze([
-        {
-            id: 'box', name: 'Straight from the Box', blurb: 'The uncut block, no weights, the axles as they came',
-            design: 'block', ballast: null, color: 0xd63c3c,
-            tune: { deburr: false, polish: 0, graphite: false, align: false, sand: 0 }
-        },
-        {
-            id: 'weekend', name: 'Weekend Wedge', blurb: 'A wedge at 5 ounces, weight in the middle, a puff of graphite',
-            design: 'wedge', ballast: { mass: 5, balance: 2.2 }, color: 0x3aa0e8,
-            tune: { deburr: false, polish: 0, graphite: true, align: false, sand: 0 }
-        },
-        {
-            id: 'tuned', name: 'Rear-Weighted Wedge', blurb: 'Weight toward the back, polished axles, graphite, aligned',
-            design: 'wedge', ballast: { mass: 5, balance: 1 }, color: 0x39b54a,
-            tune: { deburr: true, polish: 3, graphite: true, align: true, sand: 0.5 }
-        },
-        {
-            id: 'full', name: 'The Full Treatment', blurb: 'A thin wedge with everything done right',
-            design: 'thinWedge', ballast: { mass: 5, balance: 0.8 }, color: 0xf2c230,
-            tune: { deburr: true, polish: 5, graphite: true, align: true, sand: 1 }
-        }
-    ]),
+    bench: Object.freeze({
+        /** The starting designs offered, in this order (PRD, Time to first
+         *  race). The others in `designs` are the neighbors'. */
+        designs: Object.freeze(['wedge', 'bullet', 'classic', 'lowRider', 'block']),
+        /** The garage's size (D6). */
+        cars: 4,
+        /** A new car's paint, by palette id, the first car's first. */
+        newColors: Object.freeze(['blue', 'red', 'yellow', 'green']),
+        /**
+         * Auto-weigh tops a car up to its sheet's limit with the balance
+         * point this far in front of the rear axle, in inches: inside the
+         * sweet spot the model found on its own (M0, 0.75 to 0.875 in).
+         */
+        autoBalance: 0.875,
+        /**
+         * The pockets a builder can drill (PRD, Weights), in inches from the
+         * nose, none within 0.3 in of an axle slot. A pocket is a row of
+         * `diameter` holes across the body, `wall` of wood between them (a
+         * full 1.75 in block takes three). Tungsten stacks in each hole, a
+         * piece taking `depth` of it, above `floor` of wood left under it.
+         * An Outlaw car may stack `proud` higher than the body's top. Zinc
+         * strips stick on underneath, `strips` a spot.
+         */
+        pockets: Object.freeze({
+            at: Object.freeze([0.5, 1.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.6]),
+            depth: Object.freeze({ cylinder: 0.2, cube: 0.25 }),
+            floor: 0.1,
+            proud: 1.0,
+            strips: 2,
+            diameter: 0.375,
+            wall: 0.125
+        })
+    }),
+
+    /** Paint (M3, PRD Paint and decals): the palette, named as a car's name
+     *  says it ("Blue Wedge"), and the three finishes. */
+    paint: Object.freeze({
+        colors: Object.freeze([
+            Object.freeze({ id: 'red', label: 'Red', color: 0xd63c3c }),
+            Object.freeze({ id: 'orange', label: 'Orange', color: 0xee7a2a }),
+            Object.freeze({ id: 'yellow', label: 'Yellow', color: 0xf2c230 }),
+            Object.freeze({ id: 'green', label: 'Green', color: 0x39b54a }),
+            Object.freeze({ id: 'teal', label: 'Teal', color: 0x1fa3a0 }),
+            Object.freeze({ id: 'blue', label: 'Blue', color: 0x3a7be8 }),
+            Object.freeze({ id: 'purple', label: 'Purple', color: 0x7a4fd0 }),
+            Object.freeze({ id: 'pink', label: 'Pink', color: 0xe8609c }),
+            Object.freeze({ id: 'white', label: 'White', color: 0xf2f2ee }),
+            Object.freeze({ id: 'black', label: 'Black', color: 0x232326 })
+        ]),
+        finishes: Object.freeze({
+            gloss: Object.freeze({ label: 'Gloss', roughness: 0.2, metalness: 0.05, env: 0.9 }),
+            metallic: Object.freeze({ label: 'Metallic', roughness: 0.3, metalness: 0.8, env: 1.2 }),
+            matte: Object.freeze({ label: 'Matte', roughness: 0.85, metalness: 0, env: 0 })
+        }),
+        /** The stripe down the top, a share of the body's width. */
+        stripeWidth: 0.3
+    }),
 
     // ---- M1: the hall and the race on screen --------------------------------
 
@@ -371,6 +413,39 @@ export const DERBY_CONFIG = Object.freeze({
         /** Half the width a shot must hold: the four lanes and a margin. */
         holdHalfWidth: 0.26,
         follow: 6
+    }),
+
+    /**
+     * The workbench on screen (M3, graybox): a table in its own small room
+     * beyond the hall's start wall, the car on a turntable, the camera close
+     * on it. The panel covers part of the screen (a bottom sheet on a phone,
+     * a side panel on a computer), so the car is framed in the part left
+     * clear. A miniature, so warm and colorful, not the white rooms.
+     */
+    workbench: Object.freeze({
+        at: Object.freeze({ x: -12, z: 0 }),
+        /** The table top, above the floor. */
+        top: 0.9,
+        /** What the camera must hold: the turntable and the car on it. */
+        holdRadius: 0.15,
+        /** How much of the clear part of the screen it fills. */
+        fill: 0.8,
+        /** From the car toward the camera, and the nearest it comes. */
+        dir: Object.freeze([0.25, 0.42, 1]),
+        minDistance: 0.32,
+        /** The turntable's turn, radians a second (none under reduced motion). */
+        spin: 0.3,
+        /** Wider than this, the panel sits at the side (CSS keeps the same). */
+        sideFrom: 900,
+        look: Object.freeze({
+            room: 0xf0e2cc,
+            floor: 0xc79a62,
+            table: 0xe2b77c,
+            pegboard: 0xd9b88a,
+            turntable: 0x3d4a5c,
+            scale: 0xe8e4dc,
+            light: 0xffe2b8
+        })
     }),
 
     /**

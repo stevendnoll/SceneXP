@@ -63,7 +63,10 @@ const PERSISTENT = {
     'www/whitestone/js/store.js': 'the checklists a visitor builds in Whitestone Home Care',
     // The cleaner's page (M4): per shared checklist, its key (from the link),
     // the 12 hour visit pass the PIN gives, and wrong PINs in a row.
-    'www/whitestone/tasks/js/main.js': 'on a cleaner’s device, the key and visit pass of a checklist shared with them, and the visit’s marks and add-ons'
+    'www/whitestone/tasks/js/main.js': 'on a cleaner’s device, the key and visit pass of a checklist shared with them, and the visit’s marks and add-ons',
+    // Derby Day's garage (M3, 2026-10-19): up to four cars, their results,
+    // the trophies, and the units and sound settings.
+    'www/derby/js/garage.js': 'the cars a visitor builds in Derby Day, their results and trophies, and its settings'
 };
 
 /**
@@ -167,6 +170,10 @@ test('and the policy actually describes them, in words a visitor would use', () 
     expect(text).toMatch(/Whitestone Home Care sends a ping for each button you press/i);
     expect(text).toMatch(/never sends anything you typed, a price, a date or time, or the PIN itself/i);
 
+    // Derby Day's garage (M3, 2026-10-19): the cars, and how to clear them.
+    expect(text).toMatch(/Derby Day saves your cars/i);
+    expect(text).toMatch(/Forget my cars button/i);
+
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.
     expect(text).toMatch(/Start a new garden button/i);
@@ -193,6 +200,7 @@ const NAMED_IN_POLICY = {
     xo: "X's and O's",
     leaves: 'Leaf Blower',
     whitestone: 'Whitestone Home Care',
+    derby: 'Derby Day',
 };
 
 test('every experience that keeps something is named in the policy', () => {

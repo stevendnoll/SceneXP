@@ -9,13 +9,17 @@
  */
 
 /** The events a visitor can enter (PRD, What a visitor can enter). The
- *  Outlaw exhibition joins with the Outlaw class (M3). */
+ *  Outlaw exhibition (D4) takes Outlaw cars only, and says so. */
 export const EVENTS = Object.freeze([
     { id: 'easy', label: 'Easy', blurb: 'Against the three slowest cars in the hall' },
     { id: 'medium', label: 'Medium', blurb: 'Against three cars from the middle of the pack' },
     { id: 'hard', label: 'Hard', blurb: 'Against the three fastest, last year’s champion among them' },
-    { id: 'trial', label: 'Time Trial', blurb: 'Your own cars against each other, or one alone' }
+    { id: 'trial', label: 'Time Trial', blurb: 'Your own cars against each other, or one alone' },
+    { id: 'outlaw', label: 'Outlaw exhibition', blurb: 'An Outlaw car against the three fastest, marked as an exhibition' }
 ]);
+
+/** The harder division after each, for "Try the Medium division". */
+export const HARDER = Object.freeze({ easy: 'medium', medium: 'hard' });
 
 export const UI = Object.freeze({
     title: 'DERBY DAY',
@@ -39,14 +43,62 @@ export const UI = Object.freeze({
     car: 'Car',
     average: 'Average',
     heats: 'Heats',
-    seconds: 'seconds'
+    seconds: 'seconds',
+    // M3, the bench and the garage.
+    benchTitle: 'Your workbench',
+    raceIt: 'Race it',
+    toBench: 'Back to the workbench',
+    tune: 'Tune my car',
+    garage: 'Your garage',
+    newCar: 'New car',
+    copyCar: 'Copy this car',
+    deleteCar: 'Delete this car',
+    shape: 'Shape',
+    paint: 'Paint',
+    bodyColor: 'Body',
+    stripe: 'Stripe',
+    noStripe: 'No stripe',
+    customColor: 'Custom color',
+    finish: 'Finish',
+    weights: 'Weights',
+    autoWeigh: 'Auto-weigh',
+    allOut: 'Take them all out',
+    takeOut: 'Take out',
+    front: 'Front',
+    rear: 'Rear',
+    axleMark: 'Axle',
+    axles: 'Axles and wheels',
+    deburr: 'De-burr the axles',
+    deburrBlurb: 'File off the burr under each nail head',
+    polish: 'Polish the axles',
+    graphite: 'Graphite',
+    graphiteBlurb: 'A puff of dry graphite in each wheel',
+    align: 'Align the wheels',
+    alignBlurb: 'So the car rolls straight instead of rubbing the rail',
+    rules: 'Rules',
+    standard: 'Standard',
+    standardBlurb: 'The house rule sheet: 5 ounces, the kit’s wheels and axles',
+    outlaw: 'Outlaw',
+    outlawBlurb: 'No rule sheet, only what the track allows. Races the Time Trial and the Outlaw exhibition',
+    alsoMeasured: 'Also measured',
+    settings: 'Settings',
+    units: 'Units',
+    forget: 'Forget my cars',
+    forgetSure: 'Tap again to forget every car, result and trophy',
+    explore: 'More 3D worlds to explore at SceneXP.com',
+    trophies: 'Trophies',
+    noTrophies: 'No trophies yet. Win a division to put one on the shelf.'
 });
 
 export function eventLabel(id) {
     const e = EVENTS.find((x) => x.id === id);
     if (!e) return '';
-    return id === 'trial' ? e.label : `${e.label} division`;
+    return id === 'trial' || id === 'outlaw' ? e.label : `${e.label} division`;
 }
+
+/** The polish steps, as a builder says them (config physics.axleFriction
+ *  .polish: four grits, then compound). */
+export const POLISH = Object.freeze(['Not polished', '400 grit', '800 grit', '1200 grit', '2000 grit', '2000 grit and polishing compound']);
 
 /** A time as the timer shows it: to the thousandth. */
 export function clock(seconds) {
@@ -97,14 +149,38 @@ const s3 = (t) => `${clock(t)} seconds`;
 const WORTH = 0.0005;
 
 /**
+ * What one change still on the table would save, as a sentence: `line` is
+ * one of sim.explain's ({ id, more }). `car` tells which way its weight
+ * would move, `maxMass` and `idealText` say the limit and the sweet spot in
+ * the sheet's and the visitor's words.
+ */
+export function moreLine(line, car, idealBalance, { maxMass = '5 ounces', idealText = 'three quarters of an inch' } = {}) {
+    const t = line.more;
+    const back = car.balance > idealBalance;
+    switch (line.id) {
+        case 'weight': return `Weights up to the full ${maxMass} would save ${s3(t)}.`;
+        case 'balance': return back
+            ? `Moving the weight back, to about ${idealText} in front of the rear axle, would save ${s3(t)}.`
+            : `Moving the weight forward a little, to about ${idealText} in front of the rear axle, would save ${s3(t)}.`;
+        case 'axles': return `Polished axles and graphite would save ${s3(t)}.`;
+        case 'alignment': return `Aligning the wheels would save ${s3(t)}.`;
+        default: return `A slimmer shape would save ${s3(t)}.`;
+    }
+}
+
+/** sim.explain's lines still worth something, the biggest gain first. */
+export function gains(explained) {
+    return explained.lines.filter((l) => l.more > WORTH).sort((a, b) => b.more - a.more);
+}
+
+/**
  * The Why lines for the visitor's car (PRD, The results): the one thing
  * its build did best, and the two things that would gain it the most,
- * from sim.explain's lines. `car` tells which way its weight would move.
- * Returns a list of sentences.
+ * from sim.explain's lines. Returns a list of sentences.
  */
-export function whyLines(explained, car, idealBalance) {
+export function whyLines(explained, car, idealBalance, opts = {}) {
     const saved = explained.lines.filter((l) => l.saved !== null && l.saved > WORTH).sort((a, b) => b.saved - a.saved);
-    const more = explained.lines.filter((l) => l.more > WORTH).sort((a, b) => b.more - a.more);
+    const more = gains(explained);
     const out = [];
     const SAVED = {
         weight: (t) => `Its extra weight was worth ${s3(t)} over the kit’s own weight.`,
@@ -113,18 +189,8 @@ export function whyLines(explained, car, idealBalance) {
         alignment: (t) => `Straight wheels were worth ${s3(t)}.`,
         shape: (t) => `Its shape was worth ${s3(t)} over a plain block.`
     };
-    const back = car.balance > idealBalance;
-    const MORE = {
-        weight: (t) => `Weights up to the full 5 ounces would save ${s3(t)}.`,
-        balance: (t) => (back
-            ? `Moving the weight back, to about three quarters of an inch in front of the rear axle, would save ${s3(t)}.`
-            : `Moving the weight forward a little, to about three quarters of an inch in front of the rear axle, would save ${s3(t)}.`),
-        axles: (t) => `Polished axles and graphite would save ${s3(t)}.`,
-        alignment: (t) => `Aligning the wheels would save ${s3(t)}.`,
-        shape: (t) => `A slimmer shape would save ${s3(t)}.`
-    };
     if (saved.length) out.push(SAVED[saved[0].id](saved[0].saved));
-    for (const l of more.slice(0, 2)) out.push(MORE[l.id](l.more));
+    for (const l of more.slice(0, 2)) out.push(moreLine(l, car, idealBalance, opts));
     if (!more.length || more[0].more < 0.002) out.push('There is very little left to find. This car is about as fast as the rules allow.');
     return out;
 }
@@ -141,4 +207,158 @@ export function trialLines(rows) {
             : `${rows[i - 1].name} and ${rows[i].name} tied.`);
     }
     return out;
+}
+
+// ---- M3: the host at the bench --------------------------------------------
+
+/** Where on the bench each Why line's fix is (bench.js opens it). */
+export const FIX_SECTION = Object.freeze({ weight: 'weights', balance: 'weights', axles: 'axles', alignment: 'axles', shape: 'shape' });
+const SECTION_NAME = Object.freeze({ weights: 'Weights', axles: 'Axles and wheels', shape: 'Shape' });
+
+/** The host's greeting on a first visit (PRD, Time to first race). */
+export function hostFirst(name, massText) {
+    return `Welcome to Derby Day! This is your car, ${name}, already weighed to ${massText}. Choose a shape and a color, then race it whenever you’re ready.`;
+}
+
+/**
+ * The host's greeting on a return (PRD; the "every arrival needs a next
+ * step" lesson): where things stand, then the way on. `last` is the car's
+ * last result { event, place, average }, or null.
+ */
+export function hostBack(name, last) {
+    if (!last) return `Welcome back! ${name} is on the bench, ready when you are.`;
+    if (last.event === 'trial') return `Welcome back! ${name} averaged ${s3(last.average)} in the Time Trial. Would you like to tune it, or race again?`;
+    const where = last.event === 'outlaw' ? 'the Outlaw exhibition' : `the ${eventLabel(last.event)}`;
+    return `Welcome back! Your car, ${name}, finished ${placeWord(last.place)} in ${where}. Would you like to tune it, or race again?`;
+}
+
+/** Back from check-in: the car, and the two ways on. */
+export function hostStep(name) {
+    return `Here’s ${name} on the bench, ready for another change or another race.`;
+}
+
+/**
+ * Back from the results by Tune my car: the one change worth the most, and
+ * where it is on the bench (PRD: the host offers tune-ups after the first
+ * race). `top` is { id, more } from sim.explain's lines, or null.
+ */
+export function hostTune(name, top, sentence) {
+    if (!top || top.more < 0.002) {
+        return `Here’s ${name} back on the bench. It’s about as fast as the rules allow. Try a harder race, or build a second car to compare in the Time Trial.`;
+    }
+    return `Here’s ${name} back on the bench. ${sentence} You’ll find that under ${SECTION_NAME[FIX_SECTION[top.id]]}.`;
+}
+
+/** The host after a change on the bench. */
+export const SAY = Object.freeze({
+    autoWeighed: (massText, balanceText) => `Auto-weigh brought it to ${massText}, the weight ${balanceText} in front of the rear axle. Weight toward the back keeps the car higher on the slope for longer, so it has further to fall.`,
+    autoShort: (massText, balanceText) => `Auto-weigh did what this shape allows: ${massText}, the weight ${balanceText} in front of the rear axle. A bulky body has no room further back.`,
+    allOut: (massText) => `Every weight is out. The car weighs ${massText} now.`,
+    shapeAuto: (label) => `A ${label} now, and Auto-weigh moved the weights to suit it.`,
+    shapeHand: (label, dropped) => (dropped
+        ? `A ${label} now. ${dropped === 1 ? 'One weight no longer fits, so it’s' : `${dropped} weights no longer fit, so they’re`} back in the box.`
+        : `A ${label} now. Every weight still fits.`),
+    outlaw: (massText) => `Outlaw class. The rule sheet is off, so the weight can go up to ${massText}, the most the track will take. Outlaw cars race in the Time Trial and the Outlaw exhibition.`,
+    standard: (massText) => `Standard class: ${massText} at most, and the house rule sheet.`,
+    noWood: 'There isn’t enough wood there for a pocket.',
+    full: 'That pocket is full.',
+    stripsFull: 'Two strips is all that spot takes.',
+    empty: 'That pocket is already empty.',
+    newCar: (name, massText) => `A new car on the bench: ${name}, weighed to ${massText}. Your other cars wait in the garage.`,
+    copied: (from, name) => `A copy of ${from}, called ${name}. Change one thing, then race the two in the Time Trial to see what it was worth.`,
+    full4: 'The garage holds four cars. Please delete one to make room.',
+    deleteSure: (name) => `Tap Delete again to remove ${name}.`,
+    deleted: (name, next) => `${name} is gone. ${next} is on the bench now.`,
+    picked: (name) => `${name} is on the bench.`,
+    forgot: (name) => `Everything is forgotten. Here’s a fresh car to start with, ${name}.`,
+    illegal: (name, notes) => `${name} can’t race just yet. ${notes}`
+});
+
+/**
+ * A polite note for a failed rule check, in the visitor's units (`by` is
+ * the amount over or under, already written).
+ */
+export function ruleNote(rule, by) {
+    switch (rule) {
+        case 'mass': return `${by} over. Please take a weight out.`;
+        case 'length': return `${by} too long.`;
+        case 'width': return `${by} too wide.`;
+        case 'wheelGap': return `${by} too narrow between the wheels.`;
+        default: return `${by} too low to the track.`;
+    }
+}
+
+/** The rule names, as the sheet prints them. */
+export const RULE_NAMES = Object.freeze({
+    mass: 'Weight', length: 'Length', width: 'Width', wheelGap: 'Between the wheels', clearance: 'Ground clearance'
+});
+
+/** The check-in card's line under a car, and why it cannot enter. */
+export const ENTRY = Object.freeze({
+    outlawOnly: 'Outlaw cars race in the Time Trial and the Outlaw exhibition.',
+    standardOnly: 'The Outlaw exhibition is for Outlaw cars. Switch a car to Outlaw on the bench.',
+    illegal: 'Over the rule sheet’s limits. Please fix it on the bench first.',
+    noneEligible: 'None of your cars can enter this race yet. The bench can change that.',
+    benchFirst: 'Please fix your car on the bench first.'
+});
+
+/** A results line for a win (PRD: a trophy on the shelf). */
+export function trophyLine(eventId, isNew) {
+    const where = eventId === 'outlaw' ? 'the Outlaw exhibition' : `the ${eventLabel(eventId)}`;
+    if (!isNew) return `First place in ${where} again!`;
+    return `First place! A trophy for ${where} is waiting on your workbench shelf.`;
+}
+
+/** "Try the Medium division" */
+export function harderLabel(eventId) {
+    return HARDER[eventId] ? `Try the ${eventLabel(HARDER[eventId])}` : '';
+}
+
+/** What the trophy shelf holds, in words. */
+export function trophyList(trophies) {
+    const won = ['easy', 'medium', 'hard', 'outlaw'].filter((e) => trophies[e]).map((e) => (e === 'outlaw' ? 'Outlaw exhibition' : EVENTS.find((x) => x.id === e).label));
+    return won.length ? `${UI.trophies}: ${won.join(', ')}.` : UI.noTrophies;
+}
+
+/** A car's best results, in words, or ''. `results` is garage.results. */
+export function bestLine(name, results) {
+    const parts = [];
+    for (const e of ['easy', 'medium', 'hard', 'outlaw']) {
+        const r = results[e];
+        if (r && r.place) parts.push(`${placeWord(r.place)} in ${e === 'outlaw' ? 'the Outlaw exhibition' : eventLabel(e)}`);
+    }
+    if (results.trial) parts.push(`${s3(results.trial.average)} in the Time Trial`);
+    return parts.length ? `${name}’s best: ${parts.join(', ')}.` : `${name} hasn’t raced yet.`;
+}
+
+/**
+ * The rule sheet pinned to the pegboard (M3.5), line by line: the house
+ * sheet, or the Outlaw's red one. `R` is the sheet (config rules), and
+ * `fmt` writes a limit in the sheet's own units.
+ */
+export function sheetLines(rules, R, fmt) {
+    if (rules === 'outlaw') {
+        return {
+            title: 'OUTLAW CLASS',
+            lines: [
+                'No rule sheet. Only the track:',
+                `Weight: up to ${fmt.mass(R.maxMass)}`,
+                `Fits the lane: ${fmt.length(R.maxWidth)} wide`,
+                `Clears the center strip: ${fmt.length(R.minWheelGap)}`,
+                'Four wheels on the track'
+            ]
+        };
+    }
+    return {
+        title: 'HOUSE RULES',
+        lines: [
+            `Weight: ${fmt.mass(R.maxMass)} at most`,
+            `Length: ${fmt.length(R.maxLength)} at most`,
+            `Width: ${fmt.length(R.maxWidth)} at most`,
+            `Between the wheels: ${fmt.length(R.minWheelGap)}`,
+            `Ground clearance: ${fmt.length(R.minClearance)}`,
+            'The kit’s own wheels and axles',
+            'Dry graphite only'
+        ]
+    };
 }

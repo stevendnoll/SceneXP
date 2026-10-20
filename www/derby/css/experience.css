@@ -633,6 +633,460 @@ body {
     font-size: 0.75rem;
 }
 
+/* ---- The workbench (M3) ----------------------------------------------------
+   A bottom sheet on a phone, a side panel from 900px (js/config.js
+   workbench.sideFrom says the same, so the camera frames the car in what
+   is left). The sections scroll; Race it stays in view at the foot. */
+
+.bench {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 58vh;
+    height: 58dvh;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 16px 16px 0 0;
+    background: rgba(28, 22, 18, 0.95);
+    color: #f6efe6;
+    z-index: 100;
+}
+
+.bench.hidden {
+    display: none;
+}
+
+.bench [hidden] {
+    display: none;
+}
+
+.bench-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1rem max(1rem, env(safe-area-inset-left)) 0.5rem;
+}
+
+.bench-title {
+    margin: 0 0 0.35rem;
+    color: var(--ui-title);
+    font-size: 1.25rem;
+}
+
+.bench-title:focus {
+    outline: none;
+}
+
+.bench-host {
+    margin: 0 0 0.6rem;
+    line-height: 1.45;
+}
+
+.bench-host-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+
+.bench-host-actions:empty {
+    display: none;
+}
+
+.results-another.small {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+}
+
+.results-another.is-accent {
+    border-color: var(--ui-accent);
+}
+
+.bench-foot {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.6rem 1rem max(0.6rem, env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.bench-summary {
+    flex: 1;
+    margin: 0;
+    color: #d9cbbb;
+    font-size: 0.85rem;
+    line-height: 1.35;
+}
+
+.bench-foot .go-btn {
+    flex: none;
+    min-width: 8rem;
+    padding: 0.7rem 1.4rem;
+    font-size: 1.05rem;
+}
+
+.bench-garage {
+    margin-bottom: 0.75rem;
+}
+
+.bench-legend {
+    margin: 0 0 0.45rem;
+    padding: 0;
+    color: var(--ui-subtitle);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.bench-group {
+    margin: 0 0 0.75rem;
+    padding: 0;
+    border: 0;
+}
+
+.bench-cars,
+.chips,
+.swatches,
+.bench-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.bench-row {
+    margin: 0.5rem 0;
+}
+
+.choice.chip {
+    align-items: center;
+    padding: 0.45rem 0.7rem;
+}
+
+.choice.chip .choice-blurb {
+    font-size: 0.78rem;
+}
+
+.choice.car-chip .swatch-dot {
+    width: 1rem;
+    height: 1rem;
+}
+
+.choice.is-off {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* A swatch: the color is the button. The radio stays in the page for the
+   keyboard and screen readers, only out of sight. */
+.choice.swatch {
+    position: relative;
+    padding: 4px;
+    border-radius: 999px;
+}
+
+.choice.swatch input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+}
+
+.swatch-dot {
+    display: block;
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+}
+
+.swatch-dot.is-none {
+    background: linear-gradient(135deg, transparent 45%, #e06a5a 45%, #e06a5a 55%, transparent 55%), #3a302a;
+}
+
+.swatch-custom {
+    display: inline-flex;
+    gap: 0.4rem;
+    align-items: center;
+    padding: 4px 0.6rem 4px 4px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.swatch-custom input {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    cursor: pointer;
+}
+
+.swatch-custom:has(input:focus-visible) {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+.bench-box {
+    margin: 0 0 0.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.bench-box-head {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0.7rem 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.bench-box-head:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: -3px;
+    border-radius: 12px;
+}
+
+.bench-sum {
+    color: #d9cbbb;
+    font-size: 0.8rem;
+    font-weight: 400;
+    text-align: right;
+}
+
+.bench-box-body {
+    padding: 0 0.85rem 0.6rem;
+}
+
+.bench-btn {
+    padding: 0.55rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    background: transparent;
+    color: #f6efe6;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.bench-btn.is-strong {
+    border-color: var(--ui-accent);
+}
+
+.bench-btn[aria-disabled="true"] {
+    opacity: 0.6;
+}
+
+.bench-btn:focus-visible,
+.pocket:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+@media (hover: hover) {
+    .bench-btn:hover,
+    .pocket:hover {
+        border-color: var(--ui-accent);
+    }
+}
+
+.bench-note,
+.bench-help {
+    margin: 0.35rem 0;
+    color: #d9cbbb;
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+/* The pockets, front to rear, not to scale: each fills with tungsten from
+   the bottom as it is loaded. A line between two is an axle. */
+.pockets {
+    display: flex;
+    gap: 4px;
+    align-items: stretch;
+    margin: 0.15rem 0 0.4rem;
+}
+
+.pocket {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 46px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    background: #c99a5e;
+    color: #fff;
+    font: inherit;
+    font-weight: 800;
+    overflow: hidden;
+    cursor: pointer;
+    --fill: 0;
+}
+
+.pocket::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--fill) * 100%);
+    background: #4d5157;
+}
+
+.pocket.is-thin {
+    background: repeating-linear-gradient(135deg, #8a6a44 0 4px, #a3804f 4px 8px);
+}
+
+.pocket.is-filled {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.pocket-axle {
+    flex: none;
+    width: 3px;
+    border-radius: 2px;
+    background: #f2c230;
+}
+
+.pocket-ends {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.25rem;
+    color: #bfb2a3;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.bench-range {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+}
+
+.bench-range input {
+    width: 100%;
+    accent-color: var(--ui-accent);
+}
+
+/* The rule sheet: cream paper for Standard, red for Outlaw (D4). */
+.bench-sheet {
+    width: 100%;
+    margin: 0.25rem 0 0.4rem;
+    border-collapse: collapse;
+    border-radius: 8px;
+    background: #fbf4e4;
+    color: #2b2420;
+    font-size: 0.82rem;
+    overflow: hidden;
+}
+
+.bench-sheet.is-outlaw {
+    background: #c8322b;
+    color: #fff3e6;
+}
+
+.sheet-caption {
+    padding: 0.4rem 0;
+    color: #d9cbbb;
+    font-size: 0.78rem;
+    text-align: left;
+}
+
+.bench-sheet th,
+.bench-sheet td {
+    padding: 0.35rem 0.5rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    text-align: left;
+    vertical-align: top;
+}
+
+.bench-sheet thead th {
+    border-top: 0;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.bench-sheet tr.is-over td {
+    background: rgba(255, 210, 120, 0.45);
+    font-weight: 700;
+}
+
+.bench-notes {
+    margin: 0.25rem 0;
+    padding-left: 1.1rem;
+    color: #ffd2a8;
+    font-size: 0.85rem;
+}
+
+.bench-notes:empty {
+    display: none;
+}
+
+.bench-extra {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.2rem 0.75rem;
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.bench-extra dt {
+    color: #bfb2a3;
+}
+
+.bench-extra dd {
+    margin: 0;
+}
+
+@media (min-width: 900px) {
+    .bench {
+        top: 0;
+        right: auto;
+        width: min(26rem, 42vw);
+        height: auto;
+        border-top: 0;
+        border-right: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 0 16px 16px 0;
+    }
+
+    .bench-scroll {
+        padding-top: max(1.25rem, env(safe-area-inset-top));
+    }
+}
+
+/* ---- Check-in and results, M3 additions ---------------------------------- */
+
+.checkin-back-row {
+    margin: 0.75rem 0 0;
+}
+
+.results-trophy {
+    margin: 0.9rem 0 0;
+    color: #ffcf6e;
+    font-weight: 700;
+}
+
+.results-trophy[hidden],
+.results-actions [hidden] {
+    display: none;
+}
+
 /* ---- Small screens -------------------------------------------------------- */
 
 @media (max-width: 480px) {

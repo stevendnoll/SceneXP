@@ -271,8 +271,15 @@ describe('the recorder', () => {
 
 // ---- The clip's script and its words ---------------------------------------------
 
+// The builds M1's presets were (config.presets until M3 replaced them with
+// the garage), kept here as fixtures so these numbers stay comparable.
+const PRESETS = {
+    box: { design: 'block', ballast: null, tune: { deburr: false, polish: 0, graphite: false, align: false, sand: 0 } },
+    tuned: { design: 'wedge', ballast: { mass: 5, balance: 1 }, tune: { deburr: true, polish: 3, graphite: true, align: true, sand: 0.5 } },
+    full: { design: 'thinWedge', ballast: { mass: 5, balance: 0.8 }, tune: { deburr: true, polish: 5, graphite: true, align: true, sand: 1 } }
+};
 const preset = (id) => {
-    const p = C.presets.find((x) => x.id === id);
+    const p = PRESETS[id];
     return Car.describeCar(Car.buildFromDesign(p.design, { tune: p.tune, ballast: p.ballast }));
 };
 const fieldCar = (i) => Car.describeCar(Car.buildFromField(C.field[i]));
@@ -524,7 +531,7 @@ describe('the share card on the page', () => {
         const c = state.clip;
         expect(c.recording).toBe(false);
         expect(c.blob.type).toBe('video/webm');
-        expect(c.name).toBe('derby-day-weekend-wedge.webm');
+        expect(c.name).toBe('derby-day-blue-wedge.webm');
         const video = dom.el('clip-stage').children[0];
         expect(video.tagName).toMatch(/video/i);
         expect(video.src).toBe(c.url);
@@ -534,12 +541,12 @@ describe('the share card on the page', () => {
         expect(dom.el('clip-again').hidden).toBe(false);
         fire(share, 'click');
         await flushAsync(10);
-        expect(saved).toEqual(['derby-day-weekend-wedge.webm']);
+        expect(saved).toEqual(['derby-day-blue-wedge.webm']);
         expect(dom.el('clip-status').textContent).toMatch(/saved to your downloads/);
         // The picture, made ahead, saved too.
         fire(dom.el('clip-image'), 'click');
         await flushAsync(10);
-        expect(saved).toEqual(['derby-day-weekend-wedge.webm', 'derby-day-weekend-wedge-results.png']);
+        expect(saved).toEqual(['derby-day-blue-wedge.webm', 'derby-day-blue-wedge-results.png']);
         // Make it again: a fresh clip.
         fire(dom.el('clip-again'), 'click');
         expect(state.clip.recording).toBe(true);

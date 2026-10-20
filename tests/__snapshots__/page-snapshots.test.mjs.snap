@@ -1324,12 +1324,12 @@ html [data-ui-theme="ember" lang="en"]
     meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
     meta [content="noindex, nofollow" name="robots"]
-    meta [content="Race a wooden derby car down a four-lane track against the neighbors' cars, four heats, every car in every lane, timed to the thousandth, live in your browser." name="description"]
+    meta [content="Build a wooden derby car, weigh it and tune its axles, then race it down a four-lane track against the neighbors' cars, timed to the thousandth, live in your browser." name="description"]
     meta [content="#1f4e8c" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/derby/" rel="canonical"]
     meta [content="Derby Day" property="og:title"]
-    meta [content="Race a wooden derby car down a four-lane track against the neighbors' cars." property="og:description"]
+    meta [content="Build a wooden derby car and race it down a four-lane track against the neighbors' cars." property="og:description"]
     meta [content="website" property="og:type"]
     meta [content="SceneXP" property="og:site_name"]
     meta [content="https://www.scenexp.com/derby/" property="og:url"]
@@ -1341,7 +1341,7 @@ html [data-ui-theme="ember" lang="en"]
     meta [content="Four wooden derby cars racing side by side down an aluminum track in a community hall." property="og:image:alt"]
     meta [content="summary_large_image" name="twitter:card"]
     meta [content="Derby Day" name="twitter:title"]
-    meta [content="Race a wooden derby car down a four-lane track against the neighbors' cars." name="twitter:description"]
+    meta [content="Build a wooden derby car and race it down a four-lane track against the neighbors' cars." name="twitter:description"]
     meta [content="https://www.scenexp.com/derby/assets/og-derby.jpg?v=1" name="twitter:image"]
     meta [content="Four wooden derby cars racing side by side down an aluminum track in a community hall." name="twitter:image:alt"]
     script [type="application/ld+json"]
@@ -1352,7 +1352,7 @@ html [data-ui-theme="ember" lang="en"]
         "url": "https://www.scenexp.com/derby/",
         "name": "Derby Day",
         "image": "https://www.scenexp.com/derby/assets/og-derby.jpg?v=1",
-        "description": "A browser-based 3D derby car race. Race a wooden derby car down a four-lane aluminum track against the neighbors' cars, four heats with every car in every lane, timed to the thousandth of a second by real physics: weight, balance, axle friction and drag.",
+        "description": "A browser-based 3D derby car race. Build a wooden derby car on the workbench, choosing its shape, paint, weights and axle work, then race it down a four-lane aluminum track against the neighbors' cars, four heats with every car in every lane, timed to the thousandth of a second by real physics: weight, balance, axle friction and drag.",
         "genre": [
           "Racing",
           "Simulation"
@@ -1398,7 +1398,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Derby Day | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=2" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=3" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -1407,6 +1407,10 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/track.min.js" rel="modulepreload"]
     link [href="js/hall.min.js" rel="modulepreload"]
     link [href="js/carmesh.min.js" rel="modulepreload"]
+    link [href="js/workbench.min.js" rel="modulepreload"]
+    link [href="js/garage.min.js" rel="modulepreload"]
+    link [href="js/bench.min.js" rel="modulepreload"]
+    link [href="js/units.min.js" rel="modulepreload"]
     link [href="js/playback.min.js" rel="modulepreload"]
     link [href="js/director.min.js" rel="modulepreload"]
     link [href="js/board.min.js" rel="modulepreload"]
@@ -1418,9 +1422,10 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/weights.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=2" rel="stylesheet"]
+    link [href="css/experience.min.css?v=3" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -1431,7 +1436,7 @@ html [data-ui-theme="ember" lang="en"]
         h1
           "Derby Day"
         p
-          "This is a wooden derby car race, and it needs JavaScript to run. Your car lines up at the top of a four-lane aluminum track against three of the neighbors' cars, and races four heats so every car runs in every lane. The times are averaged, and the fastest average wins."
+          "This is a wooden derby car race, and it needs JavaScript to run. You build your car on a workbench, choosing its shape, its paint, where its weights go and how its axles are tuned. Then it lines up at the top of a four-lane aluminum track against three of the neighbors' cars, and races four heats so every car runs in every lane. The times are averaged, and the fastest average wins."
         h2
           "What makes a derby car fast"
         p
@@ -1460,6 +1465,19 @@ html [data-ui-theme="ember" lang="en"]
           div.loader-progress#load-progress
         div.loader-status#load-status [aria-live="polite" role="status"]
           "Loading…"
+    aside#bench.bench.hidden [aria-labelledby="bench-title"]
+      div.bench-scroll
+        header.bench-head
+          h2#bench-title.bench-title [tabindex="-1"]
+            "Your workbench"
+          p#bench-host.bench-host [aria-live="polite" role="status"]
+          div#bench-host-actions.bench-host-actions
+        div#bench-body.bench-body
+      div.bench-foot
+        p#bench-summary.bench-summary
+        button#bench-race.go-btn [type="button"]
+          "Race it"
+      p#bench-status.sr-only [aria-live="polite" role="status"]
     div#blocker [tabindex="-1"]
       div#instructions.checkin
         p.title
@@ -1477,6 +1495,9 @@ html [data-ui-theme="ember" lang="en"]
         p#checkin-note.checkin-note [hidden role="alert"]
         button#go-btn.go-btn [type="button"]
           "Go!"
+        p.checkin-back-row
+          button#checkin-back.results-another [type="button"]
+            "Back to the workbench"
         p.checkin-more
           a#explore-link.checkin-explore [href="/"]
             "More 3D worlds to explore at SceneXP.com"
@@ -1508,11 +1529,16 @@ html [data-ui-theme="ember" lang="en"]
         h3#results-why-heading.results-sub
           "Why your car ran as it did"
         ul#results-why.results-why
+        p#results-trophy.results-trophy [hidden]
         div.results-actions
           button#results-share.go-btn [type="button"]
             "Share my race"
+          button#results-harder.results-another [hidden type="button"]
+            "Try the next division"
           button#results-again.results-another [type="button"]
             "Race again"
+          button#results-tune.results-another [type="button"]
+            "Tune my car"
           button#results-another.results-another [type="button"]
             "Choose another race"
         p#results-status.sr-only [aria-live="polite" role="status"]
@@ -5458,6 +5484,10 @@ html [lang="en"]
               "The leaf blower game keeps the character you choose, their shirt and pants colors, skin tone, hair color and hair length, in your browser's local storage, so they are waiting for you when you come back. When you clear the whole lawn before the clock runs out, it also keeps your fastest time, just the number of seconds, so you have a time to beat. The Forget my choice button on the character card and the Forget my best time button on the welcome card clear them on the spot."
             li
               strong
+                "Your cars in Derby Day."
+              "Derby Day saves your cars in your browser's local storage, up to four of them, so they are waiting on the workbench when you come back: each car's shape, paint, weights and axle work, its best result in each race, your last race, the trophies you have won, and whether you chose metric units or turned the sound on. The Forget my cars button in the workbench's settings clears all of it on the spot."
+            li
+              strong
                 "Your home in Whitestone Home Care."
               "The Whitestone demo keeps the home you build in your browser's local storage, so it is waiting for you when you come back: the kind of home, its floors and rooms, the tasks you chose with their options, stars, and notes, your care preferences, and where you are in Maya's steps. Photos you add to a task are resized and stripped of their location before they are saved, in your browser's own database. There is no Whitestone server, so a checklist you book is kept only in this same browser too, sealed so that it opens only with its link and PIN. If you open a shared checklist on its cleaner's page, that page keeps the checklist's key, a pass that lasts for the visit, the visit's marks and add-ons, and a sealed copy for the hours of the visit, along with any photos taken as proof of the work, for up to 30 days. It also keeps a copy of its own page files so that it can reopen without a connection. Maya's Start over link clears everything the demo keeps on the spot, once you confirm it."
             li
@@ -5489,7 +5519,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated October 16, 2026."
+              "Last updated October 19, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand

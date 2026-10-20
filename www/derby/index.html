@@ -13,11 +13,11 @@
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <!-- STILL BEING BUILT (M1, graybox): kept out of search and every list of
+    <!-- STILL BEING BUILT (graybox): kept out of search and every list of
          the site until its release (tests/directory.test.mjs UNRELEASED,
          tests/page-rules.test.mjs PENDING_CARDS). -->
     <meta name="robots" content="noindex, nofollow">
-    <meta name="description" content="Race a wooden derby car down a four-lane track against the neighbors' cars, four heats, every car in every lane, timed to the thousandth, live in your browser.">
+    <meta name="description" content="Build a wooden derby car, weigh it and tune its axles, then race it down a four-lane track against the neighbors' cars, timed to the thousandth, live in your browser.">
     <meta name="theme-color" content="#1f4e8c">
     <meta name="author" content="Steve Noll">
 
@@ -30,7 +30,7 @@
     <!-- Open Graph. THE SOCIAL CARD is captured once the look is approved
          (M7): a JPEG, exactly one og:image. -->
     <meta property="og:title" content="Derby Day">
-    <meta property="og:description" content="Race a wooden derby car down a four-lane track against the neighbors' cars.">
+    <meta property="og:description" content="Build a wooden derby car and race it down a four-lane track against the neighbors' cars.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/derby/">
@@ -44,7 +44,7 @@
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Derby Day">
-    <meta name="twitter:description" content="Race a wooden derby car down a four-lane track against the neighbors' cars.">
+    <meta name="twitter:description" content="Build a wooden derby car and race it down a four-lane track against the neighbors' cars.">
     <meta name="twitter:image" content="https://www.scenexp.com/derby/assets/og-derby.jpg?v=1">
     <meta name="twitter:image:alt" content="Four wooden derby cars racing side by side down an aluminum track in a community hall.">
 
@@ -58,7 +58,7 @@
       "url": "https://www.scenexp.com/derby/",
       "name": "Derby Day",
       "image": "https://www.scenexp.com/derby/assets/og-derby.jpg?v=1",
-      "description": "A browser-based 3D derby car race. Race a wooden derby car down a four-lane aluminum track against the neighbors' cars, four heats with every car in every lane, timed to the thousandth of a second by real physics: weight, balance, axle friction and drag.",
+      "description": "A browser-based 3D derby car race. Build a wooden derby car on the workbench, choosing its shape, paint, weights and axle work, then race it down a four-lane aluminum track against the neighbors' cars, four heats with every car in every lane, timed to the thousandth of a second by real physics: weight, balance, axle friction and drag.",
       "genre": ["Racing", "Simulation"],
       "gamePlatform": "Web browser",
       "applicationCategory": "Game",
@@ -104,7 +104,7 @@
     <title>Derby Day | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=2" as="style">
+    <link rel="preload" href="css/experience.min.css?v=3" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -114,6 +114,10 @@
     <link rel="modulepreload" href="js/track.min.js">
     <link rel="modulepreload" href="js/hall.min.js">
     <link rel="modulepreload" href="js/carmesh.min.js">
+    <link rel="modulepreload" href="js/workbench.min.js">
+    <link rel="modulepreload" href="js/garage.min.js">
+    <link rel="modulepreload" href="js/bench.min.js">
+    <link rel="modulepreload" href="js/units.min.js">
     <link rel="modulepreload" href="js/playback.min.js">
     <link rel="modulepreload" href="js/director.min.js">
     <link rel="modulepreload" href="js/board.min.js">
@@ -125,12 +129,13 @@
     <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="js/weights.min.js">
     <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=2">
+    <link rel="stylesheet" href="css/experience.min.css?v=3">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -149,7 +154,9 @@
         <div class="noscript-fallback">
             <h1>Derby Day</h1>
             <p>This is a wooden derby car race, and it needs JavaScript to run.
-                Your car lines up at the top of a four-lane aluminum track
+                You build your car on a workbench, choosing its shape, its
+                paint, where its weights go and how its axles are tuned. Then
+                it lines up at the top of a four-lane aluminum track
                 against three of the neighbors' cars, and races four heats so
                 every car runs in every lane. The times are averaged, and the
                 fastest average wins.</p>
@@ -189,10 +196,31 @@
         </div>
     </div>
 
-    <!-- CHECK-IN (M1): the welcome card is the registration table. Pick an
-         event and a car, then Go, the one filled button. The choices are
-         radio buttons (checkboxes for Time Trial), built by main.js from
-         js/copy.js and the presets in js/config.js. -->
+    <!-- THE WORKBENCH (M3, js/bench.js): every arrival lands here, the
+         visitor's car on the turntable above or beside this panel, the host
+         saying where things stand. A bottom sheet on a phone, a side panel
+         on a computer. The sections are built by bench.js from js/copy.js.
+         Race it is the one filled button, always in view at the bottom. -->
+    <aside id="bench" class="bench hidden" aria-labelledby="bench-title">
+        <div class="bench-scroll">
+            <header class="bench-head">
+                <h2 id="bench-title" class="bench-title" tabindex="-1">Your workbench</h2>
+                <p id="bench-host" class="bench-host" role="status" aria-live="polite"></p>
+                <div id="bench-host-actions" class="bench-host-actions"></div>
+            </header>
+            <div id="bench-body" class="bench-body"></div>
+        </div>
+        <div class="bench-foot">
+            <p id="bench-summary" class="bench-summary"></p>
+            <button id="bench-race" class="go-btn" type="button">Race it</button>
+        </div>
+        <p id="bench-status" class="sr-only" role="status" aria-live="polite"></p>
+    </aside>
+
+    <!-- CHECK-IN (M1): the registration table. Pick an event and a car from
+         the garage, then Go, the one filled button. The choices are radio
+         buttons (checkboxes for Time Trial), built by main.js from js/copy.js
+         and the garage (js/garage.js). -->
     <div id="blocker" tabindex="-1">
         <div id="instructions" class="checkin">
             <p class="title">DERBY DAY</p>
@@ -207,6 +235,9 @@
             </fieldset>
             <p id="checkin-note" class="checkin-note" role="alert" hidden></p>
             <button id="go-btn" class="go-btn" type="button">Go!</button>
+            <p class="checkin-back-row">
+                <button id="checkin-back" class="results-another" type="button">Back to the workbench</button>
+            </p>
             <p class="checkin-more">
                 <a id="explore-link" class="checkin-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
             </p>
@@ -261,11 +292,14 @@
             <ul id="results-lanes" class="results-lanes"></ul>
             <h3 id="results-why-heading" class="results-sub">Why your car ran as it did</h3>
             <ul id="results-why" class="results-why"></ul>
+            <p id="results-trophy" class="results-trophy" hidden></p>
             <!-- Share my race is the one filled button: the clip is what
                  this scene is for (PRD, The share). -->
             <div class="results-actions">
                 <button id="results-share" class="go-btn" type="button">Share my race</button>
+                <button id="results-harder" class="results-another" type="button" hidden>Try the next division</button>
                 <button id="results-again" class="results-another" type="button">Race again</button>
+                <button id="results-tune" class="results-another" type="button">Tune my car</button>
                 <button id="results-another" class="results-another" type="button">Choose another race</button>
             </div>
             <p id="results-status" class="sr-only" role="status" aria-live="polite"></p>
