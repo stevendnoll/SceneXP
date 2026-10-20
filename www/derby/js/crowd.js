@@ -29,15 +29,15 @@
 
 import { DERBY_CONFIG } from './config.min.js';
 import { SHIRTS, PANTS, SKINS, HAIR_COLORS, optionOf, normalizeChoice } from '../../shared/js/cast-1.0.0.min.js';
-import { buildCrowdParts, createCrowdView, cheerAt, clapAt, HAIR, CHEER_POSES } from '../../shared/js/crowd-1.0.0.min.js';
+import { buildCrowdParts, createCrowdView, cheerAt, heldCheerAt, clapAt, HAIR, CHEER_POSES, HELD_POSES } from '../../shared/js/crowd-1.0.0.min.js';
 
 // The cheers are the shared crowd's (2026-10-20); main.js picks them.
 export { CHEERS, pickCheers } from '../../shared/js/crowd-1.0.0.min.js';
 
 /** The arm poses the hall is baked in (shared ARM_POSES): the shared
  *  cheers' (CHEER_POSES), clapping (`apart`) and holding a sign up (`hold`). */
-export const POSES = Object.freeze(['down', 'up', 'clap', 'hold', 'apart', 'roof', 'clapHigh', 'flex', 'point']);
-for (const p of CHEER_POSES) if (!POSES.includes(p)) throw new Error(`crowd.js: the cheers need the '${p}' pose baked`);
+export const POSES = Object.freeze(['down', 'up', 'clap', 'hold', 'holdLow', 'apart', 'roof', 'clapHigh', 'flex', 'point']);
+for (const p of [...CHEER_POSES, ...HELD_POSES]) if (!POSES.includes(p)) throw new Error(`crowd.js: the cheers need the '${p}' pose baked`);
 
 /** The pose each prop is held in, and which hand holds it. The trophy is
  *  held up in one hand, the other arm up too: a champion's victory. */
@@ -200,9 +200,13 @@ export function poseAt(member, moment, C = DERBY_CONFIG) {
         const won = Array.isArray(moment.won) ? moment.won.includes(member.group) : moment.won === member.group;
         // A loss: arms down, still (the groan).
         if (!won) return { pose: held || 'down', hop: 0 };
-        // A win: the heat's cheer (Steve's QA, 2026-10-20), a prop holder
-        // keeping hold of it and bouncing along.
-        const c = cheerAt(moment.cheer || 'jump', { t: moment.t, phase: member.phase, rank: member.rank || 0, still: moment.still });
+        // A win: the heat's cheer (Steve's QA, 2026-10-20). A sign held up
+        // in both hands does its own move with each cheer (the same QA: the
+        // kid's sign drew the eye and always did the same thing); anything
+        // else held keeps its pose and bounces along.
+        const opts = { t: moment.t, phase: member.phase, rank: member.rank || 0, still: moment.still };
+        if (held === 'hold') return heldCheerAt(moment.cheer || 'jump', opts);
+        const c = cheerAt(moment.cheer || 'jump', opts);
         return held ? { pose: held, hop: c.hop, lean: 0 } : c;
     }
     if ((kind === 'run' || kind === 'replay') && moment.cheering && moment.cheering.has(member.group)) {

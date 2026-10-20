@@ -219,11 +219,26 @@ describe('who stands where', () => {
         expect(signature('wave', member({ rank: 0 }))).not.toBe(signature('wave', member({ rank: 2 })));
         // The sway leans, the flex too, and neither hops.
         expect(signature('sway')).toMatch(/:0\.00:-?0\.1\d/);
-        // A prop holder keeps hold, and bounces with the cheer.
+        // A sign holder keeps hold of it, in one of the two holding poses.
         const holder = member({ prop: 'sign' });
-        const held = new Set(signature('point', holder).split('|').map((x) => x.split(':')[0]));
-        expect(held).toEqual(new Set(['hold']));
-        expect(signature('point', holder)).toMatch(/hold:0\.[1-9]/);
+        const held = new Set(Crowd.CHEERS.flatMap((c) => signature(c, holder).split('|').map((x) => x.split(':')[0])));
+        expect(held).toEqual(new Set(['hold', 'holdLow']));
+        // The kid's sign (Steve's QA, 2026-10-20: it did the same every
+        // heat): a move of its own with every cheer, never the same twice.
+        const sign = member({ prop: 'sign' });
+        const moves = Crowd.CHEERS.map((cheer) => {
+            const out = [];
+            for (let t = 0; t < 2.6; t += 1 / 30) {
+                const p = Crowd.poseAt(sign, { kind: 'times', t, won: 'mine', cheer });
+                out.push(`${p.pose}:${p.hop.toFixed(2)}:${(p.lean || 0).toFixed(2)}:${(p.pitch || 0).toFixed(2)}`);
+            }
+            return out.join('|');
+        });
+        expect(new Set(moves).size).toBe(Crowd.CHEERS.length);
+        // Anything else held keeps its pose and bounces along.
+        const thermos = new Set();
+        for (let t = 0; t < 2.6; t += 0.1) thermos.add(Crowd.poseAt(member({ prop: 'thermos' }), { kind: 'times', t, won: 'mine', cheer: 'roof' }).pose);
+        expect(thermos).toEqual(new Set(['down']));
         // A loss: arms down, still, whatever the cheer.
         expect(Crowd.poseAt(member({ group: 'owl' }), { kind: 'times', t: 0.3, won: 'mine', cheer: 'roof' })).toEqual({ pose: 'down', hop: 0 });
         // Reduced motion: each cheer one pose, no hop, no sway.

@@ -144,6 +144,12 @@ describe('more arm poses, measured', () => {
         expect(low('roof')).toBeLessThan(low('flex'));
         // The sign's grip: just over the head, 0.57 m apart; a clap's hands apart.
         expect(gap('hold')).toBeCloseTo(0.57, 1);
+        // The same grip at the chest, held out in front: the sign pumped.
+        const lowParts = Crowd.buildCrowdParts({ poses: ['down', 'hold', 'holdLow'] });
+        const lg = (p) => Math.hypot(...[0, 1, 2].map((k) => lowParts.hands[p][0][k] - lowParts.hands[p][1][k]));
+        expect(Math.abs(lg('holdLow') - lg('hold'))).toBeLessThan(0.03);
+        expect(lowParts.hands.hold[0][1] - lowParts.hands.holdLow[0][1]).toBeGreaterThan(0.4);
+        expect(lowParts.hands.holdLow[0][2]).toBeGreaterThan(0.25);
         expect(low('hold')).toBeGreaterThan(parts.top - 0.05);
         expect(gap('apart')).toBeGreaterThan(gap('clap') + 0.2);
         // Only the poses asked for are baked: X's and O's three stay its three.
@@ -304,5 +310,71 @@ describe('the crowd on screen (createCrowdView)', () => {
         }).not.toThrow();
         expect(view.propOf(0)).toBeNull();
         expect(view.grip('up')).toBe(0);
+    });
+});
+
+describe('a cheer with something held up in both hands', () => {
+    test('every cheer its own move with the sign, in the two holding poses, held still under reduced motion', () => {
+        const sig = (id) => {
+            const out = [];
+            for (let t = 0; t < 2.6; t += 1 / 30) {
+                const p = Crowd.heldCheerAt(id, { t, phase: 0.3 });
+                expect(Crowd.HELD_POSES).toContain(p.pose);
+                out.push(`${p.pose}:${p.hop.toFixed(2)}:${p.lean.toFixed(2)}:${p.pitch.toFixed(2)}`);
+            }
+            return out.join('|');
+        };
+        // All different, so two cheers running never move the sign alike.
+        expect(new Set(Crowd.CHEERS.map(sig)).size).toBe(Crowd.CHEERS.length);
+        // Pumped: both holds. Tipped: a pitch. Waved: a lean.
+        const poses = (id) => new Set(sig(id).split('|').map((x) => x.split(':')[0]));
+        expect(poses('clapHigh')).toEqual(new Set(['hold', 'holdLow']));
+        expect(sig('point')).toMatch(/:0\.[1-4]\d$|:0\.[1-4]\d\|/);
+        expect(Math.max(...sig('wave').split('|').map((x) => Math.abs(Number(x.split(':')[2]))))).toBeGreaterThan(0.2);
+        for (const id of Crowd.CHEERS) {
+            const held = new Set();
+            for (let t = 0; t < 2; t += 0.05) {
+                const p = Crowd.heldCheerAt(id, { t, still: true });
+                expect([p.hop, p.lean, p.pitch]).toEqual([0, 0, 0]);
+                held.add(p.pose);
+            }
+            expect(held.size).toBe(1);
+        }
+    });
+
+    test('the hands stay on what they hold: leaning with the figure, tipped about the line between them', () => {
+        const poses = ['down', 'hold', 'holdLow'];
+        const parts = Crowd.buildCrowdParts({ poses });
+        let now = { pose: 'hold', hop: 0, lean: 0, pitch: 0 };
+        const view = Crowd.createCrowdView({
+            parts, poses, hopHeight: 0.07,
+            poseOf: () => now,
+            propFor: () => ({ mesh: new THREE.Group(), pose: 'hold', hand: 'both', made: [] })
+        });
+        const look = { shirt: 1, pants: 2, skin: 3, hair: 4, style: 'short', scale: 0.62 };
+        view.set([{ look, at: { x: 2, y: 0, z: -1, ry: 0.4 } }]);
+        const shirt = view.group.children.find((o) => o.isInstancedMesh && o.geometry === parts.body.shirt);
+        const prop = view.propOf(0);
+        const body = new THREE.Matrix4();
+        for (const p of [{ pose: 'hold', hop: 0.6, lean: 0.2, pitch: 0 }, { pose: 'holdLow', hop: 0, lean: -0.15, pitch: 0.45 }, { pose: 'hold', hop: 0.3, lean: 0.07, pitch: 0.3 }]) {
+            now = p;
+            view.pose({});
+            shirt.getMatrixAt(0, body);
+            prop.updateMatrixWorld(true);
+            // Both hands, where the figure's own matrix puts them.
+            const [a, b] = parts.hands[p.pose].map((h) => new THREE.Vector3(...h).applyMatrix4(body));
+            // The prop's grip is between them...
+            expect(prop.position.distanceTo(a.clone().add(b).multiplyScalar(0.5))).toBeLessThan(1e-6);
+            // ...and its own left-right runs through both, however it is tipped.
+            const along = new THREE.Vector3(1, 0, 0).transformDirection(prop.matrixWorld);
+            const hands = b.clone().sub(a).normalize();
+            expect(Math.abs(along.dot(hands))).toBeGreaterThan(0.995);
+            // Tipped toward the front by its pitch: its up leans the way the
+            // figure faces by that much.
+            const upward = new THREE.Vector3(0, 1, 0).transformDirection(prop.matrixWorld);
+            const facing = new THREE.Vector3(Math.sin(0.4), 0, Math.cos(0.4));
+            expect(upward.dot(facing)).toBeCloseTo(Math.sin(p.pitch), 3);
+        }
+        view.dispose();
     });
 });

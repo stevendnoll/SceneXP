@@ -91,6 +91,8 @@ const LIGHTER = {
  *             clap is `clap` and `apart` swapped a few times a second
  *   hold      arms raised nearly straight and a little forward, the hands
  *             0.57 m apart just over the head: holding a sign up
+ *   holdLow   the same grip at the chest, held out in front: a sign
+ *             pumped from `hold` to here and back
  *   roof      elbows in, hands up at the shoulders, palms up: raise the roof
  *   clapHigh  the hands together high over the head
  *   flex      upper arms out level, forearms up: the strongman
@@ -110,6 +112,9 @@ export const ARM_POSES = Object.freeze({
     clap: Object.freeze({ x: -0.95, z: -0.55, fore: -1.25 }),
     apart: Object.freeze({ x: -0.95, z: -0.1, fore: -1.25 }),
     hold: Object.freeze({ x: -0.15, z: 3.0, fore: -0.6 }),
+    // Searched against real three for hold's grip (0.56 of its 0.57 m) at
+    // the chest.
+    holdLow: Object.freeze({ x: -0.9, z: 0.15, fore: -0.9 }),
     roof: Object.freeze({ x: -1.57, z: 0.75, fore: -2.35 }),
     clapHigh: Object.freeze({ x: -0.1, z: 3.42, fore: -0.3 }),
     flex: Object.freeze({ x: -1.57, z: 1.57, fore: -1.65 }),
@@ -490,6 +495,49 @@ export function cheerAt(id, { t = 0, phase = 0, rank = 0, still = false } = {}) 
     }
 }
 
+/**
+ * A cheer for a member HOLDING SOMETHING UP in both hands (a sign, a banner,
+ * www/derby's kid, 2026-10-20: "the kid holding the sign seems too similar
+ * after each heat"). The hands never leave it, so each cheer is a move they
+ * can make together: { pose ('hold' or 'holdLow'), hop, lean (the whole
+ * figure, the prop leaning with it), pitch (the prop tipped toward the front
+ * about the line between the hands, so the hands stay on it) }. Every cheer
+ * its own move, so a held sign never does the same thing two cheers running.
+ *
+ *   jump      raised high, jumping
+ *   clapHigh  pumped fast, overhead to the chest and back
+ *   roof      pumped slowly, with a big bounce
+ *   flex      shaken, a quick rock side to side
+ *   point     tipped toward the front, again and again
+ *   wave      waved overhead, a lean one way and the other
+ *   sway      swayed slowly at the chest
+ */
+export function heldCheerAt(id, { t = 0, phase = 0, still = false } = {}) {
+    const wave = (rate) => (still ? 0 : Math.sin((t + phase) * rate));
+    const beat = (rate) => Math.max(0, wave(rate));
+    const held = (pose, hop = 0, lean = 0, pitch = 0) => ({ pose, hop, lean, pitch });
+    if (still) return held(id === 'sway' ? 'holdLow' : 'hold');
+    switch (id) {
+    case 'clapHigh':
+        return held(wave(10) >= 0 ? 'hold' : 'holdLow', beat(10) * 0.25);
+    case 'roof':
+        return held(wave(5) >= 0 ? 'hold' : 'holdLow', beat(5) * 0.6);
+    case 'flex':
+        return held('hold', 0, 0.07 * wave(22));
+    case 'point':
+        return held('hold', beat(6) * 0.3, 0, 0.45 * beat(6));
+    case 'wave':
+        return held('hold', 0, 0.22 * wave(3.6));
+    case 'sway':
+        return held('holdLow', 0, 0.14 * wave(2.2));
+    default:
+        return held('hold', beat(11));
+    }
+}
+
+/** The arm poses `heldCheerAt` uses, for a scene to bake. */
+export const HELD_POSES = Object.freeze(['hold', 'holdLow']);
+
 /** A clapping member's arms at second `t`: 'clap' (together) or 'apart',
  *  swapped `rate` radians a second on its own `phase`; under `still`
  *  (reduced motion), together. Bake both. Pure. */
@@ -507,8 +555,9 @@ export function clapAt(t, { phase = 0, rate = 15, still = false } = {}) {
  * way and is not on it.
  *
  * THE SCENE SAYS HOW EACH STANDS: `poseOf(member, moment, index)` returns
- * { pose, hop, lean } for whatever `moment` the scene passes to `pose`; a
- * member is redrawn only when that changes. `hop` is a share of `hopHeight`
+ * { pose, hop, lean, pitch } for whatever `moment` the scene passes to
+ * `pose` (pitch tips a held prop toward the front, heldCheerAt); a member
+ * is redrawn only when that changes. `hop` is a share of `hopHeight`
  * meters, `lean` a sway from the feet. A member is { look: { shirt, pants,
  * skin, hair, style (or null), scale }, at: { x, y, z, ry }, ... } with
  * anything else the scene's own.
@@ -597,7 +646,7 @@ export function createCrowdView({ parts, poses, poseOf, propFor = () => null, ho
         /** These members, dressed, and posed for `moment` at once: a member
          *  left unposed until the next frame would stand at the origin. */
         set(list, moment = {}) {
-            members = list.slice(0, capacity).map((m) => ({ ...m, _pose: null, _hop: -1, _lean: 0, _away: false, _dropped: false }));
+            members = list.slice(0, capacity).map((m) => ({ ...m, _pose: null, _hop: -1, _lean: 0, _pitch: 0, _away: false, _dropped: false }));
             aside = new Set();
             dropped = new Set();
             for (const mesh of pieces) mesh.count = members.length;
@@ -627,12 +676,14 @@ export function createCrowdView({ parts, poses, poseOf, propFor = () => null, ho
             members.forEach((m, i) => {
                 const p = poseOf(m, moment, i);
                 const lean = p.lean || 0;
+                const pitch = p.pitch || 0;
                 const away = aside.has(i);
                 const left = dropped.has(i);
-                if (p.pose === m._pose && Math.abs(p.hop - m._hop) < 0.01 && Math.abs(lean - m._lean) < 0.002 && away === m._away && left === m._dropped) return;
+                if (p.pose === m._pose && Math.abs(p.hop - m._hop) < 0.01 && Math.abs(lean - m._lean) < 0.002 && Math.abs(pitch - m._pitch) < 0.002 && away === m._away && left === m._dropped) return;
                 m._pose = p.pose;
                 m._hop = p.hop;
                 m._lean = lean;
+                m._pitch = pitch;
                 m._away = away;
                 m._dropped = left;
                 dirty = true;
@@ -651,9 +702,14 @@ export function createCrowdView({ parts, poses, poseOf, propFor = () => null, ho
                 if (away) return;
                 const [a, b] = parts.hands[p.pose];
                 const at = prop.hand === 'right' ? (a[0] < b[0] ? a : b) : [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
-                v.set(at[0], at[1], at[2]).multiplyScalar(m.look.scale || 1).applyAxisAngle(up, m.at.ry || 0);
+                // In the hands, leaning as the figure leans (from the feet),
+                // tipped about the line between the hands.
+                v.set(at[0], at[1], at[2]).multiplyScalar(m.look.scale || 1);
+                if (lean) v.applyAxisAngle(side, lean);
+                v.applyAxisAngle(up, m.at.ry || 0);
                 prop.mesh.position.set(m.at.x + v.x, m.at.y + v.y + p.hop * hopHeight, m.at.z + v.z);
-                prop.mesh.rotation.set(0, m.at.ry || 0, 0);
+                prop.mesh.rotation.order = 'YZX';
+                prop.mesh.rotation.set(pitch, m.at.ry || 0, lean);
                 prop.mesh.scale.setScalar(m.look.scale || 1);
             });
             if (!dirty) return;
