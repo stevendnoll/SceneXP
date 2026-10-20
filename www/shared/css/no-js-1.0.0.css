@@ -16,8 +16,17 @@ body {
 #touch-controls,
 #nav-menu,
 #light-panel,
+#player-card,
 .ui-float {
     display: none !important;
+}
+
+/* One h1 a page (M7.1, 2026-10-20): the fallback brings its own, so the
+   sr-only one the scene keeps for the live page steps aside, and so does the
+   player's welcome card (High Water, Tornado Alley), its Begin a button that
+   cannot run. */
+body > h1.sr-only {
+    display: none;
 }
 
 .noscript-fallback {
