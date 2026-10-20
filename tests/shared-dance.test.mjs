@@ -322,6 +322,99 @@ describe('the jointing, against real three', () => {
 
 });
 
+describe('baked for a crowd, against real three', () => {
+    let THREE;
+    let D;
+    let people;
+    beforeAll(async () => {
+        THREE = await loadRealThree();
+    });
+    beforeEach(async () => {
+        jest.resetModules();
+        globalThis.THREE = THREE;
+        D = await import('../www/shared/js/dance-1.0.0.js');
+        people = await import('../www/shared/js/people-1.0.0.js');
+    });
+    const figure = () => D.jointPerson(people.createPerson({ shirtColor: 0xc8322b, sleeveColor: 0xc8322b, pantsColor: 0x3b4f7a, skinTone: 0xc68642, hairColor: 0x2b1d14, hairStyle: 'long', shoulderRound: 0.35, handScale: 1.3 }));
+    const meshes = (rig) => {
+        const out = [];
+        rig.root.traverse((o) => o.isMesh && out.push(o));
+        return out;
+    };
+
+    test('one mesh a joint: nine draw calls at most, the same figure to a hair, at rest and dancing', () => {
+        const plain = figure();
+        const baked = D.bakeJoints(figure());
+        expect(meshes(plain).length).toBeGreaterThan(30);
+        expect(meshes(baked).length).toBeLessThanOrEqual(9);
+        const box = (r) => new THREE.Box3().setFromObject(r.root, true);
+        for (const [id, t] of [[null, 0], ['ymca', 0.3], ['macarena', 2.5], ['dab', 1.1], ['robot', 0.9], ['floss', 0.33]]) {
+            const p = id ? D.danceAt(D.danceOf(id), t) : D.REST;
+            for (const r of [plain, baked]) {
+                D.applyPose(r, p);
+                r.root.updateMatrixWorld(true);
+            }
+            const a = box(plain);
+            const b = box(baked);
+            for (const k of ['x', 'y', 'z']) {
+                expect(Math.abs(a.min[k] - b.min[k])).toBeLessThan(1e-6);
+                expect(Math.abs(a.max[k] - b.max[k])).toBeLessThan(1e-6);
+            }
+        }
+    });
+
+    test('every part keeps its own color, one material shared between figures, the joints still the joints', () => {
+        const plainColors = new Set();
+        figure().root.traverse((o) => o.isMesh && o.material.color && plainColors.add(o.material.color.getHex()));
+        const material = new THREE.MeshStandardMaterial({ vertexColors: true });
+        const a = D.bakeJoints(figure(), { material });
+        const b = D.bakeJoints(figure(), { material });
+        const seen = new Set();
+        for (const m of meshes(a)) {
+            expect(m.material).toBe(material);
+            const c = m.geometry.attributes.color;
+            for (let i = 0; i < c.count; i += 7) seen.add(new THREE.Color(c.getX(i), c.getY(i), c.getZ(i)).getHex());
+        }
+        for (const hex of seen) expect(plainColors.has(hex)).toBe(true);
+        expect(seen.has(0xc8322b)).toBe(true);
+        expect(seen.has(0x2b1d14)).toBe(true);
+        expect(meshes(b)[0].material).toBe(material);
+        // The rig's joints are where they were, so applyPose drives it as before.
+        for (const k of ['L', 'R']) {
+            expect(a.arms[k].userData.forearm.children.filter((o) => o.isMesh)).toHaveLength(1);
+            expect(a.legs[k].children.filter((o) => o.isMesh)).toHaveLength(1);
+        }
+        expect(a.neck.children.filter((o) => o.isMesh)).toHaveLength(1);
+        // Lighter, for a figure far off: fewer triangles, the same shape near enough.
+        const light = D.bakeJoints(figure(), { light: true });
+        const tris = (r) => meshes(r).reduce((n, m) => n + m.geometry.index.count / 3, 0);
+        expect(tris(light)).toBeLessThan(tris(a));
+    });
+});
+
+describe('picking and easing', () => {
+    test('several dances, all different, none excluded, as many as there are', () => {
+        let r = 0;
+        const rand = () => ((r += 0.37) % 1);
+        const three = Dn.pickDances(3, rand, ['robot']);
+        expect(three).toHaveLength(3);
+        expect(new Set(three).size).toBe(3);
+        expect(three).not.toContain('robot');
+        expect(Dn.pickDances(20, () => 0)).toHaveLength(Dn.DANCES.length);
+        expect(Dn.pickDances(2, () => 0.99, Dn.DANCES.map((d) => d.id))).toEqual([]);
+    });
+
+    test('blending two poses: each end itself, a turn the short way round', () => {
+        const a = Dn.pose({ armL: { z: 3 }, root: { ry: 3.0 } });
+        const b = Dn.pose({ armL: { z: 0.2 }, root: { ry: -3.0 } });
+        expect(Dn.blendPoses(a, b, 0)).toEqual(a);
+        expect(Dn.blendPoses(a, b, 1).armL.z).toBeCloseTo(0.2, 12);
+        expect(Dn.blendPoses(a, b, 0.5).armL.z).toBeCloseTo(1.6, 12);
+        // 3.0 to -3.0 is 0.28 rad the short way, through pi, not six radians back.
+        expect(Math.abs(Dn.blendPoses(a, b, 0.5).root.ry)).toBeGreaterThan(3.1);
+    });
+});
+
 describe('under the stub', () => {
     test('jointing is safe with no geometry at all', async () => {
         jest.resetModules();

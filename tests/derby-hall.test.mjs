@@ -138,7 +138,16 @@ describe('who stands where', () => {
 
     test('the bleachers cheer (Steve\'s QA, 2026-10-20: they stood still): the keen jump and pump, the rest clap and sway', () => {
         const fans = Array.from({ length: 12 }, (_, i) => ({ group: 'crowd', keen: i % 3 === 0, phase: i * 0.53 }));
-        for (const kind of ['run', 'replay', 'times', 'dance']) {
+        // Through the finale everyone claps and sways, the keen too, so the
+        // dancers among them stand out (Steve, 2026-10-20).
+        for (let t = 0; t < 2; t += 1 / 30) {
+            for (const f of fans) {
+                const p = Crowd.poseAt(f, { kind: 'dance', t, cheering: new Set(), won: 'mine' });
+                expect(['clap', 'apart']).toContain(p.pose);
+                expect(p.hop).toBe(0);
+            }
+        }
+        for (const kind of ['run', 'replay', 'times']) {
             const seen = { keen: new Set(), rest: new Set() };
             let jump = 0;
             let sway = 0;
@@ -474,6 +483,93 @@ describe('the page, with real three (only the renderer stood in for)', () => {
         spy.mockRestore();
     }
 
+    test.each([[390, 844], [1280, 720]])('a win at %ix%i: the winning finale, the grown-up and the kid in step, the sign thrown down, and dancers on the bleachers (Steve, 2026-10-20)', async (width, height) => {
+        dom.windowStub.innerWidth = width;
+        dom.windowStub.innerHeight = height;
+        // A car that wins the Easy division.
+        const G = await import('../www/derby/js/garage.js');
+        let car = G.newCar(C, { rand: () => 0.3 });
+        car = G.weighAuto(G.normalizeBuild({ ...car, tune: { deburr: true, polish: 5, graphite: true, align: true, sand: 0 } }, C), C);
+        localStorage.setItem('derby-garage', JSON.stringify({ v: 1, cars: [car], bench: car.id }));
+        const main = await boot();
+        const state = main.getState();
+        fire(dom.el('bench-race'), 'click');
+        fire(dom.el('go-btn'), 'click');
+        fire(dom.el('skip-btn'), 'click');
+        expect(state.day.race.standings[0]).toBe(0);
+        const f = state.day.finale;
+        expect(f.duet).toBe(true);
+        // The grown-up, the kid, and two or three on the bleachers.
+        expect(f.dancers.length).toBeGreaterThanOrEqual(4);
+        expect(f.dancers.length).toBeLessThanOrEqual(5);
+        expect(f.dancers[0].member.look.scale).toBe(1);
+        expect(f.dancers[1].member.look.scale).toBe(C.crowd.kidScale);
+        // The pair the same dance, every other a different one.
+        expect(f.dancers[1].dance).toBe(f.dancers[0].dance);
+        const others = f.dancers.slice(2).map((d) => d.dance);
+        expect(new Set(others).size).toBe(others.length);
+        expect(others).not.toContain(f.dancers[0].dance);
+        // None of the bleachers' dancers behind the timer's gantry or a family.
+        const Dir = await import('../www/derby/js/director.js');
+        const Dr = await import('../www/derby/js/dressing.js');
+        const aspect = width / height;
+        const gantry = Dir.boxOnScreen(f.shot, aspect, Dr.gantryBounds(C), C);
+        const families = Object.values(state.families).flat().map((m) => Dir.figureBox(f.shot, aspect, m.at, { tall: 1.8 * m.look.scale }, C));
+        for (const d of f.dancers.slice(2)) {
+            const m = d.member;
+            const up = Dir.boxOnScreen(f.shot, aspect, { min: { x: m.at.x - 0.28, y: m.at.y + 0.85, z: m.at.z - 0.28 }, max: { x: m.at.x + 0.28, y: m.at.y + 1.85, z: m.at.z + 0.28 } }, C);
+            for (const b of [gantry, ...families]) expect(up.x0 < b.x1 && b.x0 < up.x1 && up.y0 < b.y1 && b.y0 < up.y1).toBe(false);
+        }
+        const heats = state.day.plan.heats;
+        const dance = heats[heats.length - 1].segments.find((s) => s.kind === 'dance');
+        frames(main, dance.from + 0.05 - state.clock);
+        const dancer = main.__test__.dancer();
+        expect(dancer.count()).toBe(f.dancers.length);
+        expect(dom.el('caption').textContent).toMatch(/ wins the day! Your family breaks out the routine they practiced: the /);
+        // Everyone dancing stepped out of the crowd.
+        const shirt = main.__test__.crowd().group.children.find((m) => m.isInstancedMesh && m.geometry === main.__test__.crowd().parts.body.shirt);
+        const mat = new THREE.Matrix4();
+        for (const d of f.dancers) {
+            shirt.getMatrixAt(d.member.index, mat);
+            expect(new THREE.Vector3().setFromMatrixScale(mat).x).toBe(0);
+        }
+        // Each a baked figure: nine draw calls at most.
+        for (let slot = 0; slot < f.dancers.length; slot++) {
+            let n = 0;
+            dancer.rig(slot).root.traverse((o) => o.isMesh && n++);
+            expect(n).toBeLessThanOrEqual(9);
+        }
+        // The sign: held up, then thrown down, lying face up on the floor.
+        const sign = main.__test__.crowd().propOf(f.sign.index);
+        expect(sign.visible).toBe(true);
+        frames(main, 1);
+        expect(sign.rotation.x).toBeCloseTo(-Math.PI / 2, 6);
+        expect(sign.position.y).toBeLessThan(0.05);
+        expect(sign.position.y).toBeGreaterThan(0);
+        // The pair in step: the kid's arms where the grown-up's are.
+        const armZ = (slot) => dancer.rig(slot).arms.L.rotation.z;
+        expect(armZ(1)).toBeCloseTo(armZ(0), 9);
+        frames(main, state.day.plan.total);
+        expect(state.phase).toBe('results');
+        expect(dancer.dancing()).toBe(false);
+        // The sign back in the kid's hands, upright, behind the results.
+        expect(sign.rotation.x).toBe(0);
+    });
+
+    test('a Time Trial is always the visitor\'s, so its finale stays the one grown-up (Steve, 2026-10-20)', async () => {
+        const main = await boot();
+        const state = main.getState();
+        fire(dom.el('bench-race'), 'click');
+        const trial = dom.el('event-options').children.map((l) => l.children[0]).find((i) => i.value === 'trial');
+        trial.checked = true;
+        fire(trial, 'change');
+        fire(dom.el('go-btn'), 'click');
+        fire(dom.el('skip-btn'), 'click');
+        expect(state.day.event).toBe('trial');
+        expect(state.day.finale.duet).toBe(false);
+        expect(state.day.finale.dancers).toHaveLength(1);
+    });
+
     test('the family stands by the bench, then by the finish with the neighbors\' families, cheering through a race', async () => {
         const main = await boot();
         const state = main.getState();
@@ -511,6 +607,9 @@ describe('the page, with real three (only the renderer stood in for)', () => {
         const dancer = main.__test__.dancer();
         expect(dancer.dancing()).toBe(true);
         expect(dom.el('caption').textContent).toMatch(/ wins the day, and (here comes|your family breaks out) the /);
+        // A neighbor's win: the finale as it was, one grown-up dancing.
+        expect(state.day.race.standings[0]).not.toBe(0);
+        expect(dancer.count()).toBe(1);
         const scaleOf = (i) => {
             const mat = new THREE.Matrix4();
             shirt.getMatrixAt(i, mat);

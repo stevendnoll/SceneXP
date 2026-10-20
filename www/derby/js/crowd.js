@@ -187,7 +187,10 @@ export function poseAt(member, moment, C = DERBY_CONFIG) {
         const K = C.crowd.stands;
         const clap = wave(K.clapRate) < 0 ? 'apart' : 'clap';
         const sway = (amount) => amount * wave(K.swayRate);
-        if (kind === 'run' || kind === 'replay' || kind === 'times' || kind === 'dance') {
+        // Through the finale the whole bleachers clap and sway, the keen
+        // ones too, so the dancers among them stand out (Steve, 2026-10-20).
+        if (kind === 'dance') return { pose: clap, hop: 0, lean: sway(K.sway) };
+        if (kind === 'run' || kind === 'replay' || kind === 'times') {
             if (member.keen) return { pose: beat(K.pumpRate) > 0.3 ? 'up' : 'clap', hop: beat(K.pumpRate * 2) * K.hop, lean: 0 };
             return { pose: clap, hop: 0, lean: sway(K.sway) };
         }
@@ -294,7 +297,8 @@ function buildProp(kind, text, made, grip = 0.57) {
 
 /**
  * The crowd, drawn: `capacity` members at most. Returns { group, ready,
- * set(members), pose(moment), stepAside(index), dispose }. Each member is { group (a key),
+ * set(members), pose(moment), stepAside(index, { drop }), propOf(index),
+ * dispose }. Each member is { group (a key),
  * look, at: { x, y, z, ry }, prop, sign, keen, phase }. Under the test stub
  * (no geometry to bake) nothing is drawn and every call is safe.
  */
@@ -304,7 +308,7 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
     const parts = buildCrowdParts({ scale: 1, poses: POSES, armPoses: { ...ARM_POSES, hold: HOLD, apart: APART } });
     const made = [];
     if (!parts) {
-        return { group, ready: false, set() {}, pose() {}, stepAside() {}, dispose() {} };
+        return { group, ready: false, set() {}, pose() {}, stepAside() {}, propOf: () => null, dispose() {} };
     }
     const lit = (vertexColors = false) => {
         const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75, vertexColors });
@@ -339,9 +343,11 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
     const v = new THREE.Vector3();
     const sc = new THREE.Vector3();
 
-    // The member who steps out of the crowd to dance (dancer.js takes its
-    // place), or -1.
-    let aside = -1;
+    // The members who step out of the crowd to dance (dancer.js takes
+    // their places), and of those, the ones whose prop is left behind for
+    // the page to throw down (the kid's sign, in the winning finale).
+    let aside = new Set();
+    let dropped = new Set();
 
     function matrixOf(m, hop, lean = 0) {
         q.setFromAxisAngle(up, m.at.ry || 0);
@@ -367,7 +373,8 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
          *  at the hall's origin for that frame. */
         set(list, moment = { kind: 'idle', t: 0 }) {
             members = list.slice(0, capacity).map((m) => ({ ...m, pose: null, hop: -1 }));
-            aside = -1;
+            aside = new Set();
+            dropped = new Set();
             const n = members.length;
             for (const mesh of [...Object.values(body), ...Object.values(hair), ...POSES.flatMap((p) => [arms[p].sleeve, arms[p].hand])]) mesh.count = n;
             clearProps();
@@ -399,7 +406,7 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
             members.forEach((m, i) => {
                 const p = poseAt(m, moment, C);
                 const lean = p.lean || 0;
-                const away = i === aside;
+                const away = aside.has(i);
                 if (p.pose === m.pose && Math.abs(p.hop - m.hop) < 0.01 && Math.abs(lean - (m.lean || 0)) < 0.002 && away === Boolean(m.away)) return;
                 m.pose = p.pose;
                 m.hop = p.hop;
@@ -407,20 +414,22 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
                 m.away = away;
                 dirty = true;
                 const mat = away ? zero : matrixOf(m, p.hop, lean);
-                if (m.propMesh) m.propMesh.visible = !away;
+                // A prop goes with its member, unless it was left behind.
+                if (m.propMesh) m.propMesh.visible = !away || dropped.has(i);
                 for (const k of Object.keys(body)) body[k].setMatrixAt(i, mat);
                 for (const s of HAIR) hair[s].setMatrixAt(i, m.look.style === s ? mat : zero);
                 for (const pose of POSES) {
                     arms[pose].sleeve.setMatrixAt(i, pose === p.pose ? mat : zero);
                     arms[pose].hand.setMatrixAt(i, pose === p.pose ? mat : zero);
                 }
-                if (m.propMesh) {
+                // Away, a prop left behind is the page's to move.
+                if (m.propMesh && !away) {
                     const hold = PROPS[m.prop];
                     const [a, b] = parts.hands[p.pose];
                     const at = hold.hand === 'right' ? (a[0] < b[0] ? a : b) : [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
                     v.set(at[0], at[1], at[2]).multiplyScalar(m.look.scale).applyAxisAngle(up, m.at.ry || 0);
                     m.propMesh.position.set(m.at.x + v.x, m.at.y + v.y + p.hop * C.crowd.hop, m.at.z + v.z);
-                    m.propMesh.rotation.y = m.at.ry || 0;
+                    m.propMesh.rotation.set(0, m.at.ry || 0, 0);
                     m.propMesh.scale.setScalar(m.look.scale);
                 }
             });
@@ -429,11 +438,18 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
                 mesh.instanceMatrix.needsUpdate = true;
             }
         },
-        /** Member `index` out of the crowd (drawn by nobody until the next
-         *  pose, which a dancer standing in its place draws), or everyone
-         *  back (-1). Its prop goes with it. */
-        stepAside(index) {
-            aside = index;
+        /** Members out of the crowd (an index, a list, or -1 for everyone
+         *  back), drawn by nobody: dancers stand in their places. Each one's
+         *  prop goes with it, except those in `drop`, left where they are
+         *  for the page to move (propOf). */
+        stepAside(index, { drop = [] } = {}) {
+            aside = new Set(Array.isArray(index) ? index : index >= 0 ? [index] : []);
+            dropped = new Set(drop.filter((i) => aside.has(i)));
+        },
+        /** A member's prop mesh, or null. */
+        propOf(index) {
+            const m = members[index];
+            return m && m.propMesh ? m.propMesh : null;
         },
         dispose() {
             clearProps();

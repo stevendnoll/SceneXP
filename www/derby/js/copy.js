@@ -186,6 +186,8 @@ export const CALLS = Object.freeze({
     weighIn: 'Cars to the registration table, please.',
     /** After the last heat, the winner's grown-up dancing (dance-1.0.0 names
      *  the dance: "the Robot"). */
+    /** The winning finale: the grown-up and the kid in step. */
+    danceDuet: (name, dance) => `${name} wins the day! Your family breaks out the routine they practiced: ${dance}!`,
     dance: (name, dance, mine) => (mine
         ? `${name} wins the day, and your family breaks out ${dance}!`
         : `${name} wins the day, and here comes ${dance}!`)

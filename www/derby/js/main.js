@@ -36,15 +36,15 @@ import { createTools } from './tools.min.js';
 import { createTuneups } from './tuneups.min.js';
 import { buildCheckinTable, planWeighIn, weighMoment, readingShare } from './checkin.min.js';
 import { createCrowd, bleacherSeats, crowdLooks, familyOf, familyPlaces, lookOf, seeded } from './crowd.min.js';
-import { buildDressing } from './dressing.min.js';
+import { buildDressing, gantryBounds } from './dressing.min.js';
 import { createDancer, dancerOf } from './dancer.min.js';
-import { pickDance, danceOf } from '../../shared/js/dance-1.0.0.min.js';
+import { pickDance, pickDances, danceOf, pose as dancePose } from '../../shared/js/dance-1.0.0.min.js';
 import { createFamilyStore, familyMembers } from './family.min.js';
 import { curvesOf } from './profile.min.js';
 import { bestBalance } from './weights.min.js';
 import * as U from './units.min.js';
 import { planDay, momentAt, positionAt, countAt, heatOrder } from './playback.min.js';
-import { shotFor, framing, crowdFraming, danceFraming } from './director.min.js';
+import { shotFor, framing, crowdFraming, danceFraming, duetFraming, figureBox, boxOnScreen, pickCrowdDancers } from './director.min.js';
 import { createTimer, fillResults, h } from './board.min.js';
 import {
     EVENTS, UI, ENTRY, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock,
@@ -781,7 +781,7 @@ function beginRace(entries, how) {
     // The day's dance, picked now, never the last one again.
     const dance = pickDance(Math.random(), state.lastDance);
     state.lastDance = dance;
-    state.day = { entries, cars, race, plan, event: state.event, dance, mine: new Set(entries.map((e, i) => (e.mine ? i : -1)).filter((i) => i >= 0)) };
+    state.day = { entries, cars, race, plan, event: state.event, dance, finale: null, mine: new Set(entries.map((e, i) => (e.mine ? i : -1)).filter((i) => i >= 0)) };
     state.clock = 0;
     state.said = '';
     state.counted = '';
@@ -795,6 +795,7 @@ function beginRace(entries, how) {
     if (el['skip-btn']) el['skip-btn'].textContent = UI.skip;
     announce('');
     holdFocusOnScene();
+    if (dances) state.day.finale = planFinale(state.day);
     track('race-start', { kind: state.event, outcome: `cars=${entries.map((e) => e.id).join('.')}&how=${how}` });
 }
 
@@ -1028,17 +1029,88 @@ function champKey(day) {
     return e.mine ? 'mine' : e.id;
 }
 
-/** The day's winner's grown-up steps out of the crowd and dances in its
- *  place (Steve, 2026-10-20). Nothing when the family has no grown-up. */
-function startDance() {
-    const day = state.day;
-    const family = (state.families || {})[champKey(day)] || [];
+/** The kid's sign held up, the pose a winning duet's kid starts from,
+ *  throwing the sign down and falling into step (crowd.js HOLD). */
+const SIGN_UP = dancePose({ armL: { x: -0.15, z: 3.0, fore: -0.6 }, armR: { x: -0.15, z: 3.0, fore: -0.6 } });
+/** How long the kid takes to throw the sign down and join in. */
+const THROW = 0.55;
+
+/**
+ * Who dances in the finale, planned as the race begins (the race is run in
+ * full before it is shown, so the winner is known): the winner's grown-up,
+ * and when that winner is the visitor's car (not a Time Trial, where every
+ * car is theirs, Steve 2026-10-20), the WINNING FINALE: the kid throws the
+ * sign down and dances the same dance in step, as if they had practiced
+ * it, and up to three on the bleachers, seen in the shot, each dance a
+ * different one. The figures are built now and their shaders compiled, so
+ * nothing stalls the frame the dance begins.
+ */
+function planFinale(day) {
+    const key = champKey(day);
+    const family = (state.families || {})[key] || [];
     const k = dancerOf(family, CONFIG.crowd.kidScale);
-    if (k < 0 || !dancer || !crowd) return;
-    const m = family[k];
-    crowd.stepAside(m.index);
-    dancer.start(m.look, m.at, day.dance);
-    state.dance = { at: m.at, index: m.index };
+    if (k < 0 || !dancer) return null;
+    const lead = family[k];
+    const dancers = [{ member: lead, dance: day.dance }];
+    let shot = null;
+    let sign = null;
+    if (key === 'mine' && day.event !== 'trial') {
+        const aspect = window.innerWidth / window.innerHeight;
+        const kid = family.find((m, i) => i !== k) || null;
+        const mid = kid ? { x: (lead.at.x + kid.at.x) / 2, z: (lead.at.z + kid.at.z) / 2 } : lead.at;
+        shot = duetFraming(mid, aspect, CONFIG);
+        if (kid) {
+            dancers.push({ member: kid, dance: day.dance, intro: { pose: SIGN_UP, seconds: THROW } });
+            if (kid.prop === 'sign') sign = { index: kid.index, from: null };
+        }
+        // Nobody on the bleachers dances where a family by the track would
+        // hide them.
+        const ahead = Object.values(state.families || {}).flat();
+        const avoid = ahead.map((m) => figureBox(shot, aspect, m.at, { tall: 1.8 * m.look.scale }, CONFIG))
+            .concat([boxOnScreen(shot, aspect, gantryBounds(CONFIG), CONFIG)]).filter(Boolean);
+        const stands = (bleachers || []).map((b, index) => ({ index, at: b.at, look: b.look }));
+        const extra = pickCrowdDancers(stands, shot, aspect, { count: 3, avoid }, CONFIG);
+        const moves = pickDances(extra.length, Math.random, [day.dance]);
+        extra.forEach((m, i) => dancers.push({ member: m, dance: moves[i] }));
+    }
+    // Built ahead, and drawn once unseen so their shaders are ready.
+    const rigs = dancers.map((d, slot) => dancer.prepare(slot, d.member.look));
+    if (renderer && typeof renderer.compile === 'function' && scene && camera) {
+        rigs.forEach((r) => { r.root.visible = true; });
+        try {
+            renderer.compile(scene, camera);
+        } catch (e) { /* compiled on first sight instead */ }
+        rigs.forEach((r) => { r.root.visible = false; });
+    }
+    return { dancers, shot, sign, duet: dancers.length > 1 };
+}
+
+/** The finale begins: everyone dancing steps out of the crowd and a dancer
+ *  takes their place. Nothing when the winner's family has no grown-up. */
+function startDance() {
+    const f = state.day.finale;
+    if (!f || !dancer || !crowd) return;
+    crowd.stepAside(f.dancers.map((d) => d.member.index), { drop: f.sign ? [f.sign.index] : [] });
+    f.dancers.forEach((d, slot) => dancer.start(d.member.look, d.member.at, d.dance, { slot, intro: d.intro || null }));
+    const lead = f.dancers[0].member;
+    state.dance = { at: lead.at, index: lead.index, shot: f.shot, sign: f.sign ? { ...f.sign } : null, duet: f.duet };
+}
+
+/** The kid's sign thrown down at the start of a winning finale: out of the
+ *  hands, falling forward and turning flat, face up on the floor. */
+function throwSign(t) {
+    const sg = state.dance && state.dance.sign;
+    if (!sg || !crowd) return;
+    const prop = crowd.propOf(sg.index);
+    if (!prop) return;
+    if (!sg.from) sg.from = { x: prop.position.x, y: prop.position.y, z: prop.position.z, s: prop.scale.x };
+    const f = Math.max(0, Math.min(1, (t - 0.08) / (THROW - 0.08)));
+    const fall = f * f;
+    // Lying face up, the board's middle (0.03 m behind the grip, scaled)
+    // just above the floor.
+    const rest = 0.03 * sg.from.s + 0.004;
+    prop.position.set(sg.from.x + 0.06 * f, sg.from.y + (rest - sg.from.y) * fall, sg.from.z + 0.3 * f);
+    prop.rotation.set((-Math.PI / 2) * fall, 0, 0.35 * f);
 }
 
 function stopDance() {
@@ -1088,8 +1160,10 @@ function stepRace(dt) {
     if (kind === 'dance') {
         if (!state.dance) startDance();
         if (state.dance) {
-            dancer.pose(state.clock - seg.from);
-            aim(danceFraming(state.dance.at, window.innerWidth / window.innerHeight, CONFIG));
+            const t = state.clock - seg.from;
+            dancer.pose(t);
+            throwSign(t);
+            aim(state.dance.shot || danceFraming(state.dance.at, window.innerWidth / window.innerHeight, CONFIG));
         }
     } else if (kind === 'times' && !state.reducedMotion) {
         // The heat's times: the people, the winner's family in the middle.
@@ -1155,7 +1229,8 @@ function stepRace(dt) {
             announce(heatSpoken(n, order.map((r, i) => ({ name: day.entries[r.car].name, time: r.time, place: i + 1 }))));
         } else if (kind === 'dance') {
             const champ = day.entries[day.race.standings[0]];
-            const line = CALLS.dance(champ.name, danceOf(day.dance).name, champ.mine);
+            const name = danceOf(day.dance).name;
+            const line = state.dance && state.dance.duet ? CALLS.danceDuet(champ.name, name) : CALLS.dance(champ.name, name, champ.mine);
             caption(line);
             announce(line);
         }

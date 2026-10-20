@@ -12,13 +12,16 @@
  * TWO HALVES, EACH USABLE ALONE.
  *
  *   The choreography (pure): `DANCES`, `danceAt(dance, t)` (a full pose at
- *   any moment), `pickDance`, `danceOf`, `loopOf`, and `pose` and `mirror`
- *   for writing new dances.
+ *   any moment), `pickDance` and `pickDances`, `danceOf`, `loopOf`, `pose`
+ *   and `mirror` for writing new dances, and `blendPoses` for easing from
+ *   any pose into a dance.
  *
  *   The jointing (three): `jointPerson(person)` takes a figure straight from
  *   people-1.0.0's `createPerson` and gives it a waist at the hips and a
  *   neck, each child kept exactly where it was; `applyPose(rig, pose, at)`
- *   puts it in a pose standing at a spot. Nothing in people-1.0.0 changes:
+ *   puts it in a pose standing at a spot; `bakeJoints(rig)` merges it to
+ *   one mesh a joint (about nine draw calls, not forty), for a scene with
+ *   several dancers. Nothing in people-1.0.0 changes:
  *   what is found is found by the rig's own tags (isArm, isLeg, forearm) and
  *   by where each child is drawn, never by its order.
  *
@@ -66,6 +69,8 @@
  * twist bends the elbow the wrong way), then draw it with the preview
  * script, in motion as well as pose by pose.
  */
+
+import { mergePieces, lighter } from './crowd-1.0.0.min.js';
 
 /** Every joint at rest: the arms as the shared rig hangs them. */
 export const REST = Object.freeze({
@@ -328,6 +333,29 @@ export function danceAt(dance, t) {
     return out;
 }
 
+/** Several dances, all different and none of `exclude`, picked by `rand`
+ *  (a function giving 0 to 1). Fewer when there are not enough. */
+export function pickDances(count, rand, exclude = []) {
+    const pool = DANCES.map((d) => d.id).filter((id) => !exclude.includes(id));
+    const out = [];
+    while (out.length < count && pool.length) out.push(pool.splice(Math.min(pool.length - 1, Math.floor(rand() * pool.length)), 1)[0]);
+    return out;
+}
+
+/** Two full poses blended: `f` 0 is `a`, 1 is `b`. A turn goes the short
+ *  way round. */
+export function blendPoses(a, b, f) {
+    const out = {};
+    for (const part of PARTS) {
+        const j = {};
+        for (const key of Object.keys(a[part])) {
+            j[key] = part === 'root' && key === 'ry' ? turnBetween(a[part][key], b[part][key], f) : a[part][key] + (b[part][key] - a[part][key]) * f;
+        }
+        out[part] = j;
+    }
+    return out;
+}
+
 /** A dance picked by `rand` (0 to 1), never `last` again. */
 export function pickDance(rand, last = null) {
     const pool = DANCES.filter((d) => d.id !== last);
@@ -427,4 +455,68 @@ export function applyPose(rig, p, at = { x: 0, y: 0, z: 0, ry: 0 }) {
         const l = p[`leg${k}`];
         if (leg) leg.rotation.set(l.x, 0, side * l.z);
     }
+}
+
+// ---- Cheap enough for a crowd -------------------------------------------------------
+
+/**
+ * A jointed figure (jointPerson's) baked down to ONE MESH A JOINT: every
+ * mesh that moves with a joint (the head's eyes, ears and hair with the
+ * neck, the sleeve and the hand with the forearm, ...) merged into one
+ * geometry in the joint's own frame, each keeping its color as a vertex
+ * color. About forty draw calls become nine (the hips, the waist, the
+ * neck, two upper arms, two forearms, two legs), so a scene can have a few
+ * dancers on a phone (www/derby's winning finale has five). The figure
+ * dances exactly as before: nothing moved, only fewer pieces.
+ *
+ * `material` is shared between figures when given (white, vertex
+ * colored); `light` caps every sphere's and cylinder's segments as
+ * crowd-1.0.0 does, for a figure seen at a distance. Returns the rig.
+ */
+export function bakeJoints(rig, { material = null, light = false } = {}) {
+    const forearm = (arm) => (arm && arm.userData ? arm.userData.forearm : null);
+    const joints = [rig.person, rig.waist, rig.neck, rig.arms.L, rig.arms.R, forearm(rig.arms.L), forearm(rig.arms.R), rig.legs.L, rig.legs.R].filter(Boolean);
+    const isJoint = new Set(joints);
+    const mat = material || new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75, vertexColors: true });
+    const old = new Set();
+    rig.root.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4();
+    const rel = new THREE.Matrix4();
+    for (const joint of joints) {
+        const meshes = [];
+        const groups = [];
+        const walk = (o) => {
+            for (const c of o.children) {
+                if (isJoint.has(c)) continue;
+                if (c.isMesh) meshes.push(c);
+                else groups.push(c);
+                walk(c);
+            }
+        };
+        walk(joint);
+        if (!meshes.length) continue;
+        inv.copy(joint.matrixWorld).invert();
+        const pieces = meshes.map((m) => {
+            const src = light ? lighter(m.geometry) : m.geometry;
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', src.attributes.position.clone());
+            g.setAttribute('normal', src.attributes.normal.clone());
+            if (src.index) g.setIndex(src.index.clone());
+            g.applyMatrix4(rel.multiplyMatrices(inv, m.matrixWorld));
+            if (src !== m.geometry) src.dispose();
+            if (m.material) old.add(m.material);
+            return { geometry: g, colour: m.material && m.material.color ? m.material.color.clone() : null };
+        });
+        for (const m of meshes) {
+            m.parent.remove(m);
+            m.geometry.dispose();
+        }
+        // The plain groups that only held meshes (the hair's) go too.
+        for (const g of groups) if (g.parent && !g.children.length) g.parent.remove(g);
+        const baked = new THREE.Mesh(mergePieces(pieces, { vertexColours: true }), mat);
+        baked.name = 'baked';
+        joint.add(baked);
+    }
+    for (const m of old) if (m !== mat && m.dispose) m.dispose();
+    return rig;
 }

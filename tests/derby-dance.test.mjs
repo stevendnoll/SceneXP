@@ -151,7 +151,8 @@ describe('the dancer, against real three', () => {
     }
 
     test('jointing the figure moves nothing, the head is the neck\'s, and it stands as the crowd\'s person does', async () => {
-        const rig = D.buildDancer(LOOK);
+        // Unbaked, to measure its single parts (the baked one is checked below).
+        const rig = D.buildDancer(LOOK, { bake: false });
         const { createPerson } = await import('../www/shared/js/people-1.0.0.js');
         const { FIGURE } = await import('../www/shared/js/crowd-1.0.0.js');
         const plain = createPerson({ ...FIGURE, shirtColor: LOOK.shirt, sleeveColor: LOOK.shirt, pantsColor: LOOK.pants, skinTone: LOOK.skin, hairColor: LOOK.hair, hairStyle: LOOK.style });
@@ -217,7 +218,8 @@ describe('the dancer, against real three', () => {
     });
 
     test('in the hall: hidden until it dances, one figure a look, and safe to stop and let go', () => {
-        const dancer = D.createDancer();
+        // Unbaked, so each part's own color can be read.
+        const dancer = D.createDancer({ bake: false });
         expect(dancer.dancing()).toBe(false);
         expect(() => dancer.pose(1)).not.toThrow();
         const spot = { x: 13, y: 0, z: -0.55, ry: 0 };
@@ -242,6 +244,66 @@ describe('the dancer, against real three', () => {
         dancer.dispose();
         expect(dancer.group.children).toHaveLength(0);
     });});
+
+describe('the winning finale\'s shot and its dancers', () => {
+    let THREE;
+    beforeAll(async () => {
+        THREE = await loadRealThree();
+    });
+
+    test('the hand-made projection lands every point where three\'s own camera does', async () => {
+        const Dir = await import('../www/derby/js/director.js');
+        for (const aspect of [16 / 9, 390 / 844]) {
+            const shot = Dir.duetFraming({ x: 13, z: -0.6 }, aspect, C);
+            const cam = new THREE.PerspectiveCamera(C.camera.fov, aspect, C.camera.near, C.camera.far);
+            cam.position.set(shot.position.x, shot.position.y, shot.position.z);
+            cam.lookAt(shot.target.x, shot.target.y, shot.target.z);
+            cam.updateMatrixWorld(true);
+            for (const p of [{ x: 13, y: 1, z: -0.6 }, { x: 11.2, y: 2.4, z: -3 }, { x: 14.1, y: 0, z: -2.2 }, { x: 12.5, y: 3.1, z: -4.6 }]) {
+                const ours = Dir.screenPoint(shot, aspect, p, C);
+                const theirs = new THREE.Vector3(p.x, p.y, p.z).project(cam);
+                expect(ours.x).toBeCloseTo(theirs.x, 9);
+                expect(ours.y).toBeCloseTo(theirs.y, 9);
+            }
+            // Behind the camera: nothing.
+            expect(Dir.screenPoint(shot, aspect, { x: shot.position.x, y: shot.position.y, z: shot.position.z + 1 }, C)).toBeNull();
+            // A portrait phone aims higher and comes in closer across.
+            if (aspect < 1) expect(shot.target.y).toBe(Dir.DUET_PORTRAIT.height);
+        }
+    });
+
+    test('the bleachers\' dancers: grown-ups, seen from the waist up, hidden by nothing, spread apart', async () => {
+        const Dir = await import('../www/derby/js/director.js');
+        const aspect = 16 / 9;
+        const shot = Dir.duetFraming({ x: 13, z: -0.6 }, aspect, C);
+        const seats = Crowd.bleacherSeats(C);
+        const looks = Crowd.crowdLooks(seats.length, C);
+        const members = seats.map((at, index) => ({ index, at: { ...at, ry: 0 }, look: looks[index] }));
+        const block = Dir.figureBox(shot, aspect, { x: 12.2, y: 0, z: -0.55 }, {}, C);
+        const picked = Dir.pickCrowdDancers(members, shot, aspect, { count: 3, avoid: [block] }, C);
+        // Two or three (Steve), as the hall allows.
+        expect(picked.length).toBeGreaterThanOrEqual(2);
+        expect(picked.length).toBeLessThanOrEqual(3);
+        const xs = [];
+        for (const m of picked) {
+            expect(m.look.scale).toBe(1);
+            const upper = Dir.boxOnScreen(shot, aspect, { min: { x: m.at.x - 0.28, y: m.at.y + 0.85, z: m.at.z - 0.28 }, max: { x: m.at.x + 0.28, y: m.at.y + 1.85, z: m.at.z + 0.28 } }, C);
+            for (const v of [upper.x0, upper.x1, upper.y0, upper.y1]) expect(Math.abs(v)).toBeLessThanOrEqual(0.9);
+            expect(upper.x0 < block.x1 && block.x0 < upper.x1 && upper.y0 < block.y1 && block.y0 < upper.y1).toBe(false);
+            xs.push((upper.x0 + upper.x1) / 2);
+        }
+        xs.sort((a, b) => a - b);
+        for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(0.28);
+        // Nobody to pick, nobody picked.
+        expect(Dir.pickCrowdDancers([], shot, aspect, {}, C)).toEqual([]);
+        // The gantry over the finish is a box on the screen like any other.
+        const Dr = await import('../www/derby/js/dressing.js');
+        const g = Dr.gantryBounds(C);
+        expect(g.min.x).toBeLessThan(C.track.courseLength);
+        expect(g.max.x).toBeGreaterThan(C.track.courseLength - 0.2);
+        expect(Dir.boxOnScreen(shot, aspect, g, C)).not.toBeNull();
+    });
+});
 
 describe('under the stub', () => {
     test('a dancer is safe with no geometry at all', async () => {

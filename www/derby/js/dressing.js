@@ -118,6 +118,14 @@ export function sprinkleAt(sp, D = DONUT) {
     };
 }
 
+/** The timer's gantry over the finish line, as a box in the hall (pure,
+ *  from the same numbers buildDressing places it by): for a shot that
+ *  must not put anyone behind it (the winning finale's dancers). */
+export function gantryBounds(C = DERBY_CONFIG) {
+    const fx = C.track.courseLength - 0.12;
+    return { min: { x: fx - 0.4, y: 0, z: -0.45 }, max: { x: fx + 0.4, y: 1.71, z: 0.45 } };
+}
+
 function canvasTex(w, h, draw) {
     const canvas = document.createElement('canvas');
     canvas.width = w;

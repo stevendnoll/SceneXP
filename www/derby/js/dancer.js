@@ -17,17 +17,22 @@
 
 import { createPerson } from '../../shared/js/people-1.0.0.min.js';
 import { FIGURE } from '../../shared/js/crowd-1.0.0.min.js';
-import { jointPerson, applyPose, danceAt, danceOf, REST } from '../../shared/js/dance-1.0.0.min.js';
+import { jointPerson, applyPose, bakeJoints, blendPoses, danceAt, danceOf, REST } from '../../shared/js/dance-1.0.0.min.js';
 
 /** The crowd's pupils (crowd-1.0.0 draws them in this color). */
 const PUPIL = 0x1c140e;
 
+/** One material for every baked dancer (vertex colored). */
+let SHARED = null;
+const sharedMaterial = () => (SHARED ||= new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75, vertexColors: true }));
+
 /**
  * The figure for `look` (crowd.js's look: shirt, pants, skin, hair, style,
  * scale), dressed as the crowd dresses it and jointed (dance-1.0.0's rig),
- * the soles on y = 0 as the crowd's are.
+ * the soles on y = 0 as the crowd's are. Baked to a mesh a joint unless
+ * `bake` is false (the tests that measure single parts).
  */
-export function buildDancer(look) {
+export function buildDancer(look, { bake = true } = {}) {
     const rig = jointPerson(createPerson({
         ...FIGURE,
         shirtColor: look.shirt,
@@ -40,64 +45,90 @@ export function buildDancer(look) {
         hairStyle: look.style || 'short',
         bald: !look.style
     }));
+    if (bake) bakeJoints(rig, { material: sharedMaterial() });
     rig.root.scale.setScalar(look.scale || 1);
     return rig;
 }
 
 /**
- * The dancer in the hall: hidden until `start`. Returns { group,
- * start(look, at, danceId), pose(t), stop(), dancing(), dispose }. `pose(t)`
- * takes the seconds since the dance began. One figure is kept per look, so
- * the same family dancing again builds nothing.
+ * The dancers in the hall, hidden until they start: one in a slot (slot 0
+ * the day's winner's grown-up; in a winning finale, 1 the kid and 2 to 4
+ * dancers on the bleachers). Returns { group, prepare(slot, look),
+ * start(look, at, danceId, { slot, intro }), pose(t), stop(), dancing(),
+ * rig(slot), dispose }. `pose(t)` takes the seconds since the dances began;
+ * every slot dances on the same clock, so a duet is in step. `intro` is
+ * { pose, seconds }: a pose to ease out of into the dance (the kid's sign
+ * held up, before it is thrown down). A slot keeps its figure while the
+ * look is the same, so the same family dancing again builds nothing.
  */
-export function createDancer() {
+export function createDancer({ bake = true } = {}) {
     const group = new THREE.Group();
     group.name = 'dancers';
-    let rig = null;
-    let rigKey = '';
-    let at = null;
-    let dance = null;
+    const slots = new Map();
 
-    function dispose(r) {
-        if (!r) return;
-        group.remove(r.root);
-        r.root.traverse((o) => {
+    function release(slot) {
+        const s = slots.get(slot);
+        if (!s) return;
+        group.remove(s.rig.root);
+        s.rig.root.traverse((o) => {
             if (o.geometry) o.geometry.dispose();
-            if (o.material) o.material.dispose();
+            if (o.material && o.material !== SHARED) o.material.dispose();
         });
+        slots.delete(slot);
+    }
+
+    /** The slot's figure for `look`, built only when the look changes. */
+    function prepare(slot, look) {
+        const key = JSON.stringify(look);
+        const s = slots.get(slot);
+        if (s && s.key === key) return s;
+        release(slot);
+        const rig = buildDancer(look, { bake });
+        rig.root.visible = false;
+        group.add(rig.root);
+        const made = { rig, key, at: null, dance: null, intro: null };
+        slots.set(slot, made);
+        return made;
+    }
+
+    function poseOf(s, t) {
+        const p = danceAt(s.dance, t);
+        if (!s.intro || t >= s.intro.seconds) return p;
+        // Ease out of the intro's pose into where the dance will be.
+        const f = Math.max(0, t) / s.intro.seconds;
+        return blendPoses(s.intro.pose, danceAt(s.dance, s.intro.seconds), f * f * (3 - 2 * f));
     }
 
     const api = {
         group,
-        /** Dress the dancer as `look`, stand it at `at`, ready to dance. */
-        start(look, spot, danceId) {
-            const key = JSON.stringify(look);
-            if (key !== rigKey) {
-                dispose(rig);
-                rig = buildDancer(look);
-                rigKey = key;
-                group.add(rig.root);
-            }
-            at = spot;
-            dance = danceOf(danceId);
-            rig.root.visible = true;
-            applyPose(rig, dance ? danceAt(dance, 0) : REST, at);
+        prepare: (slot, look) => prepare(slot, look).rig,
+        /** Dress a slot's dancer as `look`, stand it at `spot`, ready. */
+        start(look, spot, danceId, { slot = 0, intro = null } = {}) {
+            const s = prepare(slot, look);
+            s.at = spot;
+            s.dance = danceOf(danceId);
+            s.intro = intro;
+            s.rig.root.visible = Boolean(s.dance);
+            applyPose(s.rig, s.dance ? poseOf(s, 0) : REST, spot);
         },
         pose(t) {
-            if (!rig || !dance || !rig.root.visible) return;
-            applyPose(rig, danceAt(dance, t), at);
+            for (const s of slots.values()) if (s.dance && s.rig.root.visible) applyPose(s.rig, poseOf(s, t), s.at);
         },
         stop() {
-            if (rig) rig.root.visible = false;
-            dance = null;
+            for (const s of slots.values()) {
+                s.rig.root.visible = false;
+                s.dance = null;
+            }
         },
-        dancing: () => Boolean(rig && dance && rig.root.visible),
-        /** The figure, for measuring (tests). */
-        rig: () => rig,
+        dancing: () => [...slots.values()].some((s) => s.dance && s.rig.root.visible),
+        /** How many are dancing now. */
+        count: () => [...slots.values()].filter((s) => s.dance && s.rig.root.visible).length,
+        /** A slot's figure, for measuring (tests). */
+        rig: (slot = 0) => (slots.get(slot) ? slots.get(slot).rig : null),
+        /** The dance a slot is dancing, by id. */
+        danceIn: (slot = 0) => (slots.get(slot) && slots.get(slot).dance ? slots.get(slot).dance.id : null),
         dispose() {
-            dispose(rig);
-            rig = null;
-            rigKey = '';
+            for (const slot of [...slots.keys()]) release(slot);
         }
     };
     return api;

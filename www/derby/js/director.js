@@ -112,3 +112,102 @@ export function danceFraming(at, aspect, C = DERBY_CONFIG) {
     const d = Math.max(S.minDistance, tall, fitDistance(S.halfWidth, C.camera.fov, aspect));
     return { target, position: { x: target.x + dir.x * d, y: target.y + dir.y * d, z: target.z + dir.z * d } };
 }
+
+/** The winning finale's shot (Steve, 2026-10-20): the grown-up and the kid
+ *  dancing side by side, centered, wider than the one dancer's shot, high
+ *  enough to see the front of the bleachers behind them, where a few of the
+ *  crowd dance too. */
+export const DUET_SHOT = Object.freeze({ height: 1.35, halfHeight: 1.55, halfWidth: 1.5, minDistance: 3.2 });
+/** On a portrait phone: a little closer across, and aimed higher, so the
+ *  height the screen has to spare shows the bleachers, not the floor. */
+export const DUET_PORTRAIT = Object.freeze({ height: 1.95, halfWidth: 1.05 });
+
+/** Where the camera goes for the winning finale, the pair's middle `at`. */
+export function duetFraming(at, aspect, C = DERBY_CONFIG) {
+    const S = DUET_SHOT;
+    const portrait = aspect < 1;
+    const dir = CROWD_SHOT.dir;
+    const target = { x: at.x, y: portrait ? DUET_PORTRAIT.height : S.height, z: at.z };
+    const tall = S.halfHeight / Math.tan((C.camera.fov * Math.PI) / 360);
+    const d = Math.max(S.minDistance, tall, fitDistance(portrait ? DUET_PORTRAIT.halfWidth : S.halfWidth, C.camera.fov, aspect));
+    return { target, position: { x: target.x + dir.x * d, y: target.y + dir.y * d, z: target.z + dir.z * d } };
+}
+
+/**
+ * Where point `p` lands on a screen of `aspect` seen by `shot` ({ position,
+ * target }, the camera upright): { x, y } from -1 to 1 across and up the
+ * screen, or null behind the camera. The same projection three's camera
+ * makes, done by hand, so who is on screen can be chosen without three.
+ */
+export function screenPoint(shot, aspect, p, C = DERBY_CONFIG) {
+    const P = shot.position;
+    const f = unit(shot.target.x - P.x, shot.target.y - P.y, shot.target.z - P.z);
+    // Right is forward crossed with up; the camera's up is right crossed with forward.
+    const r = unit(-f.z, 0, f.x);
+    const u = { x: r.y * f.z - r.z * f.y, y: r.z * f.x - r.x * f.z, z: r.x * f.y - r.y * f.x };
+    const d = { x: p.x - P.x, y: p.y - P.y, z: p.z - P.z };
+    const depth = d.x * f.x + d.y * f.y + d.z * f.z;
+    if (depth <= 0) return null;
+    const tv = Math.tan((C.camera.fov * Math.PI) / 360);
+    return {
+        x: (d.x * r.x + d.y * r.y + d.z * r.z) / (depth * tv * aspect),
+        y: (d.x * u.x + d.y * u.y + d.z * u.z) / (depth * tv)
+    };
+}
+
+/** Where a box in the hall ({ min, max } corners) is on the screen: the
+ *  box { x0, x1, y0, y1 } around its eight corners, or null when any of
+ *  them is behind the camera. Pure. */
+export function boxOnScreen(shot, aspect, { min, max }, C = DERBY_CONFIG) {
+    const pts = [];
+    for (const x of [min.x, max.x]) for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) pts.push(screenPoint(shot, aspect, { x, y, z }, C));
+    if (pts.some((p) => !p)) return null;
+    return { x0: Math.min(...pts.map((p) => p.x)), x1: Math.max(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), y1: Math.max(...pts.map((p) => p.y)) };
+}
+
+/** Where a standing figure is on the screen, as a box, from its feet at
+ *  `at` to `tall` above them, `half` meters either side. Pure. */
+export function figureBox(shot, aspect, at, { tall = 1.8, half = 0.28 } = {}, C = DERBY_CONFIG) {
+    return boxOnScreen(shot, aspect, { min: { x: at.x - half, y: at.y, z: at.z - half }, max: { x: at.x + half, y: at.y + tall, z: at.z + half } }, C);
+}
+
+const overlaps = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+
+/**
+ * The bleachers' dancers for the winning finale: up to `count` grown-ups
+ * from `members` (the crowd's, { index, at, look }) seen whole in `shot`,
+ * from the waist up (`upper` meters above the feet), none of that hidden
+ * behind anything in front (`avoid`: screen boxes of the families by the
+ * track and the timer's gantry), spread across the picture at least
+ * `spread` apart, the front rows first. Returns the chosen members. Pure.
+ */
+export function pickCrowdDancers(members, shot, aspect, { count = 3, avoid = [], margin = 0.9, spread = 0.28, upper = 0.85 } = {}, C = DERBY_CONFIG) {
+    const seen = [];
+    for (const m of members) {
+        if (m.look.scale < 1) continue;
+        // The upper body is what dances: legs behind a chair or a front
+        // row are fine, the arms and the face are not.
+        const box = boxOnScreen(shot, aspect, { min: { x: m.at.x - 0.28, y: m.at.y + upper, z: m.at.z - 0.28 }, max: { x: m.at.x + 0.28, y: m.at.y + 1.85, z: m.at.z + 0.28 } }, C);
+        if (!box || box.x0 < -margin || box.x1 > margin || box.y0 < -margin || box.y1 > margin) continue;
+        if (avoid.some((a) => overlaps(box, a))) continue;
+        seen.push({ m, x: (box.x0 + box.x1) / 2, row: m.at.y });
+    }
+    // Spread: the one nearest each of `count` evenly spaced places across
+    // the screen, the front rows preferred, never two close together.
+    const picked = [];
+    for (let k = 0; k < count; k++) {
+        const want = count === 1 ? 0 : -margin + (2 * margin * k) / (count - 1);
+        let best = null;
+        let bestScore = Infinity;
+        for (const s of seen) {
+            if (picked.includes(s) || picked.some((p) => Math.abs(p.x - s.x) < spread)) continue;
+            const score = Math.abs(s.x - want) + s.row * 0.4;
+            if (score < bestScore) {
+                best = s;
+                bestScore = score;
+            }
+        }
+        if (best) picked.push(best);
+    }
+    return picked.map((s) => s.m);
+}
