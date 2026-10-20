@@ -147,7 +147,7 @@ describe('the sound', () => {
         expect(roll.gain.value).toBe(0);
     });
 
-    test('the countdown beeps (Steve\'s QA, 2026-10-20): a bright beep a count, the octave above held longer for Go', () => {
+    test('the countdown beeps (Steve\'s QA, 2026-10-20): a bright beep a count, a higher one held longer for Go, neither shrill', () => {
         const a = fakeAudio();
         const s = Sound.createSound(C.sound, { win: a.win });
         s.setOn(true);
@@ -157,7 +157,11 @@ describe('the sound', () => {
         expect(beep.frequency.value).toBe(C.sound.count.hz);
         s.count(true);
         const go = a.made.filter((n) => n.kind === 'osc').pop();
-        expect(go.frequency.value).toBe(2 * C.sound.count.hz);
+        expect(go.frequency.value).toBe(C.sound.count.goHz);
+        // Higher for Go, but not shrill (the same QA: 880 and 1760 Hz were
+        // a little high): both under 700 Hz.
+        expect(C.sound.count.goHz).toBeGreaterThan(C.sound.count.hz);
+        expect(C.sound.count.goHz).toBeLessThan(700);
         expect(C.sound.count.goSeconds).toBeGreaterThan(C.sound.count.seconds);
         // Louder than a car crossing the line, so it is heard over the wheels.
         expect(C.sound.count.gain).toBeGreaterThan(C.sound.beep.gain);

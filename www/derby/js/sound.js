@@ -245,9 +245,9 @@ export function createSound(S, { win = typeof window === 'undefined' ? null : wi
             const t = tone('sine', B.hz);
             envelope(t.gain, B.gain, 0.004, B.seconds, [t.osc]);
         },
-        /** The countdown's beep (3, 2, 1), and the octave above, held
-         *  longer, for Go: a triangle, brighter than the crossing's sine, so
-         *  it carries on a laptop's speakers. */
+        /** The countdown's beep (3, 2, 1), and a higher one, held longer,
+         *  for Go: a triangle, brighter than the crossing's sine, so it
+         *  carries on a laptop's speakers. */
         count(go = false) {
             if (!audible()) return;
             const K = S.count;
