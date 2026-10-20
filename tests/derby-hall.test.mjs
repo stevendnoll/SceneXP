@@ -84,11 +84,16 @@ describe('who stands where', () => {
     test('who cheers when: the crowd claps, a family cheers its car, a win jumps, a loss stands still', () => {
         const member = (group, extra = {}) => ({ group, phase: 0, ...extra });
         const run = { kind: 'run', t: 0.3, cheering: new Set(['mine', 'owl']), won: null };
-        expect(Crowd.poseAt(member('crowd'), { kind: 'idle', t: 0 })).toEqual({ pose: 'down', hop: 0 });
-        expect(Crowd.poseAt(member('crowd'), run).pose).toBe('clap');
-        expect(Crowd.poseAt(member('crowd', { keen: true }), run).pose).toBe('up');
-        expect(Crowd.poseAt(member('crowd', { keen: true }), { kind: 'times', t: 0 }).pose).toBe('up');
+        expect(Crowd.poseAt(member('crowd'), { kind: 'idle', t: 0 })).toEqual({ pose: 'down', hop: 0, lean: 0 });
+        expect(['clap', 'apart']).toContain(Crowd.poseAt(member('crowd'), run).pose);
+        expect(['up', 'clap']).toContain(Crowd.poseAt(member('crowd', { keen: true }), run).pose);
+        expect(['up', 'clap']).toContain(Crowd.poseAt(member('crowd', { keen: true }), { kind: 'times', t: 0 }).pose);
         expect(['up', 'clap']).toContain(Crowd.poseAt(member('owl'), run).pose);
+        // Steve's QA, 2026-10-20: the families by the track no longer jump
+        // while the cars run (it drew the eye from the cars).
+        for (let t = 0; t < 3; t += 0.02) {
+            for (const kind of ['run', 'replay']) expect(Crowd.poseAt(member('owl', { phase: 0.7 }), { ...run, kind, t }).hop).toBe(0);
+        }
         expect(Crowd.poseAt(member('arrow'), run)).toEqual({ pose: 'down', hop: 0 });
         expect(Crowd.poseAt(member('owl'), { kind: 'staging', t: 0 }).pose).toBe('clap');
         const times = { kind: 'times', t: 0.15, won: 'mine' };
@@ -107,6 +112,8 @@ describe('who stands where', () => {
         const member = (group, extra = {}) => ({ group, phase: 0, ...extra });
         const cases = [
             [member('crowd', { keen: true }), { kind: 'run', cheering: new Set() }],
+            [member('crowd'), { kind: 'run', cheering: new Set() }],
+            [member('crowd'), { kind: 'staging' }],
             [member('mine'), { kind: 'run', cheering: new Set(['mine']) }],
             [member('mine'), { kind: 'times', won: 'mine' }]
         ];
@@ -115,13 +122,54 @@ describe('who stands where', () => {
             for (let t = 0; t < 2; t += 0.05) {
                 const p = Crowd.poseAt(m, { ...moment, t, still: true });
                 expect(p.hop).toBe(0);
+                expect(p.lean || 0).toBe(0);
                 seen.add(p.pose);
             }
             expect(seen.size).toBe(1);
-            // Moving, the same member does hop.
-            const hops = [0.05, 0.15, 0.25].map((t) => Crowd.poseAt(m, { ...moment, t }).hop);
-            expect(Math.max(...hops)).toBeGreaterThan(0);
+            // Moving, the same member does move: a hop, a sway or its arms.
+            const moves = new Set();
+            for (let t = 0; t < 2; t += 0.05) {
+                const p = Crowd.poseAt(m, { ...moment, t });
+                moves.add(`${p.pose}:${p.hop.toFixed(2)}:${(p.lean || 0).toFixed(3)}`);
+            }
+            expect(moves.size).toBeGreaterThan(1);
         }
+    });
+
+    test('the bleachers cheer (Steve\'s QA, 2026-10-20: they stood still): the keen jump and pump, the rest clap and sway', () => {
+        const fans = Array.from({ length: 12 }, (_, i) => ({ group: 'crowd', keen: i % 3 === 0, phase: i * 0.53 }));
+        for (const kind of ['run', 'replay', 'times', 'dance']) {
+            const seen = { keen: new Set(), rest: new Set() };
+            let jump = 0;
+            let sway = 0;
+            for (let t = 0; t < 2; t += 1 / 30) {
+                for (const f of fans) {
+                    const p = Crowd.poseAt(f, { kind, t, cheering: new Set(), won: 'owl' });
+                    seen[f.keen ? 'keen' : 'rest'].add(p.pose);
+                    if (f.keen) jump = Math.max(jump, p.hop);
+                    else {
+                        expect(p.hop).toBe(0);
+                        sway = Math.max(sway, Math.abs(p.lean));
+                    }
+                }
+            }
+            // The keen pump their arms up and down and jump higher than a
+            // family's cheer.
+            expect([...seen.keen].sort()).toEqual(['clap', 'up']);
+            expect(jump).toBeGreaterThan(1);
+            // The rest clap: hands together, apart, together.
+            expect([...seen.rest].sort()).toEqual(['apart', 'clap']);
+            expect(sway).toBeGreaterThan(0.04);
+            expect(sway).toBeLessThanOrEqual(C.crowd.stands.sway);
+        }
+        // Waiting at the gate: the keen clap, the rest sway a little.
+        const gate = (f, t) => Crowd.poseAt(f, { kind: 'gate', t });
+        expect(new Set([0, 0.1, 0.2, 0.3].map((t) => gate(fans[0], t).pose))).toEqual(new Set(['clap', 'apart']));
+        expect(gate(fans[1], 0.3).pose).toBe('down');
+        expect(Math.abs(gate(fans[1], 0.3).lean)).toBeGreaterThan(0);
+        // Not in step: neighbors clap at their own moments.
+        const at = (t) => fans.filter((f) => !f.keen).map((f) => Crowd.poseAt(f, { kind: 'run', t, cheering: new Set() }).pose);
+        expect(new Set(at(0.5)).size).toBe(2);
     });
 
     test('the visitor\'s family: dressed from the card, the kid holding the car\'s name', () => {
@@ -209,6 +257,18 @@ describe('drawn, against real three', () => {
         // Posing the same moment again changes nothing.
         up.instanceMatrix.needsUpdate = false;
         crowd.pose({ kind: 'run', t: 0.17, cheering: new Set() });
+        // A clapping fan sways from the feet, the way it faces kept.
+        const clapper = { ...fan, keen: false, phase: 0.2 };
+        const moment = { kind: 'run', t: 0.1, cheering: new Set() };
+        crowd.set([clapper], moment);
+        const lean = Cr.poseAt(clapper, moment, C).lean;
+        expect(Math.abs(lean)).toBeGreaterThan(0.01);
+        byName(crowd.parts.body.shirt).getMatrixAt(0, mat);
+        const turn = new THREE.Quaternion();
+        mat.decompose(new THREE.Vector3(), turn, new THREE.Vector3());
+        const e = new THREE.Euler().setFromQuaternion(turn, 'YXZ');
+        expect(e.y).toBeCloseTo(clapper.at.ry, 4);
+        expect(e.z).toBeCloseTo(lean, 4);
         // A new cast lets the old props go.
         crowd.set([fan]);
         expect(crowd.group.children.find((c) => c.isGroup).children).toHaveLength(0);

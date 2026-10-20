@@ -566,6 +566,12 @@ export const DERBY_CONFIG = Object.freeze({
         familyZ: -0.55,
         /** How high a cheer hops, meters. */
         hop: 0.07,
+        /** The bleachers cheering (Steve's QA, 2026-10-20): the keen ones'
+         *  arms pumping (radians a second of a slow wave) and a jump at
+         *  twice that, `hop` a share of the hop above (further from the
+         *  camera, so higher); the others clapping (a hand swap per half
+         *  wave) and swaying from the feet by up to `sway` radians. */
+        stands: Object.freeze({ pumpRate: 5, hop: 1.5, clapRate: 15, swayRate: 3.4, sway: 0.06 }),
         /** The visitor's family on the bench, beside the table (from the
          *  table's middle), and the camera's reach when it looks at them. */
         benchSpot: Object.freeze({ x: -1.15, z: 0.15 }),

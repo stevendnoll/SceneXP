@@ -28,7 +28,13 @@ import { SHIRTS, PANTS, SKINS, HAIR_COLORS, optionOf, normalizeChoice } from '..
 import { buildCrowdParts, HAIR, ARM_POSES } from '../../shared/js/crowd-1.0.0.min.js';
 
 /** The arm poses the crowd is baked in. */
-export const POSES = Object.freeze(['down', 'up', 'clap', 'hold']);
+export const POSES = Object.freeze(['down', 'up', 'clap', 'hold', 'apart']);
+
+/** CLAPPING, for the bleachers (Steve's QA, 2026-10-20: the stands were
+ *  stationary). The baked arms snap from pose to pose, so a clap is two of
+ *  them: `clap` (the hands together) and `apart`, the same arms with the
+ *  hands a shoulder's width apart, swapped a few times a second. */
+export const APART = Object.freeze({ x: -0.95, z: -0.1, fore: -1.25 });
 
 /**
  * HOLDING A SIGN UP (Steve's QA, 2026-10-19: the sign floated over the
@@ -152,24 +158,43 @@ export function familyPlaces(groups, C = DERBY_CONFIG) {
 }
 
 /**
- * How a member stands in a moment of the race day: { pose, hop } (hop 0
- * to 1). `moment` is { kind, t, cheering (a set of group keys whose car is
+ * How a member stands in a moment of the race day: { pose, hop, lean } (hop
+ * a share of config crowd.hop, lean a sway in radians, the bleachers' only).
+ * `moment` is { kind, t, cheering (a set of group keys whose car is
  * running), won (the key of the group whose car just won, or null), still
- * (reduced motion: no beat, so no hop and no arms going up and down) }. A
- * prop holder keeps its prop's pose. Pure.
+ * (reduced motion: no beat, so no hop, no sway and no arms going up and
+ * down) }. A prop holder keeps its prop's pose. Pure.
+ *
+ * THE FAMILIES BY THE TRACK DO NOT JUMP WHILE THE CARS RUN (Steve's QA,
+ * 2026-10-20: it drew the eye from the cars). Their arms still pump. They
+ * jump for a win in the crowd shot after a heat, and in the finale, where
+ * the shot is about them.
+ *
+ * THE BLEACHERS CHEER (the same QA: they stood still). Through a heat and
+ * its times the keen ones pump their arms and jump, higher than a family
+ * (they are further from the camera), and the rest clap and sway. At the
+ * gate the keen ones clap and the rest sway a little.
  */
-export function poseAt(member, moment) {
+export function poseAt(member, moment, C = DERBY_CONFIG) {
     const held = member.prop ? PROPS[member.prop].pose : null;
+    const wave = (rate) => (moment.still ? 0 : Math.sin((moment.t + member.phase) * rate));
     const beat = (rate) => {
-        if (moment.still) return 0;
-        const v = Math.sin((moment.t + member.phase) * rate);
+        const v = wave(rate);
         return v > 0 ? v : 0;
     };
     const { kind } = moment;
     if (member.group === 'crowd') {
-        if (kind === 'run' || kind === 'replay') return { pose: member.keen ? 'up' : 'clap', hop: member.keen ? beat(9) * 0.6 : 0 };
-        if (kind === 'times' || kind === 'dance') return { pose: member.keen ? 'up' : 'clap', hop: 0 };
-        return { pose: 'down', hop: 0 };
+        const K = C.crowd.stands;
+        const clap = wave(K.clapRate) < 0 ? 'apart' : 'clap';
+        const sway = (amount) => amount * wave(K.swayRate);
+        if (kind === 'run' || kind === 'replay' || kind === 'times' || kind === 'dance') {
+            if (member.keen) return { pose: beat(K.pumpRate) > 0.3 ? 'up' : 'clap', hop: beat(K.pumpRate * 2) * K.hop, lean: 0 };
+            return { pose: clap, hop: 0, lean: sway(K.sway) };
+        }
+        if (kind === 'staging' || kind === 'gate') {
+            return member.keen ? { pose: clap, hop: 0, lean: 0 } : { pose: 'down', hop: 0, lean: sway(K.sway * 0.6) };
+        }
+        return { pose: 'down', hop: 0, lean: 0 };
     }
     if (member.group === 'volunteer') return { pose: 'down', hop: 0 };
     // The day's winner dancing (dances.js): the family cheers as for a heat.
@@ -179,7 +204,7 @@ export function poseAt(member, moment) {
         return { pose: held || (won ? 'up' : 'down'), hop: won ? beat(11) : 0 };
     }
     if ((kind === 'run' || kind === 'replay') && moment.cheering && moment.cheering.has(member.group)) {
-        return { pose: held || (beat(5) > 0.3 ? 'up' : 'clap'), hop: beat(10) * 0.7 };
+        return { pose: held || (beat(5) > 0.3 ? 'up' : 'clap'), hop: 0 };
     }
     if (kind === 'staging' || kind === 'gate') return { pose: held || 'clap', hop: 0 };
     return { pose: held || 'down', hop: 0 };
@@ -275,7 +300,7 @@ function buildProp(kind, text, made, grip = 0.57) {
 export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
     const group = new THREE.Group();
     group.name = 'crowd';
-    const parts = buildCrowdParts({ scale: 1, poses: POSES, armPoses: { ...ARM_POSES, hold: HOLD } });
+    const parts = buildCrowdParts({ scale: 1, poses: POSES, armPoses: { ...ARM_POSES, hold: HOLD, apart: APART } });
     const made = [];
     if (!parts) {
         return { group, ready: false, set() {}, pose() {}, stepAside() {}, dispose() {} };
@@ -308,6 +333,8 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
     const m4 = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
+    const side = new THREE.Vector3(0, 0, 1);
+    const qLean = new THREE.Quaternion();
     const v = new THREE.Vector3();
     const sc = new THREE.Vector3();
 
@@ -315,8 +342,10 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
     // place), or -1.
     let aside = -1;
 
-    function matrixOf(m, hop) {
+    function matrixOf(m, hop, lean = 0) {
         q.setFromAxisAngle(up, m.at.ry || 0);
+        // A sway side to side, from the feet.
+        if (lean) q.multiply(qLean.setFromAxisAngle(side, lean));
         v.set(m.at.x, m.at.y + hop * C.crowd.hop, m.at.z);
         sc.setScalar(m.look.scale);
         return m4.compose(v, q, sc);
@@ -367,14 +396,16 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
         pose(moment) {
             let dirty = false;
             members.forEach((m, i) => {
-                const p = poseAt(m, moment);
+                const p = poseAt(m, moment, C);
+                const lean = p.lean || 0;
                 const away = i === aside;
-                if (p.pose === m.pose && Math.abs(p.hop - m.hop) < 0.01 && away === Boolean(m.away)) return;
+                if (p.pose === m.pose && Math.abs(p.hop - m.hop) < 0.01 && Math.abs(lean - (m.lean || 0)) < 0.002 && away === Boolean(m.away)) return;
                 m.pose = p.pose;
                 m.hop = p.hop;
+                m.lean = lean;
                 m.away = away;
                 dirty = true;
-                const mat = away ? zero : matrixOf(m, p.hop);
+                const mat = away ? zero : matrixOf(m, p.hop, lean);
                 if (m.propMesh) m.propMesh.visible = !away;
                 for (const k of Object.keys(body)) body[k].setMatrixAt(i, mat);
                 for (const s of HAIR) hair[s].setMatrixAt(i, m.look.style === s ? mat : zero);
