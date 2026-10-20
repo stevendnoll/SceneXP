@@ -267,6 +267,46 @@ describe('the visit', () => {
         expect(main.__test__.garage().trophies()).toEqual(G.normalizeTrophies(null));
     });
 
+    test('two identical cars (two stock cars, likely in a challenge): a dead heat, the win shared, no dance (Steve, 2026-10-20)', async () => {
+        const main = await boot(hashOf(stock(), 'Ann'));
+        const state = main.getState();
+        fire(dom.el('go-btn'), 'click');
+        fire(dom.el('skip-btn'), 'click');
+        expect(state.day.race.places).toEqual([1, 1]);
+        // No one champion, so no finale dance.
+        expect(state.day.plan.heats.flatMap((h) => h.segments).some((s) => s.kind === 'dance')).toBe(false);
+        main.__test__.finishRace('skip');
+        const why = dom.el('results-why').children.map((li) => li.textContent);
+        expect(why[0]).toMatch(/^A dead heat with Ann’s Blue Wedge! Both cars averaged \d\.\d{3} seconds, to the timer’s finest reading, so you share the win\.$/);
+        expect(why[1]).toBe(Copy.CHALLENGE.alike);
+        const rows = dom.el('results-table').children[1].children;
+        expect(rows.map((r) => r.children[0].textContent)).toEqual(['1st (tie)', '1st (tie)']);
+        expect(dom.el('results-status').textContent).toMatch(/^Head to head results\. 1st, tied, Blue Wedge, .*\. 1st, tied, Ann’s Blue Wedge, /);
+        // Both families cheer behind the results: the visitor's is the only one here.
+        expect(main.__test__.crowdMoment(0).won).toEqual(['mine', 'rival']);
+        // Tune my car has nothing to point at.
+        fire(dom.el('results-tune'), 'click');
+        expect(dom.el('bench-host').textContent).not.toMatch(/biggest difference/);
+    });
+
+    test('a tie on the board in a division: the results lead with how it was decided', async () => {
+        const main = await boot();
+        const state = main.getState();
+        fire(dom.el('bench-race'), 'click');
+        fire(dom.el('go-btn'), 'click');
+        fire(dom.el('skip-btn'), 'click');
+        main.__test__.finishRace('skip');
+        const day = state.day;
+        // As if the visitor had tied 1st on the board and lost on the finer reading.
+        day.race = { ...day.race, ties: [{ first: 1, second: 0, dead: false, by: 0.00031 }], places: [2, 1, 3, 4] };
+        const lines = main.whyFor(day);
+        expect(lines[0]).toBe(`Tied at ${day.race.average[1].toFixed(3)} seconds on the board! The timer’s finer reading gave 1st place to ${day.entries[1].name}, by 0.0003 seconds.`);
+        expect(lines.length).toBeGreaterThan(1);
+        // Ties further down the field, between two neighbors, are not said.
+        day.race = { ...day.race, ties: [{ first: 2, second: 3, dead: false, by: 0.0001 }], places: [1, 2, 3, 4] };
+        expect(main.whyFor(day)[0]).not.toMatch(/^Tied/);
+    });
+
     test('a link that does not come through whole lands at the workbench, kindly said', async () => {
         const main = await boot('#challenge=1.@@not-a-car');
         expect(main.getState().phase).toBe('bench');

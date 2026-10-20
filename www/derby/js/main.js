@@ -49,7 +49,7 @@ import { createTimer, fillResults, h } from './board.min.js';
 import {
     EVENTS, UI, ENTRY, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock,
     gains, moreLine, sheetLines, trophyLine, harderLabel, HARDER, tuneupLines, WEIGH, ruleNote, CALLS, gateCall, COUNT,
-    CHALLENGE as CH, edgeWords, gapWords
+    CHALLENGE as CH, edgeWords, gapWords, tieLine
 } from './copy.min.js';
 import { decodeChallenge, isChallenge, challengeUrl, rivalName, biggestEdge, cleanFrom } from './challenge.min.js';
 import { nextPhase } from './phases.min.js';
@@ -722,8 +722,9 @@ function crowdMomentOf(now) {
         return { kind: m.segment.kind, t, cheering: groups, won };
     }
     if (state.phase === 'results' && day) {
-        const e = day.entries[day.race.standings[0]];
-        return { kind: 'times', t, won: e.mine ? 'mine' : e.id };
+        // Every car placed 1st: a dead heat shares the win, and the cheer.
+        const won = day.race.standings.filter((i) => day.race.places[i] === 1).map((i) => (day.entries[i].mine ? 'mine' : day.entries[i].id));
+        return { kind: 'times', t, won };
     }
     if (state.phase === 'checkin' || state.phase === 'weighin') return { kind: 'staging', t };
     return { kind: 'idle', t };
@@ -772,7 +773,10 @@ function beginRace(entries, how) {
     // The finale's dance needs a family by the track: a friend's car (M8)
     // brings none.
     const champ = entries[race.standings[0]];
-    const dances = Boolean(dancer) && (champ.mine || Boolean(CONFIG.families[champ.id]));
+    // A shared win (a dead heat, Steve 2026-10-20) has no one champion to
+    // dance for.
+    const shared = race.standings.length > 1 && race.places[race.standings[1]] === 1;
+    const dances = Boolean(dancer) && !shared && (champ.mine || Boolean(CONFIG.families[champ.id]));
     const plan = planDay(race, { focus, reducedMotion: state.reducedMotion, dance: dances }, CONFIG);
     // The day's dance, picked now, never the last one again.
     const dance = pickDance(Math.random(), state.lastDance);
@@ -1206,7 +1210,7 @@ function finishRace(how) {
     aim(crowdFraming(familyFocus(champ.mine ? 'mine' : champ.id), window.innerWidth / window.innerHeight, CONFIG));
     day.won = recordDay(day);
     showResults();
-    const place = day.race.standings.indexOf(0) + 1;
+    const place = day.race.places[0];
     sound.roll(0);
     track(how === 'skip' ? 'race-skip' : 'race-end', { kind: state.event, outcome: state.event === 'trial' ? `cars=${day.entries.length}` : `place=${place}` });
 }
@@ -1225,7 +1229,7 @@ function recordDay(day) {
         for (const i of day.race.standings.slice().reverse()) garage.record(day.entries[i].id, 'trial', { average: day.race.average[i] });
         return null;
     }
-    const place = day.race.standings.indexOf(0) + 1;
+    const place = day.race.places[0];
     garage.record(day.entries[0].id, event, { place, average: day.race.average[0] });
     if (place !== 1) return null;
     const isNew = garage.award(event);
@@ -1264,7 +1268,7 @@ export function whyFor(day) {
     const car = day.cars[0];
     const refs = whyRefs();
     day.explained = explain(car, refs, CONFIG);
-    return whyLines(day.explained, car, refs.idealBalance, whyWords(car, day.entries[0].build));
+    return tieLines(day).concat(whyLines(day.explained, car, refs.idealBalance, whyWords(car, day.entries[0].build)));
 }
 
 /** The host's tip back at the bench: the biggest gain left, said. */
@@ -1323,7 +1327,8 @@ function showResults() {
     }
     const modal = el['results-modal'];
     if (modal) modal.classList.remove('hidden');
-    const rows = day.race.standings.map((i, k) => ({ name: names[i], average: day.race.average[i], place: k + 1 }));
+    const shares = (i) => day.race.standings.filter((j) => day.race.places[j] === day.race.places[i]).length > 1;
+    const rows = day.race.standings.map((i) => ({ name: names[i], average: day.race.average[i], place: day.race.places[i], tied: shares(i) }));
     if (el['results-status']) el['results-status'].textContent = resultsSpoken(day.event, rows);
     const title = el['results-title'];
     if (title && typeof title.focus === 'function') title.focus({ preventScroll: true });
@@ -1396,7 +1401,7 @@ function clipFocus(day) {
 /** The board's rows, fastest first. */
 function boardRows(day) {
     const mine = state.event === 'trial' ? new Set() : day.mine;
-    return day.race.standings.map((i, k) => ({ place: k + 1, name: day.entries[i].name, average: day.race.average[i], mine: mine.has(i) }));
+    return day.race.standings.map((i) => ({ place: day.race.places[i], name: day.entries[i].name, average: day.race.average[i], mine: mine.has(i) }));
 }
 
 function clipSize() {
@@ -1753,13 +1758,29 @@ function showInvite() {
     p.appendChild(h('small', null, CH.inviteMore));
 }
 
+/** The board's ties the visitor should hear about (Steve, 2026-10-20):
+ *  any for 1st place, and any the visitor's car is in. How each was
+ *  decided, or that it was a dead heat and the place is shared. */
+function tieLines(day) {
+    const { race } = day;
+    return (race.ties || [])
+        .filter((t) => t.first === 0 || t.second === 0 || race.places[t.first] === 1)
+        .map((t) => tieLine(t, day.entries[t.first].name, day.entries[t.second].name, clock(race.average[t.first]), race.places[t.first]));
+}
+
 /** Who won a head to head, by how much, and what made the difference. */
 function challengeLines(day) {
     const [a, b] = [day.race.average[0], day.race.average[1]];
     const rival = day.entries[1].name;
     const won = day.race.standings[0] === 0;
     const gap = clock(Math.abs(a - b));
-    const lines = [a === b ? CH.tie(rival) : won ? CH.won(rival, gap) : CH.lost(rival, gap)];
+    const tie = (day.race.ties || [])[0];
+    // A dead heat: the win is shared, and nothing set the two apart.
+    if (tie && tie.dead) {
+        day.edge = null;
+        return [CH.tie(rival, clock(a)), CH.alike];
+    }
+    const lines = [tie ? (won ? CH.boardWon(rival, clock(a), tie.by) : CH.boardLost(rival, clock(a), tie.by)) : won ? CH.won(rival, gap) : CH.lost(rival, gap)];
     const [winner, loser] = won ? [day.entries[0].build, day.entries[1].build] : [day.entries[1].build, day.entries[0].build];
     const edge = biggestEdge(winner, loser, CONFIG);
     day.edge = edge ? { ...edge, mine: won } : null;

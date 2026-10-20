@@ -32,7 +32,12 @@ export const CHALLENGE = Object.freeze({
     heading: 'How the two cars compared',
     won: (rival, gap) => `You beat ${rival} by ${gap} seconds!`,
     lost: (rival, gap) => `${rival} wins by ${gap} seconds.`,
-    tie: (rival) => `A dead heat with ${rival}!`,
+    // A dead heat: the two shared the win (Steve, 2026-10-20). A tie on the
+    // board: the timer's finer reading decided it, and the results say so.
+    tie: (rival, average) => `A dead heat with ${rival}! Both cars averaged ${average} seconds, to the timer’s finest reading, so you share the win.`,
+    alike: 'Nothing separated them: the two cars ran exactly alike.',
+    boardWon: (rival, average, by) => `Tied with ${rival} at ${average} seconds on the board! The timer’s finer reading gave it to you, by ${fineWords(by)}.`,
+    boardLost: (rival, average, by) => `Tied with ${rival} at ${average} seconds on the board! The timer’s finer reading gave it to them, by ${fineWords(by)}.`,
     theirEdge: (what, worth) => `The biggest difference was their ${what}. On your car, it would be worth about ${worth} seconds.`,
     yourEdge: (what, worth) => `Your ${what} made the biggest difference, worth about ${worth} seconds on their car.`,
     even: 'Your axles were tuned alike, so the difference was in the shapes and the weights.',
@@ -186,6 +191,28 @@ export const CALLS = Object.freeze({
         : `${name} wins the day, and here comes ${dance}!`)
 });
 
+/** A margin finer than the board reads, in ten-thousandths, or as less. */
+export function fineWords(by) {
+    return by < 0.00005 ? 'less than a ten-thousandth of a second' : `${by.toFixed(4)} seconds`;
+}
+
+/** A place the board shows as shared: "1st (tie)". */
+export function tiedPlace(n) {
+    return `${placeWord(n)} (tie)`;
+}
+
+/**
+ * A tie on the board said in the results (Steve, 2026-10-20): `tie` is
+ * sim.runRace's ({ dead, by }) with the two cars' names, their average and
+ * the place it was for. A dead heat shares the place; any other tie went to
+ * the faster unrounded time.
+ */
+export function tieLine({ dead, by }, first, second, average, place) {
+    return dead
+        ? `A dead heat! ${first} and ${second} both averaged ${average} seconds, to the timer’s finest reading, so they share ${placeWord(place)} place.`
+        : `Tied at ${average} seconds on the board! The timer’s finer reading gave ${placeWord(place)} place to ${first}, by ${fineWords(by)}.`;
+}
+
 /** A winning margin said aloud: in thousandths, or, under one, as less. */
 export function gapWords(gap) {
     return gap < 0.0005 ? 'less than a thousandth of a second' : `${clock(gap)} seconds`;
@@ -262,7 +289,7 @@ export function heatSpoken(n, rows) {
 
 /** What a screen reader hears when the results are up. */
 export function resultsSpoken(eventId, rows) {
-    const parts = rows.map((r) => `${placeWord(r.place)}, ${r.name}, averaging ${clock(r.average)} seconds`);
+    const parts = rows.map((r) => `${placeWord(r.place)}${r.tied ? ', tied' : ''}, ${r.name}, averaging ${clock(r.average)} seconds`);
     return `${eventLabel(eventId)} results. ${parts.join('. ')}.`;
 }
 

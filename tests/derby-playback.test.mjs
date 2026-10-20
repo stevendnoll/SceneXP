@@ -277,6 +277,29 @@ describe('the tie-break', () => {
         // Listed the other way round, the same car wins.
         const flipped = Sim.runRace([phantom, slower]);
         expect(flipped.standings[0]).toBe(0);
+        // Not a dead heat: one place each, and the tie kept for the results
+        // to explain, with how much faster the winner really was.
+        expect(race.places).toEqual([2, 1]);
+        expect(race.ties).toHaveLength(1);
+        expect(race.ties[0]).toMatchObject({ first: 1, second: 0, dead: false });
+        expect(race.ties[0].by).toBeCloseTo((exact(0) - exact(1)) / 4, 12);
+        expect(race.ties[0].by).toBeGreaterThan(0);
+    });
+
+    test('the results say how a board tie was decided, or that a dead heat shares the place', () => {
+        expect(Copy.tieLine({ dead: false, by: 0.00023 }, 'The Phantom', 'Blue Wedge', '3.190', 1))
+            .toBe('Tied at 3.190 seconds on the board! The timer’s finer reading gave 1st place to The Phantom, by 0.0002 seconds.');
+        expect(Copy.tieLine({ dead: false, by: 0.00001 }, 'A', 'B', '3.190', 2))
+            .toBe('Tied at 3.190 seconds on the board! The timer’s finer reading gave 2nd place to A, by less than a ten-thousandth of a second.');
+        expect(Copy.tieLine({ dead: true, by: 0 }, 'Blue Wedge', 'Ann’s Blue Wedge', '3.212', 1))
+            .toBe('A dead heat! Blue Wedge and Ann’s Blue Wedge both averaged 3.212 seconds, to the timer’s finest reading, so they share 1st place.');
+        expect(Copy.tiedPlace(1)).toBe('1st (tie)');
+        expect(Copy.resultsSpoken('easy', [{ place: 1, tied: true, name: 'A', average: 3.2 }, { place: 1, tied: true, name: 'B', average: 3.2 }]))
+            .toBe('Easy division results. 1st, tied, A, averaging 3.200 seconds. 1st, tied, B, averaging 3.200 seconds.');
+        for (const s of [Copy.tieLine({ dead: true, by: 0 }, 'A', 'B', '3.2', 1), Copy.tieLine({ dead: false, by: 0.001 }, 'A', 'B', '3.2', 1),
+            Copy.CHALLENGE.tie('X', '3.2'), Copy.CHALLENGE.alike, Copy.CHALLENGE.boardWon('X', '3.2', 0.0001), Copy.CHALLENGE.boardLost('X', '3.2', 0.0001)]) {
+            expect(s).not.toMatch(/[—;]/);
+        }
     });
 });
 

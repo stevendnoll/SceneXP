@@ -17,7 +17,7 @@
  * every word goes in through textContent.
  */
 
-import { UI, clock, placeWord, heatOf } from './copy.min.js';
+import { UI, clock, placeWord, heatOf, tiedPlace } from './copy.min.js';
 
 /** An element with a class and text, children appended. */
 export function h(tag, className, text, children = []) {
@@ -103,10 +103,14 @@ export function fillResults({ table, lanesEl, whyEl, whyHeading }, race, names, 
         h('th', 'col-place', UI.place), h('th', 'col-car', UI.car), h('th', 'col-avg', UI.average)
     ])]);
     const body = h('tbody');
+    // Shared places (a dead heat) read "1st (tie)" on each car's row.
+    const places = race.places || [];
+    if (!race.places) race.standings.forEach((car, i) => { places[car] = i + 1; });
+    const count = (p) => race.standings.filter((c) => places[c] === p).length;
     race.standings.forEach((car, i) => {
         const heats = race.heats.map((heat) => clock(heat[car].time)).join('  ');
         const row = h('tr', mine.has(car) ? 'is-mine' : null, null, [
-            h('td', 'col-place', placeWord(i + 1)),
+            h('td', 'col-place', count(places[car]) > 1 ? tiedPlace(places[car]) : placeWord(places[car])),
             h('td', 'col-car', null, [
                 h('span', 'res-name', names[car]),
                 h('span', 'res-heats', `${UI.heats}: ${heats}`)

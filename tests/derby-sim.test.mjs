@@ -245,10 +245,23 @@ describe('the track and the race', () => {
         expect(solo.laneAverage.every((t) => typeof t === 'number')).toBe(true);
     });
 
-    test('a tie on the board keeps entry order', () => {
+    test('a dead heat shares its place (Steve, 2026-10-20): identical cars are both 1st, the next car 3rd', () => {
         const r = Sim.runRace([field[4], field[4]]);
         expect(r.average[0]).toBe(r.average[1]);
+        // Entry order only lists them; neither wins it.
         expect(r.standings).toEqual([0, 1]);
+        expect(r.places).toEqual([1, 1]);
+        expect(r.ties).toEqual([{ first: 0, second: 1, dead: true, by: 0 }]);
+        // Behind a faster car, they share 2nd, and a slower one is 4th.
+        const four = Sim.runRace([field[0], field[4], field[8], field[4]]);
+        expect(four.places[2]).toBe(1);
+        expect(four.places[1]).toBe(2);
+        expect(four.places[3]).toBe(2);
+        expect(four.places[0]).toBe(4);
+        // Different cars: one place each, no ties.
+        const plain = Sim.runRace([field[2], field[5], field[8]]);
+        expect([...plain.places].sort()).toEqual([1, 2, 3]);
+        expect(plain.ties).toEqual([]);
     });
 
     test('a recorded run samples from the pin to the finish line, and a car that cannot finish is marked', () => {

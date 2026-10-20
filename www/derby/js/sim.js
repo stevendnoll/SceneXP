@@ -144,8 +144,8 @@ export function shownTime(seconds) {
  * A race (PRD, The heats): one to four cars, four heats, each car moving one
  * lane over every heat, so every car runs every lane once. Averages are the
  * four heats', as the timer shows them. Standings are by average, a tie on
- * the board broken by the unrounded times, and only a dead heat kept in
- * entry order. Also each lane's average over the heats it ran, for
+ * the board broken by the unrounded times, and a dead heat sharing its place
+ * (`places`, `ties`). Also each lane's average over the heats it ran, for
  * the results' lane row. With `record`, every run's samples come back too
  * (`runs[car][lane]`), so the hall plays exactly the race the board scores.
  */
@@ -185,6 +185,25 @@ export function runRace(cars, C = DERBY_CONFIG, { record = 0 } = {}) {
         return pick;
     });
     const standings = cars.map((_, i) => i).sort((a, b) => average[a] - average[b] || exact[a] - exact[b] || a - b);
+    // A DEAD HEAT SHARES ITS PLACE (Steve, 2026-10-20): two cars whose four
+    // runs come to exactly the same time (identical cars, as two stock cars
+    // in a challenge are) are both 1st, or both 2nd, with the next car a
+    // place further down, as a timer would call it. Entry order is only
+    // which of them is listed first. `places[car]` is each car's place.
+    const places = [];
+    standings.forEach((car, k) => {
+        const prev = standings[k - 1];
+        places[car] = k > 0 && exact[car] === exact[prev] ? places[prev] : k + 1;
+    });
+    // Ties on the board (the same average to the thousandth), for the
+    // results to say how each was decided: `dead` when nothing could, else
+    // `by`, how much faster the winner's unrounded average was.
+    const ties = [];
+    for (let k = 1; k < standings.length; k++) {
+        const a = standings[k - 1];
+        const b = standings[k];
+        if (average[a] === average[b]) ties.push({ first: a, second: b, dead: exact[a] === exact[b], by: (exact[b] - exact[a]) / lanes });
+    }
     const laneAverage = [];
     for (let lane = 0; lane < lanes; lane++) {
         let sum = 0;
@@ -192,7 +211,7 @@ export function runRace(cars, C = DERBY_CONFIG, { record = 0 } = {}) {
         for (const heat of heats) for (const r of heat) if (r.lane === lane) { sum += r.time; n++; }
         laneAverage.push(n ? shownTime(sum / n) : null);
     }
-    return { heats, average, best, standings, laneAverage, runs: times };
+    return { heats, average, best, standings, places, ties, laneAverage, runs: times };
 }
 
 /** A car's time in a lane with no defect, for comparing one change. */
