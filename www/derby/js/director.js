@@ -95,3 +95,18 @@ export function crowdFraming(focus, aspect, C = DERBY_CONFIG) {
     const d = Math.max(S.minDistance, fitDistance(S.halfWidth, C.camera.fov, aspect));
     return { target, position: { x: target.x + S.dir.x * d, y: target.y + S.dir.y * d, z: target.z + S.dir.z * d } };
 }
+
+/** The dance shot's settings: from the crowd shot's side, the dancer in the
+ *  middle, the floor to a hand held high (2.25 m) and an arm out level
+ *  either side, however narrow the screen. */
+export const DANCE_SHOT = Object.freeze({ height: 1.12, halfHeight: 1.3, halfWidth: 1.1, minDistance: 2.6 });
+
+/** Where the camera goes to watch the dancer standing at `at` ({ x, z }). */
+export function danceFraming(at, aspect, C = DERBY_CONFIG) {
+    const S = DANCE_SHOT;
+    const dir = CROWD_SHOT.dir;
+    const target = { x: at.x, y: S.height, z: at.z };
+    const tall = S.halfHeight / Math.tan((C.camera.fov * Math.PI) / 360);
+    const d = Math.max(S.minDistance, tall, fitDistance(S.halfWidth, C.camera.fov, aspect));
+    return { target, position: { x: target.x + dir.x * d, y: target.y + dir.y * d, z: target.z + dir.z * d } };
+}

@@ -443,8 +443,28 @@ describe('the page, with real three (only the renderer stood in for)', () => {
         expect(state.phase).toBe('race');
         frames(main, 3);
         expect(dom.el('caption').textContent.length).toBeGreaterThan(0);
+        // After the last heat, the winner's grown-up steps out of the crowd
+        // and dances in its place (dances.js).
+        const heats = state.day.plan.heats;
+        const dance = heats[heats.length - 1].segments.find((s) => s.kind === 'dance');
+        frames(main, dance.from + 1 - state.clock);
+        const dancer = main.__test__.dancer();
+        expect(dancer.dancing()).toBe(true);
+        expect(dom.el('caption').textContent).toMatch(/ wins the day, and (here comes|your family breaks out) the /);
+        const scaleOf = (i) => {
+            const mat = new THREE.Matrix4();
+            shirt.getMatrixAt(i, mat);
+            return new THREE.Vector3().setFromMatrixScale(mat).x;
+        };
+        const { index, at: spot } = state.dance;
+        expect(scaleOf(index)).toBe(0);
+        expect(dancer.rig().root.position.x).toBeCloseTo(spot.x, 1);
+        expect(dancer.rig().root.position.z).toBeCloseTo(spot.z, 1);
         frames(main, state.day.plan.total);
         expect(state.phase).toBe('results');
+        // Back in the crowd behind the results, the dancer gone.
+        expect(dancer.dancing()).toBe(false);
+        expect(scaleOf(index)).toBeCloseTo(1, 6);
         // Back on the bench, the family goes with it.
         fire(dom.el('results-tune'), 'click');
         expect(at(shirt.count - 1).x).toBeLessThan(-10);

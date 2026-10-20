@@ -243,6 +243,13 @@ export function createSound(S, { win = typeof window === 'undefined' ? null : wi
             const t = tone('sine', B.hz);
             envelope(t.gain, B.gain, 0.004, B.seconds, [t.osc]);
         },
+        /** The countdown's beep (3, 2, 1), and the octave above for Go. */
+        count(go = false) {
+            if (!audible()) return;
+            const K = S.count;
+            const t = tone('sine', go ? K.goHz : K.hz);
+            envelope(t.gain, K.gain, 0.004, K.seconds, [t.osc]);
+        },
         /** The saw (`saw`) or the sandpaper (`sand`), for `seconds`: noise
          *  through a band, its loudness pulsing with each stroke. */
         work(kind, seconds) {

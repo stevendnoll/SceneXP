@@ -100,6 +100,33 @@ describe('playback', () => {
         expect(plan.total).toBeLessThan(75);
     });
 
+    test('every heat counts down 3, 2, 1 at the end of its staging, Go! through the gate and the first count of the run', () => {
+        const plan = P.planDay(race, { focus: 0 });
+        const step = C.timing.count;
+        // The copy says "starts in 3 seconds" as the staging begins.
+        expect(C.timing.staging).toBe(3);
+        expect(C.timing.staging).toBeGreaterThan(3 * step);
+        for (const h of plan.heats) {
+            const [stage, gate, run] = h.segments;
+            const seen = [];
+            for (let t = stage.from; t < run.to; t += 0.01) {
+                const seg = P.momentAt(plan, t).segment;
+                const n = P.countAt(seg, t, C);
+                if (seen[seen.length - 1] !== n) seen.push(n);
+            }
+            expect(seen).toEqual([null, 3, 2, 1, 0, null]);
+            // Each number a count long, Go! from the gate on.
+            expect(P.countAt(stage, stage.to - 3 * step + 0.01, C)).toBe(3);
+            expect(P.countAt(stage, stage.to - 3 * step - 0.01, C)).toBeNull();
+            expect(P.countAt(stage, stage.to - 0.01, C)).toBe(1);
+            expect(P.countAt(gate, gate.from, C)).toBe(0);
+            expect(P.countAt(run, run.from + step - 0.01, C)).toBe(0);
+            expect(P.countAt(run, run.from + step + 0.01, C)).toBeNull();
+        }
+        expect(P.countAt(null, 0, C)).toBeNull();
+        expect(P.countAt({ kind: 'times', from: 0, to: 1 }, 0.5, C)).toBeNull();
+    });
+
     test('a replay runs slowly over the finish, and reduced motion has none', () => {
         const close = raceOf([preset('full'), ...C.divisions.hard.map(fieldCar)]);
         const plan = P.planDay(close, { focus: 0 });
@@ -330,6 +357,8 @@ describe('the words', () => {
         for (const n of [1, 2, 3, 4]) style(Copy.staging(n, 4));
         style(Copy.OFF);
         style(Copy.heatWinner(2, 'Blue Streak', 3.2));
+        style(Copy.COUNT.go);
+        expect(Copy.COUNT.spoken(2, 4)).toBe('Heat 2 of 4 starts in 3 seconds.');
     });
 
     test('what a screen reader hears, heat by heat and at the end', () => {

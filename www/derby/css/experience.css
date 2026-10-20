@@ -299,6 +299,46 @@ body {
     letter-spacing: 0.18em;
 }
 
+/* The countdown before each heat: one big number a little above the middle,
+   clear of the timer and the caption, with no box behind it so the cars at
+   the pin still show around it. Each count pops in (two names for one
+   animation, swapped by main.js, so each new count restarts it). */
+.countdown {
+    display: none;
+    position: fixed;
+    left: 50%;
+    top: 42%;
+    transform: translate(-50%, -50%);
+    margin: 0;
+    color: #fff4e6;
+    font-size: clamp(4.5rem, 24vw, 10rem);
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 0 0.04em 0 #6b3d12, 0 0.06em 0.3em rgba(0, 0, 0, 0.65);
+    font-variant-numeric: tabular-nums;
+    z-index: 104;
+    pointer-events: none;
+    animation: count-pop 0.45s ease-out;
+}
+
+.countdown.visible {
+    display: block;
+}
+
+.countdown.is-alt {
+    animation-name: count-pop-alt;
+}
+
+@keyframes count-pop {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(1.6); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes count-pop-alt {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(1.6); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
 .skip-btn {
     position: fixed;
     right: max(16px, env(safe-area-inset-right));
@@ -1364,7 +1404,9 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #instructions .click-prompt {
+    #instructions .click-prompt,
+    .countdown,
+    .countdown.is-alt {
         animation: none;
     }
 }

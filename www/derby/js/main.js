@@ -37,16 +37,18 @@ import { createTuneups } from './tuneups.min.js';
 import { buildCheckinTable, planWeighIn, weighMoment, readingShare } from './checkin.min.js';
 import { createCrowd, bleacherSeats, crowdLooks, familyOf, familyPlaces, lookOf, seeded } from './crowd.min.js';
 import { buildDressing } from './dressing.min.js';
+import { createDancer } from './dancer.min.js';
+import { pickDance, dancerOf, danceOf } from './dances.min.js';
 import { createFamilyStore, familyMembers } from './family.min.js';
 import { curvesOf } from './profile.min.js';
 import { bestBalance } from './weights.min.js';
 import * as U from './units.min.js';
-import { planDay, momentAt, positionAt } from './playback.min.js';
-import { shotFor, framing, crowdFraming } from './director.min.js';
+import { planDay, momentAt, positionAt, countAt } from './playback.min.js';
+import { shotFor, framing, crowdFraming, danceFraming } from './director.min.js';
 import { createTimer, fillResults, h } from './board.min.js';
 import {
     EVENTS, UI, ENTRY, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock,
-    gains, moreLine, sheetLines, trophyLine, harderLabel, HARDER, tuneupLines, WEIGH, ruleNote, CALLS, gateCall
+    gains, moreLine, sheetLines, trophyLine, harderLabel, HARDER, tuneupLines, WEIGH, ruleNote, CALLS, gateCall, COUNT
 } from './copy.min.js';
 import { nextPhase } from './phases.min.js';
 import { createSound } from './sound.min.js';
@@ -92,6 +94,15 @@ const state = {
     clock: 0,
     /** The last segment announced, so each is said once. */
     said: '',
+    /** The countdown's word on screen, so each count beeps once. */
+    counted: '',
+    /** Each family by the finish, as placeCrowd stood them: { key: [{ index
+     *  (in the crowd), look, prop, at }] }. The dance under way ({ at,
+     *  index }, or null) and the last day's dance, never danced twice
+     *  running. */
+    families: {},
+    dance: null,
+    lastDance: null,
     /** Each car's last position and which have beeped, for the sound. */
     lastS: [],
     beeped: new Set(),
@@ -123,6 +134,8 @@ let tools = null;
 let tuneups = null;
 let registration = null;
 let crowd = null;
+/** The day's winner's grown-up, dancing after the last heat (dancer.js). */
+let dancer = null;
 let dressing = null;
 let familyStore = null;
 /** The bleachers' crowd, made once a visit. */
@@ -158,7 +171,7 @@ function updateLoadingStatus(message, progress) {
 
 async function init() {
     for (const id of ['game-canvas', 'blocker', 'event-options', 'car-options', 'car-legend', 'go-btn', 'checkin-note',
-        'checkin-back', 'help-btn', 'timer', 'skip-btn', 'you-tag', 'caption', 'race-status', 'results-modal', 'results-title',
+        'checkin-back', 'help-btn', 'timer', 'skip-btn', 'you-tag', 'caption', 'countdown', 'race-status', 'results-modal', 'results-title',
         'results-event', 'results-table', 'results-lanes', 'results-why', 'results-why-heading', 'results-again',
         'results-another', 'results-tune', 'results-harder', 'results-trophy', 'results-status', 'explore-link', 'sound-btn',
         'results-share', 'clip-modal', 'clip-title', 'clip-stage', 'clip-progress', 'clip-sound', 'clip-share', 'clip-image',
@@ -237,6 +250,8 @@ async function init() {
     scene.add(dressing.group);
     crowd = createCrowd(CONFIG);
     scene.add(crowd.group);
+    dancer = createDancer();
+    scene.add(dancer.group);
     familyStore = createFamilyStore();
     timer = createTimer(el.timer);
     // The cars waiting at the pin behind the check-in card: the visitor's
@@ -629,9 +644,15 @@ function placeCrowd() {
         for (const e of state.crowdEntries) {
             if (!e.mine && CONFIG.families[e.id]) groups.push({ key: e.id, members: familyOf(e.id, CONFIG).map((m, i) => ({ ...m, group: e.id, phase: i * 0.7 + 0.4 })) });
         }
+        state.families = {};
         for (const place of familyPlaces(groups, CONFIG)) {
             const g = groups.find((x) => x.key === place.key);
-            g.members.forEach((m, i) => list.push({ ...m, at: { ...place.at[i], ry: 0 } }));
+            g.members.forEach((m, i) => {
+                const at = { ...place.at[i], ry: 0 };
+                // Who stands where in the crowd, for the dance (startDance).
+                (state.families[g.key] ||= []).push({ index: list.length, look: m.look, prop: m.prop, at });
+                list.push({ ...m, at });
+            });
         }
     }
     crowd.set(list, crowdMoment(performance.now()));
@@ -665,6 +686,8 @@ function crowdMomentOf(now) {
             const first = heat.slice().sort((a, b) => a.time - b.time || a.car - b.car)[0];
             const e = day.entries[first.car];
             won = e.mine ? 'mine' : e.id;
+        } else if (m.segment.kind === 'dance') {
+            won = champKey(day);
         }
         return { kind: m.segment.kind, t, cheering: groups, won };
     }
@@ -716,10 +739,14 @@ function beginRace(entries, how) {
     const cars = meshes.map((m) => m.car);
     const race = runRace(cars, CONFIG, { record: CONFIG.timing.record });
     const focus = state.event === 'trial' ? null : 0;
-    const plan = planDay(race, { focus, reducedMotion: state.reducedMotion }, CONFIG);
-    state.day = { entries, cars, race, plan, event: state.event, mine: new Set(entries.map((e, i) => (e.mine ? i : -1)).filter((i) => i >= 0)) };
+    const plan = planDay(race, { focus, reducedMotion: state.reducedMotion, dance: Boolean(dancer) }, CONFIG);
+    // The day's dance, picked now, never the last one again.
+    const dance = pickDance(Math.random(), state.lastDance);
+    state.lastDance = dance;
+    state.day = { entries, cars, race, plan, event: state.event, dance, mine: new Set(entries.map((e, i) => (e.mine ? i : -1)).filter((i) => i >= 0)) };
     state.clock = 0;
     state.said = '';
+    state.counted = '';
     state.lastS = entries.map(() => 0);
     state.beeped = new Set();
     state.phase = 'race';
@@ -906,6 +933,8 @@ function setRaceChrome(on) {
         if (el['skip-btn']) el['skip-btn'].classList.remove('visible');
         if (el['you-tag']) el['you-tag'].classList.remove('visible');
         caption('');
+        countdown(null);
+        stopDance();
     }
 }
 
@@ -916,9 +945,55 @@ function caption(text) {
     c.classList.toggle('visible', Boolean(text));
 }
 
+/**
+ * The countdown before a heat, big in the middle of the screen: 3, 2, 1,
+ * then Go! (`n` 0) as the gate drops, or nothing (null). A beep for each
+ * new count, the octave above for Go. For the eye only: a screen reader
+ * hears the heat's start once, as the staging begins (stepRace).
+ */
+function countdown(n) {
+    const text = n === null || n === undefined ? '' : n === 0 ? COUNT.go : String(n);
+    if (text === state.counted) return;
+    state.counted = text;
+    const c = el.countdown;
+    if (c) {
+        c.textContent = text;
+        c.classList.toggle('visible', Boolean(text));
+        // Each count pops in afresh: two names for the same animation,
+        // swapped, restart it.
+        if (text) c.classList.toggle('is-alt');
+    }
+    if (text) sound.count(n === 0);
+}
+
 function announce(text) {
     const r = el['race-status'];
     if (r) r.textContent = text;
+}
+
+/** The family the day's winner belongs to: 'mine' or the neighbor's id. */
+function champKey(day) {
+    const e = day.entries[day.race.standings[0]];
+    return e.mine ? 'mine' : e.id;
+}
+
+/** The day's winner's grown-up steps out of the crowd and dances in its
+ *  place (Steve, 2026-10-20). Nothing when the family has no grown-up. */
+function startDance() {
+    const day = state.day;
+    const family = (state.families || {})[champKey(day)] || [];
+    const k = dancerOf(family, CONFIG.crowd.kidScale);
+    if (k < 0 || !dancer || !crowd) return;
+    const m = family[k];
+    crowd.stepAside(m.index);
+    dancer.start(m.look, m.at, day.dance);
+    state.dance = { at: m.at, index: m.index };
+}
+
+function stopDance() {
+    if (crowd) crowd.stepAside(-1);
+    if (dancer) dancer.stop();
+    state.dance = null;
 }
 
 /** One frame of the race day. */
@@ -955,9 +1030,16 @@ function stepRace(dt) {
     sound.roll(kind === 'run' || kind === 'replay' ? speed / (heat.length * 5) : 0);
     const seg = m.segment;
     trackParts.gate.set(kind === 'staging' ? 0 : kind === 'gate' ? Math.min(1, (state.clock - seg.from) / (seg.to - seg.from)) : 1);
+    countdown(countAt(seg, state.clock, CONFIG));
 
     const shot = shotFor(kind, leadS, { reducedMotion: state.reducedMotion }, CONFIG);
-    if (kind === 'times' && !state.reducedMotion) {
+    if (kind === 'dance') {
+        if (!state.dance) startDance();
+        if (state.dance) {
+            dancer.pose(state.clock - seg.from);
+            aim(danceFraming(state.dance.at, window.innerWidth / window.innerHeight, CONFIG));
+        }
+    } else if (kind === 'times' && !state.reducedMotion) {
         // The heat's times: the people, the winner's family in the middle.
         const first = heat.slice().sort((a, b) => a.time - b.time || a.car - b.car)[0];
         const e = day.entries[first.car];
@@ -971,7 +1053,7 @@ function stepRace(dt) {
     const byLane = new Array(LANES).fill(null);
     for (const r of heat) {
         const run = day.race.runs[r.car][r.lane];
-        const across = kind === 'times' || kind === 'replay' || (kind === 'run' && m.runTime >= run.time);
+        const across = kind === 'times' || kind === 'dance' || kind === 'replay' || (kind === 'run' && m.runTime >= run.time);
         byLane[r.lane] = { car: r.car, time: across ? r.time : null, place: across ? order.indexOf(r) + 1 : null };
     }
     timer.lanes(byLane);
@@ -993,8 +1075,10 @@ function stepRace(dt) {
         const n = m.heat + 1;
         const total = day.race.heats.length;
         timer.heat(n, total, kind === 'replay' ? UI.replay : '');
-        if (kind === 'staging') caption(staging(n, total));
-        else if (kind === 'gate') {
+        if (kind === 'staging') {
+            caption(staging(n, total));
+            announce(COUNT.spoken(n, total));
+        } else if (kind === 'gate') {
             caption(gateCall(n, total));
             // Spoken too, once a heat: otherwise a screen reader hears
             // nothing from the weigh-in to each heat's times.
@@ -1008,6 +1092,11 @@ function stepRace(dt) {
                 ? CALLS.close(n, day.entries[first.car].name, first.time)
                 : heatWinner(n, day.entries[first.car].name, first.time));
             announce(heatSpoken(n, order.map((r, i) => ({ name: day.entries[r.car].name, time: r.time, place: i + 1 }))));
+        } else if (kind === 'dance') {
+            const champ = day.entries[day.race.standings[0]];
+            const line = CALLS.dance(champ.name, danceOf(day.dance).name, champ.mine);
+            caption(line);
+            announce(line);
         }
         // Skip, once the first heat has been seen through.
         if (el['skip-btn']) el['skip-btn'].classList.toggle('visible', m.heat >= 1 || kind === 'times');
@@ -1727,6 +1816,7 @@ export function getState() {
 export const __test__ = {
     startRace, finishRace, stepBack, crowdMoment, openClip, closeClip, shareStill, shareClip, showBench, tuneCar, sound,
     meshes: () => meshes, benchMesh: () => benchMesh, garage: () => garage, bench: () => bench, holder: () => holder, crowd: () => crowd,
+    dancer: () => dancer,
     familyView: (v) => {
         state.benchView = v;
         if (state.phase === 'bench') benchCamera();

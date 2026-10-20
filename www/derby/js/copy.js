@@ -131,7 +131,12 @@ export const CALLS = Object.freeze({
     lead: (name) => `${name} out in front!`,
     leadMine: (name) => `${name} out in front, and the family is on its feet!`,
     close: (n, name, time) => `By a nose! ${name} takes heat ${n} in ${clock(time)} seconds.`,
-    weighIn: 'Cars to the registration table, please.'
+    weighIn: 'Cars to the registration table, please.',
+    /** After the last heat, the winner's grown-up dancing (dances.js names
+     *  the dance: "the Robot"). */
+    dance: (name, dance, mine) => (mine
+        ? `${name} wins the day, and your family breaks out ${dance}!`
+        : `${name} wins the day, and here comes ${dance}!`)
 });
 
 /** The gate's call for heat `n` of `total`. */
@@ -182,6 +187,13 @@ export function staging(n, total) {
 }
 
 export const OFF = 'And they’re off!';
+
+/** The countdown before each heat: the last word on screen, and the one
+ *  line a screen reader hears as the staging begins (it lasts 3 seconds). */
+export const COUNT = Object.freeze({
+    go: 'Go!',
+    spoken: (n, total) => `${heatOf(n, total)} starts in 3 seconds.`
+});
 
 /** The announcer, a heat's winner. */
 export function heatWinner(n, name, time) {

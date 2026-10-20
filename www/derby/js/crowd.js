@@ -168,11 +168,12 @@ export function poseAt(member, moment) {
     const { kind } = moment;
     if (member.group === 'crowd') {
         if (kind === 'run' || kind === 'replay') return { pose: member.keen ? 'up' : 'clap', hop: member.keen ? beat(9) * 0.6 : 0 };
-        if (kind === 'times') return { pose: member.keen ? 'up' : 'clap', hop: 0 };
+        if (kind === 'times' || kind === 'dance') return { pose: member.keen ? 'up' : 'clap', hop: 0 };
         return { pose: 'down', hop: 0 };
     }
     if (member.group === 'volunteer') return { pose: 'down', hop: 0 };
-    if (kind === 'times') {
+    // The day's winner dancing (dances.js): the family cheers as for a heat.
+    if (kind === 'times' || kind === 'dance') {
         const won = moment.won === member.group;
         // A win: up and jumping. A loss: arms down, still (the groan).
         return { pose: held || (won ? 'up' : 'down'), hop: won ? beat(11) : 0 };
@@ -267,7 +268,7 @@ function buildProp(kind, text, made, grip = 0.57) {
 
 /**
  * The crowd, drawn: `capacity` members at most. Returns { group, ready,
- * set(members), pose(moment), dispose }. Each member is { group (a key),
+ * set(members), pose(moment), stepAside(index), dispose }. Each member is { group (a key),
  * look, at: { x, y, z, ry }, prop, sign, keen, phase }. Under the test stub
  * (no geometry to bake) nothing is drawn and every call is safe.
  */
@@ -277,7 +278,7 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
     const parts = buildCrowdParts({ scale: 1, poses: POSES, armPoses: { ...ARM_POSES, hold: HOLD } });
     const made = [];
     if (!parts) {
-        return { group, ready: false, set() {}, pose() {}, dispose() {} };
+        return { group, ready: false, set() {}, pose() {}, stepAside() {}, dispose() {} };
     }
     const lit = (vertexColors = false) => {
         const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75, vertexColors });
@@ -310,6 +311,10 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
     const v = new THREE.Vector3();
     const sc = new THREE.Vector3();
 
+    // The member who steps out of the crowd to dance (dancer.js takes its
+    // place), or -1.
+    let aside = -1;
+
     function matrixOf(m, hop) {
         q.setFromAxisAngle(up, m.at.ry || 0);
         v.set(m.at.x, m.at.y + hop * C.crowd.hop, m.at.z);
@@ -332,6 +337,7 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
          *  at the hall's origin for that frame. */
         set(list, moment = { kind: 'idle', t: 0 }) {
             members = list.slice(0, capacity).map((m) => ({ ...m, pose: null, hop: -1 }));
+            aside = -1;
             const n = members.length;
             for (const mesh of [...Object.values(body), ...Object.values(hair), ...POSES.flatMap((p) => [arms[p].sleeve, arms[p].hand])]) mesh.count = n;
             clearProps();
@@ -362,11 +368,14 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
             let dirty = false;
             members.forEach((m, i) => {
                 const p = poseAt(m, moment);
-                if (p.pose === m.pose && Math.abs(p.hop - m.hop) < 0.01) return;
+                const away = i === aside;
+                if (p.pose === m.pose && Math.abs(p.hop - m.hop) < 0.01 && away === Boolean(m.away)) return;
                 m.pose = p.pose;
                 m.hop = p.hop;
+                m.away = away;
                 dirty = true;
-                const mat = matrixOf(m, p.hop);
+                const mat = away ? zero : matrixOf(m, p.hop);
+                if (m.propMesh) m.propMesh.visible = !away;
                 for (const k of Object.keys(body)) body[k].setMatrixAt(i, mat);
                 for (const s of HAIR) hair[s].setMatrixAt(i, m.look.style === s ? mat : zero);
                 for (const pose of POSES) {
@@ -387,6 +396,12 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
             for (const mesh of [...Object.values(body), ...Object.values(hair), ...POSES.flatMap((p) => [arms[p].sleeve, arms[p].hand])]) {
                 mesh.instanceMatrix.needsUpdate = true;
             }
+        },
+        /** Member `index` out of the crowd (drawn by nobody until the next
+         *  pose, which a dancer standing in its place draws), or everyone
+         *  back (-1). Its prop goes with it. */
+        stepAside(index) {
+            aside = index;
         },
         dispose() {
             clearProps();

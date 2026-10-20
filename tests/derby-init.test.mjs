@@ -135,18 +135,32 @@ test('Race it opens check-in with the five events and the garage\'s car, and Go 
     expect(dom.el('race-status').textContent).toBe('Blue Wedge weighs 5.00 oz and passes the gauge box.');
     frames(main, 0.2);
     expect(state.phase).toBe('race');
-    // Cleared as the race begins, so each gate's call is heard afresh.
-    expect(dom.el('race-status').textContent).toBe('');
+    // The weigh-in's line gives way at once to the first heat's start.
+    expect(dom.el('race-status').textContent).toBe('Heat 1 of 4 starts in 3 seconds.');
     expect(dom.el('skip-btn').textContent).toBe('Skip to results');
     expect(shown('timer')).toBe(true);
     frames(main, 0.2);
     expect(dom.el('caption').textContent).toMatch(/Lane 4 runs a hair slow/);
+    // The heat starts on its own, and says so: spoken once, then counted
+    // down on screen, 3, 2, 1, Go! as the gate drops.
+    expect(dom.el('race-status').textContent).toBe('Heat 1 of 4 starts in 3 seconds.');
+    expect(shown('countdown')).toBe(false);
     const first = state.day.plan.heats[0];
+    const stage = first.segments.find((s) => s.kind === 'staging');
+    const counts = [];
+    for (const left of [2, 1.2, 0.4]) {
+        frames(main, stage.to - left - state.clock);
+        counts.push(shown('countdown') ? dom.el('countdown').textContent : '');
+    }
+    expect(counts).toEqual(['3', '2', '1']);
     // The gate's call is spoken as well as captioned.
     const gate = first.segments.find((s) => s.kind === 'gate');
     frames(main, (gate.from + gate.to) / 2 - state.clock);
     expect(dom.el('race-status').textContent).toBe('And they’re off!');
-    frames(main, first.end - 0.4);
+    expect(dom.el('countdown').textContent).toBe('Go!');
+    frames(main, 1.5);
+    expect(shown('countdown')).toBe(false);
+    frames(main, first.end - 0.4 - state.clock);
     expect(dom.el('race-status').textContent).toMatch(/^Heat 1: /);
     expect(shown('skip-btn')).toBe(true);
     frames(main, state.day.plan.total);
@@ -348,6 +362,30 @@ test('a returning visitor hears where things stand, and Race again races the sam
     expect(state.event).toBe('medium');
 });
 
+test('after the last heat the winner\'s grown-up dances, named by the announcer, a new dance each race, and Skip ends it', async () => {
+    const main = await boot();
+    const state = main.getState();
+    raceIt();
+    go();
+    const first = state.day.dance;
+    const heats = state.day.plan.heats;
+    const dance = heats[heats.length - 1].segments.find((s) => s.kind === 'dance');
+    expect(dance.to).toBeCloseTo(state.day.plan.total, 9);
+    frames(main, dance.from + 0.5 - state.clock);
+    const line = dom.el('caption').textContent;
+    expect(line).toMatch(/ wins the day, and (here comes|your family breaks out) the [A-Z]/);
+    expect(dom.el('race-status').textContent).toBe(line);
+    // The results' board still shows the last heat.
+    expect(shown('skip-btn')).toBe(true);
+    fire(dom.el('skip-btn'), 'click');
+    expect(state.phase).toBe('results');
+    expect(state.dance).toBeNull();
+    // Race again: another dance.
+    fire(dom.el('results-again'), 'click');
+    expect(state.phase).toBe('race');
+    expect(state.day.dance).not.toBe(first);
+});
+
 test('a browser that refuses storage still gets a whole visit', async () => {
     const refuse = () => { throw new Error('SecurityError'); };
     globalThis.localStorage = { getItem: refuse, setItem: refuse, removeItem: refuse };
@@ -391,6 +429,8 @@ test('reduced motion: no slow replays, no chase camera, and the turntable stands
     choose(eventInput('hard'));
     go();
     expect(state.day.plan.heats.every((h) => h.segments.every((s) => s.kind !== 'replay'))).toBe(true);
+    // Nobody dances, either.
+    expect(state.day.plan.heats.every((h) => h.segments.every((s) => s.kind !== 'dance'))).toBe(true);
     frames(main, state.day.plan.total + 1);
     expect(state.phase).toBe('results');
 });

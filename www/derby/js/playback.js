@@ -73,9 +73,10 @@ export function closeFinish(heat, { focus = null, closeGap = DERBY_CONFIG.timing
  * replay of a close finish (none under reduced motion), and the times on
  * the board. Returns { heats: [{ index, start, segments }], total } where a
  * segment is { kind, from, to } in timeline seconds, and a replay's carries
- * the run time it shows ({ runFrom, runTo, rate }).
+ * the run time it shows ({ runFrom, runTo, rate }). With `dance`, the last
+ * heat ends with the winner's family dancing (a 'dance' segment).
  */
-export function planDay(race, { focus = null, reducedMotion = false } = {}, C = DERBY_CONFIG) {
+export function planDay(race, { focus = null, reducedMotion = false, dance = false } = {}, C = DERBY_CONFIG) {
     const T = C.timing;
     const heats = [];
     let clock = 0;
@@ -98,9 +99,29 @@ export function planDay(race, { focus = null, reducedMotion = false } = {}, C = 
             add('replay', (runTo - runFrom) / T.replayRate, { runFrom, runTo, rate: T.replayRate, close });
         }
         add('times', T.times);
+        // After the last heat, the day's winner's grown-up dances (dances.js),
+        // when asked for. Never under reduced motion.
+        if (dance && !reducedMotion && index === race.heats.length - 1) add('dance', T.dance);
         heats.push({ index, start, end: clock, segments, close });
     });
     return { heats, total: clock };
+}
+
+/**
+ * The countdown at timeline second `t` in `seg`: 3, 2 or 1 over the last
+ * three counts of a staging beat, 0 ("Go!") through the gate and the run's
+ * first count (the gate alone is too quick to read), otherwise null (the
+ * staging's quiet start, and the rest of the heat).
+ */
+export function countAt(seg, t, C = DERBY_CONFIG) {
+    if (!seg) return null;
+    const step = C.timing.count;
+    if (seg.kind === 'gate') return 0;
+    if (seg.kind === 'run') return t - seg.from < step ? 0 : null;
+    if (seg.kind !== 'staging') return null;
+    const left = seg.to - t;
+    if (left > 3 * step || left <= 0) return null;
+    return Math.min(3, Math.ceil(left / step));
 }
 
 /**

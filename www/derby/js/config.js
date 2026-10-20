@@ -508,13 +508,19 @@ export const DERBY_CONFIG = Object.freeze({
 
     /** The race's pace on screen (M1), in seconds. */
     timing: Object.freeze({
-        staging: 1.8,
+        /** The cars at the pin, the last three counts of it a countdown
+         *  (3, 2, 1, then the gate), so a visitor sees the heat will start
+         *  on its own (Steve, 2026-10-20). */
+        staging: 3,
+        count: 0.75,
         /** The gate drops this long before the cars roll. */
         gate: 0.25,
         /** After the last car crosses, before the times show. */
         settle: 0.5,
         /** The times on the board, before the next heat. */
         times: 2.6,
+        /** The day's winner's grown-up dancing, after the last heat. */
+        dance: 6,
         /** A finish this close gets a slow replay (PRD, The heats). */
         closeGap: 0.02,
         replayRate: 0.25,
@@ -646,6 +652,9 @@ export const DERBY_CONFIG = Object.freeze({
         roll: Object.freeze({ gain: 0.26, hz: 900, q: 0.8, top: 3200 }),
         gate: Object.freeze({ gain: 0.5, clickHz: 2400, thunkHz: 150, seconds: 0.14 }),
         beep: Object.freeze({ gain: 0.16, hz: 1568, seconds: 0.09 }),
+        /** The countdown: a low beep a count, and the octave above as the
+         *  gate drops. */
+        count: Object.freeze({ gain: 0.14, hz: 784, goHz: 1568, seconds: 0.16 }),
         /** The workshop (M4): the coping saw's rasp, a stroke a fifth of a
          *  second, and the sandpaper's hush, slower. */
         saw: Object.freeze({ gain: 0.22, hz: 2200, q: 1.4, strokeHz: 5 }),
