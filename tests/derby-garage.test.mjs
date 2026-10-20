@@ -129,7 +129,7 @@ describe('a new car', () => {
         expect(G.colorName(0x101010, C)).toBe('Black');
     });
 
-    test('may enter what its class allows, and nothing while it breaks its sheet', () => {
+    test('may enter what its class allows, the weigh-in judging its sheet', () => {
         const std = G.newCar(C, { rand: seeded() });
         const outlaw = G.weighAuto({ ...std, rules: 'outlaw' }, C);
         expect(['easy', 'medium', 'hard', 'trial', 'outlaw'].map((e) => G.canEnter(std, e, C)))
@@ -138,7 +138,8 @@ describe('a new car', () => {
             .toEqual(['outlawOnly', 'outlawOnly', 'outlawOnly', 'ok', 'ok']);
         const heavy = { ...std, weights: std.weights.concat([{ kind: 'cylinder', x: std.weights[0].x }]) };
         expect(massOf(heavy)).toBeGreaterThan(5);
-        expect(G.canEnter(heavy, 'trial', C)).toBe('illegal');
+        // Over its sheet, it still enters: the weigh-in turns it back (M5.2).
+        expect(G.canEnter(heavy, 'trial', C)).toBe('ok');
     });
 });
 

@@ -370,6 +370,44 @@ export const DERBY_CONFIG = Object.freeze({
         maxDecals: 6
     }),
 
+    /**
+     * The tune-ups on the bench (M5.1, PRD Wheels and axles), one tap a
+     * step, each a short animation, in seconds. Align rolls the car down a
+     * test board `board` meters long, drifting `drift` toward the side if
+     * its wheels are out of line, then rolls it again straight.
+     */
+    tuneups: Object.freeze({
+        deburr: 1.6,
+        polish: 1.3,
+        graphite: 1.6,
+        align: Object.freeze({ run: 1.1, fix: 0.6, back: 0.45 }),
+        board: 0.36,
+        drift: 0.03,
+        /** How the axle heads shine, from as they came to polished
+         *  through the compound. */
+        shine: Object.freeze({ roughness: [0.78, 0.08], metalness: [0.55, 0.95] })
+    }),
+
+    /**
+     * The weigh-in at check-in (M5.2, PRD Check-in): the registration table
+     * near the start, its scale and the gauge box. A car is set on the
+     * scale, the reading counts up to its weight, then it slides through
+     * the gauge box, which is the rule sheet's width and clearance made
+     * wood. In seconds; several cars go through `several` as fast.
+     */
+    weighIn: Object.freeze({
+        at: Object.freeze({ x: -2.6, z: 2.4 }),
+        top: 0.76,
+        place: 0.35,
+        count: 1.1,
+        hold: 0.5,
+        gauge: 1.2,
+        result: 0.8,
+        several: 0.65,
+        /** Reduced motion: the final reading and the checks, held still. */
+        still: 1.4
+    }),
+
     /** Paint (M3, PRD Paint and decals): the palette, named as a car's name
      *  says it ("Blue Wedge"), and the three finishes. */
     paint: Object.freeze({
@@ -537,7 +575,15 @@ export const DERBY_CONFIG = Object.freeze({
         /** The workshop (M4): the coping saw's rasp, a stroke a fifth of a
          *  second, and the sandpaper's hush, slower. */
         saw: Object.freeze({ gain: 0.22, hz: 2200, q: 1.4, strokeHz: 5 }),
-        sand: Object.freeze({ gain: 0.16, hz: 4200, q: 0.7, strokeHz: 2.1 })
+        sand: Object.freeze({ gain: 0.16, hz: 4200, q: 0.7, strokeHz: 2.1 }),
+        /** The tune-ups (M5): the file's rasp, the drill's whine, a puff of
+         *  graphite, a tap of the hammer, and the weigh-in's buzz for a car
+         *  over the limit. */
+        file: Object.freeze({ gain: 0.18, hz: 3400, q: 2, strokeHz: 7 }),
+        drill: Object.freeze({ gain: 0.1, hz: 1100, q: 7, strokeHz: 30 }),
+        puff: Object.freeze({ gain: 0.32, hz: 700, q: 0.6, seconds: 0.35 }),
+        tap: Object.freeze({ gain: 0.42, hz: 260, seconds: 0.12 }),
+        buzz: Object.freeze({ gain: 0.16, hz: 140, seconds: 0.45 })
     }),
 
     look: Object.freeze({

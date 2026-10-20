@@ -1398,7 +1398,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Derby Day | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=4" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=5" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -1411,6 +1411,8 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/garage.min.js" rel="modulepreload"]
     link [href="js/bench.min.js" rel="modulepreload"]
     link [href="js/tools.min.js" rel="modulepreload"]
+    link [href="js/tuneups.min.js" rel="modulepreload"]
+    link [href="js/checkin.min.js" rel="modulepreload"]
     link [href="js/profile.min.js" rel="modulepreload"]
     link [href="js/weights.min.js" rel="modulepreload"]
     link [href="js/units.min.js" rel="modulepreload"]
@@ -1430,7 +1432,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/livery.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=4" rel="stylesheet"]
+    link [href="css/experience.min.css?v=5" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -1517,6 +1519,10 @@ html [data-ui-theme="ember" lang="en"]
       "You"
     button#skip-btn.ui-float.skip-btn [type="button"]
       "Skip to results"
+    div#weighin-note.weighin-note.hidden [aria-labelledby="weighin-text" aria-modal="false" role="dialog"]
+      p#weighin-text.weighin-text
+      button#weighin-back.go-btn [type="button"]
+        "Back to the workbench"
     button#sound-btn.ui-float.menu-btn.sound-btn [aria-label="Sound" aria-pressed="false" title="Sound off (M)" type="button"]
       svg [aria-hidden="true" viewbox="0 0 24 24"]
         path [d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" stroke-linejoin="round"]
@@ -1534,6 +1540,9 @@ html [data-ui-theme="ember" lang="en"]
         h3#results-why-heading.results-sub
           "Why your car ran as it did"
         ul#results-why.results-why
+        h3#results-tuneups-heading.results-sub
+          "What each tune-up was worth"
+        ul#results-tuneups.results-why
         p#results-trophy.results-trophy [hidden]
         div.results-actions
           button#results-share.go-btn [type="button"]

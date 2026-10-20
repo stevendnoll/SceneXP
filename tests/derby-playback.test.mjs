@@ -287,7 +287,12 @@ describe('phases', () => {
         expect(Ph.nextPhase('bench', 'race')).toBe('checkin');
         expect(Ph.nextPhase('checkin', 'back')).toBe('bench');
         expect(Ph.nextPhase('results', 'tune')).toBe('bench');
-        expect(Ph.nextPhase('checkin', 'go')).toBe('race');
+        // Go weighs the car in first (M5).
+        expect(Ph.nextPhase('checkin', 'go')).toBe('weighin');
+        expect(Ph.nextPhase('weighin', 'pass')).toBe('race');
+        expect(Ph.nextPhase('weighin', 'skip')).toBe('race');
+        expect(Ph.nextPhase('weighin', 'fail')).toBe('bench');
+        expect(Ph.nextPhase('weighin', 'back')).toBe('checkin');
         expect(Ph.nextPhase('race', 'finish')).toBe('results');
         expect(Ph.nextPhase('race', 'skip')).toBe('results');
         expect(Ph.nextPhase('race', 'back')).toBe('checkin');
@@ -297,7 +302,7 @@ describe('phases', () => {
         expect(Ph.nextPhase('checkin', 'skip')).toBe('checkin');
         expect(Ph.nextPhase('nowhere', 'go')).toBe('nowhere');
         expect(Ph.nextPhase('bench', 'go')).toBe('bench');
-        expect(Ph.PHASES).toEqual(['loading', 'bench', 'checkin', 'race', 'results']);
+        expect(Ph.PHASES).toEqual(['loading', 'bench', 'checkin', 'weighin', 'race', 'results']);
     });
 });
 

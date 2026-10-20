@@ -28,7 +28,7 @@
  */
 
 import { DERBY_CONFIG } from './config.min.js';
-import { buildFromDesign, describeCar, isLegal } from './car.min.js';
+import { buildFromDesign } from './car.min.js';
 import { autoWeighPockets, autoTarget } from './weights.min.js';
 import { normalizeUnits } from './units.min.js';
 import { isCarve, clampCarve, stationsFrom } from './profile.min.js';
@@ -148,13 +148,13 @@ export function newCar(C = DERBY_CONFIG, { design = C.bench.designs[0], index = 
 }
 
 /**
- * Whether a car may enter an event (PRD, What a visitor can enter): 'ok',
- * 'illegal' (it fails its own sheet), 'outlawOnly' (an Outlaw car, in a
- * division) or 'standardOnly' (a Standard car, in the Outlaw exhibition).
- * Time Trial takes either class.
+ * Whether a car's class may enter an event (PRD, What a visitor can enter):
+ * 'ok', 'outlawOnly' (an Outlaw car, in a division) or 'standardOnly' (a
+ * Standard car, in the Outlaw exhibition). Time Trial takes either class.
+ * Whether it keeps its own sheet is the weigh-in's to find out (M5.2,
+ * checkin.js), not the entry form's.
  */
-export function canEnter(build, eventId, C = DERBY_CONFIG) {
-    if (!isLegal(describeCar(build, C), build.rules, C)) return 'illegal';
+export function canEnter(build, eventId) {
     if (eventId === 'trial') return 'ok';
     if (eventId === 'outlaw') return build.rules === 'outlaw' ? 'ok' : 'standardOnly';
     return build.rules === 'outlaw' ? 'outlawOnly' : 'ok';

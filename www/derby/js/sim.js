@@ -29,6 +29,7 @@
  */
 
 import { DERBY_CONFIG } from './config.min.js';
+import { describeCar } from './car.min.js';
 
 /**
  * The track at `s` (meters from the start pin, negative up the slope behind
@@ -238,4 +239,44 @@ export function explain(car, { kitMass, blockCdA, bestCdA, idealBalance }, C = D
         { id: 'shape', saved: variant({ cdA: blockCdA }) - base, more: base - variant({ cdA: bestCdA }) }
     ];
     return { time: base, lines };
+}
+
+/**
+ * What each tune-up is worth to a build (M5, its Done-when: each tune-up's
+ * worth shows in the results): de-burring, polishing, graphite and
+ * aligning, each as { id, done, saved, more }. `saved` is what it was worth
+ * (the car run again without it), `more` what doing it, or polishing on to
+ * the compound, would still save. Polish also carries its `level`. One
+ * change at a time, so each figure is that tune-up's alone.
+ */
+export function tuneupWorth(build, C = DERBY_CONFIG) {
+    const t = { ...C.stockTune, ...(build.tune || {}) };
+    const time = (tune) => neutralTime(describeCar({ ...build, tune }, C), C);
+    const base = time(t);
+    const full = C.physics.axleFriction.polish.length;
+    const flag = (id) => ({
+        id,
+        done: t[id] === true,
+        saved: t[id] ? time({ ...t, [id]: false }) - base : 0,
+        more: t[id] ? 0 : base - time({ ...t, [id]: true })
+    });
+    return [
+        flag('deburr'),
+        {
+            id: 'polish',
+            done: t.polish > 0,
+            level: t.polish,
+            saved: t.polish > 0 ? time({ ...t, polish: 0 }) - base : 0,
+            more: t.polish < full ? base - time({ ...t, polish: full }) : 0
+        },
+        flag('graphite'),
+        flag('align')
+    ];
+}
+
+/** How much faster one tune makes a build than another, in seconds (the
+ *  bench's word after each tune-up step). */
+export function tuneGain(build, from, to, C = DERBY_CONFIG) {
+    const time = (tune) => neutralTime(describeCar({ ...build, tune: { ...C.stockTune, ...tune } }, C), C);
+    return time(from) - time(to);
 }

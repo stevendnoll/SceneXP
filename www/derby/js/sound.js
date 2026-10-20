@@ -295,6 +295,27 @@ export function createSound(S, { win = typeof window === 'undefined' ? null : wi
             lfo.start(ctx.currentTime + S.ahead);
             envelope(shot.gain, W.gain, 0.05, seconds, [shot.source, lfo]);
         },
+        /** A puff of graphite: a short breath of low noise. */
+        puff() {
+            if (!audible()) return;
+            const P = S.puff;
+            const shot = noiseShot('lowpass', P.hz, P.q);
+            envelope(shot.gain, P.gain, 0.01, P.seconds, [shot.source]);
+        },
+        /** A tap of the hammer on an axle. */
+        tap() {
+            if (!audible()) return;
+            const T = S.tap;
+            const t = tone('triangle', T.hz);
+            envelope(t.gain, T.gain, 0.003, T.seconds, [t.osc]);
+        },
+        /** The weigh-in's buzz: a car over the limit. */
+        buzz() {
+            if (!audible()) return;
+            const Z = S.buzz;
+            const t = tone('square', Z.hz);
+            envelope(t.gain, Z.gain, 0.01, Z.seconds, [t.osc]);
+        },
         /** The clip's audio track: the recording output, made once. */
         recordStream() {
             if (!ctx || !ctx.createMediaStreamDestination) return null;

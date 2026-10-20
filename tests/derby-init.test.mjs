@@ -65,6 +65,12 @@ const results = () => open('results-modal');
 const host = () => dom.el('bench-host').textContent;
 const raceIt = () => fire(dom.el('bench-race'), 'click');
 const eventInput = (id) => inputsOf('event-options').find((i) => i.value === id);
+/** Go, and past the weigh-in (watched for itself in its own tests). */
+const go = () => {
+    fire(dom.el('go-btn'), 'click');
+    const skip = dom.el('skip-btn');
+    if (skip.classList.contains('visible') && skip.textContent === 'Skip the weigh-in') fire(skip, 'click');
+};
 
 /** A bench control by its id, found in the panel the bench built. */
 function find(root, test) {
@@ -115,8 +121,17 @@ test('Race it opens check-in with the five events and the garage\'s car, and Go 
     expect(dom.el('car-options').children[0].textContent).toBe('Blue WedgeWedge · 5.00 oz · Standard');
     expect(main.__test__.meshes()).toHaveLength(4);
     choose(eventInput('hard'));
+    // Go weighs the car in first: on the scale, through the gauge box.
     fire(dom.el('go-btn'), 'click');
+    expect(state.phase).toBe('weighin');
+    expect(dom.el('caption').textContent).toBe('Blue Wedge on the scale…');
+    expect(shown('skip-btn')).toBe(true);
+    expect(dom.el('skip-btn').textContent).toBe('Skip the weigh-in');
+    frames(main, state.weigh.plan.total * 0.5);
+    frames(main, state.weigh.plan.total * 0.5 + 0.1);
+    expect(dom.el('race-status').textContent).toBe('Blue Wedge weighs 5.00 oz and passes the gauge box.');
     expect(state.phase).toBe('race');
+    expect(dom.el('skip-btn').textContent).toBe('Skip to results');
     expect(shown('timer')).toBe(true);
     frames(main, 0.2);
     expect(dom.el('caption').textContent).toMatch(/Lane 4 runs a hair slow/);
@@ -145,7 +160,7 @@ test('Race it opens check-in with the five events and the garage\'s car, and Go 
 test('Skip goes straight to the results, and Race again runs the same race', async () => {
     const main = await boot();
     raceIt();
-    fire(dom.el('go-btn'), 'click');
+    go();
     frames(main, 1);
     fire(dom.el('skip-btn'), 'click');
     const state = main.getState();
@@ -165,20 +180,20 @@ test('Escape and the back buttons step back: the race and the results to check-i
     fire(dom.documentStub, 'keydown', { key: 'Escape' });
     expect(state.phase).toBe('bench');
     raceIt();
-    fire(dom.el('go-btn'), 'click');
+    go();
     frames(main, 2);
     fire(dom.documentStub, 'keydown', { key: 'Escape' });
     expect(state.phase).toBe('checkin');
     expect(shown('timer')).toBe(false);
-    fire(dom.el('go-btn'), 'click');
+    go();
     fire(dom.el('help-btn'), 'click');
     expect(state.phase).toBe('checkin');
-    fire(dom.el('go-btn'), 'click');
+    go();
     main.__test__.finishRace('skip');
     fire(dom.documentStub, 'keydown', { key: 'Escape' });
     expect(state.phase).toBe('checkin');
     expect(results()).toBe(false);
-    fire(dom.el('go-btn'), 'click');
+    go();
     main.__test__.finishRace('skip');
     fire(dom.el('results-another'), 'click');
     expect(state.phase).toBe('checkin');
@@ -196,7 +211,7 @@ test('Tune my car brings the car back to the bench, the host pointing at what wo
     const main = await boot();
     const state = main.getState();
     raceIt();
-    fire(dom.el('go-btn'), 'click');
+    go();
     main.__test__.finishRace('skip');
     fire(dom.el('results-tune'), 'click');
     expect(state.phase).toBe('bench');
@@ -210,16 +225,14 @@ test('Tune my car brings the car back to the bench, the host pointing at what wo
 test('a win puts a trophy on the shelf, and the next division is one tap away', async () => {
     const main = await boot();
     const state = main.getState();
-    // The full axle treatment by hand on the bench.
-    choose(control('bench-tune-deburr'));
-    const polish = control('bench-polish');
-    polish.value = '5';
-    fire(polish, 'input');
-    choose(control('bench-tune-graphite'));
-    choose(control('bench-tune-align'));
+    // The full axle treatment on the bench, a tap a step (M5).
+    fire(control('bench-deburr'), 'click');
+    for (let i = 0; i < 5; i++) fire(control('bench-polish'), 'click');
+    fire(control('bench-graphite'), 'click');
+    fire(control('bench-align'), 'click');
     expect(main.__test__.garage().bench().tune).toEqual({ deburr: true, polish: 5, graphite: true, align: true, sand: 0 });
     raceIt();
-    fire(dom.el('go-btn'), 'click');
+    go();
     main.__test__.finishRace('skip');
     expect(state.day.race.standings[0]).toBe(0);
     expect(dom.el('results-trophy').hidden).toBe(false);
@@ -236,7 +249,7 @@ test('a win puts a trophy on the shelf, and the next division is one tap away', 
     // Winning again says so, without a second trophy.
     fire(dom.el('results-another'), 'click');
     choose(eventInput('easy'));
-    fire(dom.el('go-btn'), 'click');
+    go();
     main.__test__.finishRace('skip');
     expect(dom.el('results-trophy').textContent).toBe('First place in the Easy division again!');
 });
@@ -253,10 +266,10 @@ test('Time Trial races the garage\'s own cars against each other, and says so wh
     expect(dom.el('car-legend').textContent).toBe('Your cars, up to four');
     for (const c of cars) choose(c, false);
     expect(dom.el('checkin-note').hidden).toBe(false);
-    fire(dom.el('go-btn'), 'click');
+    go();
     expect(state.phase).toBe('checkin');
     for (const c of cars) choose(c, true);
-    fire(dom.el('go-btn'), 'click');
+    go();
     expect(state.phase).toBe('race');
     expect(main.__test__.meshes()).toHaveLength(2);
     frames(main, state.day.plan.total + 1);
@@ -281,18 +294,18 @@ test('an Outlaw car races only the Time Trial and the Outlaw exhibition, and the
     expect(car.disabled).toBe(true);
     expect(dom.el('car-options').children[0].textContent).toMatch(/Outlaw cars race in the Time Trial and the Outlaw exhibition/);
     expect(dom.el('checkin-note').textContent).toMatch(/None of your cars can enter/);
-    fire(dom.el('go-btn'), 'click');
+    go();
     expect(state.phase).toBe('checkin');
     choose(eventInput('outlaw'));
     expect(inputsOf('car-options')[0].disabled).toBe(false);
-    fire(dom.el('go-btn'), 'click');
+    go();
     expect(state.phase).toBe('race');
     main.__test__.finishRace('skip');
     expect(dom.el('results-event').textContent).toBe('Outlaw exhibition');
     // In the Time Trial, its name carries the class.
     fire(dom.el('results-another'), 'click');
     choose(eventInput('trial'));
-    fire(dom.el('go-btn'), 'click');
+    go();
     expect(state.day.entries[0].name).toBe('Blue Wedge (Outlaw)');
 });
 
@@ -300,7 +313,7 @@ test('a returning visitor hears where things stand, and Race again races the sam
     let main = await boot();
     raceIt();
     choose(eventInput('medium'));
-    fire(dom.el('go-btn'), 'click');
+    go();
     main.__test__.finishRace('skip');
     const kept = Object.fromEntries(['derby-garage', 'derby-settings', 'derby-trophies'].map((k) => [k, localStorage.getItem(k)]));
     const place = main.getState().day.race.standings.indexOf(0) + 1;
@@ -318,6 +331,9 @@ test('a returning visitor hears where things stand, and Race again races the sam
     const actions = dom.el('bench-host-actions').children;
     expect(actions.map((b) => b.textContent)).toEqual(['Race again', 'Tune it']);
     fire(actions[0], 'click');
+    // Weighed in first: the car may have changed since.
+    expect(state.phase).toBe('weighin');
+    fire(dom.el('skip-btn'), 'click');
     expect(state.phase).toBe('race');
     expect(state.event).toBe('medium');
 });
@@ -332,7 +348,7 @@ test('a browser that refuses storage still gets a whole visit', async () => {
     fire(control('bench-new'), 'click');
     expect(main.__test__.garage().cars()).toHaveLength(2);
     raceIt();
-    fire(dom.el('go-btn'), 'click');
+    go();
     main.__test__.finishRace('skip');
     expect(state.phase).toBe('results');
 });
@@ -363,7 +379,7 @@ test('reduced motion: no slow replays, no chase camera, and the turntable stands
     expect(state.spin).toBeCloseTo(0.6, 6);
     raceIt();
     choose(eventInput('hard'));
-    fire(dom.el('go-btn'), 'click');
+    go();
     expect(state.day.plan.heats.every((h) => h.segments.every((s) => s.kind !== 'replay'))).toBe(true);
     frames(main, state.day.plan.total + 1);
     expect(state.phase).toBe('results');
@@ -401,7 +417,7 @@ test('a bulky car is told to carve some wood out to make room for its weight (M4
     block.checked = true;
     fire(block, 'change');
     raceIt();
-    fire(dom.el('go-btn'), 'click');
+    go();
     main.__test__.finishRace('skip');
     const why = dom.el('results-why').children.map((li) => li.textContent).join(' ');
     expect(why).toMatch(/this body has no room for it there\. Carve some wood out of the middle/);

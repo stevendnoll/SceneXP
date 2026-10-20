@@ -186,22 +186,62 @@ test('Auto-weigh: back to the limit in the sweet spot, or as close as a bulky bo
     expect(calls.track.map((c) => c[1].kind)).toContain('auto-weigh');
 });
 
-test('the axles: each tune-up kept, the polish said in grits', () => {
-    const { garage } = setUp();
-    pick('bench-tune-deburr');
-    const polish = byId('bench-polish');
-    polish.value = '3';
-    fire(polish, 'input');
+test('the axles: a tap a step, each kept at once, played, and its worth said', () => {
+    const { garage, calls } = setUp();
+    // Played by main.js; here, it lands at once.
+    expect(byId('bench-fresh').hidden).toBe(true);
+    expect(byId('bench-polish').textContent).toBe('Polish with 400 grit');
+    click('bench-deburr');
+    expect(garage.bench().tune.deburr).toBe(true);
+    expect(byId('bench-deburr').hidden).toBe(true);
+    expect(host()).toMatch(/^The burrs are filed off every axle\. That’s worth 0\.0\d\d seconds on the track\.$/);
+    expect(calls.changed.length).toBeGreaterThan(0);
+    for (let i = 1; i <= 3; i++) click('bench-polish');
     expect(garage.bench().tune.polish).toBe(3);
-    expect(polish.getAttribute('aria-valuetext')).toBe('1200 grit');
-    pick('bench-tune-graphite');
-    pick('bench-tune-align');
-    expect(garage.bench().tune).toEqual({ deburr: true, polish: 3, graphite: true, align: true, sand: 0 });
-    expect(byId('bench-axles-box').children[0].textContent).toBe('Axles and wheelsde-burred, 1200 grit, graphite, aligned');
-    expect(dom.el('bench-status').textContent).toBe('de-burred, 1200 grit, graphite, aligned');
-    polish.value = 'x';
-    fire(polish, 'input');
-    expect(garage.bench().tune.polish).toBe(0);
+    expect(host()).toMatch(/^Polished with 1200 grit\. That’s worth 0\.0\d\d seconds more\.$/);
+    expect(byId('bench-polish').textContent).toBe('Polish with 2000 grit');
+    click('bench-polish');
+    click('bench-polish');
+    expect(host()).toMatch(/^Polished with polishing compound\./);
+    expect(byId('bench-polish').hidden).toBe(true);
+    click('bench-polish');
+    expect(garage.bench().tune.polish).toBe(5);
+    click('bench-graphite');
+    expect(host()).toMatch(/^A puff of graphite in every wheel, spun to work it in\. That’s worth 0\.\d{3} seconds\.$/);
+    click('bench-align');
+    expect(host()).toMatch(/^It drifted toward the rail, so the axles were tapped straight\. Now it rolls true, worth 0\.\d{3} seconds\.$/);
+    expect(garage.bench().tune).toEqual({ deburr: true, polish: 5, graphite: true, align: true, sand: 0 });
+    expect(byId('bench-axles-box').children[0].textContent).toBe('Axles and wheelsde-burred, 2000 grit and compound, graphite, aligned');
+    const list = find(dom.el('bench-body'), (n) => n.classList && n.classList.contains('bench-tunes'));
+    expect(list.children.map((li) => li.textContent)).toEqual(['✓ Burrs filed off', '✓ Polished: 2000 grit and polishing compound', '✓ Graphite in the wheels', '✓ Aligned, it rolls true']);
+    // A step already done does nothing; fresh axles undo them all.
+    click('bench-graphite');
+    expect(garage.bench().tune.graphite).toBe(true);
+    click('bench-fresh');
+    expect(garage.bench().tune).toEqual({ deburr: false, polish: 0, graphite: false, align: false, sand: 0 });
+    expect(host()).toBe('Fresh axles from the kit, burrs, crimp marks and all, and the wheels as they go on.');
+    expect(calls.track.filter((c) => c[1].kind === 'tune').map((c) => c[1].outcome)).toContain('fresh');
+});
+
+test('a tune-up hands its animation to main.js, and the host speaks when it is done', () => {
+    const el = Object.fromEntries(ELS.map((id) => [id, dom.el(id)]));
+    const garage = G.createGarage({ C });
+    const played = [];
+    const noop = () => {};
+    B.createBench(el, garage, {
+        changed: noop, race: noop, units: noop, forgot: noop, raceAgain: noop, track: noop,
+        tune: (kind, from, to, done) => played.push({ kind, from, to, done })
+    }, C);
+    click('bench-graphite');
+    expect(played).toHaveLength(1);
+    expect(played[0].kind).toBe('graphite');
+    expect(played[0].from.tune.graphite).toBe(false);
+    expect(played[0].to.tune.graphite).toBe(true);
+    // Kept before it is shown.
+    expect(garage.bench().tune.graphite).toBe(true);
+    expect(host()).toBe('Puff in graphite…');
+    played[0].done();
+    expect(host()).toMatch(/^A puff of graphite/);
 });
 
 test('Outlaw: the red sheet, Auto-weigh to the track\'s 16 oz, and back to Standard', () => {
@@ -225,7 +265,7 @@ test('Outlaw: the red sheet, Auto-weigh to the track\'s 16 oz, and back to Stand
     expect(garage.bench().weights.length).toBeLessThan(heavy);
 });
 
-test('the sheet checks the car live, and Race it refuses a car that breaks it, politely', () => {
+test('the sheet checks the car live, and Race it goes on regardless: the weigh-in is the judge (M5.2)', () => {
     const { garage, calls } = setUp();
     click('bench-race');
     expect(calls.race).toHaveLength(1);
@@ -235,11 +275,9 @@ test('the sheet checks the car live, and Race it refuses a car that breaks it, p
     const stats = B.statsOf(garage.bench(), 'us', C);
     expect(stats.legal).toBe(false);
     expect(stats.checks.find((c) => c.rule === 'mass').note).toMatch(/^0\.\d\d oz over\. Please take a weight out\.$/);
-    click('bench-race');
-    expect(calls.race).toHaveLength(1);
-    expect(host()).toMatch(/^Blue Wedge can’t race just yet\. 0\.\d\d oz over\. Please take a weight out\.$/);
-    expect(byId('bench-rules-box').open).toBe(true);
     expect(byId('bench-rules-box').children[0].textContent).toBe('RulesStandard, needs a fix');
+    click('bench-race');
+    expect(calls.race).toHaveLength(2);
     // In grams, the note is too.
     expect(B.statsOf(garage.bench(), 'metric', C).notes[0]).toMatch(/^\d+\.\d g over\./);
 });
@@ -400,9 +438,11 @@ test('every sentence the bench and the host say keeps the house style', () => {
     for (const v of Object.values(Copy.UI)) style(v);
     for (const v of Object.values(Copy.ENTRY)) style(v);
     for (const v of Copy.POLISH) style(v);
+    // Each sentence with arguments of its own kind: a time, or words.
+    const TIMED = { deburred: [0.012], polished: ['800 grit', 0.01], graphited: [0.07], aligned: [0.02] };
     for (const [k, v] of Object.entries(Copy.SAY)) {
         if (typeof v === 'string') style(v);
-        else style(v('5.00 oz', '0.88 in', 2) + k);
+        else style(v(...(TIMED[k] || ['5.00 oz', '0.88 in', 2])) + k);
     }
     style(Copy.SAY.shapeHand('Wedge', 1));
     style(Copy.SAY.shapeHand('Wedge', 0));

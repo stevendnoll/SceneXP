@@ -24,15 +24,17 @@
  */
 
 import { DERBY_CONFIG, IN, OZ } from './config.min.js';
-import { describeCar, buildFromDesign, buildFromField, profileAt } from './car.min.js';
-import { runRace, explain } from './sim.min.js';
+import { describeCar, buildFromDesign, buildFromField, profileAt, isLegal } from './car.min.js';
+import { runRace, explain, tuneupWorth } from './sim.min.js';
 import { buildTrack, carPose } from './track.min.js';
 import { buildHall } from './hall.min.js';
-import { buildCarMesh } from './carmesh.min.js';
+import { buildCarMesh, wheelSpots } from './carmesh.min.js';
 import { buildWorkbench, benchFraming } from './workbench.min.js';
 import { createGarage, canEnter } from './garage.min.js';
 import { createBench } from './bench.min.js';
 import { createTools } from './tools.min.js';
+import { createTuneups } from './tuneups.min.js';
+import { buildCheckinTable, planWeighIn, weighMoment, readingShare } from './checkin.min.js';
 import { curvesOf } from './profile.min.js';
 import { bestBalance } from './weights.min.js';
 import * as U from './units.min.js';
@@ -41,7 +43,7 @@ import { shotFor, framing } from './director.min.js';
 import { createTimer, fillResults, h } from './board.min.js';
 import {
     EVENTS, UI, OFF, ENTRY, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock,
-    gains, moreLine, sheetLines, trophyLine, harderLabel, HARDER
+    gains, moreLine, sheetLines, trophyLine, harderLabel, HARDER, tuneupLines, WEIGH, ruleNote
 } from './copy.min.js';
 import { nextPhase } from './phases.min.js';
 import { createSound } from './sound.min.js';
@@ -68,9 +70,14 @@ const state = {
     event: 'easy',
     entrant: null,
     trial: new Set(),
+    /** The weigh-in under way (M5.2): { plan, entries, mine, how, t, said,
+     *  failed }. */
+    weigh: null,
     /** The turntable's turn, and a drag turning it by hand. */
     spin: 0,
     drag: null,
+    /** How far Align has rolled the car off the turntable, meters. */
+    benchOffset: 0,
     /** The race day being played: { entries, cars, race, plan }. */
     day: null,
     clock: 0,
@@ -104,6 +111,8 @@ let benchMesh = null;
  *  saw and the sanding block (M4). */
 let holder = null;
 let tools = null;
+let tuneups = null;
+let registration = null;
 let pencil = null;
 let cleanupController = null;
 const el = {};
@@ -140,13 +149,14 @@ async function init() {
         'results-another', 'results-tune', 'results-harder', 'results-trophy', 'results-status', 'explore-link', 'sound-btn',
         'results-share', 'clip-modal', 'clip-title', 'clip-stage', 'clip-progress', 'clip-sound', 'clip-share', 'clip-image',
         'clip-again', 'clip-close', 'clip-status', 'bench', 'bench-title', 'bench-body', 'bench-host', 'bench-host-actions',
-        'bench-summary', 'bench-race', 'bench-status']) {
+        'bench-summary', 'bench-race', 'bench-status', 'results-tuneups', 'results-tuneups-heading', 'weighin-note', 'weighin-text',
+        'weighin-back']) {
         el[id] = document.getElementById(id);
     }
     if (!el['game-canvas'] || typeof THREE === 'undefined') return;
     // The markup starts the cards hidden. Said again here, so the page never
     // begins believing one is up.
-    for (const id of ['results-modal', 'clip-modal', 'bench']) if (el[id]) el[id].classList.add('hidden');
+    for (const id of ['results-modal', 'clip-modal', 'bench', 'weighin-note']) if (el[id]) el[id].classList.add('hidden');
     // The clip's sound starts on every visit (D2), whatever a browser that
     // restores form state across a reload remembers.
     if (el['clip-sound']) el['clip-sound'].checked = true;
@@ -201,6 +211,14 @@ async function init() {
     workbench.spinner.add(holder);
     tools = createTools(CONFIG, { saw: (s) => sound.work('saw', s), sand: (s) => sound.work('sand', s) });
     holder.add(tools.group);
+    tuneups = createTuneups(CONFIG, {
+        file: (s) => sound.work('file', s), drill: (s) => sound.work('drill', s),
+        puff: () => sound.puff(), tap: () => sound.tap(), roll: (a) => sound.roll(a)
+    });
+    holder.add(tuneups.inCar);
+    workbench.spinner.add(tuneups.onBench);
+    registration = buildCheckinTable(CONFIG);
+    scene.add(registration.group);
     timer = createTimer(el.timer);
     // The cars waiting at the pin behind the check-in card: the visitor's
     // chosen car and the first division's, so the track is not empty.
@@ -238,6 +256,16 @@ async function init() {
             });
         },
         sand: (b) => tools.sand({ stations: b.stations, reducedMotion: state.reducedMotion }),
+        tune: (kind, from, to, done) => {
+            tools.finish();
+            tuneups.play(kind, {
+                wheels: wheelSpots(describeCar(from, CONFIG), CONFIG),
+                spin: (m) => { if (benchMesh) benchMesh.roll(m); },
+                reducedMotion: state.reducedMotion,
+                swap: () => showBenchCar(to),
+                done
+            });
+        },
         track
     }, CONFIG, { signal: cleanupController.signal });
     showBenchCar(garage.bench());
@@ -303,13 +331,15 @@ function buildCheckin() {
 }
 
 /** A car's line on the check-in card: its shape, weight and class, or why
- *  it cannot enter this event. */
+ *  it cannot enter this event, or a word that the weigh-in will turn it
+ *  back. */
 function carBlurb(build, why) {
-    if (why === 'illegal') return ENTRY.illegal;
     if (why === 'outlawOnly') return ENTRY.outlawOnly;
     if (why === 'standardOnly') return ENTRY.standardOnly;
+    const car = describeCar(build, CONFIG);
+    if (!isLegal(car, build.rules, CONFIG)) return ENTRY.illegal;
     const units = garage.settings().units;
-    return `${CONFIG.designs[build.design].label} · ${U.mass(describeCar(build, CONFIG).mass, units)} · ${build.rules === 'outlaw' ? UI.outlaw : UI.standard}`;
+    return `${CONFIG.designs[build.design].label} · ${U.mass(car.mass, units)} · ${build.rules === 'outlaw' ? UI.outlaw : UI.standard}`;
 }
 
 function buildCars() {
@@ -359,6 +389,7 @@ function checkinShown() {
 }
 
 function showCheckin() {
+    hideWeighIn();
     state.phase = 'checkin';
     hideResults();
     hideBench();
@@ -378,8 +409,11 @@ function benchShown() {
 }
 
 function hideBench() {
-    // A Cut or a sanding still running finishes at once: the car is cut.
+    // A Cut, a sanding or a tune-up still running finishes at once: the car
+    // is already cut and tuned.
     if (tools) tools.finish();
+    if (tuneups) tuneups.finish();
+    if (holder) holder.position.set(CONFIG.kit.length / 2, 0, 0);
     if (el.bench) el.bench.classList.add('hidden');
     if (camera && camera.clearViewOffset) camera.clearViewOffset();
 }
@@ -390,6 +424,7 @@ function hideBench() {
  * 'back', 'step' or 'tune'.
  */
 function showBench(kind = 'back', tip = null) {
+    hideWeighIn();
     state.phase = 'bench';
     hideResults();
     setRaceChrome(false);
@@ -534,7 +569,11 @@ function placeCar(mesh, s, lane) {
     return pose;
 }
 
-/** Go: run the race now, then play it. */
+/**
+ * Go: the race, if the cars may enter it. Go at check-in and the host's
+ * Race again weigh the visitor's cars in first (M5.2); Race again from the
+ * results and the next division up race at once, the car weighed already.
+ */
 function startRace(how = 'go') {
     if (!state.isLoaded) return false;
     const entries = entriesFor(state.event);
@@ -546,7 +585,18 @@ function startRace(how = 'go') {
         note(UI.tooMany);
         return false;
     }
+    if (how === 'go' || how === 'host') {
+        startWeighIn(entries, how);
+        return true;
+    }
+    beginRace(entries, how);
+    return true;
+}
+
+/** Run the race now, then play it. */
+function beginRace(entries, how) {
     hideBench();
+    hideWeighIn();
     stageCars(entries);
     const cars = meshes.map((m) => m.car);
     const race = runRace(cars, CONFIG, { record: CONFIG.timing.record });
@@ -562,8 +612,138 @@ function startRace(how = 'go') {
     hideResults();
     timer.build(entries.map((e) => e.name), state.day.mine, LANES);
     setRaceChrome(true);
+    if (el['skip-btn']) el['skip-btn'].textContent = UI.skip;
     track('race-start', { kind: state.event, outcome: `cars=${entries.map((e) => e.id).join('.')}&how=${how}` });
-    return true;
+}
+
+// ---- The weigh-in (M5.2) ------------------------------------------------------
+
+/** The weigh-in: the visitor's cars to the registration table, one at a
+ *  time, the neighbors' waiting at the pin. */
+function startWeighIn(entries, how) {
+    hideBench();
+    hideResults();
+    hideWeighIn();
+    stageCars(entries);
+    const mine = entries.map((e, i) => (e.mine ? i : -1)).filter((i) => i >= 0);
+    const plan = planWeighIn(mine.map((i) => entries[i].build), { reducedMotion: state.reducedMotion }, CONFIG);
+    state.weigh = { plan, entries, mine, how, t: 0, said: '', failed: null };
+    state.phase = nextPhase('checkin', 'go');
+    if (el.blocker) el.blocker.classList.add('hidden');
+    if (el['help-btn']) el['help-btn'].classList.add('visible');
+    if (el['skip-btn']) {
+        el['skip-btn'].textContent = UI.skipWeighIn;
+        el['skip-btn'].classList.add('visible');
+    }
+    weighCamera();
+    stepWeighIn(0);
+}
+
+function weighCamera() {
+    if (!camera || !registration) return;
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    aim(registration.shot(camera.aspect));
+}
+
+/** Why a car did not pass, in the visitor's units: { by (how far over or
+ *  under, written), note (the rule's polite note), line (the weigh-in's
+ *  sentence) }. */
+function weighWhy(verdict, name) {
+    const units = garage.settings().units;
+    const bad = verdict.checks.find((c) => !c.ok);
+    if (!bad) return { by: '', note: '', line: '' };
+    const amount = Math.abs(bad.value - bad.limit) * (bad.rule === 'mass' ? OZ : IN);
+    const by = bad.rule === 'mass' ? U.mass(amount, units) : U.length(amount, units);
+    const note = ruleNote(bad.rule, by);
+    return { by, note, line: bad.rule === 'mass' ? WEIGH.over(name, by) : WEIGH.shape(name, note) };
+}
+
+/** One frame of the weigh-in. */
+function stepWeighIn(dt) {
+    const w = state.weigh;
+    if (!w || w.failed) return;
+    w.t += dt;
+    const m = weighMoment(w.plan, w.t);
+    const units = garage.settings().units;
+    // The car being weighed on the table, the others at the pin.
+    w.mine.forEach((idx, k) => {
+        const mesh = meshes[idx];
+        if (!mesh) return;
+        if (k === m.car && !m.done) {
+            const at = registration.carAt(m.kind, m.progress);
+            mesh.group.position.set(at.x, at.y, at.z);
+            mesh.group.rotation.z = 0;
+        } else {
+            placeCar(mesh, 0, idx);
+        }
+    });
+    const verdict = w.plan.verdicts[m.car];
+    const entry = w.entries[w.mine[m.car]];
+    registration.setReading(U.mass(verdict.car.mass * readingShare(m.kind, m.progress), units), m.kind === 'over');
+    const key = `${m.car}:${m.kind}`;
+    if (key !== w.said) {
+        w.said = key;
+        const massText = U.mass(verdict.car.mass, units);
+        if (m.kind === 'place') caption(WEIGH.onScale(entry.name));
+        else if (m.kind === 'hold' || m.kind === 'still') {
+            sound.beep();
+            caption(WEIGH.reading(massText));
+        } else if (m.kind === 'gauge') caption(WEIGH.gauge);
+        else if (m.kind === 'result') {
+            sound.cheer(0.3);
+            caption(WEIGH.passed(entry.name));
+            announce(WEIGH.spoken(entry.name, massText, true));
+        } else if (m.kind === 'over' || m.kind === 'stuck') {
+            sound.buzz();
+            caption(weighWhy(verdict, entry.name).line);
+            announce(WEIGH.spoken(entry.name, massText, false));
+        }
+    }
+    if (!m.done) return;
+    if (w.plan.failedAt >= 0) weighFail();
+    else beginRace(w.entries, w.how);
+}
+
+/** A car that did not pass: the note, and the one way on, the bench. */
+function weighFail() {
+    const w = state.weigh;
+    const verdict = w.plan.verdicts[w.plan.failedAt];
+    const entry = w.entries[w.mine[w.plan.failedAt]];
+    const why = weighWhy(verdict, entry.name);
+    w.failed = { id: entry.id, name: entry.name, why: why.note };
+    if (el['skip-btn']) el['skip-btn'].classList.remove('visible');
+    caption('');
+    if (el['weighin-text']) el['weighin-text'].textContent = why.line;
+    if (el['weighin-note']) el['weighin-note'].classList.remove('hidden');
+    const back = el['weighin-back'];
+    if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
+    track('weigh-in', { kind: verdict.failed, outcome: 'failed' });
+}
+
+/** Skip the weigh-in: straight to the race, or to the note of a car that
+ *  would not have passed. */
+function skipWeighIn() {
+    const w = state.weigh;
+    if (!w || w.failed) return;
+    if (w.plan.failedAt >= 0) weighFail();
+    else beginRace(w.entries, w.how);
+}
+
+/** From the note, back to the bench with the car that did not pass. */
+function weighInBack() {
+    const w = state.weigh;
+    if (!w || !w.failed) return;
+    garage.setBench(w.failed.id);
+    const { name, why } = w.failed;
+    hideWeighIn();
+    state.phase = nextPhase('weighin', 'fail');
+    showBench('weighin', { name, why });
+}
+
+function hideWeighIn() {
+    if (el['weighin-note']) el['weighin-note'].classList.add('hidden');
+    state.weigh = null;
 }
 
 /** The race chrome: the timer, the help button, the Skip button, the
@@ -784,6 +964,19 @@ function showResults() {
     }, day.race, names, trial ? new Set() : day.mine, whyFor(day),
     trial ? UI.trialHeading : UI.whyHeading);
     if (el['results-event']) el['results-event'].textContent = eventLabel(day.event);
+    // What each tune-up was worth (M5's Done-when), for the visitor's one car.
+    const list = el['results-tuneups'];
+    if (list) {
+        list.textContent = '';
+        const lines = trial ? [] : tuneupLines(tuneupWorth(day.entries[0].build, CONFIG));
+        for (const line of lines) {
+            const li = document.createElement('li');
+            li.textContent = line;
+            list.appendChild(li);
+        }
+        list.hidden = !lines.length;
+        if (el['results-tuneups-heading']) el['results-tuneups-heading'].hidden = !lines.length;
+    }
     // A win: the trophy, and the next division up (PRD, Next steps).
     const trophy = el['results-trophy'];
     if (trophy) {
@@ -836,7 +1029,7 @@ function stepBack(how) {
     if (!state.isLoaded) return;
     if (state.phase === 'race') track('race-leave', { kind: state.event, outcome: `how=${how}` });
     sound.roll(0);
-    if (state.phase === 'race' || state.phase === 'results') showCheckin();
+    if (state.phase === 'race' || state.phase === 'results' || state.phase === 'weighin') showCheckin();
     else if (state.phase === 'checkin') showBench('step');
 }
 
@@ -1201,7 +1394,8 @@ function setupEventListeners() {
         if (el[id]) el[id].addEventListener(type, fn, { signal });
     };
     on('go-btn', 'click', () => startRace('go'));
-    on('skip-btn', 'click', () => finishRace('skip'));
+    on('skip-btn', 'click', () => (state.phase === 'weighin' ? skipWeighIn() : finishRace('skip')));
+    on('weighin-back', 'click', weighInBack);
     on('help-btn', 'click', () => stepBack('help'));
     on('results-again', 'click', () => {
         track('race-again', { kind: state.event });
@@ -1253,7 +1447,7 @@ function onKeyDown(event) {
             closeClip();
             return;
         }
-        if (state.phase === 'race' || resultsShown() || (state.phase === 'checkin' && checkinShown())) {
+        if (state.phase === 'race' || state.phase === 'weighin' || resultsShown() || (state.phase === 'checkin' && checkinShown())) {
             event.preventDefault();
             stepBack('escape');
         }
@@ -1281,9 +1475,14 @@ function animate() {
     const dt = Math.min(0.1, Math.max(0, (now - state.lastTime) / 1000));
     state.lastTime = now;
     if (state.phase === 'race') stepRace(dt);
+    if (state.phase === 'weighin') stepWeighIn(dt);
     if (state.phase === 'bench' && workbench) {
         tools.update(dt);
-        if (tools.turning()) {
+        // Align rolls the car off the turntable and back.
+        const off = tuneups.update(dt);
+        state.benchOffset = off ? off.x : 0;
+        holder.position.set(CONFIG.kit.length / 2 + state.benchOffset, 0, off ? off.z : 0);
+        if (tools.turning() || tuneups.turning()) {
             // The Cut turns the car side on to the camera first.
             const side = Math.round(state.spin / (2 * Math.PI)) * 2 * Math.PI;
             state.spin += (side - state.spin) * Math.min(1, dt * 8);
@@ -1345,5 +1544,5 @@ export function getState() {
 
 export const __test__ = {
     startRace, finishRace, stepBack, openClip, closeClip, shareStill, shareClip, showBench, tuneCar, sound,
-    meshes: () => meshes, benchMesh: () => benchMesh, garage: () => garage, bench: () => bench, el
+    meshes: () => meshes, benchMesh: () => benchMesh, garage: () => garage, bench: () => bench, holder: () => holder, el
 };

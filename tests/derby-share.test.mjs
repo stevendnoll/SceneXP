@@ -476,6 +476,7 @@ describe('the share card on the page', () => {
 
     async function toResults(main) {
         fire(dom.el('go-btn'), 'click');
+        fire(dom.el('skip-btn'), 'click');
         main.__test__.finishRace('skip');
         expect(main.getState().phase).toBe('results');
     }

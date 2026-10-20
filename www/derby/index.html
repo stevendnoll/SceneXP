@@ -104,7 +104,7 @@
     <title>Derby Day | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=4" as="style">
+    <link rel="preload" href="css/experience.min.css?v=5" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -118,6 +118,8 @@
     <link rel="modulepreload" href="js/garage.min.js">
     <link rel="modulepreload" href="js/bench.min.js">
     <link rel="modulepreload" href="js/tools.min.js">
+    <link rel="modulepreload" href="js/tuneups.min.js">
+    <link rel="modulepreload" href="js/checkin.min.js">
     <link rel="modulepreload" href="js/profile.min.js">
     <link rel="modulepreload" href="js/weights.min.js">
     <link rel="modulepreload" href="js/units.min.js">
@@ -140,7 +142,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=4">
+    <link rel="stylesheet" href="css/experience.min.css?v=5">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -275,6 +277,13 @@
 
     <button id="skip-btn" class="ui-float skip-btn" type="button">Skip to results</button>
 
+    <!-- THE WEIGH-IN'S NOTE (M5.2, js/checkin.js): a car over its sheet is
+         handed back kindly, with the one way on. Hidden until then. -->
+    <div id="weighin-note" class="weighin-note hidden" role="dialog" aria-modal="false" aria-labelledby="weighin-text">
+        <p id="weighin-text" class="weighin-text"></p>
+        <button id="weighin-back" class="go-btn" type="button">Back to the workbench</button>
+    </div>
+
     <!-- The sound (M2): off to start (D2), turned on here or with M. A
          toggle, so its name stays "Sound" and aria-pressed says which. Top
          right, opposite the back arrow, shown once the page is loaded. -->
@@ -298,6 +307,10 @@
             <ul id="results-lanes" class="results-lanes"></ul>
             <h3 id="results-why-heading" class="results-sub">Why your car ran as it did</h3>
             <ul id="results-why" class="results-why"></ul>
+            <!-- What each tune-up was worth (M5's Done-when), for the
+                 visitor's one car. Hidden for a Time Trial. -->
+            <h3 id="results-tuneups-heading" class="results-sub">What each tune-up was worth</h3>
+            <ul id="results-tuneups" class="results-why"></ul>
             <p id="results-trophy" class="results-trophy" hidden></p>
             <!-- Share my race is the one filled button: the clip is what
                  this scene is for (PRD, The share). -->

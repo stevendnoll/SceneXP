@@ -35,11 +35,12 @@ import { describeCar, checkRules } from './car.min.js';
 import { pocketsOf, roomLeft, holdsTungsten, addWeight, removeWeight, fitWeights } from './weights.min.js';
 import { weighAuto, newCar } from './garage.min.js';
 import { stationsFrom } from './profile.min.js';
+import { tuneGain } from './sim.min.js';
 import { createCarver } from './carve.min.js';
 import { createLivery } from './livery.min.js';
 import * as U from './units.min.js';
 import {
-    UI, POLISH, SAND, SAY, ruleNote, RULE_NAMES, bestLine, trophyList, hostFirst, hostBack, hostStep, hostTune, FIX_SECTION
+    UI, POLISH, SAND, SAY, WEIGH, polishButton, ruleNote, RULE_NAMES, bestLine, trophyList, hostFirst, hostBack, hostStep, hostTune, FIX_SECTION
 } from './copy.min.js';
 import { h } from './board.min.js';
 
@@ -114,8 +115,8 @@ const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
  * bench-host-actions, bench-summary, bench-race, bench-status). `hooks`:
  * changed(build), race(build), units(units), forgot(build), raceAgain(event),
  * track(action, params), and for the workshop draft(carve | null),
- * cut(from, to, done) and sand(build). Returns { build, update, arrive,
- * say, openBox }.
+ * cut(from, to, done), sand(build) and tune(kind, from, to, done). Returns
+ * { build, update, arrive, say, openBox }.
  */
 export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}) {
     let build = garage.bench();
@@ -279,23 +280,21 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
         weights.body.appendChild(ui.autoHelp);
         body.appendChild(weights.d);
 
-        // Axles and wheels: plain controls in M3, the animations in M5.
+        // Axles and wheels (M5.1): one tap a step, each played on the
+        // turntable (tuneups.js), the host saying what it was worth.
         const axles = box('axles', UI.axles, false);
         ui.axlesSum = axles.sum;
-        ui.deburr = choice('checkbox', 'bench-tune', 'deburr', UI.deburr, UI.deburrBlurb, (i) => setTune({ deburr: i.checked }));
-        ui.polish = document.createElement('input');
-        ui.polish.type = 'range';
-        ui.polish.id = 'bench-polish';
-        ui.polish.min = '0';
-        ui.polish.max = String(C.physics.axleFriction.polish.length);
-        ui.polish.step = '1';
-        listen(ui.polish, 'input', () => setTune({ polish: Number(ui.polish.value) || 0 }));
-        ui.polishText = h('span', 'choice-blurb', '');
-        const polishLabel = h('label', 'bench-range', null, [h('span', 'choice-label', UI.polish), ui.polish, ui.polishText]);
-        polishLabel.setAttribute('for', 'bench-polish');
-        ui.graphite = choice('checkbox', 'bench-tune', 'graphite', UI.graphite, UI.graphiteBlurb, (i) => setTune({ graphite: i.checked }));
-        ui.align = choice('checkbox', 'bench-tune', 'align', UI.align, UI.alignBlurb, (i) => setTune({ align: i.checked }));
-        axles.body.appendChild(group(UI.axles, [ui.deburr.wrap, polishLabel, ui.graphite.wrap, ui.align.wrap]));
+        ui.tuneList = h('ul', 'bench-tunes');
+        axles.body.appendChild(ui.tuneList);
+        ui.steps = {
+            deburr: button('bench-deburr', UI.doDeburr, () => tuneStep('deburr'), 'bench-btn is-strong'),
+            polish: button('bench-polish', '', () => tuneStep('polish'), 'bench-btn is-strong'),
+            graphite: button('bench-graphite', UI.doGraphite, () => tuneStep('graphite'), 'bench-btn is-strong'),
+            align: button('bench-align', UI.doAlign, () => tuneStep('align'), 'bench-btn is-strong'),
+            fresh: button('bench-fresh', UI.freshAxles, () => tuneStep('fresh'))
+        };
+        axles.body.appendChild(h('div', 'bench-row', null, Object.values(ui.steps)));
+        axles.body.appendChild(h('p', 'bench-help', UI.tuneHelp));
         body.appendChild(axles.d);
 
         // Rules: the class, the sheet with the car's figures, and the rest.
@@ -447,12 +446,23 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
         ui.autoHelp.textContent = `Auto-weigh fills the car to ${U.mass(C.rules[build.rules].maxMass, u)} with the weight about ${U.length(C.bench.autoBalance * IN, u)} in front of the rear axle, where a car runs fastest.`;
 
         const t = build.tune;
-        ui.deburr.input.checked = t.deburr;
-        ui.polish.value = String(t.polish);
-        ui.polish.setAttribute('aria-valuetext', POLISH[t.polish]);
-        ui.polishText.textContent = POLISH[t.polish];
-        ui.graphite.input.checked = t.graphite;
-        ui.align.input.checked = t.align;
+        const maxPolish = C.physics.axleFriction.polish.length;
+        ui.tuneList.textContent = '';
+        for (const [done, words] of [
+            [t.deburr, t.deburr ? 'Burrs filed off' : 'Burrs still on the axles'],
+            [t.polish > 0, t.polish ? `Polished: ${POLISH[t.polish]}` : 'Not polished'],
+            [t.graphite, t.graphite ? 'Graphite in the wheels' : 'No graphite yet'],
+            [t.align, t.align ? 'Aligned, it rolls true' : 'Not aligned']
+        ]) {
+            const li = h('li', done ? 'is-done' : null, `${done ? '✓' : '○'} ${words}`);
+            ui.tuneList.appendChild(li);
+        }
+        ui.steps.deburr.hidden = t.deburr;
+        ui.steps.polish.hidden = t.polish >= maxPolish;
+        ui.steps.polish.textContent = polishButton(t.polish);
+        ui.steps.graphite.hidden = t.graphite;
+        ui.steps.align.hidden = t.align;
+        ui.steps.fresh.hidden = !(t.deburr || t.polish || t.graphite || t.align);
         const done = [t.deburr ? 'de-burred' : '', t.polish ? POLISH[t.polish].replace(' and polishing compound', ' and compound') : '', t.graphite ? 'graphite' : '', t.align ? 'aligned' : ''].filter(Boolean);
         ui.axlesSum.textContent = done.length ? done.join(', ') : 'As they came';
 
@@ -579,9 +589,48 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
         commit({ ...build, paint: { ...build.paint, ...patch } }, null, opts);
     }
 
-    function setTune(patch) {
-        commit({ ...build, tune: { ...build.tune, ...patch } });
+    /**
+     * A tune-up step (M5.1): the tuned car kept at once, its animation
+     * played by main.js (`hooks.tune`), the host saying what the step was
+     * worth on the track when it is done. Fresh axles undo them all.
+     */
+    function tuneStep(kind) {
+        armed = null;
+        const from = build.tune;
+        const max = C.physics.axleFriction.polish.length;
+        let tune;
+        if (kind === 'fresh') tune = { ...from, deburr: false, polish: 0, graphite: false, align: false };
+        else if (kind === 'polish') tune = from.polish < max ? { ...from, polish: from.polish + 1 } : null;
+        else tune = from[kind] ? null : { ...from, [kind]: true };
+        if (!tune) return;
+        const gain = tuneGain(build, from, tune, C);
+        const prev = build;
+        build = garage.save({ ...build, tune }) || { ...build, tune };
+        update();
+        // A button that has just done its job hides: focus goes on to the
+        // next step there is, so a keyboard keeps its place.
+        const pressed = ui.steps[kind];
+        if (pressed.hidden) {
+            const next = ['deburr', 'polish', 'graphite', 'align', 'fresh'].map((k) => ui.steps[k]).find((b) => !b.hidden);
+            if (next && typeof next.focus === 'function') next.focus({ preventScroll: true });
+        }
+        const line = {
+            fresh: () => SAY.fresh,
+            deburr: () => SAY.deburred(gain),
+            polish: () => SAY.polished(POLISH[tune.polish].replace('2000 grit and polishing compound', 'polishing compound'), gain),
+            graphite: () => SAY.graphited(gain),
+            align: () => SAY.aligned(gain)
+        }[kind]();
         status(ui.axlesSum.textContent);
+        const done = () => say(line);
+        if (kind !== 'fresh' && hooks.tune) {
+            say(`${pressed.textContent}…`);
+            hooks.tune(kind, prev, build, done);
+        } else {
+            hooks.changed(build);
+            done();
+        }
+        hooks.track('bench', { kind: 'tune', outcome: kind });
     }
 
     function setRules(rules) {
@@ -712,14 +761,12 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
         hooks.track('garage-forget', {});
     }
 
+    /** Race it: to check-in, whatever the sheet says. A car that breaks
+     *  it is turned back at the weigh-in (M5.2), kindly, which teaches the
+     *  rule better than a button that will not go. */
     function raceIt() {
         armed = null;
-        const stats = update();
-        if (!stats.legal) {
-            say(SAY.illegal(garage.nameOf(build), stats.notes.join(' ')));
-            openBox('rules');
-            return;
-        }
+        update();
         hooks.race(build);
     }
 
@@ -744,6 +791,11 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
             say(hostFirst(name, massText));
         } else if (kind === 'step') {
             say(hostStep(name));
+        } else if (kind === 'weighin') {
+            // Sent back by the weigh-in (M5.2): what it found, and the
+            // rule sheet open on it.
+            say(WEIGH.sentBack(name, tip ? tip.why : ''));
+            openBox('rules');
         } else if (kind === 'tune') {
             say(hostTune(name, tip && tip.top, tip && tip.sentence));
             if (tip && tip.top && tip.top.more >= 0.002) openBox(FIX_SECTION[tip.top.id]);

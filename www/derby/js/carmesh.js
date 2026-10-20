@@ -24,6 +24,10 @@
  * they stick to the surface and are trimmed by its shape. The neighbors'
  * cars are plain paint.
  *
+ * THE AXLE HEADS (M5): a nail head at each wheel's middle, dull as it comes
+ * from the kit and shinier with each grit of polish (`shineOf`), so the
+ * work done on the axles can be seen.
+ *
  * THE POCKETS (M3, `pockets: true`): a visitor's car shows its tungsten,
  * a dark disc where each pocket is filled, a stack standing proud where an
  * Outlaw car has piled it higher than the body (weights.js).
@@ -59,6 +63,20 @@ export function wheelSpots(car, C = DERBY_CONFIG) {
 /** A paint's material settings: a finish from config, or gloss. Pure. */
 export function finishOf(finish, C = DERBY_CONFIG) {
     return C.paint.finishes[finish] || C.paint.finishes.gloss;
+}
+
+/** How an axle head shines after its tune-ups: rough and dull from the
+ *  kit, nearer a mirror with each grit (de-burring counts as half a step).
+ *  Pure. Returns { roughness, metalness }. */
+export function shineOf(tune, C = DERBY_CONFIG) {
+    const S = C.tuneups.shine;
+    const t = tune || C.stockTune;
+    const steps = C.physics.axleFriction.polish.length + 0.5;
+    const f = Math.min(1, ((t.polish || 0) + (t.deburr ? 0.5 : 0)) / steps);
+    return {
+        roughness: S.roughness[0] + (S.roughness[1] - S.roughness[0]) * f,
+        metalness: S.metalness[0] + (S.metalness[1] - S.metalness[0]) * f
+    };
 }
 
 /** Segments in each rounded edge. */
@@ -200,6 +218,7 @@ export function tungstenOf(build, C = DERBY_CONFIG) {
 }
 
 let wheelGeometry = null;
+let headGeometry = null;
 let room = null;
 
 /** The paint's painted room: a warm ceiling, the walls, a darker floor, as
@@ -310,11 +329,27 @@ export function buildCarMesh(build, car, { paint = null, color = 0xcccccc, shado
         group.add(w);
         return w;
     });
+    // The nail heads, outside each wheel, as shiny as the polish made them.
+    if (!headGeometry) {
+        headGeometry = new THREE.CylinderGeometry(0.085 * IN, 0.085 * IN, 0.03 * IN, 16);
+        headGeometry.rotateX(Math.PI / 2);
+    }
+    const shine = shineOf(car.tune, C);
+    const steel = new THREE.MeshStandardMaterial({ color: 0xc9ced6, roughness: shine.roughness, metalness: shine.metalness });
+    steel.envMap = paintRoom();
+    made.push(steel);
+    const heads = wheelSpots(car, C).map(([x, y, z]) => {
+        const nail = new THREE.Mesh(headGeometry, steel);
+        nail.position.set(x, y, z + Math.sign(z) * (W.thickness / 2 + 0.0004));
+        group.add(nail);
+        return nail;
+    });
 
     return {
         group,
         body,
         wheels,
+        heads,
         /** Spin the wheels for `meters` rolled. */
         roll(meters) {
             const a = -meters / W.radius;

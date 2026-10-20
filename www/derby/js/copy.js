@@ -68,13 +68,6 @@ export const UI = Object.freeze({
     rear: 'Rear',
     axleMark: 'Axle',
     axles: 'Axles and wheels',
-    deburr: 'De-burr the axles',
-    deburrBlurb: 'File off the burr under each nail head',
-    polish: 'Polish the axles',
-    graphite: 'Graphite',
-    graphiteBlurb: 'A puff of dry graphite in each wheel',
-    align: 'Align the wheels',
-    alignBlurb: 'So the car rolls straight instead of rubbing the rail',
     rules: 'Rules',
     standard: 'Standard',
     standardBlurb: 'The house rule sheet: 5 ounces, the kit’s wheels and axles',
@@ -106,8 +99,23 @@ export const UI = Object.freeze({
     along: 'Along the car',
     upDown: 'Up and down',
     size: 'Size',
-    peel: 'Peel it off'
+    peel: 'Peel it off',
+    // M5, the tune-ups and the weigh-in.
+    doDeburr: 'File off the burrs',
+    doGraphite: 'Puff in graphite',
+    doAlign: 'Roll it and align it',
+    freshAxles: 'Fresh axles from the kit',
+    tuneHelp: 'One tap a step. Each one shows what it does, and the host says what it was worth on the track.',
+    tuneupsHeading: 'What each tune-up was worth',
+    skipWeighIn: 'Skip the weigh-in',
+    weighInBack: 'Back to the workbench'
 });
+
+/** The polish button for the next step (four grits, then compound). */
+export function polishButton(level) {
+    const next = ['Polish with 400 grit', 'Polish with 800 grit', 'Polish with 1200 grit', 'Polish with 2000 grit', 'Polish with compound'];
+    return next[level] || '';
+}
 
 /** The sanding slider's five steps (M4.4). */
 export const SAND = Object.freeze(['Square, as cut', 'Lightly sanded', 'Softened', 'Rounded', 'Well rounded']);
@@ -306,7 +314,6 @@ export const SAY = Object.freeze({
     deleted: (name, next) => `${name} is gone. ${next} is on the bench now.`,
     picked: (name) => `${name} is on the bench.`,
     forgot: (name) => `Everything is forgotten. Here’s a fresh car to start with, ${name}.`,
-    illegal: (name, notes) => `${name} can’t race just yet. ${notes}`,
     // M4, the workshop.
     cutting: 'Cutting along your line…',
     cutAuto: (massText) => `Cut! Auto-weigh moved the weights to suit the new shape, ${massText} in all.`,
@@ -316,7 +323,46 @@ export const SAY = Object.freeze({
     sanded: (step) => `Sanded: ${step.toLowerCase()}. Rounder edges let the air slip past a little more easily, and the wood that came off came off the weight.`,
     decalsFull: 'That’s as many decals as a car this size can wear. Please peel one off to make room.',
     decalOn: (label) => `${label} stuck on. Move it with the sliders, or drag it on the picture.`,
-    decalOff: (label) => `${label} peeled off.`
+    decalOff: (label) => `${label} peeled off.`,
+    // M5, a tune-up step done, and what it is worth on the track.
+    deburred: (t) => `The burrs are filed off every axle. That’s worth ${s3(t)} on the track.`,
+    polished: (grit, t) => `Polished with ${grit}. That’s worth ${s3(t)} more.`,
+    graphited: (t) => `A puff of graphite in every wheel, spun to work it in. That’s worth ${s3(t)}.`,
+    aligned: (t) => `It drifted toward the rail, so the axles were tapped straight. Now it rolls true, worth ${s3(t)}.`,
+    fresh: 'Fresh axles from the kit, burrs, crimp marks and all, and the wheels as they go on.'
+});
+
+/**
+ * The results' list of what each tune-up was worth (M5's Done-when), from
+ * sim.tuneupWorth's rows: done, what it was worth, or not done, what it
+ * would save.
+ */
+export function tuneupLines(rows) {
+    const out = [];
+    for (const r of rows) {
+        if (r.id === 'deburr') out.push(r.done ? `De-burred axles: worth ${s3(r.saved)}.` : `Filing off the burrs would save ${s3(r.more)}.`);
+        if (r.id === 'polish') {
+            if (!r.done) out.push(`Polishing the axles would save ${s3(r.more)}.`);
+            else if (r.more > WORTH) out.push(`Axles polished to ${POLISH[r.level]}: worth ${s3(r.saved)}. Polishing on through the compound would save ${s3(r.more)} more.`);
+            else out.push(`Axles polished through the compound: worth ${s3(r.saved)}.`);
+        }
+        if (r.id === 'graphite') out.push(r.done ? `Graphite in the wheels: worth ${s3(r.saved)}.` : `A puff of graphite would save ${s3(r.more)}.`);
+        if (r.id === 'align') out.push(r.done ? `Straight wheels: worth ${s3(r.saved)}.` : `Aligning the wheels would save ${s3(r.more)}.`);
+    }
+    return out;
+}
+
+// ---- M5: the weigh-in ------------------------------------------------------
+
+export const WEIGH = Object.freeze({
+    onScale: (name) => `${name} on the scale…`,
+    reading: (massText) => `${massText} on the scale.`,
+    gauge: 'Through the gauge box…',
+    passed: (name) => `${name} passes the weigh-in. Good luck!`,
+    over: (name, by) => `${name} weighs in ${by} over the limit, so it can’t race just yet. Please take a weight out on the bench and come back.`,
+    shape: (name, note) => `${name} won’t pass the gauge box: ${note} Please fix it on the bench and come back.`,
+    sentBack: (name, why) => `The weigh-in sent ${name} back to the bench. ${why}`,
+    spoken: (name, massText, ok) => (ok ? `${name} weighs ${massText} and passes the gauge box.` : `${name} does not pass the weigh-in.`)
 });
 
 /**
@@ -342,7 +388,7 @@ export const RULE_NAMES = Object.freeze({
 export const ENTRY = Object.freeze({
     outlawOnly: 'Outlaw cars race in the Time Trial and the Outlaw exhibition.',
     standardOnly: 'The Outlaw exhibition is for Outlaw cars. Switch a car to Outlaw on the bench.',
-    illegal: 'Over the rule sheet’s limits. Please fix it on the bench first.',
+    illegal: 'Over the rule sheet’s limits, so the weigh-in will hand it back.',
     noneEligible: 'None of your cars can enter this race yet. The bench can change that.',
     benchFirst: 'Please fix your car on the bench first.'
 });

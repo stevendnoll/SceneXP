@@ -1209,6 +1209,50 @@ body {
     cursor: grab;
 }
 
+/* ---- The tune-ups and the weigh-in (M5) ------------------------------------ */
+
+.bench-tunes {
+    margin: 0.2rem 0 0.4rem;
+    padding: 0;
+    list-style: none;
+    font-size: 0.88rem;
+    line-height: 1.6;
+}
+
+.bench-tunes li {
+    color: #bfb2a3;
+}
+
+.bench-tunes li.is-done {
+    color: #f6efe6;
+}
+
+/* Over the scene, low: what the weigh-in found, and the way back. */
+.weighin-note {
+    position: fixed;
+    left: 50%;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 1rem);
+    transform: translateX(-50%);
+    width: min(28rem, calc(100vw - 2rem));
+    padding: 1rem 1.1rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 14px;
+    background: rgba(28, 22, 18, 0.95);
+    color: #f6efe6;
+    text-align: center;
+    box-sizing: border-box;
+    z-index: 125;
+}
+
+.weighin-note.hidden {
+    display: none;
+}
+
+.weighin-text {
+    margin: 0 0 0.8rem;
+    line-height: 1.45;
+}
+
 /* ---- Check-in and results, M3 additions ---------------------------------- */
 
 .checkin-back-row {
@@ -1222,6 +1266,8 @@ body {
 }
 
 .results-trophy[hidden],
+.results-sub[hidden],
+.results-why[hidden],
 .results-actions [hidden] {
     display: none;
 }
