@@ -196,6 +196,21 @@ export function installCardFocusTrap(options = {}) {
         // had focus), and without this the first Tab of every visit escapes.
         const outside = !card.contains(here);
 
+        // A FOCUS HOLDER IS INSIDE BUT IS NOT A STOP. A card that focuses its
+        // title (`tabindex="-1"`) on opening has focus on neither the first
+        // stop nor outside, so Shift+Tab from it went to whatever came before
+        // in the page: the floating buttons behind the backdrop (found in
+        // www/derby's results card, 2026-10-19). Wrap when no stop lies on
+        // the side the key moves toward. DOCUMENT_POSITION_PRECEDING is 2.
+        if (!outside && !items.includes(here) && here && here.compareDocumentPosition) {
+            const before = items.filter((el) => here.compareDocumentPosition(el) & 2).length;
+            if (event.shiftKey ? before === 0 : before === items.length) {
+                (event.shiftKey ? last : first).focus();
+                event.preventDefault();
+            }
+            return;
+        }
+
         if (event.shiftKey ? (here === first || outside) : (here === last || outside)) {
             (event.shiftKey ? last : first).focus();
             event.preventDefault();

@@ -1323,4 +1323,19 @@ describe('Maya\'s room chips on the page', () => {
         fire(chipOf('primary-bathroom'), 'click');
         expect(levelOfArea('primary-bathroom')).toBe('second');
     });
+
+    test('a chip added and not offered again leaves the keyboard on the chip now in its place, not her next step at the foot (QA, 2026-10-19)', async () => {
+        const main = await bootHome();
+        const t = main.__test__;
+        t.ui.guide = { ...t.ui.guide, scene: 'rooms', reached: 3, rooms: 0 };
+        t.liftLevel(null);
+        t.showGuide();
+        const chips = () => (dom.el('host-choices').children[0] || { children: [] }).children.filter((b) => b.classList && b.classList.contains('panel-chip'));
+        const tapped = chips().find((b) => b.id === 'host-chip-primary-bedroom');
+        const slot = chips().indexOf(tapped);
+        tapped.focus();
+        fire(tapped, 'click');
+        expect(chips().some((b) => b.id === 'host-chip-primary-bedroom')).toBe(false);
+        expect(dom.documentStub.activeElement).toBe(chips()[slot]);
+    });
 });

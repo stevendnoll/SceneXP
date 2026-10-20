@@ -14,7 +14,10 @@
  *     so nothing slides out from under a reader or a keyboard;
  *   - it never starts by itself for a visitor who asks for reduced motion,
  *     and the dots still work;
- *   - it rests while the tab is hidden.
+ *   - it rests while the tab is hidden;
+ *   - a previous and a next arrow at its two sides, and a swipe across it
+ *     on a touch screen, step it back and on, wrapping round (Steve,
+ *     2026-10-20: "it looks kind of like a slideshow").
  * Slides out of view are `inert` and aria-hidden, so neither Tab nor a screen
  * reader lands on a slide nobody can see.
  *
@@ -61,6 +64,20 @@ export function markNewCards(doc, now = new Date()) {
     return marked;
 }
 
+/** A swipe that moves the slideshow: this far across, and mostly across. */
+export const SWIPE = Object.freeze({ distance: 40, ratio: 1.4 });
+
+/** What a touch that went `dx` across and `dy` down (pixels) asks for: -1
+ *  the previous slide (a swipe to the right), 1 the next, 0 neither. Pure. */
+export function swipeStep(dx, dy, { distance = SWIPE.distance, ratio = SWIPE.ratio } = {}) {
+    if (Math.abs(dx) < distance || Math.abs(dx) < Math.abs(dy) * ratio) return 0;
+    return dx < 0 ? 1 : -1;
+}
+
+const ARROW = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const PREV_ICON = ARROW('M15 5l-7 7 7 7');
+const NEXT_ICON = ARROW('M9 5l7 7-7 7');
+
 const PAUSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.6" height="14" rx="1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1"/></svg>';
 const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>';
 
@@ -105,6 +122,53 @@ export function initSpotlight(section, {
         return dot;
     });
     section.appendChild(controls);
+
+    // The arrows, either side of the slides (site.css centers them on the
+    // slides' own grid cell), before and after them in the tab order.
+    const list = section.querySelector('.spotlight-slides');
+    const arrow = (cls, icon, label, step) => {
+        const b = doc.createElement('button');
+        b.type = 'button';
+        b.className = `spotlight-arrow ${cls}`;
+        b.innerHTML = icon;
+        b.setAttribute('aria-label', label);
+        b.addEventListener('click', () => {
+            show(state.index + step);
+            schedule();
+        });
+        return b;
+    };
+    const prev = arrow('spotlight-prev', PREV_ICON, 'Previous world', -1);
+    const next = arrow('spotlight-next', NEXT_ICON, 'Next world', 1);
+    section.insertBefore(prev, list);
+    section.insertBefore(next, controls);
+
+    // A swipe across the slides on a touch screen (or with a pen). A mouse
+    // is left to click its links. A swipe never also follows the link it
+    // started on.
+    let touch = null;
+    let swiped = false;
+    if (list) {
+        list.addEventListener('pointerdown', (e) => {
+            touch = e.pointerType === 'touch' || e.pointerType === 'pen' ? { x: e.clientX, y: e.clientY } : null;
+        });
+        list.addEventListener('pointerup', (e) => {
+            if (!touch) return;
+            const step = swipeStep(e.clientX - touch.x, e.clientY - touch.y);
+            touch = null;
+            if (!step) return;
+            swiped = true;
+            show(state.index + step);
+            schedule();
+        });
+        list.addEventListener('pointercancel', () => { touch = null; });
+        list.addEventListener('click', (e) => {
+            if (!swiped) return;
+            swiped = false;
+            e.preventDefault();
+            if (e.stopPropagation) e.stopPropagation();
+        }, true);
+    }
     section.classList.add('is-enhanced');
 
     function show(i) {
@@ -165,6 +229,7 @@ export function initSpotlight(section, {
     return {
         state,
         next: () => { show(state.index + 1); schedule(); },
+        prev: () => { show(state.index - 1); schedule(); },
         show: (i) => { show(i); schedule(); }
     };
 }

@@ -54,14 +54,20 @@ const PERSISTENT = {
     'www/xo/js/progress.js': 'a game of X’s and O’s that has not finished yet',
     'www/xo/js/colors.js': 'the team and field colors chosen in X’s and O’s',
     'www/xo/js/jump.js': 'whether Auto jump is on in X’s and O’s',
-    'www/leaves/js/cast.js': 'the character chosen in Leaf Blower',
+    // The shared figure store (promoted from www/leaves/js/cast.js on
+    // 2026-10-19), under each scene's own key: Leaf Blower's character, and
+    // Derby Day's family (M6, key derby-family).
+    'www/shared/js/cast-1.0.0.js': 'the character chosen in Leaf Blower, and the family dressed in Derby Day',
     'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaf Blower',
     // Released 2026-10-16, described in privacy.html as "Your home in
     // Whitestone Home Care".
     'www/whitestone/js/store.js': 'the checklists a visitor builds in Whitestone Home Care',
     // The cleaner's page (M4): per shared checklist, its key (from the link),
     // the 12 hour visit pass the PIN gives, and wrong PINs in a row.
-    'www/whitestone/tasks/js/main.js': 'on a cleaner’s device, the key and visit pass of a checklist shared with them, and the visit’s marks and add-ons'
+    'www/whitestone/tasks/js/main.js': 'on a cleaner’s device, the key and visit pass of a checklist shared with them, and the visit’s marks and add-ons',
+    // Derby Day's garage (M3, 2026-10-19): up to four cars, their results,
+    // the trophies, and the units and sound settings.
+    'www/derby/js/garage.js': 'the cars a visitor builds in Derby Day, their results and trophies, and its settings'
 };
 
 /**
@@ -165,6 +171,12 @@ test('and the policy actually describes them, in words a visitor would use', () 
     expect(text).toMatch(/Whitestone Home Care sends a ping for each button you press/i);
     expect(text).toMatch(/never sends anything you typed, a price, a date or time, or the PIN itself/i);
 
+    // Derby Day's garage (M3, 2026-10-19): the cars, and how to clear them.
+    expect(text).toMatch(/Derby Day saves your cars/i);
+    expect(text).toMatch(/Forget my cars button/i);
+    // And the family dressed on the family card (M6), forgotten with them.
+    expect(text).toMatch(/how you dressed your family/i);
+
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.
     expect(text).toMatch(/Start a new garden button/i);
@@ -191,6 +203,7 @@ const NAMED_IN_POLICY = {
     xo: "X's and O's",
     leaves: 'Leaf Blower',
     whitestone: 'Whitestone Home Care',
+    derby: 'Derby Day',
 };
 
 test('every experience that keeps something is named in the policy', () => {

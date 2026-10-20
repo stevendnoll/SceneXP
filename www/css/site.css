@@ -757,6 +757,114 @@ html {
     transform: scale(1.25);
 }
 
+/* THE ARROWS (/js/home.js adds them, so without the script there are none,
+   and none are needed): narrow, faint and borderless, at the two sides of
+   the slides and centered on them. The enhanced section is a grid, so the
+   arrows share the slides' own cell (the second row) without the slides
+   moving in the page. A touch screen swipes as well; the slides keep the
+   page's vertical scroll (pan-y) and give a sideways swipe to the script. */
+.spotlight.is-enhanced {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.spotlight.is-enhanced > h2 {
+    grid-row: 1;
+}
+
+.spotlight.is-enhanced .spotlight-slides {
+    grid-row: 2;
+    grid-column: 1;
+    touch-action: pan-y;
+}
+
+.spotlight.is-enhanced .spotlight-controls {
+    grid-row: 3;
+}
+
+.spotlight-arrow {
+    grid-row: 2;
+    grid-column: 1;
+    align-self: center;
+    z-index: 2;
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    /* Most of the slide's height (Steve, 2026-10-20: "at least 80%"): a
+       grid item's percentage is of its own cell, the slides' row. */
+    height: 80%;
+    margin: 0 10px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: rgba(10, 12, 18, 0.16);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    /* Quiet until wanted (Steve, 2026-10-20: "a little more subtle"):
+       half strength at rest, full when the slideshow is pointed at or one
+       of them has the keyboard. */
+    opacity: 0.55;
+    transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+/* No tap highlight on a phone (Steve, 2026-10-20: "a weird blue highlight
+   when I tap the arrows"): the slide changing is the answer to a tap. The
+   keyboard's focus outline stays. */
+.spotlight-arrow,
+.spotlight-toggle,
+.spotlight-dot {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* A finger needs more than the arrow shows: 44px across to tap, the extra
+   invisible either side of it. */
+.spotlight-arrow::before {
+    content: "";
+    position: absolute;
+    inset: 0 -7px;
+}
+
+.spotlight-prev {
+    justify-self: start;
+}
+
+.spotlight-next {
+    justify-self: end;
+}
+
+.spotlight-arrow svg {
+    width: 18px;
+    height: 18px;
+}
+
+.spotlight-arrow svg path {
+    stroke-width: 2;
+}
+
+.spotlight-arrow:focus-visible {
+    opacity: 1;
+    outline: 3px solid var(--link);
+    outline-offset: 2px;
+}
+
+@media (hover: hover) {
+    .spotlight:hover .spotlight-arrow {
+        opacity: 1;
+    }
+
+    .spotlight-arrow:hover {
+        background: rgba(10, 12, 18, 0.34);
+    }
+}
+
+/* A phone: closer to the edges. */
+@media (max-width: 760px) {
+    .spotlight-arrow {
+        margin: 0 6px;
+    }
+}
+
 /* THE SLOW PAN AND ZOOM, only while the slideshow is moving and only for
    visitors who have not asked for reduced motion. A pause holds the picture
    where it is rather than snapping it back. */

@@ -112,7 +112,7 @@
     <title>Corner Office | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=4" as="style">
+    <link rel="preload" href="css/experience.min.css?v=5" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -175,7 +175,7 @@
     <!-- The shared sheet, then this scene's, which carries the office's own
          cards. -->
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=4">
+    <link rel="stylesheet" href="css/experience.min.css?v=5">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -647,6 +647,7 @@
     <div id="application-form" class="card-overlay" hidden>
         <div id="application-form-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
             aria-labelledby="application-form-title" tabindex="-1">
+            <button id="application-form-close" class="card-x" type="button" aria-label="Close" title="Close (Escape)">&times;</button>
             <h2 id="application-form-title" class="card-title">New application</h2>
             <form id="af-form" class="office-form" novalidate>
                 <div class="form-row">
@@ -725,6 +726,7 @@
     <div id="event-form" class="card-overlay" hidden>
         <div id="event-form-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
             aria-labelledby="event-form-title" aria-describedby="event-form-about" tabindex="-1">
+            <button id="event-form-close" class="card-x" type="button" aria-label="Close" title="Close (Escape)">&times;</button>
             <h2 id="event-form-title" class="card-title">Log an event</h2>
             <p id="event-form-about" class="card-meta"></p>
             <form id="ef-form" class="office-form" novalidate>
@@ -775,6 +777,7 @@
     <div id="task-form" class="card-overlay" hidden>
         <div id="task-form-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
             aria-labelledby="task-form-title" aria-describedby="task-form-about" tabindex="-1">
+            <button id="task-form-close" class="card-x" type="button" aria-label="Close" title="Close (Escape)">&times;</button>
             <h2 id="task-form-title" class="card-title">Add a follow-up</h2>
             <p id="task-form-about" class="card-meta"></p>
             <form id="tf-form" class="office-form" novalidate>
@@ -800,6 +803,7 @@
     <div id="contact-form" class="card-overlay" hidden>
         <div id="contact-form-panel" class="card-panel form-panel" role="dialog" aria-modal="true"
             aria-labelledby="contact-form-title" aria-describedby="contact-form-about" tabindex="-1">
+            <button id="contact-form-close" class="card-x" type="button" aria-label="Close" title="Close (Escape)">&times;</button>
             <h2 id="contact-form-title" class="card-title">New contact</h2>
             <p id="contact-form-about" class="card-meta"></p>
             <form id="cf-form" class="office-form" novalidate>

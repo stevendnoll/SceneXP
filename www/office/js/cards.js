@@ -22,6 +22,11 @@
  * `armed: true`, and the panel swallows pointer clicks for that long. A
  * keyboard press (a click with `detail` 0) is never swallowed.
  *
+ * A FORM CLOSES ONLY ON PURPOSE. A click on the backdrop closes any other
+ * card, but a form (FORMS) holds the visitor's typing, and a stray click
+ * beside it lost a half-written application (QA, 2026-10-19). A form closes
+ * from its X, its Cancel, Escape, or saving.
+ *
  * THE PRIMARY BUTTON IS NEVER FOCUSED ON OPEN. The panel itself takes focus
  * unless the caller names a text field (a form's first box), so a screen
  * reader hears the title first and a stray Enter cannot press anything.
@@ -36,6 +41,9 @@ export const CARD_ORDER = [
     'contact', 'wastebasket', 'outtray', 'printer', 'settings', 'application-form', 'event-form', 'task-form',
     'contact-form', 'confirm'
 ];
+
+/** The cards that hold typing, which a click on the backdrop leaves open. */
+export const FORMS = ['application-form', 'event-form', 'task-form', 'contact-form'];
 
 const ARM_MS = 450;
 
@@ -261,9 +269,11 @@ export function initCards({ signal } = {}) {
         const overlay = byId(id);
         if (!overlay) continue;
         overlay.hidden = true;
-        overlay.addEventListener('click', (event) => {
-            if (event.target === overlay) closeCard(id);
-        }, { signal });
+        if (!FORMS.includes(id)) {
+            overlay.addEventListener('click', (event) => {
+                if (event.target === overlay) closeCard(id);
+            }, { signal });
+        }
         const closeBtn = byId(`${id}-close`);
         if (closeBtn) closeBtn.addEventListener('click', () => closeCard(id), { signal });
         const panel = panelOf(id);

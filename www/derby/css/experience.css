@@ -1,0 +1,1639 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+/*
+ * experience.css - Derby Day (www/derby), on the shared stylesheet with its
+ * `ember` theme: warm, like a hall on a Saturday morning.
+ *
+ * THE SHARED SHEET IS ID-SCOPED, so every card here is this scene's own:
+ * the check-in card (the shared #blocker and #instructions, made a
+ * scrolling form), the timer display, the announcer's caption, the Skip
+ * button, the "You" tag, and the results.
+ *
+ * HOUSE RULES THIS SHEET KEEPS: a phone keeps :hover after a tap, so every
+ * hover is inside (hover: hover). Only Go is filled, because a tinted
+ * resting button reads as one already pressed. Every motion stops under
+ * prefers-reduced-motion. The check-in card scrolls when it is taller than
+ * the screen (Leaf Blower's lesson, 2026-10-08).
+ */
+
+body {
+    background: #2b2420;
+}
+
+#loading-screen {
+    background:
+        radial-gradient(120% 80% at 50% 110%, #4a3a2c 0%, transparent 60%),
+        #1d1814;
+}
+
+/* ---- Check-in ------------------------------------------------------------ */
+
+#blocker {
+    cursor: default;
+    overflow-y: auto;
+    align-items: flex-start;
+    touch-action: pan-y;
+    background: rgba(20, 15, 10, 0.72);
+}
+
+#blocker #instructions {
+    margin: auto 0;
+    width: min(34rem, 100%);
+    padding: max(1.5rem, env(safe-area-inset-top)) 1rem max(1.5rem, env(safe-area-inset-bottom));
+    box-sizing: border-box;
+}
+
+#blocker #instructions .subtitle {
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.06em;
+}
+
+.choice-group {
+    margin: 0 0 1rem;
+    padding: 0;
+    border: 0;
+    text-align: left;
+}
+
+.choice-group legend {
+    margin-bottom: 0.5rem;
+    color: var(--ui-subtitle);
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 0.5rem;
+}
+
+.choice {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+    background: rgba(30, 24, 20, 0.85);
+    color: #f6efe6;
+    cursor: pointer;
+}
+
+.choice input {
+    margin: 0.2rem 0 0;
+    accent-color: var(--ui-accent);
+    flex: none;
+}
+
+.choice:has(input:checked) {
+    border-color: var(--ui-accent);
+    box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+
+.choice:has(input:focus-visible) {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+.choice-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.choice-label {
+    font-weight: 700;
+}
+
+.choice-blurb {
+    color: #d9cbbb;
+    font-size: 0.85rem;
+    line-height: 1.35;
+}
+
+@media (hover: hover) {
+    .choice:hover {
+        border-color: rgba(var(--ui-accent-rgb), 0.7);
+    }
+}
+
+.checkin-note {
+    margin: 0 0 0.75rem;
+    color: #ffd2a8;
+    font-weight: 600;
+}
+
+.checkin-note[hidden] {
+    display: none;
+}
+
+.go-btn {
+    display: inline-block;
+    min-width: 10rem;
+    padding: 0.85rem 2rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--ui-accent);
+    color: var(--ui-on-accent);
+    font: inherit;
+    font-size: 1.2rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+}
+
+.go-btn:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+}
+
+@media (hover: hover) {
+    .go-btn:hover {
+        background: var(--ui-accent-strong);
+    }
+}
+
+.checkin-more {
+    margin: 1.25rem 0 0;
+    font-size: 0.85rem;
+}
+
+.checkin-explore {
+    color: var(--ui-subtitle);
+}
+
+/* ---- Race chrome ---------------------------------------------------------- */
+
+.help-btn {
+    top: max(16px, env(safe-area-inset-top));
+    left: max(16px, env(safe-area-inset-left));
+    right: auto;
+}
+
+.help-btn:focus-visible,
+.skip-btn:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+/* The track's timer: an LED board over the top of the screen. */
+.timer {
+    display: none;
+    position: fixed;
+    top: max(16px, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(24rem, calc(100vw - 9rem));
+    padding: 0.45rem 0.7rem 0.55rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 10px;
+    /* 0.9 keeps the red times at 4.5:1 even over a white wall. */
+    background: rgba(12, 12, 14, 0.9);
+    color: #e9e9ea;
+    font-size: 0.85rem;
+    z-index: 105;
+    pointer-events: none;
+}
+
+.timer.visible {
+    display: block;
+}
+
+.timer-heat {
+    margin: 0 0 0.3rem;
+    color: #ffcf6e;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.timer-lanes {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.timer-row {
+    display: grid;
+    grid-template-columns: 1.4rem 1fr 3.6rem 2.2rem;
+    gap: 0.4rem;
+    align-items: baseline;
+    padding: 0.12rem 0.25rem;
+    border-radius: 4px;
+}
+
+.timer-row.is-mine {
+    background: rgba(var(--ui-accent-rgb), 0.22);
+}
+
+.timer-lane {
+    color: #9aa0a8;
+    font-weight: 700;
+}
+
+.timer-name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.timer-time {
+    color: #ff5a4f;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 700;
+    text-align: right;
+}
+
+/* On the visitor's tinted row the red fell to about 3:1, a lighter red
+   holds 5:1. */
+.timer-row.is-mine .timer-time {
+    color: #ffa39b;
+}
+
+.timer-place {
+    color: #c9ced6;
+    font-size: 0.75rem;
+    text-align: right;
+}
+
+.timer-row.is-first .timer-place {
+    color: #ffcf6e;
+    font-weight: 700;
+}
+
+/* The announcer, low and centered, labeled as the announcer (M6.5). */
+.caption {
+    display: none;
+    position: fixed;
+    left: 50%;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 3.6rem);
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100vw - 2rem);
+    margin: 0;
+    padding: 0.5rem 0.9rem;
+    border-radius: 10px;
+    background: rgba(20, 15, 10, 0.8);
+    color: #fff4e6;
+    font-size: 0.95rem;
+    text-align: center;
+    z-index: 104;
+    pointer-events: none;
+}
+
+.caption.visible {
+    display: block;
+}
+
+.caption::before {
+    content: "ANNOUNCER";
+    display: block;
+    margin-bottom: 0.15rem;
+    color: #ffcf6e;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+}
+
+/* The countdown before each heat: one big number a little above the middle,
+   clear of the timer and the caption, with no box behind it so the cars at
+   the pin still show around it. Each count pops in (two names for one
+   animation, swapped by main.js, so each new count restarts it). */
+.countdown {
+    display: none;
+    position: fixed;
+    left: 50%;
+    top: 42%;
+    transform: translate(-50%, -50%);
+    margin: 0;
+    color: #fff4e6;
+    font-size: clamp(4.5rem, 24vw, 10rem);
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 0 0.04em 0 #6b3d12, 0 0.06em 0.3em rgba(0, 0, 0, 0.65);
+    font-variant-numeric: tabular-nums;
+    z-index: 104;
+    pointer-events: none;
+    animation: count-pop 0.45s ease-out;
+}
+
+.countdown.visible {
+    display: block;
+}
+
+.countdown.is-alt {
+    animation-name: count-pop-alt;
+}
+
+@keyframes count-pop {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(1.6); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes count-pop-alt {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(1.6); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* The photo finish (Steve's QA, 2026-10-20): the frozen picture framed like
+   a print, the label at the top, the margin at the bottom, and one soft
+   camera flash as it is taken. A single flash, well under WCAG's three a
+   second, and none under reduced motion. */
+.photo-finish {
+    display: none;
+    position: fixed;
+    inset: max(5.5rem, calc(env(safe-area-inset-top) + 5rem)) max(16px, env(safe-area-inset-right)) max(9rem, calc(env(safe-area-inset-bottom) + 8.5rem)) max(16px, env(safe-area-inset-left));
+    border: 6px solid #fbf8f2;
+    border-radius: 4px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 0.6rem 2rem rgba(0, 0, 0, 0.45);
+    z-index: 103;
+    pointer-events: none;
+}
+
+.photo-finish.visible {
+    display: block;
+}
+
+.photo-finish::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    animation: photo-flash 0.5s ease-out;
+}
+
+@keyframes photo-flash {
+    from { opacity: 0.7; }
+    to { opacity: 0; }
+}
+
+.photo-label,
+.photo-gap {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 0.25rem 0.7rem;
+    border-radius: 4px;
+    background: #fbf8f2;
+    color: #1d1814;
+    white-space: nowrap;
+}
+
+.photo-label {
+    top: -0.2rem;
+    font-size: 0.8rem;
+    font-weight: 900;
+    letter-spacing: 0.22em;
+}
+
+.photo-gap {
+    bottom: -0.2rem;
+    max-width: calc(100% - 1rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.skip-btn {
+    position: fixed;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    padding: 0.6rem 1.1rem;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    background: rgba(20, 20, 20, 0.78);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    z-index: 110;
+}
+
+@media (hover: hover) {
+    .skip-btn:hover {
+        border-color: var(--ui-accent);
+    }
+}
+
+/* Over the visitor's car, wherever the camera has it. */
+.you-tag {
+    display: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform: translate(-50%, -100%);
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: var(--ui-accent);
+    color: var(--ui-on-accent);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    z-index: 103;
+    pointer-events: none;
+}
+
+.you-tag.visible {
+    display: block;
+}
+
+/* ---- Results -------------------------------------------------------------- */
+
+.results-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+    background: rgba(20, 15, 10, 0.55);
+    z-index: 120;
+}
+
+.results-modal.hidden {
+    display: none;
+}
+
+.results-card {
+    margin: auto 0;
+    width: min(32rem, 100%);
+    padding: 1.25rem 1.25rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    background: rgba(28, 22, 18, 0.94);
+    color: #f6efe6;
+    box-sizing: border-box;
+}
+
+.results-event {
+    margin: 0;
+    color: var(--ui-subtitle);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.results-title {
+    margin: 0.15rem 0 0.75rem;
+    color: var(--ui-title);
+    font-size: 1.6rem;
+}
+
+.results-title:focus {
+    outline: none;
+}
+
+/* The scene holds focus through the weigh-in and the race (main.js
+   holdFocusOnScene): a holder, not a control, so no ring round the screen. */
+#game-canvas:focus {
+    outline: none;
+}
+
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.results-table thead th {
+    padding: 0 0.3rem 0.35rem;
+    color: #bfb2a3;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+/* A car's name is its row's header (M7.1), set as the other cells are. */
+.results-table td,
+.results-table tbody th {
+    padding: 0.45rem 0.3rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    vertical-align: middle;
+}
+
+.results-table tbody th {
+    font-weight: inherit;
+    text-align: left;
+}
+
+.results-table tr.is-mine td,
+.results-table tr.is-mine th {
+    background: rgba(var(--ui-accent-rgb), 0.18);
+}
+
+.results-table .col-place {
+    width: 3rem;
+    font-weight: 700;
+}
+
+.results-table .col-avg {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 1.5rem;
+    font-weight: 800;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.results-table th.col-avg {
+    font-family: inherit;
+    font-size: 0.72rem;
+}
+
+.res-name {
+    display: block;
+    font-weight: 700;
+}
+
+/* The visitor's row says so in words, its tint aside (M7.1): the You tag
+   over the car in the hall, small, after the car's name. */
+.res-you {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    background: var(--ui-accent);
+    color: var(--ui-on-accent);
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    vertical-align: 0.1em;
+}
+
+.res-heats {
+    display: block;
+    color: #bfb2a3;
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+}
+
+.results-sub {
+    margin: 1rem 0 0.35rem;
+    color: var(--ui-subtitle);
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.results-lanes {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.results-lanes li {
+    display: flex;
+    flex-direction: column;
+    padding: 0.35rem;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.lane-time {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 700;
+}
+
+.results-why {
+    margin: 0;
+    padding-left: 1.1rem;
+    line-height: 1.45;
+}
+
+.results-why li + li {
+    margin-top: 0.3rem;
+}
+
+.results-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1.25rem;
+}
+
+.results-another {
+    padding: 0.75rem 1.2rem;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    background: transparent;
+    color: #f6efe6;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.results-another:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+@media (hover: hover) {
+    .results-another:hover {
+        border-color: var(--ui-accent);
+    }
+}
+
+.results-mark {
+    margin: 1rem 0 0;
+    color: #8f8478;
+    font-size: 0.75rem;
+    text-align: center;
+}
+
+/* ---- The sound button (M2) -------------------------------------------------
+   Top right, opposite the back arrow, in the same neutral circle. Waves when
+   the sound is on, a cross when it is off, and it never fills. */
+
+.sound-btn {
+    top: max(16px, env(safe-area-inset-top));
+    right: max(16px, env(safe-area-inset-right));
+}
+
+.sound-btn[aria-pressed="false"] .sound-waves,
+.sound-btn[aria-pressed="true"] .sound-off {
+    display: none;
+}
+
+.sound-btn:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+/* ---- The share card (M2) ---------------------------------------------------
+   Over the results. The stage holds the clip as it is made (its own canvas)
+   and then the finished video, 9:16, as tall as the screen allows. */
+
+.clip-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+    background: rgba(12, 9, 6, 0.78);
+    z-index: 130;
+}
+
+.clip-modal.hidden {
+    display: none;
+}
+
+.clip-card {
+    margin: auto 0;
+    width: min(26rem, 100%);
+    padding: 1rem 1rem 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    background: rgba(28, 22, 18, 0.96);
+    color: #f6efe6;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.clip-title {
+    margin: 0 0 0.75rem;
+    color: var(--ui-title);
+    font-size: 1.3rem;
+}
+
+.clip-title:focus {
+    outline: none;
+}
+
+.clip-stage {
+    display: flex;
+    justify-content: center;
+    margin: 0 auto;
+    height: min(62vh, 32rem);
+    aspect-ratio: 9 / 16;
+    max-width: 100%;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #000;
+}
+
+.clip-stage canvas,
+.clip-stage video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Reduced motion: the clip records unseen (main.js openClip). */
+.clip-stage canvas.is-unseen {
+    opacity: 0;
+}
+
+.clip-progress {
+    margin: 0.6rem 0 0.4rem;
+    color: #e6d9c9;
+    font-size: 0.9rem;
+}
+
+.clip-sound {
+    display: inline-flex;
+    gap: 0.4rem;
+    align-items: center;
+    margin-bottom: 0.4rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.clip-sound input {
+    accent-color: var(--ui-accent);
+}
+
+.clip-sound input:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+.clip-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0.5rem;
+}
+
+.clip-actions [hidden] {
+    display: none;
+}
+
+.clip-note {
+    margin: 0.75rem 0 0;
+    color: #8f8478;
+    font-size: 0.75rem;
+}
+
+/* ---- Challenge links (M8) ---------------------------------------------------
+   The card that sends one is the share card's layout (.clip-modal and
+   .clip-card): a sentence, the optional first name, the buttons, and what
+   happened. The invitation sits at the top of check-in. */
+
+.challenge-text {
+    margin: 0 0 0.9rem;
+    line-height: 1.4;
+}
+
+.challenge-label {
+    display: block;
+    margin: 0 0 0.3rem;
+    color: #e6d9c9;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: left;
+}
+
+.challenge-from,
+.challenge-link {
+    display: block;
+    width: 100%;
+    margin: 0 0 0.6rem;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(12, 9, 6, 0.6);
+    color: #fff4e6;
+    font: inherit;
+    box-sizing: border-box;
+}
+
+.challenge-link {
+    font-size: 0.8rem;
+}
+
+.challenge-link[hidden] {
+    display: none;
+}
+
+.challenge-from:focus-visible,
+.challenge-link:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+.challenge-status {
+    min-height: 1.2em;
+    margin: 0.6rem 0 0;
+    color: #ffd2a8;
+    font-size: 0.9rem;
+}
+
+.checkin-invite {
+    margin: 0 0 1.25rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.7);
+    border-radius: 10px;
+    background: rgba(var(--ui-accent-rgb), 0.16);
+    color: #fff4e6;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.checkin-invite[hidden] {
+    display: none;
+}
+
+.checkin-invite small {
+    display: block;
+    margin-top: 0.3rem;
+    color: #e6d9c9;
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+
+/* ---- The workbench (M3) ----------------------------------------------------
+   A bottom sheet on a phone, a side panel from 900px (js/config.js
+   workbench.sideFrom says the same, so the camera frames the car in what
+   is left). The sections scroll; Race it stays in view at the foot. */
+
+.bench {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 58vh;
+    height: 58dvh;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 16px 16px 0 0;
+    background: rgba(28, 22, 18, 0.95);
+    color: #f6efe6;
+    z-index: 100;
+}
+
+.bench.hidden {
+    display: none;
+}
+
+.bench [hidden] {
+    display: none;
+}
+
+.bench-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1rem max(1rem, env(safe-area-inset-left)) 0.5rem;
+}
+
+.bench-title {
+    margin: 0 0 0.35rem;
+    color: var(--ui-title);
+    font-size: 1.25rem;
+}
+
+.bench-title:focus {
+    outline: none;
+}
+
+.bench-host {
+    margin: 0 0 0.6rem;
+    line-height: 1.45;
+}
+
+.bench-host-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+
+.bench-host-actions:empty {
+    display: none;
+}
+
+.results-another.small {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+}
+
+.results-another.is-accent {
+    border-color: var(--ui-accent);
+}
+
+.bench-foot {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.6rem 1rem max(0.6rem, env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.bench-summary {
+    flex: 1;
+    margin: 0;
+    color: #d9cbbb;
+    font-size: 0.85rem;
+    line-height: 1.35;
+}
+
+/* Turn the car: round, the icon alone (its name is in aria-label and the
+   tooltip), the coarse-pointer block below making it 44px on a phone. */
+.bench-btn.bench-turn {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+}
+
+.bench-turn svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.bench-foot .go-btn {
+    flex: none;
+    min-width: 8rem;
+    padding: 0.7rem 1.4rem;
+    font-size: 1.05rem;
+}
+
+.bench-garage {
+    margin-bottom: 0.75rem;
+}
+
+.bench-legend {
+    margin: 0 0 0.45rem;
+    padding: 0;
+    color: var(--ui-subtitle);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.bench-group {
+    margin: 0 0 0.75rem;
+    padding: 0;
+    border: 0;
+}
+
+.bench-cars,
+.chips,
+.swatches,
+.bench-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.bench-row {
+    margin: 0.5rem 0;
+}
+
+.choice.chip {
+    align-items: center;
+    padding: 0.45rem 0.7rem;
+}
+
+.choice.chip .choice-blurb {
+    font-size: 0.78rem;
+}
+
+.choice.car-chip .swatch-dot {
+    width: 1rem;
+    height: 1rem;
+}
+
+.choice.is-off {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* A swatch: the color is the button. The radio stays in the page for the
+   keyboard and screen readers, only out of sight. */
+.choice.swatch {
+    position: relative;
+    padding: 4px;
+    border-radius: 999px;
+}
+
+.choice.swatch input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+}
+
+.swatch-dot {
+    display: block;
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+}
+
+.swatch-dot.is-none {
+    background: linear-gradient(135deg, transparent 45%, #e06a5a 45%, #e06a5a 55%, transparent 55%), #3a302a;
+}
+
+.swatch-custom {
+    display: inline-flex;
+    gap: 0.4rem;
+    align-items: center;
+    padding: 4px 0.6rem 4px 4px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.swatch-custom input {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    cursor: pointer;
+}
+
+.swatch-custom:has(input:focus-visible) {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+.bench-box {
+    margin: 0 0 0.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.bench-box-head {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0.7rem 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.bench-box-head:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: -3px;
+    border-radius: 12px;
+}
+
+.bench-sum {
+    color: #d9cbbb;
+    font-size: 0.8rem;
+    font-weight: 400;
+    text-align: right;
+}
+
+.bench-box-body {
+    padding: 0 0.85rem 0.6rem;
+}
+
+.bench-btn {
+    padding: 0.55rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    background: transparent;
+    color: #f6efe6;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.bench-btn.is-strong {
+    border-color: var(--ui-accent);
+}
+
+.bench-btn[aria-disabled="true"] {
+    opacity: 0.6;
+}
+
+.bench-btn:focus-visible,
+.pocket:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+@media (hover: hover) {
+    .bench-btn:hover,
+    .pocket:hover {
+        border-color: var(--ui-accent);
+    }
+}
+
+.bench-note,
+.bench-help {
+    margin: 0.35rem 0;
+    color: #d9cbbb;
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+/* The pockets, front to rear, not to scale: each fills with tungsten from
+   the bottom as it is loaded. A line between two is an axle. */
+.pockets {
+    display: flex;
+    gap: 4px;
+    align-items: stretch;
+    margin: 0.15rem 0 0.4rem;
+}
+
+.pocket {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 46px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    background: #c99a5e;
+    color: #fff;
+    font: inherit;
+    font-weight: 800;
+    overflow: hidden;
+    cursor: pointer;
+    --fill: 0;
+}
+
+.pocket::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--fill) * 100%);
+    background: #4d5157;
+}
+
+.pocket.is-thin {
+    background: repeating-linear-gradient(135deg, #8a6a44 0 4px, #a3804f 4px 8px);
+}
+
+/* The count on its own dark chip, above the fill: white on the bare wood
+   was 2.5:1, and 7:1 or better on this over wood, thin wood or tungsten. */
+.pocket-count {
+    position: relative;
+    display: inline-block;
+    min-width: 1.15em;
+    padding: 0 0.2em;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.45);
+    line-height: 1.3;
+}
+
+.pocket-axle {
+    flex: none;
+    width: 3px;
+    border-radius: 2px;
+    background: #f2c230;
+}
+
+.pocket-ends {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.25rem;
+    color: #bfb2a3;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.bench-range {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+}
+
+.bench-range input {
+    width: 100%;
+    accent-color: var(--ui-accent);
+}
+
+/* The rule sheet: cream paper for Standard, red for Outlaw (D4). */
+.bench-sheet {
+    width: 100%;
+    margin: 0.25rem 0 0.4rem;
+    border-collapse: collapse;
+    border-radius: 8px;
+    background: #fbf4e4;
+    color: #2b2420;
+    font-size: 0.82rem;
+    overflow: hidden;
+}
+
+.bench-sheet.is-outlaw {
+    background: #c8322b;
+    color: #fff3e6;
+}
+
+.sheet-caption {
+    padding: 0.4rem 0;
+    color: #d9cbbb;
+    font-size: 0.78rem;
+    text-align: left;
+}
+
+.bench-sheet th,
+.bench-sheet td {
+    padding: 0.35rem 0.5rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    text-align: left;
+    vertical-align: top;
+}
+
+.bench-sheet thead th {
+    border-top: 0;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.bench-sheet tr.is-over td {
+    background: rgba(255, 210, 120, 0.45);
+    font-weight: 700;
+}
+
+/* On the red Outlaw sheet the gold wash left the cream text at 2.7:1, on
+   the row that matters most: a darker wash instead (cream at 7.4:1). */
+.bench-sheet.is-outlaw tr.is-over td {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.bench-notes {
+    margin: 0.25rem 0;
+    padding-left: 1.1rem;
+    color: #ffd2a8;
+    font-size: 0.85rem;
+}
+
+.bench-notes:empty {
+    display: none;
+}
+
+.bench-extra {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.2rem 0.75rem;
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.bench-extra dt {
+    color: #bfb2a3;
+}
+
+.bench-extra dd {
+    margin: 0;
+}
+
+@media (min-width: 900px) {
+    .bench {
+        top: 0;
+        right: auto;
+        width: min(26rem, 42vw);
+        height: auto;
+        border-top: 0;
+        border-right: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 0 16px 16px 0;
+    }
+
+    .bench-scroll {
+        padding-top: max(1.25rem, env(safe-area-inset-top));
+    }
+}
+
+/* ---- The workshop (M4) ------------------------------------------------------
+   The pencil-line editor: the drawing (SVG, twice as tall as the block) and
+   its points over it, each a slider. A point's dot is small, its reach is
+   bigger, so a finger finds it. touch-action: none so a drag moves the
+   point, not the panel. */
+
+.carve {
+    position: relative;
+    aspect-ratio: 700 / 250;
+    margin: 0.75rem 14px 0.6rem;
+}
+
+.carve.is-top {
+    aspect-ratio: 700 / 350;
+}
+
+.carve-svg,
+.carve-area {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.carve-svg {
+    overflow: visible;
+}
+
+.carve-block {
+    fill: rgba(255, 255, 255, 0.04);
+    stroke: rgba(255, 255, 255, 0.35);
+    stroke-dasharray: 6 5;
+    vector-effect: non-scaling-stroke;
+}
+
+.carve-car {
+    fill: #c99a5e;
+}
+
+.carve-line {
+    fill: none;
+    stroke: #ffd36e;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+}
+
+.carve-axle {
+    fill: #2b2420;
+    stroke: #f2c230;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+}
+
+.carve-axle-line {
+    stroke: #f2c230;
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+    vector-effect: non-scaling-stroke;
+}
+
+.carve-handle {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border: 3px solid #3a7be8;
+    border-radius: 999px;
+    background: #fff;
+    box-sizing: border-box;
+    transform: translate(-50%, -50%);
+    touch-action: none;
+    cursor: ns-resize;
+}
+
+.carve-handle::before {
+    content: "";
+    position: absolute;
+    inset: -11px;
+}
+
+.carve-handle.is-bottom {
+    border-color: #e8609c;
+}
+
+.carve-handle.is-width {
+    border-color: #39b54a;
+}
+
+.carve-handle.is-held {
+    border-style: dotted;
+}
+
+.carve-handle:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+}
+
+.bench-btn[aria-disabled="true"].is-strong {
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+.bench-fields {
+    display: grid;
+    grid-template-columns: 1fr 7rem;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.bench-field {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.bench-field input {
+    width: 100%;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    background: #1d1814;
+    color: #f6efe6;
+    font: inherit;
+    box-sizing: border-box;
+}
+
+.bench-field input:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 1px;
+}
+
+.livery-preview {
+    display: block;
+    width: 100%;
+    aspect-ratio: 700 / 125;
+    margin: 0.4rem 0 0.6rem;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    touch-action: none;
+    cursor: grab;
+}
+
+/* ---- The tune-ups and the weigh-in (M5) ------------------------------------ */
+
+.bench-tunes {
+    margin: 0.2rem 0 0.4rem;
+    padding: 0;
+    list-style: none;
+    font-size: 0.88rem;
+    line-height: 1.6;
+}
+
+.bench-tunes li {
+    color: #bfb2a3;
+}
+
+.bench-tunes li.is-done {
+    color: #f6efe6;
+}
+
+/* Over the scene, low: what the weigh-in found, and the way back. */
+.weighin-note {
+    position: fixed;
+    left: 50%;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 1rem);
+    transform: translateX(-50%);
+    width: min(28rem, calc(100vw - 2rem));
+    padding: 1rem 1.1rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 14px;
+    background: rgba(28, 22, 18, 0.95);
+    color: #f6efe6;
+    text-align: center;
+    box-sizing: border-box;
+    z-index: 125;
+}
+
+.weighin-note.hidden {
+    display: none;
+}
+
+.weighin-text {
+    margin: 0 0 0.8rem;
+    line-height: 1.45;
+}
+
+/* ---- Check-in and results, M3 additions ---------------------------------- */
+
+.checkin-back-row {
+    margin: 0.75rem 0 0;
+}
+
+.results-trophy {
+    margin: 0.9rem 0 0;
+    color: #ffcf6e;
+    font-weight: 700;
+}
+
+.results-trophy[hidden],
+.results-sub[hidden],
+.results-why[hidden],
+.results-actions [hidden] {
+    display: none;
+}
+
+/* ---- Card mode (?card=1, js/main.js) -------------------------------------
+   The scene alone, held to the social card's shape and centered in the
+   window, for a clean picture: every overlay over it is hidden. The cards
+   (check-in, the bench, the results) still show, to set up a race. */
+body.card-mode {
+    background: #000;
+}
+
+body.card-mode #game-canvas {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+body.card-mode #timer,
+body.card-mode #caption,
+body.card-mode #countdown,
+body.card-mode #photo-finish,
+body.card-mode #you-tag,
+body.card-mode #help-btn,
+body.card-mode #sound-btn,
+body.card-mode #skip-btn {
+    display: none !important;
+}
+
+.card-hint {
+    position: fixed;
+    left: 8px;
+    bottom: 6px;
+    margin: 0;
+    color: #8f8478;
+    font-size: 0.72rem;
+    z-index: 200;
+    pointer-events: none;
+}
+
+/* ---- Small screens -------------------------------------------------------- */
+
+@media (max-width: 480px) {
+    .timer {
+        width: calc(100vw - 8rem);
+        font-size: 0.78rem;
+    }
+
+    .timer-row {
+        grid-template-columns: 1.1rem 1fr 3.2rem 1.9rem;
+        gap: 0.3rem;
+    }
+
+    .results-table .col-avg {
+        font-size: 1.25rem;
+    }
+}
+
+/* ---- Fingers ----------------------------------------------------------------
+   Every control a finger taps is at least 44px on the box (the M7.1 sweep
+   measured the bench's buttons, chips and swatches at 35 to 40px). Only for a
+   coarse pointer, so a computer keeps the look approved at M3. The pockets
+   are left as they are: ten across the car's length, front to rear with the
+   axles between them, cannot be 44px wide on a phone without breaking that
+   map, and at 26px with gaps they meet WCAG 2.2's 24px minimum. */
+@media (pointer: coarse) {
+    .bench-btn,
+    .choice.chip,
+    .results-another.small,
+    .skip-btn,
+    .bench-box-head,
+    .bench-foot .go-btn,
+    .bench-field input,
+    .swatch-custom,
+    .clip-sound,
+    .challenge-from,
+    .bench-range input {
+        min-height: 44px;
+        box-sizing: border-box;
+    }
+
+    .choice.swatch {
+        padding: 8px;
+    }
+
+    .clip-sound {
+        padding: 0 0.5rem;
+    }
+
+    .bench-btn.bench-turn {
+        width: 44px;
+        height: 44px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .countdown,
+    .countdown.is-alt,
+    .photo-finish::after {
+        animation: none;
+    }
+}

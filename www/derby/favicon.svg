@@ -1,0 +1,11 @@
+<!-- A WEDGE DERBY CAR, side on: a yellow body rising to its tail, two black
+     wheels, on the hall's blue. At 16 pixels it reads as a little car. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Derby Day">
+  <rect width="32" height="32" rx="7" fill="#1f4e8c"/>
+  <path d="M4 19.5 L26.5 12.5 Q28.5 12 28.5 14 L28.5 19.5 Z" fill="#ffd45c" stroke="#b8860b" stroke-width="0.8" stroke-linejoin="round"/>
+  <circle cx="9.5" cy="21" r="3.2" fill="#161616"/>
+  <circle cx="24" cy="21" r="3.2" fill="#161616"/>
+  <circle cx="9.5" cy="21" r="1.1" fill="#c7ccd3"/>
+  <circle cx="24" cy="21" r="1.1" fill="#c7ccd3"/>
+  <rect x="3" y="25" width="26" height="1.6" rx="0.8" fill="#c7ccd3"/>
+</svg>

@@ -10,6 +10,7 @@
  * the toast's hold, the stacking order, the safe link, the phone labels.
  */
 import { jest } from '@jest/globals';
+import { readFileSync } from 'node:fs';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, fire } from './helpers/dom-stub.mjs';
 import { CONFIG } from '../www/office/js/config.js';
@@ -116,6 +117,25 @@ describe('cards', () => {
         cards.openCard('task-form');
         cards.closeAll();
         expect(cards.anyOpen()).toBe(false);
+    });
+
+    test('a click beside a form leaves it open, and its X and Escape close it (QA, 2026-10-19)', () => {
+        for (const id of cards.FORMS) {
+            cards.openCard(id);
+            fire(el(id), 'click', { target: el(id) });
+            expect(cards.isOpen(id)).toBe(true);
+            el(`${id}-close`).click();
+            expect(cards.isOpen(id)).toBe(false);
+            cards.openCard(id);
+            fire(dom.documentStub, 'keydown', { key: 'Escape' });
+            expect(cards.isOpen(id)).toBe(false);
+        }
+        // Every form has its X in the markup, and nothing else is a form.
+        const html = readFileSync(new URL('../www/office/index.html', import.meta.url), 'utf8');
+        for (const id of cards.FORMS) {
+            expect(html).toContain(`<button id="${id}-close" class="card-x" type="button" aria-label="Close"`);
+        }
+        expect(cards.FORMS.every((id) => cards.CARD_ORDER.includes(id))).toBe(true);
     });
 
     test('the toast stays while held, offers undo once, and goes', () => {
