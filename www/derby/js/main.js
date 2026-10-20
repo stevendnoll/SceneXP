@@ -35,7 +35,7 @@ import { createBench } from './bench.min.js';
 import { createTools } from './tools.min.js';
 import { createTuneups } from './tuneups.min.js';
 import { buildCheckinTable, planWeighIn, weighMoment, readingShare } from './checkin.min.js';
-import { createCrowd, bleacherSeats, crowdLooks, familyOf, familyPlaces, lookOf, seeded } from './crowd.min.js';
+import { createCrowd, bleacherSeats, crowdLooks, familyOf, familyPlaces, lookOf, seeded, pickCheers } from './crowd.min.js';
 import { buildDressing, gantryBounds } from './dressing.min.js';
 import { createDancer, dancerOf } from './dancer.min.js';
 import { pickDance, pickDances, danceOf, pose as dancePose } from '../../shared/js/dance-1.0.0.min.js';
@@ -107,6 +107,8 @@ const state = {
     families: {},
     dance: null,
     lastDance: null,
+    /** The last heat's cheer, so the next race day's first is another. */
+    lastCheer: null,
     /** A friend's challenge (M8): { build, from, name } from the link the
      *  visitor arrived by, raced head to head; and the car being sent. */
     challenge: null,
@@ -665,14 +667,14 @@ function placeCrowd() {
     list.push({ group: 'volunteer', look: lookOf({ shirt: 'mustard', pants: 'khaki', skin: 'medium', hair: 'gray', length: 'short' }, {}, CONFIG), at: { x: W.at.x - 0.25, y: 0, z: W.at.z - 0.55, ry: 0 }, phase: 0 });
     const mineEntry = state.crowdEntries.find((e) => e.mine);
     const carName = mineEntry ? mineEntry.name.replace(/ \(Outlaw\)$/, '') : garage.nameOf(garage.bench());
-    const family = familyMembers(familyStore.load(), carName, CONFIG).map((m) => ({ ...m, group: 'mine', phase: 1.3 }));
+    const family = familyMembers(familyStore.load(), carName, CONFIG).map((m, rank) => ({ ...m, group: 'mine', phase: 1.3, rank }));
     if (state.phase === 'bench' || state.phase === 'loading') {
         const spot = CONFIG.crowd.benchSpot;
         family.forEach((m, i) => list.push({ ...m, at: { x: CONFIG.workbench.at.x + spot.x + (i ? 0.22 : -0.2), y: 0, z: CONFIG.workbench.at.z + spot.z, ry: 0 } }));
     } else {
         const groups = [{ key: 'mine', members: family }];
         for (const e of state.crowdEntries) {
-            if (!e.mine && CONFIG.families[e.id]) groups.push({ key: e.id, members: familyOf(e.id, CONFIG).map((m, i) => ({ ...m, group: e.id, phase: i * 0.7 + 0.4 })) });
+            if (!e.mine && CONFIG.families[e.id]) groups.push({ key: e.id, members: familyOf(e.id, CONFIG).map((m, i) => ({ ...m, group: e.id, phase: i * 0.7 + 0.4, rank: i })) });
         }
         state.families = {};
         for (const place of familyPlaces(groups, CONFIG)) {
@@ -719,12 +721,12 @@ function crowdMomentOf(now) {
         } else if (m.segment.kind === 'dance') {
             won = champKey(day);
         }
-        return { kind: m.segment.kind, t, cheering: groups, won };
+        return { kind: m.segment.kind, t, cheering: groups, won, cheer: day.cheers[m.heat] };
     }
     if (state.phase === 'results' && day) {
         // Every car placed 1st: a dead heat shares the win, and the cheer.
         const won = day.race.standings.filter((i) => day.race.places[i] === 1).map((i) => (day.entries[i].mine ? 'mine' : day.entries[i].id));
-        return { kind: 'times', t, won };
+        return { kind: 'times', t, won, cheer: day.cheers[day.cheers.length - 1] };
     }
     if (state.phase === 'checkin' || state.phase === 'weighin') return { kind: 'staging', t };
     return { kind: 'idle', t };
@@ -781,7 +783,11 @@ function beginRace(entries, how) {
     // The day's dance, picked now, never the last one again.
     const dance = pickDance(Math.random(), state.lastDance);
     state.lastDance = dance;
-    state.day = { entries, cars, race, plan, event: state.event, dance, finale: null, mine: new Set(entries.map((e, i) => (e.mine ? i : -1)).filter((i) => i >= 0)) };
+    // A cheer for each heat's winner, never the same twice running, from
+    // one race day to the next too (Steve's QA, 2026-10-20).
+    const cheers = pickCheers(race.heats.length, Math.random, state.lastCheer);
+    state.lastCheer = cheers[cheers.length - 1];
+    state.day = { entries, cars, race, plan, event: state.event, dance, cheers, finale: null, mine: new Set(entries.map((e, i) => (e.mine ? i : -1)).filter((i) => i >= 0)) };
     state.clock = 0;
     state.said = '';
     state.counted = '';
@@ -975,6 +981,7 @@ function setRaceChrome(on) {
         countdown(null);
         photoFrame(null);
         stopDance();
+        if (dressing && dressing.gantry) dressing.gantry.visible = true;
     }
 }
 
@@ -1157,6 +1164,9 @@ function stepRace(dt) {
     photoFrame(kind === 'photo' ? seg.close : null);
 
     const shot = shotFor(kind, leadS, { reducedMotion: state.reducedMotion }, CONFIG);
+    // The overhead photo camera hangs from the timer's gantry, as a real
+    // one does, so the gantry is not in its picture (Steve's QA, 2026-10-20).
+    if (dressing && dressing.gantry) dressing.gantry.visible = shot !== 'photo';
     if (kind === 'dance') {
         if (!state.dance) startDance();
         if (state.dance) {
@@ -2131,6 +2141,7 @@ export const __test__ = {
     startRace, finishRace, stepBack, crowdMoment, openClip, closeClip, shareStill, shareClip, showBench, tuneCar, sound, shareLine,
     meshes: () => meshes, benchMesh: () => benchMesh, garage: () => garage, bench: () => bench, holder: () => holder, crowd: () => crowd,
     dancer: () => dancer,
+    dressing: () => dressing,
     familyView: (v) => {
         state.benchView = v;
         if (state.phase === 'bench') benchCamera();

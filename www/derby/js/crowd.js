@@ -21,29 +21,23 @@
  * THE PLANNING IS PURE (`bleacherSeats`, `crowdLooks`, `familyOf`,
  * `familyPlaces`, `poseAt`), so who stands where, wearing what, and who
  * cheers when, is tested without three. `createCrowd` draws it.
+ *
+ * WHAT IS SHARED (crowd-1.0.0, 2026-10-20): the drawing (createCrowdView),
+ * the arm poses, the cheers and the clap. What is the derby's own is here:
+ * who stands where, what they hold, and who cheers when.
  */
 
 import { DERBY_CONFIG } from './config.min.js';
 import { SHIRTS, PANTS, SKINS, HAIR_COLORS, optionOf, normalizeChoice } from '../../shared/js/cast-1.0.0.min.js';
-import { buildCrowdParts, HAIR, ARM_POSES } from '../../shared/js/crowd-1.0.0.min.js';
+import { buildCrowdParts, createCrowdView, cheerAt, clapAt, HAIR, CHEER_POSES } from '../../shared/js/crowd-1.0.0.min.js';
 
-/** The arm poses the crowd is baked in. */
-export const POSES = Object.freeze(['down', 'up', 'clap', 'hold', 'apart']);
+// The cheers are the shared crowd's (2026-10-20); main.js picks them.
+export { CHEERS, pickCheers } from '../../shared/js/crowd-1.0.0.min.js';
 
-/** CLAPPING, for the bleachers (Steve's QA, 2026-10-20: the stands were
- *  stationary). The baked arms snap from pose to pose, so a clap is two of
- *  them: `clap` (the hands together) and `apart`, the same arms with the
- *  hands a shoulder's width apart, swapped a few times a second. */
-export const APART = Object.freeze({ x: -0.95, z: -0.1, fore: -1.25 });
-
-/**
- * HOLDING A SIGN UP (Steve's QA, 2026-10-19: the sign floated over the
- * kid's head). The cheer's arms are a wide V, the hands 0.85 m apart, wider
- * than any sign, so a sign is held in its own pose: arms raised nearly
- * straight and a little forward, the hands 0.57 m apart just over the
- * head (measured against real three). The board is then made to that grip.
- */
-export const HOLD = Object.freeze({ x: -0.15, z: 3.0, fore: -0.6 });
+/** The arm poses the hall is baked in (shared ARM_POSES): the shared
+ *  cheers' (CHEER_POSES), clapping (`apart`) and holding a sign up (`hold`). */
+export const POSES = Object.freeze(['down', 'up', 'clap', 'hold', 'apart', 'roof', 'clapHigh', 'flex', 'point']);
+for (const p of CHEER_POSES) if (!POSES.includes(p)) throw new Error(`crowd.js: the cheers need the '${p}' pose baked`);
 
 /** The pose each prop is held in, and which hand holds it. The trophy is
  *  held up in one hand, the other arm up too: a champion's victory. */
@@ -185,7 +179,7 @@ export function poseAt(member, moment, C = DERBY_CONFIG) {
     const { kind } = moment;
     if (member.group === 'crowd') {
         const K = C.crowd.stands;
-        const clap = wave(K.clapRate) < 0 ? 'apart' : 'clap';
+        const clap = clapAt(moment.t, { phase: member.phase, rate: K.clapRate, still: moment.still });
         const sway = (amount) => amount * wave(K.swayRate);
         // Through the finale the whole bleachers clap and sway, the keen
         // ones too, so the dancers among them stand out (Steve, 2026-10-20).
@@ -204,8 +198,12 @@ export function poseAt(member, moment, C = DERBY_CONFIG) {
     if (kind === 'times' || kind === 'dance') {
         // A shared win (a dead heat) cheers both families.
         const won = Array.isArray(moment.won) ? moment.won.includes(member.group) : moment.won === member.group;
-        // A win: up and jumping. A loss: arms down, still (the groan).
-        return { pose: held || (won ? 'up' : 'down'), hop: won ? beat(11) : 0 };
+        // A loss: arms down, still (the groan).
+        if (!won) return { pose: held || 'down', hop: 0 };
+        // A win: the heat's cheer (Steve's QA, 2026-10-20), a prop holder
+        // keeping hold of it and bouncing along.
+        const c = cheerAt(moment.cheer || 'jump', { t: moment.t, phase: member.phase, rank: member.rank || 0, still: moment.still });
+        return held ? { pose: held, hop: c.hop, lean: 0 } : c;
     }
     if ((kind === 'run' || kind === 'replay') && moment.cheering && moment.cheering.has(member.group)) {
         return { pose: held || (beat(5) > 0.3 ? 'up' : 'clap'), hop: 0 };
@@ -215,8 +213,6 @@ export function poseAt(member, moment, C = DERBY_CONFIG) {
 }
 
 // ---- Drawing ----------------------------------------------------------------
-
-const hexColor = (h) => new THREE.Color(h);
 
 /** A prop's mesh, its hold point (the hand, or between the hands) at the
  *  origin. `text` for a sign, `grip` how far apart the hands hold it. */
@@ -296,165 +292,32 @@ function buildProp(kind, text, made, grip = 0.57) {
 }
 
 /**
- * The crowd, drawn: `capacity` members at most. Returns { group, ready,
- * set(members), pose(moment), stepAside(index, { drop }), propOf(index),
- * dispose }. Each member is { group (a key),
- * look, at: { x, y, z, ry }, prop, sign, keen, phase }. Under the test stub
- * (no geometry to bake) nothing is drawn and every call is safe.
+ * The crowd, drawn (the shared crowd's view, createCrowdView): `capacity`
+ * members at most, each { group (a key), look, at: { x, y, z, ry }, prop,
+ * sign, keen, phase, rank }, posed by poseAt, holding the props above.
+ * Returns the view: { group, ready, parts, set(members, moment),
+ * pose(moment), stepAside(index, { drop }), propOf(index), dispose }. Under
+ * the test stub (no geometry to bake) nothing is drawn and every call is
+ * safe.
  */
 export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
-    const group = new THREE.Group();
-    group.name = 'crowd';
-    const parts = buildCrowdParts({ scale: 1, poses: POSES, armPoses: { ...ARM_POSES, hold: HOLD, apart: APART } });
-    const made = [];
-    if (!parts) {
-        return { group, ready: false, set() {}, pose() {}, stepAside() {}, propOf: () => null, dispose() {} };
-    }
-    const lit = (vertexColors = false) => {
-        const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75, vertexColors });
-        made.push(m);
-        return m;
+    const parts = buildCrowdParts({ scale: 1, poses: POSES });
+    const grip = (pose) => {
+        const [a, b] = parts.hands[pose];
+        return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
     };
-    const instanced = (geometry, vertexColors = false) => {
-        const mesh = new THREE.InstancedMesh(geometry, lit(vertexColors), capacity);
-        mesh.count = 0;
-        // The members are spread over the whole hall and the bench room:
-        // a bounding sphere for the piece would cull the far ones.
-        mesh.frustumCulled = false;
-        group.add(mesh);
-        made.push(geometry);
-        return mesh;
-    };
-    const body = Object.fromEntries(Object.entries(parts.body).map(([k, g]) => [k, instanced(g, k === 'fixed')]));
-    const hair = Object.fromEntries(HAIR.map((s) => [s, instanced(parts.hair[s])]));
-    const arms = Object.fromEntries(POSES.map((p) => [p, { sleeve: instanced(parts.arms[p].sleeve), hand: instanced(parts.arms[p].hand) }]));
-    const props = new THREE.Group();
-    group.add(props);
-
-    let members = [];
-    // The props' geometries, materials and textures, let go at the next set.
-    let propMade = [];
-    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
-    const m4 = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const up = new THREE.Vector3(0, 1, 0);
-    const side = new THREE.Vector3(0, 0, 1);
-    const qLean = new THREE.Quaternion();
-    const v = new THREE.Vector3();
-    const sc = new THREE.Vector3();
-
-    // The members who step out of the crowd to dance (dancer.js takes
-    // their places), and of those, the ones whose prop is left behind for
-    // the page to throw down (the kid's sign, in the winning finale).
-    let aside = new Set();
-    let dropped = new Set();
-
-    function matrixOf(m, hop, lean = 0) {
-        q.setFromAxisAngle(up, m.at.ry || 0);
-        // A sway side to side, from the feet.
-        if (lean) q.multiply(qLean.setFromAxisAngle(side, lean));
-        v.set(m.at.x, m.at.y + hop * C.crowd.hop, m.at.z);
-        sc.setScalar(m.look.scale);
-        return m4.compose(v, q, sc);
-    }
-
-    function clearProps() {
-        for (const p of props.children.slice()) props.remove(p);
-        for (const m of propMade) m.dispose();
-        propMade = [];
-    }
-
-    const api = {
-        group,
-        ready: true,
+    return createCrowdView({
         parts,
-        /** Put these members in the hall, dressed, and posed for `moment`
-         *  at once: a member left unposed until the next frame would stand
-         *  at the hall's origin for that frame. */
-        set(list, moment = { kind: 'idle', t: 0 }) {
-            members = list.slice(0, capacity).map((m) => ({ ...m, pose: null, hop: -1 }));
-            aside = new Set();
-            dropped = new Set();
-            const n = members.length;
-            for (const mesh of [...Object.values(body), ...Object.values(hair), ...POSES.flatMap((p) => [arms[p].sleeve, arms[p].hand])]) mesh.count = n;
-            clearProps();
-            members.forEach((m, i) => {
-                const L = m.look;
-                body.shirt.setColorAt(i, hexColor(L.shirt));
-                body.skin.setColorAt(i, hexColor(L.skin));
-                body.pants.setColorAt(i, hexColor(L.pants));
-                for (const p of POSES) {
-                    arms[p].sleeve.setColorAt(i, hexColor(L.shirt));
-                    arms[p].hand.setColorAt(i, hexColor(L.skin));
-                }
-                for (const s of HAIR) hair[s].setColorAt(i, hexColor(L.hair));
-                if (m.prop) {
-                    const [a, b] = parts.hands[PROPS[m.prop].pose];
-                    m.propMesh = buildProp(m.prop, m.sign || '', propMade, Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]));
-                    props.add(m.propMesh);
-                }
-            });
-            for (const mesh of [...Object.values(body), ...Object.values(hair), ...POSES.flatMap((p) => [arms[p].sleeve, arms[p].hand])]) {
-                if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-            }
-            api.pose(moment);
-        },
-        /** Pose everyone for the moment (see poseAt); only members whose pose
-         *  or hop changed are redrawn. */
-        pose(moment) {
-            let dirty = false;
-            members.forEach((m, i) => {
-                const p = poseAt(m, moment, C);
-                const lean = p.lean || 0;
-                const away = aside.has(i);
-                if (p.pose === m.pose && Math.abs(p.hop - m.hop) < 0.01 && Math.abs(lean - (m.lean || 0)) < 0.002 && away === Boolean(m.away)) return;
-                m.pose = p.pose;
-                m.hop = p.hop;
-                m.lean = lean;
-                m.away = away;
-                dirty = true;
-                const mat = away ? zero : matrixOf(m, p.hop, lean);
-                // A prop goes with its member, unless it was left behind.
-                if (m.propMesh) m.propMesh.visible = !away || dropped.has(i);
-                for (const k of Object.keys(body)) body[k].setMatrixAt(i, mat);
-                for (const s of HAIR) hair[s].setMatrixAt(i, m.look.style === s ? mat : zero);
-                for (const pose of POSES) {
-                    arms[pose].sleeve.setMatrixAt(i, pose === p.pose ? mat : zero);
-                    arms[pose].hand.setMatrixAt(i, pose === p.pose ? mat : zero);
-                }
-                // Away, a prop left behind is the page's to move.
-                if (m.propMesh && !away) {
-                    const hold = PROPS[m.prop];
-                    const [a, b] = parts.hands[p.pose];
-                    const at = hold.hand === 'right' ? (a[0] < b[0] ? a : b) : [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
-                    v.set(at[0], at[1], at[2]).multiplyScalar(m.look.scale).applyAxisAngle(up, m.at.ry || 0);
-                    m.propMesh.position.set(m.at.x + v.x, m.at.y + v.y + p.hop * C.crowd.hop, m.at.z + v.z);
-                    m.propMesh.rotation.set(0, m.at.ry || 0, 0);
-                    m.propMesh.scale.setScalar(m.look.scale);
-                }
-            });
-            if (!dirty) return;
-            for (const mesh of [...Object.values(body), ...Object.values(hair), ...POSES.flatMap((p) => [arms[p].sleeve, arms[p].hand])]) {
-                mesh.instanceMatrix.needsUpdate = true;
-            }
-        },
-        /** Members out of the crowd (an index, a list, or -1 for everyone
-         *  back), drawn by nobody: dancers stand in their places. Each one's
-         *  prop goes with it, except those in `drop`, left where they are
-         *  for the page to move (propOf). */
-        stepAside(index, { drop = [] } = {}) {
-            aside = new Set(Array.isArray(index) ? index : index >= 0 ? [index] : []);
-            dropped = new Set(drop.filter((i) => aside.has(i)));
-        },
-        /** A member's prop mesh, or null. */
-        propOf(index) {
-            const m = members[index];
-            return m && m.propMesh ? m.propMesh : null;
-        },
-        dispose() {
-            clearProps();
-            for (const m of made) m.dispose();
+        poses: POSES,
+        capacity,
+        hopHeight: C.crowd.hop,
+        poseOf: (m, moment) => poseAt(m, moment, C),
+        propFor: (m) => {
+            if (!m.prop) return null;
+            const hold = PROPS[m.prop];
+            const made = [];
+            const mesh = buildProp(m.prop, m.sign || '', made, grip(hold.pose));
+            return { mesh, pose: hold.pose, hand: hold.hand, made };
         }
-    };
-    return api;
+    });
 }

@@ -224,7 +224,7 @@ function buildDonuts(mat) {
 }
 
 /**
- * Dress the hall. Returns { group, timer: { set(state) } }, `state` being
+ * Dress the hall. Returns { group, gantry, timer: { set(state) } }, `state` being
  * { heat, total, lanes: [{ time, place } | null] } or null between races.
  */
 export function buildDressing(C = DERBY_CONFIG) {
@@ -369,23 +369,29 @@ export function buildDressing(C = DERBY_CONFIG) {
     banner.rotation.y = Math.PI / 2;
     group.add(banner);
 
-    // The timer over the finish line, on its gantry, facing the crowd.
+    // The timer over the finish line, on its gantry, facing the crowd. Its
+    // own group, so the overhead photo camera, mounted on it as a real one
+    // is, can leave it out of its picture (Steve's QA, 2026-10-20: the board
+    // and the beam blocked the photo finish).
     const fx = C.track.courseLength - 0.12;
     const post = mat(0x3a3d42, 0.5, 0.5);
+    const gantry = new THREE.Group();
+    gantry.name = 'timer-gantry';
+    group.add(gantry);
     for (const z of [-0.42, 0.42]) {
         const p = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.3, 0.04), post);
         p.position.set(fx, 0.65, z);
-        group.add(p);
+        gantry.add(p);
     }
     const beam = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.9), post);
     beam.position.set(fx, 1.3, 0);
-    group.add(beam);
+    gantry.add(beam);
     const led = canvasTex(512, 256, () => {});
     const display = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.38, 0.78), [post, post, post, post,
         new THREE.MeshBasicMaterial({ map: led.tex }), post]);
     display.position.set(fx, 1.52, 0);
     display.rotation.y = -Math.PI / 2;
-    group.add(display);
+    gantry.add(display);
     let shown = timerRows(null).join('|');
     const draw = (rows) => {
         const g = led.g;
@@ -405,6 +411,7 @@ export function buildDressing(C = DERBY_CONFIG) {
 
     return {
         group,
+        gantry,
         timer: {
             /** What the timer shows: redrawn only when it changes. */
             set(state) {

@@ -181,6 +181,64 @@ describe('who stands where', () => {
         expect(new Set(at(0.5)).size).toBe(2);
     });
 
+    test('a different cheer after each heat (Steve\'s QA, 2026-10-20), never the same twice running, one race day to the next too', () => {
+        let r = 0.13;
+        const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+        const seen = new Set();
+        let last = null;
+        for (let day = 0; day < 200; day++) {
+            const cheers = Crowd.pickCheers(4, rand, last);
+            expect(cheers).toHaveLength(4);
+            expect(cheers[0]).not.toBe(last);
+            for (let i = 1; i < cheers.length; i++) expect(cheers[i]).not.toBe(cheers[i - 1]);
+            cheers.forEach((c) => seen.add(c));
+            last = cheers[3];
+        }
+        expect([...seen].sort()).toEqual([...Crowd.CHEERS].sort());
+        expect(Crowd.CHEERS.length).toBeGreaterThanOrEqual(6);
+    });
+
+    test('each cheer moves its own way, a prop holder bouncing along, a loss still, and reduced motion holding each one', () => {
+        const member = (extra = {}) => ({ group: 'mine', phase: 0.4, rank: 0, ...extra });
+        const signature = (cheer, m = member()) => {
+            const out = [];
+            for (let t = 0; t < 2.6; t += 1 / 30) {
+                const p = Crowd.poseAt(m, { kind: 'times', t, won: 'mine', cheer });
+                out.push(`${p.pose}:${p.hop.toFixed(2)}:${(p.lean || 0).toFixed(2)}`);
+            }
+            return out.join('|');
+        };
+        const sigs = Crowd.CHEERS.map((c) => signature(c));
+        expect(new Set(sigs).size).toBe(Crowd.CHEERS.length);
+        const poses = (cheer) => new Set(signature(cheer).split('|').map((x) => x.split(':')[0]));
+        expect(poses('clapHigh').has('clapHigh')).toBe(true);
+        expect(poses('roof').has('roof')).toBe(true);
+        expect(poses('flex')).toEqual(new Set(['flex']));
+        expect(poses('point')).toEqual(new Set(['point']));
+        // The wave runs along the family: two in a family are not together.
+        expect(signature('wave', member({ rank: 0 }))).not.toBe(signature('wave', member({ rank: 2 })));
+        // The sway leans, the flex too, and neither hops.
+        expect(signature('sway')).toMatch(/:0\.00:-?0\.1\d/);
+        // A prop holder keeps hold, and bounces with the cheer.
+        const holder = member({ prop: 'sign' });
+        const held = new Set(signature('point', holder).split('|').map((x) => x.split(':')[0]));
+        expect(held).toEqual(new Set(['hold']));
+        expect(signature('point', holder)).toMatch(/hold:0\.[1-9]/);
+        // A loss: arms down, still, whatever the cheer.
+        expect(Crowd.poseAt(member({ group: 'owl' }), { kind: 'times', t: 0.3, won: 'mine', cheer: 'roof' })).toEqual({ pose: 'down', hop: 0 });
+        // Reduced motion: each cheer one pose, no hop, no sway.
+        for (const cheer of Crowd.CHEERS) {
+            const still = new Set();
+            for (let t = 0; t < 2; t += 0.05) {
+                const p = Crowd.poseAt(member(), { kind: 'times', t, won: 'mine', cheer, still: true });
+                expect(p.hop).toBe(0);
+                expect(p.lean || 0).toBe(0);
+                still.add(p.pose);
+            }
+            expect(still.size).toBe(1);
+        }
+    });
+
     test('the visitor\'s family: dressed from the card, the kid holding the car\'s name', () => {
         const f = Fam.normalizeFamily({ grownUp: { shirt: 'teal' }, kid: 'nonsense' });
         expect(f.grownUp.shirt).toBe('teal');
@@ -284,6 +342,25 @@ describe('drawn, against real three', () => {
         expect(() => crowd.dispose()).not.toThrow();
     });
 
+    test('the cheers\' arms, measured: hands together high, the strongman\'s up and wide, the point out ahead, the roof at the shoulders', async () => {
+        const Cr = await import('../www/derby/js/crowd.js');
+        const crowd = Cr.createCrowd(C, { capacity: 2 });
+        const hands = crowd.parts.hands;
+        const top = crowd.parts.top;
+        const apart = (p) => Math.hypot(hands[p][0][0] - hands[p][1][0], hands[p][0][1] - hands[p][1][1], hands[p][0][2] - hands[p][1][2]);
+        const lowest = (p) => Math.min(hands[p][0][1], hands[p][1][1]);
+        expect(apart('clapHigh')).toBeLessThan(0.15);
+        expect(lowest('clapHigh')).toBeGreaterThan(top);
+        expect(apart('flex')).toBeGreaterThan(0.75);
+        expect(lowest('flex')).toBeGreaterThan(1.45);
+        expect(Math.min(hands.point[0][2], hands.point[1][2])).toBeGreaterThan(0.4);
+        expect(lowest('point')).toBeGreaterThan(1.3);
+        expect(lowest('roof')).toBeGreaterThan(1.25);
+        expect(lowest('roof')).toBeLessThan(lowest('flex'));
+        expect(apart('roof')).toBeLessThan(apart('flex'));
+        crowd.dispose();
+    });
+
     test('every prop builds and sits in a hand, in its own pose', async () => {
         const Cr = await import('../www/derby/js/crowd.js');
         const crowd = Cr.createCrowd(C, { capacity: 10 });
@@ -362,7 +439,9 @@ describe('drawn, against real three', () => {
         expect(D.timerRows({ heat: 2, total: 4, lanes: [{ time: 3.2, place: 1 }, { time: null, place: null }, null, null] }))
             .toEqual(['HEAT 2 OF 4', '1  3.200  1st', '2  -.---', '3', '4']);
         const dressing = D.buildDressing(C);
-        expect(dressing.group.children.length).toBeGreaterThan(10);
+        let pieces = 0;
+        dressing.group.traverse((o) => o.isMesh && pieces++);
+        expect(pieces).toBeGreaterThan(15);
         expect(dressing.timer.set(null)).toBe(false);
         expect(dressing.timer.set({ heat: 1, total: 4, lanes: [] })).toBe(true);
         expect(dressing.timer.set({ heat: 1, total: 4, lanes: [] })).toBe(false);
@@ -370,7 +449,11 @@ describe('drawn, against real three', () => {
         const box = new THREE.Box3();
         const edge = trackWidth(C) / 2;
         dressing.group.updateMatrixWorld(true);
-        for (const child of dressing.group.children) {
+        // Piece by piece: a group (the gantry's posts and beam) spans a box
+        // none of its pieces stands in.
+        const meshes = [];
+        dressing.group.traverse((o) => o.isMesh && meshes.push(o));
+        for (const child of meshes) {
             box.setFromObject(child);
             if (box.isEmpty()) continue;
             const inLanes = box.max.z > -edge && box.min.z < edge && box.max.x > 0 && box.min.x < C.track.courseLength + 2;
@@ -554,6 +637,35 @@ describe('the page, with real three (only the renderer stood in for)', () => {
         expect(dancer.dancing()).toBe(false);
         // The sign back in the kid's hands, upright, behind the results.
         expect(sign.rotation.x).toBe(0);
+    });
+
+    test('the gantry leaves the picture only while the overhead photo camera is on (Steve\'s QA, 2026-10-20)', async () => {
+        const G = await import('../www/derby/js/garage.js');
+        const car = G.weighAuto(G.normalizeBuild({ ...G.newCar(C, { rand: () => 0.3 }), tune: { deburr: false, polish: 0, graphite: true, align: true, sand: 0 } }, C), C);
+        localStorage.setItem('derby-garage', JSON.stringify({ v: 1, cars: [car], bench: car.id }));
+        const main = await boot();
+        const state = main.getState();
+        fire(dom.el('bench-race'), 'click');
+        const medium = dom.el('event-options').children.map((l) => l.children[0]).find((i) => i.value === 'medium');
+        medium.checked = true;
+        fire(medium, 'change');
+        fire(dom.el('go-btn'), 'click');
+        fire(dom.el('skip-btn'), 'click');
+        const gantry = main.__test__.dressing().gantry;
+        const segs = state.day.plan.heats[0].segments;
+        const at = (kind, k = 0.5) => {
+            const seg = segs.find((x) => x.kind === kind);
+            frames(main, seg.from + (seg.to - seg.from) * k - state.clock);
+            return gantry.visible;
+        };
+        expect(at('staging')).toBe(true);
+        expect(at('run', 0.3)).toBe(true);
+        expect(segs.some((x) => x.kind === 'photo')).toBe(true);
+        expect(at('replay', 0.5)).toBe(false);
+        expect(at('photo')).toBe(false);
+        expect(at('times')).toBe(true);
+        main.__test__.finishRace('skip');
+        expect(gantry.visible).toBe(true);
     });
 
     test('a Time Trial is always the visitor\'s, so its finale stays the one grown-up (Steve, 2026-10-20)', async () => {
@@ -772,6 +884,46 @@ describe('the faces are on screen (Steve\'s QA: "I never see the faces")', () =>
             };
             expect(span(close)).toBeGreaterThan(span(wide));
         }
+    });
+
+    test('the photo finish sees every lane at the line: the timer\'s gantry is not in its picture (Steve\'s QA, 2026-10-20)', async () => {
+        const Dr = await import('../www/derby/js/dressing.js');
+        const D = await import('../www/derby/js/director.js');
+        const T = await import('../www/derby/js/track.js');
+        const Car = await import('../www/derby/js/car.js');
+        const dressing = Dr.buildDressing(C);
+        expect(dressing.gantry.name).toBe('timer-gantry');
+        dressing.group.updateMatrixWorld(true);
+        const path = T.pathOf(C);
+        const car = Car.describeCar(Car.buildFromDesign('wedge', {}, C), C);
+        const ray = new THREE.Raycaster();
+        const shown = (o) => {
+            for (let p = o; p; p = p.parent) if (!p.visible) return false;
+            return true;
+        };
+        const blocked = (aspect) => {
+            const shot = D.framing('photo', path, C.track.courseLength, aspect, C);
+            const eye = new THREE.Vector3(shot.position.x, shot.position.y, shot.position.z);
+            let n = 0;
+            for (let lane = 0; lane < C.track.lanes; lane++) {
+                const p = T.carPose(path, C.track.courseLength, lane, car, C);
+                for (const dx of [-0.06, 0, 0.03]) {
+                    const at = new THREE.Vector3(p.x + dx, p.y + 0.02, p.z);
+                    ray.set(eye, at.clone().sub(eye).normalize());
+                    ray.far = eye.distanceTo(at);
+                    if (ray.intersectObject(dressing.group, true).some((h) => shown(h.object))) n++;
+                }
+            }
+            return n;
+        };
+        // As it was, on a phone: the camera backs off to hold four lanes in a
+        // narrow screen, up to the top of the timer's board, and the board
+        // fills the near side of the picture.
+        dressing.gantry.visible = true;
+        expect(blocked(390 / 844)).toBeGreaterThan(0);
+        // The photo camera's own view, every screen: nothing in front of any lane.
+        dressing.gantry.visible = false;
+        for (const aspect of [...ASPECTS, 4 / 3, 21 / 9]) expect(blocked(aspect)).toBe(0);
     });
 
     test('the scale\'s reading is in plain view (Steve\'s QA, 2026-10-20: a silver bar across its top)', async () => {

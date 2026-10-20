@@ -425,7 +425,26 @@ test('a photo finish (Steve\'s QA, 2026-10-20): the picture frozen on the crossi
     // And on: the frame gone once the replay plays out of it.
     frames(main, photo.to - state.clock + 0.2);
     expect(shown('photo-finish')).toBe(false);
+
     shutter.mockRestore();
+});
+
+test('each heat\'s winners cheer a different way from the heat before, and the next race day starts on another', async () => {
+    const main = await boot();
+    const state = main.getState();
+    raceIt();
+    go();
+    const first = state.day.cheers;
+    expect(first).toHaveLength(4);
+    for (let i = 1; i < 4; i++) expect(first[i]).not.toBe(first[i - 1]);
+    // The crowd is told the heat's cheer while the times show.
+    const times = state.day.plan.heats[1].segments.find((x) => x.kind === 'times');
+    frames(main, times.from + 0.2 - state.clock);
+    expect(main.__test__.crowdMoment(performance.now()).cheer).toBe(first[1]);
+    main.__test__.finishRace('skip');
+    expect(main.__test__.crowdMoment(0).cheer).toBe(first[3]);
+    fire(dom.el('results-again'), 'click');
+    expect(state.day.cheers[0]).not.toBe(first[3]);
 });
 
 test('a browser that refuses storage still gets a whole visit', async () => {

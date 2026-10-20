@@ -415,6 +415,113 @@ describe('picking and easing', () => {
     });
 });
 
+describe('dancers in a scene, against real three', () => {
+    let THREE;
+    let D;
+    beforeAll(async () => {
+        THREE = await loadRealThree();
+    });
+    beforeEach(async () => {
+        jest.resetModules();
+        globalThis.THREE = THREE;
+        D = await import('../www/shared/js/dance-1.0.0.js');
+    });
+    const look = { shirt: 0xc8322b, pants: 0x3b4f7a, skin: 0xc68642, hair: 0x2b1d14, style: 'long', scale: 1 };
+    const colorsOf = (root) => {
+        const out = new Set();
+        root.traverse((o) => o.isMesh && o.material.color && out.add(o.material.color.getHex()));
+        return out;
+    };
+
+    test('dressed from a crowd member\'s look: its colors, long sleeves in the shirt\'s, no hair for none', () => {
+        const p = D.dressedPerson(look);
+        const c = colorsOf(p);
+        for (const hex of [look.shirt, look.pants, look.skin, look.hair]) expect(c.has(hex)).toBe(true);
+        expect(colorsOf(D.dressedPerson({ ...look, style: null })).has(look.hair)).toBe(false);
+        expect(colorsOf(D.dressedPerson({ ...look, sleeve: 0x00ff00 })).has(0x00ff00)).toBe(true);
+        // A scene's own figure options go through.
+        const muscled = D.dressedPerson(look, { muscular: true });
+        expect(new THREE.Box3().setFromObject(muscled).getSize(new THREE.Vector3()).x).toBeGreaterThan(new THREE.Box3().setFromObject(p).getSize(new THREE.Vector3()).x);
+    });
+
+    test('a pool of dancers: built ahead, in step on one clock, eased in, a figure kept while its look is the same', () => {
+        const pool = D.createDancers();
+        expect(pool.dancing()).toBe(false);
+        const ahead = pool.prepare(0, look);
+        expect(ahead.root.visible).toBe(false);
+        // Baked: nine draw calls at most.
+        let n = 0;
+        ahead.root.traverse((o) => o.isMesh && n++);
+        expect(n).toBeLessThanOrEqual(9);
+        const kid = { ...look, scale: 0.6 };
+        pool.start(look, { x: 1, y: 0, z: 0, ry: 0 }, 'ymca', { slot: 0 });
+        expect(pool.rig(0)).toBe(ahead);
+        const intro = { pose: D.pose({ armL: { z: 3 }, armR: { z: 3 } }), seconds: 0.5 };
+        pool.start(kid, { x: 2, y: 0, z: 0, ry: 0 }, 'ymca', { slot: 1, intro });
+        expect(pool.count()).toBe(2);
+        expect(pool.danceIn(1)).toBe('ymca');
+        expect(pool.rig(1).root.scale.x).toBeCloseTo(0.6, 9);
+        // At first the kid is in the intro's pose, not the dance's.
+        pool.pose(0);
+        expect(pool.rig(1).arms.L.rotation.z).toBeCloseTo(3, 6);
+        expect(pool.rig(0).arms.L.rotation.z).not.toBeCloseTo(3, 2);
+        // After it, in step with the other.
+        pool.pose(1.3);
+        expect(pool.rig(1).arms.L.rotation.z).toBeCloseTo(pool.rig(0).arms.L.rotation.z, 9);
+        // Stopped: hidden, not thrown away.
+        pool.stop();
+        expect(pool.dancing()).toBe(false);
+        pool.start(look, { x: 1, y: 0, z: 0 }, 'dab');
+        expect(pool.rig(0)).toBe(ahead);
+        pool.start({ ...look, shirt: 0x2f6fd6 }, { x: 1, y: 0, z: 0 }, 'dab');
+        expect(pool.rig(0)).not.toBe(ahead);
+        expect(pool.group.children).toHaveLength(2);
+        pool.dispose();
+        expect(pool.group.children).toHaveLength(0);
+        expect(pool.rig(0)).toBeNull();
+        // An unknown dance: nobody dances.
+        pool.start(look, { x: 0, y: 0, z: 0 }, 'nope');
+        expect(pool.dancing()).toBe(false);
+    });
+
+    test('who a camera sees: the hand-made projection is three\'s, and the picker keeps its rules', () => {
+        const shot = { position: { x: 0, y: 1.6, z: 4 }, target: { x: 0.4, y: 1.2, z: 0 } };
+        for (const aspect of [16 / 9, 0.46]) {
+            const cam = new THREE.PerspectiveCamera(50, aspect, 0.1, 100);
+            cam.position.set(shot.position.x, shot.position.y, shot.position.z);
+            cam.lookAt(shot.target.x, shot.target.y, shot.target.z);
+            cam.updateMatrixWorld(true);
+            for (const p of [{ x: 0, y: 0, z: 0 }, { x: 1.5, y: 2.2, z: -2 }, { x: -1, y: 0.4, z: 1 }]) {
+                const ours = D.screenPoint(shot, aspect, p, 50);
+                const theirs = new THREE.Vector3(p.x, p.y, p.z).project(cam);
+                expect(ours.x).toBeCloseTo(theirs.x, 9);
+                expect(ours.y).toBeCloseTo(theirs.y, 9);
+            }
+        }
+        expect(D.screenPoint(shot, 1, { x: 0, y: 1.6, z: 6 }, 50)).toBeNull();
+        expect(D.boxOnScreen(shot, 1, { min: { x: -1, y: 0, z: 5 }, max: { x: 1, y: 1, z: 6 } }, 50)).toBeNull();
+        // A row of grown-ups (and a child) behind one standing in front.
+        const members = [];
+        for (let x = -3; x <= 3; x += 0.5) members.push({ at: { x, y: 0.5, z: -2 }, look: { scale: 1 } });
+        members.push({ at: { x: 0.2, y: 0.5, z: -2 }, look: { scale: 0.6 } });
+        const front = D.figureBox(shot, 16 / 9, { x: 0.4, y: 0, z: 0 }, {}, 50);
+        const picked = D.pickInView(members, shot, 16 / 9, { count: 3, avoid: [front], fov: 50 });
+        expect(picked.length).toBe(3);
+        const xs = picked.map((m) => D.screenPoint(shot, 16 / 9, { x: m.at.x, y: m.at.y + 1.4, z: m.at.z }, 50).x).sort((a, b) => a - b);
+        for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(0.28);
+        for (const m of picked) {
+            expect(m.look.scale).toBe(1);
+            const up = D.boxOnScreen(shot, 16 / 9, { min: { x: m.at.x - 0.28, y: m.at.y + 0.85, z: m.at.z - 0.28 }, max: { x: m.at.x + 0.28, y: m.at.y + 1.85, z: m.at.z + 0.28 } }, 50);
+            expect(up.x0 < front.x1 && front.x0 < up.x1 && up.y0 < front.y1 && front.y0 < up.y1).toBe(false);
+        }
+        expect(D.pickInView([], shot, 1)).toEqual([]);
+        // Grown-ups only: a child in plain view is never one of them.
+        const spot = { x: -1.2, y: 0.5, z: -2 };
+        expect(D.pickInView([{ at: spot, look: { scale: 1 } }], shot, 16 / 9, { fov: 50 })).toHaveLength(1);
+        expect(D.pickInView([{ at: spot, look: { scale: 0.6 } }], shot, 16 / 9, { fov: 50 })).toEqual([]);
+    });
+});
+
 describe('under the stub', () => {
     test('jointing is safe with no geometry at all', async () => {
         jest.resetModules();

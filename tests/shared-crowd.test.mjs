@@ -126,3 +126,183 @@ describe('the pieces it is made from', () => {
         }
     });
 });
+
+// ---- Promoted from www/derby, 2026-10-20 ------------------------------------
+
+describe('more arm poses, measured', () => {
+    test('each cheer pose puts the hands where it says: high together, wide and up, out ahead, at the shoulders', () => {
+        const parts = Crowd.buildCrowdParts({ poses: ['down', 'hold', 'apart', 'clap', ...Crowd.CHEER_POSES] });
+        const hands = parts.hands;
+        const gap = (p) => Math.hypot(hands[p][0][0] - hands[p][1][0], hands[p][0][1] - hands[p][1][1], hands[p][0][2] - hands[p][1][2]);
+        const low = (p) => Math.min(hands[p][0][1], hands[p][1][1]);
+        expect(gap('clapHigh')).toBeLessThan(0.15);
+        expect(low('clapHigh')).toBeGreaterThan(parts.top);
+        expect(gap('flex')).toBeGreaterThan(0.75);
+        expect(low('flex')).toBeGreaterThan(1.45);
+        expect(Math.min(hands.point[0][2], hands.point[1][2])).toBeGreaterThan(0.4);
+        expect(low('roof')).toBeGreaterThan(1.25);
+        expect(low('roof')).toBeLessThan(low('flex'));
+        // The sign's grip: just over the head, 0.57 m apart; a clap's hands apart.
+        expect(gap('hold')).toBeCloseTo(0.57, 1);
+        expect(low('hold')).toBeGreaterThan(parts.top - 0.05);
+        expect(gap('apart')).toBeGreaterThan(gap('clap') + 0.2);
+        // Only the poses asked for are baked: X's and O's three stay its three.
+        expect(Object.keys(Crowd.buildCrowdParts({ poses: Crowd.POSES }).arms)).toEqual(['down', 'up', 'cards']);
+    });
+});
+
+describe('cheering, pure', () => {
+    test('a cheer for each moment, never the same twice running, every one of them in time', () => {
+        let r = 0.37;
+        const rand = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+        const seen = new Set();
+        let last = 'jump';
+        for (let k = 0; k < 300; k++) {
+            const run = Crowd.pickCheers(5, rand, last);
+            expect(run[0]).not.toBe(last);
+            for (let i = 1; i < run.length; i++) expect(run[i]).not.toBe(run[i - 1]);
+            run.forEach((c) => seen.add(c));
+            last = run[run.length - 1];
+        }
+        expect([...seen].sort()).toEqual([...Crowd.CHEERS].sort());
+    });
+
+    test('each cheer moves its own way in the poses it names, and reduced motion holds each one still', () => {
+        const sig = (id, opts = {}) => {
+            const out = [];
+            for (let t = 0; t < 2.6; t += 1 / 30) {
+                const p = Crowd.cheerAt(id, { t, phase: 0.3, ...opts });
+                expect(['down', ...Crowd.CHEER_POSES]).toContain(p.pose);
+                out.push(`${p.pose}:${p.hop.toFixed(2)}:${p.lean.toFixed(2)}`);
+            }
+            return out.join('|');
+        };
+        expect(new Set(Crowd.CHEERS.map((c) => sig(c))).size).toBe(Crowd.CHEERS.length);
+        expect(sig('wave', { rank: 0 })).not.toBe(sig('wave', { rank: 2 }));
+        expect(Crowd.cheerAt('nonsense', { t: 0.1 }).pose).toBe('up');
+        for (const id of Crowd.CHEERS) {
+            const held = new Set();
+            for (let t = 0; t < 2; t += 0.05) {
+                const p = Crowd.cheerAt(id, { t, still: true });
+                expect(p.hop).toBe(0);
+                expect(p.lean).toBe(0);
+                held.add(p.pose);
+            }
+            expect(held.size).toBe(1);
+        }
+        // A clap: together and apart in turn, together under reduced motion.
+        const claps = new Set([0, 0.05, 0.1, 0.15, 0.2, 0.25].map((t) => Crowd.clapAt(t, { phase: 0.1 })));
+        expect(claps).toEqual(new Set(['clap', 'apart']));
+        expect(Crowd.clapAt(0.15, { still: true })).toBe('clap');
+    });
+});
+
+describe('the crowd on screen (createCrowdView)', () => {
+    const poses = ['down', 'up', 'hold'];
+    const look = { shirt: 0xc8322b, pants: 0x3b4f7a, skin: 0xc68642, hair: 0x2b1d14, style: 'short', scale: 1 };
+
+    test('a dozen pieces and two a pose, each member posed by the scene: hop, sway, arms; redrawn only on a change', () => {
+        const parts = Crowd.buildCrowdParts({ poses });
+        let calls = 0;
+        const view = Crowd.createCrowdView({
+            parts, poses, hopHeight: 0.1,
+            poseOf: (m, moment, i) => {
+                calls++;
+                return i === 0 ? { pose: moment.arms, hop: moment.hop, lean: moment.lean } : { pose: 'down', hop: 0 };
+            }
+        });
+        expect(view.ready).toBe(true);
+        const meshes = view.group.children.filter((o) => o.isInstancedMesh);
+        expect(meshes).toHaveLength(4 + Crowd.HAIR.length + 2 * poses.length);
+        view.set([{ look, at: { x: 1, y: 0.4, z: -2, ry: 0.3 } }, { look: { ...look, style: null, scale: 0.6 }, at: { x: 2, y: 0, z: 0 } }], { arms: 'up', hop: 1, lean: 0.1 });
+        const mat = new THREE.Matrix4();
+        const at = (mesh, i) => {
+            mesh.getMatrixAt(i, mat);
+            const p = new THREE.Vector3();
+            const q = new THREE.Quaternion();
+            const s = new THREE.Vector3();
+            mat.decompose(p, q, s);
+            // (decompose calls a zero-scale matrix degenerate and says 1.)
+            return { p, s: new THREE.Vector3().setFromMatrixScale(mat), e: new THREE.Euler().setFromQuaternion(q, 'YXZ') };
+        };
+        const byGeo = (g) => meshes.find((m) => m.geometry === g);
+        const shirt = byGeo(parts.body.shirt);
+        // Up a hop, swaying, turned the way it stands, in the arms asked for.
+        expect(at(shirt, 0).p.y).toBeCloseTo(0.5, 6);
+        expect(at(shirt, 0).e.y).toBeCloseTo(0.3, 6);
+        expect(at(shirt, 0).e.z).toBeCloseTo(0.1, 6);
+        expect(at(byGeo(parts.arms.up.sleeve), 0).s.x).toBeCloseTo(1, 6);
+        expect(at(byGeo(parts.arms.down.sleeve), 0).s.x).toBe(0);
+        // A child's size; no hair for no style.
+        expect(at(shirt, 1).s.x).toBeCloseTo(0.6, 6);
+        expect(Object.keys(parts.hair).every((h) => at(byGeo(parts.hair[h]), 1).s.x === 0)).toBe(true);
+        // The same moment again redraws nothing.
+        shirt.instanceMatrix.needsUpdate = false;
+        const v = shirt.instanceMatrix.version;
+        view.pose({ arms: 'up', hop: 1, lean: 0.1 });
+        expect(shirt.instanceMatrix.version).toBe(v);
+        expect(calls).toBeGreaterThan(2);
+        view.dispose();
+    });
+
+    test('props in hand, stepping aside for a dancer, a prop left behind for the scene to move', () => {
+        const parts = Crowd.buildCrowdParts({ poses });
+        const made = [];
+        const view = Crowd.createCrowdView({
+            parts, poses,
+            poseOf: () => ({ pose: 'hold', hop: 0 }),
+            propFor: (m) => {
+                if (!m.sign) return null;
+                const geo = new THREE.BoxGeometry(view.grip('hold') + 0.09, 0.3, 0.01);
+                made.push(geo);
+                return { mesh: new THREE.Mesh(geo), pose: 'hold', hand: 'both', made: [geo] };
+            }
+        });
+        expect(view.grip('hold')).toBeCloseTo(0.57, 1);
+        view.set([{ look, at: { x: 0, y: 0, z: 0 }, sign: true }, { look, at: { x: 1, y: 0, z: 0 } }]);
+        const sign = view.propOf(0);
+        expect(sign).not.toBeNull();
+        expect(view.propOf(1)).toBeNull();
+        // Between the two hands of the pose, over the head.
+        const [a, b] = parts.hands.hold;
+        expect(sign.position.y).toBeCloseTo((a[1] + b[1]) / 2, 6);
+        const shirt = view.group.children.find((o) => o.isInstancedMesh && o.geometry === parts.body.shirt);
+        const scaleOf = (i) => {
+            const m = new THREE.Matrix4();
+            shirt.getMatrixAt(i, m);
+            return new THREE.Vector3().setFromMatrixScale(m).x;
+        };
+        // Stepped aside: drawn as nobody, the prop gone with them...
+        view.stepAside([0, 1]);
+        view.pose({});
+        expect(scaleOf(0)).toBe(0);
+        expect(scaleOf(1)).toBe(0);
+        expect(sign.visible).toBe(false);
+        // ...or left behind, where the scene can move it.
+        view.stepAside([0], { drop: [0] });
+        view.pose({});
+        expect(sign.visible).toBe(true);
+        sign.position.set(9, 0, 9);
+        view.pose({});
+        expect(sign.position.x).toBe(9);
+        // Everyone back, the prop in hand again.
+        view.stepAside(-1);
+        view.pose({});
+        expect(scaleOf(0)).toBeCloseTo(1, 6);
+        expect(sign.position.x).not.toBe(9);
+        view.dispose();
+    });
+
+    test('with nothing to bake, a view that draws nothing and is safe to call', () => {
+        const view = Crowd.createCrowdView({ parts: null, poses, poseOf: () => ({ pose: 'down', hop: 0 }) });
+        expect(view.ready).toBe(false);
+        expect(() => {
+            view.set([{ look }]);
+            view.pose({});
+            view.stepAside(0);
+            view.dispose();
+        }).not.toThrow();
+        expect(view.propOf(0)).toBeNull();
+        expect(view.grip('up')).toBe(0);
+    });
+});

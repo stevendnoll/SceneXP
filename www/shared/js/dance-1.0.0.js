@@ -21,7 +21,11 @@
  *   neck, each child kept exactly where it was; `applyPose(rig, pose, at)`
  *   puts it in a pose standing at a spot; `bakeJoints(rig)` merges it to
  *   one mesh a joint (about nine draw calls, not forty), for a scene with
- *   several dancers. Nothing in people-1.0.0 changes:
+ *   several dancers. `createDancers` keeps a scene's dancers (built ahead,
+ *   in step, eased in), `dressedPerson` dresses one from a crowd member's
+ *   look, and `screenPoint`, `boxOnScreen`, `figureBox` and `pickInView`
+ *   choose who in a crowd can dance where a camera sees them. Nothing in
+ *   people-1.0.0 changes:
  *   what is found is found by the rig's own tags (isArm, isLeg, forearm) and
  *   by where each child is drawn, never by its order.
  *
@@ -71,6 +75,7 @@
  */
 
 import { mergePieces, lighter } from './crowd-1.0.0.min.js';
+import { createPerson } from './people-1.0.0.min.js';
 
 /** Every joint at rest: the arms as the shared rig hangs them. */
 export const REST = Object.freeze({
@@ -519,4 +524,204 @@ export function bakeJoints(rig, { material = null, light = false } = {}) {
     }
     for (const m of old) if (m !== mat && m.dispose) m.dispose();
     return rig;
+}
+
+// ---- Dancers in a scene ------------------------------------------------------
+
+/**
+ * A figure dressed from a LOOK, the shape crowd-1.0.0's members wear:
+ * { shirt, pants, skin, hair, style ('short', 'long', 'buzz', or null for
+ * none), sleeve (long sleeves' color, the shirt's when left out) }, colors
+ * as hex. `figure` is any more createPerson options (a scene's build, eyes).
+ */
+export function dressedPerson(look, figure = {}) {
+    return createPerson({
+        ...figure,
+        shirtColor: look.shirt,
+        sleeveColor: look.sleeve === undefined ? look.shirt : look.sleeve,
+        pantsColor: look.pants,
+        skinTone: look.skin,
+        hairColor: look.hair,
+        hairStyle: look.style || 'short',
+        bald: !look.style
+    });
+}
+
+/** One material for every baked dancer (white, vertex colored). */
+let SHARED_MATERIAL = null;
+const sharedMaterial = () => (SHARED_MATERIAL ||= new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75, vertexColors: true }));
+
+/** A dancer for `look` (and `look.scale`, a child's size): dressed by
+ *  `dress` (dressedPerson by default), jointed, and baked unless `bake` is
+ *  false. Returns the rig. */
+export function buildDancer(look, { dress = dressedPerson, bake = true } = {}) {
+    const rig = jointPerson(dress(look));
+    if (bake) bakeJoints(rig, { material: sharedMaterial() });
+    rig.root.scale.setScalar(look.scale || 1);
+    return rig;
+}
+
+/**
+ * DANCERS IN A SCENE (from www/derby's finale, 2026-10-20): hidden until
+ * they start, one a slot. `start(look, at, danceId, { slot, intro })`
+ * dresses a slot's dancer, stands it at `at` ({ x, y, z, ry }) and readies
+ * the dance; `pose(t)` dances every slot on one clock, so dancers started
+ * together are in step; `stop()` hides them all. `intro` is { pose, seconds }:
+ * a pose to ease out of into the dance (blendPoses). `prepare(slot, look)`
+ * builds a slot's figure ahead (and returns its rig), so a scene can do it
+ * while nothing is moving and warm its shaders; a slot keeps its figure
+ * while its look is the same. Standing in for a crowd member: step the
+ * member aside (crowd-1.0.0 createCrowdView) and start a dancer in its look
+ * where it stood. Returns { group, prepare, start, pose, stop, dancing,
+ * count, rig(slot), danceIn(slot), dispose }.
+ */
+export function createDancers({ dress = dressedPerson, bake = true } = {}) {
+    const group = new THREE.Group();
+    group.name = 'dancers';
+    const slots = new Map();
+
+    function release(slot) {
+        const s = slots.get(slot);
+        if (!s) return;
+        group.remove(s.rig.root);
+        s.rig.root.traverse((o) => {
+            if (o.geometry) o.geometry.dispose();
+            if (o.material && o.material !== SHARED_MATERIAL && o.material.dispose) o.material.dispose();
+        });
+        slots.delete(slot);
+    }
+
+    function prepare(slot, look) {
+        const key = JSON.stringify(look);
+        const s = slots.get(slot);
+        if (s && s.key === key) return s;
+        release(slot);
+        const rig = buildDancer(look, { dress, bake });
+        rig.root.visible = false;
+        group.add(rig.root);
+        const made = { rig, key, at: null, dance: null, intro: null };
+        slots.set(slot, made);
+        return made;
+    }
+
+    function poseOf(s, t) {
+        const p = danceAt(s.dance, t);
+        if (!s.intro || t >= s.intro.seconds) return p;
+        const f = Math.max(0, t) / s.intro.seconds;
+        return blendPoses(s.intro.pose, danceAt(s.dance, s.intro.seconds), f * f * (3 - 2 * f));
+    }
+
+    const live = () => [...slots.values()].filter((s) => s.dance && s.rig.root.visible);
+    return {
+        group,
+        prepare: (slot, look) => prepare(slot, look).rig,
+        start(look, at, danceId, { slot = 0, intro = null } = {}) {
+            const s = prepare(slot, look);
+            s.at = at;
+            s.dance = danceOf(danceId);
+            s.intro = intro;
+            s.rig.root.visible = Boolean(s.dance);
+            applyPose(s.rig, s.dance ? poseOf(s, 0) : REST, at);
+        },
+        pose(t) {
+            for (const s of live()) applyPose(s.rig, poseOf(s, t), s.at);
+        },
+        stop() {
+            for (const s of slots.values()) {
+                s.rig.root.visible = false;
+                s.dance = null;
+            }
+        },
+        dancing: () => live().length > 0,
+        count: () => live().length,
+        rig: (slot = 0) => (slots.get(slot) ? slots.get(slot).rig : null),
+        danceIn: (slot = 0) => (slots.get(slot) && slots.get(slot).dance ? slots.get(slot).dance.id : null),
+        dispose() {
+            for (const slot of [...slots.keys()]) release(slot);
+        }
+    };
+}
+
+// ---- Who a camera sees -------------------------------------------------------
+
+const unit = (x, y, z) => {
+    const l = Math.hypot(x, y, z) || 1;
+    return { x: x / l, y: y / l, z: z / l };
+};
+
+/**
+ * Where point `p` lands on a screen of `aspect` seen by `shot` ({ position,
+ * target }, the camera upright, vertical field of view `fov` degrees):
+ * { x, y } from -1 to 1 across and up, or null behind the camera. The
+ * projection three's camera makes, done by hand, so who dances where it
+ * can be seen is chosen without a camera (tests check it against three's).
+ */
+export function screenPoint(shot, aspect, p, fov = 45) {
+    const P = shot.position;
+    const f = unit(shot.target.x - P.x, shot.target.y - P.y, shot.target.z - P.z);
+    // Right is forward crossed with up; the camera's up is right crossed with forward.
+    const r = unit(-f.z, 0, f.x);
+    const u = { x: r.y * f.z - r.z * f.y, y: r.z * f.x - r.x * f.z, z: r.x * f.y - r.y * f.x };
+    const d = { x: p.x - P.x, y: p.y - P.y, z: p.z - P.z };
+    const depth = d.x * f.x + d.y * f.y + d.z * f.z;
+    if (depth <= 0) return null;
+    const tv = Math.tan((fov * Math.PI) / 360);
+    return {
+        x: (d.x * r.x + d.y * r.y + d.z * r.z) / (depth * tv * aspect),
+        y: (d.x * u.x + d.y * u.y + d.z * u.z) / (depth * tv)
+    };
+}
+
+/** Where a box ({ min, max } corners) is on the screen: the box { x0, x1,
+ *  y0, y1 } around its eight corners, or null if any is behind the camera. */
+export function boxOnScreen(shot, aspect, { min, max }, fov = 45) {
+    const pts = [];
+    for (const x of [min.x, max.x]) for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) pts.push(screenPoint(shot, aspect, { x, y, z }, fov));
+    if (pts.some((p) => !p)) return null;
+    return { x0: Math.min(...pts.map((p) => p.x)), x1: Math.max(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), y1: Math.max(...pts.map((p) => p.y)) };
+}
+
+/** A standing figure on the screen, as a box: from its feet at `at` to
+ *  `tall` above them, `half` meters either side. */
+export function figureBox(shot, aspect, at, { tall = 1.8, half = 0.28 } = {}, fov = 45) {
+    return boxOnScreen(shot, aspect, { min: { x: at.x - half, y: at.y, z: at.z - half }, max: { x: at.x + half, y: at.y + tall, z: at.z + half } }, fov);
+}
+
+const overlaps = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+
+/**
+ * Who in a crowd can dance where `shot` sees them (www/derby's bleachers,
+ * 2026-10-20): up to `count` of `members` ({ at, look }), grown-ups only,
+ * seen from the waist up (`upper` meters above the feet) inside `margin` of
+ * the screen's edges, none of that behind anything in front (`avoid`:
+ * screen boxes, figureBox's or boxOnScreen's), at least `spread` of the
+ * screen apart, the lower (front) rows first. Returns the members chosen.
+ */
+export function pickInView(members, shot, aspect, { count = 3, avoid = [], margin = 0.9, spread = 0.28, upper = 0.85, fov = 45 } = {}) {
+    const seen = [];
+    for (const m of members) {
+        if ((m.look.scale || 1) < 1) continue;
+        const box = boxOnScreen(shot, aspect, { min: { x: m.at.x - 0.28, y: m.at.y + upper, z: m.at.z - 0.28 }, max: { x: m.at.x + 0.28, y: m.at.y + 1.85, z: m.at.z + 0.28 } }, fov);
+        if (!box || box.x0 < -margin || box.x1 > margin || box.y0 < -margin || box.y1 > margin) continue;
+        if (avoid.some((a) => overlaps(box, a))) continue;
+        seen.push({ m, x: (box.x0 + box.x1) / 2, row: m.at.y });
+    }
+    // Spread: the one nearest each of `count` evenly spaced places across
+    // the screen, the front rows preferred, never two close together.
+    const picked = [];
+    for (let k = 0; k < count; k++) {
+        const want = count === 1 ? 0 : -margin + (2 * margin * k) / (count - 1);
+        let best = null;
+        let bestScore = Infinity;
+        for (const s of seen) {
+            if (picked.includes(s) || picked.some((q) => Math.abs(q.x - s.x) < spread)) continue;
+            const score = Math.abs(s.x - want) + s.row * 0.4;
+            if (score < bestScore) {
+                best = s;
+                bestScore = score;
+            }
+        }
+        if (best) picked.push(best);
+    }
+    return picked.map((s) => s.m);
 }
