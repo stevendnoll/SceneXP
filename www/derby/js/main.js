@@ -30,7 +30,7 @@ import { buildTrack, carPose } from './track.min.js';
 import { buildHall } from './hall.min.js';
 import { buildCarMesh, wheelSpots } from './carmesh.min.js';
 import { buildWorkbench, benchFraming } from './workbench.min.js';
-import { createGarage, canEnter } from './garage.min.js';
+import { createGarage, canEnter, nameOf } from './garage.min.js';
 import { createBench } from './bench.min.js';
 import { createTools } from './tools.min.js';
 import { createTuneups } from './tuneups.min.js';
@@ -48,8 +48,10 @@ import { shotFor, framing, crowdFraming, danceFraming } from './director.min.js'
 import { createTimer, fillResults, h } from './board.min.js';
 import {
     EVENTS, UI, ENTRY, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock,
-    gains, moreLine, sheetLines, trophyLine, harderLabel, HARDER, tuneupLines, WEIGH, ruleNote, CALLS, gateCall, COUNT
+    gains, moreLine, sheetLines, trophyLine, harderLabel, HARDER, tuneupLines, WEIGH, ruleNote, CALLS, gateCall, COUNT,
+    CHALLENGE as CH, edgeWords
 } from './copy.min.js';
+import { decodeChallenge, isChallenge, challengeUrl, rivalName, biggestEdge, cleanFrom } from './challenge.min.js';
 import { nextPhase } from './phases.min.js';
 import { createSound } from './sound.min.js';
 import { planClip, clipMoment, clipFraming, drawClipFrame, drawStill } from './clip.min.js';
@@ -103,6 +105,10 @@ const state = {
     families: {},
     dance: null,
     lastDance: null,
+    /** A friend's challenge (M8): { build, from, name } from the link the
+     *  visitor arrived by, raced head to head; and the car being sent. */
+    challenge: null,
+    sending: null,
     /** Each car's last position and which have beeped, for the sound. */
     lastS: [],
     beeped: new Set(),
@@ -177,13 +183,14 @@ async function init() {
         'results-share', 'clip-modal', 'clip-title', 'clip-stage', 'clip-progress', 'clip-sound', 'clip-share', 'clip-image',
         'clip-again', 'clip-close', 'clip-status', 'bench', 'bench-title', 'bench-body', 'bench-host', 'bench-host-actions',
         'bench-summary', 'bench-race', 'bench-status', 'results-tuneups', 'results-tuneups-heading', 'weighin-note', 'weighin-text',
-        'weighin-back']) {
+        'weighin-back', 'checkin-invite', 'results-challenge', 'challenge-modal', 'challenge-title', 'challenge-text',
+        'challenge-from', 'challenge-link', 'challenge-send', 'challenge-copy', 'challenge-close', 'challenge-status']) {
         el[id] = document.getElementById(id);
     }
     if (!el['game-canvas'] || typeof THREE === 'undefined') return;
     // The markup starts the cards hidden. Said again here, so the page never
     // begins believing one is up.
-    for (const id of ['results-modal', 'clip-modal', 'bench', 'weighin-note']) if (el[id]) el[id].classList.add('hidden');
+    for (const id of ['results-modal', 'clip-modal', 'challenge-modal', 'bench', 'weighin-note']) if (el[id]) el[id].classList.add('hidden');
     // The clip's sound starts on every visit (D2), whatever a browser that
     // restores form state across a reload remembers.
     if (el['clip-sound']) el['clip-sound'].checked = true;
@@ -207,6 +214,9 @@ async function init() {
     if (last && last.event) state.event = last.event;
     state.entrant = garage.bench().id;
     state.trial = new Set([garage.bench().id]);
+    // Arrived by a friend's challenge link (M8): it opens check-in when the
+    // page is ready, the head to head chosen.
+    const invited = readChallenge();
     buildCheckin();
 
     updateLoadingStatus('Verifying your browser…', 10);
@@ -324,7 +334,11 @@ async function init() {
         if (el['sound-btn']) el['sound-btn'].classList.add('visible');
         // The car the host is about to introduce is kept from the start.
         if (garage.firstVisit) garage.keep();
-        showBench(garage.firstVisit ? 'first' : 'back');
+        if (invited === 'ok') showCheckin();
+        else {
+            showBench(garage.firstVisit ? 'first' : 'back');
+            if (invited === 'bad') bench.say(CH.bad);
+        }
     }, 400);
 
     track('session-start', { kind: state.isMobile ? 'touch' : 'desktop' });
@@ -359,7 +373,12 @@ function buildCheckin() {
     const box = el['event-options'];
     if (box) {
         box.textContent = '';
-        checkin.events = EVENTS.map((e) => {
+        // A friend's challenge first, when the visitor came by one (M8).
+        const events = state.challenge
+            ? [{ id: 'challenge', label: CH.event, blurb: CH.blurb(state.challenge.name) }].concat(EVENTS)
+            : EVENTS;
+        if (state.event === 'challenge' && !state.challenge) state.event = 'easy';
+        checkin.events = events.map((e) => {
             const o = option('radio', 'event', e.id, e.label, e.blurb, e.id === state.event, (input) => {
                 if (!input.checked) return;
                 state.event = e.id;
@@ -439,6 +458,7 @@ function showCheckin() {
     hideBench();
     setRaceChrome(false);
     buildCheckin();
+    showInvite();
     if (el.blocker) el.blocker.classList.remove('hidden');
     stageCars(entriesFor(state.event));
     idleCamera();
@@ -584,6 +604,15 @@ export function entriesFor(eventId) {
     if (eventId === 'trial') {
         return garage.cars().filter((c) => state.trial.has(c.id) && canEnter(c, 'trial', CONFIG) === 'ok').map((c) => mine(c, true));
     }
+    if (eventId === 'challenge' && state.challenge) {
+        const car = garage.cars().find((c) => c.id === state.entrant) || garage.bench();
+        const r = state.challenge;
+        const rival = {
+            build: r.build, name: r.build.rules === 'outlaw' ? `${r.name} (Outlaw)` : r.name,
+            paint: r.build.paint, mine: false, rival: true, id: r.build.id, outlaw: r.build.rules === 'outlaw'
+        };
+        return [mine(car, true), rival];
+    }
     const car = garage.cars().find((c) => c.id === state.entrant) || garage.bench();
     const field = (CONFIG.divisions[eventId] || CONFIG.divisions.easy).map((i) => CONFIG.field[i]);
     const neighbors = field.map((f) => ({ build: buildFromField(f, CONFIG), name: f.name, color: CONFIG.fieldColors[f.id], mine: false, id: f.id }));
@@ -600,7 +629,8 @@ function stageCars(entries) {
     const shadows = CONFIG.render.shadows && !state.isMobile;
     meshes = entries.map((e) => {
         const car = describeCar(e.build, CONFIG);
-        const m = buildCarMesh(e.build, car, { paint: e.paint, color: e.color, shadows, pockets: e.mine, livery: e.mine }, CONFIG);
+        // A friend's car wears its own livery too (M8).
+        const m = buildCarMesh(e.build, car, { paint: e.paint, color: e.color, shadows, pockets: e.mine, livery: e.mine || e.rival }, CONFIG);
         m.car = car;
         scene.add(m.group);
         return m;
@@ -737,7 +767,11 @@ function beginRace(entries, how) {
     const cars = meshes.map((m) => m.car);
     const race = runRace(cars, CONFIG, { record: CONFIG.timing.record });
     const focus = state.event === 'trial' ? null : 0;
-    const plan = planDay(race, { focus, reducedMotion: state.reducedMotion, dance: Boolean(dancer) }, CONFIG);
+    // The finale's dance needs a family by the track: a friend's car (M8)
+    // brings none.
+    const champ = entries[race.standings[0]];
+    const dances = Boolean(dancer) && (champ.mine || Boolean(CONFIG.families[champ.id]));
+    const plan = planDay(race, { focus, reducedMotion: state.reducedMotion, dance: dances }, CONFIG);
     // The day's dance, picked now, never the last one again.
     const dance = pickDance(Math.random(), state.lastDance);
     state.lastDance = dance;
@@ -1159,6 +1193,8 @@ function finishRace(how) {
  */
 function recordDay(day) {
     const event = day.event;
+    // A friend's challenge is between the two of them: no best, no trophy.
+    if (event === 'challenge') return null;
     if (event === 'trial') {
         // The winner last, so it is the result the host remembers.
         for (const i of day.race.standings.slice().reverse()) garage.record(day.entries[i].id, 'trial', { average: day.race.average[i] });
@@ -1196,6 +1232,7 @@ function whyWords(car, build) {
 
 /** The visitor's Why lines: their car against the kit and the best. */
 export function whyFor(day) {
+    if (day.event === 'challenge') return challengeLines(day);
     if (day.event === 'trial') {
         return trialLines(day.race.standings.map((i) => ({ name: day.entries[i].name, average: day.race.average[i] })));
     }
@@ -1207,6 +1244,13 @@ export function whyFor(day) {
 
 /** The host's tip back at the bench: the biggest gain left, said. */
 function tuneTip(day) {
+    // Lost a challenge: the host points at what beat it (M8).
+    if (day && day.event === 'challenge') {
+        const e = day.edge;
+        if (!e || e.mine) return null;
+        const id = e.id === 'align' ? 'alignment' : e.id === 'sand' ? 'shape' : 'axles';
+        return { top: { id, more: e.worth }, sentence: CH.theirEdge(edgeWords(e), clock(e.worth)) };
+    }
     if (!day || day.event === 'trial' || !day.explained) return null;
     let top = gains(day.explained)[0] || null;
     const car = day.cars[0];
@@ -1224,13 +1268,14 @@ function showResults() {
     fillResults({
         table: el['results-table'], lanesEl: el['results-lanes'], whyEl: el['results-why'], whyHeading: el['results-why-heading']
     }, day.race, names, trial ? new Set() : day.mine, whyFor(day),
-    trial ? UI.trialHeading : UI.whyHeading);
+    trial ? UI.trialHeading : day.event === 'challenge' ? CH.heading : UI.whyHeading);
+    if (el['results-challenge']) el['results-challenge'].textContent = day.event === 'challenge' ? CH.sendBack : CH.send;
     if (el['results-event']) el['results-event'].textContent = eventLabel(day.event);
     // What each tune-up was worth (M5's Done-when), for the visitor's one car.
     const list = el['results-tuneups'];
     if (list) {
         list.textContent = '';
-        const lines = trial ? [] : tuneupLines(tuneupWorth(day.entries[0].build, CONFIG));
+        const lines = trial || day.event === 'challenge' ? [] : tuneupLines(tuneupWorth(day.entries[0].build, CONFIG));
         for (const line of lines) {
             const li = document.createElement('li');
             li.textContent = line;
@@ -1545,7 +1590,8 @@ function finishedClip(blob) {
 function shareLine() {
     const day = state.day;
     const focus = clipFocus(day);
-    const url = new URL('.', window.location.href).href;
+    // The clip's link is a challenge too (M8): whoever watches can race it.
+    const url = challengeUrl(window.location.href, day.entries[focus].build, garage.settings().from, CONFIG);
     return `${day.entries[focus].name} averaged ${clock(day.race.average[focus])} seconds at Derby Day. Can you beat it? ${url}`;
 }
 
@@ -1651,6 +1697,140 @@ function closeClip() {
     if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
 }
 
+// ---- Challenge links (M8) -----------------------------------------------------------
+
+/**
+ * A challenge in the page's address, if any: 'ok' (state.challenge set, the
+ * head to head chosen), 'bad' (a challenge link that did not decode or whose
+ * car is not legal) or null (none). The link stays in the address, so a
+ * reload keeps it.
+ */
+function readChallenge() {
+    const hash = window.location.hash || '';
+    if (!isChallenge(hash)) return null;
+    const got = decodeChallenge(hash, CONFIG);
+    track('challenge', { kind: 'open', outcome: got ? 'ok' : 'invalid' });
+    if (!got) return 'bad';
+    state.challenge = { ...got, name: rivalName(nameOf(got.build, [], CONFIG), got.from) };
+    state.event = 'challenge';
+    return 'ok';
+}
+
+/** The invitation at the top of check-in, while there is a challenge. */
+function showInvite() {
+    const p = el['checkin-invite'];
+    if (!p) return;
+    p.textContent = '';
+    const r = state.challenge;
+    p.hidden = !r;
+    if (!r) return;
+    p.appendChild(h('span', null, CH.invite(r.from, nameOf(r.build, [], CONFIG))));
+    p.appendChild(h('small', null, CH.inviteMore));
+}
+
+/** Who won a head to head, by how much, and what made the difference. */
+function challengeLines(day) {
+    const [a, b] = [day.race.average[0], day.race.average[1]];
+    const rival = day.entries[1].name;
+    const won = day.race.standings[0] === 0;
+    const gap = clock(Math.abs(a - b));
+    const lines = [a === b ? CH.tie(rival) : won ? CH.won(rival, gap) : CH.lost(rival, gap)];
+    const [winner, loser] = won ? [day.entries[0].build, day.entries[1].build] : [day.entries[1].build, day.entries[0].build];
+    const edge = biggestEdge(winner, loser, CONFIG);
+    day.edge = edge ? { ...edge, mine: won } : null;
+    if (!edge) lines.push(CH.even);
+    else lines.push(won ? CH.yourEdge(edgeWords(edge), clock(edge.worth)) : CH.theirEdge(edgeWords(edge), clock(edge.worth)));
+    return lines;
+}
+
+function challengeShown() {
+    return Boolean(el['challenge-modal']) && !el['challenge-modal'].classList.contains('hidden');
+}
+
+/** The card that sends a challenge: the race's car (the visitor's, or the
+ *  Time Trial's winner), the first name last used filled in. */
+function openChallengeCard() {
+    const day = state.day;
+    if (!day) return;
+    const focus = clipFocus(day);
+    const entry = day.entries[focus];
+    state.sending = { build: entry.build, name: entry.name.replace(/ \(Outlaw\)$/, ''), average: day.race.average[focus] };
+    if (el['challenge-text']) el['challenge-text'].textContent = CH.text(state.sending.name);
+    if (el['challenge-from']) el['challenge-from'].value = garage.settings().from;
+    if (el['challenge-link']) el['challenge-link'].hidden = true;
+    if (el['challenge-status']) el['challenge-status'].textContent = '';
+    if (el['challenge-modal']) el['challenge-modal'].classList.remove('hidden');
+    const title = el['challenge-title'];
+    if (title && typeof title.focus === 'function') title.focus({ preventScroll: true });
+}
+
+/** The link and the words for the challenge being sent, the name kept. */
+function challengeOut() {
+    const s = state.sending;
+    const from = cleanFrom(el['challenge-from'] ? el['challenge-from'].value : '');
+    garage.setSetting('from', from);
+    return {
+        url: challengeUrl(window.location.href, s.build, from, CONFIG),
+        text: CH.shareText(from, s.name, clock(s.average))
+    };
+}
+
+function challengeSay(text) {
+    if (el['challenge-status']) el['challenge-status'].textContent = text;
+}
+
+/** Send the challenge: the share sheet where there is one, else the link
+ *  copied. */
+async function sendChallenge() {
+    if (!state.sending) return;
+    const out = challengeOut();
+    const nav = typeof navigator === 'undefined' ? null : navigator;
+    if (nav && typeof nav.share === 'function') {
+        try {
+            await nav.share({ title: 'Derby Day', text: out.text, url: out.url });
+            challengeSay(CH.shared);
+            track('challenge', { kind: 'send', outcome: 'shared' });
+        } catch (e) {
+            // Closed the sheet: nothing to say. Anything else: copy instead.
+            if (e && e.name === 'AbortError') {
+                track('challenge', { kind: 'send', outcome: 'cancelled' });
+                return;
+            }
+            await copyChallenge('fallback');
+        }
+        return;
+    }
+    await copyChallenge('send');
+}
+
+/** Copy the challenge's link, or show it to copy by hand. */
+async function copyChallenge(how) {
+    if (!state.sending) return;
+    const { url } = challengeOut();
+    const nav = typeof navigator === 'undefined' ? null : navigator;
+    try {
+        await nav.clipboard.writeText(url);
+        challengeSay(CH.copied);
+        track('challenge', { kind: how === 'copy' ? 'copy' : 'send', outcome: 'copied' });
+    } catch (e) {
+        const box = el['challenge-link'];
+        if (box) {
+            box.value = url;
+            box.hidden = false;
+            if (typeof box.focus === 'function') box.focus({ preventScroll: true });
+            if (typeof box.select === 'function') box.select();
+        }
+        challengeSay(CH.manual);
+        track('challenge', { kind: how === 'copy' ? 'copy' : 'send', outcome: 'manual' });
+    }
+}
+
+function closeChallengeCard() {
+    if (el['challenge-modal']) el['challenge-modal'].classList.add('hidden');
+    const back = el['results-challenge'];
+    if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
+}
+
 // ---- Events -----------------------------------------------------------------
 
 function setupEventListeners() {
@@ -1682,6 +1862,14 @@ function setupEventListeners() {
     }, { signal });
     for (const type of ['pointerup', 'pointercancel']) window.addEventListener(type, () => { state.drag = null; }, { signal });
     on('results-share', 'click', openClip);
+    on('results-challenge', 'click', openChallengeCard);
+    on('challenge-send', 'click', sendChallenge);
+    on('challenge-copy', 'click', () => copyChallenge('copy'));
+    on('challenge-close', 'click', closeChallengeCard);
+    // A challenge link opened in a tab already on the page.
+    window.addEventListener('hashchange', () => {
+        if (readChallenge() === 'ok' && state.isLoaded && ['bench', 'checkin', 'results'].includes(state.phase)) showCheckin();
+    }, { signal });
     on('clip-share', 'click', shareClip);
     on('clip-image', 'click', shareStill);
     on('clip-again', 'click', openClip);
@@ -1708,6 +1896,11 @@ function onKeyDown(event) {
         return;
     }
     if (event.key === 'Escape' || event.code === 'Escape') {
+        if (challengeShown()) {
+            event.preventDefault();
+            closeChallengeCard();
+            return;
+        }
         if (clipShown()) {
             event.preventDefault();
             closeClip();
@@ -1810,7 +2003,7 @@ export function getState() {
 }
 
 export const __test__ = {
-    startRace, finishRace, stepBack, crowdMoment, openClip, closeClip, shareStill, shareClip, showBench, tuneCar, sound,
+    startRace, finishRace, stepBack, crowdMoment, openClip, closeClip, shareStill, shareClip, showBench, tuneCar, sound, shareLine,
     meshes: () => meshes, benchMesh: () => benchMesh, garage: () => garage, bench: () => bench, holder: () => holder, crowd: () => crowd,
     dancer: () => dancer,
     familyView: (v) => {

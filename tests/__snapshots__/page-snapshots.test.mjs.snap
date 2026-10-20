@@ -1425,6 +1425,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/director.min.js" rel="modulepreload"]
     link [href="js/board.min.js" rel="modulepreload"]
     link [href="js/copy.min.js" rel="modulepreload"]
+    link [href="js/challenge.min.js" rel="modulepreload"]
     link [href="js/phases.min.js" rel="modulepreload"]
     link [href="js/sound.min.js" rel="modulepreload"]
     link [href="js/clip.min.js" rel="modulepreload"]
@@ -1499,6 +1500,7 @@ html [data-ui-theme="ember" lang="en"]
           "DERBY DAY"
         p.subtitle
           "Race a wooden derby car down a four-lane track"
+        p#checkin-invite.checkin-invite [hidden]
         fieldset.choice-group
           legend
             "Your race"
@@ -1554,7 +1556,9 @@ html [data-ui-theme="ember" lang="en"]
         ul#results-tuneups.results-why
         p#results-trophy.results-trophy [hidden]
         div.results-actions
-          button#results-share.go-btn [type="button"]
+          button#results-challenge.go-btn [type="button"]
+            "Challenge a friend"
+          button#results-share.results-another [type="button"]
             "Share my race"
           button#results-harder.results-another [hidden type="button"]
             "Try the next division"
@@ -1589,6 +1593,25 @@ html [data-ui-theme="ember" lang="en"]
         p.clip-note
           "Made on this device. Nothing is uploaded."
         p#clip-status.sr-only [aria-live="polite" role="status"]
+    div#challenge-modal.clip-modal.challenge-modal.hidden [aria-describedby="challenge-text" aria-labelledby="challenge-title" aria-modal="true" role="dialog"]
+      div.clip-card.challenge-card
+        h2#challenge-title.clip-title [tabindex="-1"]
+          "Challenge a friend"
+        p#challenge-text.challenge-text
+        label.challenge-label [for="challenge-from"]
+          "Your first name (optional)"
+        input#challenge-from.challenge-from [autocapitalize="words" autocomplete="given-name" maxlength="20" spellcheck="false" type="text"]
+        input#challenge-link.challenge-link [aria-label="The challenge link" hidden readonly type="text"]
+        div.clip-actions
+          button#challenge-send.go-btn [type="button"]
+            "Send the challenge"
+          button#challenge-copy.results-another [type="button"]
+            "Copy the link"
+          button#challenge-close.results-another [type="button"]
+            "Done"
+        p#challenge-status.challenge-status [aria-live="polite" role="status"]
+        p.clip-note
+          "The link holds your car and the name you type, nothing else. Nothing is uploaded."
     script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
@@ -5508,7 +5531,7 @@ html [lang="en"]
             li
               strong
                 "Your cars in Derby Day."
-              "Derby Day saves your cars in your browser's local storage, up to four of them, so they are waiting on the workbench when you come back: each car's name, number, shape, paint, decals, weights and axle work, its best result in each race, your last race, the trophies you have won, how you dressed your family on the family card, and whether you chose metric units or turned the sound on. The Forget my cars button in the workbench's settings clears all of it on the spot."
+              "Derby Day saves your cars in your browser's local storage, up to four of them, so they are waiting on the workbench when you come back: each car's name, number, shape, paint, decals, weights and axle work, its best result in each race, your last race, the trophies you have won, how you dressed your family on the family card, whether you chose metric units or turned the sound on, and the first name you last put on a challenge, if you typed one. A challenge link holds the car you send and that name, nothing else. It is made on your device, and the part of the link that holds them is never sent to our server, by you or by the friend who opens it. The Forget my cars button in the workbench's settings clears all of it on the spot."
             li
               strong
                 "Your home in Whitestone Home Care."

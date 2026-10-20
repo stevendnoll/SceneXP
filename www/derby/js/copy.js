@@ -18,6 +18,50 @@ export const EVENTS = Object.freeze([
     { id: 'outlaw', label: 'Outlaw exhibition', blurb: 'An Outlaw car against the three fastest, marked as an exhibition' }
 ]);
 
+/**
+ * CHALLENGE LINKS (M8): the friend's invitation, the head to head's results,
+ * and the challenge sent. `rival` is the rival's name as the board shows it
+ * ("Steve’s Blue Wedge", challenge.rivalName).
+ */
+export const CHALLENGE = Object.freeze({
+    event: 'Head to head',
+    blurb: (rival) => `Your car against ${rival}: four heats, each car in every lane`,
+    invite: (from, car) => (from ? `${from} has challenged you to a race against ${car}!` : `A friend has challenged you to a race against ${car}!`),
+    inviteMore: 'Choose your car and press Go, or tune it at the workbench first.',
+    bad: 'That challenge link did not come through whole, so here is your workbench instead. Ask your friend to send it again.',
+    heading: 'How the two cars compared',
+    won: (rival, gap) => `You beat ${rival} by ${gap} seconds!`,
+    lost: (rival, gap) => `${rival} wins by ${gap} seconds.`,
+    tie: (rival) => `A dead heat with ${rival}!`,
+    theirEdge: (what, worth) => `The biggest difference was their ${what}. On your car, it would be worth about ${worth} seconds.`,
+    yourEdge: (what, worth) => `Your ${what} made the biggest difference, worth about ${worth} seconds on their car.`,
+    even: 'Your axles were tuned alike, so the difference was in the shapes and the weights.',
+    // The results' buttons.
+    send: 'Challenge a friend',
+    sendBack: 'Send a challenge back',
+    // The card that sends one.
+    title: 'Challenge a friend',
+    text: (car) => `Send ${car} to a friend. They race their own car against it, head to head.`,
+    fromLabel: 'Your first name (optional)',
+    share: 'Send the challenge',
+    copy: 'Copy the link',
+    done: 'Done',
+    note: 'The link holds your car and the name you type, nothing else. Nothing is uploaded.',
+    shareText: (from, car, average) => (from
+        ? `${from} challenges you to a derby race! Can your car beat ${car}? It averaged ${average} seconds at Derby Day.`
+        : `Can your derby car beat ${car}? It averaged ${average} seconds at Derby Day.`),
+    shared: 'Sent. Good luck to them!',
+    copied: 'The link is copied. Paste it into a message to a friend.',
+    manual: 'Copy the link below and paste it into a message to a friend.'
+});
+
+/** What a tune-up is called in the results' comparison. */
+export function edgeWords(edge) {
+    if (!edge) return '';
+    if (edge.id === 'polish') return `axles polished to ${POLISH[edge.level]}`;
+    return { deburr: 'de-burred axles', graphite: 'graphite on the axles', align: 'aligned wheels', sand: 'sanded edges' }[edge.id] || '';
+}
+
 /** The harder division after each, for "Try the Medium division". */
 export const HARDER = Object.freeze({ easy: 'medium', medium: 'hard' });
 
@@ -154,6 +198,7 @@ export function polishButton(level) {
 export const SAND = Object.freeze(['Square, as cut', 'Lightly sanded', 'Softened', 'Rounded', 'Well rounded']);
 
 export function eventLabel(id) {
+    if (id === 'challenge') return CHALLENGE.event;
     const e = EVENTS.find((x) => x.id === id);
     if (!e) return '';
     return id === 'trial' || id === 'outlaw' ? e.label : `${e.label} division`;

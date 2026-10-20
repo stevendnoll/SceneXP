@@ -166,8 +166,12 @@ describe('normalizeGarage', () => {
     });
 
     test('settings and trophies are made valid too', () => {
-        expect(G.normalizeSettings({ units: 'metric', sound: 'yes' })).toEqual({ units: 'metric', sound: false });
-        expect(G.normalizeSettings(null)).toEqual({ units: 'us', sound: false });
+        expect(G.normalizeSettings({ units: 'metric', sound: 'yes' })).toEqual({ units: 'metric', sound: false, from: '' });
+        expect(G.normalizeSettings(null)).toEqual({ units: 'us', sound: false, from: '' });
+        // The first name last put on a challenge (M8): kept clean and short.
+        expect(G.normalizeSettings({ from: '  Steve\u202e  ' }).from).toBe('Steve');
+        expect(G.normalizeSettings({ from: 42 }).from).toBe('');
+        expect([...G.normalizeSettings({ from: 'A'.repeat(50) }).from]).toHaveLength(G.FROM_MAX);
         expect(G.normalizeTrophies({ easy: '2026-10-19', hard: 'yesterday', moon: '2026-01-01' }))
             .toEqual({ easy: '2026-10-19', medium: null, hard: null, outlaw: null });
     });
@@ -193,7 +197,7 @@ describe('the garage in this browser', () => {
         localStorage.setItem(G.KEYS.settings, 'NaN');
         const g = make();
         expect(g.cars()).toHaveLength(1);
-        expect(g.settings()).toEqual({ units: 'us', sound: false });
+        expect(g.settings()).toEqual({ units: 'us', sound: false, from: '' });
     });
 
     test('storage refused: every change still works for the visit', () => {
@@ -294,7 +298,7 @@ describe('the garage in this browser', () => {
         expect(localStorage.map.size).toBe(0);
         expect(g.cars()).toEqual([fresh]);
         expect(g.trophies().hard).toBeNull();
-        expect(g.settings()).toEqual({ units: 'us', sound: false });
+        expect(g.settings()).toEqual({ units: 'us', sound: false, from: '' });
     });
 });
 

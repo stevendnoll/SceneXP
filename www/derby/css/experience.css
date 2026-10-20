@@ -701,6 +701,83 @@ body {
     font-size: 0.75rem;
 }
 
+/* ---- Challenge links (M8) ---------------------------------------------------
+   The card that sends one is the share card's layout (.clip-modal and
+   .clip-card): a sentence, the optional first name, the buttons, and what
+   happened. The invitation sits at the top of check-in. */
+
+.challenge-text {
+    margin: 0 0 0.9rem;
+    line-height: 1.4;
+}
+
+.challenge-label {
+    display: block;
+    margin: 0 0 0.3rem;
+    color: #e6d9c9;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: left;
+}
+
+.challenge-from,
+.challenge-link {
+    display: block;
+    width: 100%;
+    margin: 0 0 0.6rem;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(12, 9, 6, 0.6);
+    color: #fff4e6;
+    font: inherit;
+    box-sizing: border-box;
+}
+
+.challenge-link {
+    font-size: 0.8rem;
+}
+
+.challenge-link[hidden] {
+    display: none;
+}
+
+.challenge-from:focus-visible,
+.challenge-link:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+.challenge-status {
+    min-height: 1.2em;
+    margin: 0.6rem 0 0;
+    color: #ffd2a8;
+    font-size: 0.9rem;
+}
+
+.checkin-invite {
+    margin: 0 0 1.25rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.7);
+    border-radius: 10px;
+    background: rgba(var(--ui-accent-rgb), 0.16);
+    color: #fff4e6;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.checkin-invite[hidden] {
+    display: none;
+}
+
+.checkin-invite small {
+    display: block;
+    margin-top: 0.3rem;
+    color: #e6d9c9;
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+
 /* ---- The workbench (M3) ----------------------------------------------------
    A bottom sheet on a phone, a side panel from 900px (js/config.js
    workbench.sideFrom says the same, so the camera frames the car in what
@@ -1389,6 +1466,7 @@ body {
     .bench-field input,
     .swatch-custom,
     .clip-sound,
+    .challenge-from,
     .bench-range input {
         min-height: 44px;
         box-sizing: border-box;

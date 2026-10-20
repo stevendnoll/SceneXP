@@ -2,7 +2,8 @@
 /**
  * garage.js - the visitor's cars, kept in this browser (M3, D6): up to four
  * builds, the one on the bench, each car's best result in every event, the
- * last race, the trophies, and the settings (units, the sound).
+ * last race, the trophies, and the settings (units, the sound, the first
+ * name last put on a challenge link).
  *
  * A BUILD IS PLAIN DATA (PLANNING, The data), versioned `v: 1`:
  *
@@ -55,9 +56,20 @@ export function newId(rand = Math.random) {
 }
 
 /** A car's name as typed: control characters out, trimmed, capped. */
+/** A challenger's first name (M8), at most this many characters. */
+export const FROM_MAX = 20;
+
+/** A first name, as typed for a challenge link: plain, short, or ''. */
+export function cleanFrom(raw) {
+    if (typeof raw !== 'string') return '';
+    return [...cleanName(raw.normalize('NFC'))].slice(0, FROM_MAX).join('').trim();
+}
+
 export function cleanName(raw) {
     if (typeof raw !== 'string') return '';
-    return raw.replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX).trim();
+    // Control characters, and the invisible ones that turn a text's
+    // direction (a car's name can now arrive in a challenge link, M8).
+    return raw.replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g, '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX).trim();
 }
 
 function normalizeStations(raw, C) {
@@ -155,7 +167,8 @@ export function newCar(C = DERBY_CONFIG, { design = C.bench.designs[0], index = 
  * checkin.js), not the entry form's.
  */
 export function canEnter(build, eventId) {
-    if (eventId === 'trial') return 'ok';
+    // Time Trial and a challenge (M8, head to head) take either class.
+    if (eventId === 'trial' || eventId === 'challenge') return 'ok';
     if (eventId === 'outlaw') return build.rules === 'outlaw' ? 'ok' : 'standardOnly';
     return build.rules === 'outlaw' ? 'outlawOnly' : 'ok';
 }
@@ -240,7 +253,9 @@ export function normalizeGarage(raw, C = DERBY_CONFIG, { rand = Math.random } = 
 
 export function normalizeSettings(raw) {
     const src = raw && typeof raw === 'object' ? raw : {};
-    return { units: normalizeUnits(src.units), sound: src.sound === true };
+    // `from`: the first name last put on a challenge link (M8), so the next
+    // one is filled in. Disclosed in www/privacy.html.
+    return { units: normalizeUnits(src.units), sound: src.sound === true, from: cleanFrom(src.from) };
 }
 
 export function normalizeTrophies(raw) {

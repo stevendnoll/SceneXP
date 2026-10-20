@@ -132,6 +132,7 @@
     <link rel="modulepreload" href="js/director.min.js">
     <link rel="modulepreload" href="js/board.min.js">
     <link rel="modulepreload" href="js/copy.min.js">
+    <link rel="modulepreload" href="js/challenge.min.js">
     <link rel="modulepreload" href="js/phases.min.js">
     <link rel="modulepreload" href="js/sound.min.js">
     <link rel="modulepreload" href="js/clip.min.js">
@@ -241,6 +242,9 @@
         <div id="instructions" class="checkin">
             <p class="title">DERBY DAY</p>
             <p class="subtitle">Race a wooden derby car down a four-lane track</p>
+            <!-- A friend's challenge (M8, js/challenge.js), when the visitor
+                 arrived by one: who sent it and against which car. -->
+            <p id="checkin-invite" class="checkin-invite" hidden></p>
             <fieldset class="choice-group">
                 <legend>Your race</legend>
                 <div id="event-options" class="choices"></div>
@@ -324,10 +328,11 @@
             <h3 id="results-tuneups-heading" class="results-sub">What each tune-up was worth</h3>
             <ul id="results-tuneups" class="results-why"></ul>
             <p id="results-trophy" class="results-trophy" hidden></p>
-            <!-- Share my race is the one filled button: the clip is what
-                 this scene is for (PRD, The share). -->
+            <!-- Challenge a friend is the one filled button (Steve, 2026-10-20:
+                 the challenge "makes it personal"). The clip comes second. -->
             <div class="results-actions">
-                <button id="results-share" class="go-btn" type="button">Share my race</button>
+                <button id="results-challenge" class="go-btn" type="button">Challenge a friend</button>
+                <button id="results-share" class="results-another" type="button">Share my race</button>
                 <button id="results-harder" class="results-another" type="button" hidden>Try the next division</button>
                 <button id="results-again" class="results-another" type="button">Race again</button>
                 <button id="results-tune" class="results-another" type="button">Tune my car</button>
@@ -356,6 +361,26 @@
             </div>
             <p class="clip-note">Made on this device. Nothing is uploaded.</p>
             <p id="clip-status" class="sr-only" role="status" aria-live="polite"></p>
+        </div>
+    </div>
+
+    <!-- THE CHALLENGE CARD (M8, js/challenge.js): the visitor's car sent to a
+         friend as a link, with their first name if they type one. The link is
+         made here, on the device, and nothing is uploaded. -->
+    <div id="challenge-modal" class="clip-modal challenge-modal hidden" role="dialog" aria-modal="true" aria-labelledby="challenge-title" aria-describedby="challenge-text">
+        <div class="clip-card challenge-card">
+            <h2 id="challenge-title" class="clip-title" tabindex="-1">Challenge a friend</h2>
+            <p id="challenge-text" class="challenge-text"></p>
+            <label class="challenge-label" for="challenge-from">Your first name (optional)</label>
+            <input id="challenge-from" class="challenge-from" type="text" maxlength="20" autocomplete="given-name" autocapitalize="words" spellcheck="false">
+            <input id="challenge-link" class="challenge-link" type="text" readonly aria-label="The challenge link" hidden>
+            <div class="clip-actions">
+                <button id="challenge-send" class="go-btn" type="button">Send the challenge</button>
+                <button id="challenge-copy" class="results-another" type="button">Copy the link</button>
+                <button id="challenge-close" class="results-another" type="button">Done</button>
+            </div>
+            <p id="challenge-status" class="challenge-status" role="status" aria-live="polite"></p>
+            <p class="clip-note">The link holds your car and the name you type, nothing else. Nothing is uploaded.</p>
         </div>
     </div>
 
