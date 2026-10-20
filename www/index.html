@@ -252,9 +252,9 @@
 
     <title>SceneXP | 3D Worlds, Games, and Experiments</title>
 
-    <link rel="preload" href="/css/site.min.css?v=6" as="style">
+    <link rel="preload" href="/css/site.min.css?v=9" as="style">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="/css/site.min.css?v=6">
+    <link rel="stylesheet" href="/css/site.min.css?v=9">
 
     <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
     <script src="/js/theme.min.js?v=1"></script>
@@ -364,7 +364,8 @@
                      Paint on every screen, so it is the one eager, high-priority
                      image on the page. Every card in the grid below is lazy. Every
                      slide's picture loads with the page (they share the same spot
-                     on screen), so the set is kept to three.
+                     on screen), so the set is kept to four at most (about 460 KB
+                     of WebP together, X's and O's the fourth at 82 KB).
 
                      WHEN A WORLD IS RELEASED, its slide goes first here. Which
                      others stay is a choice. tests/home-dates.test.mjs checks the
@@ -374,7 +375,7 @@
                     aria-roledescription="carousel">
                     <h2 id="spotlight-heading">Featured</h2>
                     <ul class="spotlight-slides">
-                        <li class="spotlight-slide is-active" data-slug="derby" aria-roledescription="slide" aria-label="1 of 3">
+                        <li class="spotlight-slide is-active" data-slug="derby" aria-roledescription="slide" aria-label="1 of 4">
                             <a href="/derby/">
                                 <div class="spotlight-media">
                                     <img src="/derby/assets/og-derby.webp?v=1" width="1200" height="630" loading="eager" fetchpriority="high" decoding="async"
@@ -389,7 +390,7 @@
                                 </div>
                             </a>
                         </li>
-                        <li class="spotlight-slide" data-slug="leaves" aria-roledescription="slide" aria-label="2 of 3">
+                        <li class="spotlight-slide" data-slug="leaves" aria-roledescription="slide" aria-label="2 of 4">
                             <a href="/leaves/">
                                 <div class="spotlight-media">
                                     <img src="/leaves/assets/og-leaves.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
@@ -404,7 +405,22 @@
                                 </div>
                             </a>
                         </li>
-                        <li class="spotlight-slide" data-slug="garden" aria-roledescription="slide" aria-label="3 of 3">
+                        <li class="spotlight-slide" data-slug="xo" aria-roledescription="slide" aria-label="3 of 4">
+                            <a href="/xo/">
+                                <div class="spotlight-media">
+                                    <img src="/xo/assets/og-xo.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
+                                        alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides.">
+                                </div>
+                                <div class="spotlight-body">
+                                    <p class="spotlight-date">Released <time datetime="2026-09-14">September 14, 2026</time></p>
+                                    <p class="experience-eyebrow">A football game where you call the plays</p>
+                                    <h3>X's and O's</h3>
+                                    <p class="spotlight-text">You are on offense for all ten plays. Pick a play, snap the ball, then throw to an open receiver or keep it and run. 500 is a perfect game.</p>
+                                    <span class="experience-cta">Call the first play →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="spotlight-slide" data-slug="garden" aria-roledescription="slide" aria-label="4 of 4">
                             <a href="/garden/">
                                 <div class="spotlight-media">
                                     <img src="/garden/assets/og-garden.webp?v=3" width="1200" height="630" loading="lazy" decoding="async"

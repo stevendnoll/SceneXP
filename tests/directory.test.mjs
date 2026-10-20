@@ -302,7 +302,9 @@ describe('the search box and the filter chips are gone for good', () => {
         expect(between).not.toMatch(/\shidden(\s|>)/);
         expect(between).not.toMatch(/<button\b/);
         const slides = [...between.matchAll(/<li class="spotlight-slide( is-active)?"/g)];
-        expect(slides.map((m) => Boolean(m[1]))).toEqual([true, false, false]);
+        expect(slides.length).toBeGreaterThanOrEqual(3);
+        expect(slides.length).toBeLessThanOrEqual(4);
+        expect(slides.map((m) => Boolean(m[1]))).toEqual(slides.map((m, i) => i === 0));
     });
 });
 
@@ -421,10 +423,11 @@ test('the outline runs h1, category h2, card h3 with no level skipped', () => {
     expect([...home.matchAll(/<h1[ >]/g)]).toHaveLength(1);
     expect(home).not.toMatch(/<div class="experience-card-body">[\s\S]{0,200}?<h2>/);
     // One h3 per card, plus one per spotlight slide (which sits under its own
-    // h2, "Just released", between the h1 and the first category).
+    // h2, "Featured", between the h1 and the first category).
     const titles = [...home.matchAll(/<h3>([^<]+)<\/h3>/g)].map((m) => m[1]);
     const slides = [...home.matchAll(/<li class="spotlight-slide/g)].length;
-    expect(slides).toBe(3);
+    expect(slides).toBeGreaterThanOrEqual(3);
+    expect(slides).toBeLessThanOrEqual(4);
     expect(titles).toHaveLength(slugs.length + slides);
     const h1 = home.indexOf('<h1');
     const spot = home.indexOf('<h2 id="spotlight-heading">');

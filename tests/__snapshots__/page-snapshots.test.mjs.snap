@@ -15,9 +15,9 @@ html [lang="en"]
     meta [content="Steve Noll" name="author"]
     title
       "Page Not Found | SceneXP"
-    link [as="style" href="/css/site.min.css?v=6" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=9" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=6" rel="stylesheet"]
+    link [href="/css/site.min.css?v=9" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -421,9 +421,9 @@ html [lang="en"]
       }
     title
       "Contact | SceneXP"
-    link [as="style" href="/css/site.min.css?v=6" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=9" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=6" rel="stylesheet"]
+    link [href="/css/site.min.css?v=9" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
     script [src="/js/contact.min.js?v=1" type="module"]
@@ -627,9 +627,9 @@ html [lang="en"]
       }
     title
       "Contribute | SceneXP"
-    link [as="style" href="/css/site.min.css?v=6" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=9" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=6" rel="stylesheet"]
+    link [href="/css/site.min.css?v=9" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -3100,9 +3100,9 @@ html [lang="en"]
       }
     title
       "SceneXP | 3D Worlds, Games, and Experiments"
-    link [as="style" href="/css/site.min.css?v=6" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=9" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=6" rel="stylesheet"]
+    link [href="/css/site.min.css?v=9" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
     script [src="/js/home.min.js?v=2" type="module"]
@@ -3157,7 +3157,7 @@ html [lang="en"]
             h2#spotlight-heading
               "Featured"
             ul.spotlight-slides
-              li.spotlight-slide.is-active [aria-label="1 of 3" aria-roledescription="slide" data-slug="derby"]
+              li.spotlight-slide.is-active [aria-label="1 of 4" aria-roledescription="slide" data-slug="derby"]
                 a [href="/derby/"]
                   div.spotlight-media
                     img [alt="Four wooden derby cars in blue, yellow, green and orange crossing a checkered finish line side by side, seen from above in a photo finish." decoding="async" fetchpriority="high" height="630" loading="eager" src="/derby/assets/og-derby.webp?v=1" width="1200"]
@@ -3174,7 +3174,7 @@ html [lang="en"]
                       "Carve a wooden derby car, tune its axles and race it down a four-lane track. Then send it to a friend and see whose car is faster."
                     span.experience-cta
                       "Build your car →"
-              li.spotlight-slide [aria-label="2 of 3" aria-roledescription="slide" data-slug="leaves"]
+              li.spotlight-slide [aria-label="2 of 4" aria-roledescription="slide" data-slug="leaves"]
                 a [href="/leaves/"]
                   div.spotlight-media
                     img [alt="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding." decoding="async" height="630" loading="lazy" src="/leaves/assets/og-leaves.webp?v=1" width="1200"]
@@ -3191,7 +3191,24 @@ html [lang="en"]
                       "Twelve thousand autumn leaves and a leaf blower. Blow them onto the tarp before the clock runs out, then take a running dive into the pile."
                     span.experience-cta
                       "Grab the leaf blower →"
-              li.spotlight-slide [aria-label="3 of 3" aria-roledescription="slide" data-slug="garden"]
+              li.spotlight-slide [aria-label="3 of 4" aria-roledescription="slide" data-slug="xo"]
+                a [href="/xo/"]
+                  div.spotlight-media
+                    img [alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." decoding="async" height="630" loading="lazy" src="/xo/assets/og-xo.webp?v=1" width="1200"]
+                  div.spotlight-body
+                    p.spotlight-date
+                      "Released"
+                      time [datetime="2026-09-14"]
+                        "September 14, 2026"
+                    p.experience-eyebrow
+                      "A football game where you call the plays"
+                    h3
+                      "X's and O's"
+                    p.spotlight-text
+                      "You are on offense for all ten plays. Pick a play, snap the ball, then throw to an open receiver or keep it and run. 500 is a perfect game."
+                    span.experience-cta
+                      "Call the first play →"
+              li.spotlight-slide [aria-label="4 of 4" aria-roledescription="slide" data-slug="garden"]
                 a [href="/garden/"]
                   div.spotlight-media
                     img [alt="Five fractal fruit trees in full summer leaf, their canopies heavy with red fruit, standing on dark mulch mounds in a walled garden plot. Each trunk has a small blue water gauge at its base. Behind the wall a pale lake sits below gray rolling hills, under a blue sky with white clouds." decoding="async" height="630" loading="lazy" src="/garden/assets/og-garden.webp?v=3" width="1200"]
@@ -5463,9 +5480,9 @@ html [lang="en"]
       }
     title
       "Privacy | SceneXP"
-    link [as="style" href="/css/site.min.css?v=6" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=9" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=6" rel="stylesheet"]
+    link [href="/css/site.min.css?v=9" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -6996,9 +7013,9 @@ html [lang="en"]
       }
     title
       "Terms | SceneXP"
-    link [as="style" href="/css/site.min.css?v=6" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=9" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=6" rel="stylesheet"]
+    link [href="/css/site.min.css?v=9" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
