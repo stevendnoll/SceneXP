@@ -538,6 +538,13 @@ test('reduced motion: no slow replays, no chase camera, and the turntable stands
     fire(dom.windowStub, 'pointermove', { clientX: 150 });
     fire(dom.windowStub, 'pointerup', {});
     expect(state.spin).toBeCloseTo(0.6, 6);
+    // And Turn the car turns it at once, to the next quarter (M7.1), and
+    // there it stays.
+    fire(dom.el('bench-turn'), 'click');
+    expect(state.spin).toBeCloseTo(Math.PI / 2, 9);
+    expect(state.turnTo).toBeNull();
+    frames(main, 1);
+    expect(state.spin).toBeCloseTo(Math.PI / 2, 9);
     raceIt();
     choose(eventInput('hard'));
     go();
@@ -642,6 +649,77 @@ test('reduced motion: the Cut is a before and after', async () => {
     fire(control('bench-cut'), 'click');
     expect(main.__test__.benchMesh()).not.toBe(before);
     expect(host()).toMatch(/^Cut!/);
+});
+
+// The M7.1 nice-to-haves (2026-10-20): the turntable by keyboard, and the
+// scene's name following the day.
+test('the turntable\'s quarter turns: always onward, to the next of the four', async () => {
+    const { quarterTurn } = await import('../www/derby/js/workbench.js');
+    const q = Math.PI / 2;
+    expect(quarterTurn(0)).toBeCloseTo(q, 12);
+    expect(quarterTurn(0.3)).toBeCloseTo(q, 12);
+    expect(quarterTurn(q)).toBeCloseTo(2 * q, 12);
+    // A turn that eased to within a hair of a quarter counts as there.
+    expect(quarterTurn(q - 1e-9)).toBeCloseTo(2 * q, 12);
+    expect(quarterTurn(7 * q + 0.1)).toBeCloseTo(8 * q, 12);
+    expect(quarterTurn(-0.2)).toBeCloseTo(0, 12);
+});
+
+test('Turn the car eases the turntable a quarter turn on, a drag takes over, and it does nothing off the bench', async () => {
+    const main = await boot();
+    const state = main.getState();
+    state.spin = 0.3;
+    fire(dom.el('bench-turn'), 'click');
+    expect(state.turnTo).toBeCloseTo(Math.PI / 2, 12);
+    // A second press goes on from where the first is headed.
+    fire(dom.el('bench-turn'), 'click');
+    expect(state.turnTo).toBeCloseTo(Math.PI, 12);
+    frames(main, 0.1);
+    expect(state.spin).toBeGreaterThan(0.3);
+    expect(state.spin).toBeLessThan(Math.PI);
+    // There, and then the turntable turns on by itself as before.
+    frames(main, 1.5);
+    expect(state.turnTo).toBeNull();
+    expect(state.spin).toBeGreaterThan(Math.PI);
+    expect(state.spin).toBeLessThan(Math.PI + 1);
+    // A drag takes over from a turn under way.
+    fire(dom.el('bench-turn'), 'click');
+    fire(dom.el('game-canvas'), 'pointerdown', { clientX: 100 });
+    expect(state.turnTo).toBeNull();
+    fire(dom.windowStub, 'pointerup', {});
+    // Off the bench it does nothing.
+    raceIt();
+    const spin = state.spin;
+    fire(dom.el('bench-turn'), 'click');
+    expect(state.turnTo).toBeNull();
+    expect(state.spin).toBe(spin);
+});
+
+test('the scene is named for what it shows as the day moves on', async () => {
+    const { SCENE } = await import('../www/derby/js/copy.js');
+    const { readFileSync } = await import('node:fs');
+    // The page's own name for it is check-in's, the scene behind the card.
+    const page = readFileSync(new URL('../www/derby/index.html', import.meta.url), 'utf8');
+    expect(page).toContain(`<canvas id="game-canvas" role="img" tabindex="-1" aria-label="${SCENE.checkin}">`);
+    expect(new Set(Object.values(SCENE)).size).toBe(5);
+    const main = await boot();
+    const state = main.getState();
+    const name = () => dom.el('game-canvas').getAttribute('aria-label');
+    expect(name()).toBe(SCENE.bench);
+    raceIt();
+    expect(name()).toBe(SCENE.checkin);
+    fire(dom.el('go-btn'), 'click');
+    expect(state.phase).toBe('weighin');
+    expect(name()).toBe(SCENE.weighin);
+    fire(dom.el('skip-btn'), 'click');
+    expect(state.phase).toBe('race');
+    expect(name()).toBe(SCENE.race);
+    main.__test__.finishRace('skip');
+    expect(results()).toBe(true);
+    expect(name()).toBe(SCENE.results);
+    fire(dom.el('results-tune'), 'click');
+    expect(state.phase).toBe('bench');
+    expect(name()).toBe(SCENE.bench);
 });
 
 test('a browser without WebGL 2 is taken to the main site with a note', async () => {

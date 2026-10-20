@@ -504,7 +504,7 @@ body {
     border-collapse: collapse;
 }
 
-.results-table th {
+.results-table thead th {
     padding: 0 0.3rem 0.35rem;
     color: #bfb2a3;
     font-size: 0.72rem;
@@ -514,13 +514,21 @@ body {
     text-transform: uppercase;
 }
 
-.results-table td {
+/* A car's name is its row's header (M7.1), set as the other cells are. */
+.results-table td,
+.results-table tbody th {
     padding: 0.45rem 0.3rem;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     vertical-align: middle;
 }
 
-.results-table tr.is-mine td {
+.results-table tbody th {
+    font-weight: inherit;
+    text-align: left;
+}
+
+.results-table tr.is-mine td,
+.results-table tr.is-mine th {
     background: rgba(var(--ui-accent-rgb), 0.18);
 }
 
@@ -545,6 +553,22 @@ body {
 .res-name {
     display: block;
     font-weight: 700;
+}
+
+/* The visitor's row says so in words, its tint aside (M7.1): the You tag
+   over the car in the hall, small, after the car's name. */
+.res-you {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    background: var(--ui-accent);
+    color: var(--ui-on-accent);
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    vertical-align: 0.1em;
 }
 
 .res-heats {
@@ -925,6 +949,28 @@ body {
     color: #d9cbbb;
     font-size: 0.85rem;
     line-height: 1.35;
+}
+
+/* Turn the car: round, the icon alone (its name is in aria-label and the
+   tooltip), the coarse-pointer block below making it 44px on a phone. */
+.bench-btn.bench-turn {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+}
+
+.bench-turn svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .bench-foot .go-btn {
@@ -1577,10 +1623,14 @@ body.card-mode #skip-btn {
     .clip-sound {
         padding: 0 0.5rem;
     }
+
+    .bench-btn.bench-turn {
+        width: 44px;
+        height: 44px;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #instructions .click-prompt,
     .countdown,
     .countdown.is-alt,
     .photo-finish::after {

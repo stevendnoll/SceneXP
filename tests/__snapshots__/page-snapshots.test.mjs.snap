@@ -1494,6 +1494,10 @@ html [data-ui-theme="ember" lang="en"]
           div#bench-host-actions.bench-host-actions
         div#bench-body.bench-body
       div.bench-foot
+        button#bench-turn.bench-btn.bench-turn [aria-label="Turn the car" title="Turn the car" type="button"]
+          svg [aria-hidden="true" focusable="false" viewbox="0 0 24 24"]
+            path [d="M20 12a8 8 0 1 1-2.34-5.66"]
+            path [d="M20 4v4.5h-4.5"]
         p#bench-summary.bench-summary
         button#bench-race.go-btn [type="button"]
           "Race it"

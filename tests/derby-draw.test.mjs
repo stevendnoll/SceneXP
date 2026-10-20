@@ -92,8 +92,13 @@ test('the results: a real table fastest first, the visitor\'s row lit, the lanes
     fillResults({ table, lanesEl, whyEl, whyHeading }, race, ['Phantom', 'Brick'], new Set([1]), ['One.', 'Two.'], 'Why');
     const [head, body] = table.children;
     expect(head.children[0].children.map((th) => th.getAttribute('scope'))).toEqual(['col', 'col', 'col']);
-    expect(body.children.map((r) => r.children[1].children[0].textContent)).toEqual(['Phantom', 'Brick']);
+    // The car's name is the row's header, and the visitor's row says so in
+    // words, not by its tint alone (M7.1).
+    expect(body.children.map((r) => [r.children[1].tagName, r.children[1].getAttribute('scope')])).toEqual([['TH', 'row'], ['TH', 'row']]);
+    expect(body.children.map((r) => r.children[1].children[0].textContent)).toEqual(['Phantom', 'Brick You']);
     expect(body.children[1].classList.contains('is-mine')).toBe(true);
+    const tag = body.children[1].children[1].children[0].children[1];
+    expect([tag.className, tag.textContent]).toEqual(['res-you', 'You']);
     expect(body.children[0].children[0].textContent).toBe('1st');
     expect(body.children[0].children[1].children[1].textContent).toMatch(/^Heats: 3\.\d{3} {2}3\.\d{3}/);
     expect(lanesEl.children).toHaveLength(4);

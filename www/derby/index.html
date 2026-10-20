@@ -234,6 +234,15 @@
             <div id="bench-body" class="bench-body"></div>
         </div>
         <div class="bench-foot">
+            <!-- Turn the car (M7.1): the turntable a quarter turn on, for a
+                 keyboard, and for reduced motion, where it never turns by
+                 itself. A drag on the car turns it too. -->
+            <button id="bench-turn" class="bench-btn bench-turn" type="button" title="Turn the car" aria-label="Turn the car">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+                    <path d="M20 4v4.5h-4.5" />
+                </svg>
+            </button>
             <p id="bench-summary" class="bench-summary"></p>
             <button id="bench-race" class="go-btn" type="button">Race it</button>
         </div>

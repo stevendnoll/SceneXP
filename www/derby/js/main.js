@@ -29,7 +29,7 @@ import { runRace, explain, tuneupWorth } from './sim.min.js';
 import { buildTrack, carPose } from './track.min.js';
 import { buildHall } from './hall.min.js';
 import { buildCarMesh, wheelSpots } from './carmesh.min.js';
-import { buildWorkbench, benchFraming } from './workbench.min.js';
+import { buildWorkbench, benchFraming, quarterTurn } from './workbench.min.js';
 import { createGarage, canEnter, nameOf } from './garage.min.js';
 import { createBench } from './bench.min.js';
 import { createTools } from './tools.min.js';
@@ -49,7 +49,7 @@ import { createTimer, fillResults, h } from './board.min.js';
 import {
     EVENTS, UI, ENTRY, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock,
     gains, moreLine, sheetLines, trophyLine, harderLabel, HARDER, tuneupLines, WEIGH, ruleNote, CALLS, gateCall, COUNT,
-    CHALLENGE as CH, edgeWords, gapWords, tieLine
+    CHALLENGE as CH, edgeWords, gapWords, tieLine, SCENE
 } from './copy.min.js';
 import { decodeChallenge, isChallenge, challengeUrl, rivalName, biggestEdge, cleanFrom } from './challenge.min.js';
 import { nextPhase } from './phases.min.js';
@@ -117,9 +117,11 @@ const state = {
     /** The weigh-in under way (M5.2): { plan, entries, mine, how, t, said,
      *  failed }. */
     weigh: null,
-    /** The turntable's turn, and a drag turning it by hand. */
+    /** The turntable's turn, a drag turning it by hand, and the quarter
+     *  turn Turn the car is easing it to (null when none). */
     spin: 0,
     drag: null,
+    turnTo: null,
     /** How far Align has rolled the car off the turntable, meters. */
     benchOffset: 0,
     /** What the bench camera looks at: the car, or the family (M6.3). */
@@ -229,7 +231,7 @@ async function init() {
         'results-another', 'results-tune', 'results-harder', 'results-trophy', 'results-status', 'explore-link', 'sound-btn',
         'results-share', 'clip-modal', 'clip-title', 'clip-stage', 'clip-progress', 'clip-sound', 'clip-share', 'clip-image',
         'clip-again', 'clip-close', 'clip-status', 'bench', 'bench-title', 'bench-body', 'bench-host', 'bench-host-actions',
-        'bench-summary', 'bench-race', 'bench-status', 'results-tuneups', 'results-tuneups-heading', 'weighin-note', 'weighin-text',
+        'bench-summary', 'bench-race', 'bench-turn', 'bench-status', 'results-tuneups', 'results-tuneups-heading', 'weighin-note', 'weighin-text',
         'weighin-back', 'checkin-invite', 'results-challenge', 'challenge-modal', 'challenge-title', 'challenge-text',
         'challenge-from', 'challenge-link', 'challenge-send', 'challenge-copy', 'challenge-close', 'challenge-status']) {
         el[id] = document.getElementById(id);
@@ -509,6 +511,7 @@ function showCheckin() {
     setRaceChrome(false);
     buildCheckin();
     showInvite();
+    sceneLabel('checkin');
     if (el.blocker) el.blocker.classList.remove('hidden');
     stageCars(entriesFor(state.event));
     idleCamera();
@@ -545,11 +548,27 @@ function showBench(kind = 'back', tip = null) {
     setRaceChrome(false);
     if (el.blocker) el.blocker.classList.add('hidden');
     if (el.bench) el.bench.classList.remove('hidden');
+    sceneLabel('bench');
     bench.arrive(kind, { tip, last: garage.last() });
     showBenchCar(garage.bench());
     benchCamera();
     const title = el['bench-title'];
     if (title && typeof title.focus === 'function') title.focus({ preventScroll: true });
+}
+
+/** Turn the car (M7.1): the turntable a quarter turn on, to the car's next
+ *  side or end, for a keyboard (a drag is the only
+ *  other way) and for reduced motion, where it never turns by itself. Eased
+ *  there, or at once under reduced motion. */
+function turnCar() {
+    if (state.phase !== 'bench') return;
+    const to = quarterTurn(state.turnTo === null ? state.spin : state.turnTo);
+    if (state.reducedMotion) {
+        state.spin = to;
+        state.turnTo = null;
+    } else {
+        state.turnTo = to;
+    }
 }
 
 /** The car on the turntable, the sheet on the pegboard, the scale's
@@ -845,6 +864,7 @@ function beginRace(entries, how) {
     setRaceChrome(true);
     if (el['skip-btn']) el['skip-btn'].textContent = UI.skip;
     announce('');
+    sceneLabel('race');
     holdFocusOnScene();
     if (dances) state.day.finale = planFinale(state.day);
     track('race-start', { kind: state.event, outcome: `cars=${entries.map((e) => e.id).join('.')}&how=${how}` });
@@ -870,9 +890,18 @@ function startWeighIn(entries, how) {
         el['skip-btn'].classList.add('visible');
     }
     announce('');
+    sceneLabel('weighin');
     holdFocusOnScene();
     weighCamera();
     stepWeighIn(0);
+}
+
+/** The scene's name for a screen reader, as the day moves on (M7.1): the
+ *  canvas is a picture (role=img), and the scene holds focus through the
+ *  weigh-in and the race, so its name is what is heard there. */
+function sceneLabel(kind) {
+    const scene = el['game-canvas'];
+    if (scene && SCENE[kind]) scene.setAttribute('aria-label', SCENE[kind]);
 }
 
 /**
@@ -1457,6 +1486,7 @@ function showResults() {
     }
     const modal = el['results-modal'];
     if (modal) modal.classList.remove('hidden');
+    sceneLabel('results');
     const shares = (i) => day.race.standings.filter((j) => day.race.places[j] === day.race.places[i]).length > 1;
     const rows = day.race.standings.map((i) => ({ name: names[i], average: day.race.average[i], place: day.race.places[i], tied: shares(i) }));
     if (el['results-status']) el['results-status'].textContent = resultsSpoken(day.event, rows);
@@ -2077,7 +2107,9 @@ function setupEventListeners() {
     on('checkin-back', 'click', () => stepBack('checkin-back'));
     // The turntable turned by hand: a drag on the car's part of the screen.
     on('game-canvas', 'pointerdown', (e) => {
-        if (state.phase === 'bench') state.drag = { x: e.clientX };
+        if (state.phase !== 'bench') return;
+        state.drag = { x: e.clientX };
+        state.turnTo = null;
     });
     window.addEventListener('pointermove', (e) => {
         if (!state.drag) return;
@@ -2085,6 +2117,7 @@ function setupEventListeners() {
         state.drag.x = e.clientX;
     }, { signal });
     for (const type of ['pointerup', 'pointercancel']) window.addEventListener(type, () => { state.drag = null; }, { signal });
+    on('bench-turn', 'click', turnCar);
     on('results-share', 'click', openClip);
     on('results-challenge', 'click', openChallengeCard);
     on('challenge-send', 'click', sendChallenge);
@@ -2186,6 +2219,13 @@ function animate() {
             // The Cut turns the car side on to the camera first.
             const side = Math.round(state.spin / (2 * Math.PI)) * 2 * Math.PI;
             state.spin += (side - state.spin) * Math.min(1, dt * 8);
+            state.turnTo = null;
+        } else if (state.turnTo !== null) {
+            state.spin += (state.turnTo - state.spin) * Math.min(1, dt * 8);
+            if (Math.abs(state.turnTo - state.spin) < 1e-3) {
+                state.spin = state.turnTo;
+                state.turnTo = null;
+            }
         } else if (!state.reducedMotion && !state.drag) {
             state.spin += dt * CONFIG.workbench.spin;
         }

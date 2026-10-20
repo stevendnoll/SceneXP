@@ -19,6 +19,15 @@
 
 import { DERBY_CONFIG } from './config.min.js';
 
+/** The turntable's next quarter turn on from `spin` (radians): the car's
+ *  side, one end, its other side, the other end, always onward, so a
+ *  press from part way round lands on the next of the four and not back on
+ *  the one just left. */
+export function quarterTurn(spin) {
+    const q = Math.PI / 2;
+    return (Math.floor(spin / q + 1e-6) + 1) * q;
+}
+
 /**
  * Where the camera goes for the bench on a `width` by `height` screen with
  * the panel covering `panel` ({ side: 'left' | 'bottom' | 'none', size } in

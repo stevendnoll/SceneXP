@@ -11,7 +11,8 @@
  *
  * THE RESULTS BOARD is a real table (PRD, Accessibility): places, names,
  * the four-heat averages in big type, each heat's time small beneath, the
- * visitor's row lit, and each lane's average.
+ * visitor's row lit and tagged You (in words, not by its tint alone, M7.1),
+ * the car's name the row's header, and each lane's average.
  *
  * NO MARKUP FROM STRINGS. Car names will be the visitor's own (M3), so
  * every word goes in through textContent.
@@ -109,12 +110,16 @@ export function fillResults({ table, lanesEl, whyEl, whyHeading }, race, names, 
     const count = (p) => race.standings.filter((c) => places[c] === p).length;
     race.standings.forEach((car, i) => {
         const heats = race.heats.map((heat) => clock(heat[car].time)).join('  ');
+        const name = h('span', 'res-name', names[car]);
+        if (mine.has(car)) {
+            name.appendChild(document.createTextNode(' '));
+            name.appendChild(h('span', 'res-you', UI.you));
+        }
+        const header = h('th', 'col-car', null, [name, h('span', 'res-heats', `${UI.heats}: ${heats}`)]);
+        header.setAttribute('scope', 'row');
         const row = h('tr', mine.has(car) ? 'is-mine' : null, null, [
             h('td', 'col-place', count(places[car]) > 1 ? tiedPlace(places[car]) : placeWord(places[car])),
-            h('td', 'col-car', null, [
-                h('span', 'res-name', names[car]),
-                h('span', 'res-heats', `${UI.heats}: ${heats}`)
-            ]),
+            header,
             h('td', 'col-avg', clock(race.average[car]))
         ]);
         body.appendChild(row);

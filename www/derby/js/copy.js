@@ -172,6 +172,19 @@ export const UI = Object.freeze({
 });
 
 /**
+ * What the scene shows, as the day moves on: the canvas's name for a screen
+ * reader (M7.1), which hears it whenever the scene holds focus (the weigh-in
+ * and the race). The check-in's is the page's own, in index.html.
+ */
+export const SCENE = Object.freeze({
+    checkin: 'A four-lane aluminum derby track running down the length of a community hall, with wooden derby cars at the starting gate',
+    bench: 'Your derby car on a turntable at the workbench, with the rule sheet on the pegboard and the scale beside it',
+    weighin: 'The registration table at the derby, where a volunteer sets each of your cars on the scale',
+    race: 'The derby race on the four-lane track, with families cheering beside the lanes and a crowd in the bleachers',
+    results: 'The finish line after the race, with families cheering beside the track'
+});
+
+/**
  * The announcer (M6.5), a few more calls than M1's: the gate, a different
  * one each heat, the leader as the field comes off the slope, and a finish
  * by a nose.
