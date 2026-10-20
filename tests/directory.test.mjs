@@ -30,7 +30,7 @@ const CATEGORY_OF = {
     dad: 'personal', family: 'personal', roqui: 'personal', gavin: 'personal', jamar: 'personal',
     whitestone: 'business', automan: 'business', interstate: 'business', seedtoseed: 'business', sunnyvalejenn: 'business',
     steve: 'worlds', mandelbrot: 'worlds', earthdefense: 'worlds', highwater: 'worlds', garden: 'worlds',
-    xo: 'worlds', tornado: 'worlds', office: 'worlds', leaves: 'worlds',
+    xo: 'worlds', tornado: 'worlds', office: 'worlds', leaves: 'worlds', derby: 'worlds',
 };
 
 // THE MARKUP IS THE SOURCE OF TRUTH now that the catalog array is gone. Each
@@ -106,7 +106,7 @@ const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
 // 2026-10-06 and left at its release as Leaf Blower on 2026-10-09.
 // Whitestone Home Care joined at M0 on 2026-10-12, on the proto-1 branch.
 // Derby Day joined at M1 on 2026-10-19, its graybox race in the open.
-const UNRELEASED = ['starfall', 'derby'];
+const UNRELEASED = ['starfall'];
 
 const sceneSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true })
     .filter((d) => d.isDirectory() && !IGNORED_DIRS.includes(d.name))

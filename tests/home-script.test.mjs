@@ -11,7 +11,7 @@
  * with the slideshow's timer handed in so time is stepped by hand.
  */
 import { jest } from '@jest/globals';
-import { NEW_FOR_DAYS, SLIDE_SECONDS, isNew, markNewCards, initSpotlight } from '../www/js/home.js';
+import { NEW_FOR_DAYS, SLIDE_SECONDS, SWIPE, isNew, markNewCards, initSpotlight, swipeStep } from '../www/js/home.js';
 
 // ---- A small DOM ------------------------------------------------------------
 
@@ -279,6 +279,76 @@ describe('the spotlight', () => {
         spot.show(-1);
         expect(active(slides)).toBe(2);
         expect(spot.state.index).toBe(2);
+    });
+
+    test('arrows either side of the slides (Steve, 2026-10-20): named, before and after them in the tab order, back and on, wrapping round', () => {
+        const doc = makeDoc();
+        const { section, slides } = makeSpotlight(doc);
+        const timers = makeTimers();
+        initSpotlight(section, { doc, timers });
+        const kinds = section.children.map((c) => c.className.split(' ').pop());
+        expect(kinds).toEqual(['spotlight-prev', 'spotlight-slides', 'spotlight-next', 'spotlight-controls']);
+        const [prev, , next] = section.children;
+        expect(prev.tagName).toBe('BUTTON');
+        expect(prev.getAttribute('aria-label')).toBe('Previous world');
+        expect(next.getAttribute('aria-label')).toBe('Next world');
+        expect(prev.innerHTML).toContain('<svg');
+        // Back from the first is the last.
+        prev.click();
+        expect(active(slides)).toBe(2);
+        next.click();
+        expect(active(slides)).toBe(0);
+        next.click();
+        expect(active(slides)).toBe(1);
+        // A step starts the clock over, as a dot does.
+        const pending = timers.pending;
+        next.click();
+        expect(timers.pending).not.toBe(pending);
+        expect(timers.pending.ms).toBe(SLIDE_SECONDS * 1000);
+    });
+
+    test('a swipe across the slides on a touch screen: left for the next, right for the previous, a mouse and a scroll left alone', () => {
+        const doc = makeDoc();
+        const { section, slides } = makeSpotlight(doc);
+        initSpotlight(section, { doc, timers: makeTimers() });
+        const list = section.querySelector('.spotlight-slides');
+        const swipe = (pointerType, dx, dy) => {
+            list.fire('pointerdown', { pointerType, clientX: 200, clientY: 300 });
+            list.fire('pointerup', { pointerType, clientX: 200 + dx, clientY: 300 + dy });
+        };
+        swipe('touch', -80, 10);
+        expect(active(slides)).toBe(1);
+        swipe('pen', 90, -12);
+        expect(active(slides)).toBe(0);
+        swipe('touch', 90, 0);
+        expect(active(slides)).toBe(2);
+        // A mouse drag, a small move and a vertical scroll do nothing.
+        swipe('mouse', -120, 0);
+        swipe('touch', -20, 0);
+        swipe('touch', -60, 70);
+        expect(active(slides)).toBe(2);
+        // A cancelled touch is forgotten.
+        list.fire('pointerdown', { pointerType: 'touch', clientX: 200, clientY: 300 });
+        list.fire('pointercancel', {});
+        list.fire('pointerup', { pointerType: 'touch', clientX: 50, clientY: 300 });
+        expect(active(slides)).toBe(2);
+        // The swipe's own click does not follow the link; the next one does.
+        swipe('touch', -80, 0);
+        const first = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
+        list.fire('click', first);
+        expect(first.preventDefault).toHaveBeenCalled();
+        const later = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
+        list.fire('click', later);
+        expect(later.preventDefault).not.toHaveBeenCalled();
+    });
+
+    test('what counts as a swipe: far enough, and mostly across', () => {
+        expect(swipeStep(-SWIPE.distance, 0)).toBe(1);
+        expect(swipeStep(SWIPE.distance, 0)).toBe(-1);
+        expect(swipeStep(-(SWIPE.distance - 1), 0)).toBe(0);
+        expect(swipeStep(-60, 60 / SWIPE.ratio + 1)).toBe(0);
+        expect(swipeStep(-60, 60 / SWIPE.ratio - 1)).toBe(1);
+        expect(swipeStep(0, 200)).toBe(0);
     });
 
     test('a single slide is left alone', () => {

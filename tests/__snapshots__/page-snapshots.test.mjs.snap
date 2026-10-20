@@ -15,9 +15,9 @@ html [lang="en"]
     meta [content="Steve Noll" name="author"]
     title
       "Page Not Found | SceneXP"
-    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=6" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=5" rel="stylesheet"]
+    link [href="/css/site.min.css?v=6" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -421,9 +421,9 @@ html [lang="en"]
       }
     title
       "Contact | SceneXP"
-    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=6" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=5" rel="stylesheet"]
+    link [href="/css/site.min.css?v=6" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
     script [src="/js/contact.min.js?v=1" type="module"]
@@ -627,9 +627,9 @@ html [lang="en"]
       }
     title
       "Contribute | SceneXP"
-    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=6" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=5" rel="stylesheet"]
+    link [href="/css/site.min.css?v=6" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -1323,7 +1323,6 @@ html [data-ui-theme="ember" lang="en"]
     meta [content="width=device-width, initial-scale=1.0" name="viewport"]
     meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
-    meta [content="noindex, nofollow" name="robots"]
     meta [content="Carve a wooden derby car, weigh it, tune its axles and give it a name, then race it down a four-lane track against the neighbors' cars, timed to the thousandth, live in your browser." name="description"]
     meta [content="#1f4e8c" name="theme-color"]
     meta [content="Steve Noll" name="author"]
@@ -1352,6 +1351,7 @@ html [data-ui-theme="ember" lang="en"]
         "url": "https://www.scenexp.com/derby/",
         "name": "Derby Day",
         "image": "https://www.scenexp.com/derby/assets/og-derby.jpg?v=1",
+        "datePublished": "2026-10-20",
         "description": "A browser-based 3D derby car race. Build a wooden derby car on the workbench, carving its shape and choosing its paint, decals, name, weights and axle work, then race it down a four-lane aluminum track against the neighbors' cars, four heats with every car in every lane, timed to the thousandth of a second by real physics: weight, balance, axle friction and drag.",
         "genre": [
           "Racing",
@@ -1463,6 +1463,10 @@ html [data-ui-theme="ember" lang="en"]
           "Where the weight sits matters too. A car with its weight about three quarters of an inch in front of the rear axle keeps its center of mass higher up the slope for longer, so it has further to fall. Too far back and the front goes light, and the car wobbles."
         p
           "The shape matters least of the three a builder works hardest on, though a slim wedge still beats a plain block."
+        h2
+          "Challenge a friend"
+        p
+          "Send your car to a friend in a link. They race their own car against it, head to head, four heats with each car in every lane, and the physics runs the same on every device, so your car posts the same times on theirs. Nothing is uploaded: the car travels in the link itself."
         p
           "SceneXP is a home for 3D experiences that run right in your browser."
         nav [aria-label="Site sections"]
@@ -2957,54 +2961,60 @@ html [lang="en"]
               {
                 "@type": "ListItem",
                 "position": 1,
+                "url": "https://www.scenexp.com/derby/",
+                "name": "Derby Day"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
                 "url": "https://www.scenexp.com/leaves/",
                 "name": "Leaf Blower"
               },
               {
                 "@type": "ListItem",
-                "position": 2,
+                "position": 3,
                 "url": "https://www.scenexp.com/office/",
                 "name": "Corner Office"
               },
               {
                 "@type": "ListItem",
-                "position": 3,
+                "position": 4,
                 "url": "https://www.scenexp.com/tornado/",
                 "name": "Tornado Alley"
               },
               {
                 "@type": "ListItem",
-                "position": 4,
+                "position": 5,
                 "url": "https://www.scenexp.com/xo/",
                 "name": "X's and O's"
               },
               {
                 "@type": "ListItem",
-                "position": 5,
+                "position": 6,
                 "url": "https://www.scenexp.com/garden/",
                 "name": "Fractal Garden"
               },
               {
                 "@type": "ListItem",
-                "position": 6,
+                "position": 7,
                 "url": "https://www.scenexp.com/highwater/",
                 "name": "High Water"
               },
               {
                 "@type": "ListItem",
-                "position": 7,
+                "position": 8,
                 "url": "https://www.scenexp.com/earthdefense/",
                 "name": "Earth Defense"
               },
               {
                 "@type": "ListItem",
-                "position": 8,
+                "position": 9,
                 "url": "https://www.scenexp.com/mandelbrot/",
                 "name": "The Mandelbrot Set"
               },
               {
                 "@type": "ListItem",
-                "position": 9,
+                "position": 10,
                 "url": "https://www.scenexp.com/steve/",
                 "name": "Steve's Home Office"
               }
@@ -3090,12 +3100,12 @@ html [lang="en"]
       }
     title
       "SceneXP | 3D Worlds, Games, and Experiments"
-    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=6" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=5" rel="stylesheet"]
+    link [href="/css/site.min.css?v=6" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
-    script [src="/js/home.min.js?v=1" type="module"]
+    script [src="/js/home.min.js?v=2" type="module"]
   body
     a.skip-link [href="#main"]
       "Skip to main content"
@@ -3147,10 +3157,27 @@ html [lang="en"]
             h2#spotlight-heading
               "Featured"
             ul.spotlight-slides
-              li.spotlight-slide.is-active [aria-label="1 of 3" aria-roledescription="slide" data-slug="leaves"]
+              li.spotlight-slide.is-active [aria-label="1 of 3" aria-roledescription="slide" data-slug="derby"]
+                a [href="/derby/"]
+                  div.spotlight-media
+                    img [alt="Four wooden derby cars in blue, yellow, green and orange crossing a checkered finish line side by side, seen from above in a photo finish." decoding="async" fetchpriority="high" height="630" loading="eager" src="/derby/assets/og-derby.webp?v=1" width="1200"]
+                  div.spotlight-body
+                    p.spotlight-date
+                      "Released"
+                      time [datetime="2026-10-20"]
+                        "October 20, 2026"
+                    p.experience-eyebrow
+                      "A wooden derby car race"
+                    h3
+                      "Derby Day"
+                    p.spotlight-text
+                      "Carve a wooden derby car, tune its axles and race it down a four-lane track. Then send it to a friend and see whose car is faster."
+                    span.experience-cta
+                      "Build your car →"
+              li.spotlight-slide [aria-label="2 of 3" aria-roledescription="slide" data-slug="leaves"]
                 a [href="/leaves/"]
                   div.spotlight-media
-                    img [alt="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding." decoding="async" fetchpriority="high" height="630" loading="eager" src="/leaves/assets/og-leaves.webp?v=1" width="1200"]
+                    img [alt="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding." decoding="async" height="630" loading="lazy" src="/leaves/assets/og-leaves.webp?v=1" width="1200"]
                   div.spotlight-body
                     p.spotlight-date
                       "Released"
@@ -3164,23 +3191,6 @@ html [lang="en"]
                       "Twelve thousand autumn leaves and a leaf blower. Blow them onto the tarp before the clock runs out, then take a running dive into the pile."
                     span.experience-cta
                       "Grab the leaf blower →"
-              li.spotlight-slide [aria-label="2 of 3" aria-roledescription="slide" data-slug="office"]
-                a [href="/office/"]
-                  div.spotlight-media
-                    img [alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond." decoding="async" height="630" loading="lazy" src="/office/assets/og-office.webp?v=1" width="1200"]
-                  div.spotlight-body
-                    p.spotlight-date
-                      "Released"
-                      time [datetime="2026-09-28"]
-                        "September 28, 2026"
-                    p.experience-eyebrow
-                      "A job search tracker in a 3D office"
-                    h3
-                      "Corner Office"
-                    p.spotlight-text
-                      "A working job search tracker in a corner office forty floors above the bay. Every application you send earns a firework over the water."
-                    span.experience-cta
-                      "Step into the office →"
               li.spotlight-slide [aria-label="3 of 3" aria-roledescription="slide" data-slug="garden"]
                 a [href="/garden/"]
                   div.spotlight-media
@@ -3202,6 +3212,22 @@ html [lang="en"]
             h2#worlds-and-games
               "Worlds and games"
             ul.experience-grid
+              li.experience-card [data-slug="derby"]
+                a [href="/derby/"]
+                  img [alt="Four wooden derby cars in blue, yellow, green and orange crossing a checkered finish line side by side, seen from above in a photo finish." decoding="async" height="630" loading="lazy" src="/derby/assets/og-derby.webp?v=1" width="1200"]
+                  div.experience-card-body
+                    p.experience-eyebrow
+                      "A wooden derby car race"
+                    h3
+                      "Derby Day"
+                    p
+                      "Carve a wooden derby car on the workbench, weigh it, tune its axles and give it a name, then race it down a four-lane track against the neighbors' cars, timed to the thousandth by real physics. Send your car to a friend and race head to head."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-10-20"]
+                        "October 20, 2026"
+                    span.experience-cta
+                      "Build your car →"
               li.experience-card [data-slug="leaves"]
                 a [href="/leaves/"]
                   img [alt="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding." decoding="async" height="630" loading="lazy" src="/leaves/assets/og-leaves.webp?v=1" width="1200"]
@@ -5437,9 +5463,9 @@ html [lang="en"]
       }
     title
       "Privacy | SceneXP"
-    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=6" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=5" rel="stylesheet"]
+    link [href="/css/site.min.css?v=6" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body
@@ -6970,9 +6996,9 @@ html [lang="en"]
       }
     title
       "Terms | SceneXP"
-    link [as="style" href="/css/site.min.css?v=5" rel="preload"]
+    link [as="style" href="/css/site.min.css?v=6" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
-    link [href="/css/site.min.css?v=5" rel="stylesheet"]
+    link [href="/css/site.min.css?v=6" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
   body

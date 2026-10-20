@@ -71,7 +71,7 @@ const WITHHELD_CARDS = ['www/interstate/index.html', 'www/seedtoseed/index.html'
 // left with its release on 2026-10-16.
 // Derby Day (2026-10-19, M1 graybox) waits for its card until the hall is
 // dressed and the look approved (M7).
-const PENDING_CARDS = ['www/starfall/index.html', 'www/derby/index.html'];
+const PENDING_CARDS = ['www/starfall/index.html'];
 
 /** Pages reached only through a link somebody shares, never by browsing.
  *  They carry full preview tags, so the link looks right in a message, and

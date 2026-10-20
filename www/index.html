@@ -111,54 +111,60 @@
             {
               "@type": "ListItem",
               "position": 1,
+              "url": "https://www.scenexp.com/derby/",
+              "name": "Derby Day"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
               "url": "https://www.scenexp.com/leaves/",
               "name": "Leaf Blower"
             },
             {
               "@type": "ListItem",
-              "position": 2,
+              "position": 3,
               "url": "https://www.scenexp.com/office/",
               "name": "Corner Office"
             },
             {
               "@type": "ListItem",
-              "position": 3,
+              "position": 4,
               "url": "https://www.scenexp.com/tornado/",
               "name": "Tornado Alley"
             },
             {
               "@type": "ListItem",
-              "position": 4,
+              "position": 5,
               "url": "https://www.scenexp.com/xo/",
               "name": "X's and O's"
             },
             {
               "@type": "ListItem",
-              "position": 5,
+              "position": 6,
               "url": "https://www.scenexp.com/garden/",
               "name": "Fractal Garden"
             },
             {
               "@type": "ListItem",
-              "position": 6,
+              "position": 7,
               "url": "https://www.scenexp.com/highwater/",
               "name": "High Water"
             },
             {
               "@type": "ListItem",
-              "position": 7,
+              "position": 8,
               "url": "https://www.scenexp.com/earthdefense/",
               "name": "Earth Defense"
             },
             {
               "@type": "ListItem",
-              "position": 8,
+              "position": 9,
               "url": "https://www.scenexp.com/mandelbrot/",
               "name": "The Mandelbrot Set"
             },
             {
               "@type": "ListItem",
-              "position": 9,
+              "position": 10,
               "url": "https://www.scenexp.com/steve/",
               "name": "Steve's Home Office"
             }
@@ -246,16 +252,16 @@
 
     <title>SceneXP | 3D Worlds, Games, and Experiments</title>
 
-    <link rel="preload" href="/css/site.min.css?v=5" as="style">
+    <link rel="preload" href="/css/site.min.css?v=6" as="style">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="/css/site.min.css?v=5">
+    <link rel="stylesheet" href="/css/site.min.css?v=6">
 
     <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
     <script src="/js/theme.min.js?v=1"></script>
     <script src="/js/nav.min.js?v=1" defer></script>
     <!-- The spotlight slideshow and the "New" badges. A module, so it runs after
          the page has parsed, and the page is complete without it. -->
-    <script type="module" src="/js/home.min.js?v=1"></script>
+    <script type="module" src="/js/home.min.js?v=2"></script>
 </head>
 
 <body>
@@ -368,10 +374,25 @@
                     aria-roledescription="carousel">
                     <h2 id="spotlight-heading">Featured</h2>
                     <ul class="spotlight-slides">
-                        <li class="spotlight-slide is-active" data-slug="leaves" aria-roledescription="slide" aria-label="1 of 3">
+                        <li class="spotlight-slide is-active" data-slug="derby" aria-roledescription="slide" aria-label="1 of 3">
+                            <a href="/derby/">
+                                <div class="spotlight-media">
+                                    <img src="/derby/assets/og-derby.webp?v=1" width="1200" height="630" loading="eager" fetchpriority="high" decoding="async"
+                                        alt="Four wooden derby cars in blue, yellow, green and orange crossing a checkered finish line side by side, seen from above in a photo finish.">
+                                </div>
+                                <div class="spotlight-body">
+                                    <p class="spotlight-date">Released <time datetime="2026-10-20">October 20, 2026</time></p>
+                                    <p class="experience-eyebrow">A wooden derby car race</p>
+                                    <h3>Derby Day</h3>
+                                    <p class="spotlight-text">Carve a wooden derby car, tune its axles and race it down a four-lane track. Then send it to a friend and see whose car is faster.</p>
+                                    <span class="experience-cta">Build your car →</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="spotlight-slide" data-slug="leaves" aria-roledescription="slide" aria-label="2 of 3">
                             <a href="/leaves/">
                                 <div class="spotlight-media">
-                                    <img src="/leaves/assets/og-leaves.webp?v=1" width="1200" height="630" loading="eager" fetchpriority="high" decoding="async"
+                                    <img src="/leaves/assets/og-leaves.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
                                         alt="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding.">
                                 </div>
                                 <div class="spotlight-body">
@@ -380,21 +401,6 @@
                                     <h3>Leaf Blower</h3>
                                     <p class="spotlight-text">Twelve thousand autumn leaves and a leaf blower. Blow them onto the tarp before the clock runs out, then take a running dive into the pile.</p>
                                     <span class="experience-cta">Grab the leaf blower →</span>
-                                </div>
-                            </a>
-                        </li>
-                        <li class="spotlight-slide" data-slug="office" aria-roledescription="slide" aria-label="2 of 3">
-                            <a href="/office/">
-                                <div class="spotlight-media">
-                                    <img src="/office/assets/og-office.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
-                                        alt="A white desk with a computer and a slim lamp in a corner office high over a city at sunset, floor-to-ceiling windows looking past glass towers to the bay, the sun glittering on the water and snowy mountains beyond.">
-                                </div>
-                                <div class="spotlight-body">
-                                    <p class="spotlight-date">Released <time datetime="2026-09-28">September 28, 2026</time></p>
-                                    <p class="experience-eyebrow">A job search tracker in a 3D office</p>
-                                    <h3>Corner Office</h3>
-                                    <p class="spotlight-text">A working job search tracker in a corner office forty floors above the bay. Every application you send earns a firework over the water.</p>
-                                    <span class="experience-cta">Step into the office →</span>
                                 </div>
                             </a>
                         </li>
@@ -441,6 +447,22 @@
                     aria-labelledby="worlds-and-games">
                     <h2 id="worlds-and-games">Worlds and games</h2>
                     <ul class="experience-grid">
+                        <li class="experience-card" data-slug="derby">
+                            <a href="/derby/">
+                                <img src="/derby/assets/og-derby.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
+                                    alt="Four wooden derby cars in blue, yellow, green and orange crossing a checkered finish line side by side, seen from above in a photo finish.">
+                                <div class="experience-card-body">
+                                    <p class="experience-eyebrow">A wooden derby car race</p>
+                                    <h3>Derby Day</h3>
+                                    <p>Carve a wooden derby car on the workbench, weigh it, tune its axles
+                                        and give it a name, then race it down a four-lane track against the
+                                        neighbors' cars, timed to the thousandth by real physics. Send your
+                                        car to a friend and race head to head.</p>
+                                    <p class="experience-date">Released <time datetime="2026-10-20">October 20, 2026</time></p>
+                                    <span class="experience-cta">Build your car →</span>
+                                </div>
+                            </a>
+                        </li>
                         <li class="experience-card" data-slug="leaves">
                             <a href="/leaves/">
                                 <img src="/leaves/assets/og-leaves.webp?v=1" width="1200" height="630" loading="lazy" decoding="async"
