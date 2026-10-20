@@ -1070,6 +1070,145 @@ body {
     }
 }
 
+/* ---- The workshop (M4) ------------------------------------------------------
+   The pencil-line editor: the drawing (SVG, twice as tall as the block) and
+   its points over it, each a slider. A point's dot is small, its reach is
+   bigger, so a finger finds it. touch-action: none so a drag moves the
+   point, not the panel. */
+
+.carve {
+    position: relative;
+    aspect-ratio: 700 / 250;
+    margin: 0.75rem 14px 0.6rem;
+}
+
+.carve.is-top {
+    aspect-ratio: 700 / 350;
+}
+
+.carve-svg,
+.carve-area {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.carve-svg {
+    overflow: visible;
+}
+
+.carve-block {
+    fill: rgba(255, 255, 255, 0.04);
+    stroke: rgba(255, 255, 255, 0.35);
+    stroke-dasharray: 6 5;
+    vector-effect: non-scaling-stroke;
+}
+
+.carve-car {
+    fill: #c99a5e;
+}
+
+.carve-line {
+    fill: none;
+    stroke: #ffd36e;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+}
+
+.carve-axle {
+    fill: #2b2420;
+    stroke: #f2c230;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+}
+
+.carve-axle-line {
+    stroke: #f2c230;
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+    vector-effect: non-scaling-stroke;
+}
+
+.carve-handle {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border: 3px solid #3a7be8;
+    border-radius: 999px;
+    background: #fff;
+    box-sizing: border-box;
+    transform: translate(-50%, -50%);
+    touch-action: none;
+    cursor: ns-resize;
+}
+
+.carve-handle::before {
+    content: "";
+    position: absolute;
+    inset: -11px;
+}
+
+.carve-handle.is-bottom {
+    border-color: #e8609c;
+}
+
+.carve-handle.is-width {
+    border-color: #39b54a;
+}
+
+.carve-handle.is-held {
+    border-style: dotted;
+}
+
+.carve-handle:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+}
+
+.bench-btn[aria-disabled="true"].is-strong {
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+.bench-fields {
+    display: grid;
+    grid-template-columns: 1fr 7rem;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.bench-field {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.bench-field input {
+    width: 100%;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    background: #1d1814;
+    color: #f6efe6;
+    font: inherit;
+    box-sizing: border-box;
+}
+
+.bench-field input:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 1px;
+}
+
+.livery-preview {
+    display: block;
+    width: 100%;
+    aspect-ratio: 700 / 125;
+    margin: 0.4rem 0 0.6rem;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    touch-action: none;
+    cursor: grab;
+}
+
 /* ---- Check-in and results, M3 additions ---------------------------------- */
 
 .checkin-back-row {

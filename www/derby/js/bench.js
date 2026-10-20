@@ -6,6 +6,10 @@
  * and the car's figures checked live, and the settings. The host speaks at
  * the top, and Race it waits at the bottom (PRD, Time to first race).
  *
+ * THE WORKSHOP (M4) joins in two sections of its own modules: drawing your
+ * own shape, the Cut and the sanding in Shape (carve.js), and the name, the
+ * number and the decals in Decals and name (livery.js).
+ *
  * BUILT ONCE, UPDATED IN PLACE. Every control is made when the bench opens
  * and only its state changes after, so a tap or a key never loses its
  * place: focus stays on the pocket just filled, the scroll where it was.
@@ -30,9 +34,12 @@ import { DERBY_CONFIG, IN, OZ } from './config.min.js';
 import { describeCar, checkRules } from './car.min.js';
 import { pocketsOf, roomLeft, holdsTungsten, addWeight, removeWeight, fitWeights } from './weights.min.js';
 import { weighAuto, newCar } from './garage.min.js';
+import { stationsFrom } from './profile.min.js';
+import { createCarver } from './carve.min.js';
+import { createLivery } from './livery.min.js';
 import * as U from './units.min.js';
 import {
-    UI, POLISH, SAY, ruleNote, RULE_NAMES, bestLine, trophyList, hostFirst, hostBack, hostStep, hostTune, FIX_SECTION
+    UI, POLISH, SAND, SAY, ruleNote, RULE_NAMES, bestLine, trophyList, hostFirst, hostBack, hostStep, hostTune, FIX_SECTION
 } from './copy.min.js';
 import { h } from './board.min.js';
 
@@ -106,7 +113,9 @@ const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
  * The bench, in the elements main.js found (`el`: bench-body, bench-host,
  * bench-host-actions, bench-summary, bench-race, bench-status). `hooks`:
  * changed(build), race(build), units(units), forgot(build), raceAgain(event),
- * track(action, params). Returns { build, update, arrive, say, openBox }.
+ * track(action, params), and for the workshop draft(carve | null),
+ * cut(from, to, done) and sand(build). Returns { build, update, arrive,
+ * say, openBox }.
  */
 export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}) {
     let build = garage.bench();
@@ -197,7 +206,19 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
             if (input.checked) setDesign(id);
         }, 'chip'));
         shape.body.appendChild(group(UI.shape, ui.designs.map((d) => d.wrap), 'chips'));
+        ui.carver = createCarver(shape.body, {
+            ...kit(),
+            onDraft: (d) => hooks.draft && hooks.draft(d),
+            onCut: cut,
+            onSand: sand
+        }, C);
         body.appendChild(shape.d);
+
+        // Decals and name (M4.5).
+        const livery = box('livery', UI.livery, false);
+        ui.liverySum = livery.sum;
+        ui.livery = createLivery(livery.body, kit(), C);
+        body.appendChild(livery.d);
 
         // Paint.
         const paint = box('paint', UI.paint, true);
@@ -322,7 +343,7 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
         settings.body.appendChild(h('p', 'bench-help', 'Your cars, their results and your trophies are kept in this browser only, never sent anywhere.'));
         body.appendChild(settings.d);
 
-        ui.boxes = { shape: shape.d, paint: paint.d, weights: weights.d, axles: axles.d, rules: rules.d, settings: settings.d };
+        ui.boxes = { shape: shape.d, livery: livery.d, paint: paint.d, weights: weights.d, axles: axles.d, rules: rules.d, settings: settings.d };
 
         const more = h('p', 'checkin-more', null, [h('a', 'checkin-explore', UI.explore)]);
         more.children[0].id = 'bench-explore';
@@ -381,8 +402,23 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
         ui.best.textContent = bestLine(name, garage.results(build.id));
         ui.trophies.textContent = trophyList(garage.trophies());
 
-        for (const d of ui.designs) d.input.checked = d.input.value === build.design;
-        ui.shapeSum.textContent = C.designs[build.design].label;
+        // A carved car is its own shape: no starting design is chosen, so
+        // any of them, its own first design too, starts a fresh block.
+        for (const d of ui.designs) d.input.checked = !build.carve && d.input.value === build.design;
+        ui.shapeSum.textContent = build.carve ? `Your own, from a ${C.designs[build.design].label}` : C.designs[build.design].label;
+        // The pencil starts again on a different car, or a newly cut one.
+        const shapeKey = `${build.id}:${build.design}:${JSON.stringify(build.carve)}`;
+        if (shapeKey !== ui.shapeKey) {
+            ui.shapeKey = shapeKey;
+            ui.carver.reset(build);
+            if (hooks.draft) hooks.draft(null);
+        } else {
+            ui.carver.update();
+        }
+        ui.livery.update();
+        const dressed = [build.name ? `“${build.name}”` : '', build.number !== null ? `No. ${build.number}` : '',
+            build.decals.length ? `${build.decals.length} ${build.decals.length === 1 ? 'decal' : 'decals'}` : ''].filter(Boolean);
+        ui.liverySum.textContent = dressed.length ? dressed.join(', ') : 'None yet';
 
         const named = C.paint.colors.find((c) => c.color === build.paint.body);
         for (const s of ui.bodyColors) s.input.checked = Boolean(named) && s.input.value === named.id;
@@ -477,9 +513,55 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
         if (line) say(line);
     }
 
+    /** What carve.js and livery.js are handed: the helpers and the build. */
+    function kit() {
+        return {
+            h, choice, group, button, listen, units, garage,
+            build: () => build,
+            commit, say, status,
+            track: hooks.track
+        };
+    }
+
+    /** New weights for a new shape: Auto-weigh again, or keep by hand what
+     *  still has a pocket. Returns { next, dropped }. */
+    function reweigh(next) {
+        if (next.ballast === 'auto') return { next: weighAuto(next, C), dropped: 0 };
+        const f = fitWeights(next, C);
+        return { next: { ...next, weights: f.weights }, dropped: f.dropped };
+    }
+
+    /** Cut along the line (M4.3): the cut car kept at once, the saw and the
+     *  falling offcuts played by main.js, the host's word when they land. */
+    function cut(carve) {
+        armed = null;
+        const from = build;
+        const { next, dropped } = reweigh({ ...build, carve, stations: stationsFrom(carve, C) });
+        build = garage.save(next) || next;
+        update();
+        say(SAY.cutting);
+        const massText = U.mass(describeCar(build, C).mass, units());
+        const line = build.ballast === 'auto' ? SAY.cutAuto(massText) : SAY.cutHand(dropped, massText);
+        const done = () => say(line);
+        if (hooks.cut) hooks.cut(from, build, done);
+        else {
+            hooks.changed(build);
+            done();
+        }
+        hooks.track('bench', { kind: 'cut', outcome: build.ballast });
+    }
+
+    /** The sanding slider (M4.4): its step kept, the block played when it
+     *  is let go. */
+    function sand(value, final) {
+        commit({ ...build, tune: { ...build.tune, sand: value } }, final ? SAY.sanded(SAND[Math.round(value * 4)]) : null, { keep: final });
+        if (final && hooks.sand) hooks.sand(build);
+        if (final) hooks.track('bench', { kind: 'sand', outcome: String(Math.round(value * 4)) });
+    }
+
     function setDesign(id) {
-        if (id === build.design) return;
-        let next = { ...build, design: id, stations: C.designs[id].stations.map((s) => [...s]) };
+        if (id === build.design && !build.carve) return;
+        let next = { ...build, design: id, carve: null, stations: C.designs[id].stations.map((s) => [...s]) };
         let line;
         if (next.ballast === 'auto') {
             next = weighAuto(next, C);

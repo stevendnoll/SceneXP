@@ -6,8 +6,12 @@
  *
  * A BUILD IS PLAIN DATA (PLANNING, The data), versioned `v: 1`:
  *
- *   { v, id, name, number, design, rules, stations, plan, weights, ballast,
- *     tune, paint: { body, stripe, finish }, decals }
+ *   { v, id, name, number, design, carve, rules, stations, weights,
+ *     ballast, tune, paint: { body, stripe, finish }, decals }
+ *
+ * A CARVED CAR (M4) keeps its pencil line, `carve` (profile.js), and its
+ * stations are always cut from it here, so the two can never disagree. A
+ * car with no carve is its starting design's shape.
  *
  * `normalizeBuild` makes anything stored valid, field by field, clamped to
  * the block, the way cast.normalizeChoice does: a stale garage, a hand-
@@ -27,6 +31,8 @@ import { DERBY_CONFIG } from './config.min.js';
 import { buildFromDesign, describeCar, isLegal } from './car.min.js';
 import { autoWeighPockets, autoTarget } from './weights.min.js';
 import { normalizeUnits } from './units.min.js';
+import { isCarve, clampCarve, stationsFrom } from './profile.min.js';
+import { normalizeDecals } from './decals.min.js';
 
 export const KEYS = Object.freeze({ garage: 'derby-garage', settings: 'derby-settings', trophies: 'derby-trophies' });
 
@@ -95,16 +101,17 @@ export function normalizeBuild(raw, C = DERBY_CONFIG, { rand = Math.random } = {
     const t = raw.tune && typeof raw.tune === 'object' ? raw.tune : {};
     const p = raw.paint && typeof raw.paint === 'object' ? raw.paint : {};
     const first = C.paint.colors.find((c) => c.id === C.bench.newColors[0]) || C.paint.colors[0];
+    const carve = isCarve(raw.carve, C) ? clampCarve(raw.carve, C) : null;
     return {
         v: 1,
         id: typeof raw.id === 'string' && /^[a-z0-9]{4,16}$/.test(raw.id) ? raw.id : newId(rand),
         name: cleanName(raw.name),
         number: Number.isInteger(raw.number) && raw.number >= 0 && raw.number <= 99 ? raw.number : null,
         design,
+        carve,
         rules: raw.rules === 'outlaw' ? 'outlaw' : 'standard',
-        stations: normalizeStations(raw.stations, C) || C.designs[design].stations.map((s) => [...s]),
-        // The top profile joins in M4 (PLANNING): none yet, full width.
-        plan: null,
+        // The top profile is the stations' width column (profile.js).
+        stations: carve ? stationsFrom(carve, C) : (normalizeStations(raw.stations, C) || C.designs[design].stations.map((s) => [...s])),
         weights: normalizeWeights(raw.weights, C),
         ballast: raw.ballast === 'hand' ? 'hand' : 'auto',
         tune: {
@@ -119,8 +126,7 @@ export function normalizeBuild(raw, C = DERBY_CONFIG, { rand = Math.random } = {
             stripe: isColor(p.stripe) ? p.stripe : null,
             finish: Object.prototype.hasOwnProperty.call(C.paint.finishes, p.finish) ? p.finish : 'gloss'
         },
-        // Decals arrive with the workshop (M4).
-        decals: []
+        decals: normalizeDecals(raw.decals, C)
     };
 }
 

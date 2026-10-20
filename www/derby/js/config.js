@@ -332,6 +332,44 @@ export const DERBY_CONFIG = Object.freeze({
         })
     }),
 
+    /**
+     * The workshop (M4, PRD Shaping the body): a builder draws a pencil
+     * line on the block's side and its top, and the coping saw cuts along
+     * it. The line passes through a point an inch (`grid`), each moved up
+     * or down only, joined by a curve that never overshoots its points, so
+     * a limit kept at the points is kept everywhere (profile.js).
+     *
+     * AROUND EACH AXLE SLOT the wood stays whole: within `slot` of an axle
+     * the bottom stays flat, the width stays the block's (the wheels mount
+     * on its sides), and the top stays at least `axleWood` above the
+     * bottom. The points either side of a slot are held to that.
+     */
+    workshop: Object.freeze({
+        grid: Object.freeze([0, 1, 2, 3, 4, 5, 6, 7]),
+        slot: 0.25,
+        axleWood: 0.45,
+        /** The body's least height and width anywhere, inches. */
+        minThickness: 0.15,
+        minWidth: 0.5,
+        /** A cut car's profile is sampled this often for the physics. */
+        sample: 0.125,
+        /** An arrow key moves a point this far, Page Up and Down further. */
+        step: 0.0625,
+        bigStep: 0.25,
+        /** The editor draws the block this many times taller than it is,
+         *  so a finger has room (the turntable shows it true). */
+        stretch: 2,
+        /** Sanding rounds every long edge, up to this radius in inches at
+         *  full sanding. The wood rounded off comes off the car's mass. */
+        round: 0.12,
+        /** The Cut, in seconds: the car turns side on, the saw runs along
+         *  the line, the offcuts fall. Then the sanding block's rubbing. */
+        cut: Object.freeze({ turn: 0.5, saw: 2.4, fall: 0.9 }),
+        sandSeconds: 1.4,
+        /** Decals a car may carry (M4.5). */
+        maxDecals: 6
+    }),
+
     /** Paint (M3, PRD Paint and decals): the palette, named as a car's name
      *  says it ("Blue Wedge"), and the three finishes. */
     paint: Object.freeze({
@@ -495,7 +533,11 @@ export const DERBY_CONFIG = Object.freeze({
         roll: Object.freeze({ gain: 0.26, hz: 900, q: 0.8, top: 3200 }),
         gate: Object.freeze({ gain: 0.5, clickHz: 2400, thunkHz: 150, seconds: 0.14 }),
         beep: Object.freeze({ gain: 0.16, hz: 1568, seconds: 0.09 }),
-        cheer: Object.freeze({ gain: 0.34, hz: 1300, q: 0.6, attack: 0.25, decay: 2.4, clapHz: 7 })
+        cheer: Object.freeze({ gain: 0.34, hz: 1300, q: 0.6, attack: 0.25, decay: 2.4, clapHz: 7 }),
+        /** The workshop (M4): the coping saw's rasp, a stroke a fifth of a
+         *  second, and the sandpaper's hush, slower. */
+        saw: Object.freeze({ gain: 0.22, hz: 2200, q: 1.4, strokeHz: 5 }),
+        sand: Object.freeze({ gain: 0.16, hz: 4200, q: 0.7, strokeHz: 2.1 })
     }),
 
     look: Object.freeze({

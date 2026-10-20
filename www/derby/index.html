@@ -17,7 +17,7 @@
          the site until its release (tests/directory.test.mjs UNRELEASED,
          tests/page-rules.test.mjs PENDING_CARDS). -->
     <meta name="robots" content="noindex, nofollow">
-    <meta name="description" content="Build a wooden derby car, weigh it and tune its axles, then race it down a four-lane track against the neighbors' cars, timed to the thousandth, live in your browser.">
+    <meta name="description" content="Carve a wooden derby car, weigh it, tune its axles and give it a name, then race it down a four-lane track against the neighbors' cars, timed to the thousandth, live in your browser.">
     <meta name="theme-color" content="#1f4e8c">
     <meta name="author" content="Steve Noll">
 
@@ -58,7 +58,7 @@
       "url": "https://www.scenexp.com/derby/",
       "name": "Derby Day",
       "image": "https://www.scenexp.com/derby/assets/og-derby.jpg?v=1",
-      "description": "A browser-based 3D derby car race. Build a wooden derby car on the workbench, choosing its shape, paint, weights and axle work, then race it down a four-lane aluminum track against the neighbors' cars, four heats with every car in every lane, timed to the thousandth of a second by real physics: weight, balance, axle friction and drag.",
+      "description": "A browser-based 3D derby car race. Build a wooden derby car on the workbench, carving its shape and choosing its paint, decals, name, weights and axle work, then race it down a four-lane aluminum track against the neighbors' cars, four heats with every car in every lane, timed to the thousandth of a second by real physics: weight, balance, axle friction and drag.",
       "genre": ["Racing", "Simulation"],
       "gamePlatform": "Web browser",
       "applicationCategory": "Game",
@@ -104,7 +104,7 @@
     <title>Derby Day | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=3" as="style">
+    <link rel="preload" href="css/experience.min.css?v=4" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -117,6 +117,9 @@
     <link rel="modulepreload" href="js/workbench.min.js">
     <link rel="modulepreload" href="js/garage.min.js">
     <link rel="modulepreload" href="js/bench.min.js">
+    <link rel="modulepreload" href="js/tools.min.js">
+    <link rel="modulepreload" href="js/profile.min.js">
+    <link rel="modulepreload" href="js/weights.min.js">
     <link rel="modulepreload" href="js/units.min.js">
     <link rel="modulepreload" href="js/playback.min.js">
     <link rel="modulepreload" href="js/director.min.js">
@@ -129,13 +132,15 @@
     <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
-    <link rel="modulepreload" href="js/weights.min.js">
+    <link rel="modulepreload" href="js/decals.min.js">
+    <link rel="modulepreload" href="js/carve.min.js">
+    <link rel="modulepreload" href="js/livery.min.js">
     <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=3">
+    <link rel="stylesheet" href="css/experience.min.css?v=4">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -154,8 +159,9 @@
         <div class="noscript-fallback">
             <h1>Derby Day</h1>
             <p>This is a wooden derby car race, and it needs JavaScript to run.
-                You build your car on a workbench, choosing its shape, its
-                paint, where its weights go and how its axles are tuned. Then
+                You build your car on a workbench: you draw its shape on the
+                block and cut it out, sand it, paint it, name it, and choose
+                where its weights go and how its axles are tuned. Then
                 it lines up at the top of a four-lane aluminum track
                 against three of the neighbors' cars, and races four heats so
                 every car runs in every lane. The times are averaged, and the

@@ -24,7 +24,7 @@
  */
 
 import { DERBY_CONFIG, IN, OZ } from './config.min.js';
-import { describeCar, buildFromDesign, buildFromField } from './car.min.js';
+import { describeCar, buildFromDesign, buildFromField, profileAt } from './car.min.js';
 import { runRace, explain } from './sim.min.js';
 import { buildTrack, carPose } from './track.min.js';
 import { buildHall } from './hall.min.js';
@@ -32,6 +32,9 @@ import { buildCarMesh } from './carmesh.min.js';
 import { buildWorkbench, benchFraming } from './workbench.min.js';
 import { createGarage, canEnter } from './garage.min.js';
 import { createBench } from './bench.min.js';
+import { createTools } from './tools.min.js';
+import { curvesOf } from './profile.min.js';
+import { bestBalance } from './weights.min.js';
 import * as U from './units.min.js';
 import { planDay, momentAt, positionAt } from './playback.min.js';
 import { shotFor, framing } from './director.min.js';
@@ -97,6 +100,11 @@ let garage;
 let bench;
 let workbench;
 let benchMesh = null;
+/** On the turntable, in the car's own frame: the car, the pencil line, the
+ *  saw and the sanding block (M4). */
+let holder = null;
+let tools = null;
+let pencil = null;
 let cleanupController = null;
 const el = {};
 
@@ -188,6 +196,11 @@ async function init() {
     scene.add(trackParts.group);
     workbench = buildWorkbench(CONFIG);
     scene.add(workbench.group);
+    holder = new THREE.Group();
+    holder.position.set(CONFIG.kit.length / 2, 0, 0);
+    workbench.spinner.add(holder);
+    tools = createTools(CONFIG, { saw: (s) => sound.work('saw', s), sand: (s) => sound.work('sand', s) });
+    holder.add(tools.group);
     timer = createTimer(el.timer);
     // The cars waiting at the pin behind the check-in card: the visitor's
     // chosen car and the first division's, so the track is not empty.
@@ -216,6 +229,15 @@ async function init() {
             showCheckin();
             startRace('host');
         },
+        draft: drawPencil,
+        cut: (from, to, done) => {
+            drawPencil(null);
+            tools.cut({
+                from: from.stations, to: to.stations, color: from.paint.body, reducedMotion: state.reducedMotion,
+                swap: () => showBenchCar(to), done
+            });
+        },
+        sand: (b) => tools.sand({ stations: b.stations, reducedMotion: state.reducedMotion }),
         track
     }, CONFIG, { signal: cleanupController.signal });
     showBenchCar(garage.bench());
@@ -356,6 +378,8 @@ function benchShown() {
 }
 
 function hideBench() {
+    // A Cut or a sanding still running finishes at once: the car is cut.
+    if (tools) tools.finish();
     if (el.bench) el.bench.classList.add('hidden');
     if (camera && camera.clearViewOffset) camera.clearViewOffset();
 }
@@ -383,13 +407,12 @@ function showBench(kind = 'back', tip = null) {
 function showBenchCar(build) {
     if (!workbench) return;
     if (benchMesh) {
-        workbench.spinner.remove(benchMesh.group);
+        holder.remove(benchMesh.group);
         benchMesh.dispose();
     }
     const car = describeCar(build, CONFIG);
-    benchMesh = buildCarMesh(build, car, { paint: build.paint, pockets: true }, CONFIG);
-    benchMesh.group.position.set(CONFIG.kit.length / 2, 0, 0);
-    workbench.spinner.add(benchMesh.group);
+    benchMesh = buildCarMesh(build, car, { paint: build.paint, pockets: true, livery: true }, CONFIG);
+    holder.add(benchMesh.group);
     const R = CONFIG.rules[build.rules];
     workbench.setSheet(sheetLines(build.rules, R, {
         mass: (kg) => `${(kg / OZ).toFixed(2)} oz`,
@@ -397,6 +420,44 @@ function showBenchCar(build) {
     }), build.rules === 'outlaw');
     workbench.setScale(U.mass(car.mass, garage.settings().units));
     workbench.setTrophies(garage.trophies());
+}
+
+/**
+ * The pencil line on the car (M4.1): the draft's outline drawn on the near
+ * side and along the top of the body as it is, so the visitor sees where
+ * the saw will go before it does. null takes it off.
+ */
+function drawPencil(carve) {
+    if (pencil) {
+        holder.remove(pencil);
+        pencil.geometry.dispose();
+        pencil.material.dispose();
+        pencil = null;
+    }
+    if (!carve || !holder) return;
+    const b = garage.bench();
+    const c = curvesOf(carve, CONFIG);
+    const base = CONFIG.kit.wheel.radius - CONFIG.kit.axleHeight;
+    const pts = [];
+    const n = 70;
+    let last = null;
+    for (let k = 0; k <= n; k++) {
+        const d = (CONFIG.kit.length * k) / n;
+        const [, top, w] = profileAt(b.stations, d);
+        const lift = 0.0005;
+        // The side line, on the side as it is now; the top's two edges, on
+        // the top as it is now.
+        const p = [
+            [-d, base + Math.min(c.top(d), top), w / 2 + lift], [-d, base + c.bottom(d), w / 2 + lift],
+            [-d, base + top + lift, Math.min(c.width(d), w) / 2], [-d, base + top + lift, -Math.min(c.width(d), w) / 2]
+        ];
+        if (last) for (let j = 0; j < 4; j++) pts.push(...last[j], ...p[j]);
+        last = p;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    pencil = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x1e1a16 }));
+    holder.add(pencil);
 }
 
 /** The panel's size on screen, for framing the car beside or above it. */
@@ -456,7 +517,7 @@ function stageCars(entries) {
     const shadows = CONFIG.render.shadows && !state.isMobile;
     meshes = entries.map((e) => {
         const car = describeCar(e.build, CONFIG);
-        const m = buildCarMesh(e.build, car, { paint: e.paint, color: e.color, shadows, pockets: e.mine }, CONFIG);
+        const m = buildCarMesh(e.build, car, { paint: e.paint, color: e.color, shadows, pockets: e.mine, livery: e.mine }, CONFIG);
         m.car = car;
         scene.add(m.group);
         return m;
@@ -680,12 +741,14 @@ function whyRefs() {
     };
 }
 
-/** The limit and the sweet spot as the Why lines say them. */
-function whyWords(car) {
+/** The limit and the sweet spot as the Why lines say them, and whether
+ *  the body is too bulky for its weight to go back (M4.6). */
+function whyWords(car, build) {
     const units = garage.settings().units;
     return {
         maxMass: car.rules === 'outlaw' ? '16 ounces' : '5 ounces',
-        idealText: units === 'metric' ? U.length(0.75 * IN, 'metric') : 'three quarters of an inch'
+        idealText: units === 'metric' ? U.length(0.75 * IN, 'metric') : 'three quarters of an inch',
+        bulky: Boolean(build) && bestBalance(build, CONFIG) > 0.875 * IN + 0.1 * IN
     };
 }
 
@@ -697,15 +760,19 @@ export function whyFor(day) {
     const car = day.cars[0];
     const refs = whyRefs();
     day.explained = explain(car, refs, CONFIG);
-    return whyLines(day.explained, car, refs.idealBalance, whyWords(car));
+    return whyLines(day.explained, car, refs.idealBalance, whyWords(car, day.entries[0].build));
 }
 
 /** The host's tip back at the bench: the biggest gain left, said. */
 function tuneTip(day) {
     if (!day || day.event === 'trial' || !day.explained) return null;
-    const top = gains(day.explained)[0] || null;
+    let top = gains(day.explained)[0] || null;
     const car = day.cars[0];
-    return { top, sentence: top ? moreLine(top, car, 0.75 * IN, whyWords(car)) : '' };
+    const words = whyWords(car, day.entries[0].build);
+    const sentence = top ? moreLine(top, car, 0.75 * IN, words) : '';
+    // A bulky body's balance is fixed in Shape, by carving, not in Weights.
+    if (top && top.id === 'balance' && words.bulky) top = { ...top, id: 'shape' };
+    return { top, sentence };
 }
 
 function showResults() {
@@ -1215,7 +1282,14 @@ function animate() {
     state.lastTime = now;
     if (state.phase === 'race') stepRace(dt);
     if (state.phase === 'bench' && workbench) {
-        if (!state.reducedMotion && !state.drag) state.spin += dt * CONFIG.workbench.spin;
+        tools.update(dt);
+        if (tools.turning()) {
+            // The Cut turns the car side on to the camera first.
+            const side = Math.round(state.spin / (2 * Math.PI)) * 2 * Math.PI;
+            state.spin += (side - state.spin) * Math.min(1, dt * 8);
+        } else if (!state.reducedMotion && !state.drag) {
+            state.spin += dt * CONFIG.workbench.spin;
+        }
         workbench.spinner.rotation.y = state.spin;
     }
     // While a clip is made, only the clip is drawn: the hall behind the card

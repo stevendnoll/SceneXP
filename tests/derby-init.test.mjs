@@ -369,6 +369,56 @@ test('reduced motion: no slow replays, no chase camera, and the turntable stands
     expect(state.phase).toBe('results');
 });
 
+test('the Cut plays on the turntable: the old car until the saw is through, then the cut one, then the host', async () => {
+    const main = await boot();
+    const state = main.getState();
+    for (let i = 0; i < 6; i++) fire(control('bench-top-3'), 'keydown', { key: 'ArrowDown' });
+    const before = main.__test__.benchMesh();
+    fire(control('bench-cut'), 'click');
+    expect(host()).toBe('Cutting along your line…');
+    expect(main.__test__.garage().bench().carve).not.toBeNull();
+    // The car turns side on and the saw runs: still the old car.
+    state.spin = 1;
+    frames(main, 1);
+    expect(main.__test__.benchMesh()).toBe(before);
+    expect(Math.abs(state.spin - 2 * Math.PI * Math.round(state.spin / (2 * Math.PI)))).toBeLessThan(0.01);
+    // Through the saw: the cut car, the offcuts falling, then the host.
+    frames(main, 2.2);
+    expect(main.__test__.benchMesh()).not.toBe(before);
+    frames(main, 1);
+    expect(host()).toMatch(/^Cut! Auto-weigh moved the weights/);
+    // Leaving the bench mid-cut finishes it.
+    for (let i = 0; i < 2; i++) fire(control('bench-top-4'), 'keydown', { key: 'ArrowDown' });
+    fire(control('bench-cut'), 'click');
+    raceIt();
+    expect(state.phase).toBe('checkin');
+    expect(host()).toMatch(/^Cut!/);
+});
+
+test('a bulky car is told to carve some wood out to make room for its weight (M4.6)', async () => {
+    const main = await boot();
+    const block = control('bench-design-block');
+    block.checked = true;
+    fire(block, 'change');
+    raceIt();
+    fire(dom.el('go-btn'), 'click');
+    main.__test__.finishRace('skip');
+    const why = dom.el('results-why').children.map((li) => li.textContent).join(' ');
+    expect(why).toMatch(/this body has no room for it there\. Carve some wood out of the middle/);
+});
+
+test('reduced motion: the Cut is a before and after', async () => {
+    dom.windowStub.matchMedia = (q) => ({
+        media: q, matches: /reduce/.test(q), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}
+    });
+    const main = await boot();
+    fire(control('bench-top-3'), 'keydown', { key: 'PageDown' });
+    const before = main.__test__.benchMesh();
+    fire(control('bench-cut'), 'click');
+    expect(main.__test__.benchMesh()).not.toBe(before);
+    expect(host()).toMatch(/^Cut!/);
+});
+
 test('a browser without WebGL 2 is taken to the main site with a note', async () => {
     delete dom.windowStub.WebGL2RenderingContext;
     await import('../www/derby/js/main.js');

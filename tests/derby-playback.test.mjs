@@ -151,15 +151,20 @@ describe('playback', () => {
 
 describe('the tie-break', () => {
     test('a tie on the board goes to the finer reading, not to whoever is listed first', () => {
-        // The Full Treatment and The Phantom both average 3.190 on the board.
-        const race = Sim.runRace([preset('full'), fieldCar(8)]);
+        // Made a tie on purpose: The Phantom against a copy with a hair more
+        // axle friction, the slower copy listed first, so entry order alone
+        // would hand it the win. (It was a found tie until M4's sanding moved
+        // the Phantom by 0.19 ms.)
+        const phantom = fieldCar(8);
+        const slower = { ...phantom, axleMu: phantom.axleMu * 1.0002 };
+        const race = Sim.runRace([slower, phantom]);
         expect(race.average[0]).toBe(race.average[1]);
         const exact = (i) => race.runs[i].reduce((a, r) => a + r.time, 0);
-        const faster = exact(0) < exact(1) ? 0 : 1;
-        expect(race.standings[0]).toBe(faster);
+        expect(exact(0)).toBeGreaterThan(exact(1));
+        expect(race.standings[0]).toBe(1);
         // Listed the other way round, the same car wins.
-        const flipped = Sim.runRace([fieldCar(8), preset('full')]);
-        expect(flipped.standings[0]).toBe(1 - faster);
+        const flipped = Sim.runRace([phantom, slower]);
+        expect(flipped.standings[0]).toBe(0);
     });
 });
 

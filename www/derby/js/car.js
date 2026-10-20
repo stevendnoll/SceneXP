@@ -43,20 +43,36 @@ export function profileAt(stations, x) {
     return [z[1], z[2], z[3]];
 }
 
-/** The cross-section's area at `x` (zero where the profile pinches shut). */
-export function areaAt(stations, x) {
+/** Four corners rounded to radius r take (4 - pi) r squared off a
+ *  rectangle. pi written out: Math.PI is exact, but the source rule is
+ *  simplest with no Math at all. */
+const CORNERS = 4 - 3.141592653589793;
+
+/** The radius sanding rounds the long edges to (M4.4), 0 to 1 sanding. */
+export function roundOf(sand, C = DERBY_CONFIG) {
+    const s = sand > 0 ? (sand < 1 ? sand : 1) : 0;
+    return s * C.workshop.round * IN;
+}
+
+/** The cross-section's area at `x` (zero where the profile pinches shut),
+ *  its four long edges rounded to `round` where the section is big enough
+ *  to take it. */
+export function areaAt(stations, x, round = 0) {
     const [bottom, top, width] = profileAt(stations, x);
     const h = top - bottom;
-    return h > 0 && width > 0 ? h * width : 0;
+    if (!(h > 0 && width > 0)) return 0;
+    const r = Math.min(round, h / 2, width / 2);
+    return h * width - CORNERS * r * r;
 }
 
 /**
- * The body alone, integrated over `slices` slices of the block's length:
+ * The body alone, integrated over `slices` slices of the block's length, its
+ * long edges rounded to `round` (sanding):
  * its volume, the x of its centroid, its largest cross-section (the frontal
  * area air meets), its tallest top, widest width and lowest bottom, and how
  * blunt its nose and tail are (the area there over the largest, 0 to 1).
  */
-export function bodyOf(stations, C = DERBY_CONFIG) {
+export function bodyOf(stations, C = DERBY_CONFIG, round = 0) {
     const L = C.kit.length;
     const n = C.physics.slices;
     const dx = L / n;
@@ -68,7 +84,7 @@ export function bodyOf(stations, C = DERBY_CONFIG) {
     let bottom = Infinity;
     for (let i = 0; i < n; i++) {
         const x = (i + 0.5) * dx;
-        const a = areaAt(stations, x);
+        const a = areaAt(stations, x, round);
         volume += a * dx;
         moment += a * dx * x;
         if (a > maxArea) maxArea = a;
@@ -87,8 +103,8 @@ export function bodyOf(stations, C = DERBY_CONFIG) {
         top,
         width,
         bottom: bottom === Infinity ? 0 : bottom,
-        nose: maxArea > 0 ? areaAt(stations, D.noseAt * L) / maxArea : 1,
-        tail: maxArea > 0 ? areaAt(stations, D.tailAt * L) / maxArea : 1
+        nose: maxArea > 0 ? areaAt(stations, D.noseAt * L, round) / maxArea : 1,
+        tail: maxArea > 0 ? areaAt(stations, D.tailAt * L, round) / maxArea : 1
     };
 }
 
@@ -128,7 +144,7 @@ export function dragCoefficientOf(body, sand, C = DERBY_CONFIG) {
  */
 export function describeCar(build, C = DERBY_CONFIG) {
     const K = C.kit;
-    const body = bodyOf(build.stations, C);
+    const body = bodyOf(build.stations, C, roundOf(build.tune ? build.tune.sand : 0, C));
     let mass = 0;
     let moment = 0;
     const add = (m, x) => {

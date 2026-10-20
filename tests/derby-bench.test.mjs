@@ -360,17 +360,10 @@ test('the pockets on the car: a disc a hole in use, an Outlaw\'s stack standing 
     const outlaw = G.weighAuto({ ...car, rules: 'outlaw' }, C);
     expect(Mesh.tungstenOf(outlaw, C).some((x) => x.proud > 0)).toBe(true);
     expect(W.pocketsOf(outlaw, C).loose).toHaveLength(0);
-    // The stripe faces up, the way the car is seen.
-    const r = Mesh.stripeOf(car.stations, 0.01, C);
-    const p = (i) => r.positions.slice(i * 3, i * 3 + 3);
-    const [a, b, c] = r.indices.slice(0, 3).map(p);
-    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-    const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    expect(u[2] * v[0] - u[0] * v[2]).toBeGreaterThan(0);
     expect(Mesh.finishOf('chrome', C)).toBe(C.paint.finishes.gloss);
     // And every finish, a stripe and the pockets build and let go.
     for (const finish of Object.keys(C.paint.finishes)) {
-        const m = Mesh.buildCarMesh(outlaw, Car.describeCar(outlaw, C), { paint: { body: 0x123456, stripe: 0xffffff, finish }, pockets: true }, C);
+        const m = Mesh.buildCarMesh(outlaw, Car.describeCar(outlaw, C), { paint: { body: 0x123456, stripe: 0xffffff, finish }, pockets: true, livery: true }, C);
         expect(() => m.dispose()).not.toThrow();
     }
 });

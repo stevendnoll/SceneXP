@@ -31,9 +31,12 @@ const atBalance = (car, inches) => ({ ...car, balance: inches * IN, comX: car.re
 
 describe('the field', () => {
     test('golden times, to the microsecond', () => {
+        // Updated on purpose 2026-10-19 (M4.4): sanding now rounds the long
+        // edges and the wood it takes off counts, so the five sanded cars
+        // moved by under a fifth of a millisecond. The order did not.
         const golden = {
-            brick: '3.469842', hotdog: '3.325823', loaf: '3.297307', streak: '3.259512', tiger: '3.249735',
-            comet: '3.239370', owl: '3.220863', arrow: '3.203525', phantom: '3.189400'
+            brick: '3.469842', hotdog: '3.325823', loaf: '3.297242', streak: '3.259512', tiger: '3.249735',
+            comet: '3.239315', owl: '3.220809', arrow: '3.203472', phantom: '3.189212'
         };
         const got = {};
         C.field.forEach((e, i) => { got[e.id] = neutral(field[i]).toFixed(6); });
@@ -303,7 +306,7 @@ describe('the same race on every device', () => {
     const SRC = join(process.cwd(), 'www/derby/js');
 
     test('the car and the sim use only + - * / and sqrt (and round, min for the scale and the board)', () => {
-        for (const file of ['car.js', 'sim.js', 'config.js']) {
+        for (const file of ['car.js', 'sim.js', 'config.js', 'profile.js']) {
             const src = readFileSync(join(SRC, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
             const calls = [...src.matchAll(/Math\.(\w+)/g)].map((m) => m[1]);
             for (const c of calls) expect(['sqrt', 'round', 'min']).toContain(c);

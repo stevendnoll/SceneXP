@@ -87,8 +87,30 @@ export const UI = Object.freeze({
     forgetSure: 'Tap again to forget every car, result and trophy',
     explore: 'More 3D worlds to explore at SceneXP.com',
     trophies: 'Trophies',
-    noTrophies: 'No trophies yet. Win a division to put one on the shelf.'
+    noTrophies: 'No trophies yet. Win a division to put one on the shelf.',
+    // M4, the workshop.
+    drawOwn: 'Or draw your own',
+    view: 'Look at it',
+    fromSide: 'From the side',
+    fromAbove: 'From above',
+    carveHelp: 'Drag a point up or down, or tab to it and use the arrow keys. The points beside the axles keep enough wood to hold them. The drawing is twice as tall as the block so there is room to work, and the turntable shows it true.',
+    cut: 'Cut along the line',
+    rubOut: 'Rub out the line',
+    sand: 'Sand the edges',
+    livery: 'Decals and name',
+    carName: 'Its name, on both sides',
+    carNumber: 'Its number, on the nose',
+    decals: 'Decals',
+    addDecal: 'Stick it on',
+    onTheCar: 'On the car',
+    along: 'Along the car',
+    upDown: 'Up and down',
+    size: 'Size',
+    peel: 'Peel it off'
 });
+
+/** The sanding slider's five steps (M4.4). */
+export const SAND = Object.freeze(['Square, as cut', 'Lightly sanded', 'Softened', 'Rounded', 'Well rounded']);
 
 export function eventLabel(id) {
     const e = EVENTS.find((x) => x.id === id);
@@ -148,15 +170,22 @@ const s3 = (t) => `${clock(t)} seconds`;
 /** Below this, a line is not worth saying. */
 const WORTH = 0.0005;
 
+/** The Why line for a car too bulky to move its weight back (M4.6, PRD A
+ *  lesson the model found on its own). */
+export function carveLine(t) {
+    return `Weight further back would save ${s3(t)}, but this body has no room for it there. Carve some wood out of the middle and the weights can sit further back.`;
+}
+
 /**
  * What one change still on the table would save, as a sentence: `line` is
  * one of sim.explain's ({ id, more }). `car` tells which way its weight
  * would move, `maxMass` and `idealText` say the limit and the sweet spot in
  * the sheet's and the visitor's words.
  */
-export function moreLine(line, car, idealBalance, { maxMass = '5 ounces', idealText = 'three quarters of an inch' } = {}) {
+export function moreLine(line, car, idealBalance, { maxMass = '5 ounces', idealText = 'three quarters of an inch', bulky = false } = {}) {
     const t = line.more;
     const back = car.balance > idealBalance;
+    if (line.id === 'balance' && back && bulky) return carveLine(t);
     switch (line.id) {
         case 'weight': return `Weights up to the full ${maxMass} would save ${s3(t)}.`;
         case 'balance': return back
@@ -190,7 +219,13 @@ export function whyLines(explained, car, idealBalance, opts = {}) {
         shape: (t) => `Its shape was worth ${s3(t)} over a plain block.`
     };
     if (saved.length) out.push(SAVED[saved[0].id](saved[0].saved));
-    for (const l of more.slice(0, 2)) out.push(moreLine(l, car, idealBalance, opts));
+    const shown = more.slice(0, 2);
+    for (const l of shown) out.push(moreLine(l, car, idealBalance, opts));
+    // A body too bulky for its weight to go back hears so even when the
+    // balance is not among the two biggest gains (M4.6): carving is the
+    // way to it, and the lesson the model found on its own.
+    const balance = more.find((l) => l.id === 'balance');
+    if (opts.bulky && balance && car.balance > idealBalance && !shown.includes(balance)) out.push(carveLine(balance.more));
     if (!more.length || more[0].more < 0.002) out.push('There is very little left to find. This car is about as fast as the rules allow.');
     return out;
 }
@@ -252,7 +287,7 @@ export function hostTune(name, top, sentence) {
 /** The host after a change on the bench. */
 export const SAY = Object.freeze({
     autoWeighed: (massText, balanceText) => `Auto-weigh brought it to ${massText}, the weight ${balanceText} in front of the rear axle. Weight toward the back keeps the car higher on the slope for longer, so it has further to fall.`,
-    autoShort: (massText, balanceText) => `Auto-weigh did what this shape allows: ${massText}, the weight ${balanceText} in front of the rear axle. A bulky body has no room further back.`,
+    autoShort: (massText, balanceText) => `Auto-weigh did what this shape allows: ${massText}, the weight ${balanceText} in front of the rear axle. A bulky body has no room further back, but carving wood out of the middle would make some.`,
     allOut: (massText) => `Every weight is out. The car weighs ${massText} now.`,
     shapeAuto: (label) => `A ${label} now, and Auto-weigh moved the weights to suit it.`,
     shapeHand: (label, dropped) => (dropped
@@ -271,7 +306,17 @@ export const SAY = Object.freeze({
     deleted: (name, next) => `${name} is gone. ${next} is on the bench now.`,
     picked: (name) => `${name} is on the bench.`,
     forgot: (name) => `Everything is forgotten. Here’s a fresh car to start with, ${name}.`,
-    illegal: (name, notes) => `${name} can’t race just yet. ${notes}`
+    illegal: (name, notes) => `${name} can’t race just yet. ${notes}`,
+    // M4, the workshop.
+    cutting: 'Cutting along your line…',
+    cutAuto: (massText) => `Cut! Auto-weigh moved the weights to suit the new shape, ${massText} in all.`,
+    cutHand: (dropped, massText) => (dropped
+        ? `Cut! ${dropped === 1 ? 'One weight lost its pocket, so it’s' : `${dropped} weights lost their pockets, so they’re`} back in the box. The car weighs ${massText} now.`
+        : `Cut! Every weight still has its pocket. The car weighs ${massText} now.`),
+    sanded: (step) => `Sanded: ${step.toLowerCase()}. Rounder edges let the air slip past a little more easily, and the wood that came off came off the weight.`,
+    decalsFull: 'That’s as many decals as a car this size can wear. Please peel one off to make room.',
+    decalOn: (label) => `${label} stuck on. Move it with the sliders, or drag it on the picture.`,
+    decalOff: (label) => `${label} peeled off.`
 });
 
 /**

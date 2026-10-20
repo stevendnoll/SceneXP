@@ -22,6 +22,9 @@
  * turns the sound on has asked for it, and where Safari offers
  * navigator.audioSession it is set to playback, through the switch.
  *
+ * THE WORKSHOP (M4) has two more: the coping saw's rasp and the sandpaper's
+ * hush, each a band of the same noise, pulsing a stroke at a time.
+ *
  * EVERY SOUND IS MADE HERE, from two seconds of noise and a few tones, so
  * the page loads no audio file. One-shots let go of their nodes when they
  * end, so nothing piles up across a race day.
@@ -266,6 +269,31 @@ export function createSound(S, { win = typeof window === 'undefined' ? null : wi
             source.start(t);
             clap.start(t);
             envelope(env, H.gain * strength, H.attack, H.decay, [source, clap]);
+        },
+        /** The saw (`saw`) or the sandpaper (`sand`), for `seconds`: noise
+         *  through a band, its loudness pulsing with each stroke. */
+        work(kind, seconds) {
+            if (!audible()) return;
+            const W = S[kind];
+            if (!W) return;
+            const shot = noiseShot('bandpass', W.hz, W.q);
+            shot.source.loop = true;
+            // The strokes: the band's level swung by a slow wave, before the
+            // envelope, so they fade with it.
+            const strokes = ctx.createGain();
+            strokes.gain.value = 0.55;
+            shot.filter.disconnect();
+            shot.filter.connect(strokes);
+            strokes.connect(shot.gain);
+            const lfo = ctx.createOscillator();
+            lfo.type = 'triangle';
+            lfo.frequency.value = W.strokeHz;
+            const depth = ctx.createGain();
+            depth.gain.value = 0.45;
+            lfo.connect(depth);
+            depth.connect(strokes.gain);
+            lfo.start(ctx.currentTime + S.ahead);
+            envelope(shot.gain, W.gain, 0.05, seconds, [shot.source, lfo]);
         },
         /** The clip's audio track: the recording output, made once. */
         recordStream() {

@@ -58,7 +58,7 @@ describe('normalizeBuild', () => {
         expect(b.paint).toEqual({ body: 0x3a7be8, stripe: null, finish: 'gloss' });
         expect(b.name).toBe('');
         expect(b.number).toBeNull();
-        expect(b.plan).toBeNull();
+        expect(b.carve).toBeNull();
         expect(b.decals).toEqual([]);
     });
 

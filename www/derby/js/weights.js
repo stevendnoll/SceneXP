@@ -203,6 +203,21 @@ export function autoWeighPockets(build, { mass, balance }, C = DERBY_CONFIG) {
     return out;
 }
 
+/**
+ * The balance a build would have with every weight it carries moved to its
+ * rearmost pocket that holds tungsten: the furthest back its weight can go.
+ * A body whose best is still well in front of the sweet spot is too bulky
+ * for rear weight (M4.6, PRD A lesson the model found on its own): its own
+ * wood holds the balance forward. Meters in front of the rear axle.
+ */
+export function bestBalance(build, C = DERBY_CONFIG) {
+    const { spots } = pocketsOf({ ...build, weights: [] }, C);
+    let rear = null;
+    for (const s of spots) if (holdsTungsten(s, C)) rear = s;
+    const x = rear ? rear.x : C.kit.rearAxle;
+    return describeCar({ ...build, weights: (build.weights || []).map((w) => ({ ...w, x })) }, C).balance;
+}
+
 /** The weight Auto-weigh aims for: the car's own sheet's limit, in ounces. */
 export function autoTarget(rules, C = DERBY_CONFIG) {
     const R = C.rules[rules] || C.rules.standard;

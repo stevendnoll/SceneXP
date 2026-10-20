@@ -1324,7 +1324,7 @@ html [data-ui-theme="ember" lang="en"]
     meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
     meta [content="noindex, nofollow" name="robots"]
-    meta [content="Build a wooden derby car, weigh it and tune its axles, then race it down a four-lane track against the neighbors' cars, timed to the thousandth, live in your browser." name="description"]
+    meta [content="Carve a wooden derby car, weigh it, tune its axles and give it a name, then race it down a four-lane track against the neighbors' cars, timed to the thousandth, live in your browser." name="description"]
     meta [content="#1f4e8c" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/derby/" rel="canonical"]
@@ -1352,7 +1352,7 @@ html [data-ui-theme="ember" lang="en"]
         "url": "https://www.scenexp.com/derby/",
         "name": "Derby Day",
         "image": "https://www.scenexp.com/derby/assets/og-derby.jpg?v=1",
-        "description": "A browser-based 3D derby car race. Build a wooden derby car on the workbench, choosing its shape, paint, weights and axle work, then race it down a four-lane aluminum track against the neighbors' cars, four heats with every car in every lane, timed to the thousandth of a second by real physics: weight, balance, axle friction and drag.",
+        "description": "A browser-based 3D derby car race. Build a wooden derby car on the workbench, carving its shape and choosing its paint, decals, name, weights and axle work, then race it down a four-lane aluminum track against the neighbors' cars, four heats with every car in every lane, timed to the thousandth of a second by real physics: weight, balance, axle friction and drag.",
         "genre": [
           "Racing",
           "Simulation"
@@ -1398,7 +1398,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Derby Day | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=3" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=4" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -1410,6 +1410,9 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/workbench.min.js" rel="modulepreload"]
     link [href="js/garage.min.js" rel="modulepreload"]
     link [href="js/bench.min.js" rel="modulepreload"]
+    link [href="js/tools.min.js" rel="modulepreload"]
+    link [href="js/profile.min.js" rel="modulepreload"]
+    link [href="js/weights.min.js" rel="modulepreload"]
     link [href="js/units.min.js" rel="modulepreload"]
     link [href="js/playback.min.js" rel="modulepreload"]
     link [href="js/director.min.js" rel="modulepreload"]
@@ -1422,10 +1425,12 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
-    link [href="js/weights.min.js" rel="modulepreload"]
+    link [href="js/decals.min.js" rel="modulepreload"]
+    link [href="js/carve.min.js" rel="modulepreload"]
+    link [href="js/livery.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=3" rel="stylesheet"]
+    link [href="css/experience.min.css?v=4" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -1436,7 +1441,7 @@ html [data-ui-theme="ember" lang="en"]
         h1
           "Derby Day"
         p
-          "This is a wooden derby car race, and it needs JavaScript to run. You build your car on a workbench, choosing its shape, its paint, where its weights go and how its axles are tuned. Then it lines up at the top of a four-lane aluminum track against three of the neighbors' cars, and races four heats so every car runs in every lane. The times are averaged, and the fastest average wins."
+          "This is a wooden derby car race, and it needs JavaScript to run. You build your car on a workbench: you draw its shape on the block and cut it out, sand it, paint it, name it, and choose where its weights go and how its axles are tuned. Then it lines up at the top of a four-lane aluminum track against three of the neighbors' cars, and races four heats so every car runs in every lane. The times are averaged, and the fastest average wins."
         h2
           "What makes a derby car fast"
         p
@@ -5485,7 +5490,7 @@ html [lang="en"]
             li
               strong
                 "Your cars in Derby Day."
-              "Derby Day saves your cars in your browser's local storage, up to four of them, so they are waiting on the workbench when you come back: each car's shape, paint, weights and axle work, its best result in each race, your last race, the trophies you have won, and whether you chose metric units or turned the sound on. The Forget my cars button in the workbench's settings clears all of it on the spot."
+              "Derby Day saves your cars in your browser's local storage, up to four of them, so they are waiting on the workbench when you come back: each car's name, number, shape, paint, decals, weights and axle work, its best result in each race, your last race, the trophies you have won, and whether you chose metric units or turned the sound on. The Forget my cars button in the workbench's settings clears all of it on the spot."
             li
               strong
                 "Your home in Whitestone Home Care."
