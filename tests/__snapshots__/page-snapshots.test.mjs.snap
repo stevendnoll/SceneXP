@@ -1321,7 +1321,7 @@ html [data-ui-theme="ember" lang="en"]
   head
     meta [charset="UTF-8"]
     meta [content="width=device-width, initial-scale=1.0" name="viewport"]
-    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
     meta [content="noindex, nofollow" name="robots"]
     meta [content="Race a wooden derby car down a four-lane track against the neighbors' cars, four heats, every car in every lane, timed to the thousandth, live in your browser." name="description"]
@@ -1398,7 +1398,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Derby Day | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=1" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=2" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -1412,12 +1412,15 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/board.min.js" rel="modulepreload"]
     link [href="js/copy.min.js" rel="modulepreload"]
     link [href="js/phases.min.js" rel="modulepreload"]
+    link [href="js/sound.min.js" rel="modulepreload"]
+    link [href="js/clip.min.js" rel="modulepreload"]
+    link [href="js/recorder.min.js" rel="modulepreload"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=1" rel="stylesheet"]
+    link [href="css/experience.min.css?v=2" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -1488,6 +1491,11 @@ html [data-ui-theme="ember" lang="en"]
       "You"
     button#skip-btn.ui-float.skip-btn [type="button"]
       "Skip to results"
+    button#sound-btn.ui-float.menu-btn.sound-btn [aria-label="Sound" aria-pressed="false" title="Sound off (M)" type="button"]
+      svg [aria-hidden="true" viewbox="0 0 24 24"]
+        path [d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" stroke-linejoin="round"]
+        path.sound-waves [d=#839f041928]
+        path.sound-off [d="M16 9.5l5 5M21 9.5l-5 5"]
     div#results-modal.results-modal.hidden [aria-labelledby="results-title" aria-modal="true" role="dialog"]
       div.results-card
         p#results-event.results-event
@@ -1501,13 +1509,37 @@ html [data-ui-theme="ember" lang="en"]
           "Why your car ran as it did"
         ul#results-why.results-why
         div.results-actions
-          button#results-again.go-btn [type="button"]
+          button#results-share.go-btn [type="button"]
+            "Share my race"
+          button#results-again.results-another [type="button"]
             "Race again"
           button#results-another.results-another [type="button"]
             "Choose another race"
         p#results-status.sr-only [aria-live="polite" role="status"]
         p.results-mark [aria-hidden="true"]
           "Derby Day &middot; SceneXP.com"
+    div#clip-modal.clip-modal.hidden [aria-describedby="clip-progress" aria-labelledby="clip-title" aria-modal="true" role="dialog"]
+      div.clip-card
+        h2#clip-title.clip-title [tabindex="-1"]
+          "Your race, ready to share"
+        div#clip-stage.clip-stage
+        p#clip-progress.clip-progress
+          "Making your clip…"
+        label.clip-sound [for="clip-sound"]
+          input#clip-sound [checked type="checkbox"]
+          "Include sound"
+        div.clip-actions
+          button#clip-share.go-btn [hidden type="button"]
+            "Share video"
+          button#clip-image.results-another [type="button"]
+            "Save a picture"
+          button#clip-again.results-another [hidden type="button"]
+            "Make it again"
+          button#clip-close.results-another [type="button"]
+            "Done"
+        p.clip-note
+          "Made on this device. Nothing is uploaded."
+        p#clip-status.sr-only [aria-live="polite" role="status"]
     script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;

@@ -29,9 +29,14 @@ import { planDay, momentAt, positionAt } from './playback.min.js';
 import { shotFor, framing } from './director.min.js';
 import { createTimer, fillResults, h } from './board.min.js';
 import {
-    EVENTS, UI, OFF, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines
+    EVENTS, UI, OFF, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock
 } from './copy.min.js';
 import { nextPhase } from './phases.min.js';
+import { createSound } from './sound.min.js';
+import { planClip, clipMoment, clipFraming, drawClipFrame, drawStill } from './clip.min.js';
+import {
+    canRecord, pickMime, extensionOf, fileName, startRecording, shareFile, canShareFiles, saveFile
+} from './recorder.min.js';
 import { getProofOfWork, installCardFocusTrap, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
 import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { track, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
@@ -54,10 +59,22 @@ const state = {
     day: null,
     clock: 0,
     /** The last segment announced, so each is said once. */
-    said: ''
+    said: '',
+    /** Each car's last position and which have beeped, for the sound. */
+    lastS: [],
+    beeped: new Set(),
+    /** The share clip being made or made: { plan, t, recording, ... }. */
+    clip: null,
+    /** The day's picture, made ahead of the tap: { day, blob, ready }. */
+    still: null
 };
 
+const sound = createSound(CONFIG.sound);
+
 let renderer;
+let clipRenderer = null;
+let clipCanvas = null;
+let clipCamera = null;
 let scene;
 let camera;
 let trackParts;
@@ -95,14 +112,23 @@ async function init() {
     for (const id of ['game-canvas', 'blocker', 'event-options', 'car-options', 'car-legend', 'go-btn', 'checkin-note',
         'help-btn', 'timer', 'skip-btn', 'you-tag', 'caption', 'race-status', 'results-modal', 'results-title',
         'results-event', 'results-table', 'results-lanes', 'results-why', 'results-why-heading', 'results-again',
-        'results-another', 'results-status', 'explore-link']) {
+        'results-another', 'results-status', 'explore-link', 'sound-btn', 'results-share', 'clip-modal', 'clip-title',
+        'clip-stage', 'clip-progress', 'clip-sound', 'clip-share', 'clip-image', 'clip-again', 'clip-close', 'clip-status']) {
         el[id] = document.getElementById(id);
     }
     if (!el['game-canvas'] || typeof THREE === 'undefined') return;
+    // The markup starts the cards hidden. Said again here, so the page never
+    // begins believing one is up.
+    for (const id of ['results-modal', 'clip-modal']) if (el[id]) el[id].classList.add('hidden');
+    // The clip's sound starts on every visit (D2), whatever a browser that
+    // restores form state across a reload remembers.
+    if (el['clip-sound']) el['clip-sound'].checked = true;
 
     state.isMobile = detectMobile();
     state.reducedMotion = prefersReducedMotion();
     setMobile(state.isMobile);
+    sound.setLevel(state.isMobile ? CONFIG.sound.masterMobile : CONFIG.sound.master);
+    markSound();
     if (el['explore-link']) el['explore-link'].href = CONFIG.site.home.path;
     buildCheckin();
 
@@ -144,6 +170,7 @@ async function init() {
         if (loading) loading.classList.add('hidden');
         state.isLoaded = true;
         state.phase = nextPhase(state.phase, 'loaded');
+        if (el['sound-btn']) el['sound-btn'].classList.add('visible');
     }, 400);
 
     track('session-start', { kind: state.isMobile ? 'touch' : 'desktop' });
@@ -307,6 +334,8 @@ function startRace(how = 'go') {
     state.day = { entries, cars, race, plan, mine: new Set(entries.map((e, i) => (e.mine ? i : -1)).filter((i) => i >= 0)) };
     state.clock = 0;
     state.said = '';
+    state.lastS = entries.map(() => 0);
+    state.beeped = new Set();
     state.phase = 'race';
     if (el.blocker) el.blocker.classList.add('hidden');
     hideResults();
@@ -354,13 +383,24 @@ function stepRace(dt) {
     const kind = m.segment.kind;
     let leadS = 0;
     let minePose = null;
+    let speed = 0;
     heat.forEach((r, i) => {
         const run = day.race.runs[i][r.lane];
         const s = positionAt(run, m.runTime, CONFIG);
         if (s > leadS) leadS = s;
+        if (dt > 0) speed += Math.max(0, s - (state.lastS[i] || 0)) / dt;
+        state.lastS[i] = s;
         const pose = placeCar(meshes[i], s, r.lane);
         if (i === 0 && state.event !== 'trial') minePose = pose;
+        // The timer's beep as each car crosses, once a heat.
+        const beepKey = `${m.heat}:${i}`;
+        if (kind === 'run' && m.runTime >= run.time && !state.beeped.has(beepKey)) {
+            state.beeped.add(beepKey);
+            sound.beep();
+        }
     });
+    // The wheels, louder the faster the field (a slow replay is quieter).
+    sound.roll(kind === 'run' || kind === 'replay' ? speed / (heat.length * 5) : 0);
     const seg = m.segment;
     trackParts.gate.set(kind === 'staging' ? 0 : kind === 'gate' ? Math.min(1, (state.clock - seg.from) / (seg.to - seg.from)) : 1);
 
@@ -384,10 +424,13 @@ function stepRace(dt) {
         const total = day.race.heats.length;
         timer.heat(n, total, kind === 'replay' ? UI.replay : '');
         if (kind === 'staging') caption(staging(n, total));
-        else if (kind === 'gate') caption(OFF);
-        else if (kind === 'replay') caption(UI.replay);
+        else if (kind === 'gate') {
+            caption(OFF);
+            sound.gate();
+        } else if (kind === 'replay') caption(UI.replay);
         else if (kind === 'times') {
             const first = order[0];
+            sound.cheer(0.55);
             caption(heatWinner(n, day.entries[first.car].name, first.time));
             announce(heatSpoken(n, order.map((r, i) => ({ name: day.entries[r.car].name, time: r.time, place: i + 1 }))));
         }
@@ -440,6 +483,8 @@ function finishRace(how) {
     aim(framing('finish', trackParts.path, CONFIG.track.courseLength, window.innerWidth / window.innerHeight, CONFIG));
     showResults();
     const place = day.race.standings.indexOf(0) + 1;
+    sound.roll(0);
+    sound.cheer(state.event === 'trial' ? 0.7 : place === 1 ? 1 : 0.45);
     track(how === 'skip' ? 'race-skip' : 'race-end', { kind: state.event, outcome: state.event === 'trial' ? `cars=${day.entries.length}` : `place=${place}` });
 }
 
@@ -487,7 +532,359 @@ function resultsShown() {
 function stepBack(how) {
     if (!state.isLoaded) return;
     if (state.phase === 'race') track('race-leave', { kind: state.event, outcome: `how=${how}` });
+    sound.roll(0);
     if (state.phase === 'race' || state.phase === 'results') showCheckin();
+}
+
+// ---- The sound (M2) -------------------------------------------------------------
+
+function markSound() {
+    const btn = el['sound-btn'];
+    if (!btn) return;
+    const on = sound.isOn();
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.setAttribute('title', on ? 'Sound on (M)' : 'Sound off (M)');
+}
+
+function toggleSound(how) {
+    const on = sound.toggle();
+    markSound();
+    track('sound', { outcome: on ? 'on' : 'off', kind: how });
+}
+
+// ---- The share clip (M2) ----------------------------------------------------------
+
+function clipShown() {
+    return Boolean(el['clip-modal']) && !el['clip-modal'].classList.contains('hidden');
+}
+
+/** The car the clip is about: the visitor's, or the Time Trial's winner. */
+function clipFocus(day) {
+    return state.event === 'trial' ? day.race.standings[0] : 0;
+}
+
+/** The board's rows, fastest first. */
+function boardRows(day) {
+    const mine = state.event === 'trial' ? new Set() : day.mine;
+    return day.race.standings.map((i, k) => ({ place: k + 1, name: day.entries[i].name, average: day.race.average[i], mine: mine.has(i) }));
+}
+
+function clipSize() {
+    const K = CONFIG.clip;
+    return state.isMobile ? { w: K.mobileWidth, h: K.mobileHeight } : { w: K.width, h: K.height };
+}
+
+/** The clip's own renderer, made once, drawing the same hall. */
+function ensureClipRenderer(w, h) {
+    if (!clipRenderer) {
+        clipCanvas = document.createElement('canvas');
+        clipRenderer = new THREE.WebGLRenderer({ canvas: clipCanvas, antialias: true, powerPreference: 'high-performance' });
+        clipRenderer.toneMapping = THREE.NeutralToneMapping || THREE.NoToneMapping;
+        clipRenderer.toneMappingExposure = CONFIG.render.exposure;
+        clipRenderer.setPixelRatio(1);
+        clipCamera = new THREE.PerspectiveCamera(CONFIG.camera.fov, w / h, CONFIG.camera.near, CONFIG.camera.far);
+    }
+    clipRenderer.setSize(w, h, false);
+    clipCamera.aspect = w / h;
+    clipCamera.updateProjectionMatrix();
+}
+
+function clipText(text) {
+    if (el['clip-progress']) el['clip-progress'].textContent = text;
+}
+
+function clipSay(text) {
+    if (el['clip-status']) el['clip-status'].textContent = text;
+}
+
+/** Let go of a made clip's file and video. */
+function releaseClip() {
+    const c = state.clip;
+    if (!c) return;
+    if (c.recording && c.rec) {
+        c.cancelled = true;
+        try { c.rec.recorder.stop(); } catch (e) { /* already stopped */ }
+    }
+    sound.setRecording(false);
+    sound.roll(0);
+    if (c.url) URL.revokeObjectURL(c.url);
+    state.clip = null;
+}
+
+/** Share my race: open the card and start making the clip at once. */
+function openClip() {
+    const day = state.day;
+    if (!day || state.phase !== 'results') return;
+    releaseClip();
+    // The picture first, so it is ready before anybody asks for it.
+    stillFor(day);
+    const modal = el['clip-modal'];
+    if (modal) modal.classList.remove('hidden');
+    const stage = el['clip-stage'];
+    if (stage) stage.textContent = '';
+    if (el['clip-share']) el['clip-share'].hidden = true;
+    if (el['clip-again']) el['clip-again'].hidden = true;
+    const title = el['clip-title'];
+    if (title && typeof title.focus === 'function') title.focus({ preventScroll: true });
+    const mime = canRecord(window) ? pickMime((t) => window.MediaRecorder.isTypeSupported(t)) : '';
+    if (!mime) {
+        clipText('This browser can’t make a video, but you can save a picture of your race.');
+        track('clip-unsupported', { kind: state.event });
+        return;
+    }
+    const { w, h } = clipSize();
+    ensureClipRenderer(w, h);
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    out.setAttribute('aria-hidden', 'true');
+    if (stage) stage.appendChild(out);
+    const g = out.getContext('2d');
+    // Sound: made now (this is a gesture), recorded whatever the speakers say.
+    sound.ensure();
+    const include = !el['clip-sound'] || el['clip-sound'].checked;
+    sound.setRecording(true, include);
+    const stream = out.captureStream(CONFIG.clip.fps);
+    const audio = sound.recordStream();
+    if (audio && audio.getAudioTracks) for (const t of audio.getAudioTracks()) stream.addTrack(t);
+    let rec;
+    try {
+        rec = startRecording(stream, mime, { bitrate: state.isMobile ? CONFIG.clip.mobileBitrate : CONFIG.clip.bitrate, win: window });
+    } catch (e) {
+        sound.setRecording(false);
+        clipText('This browser can’t make a video, but you can save a picture of your race.');
+        track('clip-unsupported', { kind: state.event, outcome: 'start-failed' });
+        return;
+    }
+    const focus = clipFocus(day);
+    state.clip = {
+        plan: planClip(day.race, focus, CONFIG), focus, t: 0, recording: true, rec, g, out, w, h, mime,
+        said: '', beeped: new Set(), lastS: day.entries.map(() => 0), shown: -1
+    };
+    clipText('Making your clip…');
+    clipSay('Making your clip. It takes about fifteen seconds.');
+    track('clip-start', { kind: state.event, outcome: `sound=${include ? 'on' : 'off'}` });
+    rec.done.then((blob) => finishedClip(blob)).catch(() => {
+        clipText('Something went wrong making the video, but you can save a picture of your race.');
+    });
+}
+
+/** One frame of the clip: pose the cars, render, write the words. */
+function stepClip(dt) {
+    const c = state.clip;
+    const day = state.day;
+    c.t += dt;
+    const m = clipMoment(c.plan, c.t);
+    const heat = day.race.heats[c.plan.heatIndex];
+    let leadS = 0;
+    let speed = 0;
+    let focusPose = null;
+    heat.forEach((r, i) => {
+        const run = day.race.runs[i][r.lane];
+        const s = positionAt(run, m.runTime, CONFIG);
+        if (s > leadS) leadS = s;
+        if (dt > 0 && (m.kind === 'run' || m.kind === 'slow')) speed += Math.max(0, s - (c.lastS[i] || 0)) / dt;
+        c.lastS[i] = s;
+        const pose = placeCar(meshes[i], s, r.lane);
+        if (i === c.focus) focusPose = pose;
+        if (m.kind === 'run' && m.runTime >= run.time && !c.beeped.has(i)) {
+            c.beeped.add(i);
+            sound.beep();
+        }
+    });
+    trackParts.gate.set(m.kind === 'car' || m.kind === 'staging' ? 0 : m.kind === 'gate' ? m.progress : 1);
+    sound.roll(speed / (heat.length * 5));
+    if (m.kind !== c.said) {
+        c.said = m.kind;
+        if (m.kind === 'gate') sound.gate();
+        if (m.kind === 'board') sound.cheer(c.plan.place === 1 ? 1 : 0.6);
+    }
+    const shot = clipFraming(m, { path: trackParts.path, pose: focusPose, carLength: CONFIG.kit.length, leadS, aspect: c.w / c.h }, CONFIG);
+    clipCamera.position.set(shot.position.x, shot.position.y, shot.position.z);
+    clipCamera.lookAt(shot.target.x, shot.target.y, shot.target.z);
+    clipRenderer.render(scene, clipCamera);
+    c.g.drawImage(clipCanvas, 0, 0, c.w, c.h);
+    const lane = heat[c.focus].lane;
+    drawClipFrame(c.g, c.w, c.h, {
+        kind: m.kind,
+        progress: m.progress,
+        carName: day.entries[c.focus].name,
+        eventLabel: eventLabel(state.event),
+        heatLabel: `Heat ${c.plan.heatIndex + 1} · Lane ${lane + 1}`,
+        crossed: (m.kind === 'run' || m.kind === 'slow') && m.runTime >= c.plan.crossing,
+        time: c.plan.time,
+        place: c.plan.place,
+        rows: boardRows(day),
+        url: CONFIG.clip.url
+    });
+    const left = Math.max(0, Math.ceil(c.plan.total - c.t));
+    if (left !== c.shown) {
+        c.shown = left;
+        clipText(left > 0 ? `Making your clip… ${left} ${left === 1 ? 'second' : 'seconds'} to go` : 'Finishing…');
+    }
+    if (m.done) {
+        c.recording = false;
+        sound.setRecording(false);
+        sound.roll(0);
+        try { c.rec.recorder.stop(); } catch (e) { /* already stopped */ }
+        restCars();
+    }
+}
+
+/** The cars back where the race left them, past the line. */
+function restCars() {
+    const day = state.day;
+    if (!day) return;
+    const last = day.race.heats[day.race.heats.length - 1];
+    last.forEach((r, i) => placeCar(meshes[i], positionAt(day.race.runs[i][r.lane], 99, CONFIG), r.lane));
+    trackParts.gate.set(1);
+}
+
+/** The clip is made: play it in the stage, ready to share or save. */
+function finishedClip(blob) {
+    const c = state.clip;
+    if (!c || c.cancelled) return;
+    c.blob = blob;
+    c.url = URL.createObjectURL(blob);
+    c.name = fileName(state.day.entries[c.focus].name, extensionOf(blob.type || c.mime));
+    const video = document.createElement('video');
+    video.src = c.url;
+    video.muted = true;
+    video.loop = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.controls = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('aria-label', 'Your race clip');
+    const stage = el['clip-stage'];
+    if (stage) {
+        stage.textContent = '';
+        stage.appendChild(video);
+    }
+    if (typeof video.play === 'function') {
+        const p = video.play();
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+    }
+    const share = el['clip-share'];
+    if (share) {
+        share.textContent = canShareFiles(blob.type) ? 'Share video' : 'Save video';
+        share.hidden = false;
+    }
+    if (el['clip-again']) el['clip-again'].hidden = false;
+    const seconds = Math.round(c.plan.total);
+    clipText(`Your clip is ready, ${seconds} seconds long.`);
+    clipSay('Your clip is ready to share.');
+    track('clip-made', { kind: extensionOf(blob.type || c.mime), seconds });
+}
+
+/** The sentence that goes with a shared clip or picture. */
+function shareLine() {
+    const day = state.day;
+    const focus = clipFocus(day);
+    const url = new URL('.', window.location.href).href;
+    return `${day.entries[focus].name} averaged ${clock(day.race.average[focus])} seconds at Derby Day. Can you beat it? ${url}`;
+}
+
+/** Share the clip, or save it where sharing a file is not possible. */
+async function shareClip() {
+    const c = state.clip;
+    if (!c || !c.blob) return;
+    const how = await shareFile(c.blob, c.name, { title: 'Derby Day', text: shareLine() });
+    if (how === 'unavailable') {
+        saveFile(c.url, c.name);
+        clipSay('Your clip is saved to your downloads.');
+    } else if (how === 'shared') {
+        clipSay('Shared. Thank you for spreading the word.');
+    }
+    track('clip-share', { outcome: how === 'unavailable' ? 'saved' : how });
+}
+
+/**
+ * The picture (M2.4): the car at the finish, the board over it, rendered
+ * and encoded AHEAD of the tap that shares it. iPhone Safari opens the share
+ * sheet only straight from a tap, and encoding a PNG takes a moment, so the
+ * picture is made when the share card opens, and Save a picture hands over
+ * what is ready. Resolves with the PNG, or null.
+ */
+function makeStill() {
+    const day = state.day;
+    if (!day || !trackParts) return Promise.resolve(null);
+    const W = CONFIG.clip.still.width;
+    const H = CONFIG.clip.still.height;
+    ensureClipRenderer(W, H);
+    restCars();
+    const focus = clipFocus(day);
+    const lastHeat = day.race.heats[day.race.heats.length - 1];
+    const s = positionAt(day.race.runs[focus][lastHeat[focus].lane], 99, CONFIG);
+    const pose = carPose(trackParts.path, s, lastHeat[focus].lane, meshes[focus].car, CONFIG);
+    const shot = clipFraming({ kind: 'car', progress: 0.45 }, { path: trackParts.path, pose, carLength: CONFIG.kit.length, leadS: s, aspect: W / H }, CONFIG);
+    clipCamera.position.set(shot.position.x, shot.position.y, shot.position.z);
+    clipCamera.lookAt(shot.target.x, shot.target.y, shot.target.z);
+    clipRenderer.render(scene, clipCamera);
+    const out = document.createElement('canvas');
+    out.width = W;
+    out.height = H;
+    const g = out.getContext('2d');
+    g.drawImage(clipCanvas, 0, 0, W, H);
+    drawStill(g, W, H, { carName: day.entries[focus].name, eventLabel: eventLabel(state.event), rows: boardRows(day), url: CONFIG.clip.url });
+    return new Promise((resolve) => {
+        try {
+            if (out.toBlob) out.toBlob((b) => resolve(b || null), 'image/png');
+            else resolve(null);
+        } catch (e) {
+            resolve(null);
+        }
+    });
+}
+
+/** The day's picture, made once and kept (state.still). */
+function stillFor(day) {
+    if (!state.still || state.still.day !== day) {
+        const entry = { day, blob: null, ready: null };
+        entry.ready = makeStill().then((b) => {
+            entry.blob = b;
+            return b;
+        });
+        state.still = entry;
+    }
+    return state.still;
+}
+
+/** Save a picture: share the picture made ahead, or save it. */
+async function shareStill() {
+    const day = state.day;
+    if (!day) return;
+    if (state.clip && state.clip.recording) {
+        clipSay('One moment, please. The clip is still being made.');
+        return;
+    }
+    const entry = stillFor(day);
+    const blob = entry.blob || await entry.ready;
+    const focus = clipFocus(day);
+    if (!blob) {
+        clipSay('Sorry, this browser could not make the picture.');
+        return;
+    }
+    const name = fileName(day.entries[focus].name, 'png').replace(/\.png$/, '-results.png');
+    const how = await shareFile(blob, name, { title: 'Derby Day', text: shareLine() });
+    if (how === 'unavailable') {
+        const url = URL.createObjectURL(blob);
+        saveFile(url, name);
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        clipSay('Your picture is saved to your downloads.');
+    } else if (how === 'shared') {
+        clipSay('Shared. Thank you for spreading the word.');
+    }
+    track('image-share', { outcome: how === 'unavailable' ? 'saved' : how });
+}
+
+/** Done, or Escape: close the card, the clip let go, back to the results. */
+function closeClip() {
+    releaseClip();
+    restCars();
+    if (el['clip-modal']) el['clip-modal'].classList.add('hidden');
+    const back = el['results-share'];
+    if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
 }
 
 // ---- Events -----------------------------------------------------------------
@@ -506,6 +903,16 @@ function setupEventListeners() {
         startRace('again');
     });
     on('results-another', 'click', () => stepBack('another'));
+    on('results-share', 'click', openClip);
+    on('clip-share', 'click', shareClip);
+    on('clip-image', 'click', shareStill);
+    on('clip-again', 'click', openClip);
+    on('clip-close', 'click', closeClip);
+    on('clip-sound', 'change', () => {
+        const c = state.clip;
+        if (c && c.recording) sound.setRecording(true, el['clip-sound'].checked);
+    });
+    on('sound-btn', 'click', () => toggleSound('button'));
     document.addEventListener('keydown', onKeyDown, { signal });
     window.addEventListener('resize', onResize, { signal });
     window.addEventListener('pagehide', cleanup);
@@ -514,7 +921,20 @@ function setupEventListeners() {
 }
 
 function onKeyDown(event) {
+    // M for the sound, unless a key is being typed somewhere (none yet, but
+    // the workshop's name field will be, M4).
+    const t = event.target;
+    const typing = t && (t.tagName === 'INPUT' && t.type === 'text' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    if ((event.key === 'm' || event.key === 'M') && !typing && !event.metaKey && !event.ctrlKey && !event.altKey && state.isLoaded) {
+        toggleSound('key');
+        return;
+    }
     if (event.key === 'Escape' || event.code === 'Escape') {
+        if (clipShown()) {
+            event.preventDefault();
+            closeClip();
+            return;
+        }
         if (state.phase === 'race' || resultsShown()) {
             event.preventDefault();
             stepBack('escape');
@@ -542,6 +962,12 @@ function animate() {
     const dt = Math.min(0.1, Math.max(0, (now - state.lastTime) / 1000));
     state.lastTime = now;
     if (state.phase === 'race') stepRace(dt);
+    // While a clip is made, only the clip is drawn: the hall behind the card
+    // holds still, and a phone draws one picture a frame, not two.
+    if (state.clip && state.clip.recording) {
+        stepClip(dt);
+        return;
+    }
     renderer.render(scene, camera);
 }
 
@@ -587,4 +1013,4 @@ export function getState() {
     return state;
 }
 
-export const __test__ = { startRace, finishRace, stepBack, meshes: () => meshes, el };
+export const __test__ = { startRace, finishRace, stepBack, openClip, closeClip, shareStill, shareClip, sound, meshes: () => meshes, el };

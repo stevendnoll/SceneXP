@@ -373,6 +373,56 @@ export const DERBY_CONFIG = Object.freeze({
         follow: 6
     }),
 
+    /**
+     * The share clip (M2, PRD The share): 9:16, the car on its own, its best
+     * heat with a slow finish, the board, and the end card, about thirteen
+     * seconds. Recorded live from a second renderer, never uploaded.
+     */
+    clip: Object.freeze({
+        width: 1080,
+        height: 1920,
+        mobileWidth: 720,
+        mobileHeight: 1280,
+        fps: 30,
+        bitrate: 8000000,
+        mobileBitrate: 5000000,
+        carSeconds: 2.2,
+        stagingSeconds: 0.45,
+        /** The run, until this long after the visitor's car crosses. */
+        runTail: 0.5,
+        /** The slow finish: this long either side of the crossing, at `slowRate`. */
+        slowLead: 0.4,
+        slowTail: 0.15,
+        slowRate: 0.3,
+        /** A rival this close is kept in the slow finish too. */
+        rivalWithin: 0.05,
+        boardSeconds: 3.8,
+        endSeconds: 1.6,
+        orbit: Object.freeze({ radius: 0.42, height: 0.12, from: 0.25, sweep: 1.1 }),
+        still: Object.freeze({ width: 1080, height: 1350 }),
+        url: 'scenexp.com/derby'
+    }),
+
+    /**
+     * The sound (M2): every sound made with Web Audio from noise and tones,
+     * no files. Muted by default (D2), a phone a little quieter than a
+     * computer, a limiter on the way out.
+     */
+    sound: Object.freeze({
+        master: 0.5,
+        masterMobile: 0.4,
+        /** The clip's sound, whatever the speakers are set to. */
+        record: 0.6,
+        /** Changes are scheduled this far ahead of the audio clock. */
+        ahead: 0.01,
+        limiter: Object.freeze({ threshold: -10, knee: 6, ratio: 12, attack: 0.003, release: 0.25 }),
+        /** Wheels on aluminum: a band of noise, louder the faster the field. */
+        roll: Object.freeze({ gain: 0.26, hz: 900, q: 0.8, top: 3200 }),
+        gate: Object.freeze({ gain: 0.5, clickHz: 2400, thunkHz: 150, seconds: 0.14 }),
+        beep: Object.freeze({ gain: 0.16, hz: 1568, seconds: 0.09 }),
+        cheer: Object.freeze({ gain: 0.34, hz: 1300, q: 0.6, attack: 0.25, decay: 2.4, clapHz: 7 })
+    }),
+
     look: Object.freeze({
         background: 0x2b2420,
         fog: Object.freeze({ color: 0x2b2420, near: 14, far: 60 }),

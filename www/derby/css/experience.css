@@ -509,6 +509,130 @@ body {
     text-align: center;
 }
 
+/* ---- The sound button (M2) -------------------------------------------------
+   Top right, opposite the back arrow, in the same neutral circle. Waves when
+   the sound is on, a cross when it is off, and it never fills. */
+
+.sound-btn {
+    top: max(16px, env(safe-area-inset-top));
+    right: max(16px, env(safe-area-inset-right));
+}
+
+.sound-btn[aria-pressed="false"] .sound-waves,
+.sound-btn[aria-pressed="true"] .sound-off {
+    display: none;
+}
+
+.sound-btn:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+/* ---- The share card (M2) ---------------------------------------------------
+   Over the results. The stage holds the clip as it is made (its own canvas)
+   and then the finished video, 9:16, as tall as the screen allows. */
+
+.clip-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+    background: rgba(12, 9, 6, 0.78);
+    z-index: 130;
+}
+
+.clip-modal.hidden {
+    display: none;
+}
+
+.clip-card {
+    margin: auto 0;
+    width: min(26rem, 100%);
+    padding: 1rem 1rem 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    background: rgba(28, 22, 18, 0.96);
+    color: #f6efe6;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.clip-title {
+    margin: 0 0 0.75rem;
+    color: var(--ui-title);
+    font-size: 1.3rem;
+}
+
+.clip-title:focus {
+    outline: none;
+}
+
+.clip-stage {
+    display: flex;
+    justify-content: center;
+    margin: 0 auto;
+    height: min(62vh, 32rem);
+    aspect-ratio: 9 / 16;
+    max-width: 100%;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #000;
+}
+
+.clip-stage canvas,
+.clip-stage video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.clip-progress {
+    margin: 0.6rem 0 0.4rem;
+    color: #e6d9c9;
+    font-size: 0.9rem;
+}
+
+.clip-sound {
+    display: inline-flex;
+    gap: 0.4rem;
+    align-items: center;
+    margin-bottom: 0.4rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.clip-sound input {
+    accent-color: var(--ui-accent);
+}
+
+.clip-sound input:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+
+.clip-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0.5rem;
+}
+
+.clip-actions [hidden] {
+    display: none;
+}
+
+.clip-note {
+    margin: 0.75rem 0 0;
+    color: #8f8478;
+    font-size: 0.75rem;
+}
+
 /* ---- Small screens -------------------------------------------------------- */
 
 @media (max-width: 480px) {

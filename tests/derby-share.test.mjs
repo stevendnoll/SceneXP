@@ -1,0 +1,571 @@
+// © 2026 Continuum Commerce LLC. MIT licensed.
+/**
+ * Derby Day's share clip and sound (M2), from SOURCE: sound.js against a
+ * fake AudioContext, recorder.js against a fake MediaRecorder and share
+ * sheet, clip.js's script and the words it burns in (into a recording 2D
+ * context), and the whole share card on the page under the stubs.
+ *
+ * What is held here, and why:
+ * - MUTING NEVER SILENCES A CLIP (PLANNING, The clip): with the speakers
+ *   off, a recording with its sound on still makes every sound.
+ * - MP4 FIRST, since Instagram does not take WebM well.
+ * - A DISMISSED SHARE SHEET IS NOT A FAILURE: no file is saved behind it.
+ * - THE CLIP IS A REPLAY: its heat is the visitor's best, and the time it
+ *   stamps is the board's.
+ */
+import { jest } from '@jest/globals';
+import { installThree } from './helpers/three-stub.mjs';
+import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
+
+installThree();
+const { DERBY_CONFIG: C } = await import('../www/derby/js/config.js');
+const Car = await import('../www/derby/js/car.js');
+const Sim = await import('../www/derby/js/sim.js');
+const Sound = await import('../www/derby/js/sound.js');
+const Rec = await import('../www/derby/js/recorder.js');
+const Clip = await import('../www/derby/js/clip.js');
+const T = await import('../www/derby/js/track.js');
+
+// ---- A fake AudioContext that remembers what it made ----------------------------
+
+function fakeAudio() {
+    const made = [];
+    const param = (value = 0) => ({
+        value,
+        setTargetAtTime(v) { this.value = v; },
+        setValueAtTime(v) { this.value = v; },
+        exponentialRampToValueAtTime(v) { this.value = v; }
+    });
+    const node = (kind, extra = {}) => {
+        const n = { kind, connected: [], connect(to) { this.connected.push(to); return to; }, disconnect() { this.connected = []; }, ...extra };
+        made.push(n);
+        return n;
+    };
+    let closed = false;
+    class Ctx {
+        constructor() {
+            this.currentTime = 0;
+            this.sampleRate = 4000;
+            this.destination = { kind: 'destination' };
+            this.state = 'suspended';
+        }
+        createGain() { return node('gain', { gain: param(1) }); }
+        createBiquadFilter() { return node('filter', { frequency: param(), Q: param() }); }
+        createBufferSource() { return node('source', { start() {}, stop() {} }); }
+        createOscillator() { return node('osc', { frequency: param(), start() {}, stop() {} }); }
+        createDynamicsCompressor() { return node('limiter', { threshold: param(), knee: param(), ratio: param(), attack: param(), release: param() }); }
+        createBuffer(ch, frames) { return { getChannelData: () => new Float32Array(frames) }; }
+        createMediaStreamDestination() { return node('record', { stream: { getAudioTracks: () => ['audio-track'] } }); }
+        resume() { this.state = 'running'; return Promise.resolve(); }
+        close() { closed = true; return Promise.resolve(); }
+    }
+    return { win: { AudioContext: Ctx }, made, count: (kind) => made.filter((n) => n.kind === kind).length, closed: () => closed };
+}
+
+describe('the sound', () => {
+    test('a browser with no Web Audio stays quiet, and every call is safe', () => {
+        const s = Sound.createSound(C.sound, { win: {} });
+        expect(s.isOn()).toBe(false);
+        expect(s.toggle()).toBe(true);
+        expect(s.ensure()).toBe(false);
+        for (const call of [() => s.roll(1), () => s.gate(), () => s.beep(), () => s.cheer(), () => s.setRecording(true), () => s.setLevel(0.2), () => s.dispose()]) {
+            expect(call).not.toThrow();
+        }
+        expect(s.recordStream()).toBeNull();
+        expect(Sound.createSound(C.sound, { win: null }).ensure()).toBe(false);
+    });
+
+    test('nothing is made until it is asked for, and the speakers follow the mute', () => {
+        const a = fakeAudio();
+        const s = Sound.createSound(C.sound, { win: a.win });
+        expect(a.made).toHaveLength(0);
+        s.gate();
+        expect(a.made).toHaveLength(0);
+        s.setOn(true);
+        // The bus, the speakers, the limiter, the record gain, and the wheels.
+        expect(a.count('limiter')).toBe(1);
+        const speakers = a.made.filter((n) => n.kind === 'gain')[1];
+        expect(speakers.gain.value).toBeCloseTo(C.sound.master, 9);
+        s.setLevel(0.3);
+        expect(speakers.gain.value).toBeCloseTo(0.3, 9);
+        s.setOn(false);
+        expect(speakers.gain.value).toBe(0);
+        s.dispose();
+        expect(a.closed()).toBe(true);
+    });
+
+    test('muted, nothing plays. Muted but recording with sound, every sound still plays for the clip', () => {
+        const a = fakeAudio();
+        const s = Sound.createSound(C.sound, { win: a.win });
+        s.ensure();
+        const before = a.made.length;
+        s.gate();
+        s.beep();
+        s.cheer();
+        expect(a.made.length).toBe(before);
+        s.setRecording(true, true);
+        s.gate();
+        s.beep();
+        s.cheer(1);
+        expect(a.made.length).toBeGreaterThan(before + 6);
+        // A recording without its sound is silent again.
+        const after = a.made.length;
+        s.setRecording(true, false);
+        s.beep();
+        expect(a.made.length).toBe(after);
+    });
+
+    test('the clip\'s audio track: one recording output, its gain on only while recording with sound', () => {
+        const a = fakeAudio();
+        const s = Sound.createSound(C.sound, { win: a.win });
+        s.ensure();
+        const stream = s.recordStream();
+        expect(stream.getAudioTracks()).toEqual(['audio-track']);
+        expect(s.recordStream()).toBe(stream);
+        expect(a.count('record')).toBe(1);
+        const recordGain = a.made.find((n) => n.kind === 'gain' && n.connected.some((c) => c.kind === 'record'));
+        s.setRecording(true, true);
+        expect(recordGain.gain.value).toBeCloseTo(C.sound.record, 9);
+        s.setRecording(false);
+        expect(recordGain.gain.value).toBe(0);
+    });
+
+    test('the wheels follow the field\'s speed, clamped, and fall silent when nobody would hear', () => {
+        const a = fakeAudio();
+        const s = Sound.createSound(C.sound, { win: a.win });
+        s.setOn(true);
+        const roll = a.made.find((n) => n.kind === 'gain' && n.connected.length && a.made.some((f) => f.kind === 'filter' && f.connected.includes(n)));
+        s.roll(0.5);
+        expect(roll.gain.value).toBeCloseTo(0.5 * C.sound.roll.gain, 9);
+        s.roll(7);
+        expect(roll.gain.value).toBeCloseTo(C.sound.roll.gain, 9);
+        s.roll(-1);
+        expect(roll.gain.value).toBe(0);
+        s.setOn(false);
+        s.roll(1);
+        expect(roll.gain.value).toBe(0);
+    });
+
+    test('a one-shot lets go of its nodes when it ends', () => {
+        const a = fakeAudio();
+        const s = Sound.createSound(C.sound, { win: a.win });
+        s.setOn(true);
+        s.beep();
+        const osc = a.made.filter((n) => n.kind === 'osc').pop();
+        const gain = osc.connected[0];
+        expect(gain.connected.length).toBe(1);
+        osc.onended();
+        expect(osc.connected).toHaveLength(0);
+        expect(gain.connected).toHaveLength(0);
+    });
+
+    test('a context that cannot be made leaves the sound quiet for good', () => {
+        const s = Sound.createSound(C.sound, { win: { AudioContext: class { constructor() { throw new Error('no'); } } } });
+        expect(s.ensure()).toBe(false);
+        expect(s.setOn(true)).toBe(true);
+        expect(() => s.cheer()).not.toThrow();
+    });
+});
+
+// ---- The recorder ----------------------------------------------------------------
+
+describe('the recorder', () => {
+    test('MP4 first, WebM last, nothing when nothing is supported, and a type check that throws is skipped', () => {
+        expect(Rec.pickMime(() => true)).toBe(Rec.MIME_PREFERENCE[0]);
+        expect(Rec.pickMime((t) => t === 'video/webm')).toBe('video/webm');
+        expect(Rec.pickMime((t) => { if (t.includes('mp4')) throw new Error('?'); return t === 'video/webm;codecs=vp9,opus'; })).toBe('video/webm;codecs=vp9,opus');
+        expect(Rec.pickMime(() => false)).toBe('');
+        expect(Rec.pickMime(null)).toBe('');
+        expect(Rec.MIME_PREFERENCE[0]).toMatch(/^video\/mp4/);
+        expect(Rec.extensionOf('video/mp4;codecs=avc1')).toBe('mp4');
+        expect(Rec.extensionOf('video/webm')).toBe('webm');
+    });
+
+    test('file names from the car\'s name, safe on every system', () => {
+        expect(Rec.fileName('Blue Comet', 'mp4')).toBe('derby-day-blue-comet.mp4');
+        expect(Rec.fileName('Café   Racer!!', 'webm')).toBe('derby-day-cafe-racer.webm');
+        expect(Rec.fileName('../../etc', 'mp4')).toBe('derby-day-etc.mp4');
+        expect(Rec.fileName('', 'png')).toBe('derby-day.png');
+        expect(Rec.fileName(null, 'png')).toBe('derby-day.png');
+    });
+
+    test('a browser can record only with MediaRecorder and canvas capture', () => {
+        expect(Rec.canRecord(null)).toBe(false);
+        expect(Rec.canRecord({})).toBe(false);
+        expect(Rec.canRecord({ MediaRecorder: function () {} })).toBe(false);
+        const Canvas = function () {};
+        Canvas.prototype.captureStream = () => ({});
+        expect(Rec.canRecord({ MediaRecorder: function () {}, HTMLCanvasElement: Canvas })).toBe(true);
+    });
+
+    test('recording gathers the slices into one file of the recorder\'s type, and a failure rejects', async () => {
+        class FakeRecorder {
+            constructor(stream, options) { this.options = options; this.mimeType = options.mimeType; FakeRecorder.last = this; }
+            start(slice) { this.slice = slice; }
+            stop() {
+                this.ondataavailable({ data: new Blob(['a']) });
+                this.ondataavailable({ data: new Blob([]) });
+                this.ondataavailable({ data: new Blob(['b']) });
+                this.onstop();
+            }
+        }
+        const win = { MediaRecorder: FakeRecorder, Blob };
+        const { recorder, done } = Rec.startRecording({}, 'video/mp4;codecs=avc1', { bitrate: 5, win });
+        expect(recorder.slice).toBe(1000);
+        expect(recorder.options).toEqual({ mimeType: 'video/mp4;codecs=avc1', videoBitsPerSecond: 5 });
+        recorder.stop();
+        const blob = await done;
+        expect(blob.type).toBe('video/mp4');
+        expect(blob.size).toBe(2);
+        const failing = Rec.startRecording({}, '', { bitrate: 5, win });
+        expect(FakeRecorder.last.options).toEqual({ videoBitsPerSecond: 5 });
+        FakeRecorder.last.onerror({ error: new Error('boom') });
+        await expect(failing.done).rejects.toThrow('boom');
+        const bare = Rec.startRecording({}, '', { bitrate: 5, win });
+        FakeRecorder.last.onerror({});
+        await expect(bare.done).rejects.toThrow('recording failed');
+    });
+
+    test('sharing a file: shared, cancelled (not saved behind the visitor\'s back), or unavailable', async () => {
+        const blob = new Blob(['x'], { type: 'video/mp4' });
+        const win = { File };
+        const nav = (share, canShare = () => true) => ({ share, canShare });
+        expect(await Rec.shareFile(blob, 'a.mp4', { nav: null, win })).toBe('unavailable');
+        expect(await Rec.shareFile(blob, 'a.mp4', { nav: nav(async () => {}), win: {} })).toBe('unavailable');
+        expect(await Rec.shareFile(blob, 'a.mp4', { nav: nav(async () => {}, () => false), win })).toBe('unavailable');
+        expect(await Rec.shareFile(blob, 'a.mp4', { nav: nav(async () => {}, () => { throw new Error('?'); }), win })).toBe('unavailable');
+        let sent = null;
+        expect(await Rec.shareFile(blob, 'a.mp4', { title: 'T', text: 'X', nav: nav(async (d) => { sent = d; }), win })).toBe('shared');
+        expect(sent.files[0].name).toBe('a.mp4');
+        expect(sent.text).toBe('X');
+        const abort = Object.assign(new Error('no'), { name: 'AbortError' });
+        expect(await Rec.shareFile(blob, 'a.mp4', { nav: nav(async () => { throw abort; }), win })).toBe('cancelled');
+        expect(await Rec.shareFile(blob, 'a.mp4', { nav: nav(async () => { throw new Error('denied'); }), win })).toBe('unavailable');
+        expect(await Rec.shareFile(blob, 'a.mp4', { nav: nav(async () => {}), win: { File: function () { throw new Error('?'); } } })).toBe('unavailable');
+        expect(Rec.canShareFiles('video/mp4', { nav: nav(null), win })).toBe(true);
+        expect(Rec.canShareFiles('video/mp4', { nav: nav(null, () => false), win })).toBe(false);
+        expect(Rec.canShareFiles('video/mp4', { nav: nav(null, () => { throw new Error('?'); }), win })).toBe(false);
+        expect(Rec.canShareFiles('video/mp4', { nav: null, win })).toBe(false);
+    });
+
+    test('saving a file offers it through a download link, then tidies the link away', () => {
+        const dom = installDom();
+        try {
+            let clicked = null;
+            const realCreate = dom.documentStub.createElement;
+            dom.documentStub.createElement = (tag) => {
+                const e = realCreate(tag);
+                if (tag === 'a') e.click = () => { clicked = { href: e.href, download: e.download }; };
+                return e;
+            };
+            expect(Rec.saveFile('blob:x', 'derby-day.mp4', { doc: dom.documentStub })).toBe(true);
+            expect(clicked).toEqual({ href: 'blob:x', download: 'derby-day.mp4' });
+            expect(dom.documentStub.body.children).toHaveLength(0);
+            expect(Rec.saveFile('', 'x', { doc: dom.documentStub })).toBe(false);
+            expect(Rec.saveFile('blob:x', 'x', { doc: null })).toBe(false);
+        } finally {
+            dom.uninstall();
+        }
+    });
+});
+
+// ---- The clip's script and its words ---------------------------------------------
+
+const preset = (id) => {
+    const p = C.presets.find((x) => x.id === id);
+    return Car.describeCar(Car.buildFromDesign(p.design, { tune: p.tune, ballast: p.ballast }));
+};
+const fieldCar = (i) => Car.describeCar(Car.buildFromField(C.field[i]));
+
+/** A 2D context that keeps every word written and every fill. */
+function recording2d() {
+    const words = [];
+    const g = {
+        font: '', fillStyle: '', textAlign: '', textBaseline: '', globalAlpha: 1,
+        measureText: (t) => ({ width: String(t).length * (parseFloat(g.font.split(' ')[1]) || 10) * 0.55 }),
+        createLinearGradient: () => ({ addColorStop() {} }),
+        fillRect() {},
+        fillText(t) { words.push({ text: t, font: g.font }); }
+    };
+    return { g, words, said: () => words.map((w) => w.text) };
+}
+
+describe('the clip', () => {
+    const race = Sim.runRace([preset('full'), ...C.divisions.hard.map(fieldCar)], C, { record: C.timing.record });
+
+    test('its heat is the visitor\'s best, and the time it stamps is the board\'s', () => {
+        const plan = Clip.planClip(race, 0);
+        const best = race.best[0];
+        expect(race.heats[plan.heatIndex][0]).toBe(best);
+        expect(plan.time).toBe(best.time);
+        expect(plan.lane).toBe(best.lane);
+        expect(plan.crossing).toBe(race.runs[0][best.lane].time);
+        expect(plan.segments.map((s) => s.kind)).toEqual(['car', 'staging', 'gate', 'run', 'slow', 'board', 'end']);
+        for (let i = 1; i < plan.segments.length; i++) expect(plan.segments[i].from).toBeCloseTo(plan.segments[i - 1].to, 9);
+        // About thirteen seconds (PRD: twelve to fifteen).
+        expect(plan.total).toBeGreaterThan(12);
+        expect(plan.total).toBeLessThan(16);
+        expect(plan.place).toBeGreaterThanOrEqual(1);
+    });
+
+    test('a rival within 0.05 s stays in the slow finish, and the slow finish brackets both crossings', () => {
+        const plan = Clip.planClip(race, 0);
+        const slow = plan.segments.find((s) => s.kind === 'slow');
+        expect(slow.runFrom).toBeLessThan(plan.crossing);
+        expect(slow.runTo).toBeGreaterThan(plan.crossing);
+        if (plan.rival !== null) {
+            expect(Math.abs(plan.rival - plan.crossing)).toBeLessThanOrEqual(C.clip.rivalWithin);
+            expect(slow.runFrom).toBeLessThan(plan.rival);
+            expect(slow.runTo).toBeGreaterThan(plan.rival);
+        }
+        // A runaway winner has no rival in its slow finish.
+        const alone = Sim.runRace([preset('full'), fieldCar(0)], C, { record: C.timing.record });
+        expect(Clip.planClip(alone, 0).rival).toBeNull();
+    });
+
+    test('clipMoment: still at the pin, then the run, the crawl over the line, and past it for the board', () => {
+        const plan = Clip.planClip(race, 0);
+        const seg = (k) => plan.segments.find((s) => s.kind === k);
+        expect(Clip.clipMoment(plan, 0.5)).toMatchObject({ kind: 'car', runTime: 0, done: false });
+        expect(Clip.clipMoment(plan, seg('gate').from + 0.01).runTime).toBe(0);
+        expect(Clip.clipMoment(plan, seg('run').from + 1).runTime).toBeCloseTo(1, 9);
+        const slow = seg('slow');
+        const mid = Clip.clipMoment(plan, (slow.from + slow.to) / 2);
+        expect(mid.runTime).toBeCloseTo((slow.runFrom + slow.runTo) / 2, 9);
+        expect(Clip.clipMoment(plan, seg('board').from + 0.1).runTime).toBeGreaterThan(plan.crossing + 1);
+        expect(Clip.clipMoment(plan, plan.total + 1)).toMatchObject({ kind: 'end', progress: 1, done: true });
+    });
+
+    test('the opening shot circles the car from its lane\'s open side, and the rest are the director\'s', () => {
+        const path = T.pathOf();
+        const car = preset('full');
+        for (const lane of [0, 3]) {
+            const pose = T.carPose(path, 0, lane, car);
+            const f = Clip.clipFraming({ kind: 'car', progress: 0.5 }, { path, pose, carLength: C.kit.length, leadS: 0, aspect: 9 / 16 });
+            // Out past the edge of the track, on the visitor's side.
+            expect(Math.sign(f.position.z - pose.z)).toBe(lane === 0 ? -1 : 1);
+            expect(f.position.y).toBeGreaterThan(pose.y);
+        }
+        const plan = Clip.planClip(race, 0);
+        for (const k of ['staging', 'run', 'slow', 'board', 'end']) {
+            const m = Clip.clipMoment(plan, plan.segments.find((s) => s.kind === k).from + 0.05);
+            const f = Clip.clipFraming(m, { path, pose: null, carLength: C.kit.length, leadS: 2, aspect: 9 / 16 });
+            expect(Number.isFinite(f.position.x)).toBe(true);
+        }
+    });
+
+    const frame = (over) => ({
+        kind: 'run', progress: 0.5, carName: 'The Full Treatment', eventLabel: 'Hard division', heatLabel: 'Heat 2 · Lane 3',
+        crossed: false, time: 3.188, place: 1, url: 'scenexp.com/derby',
+        rows: [{ place: 1, name: 'The Full Treatment', average: 3.19, mine: true }, { place: 2, name: 'The Phantom', average: 3.19, mine: false }],
+        ...over
+    });
+
+    test('the words burned in: the car, the heat, the time once across, the photo finish, the board, the end card', () => {
+        const w = 720;
+        const h = 1280;
+        let r = recording2d();
+        Clip.drawClipFrame(r.g, w, h, frame({ kind: 'car' }));
+        expect(r.said()).toEqual(['DERBY DAY', 'The Full Treatment', 'Hard division']);
+        r = recording2d();
+        Clip.drawClipFrame(r.g, w, h, frame());
+        expect(r.said()).toEqual(['Heat 2 · Lane 3']);
+        r = recording2d();
+        Clip.drawClipFrame(r.g, w, h, frame({ kind: 'slow', crossed: true }));
+        expect(r.said()).toEqual(['Heat 2 · Lane 3', 'PHOTO FINISH', '3.188', '1st in this heat · The Full Treatment']);
+        r = recording2d();
+        Clip.drawClipFrame(r.g, w, h, frame({ kind: 'board' }));
+        expect(r.said()).toEqual(['HARD DIVISION', 'Final standings', '1st', 'The Full Treatment', 'You', '3.190', '2nd', 'The Phantom', '3.190',
+            'Average of four heats, every car in every lane']);
+        r = recording2d();
+        Clip.drawClipFrame(r.g, w, h, frame({ kind: 'end', progress: 0.1 }));
+        expect(r.said()).toEqual(['Can you beat it?', 'scenexp.com/derby', 'Derby Day']);
+        expect(r.g.globalAlpha).toBe(1);
+        for (const t of r.said()) expect(t).not.toMatch(/[—;]|pinewood/i);
+    });
+
+    test('a long name shrinks to fit the frame rather than running off it', () => {
+        const r = recording2d();
+        Clip.drawClipFrame(r.g, 720, 1280, frame({ kind: 'car', carName: 'The Quite Unreasonably Long Name' }));
+        const name = r.words.find((x) => x.text === 'The Quite Unreasonably Long Name');
+        const size = parseFloat(name.font.split(' ')[1]);
+        expect(size).toBeLessThan(88);
+        expect(name.text.length * size * 0.55).toBeLessThanOrEqual(720 * 0.88);
+    });
+
+    test('the still picture: the car\'s name, the event, the board, and the way to the scene', () => {
+        const r = recording2d();
+        Clip.drawStill(r.g, 1080, 1350, frame());
+        expect(r.said()).toEqual(['DERBY DAY', 'The Full Treatment', 'Hard division', '1st', 'The Full Treatment', '3.190', '2nd', 'The Phantom', '3.190',
+            'Can you beat it? scenexp.com/derby']);
+    });
+});
+
+// ---- The share card on the page -------------------------------------------------
+
+describe('the share card on the page', () => {
+    let dom;
+
+    beforeEach(() => {
+        jest.resetModules();
+        jest.useFakeTimers({ doNotFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'queueMicrotask', 'nextTick', 'setImmediate'] });
+        installThree();
+        dom = installDom({ innerWidth: 390, innerHeight: 844 });
+    });
+
+    afterEach(() => {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+        dom.uninstall();
+    });
+
+    async function boot() {
+        const main = await import('../www/derby/js/main.js');
+        await flushAsync(30);
+        await jest.advanceTimersByTimeAsync(500);
+        return main;
+    }
+
+    function frames(main, seconds, fps = 30) {
+        const loop = dom.loops[dom.loops.length - 1];
+        const spy = jest.spyOn(performance, 'now');
+        let now = main.getState().lastTime;
+        for (let i = 1; i <= Math.round(seconds * fps); i++) {
+            now += 1000 / fps;
+            spy.mockReturnValue(now);
+            loop();
+        }
+        spy.mockRestore();
+    }
+
+    /** A browser that can record: MediaRecorder, canvas capture, and the
+     *  canvases able to stream and to make a PNG. */
+    function recordingBrowser() {
+        class FakeRecorder {
+            static isTypeSupported(t) { return t === 'video/webm'; }
+            constructor(stream, options) { this.mimeType = options.mimeType; FakeRecorder.last = this; this.stream = stream; }
+            start() {}
+            stop() {
+                this.ondataavailable({ data: new Blob(['clip']) });
+                this.onstop();
+            }
+        }
+        const Canvas = function () {};
+        Canvas.prototype.captureStream = () => ({});
+        Object.assign(dom.windowStub, { MediaRecorder: FakeRecorder, HTMLCanvasElement: Canvas, Blob, File });
+        const realCreate = dom.documentStub.createElement;
+        const saved = [];
+        dom.documentStub.createElement = (tag) => {
+            const e = realCreate(tag);
+            if (tag === 'canvas') {
+                e.captureStream = () => ({ tracks: [], addTrack(t) { this.tracks.push(t); } });
+                e.toBlob = (cb) => cb(new Blob(['png'], { type: 'image/png' }));
+            }
+            if (tag === 'a') e.click = () => saved.push(e.download);
+            return e;
+        };
+        return { FakeRecorder, saved };
+    }
+
+    async function toResults(main) {
+        fire(dom.el('go-btn'), 'click');
+        main.__test__.finishRace('skip');
+        expect(main.getState().phase).toBe('results');
+    }
+
+    test('the sound button and M turn the sound on and off, and say which', async () => {
+        const main = await boot();
+        const btn = dom.el('sound-btn');
+        expect(btn.classList.contains('visible')).toBe(true);
+        expect(btn.getAttribute('aria-pressed')).toBe('false');
+        fire(btn, 'click');
+        expect(btn.getAttribute('aria-pressed')).toBe('true');
+        expect(btn.getAttribute('title')).toBe('Sound on (M)');
+        fire(dom.documentStub, 'keydown', { key: 'm' });
+        expect(btn.getAttribute('aria-pressed')).toBe('false');
+        // Not with a modifier held.
+        fire(dom.documentStub, 'keydown', { key: 'm', metaKey: true });
+        expect(btn.getAttribute('aria-pressed')).toBe('false');
+        expect(main.__test__.sound.isOn()).toBe(false);
+    });
+
+    test('a browser that cannot record says so kindly, and the card closes with Done or Escape', async () => {
+        const main = await boot();
+        await toResults(main);
+        fire(dom.el('results-share'), 'click');
+        const modal = dom.el('clip-modal');
+        expect(modal.classList.contains('hidden')).toBe(false);
+        expect(dom.el('clip-progress').textContent).toMatch(/can’t make a video, but you can save a picture/);
+        expect(main.getState().clip).toBeNull();
+        fire(dom.el('clip-close'), 'click');
+        expect(modal.classList.contains('hidden')).toBe(true);
+        fire(dom.el('results-share'), 'click');
+        fire(dom.documentStub, 'keydown', { key: 'Escape' });
+        expect(modal.classList.contains('hidden')).toBe(true);
+        // The results are still up behind it.
+        expect(main.getState().phase).toBe('results');
+    });
+
+    test('a clip is made live, plays back in the card, and is saved where it cannot be shared', async () => {
+        const { FakeRecorder, saved } = recordingBrowser();
+        const main = await boot();
+        await toResults(main);
+        fire(dom.el('results-share'), 'click');
+        const state = main.getState();
+        expect(state.clip.recording).toBe(true);
+        expect(state.clip.mime).toBe('video/webm');
+        // The live canvas is in the stage while it is made.
+        expect(dom.el('clip-stage').children[0].tagName).toMatch(/canvas/i);
+        frames(main, 2);
+        expect(dom.el('clip-progress').textContent).toMatch(/Making your clip… \d+ seconds to go/);
+        frames(main, state.clip.plan.total);
+        await flushAsync(10);
+        expect(FakeRecorder.last).toBeTruthy();
+        const c = state.clip;
+        expect(c.recording).toBe(false);
+        expect(c.blob.type).toBe('video/webm');
+        expect(c.name).toBe('derby-day-weekend-wedge.webm');
+        const video = dom.el('clip-stage').children[0];
+        expect(video.tagName).toMatch(/video/i);
+        expect(video.src).toBe(c.url);
+        const share = dom.el('clip-share');
+        expect(share.hidden).toBe(false);
+        expect(share.textContent).toBe('Save video');
+        expect(dom.el('clip-again').hidden).toBe(false);
+        fire(share, 'click');
+        await flushAsync(10);
+        expect(saved).toEqual(['derby-day-weekend-wedge.webm']);
+        expect(dom.el('clip-status').textContent).toMatch(/saved to your downloads/);
+        // The picture, made ahead, saved too.
+        fire(dom.el('clip-image'), 'click');
+        await flushAsync(10);
+        expect(saved).toEqual(['derby-day-weekend-wedge.webm', 'derby-day-weekend-wedge-results.png']);
+        // Make it again: a fresh clip.
+        fire(dom.el('clip-again'), 'click');
+        expect(state.clip.recording).toBe(true);
+        // The picture waits while a clip is being made.
+        fire(dom.el('clip-image'), 'click');
+        await flushAsync(5);
+        expect(dom.el('clip-status').textContent).toMatch(/still being made/);
+        // Closing part way lets the clip go.
+        fire(dom.el('clip-close'), 'click');
+        expect(state.clip).toBeNull();
+    });
+
+    test('the clip\'s sound box follows into the recording, even with the speakers muted', async () => {
+        recordingBrowser();
+        const main = await boot();
+        await toResults(main);
+        const calls = [];
+        const s = main.__test__.sound;
+        const real = s.setRecording;
+        s.setRecording = (on, withSound) => { calls.push([on, withSound]); return real(on, withSound); };
+        fire(dom.el('results-share'), 'click');
+        expect(calls[0]).toEqual([true, true]);
+        const box = dom.el('clip-sound');
+        box.checked = false;
+        fire(box, 'change');
+        expect(calls[calls.length - 1]).toEqual([true, false]);
+        expect(s.isOn()).toBe(false);
+    });
+});

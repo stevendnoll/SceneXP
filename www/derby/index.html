@@ -6,10 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
-         No media-src yet: M1 makes no sound and plays no video. The share
-         clip (M2) adds media-src 'self' blob: for its preview. -->
+         media-src 'self' blob: for the share clip's preview (M2): the clip is
+         recorded on the device and played back from a blob: URL, never
+         uploaded (tests/csp-media.test.mjs holds the two halves together).
+         The sound is all Web Audio (js/sound.js) and loads no media. -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <!-- STILL BEING BUILT (M1, graybox): kept out of search and every list of
          the site until its release (tests/directory.test.mjs UNRELEASED,
@@ -102,7 +104,7 @@
     <title>Derby Day | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=1" as="style">
+    <link rel="preload" href="css/experience.min.css?v=2" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -117,6 +119,9 @@
     <link rel="modulepreload" href="js/board.min.js">
     <link rel="modulepreload" href="js/copy.min.js">
     <link rel="modulepreload" href="js/phases.min.js">
+    <link rel="modulepreload" href="js/sound.min.js">
+    <link rel="modulepreload" href="js/clip.min.js">
+    <link rel="modulepreload" href="js/recorder.min.js">
     <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
@@ -125,7 +130,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=1">
+    <link rel="stylesheet" href="css/experience.min.css?v=2">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -233,6 +238,17 @@
 
     <button id="skip-btn" class="ui-float skip-btn" type="button">Skip to results</button>
 
+    <!-- The sound (M2): off to start (D2), turned on here or with M. A
+         toggle, so its name stays "Sound" and aria-pressed says which. Top
+         right, opposite the back arrow, shown once the page is loaded. -->
+    <button id="sound-btn" class="ui-float menu-btn sound-btn" type="button" title="Sound off (M)" aria-label="Sound" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" stroke-linejoin="round" />
+            <path class="sound-waves" d="M15.5 9a4 4 0 0 1 0 6M18.2 6.6a7.4 7.4 0 0 1 0 10.8" />
+            <path class="sound-off" d="M16 9.5l5 5M21 9.5l-5 5" />
+        </svg>
+    </button>
+
     <!-- THE RESULTS (js/board.js): a real table, the lane row, and why the
          visitor's car ran as it did. Race again takes focus last on purpose:
          the title takes it first, so a screen reader hears what this is. -->
@@ -245,12 +261,36 @@
             <ul id="results-lanes" class="results-lanes"></ul>
             <h3 id="results-why-heading" class="results-sub">Why your car ran as it did</h3>
             <ul id="results-why" class="results-why"></ul>
+            <!-- Share my race is the one filled button: the clip is what
+                 this scene is for (PRD, The share). -->
             <div class="results-actions">
-                <button id="results-again" class="go-btn" type="button">Race again</button>
+                <button id="results-share" class="go-btn" type="button">Share my race</button>
+                <button id="results-again" class="results-another" type="button">Race again</button>
                 <button id="results-another" class="results-another" type="button">Choose another race</button>
             </div>
             <p id="results-status" class="sr-only" role="status" aria-live="polite"></p>
             <p class="results-mark" aria-hidden="true">Derby Day &middot; SceneXP.com</p>
+        </div>
+    </div>
+
+    <!-- THE SHARE CARD (M2, js/clip.js and js/recorder.js): the clip is made
+         live while the visitor watches it in the stage, then plays back
+         there, ready to share or save. Over the results, last in the markup
+         so it stacks on top. -->
+    <div id="clip-modal" class="clip-modal hidden" role="dialog" aria-modal="true" aria-labelledby="clip-title" aria-describedby="clip-progress">
+        <div class="clip-card">
+            <h2 id="clip-title" class="clip-title" tabindex="-1">Your race, ready to share</h2>
+            <div id="clip-stage" class="clip-stage"></div>
+            <p id="clip-progress" class="clip-progress">Making your clip…</p>
+            <label class="clip-sound" for="clip-sound"><input id="clip-sound" type="checkbox" checked> Include sound</label>
+            <div class="clip-actions">
+                <button id="clip-share" class="go-btn" type="button" hidden>Share video</button>
+                <button id="clip-image" class="results-another" type="button">Save a picture</button>
+                <button id="clip-again" class="results-another" type="button" hidden>Make it again</button>
+                <button id="clip-close" class="results-another" type="button">Done</button>
+            </div>
+            <p class="clip-note">Made on this device. Nothing is uploaded.</p>
+            <p id="clip-status" class="sr-only" role="status" aria-live="polite"></p>
         </div>
     </div>
 
