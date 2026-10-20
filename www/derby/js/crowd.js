@@ -8,7 +8,7 @@
  *
  * EVERY ONE IS THE SAME BAKED PERSON (shared/js/crowd-1.0.0.js, the "crowd
  * is baked, not built" lesson): one figure in a dozen instanced pieces,
- * tinted per member, so the whole hall is about fourteen draw calls however
+ * tinted per member, so the whole hall is a handful of draw calls however
  * many are in it. A child is the same figure at a child's size. A cheer is a
  * member's matrix moving from the arms-down pieces to the arms-up ones, and
  * a hop.
@@ -25,21 +25,40 @@
 
 import { DERBY_CONFIG } from './config.min.js';
 import { SHIRTS, PANTS, SKINS, HAIR_COLORS, optionOf, normalizeChoice } from '../../shared/js/cast-1.0.0.min.js';
-import { buildCrowdParts, HAIR } from '../../shared/js/crowd-1.0.0.min.js';
+import { buildCrowdParts, HAIR, ARM_POSES } from '../../shared/js/crowd-1.0.0.min.js';
 
 /** The arm poses the crowd is baked in. */
-export const POSES = Object.freeze(['down', 'up', 'clap']);
+export const POSES = Object.freeze(['down', 'up', 'clap', 'hold']);
 
-/** The pose each prop is held in, and which hand holds it. */
+/**
+ * HOLDING A SIGN UP (Steve's QA, 2026-10-19: the sign floated over the
+ * kid's head). The cheer's arms are a wide V, the hands 0.85 m apart, wider
+ * than any sign, so a sign is held in its own pose: arms raised nearly
+ * straight and a little forward, the hands 0.57 m apart just over the
+ * head (measured against real three). The board is then made to that grip.
+ */
+export const HOLD = Object.freeze({ x: -0.15, z: 3.0, fore: -0.6 });
+
+/** The pose each prop is held in, and which hand holds it. The trophy is
+ *  held up in one hand, the other arm up too: a champion's victory. */
 export const PROPS = Object.freeze({
     thermos: Object.freeze({ pose: 'down', hand: 'right' }),
-    sign: Object.freeze({ pose: 'up', hand: 'both' }),
+    sign: Object.freeze({ pose: 'hold', hand: 'both' }),
     camcorder: Object.freeze({ pose: 'clap', hand: 'both' }),
     megaphone: Object.freeze({ pose: 'clap', hand: 'both' }),
     finger: Object.freeze({ pose: 'up', hand: 'right' }),
     clipboard: Object.freeze({ pose: 'clap', hand: 'both' }),
-    trophy: Object.freeze({ pose: 'up', hand: 'both' })
+    trophy: Object.freeze({ pose: 'up', hand: 'right' })
 });
+
+/** A sign's board for hands `grip` apart: the hands on its bottom
+ *  corners, a little in from each edge, overlapping its lower edge and
+ *  just in front of it, where the camera sees them. Pure. */
+export function signBoard(grip) {
+    const w = grip + 0.09;
+    const h = 0.32;
+    return { w, h, y: h / 2 - 0.06, z: -0.03 };
+}
 
 /** A small seeded random, the same crowd on every visit. */
 export function seeded(seed) {
@@ -167,8 +186,9 @@ export function poseAt(member, moment) {
 
 const hexColor = (h) => new THREE.Color(h);
 
-/** A prop's mesh, its hold point at the origin. `text` for a sign. */
-function buildProp(kind, text, made) {
+/** A prop's mesh, its hold point (the hand, or between the hands) at the
+ *  origin. `text` for a sign, `grip` how far apart the hands hold it. */
+function buildProp(kind, text, made, grip = 0.57) {
     const mat = (color, roughness = 0.5, metalness = 0) => {
         const m = new THREE.MeshStandardMaterial({ color, roughness, metalness });
         made.push(m);
@@ -206,8 +226,9 @@ function buildProp(kind, text, made) {
         made.push(tex);
         const boardMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 });
         made.push(boardMat);
-        const board = mesh(new THREE.BoxGeometry(0.6, 0.3, 0.01), boardMat);
-        board.position.y = 0.18;
+        const b = signBoard(grip);
+        const board = mesh(new THREE.BoxGeometry(b.w, b.h, 0.01), boardMat);
+        board.position.set(0, b.y, b.z);
         g.add(board);
     } else if (kind === 'camcorder') {
         g.add(mesh(new THREE.BoxGeometry(0.08, 0.07, 0.14), mat(0x26262c, 0.5)));
@@ -222,9 +243,10 @@ function buildProp(kind, text, made) {
         g.add(cone);
     } else if (kind === 'finger') {
         const hand = mesh(new THREE.BoxGeometry(0.13, 0.14, 0.05), mat(0xd63c3c, 0.8));
-        hand.position.y = 0.05;
+        // Worn over the hand, the finger pointing up.
+        hand.position.y = 0.01;
         const finger = mesh(new THREE.BoxGeometry(0.045, 0.16, 0.045), hand.material);
-        finger.position.y = 0.19;
+        finger.position.y = 0.15;
         g.add(hand, finger);
     } else if (kind === 'clipboard') {
         const board = mesh(new THREE.BoxGeometry(0.22, 0.3, 0.01), mat(0xc99a5e, 0.7));
@@ -234,7 +256,8 @@ function buildProp(kind, text, made) {
     } else if (kind === 'trophy') {
         const pts = [[0.05, 0], [0.05, 0.02], [0.012, 0.03], [0.01, 0.1], [0.06, 0.13], [0.07, 0.22]].map(([r, y]) => new THREE.Vector2(r, y));
         const cup = mesh(new THREE.LatheGeometry(pts, 18), mat(0xe2b33c, 0.3, 0.6));
-        cup.position.y = -0.02;
+        // The hand round the stem.
+        cup.position.y = -0.06;
         g.add(cup);
     }
     return g;
@@ -249,7 +272,7 @@ function buildProp(kind, text, made) {
 export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
     const group = new THREE.Group();
     group.name = 'crowd';
-    const parts = buildCrowdParts({ scale: 1, poses: POSES });
+    const parts = buildCrowdParts({ scale: 1, poses: POSES, armPoses: { ...ARM_POSES, hold: HOLD } });
     const made = [];
     if (!parts) {
         return { group, ready: false, set() {}, pose() {}, dispose() {} };
@@ -321,7 +344,8 @@ export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
                 }
                 for (const s of HAIR) hair[s].setColorAt(i, hexColor(L.hair));
                 if (m.prop) {
-                    m.propMesh = buildProp(m.prop, m.sign || '', propMade);
+                    const [a, b] = parts.hands[PROPS[m.prop].pose];
+                    m.propMesh = buildProp(m.prop, m.sign || '', propMade, Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]));
                     props.add(m.propMesh);
                 }
             });

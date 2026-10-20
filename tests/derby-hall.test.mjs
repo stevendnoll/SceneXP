@@ -96,7 +96,7 @@ describe('who stands where', () => {
         expect(Crowd.poseAt(member('mine'), times).hop).toBeGreaterThan(0);
         expect(Crowd.poseAt(member('owl'), times)).toEqual({ pose: 'down', hop: 0 });
         // A prop holder keeps the pose that holds it, win or lose.
-        expect(Crowd.poseAt(member('owl', { prop: 'sign' }), times).pose).toBe('up');
+        expect(Crowd.poseAt(member('owl', { prop: 'sign' }), times).pose).toBe('hold');
         expect(Crowd.poseAt(member('owl', { prop: 'thermos' }), run).pose).toBe('down');
         expect(Crowd.poseAt(member('volunteer'), run)).toEqual({ pose: 'down', hop: 0 });
     });
@@ -145,7 +145,8 @@ describe('drawn, against real three', () => {
         const crowd = Cr.createCrowd(C, { capacity: 40 });
         expect(crowd.ready).toBe(true);
         const meshes = crowd.group.children.filter((c) => c.isInstancedMesh);
-        expect(meshes.length).toBeLessThanOrEqual(14);
+        // Four body pieces, three hair styles, two pieces for each arm pose.
+        expect(meshes.length).toBe(4 + 3 + 2 * Cr.POSES.length);
         const kid = { group: 'mine', phase: 0, look: Cr.lookOf({}, { kid: true }, C), at: { x: 1, y: 0, z: -1, ry: 0 }, prop: 'sign', sign: 'GO!' };
         const fan = { group: 'crowd', phase: 0, keen: true, look: Cr.lookOf({ length: 'bald' }, {}, C), at: { x: 2, y: 0.42, z: -2.2, ry: 0.2 } };
         crowd.set([kid, fan]);
@@ -163,8 +164,10 @@ describe('drawn, against real three', () => {
         crowd.pose({ kind: 'idle', t: 0 });
         const up = byName(crowd.parts.arms.up.sleeve);
         const down = byName(crowd.parts.arms.down.sleeve);
+        const hold = byName(crowd.parts.arms.hold.sleeve);
         // The kid holds the sign up; the fan, idle, stands arms down.
-        expect(scaleOf(up, 0)).toBeCloseTo(C.crowd.kidScale, 6);
+        expect(scaleOf(hold, 0)).toBeCloseTo(C.crowd.kidScale, 6);
+        expect(scaleOf(up, 0)).toBe(0);
         expect(scaleOf(down, 0)).toBe(0);
         expect(scaleOf(down, 1)).toBeCloseTo(1, 6);
         expect(scaleOf(up, 1)).toBe(0);
@@ -203,6 +206,48 @@ describe('drawn, against real three', () => {
             expect(p.position.y).toBeGreaterThanOrEqual(Math.min(...ys) - 1e-9);
             expect(p.position.y).toBeLessThanOrEqual(Math.max(...ys) + 1e-9);
         });
+    });
+
+    test('hands on the props (Steve\'s QA: the sign floated over the kid\'s head)', async () => {
+        const Cr = await import('../www/derby/js/crowd.js');
+        const crowd = Cr.createCrowd(C, { capacity: 4 });
+        const at = { x: 0, y: 0, z: 0, ry: 0 };
+        for (const scale of [1, C.crowd.kidScale]) {
+            const look = { ...Cr.lookOf({}, {}, C), scale };
+            crowd.set([
+                { group: 'owl', phase: 0, prop: 'sign', sign: 'GO!', look, at },
+                { group: 'owl', phase: 0, prop: 'trophy', look, at: { ...at, x: 2 } },
+                { group: 'owl', phase: 0, prop: 'finger', look, at: { ...at, x: 4 } }
+            ]);
+            crowd.group.updateMatrixWorld(true);
+            const held = crowd.group.children.find((c) => c.isGroup && c.children.length === 3).children;
+            const hands = (prop, x) => crowd.parts.hands[Cr.PROPS[prop].pose].map(([hx, hy, hz]) => new THREE.Vector3(x + hx * scale, hy * scale, hz * scale));
+            const handR = 0.04 * 1.3 * scale;
+            // The sign: each hand on the board's lower part, inside its width,
+            // just in front of it, and the board clear of the head.
+            const board = new THREE.Box3().setFromObject(held[0]);
+            for (const h of hands('sign', 0)) {
+                expect(h.x).toBeGreaterThan(board.min.x);
+                expect(h.x).toBeLessThan(board.max.x);
+                expect(h.y).toBeGreaterThan(board.min.y);
+                expect(h.y).toBeLessThan(board.min.y + 0.12 * scale);
+                expect(h.z).toBeGreaterThan(board.max.z - 0.001);
+                expect(h.z - handR).toBeLessThan(board.max.z);
+                // Inside the board's corners, not beyond them.
+                expect(Math.min(h.x - board.min.x, board.max.x - h.x)).toBeLessThan(0.1 * scale);
+            }
+            expect(board.min.y).toBeGreaterThan(crowd.parts.top * scale);
+            // The trophy: in the raised right hand, round its stem.
+            const cup = new THREE.Box3().setFromObject(held[1]);
+            const right = hands('trophy', 2).sort((p, q) => p.x - q.x)[0];
+            expect(right.x).toBeGreaterThan(cup.min.x);
+            expect(right.x).toBeLessThan(cup.max.x);
+            expect(right.y).toBeGreaterThan(cup.min.y);
+            expect(right.y).toBeLessThan(cup.min.y + 0.12 * scale);
+            // The foam finger: worn over the hand.
+            const finger = new THREE.Box3().setFromObject(held[2]);
+            expect(finger.containsPoint(hands('finger', 4).sort((p, q) => p.x - q.x)[0])).toBe(true);
+        }
     });
 
     test('under the stub, a crowd is nothing, safely', async () => {
