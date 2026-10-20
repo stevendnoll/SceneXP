@@ -560,6 +560,27 @@ describe('the share card on the page', () => {
         expect(state.clip).toBeNull();
     });
 
+    // The M7.1 sweep: the clip's orbit and slow finish played live, and the
+    // finished video autoplayed on a loop, whatever the visitor's setting.
+    test('reduced motion: the clip records unseen, and the finished clip waits for its play button', async () => {
+        dom.windowStub.matchMedia = (q) => ({
+            media: q, matches: /reduce/.test(q), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}
+        });
+        recordingBrowser();
+        const main = await boot();
+        await toResults(main);
+        fire(dom.el('results-share'), 'click');
+        const state = main.getState();
+        const live = dom.el('clip-stage').children[0];
+        expect(live.classList.contains('is-unseen')).toBe(true);
+        frames(main, state.clip.plan.total + 0.1);
+        await flushAsync(10);
+        const video = dom.el('clip-stage').children[0];
+        expect(video.tagName).toMatch(/video/i);
+        expect(video.autoplay).toBe(false);
+        expect(video.controls).toBe(true);
+    });
+
     test('the clip\'s sound box follows into the recording, even with the speakers muted', async () => {
         recordingBrowser();
         const main = await boot();

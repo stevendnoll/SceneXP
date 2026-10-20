@@ -378,4 +378,46 @@ describe('installCardFocusTrap', () => {
     press(false);
     expect(summary.focus).toHaveBeenCalled();
   });
+
+  // www/derby's sweep (2026-10-19): the results card focuses its title
+  // (tabindex=-1), inside the card but not a stop, and Shift+Tab from it left
+  // for the Sound button behind the backdrop.
+  test('Shift+Tab from a focused title before every stop wraps to the last stop', async () => {
+    const B = await load();
+    const again = el('again');
+    const done = el('done');
+    const order = ['title', 'again', 'done'];
+    const at = (n) => order.indexOf(n.id);
+    // compareDocumentPosition(other) & 2 when `other` precedes this node.
+    const title = el('title', { compareDocumentPosition: (o) => (at(o) < 0 ? 0 : at(o) < at(title) ? 2 : 4) });
+    const { press } = page([again, done]);
+    // The title is in the card, though not among its stops.
+    globalThis.document.querySelectorAll = () => [{ querySelectorAll: () => [again, done], contains: (n) => n === title || n === again || n === done, offsetWidth: 100, offsetHeight: 100 }];
+    B.installCardFocusTrap();
+    globalThis.document.activeElement = title;
+    const back = press(true);
+    expect(done.focus).toHaveBeenCalled();
+    expect(back.preventDefault).toHaveBeenCalled();
+    // Forward from the title is the browser's own move to the first stop.
+    const ahead = press(false);
+    expect(again.focus).not.toHaveBeenCalled();
+    expect(ahead.preventDefault).not.toHaveBeenCalled();
+  });
+
+  test('a focus holder after every stop wraps forward to the first', async () => {
+    const B = await load();
+    const again = el('again');
+    const done = el('done');
+    const holder = el('holder', { compareDocumentPosition: () => 2 });
+    page([again, done]);
+    globalThis.document.querySelectorAll = () => [{ querySelectorAll: () => [again, done], contains: () => true, offsetWidth: 100, offsetHeight: 100 }];
+    const listeners = [];
+    globalThis.document.addEventListener = (t, fn) => listeners.push(fn);
+    B.installCardFocusTrap();
+    globalThis.document.activeElement = holder;
+    const e = { key: 'Tab', shiftKey: false, preventDefault: jest.fn() };
+    listeners.forEach((fn) => fn(e));
+    expect(again.focus).toHaveBeenCalled();
+    expect(e.preventDefault).toHaveBeenCalled();
+  });
 });

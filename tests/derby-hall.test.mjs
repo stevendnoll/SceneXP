@@ -101,6 +101,29 @@ describe('who stands where', () => {
         expect(Crowd.poseAt(member('volunteer'), run)).toEqual({ pose: 'down', hop: 0 });
     });
 
+    // The M7.1 sweep: the winning family hopped on a loop behind the results
+    // card, and the bleachers through every run, with reduced motion on.
+    test('reduced motion: every pose held, nobody hopping, the same at any moment', () => {
+        const member = (group, extra = {}) => ({ group, phase: 0, ...extra });
+        const cases = [
+            [member('crowd', { keen: true }), { kind: 'run', cheering: new Set() }],
+            [member('mine'), { kind: 'run', cheering: new Set(['mine']) }],
+            [member('mine'), { kind: 'times', won: 'mine' }]
+        ];
+        for (const [m, moment] of cases) {
+            const seen = new Set();
+            for (let t = 0; t < 2; t += 0.05) {
+                const p = Crowd.poseAt(m, { ...moment, t, still: true });
+                expect(p.hop).toBe(0);
+                seen.add(p.pose);
+            }
+            expect(seen.size).toBe(1);
+            // Moving, the same member does hop.
+            const hops = [0.05, 0.15, 0.25].map((t) => Crowd.poseAt(m, { ...moment, t }).hop);
+            expect(Math.max(...hops)).toBeGreaterThan(0);
+        }
+    });
+
     test('the visitor\'s family: dressed from the card, the kid holding the car\'s name', () => {
         const f = Fam.normalizeFamily({ grownUp: { shirt: 'teal' }, kid: 'nonsense' });
         expect(f.grownUp.shirt).toBe('teal');

@@ -647,8 +647,13 @@ function placeCrowd() {
     state.familyCenters = Object.fromEntries(Object.entries(centers).map(([k, c]) => [k, { x: c.x / c.n, z: c.z / c.n }]));
 }
 
-/** What the people are doing now (crowd.poseAt's moment). */
+/** What the people are doing now (crowd.poseAt's moment). Reduced motion
+ *  holds every pose still, nobody hopping (`still`). */
 function crowdMoment(now) {
+    return { ...crowdMomentOf(now), still: state.reducedMotion };
+}
+
+function crowdMomentOf(now) {
     const day = state.day;
     const t = now / 1000;
     if (state.phase === 'race' && day) {
@@ -723,6 +728,8 @@ function beginRace(entries, how) {
     timer.build(entries.map((e) => e.name), state.day.mine, LANES);
     setRaceChrome(true);
     if (el['skip-btn']) el['skip-btn'].textContent = UI.skip;
+    announce('');
+    holdFocusOnScene();
     track('race-start', { kind: state.event, outcome: `cars=${entries.map((e) => e.id).join('.')}&how=${how}` });
 }
 
@@ -745,8 +752,26 @@ function startWeighIn(entries, how) {
         el['skip-btn'].textContent = UI.skipWeighIn;
         el['skip-btn'].classList.add('visible');
     }
+    announce('');
+    holdFocusOnScene();
     weighCamera();
     stepWeighIn(0);
+}
+
+/**
+ * The weigh-in and the race take focus off whatever started them: Go and
+ * check-in's card, the results' Race again and Try the next division with
+ * their card, Skip the weigh-in (hidden at the first staging) all hide, and
+ * focus left on a hidden control is on nothing. It goes to the scene itself
+ * (a holder, not a tab stop), so a held or repeated Enter presses nothing,
+ * and Tab goes on to the back arrow. The back arrow and the sound button
+ * stay on screen throughout, so focus on either is left where it is.
+ */
+function holdFocusOnScene() {
+    const here = document.activeElement;
+    if (here && (here === el['help-btn'] || here === el['sound-btn'])) return;
+    const scene = el['game-canvas'];
+    if (scene && typeof scene.focus === 'function') scene.focus({ preventScroll: true });
 }
 
 /** The weigh-in's camera: wide on the volunteer as the car is set down,
@@ -813,6 +838,9 @@ function stepWeighIn(dt) {
         else if (m.kind === 'hold' || m.kind === 'still') {
             sound.beep();
             caption(WEIGH.reading(massText));
+            // Reduced motion's one still step is the pass itself: no result
+            // step follows to say so.
+            if (m.kind === 'still') announce(WEIGH.spoken(entry.name, massText, true));
         } else if (m.kind === 'gauge') caption(WEIGH.gauge);
         else if (m.kind === 'result') {
             caption(WEIGH.passed(entry.name));
@@ -968,6 +996,9 @@ function stepRace(dt) {
         if (kind === 'staging') caption(staging(n, total));
         else if (kind === 'gate') {
             caption(gateCall(n, total));
+            // Spoken too, once a heat: otherwise a screen reader hears
+            // nothing from the weigh-in to each heat's times.
+            announce(gateCall(n, total));
             sound.gate();
         } else if (kind === 'replay') caption(UI.replay);
         else if (kind === 'times') {
@@ -1282,6 +1313,10 @@ function openClip() {
     out.width = w;
     out.height = h;
     out.setAttribute('aria-hidden', 'true');
+    // Reduced motion: the clip's orbit and slow finish are recorded, not
+    // watched. The canvas stays in the stage (a recording wants it laid out)
+    // but unseen, with the countdown under it.
+    out.classList.toggle('is-unseen', state.reducedMotion);
     if (stage) stage.appendChild(out);
     const g = out.getContext('2d');
     // Sound: made now (this is a gesture), recorded whatever the speakers say.
@@ -1394,7 +1429,8 @@ function finishedClip(blob) {
     video.src = c.url;
     video.muted = true;
     video.loop = true;
-    video.autoplay = true;
+    // Reduced motion: the clip waits for its play button.
+    video.autoplay = !state.reducedMotion;
     video.playsInline = true;
     video.controls = true;
     video.setAttribute('playsinline', '');
@@ -1404,7 +1440,7 @@ function finishedClip(blob) {
         stage.textContent = '';
         stage.appendChild(video);
     }
-    if (typeof video.play === 'function') {
+    if (!state.reducedMotion && typeof video.play === 'function') {
         const p = video.play();
         if (p && typeof p.catch === 'function') p.catch(() => {});
     }
@@ -1689,7 +1725,7 @@ export function getState() {
 }
 
 export const __test__ = {
-    startRace, finishRace, stepBack, openClip, closeClip, shareStill, shareClip, showBench, tuneCar, sound,
+    startRace, finishRace, stepBack, crowdMoment, openClip, closeClip, shareStill, shareClip, showBench, tuneCar, sound,
     meshes: () => meshes, benchMesh: () => benchMesh, garage: () => garage, bench: () => bench, holder: () => holder, crowd: () => crowd,
     familyView: (v) => {
         state.benchView = v;

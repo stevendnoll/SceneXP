@@ -341,6 +341,7 @@ export const SAY = Object.freeze({
     deleteSure: (name) => `Tap Delete again to remove ${name}.`,
     deleted: (name, next) => `${name} is gone. ${next} is on the bench now.`,
     picked: (name) => `${name} is on the bench.`,
+    forgetSure: 'Tap Forget again to clear every car, result and trophy from this browser.',
     forgot: (name) => `Everything is forgotten. Here’s a fresh car to start with, ${name}.`,
     // M4, the workshop.
     cutting: 'Cutting along your line…',

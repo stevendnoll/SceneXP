@@ -189,7 +189,8 @@ body {
     padding: 0.45rem 0.7rem 0.55rem;
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 10px;
-    background: rgba(12, 12, 14, 0.86);
+    /* 0.9 keeps the red times at 4.5:1 even over a white wall. */
+    background: rgba(12, 12, 14, 0.9);
     color: #e9e9ea;
     font-size: 0.85rem;
     z-index: 105;
@@ -245,6 +246,12 @@ body {
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-weight: 700;
     text-align: right;
+}
+
+/* On the visitor's tinted row the red fell to about 3:1, a lighter red
+   holds 5:1. */
+.timer-row.is-mine .timer-time {
+    color: #ffa39b;
 }
 
 .timer-place {
@@ -381,6 +388,12 @@ body {
 }
 
 .results-title:focus {
+    outline: none;
+}
+
+/* The scene holds focus through the weigh-in and the race (main.js
+   holdFocusOnScene): a holder, not a control, so no ring round the screen. */
+#game-canvas:focus {
     outline: none;
 }
 
@@ -598,6 +611,11 @@ body {
     width: 100%;
     height: 100%;
     object-fit: contain;
+}
+
+/* Reduced motion: the clip records unseen (main.js openClip). */
+.clip-stage canvas.is-unseen {
+    opacity: 0;
 }
 
 .clip-progress {
@@ -959,8 +977,16 @@ body {
     background: repeating-linear-gradient(135deg, #8a6a44 0 4px, #a3804f 4px 8px);
 }
 
-.pocket.is-filled {
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+/* The count on its own dark chip, above the fill: white on the bare wood
+   was 2.5:1, and 7:1 or better on this over wood, thin wood or tungsten. */
+.pocket-count {
+    position: relative;
+    display: inline-block;
+    min-width: 1.15em;
+    padding: 0 0.2em;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.45);
+    line-height: 1.3;
 }
 
 .pocket-axle {
@@ -1035,6 +1061,12 @@ body {
 .bench-sheet tr.is-over td {
     background: rgba(255, 210, 120, 0.45);
     font-weight: 700;
+}
+
+/* On the red Outlaw sheet the gold wash left the cream text at 2.7:1, on
+   the row that matters most: a darker wash instead (cream at 7.4:1). */
+.bench-sheet.is-outlaw tr.is-over td {
+    background: rgba(0, 0, 0, 0.25);
 }
 
 .bench-notes {
@@ -1297,6 +1329,37 @@ body {
 
     .results-table .col-avg {
         font-size: 1.25rem;
+    }
+}
+
+/* ---- Fingers ----------------------------------------------------------------
+   Every control a finger taps is at least 44px on the box (the M7.1 sweep
+   measured the bench's buttons, chips and swatches at 35 to 40px). Only for a
+   coarse pointer, so a computer keeps the look approved at M3. The pockets
+   are left as they are: ten across the car's length, front to rear with the
+   axles between them, cannot be 44px wide on a phone without breaking that
+   map, and at 26px with gaps they meet WCAG 2.2's 24px minimum. */
+@media (pointer: coarse) {
+    .bench-btn,
+    .choice.chip,
+    .results-another.small,
+    .skip-btn,
+    .bench-box-head,
+    .bench-foot .go-btn,
+    .bench-field input,
+    .swatch-custom,
+    .clip-sound,
+    .bench-range input {
+        min-height: 44px;
+        box-sizing: border-box;
+    }
+
+    .choice.swatch {
+        padding: 8px;
+    }
+
+    .clip-sound {
+        padding: 0 0.5rem;
     }
 }
 

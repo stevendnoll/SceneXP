@@ -116,9 +116,14 @@ export function createCarver(body, kit, C = DERBY_CONFIG) {
         kit.onCut(draft);
     }, 'bench-btn is-strong');
     const rubBtn = button('bench-rubout', UI.rubOut, () => {
+        // It hides itself with nothing left to rub out, so a keyboard's focus
+        // goes to the line's first point, where a fresh line starts.
+        const had = document.activeElement === rubBtn;
         draft = base;
         refresh();
         kit.onDraft(null);
+        const first = handles.values().next().value;
+        if (had && first && typeof first.knob.focus === 'function') first.knob.focus({ preventScroll: true });
     });
     body.appendChild(h('div', 'bench-row', null, [cutBtn, rubBtn]));
 
@@ -130,8 +135,30 @@ export function createCarver(body, kit, C = DERBY_CONFIG) {
     sand.max = '4';
     sand.step = '1';
     const sandText = h('span', 'choice-blurb', '');
-    listen(sand, 'input', () => kit.onSand((Number(sand.value) || 0) / 4, false));
-    listen(sand, 'change', () => kit.onSand((Number(sand.value) || 0) / 4, true));
+    const sandValue = () => (Number(sand.value) || 0) / 4;
+    listen(sand, 'input', () => kit.onSand(sandValue(), false));
+    // A drag lets go once, with `change`. Arrow keys fire `change` on every
+    // step, so a keyboard's steps are kept quietly and the host's line, the
+    // block and its sound wait for the slider to be let go of (blur): one
+    // line, not one a keypress over the slider's own value (M7.1).
+    let keyed = false;
+    let owed = false;
+    listen(sand, 'keydown', () => { keyed = true; });
+    listen(sand, 'pointerdown', () => { keyed = false; });
+    listen(sand, 'change', () => {
+        if (!keyed) {
+            kit.onSand(sandValue(), true);
+            return;
+        }
+        owed = true;
+        kit.onSand(sandValue(), 'quiet');
+    });
+    listen(sand, 'blur', () => {
+        keyed = false;
+        if (!owed) return;
+        owed = false;
+        kit.onSand(sandValue(), true);
+    });
     const sandLabel = h('label', 'bench-range', null, [h('span', 'choice-label', UI.sand), sand, sandText]);
     sandLabel.setAttribute('for', 'bench-sand');
     body.appendChild(sandLabel);

@@ -137,7 +137,7 @@ test('weights by hand: a pocket fills and empties, says when it is full or too t
     expect(garage.bench().weights).toEqual([{ kind: 'cylinder', x: 6.6 * IN }]);
     expect(dom.el('bench-status').textContent).toMatch(/^2\.\d\d oz, balance /);
     expect(byId('bench-pocket-9').textContent).toBe('1');
-    expect(byId('bench-pocket-9').getAttribute('aria-label')).toMatch(/^Pocket 6\.60 in from the nose: 1 cylinder, room for \d+ more cylinders$/);
+    expect(byId('bench-pocket-9').getAttribute('aria-label')).toMatch(/^1 piece\. Pocket 6\.60 in from the nose: 1 cylinder, room for \d+ more cylinders$/);
     pick('bench-tool-strip');
     click('bench-pocket-9');
     click('bench-pocket-9');
@@ -348,6 +348,8 @@ test('Forget my cars asks first, then leaves a fresh car and nothing kept', () =
     garage.award('easy');
     click('bench-forget');
     expect(byId('bench-forget').textContent).toBe('Tap again to forget every car, result and trophy');
+    // Said through the host's live line too, as Delete's arming is (M7.1).
+    expect(host()).toBe('Tap Forget again to clear every car, result and trophy from this browser.');
     expect(garage.cars()).toHaveLength(2);
     click('bench-forget');
     expect(garage.cars()).toHaveLength(1);

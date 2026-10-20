@@ -154,12 +154,14 @@ export function familyPlaces(groups, C = DERBY_CONFIG) {
 /**
  * How a member stands in a moment of the race day: { pose, hop } (hop 0
  * to 1). `moment` is { kind, t, cheering (a set of group keys whose car is
- * running), won (the key of the group whose car just won, or null) }. A
+ * running), won (the key of the group whose car just won, or null), still
+ * (reduced motion: no beat, so no hop and no arms going up and down) }. A
  * prop holder keeps its prop's pose. Pure.
  */
 export function poseAt(member, moment) {
     const held = member.prop ? PROPS[member.prop].pose : null;
     const beat = (rate) => {
+        if (moment.still) return 0;
         const v = Math.sin((moment.t + member.phase) * rate);
         return v > 0 ? v : 0;
     };

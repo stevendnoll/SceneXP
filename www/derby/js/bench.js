@@ -92,8 +92,16 @@ export function statsOf(build, units, C = DERBY_CONFIG) {
     };
 }
 
-/** What a pocket button says to a screen reader. Pure. */
+/** What a pocket button says to a screen reader: the count it shows first
+ *  (WCAG 2.5.3, so "click 2" finds it), then where it is and what is in it.
+ *  Pure. */
 export function pocketLabel(spot, units, C = DERBY_CONFIG) {
+    const n = spot.pieces.length;
+    const where = pocketWhere(spot, units, C);
+    return n ? `${n} ${n === 1 ? 'piece' : 'pieces'}. ${where}` : where;
+}
+
+function pocketWhere(spot, units, C) {
     const kinds = { cylinder: 0, cube: 0, strip: 0, putty: 0 };
     for (const p of spot.pieces) kinds[p.kind]++;
     const parts = [];
@@ -453,7 +461,10 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
         spots.forEach((s, i) => {
             const b = ui.pockets[i];
             const n = s.pieces.length;
-            b.textContent = n ? String(n) : '';
+            // The count on a dark chip of its own, so it reads over the
+            // wood and the tungsten alike.
+            b.textContent = '';
+            if (n) b.appendChild(h('span', 'pocket-count', String(n)));
             b.classList.toggle('is-filled', n > 0);
             b.classList.toggle('is-thin', !holdsTungsten(s, C));
             b.style.setProperty('--fill', String(s.budget > 0 ? Math.min(1, s.used / s.budget) : 0));
@@ -579,8 +590,13 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
     }
 
     /** The sanding slider (M4.4): its step kept, the block played when it
-     *  is let go. */
+     *  is let go. `final` is false while dragged, 'quiet' for a keyboard's
+     *  step (kept, nothing said or played until it lets go), else true. */
     function sand(value, final) {
+        if (final === 'quiet') {
+            commit({ ...build, tune: { ...build.tune, sand: value } }, null, { keep: true });
+            return;
+        }
         commit({ ...build, tune: { ...build.tune, sand: value } }, final ? SAY.sanded(SAND[Math.round(value * 4)]) : null, { keep: final });
         if (final && hooks.sand) hooks.sand(build);
         if (final) hooks.track('bench', { kind: 'sand', outcome: String(Math.round(value * 4)) });
@@ -767,6 +783,9 @@ export function createBench(el, garage, hooks, C = DERBY_CONFIG, { signal } = {}
         if (armed !== 'forget') {
             armed = 'forget';
             update();
+            // Said, as Delete's arming is: only the focused button's words
+            // change, and a screen reader does not read that out.
+            say(SAY.forgetSure);
             return;
         }
         armed = null;

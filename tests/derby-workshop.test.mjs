@@ -486,6 +486,64 @@ describe('drawing your own', () => {
     });
 });
 
+// The M7.1 sweep: each arrow key on the sanding slider said a 25-word line,
+// played the block and its sound.
+describe('sanding by keyboard', () => {
+    test('each step is kept quietly, and the line and the block come once, when the slider is let go', () => {
+        const { garage, calls } = setUp();
+        const before = host();
+        const sand = byId('bench-sand');
+        for (const v of ['1', '2', '3']) {
+            fire(sand, 'keydown', { key: 'ArrowRight' });
+            sand.value = v;
+            fire(sand, 'input');
+            fire(sand, 'change');
+        }
+        expect(garage.bench().tune.sand).toBe(0.75);
+        expect(calls.sand).toHaveLength(0);
+        expect(host()).toBe(before);
+        fire(sand, 'blur');
+        expect(calls.sand).toHaveLength(1);
+        expect(host()).toMatch(/^Sanded: rounded\./);
+        // Let go once is said once.
+        fire(sand, 'blur');
+        expect(calls.sand).toHaveLength(1);
+        // A drag after the keys says it at once again.
+        fire(sand, 'pointerdown');
+        sand.value = '4';
+        fire(sand, 'change');
+        expect(calls.sand).toHaveLength(2);
+    });
+});
+
+describe('a button that hides itself hands focus on (M7.1)', () => {
+    test('Rub out the line gives focus to the line\'s first point', () => {
+        setUp();
+        key('bench-top-3', 'ArrowDown');
+        const rub = byId('bench-rubout');
+        expect(rub.hidden).toBe(false);
+        rub.focus();
+        fire(rub, 'click');
+        expect(rub.hidden).toBe(true);
+        expect(globalThis.document.activeElement).toBe(byId('bench-top-0'));
+    });
+
+    test('peeling off the last decal gives focus to Stick it on', () => {
+        const { garage } = setUp();
+        click('bench-decal-add');
+        click('bench-decal-add');
+        const peel = byId('bench-decal-remove');
+        peel.focus();
+        fire(peel, 'click');
+        // One left: Peel it off stays, and keeps focus.
+        expect(garage.bench().decals).toHaveLength(1);
+        expect(globalThis.document.activeElement).toBe(peel);
+        fire(peel, 'click');
+        expect(garage.bench().decals).toHaveLength(0);
+        expect(globalThis.document.activeElement).toBe(byId('bench-decal-add'));
+    });
+});
+
 describe('decals and name', () => {
     test('the name is typed, cleaned and kept, the number too', () => {
         const { garage, calls } = setUp();

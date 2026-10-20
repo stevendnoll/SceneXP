@@ -118,7 +118,11 @@ export function createLivery(body, kit, C = DERBY_CONFIG) {
         if (!d) return;
         const decals = b.decals.filter((_, i) => i !== picked);
         picked = Math.max(0, Math.min(picked, decals.length - 1));
+        const had = document.activeElement === remove;
         kit.commit({ ...b, decals }, SAY.decalOff(DECALS[d.kind].label));
+        // The last one off hides this whole part, Peel it off with it: focus
+        // goes to Stick it on.
+        if (had && !decals.length && typeof add.focus === 'function') add.focus({ preventScroll: true });
     });
     placed.appendChild(h('div', 'bench-row', null, [remove]));
     body.appendChild(placed);

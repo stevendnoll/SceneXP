@@ -127,15 +127,25 @@ test('Race it opens check-in with the five events and the garage\'s car, and Go 
     expect(dom.el('caption').textContent).toBe('Blue Wedge on the scale…');
     expect(shown('skip-btn')).toBe(true);
     expect(dom.el('skip-btn').textContent).toBe('Skip the weigh-in');
-    frames(main, state.weigh.plan.total * 0.5);
-    frames(main, state.weigh.plan.total * 0.5 + 0.1);
+    // Go's card is hidden, so focus goes to the scene, not to nothing (M7.1).
+    expect(globalThis.document.activeElement).toBe(dom.el('game-canvas'));
+    const total = state.weigh.plan.total;
+    frames(main, total * 0.5);
+    frames(main, total * 0.5 - 0.1);
     expect(dom.el('race-status').textContent).toBe('Blue Wedge weighs 5.00 oz and passes the gauge box.');
+    frames(main, 0.2);
     expect(state.phase).toBe('race');
+    // Cleared as the race begins, so each gate's call is heard afresh.
+    expect(dom.el('race-status').textContent).toBe('');
     expect(dom.el('skip-btn').textContent).toBe('Skip to results');
     expect(shown('timer')).toBe(true);
     frames(main, 0.2);
     expect(dom.el('caption').textContent).toMatch(/Lane 4 runs a hair slow/);
     const first = state.day.plan.heats[0];
+    // The gate's call is spoken as well as captioned.
+    const gate = first.segments.find((s) => s.kind === 'gate');
+    frames(main, (gate.from + gate.to) / 2 - state.clock);
+    expect(dom.el('race-status').textContent).toBe('And they’re off!');
     frames(main, first.end - 0.4);
     expect(dom.el('race-status').textContent).toMatch(/^Heat 1: /);
     expect(shown('skip-btn')).toBe(true);
@@ -383,6 +393,52 @@ test('reduced motion: no slow replays, no chase camera, and the turntable stands
     expect(state.day.plan.heats.every((h) => h.segments.every((s) => s.kind !== 'replay'))).toBe(true);
     frames(main, state.day.plan.total + 1);
     expect(state.phase).toBe('results');
+});
+
+// The M7.1 sweep: reduced motion's weigh-in is one still step, and only the
+// moving weigh-in's result step said a car had passed.
+test('reduced motion: a car that passes the weigh-in is still said to pass', async () => {
+    dom.windowStub.matchMedia = (q) => ({
+        media: q, matches: /reduce/.test(q), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}
+    });
+    const main = await boot();
+    const state = main.getState();
+    raceIt();
+    fire(dom.el('go-btn'), 'click');
+    expect(state.phase).toBe('weighin');
+    expect(state.weigh.plan.segments.map((s) => s.kind)).toEqual(['still']);
+    frames(main, 0.1);
+    expect(dom.el('race-status').textContent).toBe('Blue Wedge weighs 5.00 oz and passes the gauge box.');
+    // And the crowd's moment says to hold still.
+    expect(main.__test__.crowdMoment(0).still).toBe(true);
+});
+
+// The M7.1 sweep: Race again and Try the next division hide the results
+// card, and Skip the weigh-in hides at the first staging, each taking
+// focus with it.
+test('focus goes to the scene when the button that started a race hides', async () => {
+    const main = await boot();
+    const state = main.getState();
+    raceIt();
+    fire(dom.el('go-btn'), 'click');
+    // Skip the weigh-in pressed from the keyboard: it hides at the first
+    // staging.
+    const skip = dom.el('skip-btn');
+    skip.focus();
+    fire(skip, 'click');
+    expect(state.phase).toBe('race');
+    expect(globalThis.document.activeElement).toBe(dom.el('game-canvas'));
+    main.__test__.finishRace('skip');
+    expect(globalThis.document.activeElement).toBe(dom.el('results-title'));
+    dom.el('results-again').focus();
+    fire(dom.el('results-again'), 'click');
+    expect(state.phase).toBe('race');
+    expect(globalThis.document.activeElement).toBe(dom.el('game-canvas'));
+    // The sound button keeps it, being on screen throughout.
+    main.__test__.finishRace('skip');
+    dom.el('sound-btn').focus();
+    main.__test__.startRace('again');
+    expect(globalThis.document.activeElement).toBe(dom.el('sound-btn'));
 });
 
 test('the Cut plays on the turntable: the old car until the saw is through, then the cut one, then the host', async () => {
