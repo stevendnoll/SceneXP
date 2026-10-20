@@ -288,6 +288,14 @@
          reader hears "Heat 1 of 4 starts in 3 seconds" through #race-status. -->
     <p id="countdown" class="countdown" aria-hidden="true"></p>
 
+    <!-- The photo finish (a finish closer than 0.006 s): a frame over the
+         frozen picture, for the eye. The same words reach a screen reader
+         through #race-status. -->
+    <div id="photo-finish" class="photo-finish" aria-hidden="true">
+        <p class="photo-label">PHOTO FINISH</p>
+        <p id="photo-gap" class="photo-gap"></p>
+    </div>
+
     <!-- Over the visitor's car while it races. -->
     <span id="you-tag" class="you-tag" aria-hidden="true">You</span>
 

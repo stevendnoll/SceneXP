@@ -523,10 +523,20 @@ export const DERBY_CONFIG = Object.freeze({
         dance: 6,
         /** A finish this close gets a slow replay (PRD, The heats). */
         closeGap: 0.02,
-        replayRate: 0.25,
+        /** The slow replay eases from `replayFast` (run seconds a second)
+         *  far from the line down to `replaySlow` at it, over `replayWidth`
+         *  run seconds either side (Steve's QA, 2026-10-20: a flat quarter
+         *  speed was too fast to see a close finish cross). */
+        replayFast: 0.35,
+        replaySlow: 0.06,
+        replayWidth: 0.12,
+        /** A finish closer than this also freezes on the winner's crossing,
+         *  a photo finish, for `photo` seconds (the same QA). */
+        photoGap: 0.006,
+        photo: 2.2,
         /** The replay starts this long before the first car crosses. */
-        replayLead: 0.35,
-        replayTail: 0.12,
+        replayLead: 0.4,
+        replayTail: 0.15,
         /** Past the line, a car runs out over this many meters. */
         runOut: 1.6,
         /** Samples a run is recorded at, a second apart. */
@@ -668,6 +678,8 @@ export const DERBY_CONFIG = Object.freeze({
          *  soft sine, were not heard over the murmur; then 880 and 1760 Hz
          *  were a little high, so an A at 440 and an E at 660). A lower
          *  tone sounds quieter at the same level, so a touch more gain. */
+        /** The photo finish's shutter. */
+        shutter: Object.freeze({ gain: 0.3, hz: 3200, seconds: 0.035 }),
         count: Object.freeze({ type: 'triangle', gain: 0.34, hz: 440, goHz: 660, seconds: 0.22, goSeconds: 0.45 }),
         /** The workshop (M4): the coping saw's rasp, a stroke a fifth of a
          *  second, and the sandpaper's hush, slower. */

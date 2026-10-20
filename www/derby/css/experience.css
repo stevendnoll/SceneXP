@@ -339,6 +339,68 @@ body {
     to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
+/* The photo finish (Steve's QA, 2026-10-20): the frozen picture framed like
+   a print, the label at the top, the margin at the bottom, and one soft
+   camera flash as it is taken. A single flash, well under WCAG's three a
+   second, and none under reduced motion. */
+.photo-finish {
+    display: none;
+    position: fixed;
+    inset: max(5.5rem, calc(env(safe-area-inset-top) + 5rem)) max(16px, env(safe-area-inset-right)) max(9rem, calc(env(safe-area-inset-bottom) + 8.5rem)) max(16px, env(safe-area-inset-left));
+    border: 6px solid #fbf8f2;
+    border-radius: 4px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 0.6rem 2rem rgba(0, 0, 0, 0.45);
+    z-index: 103;
+    pointer-events: none;
+}
+
+.photo-finish.visible {
+    display: block;
+}
+
+.photo-finish::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    animation: photo-flash 0.5s ease-out;
+}
+
+@keyframes photo-flash {
+    from { opacity: 0.7; }
+    to { opacity: 0; }
+}
+
+.photo-label,
+.photo-gap {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 0.25rem 0.7rem;
+    border-radius: 4px;
+    background: #fbf8f2;
+    color: #1d1814;
+    white-space: nowrap;
+}
+
+.photo-label {
+    top: -0.2rem;
+    font-size: 0.8rem;
+    font-weight: 900;
+    letter-spacing: 0.22em;
+}
+
+.photo-gap {
+    bottom: -0.2rem;
+    max-width: calc(100% - 1rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
 .skip-btn {
     position: fixed;
     right: max(16px, env(safe-area-inset-right));
@@ -1484,7 +1546,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
     #instructions .click-prompt,
     .countdown,
-    .countdown.is-alt {
+    .countdown.is-alt,
+    .photo-finish::after {
         animation: none;
     }
 }

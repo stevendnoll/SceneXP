@@ -48,6 +48,14 @@ export function positionAt(run, t, C = DERBY_CONFIG) {
     return a.s + (b.s - a.s) * (f < 0 ? 0 : f > 1 ? 1 : f);
 }
 
+/** A heat in finishing order: by the time the timer shows, a tie on it by
+ *  the unrounded time (D14's rule, for a heat), and only a dead heat by
+ *  entry order. */
+export function heatOrder(heat) {
+    const exact = (r) => (r.exact === undefined ? r.time : r.exact);
+    return heat.slice().sort((a, b) => a.time - b.time || exact(a) - exact(b) || a.car - b.car);
+}
+
 /**
  * The closest finish in a heat worth a slow replay: the two closest times,
  * when they are within `closeGap` of each other, and, when the visitor is
@@ -55,13 +63,14 @@ export function positionAt(run, t, C = DERBY_CONFIG) {
  * { first, second, gap } (car indexes) or null.
  */
 export function closeFinish(heat, { focus = null, closeGap = DERBY_CONFIG.timing.closeGap } = {}) {
-    const order = heat.filter((r) => !r.dnf).slice().sort((a, b) => a.time - b.time || a.car - b.car);
+    const order = heatOrder(heat.filter((r) => !r.dnf));
     let best = null;
     for (let i = 1; i < order.length; i++) {
         const gap = order[i].time - order[i - 1].time;
         const involves = focus === null || order[i].car === focus || order[i - 1].car === focus;
         if (involves && gap < closeGap && (!best || gap < best.gap)) {
-            best = { first: order[i - 1].car, second: order[i].car, gap, at: order[i - 1].time };
+            const exactAt = order[i - 1].exact === undefined ? order[i - 1].time : order[i - 1].exact;
+            best = { first: order[i - 1].car, second: order[i].car, gap, at: order[i - 1].time, exactAt };
         }
     }
     return best;
@@ -70,8 +79,9 @@ export function closeFinish(heat, { focus = null, closeGap = DERBY_CONFIG.timing
 /**
  * The race day's timeline: for each heat a staging beat (the cars at the
  * pin), the gate, the run (until the last car is across and settled), a slow
- * replay of a close finish (none under reduced motion), and the times on
- * the board. Returns { heats: [{ index, start, segments }], total } where a
+ * replay of a close finish (none under reduced motion), a photo finish for
+ * a very close one (held on the winner's crossing, mid-replay, and kept
+ * under reduced motion as the still it is), and the times on the board. Returns { heats: [{ index, start, segments }], total } where a
  * segment is { kind, from, to } in timeline seconds, and a replay's carries
  * the run time it shows ({ runFrom, runTo, rate }). With `dance`, the last
  * heat ends with the winner's family dancing (a 'dance' segment).
@@ -92,11 +102,27 @@ export function planDay(race, { focus = null, reducedMotion = false, dance = fal
         let last = 0;
         for (const r of heat) last = Math.max(last, race.runs[r.car][r.lane].time);
         add('run', last + T.settle, { runFrom: 0 });
-        const close = reducedMotion ? null : closeFinish(heat, { focus, closeGap: T.closeGap });
-        if (close) {
+        const close = closeFinish(heat, { focus, closeGap: T.closeGap });
+        // A finish this tight is also frozen on the winner's crossing.
+        const photo = Boolean(close) && close.gap < T.photoGap;
+        if (close && !reducedMotion) {
             const runFrom = Math.max(0, close.at - T.replayLead);
             const runTo = close.at + close.gap + T.replayTail;
-            add('replay', (runTo - runFrom) / T.replayRate, { runFrom, runTo, rate: T.replayRate, close });
+            const mid = close.at + close.gap / 2;
+            // Slowing into the line, and on out of it; with a photo finish,
+            // stopped dead on the winner's crossing between the two.
+            // The photo is taken as the winner's nose meets the line: its
+            // unrounded time.
+            const at = close.exactAt;
+            const parts = photo ? [[runFrom, at], [at, runTo]] : [[runFrom, runTo]];
+            parts.forEach(([a, b], k) => {
+                if (k === 1) add('photo', T.photo, { runAt: at, close });
+                const warp = replayWarp(a, b, mid, T);
+                add('replay', warp.seconds, { runFrom: a, runTo: b, warp, close });
+            });
+        } else if (photo) {
+            // Reduced motion: no replay, but the photo, a still, is kept.
+            add('photo', T.photo, { runAt: close.exactAt, close });
         }
         add('times', T.times);
         // After the last heat, the day's winner's grown-up dances (dancer.js),
@@ -124,6 +150,52 @@ export function countAt(seg, t, C = DERBY_CONFIG) {
     return Math.min(3, Math.ceil(left / step));
 }
 
+/** How fast the replay plays at run second `s` (run seconds a second):
+ *  slowest at `mid` (between the two crossings), easing up away from it. */
+export function replaySpeed(s, mid, T = DERBY_CONFIG.timing) {
+    const u = Math.min(1, Math.abs(s - mid) / T.replayWidth);
+    return T.replaySlow + (T.replayFast - T.replaySlow) * u * u;
+}
+
+/**
+ * The replay of run seconds `from` to `to`, its speed easing down to the
+ * line and up again (replaySpeed): { seconds (how long it plays), times,
+ * runs }, the screen second at each sampled run second, for runTimeIn to
+ * read back. A changing rate is integrated, never stepped, so it never
+ * lurches.
+ */
+export function replayWarp(from, to, mid, T = DERBY_CONFIG.timing) {
+    const step = 0.0005;
+    const times = [0];
+    const runs = [from];
+    let tau = 0;
+    let s = from;
+    while (s < to - 1e-12) {
+        const ds = Math.min(step, to - s);
+        tau += ds / replaySpeed(s + ds / 2, mid, T);
+        s += ds;
+        times.push(tau);
+        runs.push(s);
+    }
+    return { seconds: tau, times, runs };
+}
+
+/** The run second a warped replay shows `tau` seconds in. */
+function warpAt(warp, tau) {
+    const { times, runs } = warp;
+    if (tau <= 0) return runs[0];
+    if (tau >= times[times.length - 1]) return runs[runs.length - 1];
+    let lo = 0;
+    let hi = times.length - 1;
+    while (hi - lo > 1) {
+        const m = (lo + hi) >> 1;
+        if (times[m] <= tau) lo = m;
+        else hi = m;
+    }
+    const f = (tau - times[lo]) / (times[hi] - times[lo]);
+    return runs[lo] + (runs[hi] - runs[lo]) * f;
+}
+
 /**
  * What is happening at timeline second `t`: the heat, the segment, and the
  * run time the cars are at (0 while staging, rising through the run, the
@@ -147,7 +219,8 @@ export function momentAt(plan, t) {
 function runTimeIn(heat, seg, t) {
     if (seg.kind === 'staging' || seg.kind === 'gate') return 0;
     if (seg.kind === 'run') return t - seg.from;
-    if (seg.kind === 'replay') return Math.min(seg.runTo, seg.runFrom + (t - seg.from) * seg.rate);
+    if (seg.kind === 'replay') return warpAt(seg.warp, t - seg.from);
+    if (seg.kind === 'photo') return seg.runAt;
     // The times: the run as it ended.
     const run = heat.segments.find((s) => s.kind === 'run');
     return run ? run.to - run.from : 0;

@@ -161,7 +161,10 @@ export function runRace(cars, C = DERBY_CONFIG, { record = 0 } = {}) {
         heats.push(cars.map((_, i) => {
             const lane = (i + h) % lanes;
             const run = times[i][lane];
-            return { car: i, lane, time: shownTime(run.time), dnf: run.dnf };
+            // `exact`: the unrounded time, so a heat tied on the timer's
+            // thousandths goes to the car that was really ahead (the photo
+            // finish shows it), not to whoever was entered first.
+            return { car: i, lane, time: shownTime(run.time), exact: run.time, dnf: run.dnf };
         }));
     }
     const average = cars.map((_, i) => {

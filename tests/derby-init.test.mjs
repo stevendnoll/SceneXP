@@ -392,6 +392,42 @@ test('after the last heat the winner\'s grown-up dances, named by the announcer,
     expect(state.day.dance).not.toBe(first);
 });
 
+test('a photo finish (Steve\'s QA, 2026-10-20): the picture frozen on the crossing, framed, said, and a shutter', async () => {
+    // A garage car that finishes within 0.006 s of a neighbor in Medium.
+    const G = await import('../www/derby/js/garage.js');
+    const { DERBY_CONFIG: C } = await import('../www/derby/js/config.js');
+    const car = G.weighAuto(G.normalizeBuild({ ...G.newCar(C, { rand: () => 0.3 }), tune: { deburr: false, polish: 0, graphite: true, align: true, sand: 0 } }, C), C);
+    localStorage.setItem('derby-garage', JSON.stringify({ v: 1, cars: [car], bench: car.id }));
+    const main = await boot();
+    const state = main.getState();
+    raceIt();
+    choose(eventInput('medium'));
+    go();
+    const photo = state.day.plan.heats.flatMap((h) => h.segments).find((x) => x.kind === 'photo');
+    expect(photo).toBeDefined();
+    const shutter = jest.spyOn(main.__test__.sound, 'shutter');
+    frames(main, photo.from + 0.2 - state.clock);
+    expect(shown('photo-finish')).toBe(true);
+    expect(dom.el('caption').textContent).toMatch(/^Photo finish! .+ by (\d\.\d{3} seconds|less than a thousandth of a second)\.$/);
+    expect(dom.el('race-status').textContent).toBe(dom.el('caption').textContent);
+    expect(dom.el('photo-gap').textContent).toContain(state.day.entries[photo.close.first].name);
+    expect(shutter).toHaveBeenCalledTimes(1);
+    // Everything stopped: the cars where they were a second ago.
+    const at = () => state.lastS.slice();
+    const before = at();
+    frames(main, 1);
+    expect(at()).toEqual(before);
+    // The winner's nose on the line, the other car short of it.
+    const line = C.track.courseLength;
+    expect(before[photo.close.first]).toBeCloseTo(line, 6);
+    expect(before[photo.close.second]).toBeLessThanOrEqual(line + 1e-9);
+    expect(shutter).toHaveBeenCalledTimes(1);
+    // And on: the frame gone once the replay plays out of it.
+    frames(main, photo.to - state.clock + 0.2);
+    expect(shown('photo-finish')).toBe(false);
+    shutter.mockRestore();
+});
+
 test('a browser that refuses storage still gets a whole visit', async () => {
     const refuse = () => { throw new Error('SecurityError'); };
     globalThis.localStorage = { getItem: refuse, setItem: refuse, removeItem: refuse };

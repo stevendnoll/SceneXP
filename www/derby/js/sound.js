@@ -57,7 +57,7 @@ function quietly(p) {
 /**
  * The sound, off. `S` is config.sound, `win` the window (for its
  * AudioContext). Returns { isOn, setOn, toggle, setLevel, ensure, roll,
- * gate, count, beep, work, puff, tap, buzz, recordStream, setRecording,
+ * gate, count, shutter, beep, work, puff, tap, buzz, recordStream, setRecording,
  * dispose }.
  */
 export function createSound(S, { win = typeof window === 'undefined' ? null : window } = {}) {
@@ -244,6 +244,13 @@ export function createSound(S, { win = typeof window === 'undefined' ? null : wi
             const B = S.beep;
             const t = tone('sine', B.hz);
             envelope(t.gain, B.gain, 0.004, B.seconds, [t.osc]);
+        },
+        /** A photo finish's shutter: a short dry click. */
+        shutter() {
+            if (!audible()) return;
+            const K = S.shutter;
+            const click = noiseShot('highpass', K.hz, 0.7);
+            envelope(click.gain, K.gain, 0.001, K.seconds, [click.source]);
         },
         /** The countdown's beep (3, 2, 1), and a higher one, held longer,
          *  for Go: a triangle, brighter than the crossing's sine, so it

@@ -76,7 +76,8 @@ export const UI = Object.freeze({
     tooMany: 'The track has four lanes, so four cars at most.',
     skip: 'Skip to results',
     you: 'You',
-    replay: 'Photo finish',
+    replay: 'Slow motion',
+    photo: 'Photo finish',
     resultsTitle: 'Results',
     raceAgain: 'Race again',
     another: 'Choose another race',
@@ -175,6 +176,8 @@ export const CALLS = Object.freeze({
     lead: (name) => `${name} out in front!`,
     leadMine: (name) => `${name} out in front, and the family is on its feet!`,
     close: (n, name, time) => `By a nose! ${name} takes heat ${n} in ${clock(time)} seconds.`,
+    /** The photo finish (Steve's QA, 2026-10-20), frozen on the crossing. */
+    photo: (name, gap) => `Photo finish! ${name} by ${gapWords(gap)}.`,
     weighIn: 'Cars to the registration table, please.',
     /** After the last heat, the winner's grown-up dancing (dance-1.0.0 names
      *  the dance: "the Robot"). */
@@ -182,6 +185,11 @@ export const CALLS = Object.freeze({
         ? `${name} wins the day, and your family breaks out ${dance}!`
         : `${name} wins the day, and here comes ${dance}!`)
 });
+
+/** A winning margin said aloud: in thousandths, or, under one, as less. */
+export function gapWords(gap) {
+    return gap < 0.0005 ? 'less than a thousandth of a second' : `${clock(gap)} seconds`;
+}
 
 /** The gate's call for heat `n` of `total`. */
 export function gateCall(n, total) {

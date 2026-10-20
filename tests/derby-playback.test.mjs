@@ -127,25 +127,109 @@ describe('playback', () => {
         expect(P.countAt({ kind: 'times', from: 0, to: 1 }, 0.5, C)).toBeNull();
     });
 
-    test('a replay runs slowly over the finish, and reduced motion has none', () => {
+    test('a replay slows into the line and out of it (Steve\'s QA, 2026-10-20: too fast to see the crossing), and reduced motion has none', () => {
         const close = raceOf([preset('full'), ...C.divisions.hard.map(fieldCar)]);
         const plan = P.planDay(close, { focus: 0 });
         const replays = plan.heats.flatMap((h) => h.segments.filter((s) => s.kind === 'replay'));
         expect(replays.length).toBeGreaterThan(0);
+        const T = C.timing;
         for (const r of replays) {
-            expect(r.rate).toBe(C.timing.replayRate);
-            expect(r.to - r.from).toBeCloseTo((r.runTo - r.runFrom) / r.rate, 9);
-            expect(r.runFrom).toBeLessThan(r.close.at);
-            expect(r.runTo).toBeGreaterThan(r.close.at + r.close.gap);
+            const mid = r.close.at + r.close.gap / 2;
+            // Slowest between the two crossings, quicker away from them.
+            expect(P.replaySpeed(mid, mid)).toBeCloseTo(T.replaySlow, 9);
+            expect(P.replaySpeed(mid + T.replayWidth, mid)).toBeCloseTo(T.replayFast, 9);
+            expect(P.replaySpeed(mid + 0.05, mid)).toBeLessThan(P.replaySpeed(mid + 0.1, mid));
+            // It plays from before the first crossing to after the second, in
+            // order, never stepping, and longer than the flat quarter speed did.
+            // (The part out of a photo finish starts on the winner's crossing.)
+            expect(r.runFrom).toBeLessThanOrEqual(r.close.exactAt);
+            expect(r.warp.runs[0]).toBe(r.runFrom);
+            expect(r.warp.runs[r.warp.runs.length - 1]).toBeCloseTo(r.runTo, 12);
+            expect(r.to - r.from).toBeCloseTo(r.warp.seconds, 9);
+            let last = -1;
+            for (let t = r.from; t < r.to; t += 0.01) {
+                const rt = P.momentAt(plan, t).runTime;
+                expect(rt).toBeGreaterThanOrEqual(last - 1e-12);
+                // No lurch: never more run time in a frame than the fast end allows.
+                if (last >= 0) expect(rt - last).toBeLessThanOrEqual(T.replayFast * 0.01 + 1e-9);
+                last = rt;
+            }
         }
+        const whole = replays.filter((r) => r.runTo > r.close.at + r.close.gap);
+        for (const r of whole) expect(r.to - r.from).toBeGreaterThan((r.runTo - r.runFrom) / 0.25);
+        // Around the crossing it crawls: a hundredth of a second of the run takes
+        // a good part of a second to play.
+        const r = replays[0];
+        const mid = r.close.at + r.close.gap / 2;
+        const screenFor = (a, b) => {
+            let tau = 0;
+            for (let x = a; x < b; x += 0.0001) tau += 0.0001 / P.replaySpeed(x + 0.00005, mid);
+            return tau;
+        };
+        expect(screenFor(mid - 0.005, mid + 0.005)).toBeGreaterThan(0.15);
         const still = P.planDay(close, { focus: 0, reducedMotion: true });
         expect(still.heats.every((h) => h.segments.every((s) => s.kind !== 'replay'))).toBe(true);
+    });
+
+    /** A two-car day with the given heat times (car 0, car 1), every heat the same. */
+    function fakeRace(a, b) {
+        const run = (time) => ({ time, samples: [{ t: 0, s: 0 }, { t: time, s: C.track.courseLength }], speed: 4.5 });
+        const runs = [[0, 1, 2, 3].map(() => run(a)), [0, 1, 2, 3].map(() => run(b))];
+        const heats = [0, 1, 2, 3].map((h) => [0, 1].map((car) => {
+            const t = car ? b : a;
+            return { car, lane: (car + h) % 4, time: Math.round(t * 1000) / 1000, exact: t, dnf: false };
+        }));
+        return { heats, runs, average: [a, b], standings: a <= b ? [0, 1] : [1, 0] };
+    }
+
+    test('a photo finish (under 0.006 s): the replay stops dead on the winner\'s crossing, then plays on', () => {
+        const T = C.timing;
+        const plan = P.planDay(fakeRace(3.2041, 3.2072), { focus: 0 });
+        for (const h of plan.heats) {
+            const kinds = h.segments.map((s) => s.kind);
+            expect(kinds).toEqual(['staging', 'gate', 'run', 'replay', 'photo', 'replay', 'times']);
+            const [, , , into, photo, out] = h.segments;
+            // Held on the instant the winner's nose meets the line: its unrounded time.
+            expect(photo.runAt).toBe(3.2041);
+            expect(photo.to - photo.from).toBeCloseTo(T.photo, 9);
+            expect(P.momentAt(plan, photo.from + 0.1).runTime).toBe(3.2041);
+            expect(P.momentAt(plan, photo.to - 0.01).runTime).toBe(3.2041);
+            // The replay into it ends there, the one out of it starts there.
+            expect(into.runTo).toBe(3.2041);
+            expect(out.runFrom).toBe(3.2041);
+            expect(P.momentAt(plan, into.to - 1e-6).runTime).toBeCloseTo(3.2041, 6);
+            expect(photo.close.first).toBe(0);
+        }
+        // A finish just wider than that: the slow replay only.
+        const wide = P.planDay(fakeRace(3.2, 3.2065), { focus: 0 });
+        expect(wide.heats[0].segments.map((s) => s.kind)).toEqual(['staging', 'gate', 'run', 'replay', 'times']);
+        // Reduced motion: no replay, but the photo, a still, is kept.
+        const still = P.planDay(fakeRace(3.2041, 3.2072), { focus: 0, reducedMotion: true });
+        expect(still.heats[0].segments.map((s) => s.kind)).toEqual(['staging', 'gate', 'run', 'photo', 'times']);
+        expect(still.heats[0].segments[3].runAt).toBe(3.2041);
+    });
+
+    test('a heat tied on the timer goes to the car really ahead, as the photo shows it, not to whoever was entered first', () => {
+        // Both read 3.204 on the timer; car 1 was ahead by 0.0003 s.
+        const race = fakeRace(3.2042, 3.2039);
+        expect(race.heats[0][0].time).toBe(race.heats[0][1].time);
+        expect(P.heatOrder(race.heats[0]).map((r) => r.car)).toEqual([1, 0]);
+        const plan = P.planDay(race, { focus: 0 });
+        const photo = plan.heats[0].segments.find((s) => s.kind === 'photo');
+        expect(photo.close.first).toBe(1);
+        expect(photo.runAt).toBe(3.2039);
+        expect(photo.close.gap).toBe(0);
+        expect(Copy.CALLS.photo('The Phantom', 0)).toBe('Photo finish! The Phantom by less than a thousandth of a second.');
+        expect(Copy.CALLS.photo('The Phantom', 0.004)).toBe('Photo finish! The Phantom by 0.004 seconds.');
+        // The sim's own heats carry the unrounded time for it.
+        const real = raceOf([preset('full'), ...C.divisions.hard.map(fieldCar)]);
+        for (const h of real.heats) for (const r of h) expect(r.exact).toBe(real.runs[r.car][r.lane].time);
     });
 
     test('momentAt: the run time rises through the run, crawls in a replay, holds through the times, and the day ends', () => {
         const close = raceOf([preset('full'), ...C.divisions.hard.map(fieldCar)]);
         const plan = P.planDay(close, { focus: 0 });
-        const h = plan.heats.find((x) => x.close);
+        const h = plan.heats.find((x) => x.segments.some((s) => s.kind === 'replay'));
         const seg = (kind) => h.segments.find((s) => s.kind === kind);
         expect(P.momentAt(plan, seg('staging').from + 0.1)).toMatchObject({ heat: h.index, runTime: 0, done: false });
         expect(P.momentAt(plan, seg('gate').from + 0.01).runTime).toBe(0);
@@ -153,7 +237,8 @@ describe('playback', () => {
         const rp = seg('replay');
         const mid = P.momentAt(plan, (rp.from + rp.to) / 2);
         expect(mid.segment.kind).toBe('replay');
-        expect(mid.runTime).toBeCloseTo((rp.runFrom + rp.runTo) / 2, 9);
+        expect(mid.runTime).toBeGreaterThan(rp.runFrom);
+        expect(mid.runTime).toBeLessThan(rp.runTo);
         const times = P.momentAt(plan, seg('times').from + 0.1);
         expect(times.runTime).toBeCloseTo(seg('run').to - seg('run').from, 9);
         const end = P.momentAt(plan, plan.total + 1);
@@ -204,6 +289,7 @@ describe('the director', () => {
         expect(D.shotFor('run', 1)).toBe('chase');
         expect(D.shotFor('run', C.track.courseLength - 1)).toBe('finish');
         expect(D.shotFor('replay', 0)).toBe('photo');
+        expect(D.shotFor('photo', 0)).toBe('photo');
         expect(D.shotFor('times', 0)).toBe('finish');
         // Reduced motion: no chase, ever.
         expect(D.shotFor('run', 1, { reducedMotion: true })).toBe('finish');

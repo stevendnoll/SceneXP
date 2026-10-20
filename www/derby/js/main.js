@@ -43,13 +43,13 @@ import { createFamilyStore, familyMembers } from './family.min.js';
 import { curvesOf } from './profile.min.js';
 import { bestBalance } from './weights.min.js';
 import * as U from './units.min.js';
-import { planDay, momentAt, positionAt, countAt } from './playback.min.js';
+import { planDay, momentAt, positionAt, countAt, heatOrder } from './playback.min.js';
 import { shotFor, framing, crowdFraming, danceFraming } from './director.min.js';
 import { createTimer, fillResults, h } from './board.min.js';
 import {
     EVENTS, UI, ENTRY, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock,
     gains, moreLine, sheetLines, trophyLine, harderLabel, HARDER, tuneupLines, WEIGH, ruleNote, CALLS, gateCall, COUNT,
-    CHALLENGE as CH, edgeWords
+    CHALLENGE as CH, edgeWords, gapWords
 } from './copy.min.js';
 import { decodeChallenge, isChallenge, challengeUrl, rivalName, biggestEdge, cleanFrom } from './challenge.min.js';
 import { nextPhase } from './phases.min.js';
@@ -98,6 +98,8 @@ const state = {
     said: '',
     /** The countdown's word on screen, so each count beeps once. */
     counted: '',
+    /** The photo finish showing ('' for none), so it is drawn once. */
+    photo: '',
     /** Each family by the finish, as placeCrowd stood them: { key: [{ index
      *  (in the crowd), look, prop, at }] }. The dance under way ({ at,
      *  index }, or null) and the last day's dance, never danced twice
@@ -177,7 +179,7 @@ function updateLoadingStatus(message, progress) {
 
 async function init() {
     for (const id of ['game-canvas', 'blocker', 'event-options', 'car-options', 'car-legend', 'go-btn', 'checkin-note',
-        'checkin-back', 'help-btn', 'timer', 'skip-btn', 'you-tag', 'caption', 'countdown', 'race-status', 'results-modal', 'results-title',
+        'checkin-back', 'help-btn', 'timer', 'skip-btn', 'you-tag', 'caption', 'countdown', 'photo-finish', 'photo-gap', 'race-status', 'results-modal', 'results-title',
         'results-event', 'results-table', 'results-lanes', 'results-why', 'results-why-heading', 'results-again',
         'results-another', 'results-tune', 'results-harder', 'results-trophy', 'results-status', 'explore-link', 'sound-btn',
         'results-share', 'clip-modal', 'clip-title', 'clip-stage', 'clip-progress', 'clip-sound', 'clip-share', 'clip-image',
@@ -711,7 +713,7 @@ function crowdMomentOf(now) {
         const groups = new Set(day.entries.map((e) => (e.mine ? 'mine' : e.id)));
         let won = null;
         if (m.segment.kind === 'times' && heat) {
-            const first = heat.slice().sort((a, b) => a.time - b.time || a.car - b.car)[0];
+            const first = heatOrder(heat)[0];
             const e = day.entries[first.car];
             won = e.mine ? 'mine' : e.id;
         } else if (m.segment.kind === 'dance') {
@@ -966,6 +968,7 @@ function setRaceChrome(on) {
         if (el['you-tag']) el['you-tag'].classList.remove('visible');
         caption('');
         countdown(null);
+        photoFrame(null);
         stopDance();
     }
 }
@@ -996,6 +999,18 @@ function countdown(n) {
         if (text) c.classList.toggle('is-alt');
     }
     if (text) sound.count(n === 0);
+}
+
+/** The photo finish's frame over the frozen picture (for the eye: the
+ *  same words are announced), or none. */
+function photoFrame(close) {
+    const key = close ? `${close.first}:${close.gap}` : '';
+    if (key === state.photo) return;
+    state.photo = key;
+    const f = el['photo-finish'];
+    if (!f) return;
+    f.classList.toggle('visible', Boolean(close));
+    if (close && el['photo-gap']) el['photo-gap'].textContent = `${state.day.entries[close.first].name} · ${gapWords(close.gap)}`;
 }
 
 function announce(text) {
@@ -1063,6 +1078,7 @@ function stepRace(dt) {
     const seg = m.segment;
     trackParts.gate.set(kind === 'staging' ? 0 : kind === 'gate' ? Math.min(1, (state.clock - seg.from) / (seg.to - seg.from)) : 1);
     countdown(countAt(seg, state.clock, CONFIG));
+    photoFrame(kind === 'photo' ? seg.close : null);
 
     const shot = shotFor(kind, leadS, { reducedMotion: state.reducedMotion }, CONFIG);
     if (kind === 'dance') {
@@ -1073,7 +1089,7 @@ function stepRace(dt) {
         }
     } else if (kind === 'times' && !state.reducedMotion) {
         // The heat's times: the people, the winner's family in the middle.
-        const first = heat.slice().sort((a, b) => a.time - b.time || a.car - b.car)[0];
+        const first = heatOrder(heat)[0];
         const e = day.entries[first.car];
         aim(crowdFraming(familyFocus(e.mine ? 'mine' : e.id), window.innerWidth / window.innerHeight, CONFIG));
     } else {
@@ -1081,11 +1097,13 @@ function stepRace(dt) {
     }
 
     // The timer: each lane's car, and its time once it is across.
-    const order = heat.slice().sort((a, b) => a.time - b.time || a.car - b.car);
+    const order = heatOrder(heat);
     const byLane = new Array(LANES).fill(null);
     for (const r of heat) {
         const run = day.race.runs[r.car][r.lane];
-        const across = kind === 'times' || kind === 'dance' || kind === 'replay' || (kind === 'run' && m.runTime >= run.time);
+        // In the photo, only the winner is across: it is the instant its
+        // nose met the line.
+        const across = kind === 'times' || kind === 'dance' || kind === 'replay' || ((kind === 'run' || kind === 'photo') && m.runTime >= run.time);
         byLane[r.lane] = { car: r.car, time: across ? r.time : null, place: across ? order.indexOf(r) + 1 : null };
     }
     timer.lanes(byLane);
@@ -1106,7 +1124,7 @@ function stepRace(dt) {
         state.said = key;
         const n = m.heat + 1;
         const total = day.race.heats.length;
-        timer.heat(n, total, kind === 'replay' ? UI.replay : '');
+        timer.heat(n, total, kind === 'replay' ? UI.replay : kind === 'photo' ? UI.photo : '');
         if (kind === 'staging') {
             caption(staging(n, total));
             announce(COUNT.spoken(n, total));
@@ -1117,6 +1135,13 @@ function stepRace(dt) {
             announce(gateCall(n, total));
             sound.gate();
         } else if (kind === 'replay') caption(UI.replay);
+        else if (kind === 'photo') {
+            // The photo finish: everything stopped on the winner's crossing.
+            const line = CALLS.photo(day.entries[seg.close.first].name, seg.close.gap);
+            caption(line);
+            announce(line);
+            sound.shutter();
+        }
         else if (kind === 'times') {
             const first = order[0];
             const second = order[1];
@@ -1935,7 +1960,11 @@ function animate() {
     state.lastTime = now;
     if (state.phase === 'race') stepRace(dt);
     if (state.phase === 'weighin') stepWeighIn(dt);
-    if (crowd) crowd.pose(crowdMoment(now));
+    // A photo finish is a still: the people in it stay as they were.
+    if (crowd) {
+        const moment = crowdMoment(now);
+        if (moment.kind !== 'photo') crowd.pose(moment);
+    }
     if (state.phase === 'bench' && workbench) {
         tools.update(dt);
         // Align rolls the car off the turntable and back.

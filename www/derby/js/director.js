@@ -56,7 +56,7 @@ export const SHOTS = Object.freeze({
  */
 export function shotFor(kind, leadS, { reducedMotion = false } = {}, C = DERBY_CONFIG) {
     if (kind === 'staging' || kind === 'gate') return 'start';
-    if (kind === 'replay') return 'photo';
+    if (kind === 'replay' || kind === 'photo') return 'photo';
     if (kind === 'times') return 'finish';
     if (reducedMotion) return 'finish';
     return leadS >= C.track.courseLength - C.camera.finishFrom ? 'finish' : 'chase';

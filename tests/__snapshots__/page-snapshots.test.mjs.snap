@@ -1526,6 +1526,10 @@ html [data-ui-theme="ember" lang="en"]
     p#caption.caption [aria-hidden="true"]
     p#race-status.sr-only [aria-live="polite" role="status"]
     p#countdown.countdown [aria-hidden="true"]
+    div#photo-finish.photo-finish [aria-hidden="true"]
+      p.photo-label
+        "PHOTO FINISH"
+      p#photo-gap.photo-gap
     span#you-tag.you-tag [aria-hidden="true"]
       "You"
     button#skip-btn.ui-float.skip-btn [type="button"]

@@ -27,6 +27,7 @@
 import { DERBY_CONFIG } from './config.min.js';
 import { shotFor, framing } from './director.min.js';
 import { clock, placeWord } from './copy.min.js';
+import { heatOrder } from './playback.min.js';
 
 /**
  * The clip's timeline for the car at index `focus`: which heat (its best),
@@ -49,7 +50,7 @@ export function planClip(race, focus, C = DERBY_CONFIG) {
     }
     const lo = rival === null ? crossing : Math.min(crossing, rival);
     const hi = rival === null ? crossing : Math.max(crossing, rival);
-    const order = heat.slice().sort((a, b) => a.time - b.time || a.car - b.car);
+    const order = heatOrder(heat);
     const segments = [];
     let t = 0;
     const add = (kind, seconds, extra = {}) => {

@@ -60,8 +60,8 @@ test('the timer fills each lane as its car crosses, lights the visitor\'s row, a
     expect(rows).toHaveLength(4);
     timer.heat(2, 4);
     expect(root.children[0].textContent).toBe('Heat 2 of 4');
-    timer.heat(2, 4, 'Photo finish');
-    expect(root.children[0].textContent).toBe('Heat 2 of 4 · Photo finish');
+    timer.heat(2, 4, 'Slow motion');
+    expect(root.children[0].textContent).toBe('Heat 2 of 4 · Slow motion');
     timer.lanes([{ car: 0, time: 3.2, place: 1 }, { car: 1, time: null, place: null }, { car: 2, time: 3.3, place: 2 }, null]);
     const text = (row, k) => row.children[k].textContent;
     expect(text(rows[0], 1)).toBe('Mine');
