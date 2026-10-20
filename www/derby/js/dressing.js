@@ -3,7 +3,7 @@
  * dressing.js - the community hall dressed for a Saturday morning derby
  * (M6.1, PRD The venue): strings of pennants across the hall, morning light
  * through the high windows, the basketball hoops at either end (it is a
- * community gym), folding chairs in front of the bleachers, the trophy table
+ * community gym, white nets on the rims), folding chairs in front of the bleachers, the trophy table
  * by the finish, the snack table by the start, a WELCOME RACERS banner, and
  * the electronic timer over the finish line on its gantry.
  *
@@ -119,6 +119,25 @@ export function buildDressing(C = DERBY_CONFIG) {
     });
     const boardMat = new THREE.MeshStandardMaterial({ map: board.tex, roughness: 0.5 });
     const rimMat = mat(0xe8641e, 0.4, 0.5);
+    // The net: white cord in diamonds, hanging from the rim and narrowing.
+    const cord = canvasTex(128, 64, (g, w, h) => {
+        g.clearRect(0, 0, w, h);
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = 5;
+        g.beginPath();
+        g.moveTo(0, 0);
+        g.lineTo(w, h);
+        g.moveTo(w, 0);
+        g.lineTo(0, h);
+        g.moveTo(-w, 0);
+        g.lineTo(w, 2 * h);
+        g.stroke();
+    });
+    cord.tex.wrapS = THREE.RepeatWrapping;
+    cord.tex.wrapT = THREE.RepeatWrapping;
+    cord.tex.repeat.set(8, 3);
+    const netMat = new THREE.MeshBasicMaterial({ map: cord.tex, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide });
+    const netGeo = new THREE.CylinderGeometry(0.23, 0.15, 0.42, 16, 1, true);
     for (const [x, ry] of [[HALL.x0, Math.PI / 2], [HALL.x1, -Math.PI / 2]]) {
         const hoop = new THREE.Group();
         hoop.position.set(x, 0, 0);
@@ -128,7 +147,9 @@ export function buildDressing(C = DERBY_CONFIG) {
         const rim = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.012, 6, 24), rimMat);
         rim.rotation.x = Math.PI / 2;
         rim.position.set(0, 3.05, 0.65);
-        hoop.add(back, rim);
+        const net = new THREE.Mesh(netGeo, netMat);
+        net.position.set(0, 3.05 - 0.21, 0.65);
+        hoop.add(back, rim, net);
         group.add(hoop);
     }
 

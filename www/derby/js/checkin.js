@@ -186,11 +186,21 @@ export function buildCheckinTable(C = DERBY_CONFIG) {
             drawReadout(canvas.getContext('2d'), canvas.width, canvas.height, text, over);
             readout.needsUpdate = true;
         },
-        /** The camera on the table, holding the scale and the gauge box. */
-        shot(aspect) {
-            const target = world(0, W.top + 0.04, 0);
-            const d = Math.max(0.7, fitDistance(0.55, C.camera.fov, aspect));
-            const dir = [0.12, 0.42, 1];
+        /**
+         * The camera on the table. `wide` 1 holds the volunteer too, face and
+         * all, as the car is set down (Steve's QA: only the torso showed);
+         * 0 is close on the scale and the gauge box. Between, it eases in.
+         */
+        shot(aspect, wide = 0) {
+            const lerp = (a, b) => a + (b - a) * wide;
+            const target = world(lerp(0, -0.12), lerp(W.top + 0.04, 1.2), lerp(0, -0.25));
+            const tan = Math.tan((C.camera.fov * Math.PI) / 360);
+            // Close: the table's width. Wide: from the table to the
+            // volunteer's crown, tall and wide enough for both.
+            const close = Math.max(0.7, fitDistance(0.55, C.camera.fov, aspect));
+            const far = Math.max(0.68 / tan, fitDistance(0.75, C.camera.fov, aspect));
+            const d = lerp(close, far);
+            const dir = [0.12, lerp(0.42, 0.12), 1];
             const n = Math.hypot(...dir);
             return { target, position: { x: target.x + (dir[0] / n) * d, y: target.y + (dir[1] / n) * d, z: target.z + (dir[2] / n) * d } };
         }

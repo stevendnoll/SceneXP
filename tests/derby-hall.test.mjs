@@ -447,3 +447,93 @@ describe('the family card, from source', () => {
         expect(find(body, 'bench-shirt-mustard').checked).toBe(true);
     });
 });
+
+describe('the faces are on screen (Steve\'s QA: "I never see the faces")', () => {
+    let THREE;
+    let dom;
+    beforeAll(async () => {
+        THREE = await loadRealThree();
+    });
+    beforeEach(() => {
+        jest.resetModules();
+        globalThis.THREE = THREE;
+        dom = installDom();
+    });
+    afterEach(() => dom.uninstall());
+
+    /** Where a point lands on a screen of `aspect` seen by a shot: NDC, or
+     *  null behind the camera. */
+    function onScreen(shot, aspect, p) {
+        const cam = new THREE.PerspectiveCamera(C.camera.fov, aspect, C.camera.near, C.camera.far);
+        cam.position.set(shot.position.x, shot.position.y, shot.position.z);
+        cam.lookAt(shot.target.x, shot.target.y, shot.target.z);
+        cam.updateMatrixWorld(true);
+        const v = new THREE.Vector3(p.x, p.y, p.z).project(cam);
+        return v.z < 1 ? v : null;
+    }
+    const inside = (v) => v && v.x > -0.95 && v.x < 0.95 && v.y > -0.95 && v.y < 0.95;
+    const ASPECTS = [16 / 9, 390 / 844];
+
+    test('the crowd shot: every face of the family it centers on, and the bleachers\' faces behind', async () => {
+        const D = await import('../www/derby/js/director.js');
+        const parts = (await import('../www/shared/js/crowd-1.0.0.js')).buildCrowdParts({ poses: ['down'] });
+        const groups = [{ key: 'mine', members: Fam.familyMembers(null, 'Blue Wedge', C) }]
+            .concat(['owl', 'arrow', 'phantom'].map((id) => ({ key: id, members: Crowd.familyOf(id, C) })));
+        const places = Crowd.familyPlaces(groups, C);
+        for (const aspect of ASPECTS) {
+            for (const [k, place] of places.entries()) {
+                const mid = { x: place.at.reduce((a, p) => a + p.x, 0) / place.at.length, z: place.at.reduce((a, p) => a + p.z, 0) / place.at.length };
+                const shot = D.crowdFraming(mid, aspect, C);
+                place.at.forEach((p, i) => {
+                    const s = groups[k].members[i].look.scale;
+                    expect(inside(onScreen(shot, aspect, { x: p.x, y: parts.eyeHeight * s, z: p.z }))).toBe(true);
+                    // The feet too: the whole person.
+                    expect(inside(onScreen(shot, aspect, { x: p.x, y: 0.05, z: p.z }))).toBe(true);
+                });
+                // The camera stands inside the hall, at a person's height.
+                expect(shot.position.z).toBeLessThan(7);
+                expect(shot.position.y).toBeGreaterThan(1.2);
+                expect(shot.position.y).toBeLessThan(2.2);
+            }
+            // Faces on the bleachers behind the visitor's family.
+            const mid = places[0].at[0];
+            const shot = D.crowdFraming({ x: mid.x, z: mid.z }, aspect, C);
+            const seen = Crowd.bleacherSeats(C).filter((s) => inside(onScreen(shot, aspect, { x: s.x, y: s.y + parts.eyeHeight, z: s.z })));
+            expect(seen.length).toBeGreaterThan(aspect > 1 ? 15 : 4);
+        }
+    });
+
+    test('the weigh-in opens wide on the volunteer\'s face, and closes in on the scale', async () => {
+        const Ck = await import('../www/derby/js/checkin.js');
+        const parts = (await import('../www/shared/js/crowd-1.0.0.js')).buildCrowdParts({ poses: ['down'] });
+        const table = Ck.buildCheckinTable(C);
+        const W = C.weighIn;
+        // Where main.js stands the volunteer.
+        const face = { x: W.at.x - 0.25, y: parts.eyeHeight, z: W.at.z - 0.55 };
+        const scale = table.carAt('hold', 0);
+        for (const aspect of ASPECTS) {
+            const wide = table.shot(aspect, 1);
+            expect(inside(onScreen(wide, aspect, face))).toBe(true);
+            expect(inside(onScreen(wide, aspect, scale))).toBe(true);
+            const close = table.shot(aspect, 0);
+            expect(inside(onScreen(close, aspect, scale))).toBe(true);
+            // Close, the scale fills more of the screen than wide.
+            const span = (shot) => {
+                const a = onScreen(shot, aspect, { x: scale.x - 0.1, y: scale.y, z: scale.z });
+                const b = onScreen(shot, aspect, { x: scale.x + 0.1, y: scale.y, z: scale.z });
+                return Math.abs(a.x - b.x);
+            };
+            expect(span(close)).toBeGreaterThan(span(wide));
+        }
+    });
+
+    test('the hoops wear nets', async () => {
+        const Dr = await import('../www/derby/js/dressing.js');
+        const d = Dr.buildDressing(C);
+        let nets = 0;
+        d.group.traverse((o) => {
+            if (o.isMesh && o.geometry.type === 'CylinderGeometry' && o.geometry.parameters.openEnded && o.material.side === THREE.DoubleSide) nets++;
+        });
+        expect(nets).toBe(2);
+    });
+});

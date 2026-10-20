@@ -42,7 +42,7 @@ import { curvesOf } from './profile.min.js';
 import { bestBalance } from './weights.min.js';
 import * as U from './units.min.js';
 import { planDay, momentAt, positionAt } from './playback.min.js';
-import { shotFor, framing } from './director.min.js';
+import { shotFor, framing, crowdFraming } from './director.min.js';
 import { createTimer, fillResults, h } from './board.min.js';
 import {
     EVENTS, UI, ENTRY, eventLabel, staging, heatWinner, heatSpoken, resultsSpoken, whyLines, trialLines, clock,
@@ -635,6 +635,16 @@ function placeCrowd() {
         }
     }
     crowd.set(list, crowdMoment(performance.now()));
+    // Each family's middle, for the crowd shot.
+    const centers = {};
+    for (const m of list) {
+        if (m.group === 'crowd' || m.group === 'volunteer') continue;
+        const c = (centers[m.group] ||= { x: 0, z: 0, n: 0 });
+        c.x += m.at.x;
+        c.z += m.at.z;
+        c.n++;
+    }
+    state.familyCenters = Object.fromEntries(Object.entries(centers).map(([k, c]) => [k, { x: c.x / c.n, z: c.z / c.n }]));
 }
 
 /** What the people are doing now (crowd.poseAt's moment). */
@@ -739,11 +749,24 @@ function startWeighIn(entries, how) {
     stepWeighIn(0);
 }
 
-function weighCamera() {
+/** The weigh-in's camera: wide on the volunteer as the car is set down,
+ *  easing in to the scale as it counts, close after. Reduced motion holds
+ *  the wide view still. */
+function weighCamera(kind = 'place', progress = 0) {
     if (!camera || !registration) return;
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    aim(registration.shot(camera.aspect));
+    let wide = 0;
+    if (state.reducedMotion || kind === 'place') wide = 1;
+    else if (kind === 'count') wide = 1 - progress * progress * (3 - 2 * progress);
+    aim(registration.shot(camera.aspect, wide));
+}
+
+/** Where a family stands (its middle), for the crowd shot: the group's,
+ *  or the visitor's, or just before the finish. */
+function familyFocus(key) {
+    const c = state.familyCenters || {};
+    return c[key] || c.mine || { x: CONFIG.track.courseLength - 1.5, z: CONFIG.crowd.familyZ };
 }
 
 /** Why a car did not pass, in the visitor's units: { by (how far over or
@@ -778,6 +801,7 @@ function stepWeighIn(dt) {
             placeCar(mesh, 0, idx);
         }
     });
+    weighCamera(m.kind, m.progress);
     const verdict = w.plan.verdicts[m.car];
     const entry = w.entries[w.mine[m.car]];
     registration.setReading(U.mass(verdict.car.mass * readingShare(m.kind, m.progress), units), m.kind === 'over');
@@ -791,7 +815,6 @@ function stepWeighIn(dt) {
             caption(WEIGH.reading(massText));
         } else if (m.kind === 'gauge') caption(WEIGH.gauge);
         else if (m.kind === 'result') {
-            sound.cheer(0.3);
             caption(WEIGH.passed(entry.name));
             announce(WEIGH.spoken(entry.name, massText, true));
         } else if (m.kind === 'over' || m.kind === 'stuck') {
@@ -906,7 +929,14 @@ function stepRace(dt) {
     trackParts.gate.set(kind === 'staging' ? 0 : kind === 'gate' ? Math.min(1, (state.clock - seg.from) / (seg.to - seg.from)) : 1);
 
     const shot = shotFor(kind, leadS, { reducedMotion: state.reducedMotion }, CONFIG);
-    aim(framing(shot, trackParts.path, leadS, window.innerWidth / window.innerHeight, CONFIG));
+    if (kind === 'times' && !state.reducedMotion) {
+        // The heat's times: the people, the winner's family in the middle.
+        const first = heat.slice().sort((a, b) => a.time - b.time || a.car - b.car)[0];
+        const e = day.entries[first.car];
+        aim(crowdFraming(familyFocus(e.mine ? 'mine' : e.id), window.innerWidth / window.innerHeight, CONFIG));
+    } else {
+        aim(framing(shot, trackParts.path, leadS, window.innerWidth / window.innerHeight, CONFIG));
+    }
 
     // The timer: each lane's car, and its time once it is across.
     const order = heat.slice().sort((a, b) => a.time - b.time || a.car - b.car);
@@ -942,14 +972,10 @@ function stepRace(dt) {
         } else if (kind === 'replay') caption(UI.replay);
         else if (kind === 'times') {
             const first = order[0];
-            sound.cheer(0.55);
             const second = order[1];
             caption(second && second.time - first.time < 0.005
                 ? CALLS.close(n, day.entries[first.car].name, first.time)
                 : heatWinner(n, day.entries[first.car].name, first.time));
-            // The visitor's car last in the heat: the crowd's groan.
-            const mineLast = state.event !== 'trial' && order.length > 1 && order[order.length - 1].car === 0;
-            if (mineLast) sound.groan();
             announce(heatSpoken(n, order.map((r, i) => ({ name: day.entries[r.car].name, time: r.time, place: i + 1 }))));
         }
         // Skip, once the first heat has been seen through.
@@ -998,12 +1024,13 @@ function finishRace(how) {
     const last = day.race.heats[day.race.heats.length - 1];
     last.forEach((r, i) => placeCar(meshes[i], positionAt(day.race.runs[i][r.lane], 99, CONFIG), r.lane));
     setRaceChrome(false);
-    aim(framing('finish', trackParts.path, CONFIG.track.courseLength, window.innerWidth / window.innerHeight, CONFIG));
+    // Behind the results, the people: the day's winner's family.
+    const champ = day.entries[day.race.standings[0]];
+    aim(crowdFraming(familyFocus(champ.mine ? 'mine' : champ.id), window.innerWidth / window.innerHeight, CONFIG));
     day.won = recordDay(day);
     showResults();
     const place = day.race.standings.indexOf(0) + 1;
     sound.roll(0);
-    sound.cheer(state.event === 'trial' ? 0.7 : place === 1 ? 1 : 0.45);
     track(how === 'skip' ? 'race-skip' : 'race-end', { kind: state.event, outcome: state.event === 'trial' ? `cars=${day.entries.length}` : `place=${place}` });
 }
 
@@ -1314,7 +1341,6 @@ function stepClip(dt) {
     if (m.kind !== c.said) {
         c.said = m.kind;
         if (m.kind === 'gate') sound.gate();
-        if (m.kind === 'board') sound.cheer(c.plan.place === 1 ? 1 : 0.6);
     }
     const shot = clipFraming(m, { path: trackParts.path, pose: focusPose, carLength: CONFIG.kit.length, leadS, aspect: c.w / c.h }, CONFIG);
     clipCamera.position.set(shot.position.x, shot.position.y, shot.position.z);

@@ -15,6 +15,13 @@
  * must show, and the camera backs off until a portrait phone holds it
  * (`fitDistance`).
  *
+ * THE CROWD SHOT (M6, Steve's QA: "I never see the faces"). Every shot
+ * above is built for 18 cm cars, so it looks down at the track from a
+ * meter away, and a standing person is legs. `crowdFraming` stands back at
+ * a person's eye height on the near side and looks across at a family by
+ * the finish, the bleachers behind them, for the heat's times (the winner's
+ * family jumping) and behind the results.
+ *
  * PURE: plain { x, y, z } in, plain { position, target } out.
  */
 
@@ -71,4 +78,20 @@ export function framing(shot, path, leadS, aspect, C = DERBY_CONFIG) {
         target,
         position: { x: target.x + S.dir.x * d, y: target.y + S.dir.y * d, z: target.z + S.dir.z * d }
     };
+}
+
+/** The crowd shot's settings: looking from the near side, a little up the
+ *  track (away from the timer's gantry), at a face's height. */
+export const CROWD_SHOT = Object.freeze({ dir: unit(-0.22, 0.1, 1), height: 1.0, halfWidth: 1.3, minDistance: 3.2 });
+
+/**
+ * Where the camera goes to see the people: `focus` is the { x, z } of the
+ * family to center (the heat's winner's, or the visitor's), held with its
+ * neighbors either side, heads and all, however narrow the screen.
+ */
+export function crowdFraming(focus, aspect, C = DERBY_CONFIG) {
+    const S = CROWD_SHOT;
+    const target = { x: focus.x, y: S.height, z: focus.z - 0.3 };
+    const d = Math.max(S.minDistance, fitDistance(S.halfWidth, C.camera.fov, aspect));
+    return { target, position: { x: target.x + S.dir.x * d, y: target.y + S.dir.y * d, z: target.z + S.dir.z * d } };
 }

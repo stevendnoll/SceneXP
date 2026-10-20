@@ -68,7 +68,7 @@ describe('the sound', () => {
         expect(s.isOn()).toBe(false);
         expect(s.toggle()).toBe(true);
         expect(s.ensure()).toBe(false);
-        for (const call of [() => s.roll(1), () => s.gate(), () => s.beep(), () => s.cheer(), () => s.setRecording(true), () => s.setLevel(0.2), () => s.dispose()]) {
+        for (const call of [() => s.roll(1), () => s.gate(), () => s.beep(), () => s.puff(), () => s.setRecording(true), () => s.setLevel(0.2), () => s.dispose()]) {
             expect(call).not.toThrow();
         }
         expect(s.recordStream()).toBeNull();
@@ -101,12 +101,12 @@ describe('the sound', () => {
         const before = a.made.length;
         s.gate();
         s.beep();
-        s.cheer();
+        s.puff();
         expect(a.made.length).toBe(before);
         s.setRecording(true, true);
         s.gate();
         s.beep();
-        s.cheer(1);
+        s.puff();
         expect(a.made.length).toBeGreaterThan(before + 6);
         // A recording without its sound is silent again.
         const after = a.made.length;
@@ -163,7 +163,7 @@ describe('the sound', () => {
         const s = Sound.createSound(C.sound, { win: { AudioContext: class { constructor() { throw new Error('no'); } } } });
         expect(s.ensure()).toBe(false);
         expect(s.setOn(true)).toBe(true);
-        expect(() => s.cheer()).not.toThrow();
+        expect(() => s.puff()).not.toThrow();
     });
 });
 

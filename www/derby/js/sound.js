@@ -1,7 +1,11 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * sound.js - Derby Day's sound (M2): the gate dropping, the wheels on the
- * aluminum, the timer's beep as each car crosses, and the crowd.
+ * aluminum, the timer's beep as each car crosses, and the crowd's murmur.
+ *
+ * NO CHEER, NO GROAN (Steve's QA, 2026-10-19): a crowd made from noise
+ * trembling a few times a second read as a rasp, not applause, so both
+ * came out. A crowd's reaction is the families jumping, not a sound.
  *
  * MUTED BY DEFAULT (D2), with the floating speaker button and M, as
  * www/leaves has. Nothing is remembered yet: the settings join the garage's
@@ -50,7 +54,8 @@ function quietly(p) {
 /**
  * The sound, off. `S` is config.sound, `win` the window (for its
  * AudioContext). Returns { isOn, setOn, toggle, setLevel, ensure, roll,
- * gate, beep, cheer, recordStream, setRecording, dispose }.
+ * gate, beep, work, puff, tap, buzz, murmur, recordStream, setRecording,
+ * dispose }.
  */
 export function createSound(S, { win = typeof window === 'undefined' ? null : window } = {}) {
     let ctx = null;
@@ -238,39 +243,6 @@ export function createSound(S, { win = typeof window === 'undefined' ? null : wi
             const t = tone('sine', B.hz);
             envelope(t.gain, B.gain, 0.004, B.seconds, [t.osc]);
         },
-        /** The crowd, `strength` 0 to 1: a swell of voices with claps in it. */
-        cheer(strength = 0.6) {
-            if (!audible()) return;
-            const H = S.cheer;
-            const source = ctx.createBufferSource();
-            source.buffer = noise;
-            // Longer than the two seconds of noise: looped until it stops.
-            source.loop = true;
-            const band = ctx.createBiquadFilter();
-            band.type = 'bandpass';
-            band.frequency.value = H.hz;
-            band.Q.value = H.q;
-            // Claps: the voices trembling a few times a second, BEFORE the
-            // envelope, so the claps fade with the cheer.
-            const clapped = ctx.createGain();
-            clapped.gain.value = 0.75;
-            const clap = ctx.createOscillator();
-            clap.type = 'square';
-            clap.frequency.value = H.clapHz;
-            const depth = ctx.createGain();
-            depth.gain.value = 0.25;
-            clap.connect(depth);
-            depth.connect(clapped.gain);
-            const env = ctx.createGain();
-            source.connect(band);
-            band.connect(clapped);
-            clapped.connect(env);
-            env.connect(bus);
-            const t = ctx.currentTime + S.ahead;
-            source.start(t);
-            clap.start(t);
-            envelope(env, H.gain * strength, H.attack, H.decay, [source, clap]);
-        },
         /** The saw (`saw`) or the sandpaper (`sand`), for `seconds`: noise
          *  through a band, its loudness pulsing with each stroke. */
         work(kind, seconds) {
@@ -325,14 +297,6 @@ export function createSound(S, { win = typeof window === 'undefined' ? null : wi
                 murmurVoice = { gain };
             }
             glide(murmurVoice.gain.gain, onOff && audible() ? M.gain : 0, 0.6);
-        },
-        /** The crowd's groan: a fall of low voices. */
-        groan() {
-            if (!audible()) return;
-            const G = S.groan;
-            const shot = noiseShot('bandpass', G.from, 1.2);
-            shot.filter.frequency.exponentialRampToValueAtTime(G.to, ctx.currentTime + S.ahead + G.seconds);
-            envelope(shot.gain, G.gain, 0.12, G.seconds, [shot.source]);
         },
         /** A puff of graphite: a short breath of low noise. */
         puff() {

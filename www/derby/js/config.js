@@ -646,7 +646,6 @@ export const DERBY_CONFIG = Object.freeze({
         roll: Object.freeze({ gain: 0.26, hz: 900, q: 0.8, top: 3200 }),
         gate: Object.freeze({ gain: 0.5, clickHz: 2400, thunkHz: 150, seconds: 0.14 }),
         beep: Object.freeze({ gain: 0.16, hz: 1568, seconds: 0.09 }),
-        cheer: Object.freeze({ gain: 0.34, hz: 1300, q: 0.6, attack: 0.25, decay: 2.4, clapHz: 7 }),
         /** The workshop (M4): the coping saw's rasp, a stroke a fifth of a
          *  second, and the sandpaper's hush, slower. */
         saw: Object.freeze({ gain: 0.22, hz: 2200, q: 1.4, strokeHz: 5 }),
@@ -659,10 +658,8 @@ export const DERBY_CONFIG = Object.freeze({
         puff: Object.freeze({ gain: 0.32, hz: 700, q: 0.6, seconds: 0.35 }),
         tap: Object.freeze({ gain: 0.42, hz: 260, seconds: 0.12 }),
         buzz: Object.freeze({ gain: 0.16, hz: 140, seconds: 0.45 }),
-        /** The hall (M6.4): the crowd's murmur under everything, and a
-         *  groan when the visitor's car comes in last in a heat. */
-        murmur: Object.freeze({ gain: 0.07, hz: 480, q: 0.9, wobbleHz: 0.35 }),
-        groan: Object.freeze({ gain: 0.22, from: 520, to: 260, seconds: 0.9 })
+        /** The hall (M6.4): the crowd's murmur under everything. */
+        murmur: Object.freeze({ gain: 0.07, hz: 480, q: 0.9, wobbleHz: 0.35 })
     }),
 
     look: Object.freeze({
