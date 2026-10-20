@@ -447,6 +447,58 @@ test('each heat\'s winners cheer a different way from the heat before, and the n
     expect(state.day.cheers[0]).not.toBe(first[3]);
 });
 
+test('card mode (?card=1): the scene alone in the card\'s shape, paused by P, stepped by a full stop, saved by S', async () => {
+    dom.windowStub.location.search = '?card=1';
+    const main = await boot();
+    const state = main.getState();
+    expect(state.card).toBe(true);
+    expect(dom.documentStub.body.classList.contains('card-mode')).toBe(true);
+    // Held to the card's shape inside the 390 by 844 window: as wide as it is, 1200:630 tall.
+    const v = main.__test__.viewSize();
+    expect(v.w).toBe(390);
+    expect(v.h).toBe(Math.round(390 * 630 / 1200));
+    raceIt();
+    go();
+    expect(state.phase).toBe('race');
+    // P: nothing moves, the race clock included.
+    frames(main, 1);
+    fire(dom.documentStub, 'keydown', { key: 'p' });
+    const held = state.clock;
+    frames(main, 2);
+    expect(state.clock).toBe(held);
+    // A full stop: one frame on, a thirtieth of a second.
+    fire(dom.documentStub, 'keydown', { key: '.' });
+    frames(main, 1 / 30);
+    expect(state.clock).toBeCloseTo(held + 1 / 30, 9);
+    frames(main, 1);
+    expect(state.clock).toBeCloseTo(held + 1 / 30, 9);
+    // S: the frame saved, drawn at twice the card's size and read back.
+    const canvas = dom.el('game-canvas');
+    canvas.toDataURL = jest.fn(() => 'data:image/png;base64,AAAA');
+    fire(dom.documentStub, 'keydown', { key: 's' });
+    expect(canvas.toDataURL).toHaveBeenCalledWith('image/png');
+    expect(main.__test__.saveCard()).toMatch(/^derby-card-\d+\.png$/);
+    // P again: on it goes.
+    fire(dom.documentStub, 'keydown', { key: 'P' });
+    frames(main, 0.5);
+    expect(state.clock).toBeGreaterThan(held + 0.4);
+});
+
+test('without ?card=1 the keys mean nothing and the scene fills the window', async () => {
+    const main = await boot();
+    const state = main.getState();
+    expect(state.card).toBe(false);
+    expect(dom.documentStub.body.classList.contains('card-mode')).toBe(false);
+    expect(main.__test__.viewSize()).toEqual({ w: 390, h: 844 });
+    raceIt();
+    go();
+    frames(main, 0.5);
+    fire(dom.documentStub, 'keydown', { key: 'p' });
+    const was = state.clock;
+    frames(main, 0.5);
+    expect(state.clock).toBeGreaterThan(was + 0.4);
+});
+
 test('a browser that refuses storage still gets a whole visit', async () => {
     const refuse = () => { throw new Error('SecurityError'); };
     globalThis.localStorage = { getItem: refuse, setItem: refuse, removeItem: refuse };

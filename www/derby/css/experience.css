@@ -1493,6 +1493,42 @@ body {
     display: none;
 }
 
+/* ---- Card mode (?card=1, js/main.js) -------------------------------------
+   The scene alone, held to the social card's shape and centered in the
+   window, for a clean picture: every overlay over it is hidden. The cards
+   (check-in, the bench, the results) still show, to set up a race. */
+body.card-mode {
+    background: #000;
+}
+
+body.card-mode #game-canvas {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+body.card-mode #timer,
+body.card-mode #caption,
+body.card-mode #countdown,
+body.card-mode #photo-finish,
+body.card-mode #you-tag,
+body.card-mode #help-btn,
+body.card-mode #sound-btn,
+body.card-mode #skip-btn {
+    display: none !important;
+}
+
+.card-hint {
+    position: fixed;
+    left: 8px;
+    bottom: 6px;
+    margin: 0;
+    color: #8f8478;
+    font-size: 0.72rem;
+    z-index: 200;
+    pointer-events: none;
+}
+
 /* ---- Small screens -------------------------------------------------------- */
 
 @media (max-width: 480px) {

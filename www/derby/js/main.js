@@ -65,6 +65,43 @@ import { track, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.
 const CONFIG = DERBY_CONFIG;
 const LANES = CONFIG.track.lanes;
 
+/**
+ * CARD MODE, `?card=1` (M7, the social card): the scene alone, for a clean
+ * picture. Every overlay over the scene is hidden (the timer card, the
+ * caption, the countdown, the photo frame, the You tag, the floating
+ * buttons); the scene is held to the card's own shape (1200 by 630,
+ * letterboxed in the window), so every shot is framed for the card; P
+ * pauses and resumes everything, `.` steps a frame while paused, and S
+ * saves the frame as a PNG at twice the card's size, drawn by the renderer
+ * itself (so no screen color profile comes with it). The cards (check-in,
+ * the bench, the results) still work, to set up a race.
+ */
+const CARD = Object.freeze({ width: 1200, height: 630, scale: 2 });
+const cardMode = () => {
+    try {
+        return typeof window !== 'undefined' && new URLSearchParams(window.location.search || '').get('card') === '1';
+    } catch (e) {
+        return false;
+    }
+};
+
+/** The scene's size on screen, in CSS pixels: the window, or in card mode
+ *  the biggest card-shaped box that fits in it. */
+function viewSize() {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    if (!state.card) return { w: W, h: H };
+    const r = CARD.width / CARD.height;
+    const w = Math.min(W, H * r);
+    return { w: Math.round(w), h: Math.round(w / r) };
+}
+
+/** The scene's shape, width over height, for every shot's framing. */
+function viewAspect() {
+    const v = viewSize();
+    return v.w / v.h;
+}
+
 const state = {
     phase: 'loading',
     isLoaded: false,
@@ -109,6 +146,12 @@ const state = {
     lastDance: null,
     /** The last heat's cheer, so the next race day's first is another. */
     lastCheer: null,
+    /** Card mode (`?card=1`): paused, a frame owed by `.`, and the clock
+     *  the people move by, which a pause holds still too. */
+    card: false,
+    frozen: false,
+    step: false,
+    cardNow: 0,
     /** A friend's challenge (M8): { build, from, name } from the link the
      *  visitor arrived by, raced head to head; and the car being sent. */
     challenge: null,
@@ -192,6 +235,8 @@ async function init() {
         el[id] = document.getElementById(id);
     }
     if (!el['game-canvas'] || typeof THREE === 'undefined') return;
+    state.card = cardMode();
+    if (state.card) showCardMode();
     // The markup starts the cards hidden. Said again here, so the page never
     // begins believing one is up.
     for (const id of ['results-modal', 'clip-modal', 'challenge-modal', 'bench', 'weighin-note']) if (el[id]) el[id].classList.add('hidden');
@@ -233,7 +278,8 @@ async function init() {
     renderer.toneMapping = THREE.NeutralToneMapping || THREE.NoToneMapping;
     renderer.toneMappingExposure = CONFIG.render.exposure;
     renderer.setPixelRatio(pixelRatio());
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    const view = viewSize();
+    renderer.setSize(view.w, view.h);
     if (shadows) {
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -241,7 +287,7 @@ async function init() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(CONFIG.look.background);
     scene.fog = new THREE.Fog(CONFIG.look.fog.color, CONFIG.look.fog.near, CONFIG.look.fog.far);
-    camera = new THREE.PerspectiveCamera(CONFIG.camera.fov, window.innerWidth / window.innerHeight, CONFIG.camera.near, CONFIG.camera.far);
+    camera = new THREE.PerspectiveCamera(CONFIG.camera.fov, view.w / view.h, CONFIG.camera.near, CONFIG.camera.far);
     scene.add(buildHall(CONFIG, { shadows }).group);
     trackParts = buildTrack(CONFIG, { shadows });
     scene.add(trackParts.group);
@@ -576,8 +622,7 @@ function benchPanel() {
 
 function benchCamera() {
     if (!camera || !workbench) return;
-    const W = window.innerWidth;
-    const H = window.innerHeight;
+    const { w: W, h: H } = viewSize();
     const family = state.benchView === 'family';
     const f = benchFraming({ width: W, height: H, panel: benchPanel(), hold: family ? CONFIG.crowd.familyHold : null }, CONFIG);
     camera.aspect = W / H;
@@ -851,7 +896,7 @@ function holdFocusOnScene() {
  *  the wide view still. */
 function weighCamera(kind = 'place', progress = 0) {
     if (!camera || !registration) return;
-    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.aspect = viewAspect();
     camera.updateProjectionMatrix();
     let wide = 0;
     if (state.reducedMotion || kind === 'place') wide = 1;
@@ -1062,7 +1107,7 @@ function planFinale(day) {
     let shot = null;
     let sign = null;
     if (key === 'mine' && day.event !== 'trial') {
-        const aspect = window.innerWidth / window.innerHeight;
+        const aspect = viewAspect();
         const kid = family.find((m, i) => i !== k) || null;
         const mid = kid ? { x: (lead.at.x + kid.at.x) / 2, z: (lead.at.z + kid.at.z) / 2 } : lead.at;
         shot = duetFraming(mid, aspect, CONFIG);
@@ -1173,15 +1218,15 @@ function stepRace(dt) {
             const t = state.clock - seg.from;
             dancer.pose(t);
             throwSign(t);
-            aim(state.dance.shot || danceFraming(state.dance.at, window.innerWidth / window.innerHeight, CONFIG));
+            aim(state.dance.shot || danceFraming(state.dance.at, viewAspect(), CONFIG));
         }
     } else if (kind === 'times' && !state.reducedMotion) {
         // The heat's times: the people, the winner's family in the middle.
         const first = heatOrder(heat)[0];
         const e = day.entries[first.car];
-        aim(crowdFraming(familyFocus(e.mine ? 'mine' : e.id), window.innerWidth / window.innerHeight, CONFIG));
+        aim(crowdFraming(familyFocus(e.mine ? 'mine' : e.id), viewAspect(), CONFIG));
     } else {
-        aim(framing(shot, trackParts.path, leadS, window.innerWidth / window.innerHeight, CONFIG));
+        aim(framing(shot, trackParts.path, leadS, viewAspect(), CONFIG));
     }
 
     // The timer: each lane's car, and its time once it is across.
@@ -1276,7 +1321,7 @@ function aim({ position, target }) {
  *  start end, still. */
 function idleCamera() {
     if (!camera) return;
-    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.aspect = viewAspect();
     camera.updateProjectionMatrix();
     aim(framing('start', trackParts.path, 0, camera.aspect, CONFIG));
 }
@@ -1292,7 +1337,7 @@ function finishRace(how) {
     setRaceChrome(false);
     // Behind the results, the people: the day's winner's family.
     const champ = day.entries[day.race.standings[0]];
-    aim(crowdFraming(familyFocus(champ.mine ? 'mine' : champ.id), window.innerWidth / window.innerHeight, CONFIG));
+    aim(crowdFraming(familyFocus(champ.mine ? 'mine' : champ.id), viewAspect(), CONFIG));
     day.won = recordDay(day);
     showResults();
     const place = day.race.places[0];
@@ -1962,6 +2007,54 @@ function closeChallengeCard() {
     if (back && typeof back.focus === 'function') back.focus({ preventScroll: true });
 }
 
+// ---- Card mode (M7, `?card=1`) ------------------------------------------------------
+
+/** Card mode's page: the overlays hidden (experience.css, body.card-mode)
+ *  and a line of what the keys do, outside the picture. */
+function showCardMode() {
+    if (document.body && document.body.classList) document.body.classList.add('card-mode');
+    const hint = h('p', 'card-hint', `Card mode · P pause · . step a frame · S save the frame (${CARD.width * CARD.scale} × ${CARD.height * CARD.scale} PNG)`);
+    hint.setAttribute('aria-hidden', 'true');
+    if (document.body && document.body.appendChild) document.body.appendChild(hint);
+}
+
+/** A key in card mode: P, `.` or S. Returns whether it was one. */
+function cardKey(key) {
+    if (key === 'p' || key === 'P') {
+        state.frozen = !state.frozen;
+        return true;
+    }
+    if (key === '.') {
+        if (state.frozen) state.step = true;
+        return true;
+    }
+    if (key === 's' || key === 'S') {
+        saveCard();
+        return true;
+    }
+    return false;
+}
+
+/** The frame as the card's picture: drawn again at twice the card's size,
+ *  read back at once (before the browser clears the drawing), saved as a
+ *  PNG, and the screen's size put back. Returns the file's name, or null. */
+function saveCard() {
+    if (!renderer || !scene || !camera) return null;
+    const canvas = el['game-canvas'];
+    if (!canvas || typeof canvas.toDataURL !== 'function') return null;
+    const view = viewSize();
+    renderer.setPixelRatio(1);
+    renderer.setSize(CARD.width * CARD.scale, CARD.height * CARD.scale, false);
+    renderer.render(scene, camera);
+    const url = canvas.toDataURL('image/png');
+    renderer.setPixelRatio(pixelRatio());
+    renderer.setSize(view.w, view.h);
+    renderer.render(scene, camera);
+    const name = `derby-card-${Date.now()}.png`;
+    saveFile(url, name);
+    return name;
+}
+
 // ---- Events -----------------------------------------------------------------
 
 function setupEventListeners() {
@@ -2026,6 +2119,10 @@ function onKeyDown(event) {
         toggleSound('key');
         return;
     }
+    if (state.card && !typing && !event.metaKey && !event.ctrlKey && !event.altKey && state.isLoaded && cardKey(event.key)) {
+        event.preventDefault();
+        return;
+    }
     if (event.key === 'Escape' || event.code === 'Escape') {
         if (challengeShown()) {
             event.preventDefault();
@@ -2047,8 +2144,9 @@ function onKeyDown(event) {
 function onResize() {
     if (!renderer) return;
     renderer.setPixelRatio(pixelRatio());
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const view = viewSize();
+    renderer.setSize(view.w, view.h);
+    camera.aspect = view.w / view.h;
     camera.updateProjectionMatrix();
     if (state.phase === 'bench') benchCamera();
     else if (state.phase !== 'race') idleCamera();
@@ -2061,9 +2159,16 @@ function cleanup() {
 }
 
 function animate() {
-    const now = performance.now();
-    const dt = Math.min(0.1, Math.max(0, (now - state.lastTime) / 1000));
-    state.lastTime = now;
+    const real = performance.now();
+    let dt = Math.min(0.1, Math.max(0, (real - state.lastTime) / 1000));
+    state.lastTime = real;
+    // Card mode, paused: nothing moves but a frame stepped by `.`.
+    if (state.card && state.frozen) {
+        dt = state.step ? 1 / 30 : 0;
+        state.step = false;
+    }
+    state.cardNow += dt * 1000;
+    const now = state.card ? state.cardNow : real;
     if (state.phase === 'race') stepRace(dt);
     if (state.phase === 'weighin') stepWeighIn(dt);
     // A photo finish is a still: the people in it stay as they were.
@@ -2142,6 +2247,8 @@ export const __test__ = {
     meshes: () => meshes, benchMesh: () => benchMesh, garage: () => garage, bench: () => bench, holder: () => holder, crowd: () => crowd,
     dancer: () => dancer,
     dressing: () => dressing,
+    saveCard,
+    viewSize,
     familyView: (v) => {
         state.benchView = v;
         if (state.phase === 'bench') benchCamera();

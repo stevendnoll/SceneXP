@@ -650,8 +650,12 @@ describe('the page, with real three (only the renderer stood in for)', () => {
         frames(main, state.day.plan.total);
         expect(state.phase).toBe('results');
         expect(dancer.dancing()).toBe(false);
-        // The sign back in the kid's hands, upright, behind the results.
-        expect(sign.rotation.x).toBe(0);
+        // The sign back in the kid's hands behind the results, not lying on
+        // the floor: up off it, and tipped no more than a cheer tips it (the
+        // last heat's cheer goes on there, and the point tips the sign, D75).
+        expect(sign.visible).toBe(true);
+        expect(sign.position.y).toBeGreaterThan(0.6);
+        expect(Math.abs(sign.rotation.x)).toBeLessThan(0.5);
     });
 
     test('the gantry leaves the picture only while the overhead photo camera is on (Steve\'s QA, 2026-10-20)', async () => {
