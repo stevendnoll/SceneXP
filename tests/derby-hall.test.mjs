@@ -504,7 +504,7 @@ describe('the page, with real three (only the renderer stood in for)', () => {
         frames(main, 3);
         expect(dom.el('caption').textContent.length).toBeGreaterThan(0);
         // After the last heat, the winner's grown-up steps out of the crowd
-        // and dances in its place (dances.js).
+        // and dances in its place (dancer.js).
         const heats = state.day.plan.heats;
         const dance = heats[heats.length - 1].segments.find((s) => s.kind === 'dance');
         frames(main, dance.from + 1 - state.clock);
@@ -672,6 +672,78 @@ describe('the faces are on screen (Steve\'s QA: "I never see the faces")', () =>
                 return Math.abs(a.x - b.x);
             };
             expect(span(close)).toBeGreaterThan(span(wide));
+        }
+    });
+
+    test('the scale\'s reading is in plain view (Steve\'s QA, 2026-10-20: a silver bar across its top)', async () => {
+        const Ck = await import('../www/derby/js/checkin.js');
+        const table = Ck.buildCheckinTable(C);
+        table.group.updateMatrixWorld(true);
+        const screen = table.group.getObjectByName('scale-readout');
+        const ray = new THREE.Raycaster();
+        const solid = table.group.children.filter((o) => o.isMesh);
+        const { width, height } = screen.geometry.parameters;
+        for (const aspect of ASPECTS) {
+            for (const wide of [0, 0.5, 1]) {
+                const shot = table.shot(aspect, wide);
+                const eye = new THREE.Vector3(shot.position.x, shot.position.y, shot.position.z);
+                // A grid over the whole face: the old screen was hidden in a
+                // band across its upper middle, where it ran into the pan.
+                const grid = [];
+                for (let u = -0.45; u <= 0.451; u += 0.15) for (let v = -0.45; v <= 0.451; v += 0.05) grid.push([u, v]);
+                for (const [u, v] of grid) {
+                    const p = screen.localToWorld(new THREE.Vector3(u * width, v * height, 0));
+                    ray.set(eye, p.clone().sub(eye).normalize());
+                    const hit = ray.intersectObjects(solid, false)[0];
+                    expect(hit && hit.object.name).toBe('scale-readout');
+                }
+            }
+        }
+    });
+
+    test('a dozen donuts in an open box (Steve\'s QA, 2026-10-20: more detail), each its own, none in another', async () => {
+        const Dr = await import('../www/derby/js/dressing.js');
+        const box = Dr.donutBox();
+        expect(box).toHaveLength(12);
+        expect(new Set(box.map((d) => d.kind)).size).toBeGreaterThanOrEqual(6);
+        expect(Dr.donutBox()).toEqual(box);
+        const D = Dr.DONUT;
+        const outer = D.ring + D.tube;
+        for (let i = 0; i < box.length; i++) {
+            for (let j = i + 1; j < box.length; j++) {
+                expect(Math.hypot(box[i].x - box[j].x, box[i].z - box[j].z)).toBeGreaterThan(2 * outer);
+            }
+            // Sprinkles on the iced ones only, each on top of its donut.
+            const kind = Dr.DONUT_KINDS[box[i].kind];
+            expect(box[i].sprinkles.length > 0).toBe(kind.sprinkles);
+            for (const sp of box[i].sprinkles) {
+                const p = Dr.sprinkleAt(sp);
+                expect(p.y).toBeGreaterThan(D.tube * D.flat * 0.8);
+                const r = Math.hypot(p.x, p.z);
+                expect(Math.abs(r - D.ring)).toBeLessThan(D.tube * 1.1);
+            }
+        }
+        // Drawn: three instanced pieces, every donut inside the box's walls.
+        const dressing = Dr.buildDressing(C);
+        const group = dressing.group.getObjectByName('donuts');
+        const inst = group.children.filter((o) => o.isInstancedMesh);
+        expect(inst).toHaveLength(3);
+        const [dough, tops, bits] = inst;
+        expect(dough.count).toBe(12);
+        expect(tops.count).toBe(box.filter((d) => Dr.DONUT_KINDS[d.kind].icing !== null).length);
+        expect(bits.count).toBe(box.reduce((n, d) => n + d.sprinkles.length, 0));
+        group.updateMatrixWorld(true);
+        const walls = new THREE.Box3().setFromObject(group.children[0]);
+        const mat = new THREE.Matrix4();
+        for (let i = 0; i < dough.count; i++) {
+            dough.getMatrixAt(i, mat);
+            const p = new THREE.Vector3().setFromMatrixPosition(mat).applyMatrix4(group.matrixWorld);
+            expect(p.x - outer).toBeGreaterThan(walls.min.x);
+            expect(p.x + outer).toBeLessThan(walls.max.x);
+            expect(p.z - outer).toBeGreaterThan(walls.min.z);
+            expect(p.z + outer).toBeLessThan(walls.max.z);
+            // Resting on the table, not in it.
+            expect(p.y - D.tube * D.flat).toBeGreaterThan(0.74);
         }
     });
 

@@ -65,15 +65,17 @@ export function shotFor(kind, leadS, { reducedMotion = false } = {}, C = DERBY_C
 /**
  * Where the camera goes for a shot: `path` is track.pathOf's, `leadS` the
  * point the chase follows. Returns { position, target } in the hall.
+ * `pullBack` stands it further back than the lanes need (config camera;
+ * the share clip keeps 1, its 9:16 frame already backed off for the lanes).
  */
-export function framing(shot, path, leadS, aspect, C = DERBY_CONFIG) {
+export function framing(shot, path, leadS, aspect, C = DERBY_CONFIG, { pullBack = C.camera.pullBack || 1 } = {}) {
     const S = SHOTS[shot] || SHOTS.finish;
     let at;
     if (shot === 'start') at = path.at(0);
     else if (shot === 'chase') at = path.at(leadS + S.ahead);
     else at = path.at(C.track.courseLength + S.ahead);
     const target = { x: at.x, y: at.y + (S.lift || 0.01), z: 0 };
-    const d = Math.max(S.minDistance, fitDistance(S.halfWidth, C.camera.fov, aspect));
+    const d = Math.max(S.minDistance, fitDistance(S.halfWidth, C.camera.fov, aspect)) * pullBack;
     return {
         target,
         position: { x: target.x + S.dir.x * d, y: target.y + S.dir.y * d, z: target.z + S.dir.z * d }

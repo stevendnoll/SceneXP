@@ -99,7 +99,7 @@ export function planDay(race, { focus = null, reducedMotion = false, dance = fal
             add('replay', (runTo - runFrom) / T.replayRate, { runFrom, runTo, rate: T.replayRate, close });
         }
         add('times', T.times);
-        // After the last heat, the day's winner's grown-up dances (dances.js),
+        // After the last heat, the day's winner's grown-up dances (dancer.js),
         // when asked for. Never under reduced motion.
         if (dance && !reducedMotion && index === race.heats.length - 1) add('dance', T.dance);
         heats.push({ index, start, end: clock, segments, close });

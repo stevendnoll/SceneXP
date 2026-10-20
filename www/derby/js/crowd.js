@@ -197,7 +197,7 @@ export function poseAt(member, moment, C = DERBY_CONFIG) {
         return { pose: 'down', hop: 0, lean: 0 };
     }
     if (member.group === 'volunteer') return { pose: 'down', hop: 0 };
-    // The day's winner dancing (dances.js): the family cheers as for a heat.
+    // The day's winner dancing (dancer.js): the family cheers as for a heat.
     if (kind === 'times' || kind === 'dance') {
         const won = moment.won === member.group;
         // A win: up and jumping. A loss: arms down, still (the groan).

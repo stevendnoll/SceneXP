@@ -227,6 +227,23 @@ describe('the director', () => {
         expect(D.framing('nope', path, 0, 1)).toEqual(D.framing('finish', path, 0, 1));
     });
 
+    test('every race shot stands a little further back than it must (Steve\'s QA, 2026-10-20), but not much', () => {
+        expect(C.camera.pullBack).toBeGreaterThan(1);
+        expect(C.camera.pullBack).toBeLessThanOrEqual(1.35);
+        for (const aspect of [390 / 844, 16 / 9]) {
+            for (const name of ['start', 'chase', 'finish', 'photo']) {
+                const S = D.SHOTS[name];
+                const f = D.framing(name, path, 3, aspect);
+                const dist = Math.hypot(f.position.x - f.target.x, f.position.y - f.target.y, f.position.z - f.target.z);
+                const needed = Math.max(S.minDistance, D.fitDistance(S.halfWidth, C.camera.fov, aspect));
+                expect(dist).toBeCloseTo(needed * C.camera.pullBack, 9);
+                // Asked for, the shot as it was (the share clip's).
+                const g = D.framing(name, path, 3, aspect, C, { pullBack: 1 });
+                expect(Math.hypot(g.position.x - g.target.x, g.position.y - g.target.y, g.position.z - g.target.z)).toBeCloseTo(needed, 9);
+            }
+        }
+    });
+
     test('the chase follows the leader down the track', () => {
         const a = D.framing('chase', path, 1, 1);
         const b = D.framing('chase', path, 5, 1);

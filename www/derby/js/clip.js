@@ -116,7 +116,9 @@ export function clipFraming(moment, { path, pose, carLength, leadS, aspect }, C 
         };
     }
     const kind = moment.kind === 'slow' ? 'replay' : moment.kind === 'board' || moment.kind === 'end' ? 'times' : moment.kind;
-    return framing(shotFor(kind, leadS, {}, C), path, leadS, aspect, C);
+    // The race's own framing, without the live view's pull-back: the cars
+    // stay as large in the clip as they were (D54).
+    return framing(shotFor(kind, leadS, {}, C), path, leadS, aspect, C, { pullBack: 1 });
 }
 
 // ---- The words ----------------------------------------------------------------

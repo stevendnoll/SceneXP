@@ -1,43 +1,70 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * dances.js - the winning family's grown-up, dancing (Steve, 2026-10-20:
- * "The celebrations are a little too static... common identifiable dance
- * moves"). After the last heat, the day's winner's grown-up breaks out a
- * dance picked at random, never the same one twice running.
+ * dance.js - the shared person, dancing: eight dances a body says with its
+ * arms, hips and head, and the joints the shared rig needs to dance them.
  *
- * ARMS, HIPS AND A HEAD, NO KNEES. The shared person (people-1.0.0) bends at
- * the shoulders, the elbows and the hips, and dancer.js gives it a waist and
- * a neck of its own. There is no knee and no spine to ripple, so the dances
- * are the ones a body says with its arms: the Robot, the Chicken Dance, the
- * YMCA, the Macarena, the Floss, the Sprinkler, the Disco Point and the Dab.
- * The Moonwalk and the Running Man wait for a knee (TASKS, D47).
+ * PROMOTED FROM www/derby on 2026-10-20 (Steve: "we're going to incorporate
+ * dancing in other scenes"), where the winning family's grown-up dances
+ * after the last heat. Derby Day keeps only what is its own (dressing a
+ * crowd member as the dancer, who in a family dances, standing in for the
+ * baked crowd): www/derby/js/dancer.js.
+ *
+ * TWO HALVES, EACH USABLE ALONE.
+ *
+ *   The choreography (pure): `DANCES`, `danceAt(dance, t)` (a full pose at
+ *   any moment), `pickDance`, `danceOf`, `loopOf`, and `pose` and `mirror`
+ *   for writing new dances.
+ *
+ *   The jointing (three): `jointPerson(person)` takes a figure straight from
+ *   people-1.0.0's `createPerson` and gives it a waist at the hips and a
+ *   neck, each child kept exactly where it was; `applyPose(rig, pose, at)`
+ *   puts it in a pose standing at a spot. Nothing in people-1.0.0 changes:
+ *   what is found is found by the rig's own tags (isArm, isLeg, forearm) and
+ *   by where each child is drawn, never by its order.
+ *
+ * ARMS, HIPS AND A HEAD, NO KNEES. The shared person bends at the
+ * shoulders, the elbows and the hips; the waist and the neck are this
+ * module's. There is no knee and no spine to ripple, so the Moonwalk, the
+ * Running Man and the Worm are not here. A knee in people-1.0.0 would need a
+ * sweep of every scene that finds leg parts by height first.
  *
  * A DANCE IS A LOOP OF POSES, one a beat, each held for a share of its beat
- * (`hold`) and eased into over the rest, so a move hits its pose on the beat
- * the way a dancer does. The Robot holds longest, so it snaps. A pose names
- * only the joints it moves; every other joint is at rest.
+ * (`hold`) and eased into over the rest, so a move hits its pose on the
+ * beat the way a dancer does. The Robot holds longest, so it snaps. A pose
+ * names only the joints it moves; every other joint is at rest. A "via" key
+ * (`via: true`) is passed through without stopping, to take an arm round
+ * the body rather than through it.
  *
- * THE JOINTS, as dancer.js applies them (radians; meters for `root`). "L"
- * and "R" are the dancer's own left and right, so a dance reads the same on
- * any figure, and a mirrored pose (`mirror`) is the same move on the other
- * side.
+ * THE JOINTS (radians; meters for `root`). "L" and "R" are the dancer's
+ * own left and right (the rig faces +z, its left is +x), so a dance reads
+ * the same on any figure, and a mirrored pose (`mirror`) is the same move
+ * on the other side.
  *
- *   root   x, y, z   a step, a bounce (y), from where the member stood
+ *   root   x, y, z   a step, a bounce (y), from where the figure stands
  *          ry        a turn (positive turns to the dancer's left)
  *          rx, rz    a lean from the feet (rx forward, rz to the right)
  *   waist  x, y, z   a bow forward, a twist to the left, a bend to the right
  *   neck   x, y, z   a nod forward, a turn to the left, a tilt to the right
  *   armL, armR       x: negative raises the arm forward (-1.57 straight
- *                    ahead); z: out to the side (1.57 level, 2.75 up in a
- *                    V, negative across the body); y: a twist along the arm,
- *                    which turns the way the elbow bends; fore: negative
- *                    bends the elbow
+ *                    ahead); z: out to the side (1.57 level, pi straight
+ *                    up, past pi leaning in over the head, negative across
+ *                    the body); y: a twist along the arm, which turns the
+ *                    way the elbow bends; fore: negative bends the elbow
  *   legL, legR       x: negative kicks forward; z: out to the side
  *
- * The contact poses (a hand on a shoulder, a hip, the back of the head) were
- * solved against the real rig and are measured in tests/derby-dance.test.mjs.
+ * THE ARMS TURN TWIST FIRST: an arm's rotation order is XZY, so `y` happens
+ * before the swing out and the swing forward. With no twist it is the very
+ * rotation crowd-1.0.0's baked poses use.
  *
- * PURE: no three.js, no DOM.
+ * The contact poses (a hand on a shoulder, a hip, the head) were solved
+ * against the real rig from hand and elbow targets and are measured in
+ * tests/shared-dance.test.mjs, with every dance drawn pose by pose and in
+ * motion by scripts/dance-preview.mjs.
+ *
+ * Writing a dance: start from targets (where each hand and elbow should
+ * be), solve the angles against the real rig rather than guessing (a guessed
+ * twist bends the elbow the wrong way), then draw it with the preview
+ * script, in motion as well as pose by pose.
  */
 
 /** Every joint at rest: the arms as the shared rig hangs them. */
@@ -109,16 +136,23 @@ const APART = { armL: { x: -0.95, z: -0.1, fore: -1.25 }, armR: { x: -0.95, z: -
 const Y = { armL: { x: -0.2, z: 2.55 }, armR: { x: -0.2, z: 2.55 }, root: { y: 0.03 } };
 const ON_HEAD = { x: -0.02, z: 2.7, y: 1.48, fore: -1.49 };
 const M = { armL: ON_HEAD, armR: ON_HEAD, neck: { x: 0.1 } };
-const C_ = { armL: { x: 0.45, z: 3.56, y: 1.8, fore: -0.68 }, armR: { x: -0.01, z: 0.99, y: -1.08, fore: -1.73 }, waist: { z: 0.2 }, neck: { z: 0.12 } };
-const PEAK = { x: 0.07, z: 3.2, y: 1.48, fore: -0.35 };
+// The C (Steve's QA, 2026-10-20: it read as a hand to the forehead): a lean
+// to the right, the left arm arched up over the head and the right curved
+// out below, the body the C's back, open to the audience's right.
+const C_ = { armL: { x: 0.64, z: 3.21, y: 2.47, fore: -1.11 }, armR: { x: 0.1, z: 1.52, y: -1.07, fore: -2.06 }, waist: { z: 0.3 }, neck: { z: 0.1 } };
+// The A: both arms all but straight, leaning in past upright (z beyond pi)
+// to hands meeting over the head (the same QA: it was a narrow V).
+const PEAK = { x: 0, z: 3.39, y: 0.46, fore: -0.31 };
 const A = { armL: PEAK, armR: PEAK, root: { y: 0.03 } };
 
 // The Macarena, one arm then the other.
 const MAC = {
-    out: { x: -1.5, z: 0.08, y: 0, fore: 0 },
+    // Out in front, a little apart, so the arms read from the front rather
+    // than pointing straight at the camera (Steve's QA, 2026-10-20).
+    out: { x: -1.5, z: 0.3, y: 0, fore: 0 },
     // Palm up: the hand is the same either way round, so the twist goes
     // the way the next move (to the shoulder) turns.
-    up: { x: -1.5, z: 0.08, y: -1.57, fore: 0 },
+    up: { x: -1.5, z: 0.3, y: -1.57, fore: 0 },
     // The first hand to the other shoulder, then the second over it.
     shoulder: { x: -1.16, z: -0.32, y: -1.42, fore: -1.66 },
     over: { x: -1.25, z: -0.3, y: -1.35, fore: -1.55 },
@@ -152,9 +186,10 @@ const DISCO_DOWN = { armR: { x: -0.8, z: -0.72 }, armL: HAND_ON_HIP, neck: { y: 
 const DAB = { armL: { x: -2.33, z: -0.47, y: -1.06, fore: -0.62 }, armR: { x: -0.25, z: 2.05 }, neck: { x: 0.45, y: 0.35, z: -0.2 }, waist: { z: -0.12, x: 0.1 } };
 
 /**
- * THE DANCES. `name` is how the announcer says it (copy.js has the line),
- * `beat` the seconds a pose, `hold` the share of each beat held still,
- * `bounce` meters of a bounce on every beat, and `keys` the loop of poses.
+ * THE DANCES. `name` is how a scene says it ("the Robot", the real song
+ * names for the YMCA and the Macarena, Steve 2026-10-20), `beat` the seconds
+ * a pose, `hold` the share of each beat held still, `bounce` meters of a
+ * bounce between poses, and `keys` the loop of poses.
  */
 export const DANCES = Object.freeze([
     {
@@ -299,15 +334,97 @@ export function pickDance(rand, last = null) {
     return pool[Math.min(pool.length - 1, Math.floor(rand * pool.length))].id;
 }
 
+// ---- The joints ------------------------------------------------------------
+
+/** The shared rig's measurements: the hips, and the neck's base (the top
+ *  of the torso), and anything drawn above this is the head's. */
+export const RIG = Object.freeze({ hip: 0.75, neck: 1.33, headFrom: 1.36 });
+
+/** The middle of what a child draws, in the figure's own space, or null. */
+function middleY(obj) {
+    const box = new THREE.Box3().setFromObject(obj);
+    if (box.isEmpty()) return null;
+    return (box.min.y + box.max.y) / 2;
+}
+
 /**
- * Who dances in a family: its grown-up (Steve, 2026-10-20), the first one
- * not holding anything if there is one, so a sign or a camcorder is not
- * left hanging in the air. `members` is the family's list ({ look, prop });
- * a kid is drawn at a child's scale. Returns an index, or -1.
+ * The shared person `person` (createPerson's, untouched), jointed for
+ * dancing. Returns { root, person, waist, neck, arms: { L, R }, legs:
+ * { L, R } }: `root` is a group holding the figure, the soles on its y = 0
+ * (where there is geometry to measure), for applyPose to stand, turn and
+ * lean. The rig's side +1 is the figure's left (it faces +z).
  */
-export function dancerOf(members, kidScale) {
-    const grownUps = members.map((m, i) => ({ m, i })).filter(({ m }) => m.look.scale > kidScale);
-    if (!grownUps.length) return -1;
-    const free = grownUps.find(({ m }) => !m.prop);
-    return (free || grownUps[0]).i;
+export function jointPerson(person) {
+    person.position.set(0, 0, 0);
+    person.rotation.set(0, 0, 0);
+    const arms = {};
+    const legs = {};
+    for (const c of person.children) {
+        const u = c.userData || {};
+        if (u.isArm) arms[u.armSide > 0 ? 'L' : 'R'] = c;
+        if (u.isLeg) legs[u.legSide > 0 ? 'L' : 'R'] = c;
+    }
+
+    const waist = new THREE.Group();
+    waist.name = 'waist';
+    waist.position.y = RIG.hip;
+    const neck = new THREE.Group();
+    neck.name = 'neck';
+    neck.position.y = RIG.neck - RIG.hip;
+    // What the head is, read before anything moves: every child that is not
+    // a limb and is drawn above the neck's base.
+    person.updateMatrixWorld(true);
+    const head = person.children.filter((c) => !c.userData.isArm && !c.userData.isLeg && (middleY(c) ?? 0) > RIG.headFrom);
+    for (const c of person.children.slice()) {
+        if (c.userData.isLeg) continue;
+        person.remove(c);
+        if (head.includes(c)) {
+            c.position.y -= RIG.neck;
+            neck.add(c);
+        } else {
+            c.position.y -= RIG.hip;
+            waist.add(c);
+        }
+    }
+    waist.add(neck);
+    person.add(waist);
+    for (const limb of [...Object.values(arms), ...Object.values(legs)]) limb.rotation.order = 'XZY';
+
+    const root = new THREE.Group();
+    root.name = 'dancer';
+    root.rotation.order = 'YXZ';
+    root.add(person);
+    // The soles on the floor, as crowd-1.0.0 stands its baked person (it
+    // lifts its pieces by their lowest point the same way), so a dancer can
+    // stand in for a crowd member exactly.
+    person.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(person);
+    person.position.y = box.isEmpty() ? 0.055 : -box.min.y;
+    return { root, person, waist, neck, arms, legs };
+}
+
+/** Put a jointed figure (jointPerson's) in `p` (a full pose: danceAt's, or
+ *  `pose(spec)`), standing at `at` ({ x, y, z, ry }). A figure scaled by its
+ *  `root.scale` (a child) steps and bounces to that scale. */
+export function applyPose(rig, p, at = { x: 0, y: 0, z: 0, ry: 0 }) {
+    const s = rig.root.scale.x;
+    const ry = at.ry || 0;
+    const c = Math.cos(ry);
+    const n = Math.sin(ry);
+    // A step is the dancer's own: turned with the way it faces.
+    rig.root.position.set(at.x + (p.root.x * c + p.root.z * n) * s, at.y + p.root.y * s, at.z + (p.root.z * c - p.root.x * n) * s);
+    rig.root.rotation.set(p.root.rx, ry + p.root.ry, p.root.rz);
+    rig.waist.rotation.set(p.waist.x, p.waist.y, p.waist.z);
+    rig.neck.rotation.set(p.neck.x, p.neck.y, p.neck.z);
+    for (const [k, side] of [['L', 1], ['R', -1]]) {
+        const arm = rig.arms[k];
+        const a = p[`arm${k}`];
+        if (arm) {
+            arm.rotation.set(a.x, side * a.y, side * a.z);
+            if (arm.userData.forearm) arm.userData.forearm.rotation.x = a.fore;
+        }
+        const leg = rig.legs[k];
+        const l = p[`leg${k}`];
+        if (leg) leg.rotation.set(l.x, 0, side * l.z);
+    }
 }

@@ -53,6 +53,71 @@ export function timerRows(state) {
     return [head, ...rows];
 }
 
+/**
+ * THE DONUTS (Steve's QA, 2026-10-20: "more detail to the donuts"): a dozen
+ * in an open bakery box, three rows of four, each its own. `kind` says what
+ * is on it: an icing (strawberry, chocolate, vanilla or maple, some with
+ * sprinkles), or none (a powdered donut, a cinnamon sugar one). The size is a
+ * real donut's, about 10 cm across. Pure and seeded, the same box every
+ * visit.
+ */
+export const DONUT = Object.freeze({ ring: 0.031, tube: 0.016, flat: 0.85, spacing: 0.098, rows: 3, cols: 4 });
+export const DONUT_KINDS = Object.freeze({
+    strawberry: Object.freeze({ dough: 0xd29a5b, icing: 0xf2a0c4, sprinkles: true }),
+    chocolate: Object.freeze({ dough: 0xd29a5b, icing: 0x5a3320, sprinkles: true }),
+    vanilla: Object.freeze({ dough: 0xd29a5b, icing: 0xf6ecdc, sprinkles: true }),
+    glazedChocolate: Object.freeze({ dough: 0xd29a5b, icing: 0x4a2a1a, sprinkles: false }),
+    maple: Object.freeze({ dough: 0xd29a5b, icing: 0xc47b34, sprinkles: false }),
+    powdered: Object.freeze({ dough: 0xf4f0ea, icing: null, sprinkles: false }),
+    cinnamon: Object.freeze({ dough: 0xb98448, icing: null, sprinkles: false })
+});
+export const SPRINKLES = Object.freeze([0xe8413c, 0xf5d33b, 0x3b7be8, 0x46b35a, 0xffffff, 0xf08a24, 0xb05ce0]);
+
+export function donutBox(seed = 11) {
+    let s = seed;
+    const rand = () => {
+        s = (s * 1664525 + 1013904223) >>> 0;
+        return s / 4294967296;
+    };
+    const order = ['strawberry', 'chocolate', 'vanilla', 'powdered', 'maple', 'strawberry', 'glazedChocolate', 'cinnamon', 'chocolate', 'vanilla', 'strawberry', 'maple'];
+    const D = DONUT;
+    const donuts = [];
+    for (let r = 0; r < D.rows; r++) {
+        for (let c = 0; c < D.cols; c++) {
+            const kind = order[r * D.cols + c];
+            const x = (r - (D.rows - 1) / 2) * D.spacing + (rand() - 0.5) * 0.003;
+            const z = (c - (D.cols - 1) / 2) * D.spacing + (rand() - 0.5) * 0.003;
+            const sprinkles = [];
+            if (DONUT_KINDS[kind].sprinkles) {
+                // On the icing's top: round the ring, across the top of the tube.
+                for (let k = 0; k < 22; k++) {
+                    const around = rand() * Math.PI * 2;
+                    const across = (rand() - 0.5) * 2.0;
+                    sprinkles.push({ around, across, turn: rand() * Math.PI, color: SPRINKLES[Math.floor(rand() * SPRINKLES.length)] });
+                }
+            }
+            donuts.push({ kind, x, z, ry: rand() * Math.PI * 2, sprinkles });
+        }
+    }
+    return donuts;
+}
+
+/** The icing: the dough's ring with a slightly fatter, flattened tube,
+ *  lifted so only its top shows, like a donut dipped face down. */
+const ICING = Object.freeze({ grow: 1.07, flat: 0.62, lift: 0.4 });
+
+/** Where a sprinkle sits on a donut, in the donut's own space (y up, the
+ *  ring flat): on the icing's surface `across` radians from its top. */
+export function sprinkleAt(sp, D = DONUT) {
+    const t = D.tube * ICING.grow;
+    const rr = D.ring + t * Math.sin(sp.across);
+    return {
+        x: rr * Math.cos(sp.around),
+        y: ICING.lift * D.tube + t * ICING.flat * Math.cos(sp.across) + 0.0012,
+        z: rr * Math.sin(sp.around)
+    };
+}
+
 function canvasTex(w, h, draw) {
     const canvas = document.createElement('canvas');
     canvas.width = w;
@@ -69,6 +134,85 @@ function boxPiece(w, h, d, x, y, z) {
     const geometry = new THREE.BoxGeometry(w, h, d);
     geometry.translate(x, y, z);
     return { geometry, colour: null };
+}
+
+/**
+ * The open box of donuts (donutBox), its middle at the table's top: a pink
+ * box with wax paper, the lid standing open behind it (on the -x side, away
+ * from the start camera), and the dozen in three instanced pieces (dough,
+ * icing, sprinkles), each tinted per instance.
+ */
+function buildDonuts(mat) {
+    const g = new THREE.Group();
+    g.name = 'donuts';
+    g.position.set(0.25, 0.74, 0);
+    const D = DONUT;
+    const W = { x: D.rows * D.spacing + 0.03, z: D.cols * D.spacing + 0.02, h: 0.05, t: 0.004 };
+    const pink = mat(0xe8609c, 0.75);
+    const box = mergePieces([
+        boxPiece(W.x, W.t, W.z, 0, W.t / 2, 0),
+        boxPiece(W.t, W.h, W.z, -W.x / 2, W.h / 2, 0), boxPiece(W.t, W.h, W.z, W.x / 2, W.h / 2, 0),
+        boxPiece(W.x, W.h, W.t, 0, W.h / 2, -W.z / 2), boxPiece(W.x, W.h, W.t, 0, W.h / 2, W.z / 2)
+    ]);
+    g.add(new THREE.Mesh(box, pink));
+    const paper = new THREE.Mesh(new THREE.BoxGeometry(W.x - 0.012, 0.001, W.z - 0.012), mat(0xf7f3ea, 0.6));
+    paper.position.y = W.t + 0.0005;
+    g.add(paper);
+    // The lid, hinged at the back edge and standing open, leaning back.
+    const lid = new THREE.Group();
+    lid.position.set(-W.x / 2, W.h, 0);
+    lid.rotation.z = Math.PI / 2 + 0.18;
+    const lidTop = new THREE.Mesh(new THREE.BoxGeometry(W.x, W.t, W.z), pink);
+    lidTop.position.x = W.x / 2;
+    lid.add(lidTop);
+    g.add(lid);
+
+    const list = donutBox();
+    const ring = new THREE.TorusGeometry(D.ring, D.tube, 10, 26);
+    ring.rotateX(Math.PI / 2);
+    ring.scale(1, D.flat, 1);
+    const icing = new THREE.TorusGeometry(D.ring, D.tube * ICING.grow, 10, 26);
+    icing.rotateX(Math.PI / 2);
+    icing.scale(1, ICING.flat, 1);
+    icing.translate(0, ICING.lift * D.tube, 0);
+    const sprinkle = new THREE.CylinderGeometry(0.0017, 0.0017, 0.008, 5);
+    sprinkle.rotateZ(Math.PI / 2);
+    const iced = list.filter((d) => DONUT_KINDS[d.kind].icing !== null);
+    const count = list.reduce((n, d) => n + d.sprinkles.length, 0);
+    const dough = new THREE.InstancedMesh(ring, mat(0xffffff, 0.85), list.length);
+    const tops = new THREE.InstancedMesh(icing, mat(0xffffff, 0.35), iced.length);
+    const bits = new THREE.InstancedMesh(sprinkle, mat(0xffffff, 0.5), count);
+    const m4 = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    const one = new THREE.Vector3(1, 1, 1);
+    const color = new THREE.Color();
+    // Resting on the paper: the dough's underside on it.
+    const rest = W.t + 0.001 + D.tube * D.flat;
+    let i = 0;
+    let k = 0;
+    list.forEach((d, n) => {
+        const at = new THREE.Vector3(d.x, rest, d.z);
+        q.setFromAxisAngle(up, d.ry);
+        m4.compose(at, q, one);
+        dough.setMatrixAt(n, m4);
+        dough.setColorAt(n, color.setHex(DONUT_KINDS[d.kind].dough));
+        if (DONUT_KINDS[d.kind].icing !== null) {
+            tops.setMatrixAt(i, m4);
+            tops.setColorAt(i, color.setHex(DONUT_KINDS[d.kind].icing));
+            i++;
+        }
+        for (const sp of d.sprinkles) {
+            const p = sprinkleAt(sp);
+            const local = new THREE.Vector3(p.x, p.y, p.z).applyAxisAngle(up, d.ry).add(at);
+            m4.compose(local, new THREE.Quaternion().setFromAxisAngle(up, sp.turn + d.ry), one);
+            bits.setMatrixAt(k, m4);
+            bits.setColorAt(k, color.setHex(sp.color));
+            k++;
+        }
+    });
+    g.add(dough, tops, bits);
+    return g;
 }
 
 /**
@@ -200,17 +344,7 @@ export function buildDressing(C = DERBY_CONFIG) {
     const snacks = table(-2.4, -1.6, 1.5, 0.7, checked.tex);
     const jug = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.26, 16), mat(0xee7a2a, 0.2, 0, { transparent: true, opacity: 0.85 }));
     jug.position.set(-0.45, 0.87, 0);
-    const box = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.36), mat(0xe8609c, 0.7));
-    box.position.set(0.25, 0.78, 0);
-    const donut = new THREE.TorusGeometry(0.045, 0.022, 8, 16);
-    const donutMat = mat(0xc98a4b, 0.8);
-    for (const [dx, dz] of [[0.12, -0.08], [0.25, 0.06], [0.38, -0.06]]) {
-        const d = new THREE.Mesh(donut, donutMat);
-        d.rotation.x = Math.PI / 2;
-        d.position.set(dx, 0.84, dz);
-        snacks.add(d);
-    }
-    snacks.add(jug, box);
+    snacks.add(jug, buildDonuts(mat));
 
     // WELCOME RACERS! on the start wall.
     const welcome = canvasTex(1024, 200, (g, w, h) => {

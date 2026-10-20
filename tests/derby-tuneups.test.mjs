@@ -224,6 +224,10 @@ describe('the weigh-in', () => {
             const end = t.carAt('gauge', 1);
             expect(end.x).toBeGreaterThan(start.x);
             expect(start.x).toBeCloseTo(on.x, 9);
+            // Off the scale without a jump, and down onto the table.
+            expect(start.y).toBeCloseTo(on.y, 9);
+            expect(t.carAt('gauge', 0.02).y).toBeGreaterThan(end.y);
+            expect(end.y).toBeLessThan(on.y - 0.03);
             expect(t.carAt('result', 0).x).toBeCloseTo(end.x, 9);
             expect(t.carAt('stuck', 0).x).toBeLessThan(end.x);
             expect(t.carAt('place', 0).y).toBeGreaterThan(on.y);

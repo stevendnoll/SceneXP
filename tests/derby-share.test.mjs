@@ -25,6 +25,7 @@ const Sound = await import('../www/derby/js/sound.js');
 const Rec = await import('../www/derby/js/recorder.js');
 const Clip = await import('../www/derby/js/clip.js');
 const T = await import('../www/derby/js/track.js');
+const Dir = await import('../www/derby/js/director.js');
 
 // ---- A fake AudioContext that remembers what it made ----------------------------
 
@@ -358,6 +359,14 @@ describe('the clip', () => {
             const m = Clip.clipMoment(plan, plan.segments.find((s) => s.kind === k).from + 0.05);
             const f = Clip.clipFraming(m, { path, pose: null, carLength: C.kit.length, leadS: 2, aspect: 9 / 16 });
             expect(Number.isFinite(f.position.x)).toBe(true);
+            // The live race stands further back (D54); the clip keeps its
+            // cars as large as M2 framed them.
+            const shot = (pullBack) => {
+                const g = Dir.framing(Dir.shotFor(k === 'slow' ? 'replay' : k === 'board' || k === 'end' ? 'times' : k, 2, {}, C), path, 2, 9 / 16, C, { pullBack });
+                return Math.hypot(g.position.x - g.target.x, g.position.y - g.target.y, g.position.z - g.target.z);
+            };
+            expect(Math.hypot(f.position.x - f.target.x, f.position.y - f.target.y, f.position.z - f.target.z)).toBeCloseTo(shot(1), 9);
+            expect(shot(C.camera.pullBack)).toBeGreaterThan(shot(1));
         }
     });
 

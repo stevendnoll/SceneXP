@@ -541,7 +541,12 @@ export const DERBY_CONFIG = Object.freeze({
         finishFrom: 3.2,
         /** Half the width a shot must hold: the four lanes and a margin. */
         holdHalfWidth: 0.26,
-        follow: 6
+        follow: 6,
+        /** Every race shot this much further back than it needs to be to
+         *  hold the four lanes (Steve's QA, 2026-10-20: "a little too close
+         *  to the track... zoom out a little, but not too much"). 1 is the
+         *  framing M1 shipped. */
+        pullBack: 1.2
     }),
 
     /**

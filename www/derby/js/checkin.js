@@ -134,21 +134,29 @@ export function buildCheckinTable(C = DERBY_CONFIG) {
         group.add(leg);
     }
 
-    // The scale, its pan the car stands on, its readout facing the camera.
+    // The scale: a dark body, a thin steel pan on top that the car stands
+    // on, and the readout on the body's front face, facing the camera.
+    // (Steve's QA, 2026-10-20: the readout used to be tilted back into a
+    // pan that filled the whole scale, and the pan's bright front edge cut
+    // across the top of the reading. Now nothing stands in front of it.)
     const scaleX = -0.32;
-    const pan = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.12), mat(0xe8e4dc, 0.35, 0.2));
-    pan.position.set(scaleX, W.top + 0.015, 0);
+    const SCALE = { w: 0.22, h: 0.042, d: 0.14, pan: 0.006 };
+    const body = new THREE.Mesh(new THREE.BoxGeometry(SCALE.w, SCALE.h, SCALE.d), mat(0x34383e, 0.5, 0.1));
+    body.position.set(scaleX, W.top + SCALE.h / 2, 0);
+    group.add(body);
+    const pan = new THREE.Mesh(new THREE.BoxGeometry(SCALE.w - 0.02, SCALE.pan, SCALE.d - 0.025), mat(0xd9dde2, 0.3, 0.6));
+    pan.position.set(scaleX, W.top + SCALE.h + SCALE.pan / 2, -0.005);
     group.add(pan);
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 96;
     const readout = new THREE.CanvasTexture(canvas);
     readout.colorSpace = THREE.SRGBColorSpace;
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.035), new THREE.MeshBasicMaterial({ map: readout }));
-    screen.position.set(scaleX, W.top + 0.02, 0.0605);
-    screen.rotation.x = -0.4;
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.0325), new THREE.MeshBasicMaterial({ map: readout }));
+    screen.position.set(scaleX, W.top + SCALE.h / 2, SCALE.d / 2 + 0.0008);
+    screen.name = 'scale-readout';
     group.add(screen);
-    const panTop = W.top + 0.03;
+    const panTop = W.top + SCALE.h + SCALE.pan;
 
     // The gauge box: two walls the sheet's width apart, a bar over them,
     // and a sill the sheet's clearance high, so a car that is too wide or
@@ -176,7 +184,13 @@ export function buildCheckinTable(C = DERBY_CONFIG) {
         carAt(kind, progress) {
             const onScale = scaleX + K.length / 2;
             const past = gaugeX + 0.11 + K.length + 0.02;
-            if (kind === 'gauge') return world(onScale + (past - onScale) * (progress * progress * (3 - 2 * progress)), W.top + 0.003, 0);
+            if (kind === 'gauge') {
+                // Slid off the scale and set down on the table in the first
+                // third of the way, then through the box.
+                const p = progress * progress * (3 - 2 * progress);
+                const down = Math.min(1, p * 3);
+                return world(onScale + (past - onScale) * p, panTop + (W.top + 0.003 - panTop) * down, 0);
+            }
             if (kind === 'result') return world(past, W.top + 0.003, 0);
             if (kind === 'stuck') return world(gaugeX - 0.11 - 0.005, W.top + 0.003, 0);
             if (kind === 'place') return world(onScale, panTop + 0.04 * (1 - progress), 0);

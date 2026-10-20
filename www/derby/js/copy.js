@@ -132,7 +132,7 @@ export const CALLS = Object.freeze({
     leadMine: (name) => `${name} out in front, and the family is on its feet!`,
     close: (n, name, time) => `By a nose! ${name} takes heat ${n} in ${clock(time)} seconds.`,
     weighIn: 'Cars to the registration table, please.',
-    /** After the last heat, the winner's grown-up dancing (dances.js names
+    /** After the last heat, the winner's grown-up dancing (dance-1.0.0 names
      *  the dance: "the Robot"). */
     dance: (name, dance, mine) => (mine
         ? `${name} wins the day, and your family breaks out ${dance}!`
