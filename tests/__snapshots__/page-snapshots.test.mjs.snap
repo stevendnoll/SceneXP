@@ -1439,6 +1439,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=7" rel="stylesheet"]
@@ -4824,6 +4825,7 @@ html [lang="en"]
     link [href="js/rolodex.min.js" rel="modulepreload"]
     link [href="js/pinboard.min.js" rel="modulepreload"]
     link [href="js/whiteboard.min.js" rel="modulepreload"]
+    link [href="js/weekcard.min.js" rel="modulepreload"]
     link [href="js/prep.min.js" rel="modulepreload"]
     link [href="js/calendar.min.js" rel="modulepreload"]
     link [href="js/ics.min.js" rel="modulepreload"]
@@ -4837,6 +4839,8 @@ html [lang="en"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/resolution-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/pan-1.0.0.min.js" rel="modulepreload"]
     link [href="js/finishes.min.js" rel="modulepreload"]
     link [href="js/marks.min.js" rel="modulepreload"]
@@ -4917,6 +4921,8 @@ html [lang="en"]
       span#toast-text
       button#toast-undo.office-btn.office-btn-small [hidden type="button"]
         "Undo"
+      button#toast-share.office-btn.office-btn-small [hidden type="button"]
+        "Share my week"
     div#welcome.card-overlay [hidden]
       div#welcome-panel.card-panel.welcome-panel [aria-describedby="welcome-intro" aria-labelledby="welcome-title" aria-modal="true" role="dialog" tabindex="-1"]
         h2#welcome-title.card-title
@@ -4945,6 +4951,8 @@ html [lang="en"]
             label [for="grid-goal"]
               "Weekly goal"
             input#grid-goal.office-input.grid-goal [inputmode="numeric" max="100" min="1" type="number"]
+            button#grid-share.office-btn.office-btn-small [hidden type="button"]
+              "Share my week"
         div.grid-tools
           label.sr-only [for="grid-search"]
             "Search every application"
@@ -5098,6 +5106,8 @@ html [lang="en"]
           label [for="wb-goal"]
             "Weekly goal"
           input#wb-goal.office-input.grid-goal [inputmode="numeric" max="100" min="1" type="number"]
+          button#wb-share.office-btn.office-btn-small [hidden type="button"]
+            "Share my week"
         details.wb-tables
           summary
             "The numbers as tables"
@@ -5574,7 +5584,7 @@ html [lang="en"]
             li
               strong
                 "Your job search in Corner Office."
-              "Corner Office keeps everything you enter, your applications, interviews, contacts and follow-ups, along with your settings and which things in the office you have already opened, in your browser's local storage, so your office is just as you left it when you come back. None of it is ever sent anywhere: its usage pings say only what kind of thing you did, such as adding an application, and never anything you typed. Its Out-tray saves a backup you can keep, and its Settings can clear the office on the spot."
+              "Corner Office keeps everything you enter, your applications, interviews, contacts and follow-ups, along with your settings and which things in the office you have already opened, in your browser's local storage, so your office is just as you left it when you come back. None of it is ever sent anywhere: its usage pings say only what kind of thing you did, such as adding an application, and never anything you typed. Its Share my week button makes a picture of your week right on your device, with just how many applications you sent each week and your weekly goal, never a company or a role, and hands it only to your own share sheet or downloads folder. Its Out-tray saves a backup you can keep, and its Settings can clear the office on the spot."
             li
               strong
                 "Your character and best time in Leaf Blower."
@@ -5616,7 +5626,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated October 19, 2026."
+              "Last updated October 21, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand

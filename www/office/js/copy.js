@@ -37,6 +37,57 @@ export function pageTitle(name, s) {
     return waiting > 0 ? `(${waiting}) ${name}` : name;
 }
 
+/**
+ * The week card's words (weekcard.js draws them). The visitor posts the card
+ * as their own, so where it speaks it speaks as them ("my goal"). A week
+ * short of the goal says how close it is, never how far behind.
+ *
+ * COUNTS ONLY: nothing here can name a company or a role, which is what
+ * makes every card safe to share.
+ *
+ * @param {{count: number, goal: number}} week  from derive.weekly
+ * @param {string} weekOf  the week's Monday, written out ("October 19, 2026")
+ * @param {string} url     the address at the card's foot
+ */
+export function weekCardLines(week, weekOf, url) {
+    const extra = week.count - week.goal;
+    let goal;
+    if (extra > 0) goal = `Weekly goal of ${week.goal} reached, plus ${extra} more!`;
+    else if (extra === 0) goal = `Weekly goal of ${week.goal} reached!`;
+    else goal = `${-extra} to go toward my goal of ${week.goal}`;
+    return {
+        label: 'CORNER OFFICE',
+        headline: `${count(week.count, 'application')} sent this week`,
+        goal,
+        met: extra >= 0,
+        date: `Week of ${weekOf}`,
+        chart: 'Applications sent each week',
+        footer: `Track your own job search at ${url}`
+    };
+}
+
+/** The words that go with the week card into the share sheet: the card's
+ *  own headline and goal, and the way to the office as a link to follow. */
+export function weekCardShareText(lines, url) {
+    return `${lines.headline}. ${lines.goal} Track your own job search at ${url}`;
+}
+
+/** The week card's button, named for what it will do before it is pressed:
+ *  Share where the device's share sheet takes a picture, Save where not. */
+export function weekCardButton(canShare) {
+    return canShare ? 'Share my week' : 'Save a picture of my week';
+}
+
+/** What is said once the week card's button has done its work (main.js
+ *  shareWeekCard's result), or '' for a share sheet the visitor closed,
+ *  which was their decision and needs no comment. */
+export function weekCardDone(how) {
+    if (how === 'shared') return 'Thank you for sharing your week!';
+    if (how === 'saved') return 'A picture of your week is in your downloads.';
+    if (how === 'failed') return 'Sorry, the picture could not be made. Please try again in a moment.';
+    return '';
+}
+
 /** Why the office cannot save, or '' when it can. */
 export function storageNote(status, use) {
     switch (status) {

@@ -186,6 +186,17 @@ export function weekly(doc, now) {
     return { key, count, goal, met: count >= goal, remaining: Math.max(0, goal - count) };
 }
 
+/** The week the visitor's first application went out (its Monday's date
+ *  string, as weekKey gives it), or null before there is one. */
+export function firstWeekKey(doc) {
+    let first = null;
+    for (const a of sentApplications(doc)) {
+        const k = weekKey(parseLocal(a.appliedOn));
+        if (first === null || k < first) first = k;
+    }
+    return first;
+}
+
 /** Applications sent per week for the last `weeks` weeks, oldest first,
  *  including the current one. */
 export function perWeek(doc, now, weeks = 8) {

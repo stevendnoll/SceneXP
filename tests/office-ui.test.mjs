@@ -29,7 +29,7 @@ shareOfficeMath();
 // timed out each run). As www/mandelbrot and www/xo do, more room.
 jest.setTimeout(30000);
 import { emptyDoc, addApplication, serialize } from '../www/office/js/store.js';
-import { formatDate, addDays } from '../www/office/js/dates.js';
+import { formatDate, addDays, weekKey } from '../www/office/js/dates.js';
 
 let dom;
 let main;
@@ -2044,5 +2044,223 @@ describe('the accessibility sweep (2026-09-28)', () => {
             }
         }
         expect(checked).toBeGreaterThan(3);
+    });
+});
+
+// ---- The week card (step 2, 2026-10-21) ----------------------------------------
+
+describe('the week card', () => {
+    /** Canvases that can make a file (the stub's cannot), and the names of
+     *  the files the page offers to save. */
+    function keepFiles() {
+        const made = [];
+        const saved = [];
+        const create = dom.documentStub.createElement;
+        dom.documentStub.createElement = (tag) => {
+            const e = create(tag);
+            if (tag === 'canvas') {
+                e.toBlob = (done, type, quality) => {
+                    made.push({ type, quality, width: e.width, height: e.height });
+                    done(new Blob(['card'], { type }));
+                };
+            }
+            if (tag === 'a') e.click = () => saved.push(e.download);
+            return e;
+        };
+        return { made, saved };
+    }
+
+    const NAME = /^corner-office-week-of-\d{4}-\d{2}-\d{2}\.jpg$/;
+
+    test('the office is drawn on the next frame, and the card is saved where a file cannot be shared', async () => {
+        const { made, saved } = keepFiles();
+        const how = window.cornerOffice.weekCard();
+        // Nothing is drawn outside the frame loop.
+        expect(t.ui.weekCardsOwed).toHaveLength(1);
+        expect(made).toEqual([]);
+        t.animate();
+        expect(t.ui.weekCardsOwed).toHaveLength(0);
+        await expect(how).resolves.toBe('saved');
+        expect(made).toEqual([{ type: 'image/jpeg', quality: CONFIG.weekCard.quality, width: 1080, height: 1350 }]);
+        expect(saved).toEqual([`corner-office-week-of-${weekKey(new Date())}.jpg`]);
+        expect(downloads.at(-1).type).toBe('image/jpeg');
+    });
+
+    test('a card is made ahead and kept, so a press hands it straight to the share sheet', async () => {
+        const { saved } = keepFiles();
+        const sent = [];
+        window.File = File;
+        navigator.canShare = () => true;
+        navigator.share = async (data) => { sent.push(data); };
+        const entry = t.prepareWeekCard();
+        t.animate();
+        await entry.ready;
+        expect(entry.blob).toBeTruthy();
+        // The same numbers: the same card, already made.
+        expect(t.prepareWeekCard()).toBe(entry);
+        await expect(t.shareWeekCard()).resolves.toBe('shared');
+        expect(sent).toHaveLength(1);
+        expect(sent[0].files[0].name).toMatch(NAME);
+        expect(sent[0].title).toBe('Corner Office');
+        expect(sent[0].text).toMatch(/sent this week\. .+ Track your own job search at http:\/\/localhost:8000\/test\/$/);
+        // A closed sheet is the visitor's decision: nothing is saved behind it.
+        navigator.share = async () => { throw Object.assign(new Error('no'), { name: 'AbortError' }); };
+        await expect(t.shareWeekCard()).resolves.toBe('cancelled');
+        expect(saved).toEqual([]);
+    });
+
+    test('new numbers make a new card', async () => {
+        keepFiles();
+        const first = t.prepareWeekCard();
+        t.animate();
+        await first.ready;
+        t.state.doc = addApplication(t.state.doc, { company: 'Acme', role: 'Designer' }, CONFIG, new Date()).doc;
+        expect(t.prepareWeekCard()).not.toBe(first);
+    });
+
+    test('with no frame loop to draw the office, the card is made over its own sky', async () => {
+        const { made } = keepFiles();
+        t.state.running = false;
+        try {
+            const entry = t.prepareWeekCard();
+            expect(t.ui.weekCardsOwed).toHaveLength(0);
+            expect(await entry.ready).toBeTruthy();
+            expect(made).toHaveLength(1);
+        } finally {
+            t.state.running = true;
+        }
+    });
+
+    test('a browser that cannot make a picture file is told so, not left waiting', async () => {
+        const how = window.cornerOffice.weekCard();
+        t.animate();
+        await expect(how).resolves.toBe('failed');
+    });
+
+    test('the drawing buffer is borrowed at the card\'s size and given back, even when the draw fails', () => {
+        const calls = [];
+        const renderer = {
+            getPixelRatio: () => 2,
+            getSize: () => ({ x: 800, y: 600 }),
+            setPixelRatio: (r) => calls.push(['ratio', r]),
+            setSize: (w, h, style) => calls.push(['size', w, h, style])
+        };
+        expect(main.atSize(renderer, 1080, 1350, () => { calls.push(['paint']); return 'photo'; })).toBe('photo');
+        expect(calls).toEqual([
+            ['ratio', 1], ['size', 1080, 1350, false],
+            ['paint'],
+            ['ratio', 2], ['size', 800, 600, false]
+        ]);
+        calls.length = 0;
+        expect(() => main.atSize(renderer, 1080, 1350, () => { throw new Error('lost context'); })).toThrow('lost context');
+        expect(calls).toEqual([['ratio', 1], ['size', 1080, 1350, false], ['ratio', 2], ['size', 800, 600, false]]);
+    });
+
+    // ---- Step 3: the Share my week buttons ----
+
+    const addOne = (n) => t.change((d) => addApplication(d, { company: `Company ${n}` }, CONFIG, new Date()), `Add ${n}`);
+
+    /** The beacons sent while `act` runs, as [action, outcome], failing on
+     *  any parameter but the two the log keeps for detail. */
+    async function beaconsOf(act) {
+        const sent = [];
+        globalThis.Image = class { set src(url) { sent.push(new URL(url, 'http://localhost:8000/office/')); } };
+        await act();
+        return sent.map((u) => {
+            expect(u.searchParams.has('kind')).toBe(false);
+            return [u.searchParams.get('action'), u.searchParams.get('outcome')];
+        });
+    }
+
+    test('the buttons wait for something sent this week, and say what this browser will do', () => {
+        t.refresh();
+        expect(el('grid-share').hidden).toBe(true);
+        expect(el('wb-share').hidden).toBe(true);
+        t.state.doc = addApplication(t.state.doc, { company: 'Acme' }, CONFIG, new Date()).doc;
+        t.refresh();
+        expect(el('grid-share').hidden).toBe(false);
+        expect(el('wb-share').hidden).toBe(false);
+        expect(el('grid-share').textContent).toBe('Save a picture of my week');
+        window.File = File;
+        navigator.canShare = () => true;
+        t.refresh();
+        for (const id of ['grid-share', 'wb-share', 'toast-share']) expect(el(id).textContent).toBe('Share my week');
+    });
+
+    test('opening the computer makes the card ahead, and its button saves it with one beacon', async () => {
+        const { saved } = keepFiles();
+        t.state.doc = addApplication(t.state.doc, { company: 'Acme' }, CONFIG, new Date()).doc;
+        t.openComputer();
+        expect(t.ui.weekCardsOwed).toHaveLength(1);
+        t.animate();
+        await t.ui.weekCard.ready;
+        const beacons = await beaconsOf(async () => {
+            el('grid-share').click();
+            await flushAsync();
+        });
+        expect(beacons).toEqual([['share-week', 'saved']]);
+        expect(saved).toHaveLength(1);
+        expect(saved[0]).toMatch(NAME);
+        expect(el('toast-text').textContent).toBe('A picture of your week is in your downloads.');
+    });
+
+    test('the whiteboard\'s button shares the same card', async () => {
+        keepFiles();
+        window.File = File;
+        navigator.canShare = () => true;
+        const sent = [];
+        navigator.share = async (data) => { sent.push(data); };
+        t.state.doc = addApplication(t.state.doc, { company: 'Acme' }, CONFIG, new Date()).doc;
+        t.openWhiteboard();
+        t.animate();
+        await t.ui.weekCard.ready;
+        el('wb-share').click();
+        await flushAsync();
+        expect(sent).toHaveLength(1);
+        expect(el('toast-text').textContent).toBe('Thank you for sharing your week!');
+    });
+
+    test('the goal\'s toast offers the week, and no other toast does', async () => {
+        const { saved } = keepFiles();
+        for (let n = 1; n < CONFIG.settings.weeklyGoal; n++) {
+            addOne(n);
+            expect(el('office-toast').hidden).toBe(false);
+            expect(el('toast-share').hidden).toBe(true);
+        }
+        addOne(CONFIG.settings.weeklyGoal);
+        expect(el('toast-text').textContent).toMatch(/your weekly goal/);
+        expect(el('toast-share').hidden).toBe(false);
+        // Made the moment the goal was reached, so the press can hand it over.
+        expect(t.ui.weekCardsOwed).toHaveLength(1);
+        t.animate();
+        await t.ui.weekCard.ready;
+        el('toast-share').click();
+        await flushAsync();
+        expect(saved).toHaveLength(1);
+        expect(el('toast-text').textContent).toBe('A picture of your week is in your downloads.');
+        expect(el('toast-share').hidden).toBe(true);
+    });
+
+    test('a second press while the first is at work is ignored', async () => {
+        keepFiles();
+        window.File = File;
+        navigator.canShare = () => true;
+        let release = null;
+        let asked = 0;
+        navigator.share = () => { asked++; return new Promise((resolve) => { release = resolve; }); };
+        t.state.doc = addApplication(t.state.doc, { company: 'Acme' }, CONFIG, new Date()).doc;
+        const first = t.shareWeek();
+        expect(await t.shareWeek()).toBeNull();
+        t.animate();
+        await flushAsync();
+        expect(asked).toBe(1);
+        release();
+        await expect(first).resolves.toBe('shared');
+        expect(t.ui.sharingWeek).toBe(false);
+    });
+
+    test('the console names the stations when asked for one that is not there', () => {
+        expect(window.cornerOffice.weekCard('roof')).toMatch(/^No station called roof\. Try desk, /);
+        expect(t.ui.weekCardsOwed).toHaveLength(0);
     });
 });

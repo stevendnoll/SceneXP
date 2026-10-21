@@ -262,46 +262,14 @@ describe('the recorder', () => {
         await expect(bare.done).rejects.toThrow('recording failed');
     });
 
-    test('sharing a file: shared, cancelled (not saved behind the visitor\'s back), or unavailable', async () => {
-        const blob = new Blob(['x'], { type: 'video/mp4' });
-        const win = { File };
-        const nav = (share, canShare = () => true) => ({ share, canShare });
-        expect(await Rec.shareFile(blob, 'a.mp4', { nav: null, win })).toBe('unavailable');
-        expect(await Rec.shareFile(blob, 'a.mp4', { nav: nav(async () => {}), win: {} })).toBe('unavailable');
-        expect(await Rec.shareFile(blob, 'a.mp4', { nav: nav(async () => {}, () => false), win })).toBe('unavailable');
-        expect(await Rec.shareFile(blob, 'a.mp4', { nav: nav(async () => {}, () => { throw new Error('?'); }), win })).toBe('unavailable');
-        let sent = null;
-        expect(await Rec.shareFile(blob, 'a.mp4', { title: 'T', text: 'X', nav: nav(async (d) => { sent = d; }), win })).toBe('shared');
-        expect(sent.files[0].name).toBe('a.mp4');
-        expect(sent.text).toBe('X');
-        const abort = Object.assign(new Error('no'), { name: 'AbortError' });
-        expect(await Rec.shareFile(blob, 'a.mp4', { nav: nav(async () => { throw abort; }), win })).toBe('cancelled');
-        expect(await Rec.shareFile(blob, 'a.mp4', { nav: nav(async () => { throw new Error('denied'); }), win })).toBe('unavailable');
-        expect(await Rec.shareFile(blob, 'a.mp4', { nav: nav(async () => {}), win: { File: function () { throw new Error('?'); } } })).toBe('unavailable');
-        expect(Rec.canShareFiles('video/mp4', { nav: nav(null), win })).toBe(true);
-        expect(Rec.canShareFiles('video/mp4', { nav: nav(null, () => false), win })).toBe(false);
-        expect(Rec.canShareFiles('video/mp4', { nav: nav(null, () => { throw new Error('?'); }), win })).toBe(false);
-        expect(Rec.canShareFiles('video/mp4', { nav: null, win })).toBe(false);
-    });
-
-    test('saving a file offers it through a download link, then tidies the link away', () => {
-        const dom = installDom();
-        try {
-            let clicked = null;
-            const realCreate = dom.documentStub.createElement;
-            dom.documentStub.createElement = (tag) => {
-                const e = realCreate(tag);
-                if (tag === 'a') e.click = () => { clicked = { href: e.href, download: e.download }; };
-                return e;
-            };
-            expect(Rec.saveFile('blob:x', 'derby-day.mp4', { doc: dom.documentStub })).toBe(true);
-            expect(clicked).toEqual({ href: 'blob:x', download: 'derby-day.mp4' });
-            expect(dom.documentStub.body.children).toHaveLength(0);
-            expect(Rec.saveFile('', 'x', { doc: dom.documentStub })).toBe(false);
-            expect(Rec.saveFile('blob:x', 'x', { doc: null })).toBe(false);
-        } finally {
-            dom.uninstall();
-        }
+    // Sharing and saving the file are the shared part's since 2026-10-21, and
+    // tested there (shared-sharefile.test.mjs). What is Derby's is that its
+    // recorder hands on that part, not a copy of it.
+    test('the file is shared and saved by the shared part', async () => {
+        const Shared = await import('../www/shared/js/sharefile-1.0.0.min.js');
+        expect(Rec.shareFile).toBe(Shared.shareFile);
+        expect(Rec.canShareFiles).toBe(Shared.canShareFiles);
+        expect(Rec.saveFile).toBe(Shared.saveFile);
     });
 });
 
