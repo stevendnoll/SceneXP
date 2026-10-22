@@ -457,7 +457,15 @@ source of truth either way.
   Water, and Fractal Garden were built. Kind worlds only, please, whichever
   kind you bring.
 - **Security first.** Same-origin CSP, no third-party scripts, no trackers,
-  no CDNs. Everything ships from this domain.
+  no CDNs. Everything ships from this domain. That also means every world
+  shares one origin, and with it one `localStorage`, so code in any world
+  could read what another keeps there: a visitor's saved garden, their
+  Corner Office job search, the home they built in the Whitestone demo. The
+  CSP keeps outside code out, and review is the safeguard for the code
+  inside the repository. So please read and write only your own world's
+  storage keys, put anything that comes from data, a link, or a file on the
+  page with `textContent` rather than `innerHTML`, and expect a reviewer to
+  read a new world with exactly this in mind.
 - **Accessible and considerate.** Keyboard support, reduced-motion respect,
   and a no-JavaScript fallback are part of the pattern, not extras. Worth
   checking early rather than late: if the only way into your world's main

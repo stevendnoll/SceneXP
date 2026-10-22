@@ -22,22 +22,31 @@
  * Pure.
  */
 
-import { funnel, perWeek, responseStats, weekly, stats } from './derive.min.js';
+import { funnel, perWeek, responseStats, weekly, stats, firstWeekKey } from './derive.min.js';
 import { STATUS_LABELS } from './labels.min.js';
 import { parseLocal } from './dates.min.js';
+import { weekCardLines } from './copy.min.js';
+import { WEEK_CARD_LAYOUT } from './weekcard.min.js';
 
 const SHORT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const LONG = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+/** The last `weeks` weeks, oldest first, labeled by their Monday ("Oct 19"),
+ *  the last one this week. */
+function weekRows(doc, now, weeks) {
+    return perWeek(doc, now, weeks).map((w, i, all) => ({
+        label: SHORT.format(parseLocal(w.key)),
+        count: w.count,
+        current: i === all.length - 1
+    }));
+}
 
 /** Everything the board shows, from the document. */
 export function boardModel(doc, config, now, weeks = 8) {
     const s = stats(doc, config, now);
     return {
         funnel: funnel(doc, config).map((f) => ({ label: STATUS_LABELS[f.stage], count: f.count })),
-        weeks: perWeek(doc, now, weeks).map((w, i, all) => ({
-            label: SHORT.format(parseLocal(w.key)),
-            count: w.count,
-            current: i === all.length - 1
-        })),
+        weeks: weekRows(doc, now, weeks),
         goal: doc.settings.weeklyGoal,
         thisWeek: weekly(doc, now),
         response: responseStats(doc, config),
@@ -89,6 +98,49 @@ export function weekChart(model, layout = LAYOUT) {
         current: w.current
     }));
     return { bars, goalY: yOf(model.goal), x0: g.x0, x1: g.x1, baseline: g.y1 };
+}
+
+/**
+ * The card's chart box for `shown` of `weeks` weeks: each week as wide as it
+ * is in the full chart, and the group centered in the box.
+ */
+export function cardChartBox(shown, weeks, box = WEEK_CARD_LAYOUT.weeks) {
+    const slot = (box.x1 - box.x0) / weeks;
+    const mid = (box.x0 + box.x1) / 2;
+    const half = (slot * shown) / 2;
+    return { ...box, x0: mid - half, x1: mid + half };
+}
+
+/**
+ * The week card's model (weekcard.js draws it): this week against the goal,
+ * its words, and the last weeks measured for the card by the board's own
+ * chart, so the card and the whiteboard always show the same weeks.
+ * `shareable` is false in an empty week, because a card of zeros helps no
+ * one.
+ *
+ * THE CHART STARTS AT THE VISITOR'S FIRST WEEK (QA, 2026-10-21). A
+ * newcomer's card showed seven empty, dated weeks before their first
+ * application, which read as seven weeks of doing nothing. Weeks before the
+ * first one are left off, the rest keep the full chart's width, centered;
+ * a quiet week after the start is a real gap and stays.
+ */
+export function weekCardModel(doc, config, now) {
+    const c = config.weekCard;
+    const week = weekly(doc, now);
+    const first = firstWeekKey(doc);
+    const keys = perWeek(doc, now, c.weeks).map((w) => w.key);
+    const from = first === null ? keys.length - 1 : keys.findIndex((k) => k >= first);
+    const start = from < 0 ? keys.length - 1 : from;
+    const rows = weekRows(doc, now, c.weeks).slice(start);
+    const box = cardChartBox(rows.length, c.weeks);
+    const chart = weekChart({ weeks: rows, goal: week.goal }, { weeks: box });
+    return {
+        week,
+        shareable: week.count > 0,
+        fileName: `corner-office-week-of-${week.key}.jpg`,
+        lines: weekCardLines(week, LONG.format(parseLocal(week.key)), c.url),
+        chart: { ...chart, goal: week.goal }
+    };
 }
 
 /**

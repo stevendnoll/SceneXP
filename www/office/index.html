@@ -140,6 +140,7 @@
     <link rel="modulepreload" href="js/rolodex.min.js">
     <link rel="modulepreload" href="js/pinboard.min.js">
     <link rel="modulepreload" href="js/whiteboard.min.js">
+    <link rel="modulepreload" href="js/weekcard.min.js">
     <link rel="modulepreload" href="js/prep.min.js">
     <link rel="modulepreload" href="js/calendar.min.js">
     <link rel="modulepreload" href="js/ics.min.js">
@@ -153,6 +154,8 @@
     <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/resolution-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/sharefile-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/pan-1.0.0.min.js">
     <link rel="modulepreload" href="js/finishes.min.js">
     <link rel="modulepreload" href="js/marks.min.js">
@@ -275,6 +278,8 @@
     <div id="office-toast" class="office-toast" hidden>
         <span id="toast-text"></span>
         <button id="toast-undo" class="office-btn office-btn-small" type="button" hidden>Undo</button>
+        <!-- Only with the week's goal reached (main.js change). -->
+        <button id="toast-share" class="office-btn office-btn-small" type="button" hidden>Share my week</button>
     </div>
 
     <!-- ==== THE CARDS, IN STACKING ORDER (cards.js CARD_ORDER) ==== -->
@@ -325,6 +330,9 @@
                     <span id="grid-week"></span>
                     <label for="grid-goal">Weekly goal</label>
                     <input id="grid-goal" class="office-input grid-goal" type="number" min="1" max="100" inputmode="numeric">
+                    <!-- The week card (main.js shareWeek), shown once
+                         something has been sent this week. -->
+                    <button id="grid-share" class="office-btn office-btn-small" type="button" hidden>Share my week</button>
                 </p>
             </div>
             <div class="grid-tools">
@@ -486,6 +494,7 @@
             <p class="grid-week">
                 <label for="wb-goal">Weekly goal</label>
                 <input id="wb-goal" class="office-input grid-goal" type="number" min="1" max="100" inputmode="numeric">
+                <button id="wb-share" class="office-btn office-btn-small" type="button" hidden>Share my week</button>
             </p>
             <details class="wb-tables">
                 <summary>The numbers as tables</summary>

@@ -280,6 +280,22 @@ export const CONFIG = deepFreeze({
     /** How long the undo toast stays up, unless focus is inside it. */
     toastSeconds: 7,
 
+    /** The week card, a picture of the visitor's week to share (2026-10-21).
+     *  Derby Day's portrait shape, which every network takes, the same eight
+     *  weeks as the whiteboard, and the address printed at its foot. The
+     *  office behind it is drawn from `station` (main.js drawCardPhoto),
+     *  and the file is a JPEG: a photograph, which every network
+     *  recompresses anyway, at a fraction of a PNG's size. */
+    weekCard: {
+        width: 1080,
+        height: 1350,
+        weeks: 8,
+        url: 'scenexp.com/office',
+        station: 'desk',
+        type: 'image/jpeg',
+        quality: 0.9
+    },
+
     quality: {
         maxPixelRatio: 2,
         maxPixelRatioMobile: 1.5,

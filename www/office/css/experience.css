@@ -344,6 +344,7 @@ textarea.office-input {
 }
 
 .office-toast .office-btn {
+    flex: none;
     background: #2a1c0a;
     color: #eef0f3;
     border-color: #2a1c0a;

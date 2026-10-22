@@ -56,6 +56,7 @@ let toastTimer = null;
 let toastHeld = false;
 /** What the toast's Undo button does right now. Wired once in initCards. */
 let toastUndo = null;
+let toastShare = null;
 
 function byId(id) {
     return typeof document === 'undefined' ? null : document.getElementById(id);
@@ -118,18 +119,22 @@ export function announce(text) {
 
 /**
  * Show a caption at the foot of the screen, with an Undo button when `undo`
- * is given. The words also go through `announce`, and the toast itself is not
+ * is given, and a Share my week button when `share` is (the week's goal
+ * reached). The words also go through `announce`, and the toast itself is not
  * a live region, so a screen reader hears them once. It stays up while focus
- * or the pointer is inside it, so nobody loses the Undo button mid-reach.
+ * or the pointer is inside it, so nobody loses a button mid-reach.
  */
-export function toast(text, { undo = null, seconds = 7 } = {}) {
+export function toast(text, { undo = null, share = null, seconds = 7 } = {}) {
     const node = byId('office-toast');
     const words = byId('toast-text');
     const undoBtn = byId('toast-undo');
+    const shareBtn = byId('toast-share');
     if (!node || !words) return;
     words.textContent = text;
     toastUndo = undo;
+    toastShare = share;
     if (undoBtn) undoBtn.hidden = !undo;
+    if (shareBtn) shareBtn.hidden = !share;
     node.hidden = false;
     if (toastTimer) clearTimeout(toastTimer);
     const expire = () => {
@@ -146,6 +151,7 @@ export function hideToast() {
     toastTimer = null;
     toastHeld = false;
     toastUndo = null;
+    toastShare = null;
 }
 
 // ---- Open and close ---------------------------------------------------------
@@ -297,6 +303,16 @@ export function initCards({ signal } = {}) {
     if (undoBtn) {
         undoBtn.addEventListener('click', () => {
             const run = toastUndo;
+            hideToast();
+            if (run) run();
+        }, { signal });
+    }
+    // Run in the same task as the press: a share sheet opens only straight
+    // after one.
+    const shareBtn = byId('toast-share');
+    if (shareBtn) {
+        shareBtn.addEventListener('click', () => {
+            const run = toastShare;
             hideToast();
             if (run) run();
         }, { signal });

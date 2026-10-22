@@ -2,7 +2,8 @@
 /**
  * recorder.js - the browser's side of the share clip (M2): which video
  * format, recording a canvas (and the sound's recording output) to a file,
- * and handing the file on through the share sheet, or saving it.
+ * and handing the file on through the share sheet, or saving it (those last
+ * two are shared/js/sharefile-1.0.0's, re-exported below).
  *
  * NOTHING IS UPLOADED (PRD, The share). The clip is made on the device, and
  * the visitor's own share sheet or downloads folder is the only place it
@@ -81,55 +82,7 @@ export function startRecording(stream, mime, { bitrate, win = typeof window === 
     return { recorder, done };
 }
 
-/**
- * Hand a file to the share sheet. Returns 'shared', 'cancelled' (the
- * visitor backed out), or 'unavailable' (this browser cannot share a file,
- * or the share failed): the caller saves the file for the last.
- */
-export async function shareFile(blob, name, { title = '', text = '', nav = typeof navigator === 'undefined' ? null : navigator, win = typeof window === 'undefined' ? null : window } = {}) {
-    if (!nav || typeof nav.share !== 'function' || typeof nav.canShare !== 'function' || !win || typeof win.File !== 'function') return 'unavailable';
-    let file;
-    try {
-        file = new win.File([blob], name, { type: blob.type });
-    } catch (e) {
-        return 'unavailable';
-    }
-    const data = { files: [file], title, text };
-    let ok = false;
-    try {
-        ok = nav.canShare(data);
-    } catch (e) {
-        ok = false;
-    }
-    if (!ok) return 'unavailable';
-    try {
-        await nav.share(data);
-        return 'shared';
-    } catch (e) {
-        return e && e.name === 'AbortError' ? 'cancelled' : 'unavailable';
-    }
-}
-
-/** Whether this browser could hand a file of `type` to the share sheet,
- *  to name the button Share or Save before it is pressed. */
-export function canShareFiles(type, { nav = typeof navigator === 'undefined' ? null : navigator, win = typeof window === 'undefined' ? null : window } = {}) {
-    if (!nav || typeof nav.canShare !== 'function' || !win || typeof win.File !== 'function') return false;
-    try {
-        return Boolean(nav.canShare({ files: [new win.File([''], `clip.${extensionOf(type)}`, { type })] }));
-    } catch (e) {
-        return false;
-    }
-}
-
-/** Save a file through a download link. Returns true when it was offered. */
-export function saveFile(url, name, { doc = typeof document === 'undefined' ? null : document } = {}) {
-    if (!doc || !url) return false;
-    const a = doc.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.rel = 'noopener';
-    doc.body.appendChild(a);
-    a.click();
-    a.remove();
-    return true;
-}
+// Handing the file on, shared since 2026-10-21 (Corner Office's week card is
+// the second scene to share a file it made), and re-exported so main.js
+// imports them from here as before.
+export { shareFile, canShareFiles, saveFile } from '../../shared/js/sharefile-1.0.0.min.js';

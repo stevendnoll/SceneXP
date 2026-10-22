@@ -18,5 +18,6 @@ Tell us what you built or fixed, and the story behind it if there is one.
 - [ ] The experience is listed in `www/index.html` (a card in its category's group, and that group's JSON-LD `ItemList`), `www/sitemap.xml`, and `www/llms.txt`. There is no catalog array: the cards are the list.
 - [ ] Its slug and category are in the `CATEGORY_OF` map in `tests/directory.test.mjs`, which is what holds the card and the grouping together.
 - [ ] Anything the world writes to `localStorage` is named in `www/privacy.html`, along with how a visitor clears it. (`sessionStorage` needs nothing, and `tests/privacy.test.mjs` will tell you if this was missed.)
+- [ ] The world reads and writes only its own storage keys, and puts anything that comes from data, a link, or a file on the page with `textContent` rather than `innerHTML` (every world shares one origin, so see "Security first" in [CONTRIBUTING.md](../CONTRIBUTING.md)).
 - [ ] The experience has an init test following the `tests/<experience>-init.test.mjs` pattern.
 - [ ] If it honors a real person or business, they are celebrated kindly and with their permission, per our [code of conduct](../CODE_OF_CONDUCT.md).

@@ -934,17 +934,40 @@ export function updateSky(hour, deltaSeconds = 0, snowCoverage = 0, gloom = 0, f
 
     // The sun moves slowly, so the shadow map is refreshed a few times a second
     // rather than every frame. Visually indistinguishable, and it takes a full
-    // shadow pass out of most frames.
+    // shadow pass out of most frames. A light that has just started casting is
+    // refreshed at once, though (see shadowPassDue).
     if (rendererRef) {
         shadowAccum += deltaSeconds;
         const period = 1 / Math.max(1, S.lighting.shadow.refreshHz);
-        if (shadowAccum >= period) {
+        if (shadowPassDue(shadowAccum, period, [sunLight, moonLight])) {
             shadowAccum = 0;
             rendererRef.shadowMap.needsUpdate = true;
         }
     }
 
     return light;
+}
+
+/**
+ * Whether this frame needs a shadow pass.
+ *
+ * A LIGHT THAT CASTS WITH NO MAP YET CANNOT WAIT FOR THE NEXT REFRESH. three
+ * builds a light's shadow map during its first shadow pass, and until then it
+ * binds a 1x1 stand-in for the shadow sampler. In r186 the stand-in bound to a
+ * sampler ARRAY (which is how three declares every shadow sampler) never gets
+ * its compare mode, so each draw raises "Mismatch between texture format and
+ * sampler type" in the console, and the browser drops the draw. The garden hit
+ * this for the first third of a second after load, and again the first time
+ * the moon took over from the sun (and the reverse). Once both lights have a
+ * map this is just the refresh clock.
+ *
+ * @param {number} accum   seconds since the last shadow pass
+ * @param {number} period  seconds between routine refreshes
+ * @param {Array<{castShadow: boolean, shadow: {map: object|null}}>} lights
+ */
+export function shadowPassDue(accum, period, lights) {
+    if (accum >= period) return true;
+    return lights.some((l) => l.castShadow && !l.shadow.map);
 }
 
 /** Park a directional light along a direction at shadow-frustum distance, and

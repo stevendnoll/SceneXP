@@ -645,8 +645,14 @@ body {
     outline-offset: 2px;
 }
 
+/* Save a picture while the clip is still being made. */
+.results-another:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
 @media (hover: hover) {
-    .results-another:hover {
+    .results-another:hover:not(:disabled) {
         border-color: var(--ui-accent);
     }
 }

@@ -28,7 +28,8 @@ import {
     unpackColor, packColor, mixColor,
     srgbToLinear, linearToSrgb, toneMapACES, shownColor, luminanceOf,
     bracketKeys, skyStateAt, skyDaylightAt, referenceLuminance,
-    directionAt, lightingAt, starFadeAt, starHidingAt, skyOpennessAt
+    directionAt, lightingAt, starFadeAt, starHidingAt, skyOpennessAt,
+    shadowPassDue
 } from '../www/garden/js/sky.js';
 
 const SKY = GARDEN_CONFIG.sky;
@@ -366,4 +367,32 @@ test('cloud defaults to gloom for the callers that do not have one', () => {
         expect(lightingAt(0, 0, g, null).moonIntensity)
             .toBeCloseTo(lightingAt(0, 0, g, g).moonIntensity, 10);
     }
+});
+
+// ---- Shadow refresh --------------------------------------------------------
+
+/*
+ * A LIGHT THAT CASTS WITH NO MAP DRAWS AGAINST A BROKEN STAND-IN. three r186
+ * binds a stand-in without compare mode to the shadow sampler until the
+ * light's first shadow pass, and Chrome rejects every draw that samples it
+ * ("Mismatch between texture format and sampler type"). The refresh clock
+ * alone left the sun mapless for a third of a second after load, and the moon
+ * mapless at its first dusk.
+ */
+const light = (castShadow, map = null) => ({ castShadow, shadow: { map } });
+const PERIOD = 1 / GARDEN_CONFIG.sky.lighting.shadow.refreshHz;
+
+test('a light that starts casting gets its shadow pass that frame', () => {
+    // The first frame after load: the sun casts and nothing has drawn its map.
+    expect(shadowPassDue(0, PERIOD, [light(true), light(false)])).toBe(true);
+    // The first dusk: the moon takes over before it has ever cast.
+    expect(shadowPassDue(0.01, PERIOD, [light(false, {}), light(true)])).toBe(true);
+});
+
+test('once every caster has a map, the refresh clock decides', () => {
+    const mapped = [light(true, {}), light(false)];
+    expect(shadowPassDue(PERIOD * 0.5, PERIOD, mapped)).toBe(false);
+    expect(shadowPassDue(PERIOD, PERIOD, mapped)).toBe(true);
+    // A light that is not casting needs no map, whether or not it has one.
+    expect(shadowPassDue(0, PERIOD, [light(false), light(false)])).toBe(false);
 });

@@ -36,7 +36,10 @@ import {
 import { createHistory } from './log.min.js';
 import { stats, buildIndex, effectiveStatus, followUpFor, dueTasks, upcomingEvents } from './derive.min.js';
 import { queryApplications, facetCounts, normalizeQuery, searchContacts } from './query.min.js';
-import { welcomeLine, pageTitle, storageNote, count, clockTime, dayStartLine, dayEndLine } from './copy.min.js';
+import {
+    welcomeLine, pageTitle, storageNote, count, clockTime, dayStartLine, dayEndLine,
+    weekCardShareText, weekCardButton, weekCardDone
+} from './copy.min.js';
 import { STATUS_LABELS, EVENT_LABELS, SORT_LABELS, applicationName, eventName } from './labels.min.js';
 import { formatDate, formatDateTime, ceilToMinutes, addDays, displayDateTime } from './dates.min.js';
 import { stockSamples } from './samples.min.js';
@@ -57,7 +60,8 @@ import { createFiling } from './filing.min.js';
 import { boardPlan, boardSummary, boardColumns, columnAt, CARD_ATLAS } from './board.min.js';
 import { peopleOf } from './rolodex.min.js';
 import { createPinboard } from './pinboard.min.js';
-import { boardModel, funnelBars, weekChart, bigNumbers, summaryLines, onGoalLine, LAYOUT } from './whiteboard.min.js';
+import { boardModel, funnelBars, weekChart, bigNumbers, summaryLines, onGoalLine, LAYOUT, weekCardModel } from './whiteboard.min.js';
+import { drawWeekCard } from './weekcard.min.js';
 import { prepSheet, printChoices, QUESTION_LINES } from './prep.min.js';
 import { monthGrid, monthAgenda, shiftMonth } from './calendar.min.js';
 import { icsFile, upcomingItems, icsFilename } from './ics.min.js';
@@ -81,6 +85,8 @@ import {
 import { installCardFocusTrap, installCardScrollReset, getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { createResolution } from '../../shared/js/resolution-1.0.0.min.js';
+import { shareFile, saveFile, canShareFiles } from '../../shared/js/sharefile-1.0.0.min.js';
+import { shareUrl } from '../../shared/js/share-1.0.0.min.js';
 import {
     initPortraitControls, updatePortraitControls, resetPortraitAim, gestureClaimedTap, disposePortraitControls
 } from '../../shared/js/pan-1.0.0.min.js';
@@ -194,7 +200,14 @@ const ui = {
     mirrorDue: true,
     /** What the whiteboard was last painted from. */
     whiteboardKey: null,
-    whiteboardModel: null
+    whiteboardModel: null,
+    /** Week cards waiting for the frame loop to draw the office at the
+     *  card's size (drawCardPhoto), each `{ station, resolve }`, and the
+     *  last card made, kept so a Share press can hand it over at once. */
+    weekCardsOwed: [],
+    weekCard: null,
+    /** A Share my week press still at work, so a second is ignored. */
+    sharingWeek: false
 };
 
 let filing = null;
@@ -217,6 +230,8 @@ let camera = null;
 let room = null;
 /** Everything outside the windows: its own scene and camera (world.js). */
 let world = null;
+/** The week card's own eye (drawCardPhoto), made the first time. */
+let cardCamera = null;
 /** The room as its shiny things see it (interior.js), the capturer, and
  *  its current capture. */
 let interior = null;
@@ -380,6 +395,15 @@ async function init() {
             const held = resolution.pin(on);
             requestRender();
             return held;
+        },
+        /** This week's card, made now and saved (a console press is not a
+         *  tap, so no share sheet will open for it), for a QA round before
+         *  the buttons exist. `weekCard('window')` tries another station. */
+        weekCard(station = CONFIG.weekCard.station) {
+            if (!CONFIG.stations[station]) return `No station called ${station}. Try ${Object.keys(CONFIG.stations).join(', ')}.`;
+            // Made afresh, so a light held by `hour()` is the one drawn.
+            ui.weekCard = null;
+            return shareWeekCard(station);
         }
     };
 
@@ -1240,11 +1264,20 @@ function mutate(fn, label = '') {
 }
 
 /**
- * A mutation the visitor made on purpose: said aloud, and offered for undo
- * in the toast. `message` is what is said (a string, or a function of the
- * result), and defaults to the label. Nothing is said when nothing changed.
+ * A mutation the visitor made on purpose: said aloud, and undoable from the
+ * toolbar's Undo and Ctrl or Command and Z. `message` is what is said (a
+ * string, or a function of the result), and defaults to the label. Nothing
+ * is said when nothing changed.
+ *
+ * THE TOAST IS FOR A DELETE (QA, 2026-10-22: "remove the Undo alerts except
+ * for when the user deletes something"). An addition or an edit is plain to
+ * see where it was made, and a toast after each one was noise. `undoable`
+ * marks the deletes (a record thrown away, the wastebasket emptied, the
+ * samples or the whole office cleared), whose toast offers Undo on the
+ * spot. The one other toast is the week's goal reached, which offers the
+ * week card instead.
  */
-function change(fn, label, message = label) {
+function change(fn, label, message = label, { undoable = false } = {}) {
     const before = state.doc;
     const result = mutate(fn, label);
     if (result.changed) {
@@ -1256,8 +1289,14 @@ function change(fn, label, message = label) {
             words = `${words} ${party.line}`;
             celebrate(party);
         }
+        // The week's goal is the proudest moment to share, so its toast
+        // offers the week card, made now so the press can hand it over.
+        const goal = Boolean(party) && party.kind === 'goal';
+        if (goal) prepareWeekCard();
         announce(words);
-        toast(words, { undo, seconds: CONFIG.toastSeconds });
+        if (undoable || goal) {
+            toast(words, { undo: undoable ? undo : null, share: goal ? () => shareWeek() : null, seconds: CONFIG.toastSeconds });
+        }
     }
     return result;
 }
@@ -1393,6 +1432,7 @@ function refresh() {
     fileCabinet(t);
     pinBoard(t);
     paintWhiteboard(t);
+    syncWeekShare(t);
 
     if (isOpen('computer')) drawComputer(t);
     if (isOpen('cabinet')) drawCabinetSheet(t);
@@ -1512,6 +1552,7 @@ function openComputer({ armed = false, focusSearch = false, via = null } = {}) {
         onClose: () => goTo('desk')
     });
     goTo('computer');
+    syncWeekShare();
     track('open-computer', routed(via));
     noteOpen('computer');
 }
@@ -2030,6 +2071,7 @@ function openWhiteboard({ armed = false, goal = false, via = null } = {}) {
     drawWhiteboardSheet();
     openCard('whiteboard', { armed: armed && !goal, focus: goal ? el('wb-goal') : null, onClose: () => goTo('desk') });
     goTo('whiteboard');
+    syncWeekShare();
     if (goal) announce(`Your weekly goal is ${state.doc.settings.weeklyGoal}. You can change it here.`);
     track('open-whiteboard', routed(via));
     noteOpen('whiteboard');
@@ -2271,7 +2313,7 @@ function throwAway(collection, id) {
     const what = collection === 'events' && record ? `the ${eventName(record).toLowerCase()}`
         : collection === 'tasks' ? 'the follow-up' : label;
     change((doc) => deleteRecord(doc, collection, id, CONFIG, now()), `Threw away ${what}`,
-        `Threw away ${what}. It is in the wastebasket.`);
+        `Threw away ${what}. It is in the wastebasket.`, { undoable: true });
 }
 
 // ---- The application form ---------------------------------------------------
@@ -2430,7 +2472,8 @@ function emptyTheWastebasket() {
         detail: `${count(n, 'item')} will be removed for good. You can still undo it straight after, until you leave the page.`,
         confirmLabel: 'Empty it',
         danger: true,
-        onConfirm: () => change((doc) => emptyWastebasket(doc, CONFIG, now()), 'Emptied the wastebasket')
+        onConfirm: () => change((doc) => emptyWastebasket(doc, CONFIG, now()), 'Emptied the wastebasket',
+            'Emptied the wastebasket', { undoable: true })
     });
 }
 
@@ -2537,7 +2580,8 @@ function stockOffice() {
 }
 
 function clearTheSamples() {
-    return change((doc) => clearSamples(doc), 'Cleared the samples', 'Cleared the samples. Your own records are untouched.');
+    return change((doc) => clearSamples(doc), 'Cleared the samples', 'Cleared the samples. Your own records are untouched.',
+        { undoable: true });
 }
 
 function clearEverything() {
@@ -2548,7 +2592,7 @@ function clearEverything() {
         danger: true,
         onConfirm: () => {
             change((doc) => ({ doc: { ...emptyDoc(CONFIG, now()), settings: doc.settings }, record: null, error: null }),
-                'Cleared the whole office');
+                'Cleared the whole office', 'Cleared the whole office', { undoable: true });
             closeCard('settings');
             track('clear-all');
         }
@@ -2726,6 +2770,8 @@ function setupEventListeners() {
         if (!inside(menu) && !inside(toggle)) togglePlaces(false, { restoreFocus: false });
     }, { signal, capture: true });
     wire('wb-goal', 'change', () => saveGoal('wb-goal'));
+    wire('wb-share', 'click', () => shareWeek());
+    wire('grid-share', 'click', () => shareWeek());
     wire('printer-print', 'click', () => printPrep(el('printer-app').value));
     wire('outtray-print', 'click', () => { closeCard('outtray'); openPrinter(); });
     wire('rolodex-search', 'input', () => {
@@ -3001,6 +3047,13 @@ function animate() {
     if (state.drewLast && resolution) resolution.sample(delta);
     state.drewLast = false;
 
+    // A week card asked for: the office drawn at the card's size, then this
+    // frame's own draw straight over it, in the same task (drawCardPhoto).
+    if (ui.weekCardsOwed.length) {
+        takeWeekCards();
+        state.dirty = true;
+    }
+
     if (!state.dirty) return;
     state.dirty = false;
     state.frames++;
@@ -3064,11 +3117,14 @@ function placeLife() {
  * One frame: the world outside first, lit and colored as it is and drawn
  * without tone mapping, then the depth cleared and the room drawn over it
  * with the usual ACES pass (world.js explains both). Returns whether the
- * room was drawn (not through the binoculars).
+ * room was drawn (not through the binoculars). `eye` is the visitor's camera
+ * but for the week card's, which leaves the world's camera on it: the
+ * caller puts it back (drawCardPhoto).
  */
-function draw() {
+function draw(eye = camera) {
     renderer.clear();
     if (world) {
+        if (eye !== camera) world.follow(eye);
         renderer.toneMapping = THREE.NoToneMapping;
         // One shadow switch for both scenes: the towers' shadows are drawn
         // only when the sun has moved, and the room's are left as they were
@@ -3081,11 +3137,11 @@ function draw() {
     }
     // Through the binoculars only the world: the room's frames are a blur
     // a few centimeters from the objectives.
-    if (ui.eyepiece) return false;
+    if (ui.eyepiece && eye === camera) return false;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = ui.roomExposure;
-    drawMirrors();
-    renderer.render(scene, camera);
+    drawMirrors(eye);
+    renderer.render(scene, eye);
     return true;
 }
 
@@ -3104,19 +3160,19 @@ export function roomExposure(look) {
  * only when the camera or the room has moved since the last time: the
  * scenery's own frames and the jet's cost nothing more.
  */
-function drawMirrors() {
+function drawMirrors(eye = camera) {
     if (!room || !room.reflections || !(ui.mirror > 0.01)) return false;
-    camera.updateMatrixWorld();
-    const moved = !mirrors.eye || !mirrors.eye.equals(camera.matrixWorld) || !mirrors.lens.equals(camera.projectionMatrix);
+    eye.updateMatrixWorld();
+    const moved = !mirrors.eye || !mirrors.eye.equals(eye.matrixWorld) || !mirrors.lens.equals(eye.projectionMatrix);
     if (!moved && !ui.mirrorDue) return false;
     ui.mirrorDue = false;
-    mirrors.eye = camera.matrixWorld.clone();
-    mirrors.lens = camera.projectionMatrix.clone();
+    mirrors.eye = eye.matrixWorld.clone();
+    mirrors.lens = eye.projectionMatrix.clone();
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     const w = Math.max(64, Math.min(1024, Math.round(size.x / 2)));
-    const h = Math.max(32, Math.round(w / Math.max(0.2, camera.aspect)));
+    const h = Math.max(32, Math.round(w / Math.max(0.2, eye.aspect)));
     const frustum = new THREE.Frustum().setFromProjectionMatrix(
-        new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+        new THREE.Matrix4().multiplyMatrices(eye.projectionMatrix, eye.matrixWorldInverse)
     );
     const { panes } = room.reflections;
     const rain = room.rain ? room.rain.panes : [];
@@ -3131,7 +3187,7 @@ function drawMirrors() {
         }
         const target = mirrors.targets[i];
         if (target.width !== w || target.height !== h) target.setSize(w, h);
-        pane.shown = frustum.intersectsObject(pane.mesh) && mirrorCamera(camera, pane, mirrors.cams[i]);
+        pane.shown = frustum.intersectsObject(pane.mesh) && mirrorCamera(eye, pane, mirrors.cams[i]);
         if (!pane.shown) return;
         renderer.setRenderTarget(target);
         renderer.clear();
@@ -3143,6 +3199,202 @@ function drawMirrors() {
     panes.forEach((pane) => { if (!pane.shown) pane.mesh.visible = false; });
     rain.forEach((p, i) => { p.visible = wet[i]; });
     return true;
+}
+
+// ---- The week card ------------------------------------------------------------
+
+/**
+ * The office for the week card: drawn from CONFIG.weekCard.station at the
+ * card's own size and copied out, from inside the frame loop just before
+ * the frame's own draw (the "a portrait borrows the canvas" note).
+ *
+ * THE CANVAS IS BORROWED, NOT DUPLICATED. The drawing buffer is resized to
+ * the card, drawn with the screen's own two passes, copied, and put back,
+ * all in one task, so the screen never shows it and the card's light and
+ * color are exactly the screen's. A render target would skip the tone
+ * mapping and the sRGB encode, and a second WebGL context would compile the
+ * whole city again on a phone. Null if anything fails: the card has its own
+ * evening sky to fall back on.
+ */
+function drawCardPhoto(station = CONFIG.weekCard.station) {
+    if (!renderer || !scene || !camera || !canvas) return null;
+    const { width: W, height: H } = CONFIG.weekCard;
+    const pose = poseFor(station, W / H, CONFIG);
+    if (!cardCamera) cardCamera = new THREE.PerspectiveCamera(pose.fov, W / H, CONFIG.camera.near, CONFIG.camera.far);
+    cardCamera.position.set(pose.eye[0], pose.eye[1], pose.eye[2]);
+    cardCamera.fov = pose.fov;
+    cardCamera.aspect = W / H;
+    cardCamera.updateProjectionMatrix();
+    cardCamera.lookAt(pose.aim[0], pose.aim[1], pose.aim[2]);
+    cardCamera.updateMatrixWorld();
+    let photo = null;
+    try {
+        photo = atSize(renderer, W, H, () => {
+            draw(cardCamera);
+            const out = document.createElement('canvas');
+            out.width = W;
+            out.height = H;
+            const g = out.getContext && out.getContext('2d');
+            if (!g) return null;
+            // From the WebGL canvas in the same task as its draw, which is
+            // what makes it readable without preserveDrawingBuffer.
+            g.drawImage(canvas, 0, 0, W, H);
+            return out;
+        });
+    } catch (e) {
+        photo = null;
+    } finally {
+        if (world) world.follow(camera);
+        // The night glass was drawn for the card's eye.
+        ui.mirrorDue = true;
+    }
+    return photo;
+}
+
+/**
+ * Run `paint` with the renderer's drawing buffer at `w` by `h` pixels (a
+ * pixel ratio of 1), then give back the size and ratio it had, even if
+ * `paint` throws. Returns what `paint` returned. The CSS size is never
+ * touched, so the page's layout does not move.
+ */
+export function atSize(renderer, w, h, paint) {
+    const ratio = renderer.getPixelRatio();
+    const size = renderer.getSize(new THREE.Vector2());
+    const back = { x: size.x, y: size.y };
+    renderer.setPixelRatio(1);
+    renderer.setSize(w, h, false);
+    try {
+        return paint();
+    } finally {
+        renderer.setPixelRatio(ratio);
+        renderer.setSize(back.x, back.y, false);
+    }
+}
+
+/** Draw the office for every week card waiting on it (animate). */
+function takeWeekCards() {
+    for (const owed of ui.weekCardsOwed.splice(0)) owed.resolve(drawCardPhoto(owed.station));
+}
+
+/** The week card painted over `photo` (or its own sky), as a file:
+ *  resolves to a Blob, or null where the browser cannot make one. */
+function paintWeekCard(model, photo) {
+    const { width: W, height: H, type, quality } = CONFIG.weekCard;
+    const out = document.createElement('canvas');
+    out.width = W;
+    out.height = H;
+    const g = out.getContext && out.getContext('2d');
+    if (!g || typeof out.toBlob !== 'function') return Promise.resolve(null);
+    drawWeekCard(g, W, H, { lines: model.lines, chart: model.chart, photo });
+    return new Promise((resolve) => {
+        try {
+            out.toBlob((blob) => resolve(blob || null), type, quality);
+        } catch (e) {
+            resolve(null);
+        }
+    });
+}
+
+/**
+ * The week card for this week as it stands, made once and kept: the office
+ * is drawn on the next frame, then the card painted over it. A card already
+ * made for the same numbers is handed back as it is.
+ *
+ * MADE AHEAD, BECAUSE A SHARE SHEET NEEDS THE TAP. Browsers open one only
+ * straight after the visitor's press, and drawing a frame and encoding a
+ * picture can outlast that, so whatever offers Share prepares the card
+ * first and the press only hands it over (Derby Day's still, the same way).
+ *
+ * Returns `{ key, model, ready, blob }`: `ready` resolves to the Blob (or
+ * null), and `blob` is it once it has.
+ */
+function prepareWeekCard(station = CONFIG.weekCard.station) {
+    const model = weekCardModel(state.doc, CONFIG, now());
+    const key = JSON.stringify([station, model.lines, model.chart.bars.map((b) => b.count)]);
+    if (ui.weekCard && ui.weekCard.key === key) return ui.weekCard;
+    const entry = { key, model, ready: null, blob: null };
+    const photo = new Promise((resolve) => {
+        // No loop running to draw it (a hidden tab): the card's own sky.
+        if (!state.running) {
+            resolve(null);
+            return;
+        }
+        ui.weekCardsOwed.push({ station, resolve });
+        requestRender();
+    });
+    entry.ready = photo.then((p) => paintWeekCard(model, p)).then((blob) => {
+        entry.blob = blob;
+        return blob;
+    });
+    ui.weekCard = entry;
+    return entry;
+}
+
+/**
+ * Share the week card, or save it where this browser cannot share a file.
+ * Resolves to how it went: 'shared', 'cancelled' (the visitor closed the
+ * sheet, which is their decision and saves nothing), 'saved' or 'failed'.
+ */
+async function shareWeekCard(station) {
+    const entry = prepareWeekCard(station);
+    const blob = entry.blob || await entry.ready;
+    if (!blob) return 'failed';
+    const { model } = entry;
+    let how = await shareFile(blob, model.fileName, {
+        title: CONFIG.name,
+        text: weekCardShareText(model.lines, shareUrl())
+    });
+    if (how === 'unavailable') {
+        const url = URL.createObjectURL(blob);
+        how = saveFile(url, model.fileName) ? 'saved' : 'failed';
+        // Long enough for the download to have taken it.
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+    return how;
+}
+
+/**
+ * The Share my week buttons: the computer's summary (where most visitors
+ * are), the whiteboard's sheet, and the toast when the week's goal is
+ * reached. Shown only in a week with something sent, since a card of zeros
+ * helps no one, and named for what this browser will do with the picture.
+ * While the computer or the whiteboard is open the card is made ahead, so a
+ * press hands it straight to the share sheet. Returns whether the week can
+ * be shared.
+ */
+function syncWeekShare(t = now()) {
+    if (!state.doc) return false;
+    const { shareable } = weekCardModel(state.doc, CONFIG, t);
+    const label = weekCardButton(canShareFiles(CONFIG.weekCard.type));
+    for (const id of ['grid-share', 'wb-share', 'toast-share']) {
+        const b = el(id);
+        if (!b) continue;
+        b.textContent = label;
+        // The toast's button is the toast's to show (cards.js toast).
+        if (id !== 'toast-share') b.hidden = !shareable;
+    }
+    if (shareable && (isOpen('computer') || isOpen('whiteboard'))) prepareWeekCard();
+    return shareable;
+}
+
+/** A Share my week press: the card shared or saved, one beacon saying how
+ *  (and never what the week held), and a word on how it went. A second press
+ *  while the first is at work is ignored. */
+async function shareWeek() {
+    if (ui.sharingWeek) return null;
+    ui.sharingWeek = true;
+    try {
+        const how = await shareWeekCard();
+        track('share-week', { outcome: how });
+        const line = weekCardDone(how);
+        if (line) {
+            announce(line);
+            toast(line, { seconds: CONFIG.toastSeconds });
+        }
+        return how;
+    } finally {
+        ui.sharingWeek = false;
+    }
 }
 
 // ---- Teardown ---------------------------------------------------------------
@@ -3249,6 +3501,11 @@ export const __test__ = {
     goToPlace,
     openWhiteboard,
     paintWhiteboard,
+    drawCardPhoto,
+    prepareWeekCard,
+    shareWeekCard,
+    syncWeekShare,
+    shareWeek,
     openPrinter,
     printPrep,
     openContact,
