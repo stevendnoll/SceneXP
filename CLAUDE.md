@@ -22,8 +22,8 @@ their own world, welcome aboard. We are delighted to have you both.
   step-by-step guide for adding a new experience.
 - The 2D and 3D HTML, JavaScript, and CSS files are stored in the www
   folder. Each experience lives in its own folder under www and is assembled
-  from the shared parts library in www/shared (its README.md documents every
-  part).
+  from the shared parts library in www/shared (www/shared/js/README.md
+  documents every part).
 
 ## Everyday commands
 
