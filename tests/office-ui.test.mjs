@@ -114,15 +114,15 @@ describe('quick add', () => {
         })]);
         // And celebrated: applying is the win (celebrate.js).
         expect(said()).toBe("Added Acme, Designer, with a follow-up reminder in 7 days. Application sent. That's your first this week.");
-        expect(el('office-toast').hidden).toBe(false);
-        expect(el('toast-undo').hidden).toBe(false);
+        // No toast for an addition (QA, 2026-10-22: Undo is offered on the
+        // spot only for a delete). The toolbar's Undo takes it back, in one step.
+        expect(el('toast-text').textContent).toBe('');
         expect(t.history.size).toBe(1);
         expect(el('bar-undo').disabled).toBe(false);
 
-        el('toast-undo').click();
+        el('bar-undo').click();
         expect(live()).toEqual([]);
         expect(doc().tasks).toEqual([]);
-        expect(el('office-toast').hidden).toBe(true);
         expect(el('bar-undo').disabled).toBe(true);
         expect(said()).toBe('Undone. Added Acme, Designer');
     });
@@ -354,6 +354,27 @@ describe('the folder', () => {
         t.undo();
         expect(doc().applications).toHaveLength(1);
         expect(t.ui.wastePages).toBe(1);
+    });
+
+    test('a delete, and only a delete, offers Undo on the spot (QA, 2026-10-22)', () => {
+        t.throwAway('applications', id);
+        expect(el('office-toast').hidden).toBe(false);
+        expect(el('toast-text').textContent).toMatch(/^Threw away .+\. It is in the wastebasket\.$/);
+        expect(el('toast-undo').hidden).toBe(false);
+        el('toast-undo').click();
+        expect(live()).toHaveLength(1);
+        // Emptying the basket for good offers it too.
+        t.throwAway('applications', id);
+        t.openWastebasket();
+        el('wastebasket-empty').click();
+        el('confirm-actions').children[1].click();
+        expect(el('toast-text').textContent).toBe('Emptied the wastebasket');
+        expect(el('toast-undo').hidden).toBe(false);
+        // An edit is plain to see where it was made: no toast.
+        el('toast-text').textContent = '';
+        t.change((d) => ({ doc: { ...d, settings: { ...d.settings, weeklyGoal: 7 } }, record: null, error: null }), 'Set the weekly goal to 7');
+        expect(doc().settings.weeklyGoal).toBe(7);
+        expect(el('toast-text').textContent).toBe('');
     });
 });
 
@@ -2222,14 +2243,17 @@ describe('the week card', () => {
 
     test('the goal\'s toast offers the week, and no other toast does', async () => {
         const { saved } = keepFiles();
+        // Short of the goal, an addition has no toast at all (QA, 2026-10-22).
         for (let n = 1; n < CONFIG.settings.weeklyGoal; n++) {
             addOne(n);
-            expect(el('office-toast').hidden).toBe(false);
-            expect(el('toast-share').hidden).toBe(true);
+            expect(el('toast-text').textContent).toBe('');
         }
         addOne(CONFIG.settings.weeklyGoal);
+        expect(el('office-toast').hidden).toBe(false);
         expect(el('toast-text').textContent).toMatch(/your weekly goal/);
         expect(el('toast-share').hidden).toBe(false);
+        // The goal's toast shares the week. Undo stays on the toolbar.
+        expect(el('toast-undo').hidden).toBe(true);
         // Made the moment the goal was reached, so the press can hand it over.
         expect(t.ui.weekCardsOwed).toHaveLength(1);
         t.animate();

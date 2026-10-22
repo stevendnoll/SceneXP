@@ -1592,8 +1592,28 @@ function clipSay(text) {
     if (el['clip-status']) el['clip-status'].textContent = text;
 }
 
+/**
+ * Save a picture is unavailable while a clip records (QA, 2026-10-22: a
+ * press did nothing that a sighted visitor could see, because the refusal
+ * was said only to a screen reader). DISABLED, not hidden, so the visitor
+ * can see it is coming. The picture itself is ready long before (stillFor),
+ * but a share sheet over a recording stalls the clip on a phone.
+ */
+function pictureWaits(waiting) {
+    const btn = el['clip-image'];
+    if (btn) btn.disabled = waiting;
+}
+
+/** What the picture button will do here, as the video's button says
+ *  (QA, 2026-10-22): 'share' where the share sheet takes a picture, 'save'
+ *  where it does not. The card's sentences use the same word. */
+function pictureVerb() {
+    return canShareFiles('image/png') ? 'share' : 'save';
+}
+
 /** Let go of a made clip's file and video. */
 function releaseClip() {
+    pictureWaits(false);
     const c = state.clip;
     if (!c) return;
     if (c.recording && c.rec) {
@@ -1619,11 +1639,13 @@ function openClip() {
     if (stage) stage.textContent = '';
     if (el['clip-share']) el['clip-share'].hidden = true;
     if (el['clip-again']) el['clip-again'].hidden = true;
+    const verb = pictureVerb();
+    if (el['clip-image']) el['clip-image'].textContent = verb === 'share' ? 'Share a picture' : 'Save a picture';
     const title = el['clip-title'];
     if (title && typeof title.focus === 'function') title.focus({ preventScroll: true });
     const mime = canRecord(window) ? pickMime((t) => window.MediaRecorder.isTypeSupported(t)) : '';
     if (!mime) {
-        clipText('This browser can’t make a video, but you can save a picture of your race.');
+        clipText(`This browser can’t make a video, but you can ${verb} a picture of your race.`);
         track('clip-unsupported', { kind: state.event });
         return;
     }
@@ -1651,7 +1673,7 @@ function openClip() {
         rec = startRecording(stream, mime, { bitrate: state.isMobile ? CONFIG.clip.mobileBitrate : CONFIG.clip.bitrate, win: window });
     } catch (e) {
         sound.setRecording(false);
-        clipText('This browser can’t make a video, but you can save a picture of your race.');
+        clipText(`This browser can’t make a video, but you can ${verb} a picture of your race.`);
         track('clip-unsupported', { kind: state.event, outcome: 'start-failed' });
         return;
     }
@@ -1660,11 +1682,13 @@ function openClip() {
         plan: planClip(day.race, focus, CONFIG), focus, t: 0, recording: true, rec, g, out, w, h, mime,
         said: '', beeped: new Set(), lastS: day.entries.map(() => 0), shown: -1
     };
+    pictureWaits(true);
     clipText('Making your clip…');
     clipSay('Making your clip. It takes about fifteen seconds.');
     track('clip-start', { kind: state.event, outcome: `sound=${include ? 'on' : 'off'}` });
     rec.done.then((blob) => finishedClip(blob)).catch(() => {
-        clipText('Something went wrong making the video, but you can save a picture of your race.');
+        pictureWaits(false);
+        clipText(`Something went wrong making the video, but you can ${verb} a picture of your race.`);
     });
 }
 
@@ -1742,6 +1766,7 @@ function restCars() {
 function finishedClip(blob) {
     const c = state.clip;
     if (!c || c.cancelled) return;
+    pictureWaits(false);
     c.blob = blob;
     c.url = URL.createObjectURL(blob);
     c.name = fileName(state.day.entries[c.focus].name, extensionOf(blob.type || c.mime));

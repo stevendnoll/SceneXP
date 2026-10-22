@@ -1264,11 +1264,20 @@ function mutate(fn, label = '') {
 }
 
 /**
- * A mutation the visitor made on purpose: said aloud, and offered for undo
- * in the toast. `message` is what is said (a string, or a function of the
- * result), and defaults to the label. Nothing is said when nothing changed.
+ * A mutation the visitor made on purpose: said aloud, and undoable from the
+ * toolbar's Undo and Ctrl or Command and Z. `message` is what is said (a
+ * string, or a function of the result), and defaults to the label. Nothing
+ * is said when nothing changed.
+ *
+ * THE TOAST IS FOR A DELETE (QA, 2026-10-22: "remove the Undo alerts except
+ * for when the user deletes something"). An addition or an edit is plain to
+ * see where it was made, and a toast after each one was noise. `undoable`
+ * marks the deletes (a record thrown away, the wastebasket emptied, the
+ * samples or the whole office cleared), whose toast offers Undo on the
+ * spot. The one other toast is the week's goal reached, which offers the
+ * week card instead.
  */
-function change(fn, label, message = label) {
+function change(fn, label, message = label, { undoable = false } = {}) {
     const before = state.doc;
     const result = mutate(fn, label);
     if (result.changed) {
@@ -1285,7 +1294,9 @@ function change(fn, label, message = label) {
         const goal = Boolean(party) && party.kind === 'goal';
         if (goal) prepareWeekCard();
         announce(words);
-        toast(words, { undo, share: goal ? () => shareWeek() : null, seconds: CONFIG.toastSeconds });
+        if (undoable || goal) {
+            toast(words, { undo: undoable ? undo : null, share: goal ? () => shareWeek() : null, seconds: CONFIG.toastSeconds });
+        }
     }
     return result;
 }
@@ -2302,7 +2313,7 @@ function throwAway(collection, id) {
     const what = collection === 'events' && record ? `the ${eventName(record).toLowerCase()}`
         : collection === 'tasks' ? 'the follow-up' : label;
     change((doc) => deleteRecord(doc, collection, id, CONFIG, now()), `Threw away ${what}`,
-        `Threw away ${what}. It is in the wastebasket.`);
+        `Threw away ${what}. It is in the wastebasket.`, { undoable: true });
 }
 
 // ---- The application form ---------------------------------------------------
@@ -2461,7 +2472,8 @@ function emptyTheWastebasket() {
         detail: `${count(n, 'item')} will be removed for good. You can still undo it straight after, until you leave the page.`,
         confirmLabel: 'Empty it',
         danger: true,
-        onConfirm: () => change((doc) => emptyWastebasket(doc, CONFIG, now()), 'Emptied the wastebasket')
+        onConfirm: () => change((doc) => emptyWastebasket(doc, CONFIG, now()), 'Emptied the wastebasket',
+            'Emptied the wastebasket', { undoable: true })
     });
 }
 
@@ -2568,7 +2580,8 @@ function stockOffice() {
 }
 
 function clearTheSamples() {
-    return change((doc) => clearSamples(doc), 'Cleared the samples', 'Cleared the samples. Your own records are untouched.');
+    return change((doc) => clearSamples(doc), 'Cleared the samples', 'Cleared the samples. Your own records are untouched.',
+        { undoable: true });
 }
 
 function clearEverything() {
@@ -2579,7 +2592,7 @@ function clearEverything() {
         danger: true,
         onConfirm: () => {
             change((doc) => ({ doc: { ...emptyDoc(CONFIG, now()), settings: doc.settings }, record: null, error: null }),
-                'Cleared the whole office');
+                'Cleared the whole office', 'Cleared the whole office', { undoable: true });
             closeCard('settings');
             track('clear-all');
         }

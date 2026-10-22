@@ -517,6 +517,9 @@ describe('the share card on the page', () => {
         expect(modal.classList.contains('hidden')).toBe(false);
         expect(dom.el('clip-progress').textContent).toMatch(/can’t make a video, but you can save a picture/);
         expect(main.getState().clip).toBeNull();
+        // The picture is all this browser can offer, so it never waits.
+        expect(dom.el('clip-image').disabled).toBe(false);
+        expect(dom.el('clip-image').textContent).toBe('Save a picture');
         fire(dom.el('clip-close'), 'click');
         expect(modal.classList.contains('hidden')).toBe(true);
         fire(dom.el('results-share'), 'click');
@@ -524,6 +527,16 @@ describe('the share card on the page', () => {
         expect(modal.classList.contains('hidden')).toBe(true);
         // The results are still up behind it.
         expect(main.getState().phase).toBe('results');
+    });
+
+    test('where the share sheet takes a picture, the button and the card say share, as the video\'s button does', async () => {
+        const main = await boot();
+        await toResults(main);
+        dom.windowStub.File = File;
+        navigator.canShare = (data) => data.files[0].type === 'image/png';
+        fire(dom.el('results-share'), 'click');
+        expect(dom.el('clip-image').textContent).toBe('Share a picture');
+        expect(dom.el('clip-progress').textContent).toMatch(/can’t make a video, but you can share a picture/);
     });
 
     test('a clip is made live, plays back in the card, and is saved where it cannot be shared', async () => {
@@ -534,6 +547,8 @@ describe('the share card on the page', () => {
         const state = main.getState();
         expect(state.clip.recording).toBe(true);
         expect(state.clip.mime).toBe('video/webm');
+        // Save a picture is seen to wait while the clip is made (QA, 2026-10-22).
+        expect(dom.el('clip-image').disabled).toBe(true);
         // The live canvas is in the stage while it is made.
         expect(dom.el('clip-stage').children[0].tagName).toMatch(/canvas/i);
         frames(main, 2);
@@ -551,6 +566,7 @@ describe('the share card on the page', () => {
         const share = dom.el('clip-share');
         expect(share.hidden).toBe(false);
         expect(share.textContent).toBe('Save video');
+        expect(dom.el('clip-image').disabled).toBe(false);
         expect(dom.el('clip-again').hidden).toBe(false);
         fire(share, 'click');
         await flushAsync(10);
@@ -564,12 +580,14 @@ describe('the share card on the page', () => {
         fire(dom.el('clip-again'), 'click');
         expect(state.clip.recording).toBe(true);
         // The picture waits while a clip is being made.
+        expect(dom.el('clip-image').disabled).toBe(true);
         fire(dom.el('clip-image'), 'click');
         await flushAsync(5);
         expect(dom.el('clip-status').textContent).toMatch(/still being made/);
-        // Closing part way lets the clip go.
+        // Closing part way lets the clip go, and the picture with it.
         fire(dom.el('clip-close'), 'click');
         expect(state.clip).toBeNull();
+        expect(dom.el('clip-image').disabled).toBe(false);
     });
 
     // The M7.1 sweep: the clip's orbit and slow finish played live, and the
