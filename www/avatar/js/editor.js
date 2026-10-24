@@ -95,7 +95,7 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
         if (field.kind === 'swatch') {
             const swatch = make('span', 'av-swatch');
             swatch.setAttribute('aria-hidden', 'true');
-            swatch.style.setProperty('--swatch', swatchHex(option.color));
+            swatch.style.setProperty('--swatch', swatchHex(option.color === null ? option.swatch : option.color));
             label.appendChild(swatch);
             label.appendChild(make('span', 'sr-only', option.label));
             label.title = option.label;

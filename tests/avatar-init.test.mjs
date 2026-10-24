@@ -316,10 +316,12 @@ describe('the editor and the way back', () => {
         const tabs = E.visibleTabs(CONFIG.tabs).map((t) => t.id);
         expect(tabs).toEqual(['face', 'hair', 'build', 'clothes', 'feet', 'hat']);
         const face = CONFIG.tabs.find((t) => t.id === 'face');
-        expect(E.visibleFields(face).map((f) => f.key)).toEqual(['skin', 'eyes', 'facial', 'glasses']);
+        expect(E.visibleFields(face).map((f) => f.key)).toEqual(['skin', 'eyes', 'mouth', 'lips', 'facial', 'glasses']);
+        const build = CONFIG.tabs.find((t) => t.id === 'build');
+        expect(E.visibleFields(build).map((f) => f.key)).toEqual(['build', 'muscles']);
         const hat = CONFIG.tabs.find((t) => t.id === 'hat');
         expect(E.visibleFields(hat).map((f) => f.key)).toEqual(['hat', 'hatColor']);
-        expect(E.optionsFor('shoes').map((o) => o.id)).toEqual(['classic', 'sneakers', 'maryJane']);
+        expect(E.optionsFor('shoes').map((o) => o.id)).toEqual(['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots']);
         expect(E.optionsFor('nope')).toEqual([]);
         // A field that needs another shows only while that one does (a hat's
         // color, with no hats to wear, would mean nothing).
@@ -359,6 +361,10 @@ describe('the editor and the way back', () => {
         expect(tablist.children[0].getAttribute('aria-selected')).toBe('true');
         expect(panels.children[1].hidden).toBe(true);
         expect(ed.inputs.skin).toHaveLength(6);
+        // Natural lips have no color of their own, so their swatch shows a
+        // natural rose instead of black.
+        const natural = ed.inputs.lips.find((i) => i.value === 'natural').parentNode.children[1];
+        expect(natural.style.getPropertyValue('--swatch')).toBe(E.swatchHex(0xbe7d6f));
         expect(ed.inputs.skin.find((i) => i.checked).value).toBe('fair');
         const deep = ed.inputs.skin.find((i) => i.value === 'deep');
         deep.checked = true;

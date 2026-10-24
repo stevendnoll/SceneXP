@@ -60,7 +60,39 @@ export const GLASSES = Object.freeze([
     { id: 'none', label: 'None' },
     { id: 'round', label: 'Round' },
     { id: 'square', label: 'Square' },
-    { id: 'sunglasses', label: 'Sunglasses' }
+    { id: 'sunglasses', label: 'Sunglasses' },
+    { id: 'roundSun', label: 'Round sunglasses' }
+]);
+
+/** The mouth (Steve's QA, 2026-10-24: expressions, lip colors, teeth). All
+ *  of them friendly: the figure has no eyebrows, so the mouth is the whole
+ *  expression, and nobody's avatar should frown at them. */
+export const MOUTHS = Object.freeze([
+    { id: 'smile', label: 'Gentle smile' },
+    { id: 'bigSmile', label: 'Big smile' },
+    { id: 'grin', label: 'Grin' },
+    { id: 'smirk', label: 'Smirk' },
+    { id: 'surprised', label: 'Surprised' }
+]);
+
+/** Lip colors. Natural is a rose of the skin's own tone (avatar-figure's
+ *  `lipsColor`), so it has no color of its own, only a `swatch` for the
+ *  editor to show. */
+export const LIP_COLORS = Object.freeze([
+    { id: 'natural', label: 'Natural', color: null, swatch: 0xbe7d6f },
+    { id: 'rose', label: 'Rose', color: 0xb4566a },
+    { id: 'red', label: 'Red', color: 0xa81f2d },
+    { id: 'berry', label: 'Berry', color: 0x74213f },
+    { id: 'softPink', label: 'Soft pink', color: 0xd88c96 }
+]);
+
+/** How strong the arms are (Steve, 2026-10-24: "so guys can make their
+ *  avatars look buff"). Athletic thickens the arms; Buff is the rig's own
+ *  `muscular` build: a broader chest, bigger arms, thicker legs. */
+export const MUSCLES = Object.freeze([
+    { id: 'standard', label: 'Standard' },
+    { id: 'athletic', label: 'Athletic' },
+    { id: 'buff', label: 'Buff' }
 ]);
 
 /**
@@ -75,22 +107,34 @@ export const BUILDS = Object.freeze([
     { id: 'curvy', label: 'Curvy', hips: 1, waist: 0.2, slender: 1, shoulderRound: 0.45 }
 ]);
 
+/** The shirt's style, by its sleeves (the field keeps its first name,
+ *  `sleeves`, so links made before the tank top still read). */
 export const SLEEVES = Object.freeze([
-    { id: 'long', label: 'Long' },
-    { id: 'short', label: 'Short' }
+    { id: 'long', label: 'Long sleeves' },
+    { id: 'short', label: 'Short sleeves' },
+    { id: 'tank', label: 'Tank top' }
 ]);
 
 export const BOTTOMS = Object.freeze([
     { id: 'pants', label: 'Pants' },
-    { id: 'skirt', label: 'Skirt' }
+    { id: 'skirt', label: 'Skirt' },
+    { id: 'shorts', label: 'Shorts' }
 ]);
 
 /** The shoes, and the rig's `shoeStyle` each starts from. Sneakers are
  *  drawn by avatar-figure over the rig's block. */
+/** The shoes, and the rig's `shoeStyle` each starts from. Sneakers and the
+ *  boots are drawn by avatar-figure over the rig's block, the tall boots
+ *  and the cowboy boots over the trouser leg (Steve, 2026-10-24). Named by
+ *  style, never by who wears them. */
 export const SHOES = Object.freeze([
     { id: 'classic', label: 'Classic', style: 'block' },
     { id: 'sneakers', label: 'Sneakers', style: 'block' },
-    { id: 'maryJane', label: 'Mary janes', style: 'maryJane' }
+    { id: 'maryJane', label: 'Mary janes', style: 'maryJane' },
+    { id: 'ankleBoots', label: 'Ankle boots', style: 'block' },
+    { id: 'workBoots', label: 'Work boots', style: 'block' },
+    { id: 'cowboyBoots', label: 'Cowboy boots', style: 'block' },
+    { id: 'tallBoots', label: 'Tall boots', style: 'block' }
 ]);
 
 /** Black is the color every figure has always worn. */
@@ -131,7 +175,11 @@ export const FIELDS = Object.freeze([
     Object.freeze(['shoes', SHOES]),
     Object.freeze(['shoeColor', SHOE_COLORS]),
     Object.freeze(['hat', HATS]),
-    Object.freeze(['hatColor', SHIRTS])
+    Object.freeze(['hatColor', SHIRTS]),
+    // Appended 2026-10-24 (links made before read them as the defaults).
+    Object.freeze(['mouth', MOUTHS]),
+    Object.freeze(['lips', LIP_COLORS]),
+    Object.freeze(['muscles', MUSCLES])
 ]);
 
 /** The list a field's ids come from, or null for a field that is not one. */
@@ -158,7 +206,10 @@ export const DEFAULT_AVATAR = Object.freeze({
     shoes: 'classic',
     shoeColor: 'black',
     hat: 'none',
-    hatColor: 'navy'
+    hatColor: 'navy',
+    mouth: 'smile',
+    lips: 'natural',
+    muscles: 'standard'
 });
 
 const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
@@ -252,6 +303,7 @@ export function personConfig(avatar, overrides = {}) {
         sleeveColor: a.sleeves === 'long' ? shirt : null,
         pantsColor: optionOf(PANTS, a.bottomColor).color,
         hasSkirt: a.bottom === 'skirt',
+        muscular: a.muscles === 'buff',
         skinTone: optionOf(SKINS, a.skin).color,
         hairColor: optionOf(HAIR_COLORS, a.hair).color,
         hairStyle: a.length === 'bald' ? 'short' : a.length,
@@ -268,25 +320,29 @@ export function personConfig(avatar, overrides = {}) {
 
 /**
  * The figure in one sentence, for a screen reader: "A figure with fair skin,
- * dark brown eyes and short dark brown hair, a straight build, a rust red
- * shirt with long sleeves, navy pants, and classic black shoes." Every word
+ * dark brown eyes, a gentle smile and short dark brown hair, a straight
+ * build, a rust red shirt with long sleeves, navy pants, and classic black
+ * shoes." Every word
  * comes from the lists, so it is always one of a known set of sentences.
  */
 export function describeAvatar(avatar) {
     const a = normalizeAvatar(avatar);
     const word = (list, id) => optionOf(list, id).label.toLowerCase();
     const hair = a.length === 'bald' ? 'no hair' : `${word(HAIR_LENGTHS, a.length)} ${word(HAIR_COLORS, a.hair)} hair`;
-    const face = [`${word(SKINS, a.skin)} skin`, `${word(EYES, a.eyes)} eyes`];
+    const lips = a.lips === 'natural' ? '' : ` and ${word(LIP_COLORS, a.lips)} lips`;
+    const face = [`${word(SKINS, a.skin)} skin`, `${word(EYES, a.eyes)} eyes`, `a ${word(MOUTHS, a.mouth)}${lips}`];
     const extras = [];
     if (a.facial !== 'none') extras.push(`${a.facial === 'stubble' ? '' : 'a '}${word(FACIAL, a.facial)}`);
-    if (a.glasses === 'sunglasses') extras.push('sunglasses');
+    if (a.glasses === 'sunglasses' || a.glasses === 'roundSun') extras.push(word(GLASSES, a.glasses));
     else if (a.glasses !== 'none') extras.push(`${word(GLASSES, a.glasses)} glasses`);
     const shoeColor = word(SHOE_COLORS, a.shoeColor);
     const shoes = a.shoes === 'classic' ? `classic ${shoeColor} shoes` : `${shoeColor} ${word(SHOES, a.shoes)}`;
+    const muscles = a.muscles === 'standard' ? '' : `${word(MUSCLES, a.muscles)}, `;
+    const shirt = optionOf(SHIRTS, a.shirt).name;
     const clothes = [
-        `a ${word(BUILDS, a.build)} build`,
-        `a ${optionOf(SHIRTS, a.shirt).name} shirt with ${a.sleeves} sleeves`,
-        `${a.bottom === 'skirt' ? 'a ' : ''}${optionOf(PANTS, a.bottomColor).name} ${a.bottom === 'skirt' ? 'skirt' : 'pants'}`,
+        `a ${muscles}${word(BUILDS, a.build)} build`,
+        a.sleeves === 'tank' ? `a ${shirt} tank top` : `a ${shirt} shirt with ${a.sleeves} sleeves`,
+        `${a.bottom === 'skirt' ? 'a ' : ''}${optionOf(PANTS, a.bottomColor).name} ${a.bottom}`,
         shoes
     ];
     if (a.hat !== 'none') clothes.push(`a ${optionOf(SHIRTS, a.hatColor).name} ${word(HATS, a.hat)}`);

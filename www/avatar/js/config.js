@@ -82,6 +82,8 @@ export const AVATAR_PAGE = deepFreeze({
             id: 'face', label: 'Face', frame: 'face', fields: [
                 { key: 'skin', legend: 'Skin tone', kind: 'swatch' },
                 { key: 'eyes', legend: 'Eye color', kind: 'swatch' },
+                { key: 'mouth', legend: 'Expression', kind: 'text' },
+                { key: 'lips', legend: 'Lip color', kind: 'swatch' },
                 { key: 'facial', legend: 'Facial hair', kind: 'text' },
                 { key: 'glasses', legend: 'Glasses', kind: 'text' }
             ]
@@ -94,14 +96,15 @@ export const AVATAR_PAGE = deepFreeze({
         },
         {
             id: 'build', label: 'Build', frame: 'body', fields: [
-                { key: 'build', legend: 'Build', kind: 'text' }
+                { key: 'build', legend: 'Build', kind: 'text' },
+                { key: 'muscles', legend: 'Muscles', kind: 'text' }
             ]
         },
         {
             id: 'clothes', label: 'Clothes', frame: 'body', fields: [
                 { key: 'shirt', legend: 'Shirt', kind: 'swatch' },
-                { key: 'sleeves', legend: 'Sleeves', kind: 'text' },
-                { key: 'bottom', legend: 'Pants or skirt', kind: 'text' },
+                { key: 'sleeves', legend: 'Style', kind: 'text' },
+                { key: 'bottom', legend: 'Pants, skirt or shorts', kind: 'text' },
                 { key: 'bottomColor', legend: 'Color', kind: 'swatch' }
             ]
         },

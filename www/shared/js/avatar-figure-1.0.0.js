@@ -36,7 +36,7 @@
 
 import {
     personConfig, withOverrides, optionOf, normalizeAvatar, validPortraitSrc,
-    SKINS, BUILDS, HAIR_COLORS, SHIRTS
+    SKINS, HAIR_COLORS, SHIRTS, SHOE_COLORS, LIP_COLORS
 } from './avatar-1.0.0.min.js';
 import { createPerson } from './people-1.0.0.min.js';
 
@@ -44,9 +44,9 @@ import { createPerson } from './people-1.0.0.min.js';
  * The portrait's render version. Bump it whenever the figure's look changes,
  * so a portrait drawn before is drawn again (PLANNING 3.5): /avatar/ and the
  * scenes compare it with the one stored. 2 (2026-10-24): the pieces, and
- * a closer portrait.
+ * a closer portrait. 3 (2026-10-24): the mouths, bare legs, boots.
  */
-export const RENDER_VERSION = 2;
+export const RENDER_VERSION = 3;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named
@@ -91,8 +91,9 @@ export function smileArc(width, lift) {
     return { radius, arc: 2 * Math.asin(half / radius) };
 }
 
-/** The lips on the front of `head` (the rig's head mesh): a slim arc, lowest
- *  in the middle, sunk a little into the face so it reads as lips. */
+/** The gentle smile's lips on the front of `head` (the rig's head mesh): a
+ *  slim arc, lowest in the middle, sunk a little into the face so it reads
+ *  as lips. */
 function buildSmile(head, color, s = SMILE) {
     const headR = head.geometry.parameters.radius;
     const { radius: r, arc } = smileArc(s.width, s.lift);
@@ -100,25 +101,247 @@ function buildSmile(head, color, s = SMILE) {
         new THREE.TorusGeometry(r, s.thickness, 6, 20, arc),
         new THREE.MeshStandardMaterial({ color, roughness: 0.55 })
     );
-    lips.name = 'smile';
+    lips.name = 'lips';
     // The torus's arc starts at +x and runs counterclockwise: turned so its
     // middle points straight down, its center `r` above the smile's middle.
     lips.rotation.z = Math.PI * 1.5 - arc / 2;
     const y = head.position.y - s.drop;
     lips.position.set(0, y + r, Math.sqrt(headR * headR - s.drop * s.drop) - s.thickness * 0.4);
-    lips.castShadow = false;
     return lips;
 }
 
-// ---- The skirt ----------------------------------------------------------------
+/**
+ * The other mouths (Steve's QA, 2026-10-24), in meters on the 0.12 m head:
+ *
+ *   smirk      the gentle smile tipped by `turn`, one corner up
+ *   bigSmile   open, the top teeth showing
+ *   grin       wider and shallower, both rows of teeth showing
+ *   surprised  a small round "o"
+ *
+ * An open mouth is an outline (`width` across, its top rising `lift` to the
+ * corners, `depth` deep in the middle, its upper middle `drop` below the
+ * head's middle), drawn flat and then WRAPPED ONTO THE HEAD'S SPHERE: a flat
+ * shape on a round head floats up to 4 mm off it at the corners. The lips
+ * are a ring `lip` wide round the opening, over a dark inside and the teeth.
+ */
+export const MOUTH_SIZE = Object.freeze({
+    smirk: { turn: 0.22, shift: 0.004 },
+    bigSmile: { width: 0.05, lift: 0.009, depth: 0.017, lip: 0.0035, teeth: 0.0075, drop: 0.052 },
+    grin: { width: 0.058, lift: 0.006, depth: 0.013, lip: 0.003, teeth: 0.0055, lower: 0.0035, drop: 0.054 },
+    surprised: { r: 0.0085, tube: 0.0035, drop: 0.057 },
+    inside: 0x3d1418,
+    teeth: 0xf3efe6
+});
+
+/** The open mouth's outline, as [x, y] points round it: the top from left to
+ *  right, then the bottom back. `grow` widens it all round (the lips). */
+function mouthOutline(m, grow = 0, n = 14) {
+    const hw = m.width / 2 + grow;
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+        const x = -hw + (2 * hw * i) / n;
+        pts.push([x, m.lift * (x / hw) ** 2 + grow]);
+    }
+    for (let i = n - 1; i > 0; i--) {
+        const x = -hw + (2 * hw * i) / n;
+        const t = (x / hw) ** 2;
+        pts.push([x, m.lift * t + grow - (m.depth + 2 * grow) * (1 - t)]);
+    }
+    return pts;
+}
+
+/** A shape from [x, y] points. */
+function shapeOf(points) {
+    const shape = new THREE.Shape();
+    points.forEach(([x, y], i) => (i ? shape.lineTo(x, y) : shape.moveTo(x, y)));
+    return shape;
+}
+
+/** A flat shape's geometry wrapped onto the head's sphere: its (x, y) read as
+ *  meters across and up the face from the mouth's middle (`drop` below the
+ *  head's middle), at `r` from the head's middle `c`. */
+function wrapped(shape, c, r, drop, R = 0.12) {
+    const geometry = new THREE.ShapeGeometry(shape);
+    const pos = geometry.attributes.position;
+    const polar = Math.acos(-drop / R);
+    for (let i = 0; i < pos.count; i++) {
+        const t = polar - pos.getY(i) / R;
+        const a = pos.getX(i) / R;
+        pos.setXYZ(i, c.x + r * Math.sin(t) * Math.sin(a), c.y + r * Math.cos(t), c.z + r * Math.sin(t) * Math.cos(a));
+    }
+    geometry.computeVertexNormals();
+    return geometry;
+}
+
+/** The mouth: a group named 'mouth' on the person, its lips colored
+ *  `color`. */
+function buildMouth(kind, head, color) {
+    const M = MOUTH_SIZE;
+    const c = head.position;
+    const group = new THREE.Group();
+    group.name = 'mouth';
+    const lipsMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.55, side: THREE.DoubleSide });
+    const inside = new THREE.MeshStandardMaterial({ color: M.inside, roughness: 0.9, side: THREE.DoubleSide });
+    const teethMaterial = new THREE.MeshStandardMaterial({ color: M.teeth, roughness: 0.35, side: THREE.DoubleSide });
+    if (kind === 'smile' || kind === 'smirk') {
+        const lips = buildSmile(head, color);
+        if (kind === 'smirk') {
+            lips.rotation.z += M.smirk.turn;
+            lips.position.x += M.smirk.shift;
+        }
+        group.add(lips);
+    } else if (kind === 'surprised') {
+        const m = M.surprised;
+        // Stood on the face, tipped to its slope at that height.
+        const tilt = Math.asin(m.drop / 0.12);
+        const z = Math.sqrt(0.12 * 0.12 - m.drop * m.drop);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(m.r, m.tube, 8, 20), lipsMaterial);
+        ring.position.set(c.x, c.y - m.drop, c.z + z);
+        ring.rotation.x = tilt;
+        ring.name = 'lips';
+        const hole = new THREE.Mesh(new THREE.CircleGeometry(m.r, 16), inside);
+        hole.position.set(c.x, c.y - m.drop, c.z + z + 0.0008);
+        hole.rotation.x = tilt;
+        hole.name = 'inside';
+        group.add(ring, hole);
+    } else {
+        const m = M[kind];
+        const opening = mouthOutline(m);
+        const ring = shapeOf(mouthOutline(m, m.lip));
+        ring.holes.push(shapeOf(opening));
+        const lips = new THREE.Mesh(wrapped(ring, c, 0.1214, m.drop), lipsMaterial);
+        lips.name = 'lips';
+        const dark = new THREE.Mesh(wrapped(shapeOf(opening), c, 0.1204, m.drop), inside);
+        dark.name = 'inside';
+        group.add(lips, dark);
+        // The top teeth: from the top of the opening down `teeth`, never past
+        // its bottom; the grin's bottom teeth up from its bottom.
+        const hw = m.width / 2;
+        const top = [];
+        const under = [];
+        const bottomTeeth = [];
+        for (let i = 0; i <= 14; i++) {
+            const x = -hw + (2 * hw * i) / 14;
+            const t = (x / hw) ** 2;
+            const u = m.lift * t;
+            const l = u - m.depth * (1 - t);
+            top.push([x, u]);
+            under.push([x, Math.max(u - m.teeth, l)]);
+            if (m.lower) bottomTeeth.push([x, l], [x, Math.min(l + m.lower, u - m.teeth - 0.0015)]);
+        }
+        const teeth = new THREE.Mesh(wrapped(shapeOf(top.concat(under.reverse())), c, 0.1208, m.drop), teethMaterial);
+        teeth.name = 'teeth';
+        group.add(teeth);
+        if (m.lower) {
+            const lowEdge = bottomTeeth.filter((p, i) => i % 2 === 0);
+            const highEdge = bottomTeeth.filter((p, i) => i % 2 === 1).map(([x, y], i) => [x, Math.max(y, lowEdge[i][1])]);
+            const lower = new THREE.Mesh(wrapped(shapeOf(lowEdge.concat(highEdge.reverse())), c, 0.1208, m.drop), teethMaterial);
+            lower.name = 'teeth';
+            group.add(lower);
+        }
+    }
+    group.traverse((o) => {
+        if (o.isMesh) o.castShadow = false;
+    });
+    return group;
+}
+
+// ---- The skirt, the shorts, the tank top and the arms ---------------------------
+
+/** How far inside the skirt the legs stay, at the least, in meters. */
+export const SKIRT_CLEARANCE = 0.008;
 
 /**
- * How much wider the skirt is drawn per unit of the build's `hips`. The
- * rig's skirt was sized for straight legs: with hips at 1 (Curvy) the thighs
- * came 2 cm through it at the top, measured against real three. 1.18 clears
- * them with about a centimeter to spare (tests/shared-avatar-figure).
+ * The rig's skirt was sized for straight legs, and a fuller leg (Curvy's
+ * hips, Buff's thighs) came 2 cm through it (measured against real three).
+ * So it is MEASURED, not tuned: drawn just wide enough that every point of
+ * the legs within its height stays `SKIRT_CLEARANCE` inside it, and never
+ * narrower than the rig made it.
  */
-export const SKIRT_FLARE = 0.18;
+function fitSkirt(person, skirt) {
+    const { radiusTop: rTop, radiusBottom: rBottom, height } = skirt.geometry.parameters;
+    const top = skirt.position.y + height / 2;
+    const bottom = top - height;
+    const rAt = (y) => rTop + ((top - y) / height) * (rBottom - rTop);
+    let k = 1;
+    eachVertex(person.children.filter((o) => o.userData.isLeg), (v) => {
+        if (v.y > top || v.y < bottom) return;
+        k = Math.max(k, (Math.hypot(v.x, v.z) + SKIRT_CLEARANCE) / rAt(v.y));
+    });
+    skirt.scale.set(k, 1, k);
+    return k;
+}
+
+/** A leg's parts by what they are: the thigh and the shin (the upper and
+ *  lower cylinders), the knee, and the shoe. */
+function legParts(leg) {
+    const cylinders = leg.children.filter((m) => m.isMesh && m.geometry.type === 'CylinderGeometry')
+        .sort((a, b) => b.position.y - a.position.y);
+    return {
+        thigh: cylinders[0],
+        shin: cylinders[1],
+        knee: leg.children.find((m) => m.isMesh && m.geometry.type === 'SphereGeometry'),
+        shoe: leg.children.find((m) => m.userData.isShoe)
+    };
+}
+
+/**
+ * Bare legs: under a skirt, the whole leg is skin (Steve's QA, 2026-10-24:
+ * the rig colored it the skirt's, as matching tights); in shorts the knee
+ * and the shin are, and the thigh keeps the shorts' color, finished with a
+ * hem a little proud of it at the knee.
+ */
+function dressLegs(person, bottom, skin) {
+    for (const leg of person.children.filter((o) => o.userData.isLeg)) {
+        const { thigh, shin, knee } = legParts(leg);
+        knee.material = skin;
+        shin.material = skin;
+        if (bottom === 'skirt') {
+            thigh.material = skin;
+            continue;
+        }
+        const { radiusBottom, height } = thigh.geometry.parameters;
+        const hem = new THREE.Mesh(new THREE.CylinderGeometry(radiusBottom * 1.07, radiusBottom * 1.1, 0.022, 14, 1, true), thigh.material);
+        hem.position.y = thigh.position.y - height / 2 + 0.011;
+        hem.name = 'hem';
+        leg.add(hem);
+    }
+}
+
+/** A tank top: the shoulders and the upper arms bare (the rig draws them in
+ *  the shirt), and no collar. */
+function dressTank(person, skin) {
+    person.traverse((o) => {
+        if (!o.userData.isArm) return;
+        for (const m of o.children) if (m.isMesh) m.material = skin;
+    });
+    const collar = person.children.find((o) => o.isMesh && o.geometry.type === 'TorusGeometry');
+    if (collar) collar.visible = false;
+}
+
+/** How much thicker an Athletic arm is than the rig's (Buff is the rig's own
+ *  `muscular`). */
+export const ATHLETIC_ARMS = 1.28;
+
+/** Thicker arms: every part of each arm but the hand widened by `k`, and
+ *  the arm moved out by what its upper arm gained, so it grows away from
+ *  the body rather than into it. */
+function strengthenArms(person, k) {
+    person.traverse((arm) => {
+        if (!arm.userData.isArm) return;
+        let radius = 0;
+        arm.traverse((m) => {
+            if (!m.isMesh) return;
+            const hand = m.parent === arm.userData.forearm && m === arm.userData.forearm.children[arm.userData.forearm.children.length - 1];
+            if (hand) return;
+            if (m.geometry.type === 'CylinderGeometry' && m.parent === arm) radius = m.geometry.parameters.radiusTop;
+            m.scale.x *= k;
+            m.scale.z *= k;
+            if (m.geometry.type === 'SphereGeometry') m.scale.y *= k;
+        });
+        arm.position.x += arm.userData.armSide * radius * (k - 1);
+    });
+}
 
 // ---- The pieces (M5): glasses, facial hair, hats, sneakers ----------------------
 //
@@ -191,13 +414,15 @@ function band(c, r, { half, top, bottom }, material, across = 36, down = 10) {
  * head's middle (the eyes), `z` out (in front of the pupils and the nose's
  * tip), a bridge over the nose, and arms back past the sides of the head to
  * the ears, kept outside it (tests/shared-avatar-figure measures them).
- * Sunglasses are square frames a size up with dark lenses.
+ * Sunglasses are square frames a size up with dark lenses, and round
+ * sunglasses round ones (Steve's QA, 2026-10-24).
  */
 export const GLASSES_SIZE = Object.freeze({
     x: 0.035, y: 0.02, z: 0.143, tube: 0.0026, bridgeLift: 0.004,
     round: { r: 0.021, sides: 16, turn: 0, frame: 0x3b2a20 },
     square: { r: 0.027, sides: 4, turn: Math.PI / 4, frame: 0x1d1d1f },
     sunglasses: { r: 0.029, sides: 4, turn: Math.PI / 4, frame: 0x161618, lens: 0x22262c },
+    roundSun: { r: 0.024, sides: 18, turn: 0, frame: 0x161618, lens: 0x22262c },
     /** Where each arm bends at the side of the head, and where it ends at
      *  the ear, as [x, y, z] from the head's middle (x for the right side). */
     side: [0.121, 0.02, 0.06],
@@ -269,8 +494,23 @@ export const FACIAL_SIZE = Object.freeze({
     stubble: { r: 0.1213, lip: { half: 0.3, top: [[0, 1.82]], bottom: [[0, 1.91]] }, opacity: 0.42 }
 });
 
-function buildFacial(kind, c, color) {
+/** Below the mouth, the beard, the goatee and the stubble keep this far
+ *  clear of its lowest point (an open mouth reaches lower than the gentle
+ *  smile: preview, 2026-10-24, the beard crossed the grin). */
+export const BELOW_MOUTH = 0.006;
+
+/** An edge's [angle, polar] points with its front (every point up to
+ *  `front` radians from straight ahead) moved down to at least `polar`. */
+function lowerFront(points, polar, front = 0.2) {
+    return points.map(([a, t]) => [a, a <= front ? Math.max(t, polar) : t]);
+}
+
+/** `mouthBottom` is the mouth's lowest point, below the head's middle. */
+function buildFacial(kind, c, color, mouthBottom = -SMILE.drop - SMILE.thickness) {
     const F = FACIAL_SIZE;
+    // The polar angle on a sphere of radius `r` just under the mouth.
+    const under = (r) => Math.acos(Math.max(-1, (mouthBottom - BELOW_MOUTH) / r));
+    const beard = (r) => ({ ...F.beard, top: lowerFront(F.beard.top, under(r)) });
     const group = new THREE.Group();
     group.name = 'facial';
     const solid = new THREE.MeshStandardMaterial({ color, roughness: 0.95, side: THREE.DoubleSide });
@@ -290,12 +530,12 @@ function buildFacial(kind, c, color) {
         const shadow = new THREE.MeshStandardMaterial({
             color, roughness: 1, transparent: true, opacity: F.stubble.opacity, depthWrite: false, side: THREE.DoubleSide
         });
-        group.add(band(c, F.stubble.r, F.beard, shadow));
+        group.add(band(c, F.stubble.r, beard(F.stubble.r), shadow));
         group.add(band(c, F.stubble.r, F.stubble.lip, shadow));
     } else {
         group.add(mustache());
-        if (kind === 'goatee') group.add(band(c, F.chin.r, F.chin, solid));
-        if (kind === 'beard') group.add(band(c, F.beard.r, F.beard, solid));
+        if (kind === 'goatee') group.add(band(c, F.chin.r, { ...F.chin, top: lowerFront(F.chin.top, under(F.chin.r), Infinity) }, solid));
+        if (kind === 'beard') group.add(band(c, F.beard.r, beard(F.beard.r), solid));
     }
     group.traverse((o) => {
         if (o.isMesh) o.castShadow = false;
@@ -467,31 +707,141 @@ function buildHat(kind, c, color, head, hair) {
 }
 
 /**
- * Sneakers, over the rig's block shoe: a white sole a little proud of the
- * upper all round (light gray under a white shoe, so it still reads), and a
- * lace panel on top toward the toe. Sized from each shoe's own box, so a
- * slender build's narrower shoe gets a narrower sole.
+ * Sneakers, over the rig's block shoe (Steve's QA, 2026-10-24: they looked
+ * the same as the classic shoe): a thick white sole a little proud of the
+ * upper all round, a white toe cap and heel, and white laces. Under a white
+ * shoe the white parts are a light gray, so they still read. Sized from each
+ * shoe's own box, so a slender build's narrower shoe gets a narrower sole.
  */
-export const SNEAKER_SIZE = Object.freeze({ sole: 0.02, proud: 0.004, toe: 0.006, soleColor: 0xf4f3ef, soleOnWhite: 0xc9c5bd, laceColor: 0xf4f3ef });
+export const SNEAKER_SIZE = Object.freeze({
+    sole: 0.024, proud: 0.005, toe: 0.009, cap: 0.032, capHeight: 0.036, heel: 0.03, heelHeight: 0.042,
+    trim: 0xf4f3ef, trimOnWhite: 0xc9c5bd
+});
+
+/** A box `size` [w, h, l] in `material`, its bottom at `y` and middle at `z`
+ *  in a leg's coordinates, named. */
+function block(size, y, z, material, name) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
+    m.position.set(0, y + size[1] / 2, z);
+    m.name = name;
+    m.castShadow = true;
+    return m;
+}
+
+/** Each block shoe, with its leg and its box's measures. */
+function blockShoes(person) {
+    const out = [];
+    for (const leg of person.children.filter((o) => o.userData.isLeg)) {
+        const parts = legParts(leg);
+        if (!parts.shoe || !parts.shoe.isMesh) continue;
+        const { width: w, height: h, depth: l } = parts.shoe.geometry.parameters;
+        out.push({ leg, ...parts, w, h, l, floor: parts.shoe.position.y - h / 2, z: parts.shoe.position.z });
+    }
+    return out;
+}
 
 function dressSneakers(person, whiteShoe) {
     const S = SNEAKER_SIZE;
-    const sole = new THREE.MeshStandardMaterial({ color: whiteShoe ? S.soleOnWhite : S.soleColor, roughness: 0.7 });
-    const lace = new THREE.MeshStandardMaterial({ color: S.laceColor, roughness: 0.8 });
-    const shoes = [];
-    person.traverse((o) => {
-        if (o.isMesh && o.userData.isShoe && o.geometry.type === 'BoxGeometry') shoes.push(o);
-    });
-    for (const shoe of shoes) {
-        const { width: w, height: h, depth: l } = shoe.geometry.parameters;
-        const s = new THREE.Mesh(new THREE.BoxGeometry(w + 2 * S.proud, S.sole, l + 2 * S.toe), sole);
-        s.position.set(shoe.position.x, shoe.position.y - h / 2 + S.sole / 2, shoe.position.z);
-        s.name = 'sole';
-        shoe.parent.add(s);
-        const laces = new THREE.Mesh(new THREE.BoxGeometry(w * 0.45, 0.004, l * 0.34), lace);
-        laces.position.set(shoe.position.x, shoe.position.y + h / 2 + 0.002, shoe.position.z + l * 0.1);
-        laces.name = 'laces';
-        shoe.parent.add(laces);
+    const trim = new THREE.MeshStandardMaterial({ color: whiteShoe ? S.trimOnWhite : S.trim, roughness: 0.7 });
+    const shoes = blockShoes(person);
+    for (const { leg, w, h, l, floor, z } of shoes) {
+        leg.add(block([w + 2 * S.proud, S.sole, l + 2 * S.toe], floor, z, trim, 'sole'));
+        leg.add(block([w + 0.003, S.capHeight, S.cap], floor, z + l / 2 - S.cap / 2 + 0.002, trim, 'toe-cap'));
+        leg.add(block([w + 0.004, S.heelHeight, S.heel], floor, z - l / 2 + S.heel / 2 - 0.002, trim, 'heel'));
+        leg.add(block([w * 0.45, 0.004, l * 0.3], floor + h, z + l * 0.08, trim, 'laces'));
+    }
+    return shoes.length;
+}
+
+/**
+ * The boots (Steve's QA, 2026-10-24), named by style. Each starts from the
+ * rig's block shoe and adds a shaft up the leg, drawn OVER the trouser leg:
+ * its radius at every height is the shin's (read from the rig's own
+ * cylinder) plus `over`, so it fits any build. `rise` is how far the shaft
+ * reaches above the shoe; the tall boot's reaches to just under the knee.
+ *
+ *   ankleBoots   to the ankle, with elastic side panels
+ *   workBoots    over the ankle, a chunky sole, laces and a padded collar
+ *   cowboyBoots  to mid-calf, a pointed toe, a heel, and a stitched band
+ *   tallBoots    slim, to just under the knee, with a low heel
+ */
+export const BOOT_SIZE = Object.freeze({
+    ankleBoots: { rise: 0.075, over: 0.006 },
+    workBoots: { rise: 0.095, over: 0.008, sole: 0.024, lace: 0xd8c9a8 },
+    cowboyBoots: { rise: 0.21, over: 0.005, flare: 0.005, toe: 0.05, heel: 0.034 },
+    tallBoots: { over: 0.005, belowKnee: 0.5, heel: 0.022 },
+    /** How much darker the sole and the trim are than the boot. */
+    shade: 0.5
+});
+
+/** A shaft round the shin from `y0` up to `y1` (a leg's coordinates),
+ *  `over` meters proud of it, its top widened by `flare`. */
+function shaft(shin, y0, y1, over, material, flare = 0) {
+    const { radiusTop, radiusBottom, height } = shin.geometry.parameters;
+    const low = shin.position.y - height / 2;
+    const rAt = (y) => radiusBottom + ((y - low) / height) * (radiusTop - radiusBottom);
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rAt(y1) + over + flare, rAt(y0) + over, y1 - y0, 16), material);
+    mesh.position.set(shin.position.x, (y0 + y1) / 2, shin.position.z);
+    mesh.name = 'shaft';
+    mesh.castShadow = true;
+    mesh.userData.over = over;
+    return mesh;
+}
+
+function dressBoots(person, kind, color) {
+    const B = BOOT_SIZE;
+    const spec = B[kind];
+    const leather = new THREE.MeshStandardMaterial({ color, roughness: 0.55 });
+    const dark = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(B.shade), roughness: 0.7 });
+    const shoes = blockShoes(person);
+    for (const { leg, shin, knee, w, h, l, floor, z } of shoes) {
+        const top = floor + h;
+        if (kind === 'tallBoots') {
+            const kneeR = knee.geometry.parameters.radius;
+            leg.add(shaft(shin, top - 0.004, knee.position.y - kneeR * spec.belowKnee, spec.over, leather));
+            leg.add(block([w + 0.004, spec.heel, 0.04], floor, z - l / 2 + 0.022, dark, 'heel'));
+            continue;
+        }
+        leg.add(shaft(shin, top - 0.004, top + spec.rise, spec.over, leather, spec.flare || 0));
+        if (kind === 'ankleBoots') {
+            const r = shin.geometry.parameters.radiusBottom + spec.over;
+            for (const s of [-1, 1]) {
+                const panel = block([0.004, spec.rise * 0.7, 0.028], top + spec.rise * 0.15, 0, dark, 'panel');
+                panel.position.x = s * (r + 0.001);
+                leg.add(panel);
+            }
+            leg.add(block([w + 0.004, 0.012, l + 0.006], floor, z, dark, 'sole'));
+        } else if (kind === 'workBoots') {
+            leg.add(block([w + 0.012, spec.sole, l + 0.014], floor, z, dark, 'sole'));
+            const lace = new THREE.MeshStandardMaterial({ color: spec.lace, roughness: 0.8 });
+            const r = shin.geometry.parameters.radiusBottom + spec.over;
+            for (let i = 0; i < 4; i++) {
+                leg.add(block([0.026, 0.004, 0.006], top + 0.012 + i * 0.022, r + 0.002, lace, 'lace'));
+            }
+            const collar = new THREE.Mesh(new THREE.TorusGeometry(r + 0.002, 0.007, 6, 16), dark);
+            collar.rotation.x = Math.PI / 2;
+            collar.position.y = top + spec.rise;
+            collar.name = 'collar';
+            leg.add(collar);
+        } else if (kind === 'cowboyBoots') {
+            // The pointed toe: a cone lying forward, its base the shoe's
+            // whole front face (round, flattened to the shoe's height), its
+            // point `toe` past it (preview, 2026-10-24: a rounded toe read as
+            // a bump).
+            const base = w / 2 + 0.002;
+            const toe = new THREE.Mesh(new THREE.ConeGeometry(base, spec.toe, 14), leather);
+            toe.rotation.x = Math.PI / 2;
+            // Flattened to exactly the shoe's height, so it stands on the floor.
+            toe.scale.z = h / 2 / base;
+            toe.position.set(0, floor + h / 2, z + l / 2 + spec.toe / 2 - 0.002);
+            toe.name = 'toe';
+            toe.castShadow = true;
+            leg.add(toe);
+            leg.add(block([w + 0.006, spec.heel, 0.05], floor, z - l / 2 + 0.027, dark, 'heel'));
+            const band = shaft(shin, top + spec.rise * 0.72, top + spec.rise * 0.8, spec.over + 0.0015, dark, spec.flare * 0.7);
+            band.name = 'band';
+            leg.add(band);
+        }
     }
     return shoes.length;
 }
@@ -548,28 +898,37 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     const a = withOverrides(normalizeAvatar(avatar), overrides);
     const person = createPerson({ ...personConfig(a), role, ...extra });
     const head = person.children.find((o) => o.userData.isHead);
-    person.add(buildSmile(head, lipsColor(optionOf(SKINS, a.skin).color)));
-
-    if (a.bottom === 'skirt') {
-        const skirt = person.children.find((o) => o.userData.isSkirt);
-        const k = 1 + SKIRT_FLARE * optionOf(BUILDS, a.build).hips;
-        skirt.scale.set(k, 1, k);
-    }
+    // The skin's own material, for bare legs and arms.
+    const skin = head.material;
+    if (a.bottom !== 'pants') dressLegs(person, a.bottom, skin);
+    if (a.sleeves === 'tank') dressTank(person, skin);
+    if (a.muscles === 'athletic') strengthenArms(person, ATHLETIC_ARMS);
+    if (a.bottom === 'skirt') fitSkirt(person, person.children.find((o) => o.userData.isSkirt));
 
     person.traverse((o) => {
-        if (o.isMesh && o.name !== 'smile') o.castShadow = true;
+        if (o.isMesh) o.castShadow = true;
     });
+
+    const lips = optionOf(LIP_COLORS, a.lips).color;
+    person.add(buildMouth(a.mouth, head, lips === null ? lipsColor(optionOf(SKINS, a.skin).color) : lips));
 
     // The pieces the rig has no option for (M5), after the shadows above:
     // none of them casts one (a hat's shadow would darken the whole face).
     const c = head.position;
     if (a.glasses !== 'none') person.add(buildGlasses(a.glasses, c));
-    if (a.facial !== 'none') person.add(buildFacial(a.facial, c, optionOf(HAIR_COLORS, a.hair).color));
+    if (a.facial !== 'none') {
+        let bottom = Infinity;
+        eachVertex([person.children.find((o) => o.name === 'mouth')], (v) => {
+            bottom = Math.min(bottom, v.y - c.y);
+        });
+        person.add(buildFacial(a.facial, c, optionOf(HAIR_COLORS, a.hair).color, bottom));
+    }
     if (a.hat !== 'none') {
         const hair = person.children.find((o) => o.userData.isHair);
         person.add(buildHat(a.hat, c, optionOf(SHIRTS, a.hatColor).color, head, hair));
     }
     if (a.shoes === 'sneakers') dressSneakers(person, a.shoeColor === 'white');
+    else if (BOOT_SIZE[a.shoes]) dressBoots(person, a.shoes, optionOf(SHOE_COLORS, a.shoeColor).color);
 
     const group = new THREE.Group();
     group.name = 'avatar';

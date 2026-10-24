@@ -40,6 +40,8 @@ function camera(aim, distance, turn, lift, fov, aspect) {
 const SHOTS = {
     face: { cell: [220, 220], aim: [0, 1.56, 0], distance: 0.95, fov: 26, lift: 0.03 },
     feet: { cell: [220, 160], aim: [0, 0.08, 0.04], distance: 0.9, fov: 26, lift: 0.35 },
+    legs: { cell: [180, 300], aim: [0, 0.4, 0], distance: 2.2, fov: 26, lift: 0.1 },
+    mouth: { cell: [200, 160], aim: [0, 1.5, 0], distance: 0.55, fov: 22, lift: 0.0 },
     body: { cell: [180, 300], aim: [0, 0.9, 0], distance: 4.2, fov: 28, lift: 0.1 }
 };
 const TURNS = [0, 0.75];
@@ -67,7 +69,7 @@ await mkdir(OUT, { recursive: true });
 const fair = { skin: 'fair', hair: 'darkBrown' };
 const deep = { skin: 'deep', hair: 'black' };
 await sheet('glasses', [
-    { ...fair }, { ...fair, glasses: 'round' }, { ...fair, glasses: 'square' }, { ...fair, glasses: 'sunglasses' },
+    { ...fair }, { ...fair, glasses: 'round' }, { ...fair, glasses: 'square' }, { ...fair, glasses: 'sunglasses' }, { ...fair, glasses: 'roundSun' },
     { ...deep, glasses: 'round', length: 'long' }, { ...deep, glasses: 'sunglasses', length: 'buzz' }
 ], 'face');
 await sheet('facial', [
@@ -78,10 +80,27 @@ for (const hat of ['beanie', 'cap', 'sunHat']) {
     await sheet(`hat-${hat}`, ['bald', 'buzz', 'short', 'long'].map((length) => ({ ...fair, length, hat, hatColor: 'navy' }))
         .concat([{ ...deep, length: 'long', hat, hatColor: 'mustard', glasses: 'sunglasses' }]), 'face');
 }
-await sheet('shoes', [
-    { shoes: 'classic' }, { shoes: 'sneakers' }, { shoes: 'sneakers', shoeColor: 'white' }, { shoes: 'sneakers', shoeColor: 'red', build: 'slim' },
-    { shoes: 'maryJane', shoeColor: 'brown', bottom: 'skirt' }
-], 'feet');
+await sheet('mouths', [
+    { ...fair }, { ...fair, mouth: 'bigSmile' }, { ...fair, mouth: 'grin' }, { ...fair, mouth: 'smirk' }, { ...fair, mouth: 'surprised' },
+    { ...deep, mouth: 'bigSmile', lips: 'berry' }, { skin: 'light', mouth: 'grin', lips: 'red' }, { ...fair, mouth: 'smile', lips: 'rose' }, { ...fair, mouth: 'smile', lips: 'softPink' }
+], 'mouth');
+await sheet('mouths-facial', [
+    { ...fair, mouth: 'bigSmile', facial: 'mustache' }, { ...fair, mouth: 'grin', facial: 'beard' }, { ...fair, mouth: 'surprised', facial: 'goatee' },
+    { ...deep, mouth: 'grin', facial: 'stubble' }, { ...fair, mouth: 'smirk', facial: 'beard' }
+], 'mouth');
+const SHOES = ['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots'];
+await sheet('shoes', SHOES.map((shoes) => ({ shoes, shoeColor: shoes === 'sneakers' ? 'navy' : 'brown' })), 'feet');
+await sheet('shoes-white-black', [{ shoes: 'sneakers', shoeColor: 'white' }, { shoes: 'sneakers', shoeColor: 'black' }, { shoes: 'classic', shoeColor: 'black' },
+    { shoes: 'workBoots', shoeColor: 'black' }, { shoes: 'cowboyBoots', shoeColor: 'red', build: 'curvy' }], 'feet');
+await sheet('boots-legs', [
+    { shoes: 'ankleBoots' }, { shoes: 'workBoots' }, { shoes: 'cowboyBoots', shoeColor: 'brown' }, { shoes: 'tallBoots', shoeColor: 'black' },
+    { shoes: 'tallBoots', shoeColor: 'brown', bottom: 'skirt', build: 'curvy' }, { shoes: 'cowboyBoots', bottom: 'shorts', muscles: 'buff' }
+], 'legs');
+await sheet('clothes', [
+    { sleeves: 'tank' }, { sleeves: 'tank', muscles: 'athletic' }, { sleeves: 'tank', muscles: 'buff', bottom: 'shorts' },
+    { bottom: 'shorts', sleeves: 'short' }, { bottom: 'skirt', build: 'curvy', sleeves: 'tank' }, { muscles: 'buff', bottom: 'skirt', build: 'curvy' },
+    { muscles: 'athletic', build: 'slim', bottom: 'shorts', shoes: 'sneakers' }
+], 'body');
 // The round portrait, through the portrait's own camera (the chip crops it
 // to a circle), one look a cell.
 {

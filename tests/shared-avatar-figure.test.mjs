@@ -41,12 +41,19 @@ afterAll(() => {
     delete globalThis.THREE;
 });
 
-/** Every mesh of a figure, as plain records in a stable order. */
+/** Is `o` inside a group named `name`? */
+function inside(o, name) {
+    for (let p = o; p; p = p.parent) if (p.name === name) return true;
+    return false;
+}
+
+/** Every mesh of a figure but its mouth, as plain records in a stable
+ *  order. */
 function meshes(root) {
     root.updateMatrixWorld(true);
     const out = [];
     root.traverse((o) => {
-        if (!o.isMesh) return;
+        if (!o.isMesh || inside(o, 'mouth')) return;
         const p = new THREE.Vector3();
         o.getWorldPosition(p);
         const round = (n) => Math.round(n * 1e5) / 1e5;
@@ -83,9 +90,9 @@ describe('the figure', () => {
     test('the default avatar is Leaf Blower\'s operator, mesh for mesh, with a smile', () => {
         const today = meshes(createPerson(leavesPerson(DEFAULT_CHOICE)));
         const avatar = F.createAvatar(A.DEFAULT_AVATAR, { role: 'operator' });
-        const drawn = meshes(avatar.group);
-        expect(drawn.filter((m) => m.name === 'smile')).toHaveLength(1);
-        expect(drawn.filter((m) => m.name !== 'smile')).toEqual(today);
+        expect(meshes(avatar.group)).toEqual(today);
+        const mouth = avatar.person.children.find((o) => o.name === 'mouth');
+        expect(mouth.children.map((m) => m.name)).toEqual(['lips']);
         avatar.dispose();
     });
 
@@ -97,14 +104,15 @@ describe('the figure', () => {
         ]) {
             const today = meshes(createPerson(leavesPerson(choice)));
             const avatar = F.createAvatar(A.fromCastChoice(choice), { role: 'operator' });
-            expect(meshes(avatar.group).filter((m) => m.name !== 'smile')).toEqual(today);
+            expect(meshes(avatar.group)).toEqual(today);
         }
     });
 
-    test('no leg comes through the skirt, on any build', () => {
+    test('no leg comes through the skirt, on any build, at any strength', () => {
         const v = new THREE.Vector3();
-        for (const build of A.BUILDS.map((b) => b.id)) {
-            const avatar = F.createAvatar({ build, bottom: 'skirt' });
+        for (const look of A.BUILDS.flatMap((b) => A.MUSCLES.map((m) => ({ build: b.id, muscles: m.id })))) {
+            const build = `${look.build}/${look.muscles}`;
+            const avatar = F.createAvatar({ ...look, bottom: 'skirt' });
             const person = avatar.person;
             person.updateMatrixWorld(true);
             const skirt = person.children.find((o) => o.userData.isSkirt);
@@ -131,18 +139,18 @@ describe('the figure', () => {
                     worst = Math.max(worst, Math.hypot(v.x, v.z) - rAt(v.y));
                 }
             });
-            // Inside the skirt, with at least half a centimeter to spare.
-            expect(`${build}: ${worst < -0.005}`).toBe(`${build}: true`);
+            // Inside the skirt, with the clearance to spare.
+            expect(`${build}: ${worst < -F.SKIRT_CLEARANCE + 1e-6}`).toBe(`${build}: true`);
             avatar.dispose();
         }
     });
 
-    test('without the flare, Curvy\'s legs would come through, so the test above can fail', () => {
-        const avatar = F.createAvatar({ build: 'curvy', bottom: 'skirt' });
-        const skirt = avatar.person.children.find((o) => o.userData.isSkirt);
-        expect(skirt.scale.x).toBeCloseTo(1 + F.SKIRT_FLARE, 6);
-        expect(F.createAvatar({ build: 'straight', bottom: 'skirt' }).person.children
-            .find((o) => o.userData.isSkirt).scale.x).toBe(1);
+    test('the skirt widens only for fuller legs (Curvy, Buff), so the test above can fail', () => {
+        const flare = (look) => F.createAvatar({ ...look, bottom: 'skirt' }).person.children.find((o) => o.userData.isSkirt).scale.x;
+        expect(flare({ build: 'straight' })).toBe(1);
+        expect(flare({ build: 'curvy' })).toBeGreaterThan(1.1);
+        expect(flare({ build: 'straight', muscles: 'buff' })).toBeGreaterThan(1.1);
+        expect(flare({ build: 'curvy', muscles: 'buff' })).toBeGreaterThan(flare({ build: 'curvy' }));
     });
 
     test('the smile sits on the front of the face, below the nose, in a rose of the skin', () => {
@@ -151,7 +159,7 @@ describe('the figure', () => {
             const person = avatar.person;
             person.updateMatrixWorld(true);
             const head = person.children.find((o) => o.userData.isHead);
-            const smile = person.children.find((o) => o.name === 'smile');
+            const smile = person.children.find((o) => o.name === 'mouth').children.find((m) => m.name === 'lips');
             const box = new THREE.Box3().setFromObject(smile);
             const c = new THREE.Vector3();
             box.getCenter(c);
@@ -395,7 +403,7 @@ describe('the pieces (M5), measured', () => {
     };
 
     test('glasses sit in front of the eyes, over the nose, with no arm inside the head', () => {
-        for (const kind of ['round', 'square', 'sunglasses']) {
+        for (const kind of ['round', 'square', 'sunglasses', 'roundSun']) {
             const avatar = F.createAvatar({ glasses: kind });
             const person = avatar.person;
             const glasses = person.children.find((o) => o.name === 'glasses');
@@ -422,33 +430,42 @@ describe('the pieces (M5), measured', () => {
         const sun = F.createAvatar({ glasses: 'sunglasses' });
         const pupil = sun.person.children.find((o) => o.userData.isPupil);
         expect(firstFromFront(sun.person, pupil.position.x, pupil.position.y).name).toBe('lens');
+        const roundSun = F.createAvatar({ glasses: 'roundSun' });
+        expect(firstFromFront(roundSun.person, pupil.position.x, pupil.position.y).name).toBe('lens');
+        // Round sunglasses are round: a ring of many sides, not four.
+        const ring = roundSun.person.children.find((o) => o.name === 'glasses').children.find((o) => o.geometry.type === 'TorusGeometry');
+        expect(ring.geometry.parameters.tubularSegments).toBeGreaterThan(8);
         const clear = F.createAvatar({ glasses: 'round' });
         expect(firstFromFront(clear.person, pupil.position.x, pupil.position.y).userData.isPupil).toBe(true);
     });
 
-    test('no facial hair covers the smile, and each sits on the face', () => {
-        // The points of the lips seen from the front with no facial hair (the
-        // smile is sunk a little into the face, so its back is hidden).
-        const bare = F.createAvatar({});
-        const lips = vertices(bare.person, bare.person.children.find((o) => o.name === 'smile'))
-            .filter((p) => firstFromFront(bare.person, p.x, p.y).name === 'smile');
-        expect(lips.length).toBeGreaterThan(20);
-        for (const kind of ['stubble', 'mustache', 'goatee', 'beard']) {
-            for (const length of ['short', 'long']) {
-                const avatar = F.createAvatar({ facial: kind, length });
-                const person = avatar.person;
-                // Every one of them is still the first thing met (stubble is
-                // see-through, but it is held to the same rule).
-                for (const p of lips) {
-                    const hit = firstFromFront(person, p.x, p.y);
-                    expect(`${kind}/${length} at ${p.x.toFixed(3)},${p.y.toFixed(3)}: ${hit && hit.name}`).toBe(`${kind}/${length} at ${p.x.toFixed(3)},${p.y.toFixed(3)}: smile`);
+    test('no facial hair covers any mouth, and each sits on the face', () => {
+        for (const mouth of A.MOUTHS.map((m) => m.id)) {
+            // The points of the mouth seen from the front with no facial hair
+            // (the gentle smile is sunk a little into the face, so its back
+            // is hidden).
+            const bare = F.createAvatar({ mouth });
+            const seen = vertices(bare.person, bare.person.children.find((o) => o.name === 'mouth'))
+                .filter((p) => inside(firstFromFront(bare.person, p.x, p.y), 'mouth'));
+            expect(seen.length).toBeGreaterThan(20);
+            for (const kind of ['stubble', 'mustache', 'goatee', 'beard']) {
+                for (const length of ['short', 'long']) {
+                    const avatar = F.createAvatar({ mouth, facial: kind, length });
+                    const person = avatar.person;
+                    // Every one of them is still the first thing met (stubble
+                    // is see-through, but it is held to the same rule).
+                    for (const p of seen) {
+                        const hit = firstFromFront(person, p.x, p.y);
+                        expect(`${mouth} with ${kind}/${length} at ${p.x.toFixed(3)},${p.y.toFixed(3)}: ${inside(hit, 'mouth')}`)
+                            .toBe(`${mouth} with ${kind}/${length} at ${p.x.toFixed(3)},${p.y.toFixed(3)}: true`);
+                    }
+                    // On the face: none of it inside the head, none far off it.
+                    const facial = person.children.find((o) => o.name === 'facial');
+                    const d = vertices(person, facial).map((p) => p.distanceTo(HEAD()));
+                    expect(Math.min(...d)).toBeGreaterThan(0.108);
+                    expect(Math.max(...d)).toBeLessThan(0.14);
+                    avatar.dispose();
                 }
-                // On the face: none of it inside the head, none far off it.
-                const facial = person.children.find((o) => o.name === 'facial');
-                const d = vertices(person, facial).map((p) => p.distanceTo(HEAD()));
-                expect(Math.min(...d)).toBeGreaterThan(0.108);
-                expect(Math.max(...d)).toBeLessThan(0.14);
-                avatar.dispose();
             }
         }
         // The mustache shows from the front, just under the nose.
@@ -552,6 +569,13 @@ describe('the pieces (M5), measured', () => {
             });
             expect(shoes).toHaveLength(2);
             expect(soles).toHaveLength(2);
+            // A white toe cap and heel too, so they never read as the
+            // classic shoe (Steve's QA, 2026-10-24).
+            for (const part of ['toe-cap', 'heel', 'laces']) {
+                let n = 0;
+                person.traverse((o) => { if (o.name === part) n++; });
+                expect(`${part}: ${n}`).toBe(`${part}: 2`);
+            }
             for (const shoe of shoes) {
                 const sb = new THREE.Box3().setFromObject(shoe);
                 const sole = soles.find((s) => s.parent === shoe.parent);
@@ -560,7 +584,7 @@ describe('the pieces (M5), measured', () => {
                 expect(b.min.x).toBeLessThan(sb.min.x);
                 expect(b.max.x).toBeGreaterThan(sb.max.x);
                 expect(b.max.z).toBeGreaterThan(sb.max.z);
-                expect(sole.material.color.getHex()).toBe(new THREE.Color(color === 'white' ? F.SNEAKER_SIZE.soleOnWhite : F.SNEAKER_SIZE.soleColor).getHex());
+                expect(sole.material.color.getHex()).toBe(new THREE.Color(color === 'white' ? F.SNEAKER_SIZE.trimOnWhite : F.SNEAKER_SIZE.trim).getHex());
             }
             avatar.dispose();
         }
@@ -579,6 +603,196 @@ describe('the pieces (M5), measured', () => {
                 if (m.isMesh) expect(`${name}: ${m.castShadow}`).toBe(`${name}: false`);
             });
         }
+    });
+});
+
+describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () => {
+    const HEAD = () => new THREE.Vector3(0, 1.5, 0);
+    const meshesOf = (o) => {
+        const out = [];
+        o.traverse((m) => { if (m.isMesh) out.push(m); });
+        return out;
+    };
+    /** Every vertex of `object`, in the person's coordinates. */
+    function points(person, object) {
+        person.updateMatrixWorld(true);
+        const inv = person.matrixWorld.clone().invert();
+        const out = [];
+        for (const m of meshesOf(object)) {
+            const pos = m.geometry.attributes.position;
+            for (let i = 0; i < pos.count; i++) out.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).applyMatrix4(inv));
+        }
+        return out;
+    }
+
+    test('every mouth sits on the face, below the nose, and the open ones lie on the head, not off it', () => {
+        for (const mouth of A.MOUTHS.map((m) => m.id)) {
+            const avatar = F.createAvatar({ mouth });
+            const group = avatar.person.children.find((o) => o.name === 'mouth');
+            const pts = points(avatar.person, group);
+            const d = pts.map((p) => p.distanceTo(HEAD()));
+            // Within a few millimeters of the 0.12 m head's surface.
+            expect(`${mouth}: ${Math.min(...d) > 0.105 && Math.max(...d) < 0.13}`).toBe(`${mouth}: true`);
+            // Below the nose (its base 0.025 under the head's middle), above the chin.
+            expect(Math.max(...pts.map((p) => p.y))).toBeLessThan(1.5 - 0.035);
+            expect(Math.min(...pts.map((p) => p.y))).toBeGreaterThan(1.5 - 0.085);
+            expect(Math.max(...pts.map((p) => Math.abs(p.x)))).toBeLessThan(0.036);
+        }
+        // An open mouth is wrapped onto the sphere: its flat layers lie
+        // within a millimeter or two of the surface, corners and all.
+        for (const mouth of ['bigSmile', 'grin']) {
+            const avatar = F.createAvatar({ mouth });
+            for (const m of meshesOf(avatar.person.children.find((o) => o.name === 'mouth'))) {
+                const d = points(avatar.person, m).map((p) => p.distanceTo(HEAD()));
+                expect(`${mouth} ${m.name}: ${Math.max(...d) - Math.min(...d) < 0.0005}`).toBe(`${mouth} ${m.name}: true`);
+            }
+        }
+    });
+
+    test('the open mouths show their teeth, framed by the lips, with the dark inside behind', () => {
+        for (const [mouth, rows] of [['bigSmile', 1], ['grin', 2]]) {
+            const group = F.createAvatar({ mouth }).person.children.find((o) => o.name === 'mouth');
+            expect(group.children.filter((m) => m.name === 'teeth')).toHaveLength(rows);
+            expect(group.children.filter((m) => m.name === 'inside')).toHaveLength(1);
+            expect(group.children.filter((m) => m.name === 'lips')).toHaveLength(1);
+            const radius = (name) => group.children.find((m) => m.name === name).geometry.attributes.position;
+            const dist = (name) => {
+                const pos = radius(name);
+                return new THREE.Vector3().fromBufferAttribute(pos, 0).distanceTo(HEAD());
+            };
+            // Layered outward: the inside, then the teeth, then the lips.
+            expect(dist('inside')).toBeLessThan(dist('teeth'));
+            expect(dist('teeth')).toBeLessThan(dist('lips'));
+        }
+        // The gentle smile, the smirk and the "o" show no teeth.
+        for (const mouth of ['smile', 'smirk', 'surprised']) {
+            const group = F.createAvatar({ mouth }).person.children.find((o) => o.name === 'mouth');
+            expect(group.children.filter((m) => m.name === 'teeth')).toHaveLength(0);
+        }
+        // The smirk is the smile with one corner up.
+        const smile = F.createAvatar({}).person.children.find((o) => o.name === 'mouth').children[0];
+        const smirk = F.createAvatar({ mouth: 'smirk' }).person.children.find((o) => o.name === 'mouth').children[0];
+        expect(smirk.rotation.z - smile.rotation.z).toBeCloseTo(F.MOUTH_SIZE.smirk.turn, 9);
+    });
+
+    test('lips are the skin\'s own rose, or the color chosen, on every mouth', () => {
+        for (const mouth of A.MOUTHS.map((m) => m.id)) {
+            for (const lips of A.LIP_COLORS) {
+                const avatar = F.createAvatar({ mouth, lips: lips.id, skin: 'tan' });
+                const ring = avatar.person.children.find((o) => o.name === 'mouth').children.find((m) => m.name === 'lips');
+                const want = lips.color === null ? F.lipsColor(A.optionOf(A.SKINS, 'tan').color) : lips.color;
+                expect(`${mouth}/${lips.id}: ${ring.material.color.getHex()}`).toBe(`${mouth}/${lips.id}: ${new THREE.Color(want).getHex()}`);
+            }
+        }
+    });
+
+    /** A leg's thigh, knee and shin, as the figure built them. */
+    function leg(avatar) {
+        const l = avatar.person.children.find((o) => o.userData.isLeg);
+        const cyl = l.children.filter((m) => m.isMesh && m.geometry.type === 'CylinderGeometry' && m.name !== 'hem').sort((a, b) => b.position.y - a.position.y);
+        return { group: l, thigh: cyl[0], shin: cyl[1], knee: l.children.find((m) => m.isMesh && m.geometry.type === 'SphereGeometry') };
+    }
+    const skinOf = (avatar) => avatar.person.children.find((o) => o.userData.isHead).material;
+
+    test('bare legs under a skirt, bare from the knee in shorts, and trousers in pants', () => {
+        const skirt = F.createAvatar({ bottom: 'skirt' });
+        const s = leg(skirt);
+        for (const part of ['thigh', 'knee', 'shin']) expect(`skirt ${part}: ${s[part].material === skinOf(skirt)}`).toBe(`skirt ${part}: true`);
+        const shorts = F.createAvatar({ bottom: 'shorts', bottomColor: 'khaki' });
+        const h = leg(shorts);
+        expect(h.knee.material).toBe(skinOf(shorts));
+        expect(h.shin.material).toBe(skinOf(shorts));
+        expect(h.thigh.material.color.getHex()).toBe(new THREE.Color(A.optionOf(A.PANTS, 'khaki').color).getHex());
+        // The hem: at the bottom of the thigh, a little wider than it.
+        const hem = h.group.children.find((m) => m.name === 'hem');
+        expect(hem.material).toBe(h.thigh.material);
+        expect(hem.geometry.parameters.radiusTop).toBeGreaterThan(h.thigh.geometry.parameters.radiusBottom);
+        expect(Math.abs(hem.position.y - (h.thigh.position.y - h.thigh.geometry.parameters.height / 2))).toBeLessThan(0.02);
+        const pants = F.createAvatar({});
+        for (const part of ['thigh', 'knee', 'shin']) expect(leg(pants)[part].material).not.toBe(skinOf(pants));
+        expect(leg(pants).group.children.find((m) => m.name === 'hem')).toBeUndefined();
+    });
+
+    test('a tank top bares the shoulders and the upper arms, and has no collar', () => {
+        const tank = F.createAvatar({ sleeves: 'tank', shirt: 'teal' });
+        for (const m of tank.arms.right.children.filter((o) => o.isMesh)) expect(m.material).toBe(skinOf(tank));
+        const fore = tank.arms.right.userData.forearm.children[1];
+        expect(fore.material.color.getHex()).toBe(skinOf(tank).color.getHex());
+        const collar = tank.person.children.find((o) => o.isMesh && o.geometry.type === 'TorusGeometry');
+        expect(collar.visible).toBe(false);
+        const tee = F.createAvatar({ sleeves: 'short' });
+        expect(tee.arms.right.children.filter((o) => o.isMesh).every((m) => m.material !== skinOf(tee))).toBe(true);
+        expect(tee.person.children.find((o) => o.isMesh && o.geometry.type === 'TorusGeometry').visible).toBe(true);
+    });
+
+    test('athletic arms are thicker and grow outward, not into the body; buff is the rig\'s muscular build', () => {
+        const width = (avatar) => {
+            const upper = avatar.arms.right.children.find((m) => m.isMesh && m.geometry.type === 'CylinderGeometry');
+            return upper.geometry.parameters.radiusTop * upper.scale.x;
+        };
+        const inner = (avatar) => {
+            // The arm's nearest point to the body's middle, at rest.
+            const pts = points(avatar.person, avatar.arms.right).filter((p) => p.y > 1.0);
+            return Math.min(...pts.map((p) => Math.abs(p.x)));
+        };
+        const standard = F.createAvatar({});
+        const athletic = F.createAvatar({ muscles: 'athletic' });
+        expect(width(athletic) / width(standard)).toBeCloseTo(F.ATHLETIC_ARMS, 6);
+        expect(Math.abs(inner(athletic) - inner(standard))).toBeLessThan(0.006);
+        // The hands stay the hands the rig made.
+        const hand = (a) => a.arms.right.userData.forearm.children[2].scale.x;
+        expect(hand(athletic)).toBe(hand(standard));
+        const buff = F.createAvatar({ muscles: 'buff' });
+        const torso = (a) => new THREE.Box3().setFromObject(a.person.children.find((o) => o.isMesh && o.geometry.type === 'ExtrudeGeometry'));
+        expect(torso(buff).max.x).toBeGreaterThan(torso(standard).max.x * 1.2);
+        expect(width(buff)).toBeGreaterThan(width(athletic));
+    });
+
+    test('every boot is drawn over the leg at every height, stands on the floor, and the tall ones stop under the knee', () => {
+        for (const shoes of ['ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots']) {
+            for (const look of [{ build: 'straight' }, { build: 'curvy', bottom: 'skirt' }, { muscles: 'buff', bottom: 'shorts' }]) {
+                const avatar = F.createAvatar({ shoes, ...look });
+                const { group, shin, knee } = leg(avatar);
+                const shafts = group.children.filter((m) => m.name === 'shaft');
+                expect(`${shoes}: ${shafts.length}`).toBe(`${shoes}: 1`);
+                const s = shafts[0];
+                // At each height the shaft spans, it is wider than the shin
+                // there (read from both cylinders' own geometry).
+                const cyl = (m, y) => {
+                    const { radiusTop, radiusBottom, height } = m.geometry.parameters;
+                    return radiusBottom + ((y - (m.position.y - height / 2)) / height) * (radiusTop - radiusBottom);
+                };
+                const lo = s.position.y - s.geometry.parameters.height / 2;
+                const hi = s.position.y + s.geometry.parameters.height / 2;
+                for (let y = lo; y <= hi; y += 0.01) {
+                    const shinLo = shin.position.y - shin.geometry.parameters.height / 2;
+                    if (y < shinLo) continue;
+                    expect(`${shoes} at ${y.toFixed(2)}: ${cyl(s, y) > cyl(shin, y) + 0.003}`).toBe(`${shoes} at ${y.toFixed(2)}: true`);
+                }
+                // On the floor: nothing of the boot below the shoe's sole.
+                const shoe = group.children.find((m) => m.userData.isShoe);
+                const floor = new THREE.Box3().setFromObject(shoe).min.y;
+                for (const m of group.children.filter((o) => o.isMesh && !o.userData.isShoe && o !== shin && o !== knee && o.position.y < -0.6)) {
+                    expect(new THREE.Box3().setFromObject(m).min.y).toBeGreaterThan(floor - 1e-6);
+                }
+                if (shoes === 'tallBoots') {
+                    const kneeBottom = knee.position.y - knee.geometry.parameters.radius;
+                    expect(hi).toBeLessThan(knee.position.y);
+                    expect(hi).toBeGreaterThan(kneeBottom - 0.05);
+                }
+                avatar.dispose();
+            }
+        }
+        // The cowboy boot's toe comes to a point past the shoe's front.
+        const cowboy = F.createAvatar({ shoes: 'cowboyBoots' });
+        const { group } = leg(cowboy);
+        const shoe = group.children.find((m) => m.userData.isShoe);
+        const toe = group.children.find((m) => m.name === 'toe');
+        expect(new THREE.Box3().setFromObject(toe).max.z).toBeGreaterThan(new THREE.Box3().setFromObject(shoe).max.z + 0.03);
+        // Mary janes get no shaft: boots are drawn over the block shoe only.
+        let shafts = 0;
+        F.createAvatar({ shoes: 'maryJane' }).person.traverse((o) => { if (o.name === 'shaft') shafts++; });
+        expect(shafts).toBe(0);
     });
 });
 

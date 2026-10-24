@@ -76,7 +76,7 @@ afterEach(() => {
 describe('the lists', () => {
     test('every field has a list, each id is unique in it, and the default names a real option of each', () => {
         expect(FIELD_KEYS).toEqual(['skin', 'eyes', 'hair', 'length', 'facial', 'glasses', 'build', 'shirt',
-            'sleeves', 'bottom', 'bottomColor', 'shoes', 'shoeColor', 'hat', 'hatColor']);
+            'sleeves', 'bottom', 'bottomColor', 'shoes', 'shoeColor', 'hat', 'hatColor', 'mouth', 'lips', 'muscles']);
         for (const [key, list] of A.FIELDS) {
             const ids = list.map((o) => o.id);
             expect(`${key}: ${new Set(ids).size}`).toBe(`${key}: ${ids.length}`);
@@ -99,9 +99,19 @@ describe('the lists', () => {
         expect(A.listOf('bottomColor')).toBe(PANTS);
         expect(A.EYES.map((o) => o.label)).toEqual(['Dark brown', 'Brown', 'Hazel', 'Green', 'Blue', 'Gray']);
         expect(A.FACIAL.map((o) => o.id)).toEqual(['none', 'stubble', 'mustache', 'goatee', 'beard']);
-        expect(A.GLASSES.map((o) => o.id)).toEqual(['none', 'round', 'square', 'sunglasses']);
+        expect(A.GLASSES.map((o) => o.id)).toEqual(['none', 'round', 'square', 'sunglasses', 'roundSun']);
+        expect(A.MOUTHS.map((o) => o.id)).toEqual(['smile', 'bigSmile', 'grin', 'smirk', 'surprised']);
+        expect(A.LIP_COLORS.map((o) => o.id)).toEqual(['natural', 'rose', 'red', 'berry', 'softPink']);
+        expect(A.MUSCLES.map((o) => o.label)).toEqual(['Standard', 'Athletic', 'Buff']);
+        expect(A.SLEEVES.map((o) => o.id)).toEqual(['long', 'short', 'tank']);
+        expect(A.BOTTOMS.map((o) => o.id)).toEqual(['pants', 'skirt', 'shorts']);
+        // Natural lips have no color of their own (they are the skin's), only
+        // a swatch to show; every other lip color has one.
+        for (const o of A.LIP_COLORS) expect(o.id === 'natural' ? o.color === null && o.swatch > 0 : o.color > 0).toBe(true);
         expect(A.BUILDS.map((o) => o.label)).toEqual(['Straight', 'Slim', 'Curvy']);
-        expect(A.SHOES.map((o) => o.id)).toEqual(['classic', 'sneakers', 'maryJane']);
+        expect(A.SHOES.map((o) => o.id)).toEqual(['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots']);
+        // Named by style, never by who wears them (Steve, 2026-10-24).
+        for (const o of A.SHOES) expect(o.label).not.toMatch(/\b(men|women|man|woman|boy|girl|lady|ladies)/i);
         expect(A.SHOE_COLORS.map((o) => o.id)).toEqual(['black', 'brown', 'white', 'navy', 'red']);
         expect(A.HATS.map((o) => o.id)).toEqual(['none', 'cap', 'beanie', 'sunHat']);
     });
@@ -132,7 +142,8 @@ describe('normalizeAvatar takes anything', () => {
         expect(a).toEqual({
             v: 1, skin: 'deep', eyes: 'darkBrown', hair: 'darkBrown', length: 'short', facial: 'none',
             glasses: 'round', build: 'curvy', shirt: 'rust', sleeves: 'short', bottom: 'skirt',
-            bottomColor: 'denim', shoes: 'sneakers', shoeColor: 'black', hat: 'beanie', hatColor: 'mustard'
+            bottomColor: 'denim', shoes: 'sneakers', shoeColor: 'black', hat: 'beanie', hatColor: 'mustard',
+            mouth: 'smile', lips: 'natural', muscles: 'standard'
         });
         // No free text survives, whatever it was called.
         expect(a.name).toBeUndefined();
@@ -190,6 +201,11 @@ describe('the createPerson settings', () => {
         expect(A.personConfig({ build: 'curvy' })).toMatchObject({ hips: 1, waist: 0.2, slender: 1, shoulderRound: 0.45 });
         expect(A.personConfig({ shoes: 'maryJane', shoeColor: 'red' })).toMatchObject({ shoeStyle: 'maryJane', shoeColor: 0x9c2b25 });
         expect(A.personConfig({ shoes: 'sneakers' }).shoeStyle).toBe('block');
+        for (const boots of ['ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots']) expect(A.personConfig({ shoes: boots }).shoeStyle).toBe('block');
+        expect(A.personConfig({ muscles: 'buff' }).muscular).toBe(true);
+        expect(A.personConfig({ muscles: 'athletic' }).muscular).toBe(false);
+        expect(A.personConfig({ sleeves: 'tank' }).sleeveColor).toBeNull();
+        expect(A.personConfig({ bottom: 'shorts' }).hasSkirt).toBe(false);
         // An override is an avatar field, laid over first.
         expect(A.personConfig({ sleeves: 'short' }, { sleeves: 'long' }).sleeveColor).not.toBeNull();
     });
@@ -227,14 +243,17 @@ describe('the createPerson settings', () => {
 
 describe('the figure in words', () => {
     test('the default reads as one plain sentence', () => {
-        expect(A.describeAvatar(null)).toBe('A figure with fair skin, dark brown eyes and short dark brown hair, '
+        expect(A.describeAvatar(null)).toBe('A figure with fair skin, dark brown eyes, a gentle smile and short dark brown hair, '
             + 'a straight build, a rust red shirt with long sleeves, navy pants, and classic black shoes.');
     });
 
     test('every piece is said the way a person would say it', () => {
         expect(A.describeAvatar({ length: 'bald', facial: 'stubble', glasses: 'sunglasses', bottom: 'skirt', bottomColor: 'khaki', shoes: 'maryJane', shoeColor: 'red', hat: 'beanie', hatColor: 'teal', sleeves: 'short' }))
-            .toBe('A figure with fair skin, dark brown eyes, no hair, stubble and sunglasses, a straight build, '
+            .toBe('A figure with fair skin, dark brown eyes, a gentle smile, no hair, stubble and sunglasses, a straight build, '
                 + 'a rust red shirt with short sleeves, a khaki skirt, red mary janes, and a teal beanie.');
+        expect(A.describeAvatar({ mouth: 'grin', lips: 'berry', glasses: 'roundSun', muscles: 'buff', sleeves: 'tank', bottom: 'shorts', shoes: 'cowboyBoots', shoeColor: 'brown' }))
+            .toBe('A figure with fair skin, dark brown eyes, a grin and berry lips, short dark brown hair and round sunglasses, '
+                + 'a buff, straight build, a rust red tank top, navy shorts, and brown cowboy boots.');
         expect(A.describeAvatar({ facial: 'beard', glasses: 'round', shoes: 'sneakers', shoeColor: 'white', length: 'buzz' }))
             .toMatch(/buzzed dark brown hair, a full beard and round glasses, .* white sneakers\.$/);
     });
@@ -252,7 +271,13 @@ describe('the figure in words', () => {
 describe('the link', () => {
     test('the default\'s link is pinned, so the field order can never move under a link already sent', () => {
         expect(A.encodeLink(A.DEFAULT_AVATAR))
-            .toBe('a=1.fair.darkBrown.darkBrown.short.none.none.straight.rust.long.pants.navy.classic.black.none.navy');
+            .toBe('a=1.fair.darkBrown.darkBrown.short.none.none.straight.rust.long.pants.navy.classic.black.none.navy.smile.natural.standard');
+        // A link made before the mouth and the muscles (2026-10-23) still
+        // opens, its new fields at their defaults.
+        expect(A.decodeLink('#a=1.deep.blue.gray.long.beard.round.curvy.teal.short.skirt.khaki.maryJane.red.cap.mustard'))
+            .toEqual({ v: 1, skin: 'deep', eyes: 'blue', hair: 'gray', length: 'long', facial: 'beard', glasses: 'round', build: 'curvy',
+                shirt: 'teal', sleeves: 'short', bottom: 'skirt', bottomColor: 'khaki', shoes: 'maryJane', shoeColor: 'red', hat: 'cap',
+                hatColor: 'mustard', mouth: 'smile', lips: 'natural', muscles: 'standard' });
         expect(A.linkUrl(A.DEFAULT_AVATAR, 'https://www.scenexp.com/'))
             .toBe(`https://www.scenexp.com/avatar/#${A.encodeLink(A.DEFAULT_AVATAR)}`);
         expect(A.linkUrl(null, '')).toBe(`/avatar/#${A.encodeLink(null)}`);
