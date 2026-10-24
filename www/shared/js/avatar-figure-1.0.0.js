@@ -56,8 +56,9 @@ export { HAT_SIZE, trimUnder, HAIR_DRAWN };
  * (2026-10-24): the face (brows on every face, eyes, noses, cheeks, shape).
  * 6 (2026-10-24): a smoother head, solid beards.
  * 7 (2026-10-24): the hair styles (avatar-hair) and the hats (avatar-hats).
+ * 8 (2026-10-24): the hair's solids turned right side out, and the parts.
  */
-export const RENDER_VERSION = 7;
+export const RENDER_VERSION = 8;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named
@@ -1032,7 +1033,7 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     const c = head.position;
     const skinColor = colorOf('skin', a.skin);
     const hairColor = colorOf('hair', a.hair);
-    if (ownHair) face.add(buildHair(a.length, hairColor));
+    if (ownHair) face.add(buildHair(a.length, hairColor, { skin: skinColor }));
     shapeEyes(face, a.eyeShape, skin);
     shapeNose(face, a.nose, skin);
     face.add(buildBrows(a.brows, hairColor, a.mouth === 'surprised'));

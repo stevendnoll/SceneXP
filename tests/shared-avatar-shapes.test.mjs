@@ -50,9 +50,69 @@ test('a solid grid is closed, flat or wrapped round or meeting at a crown', () =
     expect(S.openEdges(open)).toBeGreaterThan(0);
 });
 
-test('a tapered tube is closed at both ends and thins as asked', () => {
+test('every triangle of a solid grid faces out of it, whichever way the grid runs', () => {
+    // The same cap built with its columns running the other way round, and
+    // its rows the other way up: the same solid either way.
+    const cap = (turn, down) => S.solidGrid(24, 6, (i, j, side) => S.onSphere(1 + side * 0.1, turn * (-Math.PI + (2 * Math.PI * i) / 24), (down ? j / 6 : 1 - j / 6) * 1.2), { wrap: true, pole: down });
+    expect(S.facesOutward(cap(1, true))).toBe(true);
+    expect(S.facesOutward(cap(-1, true))).toBe(true);
+    expect(S.facesOutward(cap(1, false))).toBe(true);
+    const slab = (flip) => S.solidGrid(6, 3, (i, j, side) => [i / 3, (flip ? -1 : 1) * j / 3, side * 0.1]);
+    expect(S.facesOutward(slab(false))).toBe(true);
+    expect(S.facesOutward(slab(true))).toBe(true);
+    // The check can fail: a solid turned inside out (every triangle flipped),
+    // and one whose walls run against its surfaces (the 2026-10-24 defect).
+    const inside = slab(false);
+    const index = Array.from(inside.index.array);
+    for (let k = 0; k < index.length; k += 3) [index[k + 1], index[k + 2]] = [index[k + 2], index[k + 1]];
+    inside.setIndex(index);
+    expect(S.openEdges(inside)).toBe(0);
+    expect(S.facesOutward(inside)).toBe(false);
+    const walls = slab(false);
+    const w = Array.from(walls.index.array);
+    const start = walls.groups[2].start;
+    for (let k = start; k < w.length; k += 3) [w[k + 1], w[k + 2]] = [w[k + 2], w[k + 1]];
+    walls.setIndex(w);
+    expect(S.openEdges(walls)).toBe(0);
+    expect(S.facesOutward(walls)).toBe(false);
+    // three's own closed shapes pass it, and its vertex normals follow the
+    // winding, so they point out of the solid too.
+    expect(S.facesOutward(new THREE.SphereGeometry(1, 16, 12))).toBe(true);
+    expect(S.facesOutward(new THREE.BoxGeometry(1, 1, 1))).toBe(true);
+    const shell = cap(1, true);
+    const pos = shell.attributes.position;
+    const nrm = shell.attributes.normal;
+    const outer = shell.groups[0];
+    let inward = 0;
+    for (let k = outer.start; k < outer.start + outer.count; k++) {
+        const i = shell.index.getX(k);
+        const p = new THREE.Vector3().fromBufferAttribute(pos, i);
+        if (new THREE.Vector3().fromBufferAttribute(nrm, i).dot(p) < 0) inward++;
+    }
+    expect(inward).toBe(0);
+});
+
+test('a wrapped grid\'s seam and its crown share one normal, so no crease runs down the back', () => {
+    const cap = S.solidGrid(24, 6, (i, j, side) => S.onSphere(1 + side * 0.1, -Math.PI + (2 * Math.PI * i) / 24, (j / 6) * 1.2), { wrap: true, pole: true });
+    const n = cap.attributes.normal;
+    const at = (i) => new THREE.Vector3().fromBufferAttribute(n, i);
+    // Column 0 and column 24 of the outer surface lie in the same place.
+    for (let j = 1; j <= 6; j++) expect(at(j).distanceTo(at(24 * 7 + j))).toBeLessThan(1e-6);
+    // Every crown vertex: straight up, and none of them left with no normal.
+    for (let i = 0; i <= 24; i++) {
+        expect(at(i * 7).y).toBeGreaterThan(0.99);
+        expect(at(7 * 25 + i * 7).y).toBeLessThan(-0.99);
+    }
+    // And the normal at the seam is the average of both sides, not one of
+    // them: it points nearly straight back (-z; the quads' diagonals lean
+    // it a hair), where a one-sided normal leans several degrees.
+    expect(Math.abs(at(3).x)).toBeLessThan(0.01);
+});
+
+test('a tapered tube is closed at both ends, faces outward, and thins as asked', () => {
     const tube = S.taperTube([[0, 0, 0], [0, -0.1, 0.02], [0, -0.2, 0]], (s) => 0.02 * (1 - s) + 0.002, { segments: 16, radial: 8 });
     expect(S.openEdges(tube)).toBe(0);
+    expect(S.facesOutward(tube)).toBe(true);
     tube.computeBoundingBox();
     expect(tube.boundingBox.min.y).toBeCloseTo(-0.2, 2);
     // Wider at its start than at its end.

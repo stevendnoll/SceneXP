@@ -55,7 +55,11 @@ export const HAIR_LENGTHS = Object.freeze([
     { id: 'spaceBuns', label: 'Space buns' },
     { id: 'braids', label: 'Braids' },
     { id: 'locs', label: 'Locs' },
-    { id: 'cornrows', label: 'Cornrows' }
+    { id: 'cornrows', label: 'Cornrows' },
+    // Parted (Steve's QA round 5, 2026-10-24): the wearer's left or right.
+    { id: 'leftPart', label: 'Left part' },
+    { id: 'rightPart', label: 'Right part' },
+    { id: 'centerPart', label: 'Center part' }
 ]);
 
 /**
@@ -503,7 +507,10 @@ export function describeAvatar(avatar) {
         pigtails: (c) => `${c} pigtails`,
         braids: (c) => `${c} braids`,
         locs: (c) => `${c} locs`,
-        cornrows: (c) => `${c} cornrows`
+        cornrows: (c) => `${c} cornrows`,
+        leftPart: (c) => `short ${c} hair with a left part`,
+        rightPart: (c) => `short ${c} hair with a right part`,
+        centerPart: (c) => `short ${c} hair parted in the middle`
     };
     const hair = (HAIR_WORDS[a.length] || ((c) => `${word(HAIR_LENGTHS, a.length)} ${c} hair`))(hairColor);
     const lips = a.lips === 'natural' ? '' : ` and ${word(LIP_COLORS, a.lips)} lips`;

@@ -26,9 +26,12 @@ import { solidGrid, taperTube, onSphere } from './avatar-shapes-1.0.0.min.js';
 
 /** The styles drawn here. The rest (none, buzzed, long) are the rig's. */
 export const HAIR_DRAWN = Object.freeze([
-    'short', 'quiff', 'spiky', 'curly', 'afro', 'mohawk', 'mullet', 'ponytail', 'pigtails',
+    'short', 'leftPart', 'rightPart', 'centerPart', 'quiff', 'spiky', 'curly', 'afro', 'mohawk', 'mullet', 'ponytail', 'pigtails',
     'topKnot', 'lowBun', 'spaceBuns', 'bob', 'braids', 'locs', 'cornrows'
 ]);
+
+/** The skin a part shows when none is given. */
+export const DEFAULT_SKIN = 0xd9a37a;
 
 /** Where the hair's inner surface lies: just outside the 0.12 m head. */
 export const SCALP = 0.1204;
@@ -83,6 +86,17 @@ export const HAIR_SIZE = Object.freeze({
         cornrows: { front: 0.0018, side: 0.0018, back: 0.0018, crown: 0, fade: 0.2, min: 0.0006 }
     },
     quiff: { lift: 0.022, at: 0.32, spread: 0.22 },
+    /** A part (Steve's QA, 2026-10-24): a line of scalp showing through the
+     *  short cut, `x` meters to the wearer's left of the middle (+x; a right
+     *  part is to the right), from the front hairline back over the top to
+     *  `back` radians behind the crown. The hair thins to `depth` of itself
+     *  across `width` either side of it, and is swept away from it into a
+     *  lobe `lift` high (the whole lift on the far side of a side part, the
+     *  near side flatter). The scalp shows as a `line` thick strand in the
+     *  skin's color along the bottom (the grid is too coarse to cut a 7 mm
+     *  groove cleanly, so the line is drawn as well). */
+    parts: { leftPart: 0.03, rightPart: -0.03, centerPart: 0 },
+    part: { width: 0.009, depth: 0.8, back: 0, fade: 0.9, lift: 0.006, near: 0.35, line: 0.002, grid: [96, 24] },
     spikes: { count: 26, height: 0.028, radius: 0.0095, reach: 0.78 },
     curls: { count: 46, radius: 0.0125, reach: 0.86 },
     /** A fin in the head's middle plane, `front` radians forward of the
@@ -153,11 +167,48 @@ function spread(count, edge, reach) {
 }
 
 /**
+ * A short cut parted `px` to the wearer's left of the middle (HAIR_SIZE.part):
+ * the cap's thickness at `a` round and `s` of the way down, and the groove's
+ * floor at a point [x, y, z] on the scalp, for the line of scalp along it.
+ */
+function parted(px) {
+    const H = HAIR_SIZE;
+    const P = H.part;
+    const base = thickness(H.volumes.short);
+    const edge = H.edges.short;
+    const thick = (a, s) => {
+        const t = along(edge, Math.abs(a)) * s;
+        const [x, y, z] = onSphere(SCALP, a, t);
+        // Forward of the crown is positive: the part runs from the hairline
+        // back to `back` and fades out there.
+        // Forward of the crown is positive: the part is full near the
+        // hairline and fades out over `fade` to nothing at `back` (preview,
+        // 2026-10-24: run on past the crown, or ended short, the groove and
+        // its lobes notched the head's outline seen from behind and above,
+        // where the surface just past the outline is nearly flat on).
+        const run = smoothstep((Math.atan2(z, y) - P.back) / P.fade);
+        const d = x - px;
+        const groove = Math.exp(-((d / P.width) ** 2)) * run;
+        const side = px === 0 || Math.sign(d) === -Math.sign(px) ? 1 : P.near;
+        const sweep = Math.exp(-(((Math.abs(d) - 2.2 * P.width) / P.width) ** 2)) * run * side;
+        return base(a, s) * (1 - P.depth * groove) + P.lift * sweep;
+    };
+    const floorAt = (x, y, z) => {
+        const r = Math.hypot(x, y, z);
+        const a = Math.atan2(x, z);
+        const t = Math.acos(y / r);
+        return thick(a, t / along(edge, Math.abs(a)));
+    };
+    return { thick, floorAt, edge };
+}
+
+/**
  * The hair for `style` in `color` (display hex), as a group named 'hair'
  * tagged `isHair`, in the head's coordinates; null for a style the rig
- * draws (none, buzzed, long).
+ * draws (none, buzzed, long). A part shows the `skin` (display hex) along
+ * it.
  */
-export function buildHair(style, color) {
+export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
     if (!HAIR_DRAWN.includes(style)) return null;
     const H = HAIR_SIZE;
     const group = new THREE.Group();
@@ -182,12 +233,46 @@ export function buildHair(style, color) {
         ring.lookAt(at[0] * 2, at[1] * 2, at[2] * 2);
         return ring;
     };
-    const tube = (points, radius, name, options = {}) => add(taperTube(points, radius, options), name);
+    const tube = (points, radius, name, { material, ...options } = {}) => add(taperTube(points, radius, options), name, material ? { material } : {});
 
     switch (style) {
         case 'short':
             cap('short', 'short');
             break;
+        case 'leftPart':
+        case 'rightPart':
+        case 'centerPart': {
+            const px = H.parts[style];
+            const P = H.part;
+            const part = parted(px);
+            // On a finer grid than the other cuts, so the groove is cut
+            // (preview, 2026-10-24: on 48 columns the line of scalp sank in
+            // and out of the hair in dashes).
+            add(scalp(part.edge, part.thick, { nu: P.grid[0], nv: P.grid[1] }), 'scalp');
+            // The line of scalp along the groove's floor: in the plane `px`
+            // from the middle, from just inside the hairline back to where
+            // the groove has faded to about a third.
+            const front = (() => {
+                // The hairline where the plane meets it, settled in two
+                // passes (the line's own angle round moves it a little).
+                let a = 0;
+                for (let k = 0; k < 2; k++) a = Math.asin(Math.min(1, px / (SCALP * Math.sin(along(part.edge, Math.abs(a))))));
+                const t = along(part.edge, Math.abs(a));
+                return Math.atan2(Math.sin(t) * Math.cos(a), Math.cos(t));
+            })();
+            const points = Array.from({ length: 9 }, (_, k) => {
+                const phi = front - 0.06 + ((P.back + P.fade * 0.35 - front + 0.06) * k) / 8;
+                const dir = [px, Math.cos(phi), Math.sin(phi)];
+                const flat = Math.sqrt(SCALP * SCALP - px * px);
+                // Half out of the groove's floor, but never under the scalp
+                // where the hair thins toward the hairline.
+                const r = SCALP + Math.max(P.line * 1.15, part.floorAt(px, flat * dir[1], flat * dir[2]) + P.line * 0.5);
+                const rr = Math.sqrt(r * r - px * px);
+                return [px, rr * dir[1], rr * dir[2]];
+            });
+            tube(points, () => P.line, 'part', { material: new THREE.MeshStandardMaterial({ color: skin, roughness: 0.95 }), segments: 16, radial: 6 });
+            break;
+        }
         case 'quiff': {
             // Short, with the front swept up into a crest.
             const base = thickness(H.volumes.short);

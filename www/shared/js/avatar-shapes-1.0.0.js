@@ -26,6 +26,14 @@
  * (the crown), so no wall is built along it either. Returns a
  * BufferGeometry with three groups: 0 the outer surface, 1 the inner, 2 the
  * walls, for a mesh that colors them apart (a brim's underside).
+ *
+ * EVERY TRIANGLE FACES OUT OF THE SOLID, whichever way `at` runs (Steve's
+ * QA, 2026-10-24: built inside out, the hair's single-sided material drew
+ * only the inner surface, lying on the scalp, and the shadow pass drew the
+ * culled outer one, so the hair shaded itself and read darker on top). The
+ * walls are wound with the surfaces, and the whole solid is turned outward
+ * by its signed volume. Along a wrapped seam and at a crown, vertices at one
+ * place share one normal, so no shading seam runs down the back.
  */
 export function solidGrid(nu, nv, at, { wrap = false, pole = false } = {}) {
     const positions = [];
@@ -63,15 +71,55 @@ export function solidGrid(nu, nv, at, { wrap = false, pole = false } = {}) {
     for (const [[i0, j0], [i1, j1]] of edge) {
         const base = positions.length / 3;
         positions.push(...at(i0, j0, 0), ...at(i0, j0, 1), ...at(i1, j1, 0), ...at(i1, j1, 1));
-        index.push(base, base + 1, base + 3, base, base + 3, base + 2);
+        index.push(base, base + 3, base + 1, base, base + 2, base + 3);
     }
     groups.push([start, index.length - start]);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setIndex(index);
+    geometry.setIndex(outward(positions, index));
     groups.forEach(([s, n], g) => geometry.addGroup(s, n, g));
     geometry.computeVertexNormals();
+    const seam = (side) => (nu + 1) * (nv + 1) * side;
+    const welds = [];
+    for (let side = 0; side < 2; side++) {
+        const b = seam(side);
+        if (wrap) for (let j = 0; j <= nv; j++) welds.push([b + j, b + nu * (nv + 1) + j]);
+        if (pole) welds.push(Array.from({ length: nu + 1 }, (_, i) => b + i * (nv + 1)));
+    }
+    weldNormals(geometry, welds);
     return geometry;
+}
+
+/** Six times the volume enclosed by the triangles `index` of `positions`
+ *  (a flat array), signed: positive when their fronts face outward. */
+function signedVolume(positions, index) {
+    let v = 0;
+    for (let k = 0; k < index.length; k += 3) {
+        const a = index[k] * 3;
+        const b = index[k + 1] * 3;
+        const c = index[k + 2] * 3;
+        v += positions[a] * (positions[b + 1] * positions[c + 2] - positions[b + 2] * positions[c + 1])
+            - positions[a + 1] * (positions[b] * positions[c + 2] - positions[b + 2] * positions[c])
+            + positions[a + 2] * (positions[b] * positions[c + 1] - positions[b + 1] * positions[c]);
+    }
+    return v;
+}
+
+/** Give each set of vertices in `sets` (indices) one normal: their average.
+ *  Vertices in one set at one place that each knew only their own side of a
+ *  seam otherwise shade as a crease. */
+function weldNormals(geometry, sets) {
+    const n = geometry.attributes.normal;
+    const sum = new THREE.Vector3();
+    const v = new THREE.Vector3();
+    for (const set of sets) {
+        sum.set(0, 0, 0);
+        for (const i of set) sum.add(v.fromBufferAttribute(n, i));
+        if (sum.lengthSq() < 1e-20) continue;
+        sum.normalize();
+        for (const i of set) n.setXYZ(i, sum.x, sum.y, sum.z);
+    }
+    n.needsUpdate = true;
 }
 
 /**
@@ -108,8 +156,9 @@ export function taperTube(points, radius, { segments = 24, radial = 10 } = {}) {
             }
         }
     }
-    // The two ends, each closed by a fan from its middle.
-    for (const [i, flip] of [[0, true], [segments, false]]) {
+    // The two ends, each closed by a fan from its middle, wound with the
+    // rings (the body runs each end ring one way; its fan runs it back).
+    for (const [i, flip] of [[0, false], [segments, true]]) {
         curve.getPointAt(i / segments, p);
         const middle = positions.length / 3;
         positions.push(p.x, p.y, p.z);
@@ -122,9 +171,23 @@ export function taperTube(points, radius, { segments = 24, radial = 10 } = {}) {
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setIndex(index);
+    // Facing out, whichever way the curve's frames turn (2026-10-24: wound
+    // inward, a single-sided tail drew only its inside).
+    geometry.setIndex(outward(positions, index));
     geometry.computeVertexNormals();
     return geometry;
+}
+
+/** `index` with every triangle flipped if the closed surface they make
+ *  faces inward. */
+function outward(positions, index) {
+    if (signedVolume(positions, index) >= 0) return index;
+    for (let k = 0; k < index.length; k += 3) {
+        const t = index[k + 1];
+        index[k + 1] = index[k + 2];
+        index[k + 2] = t;
+    }
+    return index;
 }
 
 /** A point on a sphere of radius `r` about the origin, `a` round from
@@ -136,23 +199,49 @@ export function onSphere(r, a, t) {
 /** The open edges of a geometry: edges used by other than two triangles,
  *  matching corners by place (to a micrometer). 0 for a closed solid. */
 export function openEdges(geometry) {
+    const edges = new Map();
+    for (const [ka, kb] of directedEdges(geometry)) {
+        const e = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+        edges.set(e, (edges.get(e) || 0) + 1);
+    }
+    return [...edges.values()].filter((n) => n !== 2).length;
+}
+
+/**
+ * Whether every triangle of a closed geometry faces out of it: each edge is
+ * run once each way by its two triangles (so no triangle is wound against
+ * its neighbors), and the volume they enclose is positive (so they all face
+ * out, not all in). A single-sided material draws only such a solid's
+ * outside, and a shadow pass casts from it (2026-10-24).
+ */
+export function facesOutward(geometry) {
+    const runs = new Map();
+    for (const [ka, kb] of directedEdges(geometry)) {
+        const e = `${ka}>${kb}`;
+        runs.set(e, (runs.get(e) || 0) + 1);
+    }
+    for (const [e, n] of runs) {
+        const [ka, kb] = e.split('>');
+        if (n !== 1 || runs.get(`${kb}>${ka}`) !== 1) return false;
+    }
+    return signedVolume(geometry.attributes.position.array, geometry.index.array) > 0;
+}
+
+/** The directed edges [from, to] of every triangle that covers anything,
+ *  each end keyed by its place (to a micrometer). */
+function directedEdges(geometry) {
     const pos = geometry.attributes.position;
     const key = (i) => `${Math.round(pos.getX(i) * 1e6)},${Math.round(pos.getY(i) * 1e6)},${Math.round(pos.getZ(i) * 1e6)}`;
-    const edges = new Map();
+    const out = [];
     const index = geometry.index.array;
     for (let i = 0; i < index.length; i += 3) {
         const keys = [key(index[i]), key(index[i + 1]), key(index[i + 2])];
         // A triangle with two corners in one place (where a grid's rows meet
         // at the crown) covers nothing and closes nothing.
         if (keys[0] === keys[1] || keys[1] === keys[2] || keys[2] === keys[0]) continue;
-        for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) {
-            const ka = keys[a];
-            const kb = keys[b];
-            const e = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
-            edges.set(e, (edges.get(e) || 0) + 1);
-        }
+        for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) out.push([keys[a], keys[b]]);
     }
-    return [...edges.values()].filter((n) => n !== 2).length;
+    return out;
 }
 
 /**

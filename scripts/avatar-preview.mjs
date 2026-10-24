@@ -12,8 +12,10 @@
  *
  * Writes specs/avatar/previews/*.png (git-ignored), each column one look and
  * each row a view (from the front, and from three quarters to the figure's
- * left, and for the hair and the hats from behind). Flat-shaded through scripts/preview-raster.mjs, so the shapes and
- * the fit are exact and the light is rough.
+ * left, and for the hair and the hats from behind). Drawn through
+ * scripts/preview-raster.mjs as three would draw it (vertex normals, culled
+ * back faces, the sun's shadow), so the shapes and the fit are exact and the
+ * light is rough.
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -43,6 +45,8 @@ const SHOTS = {
     feet: { cell: [220, 160], aim: [0, 0.08, 0.04], distance: 0.9, fov: 26, lift: 0.35 },
     legs: { cell: [180, 300], aim: [0, 0.4, 0], distance: 2.2, fov: 26, lift: 0.1 },
     mouth: { cell: [200, 160], aim: [0, 1.5, 0], distance: 0.55, fov: 22, lift: 0.0 },
+    /** The top of the head, close, from a little above (the parts). */
+    crown: { cell: [220, 200], aim: [0, 1.6, 0], distance: 0.55, fov: 24, lift: 0.22 },
     body: { cell: [180, 300], aim: [0, 0.9, 0], distance: 4.2, fov: 28, lift: 0.1 }
 };
 const TURNS = [0, 0.75];
@@ -81,12 +85,16 @@ await sheet('facial', [
 ], 'face');
 // Every hair style, from the front, three quarters and behind, in two
 // sheets; then every hat on short hair, and over the two biggest styles.
-const STYLES = ['short', 'quiff', 'spiky', 'curly', 'afro', 'mohawk', 'mullet', 'bob', 'ponytail', 'pigtails',
-    'topKnot', 'lowBun', 'spaceBuns', 'braids', 'locs', 'cornrows', 'buzz', 'long', 'bald'];
+const STYLES = ['short', 'leftPart', 'rightPart', 'centerPart', 'quiff', 'spiky', 'curly', 'afro', 'mohawk', 'mullet', 'bob',
+    'ponytail', 'pigtails', 'topKnot', 'lowBun', 'spaceBuns', 'braids', 'locs', 'cornrows', 'buzz', 'long', 'bald'];
 const HATS = ['beanie', 'cap', 'trucker', 'ivyCap', 'beret', 'fedora', 'cowboy', 'topHat', 'fez', 'chef', 'hardHat', 'sunHat', 'birthday'];
 const BEHIND = [0, 0.75, Math.PI];
-await sheet('hair-1', STYLES.slice(0, 10).map((length, k) => ({ ...(k % 2 ? deep : fair), length })), 'face', BEHIND);
-await sheet('hair-2', STYLES.slice(10).map((length, k) => ({ ...(k % 2 ? fair : deep), length })), 'face', BEHIND);
+await sheet('hair-1', STYLES.slice(0, 11).map((length, k) => ({ ...(k % 2 ? deep : fair), length })), 'face', BEHIND);
+await sheet('hair-2', STYLES.slice(11).map((length, k) => ({ ...(k % 2 ? fair : deep), length })), 'face', BEHIND);
+await sheet('parts', [
+    { ...fair, length: 'short' }, { ...fair, length: 'leftPart' }, { ...fair, length: 'rightPart' }, { ...fair, length: 'centerPart' },
+    { ...deep, length: 'leftPart' }, { skin: 'light', hair: 'blond', length: 'centerPart' }
+], 'crown', BEHIND);
 await sheet('hats', HATS.map((hat) => ({ ...fair, length: 'short', hat, hatColor: 'navy' })), 'face', BEHIND);
 await sheet('hats-afro', HATS.map((hat) => ({ ...deep, length: 'afro', hat, hatColor: 'mustard' })), 'face');
 await sheet('hats-long', HATS.map((hat) => ({ skin: 'light', hair: 'blond', length: 'long', hat, hatColor: 'teal' })), 'face');

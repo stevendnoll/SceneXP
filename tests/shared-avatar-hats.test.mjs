@@ -20,6 +20,7 @@ let HT;
 let HR;
 let F;
 let A;
+let shapes;
 let createPerson;
 
 beforeAll(async () => {
@@ -27,6 +28,7 @@ beforeAll(async () => {
     globalThis.THREE = THREE;
     HT = await import('../www/shared/js/avatar-hats-1.0.0.js');
     HR = await import('../www/shared/js/avatar-hair-1.0.0.js');
+    shapes = await import('../www/shared/js/avatar-shapes-1.0.0.js');
     F = await import('../www/shared/js/avatar-figure-1.0.0.js');
     A = await import('../www/shared/js/avatar-1.0.0.js');
     ({ createPerson } = await import('../www/shared/js/people-1.0.0.min.js'));
@@ -275,6 +277,11 @@ describe('the part itself, from source', () => {
                 let shadows = 0;
                 hat.traverse((m) => { if (m.isMesh && m.castShadow) shadows++; });
                 expect(shadows).toBe(0);
+                // Every solid the hat built for itself (a bill, a brim, a
+                // ridge, a stitch, a cord) faces outward, as the hair's do.
+                hat.traverse((m) => {
+                    if (m.isMesh && m.geometry.type === 'BufferGeometry') expect(`${kind} ${m.name} faces outward: ${shapes.facesOutward(m.geometry)}`).toBe(`${kind} ${m.name} faces outward: true`);
+                });
             }
         }
     });

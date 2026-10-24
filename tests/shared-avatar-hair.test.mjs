@@ -52,15 +52,20 @@ test('the styles drawn here are the avatar\'s styles less the rig\'s own three',
     for (const style of ['bald', 'buzz', 'long', 'nope']) expect(H.buildHair(style, 0x332211)).toBeNull();
 });
 
-test('every piece of every style is a closed solid, in the hair\'s color or its tie\'s', () => {
+test('every piece of every style is a closed solid facing outward, in the hair\'s color or its tie\'s', () => {
     for (const style of H.HAIR_DRAWN) {
-        const hair = H.buildHair(style, 0x6b4a2f);
+        const hair = H.buildHair(style, 0x6b4a2f, { skin: 0xc08060 });
         expect(hair.name).toBe('hair');
         expect(hair.userData).toMatchObject({ isHair: true, style });
         expect(hair.children.length).toBeGreaterThan(0);
         for (const { mesh } of pieces(hair)) {
             expect(`${style} ${mesh.name}: ${shapes.openEdges(mesh.geometry)}`).toBe(`${style} ${mesh.name}: 0`);
-            const want = mesh.name === 'tie' ? new THREE.Color(0x6b4a2f).multiplyScalar(H.HAIR_SIZE.tie).getHex() : new THREE.Color(0x6b4a2f).getHex();
+            // Single-sided, so the browser draws only its outside (Steve's
+            // QA, 2026-10-24: inside out, the hair's inner surface showed on
+            // the scalp and its top shaded itself).
+            expect(`${style} ${mesh.name} faces outward: ${shapes.facesOutward(mesh.geometry)}`).toBe(`${style} ${mesh.name} faces outward: true`);
+            expect(`${style} ${mesh.name} side: ${mesh.material.side}`).toBe(`${style} ${mesh.name} side: ${THREE.FrontSide}`);
+            const want = { tie: new THREE.Color(0x6b4a2f).multiplyScalar(H.HAIR_SIZE.tie).getHex(), part: 0xc08060 }[mesh.name] ?? new THREE.Color(0x6b4a2f).getHex();
             expect(`${style} ${mesh.name}: ${mesh.material.color.getHex()}`).toBe(`${style} ${mesh.name}: ${want}`);
         }
     }
@@ -132,6 +137,54 @@ test('what a hat would squash is tagged for it to tuck away, and the long styles
     expect(Math.max(...fin.pts.map((p) => p.y))).toBeGreaterThan(0.15);
     const facePts = fin.pts.filter((p) => p.z > 0.08);
     expect(Math.min(...facePts.map((p) => p.y))).toBeGreaterThan(0.05);
+});
+
+test('a part is a line of scalp from the hairline back over the top, the hair thinned along it and swept off it', () => {
+    const thick = (style, x, phi) => {
+        // The hair's thickness over the scalp at `x` across and `phi`
+        // radians forward of the crown, read off the cap's outer surface.
+        const scalp = pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'scalp');
+        let best = null;
+        for (const p of scalp.pts) {
+            if (p.length() < H.SCALP + 1e-5 || Math.abs(Math.atan2(p.z, p.y) - phi) > 0.08) continue;
+            const d = Math.abs(p.x - x);
+            if (!best || d < best.d) best = { d, over: p.length() - H.SCALP };
+        }
+        return best.over;
+    };
+    for (const [style, px] of Object.entries(H.HAIR_SIZE.parts)) {
+        const all = pieces(H.buildHair(style, 0x332211, { skin: 0xc08060 }));
+        const line = all.find((p) => p.mesh.name === 'part');
+        expect(line).toBeTruthy();
+        expect(line.mesh.material.color.getHex()).toBe(0xc08060);
+        // The line lies in its plane, left of the middle for a left part
+        // (+x is the wearer's left), over the front and the top only.
+        for (const p of line.pts) {
+            expect(Math.abs(p.x - px)).toBeLessThan(H.HAIR_SIZE.part.line + 1e-6);
+            expect(p.y).toBeGreaterThan(0.04);
+        }
+        expect(Math.max(...line.pts.map((p) => p.z))).toBeGreaterThan(0.08);
+        // Back to within a few centimeters of the crown, and no further: the
+        // groove fades to nothing at the crown, so the head's outline from
+        // behind is not notched.
+        expect(Math.min(...line.pts.map((p) => p.z))).toBeLessThan(0.05);
+        expect(Math.min(...line.pts.map((p) => p.z))).toBeGreaterThan(0.02);
+        expect(thick(style, px, -0.1)).toBeGreaterThan(thick(style, px + 0.02, -0.1) * 0.85);
+        // And it lies on the hair, never under the scalp.
+        expect(Math.min(...line.pts.map((p) => p.length()))).toBeGreaterThan(H.SCALP - 1e-6);
+        // The cap is thinner along the part than two centimeters to either
+        // side of it, half way from the crown to the hairline.
+        const at = thick(style, px, 0.5);
+        expect(at).toBeLessThan(thick(style, px + 0.02, 0.5) * 0.7);
+        expect(at).toBeLessThan(thick(style, px - 0.02, 0.5) * 0.7);
+        // The short cut itself has no such groove.
+        expect(thick('short', px, 0.5)).toBeGreaterThan(thick('short', px + 0.02, 0.5) * 0.8);
+    }
+    expect(H.HAIR_SIZE.parts.leftPart).toBeGreaterThan(0);
+    expect(H.HAIR_SIZE.parts.rightPart).toBe(-H.HAIR_SIZE.parts.leftPart);
+    expect(H.HAIR_SIZE.parts.centerPart).toBe(0);
+    // Nothing a hat need tuck away.
+    expect(pieces(H.buildHair('leftPart', 0x332211)).some((p) => p.mesh.userData.hatHides)).toBe(false);
 });
 
 test('along reads a line of points, flat past its ends', () => {

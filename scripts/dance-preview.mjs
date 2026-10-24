@@ -16,8 +16,9 @@
  * pose of the dance (in the middle of its hold), drawn from the front, as
  * the crowd shot sees it, and from the dancer's left side. A small software
  * rasterizer with a depth buffer (scripts/preview-raster.mjs) over the real three.js figure (people-1.0.0's
- * createPerson, jointed by dance-1.0.0), flat-shaded, so what it shows is the rig's own geometry in the
- * dance's own angles. Lighting is rough; the shapes and the poses are exact.
+ * createPerson, jointed by dance-1.0.0), shaded as three would (vertex normals, culled back faces, the
+ * sun's shadow), so what it shows is the rig's own geometry in the dance's own angles. Lighting is
+ * rough; the shapes and the poses are exact.
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
