@@ -84,12 +84,15 @@ function meshes(root) {
         const p = new THREE.Vector3();
         o.getWorldPosition(p);
         const round = (n) => Math.round(n * 1e5) / 1e5;
+        // The avatar's head is the rig's head drawn smoother (2026-10-24):
+        // compared by its radius here, its sides asserted on their own.
+        const head = o.userData.isHead;
         out.push({
             name: o.name,
             geometry: o.geometry.type,
             // A shape's uuid is fresh every build, so it is left out.
-            params: JSON.stringify(o.geometry.parameters || {}, (k, v) => (k === 'uuid' ? undefined : v)),
-            vertices: o.geometry.attributes.position.count,
+            params: head ? `radius ${o.geometry.parameters.radius}` : JSON.stringify(o.geometry.parameters || {}, (k, v) => (k === 'uuid' ? undefined : v)),
+            vertices: head ? 'head' : o.geometry.attributes.position.count,
             at: p.toArray().map(round),
             scale: o.scale.toArray().map(round),
             color: o.material.color ? o.material.color.getHex() : null
@@ -118,6 +121,9 @@ describe('the figure', () => {
         const today = meshes(createPerson(leavesPerson(DEFAULT_CHOICE)));
         const avatar = F.createAvatar(A.DEFAULT_AVATAR, { role: 'operator' });
         expect(meshes(avatar.group)).toEqual(today);
+        // The one deliberate difference: a smoother head, the same size.
+        const head = findIn(avatar.person, (o) => o.userData.isHead).geometry.parameters;
+        expect([head.radius, head.widthSegments, head.heightSegments]).toEqual([0.12, ...F.HEAD_SEGMENTS]);
         const mouth = avatar.person.getObjectByName('mouth');
         expect(mouth.children.map((m) => m.name)).toEqual(['lips']);
         avatar.dispose();
@@ -1046,6 +1052,47 @@ describe('the face (Steve\'s QA, 2026-10-24), measured', () => {
             expect(Math.min(...inHead(avatar, bridge).map((p) => p.y))).toBeGreaterThan(Math.max(...pts.map((p) => p.y)));
         }
         expect(findIn(F.createAvatar({}).person, (o) => o.userData.isNose).visible).toBe(true);
+    });
+
+    test('a beard and a goatee are closed solids lying on the face, round or oval, with no gap under their edges', () => {
+        for (const facial of ['beard', 'goatee']) {
+            for (const faceShape of ['round', 'oval']) {
+                const avatar = F.createAvatar({ facial, faceShape });
+                const solid = avatar.person.getObjectByName('facial').children.find((m) => m.name !== 'mustache');
+                // In the head's own coordinates (an oval is the head group
+                // stretched, the beard with it): its inner surface on the
+                // skin, within a millimeter of the head's surface, and none
+                // of it inside the head.
+                const pts = inHead(avatar, solid);
+                const d = pts.map((p) => p.length());
+                expect(`${facial}/${faceShape} clear of the head: ${Math.min(...d) > 0.1199}`).toBe(`${facial}/${faceShape} clear of the head: true`);
+                const spec = facial === 'beard' ? F.FACIAL_SIZE.beard : F.FACIAL_SIZE.chin;
+                expect(spec.inner - 0.12).toBeLessThan(0.001);
+                expect(Math.max(...d)).toBeLessThan(spec.r + 1e-6);
+                // CLOSED: every edge of it is shared by two triangles, so
+                // there is no open rim to see air through (Steve's QA,
+                // 2026-10-24: a shell 7 mm off the face showed a gap).
+                const pos = solid.geometry.attributes.position;
+                const key = (i) => [pos.getX(i), pos.getY(i), pos.getZ(i)].map((n) => n.toFixed(6)).join();
+                const edges = new Map();
+                const index = solid.geometry.index.array;
+                for (let i = 0; i < index.length; i += 3) {
+                    for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) {
+                        const e = [key(index[i + a]), key(index[i + b])].sort().join('|');
+                        edges.set(e, (edges.get(e) || 0) + 1);
+                    }
+                }
+                const open = [...edges.values()].filter((n) => n !== 2).length;
+                expect(`${facial}/${faceShape} open edges: ${open}`).toBe(`${facial}/${faceShape} open edges: 0`);
+            }
+        }
+        // The head the beard lies on is round to within a millimeter: its
+        // flat sides sag no deeper than that inside the sphere.
+        const [w, h] = F.HEAD_SEGMENTS;
+        // (`w` sides round a full turn, `h` from top to bottom: half a turn.)
+        expect(0.12 * (1 - Math.cos(Math.PI / w) * Math.cos(Math.PI / (2 * h)))).toBeLessThan(0.001);
+        // Stubble lies on the skin too.
+        expect(F.FACIAL_SIZE.stubble.r - 0.12).toBeLessThan(0.001);
     });
 
     test('blush is a soft see-through rose; freckles are dots a shade of the skin', () => {

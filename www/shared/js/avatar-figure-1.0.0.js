@@ -47,8 +47,9 @@ import { createPerson } from './people-1.0.0.min.js';
  * a closer portrait. 3 (2026-10-24): the mouths, bare legs, boots. 4
  * (2026-10-24): the mouths redrawn as crescents and rounded pills. 5
  * (2026-10-24): the face (brows on every face, eyes, noses, cheeks, shape).
+ * 6 (2026-10-24): a smoother head, solid beards.
  */
-export const RENDER_VERSION = 5;
+export const RENDER_VERSION = 6;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named
@@ -247,6 +248,10 @@ function buildMouth(kind, head, color) {
 // drawn taller and narrower, and every feature on it (and the hair, the
 // glasses, the beard and the hat) follows without being moved one by one.
 
+/** The avatar's head's sides, around and top to bottom (the rig's are 16
+ *  by 12). */
+export const HEAD_SEGMENTS = Object.freeze([32, 24]);
+
 /** Each face shape's stretch of the head, across, up and out. Round is the
  *  rig's own sphere. */
 export const FACE_SCALE = Object.freeze({ round: Object.freeze([1, 1, 1]), oval: Object.freeze([0.94, 1.09, 0.97]) });
@@ -260,6 +265,13 @@ export const FACE_SCALE = Object.freeze({ round: Object.freeze([1, 1, 1]), oval:
  */
 function gatherHead(person, scale) {
     const head = person.children.find((o) => o.userData.isHead);
+    // A smoother head than the rig's (16 by 12 sides), the same size: the
+    // rig's flat sides sit up to 3 mm inside the round head every face piece
+    // is fitted to, and showed as gaps under a beard (Steve's QA,
+    // 2026-10-24). One figure a scene can afford it; a crowd keeps the rig's.
+    const { radius } = head.geometry.parameters;
+    head.geometry.dispose();
+    head.geometry = new THREE.SphereGeometry(radius, HEAD_SEGMENTS[0], HEAD_SEGMENTS[1]);
     const c = head.position.clone();
     const group = new THREE.Group();
     group.name = 'head';
@@ -598,6 +610,60 @@ function band(c, r, { half, top, bottom }, material, across = 36, down = 10) {
 }
 
 /**
+ * A band with THICKNESS: its outer surface `rOut` from the head's middle,
+ * its inner one `rIn` (on the skin), and walls closing it all the way round
+ * its edge. A beard drawn as a single shell stood off the face with air
+ * under its edges, which showed as a gap at the jaw and the cheeks (Steve's
+ * QA, 2026-10-24); a closed band sits on the face like hair does.
+ */
+function solidBand(c, rIn, rOut, { half, top, bottom }, material, across = 36, down = 10) {
+    const at = (i, j) => {
+        const a = -half + (2 * half * i) / across;
+        const t0 = along(top, Math.abs(a));
+        const t1 = along(bottom, Math.abs(a));
+        return [a, t0 + ((t1 - t0) * j) / down];
+    };
+    const point = ([a, t], r) => [c.x + r * Math.sin(t) * Math.sin(a), c.y + r * Math.cos(t), c.z + r * Math.sin(t) * Math.cos(a)];
+    const positions = [];
+    const index = [];
+    const surface = (r, flip) => {
+        const base = positions.length / 3;
+        for (let i = 0; i <= across; i++) {
+            for (let j = 0; j <= down; j++) {
+                positions.push(...point(at(i, j), r));
+                if (i > 0 && j > 0) {
+                    const p = base + i * (down + 1) + j;
+                    const q = base + (i - 1) * (down + 1) + j;
+                    if (flip) index.push(q - 1, p, p - 1, q - 1, q, p);
+                    else index.push(q - 1, p - 1, p, q - 1, p, q);
+                }
+            }
+        }
+    };
+    surface(rOut, false);
+    surface(rIn, true);
+    // The walls: round the edge of the grid, inner to outer.
+    const edge = [];
+    for (let i = 0; i <= across; i++) edge.push(at(i, 0));
+    for (let j = 1; j <= down; j++) edge.push(at(across, j));
+    for (let i = across - 1; i >= 0; i--) edge.push(at(i, down));
+    for (let j = down - 1; j >= 1; j--) edge.push(at(0, j));
+    const base = positions.length / 3;
+    edge.forEach((p) => positions.push(...point(p, rIn), ...point(p, rOut)));
+    for (let k = 0; k < edge.length; k++) {
+        const n = (k + 1) % edge.length;
+        const a = base + 2 * k;
+        const d = base + 2 * n;
+        index.push(a, a + 1, d + 1, a, d + 1, d);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(index);
+    geometry.computeVertexNormals();
+    return new THREE.Mesh(geometry, material);
+}
+
+/**
  * The glasses: each frame round (a ring) or square (a ring of four sides,
  * turned to stand square), `x` either side of the nose and `y` above the
  * head's middle (the eyes), `z` out (in front of the pupils and the nose's
@@ -672,15 +738,18 @@ export const FACIAL_SIZE = Object.freeze({
      *  smile, so it never reads as a second mouth (QA by preview,
      *  2026-10-24: a small arc did). */
     mustache: { r: 0.06, tube: 0.0065, arc: 0.85, y: -0.029, flat: 0.7 },
-    chin: { r: 0.1235, half: 0.32, top: [[0, 2.13]], bottom: [[0, 2.75]] },
+    /** The goatee and the beard are solid bands, `inner` on the skin and
+     *  `r` at their outside (Steve's QA, 2026-10-24: a shell 7 mm off the
+     *  face showed a gap at the jaw). */
+    chin: { r: 0.1245, inner: 0.1203, half: 0.32, top: [[0, 2.13]], bottom: [[0, 2.75]] },
     /** The beard: under the lips at the front, round the corners of the
      *  mouth, and up the cheeks to the sideburns by the ears. */
     beard: {
-        r: 0.127, half: 1.66,
+        r: 0.1255, inner: 0.1203, half: 1.66,
         top: [[0, 2.13], [0.2, 2.13], [0.36, 1.96], [1.0, 1.72], [1.5, 1.5], [1.66, 1.45]],
         bottom: [[0, 2.95]]
     },
-    stubble: { r: 0.1213, lip: { half: 0.3, top: [[0, 1.82]], bottom: [[0, 1.91]] }, opacity: 0.42 }
+    stubble: { r: 0.1207, lip: { half: 0.3, top: [[0, 1.82]], bottom: [[0, 1.91]] }, opacity: 0.42 }
 });
 
 /** Below the mouth, the beard, the goatee and the stubble keep this far
@@ -733,8 +802,8 @@ function buildFacial(kind, c, color, mouth = { bottom: -MOUTH_SIZE.smile.drop - 
         group.add(band(c, F.stubble.r, lip(), shadow));
     } else {
         group.add(mustache());
-        if (kind === 'goatee') group.add(band(c, F.chin.r, { ...F.chin, top: lowerFront(F.chin.top, under(F.chin.r), Infinity) }, solid));
-        if (kind === 'beard') group.add(band(c, F.beard.r, beard(F.beard.r), solid));
+        if (kind === 'goatee') group.add(solidBand(c, F.chin.inner, F.chin.r, { ...F.chin, top: lowerFront(F.chin.top, under(F.chin.r), Infinity) }, solid));
+        if (kind === 'beard') group.add(solidBand(c, F.beard.inner, F.beard.r, beard(F.beard.r), solid));
     }
     group.traverse((o) => {
         if (o.isMesh) o.castShadow = false;
