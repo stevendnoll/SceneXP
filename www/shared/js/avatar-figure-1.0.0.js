@@ -10,11 +10,12 @@
  * by matching a radius. So people-1.0.0 grows only its tags, and every scene
  * already built on it is untouched.
  *
- * THE SMILE AND THE WAVE ARE MAYA'S (www/whitestone/js/cast.js), promoted
- * here with Steve's leave on 2026-10-23 (PRD section 11, question 3): the rig
- * has no mouth, so without one a face looks blank in a portrait. Her lips are
- * a rose a little deeper than her skin, and every skin tone gets the same
- * tint of its own (`lipsColor`).
+ * THE WAVE AND THE LIPS' TINT ARE MAYA'S (www/whitestone/js/cast.js),
+ * promoted here with Steve's leave on 2026-10-23 (PRD section 11, question
+ * 3): her lips are a rose a little deeper than her skin, and every skin tone
+ * gets the same tint of its own (`lipsColor`). The rig has no mouth, so
+ * without one a face looks blank in a portrait; the mouths are this part's
+ * own (`MOUTH_SIZE`).
  *
  * THE PORTRAIT IS DRAWN ON THE PAGE'S OWN CANVAS. A render target in three
  * r186 is drawn in linear color with no tone mapping, so a portrait read back
@@ -44,9 +45,10 @@ import { createPerson } from './people-1.0.0.min.js';
  * The portrait's render version. Bump it whenever the figure's look changes,
  * so a portrait drawn before is drawn again (PLANNING 3.5): /avatar/ and the
  * scenes compare it with the one stored. 2 (2026-10-24): the pieces, and
- * a closer portrait. 3 (2026-10-24): the mouths, bare legs, boots.
+ * a closer portrait. 3 (2026-10-24): the mouths, bare legs, boots. 4
+ * (2026-10-24): the mouths redrawn as crescents and rounded pills.
  */
-export const RENDER_VERSION = 3;
+export const RENDER_VERSION = 4;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named
@@ -64,12 +66,7 @@ export function smoothstep(t) {
     return x * x * (3 - 2 * x);
 }
 
-// ---- The smile ----------------------------------------------------------------
-
-/** Maya's smile (QA, 2026-10-15: friendlier, no teeth), in meters on the
- *  rig's 0.12 m head: `width` across the corners, the corners `lift` above
- *  its middle, its middle `drop` below the head's middle. */
-export const SMILE = Object.freeze({ width: 0.04, lift: 0.0072, drop: 0.054, thickness: 0.0049 });
+// ---- The mouth ----------------------------------------------------------------
 
 /** How much of each channel of the skin the lips keep: Maya's lips over her
  *  skin (#A3564F over #BF8A66), so every tone gets a rose of its own. */
@@ -82,167 +79,164 @@ export function lipsColor(skin) {
 }
 
 /**
- * The arc of a smile, `{ radius, arc }`: the part of a circle whose chord is
- * `width` and whose ends rise `lift` above its lowest point.
- */
-export function smileArc(width, lift) {
-    const half = width / 2;
-    const radius = (half * half + lift * lift) / (2 * lift);
-    return { radius, arc: 2 * Math.asin(half / radius) };
-}
-
-/** The gentle smile's lips on the front of `head` (the rig's head mesh): a
- *  slim arc, lowest in the middle, sunk a little into the face so it reads
- *  as lips. */
-function buildSmile(head, color, s = SMILE) {
-    const headR = head.geometry.parameters.radius;
-    const { radius: r, arc } = smileArc(s.width, s.lift);
-    const lips = new THREE.Mesh(
-        new THREE.TorusGeometry(r, s.thickness, 6, 20, arc),
-        new THREE.MeshStandardMaterial({ color, roughness: 0.55 })
-    );
-    lips.name = 'lips';
-    // The torus's arc starts at +x and runs counterclockwise: turned so its
-    // middle points straight down, its center `r` above the smile's middle.
-    lips.rotation.z = Math.PI * 1.5 - arc / 2;
-    const y = head.position.y - s.drop;
-    lips.position.set(0, y + r, Math.sqrt(headR * headR - s.drop * s.drop) - s.thickness * 0.4);
-    return lips;
-}
-
-/**
- * The other mouths (Steve's QA, 2026-10-24), in meters on the 0.12 m head:
+ * The mouths (Steve's QA, 2026-10-24), in meters on the rig's 0.12 m head.
+ * EVERY MOUTH BUT THE "O" IS ONE SHAPE: a band across the face between a
+ * top and a bottom edge (`mouthEdges`), bent up `lift` at the corners,
+ * `top` above and `depth` below its middle line, which sits `drop` below the
+ * head's middle. `round` sets how full its ends are (2 is an ellipse's): the
+ * edges meet with an upright tangent, so the ends are round, never pointed.
  *
- *   smirk      the gentle smile tipped by `turn`, one corner up
- *   bigSmile   open, the top teeth showing
- *   grin       wider and shallower, both rows of teeth showing
+ *   smile      a soft crescent: no tube and no balls at its ends (QA: the
+ *              first, a tube, looked like a worm, and its capped ends worse)
+ *   smirk      the crescent with one side lifted (`skew`)
+ *   bigSmile   open, the top teeth filling most of it, no tongue
+ *   grin       wider and shallower, both rows of teeth
  *   surprised  a small round "o"
  *
- * An open mouth is an outline (`width` across, its top rising `lift` to the
- * corners, `depth` deep in the middle, its upper middle `drop` below the
- * head's middle), drawn flat and then WRAPPED ONTO THE HEAD'S SPHERE: a flat
- * shape on a round head floats up to 4 mm off it at the corners. The lips
- * are a ring `lip` wide round the opening, over a dark inside and the teeth.
+ * THE SHAPES ARE BUILT AS A FINE GRID and laid onto the head's sphere point
+ * by point (`onHead`). Built as a few long triangles across the mouth (the
+ * first try), their middles sagged up to 2.6 mm inside the head, so the skin
+ * showed through the open mouth (it read as a tongue) and the dark inside
+ * through the teeth (QA, 2026-10-24). Each layer then sits a fraction of a
+ * millimeter outside the last: the inside, the teeth, the lips.
  */
 export const MOUTH_SIZE = Object.freeze({
-    smirk: { turn: 0.22, shift: 0.004 },
-    bigSmile: { width: 0.05, lift: 0.009, depth: 0.017, lip: 0.0035, teeth: 0.0075, drop: 0.052 },
-    grin: { width: 0.058, lift: 0.006, depth: 0.013, lip: 0.003, teeth: 0.0055, lower: 0.0035, drop: 0.054 },
+    smile: { width: 0.042, lift: 0.0075, top: 0.0013, depth: 0.0029, round: 2.2, drop: 0.054 },
+    smirk: { width: 0.04, lift: 0.006, skew: 0.0042, top: 0.0012, depth: 0.0026, round: 2.2, drop: 0.053 },
+    bigSmile: { width: 0.048, lift: 0.009, top: 0.0015, depth: 0.0125, round: 2.4, lip: 0.0028, teeth: 0.0085, drop: 0.052 },
+    grin: { width: 0.054, lift: 0.006, top: 0.0015, depth: 0.0105, round: 2.4, lip: 0.0026, teeth: 0.0055, lower: 0.0035, drop: 0.054 },
     surprised: { r: 0.0085, tube: 0.0035, drop: 0.057 },
-    inside: 0x3d1418,
+    /** How far out from the head's middle each layer lies. */
+    layers: { inside: 0.1205, teeth: 0.1209, lips: 0.1213 },
+    inside: 0x2a1013,
     teeth: 0xf3efe6
 });
 
-/** The open mouth's outline, as [x, y] points round it: the top from left to
- *  right, then the bottom back. `grow` widens it all round (the lips). */
-function mouthOutline(m, grow = 0, n = 14) {
-    const hw = m.width / 2 + grow;
-    const pts = [];
-    for (let i = 0; i <= n; i++) {
-        const x = -hw + (2 * hw * i) / n;
-        pts.push([x, m.lift * (x / hw) ** 2 + grow]);
-    }
-    for (let i = n - 1; i > 0; i--) {
-        const x = -hw + (2 * hw * i) / n;
-        const t = (x / hw) ** 2;
-        pts.push([x, m.lift * t + grow - (m.depth + 2 * grow) * (1 - t)]);
-    }
-    return pts;
+/**
+ * A mouth's top and bottom edges at `u` (-1 to 1 across it). `grow` widens
+ * it all round (the lips round an open mouth).
+ */
+export function mouthEdges(m, u, grow = 0) {
+    const bulge = (1 - Math.min(1, Math.abs(u)) ** m.round) ** (1 / m.round);
+    const bend = m.lift * u * u + (m.skew || 0) * u;
+    return { top: bend + (m.top + grow) * bulge, bottom: bend - (m.depth + grow) * bulge };
 }
 
-/** A shape from [x, y] points. */
-function shapeOf(points) {
-    const shape = new THREE.Shape();
-    points.forEach(([x, y], i) => (i ? shape.lineTo(x, y) : shape.moveTo(x, y)));
-    return shape;
+/** Points across a mouth, close together at the ends, where the edges turn
+ *  fastest. */
+function across(n = 32) {
+    return Array.from({ length: n + 1 }, (_, i) => -Math.cos((Math.PI * i) / n));
 }
 
-/** A flat shape's geometry wrapped onto the head's sphere: its (x, y) read as
- *  meters across and up the face from the mouth's middle (`drop` below the
- *  head's middle), at `r` from the head's middle `c`. */
-function wrapped(shape, c, r, drop, R = 0.12) {
-    const geometry = new THREE.ShapeGeometry(shape);
-    const pos = geometry.attributes.position;
-    const polar = Math.acos(-drop / R);
-    for (let i = 0; i < pos.count; i++) {
-        const t = polar - pos.getY(i) / R;
-        const a = pos.getX(i) / R;
-        pos.setXYZ(i, c.x + r * Math.sin(t) * Math.sin(a), c.y + r * Math.cos(t), c.z + r * Math.sin(t) * Math.cos(a));
-    }
+/** A point (x across, y up, in meters from the mouth's middle) laid onto the
+ *  head's sphere at `r` from its middle `c`. */
+function onHead(x, y, c, r, drop, R = 0.12) {
+    const t = Math.acos(-drop / R) - y / R;
+    const a = x / R;
+    return [c.x + r * Math.sin(t) * Math.sin(a), c.y + r * Math.cos(t), c.z + r * Math.sin(t) * Math.cos(a)];
+}
+
+/**
+ * A grid laid onto the head: `columns` from left to right, each the same
+ * number of [x, y] points from bottom to top. Every cell is small, so it
+ * stays on the sphere.
+ */
+function sheet(columns, c, r, drop) {
+    const positions = [];
+    const index = [];
+    const n = columns[0].length;
+    columns.forEach((column, i) => {
+        column.forEach(([x, y], j) => {
+            positions.push(...onHead(x, y, c, r, drop));
+            if (i > 0 && j > 0) {
+                const a = (i - 1) * n + j - 1;
+                const b = i * n + j - 1;
+                index.push(a, b, b + 1, a, b + 1, a + 1);
+            }
+        });
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(index);
     geometry.computeVertexNormals();
     return geometry;
+}
+
+/** The grid between two edges, `low(u)` and `high(u)`, across `hw` either
+ *  side of the middle, `rows` points from one to the other. */
+function between(hw, low, high, rows = 5) {
+    return across().map((u) => {
+        const y0 = low(u);
+        const y1 = Math.max(y0, high(u));
+        return Array.from({ length: rows }, (_, j) => [u * hw, y0 + ((y1 - y0) * j) / (rows - 1)]);
+    });
+}
+
+/** The ring round an open mouth: from its own outline out to the outline
+ *  grown by `lip`, all the way round. */
+function ring(m) {
+    const loop = (grow) => {
+        const hw = m.width / 2 + grow;
+        const us = across();
+        const top = us.map((u) => [u * hw, mouthEdges(m, u, grow).top]);
+        const bottom = us.slice(1, -1).reverse().map((u) => [u * hw, mouthEdges(m, u, grow).bottom]);
+        return top.concat(bottom);
+    };
+    const inner = loop(0);
+    const outer = loop(m.lip);
+    const columns = inner.map((p, i) => [p, outer[i]]);
+    return columns.concat([columns[0]]);
 }
 
 /** The mouth: a group named 'mouth' on the person, its lips colored
  *  `color`. */
 function buildMouth(kind, head, color) {
     const M = MOUTH_SIZE;
+    const L = M.layers;
     const c = head.position;
     const group = new THREE.Group();
     group.name = 'mouth';
-    const lipsMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.55, side: THREE.DoubleSide });
-    const inside = new THREE.MeshStandardMaterial({ color: M.inside, roughness: 0.9, side: THREE.DoubleSide });
-    const teethMaterial = new THREE.MeshStandardMaterial({ color: M.teeth, roughness: 0.35, side: THREE.DoubleSide });
-    if (kind === 'smile' || kind === 'smirk') {
-        const lips = buildSmile(head, color);
-        if (kind === 'smirk') {
-            lips.rotation.z += M.smirk.turn;
-            lips.position.x += M.smirk.shift;
-        }
-        group.add(lips);
-    } else if (kind === 'surprised') {
+    const material = (hex, roughness) => new THREE.MeshStandardMaterial({ color: hex, roughness, side: THREE.DoubleSide });
+    const lipsMaterial = material(color, 0.55);
+    const add = (geometry, mat, name) => {
+        const mesh = new THREE.Mesh(geometry, mat);
+        mesh.name = name;
+        mesh.castShadow = false;
+        group.add(mesh);
+        return mesh;
+    };
+    if (kind === 'surprised') {
         const m = M.surprised;
         // Stood on the face, tipped to its slope at that height.
         const tilt = Math.asin(m.drop / 0.12);
         const z = Math.sqrt(0.12 * 0.12 - m.drop * m.drop);
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(m.r, m.tube, 8, 20), lipsMaterial);
-        ring.position.set(c.x, c.y - m.drop, c.z + z);
-        ring.rotation.x = tilt;
-        ring.name = 'lips';
-        const hole = new THREE.Mesh(new THREE.CircleGeometry(m.r, 16), inside);
+        const lips = add(new THREE.TorusGeometry(m.r, m.tube, 8, 20), lipsMaterial, 'lips');
+        lips.position.set(c.x, c.y - m.drop, c.z + z);
+        lips.rotation.x = tilt;
+        const hole = add(new THREE.CircleGeometry(m.r, 16), material(M.inside, 0.9), 'inside');
         hole.position.set(c.x, c.y - m.drop, c.z + z + 0.0008);
         hole.rotation.x = tilt;
-        hole.name = 'inside';
-        group.add(ring, hole);
-    } else {
-        const m = M[kind];
-        const opening = mouthOutline(m);
-        const ring = shapeOf(mouthOutline(m, m.lip));
-        ring.holes.push(shapeOf(opening));
-        const lips = new THREE.Mesh(wrapped(ring, c, 0.1214, m.drop), lipsMaterial);
-        lips.name = 'lips';
-        const dark = new THREE.Mesh(wrapped(shapeOf(opening), c, 0.1204, m.drop), inside);
-        dark.name = 'inside';
-        group.add(lips, dark);
-        // The top teeth: from the top of the opening down `teeth`, never past
-        // its bottom; the grin's bottom teeth up from its bottom.
-        const hw = m.width / 2;
-        const top = [];
-        const under = [];
-        const bottomTeeth = [];
-        for (let i = 0; i <= 14; i++) {
-            const x = -hw + (2 * hw * i) / 14;
-            const t = (x / hw) ** 2;
-            const u = m.lift * t;
-            const l = u - m.depth * (1 - t);
-            top.push([x, u]);
-            under.push([x, Math.max(u - m.teeth, l)]);
-            if (m.lower) bottomTeeth.push([x, l], [x, Math.min(l + m.lower, u - m.teeth - 0.0015)]);
-        }
-        const teeth = new THREE.Mesh(wrapped(shapeOf(top.concat(under.reverse())), c, 0.1208, m.drop), teethMaterial);
-        teeth.name = 'teeth';
-        group.add(teeth);
-        if (m.lower) {
-            const lowEdge = bottomTeeth.filter((p, i) => i % 2 === 0);
-            const highEdge = bottomTeeth.filter((p, i) => i % 2 === 1).map(([x, y], i) => [x, Math.max(y, lowEdge[i][1])]);
-            const lower = new THREE.Mesh(wrapped(shapeOf(lowEdge.concat(highEdge.reverse())), c, 0.1208, m.drop), teethMaterial);
-            lower.name = 'teeth';
-            group.add(lower);
-        }
+        return group;
     }
-    group.traverse((o) => {
-        if (o.isMesh) o.castShadow = false;
-    });
+    const m = M[kind];
+    const hw = m.width / 2;
+    const edge = (side) => (u) => mouthEdges(m, u)[side];
+    if (kind === 'smile' || kind === 'smirk') {
+        // A closed mouth: the crescent itself is the lips.
+        add(sheet(between(hw, edge('bottom'), edge('top')), c, L.lips, m.drop), lipsMaterial, 'lips');
+        return group;
+    }
+    add(sheet(between(hw, edge('bottom'), edge('top')), c, L.inside, m.drop), material(M.inside, 0.9), 'inside');
+    const teeth = material(M.teeth, 0.35);
+    // The top teeth: from the top of the opening down `teeth`, never past
+    // its bottom. The grin's bottom teeth: up from its bottom `lower`,
+    // leaving a dark line between the rows.
+    add(sheet(between(hw, (u) => Math.max(edge('top')(u) - m.teeth, edge('bottom')(u)), edge('top')), c, L.teeth, m.drop), teeth, 'teeth');
+    if (m.lower) {
+        const high = (u) => Math.min(edge('bottom')(u) + m.lower, edge('top')(u) - m.teeth - 0.0012);
+        add(sheet(between(hw, edge('bottom'), high), c, L.teeth, m.drop), teeth, 'teeth');
+    }
+    add(sheet(ring(m), c, L.lips, m.drop), lipsMaterial, 'lips');
     return group;
 }
 
@@ -273,14 +267,17 @@ function fitSkirt(person, skirt) {
 }
 
 /** A leg's parts by what they are: the thigh and the shin (the upper and
- *  lower cylinders), the knee, and the shoe. */
+ *  lower cylinders), the knee, and the shoe. THE RIG'S OWN PARTS ONLY: they
+ *  are the leg's unnamed meshes, and everything this part adds is named.
+ *  (Steve's QA, 2026-10-24: in shorts the hem was taken for the shin, and
+ *  every boot came out the width of the hem.) */
 function legParts(leg) {
-    const cylinders = leg.children.filter((m) => m.isMesh && m.geometry.type === 'CylinderGeometry')
+    const cylinders = leg.children.filter((m) => m.isMesh && !m.name && m.geometry.type === 'CylinderGeometry')
         .sort((a, b) => b.position.y - a.position.y);
     return {
         thigh: cylinders[0],
         shin: cylinders[1],
-        knee: leg.children.find((m) => m.isMesh && m.geometry.type === 'SphereGeometry'),
+        knee: leg.children.find((m) => m.isMesh && !m.name && m.geometry.type === 'SphereGeometry'),
         shoe: leg.children.find((m) => m.userData.isShoe)
     };
 }
@@ -499,17 +496,27 @@ export const FACIAL_SIZE = Object.freeze({
  *  smile: preview, 2026-10-24, the beard crossed the grin). */
 export const BELOW_MOUTH = 0.006;
 
+/** And the stubble's upper-lip shadow keeps this far above its highest. */
+export const ABOVE_MOUTH = 0.003;
+
 /** An edge's [angle, polar] points with its front (every point up to
  *  `front` radians from straight ahead) moved down to at least `polar`. */
 function lowerFront(points, polar, front = 0.2) {
     return points.map(([a, t]) => [a, a <= front ? Math.max(t, polar) : t]);
 }
 
-/** `mouthBottom` is the mouth's lowest point, below the head's middle. */
-function buildFacial(kind, c, color, mouthBottom = -SMILE.drop - SMILE.thickness) {
+/** `mouth` is the mouth's lowest and highest points (`bottom`, `top`),
+ *  measured from the head's middle. */
+function buildFacial(kind, c, color, mouth = { bottom: -MOUTH_SIZE.smile.drop - 0.003, top: -MOUTH_SIZE.smile.drop + 0.009 }) {
     const F = FACIAL_SIZE;
     // The polar angle on a sphere of radius `r` just under the mouth.
-    const under = (r) => Math.acos(Math.max(-1, (mouthBottom - BELOW_MOUTH) / r));
+    const under = (r) => Math.acos(Math.max(-1, (mouth.bottom - BELOW_MOUTH) / r));
+    // The upper lip's shadow ends a little above the mouth's highest point
+    // (a smirk's raised corner reaches into it: QA by test, 2026-10-24).
+    const lip = () => {
+        const bottom = Math.min(along(F.stubble.lip.bottom, 0), Math.acos((mouth.top + ABOVE_MOUTH) / F.stubble.r));
+        return { ...F.stubble.lip, bottom: [[0, Math.max(bottom, along(F.stubble.lip.top, 0) + 0.01)]] };
+    };
     const beard = (r) => ({ ...F.beard, top: lowerFront(F.beard.top, under(r)) });
     const group = new THREE.Group();
     group.name = 'facial';
@@ -531,7 +538,7 @@ function buildFacial(kind, c, color, mouthBottom = -SMILE.drop - SMILE.thickness
             color, roughness: 1, transparent: true, opacity: F.stubble.opacity, depthWrite: false, side: THREE.DoubleSide
         });
         group.add(band(c, F.stubble.r, beard(F.stubble.r), shadow));
-        group.add(band(c, F.stubble.r, F.stubble.lip, shadow));
+        group.add(band(c, F.stubble.r, lip(), shadow));
     } else {
         group.add(mustache());
         if (kind === 'goatee') group.add(band(c, F.chin.r, { ...F.chin, top: lowerFront(F.chin.top, under(F.chin.r), Infinity) }, solid));
@@ -917,11 +924,12 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     const c = head.position;
     if (a.glasses !== 'none') person.add(buildGlasses(a.glasses, c));
     if (a.facial !== 'none') {
-        let bottom = Infinity;
+        const mouth = { bottom: Infinity, top: -Infinity };
         eachVertex([person.children.find((o) => o.name === 'mouth')], (v) => {
-            bottom = Math.min(bottom, v.y - c.y);
+            mouth.bottom = Math.min(mouth.bottom, v.y - c.y);
+            mouth.top = Math.max(mouth.top, v.y - c.y);
         });
-        person.add(buildFacial(a.facial, c, optionOf(HAIR_COLORS, a.hair).color, bottom));
+        person.add(buildFacial(a.facial, c, optionOf(HAIR_COLORS, a.hair).color, mouth));
     }
     if (a.hat !== 'none') {
         const hair = person.children.find((o) => o.userData.isHair);

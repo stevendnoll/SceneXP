@@ -171,7 +171,7 @@ describe('the figure', () => {
             expect(c.y).toBeLessThan(h.y - 0.03);
             expect(c.y).toBeGreaterThan(h.y - 0.08);
             expect(c.z).toBeGreaterThan(0.09);
-            expect(box.max.x - box.min.x).toBeCloseTo(F.SMILE.width + 2 * F.SMILE.thickness, 2);
+            expect(box.max.x - box.min.x).toBeCloseTo(F.MOUTH_SIZE.smile.width, 2);
             // Darker than the skin in every channel, and redder than it is green.
             const lips = smile.material.color.getHex();
             expect(lips).toBe(F.lipsColor(skin.color));
@@ -638,13 +638,35 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
             expect(Math.min(...pts.map((p) => p.y))).toBeGreaterThan(1.5 - 0.085);
             expect(Math.max(...pts.map((p) => Math.abs(p.x)))).toBeLessThan(0.036);
         }
-        // An open mouth is wrapped onto the sphere: its flat layers lie
-        // within a millimeter or two of the surface, corners and all.
-        for (const mouth of ['bigSmile', 'grin']) {
+        // Every mouth but the "o" lies on the sphere: its layers within a
+        // fraction of a millimeter of their own radius, corners and all.
+        for (const mouth of ['smile', 'smirk', 'bigSmile', 'grin']) {
             const avatar = F.createAvatar({ mouth });
             for (const m of meshesOf(avatar.person.children.find((o) => o.name === 'mouth'))) {
                 const d = points(avatar.person, m).map((p) => p.distanceTo(HEAD()));
                 expect(`${mouth} ${m.name}: ${Math.max(...d) - Math.min(...d) < 0.0005}`).toBe(`${mouth} ${m.name}: true`);
+            }
+        }
+    });
+
+    test('no part of any mouth sinks into the head, so the skin never shows through it', () => {
+        // THE MIDDLE OF EVERY TRIANGLE, not just its corners: a mouth built
+        // from a few long triangles had its corners on the sphere and its
+        // middles 2.6 mm inside it, and the skin showed through the open
+        // mouth like a tongue (Steve's QA, 2026-10-24).
+        for (const mouth of A.MOUTHS.map((m) => m.id)) {
+            const avatar = F.createAvatar({ mouth });
+            const group = avatar.person.children.find((o) => o.name === 'mouth');
+            for (const m of meshesOf(group)) {
+                if (m.geometry.type !== 'BufferGeometry') continue;
+                const pts = points(avatar.person, m);
+                const index = m.geometry.index.array;
+                let deepest = Infinity;
+                for (let i = 0; i < index.length; i += 3) {
+                    const mid = pts[index[i]].clone().add(pts[index[i + 1]]).add(pts[index[i + 2]]).divideScalar(3);
+                    deepest = Math.min(deepest, mid.distanceTo(HEAD()));
+                }
+                expect(`${mouth} ${m.name}: ${deepest > 0.1202}`).toBe(`${mouth} ${m.name}: true`);
             }
         }
     });
@@ -669,10 +691,24 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
             const group = F.createAvatar({ mouth }).person.children.find((o) => o.name === 'mouth');
             expect(group.children.filter((m) => m.name === 'teeth')).toHaveLength(0);
         }
-        // The smirk is the smile with one corner up.
-        const smile = F.createAvatar({}).person.children.find((o) => o.name === 'mouth').children[0];
-        const smirk = F.createAvatar({ mouth: 'smirk' }).person.children.find((o) => o.name === 'mouth').children[0];
-        expect(smirk.rotation.z - smile.rotation.z).toBeCloseTo(F.MOUTH_SIZE.smirk.turn, 9);
+        // The smirk is a smile with one side up: its left corner (the
+        // figure's, at +x) higher than its right; the smile's are level.
+        const corners = (mouth) => {
+            const avatar = F.createAvatar({ mouth });
+            const pts = points(avatar.person, avatar.person.children.find((o) => o.name === 'mouth'));
+            const end = (sign) => pts.reduce((best, p) => (sign * p.x > sign * best.x ? p : best));
+            return { left: end(1).y, right: end(-1).y };
+        };
+        const smile = corners('smile');
+        const smirk = corners('smirk');
+        expect(smile.left).toBeCloseTo(smile.right, 6);
+        expect(smirk.left - smirk.right).toBeGreaterThan(0.004);
+        // A closed mouth is the crescent alone: no teeth, no inside, and
+        // (QA, 2026-10-24) no balls on its ends.
+        for (const mouth of ['smile', 'smirk']) {
+            const group = F.createAvatar({ mouth }).person.children.find((o) => o.name === 'mouth');
+            expect(meshesOf(group).map((m) => m.name)).toEqual(['lips']);
+        }
     });
 
     test('lips are the skin\'s own rose, or the color chosen, on every mouth', () => {
@@ -742,6 +778,19 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
         // The hands stay the hands the rig made.
         const hand = (a) => a.arms.right.userData.forearm.children[2].scale.x;
         expect(hand(athletic)).toBe(hand(standard));
+        // The feet keep up with the legs: the shoe's width over the ankle's
+        // stays about the same at every strength (Steve's QA, 2026-10-24).
+        const ratio = (muscles) => {
+            const { shin } = (() => {
+                const l = F.createAvatar({ muscles }).person.children.find((o) => o.userData.isLeg);
+                const cyl = l.children.filter((m) => m.isMesh && !m.name && m.geometry.type === 'CylinderGeometry').sort((a, b) => b.position.y - a.position.y);
+                return { shin: cyl[1], leg: l };
+            })();
+            const shoe = F.createAvatar({ muscles }).person.children.find((o) => o.userData.isLeg).children.find((m) => m.userData.isShoe);
+            return shoe.geometry.parameters.width / shin.geometry.parameters.radiusBottom;
+        };
+        expect(ratio('buff') / ratio('standard')).toBeGreaterThan(0.85);
+        expect(ratio('athletic')).toBeGreaterThan(ratio('standard'));
         const buff = F.createAvatar({ muscles: 'buff' });
         const torso = (a) => new THREE.Box3().setFromObject(a.person.children.find((o) => o.isMesh && o.geometry.type === 'ExtrudeGeometry'));
         expect(torso(buff).max.x).toBeGreaterThan(torso(standard).max.x * 1.2);
@@ -783,6 +832,33 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
                 avatar.dispose();
             }
         }
+        // EVERY BOOT IS THE SAME BOOT whatever is worn over it (Steve's QA,
+        // 2026-10-24: in shorts the shaft took the hem's width), part for
+        // part, and no wider than the shin plus its own `over` and `flare`.
+        const parts = (look) => {
+            const out = [];
+            leg(F.createAvatar(look)).group.children.filter((m) => m.isMesh && m.name && m.name !== 'hem')
+                .forEach((m) => out.push([m.name, JSON.stringify(m.geometry.parameters), m.position.toArray().map((n) => n.toFixed(5)).join()]));
+            return out;
+        };
+        for (const shoes of ['ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots']) {
+            const inPants = parts({ shoes });
+            expect(inPants.length).toBeGreaterThan(1);
+            expect(parts({ shoes, bottom: 'shorts' })).toEqual(inPants);
+            expect(parts({ shoes, bottom: 'skirt' })).toEqual(inPants);
+            for (const bottom of ['pants', 'shorts', 'skirt']) {
+                const { group, shin } = leg(F.createAvatar({ shoes, bottom }));
+                const s = group.children.find((m) => m.name === 'shaft');
+                const spec = F.BOOT_SIZE[shoes];
+                // The shin's radius at a height, along its own taper.
+                const { radiusTop, radiusBottom, height } = shin.geometry.parameters;
+                const shinAt = (y) => radiusBottom + ((y - (shin.position.y - height / 2)) / height) * (radiusTop - radiusBottom);
+                const half = s.geometry.parameters.height / 2;
+                const fits = s.geometry.parameters.radiusTop <= shinAt(s.position.y + half) + spec.over + (spec.flare || 0) + 1e-9
+                    && s.geometry.parameters.radiusBottom <= shinAt(s.position.y - half) + spec.over + 1e-9;
+                expect(`${shoes} in ${bottom}: ${fits}`).toBe(`${shoes} in ${bottom}: true`);
+            }
+        }
         // The cowboy boot's toe comes to a point past the shoe's front.
         const cowboy = F.createAvatar({ shoes: 'cowboyBoots' });
         const { group } = leg(cowboy);
@@ -810,9 +886,4 @@ describe('what this version draws', () => {
         expect(F.smoothstep(0.5)).toBe(0.5);
     });
 
-    test('the smile\'s arc spans its width and rises its lift', () => {
-        const { radius, arc } = F.smileArc(0.04, 0.0072);
-        expect(2 * radius * Math.sin(arc / 2)).toBeCloseTo(0.04, 9);
-        expect(radius - radius * Math.cos(arc / 2)).toBeCloseTo(0.0072, 9);
-    });
 });

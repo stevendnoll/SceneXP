@@ -88,11 +88,13 @@ export const LIP_COLORS = Object.freeze([
 
 /** How strong the arms are (Steve, 2026-10-24: "so guys can make their
  *  avatars look buff"). Athletic thickens the arms; Buff is the rig's own
- *  `muscular` build: a broader chest, bigger arms, thicker legs. */
+ *  `muscular` build: a broader chest, bigger arms, thicker legs. `feet` is
+ *  the rig's `footScale`, so the shoes keep up with the legs above them
+ *  (Steve's QA, 2026-10-24: they looked too small on a buff figure). */
 export const MUSCLES = Object.freeze([
-    { id: 'standard', label: 'Standard' },
-    { id: 'athletic', label: 'Athletic' },
-    { id: 'buff', label: 'Buff' }
+    { id: 'standard', label: 'Standard', feet: 1 },
+    { id: 'athletic', label: 'Athletic', feet: 1.08 },
+    { id: 'buff', label: 'Buff', feet: 1.2 }
 ]);
 
 /**
@@ -304,6 +306,7 @@ export function personConfig(avatar, overrides = {}) {
         pantsColor: optionOf(PANTS, a.bottomColor).color,
         hasSkirt: a.bottom === 'skirt',
         muscular: a.muscles === 'buff',
+        footScale: optionOf(MUSCLES, a.muscles).feet,
         skinTone: optionOf(SKINS, a.skin).color,
         hairColor: optionOf(HAIR_COLORS, a.hair).color,
         hairStyle: a.length === 'bald' ? 'short' : a.length,
