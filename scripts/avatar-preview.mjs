@@ -3,7 +3,8 @@
  * avatar-preview.mjs - the avatar's pieces (shared/js/avatar-figure-1.0.0.js),
  * drawn for checking by eye without a browser (the "a preview renderer beats
  * guessing" lesson): every pair of glasses and every kind of facial hair on
- * two skin tones, every hat over every hair style, the shoes, and the builds
+ * two skin tones, every hair style, every hat (on short hair, over the
+ * biggest styles, and over the styles worn up), the shoes, and the builds
  * in a skirt. Run it after changing a piece, before anyone sees it in a
  * browser.
  *
@@ -11,7 +12,7 @@
  *
  * Writes specs/avatar/previews/*.png (git-ignored), each column one look and
  * each row a view (from the front, and from three quarters to the figure's
- * left). Flat-shaded through scripts/preview-raster.mjs, so the shapes and
+ * left, and for the hair and the hats from behind). Flat-shaded through scripts/preview-raster.mjs, so the shapes and
  * the fit are exact and the light is rough.
  */
 
@@ -46,15 +47,17 @@ const SHOTS = {
 };
 const TURNS = [0, 0.75];
 
-async function sheet(name, looks, shot) {
+/** One sheet: a column a look, a row a turn (`turns`, from the front and
+ *  three quarters by default; the hair also from behind). */
+async function sheet(name, looks, shot, turns = TURNS) {
     const S = SHOTS[shot];
     const [w, h] = S.cell;
     const W = w * looks.length;
-    const H = h * TURNS.length;
+    const H = h * turns.length;
     const out = new Uint8Array(W * H * 3);
     looks.forEach((look, col) => {
         const avatar = createAvatar(look);
-        TURNS.forEach((turn, row) => {
+        turns.forEach((turn, row) => {
             const cam = camera(S.aim, S.distance, turn, S.lift, S.fov, w / h);
             place(out, W, render(avatar.group, cam, w, h), w, h, col, row);
         });
@@ -76,10 +79,19 @@ await sheet('facial', [
     { ...fair, facial: 'stubble' }, { ...fair, facial: 'mustache' }, { ...fair, facial: 'goatee' }, { ...fair, facial: 'beard' },
     { ...deep, facial: 'stubble' }, { ...deep, facial: 'beard', glasses: 'round' }, { skin: 'light', hair: 'blond', facial: 'beard', length: 'long' }
 ], 'face');
-for (const hat of ['beanie', 'cap', 'sunHat']) {
-    await sheet(`hat-${hat}`, ['bald', 'buzz', 'short', 'long'].map((length) => ({ ...fair, length, hat, hatColor: 'navy' }))
-        .concat([{ ...deep, length: 'long', hat, hatColor: 'mustard', glasses: 'sunglasses' }]), 'face');
-}
+// Every hair style, from the front, three quarters and behind, in two
+// sheets; then every hat on short hair, and over the two biggest styles.
+const STYLES = ['short', 'quiff', 'spiky', 'curly', 'afro', 'mohawk', 'mullet', 'bob', 'ponytail', 'pigtails',
+    'topKnot', 'lowBun', 'spaceBuns', 'braids', 'locs', 'cornrows', 'buzz', 'long', 'bald'];
+const HATS = ['beanie', 'cap', 'trucker', 'ivyCap', 'beret', 'fedora', 'cowboy', 'topHat', 'fez', 'chef', 'hardHat', 'sunHat', 'birthday'];
+const BEHIND = [0, 0.75, Math.PI];
+await sheet('hair-1', STYLES.slice(0, 10).map((length, k) => ({ ...(k % 2 ? deep : fair), length })), 'face', BEHIND);
+await sheet('hair-2', STYLES.slice(10).map((length, k) => ({ ...(k % 2 ? fair : deep), length })), 'face', BEHIND);
+await sheet('hats', HATS.map((hat) => ({ ...fair, length: 'short', hat, hatColor: 'navy' })), 'face', BEHIND);
+await sheet('hats-afro', HATS.map((hat) => ({ ...deep, length: 'afro', hat, hatColor: 'mustard' })), 'face');
+await sheet('hats-long', HATS.map((hat) => ({ skin: 'light', hair: 'blond', length: 'long', hat, hatColor: 'teal' })), 'face');
+await sheet('hats-up', [['ponytail', 'cap'], ['ponytail', 'beanie'], ['pigtails', 'beanie'], ['topKnot', 'cap'], ['mohawk', 'beanie'], ['spaceBuns', 'fedora'], ['braids', 'cowboy'], ['bob', 'beret']]
+    .map(([length, hat]) => ({ ...fair, length, hat, hatColor: 'rust' })), 'face', BEHIND);
 await sheet('faces', [
     { ...fair }, { ...fair, faceShape: 'oval' }, { ...deep, faceShape: 'oval', length: 'long', hat: 'beanie', hatColor: 'mustard' },
     { ...fair, nose: 'button' }, { ...fair, nose: 'round' }, { ...fair, nose: 'wide' }, { ...fair, cheeks: 'blush' }, { skin: 'light', hair: 'copper', cheeks: 'freckles' }

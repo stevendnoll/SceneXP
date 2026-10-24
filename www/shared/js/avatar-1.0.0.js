@@ -29,9 +29,34 @@
  * which a browser never sends to the server.
  */
 
-import { SHIRTS, PANTS, SKINS, HAIR_COLORS as CAST_HAIR, HAIR_LENGTHS, optionOf, normalizeChoice } from './cast-1.0.0.min.js';
+import { SHIRTS, PANTS, SKINS, HAIR_COLORS as CAST_HAIR, HAIR_LENGTHS as CAST_STYLES, optionOf, normalizeChoice } from './cast-1.0.0.min.js';
 
-export { SHIRTS, PANTS, SKINS, HAIR_LENGTHS, optionOf };
+export { SHIRTS, PANTS, SKINS, optionOf };
+
+/**
+ * Hair styles (the field keeps its first name, `length`, so links made
+ * before still read): cast-1.0.0's four first (none, buzzed, short, long),
+ * then the styles Steve asked for on 2026-10-24, drawn by avatar-hair.
+ * Named by style, never by who wears them.
+ */
+export const HAIR_LENGTHS = Object.freeze([
+    ...CAST_STYLES,
+    { id: 'quiff', label: 'Quiff' },
+    { id: 'spiky', label: 'Spiky' },
+    { id: 'curly', label: 'Curly' },
+    { id: 'afro', label: 'Afro' },
+    { id: 'mohawk', label: 'Mohawk' },
+    { id: 'mullet', label: 'Mullet' },
+    { id: 'bob', label: 'Bob' },
+    { id: 'ponytail', label: 'Ponytail' },
+    { id: 'pigtails', label: 'Pigtails' },
+    { id: 'topKnot', label: 'Top knot' },
+    { id: 'lowBun', label: 'Low bun' },
+    { id: 'spaceBuns', label: 'Space buns' },
+    { id: 'braids', label: 'Braids' },
+    { id: 'locs', label: 'Locs' },
+    { id: 'cornrows', label: 'Cornrows' }
+]);
 
 /**
  * Hair colors (Steve's QA, 2026-10-24: more of them): cast-1.0.0's six
@@ -235,7 +260,18 @@ export const HATS = Object.freeze([
     { id: 'none', label: 'None' },
     { id: 'cap', label: 'Ball cap' },
     { id: 'beanie', label: 'Beanie' },
-    { id: 'sunHat', label: 'Sun hat' }
+    { id: 'sunHat', label: 'Sun hat' },
+    // Appended 2026-10-24 (Steve's QA).
+    { id: 'trucker', label: 'Trucker hat' },
+    { id: 'ivyCap', label: 'Ivy cap' },
+    { id: 'beret', label: 'Beret' },
+    { id: 'fedora', label: 'Fedora' },
+    { id: 'cowboy', label: 'Cowboy hat' },
+    { id: 'topHat', label: 'Top hat' },
+    { id: 'fez', label: 'Fez' },
+    { id: 'chef', label: "Chef's hat" },
+    { id: 'hardHat', label: 'Hard hat' },
+    { id: 'birthday', label: 'Birthday hat' }
 ]);
 
 /**
@@ -448,7 +484,28 @@ export function describeAvatar(avatar) {
     // A custom color is said as "custom-color": the words never carry a hex.
     const word = (list, id) => (CUSTOM_COLOR.test(id) ? 'custom-color' : optionOf(list, id).label.toLowerCase());
     const name = (list, id) => (CUSTOM_COLOR.test(id) ? 'custom-color' : optionOf(list, id).name);
-    const hair = a.length === 'bald' ? 'no hair' : `${word(HAIR_LENGTHS, a.length)} ${word(HAIR_COLORS, a.hair)} hair`;
+    const hairColor = word(HAIR_COLORS, a.hair);
+    const an = (w) => (/^[aeiou]/.test(w) ? `an ${w}` : `a ${w}`);
+    const HAIR_WORDS = {
+        bald: () => 'no hair',
+        buzz: (c) => `buzzed ${c} hair`,
+        spiky: (c) => `spiky ${c} hair`,
+        curly: (c) => `curly ${c} hair`,
+        afro: (c) => an(`${c} afro`),
+        mohawk: (c) => an(`${c} mohawk`),
+        mullet: (c) => an(`${c} mullet`),
+        bob: (c) => an(`${c} bob`),
+        quiff: (c) => `${c} hair in a quiff`,
+        ponytail: (c) => `${c} hair in a ponytail`,
+        topKnot: (c) => `${c} hair in a top knot`,
+        lowBun: (c) => `${c} hair in a low bun`,
+        spaceBuns: (c) => `${c} hair in space buns`,
+        pigtails: (c) => `${c} pigtails`,
+        braids: (c) => `${c} braids`,
+        locs: (c) => `${c} locs`,
+        cornrows: (c) => `${c} cornrows`
+    };
+    const hair = (HAIR_WORDS[a.length] || ((c) => `${word(HAIR_LENGTHS, a.length)} ${c} hair`))(hairColor);
     const lips = a.lips === 'natural' ? '' : ` and ${word(LIP_COLORS, a.lips)} lips`;
     const shape = { round: '', lashes: '' }[a.eyeShape] ?? `${word(EYE_SHAPES, a.eyeShape)} `;
     const face = [

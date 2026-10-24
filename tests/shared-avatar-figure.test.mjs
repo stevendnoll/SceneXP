@@ -66,6 +66,13 @@ function at(person, o) {
     return o.getWorldPosition(new THREE.Vector3()).applyMatrix4(person.matrixWorld.clone().invert());
 }
 
+/** Is `o` part of the hair (the rig's or avatar-hair's)? Compared on its
+ *  own: the short cut is avatar-hair's since 2026-10-24. */
+function inHair(o) {
+    for (let p = o; p; p = p.parent) if (p.userData && p.userData.isHair) return true;
+    return false;
+}
+
 /** Is `o` inside a group named `name`? */
 function inside(o, name) {
     for (let p = o; p; p = p.parent) if (p.name === name) return true;
@@ -80,7 +87,7 @@ function meshes(root) {
     root.updateMatrixWorld(true);
     const out = [];
     root.traverse((o) => {
-        if (!o.isMesh || inside(o, 'mouth') || inside(o, 'brows')) return;
+        if (!o.isMesh || inside(o, 'mouth') || inside(o, 'brows') || inHair(o)) return;
         const p = new THREE.Vector3();
         o.getWorldPosition(p);
         const round = (n) => Math.round(n * 1e5) / 1e5;
@@ -121,7 +128,12 @@ describe('the figure', () => {
         const today = meshes(createPerson(leavesPerson(DEFAULT_CHOICE)));
         const avatar = F.createAvatar(A.DEFAULT_AVATAR, { role: 'operator' });
         expect(meshes(avatar.group)).toEqual(today);
-        // The one deliberate difference: a smoother head, the same size.
+        // The deliberate differences: the short cut is avatar-hair's, lying
+        // on the head (the rig's is a bowl: Steve's QA, 2026-10-24), and the
+        // head is smoother, the same size.
+        const hair = avatar.person.getObjectByName('hair');
+        expect(hair.userData.style).toBe('short');
+        expect(hair.children.map((m) => m.name)).toEqual(['scalp']);
         const head = findIn(avatar.person, (o) => o.userData.isHead).geometry.parameters;
         expect([head.radius, head.widthSegments, head.heightSegments]).toEqual([0.12, ...F.HEAD_SEGMENTS]);
         const mouth = avatar.person.getObjectByName('mouth');
@@ -135,9 +147,21 @@ describe('the figure', () => {
             { shirt: 'teal', pants: 'black', skin: 'light', hair: 'blond', length: 'bald' },
             { shirt: 'mustard', pants: 'denim', skin: 'tan', hair: 'auburn', length: 'buzz' }
         ]) {
-            const today = meshes(createPerson(leavesPerson(choice)));
+            const rig = createPerson(leavesPerson(choice));
+            const today = meshes(rig);
             const avatar = F.createAvatar(A.fromCastChoice(choice), { role: 'operator' });
             expect(meshes(avatar.group)).toEqual(today);
+            // The rig's own styles (long, buzzed) are the rig's own hair, mesh
+            // for mesh; the short cut is avatar-hair's.
+            const hairOf = (root) => {
+                root.updateMatrixWorld(true);
+                const out = [];
+                root.traverse((o) => {
+                    if (o.isMesh && inHair(o)) out.push([o.geometry.type, o.getWorldPosition(new THREE.Vector3()).toArray().map((n) => n.toFixed(5)).join()]);
+                });
+                return out.sort();
+            };
+            if (choice.length === 'long' || choice.length === 'buzz') expect(hairOf(avatar.group)).toEqual(hairOf(rig));
         }
     });
 
@@ -557,7 +581,12 @@ describe('the pieces (M5), measured', () => {
 
     test('a hat is snug on a buzz cut and roomier over long hair, and long hair hangs from under it', () => {
         const size = (length) => F.createAvatar({ hat: 'beanie', length }).person.getObjectByName('hat').userData.fit.r;
-        expect(size('buzz')).toBeLessThan(size('short'));
+        // The short cut lies so close to the head (2026-10-24) that the head
+        // itself sizes the hat, as bald and buzzed do; fuller hair is roomier.
+        expect(size('buzz')).toBeLessThanOrEqual(size('short'));
+        expect(size('bald')).toBeLessThanOrEqual(size('buzz'));
+        expect(size('long')).toBeGreaterThan(size('short'));
+        expect(size('afro')).toBeGreaterThan(size('long'));
         // Fitted to the rounded hair, not the long hair's boxy hanks, so it
         // does not balloon (preview, 2026-10-24: it was 18 cm across).
         expect(size('long')).toBeLessThan(0.16);

@@ -39,6 +39,13 @@ import {
     personConfig, withOverrides, normalizeAvatar, validPortraitSrc, colorOf
 } from './avatar-1.0.0.min.js';
 import { createPerson } from './people-1.0.0.min.js';
+import { eachVertex } from './avatar-shapes-1.0.0.min.js';
+import { buildHair, HAIR_DRAWN } from './avatar-hair-1.0.0.min.js';
+import { buildHat, HAT_SIZE, trimUnder } from './avatar-hats-1.0.0.min.js';
+
+// The hats and the hair are their own parts (2026-10-24); these are passed
+// on for the scenes and the tests that read them here.
+export { HAT_SIZE, trimUnder, HAIR_DRAWN };
 
 /**
  * The portrait's render version. Bump it whenever the figure's look changes,
@@ -48,8 +55,9 @@ import { createPerson } from './people-1.0.0.min.js';
  * (2026-10-24): the mouths redrawn as crescents and rounded pills. 5
  * (2026-10-24): the face (brows on every face, eyes, noses, cheeks, shape).
  * 6 (2026-10-24): a smoother head, solid beards.
+ * 7 (2026-10-24): the hair styles (avatar-hair) and the hats (avatar-hats).
  */
-export const RENDER_VERSION = 6;
+export const RENDER_VERSION = 7;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named
@@ -812,169 +820,6 @@ function buildFacial(kind, c, color, mouth = { bottom: -MOUTH_SIZE.smile.drop - 
 }
 
 /**
- * The hats, each FITTED TO THE HAIR UNDER IT: a crown's radius is the
- * farthest the hair (or the head, bald) reaches from the crown's middle,
- * above the hat's rim, plus `ease`. So a hat sits snug on a buzz cut and
- * roomy over long hair, and no hair ever comes through it
- * (tests/shared-avatar-figure measures every hat over every hair style).
- *
- *   beanie  a dome down over the tops of the ears, its front tipped up
- *           (`tilt`) off the brow, and a turned-up cuff
- *   cap     a shallower crown, a brim out over the brow, and a button
- *   sunHat  a crown, a dark band, and a wide brim drooping a little
- *
- * `center` is the crown's middle from the head's, `edge` how far down the
- * dome runs (radians from the top).
- */
-export const HAT_SIZE = Object.freeze({
-    ease: 0.004,
-    beanie: { center: [0, 0.022, -0.008], edge: 1.65, tilt: -0.3, cuff: 0.03 },
-    cap: { center: [0, 0.035, -0.005], edge: 1.5, tilt: -0.12, brim: 0.09, reach: 0.035, pitch: 0.14 },
-    sunHat: { center: [0, 0, -0.012], base: 0.07, height: 0.1, taper: 0.88, brim: 0.235, droop: 0.025, band: 0.02, bandColor: 0x2a2622 }
-});
-
-/** Call `fn(v)` for every vertex of `objects` (meshes and groups that are
- *  the person's children), in the person's coordinates, for the meshes
- *  `keep` keeps. */
-function eachVertex(objects, fn, keep = () => true) {
-    const v = new THREE.Vector3();
-    for (const o of objects) {
-        o.updateMatrix();
-        o.traverse((m) => {
-            if (!m.isMesh || !keep(m)) return;
-            // Its own offset too: a mesh's matrix is stale until updated, and
-            // the hair's meshes carry their whole height in it.
-            m.updateMatrix();
-            const matrix = m.matrix.clone();
-            for (let p = m.parent; p && p !== o.parent; p = p.parent) {
-                p.updateMatrix();
-                matrix.premultiply(p.matrix);
-            }
-            const pos = m.geometry.attributes.position;
-            for (let i = 0; i < pos.count; i++) fn(v.fromBufferAttribute(pos, i).applyMatrix4(matrix));
-        });
-    }
-}
-
-/** The farthest any vertex of `objects` above `aboveY` reaches from
- *  `center`, straight or (`horizontal`) across. */
-function reach(objects, center, aboveY, horizontal = false, keep = undefined) {
-    let far = 0;
-    eachVertex(objects, (v) => {
-        if (v.y < aboveY) return;
-        far = Math.max(far, horizontal ? Math.hypot(v.x - center.x, v.z - center.z) : v.distanceTo(center));
-    }, keep);
-    return far;
-}
-
-/** The highest any vertex of `objects` reaches. */
-function highest(objects, keep = undefined) {
-    let top = -Infinity;
-    eachVertex(objects, (v) => {
-        top = Math.max(top, v.y);
-    }, keep);
-    return top;
-}
-
-/** The rounded parts of the hair (and the head): what a hat is fitted
- *  over. The rig's long hair also has box-shaped hanks (the curtain down
- *  the back, the locks by the face), whose top corners stand out past any
- *  round crown, so a hat fitted to them balloons (preview, 2026-10-24).
- *  Under a hat they are trimmed to hang from its rim instead (`trimUnder`). */
-const rounded = (m) => m.geometry.type !== 'BoxGeometry';
-
-/**
- * Cut each box-shaped hank of `hair` down so its top sits just under the
- * hat's rim (`rimAt(z)`, the rim's height at a depth, taken at the lower
- * of the hank's front and back), so it hangs out from under the hat as
- * hair does, and never through it. A hank wholly above the rim is hidden.
- */
-export function trimUnder(hair, rimAt, tuck = 0.004) {
-    hair.traverse((m) => {
-        if (!m.isMesh || rounded(m)) return;
-        const { height, depth } = m.geometry.parameters;
-        const h = height * m.scale.y;
-        const d = (depth * m.scale.z) / 2;
-        const bottom = m.position.y - h / 2;
-        const top = m.position.y + h / 2;
-        const rim = Math.min(rimAt(m.position.z - d), rimAt(m.position.z + d)) - tuck;
-        if (top <= rim) return;
-        if (rim <= bottom + 0.01) {
-            m.visible = false;
-            return;
-        }
-        m.scale.y *= (rim - bottom) / h;
-        m.position.y = (rim + bottom) / 2;
-    });
-}
-
-function buildHat(kind, c, color, head, hair) {
-    const cover = hair ? [head, hair] : [head];
-    const H = HAT_SIZE;
-    const spec = H[kind];
-    const group = new THREE.Group();
-    group.name = 'hat';
-    const felt = new THREE.MeshStandardMaterial({ color, roughness: 0.9, side: THREE.DoubleSide });
-    const center = new THREE.Vector3(c.x + spec.center[0], c.y + spec.center[1], c.z + spec.center[2]);
-    if (kind === 'sunHat') {
-        const baseY = c.y + spec.base;
-        const r = reach(cover, center, baseY, true, rounded) + H.ease + 0.004;
-        const top = Math.max(baseY + spec.height, highest(cover, rounded) + 0.012);
-        const height = top - baseY;
-        const crown = new THREE.Mesh(new THREE.CylinderGeometry(r * spec.taper, r, height, 32), felt);
-        crown.position.set(center.x, baseY + height / 2, center.z);
-        group.add(crown);
-        const band = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.0015, r + 0.002, spec.band, 32, 1, true),
-            new THREE.MeshStandardMaterial({ color: spec.bandColor, roughness: 0.6, side: THREE.DoubleSide }));
-        band.position.set(center.x, baseY + spec.band / 2 + 0.002, center.z);
-        band.name = 'band';
-        group.add(band);
-        const brim = new THREE.Mesh(new THREE.CylinderGeometry(r, spec.brim, spec.droop, 40, 1, true), felt);
-        brim.position.set(center.x, baseY - spec.droop / 2, center.z);
-        brim.name = 'brim';
-        group.add(brim);
-        if (hair) trimUnder(hair, () => baseY);
-        group.userData.fit = { kind, center: center.clone(), r, top, baseY };
-    } else {
-        // The rim: the dome's edge, tipped by `tilt`. Hair below the lowest
-        // point of it hangs out from under the hat, as it would.
-        const R = reach(cover, center, center.y - 0.02, false, rounded) + H.ease;
-        const dome = new THREE.Group();
-        dome.position.copy(center);
-        dome.rotation.x = spec.tilt;
-        const shell = new THREE.Mesh(new THREE.SphereGeometry(R, 32, 14, 0, Math.PI * 2, 0, spec.edge), felt);
-        shell.name = 'crown';
-        dome.add(shell);
-        const rimY = R * Math.cos(spec.edge);
-        const rimR = R * Math.sin(spec.edge);
-        if (kind === 'beanie') {
-            const cuffMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.86), roughness: 0.95, side: THREE.DoubleSide });
-            const cuff = new THREE.Mesh(new THREE.CylinderGeometry(rimR + 0.006, rimR + 0.004, spec.cuff, 32, 1, true), cuffMaterial);
-            cuff.position.y = rimY + spec.cuff / 2;
-            cuff.name = 'cuff';
-            dome.add(cuff);
-        } else {
-            const brim = new THREE.Mesh(new THREE.CylinderGeometry(spec.brim, spec.brim, 0.008, 24, 1, false, -Math.PI / 2, Math.PI), felt);
-            brim.scale.x = (rimR / spec.brim) * 0.96;
-            brim.position.set(0, rimY + 0.003, rimR - spec.reach);
-            brim.rotation.x = spec.pitch;
-            brim.name = 'brim';
-            dome.add(brim);
-            const button = new THREE.Mesh(new THREE.SphereGeometry(0.009, 10, 6), felt);
-            button.position.y = R;
-            dome.add(button);
-        }
-        group.add(dome);
-        // The rim is the dome's edge, a circle in a plane tipped by `tilt`:
-        // its height at a depth `z`, from (y - cy) cos t + (z - cz) sin t = rimY.
-        const t = spec.tilt;
-        if (hair) trimUnder(hair, (z) => center.y + (rimY - (z - center.z) * Math.sin(t)) / Math.cos(t));
-        group.userData.fit = { kind, center: center.clone(), r: R, tilt: t, edge: spec.edge };
-    }
-    return group;
-}
-
-/**
  * Sneakers, over the rig's block shoe (Steve's QA, 2026-10-24: they looked
  * the same as the classic shoe): a thick white sole a little proud of the
  * upper all round, a white toe cap and heel, and white laces. Under a white
@@ -1164,7 +1009,10 @@ export function poseFor(gesture, t) {
  */
 export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = {} } = {}) {
     const a = withOverrides(normalizeAvatar(avatar), overrides);
-    const person = createPerson({ ...personConfig(a), role, ...extra });
+    // A style drawn by avatar-hair (the short cut among them, since the
+    // rig's is a bowl) asks the rig for none of its own.
+    const ownHair = HAIR_DRAWN.includes(a.length);
+    const person = createPerson({ ...personConfig(a), role, ...extra, ...(ownHair ? { bald: true } : {}) });
     const head = person.children.find((o) => o.userData.isHead);
     // The skin's own material, for bare legs and arms.
     const skin = head.material;
@@ -1184,6 +1032,7 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     const c = head.position;
     const skinColor = colorOf('skin', a.skin);
     const hairColor = colorOf('hair', a.hair);
+    if (ownHair) face.add(buildHair(a.length, hairColor));
     shapeEyes(face, a.eyeShape, skin);
     shapeNose(face, a.nose, skin);
     face.add(buildBrows(a.brows, hairColor, a.mouth === 'surprised'));
@@ -1202,8 +1051,8 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
         face.add(buildFacial(a.facial, c, colorOf('facialColor', a.facialColor) ?? hairColor, mouth));
     }
     if (a.hat !== 'none') {
-        const hair = face.children.find((o) => o.userData.isHair);
-        face.add(buildHat(a.hat, c, colorOf('hatColor', a.hatColor), head, hair));
+        const hair = face.children.find((o) => o.userData.isHair) || null;
+        face.add(buildHat(a.hat, colorOf('hatColor', a.hatColor), head, hair));
     }
     const shoeColor = colorOf('shoeColor', a.shoeColor);
     // A white or nearly white shoe (a custom one too) gets the gray trim. The

@@ -78,14 +78,25 @@ export function render(object, camera, w, h, { bg = [236, 230, 220], light = nor
     object.traverse((mesh) => {
         if (mesh.isMesh && shown(mesh)) meshes.push(mesh);
     });
-    // Opaque first, then the see-through, as three draws them.
-    const alphaOf = (m) => (m.material.transparent ? m.material.opacity : 1);
+    // Opaque first, then the see-through, as three draws them. A mesh with
+    // several materials (a brim's top and underside) colors each triangle
+    // by its geometry group.
+    const first = (m) => (Array.isArray(m.material) ? m.material[0] : m.material);
+    const alphaOf = (m) => (first(m).transparent ? first(m).opacity : 1);
     meshes.sort((a, b) => (alphaOf(a) < 1) - (alphaOf(b) < 1));
     for (const mesh of meshes) {
         const pos = mesh.geometry.attributes.position;
         const index = mesh.geometry.index;
-        const col = mesh.material.color ? mesh.material.color.getHex() : 0x888888;
-        const base = [(col >> 16) & 255, (col >> 8) & 255, col & 255];
+        const rgbOf = (mat) => {
+            const col = mat && mat.color ? mat.color.getHex() : 0x888888;
+            return [(col >> 16) & 255, (col >> 8) & 255, col & 255];
+        };
+        const groups = Array.isArray(mesh.material) ? mesh.geometry.groups : null;
+        const baseAt = (t) => {
+            if (!groups) return rgbOf(mesh.material);
+            const g = groups.find((x) => t >= x.start && t < x.start + x.count);
+            return rgbOf(mesh.material[g ? g.materialIndex : 0]);
+        };
         const alpha = alphaOf(mesh);
         const world = [];
         const screen = [];
@@ -103,7 +114,7 @@ export function render(object, camera, w, h, { bg = [236, 230, 220], light = nor
             const [a, b, c] = ids.map((i) => world[i]);
             const n = norm(cross(sub(b, a), sub(c, a)));
             const lit = 0.45 + 0.55 * Math.abs(dot(n, light));
-            tri(ids.map((i) => screen[i]), base.map((x) => x * lit), alpha, rgb, depth, W, H);
+            tri(ids.map((i) => screen[i]), baseAt(t).map((x) => x * lit), alpha, rgb, depth, W, H);
         }
     }
     const out = new Uint8Array(w * h * 3);

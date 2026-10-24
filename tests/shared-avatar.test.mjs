@@ -94,7 +94,10 @@ describe('the lists', () => {
         expect(A.SHIRTS).toBe(SHIRTS);
         expect(A.PANTS).toBe(PANTS);
         expect(A.SKINS).toBe(SKINS);
-        expect(A.HAIR_LENGTHS).toBe(HAIR_LENGTHS);
+        // More styles (Steve's QA, 2026-10-24), cast-1.0.0's four first.
+        expect(A.HAIR_LENGTHS.slice(0, HAIR_LENGTHS.length)).toEqual([...HAIR_LENGTHS]);
+        expect(A.HAIR_LENGTHS.map((o) => o.id)).toEqual(expect.arrayContaining(['mohawk', 'mullet', 'ponytail', 'afro', 'locs', 'cornrows']));
+        expect(A.HATS.map((o) => o.id)).toEqual(['none', 'cap', 'beanie', 'sunHat', 'trucker', 'ivyCap', 'beret', 'fedora', 'cowboy', 'topHat', 'fez', 'chef', 'hardHat', 'birthday']);
         // More hair colors (Steve's QA, 2026-10-24), cast-1.0.0's six first,
         // so every id a Leaf Blower choice holds still reads.
         expect(A.HAIR_COLORS.slice(0, HAIR_COLORS.length)).toEqual([...HAIR_COLORS]);
@@ -121,7 +124,6 @@ describe('the lists', () => {
         // Named by style, never by who wears them (Steve, 2026-10-24).
         for (const o of A.SHOES) expect(o.label).not.toMatch(/\b(men|women|man|woman|boy|girl|lady|ladies)/i);
         expect(A.SHOE_COLORS.map((o) => o.id)).toEqual(['black', 'brown', 'white', 'navy', 'red']);
-        expect(A.HATS.map((o) => o.id)).toEqual(['none', 'cap', 'beanie', 'sunHat']);
     });
 
     test('Curvy is Maya\'s build, from Whitestone\'s own config', () => {
@@ -285,6 +287,22 @@ describe('custom colors (Steve, 2026-10-24)', () => {
         expect(words).toMatch(/a custom-color ball cap/);
         expect(words).toMatch(/a custom-color full beard/);
         expect(words).not.toMatch(/[0-9a-f]{6}/);
+    });
+
+    test('every hair style is said the way a person would say it', () => {
+        const say = (length) => A.describeAvatar({ length, hair: 'auburn' });
+        expect(say('afro')).toMatch(/an auburn afro/);
+        expect(say('mohawk')).toMatch(/an auburn mohawk/);
+        expect(say('mullet')).toMatch(/an auburn mullet/);
+        expect(A.describeAvatar({ length: 'bob', hair: 'blond' })).toMatch(/a blond bob/);
+        expect(say('ponytail')).toMatch(/auburn hair in a ponytail/);
+        expect(say('spaceBuns')).toMatch(/auburn hair in space buns/);
+        expect(say('locs')).toMatch(/auburn locs/);
+        expect(say('short')).toMatch(/short auburn hair/);
+        expect(say('buzz')).toMatch(/buzzed auburn hair/);
+        for (const style of A.HAIR_LENGTHS) {
+            expect(A.describeAvatar({ length: style.id })).not.toMatch(/undefined|  |[;—]/);
+        }
     });
 
     test('the face is said too, when it is not the usual', () => {
