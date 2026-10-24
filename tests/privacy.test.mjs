@@ -58,6 +58,10 @@ const PERSISTENT = {
     // 2026-10-19), under each scene's own key: Leaf Blower's character, and
     // Derby Day's family (M6, key derby-family).
     'www/shared/js/cast-1.0.0.js': 'the character chosen in Leaf Blower, and the family dressed in Derby Day',
+    // The site-wide avatar (specs/avatar M1, 2026-10-23): the avatar, its
+    // portrait, and the home chip's label rule, under three scenexp-avatar
+    // keys.
+    'www/shared/js/avatar-1.0.0.js': 'the visitor’s avatar, its portrait, and how often the home page has shown its label',
     'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaf Blower',
     // Released 2026-10-16, described in privacy.html as "Your home in
     // Whitestone Home Care".
@@ -176,6 +180,13 @@ test('and the policy actually describes them, in words a visitor would use', () 
     expect(text).toMatch(/Forget my cars button/i);
     // And the family dressed on the family card (M6), forgotten with them.
     expect(text).toMatch(/how you dressed your family/i);
+    // The site-wide avatar (specs/avatar, 2026-10-23): what is kept, the
+    // portrait drawn on the device, that none of it travels, and how to
+    // clear it. The home chip's visit count joins it with the chip (M4).
+    expect(text).toMatch(/When you save an avatar on the Your Avatar page/i);
+    expect(text).toMatch(/small picture of its face, drawn right on your device/i);
+    expect(text).toMatch(/never in our usage pings/i);
+    expect(text).toMatch(/Forget my avatar button/i);
 
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.

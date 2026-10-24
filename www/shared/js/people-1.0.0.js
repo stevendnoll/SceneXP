@@ -296,6 +296,9 @@ export function createPerson(config) {
     );
     head.position.y = legLength + torsoHeight + neckHeight + headRadius;
     head.castShadow = true;
+    // Tagged, as the arms and legs are, so a part that adds to the face (the
+    // avatar's smile, glasses and hats) finds it without matching a radius.
+    head.userData.isHead = true;
     person.add(head);
 
     // Face details - eyes
@@ -344,8 +347,11 @@ export function createPerson(config) {
         person.add(ear);
     });
 
-    // Hair (styled based on role) - positioned to not cover face
+    // Hair (styled based on role) - positioned to not cover face. Tagged: it
+    // sits at y 0 with its children at their own heights, so it cannot be
+    // found by position.
     const hairGroup = new THREE.Group();
+    hairGroup.userData.isHair = true;
     if (hairStyle === 'buzz') {
         // Close-cropped buzz cut: one tight cap hugging the skull with no
         // added volume, trimmed to expose the forehead and clear the ears.
@@ -716,6 +722,8 @@ export function createPerson(config) {
             );
             shoe.position.y = -legLength - 0.05 + shoeHeight / 2;
             shoe.position.z = shoeLength * 0.2;
+            // Tagged as the mary jane is, so the avatar's sneakers find it.
+            shoe.userData.isShoe = true;
             legGroup.add(shoe);
         }
 
@@ -767,6 +775,7 @@ export function createPerson(config) {
         );
         skirt.position.y = legLength - 0.12; // waist (~0.80) down to mid-thigh (~0.46)
         skirt.castShadow = true;
+        skirt.userData.isSkirt = true;
         person.add(skirt);
     }
 

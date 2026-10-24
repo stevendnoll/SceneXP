@@ -377,6 +377,199 @@ html [lang="en"]
           "John Walker, The Auto Man""
 `;
 
+exports[`www/avatar/index.html 1`] = `
+"<!doctype html>
+html [lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="noindex, nofollow" name="robots"]
+    meta [content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself. Your avatar is kept in your own browser." name="description"]
+    meta [content="#F1EFEA" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/avatar/" rel="canonical"]
+    meta [content="Your Avatar" property="og:title"]
+    meta [content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/avatar/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="A small figure in a rust red shirt and navy pants stands on a round stone plinth in a bright white studio, beside a row of color swatches for skin, hair and clothes." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Your Avatar" name="twitter:title"]
+    meta [content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself." name="twitter:description"]
+    meta [content="https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1" name="twitter:image"]
+    meta [content="A small figure in a rust red shirt and navy pants stands on a round stone plinth in a bright white studio, beside a row of color swatches for skin, hair and clothes." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "@id": "https://www.scenexp.com/avatar/#app",
+        "url": "https://www.scenexp.com/avatar/",
+        "name": "Your Avatar",
+        "image": "https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1",
+        "description": "A browser-based 3D avatar maker for SceneXP. Choose a skin tone, eye color, hair, build, clothes and shoes on a figure that turns on a plinth in a white studio, and save it. The avatar is kept only in the visitor's own browser, and SceneXP scenes that show the visitor as a person dress them that way. It can be moved to another device with a link or a small file.",
+        "applicationCategory": "EntertainmentApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript. The 3D studio needs WebGL 2.",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
+        "isAccessibleForFree": true,
+        "author": {
+          "@type": "Person",
+          "name": "Steve Noll"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Continuum Commerce LLC"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Your Avatar",
+            "item": "https://www.scenexp.com/avatar/"
+          }
+        ]
+      }
+    title
+      "Your Avatar | SceneXP"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="css/avatar.min.css?v=1" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/studio.min.js" rel="modulepreload"]
+    link [href="js/editor.min.js" rel="modulepreload"]
+    link [href="js/transfer.min.js" rel="modulepreload"]
+    link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
+    link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="css/avatar.min.css?v=1" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body.av-body
+    h1.sr-only
+      "Your Avatar"
+    noscript
+      div.noscript-fallback
+        h1
+          "Your Avatar"
+        p
+          "This is where you make a figure that looks like you, and it needs JavaScript to run. You choose a skin tone, eye color, hair, build, clothes and shoes on a figure that turns slowly in a bright white studio, and press Save. SceneXP scenes that show you as a person then dress you that way."
+        p
+          "Your avatar is kept only in your own browser. Nothing about it is sent to us."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/"]
+                "More 3D worlds to explore at SceneXP.com"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    div#avatar-app.av-app [hidden]
+      div.av-stage
+        canvas#av-canvas.av-canvas [aria-label="Your avatar, standing on a round plinth in a white studio" role="img"]
+        p#av-stage-status.av-stage-status [aria-live="polite" role="status"]
+        div#av-turn.av-turn
+          button#av-turn-left.av-turn-btn [aria-label="Turn left" title="Turn left" type="button"]
+            svg [aria-hidden="true" viewbox="0 0 24 24"]
+              path [d="M9 7.5 5 11.5l4 4"]
+              path [d="M5.5 11.5h8a5 5 0 0 1 5 5v1"]
+          button#av-turn-right.av-turn-btn [aria-label="Turn right" title="Turn right" type="button"]
+            svg [aria-hidden="true" viewbox="0 0 24 24"]
+              path [d="m15 7.5 4 4-4 4"]
+              path [d="M18.5 11.5h-8a5 5 0 0 0-5 5v1"]
+      section.av-sheet [aria-labelledby="av-heading"]
+        div.av-top
+          a.av-brand [href="/"]
+            "SceneXP"
+          a#av-return.av-return [hidden href="/"]
+            "Back"
+        p.av-eyebrow
+          "Your Avatar"
+        h2#av-heading.av-heading
+          "Step into SceneXP as you"
+        p.av-lede
+          "Choose a look, then press Save. Your avatar is kept in this browser, and scenes that show you as a person will dress you this way."
+        div#av-incoming.av-incoming [aria-labelledby="av-incoming-text" hidden role="region"]
+          p#av-incoming-text.av-incoming-text
+            "Keep this avatar?"
+          p#av-incoming-replaces.av-note [hidden]
+            "Keeping it replaces the one saved on this browser."
+          div.av-row
+            button#av-keep.av-primary [type="button"]
+              "Keep this avatar"
+            button#av-decline.av-secondary [type="button"]
+              "Not now"
+        div#av-editor.av-editor
+          div#av-tabs.av-tabs [aria-label="Choose what to change" role="tablist"]
+          div#av-panels.av-panels
+        div#av-actions.av-actions
+          button#av-save.av-primary.av-save [type="button"]
+            "Save my avatar"
+          p#av-unsaved.av-note.av-unsaved
+          p#av-status.av-status [aria-live="polite" role="status"]
+          h3.av-subhead
+            "Take it to another device"
+          div.av-row.av-transfer
+            button#av-link.av-secondary [type="button"]
+              "Share a link"
+            button#av-file-save.av-secondary [type="button"]
+              "Save a file"
+            button#av-file-open.av-secondary [type="button"]
+              "Open a file"
+          input#av-file-input [accept=".json,application/json" aria-label="Open an avatar file" hidden tabindex="-1" type="file"]
+          p.av-note.av-privacy
+            "Your avatar stays on this device, and nothing about it is sent to us."
+            a [href="/privacy.html"]
+              "Privacy"
+          button#av-forget.av-forget [hidden type="button"]
+            "Forget my avatar"
+          div#av-forget-confirm.av-confirm [hidden]
+            p.av-confirm-text
+              "Forget your avatar on this browser? Scenes will show the usual figure again."
+            div.av-row
+              button#av-forget-yes.av-secondary.av-danger [type="button"]
+                "Forget it"
+              button#av-forget-no.av-secondary [type="button"]
+                "Keep it"
+          div#av-lab.av-lab [hidden]
+            p.av-note
+              "Lab"
+            button#av-lab-portrait.av-secondary [type="button"]
+              "Save the default portrait"
+    script [src="../lib/three/r186/three.min.js" type="module"]
+    script [src="js/main.min.js" type="module"]"
+`;
+
 exports[`www/contact.html 1`] = `
 "<!doctype html>
 html [lang="en"]
@@ -5589,6 +5782,10 @@ html [lang="en"]
               strong
                 "Your character and best time in Leaf Blower."
               "The leaf blower game keeps the character you choose, their shirt and pants colors, skin tone, hair color and hair length, in your browser's local storage, so they are waiting for you when you come back. When you clear the whole lawn before the clock runs out, it also keeps your fastest time, just the number of seconds, so you have a time to beat. The Forget my choice button on the character card and the Forget my best time button on the welcome card clear them on the spot."
+            li
+              strong
+                "Your avatar."
+              "When you save an avatar on the Your Avatar page, its choices are kept in your browser's local storage: skin tone, eye color, hair, build, clothes and shoes, each one picked from a short list, with no name and nothing typed. Beside them is a small picture of its face, drawn right on your device. Nothing about your avatar is ever sent to us, and it is never in our usage pings. A link or a file you make to move it to another device holds only those choices, and the part of the link that holds them is never sent to our server. The Forget my avatar button on that page clears it on the spot."
             li
               strong
                 "Your cars in Derby Day."

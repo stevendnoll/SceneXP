@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         img-src allows data: for the portrait this page draws; blob: is not
+         needed, because the avatar file is saved through a download link. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <!-- STILL BEING BUILT (specs/avatar M3): kept out of search until its
+         release in M5, as tests/directory.test.mjs requires of every scene in
+         its UNRELEASED list. -->
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description" content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself. Your avatar is kept in your own browser.">
+    <meta name="theme-color" content="#F1EFEA">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they stay literal absolute URLs naming where this page is served
+         (www.scenexp.com/avatar). When serving from a new domain, update the
+         canonical, og:url, og:image, twitter:image, and the JSON-LD ids. -->
+    <link rel="canonical" href="https://www.scenexp.com/avatar/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Your Avatar">
+    <meta property="og:description" content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/avatar/">
+    <meta property="og:locale" content="en_US">
+    <!-- THE SOCIAL CARD is captured once the look is approved (M5), so it is
+         in tests/page-rules.test.mjs's PENDING_CARDS until then. JPEG, not
+         WebP (LinkedIn previews no WebP), and exactly one og:image. -->
+    <meta property="og:image" content="https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A small figure in a rust red shirt and navy pants stands on a round stone plinth in a bright white studio, beside a row of color swatches for skin, hair and clothes.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Your Avatar">
+    <meta name="twitter:description" content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself.">
+    <meta name="twitter:image" content="https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1">
+    <meta name="twitter:image:alt" content="A small figure in a rust red shirt and navy pants stands on a round stone plinth in a bright white studio, beside a row of color swatches for skin, hair and clothes.">
+
+    <!-- Structured data: a web application that is part of SceneXP.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "@id": "https://www.scenexp.com/avatar/#app",
+      "url": "https://www.scenexp.com/avatar/",
+      "name": "Your Avatar",
+      "image": "https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1",
+      "description": "A browser-based 3D avatar maker for SceneXP. Choose a skin tone, eye color, hair, build, clothes and shoes on a figure that turns on a plinth in a white studio, and save it. The avatar is kept only in the visitor's own browser, and SceneXP scenes that show the visitor as a person dress them that way. It can be moved to another device with a link or a small file.",
+      "applicationCategory": "EntertainmentApplication",
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires JavaScript. The 3D studio needs WebGL 2.",
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
+      "isAccessibleForFree": true,
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Continuum Commerce LLC"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this page). -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Your Avatar",
+          "item": "https://www.scenexp.com/avatar/"
+        }
+      ]
+    }
+    </script>
+
+    <title>Your Avatar | SceneXP</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
+    <link rel="preload" href="css/avatar.min.css?v=1" as="style">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-figure-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/sharefile-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="js/studio.min.js">
+    <link rel="modulepreload" href="js/editor.min.js">
+    <link rel="modulepreload" href="js/transfer.min.js">
+    <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/promo-1.0.0.min.js">
+    <!-- END generated modulepreload -->
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
+    <link rel="stylesheet" href="css/avatar.min.css?v=1">
+
+    <!-- When JS is off, the studio can't run: the static fallback below is
+         the page. A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body class="av-body">
+    <!-- The live page's heading, for anybody navigating by heading. The panel
+         shows its own words, under an h2. -->
+    <h1 class="sr-only">Your Avatar</h1>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers). -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Your Avatar</h1>
+            <p>This is where you make a figure that looks like you, and it
+                needs JavaScript to run. You choose a skin tone, eye color,
+                hair, build, clothes and shoes on a figure that turns slowly
+                in a bright white studio, and press Save. SceneXP scenes that
+                show you as a person then dress you that way.</p>
+            <p>Your avatar is kept only in your own browser. Nothing about it
+                is sent to us.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/">More 3D worlds to explore at SceneXP.com</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <!-- The page itself, shown by main.js (`hidden` keeps it out of the way
+         with JavaScript off). The studio on one side and the choices on the
+         other on a computer; the studio on top and the choices below on a
+         phone. -->
+    <div id="avatar-app" class="av-app" hidden>
+        <div class="av-stage">
+            <!-- The figure on its plinth (js/studio.js). Drag to turn it, or
+                 use the two buttons. Its name is the figure in words, kept
+                 current by main.js. -->
+            <canvas id="av-canvas" class="av-canvas" role="img"
+                aria-label="Your avatar, standing on a round plinth in a white studio"></canvas>
+            <p id="av-stage-status" class="av-stage-status" role="status" aria-live="polite"></p>
+            <div id="av-turn" class="av-turn">
+                <button id="av-turn-left" class="av-turn-btn" type="button" aria-label="Turn left" title="Turn left">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 7.5 5 11.5l4 4" />
+                        <path d="M5.5 11.5h8a5 5 0 0 1 5 5v1" />
+                    </svg>
+                </button>
+                <button id="av-turn-right" class="av-turn-btn" type="button" aria-label="Turn right" title="Turn right">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m15 7.5 4 4-4 4" />
+                        <path d="M18.5 11.5h-8a5 5 0 0 0-5 5v1" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <section class="av-sheet" aria-labelledby="av-heading">
+            <div class="av-top">
+                <a class="av-brand" href="/">SceneXP</a>
+                <!-- "Back to Leaf Blower", when a scene sent the visitor here
+                     (?return=, checked by js/transfer.js). -->
+                <a id="av-return" class="av-return" href="/" hidden>Back</a>
+            </div>
+
+            <p class="av-eyebrow">Your Avatar</p>
+            <h2 id="av-heading" class="av-heading">Step into SceneXP as you</h2>
+            <p class="av-lede">Choose a look, then press Save. Your avatar is kept in this browser, and scenes that show you as a person will dress you this way.</p>
+
+            <!-- An avatar that arrived by link or file, on the plinth, waiting
+                 for an answer. Never kept silently (PRD section 6). -->
+            <div id="av-incoming" class="av-incoming" role="region" aria-labelledby="av-incoming-text" hidden>
+                <p id="av-incoming-text" class="av-incoming-text">Keep this avatar?</p>
+                <p id="av-incoming-replaces" class="av-note" hidden>Keeping it replaces the one saved on this browser.</p>
+                <div class="av-row">
+                    <button id="av-keep" class="av-primary" type="button">Keep this avatar</button>
+                    <button id="av-decline" class="av-secondary" type="button">Not now</button>
+                </div>
+            </div>
+
+            <!-- The choices (js/editor.js builds the tabs and radio groups). -->
+            <div id="av-editor" class="av-editor">
+                <div id="av-tabs" class="av-tabs" role="tablist" aria-label="Choose what to change"></div>
+                <div id="av-panels" class="av-panels"></div>
+            </div>
+
+            <div id="av-actions" class="av-actions">
+                <!-- The one filled button on the page. -->
+                <button id="av-save" class="av-primary av-save" type="button">Save my avatar</button>
+                <p id="av-unsaved" class="av-note av-unsaved"></p>
+                <p id="av-status" class="av-status" role="status" aria-live="polite"></p>
+
+                <h3 class="av-subhead">Take it to another device</h3>
+                <div class="av-row av-transfer">
+                    <button id="av-link" class="av-secondary" type="button">Share a link</button>
+                    <button id="av-file-save" class="av-secondary" type="button">Save a file</button>
+                    <button id="av-file-open" class="av-secondary" type="button">Open a file</button>
+                </div>
+                <!-- Opened by the button above. Hidden, and out of the tab
+                     order, since the button is the way to it. -->
+                <input id="av-file-input" type="file" accept=".json,application/json" hidden tabindex="-1" aria-label="Open an avatar file">
+
+                <p class="av-note av-privacy">Your avatar stays on this device, and nothing about it is sent to us. <a href="/privacy.html">Privacy</a></p>
+
+                <button id="av-forget" class="av-forget" type="button" hidden>Forget my avatar</button>
+                <div id="av-forget-confirm" class="av-confirm" hidden>
+                    <p class="av-confirm-text">Forget your avatar on this browser? Scenes will show the usual figure again.</p>
+                    <div class="av-row">
+                        <button id="av-forget-yes" class="av-secondary av-danger" type="button">Forget it</button>
+                        <button id="av-forget-no" class="av-secondary" type="button">Keep it</button>
+                    </div>
+                </div>
+
+                <!-- The lab (a local server with ?lab=1 only): the default
+                     portrait the home page's chip shows, saved as a PNG to
+                     commit to www/assets/avatar/ (PRD section 11, question 4). -->
+                <div id="av-lab" class="av-lab" hidden>
+                    <p class="av-note">Lab</p>
+                    <button id="av-lab-portrait" class="av-secondary" type="button">Save the default portrait</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>
