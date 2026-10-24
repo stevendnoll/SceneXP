@@ -80,6 +80,18 @@ for (const hat of ['beanie', 'cap', 'sunHat']) {
     await sheet(`hat-${hat}`, ['bald', 'buzz', 'short', 'long'].map((length) => ({ ...fair, length, hat, hatColor: 'navy' }))
         .concat([{ ...deep, length: 'long', hat, hatColor: 'mustard', glasses: 'sunglasses' }]), 'face');
 }
+await sheet('faces', [
+    { ...fair }, { ...fair, faceShape: 'oval' }, { ...deep, faceShape: 'oval', length: 'long', hat: 'beanie', hatColor: 'mustard' },
+    { ...fair, nose: 'button' }, { ...fair, nose: 'round' }, { ...fair, nose: 'wide' }, { ...fair, cheeks: 'blush' }, { skin: 'light', hair: 'copper', cheeks: 'freckles' }
+], 'face');
+await sheet('eyes', [
+    { ...fair }, { ...fair, eyeShape: 'almond' }, { ...fair, eyeShape: 'wide' }, { ...fair, eyeShape: 'sleepy' }, { ...fair, eyeShape: 'lashes' },
+    { ...deep, eyeShape: 'almond', glasses: 'round' }, { ...fair, eyeShape: 'sleepy', glasses: 'square' }
+], 'face');
+await sheet('brows', [
+    { ...fair, brows: 'natural' }, { ...fair, brows: 'straight' }, { ...fair, brows: 'arched' }, { ...fair, brows: 'bold' }, { ...fair, brows: 'thin' },
+    { ...fair, brows: 'bold', mouth: 'surprised' }, { skin: 'light', hair: 'blond', brows: 'arched', eyeShape: 'lashes' }, { ...deep, hair: 'gray', brows: 'bold', hat: 'cap' }
+], 'face');
 await sheet('mouths', [
     { ...fair }, { ...fair, mouth: 'bigSmile' }, { ...fair, mouth: 'grin' }, { ...fair, mouth: 'smirk' }, { ...fair, mouth: 'surprised' },
     { ...deep, mouth: 'bigSmile', lips: 'berry' }, { skin: 'light', mouth: 'grin', lips: 'red' }, { ...fair, mouth: 'smile', lips: 'rose' }, { ...fair, mouth: 'smile', lips: 'softPink' }

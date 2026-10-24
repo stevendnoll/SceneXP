@@ -58,7 +58,7 @@
       "url": "https://www.scenexp.com/avatar/",
       "name": "Your Avatar",
       "image": "https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1",
-      "description": "A browser-based 3D avatar maker for SceneXP. Choose a skin tone, eye color, expression, hair, build, clothes, shoes and a hat on a figure that turns on a plinth in a white studio, and save it. The avatar is kept only in the visitor's own browser, and SceneXP scenes that show the visitor as a person dress them that way. It can be moved to another device with a link or a small file.",
+      "description": "A browser-based 3D avatar maker for SceneXP. Choose a face shape, eyes, eyebrows, a nose, an expression, hair and facial hair in any color, a build, clothes, shoes and a hat on a figure that turns on a plinth in a white studio, and save it. The avatar is kept only in the visitor's own browser, and SceneXP scenes that show the visitor as a person dress them that way. It can be moved to another device with a link or a small file.",
       "applicationCategory": "EntertainmentApplication",
       "operatingSystem": "Any",
       "browserRequirements": "Requires JavaScript. The 3D studio needs WebGL 2.",
@@ -103,7 +103,7 @@
     <title>Your Avatar | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/avatar.min.css?v=1" as="style">
+    <link rel="preload" href="css/avatar.min.css?v=3" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -124,7 +124,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/avatar.min.css?v=1">
+    <link rel="stylesheet" href="css/avatar.min.css?v=3">
 
     <!-- When JS is off, the studio can't run: the static fallback below is
          the page. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -143,8 +143,8 @@
         <div class="noscript-fallback">
             <h1>Your Avatar</h1>
             <p>This is where you make a figure that looks like you, and it
-                needs JavaScript to run. You choose a skin tone, eye color,
-                expression, hair, build, clothes, shoes and a hat on a figure that turns slowly
+                needs JavaScript to run. You choose a face shape, eyes, eyebrows,
+                a nose, an expression, hair in any color, a build, clothes, shoes and a hat on a figure that turns slowly
                 in a bright white studio, and press Save. SceneXP scenes that
                 show you as a person then dress you that way.</p>
             <p>Your avatar is kept only in your own browser. Nothing about it
@@ -170,7 +170,14 @@
             <canvas id="av-canvas" class="av-canvas" role="img"
                 aria-label="Your avatar, standing on a round plinth in a white studio"></canvas>
             <p id="av-stage-status" class="av-stage-status" role="status" aria-live="polite"></p>
+            <!-- The view: zoom out, turn, turn, zoom in. The wheel, a trackpad
+                 and a pinch zoom too, toward where they point. -->
             <div id="av-turn" class="av-turn">
+                <button id="av-zoom-out" class="av-turn-btn" type="button" aria-label="Zoom out" title="Zoom out">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6.5 12h11" />
+                    </svg>
+                </button>
                 <button id="av-turn-left" class="av-turn-btn" type="button" aria-label="Turn left" title="Turn left">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M9 7.5 5 11.5l4 4" />
@@ -181,6 +188,11 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="m15 7.5 4 4-4 4" />
                         <path d="M18.5 11.5h-8a5 5 0 0 0-5 5v1" />
+                    </svg>
+                </button>
+                <button id="av-zoom-in" class="av-turn-btn" type="button" aria-label="Zoom in" title="Zoom in">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6.5 12h11M12 6.5v11" />
                     </svg>
                 </button>
             </div>

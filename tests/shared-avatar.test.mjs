@@ -76,7 +76,8 @@ afterEach(() => {
 describe('the lists', () => {
     test('every field has a list, each id is unique in it, and the default names a real option of each', () => {
         expect(FIELD_KEYS).toEqual(['skin', 'eyes', 'hair', 'length', 'facial', 'glasses', 'build', 'shirt',
-            'sleeves', 'bottom', 'bottomColor', 'shoes', 'shoeColor', 'hat', 'hatColor', 'mouth', 'lips', 'muscles']);
+            'sleeves', 'bottom', 'bottomColor', 'shoes', 'shoeColor', 'hat', 'hatColor', 'mouth', 'lips', 'muscles',
+            'facialColor', 'brows', 'eyeShape', 'nose', 'faceShape', 'cheeks']);
         for (const [key, list] of A.FIELDS) {
             const ids = list.map((o) => o.id);
             expect(`${key}: ${new Set(ids).size}`).toBe(`${key}: ${ids.length}`);
@@ -93,8 +94,15 @@ describe('the lists', () => {
         expect(A.SHIRTS).toBe(SHIRTS);
         expect(A.PANTS).toBe(PANTS);
         expect(A.SKINS).toBe(SKINS);
-        expect(A.HAIR_COLORS).toBe(HAIR_COLORS);
         expect(A.HAIR_LENGTHS).toBe(HAIR_LENGTHS);
+        // More hair colors (Steve's QA, 2026-10-24), cast-1.0.0's six first,
+        // so every id a Leaf Blower choice holds still reads.
+        expect(A.HAIR_COLORS.slice(0, HAIR_COLORS.length)).toEqual([...HAIR_COLORS]);
+        expect(A.HAIR_COLORS.length).toBeGreaterThanOrEqual(18);
+        expect(A.FACIAL_COLORS[0]).toMatchObject({ id: 'match', color: null });
+        expect(A.FACIAL_COLORS.slice(1)).toEqual([...A.HAIR_COLORS]);
+        expect(A.FACE_SHAPES.map((o) => o.id)).toEqual(['round', 'oval']);
+        expect(A.NOSES[0].id).toBe('pointed');
         expect(A.listOf('hatColor')).toBe(SHIRTS);
         expect(A.listOf('bottomColor')).toBe(PANTS);
         expect(A.EYES.map((o) => o.label)).toEqual(['Dark brown', 'Brown', 'Hazel', 'Green', 'Blue', 'Gray']);
@@ -143,7 +151,8 @@ describe('normalizeAvatar takes anything', () => {
             v: 1, skin: 'deep', eyes: 'darkBrown', hair: 'darkBrown', length: 'short', facial: 'none',
             glasses: 'round', build: 'curvy', shirt: 'rust', sleeves: 'short', bottom: 'skirt',
             bottomColor: 'denim', shoes: 'sneakers', shoeColor: 'black', hat: 'beanie', hatColor: 'mustard',
-            mouth: 'smile', lips: 'natural', muscles: 'standard'
+            mouth: 'smile', lips: 'natural', muscles: 'standard',
+            facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none'
         });
         // No free text survives, whatever it was called.
         expect(a.name).toBeUndefined();
@@ -241,6 +250,51 @@ describe('the createPerson settings', () => {
     });
 });
 
+describe('custom colors (Steve, 2026-10-24)', () => {
+    test('a color field takes "x" and six hex digits, and nothing else of any shape', () => {
+        for (const f of A.COLOR_FIELDS) {
+            expect(A.normalizeAvatar({ [f]: 'x1a2b3c' })[f]).toBe('x1a2b3c');
+            for (const bad of ['x1A2B3C', 'x12345', 'x1234567', '#1a2b3c', '1a2b3c', 'xggggg0', 'x1a2b3c ', ' x1a2b3c', 'x1a2b3c\n']) {
+                expect(`${f} ${JSON.stringify(bad)}: ${A.normalizeAvatar({ [f]: bad })[f]}`).toBe(`${f} ${JSON.stringify(bad)}: ${A.DEFAULT_AVATAR[f]}`);
+            }
+        }
+        // A field that is not a color never takes one.
+        for (const f of ['build', 'hat', 'shoes', 'mouth', 'faceShape']) {
+            expect(A.normalizeAvatar({ [f]: 'x1a2b3c' })[f]).toBe(A.DEFAULT_AVATAR[f]);
+        }
+        expect(A.withOverrides({}, { hair: 'xffffff' }).hair).toBe('xffffff');
+        expect(A.decodeLink('#a=1.x00ff00')).toMatchObject({ skin: 'x00ff00' });
+        expect(A.fromFile(A.toFile({ shirt: 'x123456' })).shirt).toBe('x123456');
+    });
+
+    test('a custom color reaches the figure, and a swatch keeps its own', () => {
+        expect(A.customColor(0x9c2b25)).toBe('x9c2b25');
+        expect(A.customColor(0x1a)).toBe('x00001a');
+        expect(A.colorOf('hair', 'x123456')).toBe(0x123456);
+        expect(A.colorOf('hair', 'pink')).toBe(A.optionOf(A.HAIR_COLORS, 'pink').color);
+        expect(A.colorOf('lips', 'natural')).toBeNull();
+        expect(A.colorOf('facialColor', 'match')).toBeNull();
+        expect(A.colorOf('build', 'x123456')).toBeNull();
+        expect(A.colorOf('nope', 'x')).toBeNull();
+        const c = A.personConfig({ skin: 'x00aa00', hair: 'xff00ff', shirt: 'x0000ff', sleeves: 'long', bottomColor: 'x111111', shoeColor: 'x222222', eyes: 'x333333' });
+        expect(c).toMatchObject({ skinTone: 0x00aa00, hairColor: 0xff00ff, shirtColor: 0x0000ff, sleeveColor: 0x0000ff, pantsColor: 0x111111, shoeColor: 0x222222, eyeColor: 0x333333 });
+        // And it is said as "custom-color", never as a hex.
+        const words = A.describeAvatar({ hair: 'xff00ff', shirt: 'x0000ff', hat: 'cap', hatColor: 'x00ff00', facial: 'beard', facialColor: 'x444444' });
+        expect(words).toMatch(/custom-color hair/);
+        expect(words).toMatch(/a custom-color shirt/);
+        expect(words).toMatch(/a custom-color ball cap/);
+        expect(words).toMatch(/a custom-color full beard/);
+        expect(words).not.toMatch(/[0-9a-f]{6}/);
+    });
+
+    test('the face is said too, when it is not the usual', () => {
+        expect(A.describeAvatar({ faceShape: 'oval', eyeShape: 'almond', cheeks: 'freckles' }))
+            .toMatch(/^A figure with fair skin, an oval face, almond dark brown eyes, a gentle smile, freckles and short/);
+        expect(A.describeAvatar({ eyeShape: 'lashes', cheeks: 'blush' })).toMatch(/dark brown eyes with long lashes, a gentle smile, rosy cheeks/);
+        expect(A.describeAvatar({ facial: 'stubble', facialColor: 'fireRed' })).toMatch(/fire red stubble/);
+    });
+});
+
 describe('the figure in words', () => {
     test('the default reads as one plain sentence', () => {
         expect(A.describeAvatar(null)).toBe('A figure with fair skin, dark brown eyes, a gentle smile and short dark brown hair, '
@@ -271,13 +325,15 @@ describe('the figure in words', () => {
 describe('the link', () => {
     test('the default\'s link is pinned, so the field order can never move under a link already sent', () => {
         expect(A.encodeLink(A.DEFAULT_AVATAR))
-            .toBe('a=1.fair.darkBrown.darkBrown.short.none.none.straight.rust.long.pants.navy.classic.black.none.navy.smile.natural.standard');
+            .toBe('a=1.fair.darkBrown.darkBrown.short.none.none.straight.rust.long.pants.navy.classic.black.none.navy.smile.natural.standard'
+                + '.match.natural.round.pointed.round.none');
         // A link made before the mouth and the muscles (2026-10-23) still
         // opens, its new fields at their defaults.
         expect(A.decodeLink('#a=1.deep.blue.gray.long.beard.round.curvy.teal.short.skirt.khaki.maryJane.red.cap.mustard'))
             .toEqual({ v: 1, skin: 'deep', eyes: 'blue', hair: 'gray', length: 'long', facial: 'beard', glasses: 'round', build: 'curvy',
                 shirt: 'teal', sleeves: 'short', bottom: 'skirt', bottomColor: 'khaki', shoes: 'maryJane', shoeColor: 'red', hat: 'cap',
-                hatColor: 'mustard', mouth: 'smile', lips: 'natural', muscles: 'standard' });
+                hatColor: 'mustard', mouth: 'smile', lips: 'natural', muscles: 'standard',
+                facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none' });
         expect(A.linkUrl(A.DEFAULT_AVATAR, 'https://www.scenexp.com/'))
             .toBe(`https://www.scenexp.com/avatar/#${A.encodeLink(A.DEFAULT_AVATAR)}`);
         expect(A.linkUrl(null, '')).toBe(`/avatar/#${A.encodeLink(null)}`);
@@ -294,7 +350,12 @@ describe('the link', () => {
             expect(A.decodeLink(link)).toEqual(a);
             expect(A.decodeLink(`#x=1&${link}&y=2`)).toEqual(a);
         }
-        expect(longest).toBeLessThan(140);
+        expect(longest).toBeLessThan(200);
+        // Even with every color custom, a link is well inside what is read.
+        const allCustom = { ...randomAvatar(rand) };
+        for (const f of A.COLOR_FIELDS) allCustom[f] = 'xabcdef';
+        expect(A.decodeLink(A.encodeLink(allCustom))).toEqual(A.normalizeAvatar(allCustom));
+        expect(A.encodeLink(allCustom).length).toBeLessThan(A.MAX_LINK / 1.5);
     });
 
     test('a link it cannot read is null, and a short or odd one fills in the defaults', () => {

@@ -41,19 +41,46 @@ afterAll(() => {
     delete globalThis.THREE;
 });
 
+/** The first object under `root` that `pred` picks, at any depth. */
+function findIn(root, pred) {
+    let found = null;
+    root.traverse((o) => {
+        if (!found && pred(o)) found = o;
+    });
+    return found;
+}
+
+/** Every object under `root` that `pred` picks, at any depth. */
+function allIn(root, pred) {
+    const out = [];
+    root.traverse((o) => {
+        if (pred(o)) out.push(o);
+    });
+    return out;
+}
+
+/** Where `o` is, in the person's coordinates (the face is in its own
+ *  group since 2026-10-24, so a part's own position is the head's). */
+function at(person, o) {
+    person.updateMatrixWorld(true);
+    return o.getWorldPosition(new THREE.Vector3()).applyMatrix4(person.matrixWorld.clone().invert());
+}
+
 /** Is `o` inside a group named `name`? */
 function inside(o, name) {
     for (let p = o; p; p = p.parent) if (p.name === name) return true;
     return false;
 }
 
-/** Every mesh of a figure but its mouth, as plain records in a stable
- *  order. */
+/** Every mesh of a figure but its mouth and its brows (the face the rig
+ *  never had), as plain records, sorted, so a figure regrouped (the head
+ *  in its own group since 2026-10-24) compares by what is drawn, not by
+ *  the order it was built in. */
 function meshes(root) {
     root.updateMatrixWorld(true);
     const out = [];
     root.traverse((o) => {
-        if (!o.isMesh || inside(o, 'mouth')) return;
+        if (!o.isMesh || inside(o, 'mouth') || inside(o, 'brows')) return;
         const p = new THREE.Vector3();
         o.getWorldPosition(p);
         const round = (n) => Math.round(n * 1e5) / 1e5;
@@ -68,7 +95,7 @@ function meshes(root) {
             color: o.material.color ? o.material.color.getHex() : null
         });
     });
-    return out;
+    return out.sort((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1));
 }
 
 describe('the rig\'s tags', () => {
@@ -91,7 +118,7 @@ describe('the figure', () => {
         const today = meshes(createPerson(leavesPerson(DEFAULT_CHOICE)));
         const avatar = F.createAvatar(A.DEFAULT_AVATAR, { role: 'operator' });
         expect(meshes(avatar.group)).toEqual(today);
-        const mouth = avatar.person.children.find((o) => o.name === 'mouth');
+        const mouth = avatar.person.getObjectByName('mouth');
         expect(mouth.children.map((m) => m.name)).toEqual(['lips']);
         avatar.dispose();
     });
@@ -158,8 +185,8 @@ describe('the figure', () => {
             const avatar = F.createAvatar({ skin: skin.id });
             const person = avatar.person;
             person.updateMatrixWorld(true);
-            const head = person.children.find((o) => o.userData.isHead);
-            const smile = person.children.find((o) => o.name === 'mouth').children.find((m) => m.name === 'lips');
+            const head = findIn(person, (o) => o.userData.isHead);
+            const smile = person.getObjectByName('mouth').children.find((m) => m.name === 'lips');
             const box = new THREE.Box3().setFromObject(smile);
             const c = new THREE.Vector3();
             box.getCenter(c);
@@ -288,7 +315,8 @@ describe('the portrait', () => {
         expect(at(1.726, 0, 0).y - at(1.435).y).toBeGreaterThan(1.4);
         // The tallest hat, over the tallest hair, keeps its crown in the circle.
         const hatted = F.createAvatar({ hat: 'sunHat', length: 'long' });
-        const top = new THREE.Box3().setFromObject(hatted.person.children.find((o) => o.name === 'hat')).max.y;
+        hatted.group.updateMatrixWorld(true);
+        const top = new THREE.Box3().setFromObject(hatted.person.getObjectByName('hat')).max.y;
         expect(Math.hypot(0, at(top, 0, 0).y)).toBeLessThan(1);
     });
 
@@ -406,14 +434,14 @@ describe('the pieces (M5), measured', () => {
         for (const kind of ['round', 'square', 'sunglasses', 'roundSun']) {
             const avatar = F.createAvatar({ glasses: kind });
             const person = avatar.person;
-            const glasses = person.children.find((o) => o.name === 'glasses');
+            const glasses = person.getObjectByName('glasses');
             const c = HEAD();
             const pts = vertices(person, glasses);
             const nearest = Math.min(...pts.map((p) => p.distanceTo(c)));
             expect(`${kind} clears the head: ${nearest > 0.12}`).toBe(`${kind} clears the head: true`);
             // In front of the pupils and the tip of the nose.
-            const pupils = person.children.filter((o) => o.userData.isPupil);
-            const nose = person.children.find((o) => o.geometry && o.geometry.type === 'ConeGeometry');
+            const pupils = allIn(person, (o) => o.userData.isPupil);
+            const nose = findIn(person, (o) => o.userData.isNose);
             const front = Math.max(...pupils.concat([nose]).flatMap((o) => vertices(person, o)).map((p) => p.z));
             const rings = glasses.children.filter((o) => o.geometry.type === 'TorusGeometry');
             expect(rings).toHaveLength(2);
@@ -428,15 +456,15 @@ describe('the pieces (M5), measured', () => {
         }
         // Sunglasses hide the eyes from the front; clear frames do not.
         const sun = F.createAvatar({ glasses: 'sunglasses' });
-        const pupil = sun.person.children.find((o) => o.userData.isPupil);
-        expect(firstFromFront(sun.person, pupil.position.x, pupil.position.y).name).toBe('lens');
+        const pupil = at(sun.person, findIn(sun.person, (o) => o.userData.isPupil));
+        expect(firstFromFront(sun.person, pupil.x, pupil.y).name).toBe('lens');
         const roundSun = F.createAvatar({ glasses: 'roundSun' });
-        expect(firstFromFront(roundSun.person, pupil.position.x, pupil.position.y).name).toBe('lens');
+        expect(firstFromFront(roundSun.person, pupil.x, pupil.y).name).toBe('lens');
         // Round sunglasses are round: a ring of many sides, not four.
-        const ring = roundSun.person.children.find((o) => o.name === 'glasses').children.find((o) => o.geometry.type === 'TorusGeometry');
+        const ring = roundSun.person.getObjectByName('glasses').children.find((o) => o.geometry.type === 'TorusGeometry');
         expect(ring.geometry.parameters.tubularSegments).toBeGreaterThan(8);
         const clear = F.createAvatar({ glasses: 'round' });
-        expect(firstFromFront(clear.person, pupil.position.x, pupil.position.y).userData.isPupil).toBe(true);
+        expect(firstFromFront(clear.person, pupil.x, pupil.y).userData.isPupil).toBe(true);
     });
 
     test('no facial hair covers any mouth, and each sits on the face', () => {
@@ -445,7 +473,7 @@ describe('the pieces (M5), measured', () => {
             // (the gentle smile is sunk a little into the face, so its back
             // is hidden).
             const bare = F.createAvatar({ mouth });
-            const seen = vertices(bare.person, bare.person.children.find((o) => o.name === 'mouth'))
+            const seen = vertices(bare.person, bare.person.getObjectByName('mouth'))
                 .filter((p) => inside(firstFromFront(bare.person, p.x, p.y), 'mouth'));
             expect(seen.length).toBeGreaterThan(20);
             for (const kind of ['stubble', 'mustache', 'goatee', 'beard']) {
@@ -460,7 +488,7 @@ describe('the pieces (M5), measured', () => {
                             .toBe(`${mouth} with ${kind}/${length} at ${p.x.toFixed(3)},${p.y.toFixed(3)}: true`);
                     }
                     // On the face: none of it inside the head, none far off it.
-                    const facial = person.children.find((o) => o.name === 'facial');
+                    const facial = person.getObjectByName('facial');
                     const d = vertices(person, facial).map((p) => p.distanceTo(HEAD()));
                     expect(Math.min(...d)).toBeGreaterThan(0.108);
                     expect(Math.max(...d)).toBeLessThan(0.14);
@@ -474,7 +502,7 @@ describe('the pieces (M5), measured', () => {
         expect(hit.name).toBe('mustache');
         // And stubble is a shadow, not a solid.
         const st = F.createAvatar({ facial: 'stubble' });
-        const shell = st.person.children.find((o) => o.name === 'facial').children[0];
+        const shell = st.person.getObjectByName('facial').children[0];
         expect(shell.material.transparent).toBe(true);
         expect(shell.material.opacity).toBeLessThan(0.6);
     });
@@ -484,12 +512,18 @@ describe('the pieces (M5), measured', () => {
             for (const length of ['bald', 'buzz', 'short', 'long']) {
                 const avatar = F.createAvatar({ hat, length });
                 const person = avatar.person;
-                const piece = person.children.find((o) => o.name === 'hat');
+                const piece = person.getObjectByName('hat');
                 const fit = piece.userData.fit;
-                const hair = person.children.find((o) => o.userData.isHair);
-                const head = person.children.find((o) => o.userData.isHead);
+                const hair = person.getObjectByName('hair');
+                const head = findIn(person, (o) => o.userData.isHead);
                 const outside = [];
-                for (const p of vertices(person, head).concat(hair ? vertices(person, hair) : [])) {
+                // In the head group's own coordinates, where the hat records
+                // its fit (the face is that group since 2026-10-24).
+                const frame = piece.parent;
+                frame.updateMatrixWorld(true);
+                const into = frame.matrixWorld.clone().invert().multiply(person.matrixWorld);
+                const local = (pts) => pts.map((v) => v.clone().applyMatrix4(into));
+                for (const p of local(vertices(person, head).concat(hair ? vertices(person, hair) : []))) {
                     if (fit.kind === 'sunHat') {
                         if (p.y <= fit.baseY) continue;
                         // Inside the tapered crown, and under its top.
@@ -505,8 +539,9 @@ describe('the pieces (M5), measured', () => {
                 }
                 expect(`${hat} over ${length}: ${outside.length} through`).toBe(`${hat} over ${length}: 0 through`);
                 // Both eyes are the first thing met from the front.
-                for (const pupil of person.children.filter((o) => o.userData.isPupil)) {
-                    const hit = firstFromFront(person, pupil.position.x, pupil.position.y);
+                for (const pupil of allIn(person, (o) => o.userData.isPupil)) {
+                    const p = at(person, pupil);
+                    const hit = firstFromFront(person, p.x, p.y);
                     expect(`${hat} over ${length}: ${Boolean(hit && hit.userData.isPupil)}`).toBe(`${hat} over ${length}: true`);
                 }
                 avatar.dispose();
@@ -515,21 +550,21 @@ describe('the pieces (M5), measured', () => {
     });
 
     test('a hat is snug on a buzz cut and roomier over long hair, and long hair hangs from under it', () => {
-        const size = (length) => F.createAvatar({ hat: 'beanie', length }).person.children.find((o) => o.name === 'hat').userData.fit.r;
+        const size = (length) => F.createAvatar({ hat: 'beanie', length }).person.getObjectByName('hat').userData.fit.r;
         expect(size('buzz')).toBeLessThan(size('short'));
         // Fitted to the rounded hair, not the long hair's boxy hanks, so it
         // does not balloon (preview, 2026-10-24: it was 18 cm across).
         expect(size('long')).toBeLessThan(0.16);
         const long = F.createAvatar({ hat: 'beanie', length: 'long' });
         const hanks = [];
-        long.person.children.find((o) => o.userData.isHair).traverse((m) => {
+        long.person.getObjectByName('hair').traverse((m) => {
             if (m.isMesh && m.geometry.type === 'BoxGeometry') hanks.push(m);
         });
         expect(hanks.length).toBeGreaterThan(0);
         // Trimmed, but still hanging: shorter than they were, and shown.
         expect(hanks.every((m) => m.visible && m.scale.y < 1)).toBe(true);
         // Without a hat the hair is exactly as the rig made it.
-        F.createAvatar({ length: 'long' }).person.children.find((o) => o.userData.isHair).traverse((m) => {
+        F.createAvatar({ length: 'long' }).person.getObjectByName('hair').traverse((m) => {
             if (m.isMesh) expect(m.scale.y).toBe(1);
         });
     });
@@ -597,9 +632,9 @@ describe('the pieces (M5), measured', () => {
     });
 
     test('no piece casts a shadow (a hat\'s would darken the whole face)', () => {
-        const avatar = F.createAvatar({ hat: 'sunHat', glasses: 'sunglasses', facial: 'beard' });
-        for (const name of ['hat', 'glasses', 'facial']) {
-            avatar.person.children.find((o) => o.name === name).traverse((m) => {
+        const avatar = F.createAvatar({ hat: 'sunHat', glasses: 'sunglasses', facial: 'beard', cheeks: 'blush', eyeShape: 'sleepy' });
+        for (const name of ['hat', 'glasses', 'facial', 'brows', 'cheeks', 'mouth', 'lid']) {
+            avatar.person.getObjectByName(name).traverse((m) => {
                 if (m.isMesh) expect(`${name}: ${m.castShadow}`).toBe(`${name}: false`);
             });
         }
@@ -628,7 +663,7 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
     test('every mouth sits on the face, below the nose, and the open ones lie on the head, not off it', () => {
         for (const mouth of A.MOUTHS.map((m) => m.id)) {
             const avatar = F.createAvatar({ mouth });
-            const group = avatar.person.children.find((o) => o.name === 'mouth');
+            const group = avatar.person.getObjectByName('mouth');
             const pts = points(avatar.person, group);
             const d = pts.map((p) => p.distanceTo(HEAD()));
             // Within a few millimeters of the 0.12 m head's surface.
@@ -642,7 +677,7 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
         // fraction of a millimeter of their own radius, corners and all.
         for (const mouth of ['smile', 'smirk', 'bigSmile', 'grin']) {
             const avatar = F.createAvatar({ mouth });
-            for (const m of meshesOf(avatar.person.children.find((o) => o.name === 'mouth'))) {
+            for (const m of meshesOf(avatar.person.getObjectByName('mouth'))) {
                 const d = points(avatar.person, m).map((p) => p.distanceTo(HEAD()));
                 expect(`${mouth} ${m.name}: ${Math.max(...d) - Math.min(...d) < 0.0005}`).toBe(`${mouth} ${m.name}: true`);
             }
@@ -656,7 +691,7 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
         // mouth like a tongue (Steve's QA, 2026-10-24).
         for (const mouth of A.MOUTHS.map((m) => m.id)) {
             const avatar = F.createAvatar({ mouth });
-            const group = avatar.person.children.find((o) => o.name === 'mouth');
+            const group = avatar.person.getObjectByName('mouth');
             for (const m of meshesOf(group)) {
                 if (m.geometry.type !== 'BufferGeometry') continue;
                 const pts = points(avatar.person, m);
@@ -673,7 +708,7 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
 
     test('the open mouths show their teeth, framed by the lips, with the dark inside behind', () => {
         for (const [mouth, rows] of [['bigSmile', 1], ['grin', 2]]) {
-            const group = F.createAvatar({ mouth }).person.children.find((o) => o.name === 'mouth');
+            const group = F.createAvatar({ mouth }).person.getObjectByName('mouth');
             expect(group.children.filter((m) => m.name === 'teeth')).toHaveLength(rows);
             expect(group.children.filter((m) => m.name === 'inside')).toHaveLength(1);
             expect(group.children.filter((m) => m.name === 'lips')).toHaveLength(1);
@@ -688,14 +723,14 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
         }
         // The gentle smile, the smirk and the "o" show no teeth.
         for (const mouth of ['smile', 'smirk', 'surprised']) {
-            const group = F.createAvatar({ mouth }).person.children.find((o) => o.name === 'mouth');
+            const group = F.createAvatar({ mouth }).person.getObjectByName('mouth');
             expect(group.children.filter((m) => m.name === 'teeth')).toHaveLength(0);
         }
         // The smirk is a smile with one side up: its left corner (the
         // figure's, at +x) higher than its right; the smile's are level.
         const corners = (mouth) => {
             const avatar = F.createAvatar({ mouth });
-            const pts = points(avatar.person, avatar.person.children.find((o) => o.name === 'mouth'));
+            const pts = points(avatar.person, avatar.person.getObjectByName('mouth'));
             const end = (sign) => pts.reduce((best, p) => (sign * p.x > sign * best.x ? p : best));
             return { left: end(1).y, right: end(-1).y };
         };
@@ -706,7 +741,7 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
         // A closed mouth is the crescent alone: no teeth, no inside, and
         // (QA, 2026-10-24) no balls on its ends.
         for (const mouth of ['smile', 'smirk']) {
-            const group = F.createAvatar({ mouth }).person.children.find((o) => o.name === 'mouth');
+            const group = F.createAvatar({ mouth }).person.getObjectByName('mouth');
             expect(meshesOf(group).map((m) => m.name)).toEqual(['lips']);
         }
     });
@@ -715,7 +750,7 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
         for (const mouth of A.MOUTHS.map((m) => m.id)) {
             for (const lips of A.LIP_COLORS) {
                 const avatar = F.createAvatar({ mouth, lips: lips.id, skin: 'tan' });
-                const ring = avatar.person.children.find((o) => o.name === 'mouth').children.find((m) => m.name === 'lips');
+                const ring = avatar.person.getObjectByName('mouth').children.find((m) => m.name === 'lips');
                 const want = lips.color === null ? F.lipsColor(A.optionOf(A.SKINS, 'tan').color) : lips.color;
                 expect(`${mouth}/${lips.id}: ${ring.material.color.getHex()}`).toBe(`${mouth}/${lips.id}: ${new THREE.Color(want).getHex()}`);
             }
@@ -728,7 +763,7 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
         const cyl = l.children.filter((m) => m.isMesh && m.geometry.type === 'CylinderGeometry' && m.name !== 'hem').sort((a, b) => b.position.y - a.position.y);
         return { group: l, thigh: cyl[0], shin: cyl[1], knee: l.children.find((m) => m.isMesh && m.geometry.type === 'SphereGeometry') };
     }
-    const skinOf = (avatar) => avatar.person.children.find((o) => o.userData.isHead).material;
+    const skinOf = (avatar) => findIn(avatar.person, (o) => o.userData.isHead).material;
 
     test('bare legs under a skirt, bare from the knee in shorts, and trousers in pants', () => {
         const skirt = F.createAvatar({ bottom: 'skirt' });
@@ -869,6 +904,176 @@ describe('the second round of choices (Steve\'s QA, 2026-10-24), measured', () =
         let shafts = 0;
         F.createAvatar({ shoes: 'maryJane' }).person.traverse((o) => { if (o.name === 'shaft') shafts++; });
         expect(shafts).toBe(0);
+    });
+});
+
+describe('the face (Steve\'s QA, 2026-10-24), measured', () => {
+    const headOf = (avatar) => avatar.person.getObjectByName('head');
+    const world = (o) => {
+        o.updateWorldMatrix(true, true);
+        return o;
+    };
+    /** Every vertex of `object` in the head's own coordinates. */
+    function inHead(avatar, object) {
+        const head = world(headOf(avatar));
+        const inv = head.matrixWorld.clone().invert();
+        const out = [];
+        object.traverse((m) => {
+            if (!m.isMesh) return;
+            const pos = m.geometry.attributes.position;
+            for (let i = 0; i < pos.count; i++) out.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).applyMatrix4(inv));
+        });
+        return out;
+    }
+
+    test('the head and everything on it are one group, and a round face is exactly the rig\'s', () => {
+        const avatar = F.createAvatar({ glasses: 'round', facial: 'beard', hat: 'cap' });
+        const head = headOf(avatar);
+        expect(head.scale.toArray()).toEqual([1, 1, 1]);
+        for (const name of ['mouth', 'brows', 'glasses', 'facial', 'hat', 'hair']) {
+            expect(`${name}: ${avatar.person.getObjectByName(name).parent === head}`).toBe(`${name}: true`);
+        }
+        for (const key of ['isHead', 'isEye', 'isPupil', 'isNose', 'isEar']) {
+            expect(`${key}: ${head.children.some((o) => o.userData[key])}`).toBe(`${key}: true`);
+            expect(`${key} left behind: ${avatar.person.children.some((o) => o.userData[key])}`).toBe(`${key} left behind: false`);
+        }
+    });
+
+    test('an oval face stretches the head and all of it together, and every hat still fits', () => {
+        const oval = F.createAvatar({ faceShape: 'oval', length: 'short' });
+        expect(headOf(oval).scale.toArray()).toEqual([...F.FACE_SCALE.oval]);
+        const box = (a) => new THREE.Box3().setFromObject(world(findIn(a.person, (o) => o.userData.isHead)));
+        const round = F.createAvatar({});
+        const r = box(round);
+        const o = box(oval);
+        expect(o.max.y - o.min.y).toBeGreaterThan((r.max.y - r.min.y) * 1.05);
+        expect(o.max.x - o.min.x).toBeLessThan(r.max.x - r.min.x);
+        // The mouth moves with the face: in the head's own coordinates it is
+        // exactly where the round face has it.
+        const mouthAt = (a) => inHead(a, a.person.getObjectByName('mouth'))[0].toArray().map((n) => n.toFixed(6));
+        expect(mouthAt(oval)).toEqual(mouthAt(round));
+        // Every hat over every hair style on an oval face: no hair through.
+        for (const hat of ['beanie', 'cap', 'sunHat']) {
+            for (const length of ['bald', 'short', 'long']) {
+                const a = F.createAvatar({ faceShape: 'oval', hat, length });
+                const fit = a.person.getObjectByName('hat').userData.fit;
+                const hair = a.person.getObjectByName('hair');
+                const pts = inHead(a, findIn(a.person, (x) => x.userData.isHead)).concat(hair ? inHead(a, hair) : []);
+                const through = pts.filter((p) => {
+                    if (fit.kind === 'sunHat') {
+                        if (p.y <= fit.baseY) return false;
+                        const k = (p.y - fit.baseY) / (fit.top - fit.baseY);
+                        return Math.hypot(p.x - fit.center.x, p.z - fit.center.z) > fit.r * (1 - k * (1 - F.HAT_SIZE.sunHat.taper)) || p.y > fit.top;
+                    }
+                    const rel = p.clone().sub(fit.center);
+                    return rel.y * Math.cos(fit.tilt) + rel.z * Math.sin(fit.tilt) > fit.r * Math.cos(fit.edge) && rel.length() > fit.r;
+                });
+                expect(`oval ${hat}/${length}: ${through.length}`).toBe(`oval ${hat}/${length}: 0`);
+            }
+        }
+    });
+
+    test('the eye shapes: almond and wide reshape the rig\'s eye, sleepy lids the top half, lashes line it', () => {
+        const eye = (a) => findIn(a.person, (o) => o.userData.isEye);
+        expect(eye(F.createAvatar({ eyeShape: 'almond' })).scale.x).toBeGreaterThan(eye(F.createAvatar({})).scale.x);
+        expect(eye(F.createAvatar({ eyeShape: 'almond' })).scale.y).toBeLessThan(eye(F.createAvatar({})).scale.y);
+        expect(eye(F.createAvatar({ eyeShape: 'wide' })).scale.y).toBeGreaterThan(1);
+        // Sleepy: from the front, the top of the pupil is behind the lid and
+        // its bottom still shows (preview, 2026-10-24: the first lid closed
+        // the eye).
+        const sleepy = F.createAvatar({ eyeShape: 'sleepy' });
+        const pupil = at(sleepy.person, findIn(sleepy.person, (o) => o.userData.isPupil));
+        const ray = (dy) => {
+            sleepy.person.updateMatrixWorld(true);
+            const hits = new THREE.Raycaster(new THREE.Vector3(pupil.x, pupil.y + dy, 2).applyMatrix4(sleepy.person.matrixWorld), new THREE.Vector3(0, 0, -1))
+                .intersectObject(sleepy.person, true);
+            return hits[0].object;
+        };
+        expect(ray(0.007).name).toBe('lid');
+        expect(ray(-0.006).userData.isPupil).toBe(true);
+        const lashes = F.createAvatar({ eyeShape: 'lashes' });
+        expect(allIn(lashes.person, (o) => o.name === 'lashes')).toHaveLength(4);
+        expect(allIn(F.createAvatar({}).person, (o) => o.name === 'lid' || o.name === 'lashes')).toHaveLength(0);
+    });
+
+    test('every face has brows above its eyes, on the head and not sunk into it, a shade darker than its hair', () => {
+        for (const brows of A.BROWS.map((b) => b.id)) {
+            const avatar = F.createAvatar({ brows, hair: 'blond' });
+            const group = avatar.person.getObjectByName('brows');
+            expect(group.children).toHaveLength(2);
+            const pts = inHead(avatar, group);
+            // Above the eyes (0.02 above the head's middle, 0.018 tall) and
+            // below a short cut's hairline.
+            expect(Math.min(...pts.map((p) => p.y))).toBeGreaterThan(0.02 + 0.018);
+            expect(Math.max(...pts.map((p) => p.y))).toBeLessThan(0.06);
+            // The middle of every triangle outside the head (as the mouths).
+            for (const m of group.children) {
+                const local = inHead(avatar, m);
+                const index = m.geometry.index.array;
+                for (let i = 0; i < index.length; i += 3) {
+                    const mid = local[index[i]].clone().add(local[index[i + 1]]).add(local[index[i + 2]]).divideScalar(3);
+                    expect(mid.length()).toBeGreaterThan(0.1202);
+                }
+            }
+            const c = group.children[0].material.color.getHex();
+            expect(c).toBe(new THREE.Color(A.optionOf(A.HAIR_COLORS, 'blond').color).multiplyScalar(F.BROW_SIZE.darker).getHex());
+        }
+        // Bold is thicker than thin, arched higher in the middle than straight.
+        const span = (brows) => {
+            const a = F.createAvatar({ brows });
+            const pts = inHead(a, a.person.getObjectByName('brows'));
+            return Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y));
+        };
+        expect(span('bold')).toBeGreaterThan(span('thin'));
+        expect(span('arched')).toBeGreaterThan(span('straight'));
+        // Surprised raises them.
+        const top = (look) => {
+            const a = F.createAvatar(look);
+            return Math.max(...inHead(a, a.person.getObjectByName('brows')).map((p) => p.y));
+        };
+        expect(top({ mouth: 'surprised' }) - top({})).toBeCloseTo(F.BROW_SIZE.surprised, 3);
+    });
+
+    test('each nose takes the rig\'s place, in front of the face and under the glasses\' bridge', () => {
+        for (const nose of ['button', 'round', 'wide']) {
+            const avatar = F.createAvatar({ nose, glasses: 'round' });
+            expect(findIn(avatar.person, (o) => o.userData.isNose).visible).toBe(false);
+            const mesh = avatar.person.getObjectByName('nose');
+            const pts = inHead(avatar, mesh);
+            expect(Math.max(...pts.map((p) => p.z))).toBeGreaterThan(0.12);
+            const glasses = avatar.person.getObjectByName('glasses');
+            const bridge = glasses.children[glasses.children.length - 1];
+            expect(Math.min(...inHead(avatar, bridge).map((p) => p.y))).toBeGreaterThan(Math.max(...pts.map((p) => p.y)));
+        }
+        expect(findIn(F.createAvatar({}).person, (o) => o.userData.isNose).visible).toBe(true);
+    });
+
+    test('blush is a soft see-through rose; freckles are dots a shade of the skin', () => {
+        const blush = F.createAvatar({ cheeks: 'blush' }).person.getObjectByName('cheeks');
+        expect(blush.children).toHaveLength(2);
+        expect(blush.children.every((m) => m.material.transparent && m.material.opacity < 0.5)).toBe(true);
+        const freckles = F.createAvatar({ cheeks: 'freckles', skin: 'light' }).person.getObjectByName('cheeks');
+        expect(freckles.children).toHaveLength(2 * F.CHEEK_SIZE.freckles.dots.length);
+        expect(freckles.children[0].material.color.getHex())
+            .toBe(new THREE.Color(A.optionOf(A.SKINS, 'light').color).multiplyScalar(F.CHEEK_SIZE.freckles.darker).getHex());
+        expect(F.createAvatar({}).person.getObjectByName('cheeks')).toBeUndefined();
+    });
+
+    test('custom colors reach the hair, the beard, the hat and the lips, and facial hair can differ from the hair', () => {
+        const hex = (o) => o.material.color.getHex();
+        const as = (n) => new THREE.Color(n).getHex();
+        const a = F.createAvatar({ hair: 'x11aa33', facial: 'beard', facialColor: 'xcc2200', hat: 'beanie', hatColor: 'x0055ff', lips: 'xaa0066' });
+        const hairMesh = findIn(a.person.getObjectByName('hair'), (o) => o.isMesh);
+        expect(hex(hairMesh)).toBe(as(0x11aa33));
+        expect(hex(findIn(a.person.getObjectByName('facial'), (o) => o.isMesh))).toBe(as(0xcc2200));
+        expect(hex(findIn(a.person.getObjectByName('hat'), (o) => o.name === 'crown'))).toBe(as(0x0055ff));
+        expect(hex(a.person.getObjectByName('mouth').children.find((m) => m.name === 'lips'))).toBe(as(0xaa0066));
+        // "Same as hair": the beard follows the hair, custom or not.
+        const same = F.createAvatar({ hair: 'x11aa33', facial: 'goatee' });
+        expect(hex(findIn(same.person.getObjectByName('facial'), (o) => o.isMesh))).toBe(as(0x11aa33));
+        // A white custom shoe gets the gray trim, like the white swatch.
+        const white = F.createAvatar({ shoes: 'sneakers', shoeColor: 'xfafafa' });
+        expect(hex(findIn(white.person, (o) => o.name === 'sole'))).toBe(as(F.SNEAKER_SIZE.trimOnWhite));
     });
 });
 

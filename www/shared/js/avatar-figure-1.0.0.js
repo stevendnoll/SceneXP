@@ -36,8 +36,7 @@
  */
 
 import {
-    personConfig, withOverrides, optionOf, normalizeAvatar, validPortraitSrc,
-    SKINS, HAIR_COLORS, SHIRTS, SHOE_COLORS, LIP_COLORS
+    personConfig, withOverrides, normalizeAvatar, validPortraitSrc, colorOf
 } from './avatar-1.0.0.min.js';
 import { createPerson } from './people-1.0.0.min.js';
 
@@ -46,9 +45,10 @@ import { createPerson } from './people-1.0.0.min.js';
  * so a portrait drawn before is drawn again (PLANNING 3.5): /avatar/ and the
  * scenes compare it with the one stored. 2 (2026-10-24): the pieces, and
  * a closer portrait. 3 (2026-10-24): the mouths, bare legs, boots. 4
- * (2026-10-24): the mouths redrawn as crescents and rounded pills.
+ * (2026-10-24): the mouths redrawn as crescents and rounded pills. 5
+ * (2026-10-24): the face (brows on every face, eyes, noses, cheeks, shape).
  */
-export const RENDER_VERSION = 4;
+export const RENDER_VERSION = 5;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named
@@ -164,11 +164,11 @@ function sheet(columns, c, r, drop) {
 
 /** The grid between two edges, `low(u)` and `high(u)`, across `hw` either
  *  side of the middle, `rows` points from one to the other. */
-function between(hw, low, high, rows = 5) {
-    return across().map((u) => {
+function between(hw, low, high, rows = 5, cx = 0, n = 32) {
+    return across(n).map((u) => {
         const y0 = low(u);
         const y1 = Math.max(y0, high(u));
-        return Array.from({ length: rows }, (_, j) => [u * hw, y0 + ((y1 - y0) * j) / (rows - 1)]);
+        return Array.from({ length: rows }, (_, j) => [cx + u * hw, y0 + ((y1 - y0) * j) / (rows - 1)]);
     });
 }
 
@@ -237,6 +237,198 @@ function buildMouth(kind, head, color) {
         add(sheet(between(hw, edge('bottom'), high), c, L.teeth, m.drop), teeth, 'teeth');
     }
     add(sheet(ring(m), c, L.lips, m.drop), lipsMaterial, 'lips');
+    return group;
+}
+
+// ---- The face: its shape, the eyes, the eyebrows, the nose, the cheeks ----------
+//
+// Steve's QA, 2026-10-24. Everything here is built about the head's own
+// middle, inside the HEAD GROUP (`gatherHead`), so an oval face is that group
+// drawn taller and narrower, and every feature on it (and the hair, the
+// glasses, the beard and the hat) follows without being moved one by one.
+
+/** Each face shape's stretch of the head, across, up and out. Round is the
+ *  rig's own sphere. */
+export const FACE_SCALE = Object.freeze({ round: Object.freeze([1, 1, 1]), oval: Object.freeze([0.94, 1.09, 0.97]) });
+
+/**
+ * Gather the head and everything on it (the eyes, the pupils, the nose, the
+ * ears, the hair) into one group at the head's middle, stretched to `scale`.
+ * Each keeps its place: its position becomes its offset from the middle, and
+ * the hair's own pieces are re-based the same way, so the group's coordinates
+ * ARE the head's (the hats and the trims read them). Returns the group.
+ */
+function gatherHead(person, scale) {
+    const head = person.children.find((o) => o.userData.isHead);
+    const c = head.position.clone();
+    const group = new THREE.Group();
+    group.name = 'head';
+    group.position.copy(c);
+    group.scale.set(...scale);
+    const parts = person.children.filter((o) => o.userData.isHead || o.userData.isEye || o.userData.isPupil
+        || o.userData.isNose || o.userData.isEar || o.userData.isHair);
+    for (const o of parts) {
+        person.remove(o);
+        if (o.userData.isHair) {
+            for (const piece of o.children) piece.position.sub(c);
+            o.name = 'hair';
+        } else {
+            o.position.sub(c);
+        }
+        group.add(o);
+    }
+    person.add(group);
+    return group;
+}
+
+/**
+ * The eyes' shapes, made from the rig's own eye (a white, flattened ball) and
+ * pupil:
+ *
+ *   almond  wider and shorter
+ *   wide    larger all round
+ *   sleepy  a lid of skin over the top half, pupil and all
+ *   lashes  the round eye with a dark lash line over it, flicked at the
+ *           outer corner
+ */
+export const EYE_SIZE = Object.freeze({
+    almond: { eye: [1.25, 0.72], pupil: [1, 0.9] },
+    wide: { eye: [1.2, 1.2], pupil: [1.15, 1.15] },
+    // Tipped back a touch, so the lid stops just above the eye's middle and
+    // the lower part of the pupil shows (preview, 2026-10-24: tipped forward
+    // it closed the eye).
+    sleepy: { lid: 0.0196, reach: 1.32, tilt: -0.08 },
+    lashes: { r: 0.0192, tube: 0.0016, from: 0.2, to: 0.8, flick: [0.007, 0.0016], color: 0x1a1412 }
+});
+
+function shapeEyes(face, kind, skin) {
+    const E = EYE_SIZE;
+    const eyes = face.children.filter((o) => o.userData.isEye);
+    const pupils = face.children.filter((o) => o.userData.isPupil);
+    if (E[kind] && E[kind].eye) {
+        for (const e of eyes) e.scale.set(E[kind].eye[0], E[kind].eye[1], e.scale.z);
+        for (const p of pupils) p.scale.set(E[kind].pupil[0], E[kind].pupil[1], p.scale.z);
+    }
+    if (kind === 'sleepy') {
+        for (const e of eyes) {
+            // The top half of a ball the eye's size, reaching forward past
+            // the pupil.
+            const lid = new THREE.Mesh(new THREE.SphereGeometry(E.sleepy.lid, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), skin);
+            lid.position.copy(e.position);
+            lid.scale.z = E.sleepy.reach;
+            lid.rotation.x = E.sleepy.tilt;
+            lid.name = 'lid';
+            face.add(lid);
+        }
+    }
+    if (kind === 'lashes') {
+        const L = E.lashes;
+        const dark = new THREE.MeshStandardMaterial({ color: L.color, roughness: 0.8 });
+        for (const e of eyes) {
+            const side = Math.sign(e.position.x);
+            const line = new THREE.Mesh(new THREE.TorusGeometry(L.r, L.tube, 5, 14, Math.PI * (L.to - L.from)), dark);
+            line.rotation.z = Math.PI * L.from;
+            line.position.set(e.position.x, e.position.y, e.position.z + 0.009);
+            line.name = 'lashes';
+            face.add(line);
+            const flick = new THREE.Mesh(new THREE.BoxGeometry(L.flick[0], L.flick[1], L.flick[1]), dark);
+            const end = Math.PI * (side > 0 ? L.from : L.to);
+            flick.position.set(e.position.x + Math.cos(end) * L.r + side * 0.002, e.position.y + Math.sin(end) * L.r + 0.0015, e.position.z + 0.009);
+            flick.rotation.z = side * 0.6;
+            flick.name = 'lashes';
+            face.add(flick);
+        }
+    }
+    face.traverse((o) => {
+        if (o.name === 'lid' || o.name === 'lashes') o.castShadow = false;
+    });
+}
+
+/**
+ * The eyebrows, in the hair's color a shade darker, laid on the head like the
+ * mouth: each a tapered band `width` wide, `x` either side of the middle and
+ * `y` above it, its middle `arch` higher than its ends, its inner end `tilt`
+ * lower than its outer, `thick` at its fullest. A surprised face raises them
+ * `surprised`.
+ */
+export const BROW_SIZE = Object.freeze({
+    // A little wider than the eye and full enough to read at a distance
+    // (preview, 2026-10-24: narrower and thinner, they all but vanished).
+    x: 0.037, y: 0.046, width: 0.034, round: 2.4, darker: 0.75, surprised: 0.004,
+    natural: { arch: 0.003, thick: 0.0047, tilt: 0.0015 },
+    straight: { arch: 0, thick: 0.0047, tilt: 0 },
+    arched: { arch: 0.0068, thick: 0.004, tilt: 0.002 },
+    bold: { arch: 0.003, thick: 0.0072, tilt: 0.0015 },
+    thin: { arch: 0.0035, thick: 0.0025, tilt: 0.0015 }
+});
+
+function buildBrows(kind, color, raised = false) {
+    const B = BROW_SIZE;
+    const spec = B[kind];
+    const group = new THREE.Group();
+    group.name = 'brows';
+    const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(B.darker), roughness: 0.95, side: THREE.DoubleSide });
+    const hw = B.width / 2;
+    for (const side of [-1, 1]) {
+        // u runs left to right; the inner end is the one nearer the nose.
+        const line = (u) => spec.arch * (1 - u * u) - spec.tilt * u * side;
+        const bulge = (u) => (1 - Math.abs(u) ** B.round) ** (1 / B.round);
+        const brow = new THREE.Mesh(sheet(between(hw, (u) => line(u) - (spec.thick / 2) * bulge(u), (u) => line(u) + (spec.thick / 2) * bulge(u), 4, side * B.x, 16),
+            new THREE.Vector3(), 0.1212, -(B.y + (raised ? B.surprised : 0))), material);
+        brow.name = 'brow';
+        brow.castShadow = false;
+        group.add(brow);
+    }
+    return group;
+}
+
+/** The noses other than the rig's own pointed one: a ball, `r` across,
+ *  stretched by `scale`, its middle `at` from the head's. */
+export const NOSE_SIZE = Object.freeze({
+    button: { r: 0.011, scale: [1, 1, 1], at: [0, -0.012, 0.118] },
+    round: { r: 0.016, scale: [1, 0.85, 0.8], at: [0, -0.012, 0.114] },
+    wide: { r: 0.015, scale: [1.5, 0.75, 0.7], at: [0, -0.014, 0.113] }
+});
+
+function shapeNose(face, kind, skin) {
+    const spec = NOSE_SIZE[kind];
+    if (!spec) return;
+    const rig = face.children.find((o) => o.userData.isNose);
+    rig.visible = false;
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(spec.r, 14, 10), skin);
+    nose.scale.set(...spec.scale);
+    nose.position.set(...spec.at);
+    nose.name = 'nose';
+    face.add(nose);
+}
+
+/** The cheeks: a soft see-through blush, or a scatter of freckles a shade of
+ *  the skin's own, `x` either side and `y` below the head's middle. */
+export const CHEEK_SIZE = Object.freeze({
+    x: 0.058, y: 0.012, blush: { r: 0.016, color: 0xe2737a, opacity: 0.32 },
+    freckles: { r: 0.0025, darker: 0.62, dots: [[-0.012, 0.004], [-0.004, 0.009], [0.005, 0.005], [0.012, 0.001], [-0.008, -0.004], [0.002, -0.002], [0.009, -0.007], [-0.002, 0.012]] }
+});
+
+function buildCheeks(kind, skinColor) {
+    const K = CHEEK_SIZE;
+    const group = new THREE.Group();
+    group.name = 'cheeks';
+    const round = (r) => (u) => r * Math.sqrt(Math.max(0, 1 - u * u));
+    const disc = (cx, cy, r, material, n = 12) => {
+        const mesh = new THREE.Mesh(sheet(between(r, (u) => -round(r)(u), round(r), 4, cx, n), new THREE.Vector3(), 0.1211, cy), material);
+        mesh.castShadow = false;
+        group.add(mesh);
+        return mesh;
+    };
+    if (kind === 'blush') {
+        const material = new THREE.MeshStandardMaterial({ color: K.blush.color, roughness: 1, transparent: true, opacity: K.blush.opacity, depthWrite: false, side: THREE.DoubleSide });
+        for (const side of [-1, 1]) disc(side * K.x, K.y, K.blush.r, material, 24).name = 'blush';
+    } else if (kind === 'freckles') {
+        const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(skinColor).multiplyScalar(K.freckles.darker), roughness: 1, side: THREE.DoubleSide });
+        for (const side of [-1, 1]) {
+            for (const [dx, dy] of K.freckles.dots) disc(side * (K.x + dx), K.y - dy, K.freckles.r, material, 6).name = 'freckle';
+        }
+    }
     return group;
 }
 
@@ -916,27 +1108,41 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
         if (o.isMesh) o.castShadow = true;
     });
 
-    const lips = optionOf(LIP_COLORS, a.lips).color;
-    person.add(buildMouth(a.mouth, head, lips === null ? lipsColor(optionOf(SKINS, a.skin).color) : lips));
+    // The head and everything on it in one group at its middle (the face's
+    // shape is that group's stretch). From here on, every piece of the face
+    // is built about that middle, at the origin of the group.
+    const face = gatherHead(person, FACE_SCALE[a.faceShape]);
+    const c = head.position;
+    const skinColor = colorOf('skin', a.skin);
+    const hairColor = colorOf('hair', a.hair);
+    shapeEyes(face, a.eyeShape, skin);
+    shapeNose(face, a.nose, skin);
+    face.add(buildBrows(a.brows, hairColor, a.mouth === 'surprised'));
+    if (a.cheeks !== 'none') face.add(buildCheeks(a.cheeks, skinColor));
+    face.add(buildMouth(a.mouth, head, colorOf('lips', a.lips) ?? lipsColor(skinColor)));
 
     // The pieces the rig has no option for (M5), after the shadows above:
     // none of them casts one (a hat's shadow would darken the whole face).
-    const c = head.position;
-    if (a.glasses !== 'none') person.add(buildGlasses(a.glasses, c));
+    if (a.glasses !== 'none') face.add(buildGlasses(a.glasses, c));
     if (a.facial !== 'none') {
         const mouth = { bottom: Infinity, top: -Infinity };
-        eachVertex([person.children.find((o) => o.name === 'mouth')], (v) => {
+        eachVertex([face.children.find((o) => o.name === 'mouth')], (v) => {
             mouth.bottom = Math.min(mouth.bottom, v.y - c.y);
             mouth.top = Math.max(mouth.top, v.y - c.y);
         });
-        person.add(buildFacial(a.facial, c, optionOf(HAIR_COLORS, a.hair).color, mouth));
+        face.add(buildFacial(a.facial, c, colorOf('facialColor', a.facialColor) ?? hairColor, mouth));
     }
     if (a.hat !== 'none') {
-        const hair = person.children.find((o) => o.userData.isHair);
-        person.add(buildHat(a.hat, c, optionOf(SHIRTS, a.hatColor).color, head, hair));
+        const hair = face.children.find((o) => o.userData.isHair);
+        face.add(buildHat(a.hat, c, colorOf('hatColor', a.hatColor), head, hair));
     }
-    if (a.shoes === 'sneakers') dressSneakers(person, a.shoeColor === 'white');
-    else if (BOOT_SIZE[a.shoes]) dressBoots(person, a.shoes, optionOf(SHOE_COLORS, a.shoeColor).color);
+    const shoeColor = colorOf('shoeColor', a.shoeColor);
+    // A white or nearly white shoe (a custom one too) gets the gray trim. The
+    // display color's own lightness: three's Color holds it in linear light,
+    // where white reads darker than it looks.
+    const light = (((shoeColor >> 16) & 255) * 0.299 + ((shoeColor >> 8) & 255) * 0.587 + (shoeColor & 255) * 0.114) / 255;
+    if (a.shoes === 'sneakers') dressSneakers(person, light > 0.85);
+    else if (BOOT_SIZE[a.shoes]) dressBoots(person, a.shoes, shoeColor);
 
     const group = new THREE.Group();
     group.name = 'avatar';

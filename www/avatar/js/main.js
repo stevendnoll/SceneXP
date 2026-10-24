@@ -288,6 +288,8 @@ function wire() {
     });
     $('av-turn-left').addEventListener('click', () => state.studio && state.studio.turnBy(-CONFIG.turntable.step));
     $('av-turn-right').addEventListener('click', () => state.studio && state.studio.turnBy(CONFIG.turntable.step));
+    $('av-zoom-in').addEventListener('click', () => state.studio && state.studio.zoomIn());
+    $('av-zoom-out').addEventListener('click', () => state.studio && state.studio.zoomOut());
     window.addEventListener('hashchange', readLink);
     document.addEventListener('visibilitychange', () => {
         if (!state.studio) return;
@@ -336,8 +338,15 @@ export async function init() {
             }
             refresh();
         },
+        // A tab frames its part of the figure (the face, the feet, or the
+        // whole figure for the clothes), and is where + zooms from then on.
+        // Steve's QA, 2026-10-24: tabs that zoomed were clunky only while
+        // there was no way back out; with the zoom by hand, they should.
+        // The first tab, shown as the page opens, frames nothing.
         onTab(tab) {
-            if (state.studio) state.studio.setFrame(tab.frame);
+            if (!state.studio) return;
+            state.studio.setZoomTarget(tab.frame);
+            state.studio.setFrame(tab.frame);
         }
     });
     wire();

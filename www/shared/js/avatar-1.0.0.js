@@ -29,9 +29,48 @@
  * which a browser never sends to the server.
  */
 
-import { SHIRTS, PANTS, SKINS, HAIR_COLORS, HAIR_LENGTHS, optionOf, normalizeChoice } from './cast-1.0.0.min.js';
+import { SHIRTS, PANTS, SKINS, HAIR_COLORS as CAST_HAIR, HAIR_LENGTHS, optionOf, normalizeChoice } from './cast-1.0.0.min.js';
 
-export { SHIRTS, PANTS, SKINS, HAIR_COLORS, HAIR_LENGTHS, optionOf };
+export { SHIRTS, PANTS, SKINS, HAIR_LENGTHS, optionOf };
+
+/**
+ * Hair colors (Steve's QA, 2026-10-24: more of them): cast-1.0.0's six
+ * first, so every id a choice or a link already holds still reads, then
+ * more natural shades, then the fun ones. Any color at all is a custom one
+ * (`CUSTOM_COLOR`).
+ */
+export const HAIR_COLORS = Object.freeze([
+    ...CAST_HAIR,
+    { id: 'lightBrown', label: 'Light brown', color: 0x9a7350 },
+    { id: 'honey', label: 'Honey blond', color: 0xc4914a },
+    { id: 'strawberry', label: 'Strawberry blond', color: 0xd08a5c },
+    { id: 'platinum', label: 'Platinum', color: 0xe9e2cf },
+    { id: 'copper', label: 'Copper', color: 0xb3542a },
+    { id: 'silver', label: 'Silver', color: 0xc8cacd },
+    { id: 'white', label: 'White', color: 0xf0efea },
+    { id: 'pink', label: 'Pink', color: 0xe48fb8 },
+    { id: 'purple', label: 'Purple', color: 0x7b4fb5 },
+    { id: 'blue', label: 'Blue', color: 0x3d6fd6 },
+    { id: 'teal', label: 'Teal', color: 0x2aa7a3 },
+    { id: 'green', label: 'Green', color: 0x4f9e4b },
+    { id: 'fireRed', label: 'Fire red', color: 0xc3242c }
+]);
+
+/**
+ * ANY COLOR, chosen with the browser's own picker (Steve, 2026-10-24),
+ * kept as `x` and six hex digits ("x9c2b25"). Letters and digits only, so
+ * it travels in a link between dots like any other id, and nothing else of
+ * any shape is ever accepted.
+ */
+export const CUSTOM_COLOR = /^x[0-9a-f]{6}$/;
+
+/** The fields that take a custom color as well as their swatches. */
+export const COLOR_FIELDS = Object.freeze(['skin', 'eyes', 'hair', 'shirt', 'bottomColor', 'shoeColor', 'hatColor', 'lips', 'facialColor']);
+
+/** A custom color's id for a display hex (0x9c2b25 is "x9c2b25"). */
+export function customColor(hex) {
+    return `x${(Number(hex) >>> 0 & 0xffffff).toString(16).padStart(6, '0')}`;
+}
 
 /** The avatar's own schema, stored as `v`. */
 export const AVATAR_VERSION = 1;
@@ -84,6 +123,50 @@ export const LIP_COLORS = Object.freeze([
     { id: 'red', label: 'Red', color: 0xa81f2d },
     { id: 'berry', label: 'Berry', color: 0x74213f },
     { id: 'softPink', label: 'Soft pink', color: 0xd88c96 }
+]);
+
+/** Facial hair's color: the hair's own unless another is chosen (Steve,
+ *  2026-10-24: a beard need not match the hair on top). */
+export const FACIAL_COLORS = Object.freeze([
+    { id: 'match', label: 'Same as hair', color: null, swatch: 0x8a7a6a },
+    ...HAIR_COLORS
+]);
+
+/** The face (Steve's QA, 2026-10-24): its shape, the eyes' shape, the
+ *  eyebrows, the nose, and the cheeks. Drawn by avatar-figure. */
+export const FACE_SHAPES = Object.freeze([
+    { id: 'round', label: 'Round' },
+    { id: 'oval', label: 'Oval' }
+]);
+
+export const EYE_SHAPES = Object.freeze([
+    { id: 'round', label: 'Round' },
+    { id: 'almond', label: 'Almond' },
+    { id: 'wide', label: 'Wide' },
+    { id: 'sleepy', label: 'Sleepy' },
+    { id: 'lashes', label: 'Lashes' }
+]);
+
+export const BROWS = Object.freeze([
+    { id: 'natural', label: 'Natural' },
+    { id: 'straight', label: 'Straight' },
+    { id: 'arched', label: 'Arched' },
+    { id: 'bold', label: 'Bold' },
+    { id: 'thin', label: 'Thin' }
+]);
+
+/** Pointed is the rig's own nose, which every figure has always had. */
+export const NOSES = Object.freeze([
+    { id: 'pointed', label: 'Pointed' },
+    { id: 'button', label: 'Button' },
+    { id: 'round', label: 'Round' },
+    { id: 'wide', label: 'Wide' }
+]);
+
+export const CHEEKS = Object.freeze([
+    { id: 'none', label: 'None' },
+    { id: 'blush', label: 'Blush' },
+    { id: 'freckles', label: 'Freckles' }
 ]);
 
 /** How strong the arms are (Steve, 2026-10-24: "so guys can make their
@@ -181,7 +264,14 @@ export const FIELDS = Object.freeze([
     // Appended 2026-10-24 (links made before read them as the defaults).
     Object.freeze(['mouth', MOUTHS]),
     Object.freeze(['lips', LIP_COLORS]),
-    Object.freeze(['muscles', MUSCLES])
+    Object.freeze(['muscles', MUSCLES]),
+    // Appended 2026-10-24, the face (Steve's QA).
+    Object.freeze(['facialColor', FACIAL_COLORS]),
+    Object.freeze(['brows', BROWS]),
+    Object.freeze(['eyeShape', EYE_SHAPES]),
+    Object.freeze(['nose', NOSES]),
+    Object.freeze(['faceShape', FACE_SHAPES]),
+    Object.freeze(['cheeks', CHEEKS])
 ]);
 
 /** The list a field's ids come from, or null for a field that is not one. */
@@ -211,18 +301,32 @@ export const DEFAULT_AVATAR = Object.freeze({
     hatColor: 'navy',
     mouth: 'smile',
     lips: 'natural',
-    muscles: 'standard'
+    muscles: 'standard',
+    facialColor: 'match',
+    brows: 'natural',
+    eyeShape: 'round',
+    nose: 'pointed',
+    faceShape: 'round',
+    cheeks: 'none'
 });
 
 const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
 
 /** How many of `raw`'s fields name a real option (0 for anything that is
  *  not an object). */
+/** Whether `value` is one `key` takes: an id of its list, or (for a color
+ *  field) a custom color. */
+function valid(key, list, value) {
+    if (typeof value !== 'string') return false;
+    if (optionOf(list, value)) return true;
+    return COLOR_FIELDS.includes(key) && CUSTOM_COLOR.test(value);
+}
+
 function validCount(raw) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return 0;
     let n = 0;
     for (const [key, list] of FIELDS) {
-        if (own(raw, key) && typeof raw[key] === 'string' && optionOf(list, raw[key])) n++;
+        if (own(raw, key) && valid(key, list, raw[key])) n++;
     }
     return n;
 }
@@ -240,7 +344,7 @@ export function normalizeAvatar(raw) {
         const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
         for (const [key, list] of FIELDS) {
             const value = own(r, key) ? r[key] : undefined;
-            out[key] = typeof value === 'string' && optionOf(list, value) ? value : DEFAULT_AVATAR[key];
+            out[key] = valid(key, list, value) ? value : DEFAULT_AVATAR[key];
         }
     } catch (e) {
         return { ...DEFAULT_AVATAR };
@@ -264,7 +368,7 @@ export function withOverrides(avatar, overrides = {}) {
     const base = normalizeAvatar(avatar);
     const o = overrides && typeof overrides === 'object' ? overrides : {};
     for (const [key, list] of FIELDS) {
-        if (own(o, key) && typeof o[key] === 'string' && optionOf(list, o[key])) base[key] = o[key];
+        if (own(o, key) && valid(key, list, o[key])) base[key] = o[key];
     }
     return base;
 }
@@ -296,27 +400,38 @@ export function fromCastChoice(choice) {
  * Long sleeves are the shirt's color to the wrist, short ones leave the
  * forearm bare (the rig's own default).
  */
+/**
+ * A color field's color (display hex): its swatch's, or a custom color's
+ * own. Null for a field with no color of its own (natural lips, facial hair
+ * the same as the hair), or for a field that is not a color.
+ */
+export function colorOf(field, value) {
+    if (typeof value === 'string' && CUSTOM_COLOR.test(value) && COLOR_FIELDS.includes(field)) return parseInt(value.slice(1), 16);
+    const option = optionOf(listOf(field) || [], value);
+    return option && typeof option.color === 'number' ? option.color : null;
+}
+
 export function personConfig(avatar, overrides = {}) {
     const a = withOverrides(avatar, overrides);
-    const shirt = optionOf(SHIRTS, a.shirt).color;
+    const shirt = colorOf('shirt', a.shirt);
     const build = optionOf(BUILDS, a.build);
     return {
         shirtColor: shirt,
         sleeveColor: a.sleeves === 'long' ? shirt : null,
-        pantsColor: optionOf(PANTS, a.bottomColor).color,
+        pantsColor: colorOf('bottomColor', a.bottomColor),
         hasSkirt: a.bottom === 'skirt',
         muscular: a.muscles === 'buff',
         footScale: optionOf(MUSCLES, a.muscles).feet,
-        skinTone: optionOf(SKINS, a.skin).color,
-        hairColor: optionOf(HAIR_COLORS, a.hair).color,
+        skinTone: colorOf('skin', a.skin),
+        hairColor: colorOf('hair', a.hair),
         hairStyle: a.length === 'bald' ? 'short' : a.length,
         bald: a.length === 'bald',
-        eyeColor: optionOf(EYES, a.eyes).color,
+        eyeColor: colorOf('eyes', a.eyes),
         shoulderRound: build.shoulderRound,
         hips: build.hips,
         waist: build.waist,
         slender: build.slender,
-        shoeColor: optionOf(SHOE_COLORS, a.shoeColor).color,
+        shoeColor: colorOf('shoeColor', a.shoeColor),
         shoeStyle: optionOf(SHOES, a.shoes).style
     };
 }
@@ -330,25 +445,35 @@ export function personConfig(avatar, overrides = {}) {
  */
 export function describeAvatar(avatar) {
     const a = normalizeAvatar(avatar);
-    const word = (list, id) => optionOf(list, id).label.toLowerCase();
+    // A custom color is said as "custom-color": the words never carry a hex.
+    const word = (list, id) => (CUSTOM_COLOR.test(id) ? 'custom-color' : optionOf(list, id).label.toLowerCase());
+    const name = (list, id) => (CUSTOM_COLOR.test(id) ? 'custom-color' : optionOf(list, id).name);
     const hair = a.length === 'bald' ? 'no hair' : `${word(HAIR_LENGTHS, a.length)} ${word(HAIR_COLORS, a.hair)} hair`;
     const lips = a.lips === 'natural' ? '' : ` and ${word(LIP_COLORS, a.lips)} lips`;
-    const face = [`${word(SKINS, a.skin)} skin`, `${word(EYES, a.eyes)} eyes`, `a ${word(MOUTHS, a.mouth)}${lips}`];
+    const shape = { round: '', lashes: '' }[a.eyeShape] ?? `${word(EYE_SHAPES, a.eyeShape)} `;
+    const face = [
+        `${word(SKINS, a.skin)} skin${a.faceShape === 'oval' ? ', an oval face' : ''}`,
+        `${shape}${word(EYES, a.eyes)} eyes${a.eyeShape === 'lashes' ? ' with long lashes' : ''}`,
+        `a ${word(MOUTHS, a.mouth)}${lips}`
+    ];
+    if (a.cheeks === 'freckles') face.push('freckles');
+    if (a.cheeks === 'blush') face.push('rosy cheeks');
     const extras = [];
-    if (a.facial !== 'none') extras.push(`${a.facial === 'stubble' ? '' : 'a '}${word(FACIAL, a.facial)}`);
+    const beardColor = a.facialColor === 'match' ? '' : `${word(FACIAL_COLORS, a.facialColor)} `;
+    if (a.facial !== 'none') extras.push(`${a.facial === 'stubble' ? '' : 'a '}${beardColor}${word(FACIAL, a.facial)}`);
     if (a.glasses === 'sunglasses' || a.glasses === 'roundSun') extras.push(word(GLASSES, a.glasses));
     else if (a.glasses !== 'none') extras.push(`${word(GLASSES, a.glasses)} glasses`);
     const shoeColor = word(SHOE_COLORS, a.shoeColor);
     const shoes = a.shoes === 'classic' ? `classic ${shoeColor} shoes` : `${shoeColor} ${word(SHOES, a.shoes)}`;
     const muscles = a.muscles === 'standard' ? '' : `${word(MUSCLES, a.muscles)}, `;
-    const shirt = optionOf(SHIRTS, a.shirt).name;
+    const shirt = name(SHIRTS, a.shirt);
     const clothes = [
         `a ${muscles}${word(BUILDS, a.build)} build`,
         a.sleeves === 'tank' ? `a ${shirt} tank top` : `a ${shirt} shirt with ${a.sleeves} sleeves`,
-        `${a.bottom === 'skirt' ? 'a ' : ''}${optionOf(PANTS, a.bottomColor).name} ${a.bottom}`,
+        `${a.bottom === 'skirt' ? 'a ' : ''}${name(PANTS, a.bottomColor)} ${a.bottom}`,
         shoes
     ];
-    if (a.hat !== 'none') clothes.push(`a ${optionOf(SHIRTS, a.hatColor).name} ${word(HATS, a.hat)}`);
+    if (a.hat !== 'none') clothes.push(`a ${name(SHIRTS, a.hatColor)} ${word(HATS, a.hat)}`);
     const head = [...face, hair, ...extras];
     const list = (items) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0]);
     return `A figure with ${list(head)}, ${clothes.slice(0, -1).join(', ')}, and ${clothes[clothes.length - 1]}.`;

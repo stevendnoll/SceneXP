@@ -10,16 +10,19 @@
  * A drag turns it, and so do the two turn buttons. Under reduced motion it
  * never turns by itself, and a button turns it at once.
  *
- * THE CAMERA FRAMES WHAT IS BEING CHOSEN. Each tab names a framing (the whole
- * figure, the face, the feet), and the camera eases between them, so eye
- * color is chosen looking at the eyes. The plinth turns the figure to face
- * the front for the face and the feet.
+ * THE VISITOR ZOOMS, AND A TAB OR A CHOICE FRAMES ITS PART (Steve's QA,
+ * 2026-10-24). The wheel, a trackpad, a pinch and the zoom buttons move the
+ * view between the whole figure and close in, toward wherever they point,
+ * and a drag pans up and down once in. The face's tabs and the feet's bring
+ * the view in on them, facing the front; the clothes' tabs take it back out.
+ * Tabs zooming felt clunky only while there was no way back out by hand.
  *
  * QUIET WHEN STILL. A frame is drawn only while something moves (the plinth,
  * the camera, a wave) or something changed (the figure, the canvas's size).
  *
  * The arithmetic is pure and exported (`coveProfile`, `frameFor`,
- * `nearestFront`, `contactAlpha`), so the tests check it without a renderer.
+ * `closeFrame`, `viewFor`, `nearestFront`, `contactAlpha`), so the tests
+ * check it without a renderer.
  */
 
 import { createAvatar, renderPortrait, smoothstep, GESTURES } from '../../shared/js/avatar-figure-1.0.0.min.js';
@@ -66,15 +69,57 @@ export function frameFor(frame, aspect, fov, standY = 0) {
     return { eye: [0, y + frame.lift, distance], aim: [0, y, 0] };
 }
 
+const clamp01 = (x) => Math.min(1, Math.max(0, x));
+
+/**
+ * The close framing for a focus `focus` meters above the plinth's top: the
+ * feet's framing at the feet's height, the face's at the face's, and in
+ * between in proportion (so a focus on the knees looks down a little less
+ * than one on the shoes).
+ */
+export function closeFrame(focus, C) {
+    const feet = C.frames.feet;
+    const face = C.frames.face;
+    const k = clamp01((focus - feet.center) / (face.center - feet.center));
+    const mix = (a, b) => a + (b - a) * k;
+    return { center: focus, height: mix(feet.height, face.height), half: mix(feet.half, face.half), lift: mix(feet.lift, face.lift), margin: mix(feet.margin, face.margin) };
+}
+
+/**
+ * The camera at `zoom` (0 the whole figure, 1 close in) about a `focus`
+ * height (Steve's QA, 2026-10-24: zoom by hand, not only by tab). The
+ * distance moves evenly in proportion (each step in looks the same size),
+ * and the aim slides from the figure's middle to the focus as it comes in.
+ * At 0 it is exactly the body's framing, at 1 exactly the close one.
+ */
+export function viewFor(zoom, focus, aspect, C, standY = 0) {
+    const body = frameFor(C.frames.body, aspect, C.fov, standY);
+    const close = frameFor(closeFrame(focus, C), aspect, C.fov, standY);
+    const z = clamp01(zoom);
+    const db = body.eye[2];
+    const dc = close.eye[2];
+    const d = db * (dc / db) ** z;
+    const w = aimShare(Math.abs(db - dc) < 1e-9 ? z : (db - d) / (db - dc));
+    const mix = (a, b) => a + (b - a) * w;
+    const aim = mix(body.aim[1], close.aim[1]);
+    return { eye: [0, aim + mix(body.eye[1] - body.aim[1], close.eye[1] - close.aim[1]), d], aim: [0, aim, 0] };
+}
+
+/**
+ * How far the aim has slid from the figure's middle to the focus, for a view
+ * `share` of the way in (by distance): quickly at first, so the first step
+ * of the zoom is already looking at what it zooms toward (Steve's QA,
+ * 2026-10-24: one press of + looked at the torso, whatever the focus). 0 at
+ * 0 and 1 at 1, so the end framings are untouched.
+ */
+export function aimShare(share) {
+    return 1 - (1 - clamp01(share)) ** 3;
+}
+
 /** The front-facing angle nearest `angle` (a whole number of turns), so
  *  the plinth turns the short way round to face the front. */
 export function nearestFront(angle) {
     return Math.round(angle / (Math.PI * 2)) * Math.PI * 2;
-}
-
-/** `a` to `b` by `k` (0 to 1), for each of three numbers. */
-function mix3(a, b, k) {
-    return [0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * k);
 }
 
 // ---- Building it (three) ------------------------------------------------------
@@ -198,7 +243,9 @@ function buildLights(light, mobile) {
  *
  *   scene, camera, renderer
  *   setAvatar(avatar)   the figure rebuilt in this avatar
- *   setFrame(name)      'body', 'face' or 'feet', eased
+ *   setFrame(name)      'body', 'face' or 'feet', eased (after a choice)
+ *   zoomIn(), zoomOut() the zoom buttons; the wheel, a trackpad and a pinch
+ *                       zoom by themselves, toward where they point
  *   turnBy(radians)     a turn button's step, eased
  *   faceFront()         turn to face the front, the short way
  *   celebrate()         face the front, then wave (after a save)
@@ -240,9 +287,11 @@ export function createStudio(config, {
     const camera = new THREE.PerspectiveCamera(C.fov, 1, 0.05, 60);
 
     let figure = null;
-    let frameName = 'body';
-    let from = null;            // the camera's pose when the ease began
-    let easing = 1;             // 0 to 1 through the camera's ease
+    // The view: where it is now, and where it is heading. A wheel, a pinch,
+    // the zoom buttons and a choice (`setFrame`) all move the goal; each
+    // frame the view closes on it.
+    const view = { zoom: 0, focus: C.frames.face.center };
+    const goal = { zoom: 0, focus: C.frames.face.center };
     let pose = null;            // where the camera is now
     let size = '';
     let dirty = true;
@@ -277,24 +326,53 @@ export function createStudio(config, {
         renderer.setSize(w, h, false);
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
-        // A new shape: straight to the framing, no ease.
-        pose = frameFor(C.frames[frameName], w / h, C.fov, standY);
-        from = null;
-        easing = 1;
         dirty = true;
         return true;
     }
 
     function place() {
-        const goal = frameFor(C.frames[frameName], aspect(), C.fov, standY);
-        if (from && easing < 1) {
-            const k = smoothstep(easing);
-            pose = { eye: mix3(from.eye, goal.eye, k), aim: mix3(from.aim, goal.aim, k) };
-        } else {
-            pose = goal;
-        }
+        pose = viewFor(view.zoom, view.focus, aspect(), C, standY);
         camera.position.set(pose.eye[0], pose.eye[1], pose.eye[2]);
         camera.lookAt(pose.aim[0], pose.aim[1], pose.aim[2]);
+        camera.updateMatrixWorld();
+    }
+
+    /** Move the view's goal: `zoom` kept within 0 and 1, `focus` within the
+     *  figure. The plinth stops turning by itself once the view is in. */
+    function aimFor(zoom, focus = goal.focus) {
+        goal.zoom = clamp01(zoom);
+        goal.focus = Math.min(C.zoom.highest, Math.max(C.zoom.lowest, focus));
+        if (goal.zoom > 0) spinning = false;
+        if (reducedMotion()) Object.assign(view, goal);
+        // Zoomed in, an upright drag pans the view, so on a phone the canvas
+        // takes it rather than the page; zoomed out, the page scrolls.
+        if (canvas.style) canvas.style.touchAction = goal.zoom > 0 ? 'none' : 'pan-y';
+        dirty = true;
+    }
+
+    /** Where the + button zooms: the face, the torso or the feet, as the
+     *  visitor's tab says (Steve's QA, 2026-10-24). */
+    let zoomTarget = C.frames.face.center;
+
+    /** The height on the figure under a point on the canvas (its middle
+     *  plane), above the plinth's top. */
+    function heightAt(clientY) {
+        const rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+        if (!rect || !rect.height) return goal.focus;
+        const ndc = 1 - (2 * (clientY - rect.top)) / rect.height;
+        const p = new THREE.Vector3(0, ndc, 0.5).unproject(camera).sub(camera.position);
+        if (Math.abs(p.z) < 1e-9) return goal.focus;
+        const t = -camera.position.z / p.z;
+        return camera.position.y + p.y * t - standY;
+    }
+
+    /** Zoom by `amount` (a share of the whole range), the focus drifting
+     *  toward a point the visitor is pointing at, if any. */
+    function zoomBy(amount, clientY = null) {
+        let focus = goal.focus;
+        if (clientY !== null && amount > 0) focus += (heightAt(clientY) - focus) * C.zoom.drift;
+        aimFor(goal.zoom + amount, focus);
+        lastTouch = now();
     }
 
     function startTurn(to) {
@@ -312,9 +390,12 @@ export function createStudio(config, {
     function step(dt) {
         const still = reducedMotion();
         let moved = false;
-        // The camera's ease.
-        if (easing < 1) {
-            easing = still ? 1 : Math.min(1, easing + dt / C.ease);
+        // The view closes on its goal, quickly at first and gently at the end.
+        if (Math.abs(view.zoom - goal.zoom) > 1e-4 || Math.abs(view.focus - goal.focus) > 1e-4) {
+            const k = still ? 1 : 1 - Math.exp(-dt * C.zoom.follow);
+            view.zoom += (goal.zoom - view.zoom) * k;
+            view.focus += (goal.focus - view.focus) * k;
+            if (Math.abs(view.zoom - goal.zoom) <= 1e-4 && Math.abs(view.focus - goal.focus) <= 1e-4) Object.assign(view, goal);
             moved = true;
         }
         // A turn to a set angle (a button, facing the front).
@@ -326,7 +407,7 @@ export function createStudio(config, {
                 target = null;
             }
             moved = true;
-        } else if (spinning && !dragging && !still && frameName === 'body') {
+        } else if (spinning && !dragging && !still && goal.zoom === 0) {
             // Turning by itself, until nobody has touched anything for a while.
             if (now() - lastTouch > T.idle) {
                 spinning = false;
@@ -364,30 +445,80 @@ export function createStudio(config, {
 
     // ---- Dragging the plinth round ----------------------------------------------
 
+    // One finger (or the mouse) turns the plinth; two fingers pinch to zoom,
+    // about the point between them.
+    const pointers = new Map();
+    let pinch = 0;
+    const spread = () => {
+        const [a, b] = [...pointers.values()];
+        return Math.hypot(a.x - b.x, a.y - b.y);
+    };
     const onDown = (e) => {
         if (e.button !== undefined && e.button !== 0) return;
-        dragging = { id: e.pointerId, x: e.clientX };
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (canvas.setPointerCapture && e.pointerId !== undefined) canvas.setPointerCapture(e.pointerId);
+        if (pointers.size === 2) {
+            dragging = null;
+            pinch = spread();
+            return;
+        }
+        dragging = { id: e.pointerId, x: e.clientX, y: e.clientY };
         target = null;
         api.touch();
-        if (canvas.setPointerCapture && e.pointerId !== undefined) canvas.setPointerCapture(e.pointerId);
     };
     const onMove = (e) => {
+        const p = pointers.get(e.pointerId);
+        if (!p) return;
+        p.x = e.clientX;
+        p.y = e.clientY;
+        if (pointers.size === 2) {
+            const now2 = spread();
+            if (pinch > 0 && now2 > 0) {
+                const [a, b] = [...pointers.values()];
+                zoomBy(Math.log(now2 / pinch) * C.zoom.pinch, (a.y + b.y) / 2);
+            }
+            pinch = now2;
+            return;
+        }
         if (!dragging || e.pointerId !== dragging.id) return;
         const dx = e.clientX - dragging.x;
+        const dy = e.clientY - dragging.y;
         dragging.x = e.clientX;
+        dragging.y = e.clientY;
         turntable.rotation.y += dx * T.drag;
+        // Zoomed in, an upright drag pans up or down the figure (Steve's QA,
+        // 2026-10-24: there was no way to look up or down once in), the
+        // figure following the finger.
+        if (goal.zoom > 0 && dy && pose) {
+            const height = canvas.clientHeight || 1;
+            const perPixel = (2 * pose.eye[2] * Math.tan((C.fov * Math.PI) / 360)) / height;
+            const share = Math.max(0.25, aimShare(view.zoom));
+            const focus = Math.min(C.zoom.highest, Math.max(C.zoom.lowest, goal.focus + (dy * perPixel) / share));
+            goal.focus = focus;
+            view.focus = focus;
+        }
         lastTouch = now();
         dirty = true;
     };
     const onUp = (e) => {
-        if (!dragging || e.pointerId !== dragging.id) return;
-        dragging = null;
+        pointers.delete(e.pointerId);
+        if (pointers.size < 2) pinch = 0;
         if (canvas.releasePointerCapture && e.pointerId !== undefined) canvas.releasePointerCapture(e.pointerId);
+        if (dragging && e.pointerId === dragging.id) dragging = null;
+    };
+    // The wheel, and a trackpad's pinch (a wheel with ctrlKey), zoom toward
+    // the point under the pointer. It is the canvas's own: the page never
+    // scrolls under it.
+    const onWheel = (e) => {
+        if (e.preventDefault) e.preventDefault();
+        const lines = e.deltaMode === 1 ? 16 : 1;
+        zoomBy(-e.deltaY * lines * C.zoom.wheel * (e.ctrlKey ? C.zoom.trackpad : 1), e.clientY);
     };
     canvas.addEventListener('pointerdown', onDown);
     canvas.addEventListener('pointermove', onMove);
     canvas.addEventListener('pointerup', onUp);
     canvas.addEventListener('pointercancel', onUp);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
 
     const api = {
         scene,
@@ -397,9 +528,15 @@ export function createStudio(config, {
         get figure() {
             return figure;
         },
-        /** The framing the camera is in, or easing to. */
+        /** Where the view is heading, in words: 'body' when it is out,
+         *  'face' or 'feet' when it is in, by its focus. */
         get framing() {
-            return frameName;
+            if (goal.zoom < 0.5) return 'body';
+            return goal.focus > (C.frames.face.center + C.frames.feet.center) / 2 ? 'face' : 'feet';
+        },
+        /** The view's goal: `{ zoom, focus }`. */
+        get zoom() {
+            return { ...goal };
         },
         get dirty() {
             return dirty;
@@ -414,14 +551,40 @@ export function createStudio(config, {
             dirty = true;
             return figure;
         },
+        /**
+         * Frame a part: 'face' or 'feet' brings the view in on it, facing the
+         * front; 'body' takes it out to the whole figure. A tab and a choice
+         * both frame (the visitor can always zoom back out by hand). Asked
+         * again, it centers again, undoing a pan.
+         */
         setFrame(name) {
-            if (!C.frames[name] || name === frameName) return;
-            from = pose ? { eye: pose.eye.slice(), aim: pose.aim.slice() } : null;
-            frameName = name;
-            easing = from ? 0 : 1;
-            if (name !== 'body') api.faceFront();
+            if (!C.frames[name]) return;
+            const focus = name === 'body' ? goal.focus : C.frames[name].center;
+            if (name === api.framing && goal.focus === focus && (name === 'body' || goal.zoom === 1)) return;
             api.touch();
-            dirty = true;
+            if (name === 'body') {
+                aimFor(0);
+                spinning = true;
+                return;
+            }
+            aimFor(1, C.frames[name].center);
+            api.faceFront();
+        },
+        /** Where + zooms from now on: 'face', 'body' (the torso) or
+         *  'feet'. The view does not move (a tab never moves it). */
+        setZoomTarget(name) {
+            if (name === 'body') zoomTarget = C.zoom.torso;
+            else if (C.frames[name]) zoomTarget = C.frames[name].center;
+        },
+        /** The zoom buttons: in, toward the tab's target; out, about the
+         *  present focus. */
+        zoomIn() {
+            aimFor(goal.zoom + C.zoom.step, zoomTarget);
+            lastTouch = now();
+        },
+        zoomOut() {
+            zoomBy(-C.zoom.step);
+            if (goal.zoom === 0) spinning = true;
         },
         turnBy(radians) {
             const base = target !== null ? target : turntable.rotation.y;
@@ -470,6 +633,7 @@ export function createStudio(config, {
             canvas.removeEventListener('pointermove', onMove);
             canvas.removeEventListener('pointerup', onUp);
             canvas.removeEventListener('pointercancel', onUp);
+            canvas.removeEventListener('wheel', onWheel);
             if (figure) figure.dispose();
             if (renderer.dispose) renderer.dispose();
         }

@@ -313,6 +313,7 @@ export function createPerson(config) {
         );
         eye.position.set(offsetX, head.position.y + 0.02, headRadius - 0.01);
         eye.scale.z = 0.5;
+        eye.userData.isEye = true;
         person.add(eye);
 
         // Pupil. Tagged so the zombie transform can recolor it reliably: the
@@ -334,6 +335,7 @@ export function createPerson(config) {
     );
     nose.position.set(0, head.position.y - 0.01, headRadius);
     nose.rotation.x = Math.PI / 2;
+    nose.userData.isNose = true;
     person.add(nose);
 
     // Ears
@@ -344,6 +346,7 @@ export function createPerson(config) {
         );
         ear.position.set(side * (headRadius - 0.01), head.position.y, 0);
         ear.scale.set(0.4, 0.7, 0.5);
+        ear.userData.isEar = true;
         person.add(ear);
     });
 

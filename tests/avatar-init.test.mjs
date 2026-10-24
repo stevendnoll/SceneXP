@@ -48,6 +48,7 @@ function fakeCanvas(w = 800, h = 600) {
     return {
         clientWidth: w,
         clientHeight: h,
+        getBoundingClientRect: () => ({ left: 0, top: 0, width: w, height: h }),
         listeners,
         addEventListener: (t, fn) => { listeners[t] = fn; },
         removeEventListener: (t) => { delete listeners[t]; },
@@ -162,9 +163,10 @@ describe('the studio, on the real three', () => {
             };
             inside('body', raised);
             // The head and its hair, in the face framing.
-            const head = st.figure.person.children.find((o) => o.userData.isHead);
-            const hair = st.figure.person.children.find((o) => o.userData.isHair);
-            inside('face', new THREE.Box3().setFromObject(head).union(new THREE.Box3().setFromObject(hair)));
+            // The whole head (its hair, brows and mouth with it), in the
+            // face framing.
+            st.figure.group.updateMatrixWorld(true);
+            inside('face', new THREE.Box3().setFromObject(st.figure.person.getObjectByName('head')));
             // Both shoes, in the feet framing.
             const shoes = new THREE.Box3();
             st.figure.person.traverse((o) => {
@@ -289,6 +291,159 @@ describe('the studio, on the real three', () => {
         expect(canvas.listeners.pointerdown).toBeUndefined();
     });
 
+    test('the zoom runs from the whole figure to close in, landing exactly on each framing', () => {
+        const C = CONFIG.camera;
+        const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-9);
+        for (const aspect of [0.6, 1, 1.6]) {
+            const body = S.frameFor(C.frames.body, aspect, C.fov, 0.07);
+            const out = S.viewFor(0, 1.2, aspect, C, 0.07);
+            expect(near(out.eye, body.eye) && near(out.aim, body.aim)).toBe(true);
+            for (const name of ['face', 'feet']) {
+                const f = S.frameFor(C.frames[name], aspect, C.fov, 0.07);
+                const v = S.viewFor(1, C.frames[name].center, aspect, C, 0.07);
+                expect(`${name} ${aspect}: ${near(v.eye, f.eye) && near(v.aim, f.aim)}`).toBe(`${name} ${aspect}: true`);
+            }
+            // Every step in is closer than the last, and none overshoots.
+            let last = Infinity;
+            for (let z = 0; z <= 1.0001; z += 0.1) {
+                const d = S.viewFor(z, C.frames.face.center, aspect, C, 0.07).eye[2];
+                expect(d).toBeLessThan(last + 1e-12);
+                last = d;
+            }
+            expect(S.viewFor(-1, 1, aspect, C).eye).toEqual(S.viewFor(0, 1, aspect, C).eye);
+            expect(S.viewFor(2, 1, aspect, C).eye).toEqual(S.viewFor(1, 1, aspect, C).eye);
+        }
+        // A close look at the knees is between the feet's and the face's.
+        const knees = S.closeFrame(0.6, C);
+        expect(knees.height).toBeLessThan(C.frames.feet.height);
+        expect(knees.height).toBeGreaterThan(C.frames.face.height);
+    });
+
+    test('the wheel zooms in toward the pointer and back out, and a pinch zooms too', () => {
+        const { st, canvas, tick } = studio({ w: 800, h: 800 });
+        tick(2);
+        expect(st.zoom.zoom).toBe(0);
+        // Scrolling up over the feet (low on the canvas) zooms in toward them.
+        canvas.listeners.wheel({ deltaY: -200, deltaMode: 0, clientY: 740, preventDefault() {} });
+        expect(st.zoom.zoom).toBeGreaterThan(0.2);
+        expect(st.zoom.focus).toBeLessThan(CONFIG.camera.frames.face.center - 0.3);
+        tick(120);
+        expect(st.framing).toBe('body');   // not yet halfway in
+        canvas.listeners.wheel({ deltaY: -400, deltaMode: 0, clientY: 740, preventDefault() {} });
+        expect(st.framing).toBe('feet');
+        // And all the way back out, by the wheel alone.
+        canvas.listeners.wheel({ deltaY: 4000, deltaMode: 0, clientY: 400, preventDefault() {} });
+        expect(st.zoom.zoom).toBe(0);
+        // Lines, not pixels (deltaMode 1), and a trackpad's pinch, count more.
+        canvas.listeners.wheel({ deltaY: -3, deltaMode: 1, clientY: 100, preventDefault() {} });
+        const lines = st.zoom.zoom;
+        expect(lines).toBeGreaterThan(0);
+        // Two fingers spreading apart zoom in; the plinth does not turn.
+        const turned = st.turntable.rotation.y;
+        canvas.listeners.pointerdown({ pointerId: 1, clientX: 380, clientY: 200, button: 0 });
+        canvas.listeners.pointerdown({ pointerId: 2, clientX: 420, clientY: 200, button: 0 });
+        canvas.listeners.pointermove({ pointerId: 2, clientX: 500, clientY: 200 });
+        expect(st.zoom.zoom).toBeGreaterThan(lines);
+        expect(st.turntable.rotation.y).toBe(turned);
+        canvas.listeners.pointerup({ pointerId: 2 });
+        canvas.listeners.pointerup({ pointerId: 1 });
+    });
+
+    test('the buttons step in and out, out is always there, and the plinth rests while in', () => {
+        const { st, tick } = studio();
+        tick(30);
+        st.zoomIn();
+        st.zoomIn();
+        st.zoomIn();
+        expect(st.zoom.zoom).toBe(1);
+        tick(120);
+        const held = st.turntable.rotation.y;
+        tick(120);
+        expect(st.turntable.rotation.y).toBe(held);
+        st.zoomOut();
+        st.zoomOut();
+        st.zoomOut();
+        expect(st.zoom.zoom).toBe(0);
+        tick(60);
+        expect(st.turntable.rotation.y).toBeGreaterThan(held);
+        // A choice frames itself, and choosing clothes takes the view out.
+        st.setFrame('face');
+        expect(st.framing).toBe('face');
+        st.setFrame('body');
+        expect(st.zoom.zoom).toBe(0);
+    });
+
+    test('+ zooms toward the tab\'s part of the figure, its first press already looking there', () => {
+        const C = CONFIG.camera;
+        expect(S.aimShare(0)).toBe(0);
+        expect(S.aimShare(1)).toBe(1);
+        expect(S.aimShare(0.3)).toBeGreaterThan(0.6);
+        // One step in toward the feet already aims far nearer them than the
+        // figure's middle (QA, 2026-10-24: it looked at the torso).
+        const body = S.viewFor(0, C.frames.feet.center, 1, C, 0.07).aim[1];
+        const one = S.viewFor(C.zoom.step, C.frames.feet.center, 1, C, 0.07).aim[1];
+        const feet = C.frames.feet.center + 0.07;
+        expect(Math.abs(one - feet)).toBeLessThan(0.4 * Math.abs(body - feet));
+        const { st, tick } = studio();
+        tick(2);
+        // The tab says where + goes, and moves nothing.
+        st.setZoomTarget('feet');
+        expect(st.zoom.zoom).toBe(0);
+        st.zoomIn();
+        expect(st.zoom.focus).toBe(C.frames.feet.center);
+        st.setZoomTarget('body');
+        st.zoomIn();
+        expect(st.zoom.focus).toBe(C.zoom.torso);
+        st.setZoomTarget('face');
+        st.zoomIn();
+        expect(st.zoom.focus).toBe(C.frames.face.center);
+        st.setZoomTarget('nowhere');
+        st.zoomOut();
+        st.zoomIn();
+        expect(st.zoom.focus).toBe(C.frames.face.center);
+    });
+
+    test('zoomed in, an upright drag pans up and down the figure; zoomed out, the page keeps its scroll', () => {
+        const { st, canvas, tick } = studio({ w: 600, h: 800 });
+        canvas.style = {};
+        tick(2);
+        // Out: an upright drag turns nothing and pans nothing.
+        canvas.listeners.pointerdown({ pointerId: 1, clientX: 300, clientY: 300, button: 0 });
+        canvas.listeners.pointermove({ pointerId: 1, clientX: 300, clientY: 400 });
+        canvas.listeners.pointerup({ pointerId: 1 });
+        expect(st.zoom.focus).toBe(CONFIG.camera.frames.face.center);
+        // In: dragging down brings what is above into view (the focus rises).
+        st.zoomIn();
+        st.zoomIn();
+        expect(canvas.style.touchAction).toBe('none');
+        tick(120);
+        const before = st.zoom.focus;
+        canvas.listeners.pointerdown({ pointerId: 2, clientX: 300, clientY: 300, button: 0 });
+        canvas.listeners.pointermove({ pointerId: 2, clientX: 300, clientY: 200 });
+        expect(st.zoom.focus).toBeLessThan(before);
+        canvas.listeners.pointermove({ pointerId: 2, clientX: 300, clientY: 5000 });
+        expect(st.zoom.focus).toBe(CONFIG.camera.zoom.highest);
+        canvas.listeners.pointerup({ pointerId: 2 });
+        // Framing the face again centers it again, undoing the pan.
+        st.setFrame('face');
+        expect(st.zoom).toEqual({ zoom: 1, focus: CONFIG.camera.frames.face.center });
+        st.zoomOut();
+        st.zoomOut();
+        st.zoomOut();
+        expect(canvas.style.touchAction).toBe('pan-y');
+    });
+
+    test('under reduced motion a zoom is instant', () => {
+        const { st, renderer, tick } = studio({ still: true });
+        tick(2);
+        st.zoomIn();
+        const drawn = renderer.renders;
+        tick(1);
+        expect(renderer.renders).toBe(drawn + 1);
+        tick(30);
+        expect(renderer.renders).toBe(drawn + 1);
+    });
+
     test('nearestFront takes the short way round', () => {
         expect(S.nearestFront(0.4)).toBe(0);
         expect(S.nearestFront(5.9)).toBeCloseTo(Math.PI * 2, 9);
@@ -314,9 +469,15 @@ describe('the editor and the way back', () => {
 
     test('every piece is offered since M5, and the tab order is the PRD\'s', () => {
         const tabs = E.visibleTabs(CONFIG.tabs).map((t) => t.id);
-        expect(tabs).toEqual(['face', 'hair', 'build', 'clothes', 'feet', 'hat']);
-        const face = CONFIG.tabs.find((t) => t.id === 'face');
-        expect(E.visibleFields(face).map((f) => f.key)).toEqual(['skin', 'eyes', 'mouth', 'lips', 'facial', 'glasses']);
+        expect(tabs).toEqual(['face', 'eyes', 'mouth', 'hair', 'build', 'clothes', 'feet', 'hat']);
+        const fields = (id) => E.visibleFields(CONFIG.tabs.find((t) => t.id === id)).map((f) => f.key);
+        expect(fields('face')).toEqual(['skin', 'faceShape', 'nose', 'cheeks']);
+        expect(fields('eyes')).toEqual(['eyeShape', 'eyes', 'brows', 'glasses']);
+        expect(fields('mouth')).toEqual(['mouth', 'lips']);
+        expect(fields('hair')).toEqual(['length', 'hair', 'facial', 'facialColor']);
+        // Every field of every tab is shown somewhere, once.
+        const all = CONFIG.tabs.flatMap((t) => t.fields.map((f) => f.key));
+        expect(new Set(all).size).toBe(all.length);
         const build = CONFIG.tabs.find((t) => t.id === 'build');
         expect(E.visibleFields(build).map((f) => f.key)).toEqual(['build', 'muscles']);
         const hat = CONFIG.tabs.find((t) => t.id === 'hat');
@@ -354,7 +515,7 @@ describe('the editor and the way back', () => {
             tablist, panels, tabs: CONFIG.tabs, avatar: { skin: 'fair', eyes: 'darkBrown' },
             onChange: (k, id) => changes.push([k, id]), onTab: (t) => tabsSeen.push(t.id)
         });
-        expect(tablist.children.map((b) => b.textContent)).toEqual(['Face', 'Hair', 'Build', 'Clothes', 'Feet', 'Hat']);
+        expect(tablist.children.map((b) => b.textContent)).toEqual(['Face', 'Eyes', 'Mouth', 'Hair', 'Build', 'Clothes', 'Feet', 'Hat']);
         // The first tab is shown quietly: the page opens on the whole figure.
         expect(ed.selected).toBe('face');
         expect(tabsSeen).toEqual([]);
@@ -378,13 +539,13 @@ describe('the editor and the way back', () => {
         // Arrow keys on the row choose, and tell the page.
         const e = fire(tablist, 'keydown', { key: 'ArrowRight' });
         expect(e.defaultPrevented).toBe(true);
-        expect(ed.selected).toBe('hair');
-        expect(tabsSeen).toEqual(['hair']);
+        expect(ed.selected).toBe('eyes');
+        expect(tabsSeen).toEqual(['eyes']);
         expect(tablist.children[1].tabIndex).toBe(0);
         expect(tablist.children[0].tabIndex).toBe(-1);
         fire(tablist, 'keydown', { key: 'a' });
-        expect(ed.selected).toBe('hair');
-        tablist.children[4].click();
+        expect(ed.selected).toBe('eyes');
+        tablist.children[6].click();
         expect(ed.selected).toBe('feet');
         expect(ed.select('nowhere')).toBe(false);
         expect(ed.select('hat')).toBe(true);
@@ -394,6 +555,61 @@ describe('the editor and the way back', () => {
         expect(ed.labelOf('skin', 'tan')).toBe('Tan');
         expect(ed.labelOf('skin', 'x')).toBe('');
         expect(ed.labelOf('nope', 'x')).toBe('');
+    });
+
+    test('every color choice ends in a custom swatch: any color, sent once a frame while it is dragged', () => {
+        const tablist = document.createElement('div');
+        const panels = document.createElement('div');
+        const changes = [];
+        const ed = E.createEditor({ tablist, panels, tabs: CONFIG.tabs, avatar: { hair: 'blond', facial: 'none', hat: 'none' }, onChange: (k, id) => changes.push([k, id]) });
+        // One for each color field the page shows, and none for the rest.
+        expect(Object.keys(ed.customs).sort()).toEqual(['bottomColor', 'eyes', 'facialColor', 'hair', 'hatColor', 'lips', 'shirt', 'shoeColor', 'skin']);
+        const hair = ed.customs.hair;
+        expect(hair.type).toBe('color');
+        expect(hair.getAttribute('aria-label')).toBe('Custom color');
+        expect(ed.customs.facialColor.getAttribute('aria-label')).toBe('Custom facial hair color');
+        // It opens on the color shown: blond.
+        expect(hair.value).toBe(E.swatchHex(0xd9b46a));
+        expect(hair.classList.contains('is-chosen')).toBe(false);
+        // Dragged: three moves in a frame are one change, the last.
+        const frames = dom.loops.length;
+        for (const v of ['#110000', '#220000', '#11aa33']) {
+            hair.value = v;
+            fire(hair, 'input');
+        }
+        expect(changes).toEqual([]);
+        dom.loops.slice(frames).forEach((cb) => cb());
+        expect(changes).toEqual([['hair', 'x11aa33']]);
+        // Let go: the final color, at once.
+        hair.value = '#00ff00';
+        fire(hair, 'change');
+        expect(changes[changes.length - 1]).toEqual(['hair', 'x00ff00']);
+        // A custom color is shown as chosen, and no swatch is.
+        ed.set({ hair: 'x00ff00', facial: 'none', hat: 'none' });
+        expect(hair.classList.contains('is-chosen')).toBe(true);
+        expect(hair.value).toBe('#00ff00');
+        expect(ed.inputs.hair.some((i) => i.checked)).toBe(false);
+        ed.set({ hair: 'pink', facial: 'none', hat: 'none', facialColor: 'match' });
+        expect(hair.classList.contains('is-chosen')).toBe(false);
+        expect(ed.inputs.hair.find((i) => i.checked).value).toBe('pink');
+        // "Same as hair" shows its own swatch, not black.
+        expect(ed.customs.facialColor.value).toBe(E.swatchHex(0x8a7a6a));
+    });
+
+    test('a beard\'s color and a hat\'s step aside while there is no beard and no hat', () => {
+        const tablist = document.createElement('div');
+        const panels = document.createElement('div');
+        const ed = E.createEditor({ tablist, panels, tabs: CONFIG.tabs, avatar: { facial: 'none', hat: 'none' } });
+        const groupOf = (key) => ed.customs[key].parentNode.parentNode;
+        expect(groupOf('facialColor').tagName).toBe('FIELDSET');
+        expect(groupOf('facialColor').hidden).toBe(true);
+        expect(groupOf('hatColor').hidden).toBe(true);
+        expect(groupOf('hair').hidden).toBe(false);
+        ed.set({ facial: 'beard', hat: 'none' });
+        expect(groupOf('facialColor').hidden).toBe(false);
+        expect(groupOf('hatColor').hidden).toBe(true);
+        ed.set({ facial: 'beard', hat: 'cap' });
+        expect(groupOf('hatColor').hidden).toBe(false);
     });
 
     test('the way back is the home page or a scene of the site\'s, written exactly, and nothing else', () => {
@@ -443,6 +659,15 @@ describe('the page', () => {
         return main;
     }
 
+    test('the tabs sit in rows of four, every one in sight, with no hidden scroll', () => {
+        const css = readFileSync('www/avatar/css/avatar.css', 'utf8');
+        const rule = css.match(/\n\.av-tabs \{([^}]*)\}/)[1];
+        expect(rule).toMatch(/display:\s*grid/);
+        expect(rule).toMatch(/grid-template-columns:\s*repeat\(4,/);
+        expect(rule).not.toMatch(/overflow/);
+        expect(css).not.toMatch(/\.av-tabs::-webkit-scrollbar/);
+    });
+
     test('every id the page looks up is in its markup, once', () => {
         const ids = [...MAIN.matchAll(/\$\('([\w-]+)'\)/g)].map((m) => m[1]);
         expect(ids.length).toBeGreaterThan(20);
@@ -458,10 +683,14 @@ describe('the page', () => {
         const main = await boot();
         const { state } = main.__test__;
         expect(dom.el('avatar-app').hidden).toBe(false);
-        expect(state.editor.tabs.length).toBe(6);
+        expect(state.editor.tabs.length).toBe(8);
         expect(state.studio).toBeTruthy();
         expect(dom.loops.length).toBeGreaterThan(0);
         expect(dom.el('av-stage-status').hidden).toBe(true);
+        // It opens on the whole figure, though the Face tab is selected.
+        expect(state.editor.selected).toBe('face');
+        expect(state.studio.framing).toBe('body');
+        expect(state.studio.zoom.zoom).toBe(0);
         expect(state.saved).toBeNull();
         expect(dom.el('av-forget').hidden).toBe(true);
         expect(dom.el('av-unsaved').textContent).toBe('');
@@ -512,6 +741,30 @@ describe('the page', () => {
         expect(dom.el('av-unsaved').textContent).toBe(main.WORDS.unsaved);
         // The camera went to the clothes.
         expect(state.studio.framing).toBe('body');
+        // A tab frames its part (Steve's QA, 2026-10-24): the face's tabs
+        // the face, the feet's the feet, the clothes' the whole figure.
+        // (The real buttons from the tab row: the stub invents any id asked
+        // for, and clicking an invented one would prove nothing.)
+        const tab = (id) => dom.el('av-tabs').children.find((b) => b.id === `av-tab-${id}`);
+        for (const [id, framing] of [['hair', 'face'], ['clothes', 'body'], ['eyes', 'face'], ['feet', 'feet'], ['build', 'body'], ['mouth', 'face'], ['hat', 'face'], ['face', 'face']]) {
+            expect(tab(id)).toBeTruthy();
+            tab(id).click();
+            expect(`${id}: ${state.studio.framing}`).toBe(`${id}: ${framing}`);
+        }
+        // The zoom buttons are wired: out by hand from the face, and + back
+        // in toward the tab's part.
+        dom.el('av-zoom-out').click();
+        dom.el('av-zoom-out').click();
+        dom.el('av-zoom-out').click();
+        expect(state.studio.zoom.zoom).toBe(0);
+        tab('feet').click();
+        dom.el('av-zoom-out').click();
+        dom.el('av-zoom-out').click();
+        dom.el('av-zoom-out').click();
+        dom.el('av-zoom-in').click();
+        expect(state.studio.zoom.zoom).toBeGreaterThan(0);
+        const { AVATAR_PAGE } = await import('../www/avatar/js/config.min.js');
+        expect(state.studio.zoom.focus).toBe(AVATAR_PAGE.camera.frames.feet.center);
         dom.el('av-save').click();
         expect(JSON.parse(globalThis.localStorage.getItem('scenexp-avatar')).shirt).toBe('teal');
         expect(dom.el('av-status').textContent).toBe(main.WORDS.savedFor('Leaf Blower'));

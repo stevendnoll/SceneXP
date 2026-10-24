@@ -19,7 +19,7 @@
  * security policy allows, where a style attribute would not be.
  */
 
-import { listOf, optionOf } from '../../shared/js/avatar-1.0.0.min.js';
+import { listOf, optionOf, colorOf, customColor, CUSTOM_COLOR, COLOR_FIELDS } from '../../shared/js/avatar-1.0.0.min.js';
 import { drawnOptions } from '../../shared/js/avatar-figure-1.0.0.min.js';
 
 /** The options a field offers today. */
@@ -72,6 +72,9 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
     const buttons = [];
     const panes = [];
     const inputs = {};
+    const customs = {};      // each color field's own color picker
+    const groups = [];       // [field, fieldset], for the groups a choice hides
+    let current = { ...avatar };
     let selected = null;
 
     function make(tag, className, text) {
@@ -106,6 +109,59 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
         return label;
     }
 
+    /**
+     * Any color (Steve, 2026-10-24): the browser's own color input, drawn as
+     * one more swatch at the end of the row, so it opens the device's own
+     * picker and has its keys. While a picker is dragged its color is shown
+     * on the figure once a frame, not once an event.
+     */
+    function buildCustom(field) {
+        const input = make('input', 'av-custom');
+        input.type = 'color';
+        input.setAttribute('aria-label', `Custom ${field.legend.toLowerCase()}`);
+        input.title = 'Any color';
+        let pending = null;
+        const send = () => {
+            if (pending === null) return;
+            const id = customColor(parseInt(pending.slice(1), 16));
+            pending = null;
+            onChange(field.key, id);
+        };
+        input.addEventListener('input', () => {
+            const first = pending === null;
+            pending = input.value;
+            if (!first) return;
+            if (typeof requestAnimationFrame === 'function') requestAnimationFrame(send);
+            else send();
+        });
+        input.addEventListener('change', () => {
+            pending = input.value;
+            send();
+        });
+        customs[field.key] = input;
+        return input;
+    }
+
+    /** Show the custom swatch as chosen (and the radios as not) when the
+     *  field holds a custom color; either way it opens on the color shown. */
+    function showCustom(key, value) {
+        const input = customs[key];
+        if (!input) return;
+        const custom = CUSTOM_COLOR.test(value);
+        input.classList.toggle('is-chosen', custom);
+        const option = optionOf(listOf(key) || [], value);
+        const hex = custom ? colorOf(key, value) : option && (option.color === null ? option.swatch : option.color);
+        if (typeof hex === 'number') input.value = swatchHex(hex);
+    }
+
+    /** Hide each group whose `hideWhen` the avatar now meets (a beard's
+     *  color with no beard, a hat's with no hat). */
+    function showGroups() {
+        for (const [field, group] of groups) {
+            if (field.hideWhen) group.hidden = current[field.hideWhen.field] === field.hideWhen.value;
+        }
+    }
+
     shown.forEach((tab, i) => {
         const button = make('button', 'av-tab', tab.label);
         button.type = 'button';
@@ -125,13 +181,20 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
             group.appendChild(make('legend', 'av-legend', field.legend));
             const row = make('div', `av-options av-options-${field.kind}`);
             for (const option of optionsFor(field.key)) row.appendChild(buildOption(field, option));
+            if (field.kind === 'swatch' && COLOR_FIELDS.includes(field.key)) {
+                row.appendChild(buildCustom(field));
+                showCustom(field.key, avatar[field.key]);
+            }
             group.appendChild(row);
             pane.appendChild(group);
+            groups.push([field, group]);
         }
         panels.appendChild(pane);
         panes.push(pane);
         if (i === 0) selected = tab.id;
     });
+
+    showGroups();
 
     tablist.addEventListener('keydown', (e) => {
         const index = shown.findIndex((t) => t.id === selected);
@@ -145,6 +208,7 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
     const api = {
         tabs: shown,
         inputs,
+        customs,
         get selected() {
             return selected;
         },
@@ -165,11 +229,16 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
             if (!quiet) onTab(shown[index]);
             return true;
         },
-        /** Check the radios that match `avatar`. */
+        /** Check the radios that match `avatar` (none, where a field holds
+         *  a custom color), show the custom swatches, and hide the groups
+         *  the avatar's choices make moot. */
         set(next) {
+            current = { ...next };
             for (const [key, list] of Object.entries(inputs)) {
                 for (const input of list) input.checked = next[key] === input.value;
             }
+            for (const key of Object.keys(customs)) showCustom(key, next[key]);
+            showGroups();
         },
         /** An option's label, for a status line. */
         labelOf(key, id) {

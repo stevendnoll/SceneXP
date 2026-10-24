@@ -185,6 +185,8 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // clear it. The home chip's visit count joins it with the chip (M4).
     expect(text).toMatch(/When you save an avatar on the Your Avatar page/i);
     expect(text).toMatch(/small picture of its face, drawn right on your device/i);
+    // Custom colors (2026-10-24): still nothing typed, and said so.
+    expect(text).toMatch(/from your browser.s color picker, with no name and nothing typed/i);
     expect(text).toMatch(/never in our usage pings/i);
     expect(text).toMatch(/Forget my avatar button/i);
 
