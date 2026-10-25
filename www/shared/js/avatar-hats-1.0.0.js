@@ -53,10 +53,15 @@ export const HAT_SIZE = Object.freeze({
     topHat: { fit: 'crown', center: [0, 0, -0.008], base: 0.056, height: 0.17, flare: 1.05, brim: 0.048, curl: 0.016, band: 0.03 },
     fedora: { fit: 'crown', center: [0, 0, -0.008], base: 0.058, height: 0.105, taper: 0.9, dent: 0.016, brim: 0.058, snap: 0.012, oval: 1.1, band: 0.022 },
     cowboy: { fit: 'crown', center: [0, 0, -0.008], base: 0.058, height: 0.12, taper: 0.88, dent: 0.026, brim: 0.09, curl: 0.042, oval: 1.12, band: 0.018 },
-    fez: { fit: 'crown', center: [0, 0, -0.006], base: 0.06, height: 0.11, taper: 0.78, tassel: 0x1a1a1a },
-    /** A band, and a tall soft puff over it (preview, 2026-10-24: a
-     *  flatter puff read as a dish). */
-    chef: { fit: 'crown', center: [0, 0, -0.006], base: 0.06, height: 0.05, puff: 1.16, rise: 0.9, pleats: 10 },
+    /** The tassel: black, or `gold` on a dark fez, where black vanished
+     *  (Steve's QA, 2026-10-24: "not noticeable enough"); its cord `cord`
+     *  thick, hanging `hang` of the way down the side. */
+    fez: { fit: 'crown', center: [0, 0, -0.006], base: 0.06, height: 0.11, taper: 0.78, tassel: 0x1a1a1a, gold: 0xe8c04a, cord: 0.003, hang: 0.75, tuft: [0.013, 0.05], side: 1.75 },
+    /** A pleated band, and a toque over it: a tall soft cylinder `puff`
+     *  times the band's width, `rise` tall, bulging out just above the
+     *  band and rounding in over the top, pleated up its side (Steve's QA,
+     *  2026-10-24: a ball ringed with lobes "looks really weird"). */
+    chef: { fit: 'crown', center: [0, 0, -0.006], base: 0.06, height: 0.05, puff: 1.18, rise: 0.17, pleats: 10 },
     birthday: { fit: 'perch', height: 0.17, radius: 0.055, sink: 0.012, lean: 0.14, stripes: 5, pompom: 0.013 }
 });
 
@@ -148,17 +153,27 @@ function seams(R, edge, count, mat) {
 }
 
 /**
- * A curved bill: `width` across (as a share of `across`), `length` out from
- * its root at `root` [y, z], drooping `droop` at its sides and pitched down
- * `pitch`, `thick` thick, rounded at its front. Its top in `top`, its
- * underside in `under`, and a pale stitch along its front.
+ * A curved bill: `width` across (as a share of `across`, the rim's
+ * diameter), `length` out from its root at `root` [y, z], drooping `droop`
+ * at its sides and pitched down `pitch`, `thick` thick, rounded at its
+ * front. Its top in `top`, its underside in `under`, and a pale stitch
+ * along its front. ITS ROOT FOLLOWS THE RIM: the rim is a circle, so a
+ * straight root across the front stood clear of the crown at its sides
+ * (Steve's QA, 2026-10-24: "disconnected from the rest of the hat at its
+ * edges"); the root is set as far inside the rim's circle at every point
+ * across as `root`'s depth is at the middle, and the droop grows along the
+ * bill's length, so the root stays at the rim's height all the way round.
  */
 function bill(spec, across, root, top, under, stitchColor) {
     const half = (across * spec.width) / 2;
+    const rim = across / 2;
+    const inset = rim - root[1];
     const point = (u, v, lift) => {
         const x = u * half * (1 - 0.22 * v * v);
-        const z = root[1] + spec.length * v * (1 - 0.38 * u * u);
-        const y = root[0] - spec.droop * u * u - spec.pitch * spec.length * v + lift;
+        const x0 = u * half;
+        const rootZ = Math.sqrt(Math.max(0, rim * rim - x0 * x0)) - inset;
+        const z = rootZ + spec.length * v * (1 - 0.38 * u * u);
+        const y = root[0] - spec.droop * u * u * v - spec.pitch * spec.length * v + lift;
         return [x, y, z];
     };
     const geometry = solidGrid(16, 6, (i, j, side) => point(-1 + (2 * i) / 16, j / 6, side ? spec.thick / 2 : -spec.thick / 2));
@@ -296,17 +311,28 @@ export function buildHat(kind, color, head, hair) {
             holder.add(brimRing(r - 0.002, spec.brim, rise, 0.005, felt, oval));
         } else if (kind === 'fez') {
             holder.add(crownFrom([[r, 0], [r * spec.taper, height], [0, height]], felt));
-            const black = material(spec.tassel, 0.7);
-            const knob = new THREE.Mesh(new THREE.SphereGeometry(0.006, 8, 6), black);
-            knob.position.y = height + 0.003;
+            // The tassel, in black, or gold where black would vanish
+            // against a dark fez.
+            const dark = new THREE.Color(color).getHSL({}).l < 0.3;
+            const silk = material(dark ? spec.gold : spec.tassel, 0.6);
+            const knob = new THREE.Mesh(new THREE.SphereGeometry(0.008, 10, 8), silk);
+            knob.position.y = height + 0.004;
             knob.name = 'tassel';
             holder.add(knob);
+            // Hanging beside the head, `side` radians round from the front
+            // (preview, 2026-10-24: behind, no view showed it), and clear
+            // of the crown, which is wider at its base than at its top (a
+            // tassel dropped straight from the top edge hung inside it).
             const edge = r * spec.taper;
-            const cord = new THREE.Mesh(taperTube([[0, height + 0.004, 0], [edge * 0.6, height + 0.006, -0.01], [edge + 0.004, height - 0.01, -0.02], [edge + 0.006, height - 0.05, -0.024]], () => 0.0018, { segments: 20, radial: 5 }), black);
+            const low = height * (1 - spec.hang);
+            const coneR = (y) => r + (edge - r) * (y / height);
+            const at = (d, y) => [d * Math.sin(spec.side), y, d * Math.cos(spec.side)];
+            const mid = low + spec.tuft[1] * 0.5;
+            const cord = new THREE.Mesh(taperTube([[0, height + 0.005, 0], at(edge * 0.6, height + 0.008), at(edge + 0.006, height - 0.01), at(coneR(mid) + 0.015, mid)], () => spec.cord, { segments: 20, radial: 6 }), silk);
             cord.name = 'tassel';
             holder.add(cord);
-            const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.028, 8), black);
-            tuft.position.set(edge + 0.006, height - 0.062, -0.024);
+            const tuft = new THREE.Mesh(new THREE.ConeGeometry(spec.tuft[0], spec.tuft[1], 10), silk);
+            tuft.position.set(...at(coneR(low) + spec.tuft[0] + 0.003, low));
             tuft.name = 'tassel';
             holder.add(tuft);
         } else if (kind === 'chef') {
@@ -325,19 +351,22 @@ export function buildHat(kind, color, head, hair) {
                 pleat.name = 'pleat';
                 holder.add(pleat);
             }
-            // The puff: a soft ball over the band, rounded out by lobes.
+            // The toque: a tall soft cylinder over the band, wider than it,
+            // bulging out just above the band, nearly straight up its side
+            // and rounding in over the top, closed; pleats up its side.
             const R = r * spec.puff;
-            const puff = new THREE.Mesh(new THREE.SphereGeometry(R, 24, 14), felt);
-            puff.scale.y = spec.rise;
-            puff.position.y = top + R * spec.rise * 0.7;
+            const h = spec.rise;
+            const profile = [[0, 0], [r, 0], [R * 0.97, h * 0.1], [R, h * 0.42], [R * 0.97, h * 0.74], [R * 0.8, h * 0.92], [R * 0.45, h], [0, h]];
+            const puff = crownFrom(profile, felt);
+            puff.position.y = top - 0.004;
             puff.name = 'puff';
             holder.add(puff);
-            for (let k = 0; k < 6; k++) {
-                const a = (k / 6) * Math.PI * 2;
-                const lobe = new THREE.Mesh(new THREE.SphereGeometry(R * 0.48, 12, 8), felt);
-                lobe.position.set(R * 0.6 * Math.sin(a), top + R * spec.rise * 1.05, R * 0.6 * Math.cos(a));
-                lobe.name = 'puff';
-                holder.add(lobe);
+            for (let k = 0; k < spec.pleats; k++) {
+                const a = ((k + 0.5) / spec.pleats) * Math.PI * 2;
+                const points = profile.slice(1, 7).map(([x, y]) => [(x + 0.0008) * Math.sin(a), top - 0.004 + y, (x + 0.0008) * Math.cos(a)]);
+                const pleat = new THREE.Mesh(taperTube(points, (s) => 0.0024 * (1 - 0.5 * s), { segments: 16, radial: 5 }), darker);
+                pleat.name = 'pleat';
+                holder.add(pleat);
             }
         }
         if (hair) trimUnder(hair, () => baseY);
@@ -384,14 +413,19 @@ export function buildHat(kind, color, head, hair) {
         squash.add(cuff);
     } else if (kind === 'cap' || kind === 'trucker') {
         if (kind === 'trucker') {
-            // The front panel in the hat's color; the back, a pale mesh.
+            // The pale foam front panel, and the mesh back in the hat's
+            // color, like its bill (Steve's QA, 2026-10-24: the other way
+            // round, "the colors seem to be reversed").
             shell.geometry.dispose();
             shell.geometry = new THREE.SphereGeometry(R, 40, 16, 0, Math.PI, 0, spec.edge);
-            const back = new THREE.Mesh(new THREE.SphereGeometry(R, 40, 16, Math.PI, Math.PI, 0, spec.edge), material(spec.mesh, 0.95));
-            back.name = 'mesh';
+            shell.material = material(spec.mesh, 0.95);
+            const back = new THREE.Mesh(new THREE.SphereGeometry(R, 40, 16, Math.PI, Math.PI, 0, spec.edge), felt);
+            back.name = 'back';
             squash.add(back);
         }
-        squash.add(seams(R, spec.edge, spec.seams, material(shade(color, 0.62))));
+        // Piping along the seams: a shade darker, or the hat's own color
+        // over a trucker cap's pale front.
+        squash.add(seams(R, spec.edge, spec.seams, kind === 'trucker' ? felt : material(shade(color, 0.62))));
         const button = new THREE.Mesh(new THREE.SphereGeometry(0.008, 10, 6), felt);
         button.position.y = R;
         button.name = 'button';

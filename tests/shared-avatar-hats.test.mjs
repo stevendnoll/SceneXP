@@ -231,6 +231,71 @@ describe('every hat over every hair style, on the figure', () => {
         }
     });
 
+    test('a bill is joined to its crown along its whole root', () => {
+        // Steve's QA, 2026-10-24: "disconnected from the rest of the hat at
+        // its edges". The root (the bill grid's first row) lies inside the
+        // crown's ball all the way across, in the crown's own frame, where
+        // the crown is a ball of radius `fit.r` about the origin.
+        for (const hat of ['cap', 'trucker', 'ivyCap']) {
+            const avatar = F.createAvatar({ hat, length: 'short' });
+            const bill = avatar.person.getObjectByName('bill');
+            const { r } = avatar.person.getObjectByName('hat').userData.fit;
+            const pos = bill.geometry.attributes.position;
+            const nv = 6;
+            for (let i = 0; i <= 16; i++) {
+                const p = new THREE.Vector3().fromBufferAttribute(pos, i * (nv + 1));
+                expect(`${hat} root ${i}: ${p.length() < r - 0.002}`).toBe(`${hat} root ${i}: true`);
+            }
+        }
+    });
+
+    test('a trucker cap is pale in front and the hat\'s color behind, like its bill', () => {
+        // Steve's QA, 2026-10-24: "the colors seem to be reversed".
+        const hat = F.createAvatar({ hat: 'trucker', hatColor: 'navy' }).person.getObjectByName('hat');
+        const navy = F.createAvatar({ hat: 'cap', hatColor: 'navy' }).person.getObjectByName('hat').getObjectByName('crown').material.color.getHex();
+        expect(hat.getObjectByName('crown').material.color.getHex()).toBe(F.HAT_SIZE.trucker.mesh);
+        expect(hat.getObjectByName('back').material.color.getHex()).toBe(navy);
+    });
+
+    test('a chef\'s hat is a tall toque over its band, and a fez\'s tassel hangs down its side and shows', () => {
+        const chef = F.createAvatar({ hat: 'chef', length: 'short' }).person.getObjectByName('hat');
+        const fit = chef.userData.fit;
+        const puff = chef.getObjectByName('puff');
+        puff.geometry.computeBoundingBox();
+        const box = puff.geometry.boundingBox;
+        // One closed piece, wider than the band and taller than the band
+        // is wide (Steve, 2026-10-24: a ball ringed with lobes "looks
+        // really weird").
+        expect(chef.children[0].children.filter((m) => m.name === 'puff').length).toBe(1);
+        expect(shapes.openEdges(puff.geometry)).toBe(0);
+        expect(box.max.x).toBeGreaterThan(fit.r * 1.1);
+        expect(box.max.y - box.min.y).toBeGreaterThan(fit.r * 1.2);
+        for (const hatColor of ['navy', 'white']) {
+            const fez = F.createAvatar({ hat: 'fez', hatColor }).person.getObjectByName('hat');
+            const { baseY, top } = fez.userData.fit;
+            const felt = fez.getObjectByName('crown').material.color.getHSL({}).l;
+            let lowest = Infinity;
+            let silk = null;
+            fez.traverse((m) => {
+                if (!m.isMesh || m.name !== 'tassel') return;
+                m.geometry.computeBoundingBox();
+                lowest = Math.min(lowest, m.geometry.boundingBox.min.y + m.position.y);
+                silk = m.material.color.getHSL({}).l;
+            });
+            // Hanging past the middle of the side, OUTSIDE the crown (which
+            // is wider at its base: dropped straight from the top edge, the
+            // tuft hung inside it), and a different lightness from the fez
+            // (Steve, 2026-10-24: "not noticeable enough", black on navy).
+            expect(lowest).toBeLessThan((top - baseY) * 0.5);
+            expect(Math.abs(silk - felt)).toBeGreaterThan(0.3);
+            const { r, taper } = fez.userData.fit;
+            const tuft = fez.children[0].children.filter((m) => m.name === 'tassel').find((m) => m.geometry.type === 'ConeGeometry');
+            const y = tuft.position.y;
+            const coneR = r + (r * taper - r) * (y / (top - baseY));
+            expect(Math.hypot(tuft.position.x, tuft.position.z) - tuft.geometry.parameters.radius).toBeGreaterThan(coneR);
+        }
+    });
+
     test('a perched hat sits on the top of the hair, whatever the hair', () => {
         for (const length of ['bald', 'short', 'afro', 'topKnot']) {
             const avatar = F.createAvatar({ hat: 'birthday', length });
