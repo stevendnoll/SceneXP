@@ -233,6 +233,107 @@ test('a part is a line of scalp from the hairline back over the top, the hair th
     expect(top.z).toBeGreaterThan(0.05);
 });
 
+describe('the strands (Steve\'s QA, 2026-10-25: "a monochrome blob")', () => {
+    const BARE = { afro: ['scalp'], mohawk: ['scalp', 'fin'], cornrows: ['scalp'] };
+
+    test('every piece of hair wears a map of gray strands, but the afro, the shaved sides, the fin, the ties and the part', () => {
+        for (const style of H.HAIR_DRAWN) {
+            for (const { mesh } of pieces(H.buildHair(style, 0x6b4a2f, { skin: 0xc08060 }))) {
+                const bare = ['tie', 'part'].includes(mesh.name) || (BARE[style] || []).includes(mesh.name);
+                const map = mesh.material.map;
+                expect(`${style} ${mesh.name} mapped: ${!!map}`).toBe(`${style} ${mesh.name} mapped: ${!bare}`);
+                if (!map) continue;
+                expect(map.isDataTexture).toBe(true);
+                expect(map.colorSpace).toBe(THREE.SRGBColorSpace);
+                const { data, width, height } = map.image;
+                expect(data.length).toBe(width * height * 4);
+                // Gray, opaque, never darker than the gap's depth, and not
+                // one shade (a flat map would be the blob again).
+                let sum = 0;
+                let sum2 = 0;
+                let least = 255;
+                let gray = true;
+                for (let k = 0; k < data.length; k += 4) {
+                    gray = gray && data[k + 1] === data[k] && data[k + 2] === data[k] && data[k + 3] === 255;
+                    sum += data[k];
+                    sum2 += data[k] * data[k];
+                    least = Math.min(least, data[k]);
+                }
+                expect(gray).toBe(true);
+                const n = data.length / 4;
+                const mean = sum / n;
+                const sd = Math.sqrt(sum2 / n - mean * mean);
+                expect(least).toBeGreaterThan(255 * (1 - H.STRANDS.depth) * 0.7);
+                expect(`${style} ${mesh.name} sd: ${sd > 8}`).toBe(`${style} ${mesh.name} sd: true`);
+            }
+        }
+        // Kept for the session: the same style builds with the same map.
+        expect(pieces(H.buildHair('short', 0x111111))[0].mesh.material.map).toBe(pieces(H.buildHair('short', 0xeeeeee))[0].mesh.material.map);
+    });
+
+    test('a strand is a shade of its own with a darker gap beside it, and fades to the mean', () => {
+        const shades = Array.from({ length: 400 }, (_, k) => H.strandShade(k / 40, 0.3, 1, 150));
+        expect(Math.min(...shades)).toBeLessThan(0.7);
+        expect(Math.max(...shades)).toBeGreaterThan(0.9);
+        expect(Math.min(...shades)).toBeGreaterThanOrEqual(0);
+        expect(Math.max(...shades)).toBeLessThanOrEqual(1);
+        expect(H.strandShade(3.3, 0.3, 0, 150)).toBeCloseTo(H.STRANDS.mean, 9);
+    });
+
+    test('strands fall from a pole along lines of constant angle round it, and fade at it', () => {
+        const flow = H.fallFrom([0, 1, 0]);
+        const p = (a, t) => shapes.onSphere(0.12, a, t);
+        // Down one meridian: the same strand all the way.
+        expect(flow(p(0.7, 0.4)).k).toBeCloseTo(flow(p(0.7, 1.2)).k, 6);
+        // Round the head: a different one.
+        expect(Math.abs(flow(p(0.7, 0.8)).k - flow(p(0.9, 0.8)).k)).toBeGreaterThan(1);
+        expect(flow(p(0.7, 0.01)).fade).toBeLessThan(0.01);
+        expect(flow(p(0.7, 1.0)).fade).toBe(1);
+    });
+
+    test('a parted cut\'s strands cross the part square on and bend forward over the brow as they leave it', () => {
+        const px = 0.058;
+        const flow = H.awayFromPart(px);
+        const on = (x, psi) => [x, 0.12 * Math.cos(psi), 0.12 * Math.sin(psi)];
+        // Nothing drawn on the part itself.
+        expect(flow(on(px, 0.5)).fade).toBe(0);
+        expect(flow(on(px + 0.03, 0.5)).fade).toBe(1);
+        // Along the ear-to-ear line (the same angle forward of the crown),
+        // the strand coordinate falls the farther out from the part, so a
+        // strand of constant k leaving the part lands at a larger angle
+        // forward of the crown (toward the brow), the more so the farther
+        // out: it curves forward.
+        const k0 = flow(on(px, 0.5)).k;
+        const step1 = flow(on(px + 0.03, 0.5)).k - k0;
+        const step2 = flow(on(px + 0.06, 0.5)).k - flow(on(px + 0.03, 0.5)).k;
+        expect(step1).toBeLessThan(0);
+        expect(step2).toBeLessThan(step1);
+        // Both sides alike, and forward of the crown is a larger k.
+        expect(flow(on(px - 0.03, 0.5)).k).toBeCloseTo(flow(on(px + 0.03, 0.5)).k, 9);
+        expect(flow(on(px, 0.9)).k).toBeGreaterThan(flow(on(px, 0.5)).k);
+    });
+
+    test('the swoosh stands over the top of the head, not only at the hairline', () => {
+        // Steve, 2026-10-25: "still don't look very swooshy". Gated by the
+        // groove's run, the lift was a quarter of itself a third of the way
+        // forward of the crown, and nothing at the crown.
+        const W = H.HAIR_SIZE.part.wave;
+        for (const [style, px] of Object.entries(H.HAIR_SIZE.parts)) {
+            const wave = pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'wave');
+            const lift = px === 0 ? W.center.lift : W.heavy.lift;
+            const side = px === 0 ? 1 : -Math.sign(px);
+            for (const phi of [0.3, 0.6]) {
+                // The wave's height at the crest, 2 cm out on the heavy
+                // side, `phi` forward of the crown, over a cap about 7 mm
+                // thick there.
+                const near = wave.pts.filter((p) => Math.abs(Math.atan2(p.z, p.y) - phi) < 0.08 && Math.abs(p.x - px - side * 0.02) < 0.008);
+                const height = Math.max(...near.map((p) => p.length())) - H.SCALP - 0.008;
+                expect(`${style} at ${phi}: ${height > lift * 0.6}`).toBe(`${style} at ${phi}: true`);
+            }
+        }
+    });
+});
+
 test('along reads a line of points, flat past its ends', () => {
     const pts = [[0, 1], [1, 3]];
     expect(H.along(pts, -1)).toBe(1);

@@ -47,6 +47,9 @@ const SHOTS = {
     mouth: { cell: [200, 160], aim: [0, 1.5, 0], distance: 0.55, fov: 22, lift: 0.0 },
     /** The top of the head, close, from a little above (the parts). */
     crown: { cell: [220, 200], aim: [0, 1.6, 0], distance: 0.55, fov: 24, lift: 0.22 },
+    /** The head at about the editor's zoom (1.6 px a millimeter), for the
+     *  strands. */
+    close: { cell: [320, 300], aim: [0, 1.57, 0], distance: 0.45, fov: 24, lift: 0.08 },
     body: { cell: [180, 300], aim: [0, 0.9, 0], distance: 4.2, fov: 28, lift: 0.1 }
 };
 const TURNS = [0, 0.75];
@@ -95,6 +98,12 @@ await sheet('parts', [
     { ...fair, length: 'short' }, { ...fair, length: 'leftPart' }, { ...fair, length: 'rightPart' }, { ...fair, length: 'centerPart' },
     { ...deep, length: 'leftPart' }, { skin: 'light', hair: 'blond', length: 'centerPart' }
 ], 'crown', BEHIND);
+// The strands, at the editor's zoom: the cuts combed from the crown, the
+// parts, the quiff, hair worn back, and a curtain.
+await sheet('strands', [
+    { ...fair, length: 'short' }, { ...fair, length: 'leftPart' }, { ...fair, length: 'centerPart' }, { ...fair, length: 'quiff' },
+    { ...deep, length: 'ponytail' }, { skin: 'light', hair: 'blond', length: 'bob' }, { ...fair, hair: 'auburn', length: 'rightPart' }
+], 'close', [0, 0.75]);
 await sheet('hats', HATS.map((hat) => ({ ...fair, length: 'short', hat, hatColor: 'navy' })), 'face', BEHIND);
 await sheet('hats-afro', HATS.map((hat) => ({ ...deep, length: 'afro', hat, hatColor: 'mustard' })), 'face');
 await sheet('hats-long', HATS.map((hat) => ({ skin: 'light', hair: 'blond', length: 'long', hat, hatColor: 'teal' })), 'face');

@@ -20,6 +20,11 @@
  * after everything opaque, writes no depth and casts no shadow (as three
  * draws it).
  *
+ * A material's `map`, when it is a DataTexture (the hair's strands,
+ * 2026-10-25), is read at each pixel's uv (nearest texel, wrapping as the
+ * texture says) and multiplied into the color, as three does; any other
+ * kind of texture is ignored.
+ *
  * Uses the global THREE (tests/helpers/real-three.mjs's loadRealThree).
  */
 
@@ -99,6 +104,20 @@ export function render(object, camera, w, h, { bg = [236, 230, 220], light = nor
         const col = mat && mat.color ? mat.color.getHex() : 0x888888;
         return [(col >> 16) & 255, (col >> 8) & 255, col & 255];
     };
+    /** A sampler of the material's map at (u, v), as [r, g, b] factors, or
+     *  null when it has none to read. */
+    const samplerOf = (mat) => {
+        const map = mat && mat.map;
+        if (!map || !map.isDataTexture || !map.image || !map.image.data) return null;
+        const { data, width, height } = map.image;
+        const wrap = (x, mode) => (mode === THREE.RepeatWrapping ? x - Math.floor(x) : Math.min(1, Math.max(0, x)));
+        return (u, v) => {
+            const i = Math.min(width - 1, Math.floor(wrap(u, map.wrapS) * width));
+            const j = Math.min(height - 1, Math.floor(wrap(v, map.wrapT) * height));
+            const o = (j * width + i) * 4;
+            return [data[o] / 255, data[o + 1] / 255, data[o + 2] / 255];
+        };
+    };
     // Every triangle, with its corners in the world, on the screen, and
     // their normals.
     const tris = [];
@@ -106,6 +125,7 @@ export function render(object, camera, w, h, { bg = [236, 230, 220], light = nor
     for (const mesh of meshes) {
         const pos = mesh.geometry.attributes.position;
         const nrm = mesh.geometry.attributes.normal;
+        const uv = mesh.geometry.attributes.uv;
         const index = mesh.geometry.index;
         const groups = Array.isArray(mesh.material) ? mesh.geometry.groups : null;
         const materialAt = (t) => {
@@ -134,9 +154,11 @@ export function render(object, camera, w, h, { bg = [236, 230, 220], light = nor
             const mat = materialAt(t);
             const p = ids.map((i) => world[i]);
             const face = norm(cross(sub(p[1], p[0]), sub(p[2], p[0])));
+            const sample = uv ? samplerOf(mat) : null;
             tris.push({
                 world: p, screen: ids.map((i) => screen[i]), normals: ids.map((i) => normals[i] || face),
-                color: rgbOf(mat), alpha, side: mat ? mat.side : THREE.FrontSide
+                color: rgbOf(mat), alpha, side: mat ? mat.side : THREE.FrontSide,
+                sample, uvs: sample ? ids.map((i) => [uv.getX(i), uv.getY(i)]) : null
             });
         }
     }
@@ -201,11 +223,17 @@ export function render(object, camera, w, h, { bg = [236, 230, 220], light = nor
             const p = [w0 * p0[0] + w1 * p1[0] + w2 * p2[0], w0 * p0[1] + w1 * p1[1] + w2 * p2[1], w0 * p0[2] + w1 * p1[2] + w2 * p2[2]];
             const sun = Math.max(0, dot(n, light)) * (inShadow(p, n) ? SHADOW.dark : 1);
             const lit = 0.45 + 0.55 * sun;
+            let color = tri.color;
+            if (tri.sample) {
+                const [t0, t1, t2] = tri.uvs;
+                const f = tri.sample(w0 * t0[0] + w1 * t1[0] + w2 * t2[0], w0 * t0[1] + w1 * t1[1] + w2 * t2[1]);
+                color = [tri.color[0] * f[0], tri.color[1] * f[1], tri.color[2] * f[2]];
+            }
             if (tri.alpha >= 1) {
                 depth[i] = z;
-                for (let ch = 0; ch < 3; ch++) rgb[i * 3 + ch] = tri.color[ch] * lit;
+                for (let ch = 0; ch < 3; ch++) rgb[i * 3 + ch] = color[ch] * lit;
             } else {
-                for (let ch = 0; ch < 3; ch++) rgb[i * 3 + ch] = rgb[i * 3 + ch] * (1 - tri.alpha) + tri.color[ch] * lit * tri.alpha;
+                for (let ch = 0; ch < 3; ch++) rgb[i * 3 + ch] = rgb[i * 3 + ch] * (1 - tri.alpha) + color[ch] * lit * tri.alpha;
             }
         });
     }

@@ -58,7 +58,7 @@ export { HAT_SIZE, trimUnder, HAIR_DRAWN };
  * 7 (2026-10-24): the hair styles (avatar-hair) and the hats (avatar-hats).
  * 8 (2026-10-24): the hair's solids turned right side out, and the parts.
  */
-export const RENDER_VERSION = 8;
+export const RENDER_VERSION = 9;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named
@@ -322,8 +322,32 @@ export const EYE_SIZE = Object.freeze({
     lashes: { r: 0.0192, tube: 0.0016, from: 0.2, to: 0.8, flick: [0.007, 0.0016], color: 0x1a1412 }
 });
 
+/**
+ * The pupil as a lens on the white, not a ball (Steve's QA, 2026-10-25: the
+ * pupils "stick out from the whites of the eyes"). The rig's pupil is a
+ * 1 cm ball whose middle sits 5 mm outside the white's front, so it stood
+ * 16 mm proud of the eye, and from the side poked through a sunglass lens.
+ * Here it is squashed to `flat` of its radius front to back and set so its
+ * front stands `proud` of the white's front: the whole of it still in front
+ * of the white (the white's surface falls away toward the pupil's rim), so
+ * it shows as a disc from the front and barely rises from the side.
+ */
+export const PUPIL_SIZE = Object.freeze({ flat: 0.35, proud: 0.003 });
+
+function flattenPupils(face) {
+    const P = PUPIL_SIZE;
+    const eyes = face.children.filter((o) => o.userData.isEye);
+    for (const pupil of face.children.filter((o) => o.userData.isPupil)) {
+        const eye = eyes.find((e) => Math.abs(e.position.x - pupil.position.x) < 1e-6);
+        const front = eye.position.z + eye.geometry.parameters.radius * eye.scale.z;
+        pupil.scale.z = P.flat;
+        pupil.position.z = front + P.proud - pupil.geometry.parameters.radius * P.flat;
+    }
+}
+
 function shapeEyes(face, kind, skin) {
     const E = EYE_SIZE;
+    flattenPupils(face);
     const eyes = face.children.filter((o) => o.userData.isEye);
     const pupils = face.children.filter((o) => o.userData.isPupil);
     if (E[kind] && E[kind].eye) {
@@ -1203,6 +1227,8 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
             return true;
         },
         dispose() {
+            // The hair's strand maps are not disposed: avatar-hair keeps
+            // one per style for the session, shared by every figure built.
             group.traverse((o) => {
                 if (o.geometry && o.geometry.dispose) o.geometry.dispose();
                 if (o.material && o.material.dispose) o.material.dispose();

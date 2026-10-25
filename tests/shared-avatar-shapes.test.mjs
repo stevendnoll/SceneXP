@@ -23,6 +23,36 @@ afterAll(() => {
     delete globalThis.THREE;
 });
 
+test('every solid carries its grid\'s own coordinates as its uv, so a map lands where the grid puts it', () => {
+    // 2026-10-25: the hair's strands are a map over the grid.
+    const nu = 6;
+    const nv = 3;
+    const slab = S.solidGrid(nu, nv, (i, j, side) => [i / 3, j / 3, side * 0.1]);
+    const uv = slab.attributes.uv;
+    expect(uv.count).toBe(slab.attributes.position.count);
+    // The outer surface comes first, column by column.
+    for (let i = 0; i <= nu; i++) {
+        for (let j = 0; j <= nv; j++) {
+            const k = i * (nv + 1) + j;
+            expect(uv.getX(k)).toBeCloseTo(i / nu, 6);
+            expect(uv.getY(k)).toBeCloseTo(j / nv, 6);
+        }
+    }
+    for (let k = 0; k < uv.count; k++) {
+        expect(uv.getX(k)).toBeGreaterThanOrEqual(0);
+        expect(uv.getX(k)).toBeLessThanOrEqual(1);
+        expect(uv.getY(k)).toBeGreaterThanOrEqual(0);
+        expect(uv.getY(k)).toBeLessThanOrEqual(1);
+    }
+    // A tube's runs round (u) and along (v).
+    const tube = S.taperTube([[0, 0, 0], [0, 1, 0], [0, 2, 0]], () => 0.1, { segments: 4, radial: 5 });
+    const tuv = tube.attributes.uv;
+    expect(tuv.count).toBe(tube.attributes.position.count);
+    expect(tuv.getX(2)).toBeCloseTo(2 / 5, 6);
+    expect(tuv.getY(2)).toBe(0);
+    expect(tuv.getY(4 * 5 + 1)).toBe(1);
+});
+
 test('openEdges sees a flat sheet as open, and a ball as closed', () => {
     expect(S.openEdges(new THREE.PlaneGeometry(1, 1, 3, 3))).toBeGreaterThan(0);
     expect(S.openEdges(new THREE.SphereGeometry(1, 16, 12))).toBe(0);

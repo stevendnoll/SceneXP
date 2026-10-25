@@ -249,6 +249,24 @@ describe('every hat over every hair style, on the figure', () => {
         }
     });
 
+    test('a ball cap\'s and a trucker cap\'s bills reach well past the rim; an ivy cap\'s stays short', () => {
+        // Steve's QA, 2026-10-25: at 6 cm past the rim, "too short, like
+        // they should extend out further in front". Measured in the bill's
+        // own frame (the dome's), where the rim is a circle of fit.r sin
+        // edge about the middle.
+        for (const [hat, least, most] of [['cap', HT.BILL_REACH, 0.12], ['trucker', HT.BILL_REACH, 0.12], ['ivyCap', 0.01, 0.04]]) {
+            const avatar = F.createAvatar({ hat, length: 'short' });
+            const bill = avatar.person.getObjectByName('bill');
+            const { r, edge } = avatar.person.getObjectByName('hat').userData.fit;
+            const rim = r * Math.sin(edge);
+            const pos = bill.geometry.attributes.position;
+            let far = -Infinity;
+            for (let i = 0; i < pos.count; i++) far = Math.max(far, pos.getZ(i));
+            expect(`${hat}: ${far - rim > least}`).toBe(`${hat}: true`);
+            expect(`${hat}: ${far - rim < most}`).toBe(`${hat}: true`);
+        }
+    });
+
     test('a trucker cap is pale in front and the hat\'s color behind, like its bill', () => {
         // Steve's QA, 2026-10-24: "the colors seem to be reversed".
         const hat = F.createAvatar({ hat: 'trucker', hatColor: 'navy' }).person.getObjectByName('hat');

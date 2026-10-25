@@ -92,16 +92,19 @@ function meshes(root) {
         o.getWorldPosition(p);
         const round = (n) => Math.round(n * 1e5) / 1e5;
         // The avatar's head is the rig's head drawn smoother (2026-10-24):
-        // compared by its radius here, its sides asserted on their own.
+        // compared by its radius here, its sides asserted on their own. Its
+        // pupils are the rig's flattened onto the whites (2026-10-25):
+        // compared across and up, their depth asserted on its own.
         const head = o.userData.isHead;
+        const pupil = o.userData.isPupil;
         out.push({
             name: o.name,
             geometry: o.geometry.type,
             // A shape's uuid is fresh every build, so it is left out.
             params: head ? `radius ${o.geometry.parameters.radius}` : JSON.stringify(o.geometry.parameters || {}, (k, v) => (k === 'uuid' ? undefined : v)),
             vertices: head ? 'head' : o.geometry.attributes.position.count,
-            at: p.toArray().map(round),
-            scale: o.scale.toArray().map(round),
+            at: (pupil ? [p.x, p.y, 'lens'] : p.toArray()).map((n) => (typeof n === 'number' ? round(n) : n)),
+            scale: (pupil ? [o.scale.x, o.scale.y, 'lens'] : o.scale.toArray()).map((n) => (typeof n === 'number' ? round(n) : n)),
             color: o.material.color ? o.material.color.getHex() : null
         });
     });
@@ -1067,6 +1070,37 @@ describe('the face (Steve\'s QA, 2026-10-24), measured', () => {
                 expect(`oval ${hat}/${length}: ${through.length}`).toBe(`oval ${hat}/${length}: 0`);
             }
         }
+    });
+
+    test('the pupil is a lens on the white, barely proud of it, where the rig\'s is a ball standing off it', () => {
+        // Steve's QA, 2026-10-25: the pupils "stick out from the whites of
+        // the eyes", and poked through a sunglass lens from the side.
+        const front = (o) => o.position.z + o.geometry.parameters.radius * o.scale.z;
+        const thick = (o) => 2 * o.geometry.parameters.radius * o.scale.z;
+        for (const eyeShape of ['round', 'almond', 'wide', 'sleepy', 'lashes']) {
+            const face = F.createAvatar({ eyeShape }).person.getObjectByName('head');
+            const eyes = face.children.filter((o) => o.userData.isEye);
+            for (const pupil of face.children.filter((o) => o.userData.isPupil)) {
+                const eye = eyes.find((e) => Math.abs(e.position.x - pupil.position.x) < 1e-9);
+                const proud = front(pupil) - front(eye);
+                expect(`${eyeShape}: ${proud > 0.001 && proud < 0.005}`).toBe(`${eyeShape}: true`);
+                expect(thick(pupil)).toBeLessThan(0.008);
+                // Still in front of the white at its rim, so the whole disc shows.
+                const rimZ = pupil.position.z;
+                const rr = pupil.geometry.parameters.radius * pupil.scale.x;
+                const whiteAtRim = eye.position.z + eye.scale.z * Math.sqrt(Math.max(0, eye.geometry.parameters.radius ** 2 - (rr / eye.scale.x) ** 2));
+                expect(`${eyeShape}: ${rimZ > whiteAtRim - 0.001}`).toBe(`${eyeShape}: true`);
+            }
+        }
+        // Well behind a sunglass lens.
+        const sun = F.createAvatar({ glasses: 'sunglasses' }).person.getObjectByName('head');
+        const pupil = sun.children.find((o) => o.userData.isPupil);
+        expect(F.GLASSES_SIZE.z - 0.001 - front(pupil)).toBeGreaterThan(0.015);
+        // The rig's own pupil stands over a centimeter proud: this test can fail.
+        const rig = createPerson({});
+        const rigPupil = rig.children.find((o) => o.userData.isPupil);
+        const rigEye = rig.children.find((o) => o.userData.isEye);
+        expect(front(rigPupil) - front(rigEye)).toBeGreaterThan(0.01);
     });
 
     test('the eye shapes: almond and wide reshape the rig\'s eye, sleepy lids the top half, lashes line it', () => {

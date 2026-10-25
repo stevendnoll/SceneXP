@@ -20,6 +20,17 @@
  * middle of the 0.12 m head at the origin, the face toward +z. A piece a hat
  * would squash (a bun, a spike, a mohawk's fin) is tagged
  * `userData.hatHides`, and avatar-hats tucks it away under a hat.
+ *
+ * STRANDS (Steve's QA, 2026-10-25: all one color, the hair was "a monochrome
+ * blob"): nearly every piece wears a map of strands, a gray picture
+ * multiplied into the hair's color, drawn in code the first time a style is
+ * built (no image file, nothing fetched, so the page's same-origin policy
+ * holds) and kept for the session. The strands follow a FLOW over the head,
+ * read at each texel's own point on the piece: down from the crown's whorl
+ * on a short cut, away from the part and bending forward on a parted one (so
+ * the lines draw the swoosh even where the light is flat), back from the
+ * brow on a quiff, in to the tie on hair worn back, and down a tail, a
+ * braid or a curtain. The afro, the shaved sides and the fin go without.
  */
 
 import { solidGrid, taperTube, onSphere } from './avatar-shapes-1.0.0.min.js';
@@ -128,9 +139,21 @@ export const HAIR_SIZE = Object.freeze({
     // the head to `forward` (up and out over the brow), full to within
     // `edge` of the hairline.
     parts: { leftPart: 0.058, rightPart: -0.058, centerPart: 0 },
+    // Steve, 2026-10-25 ("still don't look very swooshy"): the swoosh was
+    // gated by the GROOVE's run, nothing at the crown and full only at the
+    // hairline, where the hairline fade and the forward turn took over, so
+    // over the top of the head it never showed. It now runs over the whole
+    // top: full from `wave.back` radians behind the crown forward, out to
+    // `wave.temple` radians round at the sides, and fullest toward the
+    // front (`wave.swoop` of it over the crown, all of it over the brow),
+    // where a side part swoops. With the whole top carrying it, the lifts
+    // came down from 40/16/26 mm.
     part: {
         width: 0.0045, depth: 0.8, back: 0, fade: 0.9, line: 0.001, grid: [144, 24], edge: 0.86, lean: 0.35, forward: [0, 1, 0.9], turn: 0.5,
-        wave: { heavy: { lift: 0.04, crest: 4.5, tail: 12 }, light: { lift: 0.016, crest: 3.2, tail: 6 }, center: { lift: 0.026, crest: 3.7, tail: 8 } }
+        wave: {
+            back: -0.5, fade: 0.6, temple: 1.15, swoop: 0.55,
+            heavy: { lift: 0.03, crest: 4.5, tail: 12 }, light: { lift: 0.012, crest: 3.2, tail: 6 }, center: { lift: 0.02, crest: 3.7, tail: 8 }
+        }
     },
     spikes: { count: 26, height: 0.028, radius: 0.0095, reach: 0.78 },
     curls: { grid: [144, 36] },
@@ -155,6 +178,144 @@ export const HAIR_SIZE = Object.freeze({
     /** How much darker a hair tie is than the hair. */
     tie: 0.55
 });
+
+/**
+ * The strands (see the header). `around` strands round the head (about
+ * 5 mm apart on the 0.12 head, so they read as lines at the editor's zoom
+ * and blend to a texture at a distance), `depth` how dark the gap between
+ * two strands gets (of the hair's color), `mean` the map's shade where the
+ * strands fade (at a whorl, along a part), `sheen` a soft shine along each
+ * strand. A parted cut's strands bend forward `sweep` radians a meter out
+ * from the part (growing as they go), starting `partFade` from it; every flow
+ * fades within `whorl` radians of its pole, where all its strands meet.
+ * `tube` strands round a tail. Maps are `size`d by the piece they cover
+ * (texels across and down).
+ */
+export const STRANDS = Object.freeze({
+    around: 150, depth: 0.42, mean: 0.84, sheen: 0.06, sweep: 8, partFade: 0.006, whorl: 0.3, tube: 7, roughness: 0.75,
+    crown: [0, 1, -0.35], brow: [0, 0.3, 1],
+    size: { scalp: [1024, 160], patch: [512, 128], curtain: [512, 64], tube: [64, 128] }
+});
+
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+/** A number in [0, 1) that jumps about with `n`, the same every time. */
+function hash(n) {
+    const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+    return s - Math.floor(s);
+}
+
+/**
+ * The shade (0 to 1) of a strand map at across-coordinate `k` (in strands:
+ * each whole number is a strand), `along` the strands (a unit is about
+ * 2 cm), with the pattern `fade`d toward the map's mean (0 none of it, 1 all
+ * of it), for a flow of `period` strands round. Each strand is a shade of
+ * its own, with a darker gap along one side, wobbling a little as it goes
+ * and shining along it.
+ */
+export function strandShade(k, along, fade, period) {
+    const S = STRANDS;
+    // The wobble repeats round the flow's period, so a wrapped map meets
+    // itself at its seam.
+    const w1 = (2 * Math.PI * Math.max(1, Math.round(period * 0.27))) / period;
+    const w2 = (2 * Math.PI * Math.max(1, Math.round(period * 0.14))) / period;
+    const kk = k + 0.22 * Math.sin(along * 1.45 + w1 * k) + 0.12 * Math.sin(along * 3.6 - w2 * k);
+    const n = Math.floor(kk);
+    const f = kk - n;
+    const h = hash(n);
+    const gap = 0.14 + 0.16 * hash(n + 0.37);
+    const seam = Math.max(1 - smoothstep(f / gap), 1 - smoothstep((1 - f) / 0.08));
+    const bright = 0.84 + 0.16 * h;
+    const sheen = 1 - S.sheen * Math.sin(along * 2.05 + h * 6.28) ** 2;
+    const value = bright * sheen * (1 - S.depth * seam);
+    return clamp01(S.mean + (value - S.mean) * fade);
+}
+
+/**
+ * A flow of strands falling away from `pole` (a direction from the head's
+ * middle) all the way round: a strand is a line of constant angle round the
+ * pole, so they meet at it (a whorl, a tie) and fade out within
+ * STRANDS.whorl of it.
+ */
+export function fallFrom(pole) {
+    const p = norm3(pole);
+    const e1 = norm3(cross3(p, Math.abs(p[1]) < 0.9 ? [0, 1, 0] : [0, 0, 1]));
+    const e2 = cross3(p, e1);
+    return (point) => {
+        const d = norm3(point);
+        const k = ((Math.atan2(dot3(d, e2), dot3(d, e1)) + Math.PI) / (2 * Math.PI)) * STRANDS.around;
+        const from = Math.acos(Math.min(1, Math.max(-1, dot3(d, p))));
+        return { k, along: from * 6, fade: smoothstep(from / STRANDS.whorl), period: STRANDS.around };
+    };
+}
+
+/**
+ * A parted cut's flow: the strands come straight up out of the part (the
+ * plane `px` from the middle) either side, run over the head away from it,
+ * and bend forward toward the brow more the farther they get
+ * (STRANDS.sweep), as a side-swept cut does (Steve, 2026-10-24: "the
+ * swoosh should come forward over the forehead too"). They are lines of
+ * constant angle forward of the crown, round the ear-to-ear axis, so they
+ * cross the part square on.
+ */
+export function awayFromPart(px) {
+    return ([x, y, z]) => {
+        const d = Math.abs(x - px);
+        const psi = Math.atan2(z, y) - (STRANDS.sweep * d * d) / 0.06;
+        const k = ((psi + Math.PI) / (2 * Math.PI)) * STRANDS.around;
+        return { k, along: d * 50, fade: smoothstep(d / STRANDS.partFade), period: STRANDS.around };
+    };
+}
+
+/** A flow straight down a piece's own uv: `n` strands across (u), running
+ *  along v (a tail, a curtain, a spike). */
+export function alongV(n) {
+    return (point, u, v) => ({ k: u * n, along: v * 8, fade: 1, period: n });
+}
+
+const MAPS = new Map();
+
+/**
+ * The map of strands for a piece, `width` by `height` texels: each texel's
+ * shade is the `flow` read at `at(u, v)` (the piece's own point for that
+ * texel, or null for a flow that reads the uv itself). Built once per `key`
+ * and kept: the maps are gray and the same for every color, and a visitor
+ * rebuilds the figure at every click in the editor.
+ */
+export function strandMap(key, at, flow, [width, height], { repeat = true } = {}) {
+    if (MAPS.has(key)) return MAPS.get(key);
+    const data = new Uint8Array(width * height * 4);
+    for (let j = 0; j < height; j++) {
+        const v = (j + 0.5) / height;
+        for (let i = 0; i < width; i++) {
+            const u = (i + 0.5) / width;
+            const { k, along, fade, period } = flow(at ? at(u, v) : null, u, v);
+            const g = Math.round(255 * strandShade(k, along, fade, period));
+            const o = (j * width + i) * 4;
+            data[o] = g;
+            data[o + 1] = g;
+            data[o + 2] = g;
+            data[o + 3] = 255;
+        }
+    }
+    const texture = new THREE.DataTexture(data, width, height);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = repeat ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
+    texture.needsUpdate = true;
+    MAPS.set(key, texture);
+    return texture;
+}
+
+/** The point on the scalp a cap's texel (u, v) covers (see `scalp`). */
+const onScalp = (edge) => (u, v) => {
+    const a = -Math.PI + 2 * Math.PI * u;
+    return onSphere(SCALP, a, along(edge, Math.abs(a)) * v);
+};
 
 /** A volume (HAIR_SIZE.volumes) as a thickness at `a` round and `s` of the
  *  way from the crown to the edge. */
@@ -240,12 +401,19 @@ function parted(px) {
     /** The swoosh's height at (a, s), and which way it leans (+1 toward
      *  +x, -1 toward -x: away from the part). */
     const wave = (a, s) => {
-        const { d, run } = where(a, s);
+        const { d, phi } = where(a, s);
         const W = P.wave;
         const w = px === 0 ? W.center : Math.sign(d) === -Math.sign(px) ? W.heavy : W.light;
         const u = Math.abs(d) / P.width;
         // Steeply up out of the groove to the crest, then gently away.
         const roll = u < w.crest ? smoothstep((u - 0.5) / (w.crest - 0.5)) : Math.exp(-(((u - w.crest) / w.tail) ** 2));
+        // Over the whole top (Steve, 2026-10-25, see HAIR_SIZE.part): from
+        // behind the crown forward, fading at the temples, and nothing
+        // right at the crown, where the patch's columns meet (a lift there
+        // would step up off its padded first row).
+        const run = smoothstep((phi - W.back) / W.fade) * (1 - smoothstep((Math.abs(a) - W.temple) / 0.4)) * smoothstep((s - 0.04) / 0.2);
+        // Fullest toward the front, where a side part swoops.
+        const swoop = W.swoop + (1 - W.swoop) * smoothstep((phi + 0.2) / 1.0);
         // Full to just inside the hairline, then gone at it (the patch's
         // border). Out from the head it would stand over the brow as a
         // shelf (preview, 2026-10-24); its lift turns forward instead
@@ -253,7 +421,7 @@ function parted(px) {
         // up and over the forehead (Steve: "the swoosh should come forward
         // over the forehead too").
         const edgeFade = 1 - smoothstep((s - P.edge) / (1 - P.edge));
-        return { height: w.lift * roll * run * edgeFade, away: Math.sign(d) || 1, front: smoothstep((s - P.turn) / (P.edge - P.turn)) };
+        return { height: w.lift * roll * run * swoop * edgeFade, away: Math.sign(d) || 1, front: smoothstep((s - P.turn) / (P.edge - P.turn)) };
     };
     const floorAt = (x, y, z) => {
         const r = Math.hypot(x, y, z);
@@ -302,25 +470,41 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
     group.name = 'hair';
     group.userData.isHair = true;
     group.userData.style = style;
-    const hair = new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
+    const S = STRANDS;
+    // Every piece gets a material of its own, with its map of strands (or
+    // none: the afro, the shaved sides, a mohawk's fin).
+    const hairWith = (map) => new THREE.MeshStandardMaterial({ color, roughness: S.roughness, map: map || null });
     const tieMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(H.tie), roughness: 0.6 });
-    const add = (geometry, name, { hides = false, material = hair } = {}) => {
-        const mesh = new THREE.Mesh(geometry, material);
+    const add = (geometry, name, { hides = false, material, map = null } = {}) => {
+        const mesh = new THREE.Mesh(geometry, material || hairWith(map));
         mesh.name = name;
         mesh.castShadow = true;
         if (hides) mesh.userData.hatHides = true;
         group.add(mesh);
         return mesh;
     };
-    const cap = (edge, volume) => add(scalp(H.edges[edge], thickness(H.volumes[volume])), 'scalp');
+    /** The map for a cap over `edge`, its strands in `flow`. */
+    const capMap = (key, edge, flow) => strandMap(`${key}:scalp`, onScalp(edge), flow, S.size.scalp);
+    /** The map for a piece lying on a cap (`onCap`), over the same span. */
+    const patchMap = (key, edge, flow, { a0, a1, s0, s1 }) => strandMap(`${key}:patch`, (u, v) => {
+        const a = a0 + (a1 - a0) * u;
+        return onSphere(SCALP, a, along(edge, Math.abs(a)) * (s0 + (s1 - s0) * v));
+    }, flow, S.size.patch);
+    /** The map down a piece's own uv (a tail, a spike, a plait). */
+    const downMap = (n) => strandMap(`down:${n}`, null, alongV(n), S.size.tube);
+    const crownFlow = fallFrom(S.crown);
+    const cap = (edge, volume, flow = crownFlow, key = `${edge}:${volume}`) => add(scalp(H.edges[edge], thickness(H.volumes[volume])), 'scalp', { map: capMap(key, H.edges[edge], flow) });
     const sleekEdge = H.edges.sleek;
+    /** A sleek cap, its strands drawn in to `pole` (where the hair is
+     *  gathered), and the sleek cut's own thickness. */
+    const sleek = (key, pole) => add(scalp(sleekEdge, thickness(H.volumes.sleek)), 'scalp', { map: capMap(key, sleekEdge, fallFrom(pole)) });
     const tie = (at, r = 0.014) => {
         const ring = add(new THREE.TorusGeometry(r, 0.0045, 6, 14), 'tie', { material: tieMaterial });
         ring.position.set(...at);
         ring.lookAt(at[0] * 2, at[1] * 2, at[2] * 2);
         return ring;
     };
-    const tube = (points, radius, name, { material, ...options } = {}) => add(taperTube(points, radius, options), name, material ? { material } : {});
+    const tube = (points, radius, name, { material, ...options } = {}) => add(taperTube(points, radius, options), name, material ? { material } : { map: downMap(S.tube) });
 
     switch (style) {
         case 'short':
@@ -332,10 +516,11 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             const px = H.parts[style];
             const P = H.part;
             const part = parted(px);
+            const flow = awayFromPart(px);
             // On a finer grid than the other cuts, so the groove is cut
             // (preview, 2026-10-24: on 48 columns the line of scalp sank in
             // and out of the hair in dashes).
-            add(scalp(part.edge, part.thick, { nu: P.grid[0], nv: P.grid[1] }), 'scalp');
+            add(scalp(part.edge, part.thick, { nu: P.grid[0], nv: P.grid[1] }), 'scalp', { map: capMap(style, part.edge, flow) });
             // The swooshes either side, out from the head and leaning over
             // away from the part, turning up and forward over the brow
             // toward the hairline, over the front and the top (they fade
@@ -343,11 +528,12 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             // as the cut's (preview, 2026-10-24: on half as many, the
             // piece bridged the groove and buried the line of scalp).
             const forward = norm3(P.forward);
+            const span = { a0: -1.7, a1: 1.7, s0: 0.02, s1: 0.99 };
             add(onCap(part.edge, part.thick, (a, s, dir) => {
                 const { height, away, front } = part.wave(a, s);
                 const out = [dir[0] + away * P.lean, dir[1], dir[2]];
                 return out.map((o, k) => (o * (1 - front) + forward[k] * front) * height);
-            }, { a0: -1.7, a1: 1.7, s0: 0.02, s1: 0.99, nu: Math.round((P.grid[0] * 3.4) / (2 * Math.PI)), nv: 28 }), 'wave', { hides: true });
+            }, { ...span, nu: Math.round((P.grid[0] * 3.4) / (2 * Math.PI)), nv: 28 }), 'wave', { hides: true, map: patchMap(style, part.edge, flow, span) });
             // The line of scalp along the groove's floor: in the plane `px`
             // from the middle, from just inside the hairline back to where
             // the groove has faded to about a third.
@@ -387,8 +573,12 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             const base = thickness(H.volumes.short);
             const Q = H.quiff;
             const edge = H.edges.quiff;
-            add(scalp(edge, base), 'scalp');
+            // Combed up and back from the brow: the strands fall away from
+            // a pole low on the forehead.
+            const flow = fallFrom(S.brow);
+            add(scalp(edge, base), 'scalp', { map: capMap('quiff', edge, flow) });
             const lean = norm3(Q.lean);
+            const span = { a0: -1.35, a1: 1.35, s0: 0.04, s1: 0.99 };
             add(onCap(edge, base, (a, s) => {
                 const t = along(edge, Math.abs(a)) * s;
                 const [, y, z] = onSphere(1, a, t);
@@ -404,29 +594,33 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
                 const ripple = 1 + Q.ripple * Math.sin(a * 9);
                 const h = Q.height * along_ * across * edgeFade * ripple;
                 return [lean[0] * h, lean[1] * h, lean[2] * h];
-            }, { a0: -1.35, a1: 1.35, s0: 0.04, s1: 0.99, nu: 48, nv: 24 }), 'crest', { hides: true });
+            }, { ...span, nu: 48, nv: 24 }), 'crest', { hides: true, map: patchMap('quiff', edge, flow, span) });
             break;
         }
         case 'spiky': {
             cap('short', 'sleek');
-            const S = H.spikes;
-            for (const [a, t] of spread(S.count, H.edges.short, S.reach)) {
+            const K = H.spikes;
+            for (const [a, t] of spread(K.count, H.edges.short, K.reach)) {
                 const dir = new THREE.Vector3(...onSphere(1, a, t));
-                const cone = add(new THREE.ConeGeometry(S.radius, S.height, 7), 'spike', { hides: true });
-                cone.position.copy(dir.clone().multiplyScalar(SCALP + S.height / 2));
+                // A cone's uv runs round (u) and up (v): strands up each spike.
+                const cone = add(new THREE.ConeGeometry(K.radius, K.height, 7), 'spike', { hides: true, map: downMap(5) });
+                cone.position.copy(dir.clone().multiplyScalar(SCALP + K.height / 2));
                 cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
             }
             break;
         }
         case 'curly':
             // One lumpy cap, on a grid fine enough for its curls.
-            add(scalp(H.edges.short, thickness(H.volumes.curly), { nu: H.curls.grid[0], nv: H.curls.grid[1] }), 'scalp');
+            add(scalp(H.edges.short, thickness(H.volumes.curly), { nu: H.curls.grid[0], nv: H.curls.grid[1] }), 'scalp', { map: capMap('curly', H.edges.short, crownFlow) });
             break;
         case 'afro':
-            cap('afro', 'afro');
+            // Its own texture of bumps; no strands.
+            add(scalp(H.edges.afro, thickness(H.volumes.afro)), 'scalp');
             break;
         case 'mohawk': {
-            cap('short', 'shaved');
+            // Shaved sides: too thin for strands. The fin's uv runs across
+            // it, not up, so it goes without too.
+            add(scalp(H.edges.short, thickness(H.volumes.shaved)), 'scalp');
             const M = H.mohawk;
             // A fin in the head's middle plane, from the hairline over the
             // crown to the nape (preview, 2026-10-24: measured down the
@@ -445,7 +639,8 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             cap('short', 'short');
             const M = H.mullet;
             // Business in front: the short cap. Party in the back: a curtain
-            // from the nape to the shoulders, flicking out at its foot.
+            // from the nape to the shoulders, flicking out at its foot, its
+            // strands straight down it (about 5 mm apart round the nape).
             add(solidGrid(20, 8, (i, j, side) => {
                 const a = Math.PI - M.half + (2 * M.half * i) / 20;
                 const k = j / 8;
@@ -453,19 +648,20 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
                 const edgeIn = Math.min(1, (M.half - Math.abs(a - Math.PI)) / 0.25);
                 const r = M.inner + 0.01 * k + M.flip * k * k + (side ? M.thick * (0.35 + 0.65 * edgeIn) : 0);
                 return [r * Math.sin(a), y, r * Math.cos(a)];
-            }), 'curtain');
+            }), 'curtain', { map: strandMap('mullet:curtain', null, alongV(42), S.size.curtain, { repeat: false }) });
             break;
         }
         case 'ponytail': {
-            add(scalp(sleekEdge, thickness(H.volumes.sleek)), 'scalp');
             const P = H.ponytail;
+            sleek('ponytail', P.tie);
             tie(P.tie);
             tube(P.tail, (s) => P.radius * (1 - s) ** 0.6 + 0.004, 'tail');
             break;
         }
         case 'pigtails': {
-            add(scalp(sleekEdge, thickness(H.volumes.sleek)), 'scalp');
             const P = H.pigtails;
+            // Gathered to both sides: the strands run back to between the ties.
+            sleek('pigtails', [0, P.tie[1], P.tie[2]]);
             for (const side of [-1, 1]) {
                 const flip = ([x, y, z]) => [x * side, y, z];
                 tie(flip(P.tie), 0.012);
@@ -476,10 +672,13 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
         case 'topKnot':
         case 'lowBun':
         case 'spaceBuns': {
-            add(scalp(sleekEdge, thickness(H.volumes.sleek)), 'scalp');
-            for (const [a, t, r] of H.buns[style]) {
+            // Drawn in to the bun (or, for two, to the top of the head
+            // between them); a bun's own strands wind round it.
+            const buns = H.buns[style];
+            sleek(style, buns.length === 1 ? onSphere(1, buns[0][0], buns[0][1]) : [0, 1, -0.2]);
+            for (const [a, t, r] of buns) {
                 const dir = new THREE.Vector3(...onSphere(1, a, t));
-                const bun = add(new THREE.SphereGeometry(r, 14, 10), 'bun', { hides: true });
+                const bun = add(new THREE.SphereGeometry(r, 14, 10), 'bun', { hides: true, map: downMap(12) });
                 bun.position.copy(dir.clone().multiplyScalar(SCALP + r * 0.8));
                 bun.scale.set(1, 0.88, 1);
                 const ring = tie(dir.clone().multiplyScalar(SCALP + 0.004).toArray(), r * 0.55);
@@ -488,22 +687,24 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             break;
         }
         case 'bob': {
-            add(scalp(H.edges.bob, thickness(H.volumes.bob)), 'scalp');
+            cap('bob', 'bob');
             const B = H.bob;
             // Straight down the sides and the back to the jaw, open at the
-            // face, a little fuller toward its ends.
+            // face, a little fuller toward its ends, its strands straight
+            // down it.
             add(solidGrid(30, 8, (i, j, side) => {
                 const a = B.from + ((2 * Math.PI - 2 * B.from) * i) / 30;
                 const k = j / 8;
                 const y = B.top + (B.bottom - B.top) * k;
                 const r = B.inner + B.flare * k * k + (side ? B.thick * (0.9 + 0.1 * k) : 0);
                 return [r * Math.sin(a), y, r * Math.cos(a)];
-            }), 'curtain');
+            }), 'curtain', { map: strandMap('bob:curtain', null, alongV(115), S.size.curtain, { repeat: false }) });
             break;
         }
         case 'braids': {
-            add(scalp(sleekEdge, thickness(H.volumes.sleek)), 'scalp');
             const B = H.braids;
+            // Drawn back and down to the braids' roots behind the ears.
+            sleek('braids', [0, B.start[1] - 0.1, B.start[2] - 0.08]);
             for (const side of [-1, 1]) {
                 const curve = new THREE.CatmullRomCurve3(B.path.map(([x, y, z]) => new THREE.Vector3(x * side, y, z)));
                 // The plaits: lobes along the curve, each leaning the other
@@ -512,7 +713,9 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
                     const s = (k + 0.5) / B.plaits;
                     const p = curve.getPointAt(s);
                     const tangent = curve.getTangentAt(s);
-                    const lobe = add(new THREE.SphereGeometry(B.radius * (1 - 0.35 * s), 10, 8), 'plait');
+                    // A ball's uv runs round (u) and pole to pole (v), and
+                    // the lobe's poles lie along the braid: strands along it.
+                    const lobe = add(new THREE.SphereGeometry(B.radius * (1 - 0.35 * s), 10, 8), 'plait', { map: downMap(5) });
                     lobe.position.copy(p).add(new THREE.Vector3(side * 0.004 * (k % 2 ? 1 : -1), 0, 0));
                     lobe.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent);
                     lobe.scale.set(1, 1.45, 0.85);
@@ -524,7 +727,7 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             break;
         }
         case 'locs': {
-            add(scalp(sleekEdge, thickness(H.volumes.locs)), 'scalp');
+            add(scalp(sleekEdge, thickness(H.volumes.locs)), 'scalp', { map: capMap('locs', sleekEdge, crownFlow) });
             const L = H.locs;
             // Hanging from round the back and the sides of the hairline,
             // longer at the back than by the face.
@@ -542,6 +745,8 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             break;
         }
         case 'cornrows': {
+            // The cap between the rows is too thin for strands; each row
+            // has its own, down its length.
             add(scalp(sleekEdge, thickness(H.volumes.cornrows)), 'scalp');
             const C = H.cornrows;
             // Each row in its own upright plane `x` to one side of the middle,

@@ -34,9 +34,15 @@
  * walls are wound with the surfaces, and the whole solid is turned outward
  * by its signed volume. Along a wrapped seam and at a crown, vertices at one
  * place share one normal, so no shading seam runs down the back.
+ *
+ * Every vertex carries the grid's own coordinates as its uv (column over
+ * `nu`, row over `nv`; a wall's from the grid points it joins), so a map
+ * drawn over the grid (the hair's strands, 2026-10-25) lands where the
+ * grid's `at` would put it.
  */
 export function solidGrid(nu, nv, at, { wrap = false, pole = false } = {}) {
     const positions = [];
+    const uvs = [];
     const index = [];
     const groups = [];
     const surface = (side, flip) => {
@@ -45,6 +51,7 @@ export function solidGrid(nu, nv, at, { wrap = false, pole = false } = {}) {
         for (let i = 0; i <= nu; i++) {
             for (let j = 0; j <= nv; j++) {
                 positions.push(...at(i, j, side));
+                uvs.push(i / nu, j / nv);
                 if (i > 0 && j > 0) {
                     const p = base + i * (nv + 1) + j;
                     const q = base + (i - 1) * (nv + 1) + j;
@@ -71,11 +78,13 @@ export function solidGrid(nu, nv, at, { wrap = false, pole = false } = {}) {
     for (const [[i0, j0], [i1, j1]] of edge) {
         const base = positions.length / 3;
         positions.push(...at(i0, j0, 0), ...at(i0, j0, 1), ...at(i1, j1, 0), ...at(i1, j1, 1));
+        uvs.push(i0 / nu, j0 / nv, i0 / nu, j0 / nv, i1 / nu, j1 / nv, i1 / nu, j1 / nv);
         index.push(base, base + 3, base + 1, base, base + 2, base + 3);
     }
     groups.push([start, index.length - start]);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(outward(positions, index));
     groups.forEach(([s, n], g) => geometry.addGroup(s, n, g));
     geometry.computeVertexNormals();
@@ -125,12 +134,14 @@ function weldNormals(geometry, sets) {
 /**
  * A tube along the curve through `points` ([x, y, z] each), its radius
  * `radius(s)` at `s` 0 (the start) to 1 (the end), `segments` rings along
- * it of `radial` sides each, closed at both ends.
+ * it of `radial` sides each, closed at both ends. Its uv runs round (u) and
+ * along (v), for strands drawn down a tail.
  */
 export function taperTube(points, radius, { segments = 24, radial = 10 } = {}) {
     const curve = new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(...p)));
     const frames = curve.computeFrenetFrames(segments, false);
     const positions = [];
+    const uvs = [];
     const index = [];
     const p = new THREE.Vector3();
     for (let i = 0; i <= segments; i++) {
@@ -146,6 +157,7 @@ export function taperTube(points, radius, { segments = 24, radial = 10 } = {}) {
                 p.y + r * (Math.cos(t) * n.y + Math.sin(t) * b.y),
                 p.z + r * (Math.cos(t) * n.z + Math.sin(t) * b.z)
             );
+            uvs.push(k / radial, s);
         }
         if (i > 0) {
             const a = (i - 1) * radial;
@@ -162,6 +174,7 @@ export function taperTube(points, radius, { segments = 24, radial = 10 } = {}) {
         curve.getPointAt(i / segments, p);
         const middle = positions.length / 3;
         positions.push(p.x, p.y, p.z);
+        uvs.push(0.5, i / segments);
         const ring = i * radial;
         for (let k = 0; k < radial; k++) {
             const k1 = (k + 1) % radial;
@@ -171,6 +184,7 @@ export function taperTube(points, radius, { segments = 24, radial = 10 } = {}) {
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     // Facing out, whichever way the curve's frames turn (2026-10-24: wound
     // inward, a single-sided tail drew only its inside).
     geometry.setIndex(outward(positions, index));

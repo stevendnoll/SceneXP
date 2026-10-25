@@ -40,9 +40,13 @@ export const HAT_SIZE = Object.freeze({
      *  panels with darker seams, a button, and a curved bill, pitched down,
      *  its top a shade darker than the crown, its underside darker still,
      *  and a pale stitch along it, so it reads straight on (preview,
-     *  2026-10-24: level and one color, it was a thin line from the front). */
-    cap: { fit: 'dome', center: [0, 0.026, -0.004], edge: 1.62, tilt: -0.2, seams: 6, bill: { length: 0.074, droop: 0.022, thick: 0.0065, pitch: 0.2, width: 0.86, shade: 0.8 } },
-    trucker: { fit: 'dome', center: [0, 0.03, -0.004], edge: 1.6, tilt: -0.18, seams: 4, mesh: 0xf3f2ee, bill: { length: 0.074, droop: 0.012, thick: 0.0065, pitch: 0.14, width: 0.86, shade: 0.8 } },
+     *  2026-10-24: level and one color, it was a thin line from the front).
+     *  The bill reaches about 9 cm past the rim (Steve's QA, 2026-10-25: at
+     *  6 cm "too short"; a real cap's 7 cm bill scales to 9 on this 24 cm
+     *  head), curving down more at its sides as it goes. `BILL_REACH` holds
+     *  the least past the rim for the tests. */
+    cap: { fit: 'dome', center: [0, 0.026, -0.004], edge: 1.62, tilt: -0.2, seams: 6, bill: { length: 0.105, droop: 0.03, thick: 0.0065, pitch: 0.2, width: 0.86, shade: 0.8 } },
+    trucker: { fit: 'dome', center: [0, 0.03, -0.004], edge: 1.6, tilt: -0.18, seams: 4, mesh: 0xf3f2ee, bill: { length: 0.105, droop: 0.022, thick: 0.0065, pitch: 0.14, width: 0.86, shade: 0.8 } },
     hardHat: { fit: 'dome', center: [0, 0.03, -0.004], edge: 1.46, tilt: -0.1, lift: 0.006, lip: 0.012, peak: 0.032, ridge: { width: 0.012, height: 0.007 } },
     /** Sitting high on the head, over its top (preview, 2026-10-24: fitted
      *  round all the hair from lower down, it was an enormous pancake). */
@@ -64,6 +68,10 @@ export const HAT_SIZE = Object.freeze({
     chef: { fit: 'crown', center: [0, 0, -0.006], base: 0.06, height: 0.05, puff: 1.18, rise: 0.17, pleats: 10 },
     birthday: { fit: 'perch', height: 0.17, radius: 0.055, sink: 0.012, lean: 0.14, stripes: 5, pompom: 0.013 }
 });
+
+/** How far past the rim a ball cap's or a trucker cap's bill reaches, at
+ *  least (meters, along the bill's middle). The ivy cap's stays short. */
+export const BILL_REACH = 0.085;
 
 // ---- Measuring the hair under a hat -------------------------------------------
 
