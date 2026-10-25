@@ -482,7 +482,8 @@ describe('the editor and the way back', () => {
         expect(E.visibleFields(build).map((f) => f.key)).toEqual(['build', 'muscles']);
         const hat = CONFIG.tabs.find((t) => t.id === 'hat');
         expect(E.visibleFields(hat).map((f) => f.key)).toEqual(['hat', 'hatColor']);
-        expect(E.optionsFor('shoes').map((o) => o.id)).toEqual(['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots']);
+        expect(E.optionsFor('shoes').map((o) => o.id)).toEqual(['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots',
+            'sandals', 'flats', 'heels', 'platforms', 'slippers']);
         expect(E.optionsFor('nope')).toEqual([]);
         // A field that needs another shows only while that one does (a hat's
         // color, with no hats to wear, would mean nothing).

@@ -248,7 +248,15 @@ export const SHOES = Object.freeze([
     { id: 'ankleBoots', label: 'Ankle boots', style: 'block' },
     { id: 'workBoots', label: 'Work boots', style: 'block' },
     { id: 'cowboyBoots', label: 'Cowboy boots', style: 'block' },
-    { id: 'tallBoots', label: 'Tall boots', style: 'block' }
+    { id: 'tallBoots', label: 'Tall boots', style: 'block' },
+    // Steve, 2026-10-24: "sandals, high heels, platforms, slippers, etc."
+    // Sandals and flats show the foot in the skin's color; heels tilt the
+    // shoe over a heel; platforms stand the figure up on a thick sole.
+    { id: 'sandals', label: 'Sandals', style: 'block' },
+    { id: 'flats', label: 'Flats', style: 'block' },
+    { id: 'heels', label: 'High heels', style: 'block' },
+    { id: 'platforms', label: 'Platforms', style: 'block' },
+    { id: 'slippers', label: 'Slippers', style: 'block' }
 ]);
 
 /** Black is the color every figure has always worn. */

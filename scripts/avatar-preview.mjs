@@ -120,13 +120,14 @@ await sheet('mouths-facial', [
     { ...fair, mouth: 'bigSmile', facial: 'mustache' }, { ...fair, mouth: 'grin', facial: 'beard' }, { ...fair, mouth: 'surprised', facial: 'goatee' },
     { ...deep, mouth: 'grin', facial: 'stubble' }, { ...fair, mouth: 'smirk', facial: 'beard' }
 ], 'mouth');
-const SHOES = ['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots'];
+const SHOES = ['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots', 'sandals', 'flats', 'heels', 'platforms', 'slippers'];
 await sheet('shoes', SHOES.map((shoes) => ({ shoes, shoeColor: shoes === 'sneakers' ? 'navy' : 'brown' })), 'feet');
 await sheet('shoes-white-black', [{ shoes: 'sneakers', shoeColor: 'white' }, { shoes: 'sneakers', shoeColor: 'black' }, { shoes: 'classic', shoeColor: 'black' },
     { shoes: 'workBoots', shoeColor: 'black' }, { shoes: 'cowboyBoots', shoeColor: 'red', build: 'curvy' }], 'feet');
 await sheet('boots-legs', [
     { shoes: 'ankleBoots' }, { shoes: 'workBoots' }, { shoes: 'cowboyBoots', shoeColor: 'brown' }, { shoes: 'tallBoots', shoeColor: 'black' },
-    { shoes: 'tallBoots', shoeColor: 'brown', bottom: 'skirt', build: 'curvy' }, { shoes: 'cowboyBoots', bottom: 'shorts', muscles: 'buff' }
+    { shoes: 'tallBoots', shoeColor: 'brown', bottom: 'skirt', build: 'curvy' }, { shoes: 'cowboyBoots', bottom: 'shorts', muscles: 'buff' },
+    { shoes: 'heels', shoeColor: 'red', bottom: 'skirt', build: 'curvy' }, { shoes: 'platforms', bottom: 'shorts' }, { shoes: 'sandals', shoeColor: 'brown', bottom: 'shorts' }
 ], 'legs');
 await sheet('clothes', [
     { sleeves: 'tank' }, { sleeves: 'tank', muscles: 'athletic' }, { sleeves: 'tank', muscles: 'buff', bottom: 'shorts' },

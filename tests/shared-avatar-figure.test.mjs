@@ -666,6 +666,67 @@ describe('the pieces (M5), measured', () => {
         }
     });
 
+    test('sandals, flats, heels, platforms and slippers (Steve, 2026-10-24)', () => {
+        const parts = (person, name) => {
+            const out = [];
+            person.traverse((o) => { if (o.name === name) out.push(o); });
+            return out;
+        };
+        const shoesOf = (person) => {
+            const out = [];
+            person.traverse((o) => { if (o.isMesh && o.userData.isShoe) out.push(o); });
+            return out;
+        };
+        const skinOf = (avatar) => avatar.person.getObjectByName('head').children.find((o) => o.userData.isHead).material.color.getHex();
+        const classic = F.createAvatar({ shoes: 'classic' });
+        classic.person.updateMatrixWorld(true);
+        const floorY = Math.min(...shoesOf(classic.person).map((s) => new THREE.Box3().setFromObject(s).min.y));
+        // Sandals and flats show the foot: the block in the skin's color,
+        // with straps or a low upper in the shoe's color.
+        for (const [kind, piece, n] of [['sandals', 'strap', 7], ['flats', 'upper', 1]]) {
+            const avatar = F.createAvatar({ shoes: kind, shoeColor: 'brown' });
+            for (const shoe of shoesOf(avatar.person)) expect(shoe.material.color.getHex()).toBe(skinOf(avatar));
+            expect(parts(avatar.person, piece)).toHaveLength(n * 2);
+            expect(parts(avatar.person, piece)[0].material.color.getHex()).toBe(0x5a3a24);
+        }
+        expect(parts(F.createAvatar({ shoes: 'sandals' }).person, 'sole')).toHaveLength(2);
+        expect(parts(F.createAvatar({ shoes: 'flats' }).person, 'bow')).toHaveLength(2);
+        // Heels: the shoe tilted up at the back, its toe still on the
+        // floor, a heel column from the floor up under its back.
+        const heels = F.createAvatar({ shoes: 'heels' });
+        heels.person.updateMatrixWorld(true);
+        for (const shoe of shoesOf(heels.person)) {
+            expect(shoe.rotation.x).toBeGreaterThan(0.2);
+            const box = new THREE.Box3().setFromObject(shoe);
+            expect(box.min.y).toBeCloseTo(floorY, 3);
+            expect(box.max.y - box.min.y).toBeGreaterThan(0.06 + F.SHOE_SIZE.heels.heel * 0.8);
+        }
+        for (const column of parts(heels.person, 'heel')) {
+            const box = new THREE.Box3().setFromObject(column);
+            expect(box.min.y).toBeCloseTo(floorY, 6);
+        }
+        expect(parts(heels.person, 'heel')).toHaveLength(2);
+        // Platforms: a thick sole under the shoe, and the figure stood up on
+        // it, so the sole's bottom is where a classic shoe's is.
+        const platforms = F.createAvatar({ shoes: 'platforms' });
+        platforms.person.updateMatrixWorld(true);
+        expect(platforms.person.position.y).toBeCloseTo(classic.person.position.y + F.SHOE_SIZE.platforms.sole, 6);
+        for (const sole of parts(platforms.person, 'sole')) {
+            const box = new THREE.Box3().setFromObject(sole);
+            expect(box.min.y).toBeCloseTo(floorY, 6);
+            expect(box.max.y - box.min.y).toBeCloseTo(F.SHOE_SIZE.platforms.sole, 6);
+        }
+        for (const shoe of shoesOf(platforms.person)) expect(new THREE.Box3().setFromObject(shoe).min.y).toBeCloseTo(floorY + F.SHOE_SIZE.platforms.sole, 6);
+        // Every other shoe leaves the figure where the rig stands it.
+        expect(heels.person.position.y).toBe(classic.person.position.y);
+        // Slippers: a fleece cuff and a rounded toe on each.
+        const slippers = F.createAvatar({ shoes: 'slippers' });
+        expect(parts(slippers.person, 'cuff')).toHaveLength(2);
+        expect(parts(slippers.person, 'toe')).toHaveLength(2);
+        expect(parts(slippers.person, 'cuff')[0].material.color.getHex()).toBe(F.SHOE_SIZE.slippers.fleece);
+        for (const avatar of [classic, heels, platforms, slippers]) avatar.dispose();
+    });
+
     test('no piece casts a shadow (a hat\'s would darken the whole face)', () => {
         const avatar = F.createAvatar({ hat: 'sunHat', glasses: 'sunglasses', facial: 'beard', cheeks: 'blush', eyeShape: 'sleepy' });
         for (const name of ['hat', 'glasses', 'facial', 'brows', 'cheeks', 'mouth', 'lid']) {

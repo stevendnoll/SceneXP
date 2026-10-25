@@ -960,6 +960,88 @@ function dressBoots(person, kind, color) {
     return shoes.length;
 }
 
+/**
+ * More shoes (Steve, 2026-10-24: "sandals, high heels, platforms, slippers,
+ * etc."), each from the rig's block shoe, in a leg's coordinates:
+ *
+ *   sandals     the foot itself (the block in the skin's color) on a thin
+ *               sole, held by a toe strap, an instep strap and a heel strap
+ *   flats       the foot in a low shoe to `rise`, a bow on the toe
+ *   heels       the shoe tilted up at the back by `heel` over a slim heel
+ *               column, its toe still on the floor (the figure's height is
+ *               unchanged)
+ *   platforms   a thick sole `sole` under the shoe, and the whole figure
+ *               stood up on it (platforms make you taller)
+ *   slippers    a fleece cuff round the opening and a rounded toe
+ */
+export const SHOE_SIZE = Object.freeze({
+    sandals: { sole: 0.012, proud: 0.003, strap: 0.005, straps: [0.78, 0.42], heelStrap: 0.72 },
+    flats: { rise: 0.026, proud: 0.002, bow: [0.018, 0.006, 0.007] },
+    heels: { heel: 0.055, column: [0.022, 0.024], overlap: 0.014 },
+    platforms: { sole: 0.04, proud: 0.004, shade: 0.72 },
+    slippers: { cuff: 0.009, fleece: 0xf4ead8, toe: 0.024 }
+});
+
+function dressShoes(person, kind, color, skin) {
+    const spec = SHOE_SIZE[kind];
+    const shoeMat = new THREE.MeshStandardMaterial({ color, roughness: kind === 'slippers' ? 1 : 0.6 });
+    const dark = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(spec.shade || 0.6), roughness: 0.75 });
+    let lift = 0;
+    for (const { shoe, w, h, l, floor, z } of blockShoes(person)) {
+        const leg = shoe.parent;
+        if (kind === 'sandals') {
+            shoe.material = skin;
+            leg.add(block([w + 2 * spec.proud, spec.sole, l + 2 * spec.proud], floor, z, shoeMat, 'sole'));
+            // Each strap: a bar over the top of the foot, and a bar down each
+            // side, a little proud of it.
+            for (const f of spec.straps) {
+                const zc = z - l / 2 + f * l;
+                leg.add(block([w + 0.008, spec.strap, 0.012], floor + h, zc, shoeMat, 'strap'));
+                for (const s of [-1, 1]) {
+                    const bar = block([0.004, h * 0.6, 0.012], floor + h * 0.4, zc, shoeMat, 'strap');
+                    bar.position.x = s * (w / 2 + 0.002);
+                    leg.add(bar);
+                }
+            }
+            const back = block([w + 0.008, spec.strap, 0.004], floor + h * spec.heelStrap, z - l / 2 - 0.002, shoeMat, 'strap');
+            leg.add(back);
+        } else if (kind === 'flats') {
+            shoe.material = skin;
+            leg.add(block([w + 2 * spec.proud, spec.rise, l + 2 * spec.proud], floor, z, shoeMat, 'upper'));
+            leg.add(block(spec.bow, floor + spec.rise - 0.002, z + l / 2 - 0.012, dark, 'bow'));
+        } else if (kind === 'heels') {
+            // Tilted about its toe: turned up at the back by `heel`, and
+            // raised so the toe's bottom edge stays on the floor.
+            const angle = Math.asin(Math.min(0.9, spec.heel / l));
+            shoe.rotation.x = angle;
+            shoe.position.y = floor + (h / 2) * Math.cos(angle) + (l / 2) * Math.sin(angle);
+            shoe.position.z = z - (h / 2) * Math.sin(angle);
+            const column = block([spec.column[0], spec.heel + spec.overlap, spec.column[1]], floor, z - l / 2 + spec.column[1] / 2 + 0.004, dark, 'heel');
+            leg.add(column);
+        } else if (kind === 'platforms') {
+            leg.add(block([w + 2 * spec.proud, spec.sole, l + 2 * spec.proud], floor - spec.sole, z, dark, 'sole'));
+            lift = spec.sole;
+        } else if (kind === 'slippers') {
+            const fleece = new THREE.MeshStandardMaterial({ color: spec.fleece, roughness: 1 });
+            const cuff = new THREE.Mesh(new THREE.TorusGeometry(w / 2 + 0.002, spec.cuff, 8, 18), fleece);
+            cuff.rotation.x = Math.PI / 2;
+            cuff.scale.set(1, 1.15, 0.75);
+            cuff.position.set(0, floor + h + 0.002, z - l / 2 + w / 2 + 0.01);
+            cuff.name = 'cuff';
+            cuff.castShadow = true;
+            leg.add(cuff);
+            const toe = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), shoeMat);
+            toe.scale.set(w / 2 + 0.001, h / 2 + 0.001, spec.toe);
+            toe.position.set(0, floor + h / 2, z + l / 2 - 0.004);
+            toe.name = 'toe';
+            toe.castShadow = true;
+            leg.add(toe);
+            shoe.material = shoeMat;
+        }
+    }
+    return lift;
+}
+
 // ---- The wave -----------------------------------------------------------------
 
 /** The rig's resting arm: splayed a little, a touch forward, the elbow
@@ -1062,6 +1144,8 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     const light = (((shoeColor >> 16) & 255) * 0.299 + ((shoeColor >> 8) & 255) * 0.587 + (shoeColor & 255) * 0.114) / 255;
     if (a.shoes === 'sneakers') dressSneakers(person, light > 0.85);
     else if (BOOT_SIZE[a.shoes]) dressBoots(person, a.shoes, shoeColor);
+    // Platforms stand the whole figure up by their sole.
+    else if (SHOE_SIZE[a.shoes]) person.position.y += dressShoes(person, a.shoes, shoeColor, skin);
 
     const group = new THREE.Group();
     group.name = 'avatar';

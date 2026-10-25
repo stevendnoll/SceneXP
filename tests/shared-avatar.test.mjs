@@ -120,7 +120,8 @@ describe('the lists', () => {
         // a swatch to show; every other lip color has one.
         for (const o of A.LIP_COLORS) expect(o.id === 'natural' ? o.color === null && o.swatch > 0 : o.color > 0).toBe(true);
         expect(A.BUILDS.map((o) => o.label)).toEqual(['Straight', 'Slim', 'Curvy']);
-        expect(A.SHOES.map((o) => o.id)).toEqual(['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots']);
+        expect(A.SHOES.map((o) => o.id)).toEqual(['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots',
+            'sandals', 'flats', 'heels', 'platforms', 'slippers']);
         // Named by style, never by who wears them (Steve, 2026-10-24).
         for (const o of A.SHOES) expect(o.label).not.toMatch(/\b(men|women|man|woman|boy|girl|lady|ladies)/i);
         expect(A.SHOE_COLORS.map((o) => o.id)).toEqual(['black', 'brown', 'white', 'navy', 'red']);
