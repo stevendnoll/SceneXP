@@ -173,7 +173,7 @@ describe('every hat over every hair style, on the figure', () => {
     });
 
     test('what a hat would squash is tucked away under it, and comes back without it', () => {
-        for (const [length, piece] of [['topKnot', 'bun'], ['spaceBuns', 'bun'], ['mohawk', 'fin'], ['spiky', 'spike'], ['curly', 'curl']]) {
+        for (const [length, piece] of [['topKnot', 'bun'], ['spaceBuns', 'bun'], ['mohawk', 'fin'], ['spiky', 'spike'], ['quiff', 'crest'], ['leftPart', 'wave']]) {
             const shown = (look) => {
                 const hair = F.createAvatar(look).person.getObjectByName('hair');
                 return hair.children.filter((m) => m.name === piece).some((m) => m.visible);

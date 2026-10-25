@@ -82,6 +82,11 @@ export const HAIR_SIZE = Object.freeze({
         sleek: { front: 0.0035, side: 0.0035, back: 0.004, crown: 0.002, fade: 0.25, min: 0.0006 },
         shaved: { front: 0.0013, side: 0.0013, back: 0.0013, crown: 0, fade: 0.15, min: 0.0005 },
         afro: { front: 0.03, side: 0.04, back: 0.045, crown: 0.02, fade: 0.45, min: 0.001, texture: 0.06 },
+        /** Curls (Steve's QA, 2026-10-24: balls on a short cut "just looks
+         *  like a bunch of spheres"): one full cap, its surface lumpy with
+         *  curl-sized bumps (`curl` deep, two octaves), full to near the
+         *  hairline. */
+        curly: { front: 0.022, side: 0.024, back: 0.027, crown: 0.012, fade: 0.3, min: 0.001, curl: 0.3 },
         // Full at the sides, so the curtain grows out of it with no step
         // (preview, 2026-10-24: a thin cap over a thick curtain read as
         // headphones).
@@ -128,7 +133,7 @@ export const HAIR_SIZE = Object.freeze({
         wave: { heavy: { lift: 0.04, crest: 4.5, tail: 12 }, light: { lift: 0.016, crest: 3.2, tail: 6 }, center: { lift: 0.026, crest: 3.7, tail: 8 } }
     },
     spikes: { count: 26, height: 0.028, radius: 0.0095, reach: 0.78 },
-    curls: { count: 46, radius: 0.0125, reach: 0.86 },
+    curls: { grid: [144, 36] },
     /** A fin in the head's middle plane, `front` radians forward of the
      *  crown (the hairline) back over the top to `back` (the nape). */
     mohawk: { front: 0.95, back: -1.95, height: 0.05, width: 0.014 },
@@ -165,7 +170,15 @@ function thickness(v) {
         const even = (v.front + v.back + 2 * v.side) / 4;
         const toward = even + (v.front * front + v.back * back + v.side * side - even) * smoothstep(s / 0.3);
         const fall = 1 - smoothstep((s - (1 - v.fade)) / v.fade);
-        const texture = v.texture ? 1 + v.texture * Math.sin(9 * a) * Math.sin(11 * s * Math.PI) : 1;
+        let texture = v.texture ? 1 + v.texture * Math.sin(9 * a) * Math.sin(11 * s * Math.PI) : 1;
+        if (v.curl) {
+            // Lumps about a curl across, two sizes, offset so they never
+            // line up in rows; smooth at the crown, where the columns meet.
+            const bump = 0.6 * Math.sin(16 * a + 1.3 + 2 * s) * Math.sin(9 * Math.PI * s + 0.4) + 0.4 * Math.sin(27 * a + 2.9 - 3 * s) * Math.cos(14 * Math.PI * s);
+            // Nothing at the crown itself, where the cap's columns must
+            // still meet at one point for the solid to close.
+            texture *= 1 + v.curl * bump * smoothstep(s / 0.1);
+        }
         return Math.max(v.min, (toward + v.crown * (1 - s) ** 2) * fall * texture);
     };
 }
@@ -405,15 +418,10 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             }
             break;
         }
-        case 'curly': {
-            cap('short', 'short');
-            const C = H.curls;
-            for (const [a, t] of spread(C.count, H.edges.short, C.reach)) {
-                const curl = add(new THREE.SphereGeometry(C.radius, 8, 6), 'curl', { hides: true });
-                curl.position.set(...onSphere(SCALP + 0.006, a, t));
-            }
+        case 'curly':
+            // One lumpy cap, on a grid fine enough for its curls.
+            add(scalp(H.edges.short, thickness(H.volumes.curly), { nu: H.curls.grid[0], nv: H.curls.grid[1] }), 'scalp');
             break;
-        }
         case 'afro':
             cap('afro', 'afro');
             break;

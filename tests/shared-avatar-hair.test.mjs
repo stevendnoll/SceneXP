@@ -119,7 +119,19 @@ test('the short cut thins almost to nothing at its hairline, all the way round',
 test('what a hat would squash is tagged for it to tuck away, and the long styles hang', () => {
     const hides = (style) => pieces(H.buildHair(style, 0x332211)).filter((p) => p.mesh.userData.hatHides).map((p) => p.mesh.name);
     expect(hides('spiky')).toEqual(expect.arrayContaining(['spike']));
-    expect(hides('curly')).toEqual(expect.arrayContaining(['curl']));
+    // Curls are one lumpy cap, nothing to tuck away (Steve, 2026-10-24:
+    // balls on a cut "just looks like a bunch of spheres"): its surface
+    // varies by more than a centimeter over the top of the head, where a
+    // smooth cut's varies by millimeters.
+    expect(hides('curly')).toEqual([]);
+    const relief = (style) => {
+        const scalp = pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'scalp');
+        const over = scalp.pts.filter((p) => p.length() > H.SCALP + 1e-5 && p.y > 0.06).map((p) => p.length() - H.SCALP);
+        return Math.max(...over) - Math.min(...over);
+    };
+    expect(relief('curly')).toBeGreaterThan(0.012);
+    expect(relief('short')).toBeLessThan(relief('curly') * 0.6);
+    expect(pieces(H.buildHair('curly', 0x332211)).every((p) => p.mesh.name === 'scalp')).toBe(true);
     expect(hides('mohawk')).toEqual(['fin']);
     expect(hides('quiff')).toEqual(['crest']);
     for (const style of ['leftPart', 'rightPart', 'centerPart']) expect(hides(style)).toEqual(['wave']);
