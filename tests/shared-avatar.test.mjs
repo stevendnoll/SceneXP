@@ -94,8 +94,13 @@ describe('the lists', () => {
         expect(A.SHIRTS).toBe(SHIRTS);
         expect(A.PANTS).toBe(PANTS);
         expect(A.SKINS).toBe(SKINS);
-        // More styles (Steve's QA, 2026-10-24), cast-1.0.0's four first.
-        expect(A.HAIR_LENGTHS.slice(0, HAIR_LENGTHS.length)).toEqual([...HAIR_LENGTHS]);
+        // More styles (Steve's QA, 2026-10-24), cast-1.0.0's four first, by
+        // id; the rig's long hair is called "Long with bangs" here since the
+        // long styles without them (2026-10-25).
+        expect(A.HAIR_LENGTHS.slice(0, HAIR_LENGTHS.length).map((o) => o.id)).toEqual(HAIR_LENGTHS.map((o) => o.id));
+        expect(A.HAIR_LENGTHS.slice(0, 3)).toEqual(HAIR_LENGTHS.slice(0, 3));
+        expect(A.optionOf(A.HAIR_LENGTHS, 'long').label).toBe('Long with bangs');
+        expect(A.HAIR_LENGTHS.map((o) => o.id)).toEqual(expect.arrayContaining(['longCenter', 'longSide', 'longBack']));
         expect(A.HAIR_LENGTHS.map((o) => o.id)).toEqual(expect.arrayContaining(['mohawk', 'mullet', 'ponytail', 'afro', 'locs', 'cornrows']));
         expect(A.HATS.map((o) => o.id)).toEqual(['none', 'cap', 'beanie', 'sunHat', 'trucker', 'ivyCap', 'beret', 'fedora', 'cowboy', 'topHat', 'fez', 'chef', 'hardHat', 'birthday']);
         // More hair colors (Steve's QA, 2026-10-24), cast-1.0.0's six first,
@@ -114,14 +119,17 @@ describe('the lists', () => {
         expect(A.MOUTHS.map((o) => o.id)).toEqual(['smile', 'bigSmile', 'grin', 'smirk', 'surprised']);
         expect(A.LIP_COLORS.map((o) => o.id)).toEqual(['natural', 'rose', 'red', 'berry', 'softPink']);
         expect(A.MUSCLES.map((o) => o.label)).toEqual(['Standard', 'Athletic', 'Buff']);
-        expect(A.SLEEVES.map((o) => o.id)).toEqual(['long', 'short', 'tank']);
-        expect(A.BOTTOMS.map((o) => o.id)).toEqual(['pants', 'skirt', 'shorts']);
+        // The first three of each are the ones links made before hold; the
+        // wardrobe's follow (2026-10-25).
+        expect(A.SLEEVES.map((o) => o.id)).toEqual(['long', 'short', 'tank', 'sweater', 'turtleneck', 'jersey', 'buttonDown', 'hoodie']);
+        expect(A.BOTTOMS.map((o) => o.id)).toEqual(['pants', 'skirt', 'shorts', 'cargoPants', 'cargoShorts', 'sweatpants', 'leggings', 'basketballShorts', 'longSkirt']);
+        for (const o of A.BOTTOMS) expect(['pants', 'shorts', 'skirt']).toContain(o.kind);
         // Natural lips have no color of their own (they are the skin's), only
         // a swatch to show; every other lip color has one.
         for (const o of A.LIP_COLORS) expect(o.id === 'natural' ? o.color === null && o.swatch > 0 : o.color > 0).toBe(true);
         expect(A.BUILDS.map((o) => o.label)).toEqual(['Straight', 'Slim', 'Curvy']);
         expect(A.SHOES.map((o) => o.id)).toEqual(['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots',
-            'sandals', 'flats', 'heels', 'platforms', 'slippers']);
+            'sandals', 'flats', 'heels', 'platforms', 'slippers', 'crocs', 'highTops', 'hikingBoots', 'cleats']);
         // Named by style, never by who wears them (Steve, 2026-10-24).
         for (const o of A.SHOES) expect(o.label).not.toMatch(/\b(men|women|man|woman|boy|girl|lady|ladies)/i);
         expect(A.SHOE_COLORS.map((o) => o.id)).toEqual(['black', 'brown', 'white', 'navy', 'red']);

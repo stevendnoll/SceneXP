@@ -36,12 +36,17 @@
  */
 
 import {
-    personConfig, withOverrides, normalizeAvatar, validPortraitSrc, colorOf
+    personConfig, withOverrides, normalizeAvatar, validPortraitSrc, colorOf, optionOf, BOTTOMS
 } from './avatar-1.0.0.min.js';
 import { createPerson } from './people-1.0.0.min.js';
-import { eachVertex } from './avatar-shapes-1.0.0.min.js';
+import { eachVertex, solidGrid } from './avatar-shapes-1.0.0.min.js';
 import { buildHair, HAIR_DRAWN } from './avatar-hair-1.0.0.min.js';
 import { buildHat, HAT_SIZE, trimUnder } from './avatar-hats-1.0.0.min.js';
+import {
+    block, legParts, blockShoes, shaft, EXTRA_SHOES, dressExtraShoes, SHIRT_SIZE, dressShirt, BOTTOM_SIZE, dressBottom
+} from './avatar-wardrobe-1.0.0.min.js';
+
+export { EXTRA_SHOES, SHIRT_SIZE, BOTTOM_SIZE };
 
 // The hats and the hair are their own parts (2026-10-24); these are passed
 // on for the scenes and the tests that read them here.
@@ -503,34 +508,24 @@ function fitSkirt(person, skirt) {
     return k;
 }
 
-/** A leg's parts by what they are: the thigh and the shin (the upper and
- *  lower cylinders), the knee, and the shoe. THE RIG'S OWN PARTS ONLY: they
- *  are the leg's unnamed meshes, and everything this part adds is named.
- *  (Steve's QA, 2026-10-24: in shorts the hem was taken for the shin, and
- *  every boot came out the width of the hem.) */
-function legParts(leg) {
-    const cylinders = leg.children.filter((m) => m.isMesh && !m.name && m.geometry.type === 'CylinderGeometry')
-        .sort((a, b) => b.position.y - a.position.y);
-    return {
-        thigh: cylinders[0],
-        shin: cylinders[1],
-        knee: leg.children.find((m) => m.isMesh && !m.name && m.geometry.type === 'SphereGeometry'),
-        shoe: leg.children.find((m) => m.userData.isShoe)
-    };
-}
+// A leg's parts (`legParts`, avatar-wardrobe) are THE RIG'S OWN PARTS ONLY:
+// the leg's unnamed meshes, and everything this part adds is named. (Steve's
+// QA, 2026-10-24: in shorts the hem was taken for the shin, and every boot
+// came out the width of the hem.)
 
 /**
  * Bare legs: under a skirt, the whole leg is skin (Steve's QA, 2026-10-24:
  * the rig colored it the skirt's, as matching tights); in shorts the knee
  * and the shin are, and the thigh keeps the shorts' color, finished with a
- * hem a little proud of it at the knee.
+ * hem a little proud of it at the knee. `kind` is the bottom's kind
+ * (avatar-1.0.0's BOTTOMS: pants, skirt or shorts).
  */
-function dressLegs(person, bottom, skin) {
+function dressLegs(person, kind, skin) {
     for (const leg of person.children.filter((o) => o.userData.isLeg)) {
         const { thigh, shin, knee } = legParts(leg);
         knee.material = skin;
         shin.material = skin;
-        if (bottom === 'skirt') {
+        if (kind === 'skirt') {
             thigh.material = skin;
             continue;
         }
@@ -856,27 +851,9 @@ export const SNEAKER_SIZE = Object.freeze({
     trim: 0xf4f3ef, trimOnWhite: 0xc9c5bd
 });
 
-/** A box `size` [w, h, l] in `material`, its bottom at `y` and middle at `z`
- *  in a leg's coordinates, named. */
-function block(size, y, z, material, name) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
-    m.position.set(0, y + size[1] / 2, z);
-    m.name = name;
-    m.castShadow = true;
-    return m;
-}
-
-/** Each block shoe, with its leg and its box's measures. */
-function blockShoes(person) {
-    const out = [];
-    for (const leg of person.children.filter((o) => o.userData.isLeg)) {
-        const parts = legParts(leg);
-        if (!parts.shoe || !parts.shoe.isMesh) continue;
-        const { width: w, height: h, depth: l } = parts.shoe.geometry.parameters;
-        out.push({ leg, ...parts, w, h, l, floor: parts.shoe.position.y - h / 2, z: parts.shoe.position.z });
-    }
-    return out;
-}
+// `block` (a box standing on `y` at `z` in a leg's coordinates) and
+// `blockShoes` are avatar-wardrobe's now (2026-10-25), shared with the shoes
+// drawn there.
 
 function dressSneakers(person, whiteShoe) {
     const S = SNEAKER_SIZE;
@@ -912,19 +889,7 @@ export const BOOT_SIZE = Object.freeze({
     shade: 0.5
 });
 
-/** A shaft round the shin from `y0` up to `y1` (a leg's coordinates),
- *  `over` meters proud of it, its top widened by `flare`. */
-function shaft(shin, y0, y1, over, material, flare = 0) {
-    const { radiusTop, radiusBottom, height } = shin.geometry.parameters;
-    const low = shin.position.y - height / 2;
-    const rAt = (y) => radiusBottom + ((y - low) / height) * (radiusTop - radiusBottom);
-    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rAt(y1) + over + flare, rAt(y0) + over, y1 - y0, 16), material);
-    mesh.position.set(shin.position.x, (y0 + y1) / 2, shin.position.z);
-    mesh.name = 'shaft';
-    mesh.castShadow = true;
-    mesh.userData.over = over;
-    return mesh;
-}
+// `shaft` (a boot's shaft round the shin) is avatar-wardrobe's too.
 
 function dressBoots(person, kind, color) {
     const B = BOOT_SIZE;
@@ -991,9 +956,14 @@ function dressBoots(person, kind, color) {
  *   sandals     the foot itself (the block in the skin's color) on a thin
  *               sole, held by a toe strap, an instep strap and a heel strap
  *   flats       the foot in a low shoe to `rise`, a bow on the toe
- *   heels       the shoe tilted up at the back by `heel` over a slim heel
- *               column, its toe still on the floor (the figure's height is
- *               unchanged)
+ *   heels       the shoe tilted up at the back by `heel` over a slim round
+ *               heel column (`column` its radius at the top and the floor),
+ *               its toe still on the floor (the figure's height is
+ *               unchanged), the block itself scaled by `body` (height,
+ *               length), and a pointed toe `toe` long laid flat on the
+ *               floor in front of it, tapering to a rounded point `tip` wide
+ *               and `tipHeight` high (Steve's QA, 2026-10-25: "pointy toes...
+ *               the heel should be round instead of square")
  *   platforms   a thick sole `sole` under the shoe, and the whole figure
  *               stood up on it (platforms make you taller)
  *   slippers    a fleece cuff round the opening and a rounded toe
@@ -1001,7 +971,7 @@ function dressBoots(person, kind, color) {
 export const SHOE_SIZE = Object.freeze({
     sandals: { sole: 0.012, proud: 0.003, strap: 0.005, straps: [0.78, 0.42], heelStrap: 0.72 },
     flats: { rise: 0.026, proud: 0.002, bow: [0.018, 0.006, 0.007] },
-    heels: { heel: 0.055, column: [0.022, 0.024], overlap: 0.014 },
+    heels: { heel: 0.055, column: [0.012, 0.008], overlap: 0.014, body: [0.7, 0.78], toe: 0.05, tip: 0.004, tipHeight: 0.007 },
     platforms: { sole: 0.04, proud: 0.004, shade: 0.72 },
     slippers: { cuff: 0.009, fleece: 0xf4ead8, toe: 0.024 }
 });
@@ -1036,12 +1006,38 @@ function dressShoes(person, kind, color, skin) {
         } else if (kind === 'heels') {
             // Tilted about its toe: turned up at the back by `heel`, and
             // raised so the toe's bottom edge stays on the floor.
-            const angle = Math.asin(Math.min(0.9, spec.heel / l));
+            // A lower, shorter block than the rig's (`body`), so with the
+            // toe it is a shoe's length and not a ramp (preview,
+            // 2026-10-25). Its toe's bottom edge stays where the block's
+            // was, on the floor; its back rises by `heel`.
+            shoe.scale.set(1, spec.body[0], spec.body[1]);
+            const hh = h * spec.body[0];
+            const ll = l * spec.body[1];
+            const angle = Math.asin(Math.min(0.9, spec.heel / ll));
+            const zf = z + l / 2;
             shoe.rotation.x = angle;
-            shoe.position.y = floor + (h / 2) * Math.cos(angle) + (l / 2) * Math.sin(angle);
-            shoe.position.z = z - (h / 2) * Math.sin(angle);
-            const column = block([spec.column[0], spec.heel + spec.overlap, spec.column[1]], floor, z - l / 2 + spec.column[1] / 2 + 0.004, dark, 'heel');
+            shoe.position.y = floor + (hh / 2) * Math.cos(angle) + (ll / 2) * Math.sin(angle);
+            shoe.position.z = zf - (ll / 2) * Math.cos(angle) + (hh / 2) * Math.sin(angle);
+            const column = new THREE.Mesh(new THREE.CylinderGeometry(spec.column[0], spec.column[1], spec.heel + spec.overlap, 14), dark);
+            column.position.set(0, floor + (spec.heel + spec.overlap) / 2, zf - ll * Math.cos(angle) + spec.column[0] + 0.006);
+            column.name = 'heel';
+            column.castShadow = true;
             leg.add(column);
+            // The pointed toe: a closed wedge from the tilted block's front
+            // face (its bottom edge on the floor at the toe; pivoted about
+            // that edge, the face leans FORWARD as it rises) out along the
+            // floor to a rounded point.
+            const tan = Math.tan(angle);
+            const toe = new THREE.Mesh(solidGrid(8, 6, (i, j, side) => {
+                const u = -1 + (2 * i) / 8;
+                const v = j / 6;
+                const top = side ? hh * Math.cos(angle) * (1 - v) ** 1.3 + spec.tipHeight * v : 0;
+                const half = (w / 2) * (1 - v) ** 0.6 + (spec.tip / 2) * v;
+                return [u * half, floor + top, zf + top * tan + spec.toe * v * (1 - 0.12 * u * u)];
+            }), shoeMat);
+            toe.name = 'toe';
+            toe.castShadow = true;
+            leg.add(toe);
         } else if (kind === 'platforms') {
             leg.add(block([w + 2 * spec.proud, spec.sole, l + 2 * spec.proud], floor - spec.sole, z, dark, 'sole'));
             lift = spec.sole;
@@ -1123,10 +1119,14 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     const head = person.children.find((o) => o.userData.isHead);
     // The skin's own material, for bare legs and arms.
     const skin = head.material;
-    if (a.bottom !== 'pants') dressLegs(person, a.bottom, skin);
+    const bottomKind = optionOf(BOTTOMS, a.bottom).kind;
+    if (bottomKind !== 'pants') dressLegs(person, bottomKind, skin);
     if (a.sleeves === 'tank') dressTank(person, skin);
     if (a.muscles === 'athletic') strengthenArms(person, ATHLETIC_ARMS);
-    if (a.bottom === 'skirt') fitSkirt(person, person.children.find((o) => o.userData.isSkirt));
+    if (bottomKind === 'skirt') fitSkirt(person, person.children.find((o) => o.userData.isSkirt));
+    // The wardrobe's shirts and bottoms (2026-10-25), over the rig's own.
+    if (SHIRT_SIZE[a.sleeves]) dressShirt(person, a.sleeves, colorOf('shirt', a.shirt));
+    if (BOTTOM_SIZE[a.bottom]) dressBottom(person, a.bottom, colorOf('bottomColor', a.bottomColor));
 
     person.traverse((o) => {
         if (o.isMesh) o.castShadow = true;
@@ -1168,8 +1168,9 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     const light = (((shoeColor >> 16) & 255) * 0.299 + ((shoeColor >> 8) & 255) * 0.587 + (shoeColor & 255) * 0.114) / 255;
     if (a.shoes === 'sneakers') dressSneakers(person, light > 0.85);
     else if (BOOT_SIZE[a.shoes]) dressBoots(person, a.shoes, shoeColor);
-    // Platforms stand the whole figure up by their sole.
+    // Platforms stand the whole figure up by their sole, cleats by their studs.
     else if (SHOE_SIZE[a.shoes]) person.position.y += dressShoes(person, a.shoes, shoeColor, skin);
+    else if (EXTRA_SHOES[a.shoes]) person.position.y += dressExtraShoes(person, a.shoes, shoeColor, skin);
 
     const group = new THREE.Group();
     group.name = 'avatar';

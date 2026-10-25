@@ -40,7 +40,9 @@ export { SHIRTS, PANTS, SKINS, optionOf };
  * Named by style, never by who wears them.
  */
 export const HAIR_LENGTHS = Object.freeze([
-    ...CAST_STYLES,
+    // The rig's long hair has bangs baked in, so it says so now that there
+    // are long styles without them (Steve's QA, 2026-10-25). Same id.
+    ...CAST_STYLES.map((o) => (o.id === 'long' ? { ...o, label: 'Long with bangs' } : o)),
     { id: 'quiff', label: 'Quiff' },
     { id: 'spiky', label: 'Spiky' },
     { id: 'curly', label: 'Curly' },
@@ -59,7 +61,12 @@ export const HAIR_LENGTHS = Object.freeze([
     // Parted (Steve's QA round 5, 2026-10-24): the wearer's left or right.
     { id: 'leftPart', label: 'Left part' },
     { id: 'rightPart', label: 'Right part' },
-    { id: 'centerPart', label: 'Center part' }
+    { id: 'centerPart', label: 'Center part' },
+    // Long without bangs (Steve's QA, 2026-10-25: "some men have long hair
+    // parted in the center with no bangs"): parted, or swept back.
+    { id: 'longCenter', label: 'Long, center part' },
+    { id: 'longSide', label: 'Long, side part' },
+    { id: 'longBack', label: 'Long, swept back' }
 ]);
 
 /**
@@ -224,15 +231,35 @@ export const BUILDS = Object.freeze([
 /** The shirt's style, by its sleeves (the field keeps its first name,
  *  `sleeves`, so links made before the tank top still read). */
 export const SLEEVES = Object.freeze([
-    { id: 'long', label: 'Long sleeves' },
+    { id: 'long', label: 'Long sleeves', long: true },
     { id: 'short', label: 'Short sleeves' },
-    { id: 'tank', label: 'Tank top' }
+    { id: 'tank', label: 'Tank top' },
+    // Steve's QA, 2026-10-25: "sweaters, turtlenecks, sports jerseys,
+    // button-down dress shirts, hoodies". Drawn by avatar-wardrobe over the
+    // rig's shirt; `long` ones cover the forearms, the button-down asks the
+    // rig for its placket and buttons (`dressShirt`). Said in a sentence by
+    // `said` ("a teal sweater").
+    { id: 'sweater', label: 'Sweater', long: true, said: 'sweater' },
+    { id: 'turtleneck', label: 'Turtleneck', long: true, said: 'turtleneck' },
+    { id: 'jersey', label: 'Sports jersey', said: 'sports jersey' },
+    { id: 'buttonDown', label: 'Button-down shirt', long: true, dressShirt: true, said: 'button-down shirt' },
+    { id: 'hoodie', label: 'Hoodie', long: true, said: 'hoodie' }
 ]);
 
+/** The bottoms, each of a `kind` the figure dresses the legs for: pants
+ *  (trousers to the shoe), shorts (bare below the knee, a hem) or a skirt
+ *  (bare legs). Appended 2026-10-25 (Steve's QA: "cargo shorts/pants, sweat
+ *  pants, leggings, basketball shorts"); drawn by avatar-wardrobe. */
 export const BOTTOMS = Object.freeze([
-    { id: 'pants', label: 'Pants' },
-    { id: 'skirt', label: 'Skirt' },
-    { id: 'shorts', label: 'Shorts' }
+    { id: 'pants', label: 'Pants', kind: 'pants' },
+    { id: 'skirt', label: 'Skirt', kind: 'skirt' },
+    { id: 'shorts', label: 'Shorts', kind: 'shorts' },
+    { id: 'cargoPants', label: 'Cargo pants', kind: 'pants' },
+    { id: 'cargoShorts', label: 'Cargo shorts', kind: 'shorts' },
+    { id: 'sweatpants', label: 'Sweatpants', kind: 'pants' },
+    { id: 'leggings', label: 'Leggings', kind: 'pants' },
+    { id: 'basketballShorts', label: 'Basketball shorts', kind: 'shorts' },
+    { id: 'longSkirt', label: 'Long skirt', kind: 'skirt' }
 ]);
 
 /** The shoes, and the rig's `shoeStyle` each starts from. Sneakers are
@@ -256,7 +283,13 @@ export const SHOES = Object.freeze([
     { id: 'flats', label: 'Flats', style: 'block' },
     { id: 'heels', label: 'High heels', style: 'block' },
     { id: 'platforms', label: 'Platforms', style: 'block' },
-    { id: 'slippers', label: 'Slippers', style: 'block' }
+    { id: 'slippers', label: 'Slippers', style: 'block' },
+    // Steve's QA, 2026-10-25: "crocs, basketball shoes, hiking boots, sports
+    // cleats". Drawn by avatar-wardrobe over the block.
+    { id: 'crocs', label: 'Clogs', style: 'block' },
+    { id: 'highTops', label: 'Basketball shoes', style: 'block' },
+    { id: 'hikingBoots', label: 'Hiking boots', style: 'block' },
+    { id: 'cleats', label: 'Cleats', style: 'block' }
 ]);
 
 /** Black is the color every figure has always worn. */
@@ -463,11 +496,13 @@ export function personConfig(avatar, overrides = {}) {
     const a = withOverrides(avatar, overrides);
     const shirt = colorOf('shirt', a.shirt);
     const build = optionOf(BUILDS, a.build);
+    const sleeves = optionOf(SLEEVES, a.sleeves);
     return {
         shirtColor: shirt,
-        sleeveColor: a.sleeves === 'long' ? shirt : null,
+        sleeveColor: sleeves.long ? shirt : null,
+        dressShirt: !!sleeves.dressShirt,
         pantsColor: colorOf('bottomColor', a.bottomColor),
-        hasSkirt: a.bottom === 'skirt',
+        hasSkirt: optionOf(BOTTOMS, a.bottom).kind === 'skirt',
         muscular: a.muscles === 'buff',
         footScale: optionOf(MUSCLES, a.muscles).feet,
         skinTone: colorOf('skin', a.skin),
@@ -518,7 +553,11 @@ export function describeAvatar(avatar) {
         cornrows: (c) => `${c} cornrows`,
         leftPart: (c) => `short ${c} hair with a left part`,
         rightPart: (c) => `short ${c} hair with a right part`,
-        centerPart: (c) => `short ${c} hair parted in the middle`
+        centerPart: (c) => `short ${c} hair parted in the middle`,
+        long: (c) => `long ${c} hair with bangs`,
+        longCenter: (c) => `long ${c} hair parted in the middle`,
+        longSide: (c) => `long ${c} hair with a side part`,
+        longBack: (c) => `long ${c} hair swept back`
     };
     const hair = (HAIR_WORDS[a.length] || ((c) => `${word(HAIR_LENGTHS, a.length)} ${c} hair`))(hairColor);
     const lips = a.lips === 'natural' ? '' : ` and ${word(LIP_COLORS, a.lips)} lips`;
@@ -539,10 +578,12 @@ export function describeAvatar(avatar) {
     const shoes = a.shoes === 'classic' ? `classic ${shoeColor} shoes` : `${shoeColor} ${word(SHOES, a.shoes)}`;
     const muscles = a.muscles === 'standard' ? '' : `${word(MUSCLES, a.muscles)}, `;
     const shirt = name(SHIRTS, a.shirt);
+    const sleeves = optionOf(SLEEVES, a.sleeves);
+    const bottom = optionOf(BOTTOMS, a.bottom);
     const clothes = [
         `a ${muscles}${word(BUILDS, a.build)} build`,
-        a.sleeves === 'tank' ? `a ${shirt} tank top` : `a ${shirt} shirt with ${a.sleeves} sleeves`,
-        `${a.bottom === 'skirt' ? 'a ' : ''}${name(PANTS, a.bottomColor)} ${a.bottom}`,
+        sleeves.said ? `a ${shirt} ${sleeves.said}` : a.sleeves === 'tank' ? `a ${shirt} tank top` : `a ${shirt} shirt with ${a.sleeves} sleeves`,
+        `${bottom.kind === 'skirt' ? 'a ' : ''}${name(PANTS, a.bottomColor)} ${bottom.label.toLowerCase()}`,
         shoes
     ];
     if (a.hat !== 'none') clothes.push(`a ${name(SHIRTS, a.hatColor)} ${word(HATS, a.hat)}`);

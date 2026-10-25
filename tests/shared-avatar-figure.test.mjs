@@ -24,6 +24,7 @@ import { loadRealThree } from './helpers/real-three.mjs';
 let THREE;
 let F;
 let A;
+let S;
 let createPerson;
 let leavesPerson;
 let DEFAULT_CHOICE;
@@ -33,6 +34,7 @@ beforeAll(async () => {
     globalThis.THREE = THREE;
     F = await import('../www/shared/js/avatar-figure-1.0.0.js');
     A = await import('../www/shared/js/avatar-1.0.0.min.js');
+    S = await import('../www/shared/js/avatar-shapes-1.0.0.min.js');
     ({ createPerson } = await import('../www/shared/js/people-1.0.0.min.js'));
     ({ personConfig: leavesPerson, DEFAULT_CHOICE } = await import('../www/leaves/js/cast.js'));
 });
@@ -702,13 +704,33 @@ describe('the pieces (M5), measured', () => {
             expect(shoe.rotation.x).toBeGreaterThan(0.2);
             const box = new THREE.Box3().setFromObject(shoe);
             expect(box.min.y).toBeCloseTo(floorY, 3);
-            expect(box.max.y - box.min.y).toBeGreaterThan(0.06 + F.SHOE_SIZE.heels.heel * 0.8);
+            expect(box.max.y - box.min.y).toBeGreaterThan(F.SHOE_SIZE.heels.heel + 0.03);
         }
+        // A round heel (Steve's QA, 2026-10-25: "round instead of square")
+        // from the floor up, and a pointed toe on the floor in front of the
+        // block, a closed solid, narrowing to its tip.
         for (const column of parts(heels.person, 'heel')) {
             const box = new THREE.Box3().setFromObject(column);
             expect(box.min.y).toBeCloseTo(floorY, 6);
+            expect(column.geometry.type).toBe('CylinderGeometry');
         }
         expect(parts(heels.person, 'heel')).toHaveLength(2);
+        const toes = parts(heels.person, 'toe');
+        expect(toes).toHaveLength(2);
+        const shoeBoxes = shoesOf(heels.person).map((s) => new THREE.Box3().setFromObject(s));
+        for (const toe of toes) {
+            const box = new THREE.Box3().setFromObject(toe);
+            expect(box.min.y).toBeCloseTo(floorY, 6);
+            // Past the block's front, which leans forward over its toe edge
+            // as it rises.
+            expect(box.max.z).toBeGreaterThan(Math.max(...shoeBoxes.map((b) => b.max.z)) + F.SHOE_SIZE.heels.toe * 0.5);
+            // Its tip is narrow: the width across its front few millimeters.
+            const pos = toe.geometry.attributes.position;
+            let tipWidth = 0;
+            for (let i = 0; i < pos.count; i++) if (pos.getZ(i) > box.max.z - toe.getWorldPosition(new THREE.Vector3()).z - 0.004) tipWidth = Math.max(tipWidth, Math.abs(pos.getX(i)) * 2);
+            expect(tipWidth).toBeLessThan(0.02);
+            expect(S.openEdges(toe.geometry)).toBe(0);
+        }
         // Platforms: a thick sole under the shoe, and the figure stood up on
         // it, so the sole's bottom is where a classic shoe's is.
         const platforms = F.createAvatar({ shoes: 'platforms' });

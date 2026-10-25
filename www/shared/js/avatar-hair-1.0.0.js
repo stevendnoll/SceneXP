@@ -38,7 +38,7 @@ import { solidGrid, taperTube, onSphere } from './avatar-shapes-1.0.0.min.js';
 /** The styles drawn here. The rest (none, buzzed, long) are the rig's. */
 export const HAIR_DRAWN = Object.freeze([
     'short', 'leftPart', 'rightPart', 'centerPart', 'quiff', 'spiky', 'curly', 'afro', 'mohawk', 'mullet', 'ponytail', 'pigtails',
-    'topKnot', 'lowBun', 'spaceBuns', 'bob', 'braids', 'locs', 'cornrows'
+    'topKnot', 'lowBun', 'spaceBuns', 'bob', 'braids', 'locs', 'cornrows', 'longCenter', 'longSide', 'longBack'
 ]);
 
 /** The skin a part shows when none is given. */
@@ -86,7 +86,10 @@ export const HAIR_SIZE = Object.freeze({
         quiff: [[0, 1.0], [0.45, 1.1], [0.9, 1.3], [1.35, 1.45], [1.9, 1.58], [2.5, 1.8], [Math.PI, 1.92]],
         sleek: [[0, 1.05], [0.5, 1.12], [0.9, 1.32], [1.4, 1.5], [2.0, 1.7], [Math.PI, 1.95]],
         afro: [[0, 1.0], [0.6, 1.1], [1.2, 1.4], [1.6, 1.6], [2.4, 1.85], [Math.PI, 1.95]],
-        bob: [[0, 1.08], [0.5, 1.15], [0.9, 1.35], [1.4, 1.55], [Math.PI, 1.62]]
+        bob: [[0, 1.08], [0.5, 1.15], [0.9, 1.35], [1.4, 1.55], [Math.PI, 1.62]],
+        /** The long styles without bangs: the natural hairline in front,
+         *  meeting the curtain round the sides and the back. */
+        long: [[0, 1.06], [0.45, 1.12], [0.9, 1.32], [1.4, 1.52], [Math.PI, 1.62]]
     },
     volumes: {
         short: { front: 0.0065, side: 0.0045, back: 0.0055, crown: 0.004, fade: 0.3, min: 0.0006 },
@@ -102,6 +105,7 @@ export const HAIR_SIZE = Object.freeze({
         // (preview, 2026-10-24: a thin cap over a thick curtain read as
         // headphones).
         bob: { front: 0.012, side: 0.011, back: 0.012, crown: 0.004, fade: 0.06, min: 0.009 },
+        long: { front: 0.011, side: 0.011, back: 0.012, crown: 0.004, fade: 0.06, min: 0.009 },
         locs: { front: 0.006, side: 0.006, back: 0.007, crown: 0.003, fade: 0.25, min: 0.0008 },
         cornrows: { front: 0.0018, side: 0.0018, back: 0.0018, crown: 0, fade: 0.2, min: 0.0006 }
     },
@@ -158,8 +162,13 @@ export const HAIR_SIZE = Object.freeze({
     spikes: { count: 26, height: 0.028, radius: 0.0095, reach: 0.78 },
     curls: { grid: [144, 36] },
     /** A fin in the head's middle plane, `front` radians forward of the
-     *  crown (the hairline) back over the top to `back` (the nape). */
-    mohawk: { front: 0.95, back: -1.95, height: 0.05, width: 0.014 },
+     *  crown (the hairline) back over the top to `back` (the nape), `width`
+     *  across at its foot. Its top is a row of `spikes` (Steve's QA,
+     *  2026-10-25: the smooth arch "could use some polish... pointier or
+     *  rounded spiked tips"), each rising to `height` from a valley `dip`
+     *  of the way down, with rounded tips, leaning back by `lean` of a
+     *  spike as they rise. */
+    mohawk: { front: 0.95, back: -1.95, height: 0.055, width: 0.014, spikes: 8, dip: 0.5, lean: 0.3, strands: 70 },
     mullet: { half: 0.95, top: -0.025, bottom: -0.175, inner: 0.112, thick: 0.014, flip: 0.012 },
     ponytail: { tie: [0, -0.03, -0.122], tail: [[0, -0.028, -0.118], [0, -0.045, -0.145], [0, -0.09, -0.165], [0, -0.15, -0.16], [0, -0.2, -0.145]], radius: 0.02 },
     // Hanging down behind the ears, full at the tie (preview, 2026-10-24:
@@ -167,6 +176,14 @@ export const HAIR_SIZE = Object.freeze({
     pigtails: { tie: [0.1, -0.012, -0.056], tail: [[0.104, -0.012, -0.06], [0.122, -0.04, -0.062], [0.128, -0.09, -0.05], [0.122, -0.15, -0.035]], radius: 0.021 },
     buns: { topKnot: [[Math.PI, 0.45, 0.032]], lowBun: [[Math.PI, 1.35, 0.028]], spaceBuns: [[0.95, 0.62, 0.027], [-0.95, 0.62, 0.027]] },
     bob: { from: 0.72, top: 0.02, bottom: -0.085, inner: 0.1205, flare: 0.008, thick: 0.011 },
+    /** Long without bangs (Steve's QA, 2026-10-25): a full cap, parted
+     *  (`longParts`, the wearer's left or the middle) or swept back from
+     *  the brow, and a curtain from `from` radians round from the front
+     *  (beside the face, in front of the ears) all round the back, down to
+     *  the shoulders (`bottom`), flaring a little toward its ends, with
+     *  `strands` down it. */
+    long: { from: 0.6, top: 0.02, bottom: -0.235, inner: 0.1205, flare: 0.012, thick: 0.011, strands: 140 },
+    longParts: { longCenter: 0, longSide: 0.058 },
     braids: { start: [0.095, -0.035, -0.07], path: [[0.095, -0.035, -0.07], [0.125, -0.08, -0.03], [0.13, -0.15, 0.02], [0.122, -0.22, 0.045]], plaits: 10, radius: 0.016 },
     // Many and full, close to the head (preview, 2026-10-24: eighteen thin
     // ones read as a bead curtain).
@@ -274,6 +291,11 @@ export function alongV(n) {
     return (point, u, v) => ({ k: u * n, along: v * 8, fade: 1, period: n });
 }
 
+/** The other way: `n` strands across v, running along u (up a fin). */
+export function alongU(n) {
+    return (point, u, v) => ({ k: v * n, along: u * 8, fade: 1, period: n });
+}
+
 const MAPS = new Map();
 
 /**
@@ -376,11 +398,10 @@ function spread(count, edge, reach) {
  * its groove), the wave's height there, and the groove's floor at a point
  * [x, y, z] on the scalp, for the line of scalp along it.
  */
-function parted(px) {
+function parted(px, volume = HAIR_SIZE.volumes.short, edge = HAIR_SIZE.edges.short) {
     const H = HAIR_SIZE;
     const P = H.part;
-    const base = thickness(H.volumes.short);
-    const edge = H.edges.short;
+    const base = thickness(volume);
     // Where (a, s) is: `d` across from the part, `phi` forward of the crown
     // (positive), and how far along the part is there: full near the
     // hairline, fading out over `fade` to nothing at `back` (preview,
@@ -505,6 +526,62 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
         return ring;
     };
     const tube = (points, radius, name, { material, ...options } = {}) => add(taperTube(points, radius, options), name, material ? { material } : { map: downMap(S.tube) });
+    /** A cut parted `px` from the middle (HAIR_SIZE.part), of `volume`
+     *  over `edge`: the cap with its groove, the swooshes, and the line of
+     *  scalp. */
+    const partedCut = (key, px, volume, edge) => {
+        const P = H.part;
+        const part = parted(px, volume, edge);
+        const flow = awayFromPart(px);
+        // On a finer grid than the other cuts, so the groove is cut
+        // (preview, 2026-10-24: on 48 columns the line of scalp sank in
+        // and out of the hair in dashes).
+        add(scalp(part.edge, part.thick, { nu: P.grid[0], nv: P.grid[1] }), 'scalp', { map: capMap(key, part.edge, flow) });
+        // The swooshes either side, out from the head and leaning over
+        // away from the part, turning up and forward over the brow
+        // toward the hairline, over the front and the top (they fade
+        // to nothing before this patch's border). On columns as fine
+        // as the cut's (preview, 2026-10-24: on half as many, the
+        // piece bridged the groove and buried the line of scalp).
+        const forward = norm3(P.forward);
+        const span = { a0: -1.7, a1: 1.7, s0: 0.02, s1: 0.99 };
+        add(onCap(part.edge, part.thick, (a, s, dir) => {
+            const { height, away, front } = part.wave(a, s);
+            const out = [dir[0] + away * P.lean, dir[1], dir[2]];
+            return out.map((o, k) => (o * (1 - front) + forward[k] * front) * height);
+        }, { ...span, nu: Math.round((P.grid[0] * 3.4) / (2 * Math.PI)), nv: 28 }), 'wave', { hides: true, map: patchMap(key, part.edge, flow, span) });
+        // The line of scalp along the groove's floor: in the plane `px`
+        // from the middle, from just inside the hairline back to where
+        // the groove has faded to about a third.
+        const front = (() => {
+            // The hairline where the plane meets it, settled in two
+            // passes (the line's own angle round moves it a little).
+            let a = 0;
+            for (let k = 0; k < 2; k++) a = Math.asin(Math.min(1, px / (SCALP * Math.sin(along(part.edge, Math.abs(a))))));
+            const t = along(part.edge, Math.abs(a));
+            return Math.atan2(Math.sin(t) * Math.cos(a), Math.cos(t));
+        })();
+        const points = Array.from({ length: 9 }, (_, k) => {
+            const phi = front - 0.06 + ((P.back + P.fade * 0.35 - front + 0.06) * k) / 8;
+            const dir = [px, Math.cos(phi), Math.sin(phi)];
+            const flat = Math.sqrt(SCALP * SCALP - px * px);
+            // Out of the groove as the GRID draws it: a side part runs
+            // between the grid's columns, whose triangles bridge the
+            // groove higher than its floor (preview, 2026-10-24: set
+            // on the floor, the line sank into that bridge and read as
+            // dashes), so the floor is read half a column either side
+            // and the line sits mostly out of the higher one. Never
+            // under the scalp where the hair thins toward the hairline.
+            const y = flat * dir[1];
+            const z = flat * dir[2];
+            const half = (SCALP * Math.sqrt(1 - (y / SCALP) ** 2) * Math.cos(Math.atan2(px, z)) * Math.PI) / P.grid[0];
+            const floor = Math.max(part.floorAt(px, y, z), part.floorAt(px - half, y, z), part.floorAt(px + half, y, z));
+            const r = SCALP + Math.max(P.line * 1.15, floor + P.line * 0.8);
+            const rr = Math.sqrt(r * r - px * px);
+            return [px, rr * dir[1], rr * dir[2]];
+        });
+        tube(points, () => P.line, 'part', { material: new THREE.MeshStandardMaterial({ color: skin, roughness: 0.95 }), segments: 16, radial: 6 });
+    };
 
     switch (style) {
         case 'short':
@@ -512,59 +589,26 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             break;
         case 'leftPart':
         case 'rightPart':
-        case 'centerPart': {
-            const px = H.parts[style];
-            const P = H.part;
-            const part = parted(px);
-            const flow = awayFromPart(px);
-            // On a finer grid than the other cuts, so the groove is cut
-            // (preview, 2026-10-24: on 48 columns the line of scalp sank in
-            // and out of the hair in dashes).
-            add(scalp(part.edge, part.thick, { nu: P.grid[0], nv: P.grid[1] }), 'scalp', { map: capMap(style, part.edge, flow) });
-            // The swooshes either side, out from the head and leaning over
-            // away from the part, turning up and forward over the brow
-            // toward the hairline, over the front and the top (they fade
-            // to nothing before this patch's border). On columns as fine
-            // as the cut's (preview, 2026-10-24: on half as many, the
-            // piece bridged the groove and buried the line of scalp).
-            const forward = norm3(P.forward);
-            const span = { a0: -1.7, a1: 1.7, s0: 0.02, s1: 0.99 };
-            add(onCap(part.edge, part.thick, (a, s, dir) => {
-                const { height, away, front } = part.wave(a, s);
-                const out = [dir[0] + away * P.lean, dir[1], dir[2]];
-                return out.map((o, k) => (o * (1 - front) + forward[k] * front) * height);
-            }, { ...span, nu: Math.round((P.grid[0] * 3.4) / (2 * Math.PI)), nv: 28 }), 'wave', { hides: true, map: patchMap(style, part.edge, flow, span) });
-            // The line of scalp along the groove's floor: in the plane `px`
-            // from the middle, from just inside the hairline back to where
-            // the groove has faded to about a third.
-            const front = (() => {
-                // The hairline where the plane meets it, settled in two
-                // passes (the line's own angle round moves it a little).
-                let a = 0;
-                for (let k = 0; k < 2; k++) a = Math.asin(Math.min(1, px / (SCALP * Math.sin(along(part.edge, Math.abs(a))))));
-                const t = along(part.edge, Math.abs(a));
-                return Math.atan2(Math.sin(t) * Math.cos(a), Math.cos(t));
-            })();
-            const points = Array.from({ length: 9 }, (_, k) => {
-                const phi = front - 0.06 + ((P.back + P.fade * 0.35 - front + 0.06) * k) / 8;
-                const dir = [px, Math.cos(phi), Math.sin(phi)];
-                const flat = Math.sqrt(SCALP * SCALP - px * px);
-                // Out of the groove as the GRID draws it: a side part runs
-                // between the grid's columns, whose triangles bridge the
-                // groove higher than its floor (preview, 2026-10-24: set
-                // on the floor, the line sank into that bridge and read as
-                // dashes), so the floor is read half a column either side
-                // and the line sits mostly out of the higher one. Never
-                // under the scalp where the hair thins toward the hairline.
-                const y = flat * dir[1];
-                const z = flat * dir[2];
-                const half = (SCALP * Math.sqrt(1 - (y / SCALP) ** 2) * Math.cos(Math.atan2(px, z)) * Math.PI) / P.grid[0];
-                const floor = Math.max(part.floorAt(px, y, z), part.floorAt(px - half, y, z), part.floorAt(px + half, y, z));
-                const r = SCALP + Math.max(P.line * 1.15, floor + P.line * 0.8);
-                const rr = Math.sqrt(r * r - px * px);
-                return [px, rr * dir[1], rr * dir[2]];
-            });
-            tube(points, () => P.line, 'part', { material: new THREE.MeshStandardMaterial({ color: skin, roughness: 0.95 }), segments: 16, radial: 6 });
+        case 'centerPart':
+            partedCut(style, H.parts[style], H.volumes.short, H.edges.short);
+            break;
+        case 'longCenter':
+        case 'longSide':
+        case 'longBack': {
+            const L = H.long;
+            const edge = H.edges.long;
+            if (style === 'longBack') add(scalp(edge, thickness(H.volumes.long)), 'scalp', { map: capMap('longBack', edge, fallFrom(S.brow)) });
+            else partedCut(style, H.longParts[style], H.volumes.long, edge);
+            // The curtain: beside the face and all round the back, down to
+            // the shoulders, a little fuller toward its ends, its strands
+            // straight down it.
+            add(solidGrid(44, 12, (i, j, side) => {
+                const a = L.from + ((2 * Math.PI - 2 * L.from) * i) / 44;
+                const k = j / 12;
+                const y = L.top + (L.bottom - L.top) * k;
+                const r = L.inner + L.flare * k * k + (side ? L.thick * (0.9 + 0.1 * k) : 0);
+                return [r * Math.sin(a), y, r * Math.cos(a)];
+            }), 'curtain', { map: strandMap('long:curtain', null, alongV(L.strands), S.size.curtain, { repeat: false }) });
             break;
         }
         case 'quiff': {
@@ -618,21 +662,33 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             add(scalp(H.edges.afro, thickness(H.volumes.afro)), 'scalp');
             break;
         case 'mohawk': {
-            // Shaved sides: too thin for strands. The fin's uv runs across
-            // it, not up, so it goes without too.
+            // Shaved sides: too thin for strands.
             add(scalp(H.edges.short, thickness(H.volumes.shaved)), 'scalp');
             const M = H.mohawk;
             // A fin in the head's middle plane, from the hairline over the
             // crown to the nape (preview, 2026-10-24: measured down the
             // front it ran over the face): its foot on the scalp, its top
-            // rising to `height`, narrowing toward the back.
-            add(solidGrid(4, 32, (i, j, side) => {
-                const u = -1 + (2 * i) / 4;
-                const k = j / 32;
+            // a row of spikes, narrowing toward the back and toward its
+            // top. The grid runs UP the fin (u) and along it (v), its two
+            // surfaces the fin's two sides, so the strands run up it.
+            const spikeTop = (k) => {
+                const arch = Math.sin(Math.PI * k) ** 0.5;
+                return (u) => {
+                    // Where along a spike this is, leaning back as it rises.
+                    const p = (k * M.spikes - M.lean * u) % 1;
+                    const q = p < 0 ? p + 1 : p;
+                    const spike = (1 - (2 * q - 1) ** 2) ** 1.6;
+                    return M.height * arch * (1 - M.dip + M.dip * spike);
+                };
+            };
+            add(solidGrid(10, 96, (i, j, side) => {
+                const u = i / 10;
+                const k = j / 96;
                 const th = M.front + (M.back - M.front) * k;
-                const r = SCALP + (side ? M.height * Math.sin(Math.PI * k) ** 0.5 : 0);
-                return [u * M.width * (1 - 0.45 * k), r * Math.cos(th), r * Math.sin(th)];
-            }), 'fin', { hides: true });
+                const r = SCALP + u * spikeTop(k)(u);
+                const half = (M.width / 2) * (1 - 0.45 * k) * (1 - 0.7 * u);
+                return [(side ? half : -half), r * Math.cos(th), r * Math.sin(th)];
+            }), 'fin', { hides: true, map: strandMap('mohawk:fin', null, alongU(M.strands), [64, 512], { repeat: false }) });
             break;
         }
         case 'mullet': {

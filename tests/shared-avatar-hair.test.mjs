@@ -151,6 +151,36 @@ test('what a hat would squash is tagged for it to tuck away, and the long styles
     expect(Math.max(...fin.pts.map((p) => p.y))).toBeGreaterThan(0.15);
     const facePts = fin.pts.filter((p) => p.z > 0.08);
     expect(Math.min(...facePts.map((p) => p.y))).toBeGreaterThan(0.05);
+    // Its top is a row of spikes (Steve's QA, 2026-10-25): along the ridge
+    // the fin's height rises and falls `spikes` times, by a good share of
+    // itself, and strands run up it.
+    const M = H.HAIR_SIZE.mohawk;
+    // The fin's height at each angle along it: the farthest any of its
+    // points reaches there.
+    const byAngle = new Map();
+    for (const p of fin.pts) {
+        const th = Math.round(Math.atan2(p.z, p.y) * 1e4) / 1e4;
+        byAngle.set(th, Math.max(byAngle.get(th) || 0, p.length()));
+    }
+    const ridge = [...byAngle.entries()].sort((a, b) => b[0] - a[0]).map(([th, r]) => ({ th, r }));
+    // Peaks that stand a fifth of the fin's height over the valleys either
+    // side (the grid's rows jitter the ridge by less).
+    let peaks = 0;
+    let rising = true;
+    let ext = ridge[0].r;
+    const swing = 0.2 * M.height;
+    for (const { r } of ridge) {
+        if (rising) {
+            if (r > ext) ext = r;
+            else if (r < ext - swing) { peaks++; rising = false; ext = r; }
+        } else if (r < ext) ext = r;
+        else if (r > ext + swing) { rising = true; ext = r; }
+    }
+    expect(peaks).toBeGreaterThanOrEqual(M.spikes - 1);
+    expect(peaks).toBeLessThanOrEqual(M.spikes + 1);
+    const tops = ridge.map((p) => p.r - H.SCALP);
+    expect(Math.max(...tops)).toBeGreaterThan(M.height * 0.9);
+    expect(fin.mesh.material.map).toBeTruthy();
 });
 
 test('a part is a line of scalp from the hairline back over the top, the hair thinned along it and swept off it', () => {
@@ -234,9 +264,9 @@ test('a part is a line of scalp from the hairline back over the top, the hair th
 });
 
 describe('the strands (Steve\'s QA, 2026-10-25: "a monochrome blob")', () => {
-    const BARE = { afro: ['scalp'], mohawk: ['scalp', 'fin'], cornrows: ['scalp'] };
+    const BARE = { afro: ['scalp'], mohawk: ['scalp'], cornrows: ['scalp'] };
 
-    test('every piece of hair wears a map of gray strands, but the afro, the shaved sides, the fin, the ties and the part', () => {
+    test('every piece of hair wears a map of gray strands, but the afro, the shaved sides, the ties and the part', () => {
         for (const style of H.HAIR_DRAWN) {
             for (const { mesh } of pieces(H.buildHair(style, 0x6b4a2f, { skin: 0xc08060 }))) {
                 const bare = ['tie', 'part'].includes(mesh.name) || (BARE[style] || []).includes(mesh.name);
@@ -332,6 +362,34 @@ describe('the strands (Steve\'s QA, 2026-10-25: "a monochrome blob")', () => {
             }
         }
     });
+});
+
+test('the long styles without bangs: a parted or swept-back cap, a curtain to the shoulders, and the brow clear', () => {
+    // Steve's QA, 2026-10-25: "some men have long hair parted in the center
+    // with no bangs"; the rig's long hair has bangs baked in.
+    const L = H.HAIR_SIZE.long;
+    for (const style of ['longCenter', 'longSide', 'longBack']) {
+        const all = pieces(H.buildHair(style, 0x332211, { skin: 0xc08060 }));
+        const names = all.map((p) => p.mesh.name).sort();
+        expect(names).toEqual(style === 'longBack' ? ['curtain', 'scalp'] : ['curtain', 'part', 'scalp', 'wave']);
+        const curtain = all.find((p) => p.mesh.name === 'curtain');
+        // Down to the shoulders, and strands down it.
+        expect(Math.min(...curtain.pts.map((p) => p.y))).toBeLessThan(L.bottom + 0.005);
+        expect(curtain.mesh.material.map).toBeTruthy();
+        // NO BANGS: nothing of the curtain in front of the face, and the
+        // cap's hairline above the brows (the "lies on the scalp" test).
+        expect(curtain.pts.filter((p) => Math.abs(p.x) < 0.06 && p.z > 0.07)).toHaveLength(0);
+        // But it does hang beside the face, in front of the ears.
+        expect(curtain.pts.filter((p) => p.z > 0.03 && p.y < -0.05).length).toBeGreaterThan(0);
+        expect(shapes.facesOutward(curtain.mesh.geometry)).toBe(true);
+    }
+    // The parted ones carry their part where the short cuts do.
+    const lineX = (style) => {
+        const pts = pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'part').pts;
+        return pts.reduce((s, p) => s + p.x, 0) / pts.length;
+    };
+    expect(lineX('longCenter')).toBeCloseTo(0, 3);
+    expect(lineX('longSide')).toBeCloseTo(H.HAIR_SIZE.longParts.longSide, 3);
 });
 
 test('along reads a line of points, flat past its ends', () => {

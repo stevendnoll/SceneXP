@@ -50,7 +50,9 @@ const SHOTS = {
     /** The head at about the editor's zoom (1.6 px a millimeter), for the
      *  strands. */
     close: { cell: [320, 300], aim: [0, 1.57, 0], distance: 0.45, fov: 24, lift: 0.08 },
-    body: { cell: [180, 300], aim: [0, 0.9, 0], distance: 4.2, fov: 28, lift: 0.1 }
+    body: { cell: [180, 300], aim: [0, 0.9, 0], distance: 4.2, fov: 28, lift: 0.1 },
+    /** The torso, for the shirts. */
+    torso: { cell: [240, 300], aim: [0, 1.1, 0], distance: 1.7, fov: 28, lift: 0.1 }
 };
 const TURNS = [0, 0.75];
 
@@ -89,7 +91,7 @@ await sheet('facial', [
 // Every hair style, from the front, three quarters and behind, in two
 // sheets; then every hat on short hair, and over the two biggest styles.
 const STYLES = ['short', 'leftPart', 'rightPart', 'centerPart', 'quiff', 'spiky', 'curly', 'afro', 'mohawk', 'mullet', 'bob',
-    'ponytail', 'pigtails', 'topKnot', 'lowBun', 'spaceBuns', 'braids', 'locs', 'cornrows', 'buzz', 'long', 'bald'];
+    'ponytail', 'pigtails', 'topKnot', 'lowBun', 'spaceBuns', 'braids', 'locs', 'cornrows', 'buzz', 'long', 'bald', 'longCenter', 'longSide', 'longBack'];
 const HATS = ['beanie', 'cap', 'trucker', 'ivyCap', 'beret', 'fedora', 'cowboy', 'topHat', 'fez', 'chef', 'hardHat', 'sunHat', 'birthday'];
 const BEHIND = [0, 0.75, Math.PI];
 await sheet('hair-1', STYLES.slice(0, 11).map((length, k) => ({ ...(k % 2 ? deep : fair), length })), 'face', BEHIND);
@@ -104,6 +106,12 @@ await sheet('strands', [
     { ...fair, length: 'short' }, { ...fair, length: 'leftPart' }, { ...fair, length: 'centerPart' }, { ...fair, length: 'quiff' },
     { ...deep, length: 'ponytail' }, { skin: 'light', hair: 'blond', length: 'bob' }, { ...fair, hair: 'auburn', length: 'rightPart' }
 ], 'close', [0, 0.75]);
+// The long styles without bangs, beside the rig's long with bangs
+// (Steve's QA, 2026-10-25), and the mohawk's spikes.
+await sheet('long', [
+    { ...fair, length: 'long' }, { ...fair, length: 'longCenter' }, { ...fair, length: 'longSide' }, { ...fair, length: 'longBack' },
+    { ...deep, length: 'longCenter' }, { skin: 'light', hair: 'blond', length: 'longBack', hat: 'beanie', hatColor: 'rust' }, { ...fair, length: 'mohawk' }
+], 'face', BEHIND);
 await sheet('hats', HATS.map((hat) => ({ ...fair, length: 'short', hat, hatColor: 'navy' })), 'face', BEHIND);
 await sheet('hats-afro', HATS.map((hat) => ({ ...deep, length: 'afro', hat, hatColor: 'mustard' })), 'face');
 await sheet('hats-long', HATS.map((hat) => ({ skin: 'light', hair: 'blond', length: 'long', hat, hatColor: 'teal' })), 'face');
@@ -131,6 +139,22 @@ await sheet('mouths-facial', [
 ], 'mouth');
 const SHOES = ['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots', 'sandals', 'flats', 'heels', 'platforms', 'slippers'];
 await sheet('shoes', SHOES.map((shoes) => ({ shoes, shoeColor: shoes === 'sneakers' ? 'navy' : 'brown' })), 'feet');
+// The wardrobe (Steve, 2026-10-25): more shoes, shirts and bottoms.
+await sheet('wardrobe-shoes', [
+    { shoes: 'crocs', shoeColor: 'red' }, { shoes: 'highTops', shoeColor: 'navy' }, { shoes: 'hikingBoots', shoeColor: 'brown' }, { shoes: 'cleats', shoeColor: 'black' },
+    { shoes: 'crocs', shoeColor: 'white', bottom: 'shorts' }, { shoes: 'highTops', shoeColor: 'white', bottom: 'basketballShorts' }
+], 'feet', [0.75, Math.PI / 2]);
+await sheet('shirts', [
+    { sleeves: 'sweater', shirt: 'rust' }, { sleeves: 'turtleneck', shirt: 'charcoal' }, { sleeves: 'jersey', shirt: 'navy' }, { sleeves: 'jersey', shirt: 'white' },
+    { sleeves: 'buttonDown', shirt: 'white' }, { sleeves: 'hoodie', shirt: 'teal' }, { sleeves: 'hoodie', shirt: 'white', build: 'curvy' }
+], 'torso', [0, 0.75, Math.PI]);
+await sheet('bottoms', [
+    { bottom: 'cargoPants', bottomColor: 'khaki' }, { bottom: 'cargoShorts', bottomColor: 'khaki' }, { bottom: 'sweatpants', bottomColor: 'charcoal' },
+    { bottom: 'leggings', bottomColor: 'black', build: 'curvy' }, { bottom: 'basketballShorts', bottomColor: 'navy', shoes: 'highTops' }, { bottom: 'longSkirt', bottomColor: 'denim', build: 'curvy' }
+], 'legs', [0, 0.75]);
+// The heels, close, from the side and three quarters (Steve, 2026-10-25:
+// pointed toes, a round heel).
+await sheet('heels', [{ shoes: 'heels', shoeColor: 'red' }, { shoes: 'heels', shoeColor: 'black', build: 'curvy', bottom: 'skirt' }], 'feet', [Math.PI / 2, 0.75, 0]);
 await sheet('shoes-white-black', [{ shoes: 'sneakers', shoeColor: 'white' }, { shoes: 'sneakers', shoeColor: 'black' }, { shoes: 'classic', shoeColor: 'black' },
     { shoes: 'workBoots', shoeColor: 'black' }, { shoes: 'cowboyBoots', shoeColor: 'red', build: 'curvy' }], 'feet');
 await sheet('boots-legs', [
