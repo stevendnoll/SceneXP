@@ -37,6 +37,10 @@ export const DEFAULT_SKIN = 0xd9a37a;
 export const SCALP = 0.1204;
 
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
+const norm3 = ([x, y, z]) => {
+    const l = Math.hypot(x, y, z) || 1;
+    return [x / l, y / l, z / l];
+};
 const smoothstep = (x) => {
     const t = clamp01(x);
     return t * t * (3 - 2 * t);
@@ -85,18 +89,44 @@ export const HAIR_SIZE = Object.freeze({
         locs: { front: 0.006, side: 0.006, back: 0.007, crown: 0.003, fade: 0.25, min: 0.0008 },
         cornrows: { front: 0.0018, side: 0.0018, back: 0.0018, crown: 0, fade: 0.2, min: 0.0006 }
     },
-    quiff: { lift: 0.022, at: 0.32, spread: 0.22 },
+    /** The quiff (Steve's QA, 2026-10-24: a smooth bulge "doesn't look
+     *  right", and a crest set back "needs to come forward more, it's
+     *  still too close to the middle of the head"): the front swept up and
+     *  out over the forehead into a crest `height` tall, rising from the
+     *  hairline over `rise` radians to its top `peak` radians forward of
+     *  the crown (the hairline is at 1.0), then sweeping back over `fall`;
+     *  `spread` radians wide; lifted along `lean` (up and well forward), not
+     *  out from the head, so its front leans out over the brow. Its own
+     *  piece, so a hat can squash it. */
+    quiff: { height: 0.055, peak: 0.97, rise: 0.06, fall: 0.5, spread: 0.8, lean: [0, 1, 0.9], ripple: 0.1 },
     /** A part (Steve's QA, 2026-10-24): a line of scalp showing through the
      *  short cut, `x` meters to the wearer's left of the middle (+x; a right
      *  part is to the right), from the front hairline back over the top to
      *  `back` radians behind the crown. The hair thins to `depth` of itself
-     *  across `width` either side of it, and is swept away from it into a
-     *  lobe `lift` high (the whole lift on the far side of a side part, the
-     *  near side flatter). The scalp shows as a `line` thick strand in the
-     *  skin's color along the bottom (the grid is too coarse to cut a 7 mm
-     *  groove cleanly, so the line is drawn as well). */
-    parts: { leftPart: 0.03, rightPart: -0.03, centerPart: 0 },
-    part: { width: 0.009, depth: 0.8, back: 0, fade: 0.9, lift: 0.006, near: 0.35, line: 0.002, grid: [96, 24] },
+     *  across `width` either side of it, and the scalp shows as a `line`
+     *  thick strand in the skin's color along the bottom (the grid is too
+     *  coarse to cut a 9 mm groove cleanly, so the line is drawn as well).
+     *  Either side of it the hair comes up out of the part in ONE SWOOSH
+     *  with volume (Steve's QA, 2026-10-24: lobes 6 mm high read as a bald
+     *  line down the head; rolls with repeating swells "look really bad":
+     *  "there's usually like a swoosh with volume coming up from the
+     *  part"): rising steeply out of the groove to a crest `crest` widths
+     *  from the part, `lift` high, then falling away gently over `tail`
+     *  widths, and leaning over away from the part by `lean` of its
+     *  height. A side part's `heavy` side (the far one, where the hair is
+     *  swept to) is the big swoosh, its `light` side a small one; a center
+     *  part has `center` on both. The swooshes are their own piece on the
+     *  cut, so a hat can squash them. */
+    // Steve, 2026-10-24, two rounds: a narrower part, more swoosh, the side
+    // parts further out from the middle, and the swoosh coming forward
+    // over the forehead: toward the hairline its lift turns from out of
+    // the head to `forward` (up and out over the brow), full to within
+    // `edge` of the hairline.
+    parts: { leftPart: 0.058, rightPart: -0.058, centerPart: 0 },
+    part: {
+        width: 0.0045, depth: 0.8, back: 0, fade: 0.9, line: 0.001, grid: [144, 24], edge: 0.86, lean: 0.35, forward: [0, 1, 0.9], turn: 0.5,
+        wave: { heavy: { lift: 0.04, crest: 4.5, tail: 12 }, light: { lift: 0.016, crest: 3.2, tail: 6 }, center: { lift: 0.026, crest: 3.7, tail: 8 } }
+    },
     spikes: { count: 26, height: 0.028, radius: 0.0095, reach: 0.78 },
     curls: { count: 46, radius: 0.0125, reach: 0.86 },
     /** A fin in the head's middle plane, `front` radians forward of the
@@ -168,30 +198,49 @@ function spread(count, edge, reach) {
 
 /**
  * A short cut parted `px` to the wearer's left of the middle (HAIR_SIZE.part):
- * the cap's thickness at `a` round and `s` of the way down, and the groove's
- * floor at a point [x, y, z] on the scalp, for the line of scalp along it.
+ * the cap's thickness at `a` round and `s` of the way down (the cut with
+ * its groove), the wave's height there, and the groove's floor at a point
+ * [x, y, z] on the scalp, for the line of scalp along it.
  */
 function parted(px) {
     const H = HAIR_SIZE;
     const P = H.part;
     const base = thickness(H.volumes.short);
     const edge = H.edges.short;
-    const thick = (a, s) => {
+    // Where (a, s) is: `d` across from the part, `phi` forward of the crown
+    // (positive), and how far along the part is there: full near the
+    // hairline, fading out over `fade` to nothing at `back` (preview,
+    // 2026-10-24: run on past the crown, or ended short, the groove notched
+    // the head's outline seen from behind and above, where the surface
+    // just past the outline is nearly flat on).
+    const where = (a, s) => {
         const t = along(edge, Math.abs(a)) * s;
         const [x, y, z] = onSphere(SCALP, a, t);
-        // Forward of the crown is positive: the part runs from the hairline
-        // back to `back` and fades out there.
-        // Forward of the crown is positive: the part is full near the
-        // hairline and fades out over `fade` to nothing at `back` (preview,
-        // 2026-10-24: run on past the crown, or ended short, the groove and
-        // its lobes notched the head's outline seen from behind and above,
-        // where the surface just past the outline is nearly flat on).
-        const run = smoothstep((Math.atan2(z, y) - P.back) / P.fade);
-        const d = x - px;
+        const phi = Math.atan2(z, y);
+        return { d: x - px, phi, run: smoothstep((phi - P.back) / P.fade) };
+    };
+    const thick = (a, s) => {
+        const { d, run } = where(a, s);
         const groove = Math.exp(-((d / P.width) ** 2)) * run;
-        const side = px === 0 || Math.sign(d) === -Math.sign(px) ? 1 : P.near;
-        const sweep = Math.exp(-(((Math.abs(d) - 2.2 * P.width) / P.width) ** 2)) * run * side;
-        return base(a, s) * (1 - P.depth * groove) + P.lift * sweep;
+        return base(a, s) * (1 - P.depth * groove);
+    };
+    /** The swoosh's height at (a, s), and which way it leans (+1 toward
+     *  +x, -1 toward -x: away from the part). */
+    const wave = (a, s) => {
+        const { d, run } = where(a, s);
+        const W = P.wave;
+        const w = px === 0 ? W.center : Math.sign(d) === -Math.sign(px) ? W.heavy : W.light;
+        const u = Math.abs(d) / P.width;
+        // Steeply up out of the groove to the crest, then gently away.
+        const roll = u < w.crest ? smoothstep((u - 0.5) / (w.crest - 0.5)) : Math.exp(-(((u - w.crest) / w.tail) ** 2));
+        // Full to just inside the hairline, then gone at it (the patch's
+        // border). Out from the head it would stand over the brow as a
+        // shelf (preview, 2026-10-24); its lift turns forward instead
+        // (`front`, 0 over the crown to 1 at the hairline), so it sweeps
+        // up and over the forehead (Steve: "the swoosh should come forward
+        // over the forehead too").
+        const edgeFade = 1 - smoothstep((s - P.edge) / (1 - P.edge));
+        return { height: w.lift * roll * run * edgeFade, away: Math.sign(d) || 1, front: smoothstep((s - P.turn) / (P.edge - P.turn)) };
     };
     const floorAt = (x, y, z) => {
         const r = Math.hypot(x, y, z);
@@ -199,7 +248,32 @@ function parted(px) {
         const t = Math.acos(y / r);
         return thick(a, t / along(edge, Math.abs(a)));
     };
-    return { thick, floorAt, edge };
+    return { thick, wave, floorAt, edge };
+}
+
+/**
+ * A solid lying ON a cap of hair (`edge`, `thick`), over columns `a0` to `a1`
+ * round and rows `s0` to `s1` down: its inside on the cap's outer surface,
+ * its outside `lift(a, s, dir)` further out (a vector, given the surface's
+ * own direction `dir` there), at least `pad` so the two never fight for a
+ * pixel, and half that round its border, so its walls are a hair high and
+ * it is a proper closed solid. For a piece a hat would squash: a quiff's
+ * crest, a part's waves.
+ */
+function onCap(edge, thick, lift, { a0, a1, s0, s1, nu = 40, nv = 20, pad = 0.0004 }) {
+    return solidGrid(nu, nv, (i, j, side) => {
+        const a = a0 + ((a1 - a0) * i) / nu;
+        const s = s0 + ((s1 - s0) * j) / nv;
+        const t = along(edge, Math.abs(a)) * s;
+        const p = onSphere(SCALP + thick(a, s), a, t);
+        if (!side) return p;
+        const dir = onSphere(1, a, t);
+        if (i === 0 || i === nu || j === 0 || j === nv) return [p[0] + dir[0] * pad * 0.5, p[1] + dir[1] * pad * 0.5, p[2] + dir[2] * pad * 0.5];
+        const [lx, ly, lz] = lift(a, s, dir);
+        const l = Math.hypot(lx, ly, lz);
+        if (l < pad) return [p[0] + dir[0] * pad, p[1] + dir[1] * pad, p[2] + dir[2] * pad];
+        return [p[0] + lx, p[1] + ly, p[2] + lz];
+    });
 }
 
 /**
@@ -249,6 +323,18 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             // (preview, 2026-10-24: on 48 columns the line of scalp sank in
             // and out of the hair in dashes).
             add(scalp(part.edge, part.thick, { nu: P.grid[0], nv: P.grid[1] }), 'scalp');
+            // The swooshes either side, out from the head and leaning over
+            // away from the part, turning up and forward over the brow
+            // toward the hairline, over the front and the top (they fade
+            // to nothing before this patch's border). On columns as fine
+            // as the cut's (preview, 2026-10-24: on half as many, the
+            // piece bridged the groove and buried the line of scalp).
+            const forward = norm3(P.forward);
+            add(onCap(part.edge, part.thick, (a, s, dir) => {
+                const { height, away, front } = part.wave(a, s);
+                const out = [dir[0] + away * P.lean, dir[1], dir[2]];
+                return out.map((o, k) => (o * (1 - front) + forward[k] * front) * height);
+            }, { a0: -1.7, a1: 1.7, s0: 0.02, s1: 0.99, nu: Math.round((P.grid[0] * 3.4) / (2 * Math.PI)), nv: 28 }), 'wave', { hides: true });
             // The line of scalp along the groove's floor: in the plane `px`
             // from the middle, from just inside the hairline back to where
             // the groove has faded to about a third.
@@ -264,9 +350,18 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
                 const phi = front - 0.06 + ((P.back + P.fade * 0.35 - front + 0.06) * k) / 8;
                 const dir = [px, Math.cos(phi), Math.sin(phi)];
                 const flat = Math.sqrt(SCALP * SCALP - px * px);
-                // Half out of the groove's floor, but never under the scalp
-                // where the hair thins toward the hairline.
-                const r = SCALP + Math.max(P.line * 1.15, part.floorAt(px, flat * dir[1], flat * dir[2]) + P.line * 0.5);
+                // Out of the groove as the GRID draws it: a side part runs
+                // between the grid's columns, whose triangles bridge the
+                // groove higher than its floor (preview, 2026-10-24: set
+                // on the floor, the line sank into that bridge and read as
+                // dashes), so the floor is read half a column either side
+                // and the line sits mostly out of the higher one. Never
+                // under the scalp where the hair thins toward the hairline.
+                const y = flat * dir[1];
+                const z = flat * dir[2];
+                const half = (SCALP * Math.sqrt(1 - (y / SCALP) ** 2) * Math.cos(Math.atan2(px, z)) * Math.PI) / P.grid[0];
+                const floor = Math.max(part.floorAt(px, y, z), part.floorAt(px - half, y, z), part.floorAt(px + half, y, z));
+                const r = SCALP + Math.max(P.line * 1.15, floor + P.line * 0.8);
                 const rr = Math.sqrt(r * r - px * px);
                 return [px, rr * dir[1], rr * dir[2]];
             });
@@ -274,10 +369,29 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             break;
         }
         case 'quiff': {
-            // Short, with the front swept up into a crest.
+            // Short, with the front swept up and back into a crest: its own
+            // piece on the cut, lifted along `lean`.
             const base = thickness(H.volumes.short);
-            const q = H.quiff;
-            add(scalp(H.edges.quiff, (a, s) => base(a, s) + q.lift * Math.max(0, Math.cos(a)) ** 3 * Math.exp(-(((s - q.at) / q.spread) ** 2))), 'scalp');
+            const Q = H.quiff;
+            const edge = H.edges.quiff;
+            add(scalp(edge, base), 'scalp');
+            const lean = norm3(Q.lean);
+            add(onCap(edge, base, (a, s) => {
+                const t = along(edge, Math.abs(a)) * s;
+                const [, y, z] = onSphere(1, a, t);
+                const phi = Math.atan2(z, y);
+                const along_ = phi > Q.peak ? Math.exp(-(((phi - Q.peak) / Q.rise) ** 2)) : Math.exp(-(((Q.peak - phi) / Q.fall) ** 2));
+                // Flat across the forehead, falling away steeply at the
+                // temples (preview, 2026-10-24: a bell across peaked like
+                // a fin from the front).
+                const across = Math.exp(-((a / Q.spread) ** 4)) * (1 - smoothstep((Math.abs(a) - 1.0) / 0.3));
+                // Full to within a hair of the hairline, so the crest's
+                // front stands up right off the brow.
+                const edgeFade = 1 - smoothstep((s - 0.93) / 0.06);
+                const ripple = 1 + Q.ripple * Math.sin(a * 9);
+                const h = Q.height * along_ * across * edgeFade * ripple;
+                return [lean[0] * h, lean[1] * h, lean[2] * h];
+            }, { a0: -1.35, a1: 1.35, s0: 0.04, s1: 0.99, nu: 48, nv: 24 }), 'crest', { hides: true });
             break;
         }
         case 'spiky': {

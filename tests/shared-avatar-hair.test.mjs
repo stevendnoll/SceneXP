@@ -121,6 +121,8 @@ test('what a hat would squash is tagged for it to tuck away, and the long styles
     expect(hides('spiky')).toEqual(expect.arrayContaining(['spike']));
     expect(hides('curly')).toEqual(expect.arrayContaining(['curl']));
     expect(hides('mohawk')).toEqual(['fin']);
+    expect(hides('quiff')).toEqual(['crest']);
+    for (const style of ['leftPart', 'rightPart', 'centerPart']) expect(hides(style)).toEqual(['wave']);
     for (const style of ['topKnot', 'lowBun', 'spaceBuns']) expect(hides(style)).toEqual(expect.arrayContaining(['bun', 'tie']));
     expect(hides('short')).toEqual([]);
     expect(hides('ponytail')).toEqual([]);
@@ -141,16 +143,17 @@ test('what a hat would squash is tagged for it to tuck away, and the long styles
 
 test('a part is a line of scalp from the hairline back over the top, the hair thinned along it and swept off it', () => {
     const thick = (style, x, phi) => {
-        // The hair's thickness over the scalp at `x` across and `phi`
-        // radians forward of the crown, read off the cap's outer surface.
+        // The hair's thinnest over the scalp within 4 mm of `x` across at
+        // `phi` radians forward of the crown, read off the cap's outer
+        // surface.
         const scalp = pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'scalp');
-        let best = null;
+        let least = Infinity;
         for (const p of scalp.pts) {
-            if (p.length() < H.SCALP + 1e-5 || Math.abs(Math.atan2(p.z, p.y) - phi) > 0.08) continue;
-            const d = Math.abs(p.x - x);
-            if (!best || d < best.d) best = { d, over: p.length() - H.SCALP };
+            if (p.length() < H.SCALP + 1e-5 || Math.abs(Math.atan2(p.z, p.y) - phi) > 0.08 || Math.abs(p.x - x) > 0.004) continue;
+            least = Math.min(least, p.length() - H.SCALP);
         }
-        return best.over;
+        expect(least).toBeLessThan(Infinity);
+        return least;
     };
     for (const [style, px] of Object.entries(H.HAIR_SIZE.parts)) {
         const all = pieces(H.buildHair(style, 0x332211, { skin: 0xc08060 }));
@@ -173,18 +176,49 @@ test('a part is a line of scalp from the hairline back over the top, the hair th
         // And it lies on the hair, never under the scalp.
         expect(Math.min(...line.pts.map((p) => p.length()))).toBeGreaterThan(H.SCALP - 1e-6);
         // The cap is thinner along the part than two centimeters to either
-        // side of it, half way from the crown to the hairline.
-        const at = thick(style, px, 0.5);
-        expect(at).toBeLessThan(thick(style, px + 0.02, 0.5) * 0.7);
-        expect(at).toBeLessThan(thick(style, px - 0.02, 0.5) * 0.7);
+        // side of it, most of the way from the crown to the hairline.
+        const at = thick(style, px, 0.7);
+        expect(at).toBeLessThan(thick(style, px + 0.02, 0.7) * 0.6);
+        expect(at).toBeLessThan(thick(style, px - 0.02, 0.7) * 0.6);
         // The short cut itself has no such groove.
-        expect(thick('short', px, 0.5)).toBeGreaterThan(thick('short', px + 0.02, 0.5) * 0.8);
+        expect(thick('short', px, 0.7)).toBeGreaterThan(thick('short', px + 0.02, 0.7) * 0.8);
     }
     expect(H.HAIR_SIZE.parts.leftPart).toBeGreaterThan(0);
     expect(H.HAIR_SIZE.parts.rightPart).toBe(-H.HAIR_SIZE.parts.leftPart);
     expect(H.HAIR_SIZE.parts.centerPart).toBe(0);
-    // Nothing a hat need tuck away.
-    expect(pieces(H.buildHair('leftPart', 0x332211)).some((p) => p.mesh.userData.hatHides)).toBe(false);
+    // The waves: a piece on the cut either side of the part, tallest on a
+    // side part's heavy side (the far one), that a hat tucks away.
+    const waveOf = (style) => pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'wave');
+    const over = (p) => p.length() - H.SCALP;
+    for (const [style, px] of Object.entries(H.HAIR_SIZE.parts)) {
+        const wave = waveOf(style);
+        expect(wave.mesh.userData.hatHides).toBe(true);
+        expect(shapes.facesOutward(wave.mesh.geometry)).toBe(true);
+        const tallest = (keep) => Math.max(...wave.pts.filter(keep).map(over));
+        const W = H.HAIR_SIZE.part.wave;
+        if (px === 0) {
+            expect(tallest((p) => p.x > 0)).toBeGreaterThan(W.center.lift * 0.8);
+            expect(tallest((p) => p.x < 0)).toBeGreaterThan(W.center.lift * 0.8);
+        } else {
+            const heavy = tallest((p) => Math.sign(p.x - px) === -Math.sign(px));
+            const light = tallest((p) => Math.sign(p.x - px) === Math.sign(px));
+            expect(heavy).toBeGreaterThan(W.heavy.lift * 0.8);
+            expect(light).toBeLessThan(heavy * 0.7);
+        }
+    }
+    // The quiff: a crest swept up and OUT over the forehead (Steve,
+    // 2026-10-24: set back, it was "too close to the middle of the head"),
+    // so its farthest-forward point stands well clear of the head's front
+    // and above the brows, and it rises above the hairline's hair.
+    const crest = pieces(H.buildHair('quiff', 0x332211)).find((p) => p.mesh.name === 'crest');
+    expect(crest.mesh.userData.hatHides).toBe(true);
+    expect(shapes.facesOutward(crest.mesh.geometry)).toBe(true);
+    const front = crest.pts.reduce((m, p) => (p.z > m.z ? p : m));
+    expect(front.z).toBeGreaterThan(H.SCALP + 0.012);
+    expect(front.y).toBeGreaterThan(0.07);
+    const top = crest.pts.reduce((m, p) => (p.y > m.y ? p : m));
+    expect(top.y).toBeGreaterThan(0.12 + 0.01);
+    expect(top.z).toBeGreaterThan(0.05);
 });
 
 test('along reads a line of points, flat past its ends', () => {
