@@ -476,7 +476,9 @@ html [lang="en"]
     link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/recorder-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/dance-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/avatar.min.css?v=8" rel="stylesheet"]
@@ -734,7 +736,51 @@ html [lang="en"]
         div#av-export-clip.av-export-panel [aria-labelledby="av-export-tab-clip" hidden role="tabpanel"]
           div#av-export-stage.av-export-stage
           p.av-note
-            "Your avatar waves and turns once round, about five seconds, with no sound. It loops."
+            "A few seconds of your avatar, with no sound. It loops."
+          fieldset.av-group
+            legend.av-legend
+              "Motion"
+            div.av-options.av-options-text
+              label.av-option.av-option-text
+                input#av-export-motion-none.av-radio [name="av-export-motion" type="radio" value="none"]
+                span.av-word
+                  "None"
+              label.av-option.av-option-text
+                input#av-export-motion-wave.av-radio [checked name="av-export-motion" type="radio" value="wave"]
+                span.av-word
+                  "Wave"
+              label.av-option.av-option-text
+                input#av-export-motion-robot.av-radio [name="av-export-motion" type="radio" value="robot"]
+                span.av-word
+                  "The Robot"
+              label.av-option.av-option-text
+                input#av-export-motion-chicken.av-radio [name="av-export-motion" type="radio" value="chicken"]
+                span.av-word
+                  "The Chicken Dance"
+              label.av-option.av-option-text
+                input#av-export-motion-ymca.av-radio [name="av-export-motion" type="radio" value="ymca"]
+                span.av-word
+                  "The YMCA"
+              label.av-option.av-option-text
+                input#av-export-motion-macarena.av-radio [name="av-export-motion" type="radio" value="macarena"]
+                span.av-word
+                  "The Macarena"
+              label.av-option.av-option-text
+                input#av-export-motion-floss.av-radio [name="av-export-motion" type="radio" value="floss"]
+                span.av-word
+                  "The Floss"
+              label.av-option.av-option-text
+                input#av-export-motion-sprinkler.av-radio [name="av-export-motion" type="radio" value="sprinkler"]
+                span.av-word
+                  "The Sprinkler"
+              label.av-option.av-option-text
+                input#av-export-motion-disco.av-radio [name="av-export-motion" type="radio" value="disco"]
+                span.av-word
+                  "The Disco Point"
+              label.av-option.av-option-text
+                input#av-export-motion-dab.av-radio [name="av-export-motion" type="radio" value="dab"]
+                span.av-word
+                  "The Dab"
           fieldset.av-group
             legend.av-legend
               "Size"

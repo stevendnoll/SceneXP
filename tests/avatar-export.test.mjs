@@ -151,6 +151,38 @@ describe('the framings, on the real three', () => {
         }
         stage.turntable.rotation.y = 0;
     });
+
+    test('a dressed avatar, jointed, keeps every piece and dances every dance within reach (2026-10-26)', async () => {
+        const D = await import('../www/shared/js/dance-1.0.0.js');
+        const look = { hat: 'sunHat', length: 'long', glasses: 'round', facial: 'beard', sleeves: 'jersey', jerseyNumber: 'n8', legwear: 'kneeSocks', shoes: 'platforms', bottom: 'shorts', armwear: 'longGloves' };
+        const figure = F.createAvatar(look);
+        const meshesBefore = [];
+        figure.group.traverse((o) => { if (o.isMesh) meshesBefore.push(o); });
+        const rig = D.jointPerson(figure.person);
+        figure.group.add(rig.root);
+        // Nothing lost, the head group (and its hat) under the neck.
+        const meshesAfter = new Set();
+        figure.group.traverse((o) => { if (o.isMesh) meshesAfter.add(o); });
+        for (const m of meshesBefore) expect(meshesAfter.has(m)).toBe(true);
+        const head = figure.person.getObjectByName('head');
+        expect(head.parent).toBe(rig.neck);
+        expect(figure.person.getObjectByName('hat').parent).toBe(head);
+        expect(rig.arms.L && rig.arms.R && rig.legs.L && rig.legs.R).toBeTruthy();
+        // Every moment of every dance: the figure finite, on the plinth, and
+        // within arm's reach of where it stands.
+        for (const dance of D.DANCES) {
+            const loop = D.loopOf(dance);
+            for (let k = 0; k < 12; k++) {
+                D.applyPose(rig, D.danceAt(dance, (loop * k) / 12));
+                figure.group.updateMatrixWorld(true);
+                const box = new THREE.Box3().setFromObject(figure.group);
+                const ok = Number.isFinite(box.min.x) && Number.isFinite(box.max.y) && box.max.y < 2.4 && box.min.y > -0.1
+                    && Math.abs(box.min.x) < 1.2 && Math.abs(box.max.x) < 1.2 && Math.abs(box.min.z) < 1.2 && Math.abs(box.max.z) < 1.2;
+                expect(`${dance.id} ${k}: ${ok}`).toBe(`${dance.id} ${k}: true`);
+            }
+        }
+        figure.dispose();
+    });
 });
 
 describe('the pure parts', () => {
@@ -195,8 +227,8 @@ describe('the pure parts', () => {
 
     test('file names say what they are', () => {
         expect(X.pictureName(1024)).toBe('scenexp-avatar-1024.png');
-        expect(X.clipName({ w: 1080, h: 1920 }, 'mp4')).toBe('scenexp-avatar-1080x1920.mp4');
-        expect(X.clipName({ w: 720, h: 720 }, 'webm')).toBe('scenexp-avatar-720x720.webm');
+        expect(X.clipName({ w: 1080, h: 1920 }, 'mp4')).toBe('scenexp-avatar-wave-1080x1920.mp4');
+        expect(X.clipName({ w: 720, h: 720 }, 'webm', 'floss')).toBe('scenexp-avatar-floss-720x720.webm');
     });
 
     test('the clip: still, a wave, then once round, ending as it began', () => {
@@ -211,13 +243,55 @@ describe('the pure parts', () => {
             expect(a).toBeGreaterThanOrEqual(last);
             last = a;
         }
-        expect(X.clipMoment(0, C)).toEqual({ angle: 0, waving: false, done: false });
+        expect(X.clipMoment(0, C)).toEqual({ angle: 0, waving: false, done: false, pose: null });
         expect(X.clipMoment(C.waveAt, C).waving).toBe(true);
         expect(X.clipMoment(C.seconds - 0.01, C).done).toBe(false);
         expect(X.clipMoment(C.seconds, C).done).toBe(true);
         // The wave is over before the clip ends, and the turn ends with it.
         expect(C.waveAt + 2.2).toBeLessThan(C.seconds);
         expect(C.turnFrom + C.turnSeconds).toBeLessThanOrEqual(C.seconds);
+        // No motion: the turn alone, never a wave.
+        const still = X.clipPlan('none', C);
+        expect(still).toMatchObject({ motion: 'none', seconds: C.seconds, dance: null });
+        expect(X.clipMoment(C.waveAt + 1, C, still).waving).toBe(false);
+        expect(X.clipMoment(C.seconds / 2, C, still).angle).toBeGreaterThan(0);
+        expect(X.clipPlan('nope', C).motion).toBe('none');
+    });
+
+    test('the motions: none, the wave, then every shared dance by name', async () => {
+        const D = await import('../www/shared/js/dance-1.0.0.js');
+        expect(X.MOTIONS.slice(0, 2).map((m) => m.id)).toEqual(['none', 'wave']);
+        expect(X.MOTIONS.slice(2).map((m) => m.id)).toEqual(D.DANCES.map((d) => d.id));
+        for (const m of X.MOTIONS.slice(2)) expect(m.label).toMatch(/^The /);
+        expect(X.MOTIONS.find((m) => m.id === 'floss').label).toBe('The Floss');
+    });
+
+    test('a dance plays whole loops between rest and rest, facing the front, within the longest clip', async () => {
+        const D = await import('../www/shared/js/dance-1.0.0.js');
+        const C = CONFIG.export.clip;
+        for (const dance of D.DANCES) {
+            const plan = X.clipPlan(dance.id, C);
+            const loop = D.loopOf(dance);
+            expect(plan.dance.id).toBe(dance.id);
+            expect(plan.loops).toBeGreaterThanOrEqual(1);
+            expect(plan.seconds).toBeCloseTo(2 * C.ease + plan.loops * loop, 9);
+            expect(plan.seconds).toBeLessThanOrEqual(C.longest + 1e-9);
+            // The nearest whole number of loops to the plain clip's length,
+            // unless that is too long.
+            const wanted = Math.max(1, Math.round((C.seconds - 2 * C.ease) / loop));
+            expect(plan.loops === wanted || 2 * C.ease + wanted * loop > C.longest).toBe(true);
+            // Rest at the start and the end, the dance between, no turn.
+            const at = (t) => X.clipMoment(t, C, plan);
+            expect(at(0).pose).toEqual(D.REST);
+            expect(at(0).angle).toBe(0);
+            expect(at(plan.seconds / 2).angle).toBe(0);
+            expect(at(plan.seconds / 2).waving).toBe(false);
+            expect(at(plan.seconds / 2).pose).toEqual(D.danceAt(dance, plan.seconds / 2 - C.ease));
+            expect(at(plan.seconds).done).toBe(true);
+            expect(at(plan.seconds).pose).toEqual(D.REST);
+        }
+        // The Floss's loop is under a second: several loops, not one.
+        expect(X.clipPlan('floss', C).loops).toBeGreaterThan(3);
     });
 
     test('every border is drawn as designed', () => {
@@ -285,10 +359,13 @@ describe('the pure parts', () => {
         // export button sits beside Surprise me.
         expect(HTML).toMatch(/<dialog id="av-export" class="av-export" aria-labelledby="av-export-title">/);
         expect(HTML).toMatch(/id="av-random"[^>]*>Surprise me<\/button>\s*<button id="av-export-open"/);
-        for (const w of Object.values(X.WORDS)) {
+        for (const word of Object.values(X.WORDS)) {
+            const w = typeof word === 'function' ? word(5) : word;
             expect(w).not.toMatch(/[;—]/);
             expect(w).not.toMatch(/\b(colour|grey|centre|favourite)/i);
         }
+        expect(X.WORDS.clipMaking(4.5)).toBe('Making your clip. It takes about 5 seconds.');
+        expect(X.WORDS.clipMaking(7.6)).toBe('Making your clip. It takes about 8 seconds.');
     });
 });
 
@@ -508,8 +585,10 @@ describe('the dialog, end to end with fakes', () => {
         ex.open({});
         expect(ex.clipMime()).toBe('video/mp4');
         clock.t = 100;
+        dom.el('av-export-motion-wave').checked = true;
         const pending = ex.makeClip();
-        expect(dom.el('av-export-status').textContent).toBe(X.WORDS.clipMaking);
+        expect(dom.el('av-export-status').textContent).toBe(X.WORDS.clipMaking(CONFIG.export.clip.seconds));
+        expect(ex.state.recording.rig).toBeNull();
         expect(dom.el('av-export-clip-make').disabled).toBe(true);
         expect(FakeRecorder.last.options).toEqual({ mimeType: 'video/mp4', videoBitsPerSecond: CONFIG.export.clip.bitrate });
         // The stage holds the recording canvas, at the story's size.
@@ -540,15 +619,40 @@ describe('the dialog, end to end with fakes', () => {
         expect(FakeRecorder.last.stopped).toBe(true);
         expect(dom.loops.length).toBe(loops);
         const clip = await pending;
-        expect(clip.name).toBe('scenexp-avatar-1080x1920.mp4');
+        expect(clip.name).toBe('scenexp-avatar-wave-1080x1920.mp4');
         expect(ex.state.clip).toBe(clip);
         expect(dom.el('av-export-clip-save').hidden).toBe(false);
         expect(dom.el('av-export-clip-save').textContent).toBe('Save video');
         expect(dom.el('av-export-clip-make').disabled).toBe(false);
         expect(dom.el('av-export-status').textContent).toBe(X.WORDS.clipReady);
         expect(await ex.saveClip()).toBe('saved');
-        expect(made[made.length - 1].download).toBe('scenexp-avatar-1080x1920.mp4');
+        expect(made[made.length - 1].download).toBe('scenexp-avatar-wave-1080x1920.mp4');
         expect(dom.el('av-export-status').textContent).toBe(X.WORDS.clipSaved);
+        // A dance (2026-10-26): the figure jointed, posed each frame from
+        // rest into the dance, no wave and no turn, as long as its loops.
+        const D = await import('../www/shared/js/dance-1.0.0.js');
+        dom.el('av-export-motion-wave').checked = false;
+        dom.el('av-export-motion-floss').checked = true;
+        dom.el('av-export-clip-size-story').checked = false;
+        dom.el('av-export-clip-size-c720').checked = true;
+        clock.t = 200;
+        const dancing = ex.makeClip();
+        const plan = X.clipPlan('floss', C);
+        expect(dom.el('av-export-status').textContent).toBe(X.WORDS.clipMaking(plan.seconds));
+        expect(ex.state.recording.rig).toBeTruthy();
+        // The stub absorbs a name: the rig holds the figure's own person.
+        expect(ex.state.recording.rig.person).toBe(ex.stage.figure.person);
+        frame();
+        expect(ex.state.recording.pose).toEqual(D.REST);
+        clock.t = 200 + plan.seconds / 2;
+        frame();
+        expect(ex.state.recording.angle).toBe(0);
+        expect(ex.state.recording.pose).toEqual(D.danceAt(plan.dance, plan.seconds / 2 - C.ease));
+        expect(ex.stage.figure.gesturing).toBeNull();
+        clock.t = 200 + plan.seconds;
+        frame();
+        const danced = await dancing;
+        expect(danced.name).toBe('scenexp-avatar-floss-720x720.mp4');
         // Closing mid-clip cancels it quietly.
         const again = ex.makeClip();
         ex.close();

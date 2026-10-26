@@ -125,7 +125,9 @@
     <link rel="modulepreload" href="../shared/js/avatar-hats-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-wardrobe-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/recorder-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/dance-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/promo-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/crowd-1.0.0.min.js">
     <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
@@ -370,7 +372,24 @@
 
             <div id="av-export-clip" class="av-export-panel" role="tabpanel" aria-labelledby="av-export-tab-clip" hidden>
                 <div id="av-export-stage" class="av-export-stage"></div>
-                <p class="av-note">Your avatar waves and turns once round, about five seconds, with no sound. It loops.</p>
+                <p class="av-note">A few seconds of your avatar, with no sound. It loops.</p>
+                <!-- The motion: the turn alone, the wave and the turn, or one
+                     of the shared dances (dance-1.0.0), facing the front. -->
+                <fieldset class="av-group">
+                    <legend class="av-legend">Motion</legend>
+                    <div class="av-options av-options-text">
+                        <label class="av-option av-option-text"><input id="av-export-motion-none" class="av-radio" type="radio" name="av-export-motion" value="none"><span class="av-word">None</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-wave" class="av-radio" type="radio" name="av-export-motion" value="wave" checked><span class="av-word">Wave</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-robot" class="av-radio" type="radio" name="av-export-motion" value="robot"><span class="av-word">The Robot</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-chicken" class="av-radio" type="radio" name="av-export-motion" value="chicken"><span class="av-word">The Chicken Dance</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-ymca" class="av-radio" type="radio" name="av-export-motion" value="ymca"><span class="av-word">The YMCA</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-macarena" class="av-radio" type="radio" name="av-export-motion" value="macarena"><span class="av-word">The Macarena</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-floss" class="av-radio" type="radio" name="av-export-motion" value="floss"><span class="av-word">The Floss</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-sprinkler" class="av-radio" type="radio" name="av-export-motion" value="sprinkler"><span class="av-word">The Sprinkler</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-disco" class="av-radio" type="radio" name="av-export-motion" value="disco"><span class="av-word">The Disco Point</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-dab" class="av-radio" type="radio" name="av-export-motion" value="dab"><span class="av-word">The Dab</span></label>
+                    </div>
+                </fieldset>
                 <fieldset class="av-group">
                     <legend class="av-legend">Size</legend>
                     <div class="av-options av-options-text">

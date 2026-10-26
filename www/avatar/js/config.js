@@ -177,7 +177,10 @@ export const AVATAR_PAGE = deepFreeze({
      * `preview` pixels across. A clip is `clip.seconds` long at `clip.fps`:
      * the figure waves from `clip.waveAt` and turns once round from
      * `clip.turnFrom` over `clip.turnSeconds`, so it ends facing the front
-     * as it began and loops cleanly, at one of `clip.sizes`.
+     * as it began and loops cleanly, at one of `clip.sizes`. A dance
+     * (Steve, 2026-10-26) eases in from rest and back over `clip.ease`
+     * either side of a whole number of its loops, never over
+     * `clip.longest` seconds.
      */
     export: {
         pictures: [
@@ -187,7 +190,7 @@ export const AVATAR_PAGE = deepFreeze({
         ],
         preview: 560,
         clip: {
-            seconds: 4.5, fps: 30, waveAt: 0.3, turnFrom: 1.5, turnSeconds: 3.0,
+            seconds: 4.5, fps: 30, waveAt: 0.3, turnFrom: 1.5, turnSeconds: 3.0, ease: 0.4, longest: 8,
             bitrate: 8000000, mobileBitrate: 5000000,
             sizes: [
                 { id: 'c720', w: 720, h: 720, label: '720 square' },

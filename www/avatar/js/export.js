@@ -32,6 +32,7 @@ import { createAvatar, portraitPose, PORTRAIT, smoothstep } from '../../shared/j
 import { colorOf, normalizeAvatar, CUSTOM_COLOR } from '../../shared/js/avatar-1.0.0.min.js';
 import { shareFile, canShareFiles, saveFile } from '../../shared/js/sharefile-1.0.0.min.js';
 import { canRecord, pickMime, extensionOf, startRecording } from '../../shared/js/recorder-1.0.0.min.js';
+import { DANCES, danceOf, loopOf, danceAt, blendPoses, jointPerson, applyPose, REST as DANCE_REST } from '../../shared/js/dance-1.0.0.min.js';
 import { buildStage, frameFor } from './studio.min.js';
 import { tabKey } from './editor.min.js';
 
@@ -41,7 +42,7 @@ export const WORDS = Object.freeze({
     pictureSaved: 'Your picture is in your downloads.',
     pictureShared: 'Shared.',
     pictureFailed: "This browser couldn't make the picture. Please try a smaller size.",
-    clipMaking: 'Making your clip. It takes about five seconds.',
+    clipMaking: (seconds) => `Making your clip. It takes about ${Math.max(1, Math.round(seconds))} seconds.`,
     clipReady: 'Your clip is ready.',
     clipSaved: 'Your clip is in your downloads.',
     clipShared: 'Shared.',
@@ -91,6 +92,17 @@ export const BORDER_COLORS = Object.freeze([
     { id: 'pink', label: 'Pink', color: 0xe48fb8 }
 ]);
 
+/**
+ * What the figure does in the clip (Steve, 2026-10-26: "export videos of
+ * their avatars dancing"): nothing but the turn, the wave, or one of the
+ * shared dances (dance-1.0.0), by name.
+ */
+export const MOTIONS = Object.freeze([
+    { id: 'none', label: 'None' },
+    { id: 'wave', label: 'Wave' },
+    ...DANCES.map((d) => Object.freeze({ id: d.id, label: d.name.replace(/^the /, 'The ') }))
+]);
+
 /** The border's color as a hex number: a custom color (`x` and six hex
  *  digits) as it is, a listed one's, or the avatar's shirt for `match`. */
 export function borderColor(avatar, id) {
@@ -116,8 +128,8 @@ export function pictureName(px, ext = 'png') {
     return `scenexp-avatar-${px}.${ext}`;
 }
 
-export function clipName(size, ext) {
-    return `scenexp-avatar-${size.w}x${size.h}.${ext}`;
+export function clipName(size, ext, motion = 'wave') {
+    return `scenexp-avatar-${motion}-${size.w}x${size.h}.${ext}`;
 }
 
 // ---- The camera -----------------------------------------------------------------
@@ -163,10 +175,35 @@ export function clipAngle(t, clip) {
     return Math.PI * 2 * smoothstep((t - clip.turnFrom) / clip.turnSeconds);
 }
 
-/** What the clip is doing at `t`: the angle, whether the wave has begun,
- *  and whether the clip is over. */
-export function clipMoment(t, clip) {
-    return { angle: clipAngle(t, clip), waving: t >= clip.waveAt, done: t >= clip.seconds };
+/**
+ * The clip's plan for a `motion`: how long it runs, and the dance if it is
+ * one. The turn and the wave take `clip.seconds`. A dance starts at rest,
+ * eases into the dance over `clip.ease`, plays a whole number of its loops
+ * (the nearest to the plain clip's length, never over `clip.longest`) and
+ * eases back to rest, so the clip loops as a video the way the wave does.
+ */
+export function clipPlan(motion, clip) {
+    const dance = danceOf(motion);
+    if (!dance) return { motion: motion === 'wave' ? 'wave' : 'none', seconds: clip.seconds, dance: null, loops: 0 };
+    const loop = loopOf(dance);
+    let loops = Math.max(1, Math.round((clip.seconds - 2 * clip.ease) / loop));
+    while (loops > 1 && 2 * clip.ease + loops * loop > clip.longest) loops--;
+    return { motion, seconds: 2 * clip.ease + loops * loop, dance, loops };
+}
+
+/**
+ * What the clip is doing at `t`: the plinth's angle, whether the wave has
+ * begun, whether the clip is over, and for a dance the figure's pose
+ * (dance-1.0.0's, to `applyPose`), blended from rest at the start and back
+ * to it at the end. A dance faces the front: no turn under its own steps.
+ */
+export function clipMoment(t, clip, plan = clipPlan('wave', clip)) {
+    if (!plan.dance) {
+        return { angle: clipAngle(t, clip), waving: plan.motion === 'wave' && t >= clip.waveAt, done: t >= plan.seconds, pose: null };
+    }
+    const f = Math.min(smoothstep(t / clip.ease), 1 - smoothstep((t - (plan.seconds - clip.ease)) / clip.ease));
+    const danced = danceAt(plan.dance, Math.max(0, t - clip.ease));
+    return { angle: 0, waving: false, done: t >= plan.seconds, pose: f >= 1 ? danced : blendPoses(DANCE_REST, danced, f) };
 }
 
 // ---- Drawing the picture ---------------------------------------------------------
@@ -328,6 +365,7 @@ export function dialogIds(config) {
         border: radios('av-export-border', BORDERS),
         color: radios('av-export-color', BORDER_COLORS),
         size: radios('av-export-size', E.pictures),
+        motion: radios('av-export-motion', MOTIONS),
         clipSize: radios('av-export-clip-size', E.clip.sizes)
     };
 }
@@ -360,6 +398,7 @@ export function createExporter(config, {
         color: BORDER_COLORS[0].id,
         size: E.pictures[Math.min(1, E.pictures.length - 1)].id,
         clipSize: E.clip.sizes[Math.min(1, E.clip.sizes.length - 1)].id,
+        motion: 'wave',
         tab: 'picture',
         angle: 0,              // the plinth's turn in the picture (Steve, 2026-10-26: a side profile)
         open: false,
@@ -389,6 +428,7 @@ export function createExporter(config, {
         state.border = checked(ids.border, 'av-export-border', state.border);
         state.size = checked(ids.size, 'av-export-size', state.size);
         state.clipSize = checked(ids.clipSize, 'av-export-clip-size', state.clipSize);
+        state.motion = checked(ids.motion, 'av-export-motion', state.motion);
         const custom = $(ids.custom);
         const chosen = checked(ids.color, 'av-export-color', null);
         if (chosen) state.color = chosen;
@@ -591,25 +631,39 @@ export function createExporter(config, {
         }
         setBackdrop(false);
         setFigure(state.avatar);
+        const s = ensureStage();
+        const plan = clipPlan(state.motion, E.clip);
+        // A dance: the figure given a waist and a neck (dance-1.0.0), its
+        // root back inside the figure's group on the plinth, and posed
+        // frame by frame; the wave and the turn drive the figure as before.
+        let rig = null;
+        if (plan.dance) {
+            rig = jointPerson(s.figure.person);
+            s.figure.group.add(rig.root);
+        }
         const makeBtn = $(ids.makeClip);
         if (makeBtn) makeBtn.disabled = true;
-        say(WORDS.clipMaking);
-        const recording = { rec, out, g, size, mime, t0: now(), last: 0, waved: false, cancelled: false };
+        say(WORDS.clipMaking(plan.seconds));
+        const recording = { rec, out, g, size, mime, plan, rig, t0: now(), last: 0, waved: false, cancelled: false };
         state.recording = recording;
-        const s = ensureStage();
         const step = () => {
             if (recording.cancelled || state.recording !== recording) return;
             const t = now() - recording.t0;
             const dt = Math.min(0.1, Math.max(0, t - recording.last));
             recording.last = t;
-            const m = clipMoment(t, E.clip);
+            const m = clipMoment(t, E.clip, plan);
             recording.t = t;
             recording.angle = m.angle;
-            if (m.waving && !recording.waved) {
-                recording.waved = true;
-                s.figure.gesture('wave');
+            recording.pose = m.pose;
+            if (m.pose && rig) {
+                applyPose(rig, m.pose);
+            } else {
+                if (m.waving && !recording.waved) {
+                    recording.waved = true;
+                    s.figure.gesture('wave');
+                }
+                s.figure.tick(dt, { reducedMotion: false });
             }
-            s.figure.tick(dt, { reducedMotion: false });
             const image = render(size.w, size.h, 'figure', m.angle);
             g.drawImage(image, 0, 0, size.w, size.h);
             if (m.done) {
@@ -623,7 +677,7 @@ export function createExporter(config, {
             if (makeBtn) makeBtn.disabled = false;
             if (recording.cancelled) return null;
             state.recording = null;
-            state.clip = { blob, name: clipName(size, extensionOf(mime)) };
+            state.clip = { blob, name: clipName(size, extensionOf(mime), plan.motion) };
             if (saveBtn) {
                 saveBtn.hidden = false;
                 saveBtn.textContent = canShareFiles(blob.type, { nav, win }) ? 'Share video' : 'Save video';
@@ -741,7 +795,7 @@ export function createExporter(config, {
     for (const list of [ids.framing, ids.background, ids.border, ids.color, ids.size]) {
         for (const id of list) on(id, 'change', drawPreview);
     }
-    for (const id of ids.clipSize) on(id, 'change', readChoices);
+    for (const id of [...ids.clipSize, ...ids.motion]) on(id, 'change', readChoices);
     // The custom color: the radios let go of their choice, and the preview
     // follows the picker once a frame while it is dragged.
     const custom = $(ids.custom);
