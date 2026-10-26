@@ -583,6 +583,67 @@ describe('the rig\'s hips: off by default, a woman\'s build from the legs when a
         expect(legsOf(person).map((l) => l.position.y)).toEqual([0.75, 0.75]);
     });
 
+    test('the builds\' shape numbers (2026-10-26): shoulders and seat widen or narrow the torso\'s ends, a waist below 0 bows it out, girth deepens it, legs thicken them, and each at 1 is the figure as it was', () => {
+        const base = { role: 'customer', shoulderRound: 0.35 };
+        /** The torso's width across a band of its height (its own
+         *  middle), from its outline. */
+        const widthAt = (person, y0, y1) => {
+            const torso = torsoOf(person) || person.children.find((c) => c.isMesh && c.geometry.type === 'ExtrudeGeometry' && Math.abs(c.position.y - 1.025) < 1e-6);
+            const { width } = (() => {
+                torso.geometry.computeBoundingBox();
+                const b = torso.geometry.boundingBox;
+                return { width: b.max.x - b.min.x, depth: b.max.z - b.min.z };
+            })();
+            const pos = torso.geometry.attributes.position;
+            let half = 0;
+            for (let i = 0; i < pos.count; i++) {
+                const y = pos.getY(i);
+                if (y < y0 || y > y1) continue;
+                half = Math.max(half, Math.abs(pos.getX(i)));
+            }
+            // A straight side has no vertex between its corners: full width.
+            return { width: half > 0 ? 2 * half : width, full: width, depth: boxOf(torso, person).max.z - boxOf(torso, person).min.z };
+        };
+        const plain = createPerson(base);
+        // Bands down the side, clear of the shoulders' rounding at the top
+        // and the corners at the bottom.
+        const top = (p) => widthAt(p, 0.1, 0.16).width;
+        const bottom = (p) => widthAt(p, -0.22, -0.16).width;
+        const middle = (p) => widthAt(p, -0.06, -0.01).width;
+        expect(top(plain)).toBeCloseTo(bottom(plain), 3);
+        // Lean shoulders over a wider seat: a pear. The arms hang from the
+        // shoulders and the legs and the belt sit on the seat.
+        const pear = createPerson({ ...base, shoulders: 0.86, seat: 1.08 });
+        // (The side is still coming in at the band; at the shoulders it is
+        // 0.86 of the width.)
+        expect(top(pear)).toBeLessThan(top(plain) - 0.02);
+        expect(bottom(pear)).toBeGreaterThan(bottom(plain) + 0.02);
+        const armX = (p) => Math.abs(armsOf(p)[0].position.x);
+        const legX = (p) => Math.abs(legsOf(p)[0].position.x);
+        expect(armX(pear)).toBeLessThan(armX(plain));
+        expect(legX(pear)).toBeGreaterThan(legX(plain));
+        // Broad: the other way about.
+        const broad = createPerson({ ...base, shoulders: 1.15, seat: 0.94 });
+        expect(top(broad)).toBeGreaterThan(top(plain) * 1.1);
+        expect(bottom(broad)).toBeLessThan(bottom(plain));
+        expect(armX(broad)).toBeGreaterThan(armX(plain));
+        // A waist below 0 bows the middle OUT past both ends.
+        const round = createPerson({ ...base, waist: -0.12, girth: 1.3 });
+        expect(middle(round)).toBeGreaterThan(top(round) + 0.02);
+        expect(middle(round)).toBeGreaterThan(bottom(round) + 0.02);
+        expect(middle(plain)).toBeLessThanOrEqual(top(plain) + 1e-6);
+        expect(widthAt(round, 0, 0).depth).toBeCloseTo(widthAt(plain, 0, 0).depth * 1.3, 3);
+        // Thicker legs, over the muscles' own.
+        const thick = createPerson({ ...base, legs: 1.25 });
+        expect(pieces(legsOf(thick)[0]).thigh.radiusTop).toBeCloseTo(0.065 * 1.25, 9);
+        expect(pieces(legsOf(createPerson({ ...base, legs: 1.25, muscular: true }))[0]).thigh.radiusTop).toBeCloseTo(0.065 * 1.35 * 1.25, 9);
+        // At 1, 1, 0 and 1 nothing differs, vertex for vertex.
+        const same = createPerson({ ...base, shoulders: 1, seat: 1, waist: 0, girth: 1, legs: 1 });
+        const rounded = (p) => p.children.find((c) => c.isMesh && c.geometry.type === 'ExtrudeGeometry' && Math.abs(c.position.y - 1.025) < 1e-6);
+        const posOf = (p) => Array.from(rounded(p).geometry.attributes.position.array);
+        expect(posOf(same)).toEqual(posOf(plain));
+    });
+
     test('more than 1 is 1, and less than 0 is none', () => {
         const one = createPerson({ role: 'customer', hips: 1 });
         const many = createPerson({ role: 'customer', hips: 5 });

@@ -67,9 +67,10 @@ export { HAT_SIZE, trimUnder, HAIR_DRAWN };
  * sunglasses with colors, hand and foot sizes. 11 (2026-10-26): forearms
  * that narrow to the wrist, hands with fingers and a thumb, jersey numbers.
  * 12 (2026-10-26): bigger hands, hats lifted clear of glasses, numbers
- * bigger and centered.
+ * bigger and centered. 13 (2026-10-26): seven builds (Curvy's shoulders
+ * narrowed a touch).
  */
-export const RENDER_VERSION = 12;
+export const RENDER_VERSION = 13;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named

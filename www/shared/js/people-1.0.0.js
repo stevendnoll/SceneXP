@@ -34,59 +34,73 @@
  * outline has no corner anywhere. The hip, the shoulders and the depth stay
  * exactly as they were: only the middle of each side moves in.
  *
+ * WITH `shoulders` OR `seat` OFF 1 (2026-10-26, the avatar's builds) the
+ * outline is a trapezoid softened the same way: `w` times `shoulders` across
+ * the top and `w` times `seat` across the bottom, each side a smooth S from
+ * the one to the other through the waist. A waist BELOW 0 bows the sides
+ * out instead, for a fuller middle. At 1, 1 and 0 the outline is exactly the
+ * one every figure built before.
+ *
  * @param {number} w Finished width
  * @param {number} h Finished height
  * @param {number} d Finished depth
  * @param {number} round Shoulder radius as a fraction of the half-width
- * @param {number} [waist=0] How much narrower the waist is, 0 to 0.3 of the width
+ * @param {number} [waist=0] How much narrower the waist is, -0.3 (fuller) to 0.3 of the width
+ * @param {number} [shoulders=1] The top's width as a share of `w`
+ * @param {number} [seat=1] The bottom's width as a share of `w`
  * @returns {THREE.ExtrudeGeometry}
  */
-function roundedTorsoGeometry(w, h, d, round, waist = 0) {
+function roundedTorsoGeometry(w, h, d, round, waist = 0, shoulders = 1, seat = 1) {
     // Small enough that it never eats a face, large enough to catch a
     // highlight along each edge under the room's key light.
     const bevel = Math.min(0.02, w / 4, h / 4, d / 4);
     const hw = (w - 2 * bevel) / 2;
     const hh = (h - 2 * bevel) / 2;
+    const hwTop = hw * shoulders;
+    const hwBot = hw * seat;
     // Clamped so an over-large `round` rounds the shoulders away entirely
     // rather than folding the outline back through itself.
-    const topR = Math.min(round * (w / 2), hw, hh);
-    const botR = Math.min(0.02, hw, hh);
+    const topR = Math.min(round * (w / 2), hwTop, hh);
+    const botR = Math.min(0.02, hwBot, hh);
 
-    // The waist: how far in each side comes (in the shape's own half-width,
-    // so the bevel still finishes it to `w * (1 - pinch)`), and its height.
-    const pinch = Math.max(0, Math.min(0.3, waist));
+    // The waist: how far in (or out, below 0) each side comes from the
+    // mean of the top and the bottom (in the shape's own half-width, so the
+    // bevel still finishes it to `w * (1 - pinch)`), and its height.
+    const pinch = Math.max(-0.3, Math.min(0.3, waist));
     const inset = (w / 2) * pinch;
+    const curved = pinch !== 0 || shoulders !== seat;
     const hip = -hh + botR;
     const shoulder = hh - topR;
     const at = -hh + h * WAIST_AT;
-    // One side, from `y0` to `y1` at its full half-width `x` (signed), in to
-    // the waist and out again, every tangent upright where it meets the next.
-    const side = (x, y0, y1) => {
-        if (!(inset > 0)) {
-            shape.lineTo(x, y1);
+    // One side, from `y0` at half-width `x0` to `y1` at `x1` (signed), in
+    // to the waist and out again, every tangent upright where it meets the
+    // next; a straight line when nothing bends it.
+    const side = (x0, y0, x1, y1) => {
+        if (!curved) {
+            shape.lineTo(x1, y1);
             return;
         }
-        const xw = x - Math.sign(x) * inset;
+        const xw = (x0 + x1) / 2 - Math.sign(x0) * inset;
         const half1 = (at - y0) / 2;
         const half2 = (y1 - at) / 2;
-        shape.bezierCurveTo(x, y0 + half1, xw, at - half1, xw, at);
-        shape.bezierCurveTo(xw, at + half2, x, y1 - half2, x, y1);
+        shape.bezierCurveTo(x0, y0 + half1, xw, at - half1, xw, at);
+        shape.bezierCurveTo(xw, at + half2, x1, y1 - half2, x1, y1);
     };
 
     const shape = new THREE.Shape();
-    shape.moveTo(-hw, hip);
-    side(-hw, hip, shoulder);
-    shape.absarc(-hw + topR, hh - topR, topR, Math.PI, Math.PI / 2, true);
-    shape.lineTo(hw - topR, hh);
-    shape.absarc(hw - topR, hh - topR, topR, Math.PI / 2, 0, true);
-    side(hw, shoulder, hip);
-    shape.absarc(hw - botR, -hh + botR, botR, 0, -Math.PI / 2, true);
-    shape.lineTo(-hw + botR, -hh);
-    shape.absarc(-hw + botR, -hh + botR, botR, -Math.PI / 2, -Math.PI, true);
+    shape.moveTo(-hwBot, hip);
+    side(-hwBot, hip, -hwTop, shoulder);
+    shape.absarc(-hwTop + topR, hh - topR, topR, Math.PI, Math.PI / 2, true);
+    shape.lineTo(hwTop - topR, hh);
+    shape.absarc(hwTop - topR, hh - topR, topR, Math.PI / 2, 0, true);
+    side(hwTop, shoulder, hwBot, hip);
+    shape.absarc(hwBot - botR, -hh + botR, botR, 0, -Math.PI / 2, true);
+    shape.lineTo(-hwBot + botR, -hh);
+    shape.absarc(-hwBot + botR, -hh + botR, botR, -Math.PI / 2, -Math.PI, true);
 
     const depth = d - 2 * bevel;
     const geometry = new THREE.ExtrudeGeometry(shape, {
-        depth, steps: 1, curveSegments: inset > 0 ? 10 : 5,
+        depth, steps: 1, curveSegments: curved ? 10 : 5,
         bevelEnabled: true, bevelSegments: 2,
         bevelThickness: bevel, bevelSize: bevel, bevelOffset: 0
     });
@@ -329,8 +343,13 @@ export function createPerson(config) {
         dressShirt = false,    // button-down dress shirt: center placket + long sleeves, no jacket/tie
         shoulderRound = 0,     // 0 = square box torso; up to ~0.6 rounds the shoulders and softens every edge
         hips = 0,              // 0 = straight (as before); up to 1 a woman's build: thighs full at the hip, meeting, tapering to the knee, a slimmer calf
-        waist = 0,             // 0 = straight sides (as before); up to 0.3 an hourglass: the torso's sides curve in to a waist that much narrower (rounded torso only, shoulderRound > 0)
+        waist = 0,             // 0 = straight sides (as before); up to 0.3 an hourglass: the torso's sides curve in to a waist that much narrower; below 0 (to -0.3) they bow out, a fuller middle (rounded torso only, shoulderRound > 0)
         slender = 0,           // 0 = as before; up to 1 slimmer arms and wrists (15%), smaller hands and narrower shoes
+        // The builds (2026-10-26, the avatar's body types): each 1 (or 0) is exactly the figure built before.
+        shoulders = 1,         // the torso's width across the top, as a share of its width (0.86 a pear's lean shoulders, 1.15 broad); the arms hang from it (rounded torso only)
+        seat = 1,              // the torso's width across the bottom, the same way (1.08 a pear's hips); the legs and the belt follow it (rounded torso only)
+        girth = 1,             // the torso's depth, as a share (1.3 a round middle)
+        legs = 1,              // the legs' thickness, as a share (over the muscles' own)
         shoeColor = 0x1a1a1a,  // the shoes' color (black, as every figure has worn them)
         shoeStyle = 'block',   // 'block' (the box every figure has worn) | 'maryJane': a low rounded shoe, the instep showing, a strap across it
         sleeveColor = null     // long sleeves in this color; null keeps bare forearms
@@ -398,12 +417,12 @@ export function createPerson(config) {
     const neckHeight = 0.08;
     const torsoHeight = 0.55;
     const torsoWidth = 0.38 * (muscular ? 1.3 : 1);    // broader chest & shoulders
-    const torsoDepth = 0.22 * (muscular ? 1.18 : 1);
+    const torsoDepth = 0.22 * (muscular ? 1.18 : 1) * girth;
     const armLength = 0.55;
     const slim = Math.max(0, Math.min(1, slender));
     const armRadius = 0.045 * (muscular ? 1.55 : 1) * (1 - 0.15 * slim);   // thicker arms; slimmer on a slender build
     const legLength = 0.75;
-    const legRadius = 0.065 * (muscular ? 1.35 : 1);   // thicker legs on a muscular build
+    const legRadius = 0.065 * (muscular ? 1.35 : 1) * legs;   // thicker legs on a muscular build, or a build's own
     const hipShape = Math.max(0, Math.min(1, hips));
     const footLength = 0.18;
 
@@ -568,9 +587,11 @@ export function createPerson(config) {
     // soft-edged slab with rounded shoulders, which is what a figure seen
     // close up in a seated scene wants: the box's hard top corners read as
     // points from any three-quarter angle.
+    // The builds' shoulder and seat widths shape the rounded torso only, as
+    // the waist does; the box stays the box.
     const torso = new THREE.Mesh(
         shoulderRound > 0
-            ? roundedTorsoGeometry(torsoWidth, torsoHeight, torsoDepth, shoulderRound, waist)
+            ? roundedTorsoGeometry(torsoWidth, torsoHeight, torsoDepth, shoulderRound, waist, shoulders, seat)
             : new THREE.BoxGeometry(torsoWidth, torsoHeight, torsoDepth),
         shirtMaterial
     );
@@ -786,7 +807,7 @@ export function createPerson(config) {
 
         // Position arm group at shoulder
         armGroup.position.set(
-            side * (torsoWidth / 2 + armRadius * 0.5),
+            side * ((torsoWidth * shoulders) / 2 + armRadius * 0.5),
             legLength + torsoHeight - 0.05,
             0
         );
@@ -860,7 +881,7 @@ export function createPerson(config) {
 
         // Position leg group at hip
         legGroup.position.set(
-            side * (torsoWidth / 4 + 0.006 * hipShape),
+            side * ((torsoWidth * seat) / 4 + 0.006 * hipShape),
             legLength,
             0
         );
@@ -880,7 +901,7 @@ export function createPerson(config) {
     // === BELT (skipped when wearing a skirt) ===
     if (!hasSkirt) {
         const belt = new THREE.Mesh(
-            new THREE.BoxGeometry(torsoWidth + 0.02, 0.04, torsoDepth + 0.02),
+            new THREE.BoxGeometry(torsoWidth * seat + 0.02, 0.04, torsoDepth + 0.02),
             new THREE.MeshStandardMaterial({ color: 0x2c1810, roughness: 0.5, metalness: 0.2 })
         );
         belt.position.y = legLength + 0.02;

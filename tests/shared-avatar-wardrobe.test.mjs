@@ -324,6 +324,55 @@ describe('the shirts', () => {
         expect(named(F.createAvatar({ sleeves: 'short', shirt: 'navy', jerseyNumber: 'n8' }).person, 'number')).toHaveLength(0);
     });
 
+    test('every build wears every shirt: hem bands and waistbands are as wide as the torso\'s bottom, the jersey\'s stripes follow its sides, and the numbers stay on the cloth (2026-10-26)', () => {
+        const builds = A.BUILDS.map((b) => b.id);
+        expect(builds).toHaveLength(7);
+        for (const build of builds) {
+            // The sweater's hem band hugs the torso's bottom, wider or
+            // narrower than its shoulders.
+            const sweater = F.createAvatar({ build, sleeves: 'sweater', shirt: 'rust' });
+            const torso = torsoOf(sweater);
+            const { height } = (() => {
+                torso.geometry.computeBoundingBox();
+                return { height: torso.geometry.boundingBox.max.y - torso.geometry.boundingBox.min.y };
+            })();
+            const band = named(sweater.person, 'band')[0];
+            const bb = boxOf(sweater.person, band);
+            const hem = W.torsoWidthAt(torso, -height / 2, -height / 2 + W.SHIRT_SIZE.sweater.band);
+            expect(`${build} hem: ${Math.abs((bb.max.x - bb.min.x) - (hem + 2 * W.SHIRT_SIZE.sweater.proud)) < 1e-6}`).toBe(`${build} hem: true`);
+            // The leggings' waistband too.
+            const leggings = F.createAvatar({ build, bottom: 'leggings' });
+            const wb = boxOf(leggings.person, named(leggings.person, 'waistband')[0]);
+            const waistWidth = W.torsoWidthAt(torsoOf(leggings), -height / 2, -height / 2 + W.BOTTOM_SIZE.leggings.waist);
+            expect(`${build} waistband: ${Math.abs((wb.max.x - wb.min.x) - (waistWidth + 0.016)) < 1e-6}`).toBe(`${build} waistband: true`);
+            // Every piece of each jersey stripe sits within 4 mm of the
+            // torso's side at its own height, never floating off a narrow
+            // shoulder or sinking into a wide seat.
+            const jersey = F.createAvatar({ build, sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n88' });
+            const jt = torsoOf(jersey);
+            const stripes = named(jersey.person, 'stripe');
+            const pieces = W.isStraight(jt) ? 1 : W.STRIPE_PIECES;
+            expect(stripes.length).toBe(2 * pieces);
+            // Each piece's band down the torso, as the wardrobe cuts them.
+            const run = height * 0.82;
+            const lowY = -height * 0.05 - run / 2;
+            for (const piece of stripes) {
+                const pb = boxOf(jersey.person, piece);
+                const mid = (pb.min.y + pb.max.y) / 2 - jt.position.y;
+                const k = Math.min(pieces - 1, Math.max(0, Math.floor(((mid - lowY) / run) * pieces)));
+                const half = W.torsoWidthAt(jt, lowY + (run * k) / pieces, lowY + (run * (k + 1)) / pieces) / 2;
+                const center = (Math.abs(pb.min.x) + Math.abs(pb.max.x)) / 2;
+                expect(`${build} stripe ${k}: ${Math.abs(center - half - 0.002) < 1e-6}`).toBe(`${build} stripe ${k}: true`);
+            }
+            // The number never spans more than its share of the torso there.
+            for (const n of named(jersey.person, 'number')) {
+                const nb = boxOf(jersey.person, n);
+                const across = W.torsoWidthAt(jt, nb.min.y - jt.position.y, nb.max.y - jt.position.y);
+                expect(`${build} number: ${nb.max.x - nb.min.x <= across * W.NUMBER_SIZE.fit + 1e-6}`).toBe(`${build} number: true`);
+            }
+        }
+    });
+
     test('a hoodie\'s hood is one closed solid that stands up behind the neck and lies down the back; its pocket sits low on the front, and two drawstrings hang from the neck', () => {
         const avatar = F.createAvatar({ sleeves: 'hoodie', shirt: 'teal' });
         const torso = torsoOf(avatar);

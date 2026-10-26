@@ -182,15 +182,15 @@ export const LENS_COLORS = Object.freeze([
  *  and `footScale`. The feet's scale multiplies the muscles' (MUSCLES). */
 /** Steve's QA, 2026-10-26: every hand was about half a real one against
  *  this head (the crowd part already asked the rig for 1.3), so the three
- *  sizes moved up together and XL and XXL were appended. A saved avatar
- *  keeps its id and gets the right-sized hand. `said` is how a size is
- *  spoken in a sentence ("extra-large hands"). */
+ *  sizes moved up together and XL was appended (an XXL was built and
+ *  withdrawn the same day at Steve's request; a saved `xxl` reads as
+ *  standard). A saved avatar keeps its id and gets the right-sized hand.
+ *  `said` is how a size is spoken in a sentence ("extra-large hands"). */
 export const HAND_SIZES = Object.freeze([
     { id: 'small', label: 'Small', scale: 1.1 },
     { id: 'standard', label: 'Standard', scale: 1.4 },
     { id: 'large', label: 'Large', scale: 1.7 },
-    { id: 'xl', label: 'XL', scale: 2.0, said: 'extra-large' },
-    { id: 'xxl', label: 'XXL', scale: 2.4, said: 'extra-extra-large' }
+    { id: 'xl', label: 'XL', scale: 2.0, said: 'extra-large' }
 ]);
 
 export const FOOT_SIZES = Object.freeze([
@@ -309,10 +309,26 @@ export const MUSCLES = Object.freeze([
  * Straight is Leaf Blower's operator exactly. Curvy is Maya's build from
  * www/whitestone. Starting values for QA (PLANNING 3.2).
  */
+/**
+ * More body types (Steve's QA, 2026-10-26: three builds "look pretty
+ * limiting", and Curvy never narrowed the shoulders): the rig grew a
+ * shoulder width, a seat width, a girth and a leg thickness (each 1 is the
+ * figure as it was), and the waist may bow out. Appended, neutral names,
+ * none saying who it is for; `said` for the sentence ("a pear-shaped build").
+ *
+ *   pear    lean shoulders, a wider seat, full hips, a soft waist
+ *   broad   wide shoulders over a narrower seat: the V shape
+ *   round   a fuller, deeper middle, no waist
+ *   full    everything a size up: shoulders, seat, depth and thighs
+ */
 export const BUILDS = Object.freeze([
     { id: 'straight', label: 'Straight', hips: 0, waist: 0, slender: 0, shoulderRound: 0.4 },
     { id: 'slim', label: 'Slim', hips: 0, waist: 0.1, slender: 1, shoulderRound: 0.45 },
-    { id: 'curvy', label: 'Curvy', hips: 1, waist: 0.2, slender: 1, shoulderRound: 0.45 }
+    { id: 'curvy', label: 'Curvy', hips: 1, waist: 0.2, slender: 1, shoulderRound: 0.45, shoulders: 0.95 },
+    { id: 'pear', label: 'Pear', said: 'pear-shaped', hips: 1, waist: 0.12, slender: 1, shoulderRound: 0.45, shoulders: 0.86, seat: 1.08 },
+    { id: 'broad', label: 'Broad', said: 'broad-shouldered', hips: 0, waist: 0.1, slender: 0, shoulderRound: 0.4, shoulders: 1.15, seat: 0.94 },
+    { id: 'round', label: 'Round', hips: 0.3, waist: -0.12, slender: 0, shoulderRound: 0.45, seat: 1.02, girth: 1.3, legs: 1.08 },
+    { id: 'full', label: 'Full', said: 'full-figured', hips: 0.6, waist: -0.05, slender: 0, shoulderRound: 0.45, shoulders: 1.08, seat: 1.14, girth: 1.22, legs: 1.25 }
 ]);
 
 /** The shirt's style, by its sleeves (the field keeps its first name,
@@ -620,6 +636,10 @@ export function personConfig(avatar, overrides = {}) {
         hips: build.hips,
         waist: build.waist,
         slender: build.slender,
+        shoulders: build.shoulders ?? 1,
+        seat: build.seat ?? 1,
+        girth: build.girth ?? 1,
+        legs: build.legs ?? 1,
         shoeColor: colorOf('shoeColor', a.shoeColor),
         shoeStyle: optionOf(SHOES, a.shoes).style
     };
@@ -703,7 +723,7 @@ export function describeAvatar(avatar) {
         ? ` with the number ${number.digits}${a.numberColor === 'standard' ? '' : ` in ${word(NUMBER_COLORS, a.numberColor)}`}`
         : '';
     const clothes = [
-        `a ${muscles}${word(BUILDS, a.build)} build${limbs.length ? ` with ${limbs.join(' and ')}` : ''}`,
+        `a ${muscles}${optionOf(BUILDS, a.build).said || word(BUILDS, a.build)} build${limbs.length ? ` with ${limbs.join(' and ')}` : ''}`,
         (sleeves.said ? `a ${shirt} ${sleeves.said}` : a.sleeves === 'tank' ? `a ${shirt} tank top` : `a ${shirt} shirt with ${a.sleeves} sleeves`) + numbered,
         `${bottom.kind === 'skirt' ? 'a ' : ''}${name(PANTS, a.bottomColor)} ${bottom.label.toLowerCase()}`,
         shoes

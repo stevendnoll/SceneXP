@@ -285,20 +285,61 @@ export const NUMBER_SIZE = Object.freeze({
     fit: 0.85
 });
 
-/** The torso's width between `y0` and `y1` of its own middle: the least
- *  across its outline there (an extruded torso's vertices all lie on its
- *  outline, so a waist shows), or its full width where no vertex lies. */
+/** How many pieces a jersey's side stripe is cut into down a shaped
+ *  torso. */
+export const STRIPE_PIECES = 8;
+
+/** The torso's rounded corners: this much of its height at the bottom
+ *  (the 2 cm corner and the 2 cm bevel), and this much at the top (the
+ *  shoulders round further), is not its side, and is never measured as
+ *  one. */
+export const TORSO_CORNERS = Object.freeze({ bottom: 0.045, top: 0.1 });
+
+/** Whether the torso's sides are straight (one width down the side between
+ *  its corners): a box, or an extrusion whose outline is as wide at every
+ *  height there. */
+export function isStraight(torso) {
+    const { width, height } = torsoBox(torso);
+    const low = -height / 2 + TORSO_CORNERS.bottom;
+    const high = height / 2 - TORSO_CORNERS.top;
+    const bands = 6;
+    for (let k = 0; k < bands; k++) {
+        const w = torsoWidthAt(torso, low + ((high - low) * k) / bands, low + ((high - low) * (k + 1)) / bands);
+        if (Math.abs(w - width) > 0.001) return false;
+    }
+    return true;
+}
+
+/**
+ * The torso's width between `y0` and `y1` of its own middle: the least
+ * across its outline there, read in a few thin bands as the widest vertex
+ * of each (an extruded torso's vertices all lie on its outline and its
+ * bevel, so the widest at a height is the side there, and a waist or a
+ * seat shows). The rounded corners at the top and the bottom are left out
+ * (TORSO_CORNERS; a band wholly in one reads the side just inside it), and
+ * a box, with no vertex down its side, is its full width.
+ */
 export function torsoWidthAt(torso, y0, y1) {
-    const { width } = torsoBox(torso);
+    const { width, height } = torsoBox(torso);
+    const low = -height / 2 + TORSO_CORNERS.bottom;
+    const high = height / 2 - TORSO_CORNERS.top;
+    let a = Math.max(y0, low);
+    let b = Math.min(y1, high);
+    if (b <= a) {
+        a = Math.max(low, Math.min(high - 0.01, (y0 + y1) / 2));
+        b = a + 0.01;
+    }
     const pos = torso.geometry.attributes.position;
-    let half = Infinity;
+    const bands = 4;
+    const halves = new Array(bands).fill(0);
     for (let i = 0; i < pos.count; i++) {
         const y = pos.getY(i);
-        const x = Math.abs(pos.getX(i));
-        if (y < y0 || y > y1 || x < width * 0.25) continue;
-        half = Math.min(half, x);
+        if (y < a || y > b) continue;
+        const k = Math.min(bands - 1, Math.floor(((y - a) / (b - a)) * bands));
+        halves[k] = Math.max(halves[k], Math.abs(pos.getX(i)));
     }
-    return half === Infinity ? width : 2 * half;
+    const found = halves.filter((h) => h > 0);
+    return found.length ? 2 * Math.min(...found) : width;
 }
 
 /** How wide `digits` are for each meter of height (DIGITS' grid). */
@@ -496,7 +537,10 @@ export function dressShirt(person, style, color, skin = null) {
     if (style === 'sweater') {
         torso.material.roughness = 1;
         for (const arm of arms) cuff(arm, spec.cuff, spec.proud, darker);
-        const band = add(new THREE.Mesh(new THREE.BoxGeometry(width + 2 * spec.proud, spec.band, depth + 2 * spec.proud), darker), 'band');
+        // As wide as the torso's own bottom (a build's seat may be wider or
+        // narrower than its shoulders, 2026-10-26).
+        const hemWidth = torsoWidthAt(torso, -height / 2, -height / 2 + spec.band);
+        const band = add(new THREE.Mesh(new THREE.BoxGeometry(hemWidth + 2 * spec.proud, spec.band, depth + 2 * spec.proud), darker), 'band');
         band.position.set(0, bottom + spec.band / 2, 0);
         if (collar) collar.visible = false;
         const neck = add(new THREE.Mesh(new THREE.TorusGeometry(0.058, spec.neck, 8, 20), darker), 'neckband');
@@ -534,9 +578,28 @@ export function dressShirt(person, style, color, skin = null) {
             band.castShadow = true;
             arm.add(band);
         }
+        // A stripe down each side, following the side (a build's torso may
+        // narrow to the shoulders, widen to the seat or pinch at the waist,
+        // 2026-10-26): `STRIPE_PIECES` short pieces, each at the torso's own
+        // half width at its height, one piece on a straight torso.
+        const run = height * 0.82;
+        const low = -height * 0.05 - run / 2;
+        const pieces = isStraight(torso) ? 1 : STRIPE_PIECES;
         for (const s of [-1, 1]) {
-            const stripe = add(new THREE.Mesh(new THREE.BoxGeometry(0.006, height * 0.82, spec.stripe), trim), 'stripe');
-            stripe.position.set(s * (width / 2 + 0.002), torso.position.y - height * 0.05, 0);
+            const stripe = new THREE.Group();
+            stripe.name = 'stripe';
+            for (let k = 0; k < pieces; k++) {
+                const y0 = low + (run * k) / pieces;
+                const y1 = low + (run * (k + 1)) / pieces;
+                const half = torsoWidthAt(torso, y0, y1) / 2;
+                const piece = new THREE.Mesh(new THREE.BoxGeometry(0.006, y1 - y0 + 0.001, spec.stripe), trim);
+                piece.position.set(s * (half + 0.002), (y0 + y1) / 2, 0);
+                piece.name = 'stripe';
+                piece.castShadow = true;
+                stripe.add(piece);
+            }
+            stripe.position.y = torso.position.y;
+            person.add(stripe);
         }
     } else if (style === 'buttonDown') {
         // The rig drew the placket and the buttons; a pointed collar over
@@ -681,7 +744,8 @@ export function dressBottom(person, style, color) {
         if (!torso) return;
         const { width, height, depth } = torsoBox(torso);
         const bottom = torso.position.y - height / 2;
-        const band = new THREE.Mesh(new THREE.BoxGeometry(width + 0.016, spec.waist || 0.035, depth + 0.016), darker);
+        const bandWidth = torsoWidthAt(torso, -height / 2, -height / 2 + (spec.waist || 0.035));
+        const band = new THREE.Mesh(new THREE.BoxGeometry(bandWidth + 0.016, spec.waist || 0.035, depth + 0.016), darker);
         band.position.set(0, bottom + (spec.waist || 0.035) / 2 - 0.004, 0);
         band.name = 'waistband';
         band.castShadow = true;

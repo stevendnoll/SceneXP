@@ -639,7 +639,7 @@ describe('the pieces (M5), measured', () => {
         };
         const scaleOf = (id) => A.optionOf(A.HAND_SIZES, id).scale;
         expect(hand({ handSize: 'large' }) / hand({})).toBeCloseTo(scaleOf('large') / scaleOf('standard'), 6);
-        expect(hand({ handSize: 'xxl' }) / hand({})).toBeCloseTo(scaleOf('xxl') / scaleOf('standard'), 6);
+        expect(hand({ handSize: 'xl' }) / hand({})).toBeCloseTo(scaleOf('xl') / scaleOf('standard'), 6);
         expect(hand({ handSize: 'small' })).toBeLessThan(hand({}));
         // A huge hand never brings a club of a wrist: the wrist stops at
         // most of the arm's own radius (2026-10-26).
@@ -648,7 +648,7 @@ describe('the pieces (M5), measured', () => {
             const cyl = fore.children.find((m) => m.isMesh && m.geometry.type === 'CylinderGeometry');
             return cyl.geometry.parameters;
         };
-        const huge = wristOf({ handSize: 'xxl' });
+        const huge = wristOf({ handSize: 'xl' });
         expect(huge.radiusBottom).toBeLessThan(huge.radiusTop * 0.9);
         expect(huge.radiusBottom).toBeGreaterThan(wristOf({ handSize: 'small' }).radiusBottom);
         // The hands keep their size when the arms are strengthened.

@@ -170,8 +170,8 @@ await sheet('hood', [
 ], 'torso', [0, 0.75, Math.PI / 2, 2.4, Math.PI]);
 // Hand and foot sizes (Steve's QA, 2026-10-25), beside the standard.
 await sheet('hands', [
-    { handSize: 'small' }, { handSize: 'standard' }, { handSize: 'large' }, { handSize: 'xl' }, { handSize: 'xxl' },
-    { handSize: 'xxl', muscles: 'buff', sleeves: 'short' }, { handSize: 'small', build: 'slim', sleeves: 'short' }
+    { handSize: 'small' }, { handSize: 'standard' }, { handSize: 'large' }, { handSize: 'xl' },
+    { handSize: 'xl', muscles: 'buff', sleeves: 'short' }, { handSize: 'small', build: 'slim', sleeves: 'short' }
 ], 'torso', [0, 0.75]);
 // Hats over glasses (Steve's QA, 2026-10-26: the sunglasses went through
 // the cap's bill): every billed or brimmed hat over the biggest frames.
@@ -243,7 +243,15 @@ await sheet('clothes', [
     await writeFile(file, png(n * looks.length, n, out));
     console.log(`portraits: ${looks.length} looks, ${file}`);
 }
-await sheet('builds', [
-    { build: 'straight' }, { build: 'slim' }, { build: 'curvy' },
-    { build: 'straight', bottom: 'skirt' }, { build: 'slim', bottom: 'skirt' }, { build: 'curvy', bottom: 'skirt', shoes: 'maryJane' }
-], 'body');
+// Every build (seven since 2026-10-26), in pants with short sleeves so the
+// torso's shape shows, then in a skirt, then dressed in the pieces that
+// follow the torso's sides.
+const BUILDS = ['straight', 'slim', 'curvy', 'pear', 'broad', 'round', 'full'];
+await sheet('builds', BUILDS.map((build) => ({ build, sleeves: 'short' })), 'body');
+await sheet('builds-skirt', BUILDS.map((build) => ({ build, bottom: 'skirt', shoes: 'maryJane', length: 'long' })), 'body');
+await sheet('builds-dressed', [
+    { build: 'pear', sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n88' }, { build: 'broad', sleeves: 'jersey', shirt: 'x241773', jerseyNumber: 'n8' },
+    { build: 'round', sleeves: 'sweater', shirt: 'rust' }, { build: 'full', sleeves: 'hoodie', shirt: 'teal', bottom: 'sweatpants', bottomColor: 'charcoal' },
+    { build: 'pear', sleeves: 'sweater', shirt: 'teal', bottom: 'leggings', bottomColor: 'black' }, { build: 'full', sleeves: 'jersey', shirt: 'white', jerseyNumber: 'n45', muscles: 'buff' },
+    { build: 'round', sleeves: 'buttonDown', shirt: 'white' }
+], 'torso', [0, 0.75]);

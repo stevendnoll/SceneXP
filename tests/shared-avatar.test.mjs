@@ -125,10 +125,12 @@ describe('the lists', () => {
         expect(A.FRAME_COLORS.filter((o) => o.metal).map((o) => o.id)).toEqual(['gold', 'silver']);
         expect(A.LENS_COLORS.slice(0, 2).map((o) => o.id)).toEqual(['standard', 'clear']);
         expect(A.LENS_COLORS.find((o) => o.id === 'clear')).toMatchObject({ color: null, clear: true });
-        // The hand sizes moved up together and grew XL and XXL on the end
+        // The hand sizes moved up together and grew an XL on the end
         // (Steve's QA, 2026-10-26: "hands still look a little too small").
-        expect(A.HAND_SIZES.map((o) => o.id)).toEqual(['small', 'standard', 'large', 'xl', 'xxl']);
-        expect(A.HAND_SIZES.map((o) => o.scale)).toEqual([1.1, 1.4, 1.7, 2.0, 2.4]);
+        expect(A.HAND_SIZES.map((o) => o.id)).toEqual(['small', 'standard', 'large', 'xl']);
+        expect(A.HAND_SIZES.map((o) => o.scale)).toEqual([1.1, 1.4, 1.7, 2.0]);
+        // An XXL was built and withdrawn the same day: it reads as standard.
+        expect(A.normalizeAvatar({ handSize: 'xxl' }).handSize).toBe('standard');
         expect(A.optionOf(A.HAND_SIZES, 'small').scale).toBeGreaterThan(1);
         expect(A.FOOT_SIZES.map((o) => o.id)).toEqual(['small', 'standard', 'large']);
         expect(A.MOUTHS.map((o) => o.id)).toEqual(['smile', 'bigSmile', 'grin', 'smirk', 'surprised']);
@@ -142,7 +144,11 @@ describe('the lists', () => {
         // Natural lips have no color of their own (they are the skin's), only
         // a swatch to show; every other lip color has one.
         for (const o of A.LIP_COLORS) expect(o.id === 'natural' ? o.color === null && o.swatch > 0 : o.color > 0).toBe(true);
-        expect(A.BUILDS.map((o) => o.label)).toEqual(['Straight', 'Slim', 'Curvy']);
+        // Seven builds since 2026-10-26 (Steve: three "look pretty
+        // limiting"), the first three keeping their ids, none named for who
+        // it is for.
+        expect(A.BUILDS.map((o) => o.label)).toEqual(['Straight', 'Slim', 'Curvy', 'Pear', 'Broad', 'Round', 'Full']);
+        for (const o of A.BUILDS) expect(`${o.label} ${o.said || ''}`).not.toMatch(/\b(men|women|man|woman|male|female|lady|ladies)/i);
         expect(A.SHOES.map((o) => o.id)).toEqual(['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots',
             'sandals', 'flats', 'heels', 'platforms', 'slippers', 'crocs', 'highTops', 'hikingBoots', 'cleats']);
         // Named by style, never by who wears them (Steve, 2026-10-24).
@@ -235,6 +241,24 @@ describe('the createPerson settings', () => {
         expect(A.personConfig({ length: 'buzz' })).toMatchObject({ bald: false, hairStyle: 'buzz' });
         expect(A.personConfig({ eyes: 'blue' }).eyeColor).toBe(A.optionOf(A.EYES, 'blue').color);
         expect(A.personConfig({ build: 'curvy' })).toMatchObject({ hips: 1, waist: 0.2, slender: 1, shoulderRound: 0.45 });
+        // The builds' shape numbers reach the rig (2026-10-26), and a build
+        // that leaves one unsaid sends the rig's own 1.
+        expect(A.personConfig({})).toMatchObject({ shoulders: 1, seat: 1, girth: 1, legs: 1 });
+        expect(A.personConfig({ build: 'curvy' }).shoulders).toBeLessThan(1);
+        const pear = A.personConfig({ build: 'pear' });
+        expect(pear.shoulders).toBeLessThan(0.9);
+        expect(pear.seat).toBeGreaterThan(1);
+        expect(pear.hips).toBe(1);
+        const broad = A.personConfig({ build: 'broad' });
+        expect(broad.shoulders).toBeGreaterThan(1.1);
+        expect(broad.seat).toBeLessThan(1);
+        const round = A.personConfig({ build: 'round' });
+        expect(round.waist).toBeLessThan(0);
+        expect(round.girth).toBeGreaterThan(1.2);
+        const full = A.personConfig({ build: 'full' });
+        expect(full.legs).toBeGreaterThan(1.2);
+        expect(full.seat).toBeGreaterThan(full.shoulders);
+        expect(full.shoulders).toBeGreaterThan(1);
         expect(A.personConfig({ shoes: 'maryJane', shoeColor: 'red' })).toMatchObject({ shoeStyle: 'maryJane', shoeColor: 0x9c2b25 });
         expect(A.personConfig({ shoes: 'sneakers' }).shoeStyle).toBe('block');
         for (const boots of ['ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots']) expect(A.personConfig({ shoes: boots }).shoeStyle).toBe('block');
@@ -344,7 +368,11 @@ describe('custom colors (Steve, 2026-10-24)', () => {
         expect(A.describeAvatar({ footSize: 'small', build: 'curvy' })).toMatch(/a curvy build with small feet, /);
         expect(A.describeAvatar({ handSize: 'small', footSize: 'large', muscles: 'buff' })).toMatch(/a buff, straight build with small hands and large feet, /);
         expect(A.describeAvatar({ handSize: 'xl' })).toMatch(/a straight build with extra-large hands, /);
-        expect(A.describeAvatar({ handSize: 'xxl' })).toMatch(/a straight build with extra-extra-large hands, /);
+        // The new builds, as a person would say them (2026-10-26).
+        expect(A.describeAvatar({ build: 'pear' })).toMatch(/, a pear-shaped build, /);
+        expect(A.describeAvatar({ build: 'broad', muscles: 'buff' })).toMatch(/, a buff, broad-shouldered build, /);
+        expect(A.describeAvatar({ build: 'round' })).toMatch(/, a round build, /);
+        expect(A.describeAvatar({ build: 'full', handSize: 'large' })).toMatch(/, a full-figured build with large hands, /);
         expect(A.describeAvatar({ sleeves: 'vneck', shirt: 'navy' })).toMatch(/a navy V-neck shirt, /);
     });
 
