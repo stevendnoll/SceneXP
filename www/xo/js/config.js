@@ -2842,8 +2842,10 @@ const XO_CONFIG = {
         cardsAt: 1.6,
         cardsForward: 0.46,
         /** How high a fan's hands reach with their arms up, per unit of scale.
-         *  The finale shot climbs until the near stand clears the teams. */
-        reach: 1.88,
+         *  The finale shot climbs until the near stand clears the teams.
+         *  1.88 until 2026-10-26, when the rig's hand grew fingers (measured
+         *  1.897 with them up; tests/xo-fans holds this over it). */
+        reach: 1.92,
         /** The bounce once the number lands at 500, per unit of scale. */
         bounce: 0.1,
         /**

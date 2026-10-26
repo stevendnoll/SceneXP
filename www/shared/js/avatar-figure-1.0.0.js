@@ -36,14 +36,14 @@
  */
 
 import {
-    personConfig, withOverrides, normalizeAvatar, validPortraitSrc, colorOf, optionOf, BOTTOMS, FRAME_COLORS, LENS_COLORS
+    personConfig, withOverrides, normalizeAvatar, validPortraitSrc, colorOf, optionOf, BOTTOMS, FRAME_COLORS, LENS_COLORS, JERSEY_NUMBERS
 } from './avatar-1.0.0.min.js';
 import { createPerson } from './people-1.0.0.min.js';
 import { eachVertex, solidGrid } from './avatar-shapes-1.0.0.min.js';
 import { buildHair, HAIR_DRAWN } from './avatar-hair-1.0.0.min.js';
 import { buildHat, HAT_SIZE, trimUnder } from './avatar-hats-1.0.0.min.js';
 import {
-    block, legParts, blockShoes, shaft, EXTRA_SHOES, dressExtraShoes, SHIRT_SIZE, dressShirt, BOTTOM_SIZE, dressBottom
+    block, legParts, blockShoes, shaft, EXTRA_SHOES, dressExtraShoes, SHIRT_SIZE, dressShirt, BOTTOM_SIZE, dressBottom, numberJersey
 } from './avatar-wardrobe-1.0.0.min.js';
 
 export { EXTRA_SHOES, SHIRT_SIZE, BOTTOM_SIZE };
@@ -64,9 +64,10 @@ export { HAT_SIZE, trimUnder, HAIR_DRAWN };
  * 8 (2026-10-24): the hair's solids turned right side out, and the parts.
  * 9 (2026-10-25): strands, the swoosh, longer bills, flat pupils.
  * 10 (2026-10-25): the hood, the jersey's V the right way up, more
- * sunglasses with colors, hand and foot sizes.
+ * sunglasses with colors, hand and foot sizes. 11 (2026-10-26): forearms
+ * that narrow to the wrist, hands with fingers and a thumb, jersey numbers.
  */
-export const RENDER_VERSION = 10;
+export const RENDER_VERSION = 11;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named
@@ -557,7 +558,9 @@ export const ATHLETIC_ARMS = 1.28;
 
 /** Thicker arms: every part of each arm but the hand widened by `k`, and
  *  the arm moved out by what its upper arm gained, so it grows away from
- *  the body rather than into it. */
+ *  the body rather than into it. The forearm is drawn again rather than
+ *  scaled, thicker at the elbow and the same at the wrist, which belongs to
+ *  the hand (Steve's QA, 2026-10-26: the forearms flared at the wrist). */
 function strengthenArms(person, k) {
     person.traverse((arm) => {
         if (!arm.userData.isArm) return;
@@ -567,6 +570,12 @@ function strengthenArms(person, k) {
             const hand = m.parent === arm.userData.forearm && m === arm.userData.forearm.children[arm.userData.forearm.children.length - 1];
             if (hand) return;
             if (m.geometry.type === 'CylinderGeometry' && m.parent === arm) radius = m.geometry.parameters.radiusTop;
+            if (m.geometry.type === 'CylinderGeometry' && m.parent === arm.userData.forearm) {
+                const p = m.geometry.parameters;
+                m.geometry.dispose();
+                m.geometry = new THREE.CylinderGeometry(p.radiusTop * k, p.radiusBottom, p.height, p.radialSegments);
+                return;
+            }
             m.scale.x *= k;
             m.scale.z *= k;
             if (m.geometry.type === 'SphereGeometry') m.scale.y *= k;
@@ -1229,6 +1238,9 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     if (bottomKind === 'skirt') fitSkirt(person, person.children.find((o) => o.userData.isSkirt));
     // The wardrobe's shirts and bottoms (2026-10-25), over the rig's own.
     if (SHIRT_SIZE[a.sleeves]) dressShirt(person, a.sleeves, colorOf('shirt', a.shirt), skin);
+    // The jersey's number (2026-10-26), in its chosen color or the trim's.
+    const number = optionOf(JERSEY_NUMBERS, a.jerseyNumber);
+    if (a.sleeves === 'jersey' && number && number.digits) numberJersey(person, number.digits, colorOf('numberColor', a.numberColor), colorOf('shirt', a.shirt));
     if (BOTTOM_SIZE[a.bottom]) dressBottom(person, a.bottom, colorOf('bottomColor', a.bottomColor));
 
     person.traverse((o) => {

@@ -133,7 +133,7 @@ describe('the jointing, against real three', () => {
     const handOf = (arm) => {
         let hand = null;
         arm.userData.forearm.traverse((o) => {
-            if (o.isMesh && o.geometry.type === 'SphereGeometry' && o.position.y < -0.2) hand = o;
+            if (o.isMesh && o.userData.isHand) hand = o;
         });
         return hand;
     };

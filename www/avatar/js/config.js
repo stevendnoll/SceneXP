@@ -87,9 +87,11 @@ export const AVATAR_PAGE = deepFreeze({
      * word). A field shows only when this version draws more than one of its
      * options, and only while the field it `requires` shows; a field with
      * `hideWhen` steps aside while the avatar holds that value (no beard,
-     * no beard's color). A tab shows only when it has a field to show. Every
-     * color field ends in a custom swatch (any color, the browser's own
-     * picker). The face has three tabs (Steve's QA, 2026-10-24: one would
+     * no beard's color), and one with `showWhen` shows only while it does
+     * (a jersey's number, on the jersey). A 'number' field is typed, not
+     * chosen from a row (a hundred buttons would be no row). A tab shows
+     * only when it has a field to show. Every color field ends in a custom
+     * swatch (any color, the browser's own picker). The face has three tabs (Steve's QA, 2026-10-24: one would
      * have been a dozen groups long). Facial hair is on the Face tab, since
      * the Hair tab is full of styles; the hands and the feet are part of
      * the Build, and the Feet tab, being only shoes, says so (Steve's QA,
@@ -140,6 +142,8 @@ export const AVATAR_PAGE = deepFreeze({
             id: 'clothes', label: 'Clothes', frame: 'body', fields: [
                 { key: 'shirt', legend: 'Shirt', kind: 'swatch' },
                 { key: 'sleeves', legend: 'Style', kind: 'text' },
+                { key: 'jerseyNumber', legend: 'Jersey number', kind: 'number', showWhen: { field: 'sleeves', value: 'jersey' } },
+                { key: 'numberColor', legend: 'Number color', kind: 'swatch', showWhen: { field: 'sleeves', value: 'jersey' } },
                 { key: 'bottom', legend: 'Pants, skirt or shorts', kind: 'text' },
                 { key: 'bottomColor', legend: 'Color', kind: 'swatch' }
             ]

@@ -253,6 +253,100 @@ export const HOOD = Object.freeze({
  *  the shirt). */
 export const LONG_SLEEVED = Object.freeze(['sweater', 'turtleneck', 'buttonDown', 'hoodie']);
 
+/**
+ * The jersey's number (Steve's QA, 2026-10-26): block numerals from a
+ * 7 by 9 pixel font, two pixels to a stroke, as varsity numbers are cut. A
+ * row is a string of 9 marks; `#` is cloth of the number's color.
+ */
+export const DIGITS = Object.freeze({
+    0: ['#######', '#######', '##...##', '##...##', '##...##', '##...##', '##...##', '#######', '#######'],
+    1: ['...##..', '..###..', '.####..', '...##..', '...##..', '...##..', '...##..', '#######', '#######'],
+    2: ['#######', '#######', '.....##', '.....##', '#######', '#######', '##.....', '#######', '#######'],
+    3: ['#######', '#######', '.....##', '.######', '.######', '.....##', '.....##', '#######', '#######'],
+    4: ['##...##', '##...##', '##...##', '#######', '#######', '.....##', '.....##', '.....##', '.....##'],
+    5: ['#######', '#######', '##.....', '#######', '#######', '.....##', '.....##', '#######', '#######'],
+    6: ['#######', '#######', '##.....', '#######', '#######', '##...##', '##...##', '#######', '#######'],
+    7: ['#######', '#######', '.....##', '....##.', '...##..', '..##...', '..##...', '..##...', '..##...'],
+    8: ['#######', '#######', '##...##', '#######', '#######', '##...##', '##...##', '#######', '#######'],
+    9: ['#######', '#######', '##...##', '#######', '#######', '.....##', '.....##', '#######', '#######']
+});
+
+/** Where the number goes: on the chest below the V and across the back,
+ *  each `height` meters tall with its top `below` the shoulders, a `gap` of
+ *  pixels between two digits, `proud` of the cloth. */
+export const NUMBER_SIZE = Object.freeze({
+    front: { height: 0.1, below: 0.085 },
+    back: { height: 0.17, below: 0.04 },
+    gap: 1,
+    proud: 0.006
+});
+
+/**
+ * `digits` ("8", "00") as one flat geometry `height` meters tall, centered
+ * on the origin in the x-y plane facing +z: each row's runs of pixels as
+ * rectangles, so a stroke is one piece rather than a row of squares.
+ */
+export function numberGeometry(digits, height) {
+    const rows = DIGITS[0].length;
+    const cols = DIGITS[0][0].length;
+    const px = height / rows;
+    const chars = String(digits).split('').filter((d) => DIGITS[d]);
+    const width = chars.length * cols + Math.max(0, chars.length - 1) * NUMBER_SIZE.gap;
+    const shapes = [];
+    chars.forEach((d, k) => {
+        const left = k * (cols + NUMBER_SIZE.gap) - width / 2;
+        DIGITS[d].forEach((row, r) => {
+            const y1 = height / 2 - r * px;
+            const y0 = y1 - px;
+            let c = 0;
+            while (c < cols) {
+                if (row[c] !== '#') {
+                    c++;
+                    continue;
+                }
+                let end = c;
+                while (end < cols && row[end] === '#') end++;
+                const x0 = (left + c) * px;
+                const x1 = (left + end) * px;
+                const s = new THREE.Shape();
+                s.moveTo(x0, y0);
+                s.lineTo(x1, y0);
+                s.lineTo(x1, y1);
+                s.lineTo(x0, y1);
+                s.closePath();
+                shapes.push(s);
+                c = end;
+            }
+        });
+    });
+    return new THREE.ShapeGeometry(shapes);
+}
+
+/**
+ * The number on the jersey: `digits` on the chest and, larger, across the
+ * back, in `color` (a display hex), or in the jersey's own trim for the
+ * shirt's `shirtColor` when `color` is null. Named 'number'.
+ */
+export function numberJersey(person, digits, color, shirtColor) {
+    const { torso } = bodyParts(person);
+    if (!torso || !String(digits).length) return [];
+    const { height, depth } = torsoBox(torso);
+    const top = torso.position.y + height / 2;
+    const spec = SHIRT_SIZE.jersey;
+    const mat = material(color ?? (isLight(shirtColor) ? spec.dark : spec.light), 0.8);
+    const out = [];
+    for (const [side, face] of [[1, NUMBER_SIZE.front], [-1, NUMBER_SIZE.back]]) {
+        const mesh = new THREE.Mesh(numberGeometry(digits, face.height), mat);
+        mesh.position.set(0, top - face.below - face.height / 2, side * (depth / 2 + NUMBER_SIZE.proud));
+        if (side < 0) mesh.rotation.y = Math.PI;
+        mesh.name = 'number';
+        mesh.userData.side = side;
+        person.add(mesh);
+        out.push(mesh);
+    }
+    return out;
+}
+
 /** `points` ([x, y] pairs, x rising) read at `x`, straight between them
  *  and flat past the ends. */
 function along(points, x) {
@@ -338,8 +432,9 @@ export function hoodGeometry(top, back) {
 function cuff(arm, thick, proud, mat) {
     const fore = arm.userData.forearm;
     const forearm = fore.children.find((m) => m.isMesh && m.geometry.type === 'CylinderGeometry');
-    const { radiusTop, height } = forearm.geometry.parameters;
-    const r = radiusTop * forearm.scale.x + proud;
+    // The forearm narrows to the wrist (its bottom), where the cuff sits.
+    const { radiusBottom, height } = forearm.geometry.parameters;
+    const r = radiusBottom * forearm.scale.x + proud;
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.96, thick, 12), mat);
     ring.position.set(forearm.position.x, forearm.position.y - height / 2 + thick / 2 + 0.004, forearm.position.z);
     ring.name = 'cuff';

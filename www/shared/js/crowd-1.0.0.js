@@ -195,10 +195,24 @@ function pieceFor(mesh) {
     return 'fixed';
 }
 
+/** The rig's hand (a palm, four fingers and a thumb since 2026-10-26, some
+ *  hundreds of triangles) as the crowd draws it: one block the size of the
+ *  hand's box, twelve triangles. A crowd member is a few pixels tall; nobody
+ *  can see its fingers, and a thousand of them is a thousand hands. The box
+ *  reaches exactly where the hand's own box does, so a fan is the figure's
+ *  size to the millimeter. */
+export function handStandIn(geometry) {
+    geometry.computeBoundingBox();
+    const b = geometry.boundingBox;
+    const g = new THREE.BoxGeometry(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z);
+    g.translate((b.max.x + b.min.x) / 2, (b.max.y + b.min.y) / 2, (b.max.z + b.min.z) / 2);
+    return g;
+}
+
 /** ONE MESH, BAKED: its lighter geometry moved to where it sits in the
  *  figure, with only the attributes a crowd is drawn with. */
 function bake(mesh) {
-    const source = lighter(mesh.geometry);
+    const source = mesh.userData.isHand ? handStandIn(mesh.geometry) : lighter(mesh.geometry);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', source.attributes.position.clone());
     g.setAttribute('normal', source.attributes.normal.clone());

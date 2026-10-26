@@ -12,7 +12,9 @@
  * text (PRD section 5), so an avatar from anywhere (a link, a file, storage
  * somebody edited by hand) is made valid field by field: a field that names a
  * real option is kept, anything else becomes the default's. `normalizeAvatar`
- * takes anything at all and always returns a real figure.
+ * takes anything at all and always returns a real figure. The two shapes
+ * since: any color as six hex digits (`CUSTOM_COLOR`), and a jersey number
+ * as one of a list of a hundred and two (JERSEY_NUMBERS).
  *
  * TODAY'S LISTS COME FROM cast-1.0.0 (frozen, Leaf Blower and Derby Day run
  * on it): the shirts, pants, skin tones, hair colors and hair lengths. The
@@ -101,7 +103,7 @@ export const HAIR_COLORS = Object.freeze([
 export const CUSTOM_COLOR = /^x[0-9a-f]{6}$/;
 
 /** The fields that take a custom color as well as their swatches. */
-export const COLOR_FIELDS = Object.freeze(['skin', 'eyes', 'hair', 'shirt', 'bottomColor', 'shoeColor', 'hatColor', 'lips', 'facialColor', 'frameColor', 'lensColor']);
+export const COLOR_FIELDS = Object.freeze(['skin', 'eyes', 'hair', 'shirt', 'bottomColor', 'shoeColor', 'hatColor', 'lips', 'facialColor', 'frameColor', 'lensColor', 'numberColor']);
 
 /** A custom color's id for a display hex (0x9c2b25 is "x9c2b25"). */
 export function customColor(hex) {
@@ -186,6 +188,33 @@ export const FOOT_SIZES = Object.freeze([
     { id: 'small', label: 'Small', scale: 0.88 },
     { id: 'standard', label: 'Standard', scale: 1 },
     { id: 'large', label: 'Large', scale: 1.15 }
+]);
+
+/**
+ * The number on a sports jersey (Steve's QA, 2026-10-26: "people who wear
+ * jerseys wear the jersey of their favorite player"): none, or 0 to 99, or
+ * 00, each one an option of this list so it travels and is checked like
+ * every other id (`n8` is the number 8; `digits` is what is drawn). Drawn by
+ * avatar-wardrobe on the chest and the back, only on the jersey.
+ */
+export const JERSEY_NUMBERS = Object.freeze([
+    { id: 'none', label: 'None', digits: '' },
+    ...Array.from({ length: 100 }, (_, n) => ({ id: `n${n}`, label: String(n), digits: String(n) })),
+    { id: 'n00', label: '00', digits: '00' }
+]);
+
+/** The number's color: the jersey's own trim (white on a dark shirt, dark
+ *  on a light one) unless another is chosen. */
+export const NUMBER_COLORS = Object.freeze([
+    { id: 'standard', label: 'Standard', color: null, swatch: 0xf2f0ea },
+    { id: 'white', label: 'White', color: 0xf2f0ea },
+    { id: 'black', label: 'Black', color: 0x1f2024 },
+    { id: 'gold', label: 'Gold', color: 0xd4a537 },
+    { id: 'silver', label: 'Silver', color: 0xb8bcc2 },
+    { id: 'red', label: 'Red', color: 0xb0282a },
+    { id: 'navy', label: 'Navy', color: 0x1f2f55 },
+    { id: 'green', label: 'Green', color: 0x2f7a4f },
+    { id: 'orange', label: 'Orange', color: 0xe07a1f }
 ]);
 
 /** The mouth (Steve's QA, 2026-10-24: expressions, lip colors, teeth). All
@@ -409,7 +438,10 @@ export const FIELDS = Object.freeze([
     Object.freeze(['frameColor', FRAME_COLORS]),
     Object.freeze(['lensColor', LENS_COLORS]),
     Object.freeze(['handSize', HAND_SIZES]),
-    Object.freeze(['footSize', FOOT_SIZES])
+    Object.freeze(['footSize', FOOT_SIZES]),
+    // Appended 2026-10-26 (Steve's QA): the jersey's number and its color.
+    Object.freeze(['jerseyNumber', JERSEY_NUMBERS]),
+    Object.freeze(['numberColor', NUMBER_COLORS])
 ]);
 
 /** The list a field's ids come from, or null for a field that is not one. */
@@ -449,7 +481,9 @@ export const DEFAULT_AVATAR = Object.freeze({
     frameColor: 'standard',
     lensColor: 'standard',
     handSize: 'standard',
-    footSize: 'standard'
+    footSize: 'standard',
+    jerseyNumber: 'none',
+    numberColor: 'standard'
 });
 
 const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
@@ -652,9 +686,15 @@ export function describeAvatar(avatar) {
     const limbs = [];
     if (a.handSize !== 'standard') limbs.push(`${word(HAND_SIZES, a.handSize)} hands`);
     if (a.footSize !== 'standard') limbs.push(`${word(FOOT_SIZES, a.footSize)} feet`);
+    // "a purple sports jersey with the number 8 in white" (nothing said of
+    // the standard color, which is the jersey's own trim).
+    const number = optionOf(JERSEY_NUMBERS, a.jerseyNumber);
+    const numbered = a.sleeves === 'jersey' && number.digits
+        ? ` with the number ${number.digits}${a.numberColor === 'standard' ? '' : ` in ${word(NUMBER_COLORS, a.numberColor)}`}`
+        : '';
     const clothes = [
         `a ${muscles}${word(BUILDS, a.build)} build${limbs.length ? ` with ${limbs.join(' and ')}` : ''}`,
-        sleeves.said ? `a ${shirt} ${sleeves.said}` : a.sleeves === 'tank' ? `a ${shirt} tank top` : `a ${shirt} shirt with ${a.sleeves} sleeves`,
+        (sleeves.said ? `a ${shirt} ${sleeves.said}` : a.sleeves === 'tank' ? `a ${shirt} tank top` : `a ${shirt} shirt with ${a.sleeves} sleeves`) + numbered,
         `${bottom.kind === 'skirt' ? 'a ' : ''}${name(PANTS, a.bottomColor)} ${bottom.label.toLowerCase()}`,
         shoes
     ];

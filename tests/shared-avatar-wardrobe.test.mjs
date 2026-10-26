@@ -226,6 +226,77 @@ describe('the shirts', () => {
         expect(navy.arms.right.userData.forearm.children[1].material.color.getHex()).toBe(skin.color.getHex());
     });
 
+    test('a jersey number is drawn on the chest and, larger, across the back, in the trim or a chosen color, from a block font of ten digits (2026-10-26)', () => {
+        // The font: ten digits, each 9 rows of 7, every one its own shape,
+        // two pixels to a stroke.
+        expect(Object.keys(W.DIGITS).sort()).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
+        for (const rows of Object.values(W.DIGITS)) {
+            expect(rows).toHaveLength(9);
+            for (const row of rows) expect(row).toMatch(/^[#.]{7}$/);
+        }
+        expect(new Set(Object.values(W.DIGITS).map((rows) => rows.join('/'))).size).toBe(10);
+        // An eight has holes above and below its waist; a zero one hole.
+        const holes = (d) => W.DIGITS[d].filter((row) => /^#+\.+#+$/.test(row)).length;
+        expect(holes('8')).toBe(3);
+        expect(holes('0')).toBe(5);
+        // The geometry: a run of pixels is one rectangle (two triangles), so
+        // a solid row is one piece and "8" is far fewer pieces than pixels.
+        const triangles = (digits, h) => {
+            const g = W.numberGeometry(digits, h);
+            return g.index ? g.index.count / 3 : g.attributes.position.count / 3;
+        };
+        // An eight is six solid rows and three rows of two runs: 12 pieces.
+        expect(triangles('8', 0.1)).toBe(2 * 12);
+        expect(triangles('88', 0.1)).toBe(2 * triangles('8', 0.1));
+        expect(triangles('', 0.1)).toBe(0);
+        const size = (digits, h) => {
+            const g = W.numberGeometry(digits, h);
+            g.computeBoundingBox();
+            return { w: g.boundingBox.max.x - g.boundingBox.min.x, h: g.boundingBox.max.y - g.boundingBox.min.y, x: (g.boundingBox.max.x + g.boundingBox.min.x) / 2 };
+        };
+        expect(size('8', 0.09).h).toBeCloseTo(0.09, 6);
+        expect(size('8', 0.09).w).toBeCloseTo(0.07, 6);
+        expect(size('88', 0.09).w).toBeCloseTo(0.15, 6);
+        expect(Math.abs(size('88', 0.09).x)).toBeLessThan(1e-6);
+
+        // On the figure: two meshes named 'number', the chest's below the
+        // V and the back's larger, each proud of its side of the torso.
+        const avatar = F.createAvatar({ sleeves: 'jersey', shirt: 'x241773', jerseyNumber: 'n8' });
+        const numbers = named(avatar.person, 'number');
+        expect(numbers).toHaveLength(2);
+        const torso = torsoOf(avatar);
+        torso.geometry.computeBoundingBox();
+        const tb = torso.geometry.boundingBox;
+        const top = torso.position.y + tb.max.y;
+        const front = numbers.find((n) => n.userData.side > 0);
+        const back = numbers.find((n) => n.userData.side < 0);
+        const fb = boxOf(avatar.person, front);
+        const bb = boxOf(avatar.person, back);
+        expect(fb.min.z).toBeGreaterThan(tb.max.z);
+        expect(bb.max.z).toBeLessThan(tb.min.z);
+        expect(fb.max.y).toBeLessThan(top - 0.08);
+        expect(fb.max.y - fb.min.y).toBeCloseTo(W.NUMBER_SIZE.front.height, 6);
+        expect(bb.max.y - bb.min.y).toBeCloseTo(W.NUMBER_SIZE.back.height, 6);
+        expect(bb.max.y).toBeGreaterThan(fb.max.y);
+        // Both read from outside: the chest's faces +z, the back's -z.
+        const facing = (mesh) => new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion())).z;
+        expect(facing(front)).toBeGreaterThan(0.99);
+        expect(facing(back)).toBeLessThan(-0.99);
+        // The trim's color on a dark shirt, the dark trim on a light one,
+        // and a chosen color on either.
+        expect(front.material.color.getHex()).toBe(W.SHIRT_SIZE.jersey.light);
+        const white = F.createAvatar({ sleeves: 'jersey', shirt: 'white', jerseyNumber: 'n00' });
+        expect(named(white.person, 'number')[0].material.color.getHex()).toBe(W.SHIRT_SIZE.jersey.dark);
+        const gold = F.createAvatar({ sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n12', numberColor: 'gold' });
+        expect(named(gold.person, 'number')[0].material.color.getHex()).toBe(new THREE.Color(A.optionOf(A.NUMBER_COLORS, 'gold').color).getHex());
+        // Two digits are wider than one, and no number is drawn for none or
+        // on any other shirt.
+        expect(boxOf(gold.person, named(gold.person, 'number')[0]).max.x - boxOf(gold.person, named(gold.person, 'number')[0]).min.x)
+            .toBeGreaterThan(fb.max.x - fb.min.x);
+        expect(named(F.createAvatar({ sleeves: 'jersey', shirt: 'navy' }).person, 'number')).toHaveLength(0);
+        expect(named(F.createAvatar({ sleeves: 'short', shirt: 'navy', jerseyNumber: 'n8' }).person, 'number')).toHaveLength(0);
+    });
+
     test('a hoodie\'s hood is one closed solid that stands up behind the neck and lies down the back; its pocket sits low on the front, and two drawstrings hang from the neck', () => {
         const avatar = F.createAvatar({ sleeves: 'hoodie', shirt: 'teal' });
         const torso = torsoOf(avatar);

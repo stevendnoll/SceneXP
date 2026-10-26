@@ -141,24 +141,58 @@ describe('the shared rig hands out a real elbow', () => {
         expect(worldOf(handOf(arm)).distanceTo(before)).toBeGreaterThan(0.2);
     });
 
-    test('the hand is still findable by geometry, from inside an arm', () => {
+    test('the hand is still findable from inside an arm, by its tag', () => {
         // www/jamar and www/seedtoseed give their leads big capable hands by
-        // walking the built figure for the rig's own 0.04-radius sphere and
-        // scaling it where it stands. The parent tag is what tells that
-        // sphere apart from every other small ball on a person, and when the
-        // hand moved down into the forearm group the test for it went quiet:
-        // two scenes lost the detail with nothing to show for it.
+        // walking the built figure for the hand and scaling it where it
+        // stands. They matched the rig's 0.04-radius ball until 2026-10-26,
+        // when the hand became a palm with fingers and a thumb in one mesh;
+        // now they match the tag, and this holds the rig to tagging it. The
+        // sources are read too, so neither scene can slip back to matching
+        // a ball that is no longer there.
         const person = createPerson({ role: 'customer' });
         const found = [];
         person.traverse((child) => {
-            if (!child.isMesh || !child.geometry) return;
-            const params = child.geometry.parameters || {};
-            if (child.geometry.type !== 'SphereGeometry' || params.radius !== 0.04) return;
+            if (!child.isMesh || !child.userData.isHand) return;
             const owner = (child.parent && child.parent.userData) || {};
             if (owner.isArm || owner.isForearm) found.push(child);
         });
         expect(found).toHaveLength(2);
         expect(found).toEqual(expect.arrayContaining(armsOf(person).map(handOf)));
+        for (const scene of ['jamar', 'seedtoseed']) {
+            const source = readFileSync(join(root, `www/${scene}/js/store.js`), 'utf8');
+            expect(source).toMatch(/child\.userData\.isHand/);
+            expect(source).not.toMatch(/params\.radius === 0\.04/);
+        }
+    });
+
+    test('the forearm narrows from the elbow to a wrist narrower than the palm (2026-10-26)', () => {
+        // Steve's QA of the avatar: the forearm tapered the OTHER way (0.9 of
+        // the arm's radius at the elbow, all of it at the wrist), so a
+        // muscular wrist came out twice the hand's width. The wrist is
+        // sized from the hand now, so it stays put whatever the arm does.
+        const measure = (config) => {
+            const fore = armsOf(createPerson(config))[0].userData.forearm;
+            const cyl = fore.children.find((c) => c.isMesh && c.geometry.type === 'CylinderGeometry');
+            const hand = handOf(fore.parent);
+            hand.geometry.computeBoundingBox();
+            const b = hand.geometry.boundingBox;
+            return { elbow: cyl.geometry.parameters.radiusTop, wrist: cyl.geometry.parameters.radiusBottom, palm: b.max.x - b.min.x, hand: b.max.y - b.min.y };
+        };
+        const plain = measure({ role: 'customer' });
+        expect(plain.elbow).toBeCloseTo(0.045, 9);
+        expect(plain.wrist).toBeLessThan(plain.elbow * 0.7);
+        expect(plain.wrist * 2).toBeLessThan(plain.palm);
+        // A thicker arm keeps its wrist to the hand: never twice the palm.
+        const buff = measure({ role: 'customer', muscular: true });
+        expect(buff.elbow).toBeGreaterThan(plain.elbow * 1.5);
+        expect(buff.wrist * 2).toBeLessThan(buff.palm * 1.1);
+        // And a bigger hand brings a bigger wrist with it.
+        const big = measure({ role: 'customer', handScale: 1.3 });
+        expect(big.palm).toBeCloseTo(plain.palm * 1.3, 6);
+        expect(big.wrist).toBeGreaterThan(plain.wrist);
+        // The hand is longer than it is wide (its width taking in the
+        // thumb), as a hand with fingers is.
+        expect(plain.hand).toBeGreaterThan(plain.palm * 1.2);
     });
 });
 

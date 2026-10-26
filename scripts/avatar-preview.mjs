@@ -52,7 +52,10 @@ const SHOTS = {
     close: { cell: [320, 300], aim: [0, 1.57, 0], distance: 0.45, fov: 24, lift: 0.08 },
     body: { cell: [180, 300], aim: [0, 0.9, 0], distance: 4.2, fov: 28, lift: 0.1 },
     /** The torso, for the shirts. */
-    torso: { cell: [240, 300], aim: [0, 1.1, 0], distance: 1.7, fov: 28, lift: 0.1 }
+    torso: { cell: [240, 300], aim: [0, 1.1, 0], distance: 1.7, fov: 28, lift: 0.1 },
+    /** The figure's left hand and wrist, close (the fingers and the thumb,
+     *  2026-10-26). */
+    hand: { cell: [240, 260], aim: [0.3, 0.72, 0], distance: 0.6, fov: 24, lift: 0.04 }
 };
 const TURNS = [0, 0.75];
 
@@ -169,6 +172,25 @@ await sheet('hood', [
 await sheet('hands', [
     { handSize: 'small' }, { handSize: 'standard' }, { handSize: 'large' }, { handSize: 'large', muscles: 'buff' }, { handSize: 'small', build: 'slim', sleeves: 'short' }
 ], 'torso', [0, 0.75]);
+// The hand itself (Steve's QA, 2026-10-26: fingers and a thumb) and the
+// forearm narrowing to the wrist, close, from the front, the outside, the
+// side and behind (the palm).
+await sheet('hands-close', [
+    { sleeves: 'short' }, { sleeves: 'short', handSize: 'large' }, { sleeves: 'short', handSize: 'small', build: 'slim' },
+    { sleeves: 'short', muscles: 'buff' }, { sleeves: 'short', muscles: 'athletic', skin: 'deep' }, { sleeves: 'sweater', shirt: 'rust' }
+], 'hand', [0, 0.75, Math.PI / 2, Math.PI]);
+// The forearms at the body's scale, every strength, bare and sleeved.
+await sheet('forearms', [
+    { sleeves: 'short' }, { sleeves: 'short', muscles: 'athletic' }, { sleeves: 'short', muscles: 'buff' }, { sleeves: 'tank', muscles: 'buff', handSize: 'large' },
+    { sleeves: 'long', muscles: 'buff' }, { sleeves: 'short', build: 'slim' }, { sleeves: 'short', build: 'curvy', handSize: 'small' }
+], 'torso', [0, 0.75]);
+// Jersey numbers (Steve's QA, 2026-10-26), front and back.
+await sheet('jersey-numbers', [
+    { sleeves: 'jersey', shirt: 'x241773', jerseyNumber: 'n8' }, { sleeves: 'jersey', shirt: 'white', jerseyNumber: 'n00' },
+    { sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n12', numberColor: 'gold' }, { sleeves: 'jersey', shirt: 'rust', jerseyNumber: 'n7' },
+    { sleeves: 'jersey', shirt: 'teal', jerseyNumber: 'n45', build: 'curvy' }, { sleeves: 'jersey', shirt: 'x241773', jerseyNumber: 'n52', muscles: 'buff', numberColor: 'black' },
+    { sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n3', numberColor: 'x00ff88' }
+], 'torso', [0, Math.PI]);
 await sheet('feet-sizes', [
     { footSize: 'small' }, { footSize: 'standard' }, { footSize: 'large' }, { footSize: 'large', muscles: 'buff' }, { footSize: 'small', shoes: 'heels', build: 'curvy' }, { footSize: 'large', shoes: 'highTops' }
 ], 'feet', [0, 0.75]);

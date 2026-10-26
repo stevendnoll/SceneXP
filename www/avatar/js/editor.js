@@ -50,6 +50,24 @@ export function swatchHex(color) {
     return `#${(color >>> 0).toString(16).padStart(6, '0')}`;
 }
 
+/**
+ * The id of a typed jersey number (Steve's QA, 2026-10-26): the digits in
+ * `text`, two at most, as the list's id ("8" and "08" are `n8`, "00" is
+ * `n00`, nothing is `none`); anything the list does not hold is `none`.
+ */
+export function numberId(key, text) {
+    const digits = String(text ?? '').replace(/\D/g, '').slice(0, 2);
+    if (!digits) return 'none';
+    const id = digits === '00' ? 'n00' : `n${Number(digits)}`;
+    return optionOf(listOf(key) || [], id) ? id : 'none';
+}
+
+/** What a number field shows for `id`: its digits, or nothing for none. */
+export function numberText(key, id) {
+    const option = optionOf(listOf(key) || [], id);
+    return option && option.digits ? option.digits : '';
+}
+
 /** The tab a key press on the row moves to, from `index` of `count`, or
  *  null for a key the row does not take. */
 export function tabKey(key, index, count) {
@@ -73,6 +91,8 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
     const panes = [];
     const inputs = {};
     const customs = {};      // each color field's own color picker
+    const numbers = {};      // each number field's own text box
+    const shows = {};        // and the way to show it an id
     const groups = [];       // [field, fieldset], for the groups a choice hides
     let current = { ...avatar };
     let selected = null;
@@ -154,11 +174,47 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
         if (typeof hex === 'number') input.value = swatchHex(hex);
     }
 
+    /**
+     * A typed number (a jersey's): one text box taking two digits, read as
+     * it is typed, so the figure wears each keystroke. Empty is none. What
+     * is kept is always one of the list's ids (`numberId`), never the text.
+     */
+    function buildNumber(field) {
+        const input = make('input', 'av-number');
+        input.type = 'text';
+        input.inputMode = 'numeric';
+        input.autocomplete = 'off';
+        input.maxLength = 2;
+        input.placeholder = 'None';
+        input.setAttribute('aria-label', field.legend);
+        let shown = numberId(field.key, numberText(field.key, avatar[field.key]));
+        input.value = numberText(field.key, shown);
+        const send = () => {
+            const id = numberId(field.key, input.value);
+            const text = numberText(field.key, id);
+            if (input.value !== text) input.value = text;
+            if (id === shown) return;
+            shown = id;
+            onChange(field.key, id);
+        };
+        input.addEventListener('input', send);
+        input.addEventListener('change', send);
+        numbers[field.key] = input;
+        shows[field.key] = (id) => {
+            shown = numberId(field.key, numberText(field.key, id));
+            const text = numberText(field.key, shown);
+            if (input.value !== text) input.value = text;
+        };
+        return input;
+    }
+
     /** Hide each group whose `hideWhen` the avatar now meets (a beard's
-     *  color with no beard, a hat's with no hat). */
+     *  color with no beard, a hat's with no hat), and each whose `showWhen`
+     *  it does not (a jersey's number, off the jersey). */
     function showGroups() {
         for (const [field, group] of groups) {
             if (field.hideWhen) group.hidden = current[field.hideWhen.field] === field.hideWhen.value;
+            if (field.showWhen) group.hidden = current[field.showWhen.field] !== field.showWhen.value;
         }
     }
 
@@ -180,7 +236,8 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
             const group = make('fieldset', 'av-group');
             group.appendChild(make('legend', 'av-legend', field.legend));
             const row = make('div', `av-options av-options-${field.kind}`);
-            for (const option of optionsFor(field.key)) row.appendChild(buildOption(field, option));
+            if (field.kind === 'number') row.appendChild(buildNumber(field));
+            else for (const option of optionsFor(field.key)) row.appendChild(buildOption(field, option));
             if (field.kind === 'swatch' && COLOR_FIELDS.includes(field.key)) {
                 row.appendChild(buildCustom(field));
                 showCustom(field.key, avatar[field.key]);
@@ -209,6 +266,7 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
         tabs: shown,
         inputs,
         customs,
+        numbers,
         get selected() {
             return selected;
         },
@@ -238,6 +296,7 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
                 for (const input of list) input.checked = next[key] === input.value;
             }
             for (const key of Object.keys(customs)) showCustom(key, next[key]);
+            for (const key of Object.keys(shows)) shows[key](next[key]);
             showGroups();
         },
         /** An option's label, for a status line. */

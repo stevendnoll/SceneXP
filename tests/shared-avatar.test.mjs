@@ -77,12 +77,14 @@ describe('the lists', () => {
     test('every field has a list, each id is unique in it, and the default names a real option of each', () => {
         expect(FIELD_KEYS).toEqual(['skin', 'eyes', 'hair', 'length', 'facial', 'glasses', 'build', 'shirt',
             'sleeves', 'bottom', 'bottomColor', 'shoes', 'shoeColor', 'hat', 'hatColor', 'mouth', 'lips', 'muscles',
-            'facialColor', 'brows', 'eyeShape', 'nose', 'faceShape', 'cheeks', 'frameColor', 'lensColor', 'handSize', 'footSize']);
+            'facialColor', 'brows', 'eyeShape', 'nose', 'faceShape', 'cheeks', 'frameColor', 'lensColor', 'handSize', 'footSize',
+            'jerseyNumber', 'numberColor']);
         for (const [key, list] of A.FIELDS) {
             const ids = list.map((o) => o.id);
             expect(`${key}: ${new Set(ids).size}`).toBe(`${key}: ${ids.length}`);
-            // Ids travel in a link between dots, so they are plain letters.
-            for (const id of ids) expect(id).toMatch(/^[A-Za-z]+$/);
+            // Ids travel in a link between dots, so they are plain letters
+            // (and the jersey numbers' digits, 2026-10-26).
+            for (const id of ids) expect(id).toMatch(/^[A-Za-z0-9]+$/);
             expect(A.optionOf(list, A.DEFAULT_AVATAR[key])).toBeTruthy();
             expect(A.listOf(key)).toBe(list);
         }
@@ -173,7 +175,7 @@ describe('normalizeAvatar takes anything', () => {
             bottomColor: 'denim', shoes: 'sneakers', shoeColor: 'black', hat: 'beanie', hatColor: 'mustard',
             mouth: 'smile', lips: 'natural', muscles: 'standard',
             facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
-            frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard'
+            frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard'
         });
         // No free text survives, whatever it was called.
         expect(a.name).toBeUndefined();
@@ -336,6 +338,32 @@ describe('custom colors (Steve, 2026-10-24)', () => {
         expect(A.describeAvatar({ sleeves: 'vneck', shirt: 'navy' })).toMatch(/a navy V-neck shirt, /);
     });
 
+    test('a jersey number is one of a list of 102, drawn as its digits, and said with its color (2026-10-26)', () => {
+        // None, 0 to 99, and 00: a number is an id like any other, so a
+        // link or a file holding one is checked the same way.
+        expect(A.JERSEY_NUMBERS).toHaveLength(102);
+        expect(A.JERSEY_NUMBERS[0]).toEqual({ id: 'none', label: 'None', digits: '' });
+        expect(A.optionOf(A.JERSEY_NUMBERS, 'n8')).toEqual({ id: 'n8', label: '8', digits: '8' });
+        expect(A.optionOf(A.JERSEY_NUMBERS, 'n99').digits).toBe('99');
+        expect(A.optionOf(A.JERSEY_NUMBERS, 'n00')).toEqual({ id: 'n00', label: '00', digits: '00' });
+        expect(A.optionOf(A.JERSEY_NUMBERS, 'n100')).toBeFalsy();
+        expect(A.optionOf(A.JERSEY_NUMBERS, 'n08')).toBeFalsy();
+        expect(A.normalizeAvatar({ jerseyNumber: '8' }).jerseyNumber).toBe('none');
+        expect(A.normalizeAvatar({ jerseyNumber: 'n8', numberColor: 'gold' })).toMatchObject({ jerseyNumber: 'n8', numberColor: 'gold' });
+        // The number's color takes any color, like every other color field.
+        expect(A.COLOR_FIELDS).toContain('numberColor');
+        expect(A.normalizeAvatar({ numberColor: 'x241773' }).numberColor).toBe('x241773');
+        expect(A.colorOf('numberColor', 'standard')).toBeNull();
+        expect(A.colorOf('numberColor', 'white')).toBe(0xf2f0ea);
+        // Said on the jersey, with the color when one is chosen; unsaid on
+        // any other shirt, and the rig is never told of it.
+        expect(A.describeAvatar({ sleeves: 'jersey', shirt: 'x241773', jerseyNumber: 'n8' })).toMatch(/a custom-color sports jersey with the number 8, /);
+        expect(A.describeAvatar({ sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n00', numberColor: 'gold' })).toMatch(/a navy sports jersey with the number 00 in gold, /);
+        expect(A.describeAvatar({ sleeves: 'jersey', shirt: 'navy' })).toMatch(/a navy sports jersey, /);
+        expect(A.describeAvatar({ sleeves: 'short', jerseyNumber: 'n8', numberColor: 'gold' })).toBe(A.describeAvatar({ sleeves: 'short' }));
+        expect(A.personConfig({ sleeves: 'jersey', jerseyNumber: 'n8' })).toEqual(A.personConfig({ sleeves: 'jersey' }));
+    });
+
     test('every hair style is said the way a person would say it', () => {
         const say = (length) => A.describeAvatar({ length, hair: 'auburn' });
         expect(say('afro')).toMatch(/an auburn afro/);
@@ -391,7 +419,7 @@ describe('the link', () => {
     test('the default\'s link is pinned, so the field order can never move under a link already sent', () => {
         expect(A.encodeLink(A.DEFAULT_AVATAR))
             .toBe('a=1.fair.darkBrown.darkBrown.short.none.none.straight.rust.long.pants.navy.classic.black.none.navy.smile.natural.standard'
-                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard');
+                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard');
         // A link made before the mouth and the muscles (2026-10-23) still
         // opens, its new fields at their defaults.
         expect(A.decodeLink('#a=1.deep.blue.gray.long.beard.round.curvy.teal.short.skirt.khaki.maryJane.red.cap.mustard'))
@@ -399,7 +427,7 @@ describe('the link', () => {
                 shirt: 'teal', sleeves: 'short', bottom: 'skirt', bottomColor: 'khaki', shoes: 'maryJane', shoeColor: 'red', hat: 'cap',
                 hatColor: 'mustard', mouth: 'smile', lips: 'natural', muscles: 'standard',
                 facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
-                frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard' });
+                frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard' });
         expect(A.linkUrl(A.DEFAULT_AVATAR, 'https://www.scenexp.com/'))
             .toBe(`https://www.scenexp.com/avatar/#${A.encodeLink(A.DEFAULT_AVATAR)}`);
         expect(A.linkUrl(null, '')).toBe(`/avatar/#${A.encodeLink(null)}`);

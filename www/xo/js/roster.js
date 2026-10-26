@@ -933,10 +933,9 @@ export let FIGURE_LIFT = 0.055 * CFG.figureScale;
 function measureArm(person) {
     const arm = (person.userData.arms || [])[0];
     if (!arm || !arm.userData || !arm.userData.forearm) return;
-    const hand = arm.userData.forearm.children.find(
-        (c) => c.isMesh && c.geometry && c.geometry.type === 'SphereGeometry'
-            && c.geometry.parameters && c.geometry.parameters.radius < 0.045
-    );
+    // The rig tags its hand (2026-10-26: a palm, fingers and a thumb in one
+    // mesh, where the 0.04 ball used to be).
+    const hand = arm.userData.forearm.children.find((c) => c.isMesh && c.userData && c.userData.isHand);
     calibrate({
         shoulderX: Math.abs(arm.position.x),
         shoulderY: arm.position.y,

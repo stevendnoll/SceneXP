@@ -587,7 +587,14 @@ describe('the pieces (M5), measured', () => {
     });
 
     test('hand and foot sizes scale the rig\'s hands and shoes, the feet over the muscles\' (2026-10-25)', () => {
-        const hand = (look) => F.createAvatar(look).arms.right.userData.forearm.children[2].geometry.parameters.radius;
+        // The hand is one mesh of a palm, fingers and a thumb (2026-10-26):
+        // its width, from its geometry.
+        const hand = (look) => {
+            const mesh = F.createAvatar(look).arms.right.userData.forearm.children[2];
+            expect(mesh.userData.isHand).toBe(true);
+            mesh.geometry.computeBoundingBox();
+            return mesh.geometry.boundingBox.max.x - mesh.geometry.boundingBox.min.x;
+        };
         const shoe = (look) => {
             const leg = F.createAvatar(look).person.children.find((o) => o.userData.isLeg);
             return leg.children.find((m) => m.userData.isShoe).geometry.parameters;
@@ -596,6 +603,21 @@ describe('the pieces (M5), measured', () => {
         expect(hand({ handSize: 'small' })).toBeLessThan(hand({}));
         // The hands keep their size when the arms are strengthened.
         expect(hand({ handSize: 'large', muscles: 'athletic' })).toBe(hand({ handSize: 'large' }));
+        // Athletic thickens the forearm at the elbow and leaves the wrist to
+        // the hand (Steve's QA, 2026-10-26: the forearms flared at the
+        // wrist); the forearm narrows toward the hand on every build.
+        const forearm = (look) => {
+            const fore = F.createAvatar(look).arms.right.userData.forearm;
+            const cyl = fore.children.find((m) => m.isMesh && m.geometry.type === 'CylinderGeometry');
+            return { elbow: cyl.geometry.parameters.radiusTop * cyl.scale.x, wrist: cyl.geometry.parameters.radiusBottom * cyl.scale.x };
+        };
+        const plainArm = forearm({});
+        const athleticArm = forearm({ muscles: 'athletic' });
+        const buffArm = forearm({ muscles: 'buff' });
+        expect(athleticArm.elbow / plainArm.elbow).toBeCloseTo(F.ATHLETIC_ARMS, 6);
+        expect(athleticArm.wrist).toBe(plainArm.wrist);
+        for (const f of [plainArm, athleticArm, buffArm]) expect(f.wrist).toBeLessThan(f.elbow * 0.7);
+        expect(buffArm.wrist * 2).toBeLessThan(hand({ muscles: 'buff' }) * 1.1);
         const large = shoe({ footSize: 'large' });
         const standard = shoe({});
         expect(large.width / standard.width).toBeCloseTo(A.optionOf(A.FOOT_SIZES, 'large').scale, 6);
