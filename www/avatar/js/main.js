@@ -168,14 +168,16 @@ function save() {
 
 /**
  * Surprise me (Steve, 2026-10-26): a random look from every list, on the
- * plinth and in the radios, framed whole. It changes the figure on screen
- * only, like any choice: Save keeps it, and a saved avatar is untouched
- * until then.
+ * plinth and in the radios, framed whole and facing the front (Steve's QA,
+ * 2026-10-26: the plinth turns by itself, so after a few presses the new
+ * look was showing its back). It changes the figure on screen only, like
+ * any choice: Save keeps it, and a saved avatar is untouched until then.
  */
 function surprise() {
     show(randomAvatar());
     if (state.studio) {
         state.studio.setFrame('body');
+        state.studio.faceFront();
         state.studio.touch();
     }
     say(WORDS.surprised);

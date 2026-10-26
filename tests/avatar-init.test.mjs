@@ -241,6 +241,25 @@ describe('the studio, on the real three', () => {
         expect(st.turntable.rotation.y).toBeGreaterThan(0);
     });
 
+    test('faceFront on a turning plinth eases it to the front, and it turns by itself again after (2026-10-26)', () => {
+        const { st, tick } = studio();
+        // Well into a turn, past the half-way mark, so the nearest front is
+        // a full turn on rather than back at zero.
+        tick(60);
+        st.turntable.rotation.y = 4;
+        st.faceFront();
+        st.touch();
+        let fronted = false;
+        for (let i = 0; i < Math.ceil(CONFIG.turntable.stepSeconds * 60) + 2 && !fronted; i++) {
+            tick(1);
+            fronted = Math.abs(st.turntable.rotation.y - Math.PI * 2) < 1e-6;
+        }
+        expect(fronted).toBe(true);
+        // Framed whole, it does not hold there: the slow turn resumes.
+        tick(60);
+        expect(st.turntable.rotation.y).toBeGreaterThan(Math.PI * 2 + 0.1);
+    });
+
     test('a drag turns the plinth with the pointer', () => {
         const { st, canvas, tick } = studio();
         st.setFrame('face');
@@ -1017,11 +1036,17 @@ describe('the page', () => {
         };
         const real = Math.random;
         Math.random = seeded;
+        // The plinth has turned by itself since the page opened; the new
+        // look must come round to face the front (Steve's QA, 2026-10-26).
+        state.studio.turntable.rotation.y = 2.5;
+        const faced = jest.spyOn(state.studio, 'faceFront');
         try {
             dom.el('av-random').click();
         } finally {
             Math.random = real;
         }
+        expect(faced).toHaveBeenCalledTimes(1);
+        faced.mockRestore();
         expect(sameAvatar(state.current, { skin: 'deep', hat: 'cap' })).toBe(false);
         expect(normalizeAvatar(state.current)).toEqual(state.current);
         // The radios follow it, the canvas says it, the camera shows all of it.
