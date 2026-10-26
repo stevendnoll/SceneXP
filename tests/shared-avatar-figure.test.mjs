@@ -26,6 +26,7 @@ let F;
 let A;
 let S;
 let createPerson;
+let HAND;
 let leavesPerson;
 let DEFAULT_CHOICE;
 
@@ -35,7 +36,7 @@ beforeAll(async () => {
     F = await import('../www/shared/js/avatar-figure-1.0.0.js');
     A = await import('../www/shared/js/avatar-1.0.0.min.js');
     S = await import('../www/shared/js/avatar-shapes-1.0.0.min.js');
-    ({ createPerson } = await import('../www/shared/js/people-1.0.0.min.js'));
+    ({ createPerson, HAND } = await import('../www/shared/js/people-1.0.0.min.js'));
     ({ personConfig: leavesPerson, DEFAULT_CHOICE } = await import('../www/leaves/js/cast.js'));
 });
 
@@ -292,6 +293,40 @@ describe('the wave', () => {
         expect(F.poseFor('wave', 0)).toEqual(rest);
     });
 
+    test('at the top of the wave the palm faces the viewer and the thumb points up and in toward the head', () => {
+        // Steve's QA, 2026-10-26: "the thumb is pointing down... usually
+        // the hand/thumb rotate so that the thumb is facing the person who
+        // is waving". Measured: swung up untwisted, the thumb pointed
+        // straight out to the side and the back of the hand faced the
+        // viewer.
+        const avatar = F.createAvatar({});
+        const hand = findIn(avatar.arms.right, (o) => o.userData.isHand);
+        // The thumb in the hand's own coordinates (the rig's HAND, on the
+        // inner side of the right hand), the back of the hand +z, the
+        // fingers down.
+        const inner = 1;
+        const thumbLocal = new THREE.Vector3(inner * Math.sin(HAND.thumb.out), -Math.cos(HAND.thumb.out), -Math.sin(HAND.thumb.forward)).normalize();
+        const world = (v) => {
+            avatar.group.updateMatrixWorld(true);
+            return v.clone().applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion()));
+        };
+        const peak = F.poseFor('wave', 1.0);
+        expect(peak.right.twist).toBeCloseTo(F.WAVE_TWIST, 9);
+        expect(F.poseFor('wave', 0.01).right.twist).toBeLessThan(0.1);
+        avatar.setPose(peak);
+        const thumb = world(thumbLocal);
+        const back = world(new THREE.Vector3(0, 0, 1));
+        const fingers = world(new THREE.Vector3(0, -1, 0));
+        expect(back.z).toBeLessThan(-0.5);          // the palm to the viewer
+        expect(thumb.y).toBeGreaterThan(0.8);       // the thumb up
+        expect(thumb.x - fingers.x).toBeGreaterThan(0.5);   // and in, toward the head (+x is the figure's left)
+        // The rig's own swing, untwisted: this test can fail.
+        avatar.setPose({ right: { ...peak.right, twist: 0 } });
+        expect(world(new THREE.Vector3(0, 0, 1)).z).toBeGreaterThan(0.5);
+        expect(Math.abs(world(thumbLocal).y)).toBeLessThan(0.2);
+        avatar.dispose();
+    });
+
     test('the right hand rises above the head mid-wave, and comes back down', () => {
         const avatar = F.createAvatar({});
         const hand = () => {
@@ -316,6 +351,9 @@ describe('the wave', () => {
         expect(avatar.tick(1)).toBe(false);
         // The left arm never moved.
         expect(avatar.arms.left.rotation.z).toBeCloseTo(F.REST.z, 6);
+        // The hand is back as the rig hung it.
+        const handMesh = findIn(avatar.arms.right, (o) => o.userData.isHand);
+        expect(handMesh.rotation.y).toBeCloseTo(-HAND.turn, 9);
         // A scene's own pose may name one arm, or none.
         avatar.setPose({ left: { z: 1, x: 0, fore: -0.5 } });
         expect(avatar.arms.left.rotation.z).toBeCloseTo(1, 6);

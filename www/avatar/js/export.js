@@ -319,6 +319,8 @@ export function dialogIds(config) {
         colorGroup: 'av-export-color-group',
         custom: 'av-export-color-custom',
         savePicture: 'av-export-picture-save',
+        turnLeft: 'av-export-turn-left',
+        turnRight: 'av-export-turn-right',
         makeClip: 'av-export-clip-make',
         saveClip: 'av-export-clip-save',
         framing: radios('av-export-framing', FRAMINGS),
@@ -359,6 +361,7 @@ export function createExporter(config, {
         size: E.pictures[Math.min(1, E.pictures.length - 1)].id,
         clipSize: E.clip.sizes[Math.min(1, E.clip.sizes.length - 1)].id,
         tab: 'picture',
+        angle: 0,              // the plinth's turn in the picture (Steve, 2026-10-26: a side profile)
         open: false,
         recording: null,       // while a clip is made
         clip: null             // { blob, name } once made
@@ -417,13 +420,23 @@ export function createExporter(config, {
         s.figure = createAvatar(avatar);
         s.figure.group.position.y = s.standY;
         s.turntable.add(s.figure.group);
-        // The head with its hat and hair, measured facing the front, so the
-        // portrait can back off for a wide brim.
-        s.turntable.rotation.y = 0;
+        s.heads = new Map();
+    }
+
+    /** The head with its hat and hair, measured with the plinth turned
+     *  `angle` (a brim is as deep as it is wide only side on), so the
+     *  portrait can back off for it. Kept per angle for the figure. */
+    function headAt(angle) {
+        const s = ensureStage();
+        if (!s.figure) return null;
+        if (s.heads.has(angle)) return s.heads.get(angle);
+        s.turntable.rotation.y = angle;
         s.scene.updateMatrixWorld(true);
         const head = s.figure.person.getObjectByName('head');
         const box = head ? new THREE.Box3().setFromObject(head) : null;
-        s.head = box ? { min: { x: box.min.x, y: box.min.y, z: box.min.z }, max: { x: box.max.x, y: box.max.y, z: box.max.z } } : null;
+        const out = box ? { min: { x: box.min.x, y: box.min.y, z: box.min.z }, max: { x: box.max.x, y: box.max.y, z: box.max.z } } : null;
+        s.heads.set(angle, out);
+        return out;
     }
 
     function releaseStage() {
@@ -450,7 +463,7 @@ export function createExporter(config, {
         const s = ensureStage();
         if (s.renderer.setPixelRatio) s.renderer.setPixelRatio(1);
         s.renderer.setSize(w, h, false);
-        const pose = pictureCamera(framing, w / h, C, s.standY, s.head);
+        const pose = pictureCamera(framing, w / h, C, s.standY, framing === 'portrait' ? headAt(angle) : null);
         s.camera.fov = pose.fov;
         s.camera.aspect = w / h;
         s.camera.updateProjectionMatrix();
@@ -466,7 +479,7 @@ export function createExporter(config, {
 
     function composeInto(out, px) {
         setBackdrop(state.background === 'clear');
-        const image = render(px, px, state.framing, 0);
+        const image = render(px, px, state.framing, state.angle);
         const ctx = out.getContext('2d');
         if (!ctx) return false;
         composePicture(ctx, image, px, { border: BORDERS.find((b) => b.id === state.border), color: borderColor(state.avatar, state.color) });
@@ -648,9 +661,19 @@ export function createExporter(config, {
         if (picture) drawPreview();
     }
 
+    /** Turn the picture's plinth by `radians` (a turn button's step), kept
+     *  within one turn, and redraw. */
+    function turnBy(radians) {
+        const whole = Math.PI * 2;
+        state.angle = ((state.angle + radians) % whole + whole) % whole;
+        if (Math.abs(state.angle) < 1e-9 || Math.abs(state.angle - whole) < 1e-9) state.angle = 0;
+        return drawPreview();
+    }
+
     function open(avatar) {
         state.avatar = normalizeAvatar(avatar);
         state.clip = null;
+        state.angle = 0;
         const saveBtn = $(ids.saveClip);
         if (saveBtn) saveBtn.hidden = true;
         clearStage();
@@ -750,6 +773,8 @@ export function createExporter(config, {
         const swatch = input && input.parentNode && input.parentNode.children ? input.parentNode.children[1] : null;
         if (swatch && swatch.style && swatch.style.setProperty) swatch.style.setProperty('--swatch', hexCss(option.color));
     }
+    on(ids.turnLeft, 'click', () => turnBy(-config.turntable.step));
+    on(ids.turnRight, 'click', () => turnBy(config.turntable.step));
     on(ids.savePicture, 'click', savePicture);
     on(ids.makeClip, 'click', makeClip);
     on(ids.saveClip, 'click', saveClip);
@@ -761,6 +786,7 @@ export function createExporter(config, {
         close,
         select,
         drawPreview,
+        turnBy,
         makePicture,
         savePicture,
         makeClip,

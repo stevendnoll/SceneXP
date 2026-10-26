@@ -645,10 +645,37 @@ body.av-body {
     width: min(280px, 100%);
     height: auto;
     aspect-ratio: 1;
-    margin: 0 auto 18px;
+    margin: 0 auto 10px;
     border-radius: 12px;
     background:
         repeating-conic-gradient(#ebe8e2 0 25%, var(--av-paper) 0 50%) 0 0 / 20px 20px;
+}
+
+/* The turn buttons under the preview (a side profile, 2026-10-26): the
+   page's own arrows, in the dialog's outlined style. */
+.av-export-turn {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.av-export-turn-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 48px;
+    height: 40px;
+    padding: 0;
+}
+
+.av-export-turn-btn svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 /* The clip as it is made, in the dialog: a recording wants its canvas

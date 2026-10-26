@@ -1208,20 +1208,33 @@ function dressShoes(person, kind, color, skin) {
 // ---- The wave -----------------------------------------------------------------
 
 /** The rig's resting arm: splayed a little, a touch forward, the elbow
- *  straight. */
-export const REST = Object.freeze({ z: 0.15, x: 0.1, fore: 0 });
+ *  straight, the hand as the rig hung it. */
+export const REST = Object.freeze({ z: 0.15, x: 0.1, fore: 0, twist: 0 });
 
 /** How long each gesture lasts, seconds. */
 export const GESTURES = Object.freeze({ wave: 2.2 });
 
 /**
+ * How far the waving hand turns about the arm (Steve's QA, 2026-10-26: "the
+ * thumb is pointing down... usually the hand/thumb rotate so that the thumb
+ * is facing the person who is waving"). The rig hangs the hand with its
+ * palm to the thigh and the thumb leading, and swinging the arm up alone
+ * left the back of the hand to the viewer and the thumb out to the side
+ * (measured). A half turn brings the palm round to face the viewer and the
+ * thumb up and in toward the head.
+ */
+export const WAVE_TWIST = Math.PI;
+
+/**
  * Each arm's angles `t` seconds into a gesture: `{ right, left }`, the
  * figure's own right and left. `z` is the swing out from the side (before
  * the side's sign), `x` the swing forward (negative is forward), `fore` the
- * elbow's bend. Up over the first 0.35 s, down over the last 0.45 s, so a
- * gesture never snaps.
+ * elbow's bend, `twist` the hand's turn about the arm (before the side's
+ * sign). Up over the first 0.35 s, down over the last 0.45 s, so a gesture
+ * never snaps.
  *
- *   wave   the right arm raised high, swinging side to side (Maya's wave)
+ *   wave   the right arm raised high, swinging side to side (Maya's wave),
+ *          the hand turned so its palm faces the viewer
  */
 export function poseFor(gesture, t) {
     const rest = { right: { ...REST }, left: { ...REST } };
@@ -1232,7 +1245,7 @@ export function poseFor(gesture, t) {
     const k = Math.min(up, down);
     const mix = (a, b) => a + (b - a) * k;
     const swing = 0.22 * Math.sin(t * Math.PI * 2 * 1.6) * k;
-    return { right: { z: mix(REST.z, 2.55) + swing, x: mix(REST.x, -0.12), fore: mix(0, -0.12) }, left: rest.left };
+    return { right: { z: mix(REST.z, 2.55) + swing, x: mix(REST.x, -0.12), fore: mix(0, -0.12), twist: mix(0, WAVE_TWIST) }, left: rest.left };
 }
 
 // ---- The figure ---------------------------------------------------------------
@@ -1368,6 +1381,16 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     });
     const side = { right: -1, left: 1 };
 
+    // Each arm's hand, and the turn the rig hung it at, so a pose's twist
+    // is added to it and rest puts it back.
+    const hands = {};
+    for (const key of ['right', 'left']) {
+        if (!arms[key]) continue;
+        arms[key].traverse((o) => {
+            if (o.userData && o.userData.isHand && !hands[key]) hands[key] = { mesh: o, turn: o.rotation.y };
+        });
+    }
+
     function setPose(pose) {
         for (const key of ['right', 'left']) {
             const arm = arms[key];
@@ -1375,6 +1398,7 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
             arm.rotation.z = side[key] * pose[key].z;
             arm.rotation.x = pose[key].x;
             if (arm.userData.forearm) arm.userData.forearm.rotation.x = pose[key].fore;
+            if (hands[key]) hands[key].mesh.rotation.y = hands[key].turn + side[key] * (pose[key].twist || 0);
         }
     }
     setPose(poseFor(null, 0));

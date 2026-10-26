@@ -113,10 +113,11 @@ describe('the framings, on the real three', () => {
             }
             return most;
         };
-        const headOf = (look) => {
+        const headOf = (look, angle = 0) => {
             const f = F.createAvatar(look);
             f.group.position.y = stage.standY;
             stage.turntable.add(f.group);
+            stage.turntable.rotation.y = angle;
             stage.scene.updateMatrixWorld(true);
             const box = new THREE.Box3().setFromObject(f.person.getObjectByName('head'));
             f.dispose();
@@ -139,6 +140,16 @@ describe('the framings, on the real three', () => {
         // chip's framing.
         expect(X.pictureCamera('portrait', 1, CONFIG.camera, stage.standY, headOf({ hat: 'sunHat' })).eye[2]).toBeGreaterThan(F.PORTRAIT.distance * 1.3);
         expect(X.pictureCamera('portrait', 1, CONFIG.camera, stage.standY).eye[2]).toBe(F.PORTRAIT.distance);
+        // Turned for a side profile (2026-10-26), the head is measured
+        // turned, so a brim or a long style still fits.
+        for (const angle of [Math.PI / 2, Math.PI / 4, Math.PI]) {
+            for (const look of [{ hat: 'sunHat' }, { hat: 'cowboy', length: 'long' }, { length: 'afro', hat: 'topHat' }]) {
+                const head = headOf(look, angle);
+                const most = fill(X.pictureCamera('portrait', 1, CONFIG.camera, stage.standY, head), head);
+                expect(`${JSON.stringify(look)} at ${angle.toFixed(2)}: ${most < 0.95}`).toBe(`${JSON.stringify(look)} at ${angle.toFixed(2)}: true`);
+            }
+        }
+        stage.turntable.rotation.y = 0;
     });
 });
 
@@ -403,6 +414,20 @@ describe('the dialog, end to end with fakes', () => {
         dom.loops[frames]();
         expect(ex.state.color).toBe('x11aa33');
         expect(dom.el('av-export-color-match').checked).toBe(false);
+        // The turn buttons turn the picture's plinth in the page's steps,
+        // round and back, redrawing each time; opening again faces front.
+        const step = CONFIG.turntable.step;
+        const drawn = renderers[0].renders;
+        dom.el('av-export-turn-right').click();
+        expect(ex.state.angle).toBeCloseTo(step, 9);
+        expect(renderers[0].renders).toBe(drawn + 1);
+        dom.el('av-export-turn-left').click();
+        dom.el('av-export-turn-left').click();
+        expect(ex.state.angle).toBeCloseTo(Math.PI * 2 - step, 9);
+        for (let i = 0; i < 7; i++) dom.el('av-export-turn-left').click();
+        expect(ex.state.angle).toBe(0);
+        dom.el('av-export-turn-right').click();
+        expect(ex.state.angle).toBeCloseTo(step, 9);
         // The tabs: the clip's panel, and back by the arrow keys.
         ex.select('clip');
         expect(dom.el('av-export-picture').hidden).toBe(true);
@@ -417,9 +442,10 @@ describe('the dialog, end to end with fakes', () => {
         expect(dom.el('av-export').getAttribute('open')).toBeNull();
         expect(ex.close()).toBe(false);
         expect(globalThis.localStorage.getItem('scenexp-avatar')).toBeNull();
-        // Opened again: a fresh stage.
+        // Opened again: a fresh stage, facing the front.
         ex.open({});
         expect(renderers).toHaveLength(2);
+        expect(ex.state.angle).toBe(0);
     });
 
     test('a picture is made at the chosen size and saved, or shared where the sheet takes it', async () => {

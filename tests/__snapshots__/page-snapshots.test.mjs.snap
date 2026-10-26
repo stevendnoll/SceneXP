@@ -455,7 +455,7 @@ html [lang="en"]
     title
       "Your Avatar | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/avatar.min.css?v=7" rel="preload"]
+    link [as="style" href="css/avatar.min.css?v=8" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -479,7 +479,7 @@ html [lang="en"]
     link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/avatar.min.css?v=7" rel="stylesheet"]
+    link [href="css/avatar.min.css?v=8" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body.av-body
@@ -598,6 +598,15 @@ html [lang="en"]
             "Video"
         div#av-export-picture.av-export-panel [aria-labelledby="av-export-tab-picture" role="tabpanel"]
           canvas#av-export-preview.av-export-preview [aria-label="A preview of your picture" height="560" role="img" width="560"]
+          div.av-export-turn
+            button#av-export-turn-left.av-secondary.av-export-turn-btn [aria-label="Turn left" title="Turn left" type="button"]
+              svg [aria-hidden="true" viewbox="0 0 24 24"]
+                path [d="M9 7.5 5 11.5l4 4"]
+                path [d="M5.5 11.5h8a5 5 0 0 1 5 5v1"]
+            button#av-export-turn-right.av-secondary.av-export-turn-btn [aria-label="Turn right" title="Turn right" type="button"]
+              svg [aria-hidden="true" viewbox="0 0 24 24"]
+                path [d="m15 7.5 4 4-4 4"]
+                path [d="M18.5 11.5h-8a5 5 0 0 0-5 5v1"]
           fieldset.av-group
             legend.av-legend
               "Framing"

@@ -103,7 +103,7 @@
     <title>Your Avatar | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/avatar.min.css?v=7" as="style">
+    <link rel="preload" href="css/avatar.min.css?v=8" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -131,7 +131,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/avatar.min.css?v=7">
+    <link rel="stylesheet" href="css/avatar.min.css?v=8">
 
     <!-- When JS is off, the studio can't run: the static fallback below is
          the page. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -298,6 +298,22 @@
 
             <div id="av-export-picture" class="av-export-panel" role="tabpanel" aria-labelledby="av-export-tab-picture">
                 <canvas id="av-export-preview" class="av-export-preview" width="560" height="560" role="img" aria-label="A preview of your picture"></canvas>
+                <!-- Turn the plinth for the picture (a side profile, a
+                     three-quarter view), in the page's own steps. -->
+                <div class="av-export-turn">
+                    <button id="av-export-turn-left" class="av-secondary av-export-turn-btn" type="button" aria-label="Turn left" title="Turn left">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M9 7.5 5 11.5l4 4" />
+                            <path d="M5.5 11.5h8a5 5 0 0 1 5 5v1" />
+                        </svg>
+                    </button>
+                    <button id="av-export-turn-right" class="av-secondary av-export-turn-btn" type="button" aria-label="Turn right" title="Turn right">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="m15 7.5 4 4-4 4" />
+                            <path d="M18.5 11.5h-8a5 5 0 0 0-5 5v1" />
+                        </svg>
+                    </button>
+                </div>
                 <fieldset class="av-group">
                     <legend class="av-legend">Framing</legend>
                     <div class="av-options av-options-text">
