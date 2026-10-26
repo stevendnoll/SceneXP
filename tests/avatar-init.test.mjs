@@ -467,24 +467,31 @@ describe('the editor and the way back', () => {
     });
     afterAll(() => dom.uninstall());
 
-    test('every piece is offered since M5, and the tab order is the PRD\'s', () => {
+    test('every piece is offered since M5, in six tabs of two rows (Steve\'s QA, 2026-10-26)', async () => {
         const tabs = E.visibleTabs(CONFIG.tabs).map((t) => t.id);
-        expect(tabs).toEqual(['face', 'eyes', 'mouth', 'hair', 'build', 'clothes', 'shoes', 'hat']);
+        expect(tabs).toEqual(['face', 'eyes', 'hair', 'build', 'clothes', 'layers']);
         const fields = (id) => E.visibleFields(CONFIG.tabs.find((t) => t.id === id)).map((f) => f.key);
-        // Facial hair is on the Face tab, and the glasses' colors follow
-        // the glasses (Steve's QA, 2026-10-25: the Hair tab was crowded).
-        expect(fields('face')).toEqual(['skin', 'faceShape', 'nose', 'cheeks', 'facial', 'facialColor']);
+        // The mouth sits between the cheeks and the facial hair; facial hair
+        // is on the Face tab, and the glasses' colors follow the glasses
+        // (Steve's QA, 2026-10-25: the Hair tab was crowded).
+        expect(fields('face')).toEqual(['skin', 'faceShape', 'nose', 'cheeks', 'mouth', 'lips', 'facial', 'facialColor']);
         expect(fields('eyes')).toEqual(['eyeShape', 'eyes', 'brows', 'glasses', 'frameColor', 'lensColor']);
-        expect(fields('mouth')).toEqual(['mouth', 'lips']);
-        expect(fields('hair')).toEqual(['length', 'hair']);
-        expect(fields('shoes')).toEqual(['shoes', 'shoeColor']);
-        // Every field of every tab is shown somewhere, once.
+        // The hat is with the hair it is fitted to.
+        expect(fields('hair')).toEqual(['length', 'hair', 'hat', 'hatColor']);
+        // The underlayer's tab (2026-10-26).
+        expect(fields('layers')).toEqual(['legwear', 'legwearColor', 'armwear', 'armwearColor']);
+        // Every field of every tab is shown somewhere, once, and every
+        // field of the avatar is on a tab.
         const all = CONFIG.tabs.flatMap((t) => t.fields.map((f) => f.key));
         expect(new Set(all).size).toBe(all.length);
+        const { FIELDS } = await import('../www/shared/js/avatar-1.0.0.js');
+        expect([...all].sort()).toEqual(FIELDS.map(([key]) => key).sort());
         const build = CONFIG.tabs.find((t) => t.id === 'build');
         expect(E.visibleFields(build).map((f) => f.key)).toEqual(['build', 'muscles', 'handSize', 'footSize']);
-        const hat = CONFIG.tabs.find((t) => t.id === 'hat');
-        expect(E.visibleFields(hat).map((f) => f.key)).toEqual(['hat', 'hatColor']);
+        // The shoes are clothes, and still look at the feet when chosen.
+        const clothes = CONFIG.tabs.find((t) => t.id === 'clothes');
+        for (const key of ['shoes', 'shoeColor']) expect(clothes.fields.find((f) => f.key === key).frame).toBe('feet');
+        for (const tab of CONFIG.tabs) for (const f of tab.fields) if (f.frame) expect(['shoes', 'shoeColor']).toContain(f.key);
         expect(E.optionsFor('shoes').map((o) => o.id)).toEqual(['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots',
             'sandals', 'flats', 'heels', 'platforms', 'slippers', 'crocs', 'highTops', 'hikingBoots', 'cleats']);
         expect(E.optionsFor('nope')).toEqual([]);
@@ -500,10 +507,36 @@ describe('the editor and the way back', () => {
         for (const tab of CONFIG.tabs) for (const f of tab.fields) expect(['swatch', 'text', 'number']).toContain(f.kind);
         // The jersey's number and its color follow the shirt's style
         // (2026-10-26), shown only on the jersey.
-        expect(fields('clothes')).toEqual(['shirt', 'sleeves', 'jerseyNumber', 'numberColor', 'bottom', 'bottomColor']);
-        const clothes = CONFIG.tabs.find((t) => t.id === 'clothes');
+        expect(fields('clothes')).toEqual(['shirt', 'sleeves', 'jerseyNumber', 'numberColor', 'bottom', 'bottomColor', 'shoes', 'shoeColor']);
         for (const key of ['jerseyNumber', 'numberColor']) expect(clothes.fields.find((f) => f.key === key).showWhen).toEqual({ field: 'sleeves', value: 'jersey' });
         expect(clothes.fields.find((f) => f.key === 'jerseyNumber').kind).toBe('number');
+    });
+
+    test('bare legs are offered only while a one-piece is worn, and the layers\' colors step aside with no layer (2026-10-26)', () => {
+        const tablist = document.createElement('div');
+        const panels = document.createElement('div');
+        const ed = E.createEditor({ tablist, panels, tabs: CONFIG.tabs, avatar: { sleeves: 'short', bottom: 'pants', legwear: 'none', armwear: 'none' } });
+        const bare = ed.inputs.bottom.find((i) => i.value === 'bare');
+        const option = bare.parentNode;
+        expect(option.tagName).toBe('LABEL');
+        expect(option.hidden).toBe(true);
+        for (const other of ed.inputs.bottom) if (other !== bare) expect(other.parentNode.hidden).toBe(false);
+        ed.set({ sleeves: 'leotard', bottom: 'pants', legwear: 'none', armwear: 'none' });
+        expect(option.hidden).toBe(false);
+        ed.set({ sleeves: 'bodysuit', bottom: 'bare', legwear: 'none', armwear: 'none' });
+        expect(option.hidden).toBe(false);
+        expect(bare.checked).toBe(true);
+        // Back to a shirt: the option steps aside, the choice stays (the
+        // figure wears shorts meanwhile, avatar-1.0.0's wornBottom).
+        ed.set({ sleeves: 'short', bottom: 'bare', legwear: 'none', armwear: 'none' });
+        expect(option.hidden).toBe(true);
+        expect(bare.checked).toBe(true);
+        const groupOf = (key) => ed.customs[key].parentNode.parentNode;
+        expect(groupOf('legwearColor').hidden).toBe(true);
+        expect(groupOf('armwearColor').hidden).toBe(true);
+        ed.set({ sleeves: 'short', bottom: 'shorts', legwear: 'fishnets', armwear: 'none' });
+        expect(groupOf('legwearColor').hidden).toBe(false);
+        expect(groupOf('armwearColor').hidden).toBe(true);
     });
 
     test('a jersey number is typed: two digits at most, kept as the list\'s id, shown only on the jersey (2026-10-26)', () => {
@@ -580,7 +613,7 @@ describe('the editor and the way back', () => {
             tablist, panels, tabs: CONFIG.tabs, avatar: { skin: 'fair', eyes: 'darkBrown' },
             onChange: (k, id) => changes.push([k, id]), onTab: (t) => tabsSeen.push(t.id)
         });
-        expect(tablist.children.map((b) => b.textContent)).toEqual(['Face', 'Eyes', 'Mouth', 'Hair', 'Build', 'Clothes', 'Shoes', 'Hat']);
+        expect(tablist.children.map((b) => b.textContent)).toEqual(['Face', 'Eyes', 'Hair', 'Build', 'Clothes', 'Layers']);
         // The first tab is shown quietly: the page opens on the whole figure.
         expect(ed.selected).toBe('face');
         expect(tabsSeen).toEqual([]);
@@ -610,11 +643,11 @@ describe('the editor and the way back', () => {
         expect(tablist.children[0].tabIndex).toBe(-1);
         fire(tablist, 'keydown', { key: 'a' });
         expect(ed.selected).toBe('eyes');
-        tablist.children[6].click();
-        expect(ed.selected).toBe('shoes');
+        tablist.children[4].click();
+        expect(ed.selected).toBe('clothes');
         expect(ed.select('nowhere')).toBe(false);
-        expect(ed.select('hat')).toBe(true);
-        expect(tabsSeen[tabsSeen.length - 1]).toBe('hat');
+        expect(ed.select('layers')).toBe(true);
+        expect(tabsSeen[tabsSeen.length - 1]).toBe('layers');
         ed.set({ skin: 'tan' });
         expect(ed.inputs.skin.find((i) => i.checked).value).toBe('tan');
         expect(ed.labelOf('skin', 'tan')).toBe('Tan');
@@ -628,7 +661,7 @@ describe('the editor and the way back', () => {
         const changes = [];
         const ed = E.createEditor({ tablist, panels, tabs: CONFIG.tabs, avatar: { hair: 'blond', facial: 'none', hat: 'none' }, onChange: (k, id) => changes.push([k, id]) });
         // One for each color field the page shows, and none for the rest.
-        expect(Object.keys(ed.customs).sort()).toEqual(['bottomColor', 'eyes', 'facialColor', 'frameColor', 'hair', 'hatColor', 'lensColor', 'lips', 'numberColor', 'shirt', 'shoeColor', 'skin']);
+        expect(Object.keys(ed.customs).sort()).toEqual(['armwearColor', 'bottomColor', 'eyes', 'facialColor', 'frameColor', 'hair', 'hatColor', 'legwearColor', 'lensColor', 'lips', 'numberColor', 'shirt', 'shoeColor', 'skin']);
         const hair = ed.customs.hair;
         expect(hair.type).toBe('color');
         expect(hair.getAttribute('aria-label')).toBe('Custom color');
@@ -724,11 +757,13 @@ describe('the page', () => {
         return main;
     }
 
-    test('the tabs sit in rows of four, every one in sight, with no hidden scroll', () => {
+    test('the tabs sit in rows of three (six tabs since 2026-10-26), every one in sight, with no hidden scroll', () => {
         const css = readFileSync('www/avatar/css/avatar.css', 'utf8');
         const rule = css.match(/\n\.av-tabs \{([^}]*)\}/)[1];
         expect(rule).toMatch(/display:\s*grid/);
-        expect(rule).toMatch(/grid-template-columns:\s*repeat\(4,/);
+        expect(rule).toMatch(/grid-template-columns:\s*repeat\(3,/);
+        const config = readFileSync('www/avatar/js/config.js', 'utf8');
+        expect((config.match(/^\s+id: '[a-z]+', label: '[A-Za-z]+', frame:/gm) || []).length % 3).toBe(0);
         expect(rule).not.toMatch(/overflow/);
         expect(css).not.toMatch(/\.av-tabs::-webkit-scrollbar/);
     });
@@ -748,7 +783,7 @@ describe('the page', () => {
         const main = await boot();
         const { state } = main.__test__;
         expect(dom.el('avatar-app').hidden).toBe(false);
-        expect(state.editor.tabs.length).toBe(8);
+        expect(state.editor.tabs.length).toBe(6);
         expect(state.studio).toBeTruthy();
         expect(dom.loops.length).toBeGreaterThan(0);
         expect(dom.el('av-stage-status').hidden).toBe(true);
@@ -811,25 +846,30 @@ describe('the page', () => {
         // (The real buttons from the tab row: the stub invents any id asked
         // for, and clicking an invented one would prove nothing.)
         const tab = (id) => dom.el('av-tabs').children.find((b) => b.id === `av-tab-${id}`);
-        for (const [id, framing] of [['hair', 'face'], ['clothes', 'body'], ['eyes', 'face'], ['shoes', 'feet'], ['build', 'body'], ['mouth', 'face'], ['hat', 'face'], ['face', 'face']]) {
+        for (const [id, framing] of [['hair', 'face'], ['clothes', 'body'], ['eyes', 'face'], ['layers', 'body'], ['build', 'body'], ['face', 'face']]) {
             expect(tab(id)).toBeTruthy();
             tab(id).click();
             expect(`${id}: ${state.studio.framing}`).toBe(`${id}: ${framing}`);
         }
-        // The zoom buttons are wired: out by hand from the face, and + back
-        // in toward the tab's part.
+        // A shoe, chosen from the Clothes tab, still looks at the feet
+        // (2026-10-26: the Shoes tab became part of Clothes).
+        tab('clothes').click();
+        expect(state.studio.framing).toBe('body');
+        const boots = state.editor.inputs.shoes.find((i) => i.value === 'workBoots');
+        boots.checked = true;
+        fire(boots, 'change');
+        expect(state.current.shoes).toBe('workBoots');
+        expect(state.studio.framing).toBe('feet');
+        // The zoom buttons are wired: out by hand from the feet, and + back
+        // in toward the tab's part (the torso, from Clothes).
         dom.el('av-zoom-out').click();
         dom.el('av-zoom-out').click();
         dom.el('av-zoom-out').click();
         expect(state.studio.zoom.zoom).toBe(0);
-        tab('shoes').click();
-        dom.el('av-zoom-out').click();
-        dom.el('av-zoom-out').click();
-        dom.el('av-zoom-out').click();
         dom.el('av-zoom-in').click();
         expect(state.studio.zoom.zoom).toBeGreaterThan(0);
         const { AVATAR_PAGE } = await import('../www/avatar/js/config.min.js');
-        expect(state.studio.zoom.focus).toBe(AVATAR_PAGE.camera.frames.feet.center);
+        expect(state.studio.zoom.focus).toBe(AVATAR_PAGE.camera.zoom.torso);
         dom.el('av-save').click();
         expect(JSON.parse(globalThis.localStorage.getItem('scenexp-avatar')).shirt).toBe('teal');
         expect(dom.el('av-status').textContent).toBe(main.WORDS.savedFor('Leaf Blower'));
@@ -956,6 +996,52 @@ describe('the page', () => {
         }
         expect(main.frameOf('eyes')).toBe('face');
         expect(main.frameOf('shoes')).toBe('feet');
+        expect(main.frameOf('shoeColor')).toBe('feet');
+        expect(main.frameOf('bottom')).toBe('body');
+        expect(main.frameOf('hat')).toBe('face');
         expect(main.frameOf('nope')).toBe('body');
+    });
+
+    test('Surprise me rolls a random look onto the plinth and into the radios, framed whole, and keeps nothing (2026-10-26)', async () => {
+        const main = await boot({ saved: { skin: 'deep', hat: 'cap' } });
+        const { state } = main.__test__;
+        const { sameAvatar, normalizeAvatar, FIELDS } = await import('../www/shared/js/avatar-1.0.0.js');
+        // Its own line above the tabs, outlined, so Save stays the one
+        // filled button (the stub invents elements, so the markup is read).
+        expect(HTML).toMatch(/<button id="av-random" class="av-secondary av-random" type="button"[^>]*>Surprise me<\/button>\s*<\/div>\s*<div id="av-tabs"/);
+        // A seeded roll, so the look is the same each run.
+        let t = 7;
+        const seeded = () => {
+            t = (t * 1103515245 + 12345) % 2147483648;
+            return t / 2147483648;
+        };
+        const real = Math.random;
+        Math.random = seeded;
+        try {
+            dom.el('av-random').click();
+        } finally {
+            Math.random = real;
+        }
+        expect(sameAvatar(state.current, { skin: 'deep', hat: 'cap' })).toBe(false);
+        expect(normalizeAvatar(state.current)).toEqual(state.current);
+        // The radios follow it, the canvas says it, the camera shows all of it.
+        for (const [key] of FIELDS) {
+            const checked = (state.editor.inputs[key] || []).find((i) => i.checked);
+            if (checked) expect(`${key}: ${checked.value}`).toBe(`${key}: ${state.current[key]}`);
+        }
+        expect(dom.el('av-canvas').getAttribute('aria-label')).toMatch(/^A figure with /);
+        expect(state.studio.framing).toBe('body');
+        expect(dom.el('av-status').textContent).toBe(main.WORDS.surprised);
+        // Nothing kept: the saved avatar is as it was, and the note says so.
+        expect(JSON.parse(globalThis.localStorage.getItem('scenexp-avatar'))).toMatchObject({ skin: 'deep', hat: 'cap' });
+        expect(state.saved.skin).toBe('deep');
+        expect(dom.el('av-unsaved').textContent).toBe(main.WORDS.changed);
+        // Another press is another look.
+        const first = { ...state.current };
+        main.__test__.surprise();
+        expect(sameAvatar(first, state.current)).toBe(false);
+        // Save keeps the look on screen, as any other.
+        dom.el('av-save').click();
+        expect(sameAvatar(JSON.parse(globalThis.localStorage.getItem('scenexp-avatar')), state.current)).toBe(true);
     });
 });

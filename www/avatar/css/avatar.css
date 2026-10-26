@@ -236,11 +236,19 @@ body.av-body {
 
 /* ---- The tabs ------------------------------------------------------------ */
 
-/* Two rows of four, every tab always in sight (Steve's QA, 2026-10-24: one
-   row of eight ran off the end, and its hidden scroll gave no sign). */
+/* Surprise me (2026-10-26), on its own line above the tabs: an outlined
+   button like the sharing ones, so Save stays the one filled button. */
+.av-random-row {
+    display: flex;
+    margin-bottom: 14px;
+}
+
+/* Rows of three, every tab always in sight (Steve's QA, 2026-10-24: one
+   row of eight ran off the end, and its hidden scroll gave no sign). Six
+   tabs in two rows since 2026-10-26 (nine in three rows for a day). */
 .av-tabs {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 2px;
     padding: 3px;
     background: var(--av-well);

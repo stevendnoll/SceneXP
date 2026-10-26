@@ -78,7 +78,7 @@ describe('the lists', () => {
         expect(FIELD_KEYS).toEqual(['skin', 'eyes', 'hair', 'length', 'facial', 'glasses', 'build', 'shirt',
             'sleeves', 'bottom', 'bottomColor', 'shoes', 'shoeColor', 'hat', 'hatColor', 'mouth', 'lips', 'muscles',
             'facialColor', 'brows', 'eyeShape', 'nose', 'faceShape', 'cheeks', 'frameColor', 'lensColor', 'handSize', 'footSize',
-            'jerseyNumber', 'numberColor']);
+            'jerseyNumber', 'numberColor', 'legwear', 'legwearColor', 'armwear', 'armwearColor']);
         for (const [key, list] of A.FIELDS) {
             const ids = list.map((o) => o.id);
             expect(`${key}: ${new Set(ids).size}`).toBe(`${key}: ${ids.length}`);
@@ -138,9 +138,18 @@ describe('the lists', () => {
         expect(A.MUSCLES.map((o) => o.label)).toEqual(['Standard', 'Athletic', 'Buff']);
         // The first three of each are the ones links made before hold; the
         // wardrobe's follow (2026-10-25).
-        expect(A.SLEEVES.map((o) => o.id)).toEqual(['long', 'short', 'tank', 'sweater', 'turtleneck', 'jersey', 'buttonDown', 'hoodie', 'vneck']);
-        expect(A.BOTTOMS.map((o) => o.id)).toEqual(['pants', 'skirt', 'shorts', 'cargoPants', 'cargoShorts', 'sweatpants', 'leggings', 'basketballShorts', 'longSkirt']);
-        for (const o of A.BOTTOMS) expect(['pants', 'shorts', 'skirt']).toContain(o.kind);
+        expect(A.SLEEVES.map((o) => o.id)).toEqual(['long', 'short', 'tank', 'sweater', 'turtleneck', 'jersey', 'buttonDown', 'hoodie', 'vneck', 'leotard', 'bodysuit']);
+        expect(A.BOTTOMS.map((o) => o.id)).toEqual(['pants', 'skirt', 'shorts', 'cargoPants', 'cargoShorts', 'sweatpants', 'leggings', 'basketballShorts', 'longSkirt',
+            'shortShorts', 'miniSkirt', 'pleatedSkirt', 'tutu', 'capris', 'bare']);
+        for (const o of A.BOTTOMS) expect(['pants', 'shorts', 'skirt', 'capris', 'bare']).toContain(o.kind);
+        // The one-pieces, and bare legs offered only under them (2026-10-26).
+        expect(A.SLEEVES.filter((o) => o.onePiece).map((o) => o.id)).toEqual(['leotard', 'bodysuit']);
+        expect(A.optionOf(A.SLEEVES, 'bodysuit').long).toBe(true);
+        expect(A.optionOf(A.BOTTOMS, 'bare').onlyWith).toEqual({ field: 'sleeves', values: ['leotard', 'bodysuit'] });
+        expect(A.LEGWEAR.map((o) => o.id)).toEqual(['none', 'crewSocks', 'kneeSocks', 'thighHighs', 'sheerTights', 'tights', 'fishnets', 'longJohns', 'legWarmers']);
+        expect(A.ARMWEAR.map((o) => o.id)).toEqual(['none', 'fishnetSleeves', 'longGloves', 'armWarmers', 'thermalSleeves']);
+        expect(A.LAYER_COLORS[0].id).toBe('black');
+        expect(A.COLOR_FIELDS).toEqual(expect.arrayContaining(['legwearColor', 'armwearColor']));
         // Natural lips have no color of their own (they are the skin's), only
         // a swatch to show; every other lip color has one.
         for (const o of A.LIP_COLORS) expect(o.id === 'natural' ? o.color === null && o.swatch > 0 : o.color > 0).toBe(true);
@@ -185,7 +194,7 @@ describe('normalizeAvatar takes anything', () => {
             bottomColor: 'denim', shoes: 'sneakers', shoeColor: 'black', hat: 'beanie', hatColor: 'mustard',
             mouth: 'smile', lips: 'natural', muscles: 'standard',
             facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
-            frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard'
+            frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black'
         });
         // No free text survives, whatever it was called.
         expect(a.name).toBeUndefined();
@@ -373,6 +382,27 @@ describe('custom colors (Steve, 2026-10-24)', () => {
         expect(A.describeAvatar({ build: 'broad', muscles: 'buff' })).toMatch(/, a buff, broad-shouldered build, /);
         expect(A.describeAvatar({ build: 'round' })).toMatch(/, a round build, /);
         expect(A.describeAvatar({ build: 'full', handSize: 'large' })).toMatch(/, a full-figured build with large hands, /);
+        // The one-pieces, bare legs and the underlayer (2026-10-26).
+        expect(A.describeAvatar({ sleeves: 'leotard', shirt: 'navy', bottom: 'bare' })).toMatch(/a navy leotard, bare legs, and classic black shoes\.$/);
+        expect(A.describeAvatar({ sleeves: 'bodysuit', shirt: 'navy', bottom: 'tutu', bottomColor: 'black' })).toMatch(/a navy bodysuit, a black tutu, and /);
+        expect(A.describeAvatar({ sleeves: 'short', bottom: 'bare', bottomColor: 'navy' })).toMatch(/with short sleeves, navy shorts, and /);
+        expect(A.describeAvatar({ bottom: 'shorts', legwear: 'fishnets', armwear: 'fishnetSleeves', armwearColor: 'red' }))
+            .toMatch(/navy shorts, black fishnets, red fishnet sleeves, and classic black shoes\.$/);
+        expect(A.describeAvatar({ legwear: 'kneeSocks', legwearColor: 'white', hat: 'cap' })).toMatch(/navy pants, white knee socks, classic black shoes, and a navy ball cap\.$/);
+    });
+
+    test('bare legs are worn only under a one-piece; with any other shirt the figure wears shorts (2026-10-26)', () => {
+        expect(A.wornBottom({ sleeves: 'leotard', bottom: 'bare' })).toBe('bare');
+        expect(A.wornBottom({ sleeves: 'bodysuit', bottom: 'bare' })).toBe('bare');
+        expect(A.wornBottom({ sleeves: 'short', bottom: 'bare' })).toBe('shorts');
+        expect(A.wornBottom({ sleeves: 'long', bottom: 'skirt' })).toBe('skirt');
+        expect(A.wornBottom({ bottom: 'nope' })).toBe('pants');
+        expect(A.wornBottom(null)).toBe('pants');
+        // The choice itself is kept (it comes back when a one-piece does).
+        expect(A.normalizeAvatar({ sleeves: 'short', bottom: 'bare' }).bottom).toBe('bare');
+        expect(A.personConfig({ sleeves: 'leotard', bottom: 'bare' }).hasSkirt).toBe(false);
+        expect(A.personConfig({ sleeves: 'bodysuit' })).toMatchObject({ sleeveColor: A.colorOf('shirt', 'rust') });
+        expect(A.personConfig({ sleeves: 'leotard' }).sleeveColor).toBeNull();
         expect(A.describeAvatar({ sleeves: 'vneck', shirt: 'navy' })).toMatch(/a navy V-neck shirt, /);
     });
 
@@ -426,6 +456,63 @@ describe('custom colors (Steve, 2026-10-24)', () => {
     });
 });
 
+describe('a random avatar (Surprise me, 2026-10-26)', () => {
+    test('every field is a real option of its list, never a custom color, and the whole is already valid', () => {
+        const rand = rng(21);
+        for (let i = 0; i < 300; i++) {
+            const a = A.randomAvatar(rand);
+            expect(Object.keys(a)).toEqual(['v', ...FIELD_KEYS]);
+            for (const [key, list] of A.FIELDS) expect(`${key}: ${Boolean(A.optionOf(list, a[key]))}`).toBe(`${key}: true`);
+            expect(A.normalizeAvatar(a)).toEqual(a);
+            // Bare legs only under a one-piece; a number only on a jersey.
+            if (a.bottom === 'bare') expect(['leotard', 'bodysuit']).toContain(a.sleeves);
+            expect(`${a.sleeves}: ${a.jerseyNumber === 'none'}`).toBe(`${a.sleeves}: ${a.sleeves !== 'jersey'}`);
+        }
+        // Math.random by default.
+        expect(A.normalizeAvatar(A.randomAvatar())).toEqual(A.randomAvatar(() => 0) === null ? null : expect.anything());
+    });
+
+    test('a piece it can go without is worn about half the time, and every option comes up', () => {
+        const rand = rng(8);
+        const seen = {};
+        const none = {};
+        const N = 3000;
+        for (let i = 0; i < N; i++) {
+            const a = A.randomAvatar(rand);
+            for (const key of FIELD_KEYS) {
+                (seen[key] = seen[key] || new Set()).add(a[key]);
+                if (a[key] === 'none') none[key] = (none[key] || 0) + 1;
+            }
+        }
+        for (const key of ['facial', 'glasses', 'hat', 'legwear', 'armwear']) {
+            expect(`${key}: ${Math.abs(none[key] / N - A.NONE_ODDS) < 0.04}`).toBe(`${key}: true`);
+        }
+        // A straight roll would wear a hat 13 times in 14: this test can fail.
+        expect(none.hat / N).toBeGreaterThan(0.4);
+        for (const [key, list] of A.FIELDS) {
+            // A number is drawn only on a jersey: a hundred of them, a few
+            // hundred jerseys, so most come up, not all.
+            if (key === 'jerseyNumber') {
+                expect(seen[key].size).toBeGreaterThan(60);
+                continue;
+            }
+            const missing = list.filter((o) => !seen[key].has(o.id)).map((o) => o.id);
+            expect(`${key} never drawn: ${missing.join()}`).toBe(`${key} never drawn: `);
+        }
+        // The lists hold no custom color, so none is ever drawn.
+        for (const key of A.COLOR_FIELDS) for (const id of seen[key]) expect(A.CUSTOM_COLOR.test(id)).toBe(false);
+    });
+
+    test('a generator that misbehaves still gives a real avatar', () => {
+        for (const rand of [() => 1, () => -1, () => NaN, () => 'x', () => 2]) {
+            const a = A.randomAvatar(rand);
+            expect(A.normalizeAvatar(a)).toEqual(a);
+        }
+        expect(A.randomAvatar(() => 0).hat).toBe('none');
+        expect(A.randomAvatar(() => 0.9999).hat).toBe('birthday');
+    });
+});
+
 describe('the figure in words', () => {
     test('the default reads as one plain sentence', () => {
         expect(A.describeAvatar(null)).toBe('A figure with fair skin, dark brown eyes, a gentle smile and short dark brown hair, '
@@ -457,7 +544,7 @@ describe('the link', () => {
     test('the default\'s link is pinned, so the field order can never move under a link already sent', () => {
         expect(A.encodeLink(A.DEFAULT_AVATAR))
             .toBe('a=1.fair.darkBrown.darkBrown.short.none.none.straight.rust.long.pants.navy.classic.black.none.navy.smile.natural.standard'
-                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard');
+                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard.none.black.none.black');
         // A link made before the mouth and the muscles (2026-10-23) still
         // opens, its new fields at their defaults.
         expect(A.decodeLink('#a=1.deep.blue.gray.long.beard.round.curvy.teal.short.skirt.khaki.maryJane.red.cap.mustard'))
@@ -465,7 +552,7 @@ describe('the link', () => {
                 shirt: 'teal', sleeves: 'short', bottom: 'skirt', bottomColor: 'khaki', shoes: 'maryJane', shoeColor: 'red', hat: 'cap',
                 hatColor: 'mustard', mouth: 'smile', lips: 'natural', muscles: 'standard',
                 facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
-                frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard' });
+                frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black' });
         expect(A.linkUrl(A.DEFAULT_AVATAR, 'https://www.scenexp.com/'))
             .toBe(`https://www.scenexp.com/avatar/#${A.encodeLink(A.DEFAULT_AVATAR)}`);
         expect(A.linkUrl(null, '')).toBe(`/avatar/#${A.encodeLink(null)}`);

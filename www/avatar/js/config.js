@@ -93,11 +93,17 @@ export const AVATAR_PAGE = deepFreeze({
      * (a jersey's number, on the jersey). A 'number' field is typed, not
      * chosen from a row (a hundred buttons would be no row). A tab shows
      * only when it has a field to show. Every color field ends in a custom
-     * swatch (any color, the browser's own picker). The face has three tabs (Steve's QA, 2026-10-24: one would
-     * have been a dozen groups long). Facial hair is on the Face tab, since
-     * the Hair tab is full of styles; the hands and the feet are part of
-     * the Build, and the Feet tab, being only shoes, says so (Steve's QA,
-     * 2026-10-25).
+     * swatch (any color, the browser's own picker). A field with a `frame`
+     * of its own is framed by it when chosen, not by its tab's (the shoes,
+     * on the Clothes tab, still look at the feet).
+     *
+     * SIX TABS IN TWO ROWS OF THREE (Steve's QA, 2026-10-26, down from
+     * nine): the mouth's two groups sit on the Face tab between the cheeks
+     * and the facial hair (top down, and the beard wraps the mouth); the
+     * shoes are clothes; the hat is on the Hair tab, since every hat is
+     * fitted to the hair under it. Facial hair is on the Face tab, since
+     * the Hair tab is full of styles (2026-10-25); the hands and the feet
+     * are part of the Build.
      */
     tabs: [
         {
@@ -106,6 +112,8 @@ export const AVATAR_PAGE = deepFreeze({
                 { key: 'faceShape', legend: 'Face shape', kind: 'text' },
                 { key: 'nose', legend: 'Nose', kind: 'text' },
                 { key: 'cheeks', legend: 'Cheeks', kind: 'text' },
+                { key: 'mouth', legend: 'Expression', kind: 'text' },
+                { key: 'lips', legend: 'Lip color', kind: 'swatch' },
                 { key: 'facial', legend: 'Facial hair', kind: 'text' },
                 { key: 'facialColor', legend: 'Facial hair color', kind: 'swatch', hideWhen: { field: 'facial', value: 'none' } }
             ]
@@ -121,15 +129,11 @@ export const AVATAR_PAGE = deepFreeze({
             ]
         },
         {
-            id: 'mouth', label: 'Mouth', frame: 'face', fields: [
-                { key: 'mouth', legend: 'Expression', kind: 'text' },
-                { key: 'lips', legend: 'Lip color', kind: 'swatch' }
-            ]
-        },
-        {
             id: 'hair', label: 'Hair', frame: 'face', fields: [
                 { key: 'length', legend: 'Style', kind: 'text' },
-                { key: 'hair', legend: 'Color', kind: 'swatch' }
+                { key: 'hair', legend: 'Color', kind: 'swatch' },
+                { key: 'hat', legend: 'Hat', kind: 'text' },
+                { key: 'hatColor', legend: 'Hat color', kind: 'swatch', requires: 'hat', hideWhen: { field: 'hat', value: 'none' } }
             ]
         },
         {
@@ -147,19 +151,19 @@ export const AVATAR_PAGE = deepFreeze({
                 { key: 'jerseyNumber', legend: 'Jersey number', kind: 'number', showWhen: { field: 'sleeves', value: 'jersey' } },
                 { key: 'numberColor', legend: 'Number color', kind: 'swatch', showWhen: { field: 'sleeves', value: 'jersey' } },
                 { key: 'bottom', legend: 'Pants, skirt or shorts', kind: 'text' },
-                { key: 'bottomColor', legend: 'Color', kind: 'swatch' }
+                { key: 'bottomColor', legend: 'Color', kind: 'swatch' },
+                { key: 'shoes', legend: 'Shoes', kind: 'text', frame: 'feet' },
+                { key: 'shoeColor', legend: 'Shoe color', kind: 'swatch', frame: 'feet' }
             ]
         },
         {
-            id: 'shoes', label: 'Shoes', frame: 'feet', fields: [
-                { key: 'shoes', legend: 'Shoes', kind: 'text' },
-                { key: 'shoeColor', legend: 'Shoe color', kind: 'swatch' }
-            ]
-        },
-        {
-            id: 'hat', label: 'Hat', frame: 'face', fields: [
-                { key: 'hat', legend: 'Hat', kind: 'text' },
-                { key: 'hatColor', legend: 'Hat color', kind: 'swatch', requires: 'hat', hideWhen: { field: 'hat', value: 'none' } }
+            // The underlayer (Steve's QA, 2026-10-26): what shows where the
+            // legs and the arms are bare, each with a color of its own.
+            id: 'layers', label: 'Layers', frame: 'body', fields: [
+                { key: 'legwear', legend: 'Legs', kind: 'text' },
+                { key: 'legwearColor', legend: 'Legwear color', kind: 'swatch', hideWhen: { field: 'legwear', value: 'none' } },
+                { key: 'armwear', legend: 'Arms', kind: 'text' },
+                { key: 'armwearColor', legend: 'Armwear color', kind: 'swatch', hideWhen: { field: 'armwear', value: 'none' } }
             ]
         }
     ],

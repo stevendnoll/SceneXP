@@ -58,6 +58,37 @@ export function blockShoes(person) {
     return out;
 }
 
+/**
+ * A thin shell over one of the rig's parts (a leg's or an arm's cylinder,
+ * or a knee's or an elbow's ball), `over` meters off it, from `from` to
+ * `to` of its height (0 at its bottom, 1 at its top; a ball is whole),
+ * following the part's own scale, in the part's parent's coordinates,
+ * named. The pieces a layer or a short bottom is made of (2026-10-26).
+ */
+export function partShell(part, over, from, to, mat, name) {
+    const p = part.geometry.parameters;
+    const sx = part.scale.x || 1;
+    const sz = part.scale.z || 1;
+    let mesh;
+    if (part.geometry.type === 'SphereGeometry') {
+        mesh = new THREE.Mesh(new THREE.SphereGeometry(p.radius * sx + over, 12, 10), mat);
+        mesh.scale.set(1, (part.scale.y || 1) / sx, sz / sx);
+        mesh.position.copy(part.position);
+    } else {
+        const h = p.height * (part.scale.y || 1);
+        const rAt = (t) => p.radiusBottom + (p.radiusTop - p.radiusBottom) * t;
+        const a = Math.max(0, Math.min(1, from));
+        const b = Math.max(a, Math.min(1, to));
+        mesh = new THREE.Mesh(new THREE.CylinderGeometry(rAt(b) * sx + over, rAt(a) * sx + over, Math.max(0.001, h * (b - a)), 16), mat);
+        mesh.scale.z = sz / sx;
+        mesh.position.copy(part.position);
+        mesh.position.y = part.position.y - h / 2 + (h * (a + b)) / 2;
+    }
+    mesh.name = name;
+    mesh.castShadow = true;
+    return mesh;
+}
+
 /** A shaft round the shin from `y0` up to `y1` (a leg's coordinates),
  *  `over` meters proud of it, its top widened by `flare`. */
 export function shaft(shin, y0, y1, over, material, flare = 0) {
@@ -649,7 +680,7 @@ export function dressShirt(person, style, color, skin = null) {
 
 /** The rig's torso measures: its box is exactly (width, height, depth)
  *  whether a plain box or the rounded slab. */
-function torsoBox(torso) {
+export function torsoBox(torso) {
     torso.geometry.computeBoundingBox();
     const b = torso.geometry.boundingBox;
     return { width: b.max.x - b.min.x, height: b.max.y - b.min.y, depth: b.max.z - b.min.z };
@@ -676,28 +707,85 @@ export const BOTTOM_SIZE = Object.freeze({
     sweatpants: { baggy: 1.14, cuff: 0.03, shade: 0.8 },
     leggings: { close: 0.9, waist: 0.03, shade: 0.85 },
     basketballShorts: { wide: 1.18, stripe: 0.014, hem: 0.02, light: 0xf2f0ea, dark: 0x1f2024 },
-    longSkirt: { height: 0.72, bottom: 0.27 }
+    longSkirt: { height: 0.72, bottom: 0.27 },
+    // Steve's QA, 2026-10-26: "short shorts and short mini skirts", a tutu
+    // for a ballerina, and capri pants so legwear has somewhere to show.
+    /** Short shorts: the thigh bared, a shell of the shorts over its top
+     *  `cover`, with a hem. */
+    shortShorts: { cover: 0.5, over: 0.004, hem: 0.018 },
+    /** A short A-line, from the hips down `height`, `bottom` wide. */
+    miniSkirt: { height: 0.2, bottom: 0.24 },
+    /** A pleated skirt: as short, with `pleats` folds standing off it. */
+    pleatedSkirt: { height: 0.22, bottom: 0.25, pleats: 16, fold: [0.004, 0.006], shade: 0.8 },
+    /** A tutu: a brief `brief` tall under a stiff flat disc `disc` out from
+     *  the hips, `thick`, a shade lighter at its rim. */
+    tutu: { brief: 0.08, disc: 0.3, thick: 0.03, shade: 0.9 },
+    /** Capri pants: the shin bared, the trouser down over its top `cover`
+     *  with a hem. */
+    capris: { cover: 0.55, over: 0.004, hem: 0.018 }
 });
 
-/** Dress the legs as `style` (BOTTOM_SIZE). */
-export function dressBottom(person, style, color) {
+/** Dress the legs as `style` (BOTTOM_SIZE); `skin` is the figure's skin
+ *  material, for the bottoms that bare more of the leg. */
+export function dressBottom(person, style, color, skin = null) {
     const spec = BOTTOM_SIZE[style];
     const darker = material(shade(color, spec.shade || 0.85).getHex(), 0.9);
     const legs = person.children.filter((o) => o.userData.isLeg);
-    if (style === 'longSkirt') {
+    if (style === 'longSkirt' || style === 'miniSkirt' || style === 'pleatedSkirt' || style === 'tutu') {
         const skirt = person.children.find((o) => o.userData.isSkirt);
         if (!skirt) return;
         const { radiusTop, height } = skirt.geometry.parameters;
         const top = skirt.position.y + height / 2;
         skirt.geometry.dispose();
+        if (style === 'tutu') {
+            // The brief, and the disc hanging off the hips just under its
+            // top; both children of the fitted skirt, so they keep its fit.
+            skirt.geometry = new THREE.CylinderGeometry(radiusTop, radiusTop * 0.96, spec.brief, 16);
+            skirt.position.y = top - spec.brief / 2;
+            const disc = new THREE.Mesh(new THREE.CylinderGeometry(spec.disc, spec.disc, spec.thick, 40), material(shade(color, 1 / spec.shade).getHex(), 0.95));
+            disc.position.y = spec.brief / 2 - 0.02 - spec.thick / 2;
+            disc.name = 'tutu';
+            disc.castShadow = true;
+            skirt.add(disc);
+            return;
+        }
         skirt.geometry = new THREE.CylinderGeometry(radiusTop, spec.bottom, spec.height, 16);
         skirt.position.y = top - spec.height / 2;
+        if (style === 'pleatedSkirt') {
+            // Folds standing off the skirt all the way round, a shade
+            // darker, leaning out with it.
+            const lean = Math.atan2(spec.bottom - radiusTop, spec.height);
+            for (let k = 0; k < spec.pleats; k++) {
+                const a = ((k + 0.5) / spec.pleats) * Math.PI * 2;
+                const r = (radiusTop + spec.bottom) / 2 + spec.fold[0] / 2;
+                const pleat = new THREE.Mesh(new THREE.BoxGeometry(spec.fold[0], spec.height * 0.92, spec.fold[1]), darker);
+                pleat.position.set(r * Math.sin(a), 0, r * Math.cos(a));
+                pleat.rotation.set(0, a, 0);
+                pleat.rotateX(-lean);
+                pleat.name = 'pleat';
+                pleat.castShadow = true;
+                skirt.add(pleat);
+            }
+        }
         return;
     }
     for (const leg of legs) {
         const { thigh, shin, knee } = legParts(leg);
         const side = leg.userData.legSide || Math.sign(leg.position.x) || 1;
-        if (style === 'cargoPants' || style === 'cargoShorts') {
+        if (style === 'shortShorts' || style === 'capris') {
+            // The part the figure bared (the thigh, or the shin) gets the
+            // cloth back over its top `cover` only, finished with a hem.
+            const part = style === 'shortShorts' ? thigh : shin;
+            const h = part.geometry.parameters.height * part.scale.y;
+            const cloth = material(color, 0.85);
+            if (style === 'shortShorts') {
+                const old = leg.children.find((m) => m.name === 'hem');
+                if (old) leg.remove(old);
+                if (skin) thigh.material = skin;
+            }
+            leg.add(partShell(part, spec.over, 1 - spec.cover, 1, cloth, style));
+            leg.add(partShell(part, spec.over + 0.003, 1 - spec.cover, 1 - spec.cover + spec.hem / h, cloth, 'hem'));
+        } else if (style === 'cargoPants' || style === 'cargoShorts') {
             const { radiusTop, height } = thigh.geometry.parameters;
             const pocket = block(spec.pocket, thigh.position.y - height * 0.3, 0, darker, 'pocket');
             pocket.position.x = side * (radiusTop * thigh.scale.x + spec.pocket[0] / 2 - 0.002);

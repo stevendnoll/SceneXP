@@ -105,7 +105,7 @@ export const HAIR_COLORS = Object.freeze([
 export const CUSTOM_COLOR = /^x[0-9a-f]{6}$/;
 
 /** The fields that take a custom color as well as their swatches. */
-export const COLOR_FIELDS = Object.freeze(['skin', 'eyes', 'hair', 'shirt', 'bottomColor', 'shoeColor', 'hatColor', 'lips', 'facialColor', 'frameColor', 'lensColor', 'numberColor']);
+export const COLOR_FIELDS = Object.freeze(['skin', 'eyes', 'hair', 'shirt', 'bottomColor', 'shoeColor', 'hatColor', 'lips', 'facialColor', 'frameColor', 'lensColor', 'numberColor', 'legwearColor', 'armwearColor']);
 
 /** A custom color's id for a display hex (0x9c2b25 is "x9c2b25"). */
 export function customColor(hex) {
@@ -348,7 +348,12 @@ export const SLEEVES = Object.freeze([
     { id: 'buttonDown', label: 'Button-down shirt', long: true, dressShirt: true, said: 'button-down shirt' },
     { id: 'hoodie', label: 'Hoodie', long: true, said: 'hoodie' },
     // Steve's QA, 2026-10-25: a V-neck (short sleeves, the collar cut away).
-    { id: 'vneck', label: 'V-neck shirt', said: 'V-neck shirt' }
+    { id: 'vneck', label: 'V-neck shirt', said: 'V-neck shirt' },
+    // Steve's QA, 2026-10-26: one-pieces ("so avatars can look like
+    // wrestlers or ballerinas"): the shirt carried down into a brief over
+    // the hips (avatar-layers), so the legs may be bare under it.
+    { id: 'leotard', label: 'Leotard', said: 'leotard', onePiece: true },
+    { id: 'bodysuit', label: 'Bodysuit', long: true, said: 'bodysuit', onePiece: true }
 ]);
 
 /** The bottoms, each of a `kind` the figure dresses the legs for: pants
@@ -364,7 +369,63 @@ export const BOTTOMS = Object.freeze([
     { id: 'sweatpants', label: 'Sweatpants', kind: 'pants' },
     { id: 'leggings', label: 'Leggings', kind: 'pants' },
     { id: 'basketballShorts', label: 'Basketball shorts', kind: 'shorts' },
-    { id: 'longSkirt', label: 'Long skirt', kind: 'skirt' }
+    { id: 'longSkirt', label: 'Long skirt', kind: 'skirt' },
+    // Appended 2026-10-26 (Steve's QA: "short shorts and short mini
+    // skirts", a ballerina's tutu, capris so legwear shows under pants), and
+    // bare legs, OFFERED ONLY UNDER A ONE-PIECE (`onlyWith`; chosen with any
+    // other shirt it is worn as shorts: `wornBottom`).
+    { id: 'shortShorts', label: 'Short shorts', kind: 'shorts' },
+    { id: 'miniSkirt', label: 'Mini skirt', kind: 'skirt' },
+    { id: 'pleatedSkirt', label: 'Pleated skirt', kind: 'skirt' },
+    { id: 'tutu', label: 'Tutu', kind: 'skirt' },
+    { id: 'capris', label: 'Capri pants', kind: 'capris' },
+    { id: 'bare', label: 'Bare legs', kind: 'bare', onlyWith: { field: 'sleeves', values: ['leotard', 'bodysuit'] } }
+]);
+
+/** The bottom an avatar is drawn in: its own, unless it is bare legs with
+ *  no one-piece over them, which is worn as shorts. */
+export function wornBottom(avatar) {
+    const a = avatar && typeof avatar === 'object' ? avatar : {};
+    const sleeves = optionOf(SLEEVES, a.sleeves);
+    if (a.bottom === 'bare' && !(sleeves && sleeves.onePiece)) return 'shorts';
+    return optionOf(BOTTOMS, a.bottom) ? a.bottom : DEFAULT_AVATAR.bottom;
+}
+
+/**
+ * The underlayer (Steve's QA, 2026-10-26: "socks, nylons, fishnets, thigh
+ * highs, long johns... goth/punk personas"), drawn by avatar-layers where
+ * the legs and the arms are bare, in a color of its own (LAYER_COLORS).
+ */
+export const LEGWEAR = Object.freeze([
+    { id: 'none', label: 'None' },
+    { id: 'crewSocks', label: 'Crew socks' },
+    { id: 'kneeSocks', label: 'Knee socks' },
+    { id: 'thighHighs', label: 'Thigh highs' },
+    { id: 'sheerTights', label: 'Sheer tights' },
+    { id: 'tights', label: 'Tights' },
+    { id: 'fishnets', label: 'Fishnets' },
+    { id: 'longJohns', label: 'Long johns' },
+    { id: 'legWarmers', label: 'Leg warmers' }
+]);
+
+export const ARMWEAR = Object.freeze([
+    { id: 'none', label: 'None' },
+    { id: 'fishnetSleeves', label: 'Fishnet sleeves' },
+    { id: 'longGloves', label: 'Long gloves' },
+    { id: 'armWarmers', label: 'Arm warmers' },
+    { id: 'thermalSleeves', label: 'Thermal sleeves' }
+]);
+
+/** The underlayer's colors, for the legs and the arms alike. */
+export const LAYER_COLORS = Object.freeze([
+    { id: 'black', label: 'Black', color: 0x1d1d1f },
+    { id: 'white', label: 'White', color: 0xeeede8 },
+    { id: 'gray', label: 'Gray', color: 0x7d8087 },
+    { id: 'navy', label: 'Navy', color: 0x2a3a56 },
+    { id: 'red', label: 'Red', color: 0x9c2b25 },
+    { id: 'purple', label: 'Purple', color: 0x5a3a8a },
+    { id: 'pink', label: 'Pink', color: 0xe48fb8 },
+    { id: 'green', label: 'Green', color: 0x3f6f46 }
 ]);
 
 /** The shoes, and the rig's `shoeStyle` each starts from. Sneakers are
@@ -466,7 +527,12 @@ export const FIELDS = Object.freeze([
     Object.freeze(['footSize', FOOT_SIZES]),
     // Appended 2026-10-26 (Steve's QA): the jersey's number and its color.
     Object.freeze(['jerseyNumber', JERSEY_NUMBERS]),
-    Object.freeze(['numberColor', NUMBER_COLORS])
+    Object.freeze(['numberColor', NUMBER_COLORS]),
+    // Appended 2026-10-26 (Steve's QA): the underlayer, legs and arms.
+    Object.freeze(['legwear', LEGWEAR]),
+    Object.freeze(['legwearColor', LAYER_COLORS]),
+    Object.freeze(['armwear', ARMWEAR]),
+    Object.freeze(['armwearColor', LAYER_COLORS])
 ]);
 
 /** The list a field's ids come from, or null for a field that is not one. */
@@ -509,7 +575,11 @@ export const DEFAULT_AVATAR = Object.freeze({
     handSize: 'standard',
     footSize: 'standard',
     jerseyNumber: 'none',
-    numberColor: 'standard'
+    numberColor: 'standard',
+    legwear: 'none',
+    legwearColor: 'black',
+    armwear: 'none',
+    armwearColor: 'black'
 });
 
 const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
@@ -576,6 +646,41 @@ export function withOverrides(avatar, overrides = {}) {
 }
 
 /**
+ * How often a random avatar goes without a piece it could go without: a
+ * field with a "none" (facial hair, glasses, a hat, legwear, armwear) is
+ * none this share of the time. A straight roll over the lists would wear a
+ * hat thirteen times in fourteen and glasses seven in eight: a costume
+ * every time.
+ */
+export const NONE_ODDS = 0.5;
+
+/**
+ * A random avatar (Steve, 2026-10-26: a "Surprise me" button on /avatar/),
+ * from the lists alone, never a custom color, so it is always said in
+ * words. Every field is rolled in the link's order with `rand` (0 up to 1,
+ * Math.random unless given), under the editor's own rules: a field with a
+ * "none" is none `NONE_ODDS` of the time and one of the rest evenly
+ * otherwise; an option offered only with another (`onlyWith`, bare legs
+ * under a one-piece) is in the draw only while that field, rolled before
+ * it, holds one of its values; and a jersey number is drawn only on a
+ * jersey (a number then, never none). Nothing is kept: the caller shows it,
+ * and only Save keeps it.
+ */
+export function randomAvatar(rand = Math.random) {
+    const out = { v: AVATAR_VERSION };
+    const roll = () => Math.min(0.999999, Math.max(0, Number(rand()) || 0));
+    const pick = (options) => options[Math.floor(roll() * options.length)].id;
+    for (const [key, list] of FIELDS) {
+        const offered = list.filter((o) => !o.onlyWith || o.onlyWith.values.includes(out[o.onlyWith.field]));
+        const rest = offered.filter((o) => o.id !== 'none');
+        if (key === 'jerseyNumber') out[key] = out.sleeves === 'jersey' ? pick(rest) : 'none';
+        else if (rest.length < offered.length && roll() < NONE_ODDS) out[key] = 'none';
+        else out[key] = pick(rest.length ? rest : offered);
+    }
+    return normalizeAvatar(out);
+}
+
+/**
  * The avatar a cast-1.0.0 choice describes (Leaf Blower's stored character,
  * Derby Day's family): its skin, hair, shirt and pants, with long sleeves
  * and everything new at the default. Built through personConfig, it is
@@ -623,7 +728,7 @@ export function personConfig(avatar, overrides = {}) {
         sleeveColor: sleeves.long ? shirt : null,
         dressShirt: !!sleeves.dressShirt,
         pantsColor: colorOf('bottomColor', a.bottomColor),
-        hasSkirt: optionOf(BOTTOMS, a.bottom).kind === 'skirt',
+        hasSkirt: optionOf(BOTTOMS, wornBottom(a)).kind === 'skirt',
         muscular: a.muscles === 'buff',
         footScale: optionOf(MUSCLES, a.muscles).feet * optionOf(FOOT_SIZES, a.footSize).scale,
         handScale: optionOf(HAND_SIZES, a.handSize).scale,
@@ -711,7 +816,7 @@ export function describeAvatar(avatar) {
     const muscles = a.muscles === 'standard' ? '' : `${word(MUSCLES, a.muscles)}, `;
     const shirt = name(SHIRTS, a.shirt);
     const sleeves = optionOf(SLEEVES, a.sleeves);
-    const bottom = optionOf(BOTTOMS, a.bottom);
+    const bottom = optionOf(BOTTOMS, wornBottom(a));
     // "a straight build with large hands and small feet".
     const limbs = [];
     if (a.handSize !== 'standard') limbs.push(`${optionOf(HAND_SIZES, a.handSize).said || word(HAND_SIZES, a.handSize)} hands`);
@@ -725,9 +830,12 @@ export function describeAvatar(avatar) {
     const clothes = [
         `a ${muscles}${optionOf(BUILDS, a.build).said || word(BUILDS, a.build)} build${limbs.length ? ` with ${limbs.join(' and ')}` : ''}`,
         (sleeves.said ? `a ${shirt} ${sleeves.said}` : a.sleeves === 'tank' ? `a ${shirt} tank top` : `a ${shirt} shirt with ${a.sleeves} sleeves`) + numbered,
-        `${bottom.kind === 'skirt' ? 'a ' : ''}${name(PANTS, a.bottomColor)} ${bottom.label.toLowerCase()}`,
-        shoes
+        bottom.kind === 'bare' ? 'bare legs' : `${bottom.kind === 'skirt' ? 'a ' : ''}${name(PANTS, a.bottomColor)} ${bottom.label.toLowerCase()}`
     ];
+    // The underlayer (2026-10-26): "black fishnets and black fishnet sleeves".
+    if (a.legwear !== 'none') clothes.push(`${word(LAYER_COLORS, a.legwearColor)} ${word(LEGWEAR, a.legwear)}`);
+    if (a.armwear !== 'none') clothes.push(`${word(LAYER_COLORS, a.armwearColor)} ${word(ARMWEAR, a.armwear)}`);
+    clothes.push(shoes);
     if (a.hat !== 'none') clothes.push(`a ${name(SHIRTS, a.hatColor)} ${word(HATS, a.hat)}`);
     const head = [...face, hair, ...extras];
     const list = (items) => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0]);
@@ -739,9 +847,10 @@ export function describeAvatar(avatar) {
 /** The link's own version, its first part. */
 export const LINK_VERSION = 1;
 
-/** The longest fragment `decodeLink` reads. Today's link is about a hundred
- *  characters, so this is room for every field to grow. */
-export const MAX_LINK = 512;
+/** The longest fragment `decodeLink` reads. Today's link is about two
+ *  hundred characters (and under 270 at its longest), so this is room for
+ *  every field to grow. */
+export const MAX_LINK = 768;
 
 /**
  * The avatar as a fragment, without the `#`: `a=1.fair.darkBrown...`, each

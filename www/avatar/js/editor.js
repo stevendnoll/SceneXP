@@ -94,6 +94,7 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
     const numbers = {};      // each number field's own text box
     const shows = {};        // and the way to show it an id
     const groups = [];       // [field, fieldset], for the groups a choice hides
+    const onlyWith = [];     // [option, label], for the options another choice offers
     let current = { ...avatar };
     let selected = null;
 
@@ -126,6 +127,10 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
             label.appendChild(make('span', 'av-word', option.label));
         }
         (inputs[field.key] = inputs[field.key] || []).push(input);
+        // An option offered only with another choice (bare legs under a
+        // one-piece, 2026-10-26) is hidden the rest of the time; chosen and
+        // then orphaned, the figure wears the list's fallback for it.
+        if (option.onlyWith) onlyWith.push([option, label]);
         return label;
     }
 
@@ -216,6 +221,7 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
             if (field.hideWhen) group.hidden = current[field.hideWhen.field] === field.hideWhen.value;
             if (field.showWhen) group.hidden = current[field.showWhen.field] !== field.showWhen.value;
         }
+        for (const [option, label] of onlyWith) label.hidden = !option.onlyWith.values.includes(current[option.onlyWith.field]);
     }
 
     shown.forEach((tab, i) => {

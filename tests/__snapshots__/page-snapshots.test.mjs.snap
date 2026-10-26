@@ -455,7 +455,7 @@ html [lang="en"]
     title
       "Your Avatar | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/avatar.min.css?v=4" rel="preload"]
+    link [as="style" href="css/avatar.min.css?v=6" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -468,6 +468,7 @@ html [lang="en"]
     link [href="js/editor.min.js" rel="modulepreload"]
     link [href="js/transfer.min.js" rel="modulepreload"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-shapes-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-hair-1.0.0.min.js" rel="modulepreload"]
@@ -476,7 +477,7 @@ html [lang="en"]
     link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/avatar.min.css?v=4" rel="stylesheet"]
+    link [href="css/avatar.min.css?v=6" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body.av-body
@@ -540,6 +541,9 @@ html [lang="en"]
             button#av-decline.av-secondary [type="button"]
               "Not now"
         div#av-editor.av-editor
+          div.av-random-row
+            button#av-random.av-secondary.av-random [title="A random look, from every choice there is" type="button"]
+              "Surprise me"
           div#av-tabs.av-tabs [aria-label="Choose what to change" role="tablist"]
           div#av-panels.av-panels
         div#av-actions.av-actions

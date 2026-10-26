@@ -36,8 +36,9 @@
  */
 
 import {
-    personConfig, withOverrides, normalizeAvatar, validPortraitSrc, colorOf, optionOf, BOTTOMS, FRAME_COLORS, LENS_COLORS, JERSEY_NUMBERS
+    personConfig, withOverrides, normalizeAvatar, validPortraitSrc, colorOf, optionOf, BOTTOMS, FRAME_COLORS, LENS_COLORS, JERSEY_NUMBERS, wornBottom
 } from './avatar-1.0.0.min.js';
+import { ONE_PIECE, dressOnePiece, dressLegwear, dressArmwear } from './avatar-layers-1.0.0.min.js';
 import { createPerson } from './people-1.0.0.min.js';
 import { eachVertex, solidGrid } from './avatar-shapes-1.0.0.min.js';
 import { buildHair, HAIR_DRAWN } from './avatar-hair-1.0.0.min.js';
@@ -68,9 +69,10 @@ export { HAT_SIZE, trimUnder, HAIR_DRAWN };
  * that narrow to the wrist, hands with fingers and a thumb, jersey numbers.
  * 12 (2026-10-26): bigger hands, hats lifted clear of glasses, numbers
  * bigger and centered. 13 (2026-10-26): seven builds (Curvy's shoulders
- * narrowed a touch).
+ * narrowed a touch). 14 (2026-10-26): one-pieces, more bottoms, the
+ * underlayer (avatar-layers). 15 (2026-10-26): pupils on the irises.
  */
-export const RENDER_VERSION = 13;
+export const RENDER_VERSION = 15;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named
@@ -335,33 +337,54 @@ export const EYE_SIZE = Object.freeze({
 });
 
 /**
- * The pupil as a lens on the white, not a ball (Steve's QA, 2026-10-25: the
- * pupils "stick out from the whites of the eyes"). The rig's pupil is a
+ * The iris as a lens on the white, not a ball (Steve's QA, 2026-10-25: the
+ * pupils "stick out from the whites of the eyes"), with a pupil on it.
+ *
+ * The rig draws one ball an eye in the eye's color and calls it the pupil: a
  * 1 cm ball whose middle sits 5 mm outside the white's front, so it stood
  * 16 mm proud of the eye, and from the side poked through a sunglass lens.
- * Here it is squashed to `flat` of its radius front to back and set so its
- * front stands `proud` of the white's front: the whole of it still in front
- * of the white (the white's surface falls away toward the pupil's rim), so
- * it shows as a disc from the front and barely rises from the side.
+ * Here that ball is the IRIS (re-tagged `userData.isIris`): squashed to
+ * `flat` of its radius front to back and set so its front stands `proud` of
+ * the white's front, the whole of it still in front of the white (the
+ * white's surface falls away toward its rim), so it shows as a disc from
+ * the front and barely rises from the side.
+ *
+ * The PUPIL (Steve's QA, 2026-10-26: "give the eyes pupils so the eye color
+ * only affects the iris") is a second lens, `pupil` of the iris's radius
+ * and near black (`pupilColor`), laid the same way on the iris's front,
+ * `pupilProud` of it. Tagged `userData.isPupil` (and named 'pupil'), so
+ * what a ray from the front meets at an eye's middle is the pupil; the
+ * rig's released scenes keep their single ball, untouched.
  */
-export const PUPIL_SIZE = Object.freeze({ flat: 0.35, proud: 0.003 });
+export const PUPIL_SIZE = Object.freeze({ flat: 0.35, proud: 0.003, pupil: 0.45, pupilProud: 0.001, pupilColor: 0x0d0b0b });
 
-function flattenPupils(face) {
+function lensEyes(face) {
     const P = PUPIL_SIZE;
     const eyes = face.children.filter((o) => o.userData.isEye);
-    for (const pupil of face.children.filter((o) => o.userData.isPupil)) {
-        const eye = eyes.find((e) => Math.abs(e.position.x - pupil.position.x) < 1e-6);
+    const dark = new THREE.MeshStandardMaterial({ color: P.pupilColor, roughness: 0.45 });
+    for (const iris of face.children.filter((o) => o.userData.isPupil)) {
+        const eye = eyes.find((e) => Math.abs(e.position.x - iris.position.x) < 1e-6);
         const front = eye.position.z + eye.geometry.parameters.radius * eye.scale.z;
+        const r = iris.geometry.parameters.radius;
+        iris.scale.z = P.flat;
+        iris.position.z = front + P.proud - r * P.flat;
+        delete iris.userData.isPupil;
+        iris.userData.isIris = true;
+        const pupil = new THREE.Mesh(new THREE.SphereGeometry(r * P.pupil, 12, 8), dark);
         pupil.scale.z = P.flat;
-        pupil.position.z = front + P.proud - pupil.geometry.parameters.radius * P.flat;
+        pupil.position.set(iris.position.x, iris.position.y, front + P.proud + P.pupilProud - r * P.pupil * P.flat);
+        pupil.userData.isPupil = true;
+        pupil.name = 'pupil';
+        pupil.castShadow = true;
+        face.add(pupil);
     }
 }
 
 function shapeEyes(face, kind, skin) {
     const E = EYE_SIZE;
-    flattenPupils(face);
+    lensEyes(face);
     const eyes = face.children.filter((o) => o.userData.isEye);
-    const pupils = face.children.filter((o) => o.userData.isPupil);
+    const pupils = face.children.filter((o) => o.userData.isIris || o.userData.isPupil);
     if (E[kind] && E[kind].eye) {
         for (const e of eyes) e.scale.set(E[kind].eye[0], E[kind].eye[1], e.scale.z);
         for (const p of pupils) p.scale.set(E[kind].pupil[0], E[kind].pupil[1], p.scale.z);
@@ -525,14 +548,17 @@ function fitSkirt(person, skirt) {
  * the rig colored it the skirt's, as matching tights); in shorts the knee
  * and the shin are, and the thigh keeps the shorts' color, finished with a
  * hem a little proud of it at the knee. `kind` is the bottom's kind
- * (avatar-1.0.0's BOTTOMS: pants, skirt or shorts).
+ * (avatar-1.0.0's BOTTOMS): pants, skirt, shorts, and since 2026-10-26
+ * capris (the shin bared, the wardrobe puts the trouser back over its top)
+ * and bare (the whole leg, under a one-piece).
  */
 function dressLegs(person, kind, skin) {
     for (const leg of person.children.filter((o) => o.userData.isLeg)) {
         const { thigh, shin, knee } = legParts(leg);
-        knee.material = skin;
         shin.material = skin;
-        if (kind === 'skirt') {
+        if (kind === 'capris') continue;
+        knee.material = skin;
+        if (kind === 'skirt' || kind === 'bare') {
             thigh.material = skin;
             continue;
         }
@@ -1256,17 +1282,26 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     const head = person.children.find((o) => o.userData.isHead);
     // The skin's own material, for bare legs and arms.
     const skin = head.material;
-    const bottomKind = optionOf(BOTTOMS, a.bottom).kind;
+    // The bottom worn: bare legs only under a one-piece (2026-10-26).
+    const bottom = wornBottom(a);
+    const bottomKind = optionOf(BOTTOMS, bottom).kind;
     if (bottomKind !== 'pants') dressLegs(person, bottomKind, skin);
     if (a.sleeves === 'tank') dressTank(person, skin);
     if (a.muscles === 'athletic') strengthenArms(person, ATHLETIC_ARMS);
     if (bottomKind === 'skirt') fitSkirt(person, person.children.find((o) => o.userData.isSkirt));
     // The wardrobe's shirts and bottoms (2026-10-25), over the rig's own.
     if (SHIRT_SIZE[a.sleeves]) dressShirt(person, a.sleeves, colorOf('shirt', a.shirt), skin);
+    // A leotard or a bodysuit (2026-10-26): the shirt carried down into a
+    // brief over the hips, the leotard's arms bare.
+    if (ONE_PIECE.includes(a.sleeves)) dressOnePiece(person, a.sleeves, colorOf('shirt', a.shirt), skin);
     // The jersey's number (2026-10-26), in its chosen color or the trim's.
     const number = optionOf(JERSEY_NUMBERS, a.jerseyNumber);
     if (a.sleeves === 'jersey' && number && number.digits) numberJersey(person, number.digits, colorOf('numberColor', a.numberColor), colorOf('shirt', a.shirt));
-    if (BOTTOM_SIZE[a.bottom]) dressBottom(person, a.bottom, colorOf('bottomColor', a.bottomColor));
+    if (BOTTOM_SIZE[bottom]) dressBottom(person, bottom, colorOf('bottomColor', a.bottomColor), skin);
+    // The underlayer (2026-10-26), wherever the legs and the arms are bare
+    // once the clothes are on.
+    dressLegwear(person, a.legwear, colorOf('legwearColor', a.legwearColor), skin);
+    dressArmwear(person, a.armwear, colorOf('armwearColor', a.armwearColor), skin);
 
     person.traverse((o) => {
         if (o.isMesh) o.castShadow = true;

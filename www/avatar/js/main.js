@@ -28,7 +28,7 @@
 
 import { AVATAR_PAGE as CONFIG } from './config.min.js';
 import {
-    createAvatarStore, normalizeAvatar, sameAvatar, linkUrl, decodeLink, toFile, describeAvatar,
+    createAvatarStore, normalizeAvatar, sameAvatar, randomAvatar, linkUrl, decodeLink, toFile, describeAvatar,
     DEFAULT_AVATAR, FILE_NAME
 } from '../../shared/js/avatar-1.0.0.min.js';
 import { RENDER_VERSION } from '../../shared/js/avatar-figure-1.0.0.min.js';
@@ -51,6 +51,7 @@ export const WORDS = Object.freeze({
     fileSaved: `${FILE_NAME} is in your downloads. On your other device, open this page and choose Open a file.`,
     unsaved: 'Not saved yet.',
     changed: 'You have changes that are not saved yet.',
+    surprised: 'Here is a random look. Change anything you like, and press Save my avatar to keep it.',
     fromLink: 'This link brought an avatar with it. Keep this avatar?',
     fromFile: 'This file holds an avatar. Keep this avatar?',
     replaces: 'Keeping it replaces the one saved on this browser.',
@@ -110,10 +111,13 @@ function say(text) {
     status.textContent = text;
 }
 
-/** The camera's framing for a field: its tab's. */
+/** The camera's framing for a field: its own, or its tab's (the shoes
+ *  look at the feet from the Clothes tab, 2026-10-26). */
 export function frameOf(key) {
     const tab = CONFIG.tabs.find((t) => t.fields.some((f) => f.key === key));
-    return tab ? tab.frame : 'body';
+    if (!tab) return 'body';
+    const field = tab.fields.find((f) => f.key === key);
+    return field.frame || tab.frame;
 }
 
 /** The figure on screen becomes `avatar`: the studio, the radios, and the
@@ -158,6 +162,22 @@ function save() {
     say(state.target ? WORDS.savedFor(state.target.name) : WORDS.saved);
     refresh();
     return true;
+}
+
+/**
+ * Surprise me (Steve, 2026-10-26): a random look from every list, on the
+ * plinth and in the radios, framed whole. It changes the figure on screen
+ * only, like any choice: Save keeps it, and a saved avatar is untouched
+ * until then.
+ */
+function surprise() {
+    show(randomAvatar());
+    if (state.studio) {
+        state.studio.setFrame('body');
+        state.studio.touch();
+    }
+    say(WORDS.surprised);
+    refresh();
 }
 
 function askForget(open) {
@@ -266,6 +286,7 @@ function refreshPortrait() {
 
 function wire() {
     $('av-save').addEventListener('click', save);
+    $('av-random').addEventListener('click', surprise);
     $('av-forget').addEventListener('click', () => askForget(true));
     $('av-forget-yes').addEventListener('click', forget);
     $('av-forget-no').addEventListener('click', () => {
@@ -368,6 +389,7 @@ export async function init() {
 export const __test__ = {
     state,
     save,
+    surprise,
     forget,
     keep,
     decline,

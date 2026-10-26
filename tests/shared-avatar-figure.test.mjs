@@ -89,16 +89,17 @@ function meshes(root) {
     root.updateMatrixWorld(true);
     const out = [];
     root.traverse((o) => {
-        if (!o.isMesh || inside(o, 'mouth') || inside(o, 'brows') || inHair(o)) return;
+        // The pupils (2026-10-26) are the avatar's own, on the rig's balls.
+        if (!o.isMesh || inside(o, 'mouth') || inside(o, 'brows') || inHair(o) || o.name === 'pupil') return;
         const p = new THREE.Vector3();
         o.getWorldPosition(p);
         const round = (n) => Math.round(n * 1e5) / 1e5;
         // The avatar's head is the rig's head drawn smoother (2026-10-24):
         // compared by its radius here, its sides asserted on their own. Its
-        // pupils are the rig's flattened onto the whites (2026-10-25):
+        // irises are the rig's pupils flattened onto the whites (2026-10-25):
         // compared across and up, their depth asserted on its own.
         const head = o.userData.isHead;
-        const pupil = o.userData.isPupil;
+        const pupil = o.userData.isPupil || o.userData.isIris;
         out.push({
             name: o.name,
             geometry: o.geometry.type,
@@ -1234,7 +1235,7 @@ describe('the face (Steve\'s QA, 2026-10-24), measured', () => {
         for (const name of ['mouth', 'brows', 'glasses', 'facial', 'hat', 'hair']) {
             expect(`${name}: ${avatar.person.getObjectByName(name).parent === head}`).toBe(`${name}: true`);
         }
-        for (const key of ['isHead', 'isEye', 'isPupil', 'isNose', 'isEar']) {
+        for (const key of ['isHead', 'isEye', 'isIris', 'isPupil', 'isNose', 'isEar']) {
             expect(`${key}: ${head.children.some((o) => o.userData[key])}`).toBe(`${key}: true`);
             expect(`${key} left behind: ${avatar.person.children.some((o) => o.userData[key])}`).toBe(`${key} left behind: false`);
         }
@@ -1274,35 +1275,72 @@ describe('the face (Steve\'s QA, 2026-10-24), measured', () => {
         }
     });
 
-    test('the pupil is a lens on the white, barely proud of it, where the rig\'s is a ball standing off it', () => {
+    test('the iris is a lens on the white, barely proud of it, where the rig\'s is a ball standing off it, and a dark pupil sits on the iris', () => {
         // Steve's QA, 2026-10-25: the pupils "stick out from the whites of
-        // the eyes", and poked through a sunglass lens from the side.
+        // the eyes", and poked through a sunglass lens from the side. Steve's
+        // QA, 2026-10-26: "give the eyes pupils so the eye color only affects
+        // the iris".
         const front = (o) => o.position.z + o.geometry.parameters.radius * o.scale.z;
         const thick = (o) => 2 * o.geometry.parameters.radius * o.scale.z;
         for (const eyeShape of ['round', 'almond', 'wide', 'sleepy', 'lashes']) {
-            const face = F.createAvatar({ eyeShape }).person.getObjectByName('head');
+            const avatar = F.createAvatar({ eyeShape, eyes: 'blue' });
+            const face = avatar.person.getObjectByName('head');
+            // What a ray straight in from the front meets first at (x, y) of
+            // the person's coordinates.
+            const fromFront = (x, y) => {
+                avatar.person.updateMatrixWorld(true);
+                const origin = new THREE.Vector3(x, y, 2).applyMatrix4(avatar.person.matrixWorld);
+                const hits = new THREE.Raycaster(origin, new THREE.Vector3(0, 0, -1)).intersectObject(avatar.person, true);
+                return hits[0] ? hits[0].object : null;
+            };
             const eyes = face.children.filter((o) => o.userData.isEye);
-            for (const pupil of face.children.filter((o) => o.userData.isPupil)) {
-                const eye = eyes.find((e) => Math.abs(e.position.x - pupil.position.x) < 1e-9);
-                const proud = front(pupil) - front(eye);
+            const irises = face.children.filter((o) => o.userData.isIris);
+            const pupils = face.children.filter((o) => o.userData.isPupil);
+            expect(irises).toHaveLength(2);
+            expect(pupils).toHaveLength(2);
+            for (const iris of irises) {
+                const eye = eyes.find((e) => Math.abs(e.position.x - iris.position.x) < 1e-9);
+                const proud = front(iris) - front(eye);
                 expect(`${eyeShape}: ${proud > 0.001 && proud < 0.005}`).toBe(`${eyeShape}: true`);
-                expect(thick(pupil)).toBeLessThan(0.008);
+                expect(thick(iris)).toBeLessThan(0.008);
                 // Still in front of the white at its rim, so the whole disc shows.
-                const rimZ = pupil.position.z;
-                const rr = pupil.geometry.parameters.radius * pupil.scale.x;
+                const rimZ = iris.position.z;
+                const rr = iris.geometry.parameters.radius * iris.scale.x;
                 const whiteAtRim = eye.position.z + eye.scale.z * Math.sqrt(Math.max(0, eye.geometry.parameters.radius ** 2 - (rr / eye.scale.x) ** 2));
                 expect(`${eyeShape}: ${rimZ > whiteAtRim - 0.001}`).toBe(`${eyeShape}: true`);
+                // The iris wears the eye color; the pupil on it is near black,
+                // smaller, on the iris's middle, just in front of it, and shaped
+                // with it.
+                expect(iris.material.color.getHex()).toBe(A.colorOf('eyes', 'blue'));
+                const pupil = pupils.find((p) => Math.abs(p.position.x - iris.position.x) < 1e-9);
+                expect(pupil.material.color.getHex()).toBe(F.PUPIL_SIZE.pupilColor);
+                expect(pupil.position.y).toBe(iris.position.y);
+                expect(pupil.geometry.parameters.radius).toBeLessThan(iris.geometry.parameters.radius * 0.5);
+                expect(pupil.geometry.parameters.radius).toBeGreaterThan(iris.geometry.parameters.radius * 0.3);
+                const over = front(pupil) - front(iris);
+                expect(`${eyeShape}: ${over > 0.0005 && over < 0.002}`).toBe(`${eyeShape}: true`);
+                expect(pupil.scale.x / iris.scale.x).toBeCloseTo(1, 9);
+                expect(pupil.scale.y / iris.scale.y).toBeCloseTo(1, 9);
+                // From the front, the eye's middle is the pupil and its edge
+                // the iris (a touch below the middle, under a sleepy lid).
+                const mid = at(avatar.person, pupil);
+                const hit = (dx) => fromFront(mid.x + dx, mid.y - 0.002);
+                expect(`${eyeShape} middle: ${hit(0) && hit(0).userData.isPupil}`).toBe(`${eyeShape} middle: true`);
+                expect(`${eyeShape} edge: ${hit(rr * 0.8) && hit(rr * 0.8).userData.isIris}`).toBe(`${eyeShape} edge: true`);
             }
+            avatar.dispose();
         }
         // Well behind a sunglass lens.
         const sun = F.createAvatar({ glasses: 'sunglasses' }).person.getObjectByName('head');
         const pupil = sun.children.find((o) => o.userData.isPupil);
         expect(F.GLASSES_SIZE.z - 0.001 - front(pupil)).toBeGreaterThan(0.015);
-        // The rig's own pupil stands over a centimeter proud: this test can fail.
+        // The rig's own pupil stands over a centimeter proud, in the eye's
+        // color with no pupil on it: this test can fail.
         const rig = createPerson({});
         const rigPupil = rig.children.find((o) => o.userData.isPupil);
         const rigEye = rig.children.find((o) => o.userData.isEye);
         expect(front(rigPupil) - front(rigEye)).toBeGreaterThan(0.01);
+        expect(rig.children.some((o) => o.userData.isIris)).toBe(false);
     });
 
     test('the eye shapes: almond and wide reshape the rig\'s eye, sleepy lids the top half, lashes line it', () => {
@@ -1322,7 +1360,9 @@ describe('the face (Steve\'s QA, 2026-10-24), measured', () => {
             return hits[0].object;
         };
         expect(ray(0.007).name).toBe('lid');
-        expect(ray(-0.006).userData.isPupil).toBe(true);
+        // The lower part of the iris, and the pupil on its middle, still show.
+        expect(ray(-0.006).userData.isIris).toBe(true);
+        expect(ray(-0.002).userData.isPupil).toBe(true);
         const lashes = F.createAvatar({ eyeShape: 'lashes' });
         expect(allIn(lashes.person, (o) => o.name === 'lashes')).toHaveLength(4);
         expect(allIn(F.createAvatar({}).person, (o) => o.name === 'lid' || o.name === 'lashes')).toHaveLength(0);

@@ -10,6 +10,9 @@
  *
  *   npm run build && node --experimental-vm-modules scripts/avatar-preview.mjs
  *
+ * Named sheets after the script draw those alone (`... avatar-preview.mjs
+ * eye-colors hands`), since the whole set takes a few minutes.
+ *
  * Writes specs/avatar/previews/*.png (git-ignored), each column one look and
  * each row a view (from the front, and from three quarters to the figure's
  * left, and for the hair and the hats from behind). Drawn through
@@ -58,10 +61,12 @@ const SHOTS = {
     hand: { cell: [240, 260], aim: [0.3, 0.72, 0], distance: 0.6, fov: 24, lift: 0.04 }
 };
 const TURNS = [0, 0.75];
+const ONLY = process.argv.slice(2);
 
 /** One sheet: a column a look, a row a turn (`turns`, from the front and
  *  three quarters by default; the hair also from behind). */
 async function sheet(name, looks, shot, turns = TURNS) {
+    if (ONLY.length && !ONLY.includes(name)) return;
     const S = SHOTS[shot];
     const [w, h] = S.cell;
     const W = w * looks.length;
@@ -139,6 +144,12 @@ await sheet('eyes', [
     { ...fair }, { ...fair, eyeShape: 'almond' }, { ...fair, eyeShape: 'wide' }, { ...fair, eyeShape: 'sleepy' }, { ...fair, eyeShape: 'lashes' },
     { ...deep, eyeShape: 'almond', glasses: 'round' }, { ...fair, eyeShape: 'sleepy', glasses: 'square' }
 ], 'face');
+// The irises in every color with a dark pupil on each (Steve's QA,
+// 2026-10-26), at the editor's zoom, on every eye shape.
+await sheet('eye-colors', [
+    { ...fair }, { ...fair, eyes: 'blue' }, { ...fair, eyes: 'green', eyeShape: 'almond' }, { ...fair, eyes: 'hazel', eyeShape: 'wide' },
+    { ...fair, eyes: 'gray', eyeShape: 'sleepy' }, { ...deep, eyes: 'brown', eyeShape: 'lashes' }, { skin: 'light', hair: 'blond', eyes: 'x9ad0ff', glasses: 'round' }
+], 'close', [0, 0.75]);
 await sheet('brows', [
     { ...fair, brows: 'natural' }, { ...fair, brows: 'straight' }, { ...fair, brows: 'arched' }, { ...fair, brows: 'bold' }, { ...fair, brows: 'thin' },
     { ...fair, brows: 'bold', mouth: 'surprised' }, { skin: 'light', hair: 'blond', brows: 'arched', eyeShape: 'lashes' }, { ...deep, hair: 'gray', brows: 'bold', hat: 'cap' }
@@ -207,6 +218,30 @@ await sheet('bottoms', [
     { bottom: 'cargoPants', bottomColor: 'khaki' }, { bottom: 'cargoShorts', bottomColor: 'khaki' }, { bottom: 'sweatpants', bottomColor: 'charcoal' },
     { bottom: 'leggings', bottomColor: 'black', build: 'curvy' }, { bottom: 'basketballShorts', bottomColor: 'navy', shoes: 'highTops' }, { bottom: 'longSkirt', bottomColor: 'denim', build: 'curvy' }
 ], 'legs', [0, 0.75]);
+// More bottoms (Steve's QA, 2026-10-26): short shorts, the mini and pleated
+// skirts, the tutu and capris, on a few builds.
+await sheet('bottoms-2', [
+    { bottom: 'shortShorts', bottomColor: 'navy' }, { bottom: 'shortShorts', bottomColor: 'khaki', build: 'curvy', sleeves: 'tank' }, { bottom: 'miniSkirt', bottomColor: 'black', build: 'curvy' },
+    { bottom: 'pleatedSkirt', bottomColor: 'white', build: 'pear' }, { bottom: 'tutu', bottomColor: 'xf0a0c8', build: 'slim' }, { bottom: 'capris', bottomColor: 'denim' },
+    { bottom: 'capris', bottomColor: 'khaki', build: 'full', legwear: 'crewSocks', legwearColor: 'white' }
+], 'legs', [0, 0.75]);
+// The one-pieces: a leotard with bare legs, a ballerina (leotard, tutu,
+// tights), a wrestler (bodysuit, short shorts, buff), a leotard under a
+// mini skirt, and the fallback (bare legs with a tee are shorts).
+await sheet('onepiece', [
+    { sleeves: 'leotard', shirt: 'navy', bottom: 'bare' }, { sleeves: 'leotard', shirt: 'xf0a0c8', bottom: 'tutu', bottomColor: 'xf0a0c8', legwear: 'tights', legwearColor: 'pink', build: 'slim', length: 'lowBun' },
+    { sleeves: 'bodysuit', shirt: 'x241773', bottom: 'shortShorts', bottomColor: 'black', muscles: 'buff', build: 'broad' }, { sleeves: 'leotard', shirt: 'black', bottom: 'miniSkirt', bottomColor: 'black', legwear: 'fishnets', build: 'curvy' },
+    { sleeves: 'short', shirt: 'teal', bottom: 'bare' }, { sleeves: 'bodysuit', shirt: 'white', bottom: 'bare', skin: 'deep' }
+], 'body', [0, 0.75]);
+// The underlayer, legs: every legwear in shorts and under a skirt.
+const LEGWEAR = ['crewSocks', 'kneeSocks', 'thighHighs', 'sheerTights', 'tights', 'fishnets', 'longJohns', 'legWarmers'];
+await sheet('layers-legs', LEGWEAR.map((legwear, k) => ({ legwear, legwearColor: k % 2 ? 'black' : 'white', bottom: k % 3 === 2 ? 'skirt' : 'shorts', bottomColor: 'navy' })), 'legs', [0, 0.75]);
+// The underlayer, arms: every armwear with short sleeves and a tank top.
+const ARMWEAR = ['fishnetSleeves', 'longGloves', 'armWarmers', 'thermalSleeves'];
+await sheet('layers-arms', [
+    ...ARMWEAR.map((armwear) => ({ armwear, armwearColor: 'black', sleeves: 'short', shirt: 'white' })),
+    ...ARMWEAR.map((armwear) => ({ armwear, armwearColor: 'red', sleeves: 'tank', shirt: 'charcoal' }))
+], 'torso', [0, 0.75]);
 // The heels, close, from the side and three quarters (Steve, 2026-10-25:
 // pointed toes, a round heel).
 await sheet('heels', [{ shoes: 'heels', shoeColor: 'red' }, { shoes: 'heels', shoeColor: 'black', build: 'curvy', bottom: 'skirt' }], 'feet', [Math.PI / 2, 0.75, 0]);

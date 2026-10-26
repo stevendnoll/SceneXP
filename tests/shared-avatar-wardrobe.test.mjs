@@ -373,6 +373,62 @@ describe('the shirts', () => {
         }
     });
 
+    test('short shorts stop at upper thigh, capris at mid-calf, the mini and pleated skirts are short, and a tutu is a disc off the hips (2026-10-26)', () => {
+        const skinOf = (avatar) => avatar.person.getObjectByName('head').children.find((o) => o.userData.isHead).material;
+        const legOf = (avatar) => avatar.person.children.find((o) => o.userData.isLeg);
+        const span = (avatar, leg, mesh) => {
+            const b = boxOf(avatar.person, mesh);
+            return { top: b.max.y, bottom: b.min.y, width: b.max.x - b.min.x };
+        };
+        // Short shorts: the thigh bared, the cloth over its top half only,
+        // the knee-length hem gone, a hem at the shorts' own foot.
+        const shorts = F.createAvatar({ bottom: 'shortShorts', bottomColor: 'navy' });
+        const leg = legOf(shorts);
+        const { thigh } = W.legParts(leg);
+        expect(thigh.material).toBe(skinOf(shorts));
+        const cloth = named(shorts.person, 'shortShorts');
+        expect(cloth).toHaveLength(2);
+        const thighH = thigh.geometry.parameters.height * thigh.scale.y;
+        const thighTop = leg.position.y + thigh.position.y + thighH / 2;
+        const s = span(shorts, leg, cloth[0]);
+        expect(s.top).toBeCloseTo(thighTop, 3);
+        expect(s.bottom).toBeCloseTo(thighTop - thighH * W.BOTTOM_SIZE.shortShorts.cover, 3);
+        const hems = named(shorts.person, 'hem');
+        expect(hems).toHaveLength(2);
+        expect(span(shorts, leg, hems[0]).bottom).toBeCloseTo(s.bottom, 3);
+        // Capris: the shin bared below the trouser, which keeps the knee.
+        const capris = F.createAvatar({ bottom: 'capris' });
+        const cl = legOf(capris);
+        const parts = W.legParts(cl);
+        expect(parts.shin.material).toBe(skinOf(capris));
+        expect(parts.knee.material).not.toBe(skinOf(capris));
+        expect(parts.thigh.material).not.toBe(skinOf(capris));
+        const trouser = named(capris.person, 'capris');
+        expect(trouser).toHaveLength(2);
+        const shinH = parts.shin.geometry.parameters.height * parts.shin.scale.y;
+        const shinTop = cl.position.y + parts.shin.position.y + shinH / 2;
+        expect(span(capris, cl, trouser[0]).bottom).toBeCloseTo(shinTop - shinH * W.BOTTOM_SIZE.capris.cover, 3);
+        // The skirts: the rig's skirt cut short, the pleated one with its
+        // folds standing off it, the tutu a disc wider than any skirt.
+        const skirtOf = (bottom) => F.createAvatar({ bottom, bottomColor: 'black', build: 'curvy' }).person.children.find((o) => o.userData.isSkirt);
+        const plain = skirtOf('skirt');
+        const mini = skirtOf('miniSkirt');
+        expect(mini.geometry.parameters.height).toBeCloseTo(W.BOTTOM_SIZE.miniSkirt.height, 6);
+        expect(mini.position.y + mini.geometry.parameters.height / 2).toBeCloseTo(plain.position.y + plain.geometry.parameters.height / 2, 6);
+        expect(mini.geometry.parameters.height).toBeLessThan(plain.geometry.parameters.height);
+        const pleated = skirtOf('pleatedSkirt');
+        expect(pleated.children.filter((m) => m.name === 'pleat')).toHaveLength(W.BOTTOM_SIZE.pleatedSkirt.pleats);
+        const tutu = skirtOf('tutu');
+        const disc = tutu.children.find((m) => m.name === 'tutu');
+        expect(disc).toBeTruthy();
+        expect(disc.geometry.parameters.radiusTop).toBeCloseTo(W.BOTTOM_SIZE.tutu.disc, 6);
+        expect(disc.geometry.parameters.radiusTop).toBeGreaterThan(W.BOTTOM_SIZE.miniSkirt.bottom);
+        expect(tutu.geometry.parameters.height).toBeCloseTo(W.BOTTOM_SIZE.tutu.brief, 6);
+        // Every skirt keeps the fit the figure measured for the legs.
+        expect(mini.scale.x).toBeCloseTo(plain.scale.x, 6);
+        expect(tutu.scale.x).toBeCloseTo(plain.scale.x, 6);
+    });
+
     test('a hoodie\'s hood is one closed solid that stands up behind the neck and lies down the back; its pocket sits low on the front, and two drawstrings hang from the neck', () => {
         const avatar = F.createAvatar({ sleeves: 'hoodie', shirt: 'teal' });
         const torso = torsoOf(avatar);
