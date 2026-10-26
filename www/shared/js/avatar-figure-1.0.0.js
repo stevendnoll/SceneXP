@@ -71,8 +71,10 @@ export { HAT_SIZE, trimUnder, HAIR_DRAWN };
  * bigger and centered. 13 (2026-10-26): seven builds (Curvy's shoulders
  * narrowed a touch). 14 (2026-10-26): one-pieces, more bottoms, the
  * underlayer (avatar-layers). 15 (2026-10-26): pupils on the irises.
+ * 16 (2026-10-26): the short cuts tapered to stubble, the swoosh over the
+ * whole head.
  */
-export const RENDER_VERSION = 15;
+export const RENDER_VERSION = 16;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named

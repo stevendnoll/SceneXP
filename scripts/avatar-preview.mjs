@@ -115,6 +115,12 @@ const HATS = ['beanie', 'cap', 'trucker', 'ivyCap', 'beret', 'fedora', 'cowboy',
 const BEHIND = [0, 0.75, Math.PI];
 await sheet('hair-1', STYLES.slice(0, 11).map((length, k) => ({ ...(k % 2 ? deep : fair), length })), 'face', BEHIND);
 await sheet('hair-2', STYLES.slice(11).map((length, k) => ({ ...(k % 2 ? fair : deep), length })), 'face', BEHIND);
+// The parts from the side and behind (Steve's QA, 2026-10-26: "turbans",
+// the swoosh "only goes about halfway back").
+await sheet('parts-side', [
+    { ...fair, length: 'short' }, { ...fair, length: 'leftPart' }, { ...fair, length: 'rightPart' }, { ...fair, length: 'centerPart' },
+    { skin: 'light', hair: 'blond', length: 'leftPart' }
+], 'face', [Math.PI / 2, -Math.PI / 2, 2.4, Math.PI]);
 await sheet('parts', [
     { ...fair, length: 'short' }, { ...fair, length: 'leftPart' }, { ...fair, length: 'rightPart' }, { ...fair, length: 'centerPart' },
     { ...deep, length: 'leftPart' }, { skin: 'light', hair: 'blond', length: 'centerPart' }

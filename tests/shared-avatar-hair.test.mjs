@@ -263,6 +263,9 @@ test('a part is a line of scalp from the hairline back over the top, the hair th
     expect(top.z).toBeGreaterThan(0.05);
 });
 
+/** The short cuts, tapered at the sides and the back (2026-10-26). */
+const TAPERED = ['short', 'leftPart', 'rightPart', 'centerPart', 'quiff', 'spiky'];
+
 describe('the strands (Steve\'s QA, 2026-10-25: "a monochrome blob")', () => {
     const BARE = { afro: ['scalp'], mohawk: ['scalp'], cornrows: ['scalp'] };
 
@@ -277,19 +280,26 @@ describe('the strands (Steve\'s QA, 2026-10-25: "a monochrome blob")', () => {
                 expect(map.colorSpace).toBe(THREE.SRGBColorSpace);
                 const { data, width, height } = map.image;
                 expect(data.length).toBe(width * height * 4);
-                // Gray, opaque, never darker than the gap's depth, and not
-                // one shade (a flat map would be the blob again).
+                // Gray, never darker than the gap's depth, and not one
+                // shade (a flat map would be the blob again). Opaque, but
+                // for a tapered cap's hairline (2026-10-26, held below).
                 let sum = 0;
                 let sum2 = 0;
                 let least = 255;
                 let gray = true;
+                let opaque = true;
                 for (let k = 0; k < data.length; k += 4) {
-                    gray = gray && data[k + 1] === data[k] && data[k + 2] === data[k] && data[k + 3] === 255;
+                    gray = gray && data[k + 1] === data[k] && data[k + 2] === data[k];
+                    opaque = opaque && data[k + 3] === 255;
                     sum += data[k];
                     sum2 += data[k] * data[k];
                     least = Math.min(least, data[k]);
                 }
                 expect(gray).toBe(true);
+                const tapered = TAPERED.includes(style) && ['scalp', 'wave'].includes(mesh.name);
+                expect(`${style} ${mesh.name} opaque: ${opaque}`).toBe(`${style} ${mesh.name} opaque: ${!tapered}`);
+                expect(`${style} ${mesh.name} alphaTest: ${mesh.material.alphaTest}`).toBe(`${style} ${mesh.name} alphaTest: ${tapered ? H.HAIR_SIZE.taper.cutoff : 0}`);
+                expect(mesh.material.transparent).toBe(tapered);
                 const n = data.length / 4;
                 const mean = sum / n;
                 const sd = Math.sqrt(sum2 / n - mean * mean);
@@ -341,6 +351,98 @@ describe('the strands (Steve\'s QA, 2026-10-25: "a monochrome blob")', () => {
         // Both sides alike, and forward of the crown is a larger k.
         expect(flow(on(px - 0.03, 0.5)).k).toBeCloseTo(flow(on(px + 0.03, 0.5)).k, 9);
         expect(flow(on(px, 0.9)).k).toBeGreaterThan(flow(on(px, 0.5)).k);
+    });
+
+    test('the short cuts fade out round the sides and the back, smoothly, the forehead\'s hairline a clean line (Steve, 2026-10-26)', () => {
+        // Steve: "the bottom edges of the hairline don't fade at all.
+        // Usually there's a bit of stubble, or men will have them trim the
+        // bottom back and side edges of their hairline a little shorter."
+        // Then, of a grain of stubble cut at an alphaTest: "jagged and
+        // stringy... almost looks like the hair is bleeding into the
+        // scalp", so the fade is a smooth blend.
+        const T = H.HAIR_SIZE.taper;
+        // The depth: nothing at the front or above `from`, all of it at the
+        // hairline round the back.
+        expect(H.taperAt(T, 0, 1)).toBe(0);
+        expect(H.taperAt(T, Math.PI, T.from)).toBe(0);
+        expect(H.taperAt(T, Math.PI, 1)).toBe(1);
+        expect(H.taperAt(T, Math.PI / 2, 1)).toBe(1);
+        expect(H.taperAt(T, -Math.PI / 2, 0.96)).toBeGreaterThan(0.3);
+        expect(H.taperAt(T, -Math.PI / 2, 0.85)).toBe(0);
+        expect(H.taperAt(null, Math.PI, 1)).toBe(0);
+        // A texel's alpha: whole above the taper, falling smoothly with it
+        // (never a step), a shade lower in the gaps, gone at the bottom.
+        expect(H.taperAlpha(0, 0.9)).toBe(1);
+        expect(H.taperAlpha(0.5, 0.9)).toBeLessThan(1);
+        expect(H.taperAlpha(0.5, 0.5)).toBeLessThan(H.taperAlpha(0.5, 0.9));
+        expect(H.taperAlpha(1, 0.9)).toBe(0);
+        let last = 1;
+        for (let i = 1; i <= 50; i++) {
+            const a = H.taperAlpha(i / 50, 0.9);
+            expect(a).toBeLessThanOrEqual(last);
+            expect(last - a).toBeLessThan(0.08);
+            last = a;
+        }
+        // Blended, writing depth, its bare foot discarded.
+        for (const style of TAPERED) {
+            const scalp = pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'scalp');
+            expect(scalp.mesh.material.transparent).toBe(true);
+            expect(scalp.mesh.material.depthWrite).toBe(true);
+            expect(scalp.mesh.material.alphaTest).toBe(T.cutoff);
+            // And it casts its shadow from the fade's upper half only, through
+            // a depth material of its own reading the same map.
+            const depth = scalp.mesh.customDepthMaterial;
+            expect(depth.isMeshDepthMaterial).toBe(true);
+            expect(depth.map).toBe(scalp.mesh.material.map);
+            expect(depth.alphaTest).toBe(T.shadowCut);
+            expect(depth.depthPacking).toBe(THREE.RGBADepthPacking);
+        }
+        expect(pieces(H.buildHair('bob', 0x332211)).find((p) => p.mesh.name === 'scalp').mesh.customDepthMaterial).toBeUndefined();
+        // The swoosh patch over a parted cut fades out over the top of the
+        // taper, or its skin would cover the fade.
+        for (const style of ['leftPart', 'centerPart']) {
+            const wave = pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'wave');
+            expect(wave.mesh.material.transparent).toBe(true);
+            const { data, width, height } = wave.mesh.material.map.image;
+            expect(data[(Math.floor(height * 0.995) * width + 2) * 4 + 3]).toBe(0);
+            expect(data[(Math.floor(height * 0.2) * width + 2) * 4 + 3]).toBe(255);
+        }
+        for (const style of TAPERED) {
+            const scalp = pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'scalp');
+            const { data, width, height } = scalp.mesh.material.map.image;
+            const alphaAt = (u, v) => data[(Math.floor(v * (height - 1)) * width + Math.floor(u * (width - 1))) * 4 + 3];
+            // The map's bottom row at the back and the sides is gone, its
+            // top rows whole, and the front's bottom row whole too.
+            let cut = 0;
+            for (let i = 0; i < 40; i++) if (alphaAt(0.02 + (0.3 * i) / 40, 0.995) < 255 * T.cutoff) cut++;
+            expect(`${style} back cut: ${cut}`).toBe(`${style} back cut: 40`);
+            for (const u of [0.1, 0.5, 0.75]) expect(alphaAt(u, 0.2)).toBe(255);
+            for (let i = 0; i < 20; i++) expect(alphaAt(0.46 + 0.08 * (i / 20), 0.98)).toBe(255);
+            // Within the taper, each row fades more than the one above, and
+            // every texel of a row is near its neighbors (no grain).
+            const row = (v) => Array.from({ length: 60 }, (_, i) => alphaAt(0.15 + (0.2 * i) / 60, v));
+            const mean = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
+            expect(mean(row(0.92))).toBeGreaterThan(mean(row(0.96)));
+            expect(mean(row(0.96))).toBeGreaterThan(mean(row(0.99)));
+            expect(mean(row(0.96))).toBeGreaterThan(30);
+            // Only the very bottom (Steve, 2026-10-26): whole to nine
+            // tenths of the way down.
+            expect(mean(row(0.88))).toBe(255);
+            for (const v of [0.92, 0.96]) {
+                const xs = row(v);
+                for (let i = 1; i < xs.length; i++) expect(Math.abs(xs[i] - xs[i - 1])).toBeLessThan(255 * T.gap + 4);
+            }
+        }
+        // The cap itself keeps its full thickness: the blend is in the map
+        // alone (Steve: "it looked better without the fade").
+        const thick = (style) => Math.max(...pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'scalp').pts.filter((p) => p.y < 0 && p.z < -0.08).map((p) => p.length() - H.SCALP));
+        expect(thick('short')).toBeGreaterThan(0.003);
+        expect(thick('short')).toBeCloseTo(thick('mullet'), 6);
+        // The styles worn back, long or curled keep their whole edge.
+        for (const style of ['ponytail', 'bob', 'curly', 'mullet', 'longBack']) {
+            const scalp = pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'scalp');
+            expect(scalp.mesh.material.alphaTest).toBe(0);
+        }
     });
 
     test('the swoosh stands over the top of the head, not only at the hairline', () => {

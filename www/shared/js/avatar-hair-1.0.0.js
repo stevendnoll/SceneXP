@@ -150,15 +150,53 @@ export const HAIR_SIZE = Object.freeze({
     // top: full from `wave.back` radians behind the crown forward, out to
     // `wave.temple` radians round at the sides, and fullest toward the
     // front (`wave.swoop` of it over the crown, all of it over the brow),
-    // where a side part swoops. With the whole top carrying it, the lifts
-    // came down from 40/16/26 mm.
+    // where a side part swoops.
+    // Steve, 2026-10-26 ("turbans", and from the side "more like a knot
+    // than hair": the swoosh "only goes about halfway back"): it ran only
+    // half a radian behind the crown, so from the side it was one bump
+    // over the brow on a flat cap. Now it carries over the crown and
+    // settles down the back of the head (`wave.back` 1.2 rad behind the
+    // crown, fading over `wave.fade`), lower and with a longer tail, so it
+    // is a sweep across the head and not a roll; its forward turn over
+    // the brow happens forward of the crown only (`turnFrom`, radians
+    // forward of it), never behind, where it would push into the head.
     part: {
-        width: 0.0045, depth: 0.8, back: 0, fade: 0.9, line: 0.001, grid: [144, 24], edge: 0.86, lean: 0.35, forward: [0, 1, 0.9], turn: 0.5,
+        width: 0.0045, depth: 0.8, back: 0, fade: 0.9, line: 0.001, grid: [144, 24], edge: 0.86, lean: 0.35, forward: [0, 1, 0.9], turn: 0.5, turnFrom: 0.25,
         wave: {
-            back: -0.5, fade: 0.6, temple: 1.15, swoop: 0.55,
-            heavy: { lift: 0.03, crest: 4.5, tail: 12 }, light: { lift: 0.012, crest: 3.2, tail: 6 }, center: { lift: 0.02, crest: 3.7, tail: 8 }
+            back: -1.2, fade: 0.9, temple: 1.15, swoop: 0.72,
+            heavy: { lift: 0.023, crest: 4.5, tail: 20 }, light: { lift: 0.009, crest: 3.2, tail: 9 }, center: { lift: 0.016, crest: 3.7, tail: 13 }
         }
     },
+    /**
+     * The taper (Steve's QA, 2026-10-26: "the bottom edges of the hairline
+     * don't fade at all. Usually there's a bit of stubble, or men will have
+     * them trim the bottom back and side edges of their hairline a little
+     * shorter"): on the short cuts (the short cut, the parts, the quiff and
+     * the spiky cut), the VERY BOTTOM of the hairline is blended into the
+     * skin, round the sides and the back only: from `from` of the way from
+     * the crown to the hairline (the last tenth), nothing of it within
+     * `front` radians round from the front (the forehead's hairline stays
+     * a clean line), all of it `spread` radians further round. The cap's
+     * map of strands carries an ALPHA that falls smoothly over that band
+     * (`taperAlpha`: (1 - t) to the `curve`, a shade more see-through in
+     * the gaps between strands by `gap`), and the material is drawn
+     * BLENDED, writing depth as usual. Below `cutoff` a texel is
+     * discarded outright, so the band's bare foot blocks nothing behind
+     * it; and since the shadow pass ignores a blend, the mesh casts
+     * through a depth material of its own that cuts at `shadowCut`, so
+     * the shadow ends in the band's middle, not at its invisible foot.
+     *
+     * Three tries the same day. A grain of stubble cut at an alphaTest of
+     * 0.5 over the lower quarter: up close "jagged and stringy", "the
+     * hair bleeding into the scalp". A smooth blend over the same
+     * quarter: "honestly it looked better without the fade". So the cap
+     * keeps its full thickness and its edge, and only the last few
+     * millimeters blend (Steve: "what if we only faded/blended the very
+     * bottom of the back and sides of the hairline?"). The swoosh patch
+     * over a parted cut fades out over the top of the band (`patchFade`
+     * of the taper's depth), or its skin would cover it.
+     */
+    taper: { from: 0.9, front: 0.55, spread: 0.5, curve: 1.0, gap: 0.2, cutoff: 0.04, shadowCut: 0.5, patchFade: 0.25 },
     spikes: { count: 26, height: 0.028, radius: 0.0095, reach: 0.78 },
     curls: { grid: [144, 36] },
     /** A fin in the head's middle plane, `front` radians forward of the
@@ -296,6 +334,31 @@ export function alongU(n) {
     return (point, u, v) => ({ k: v * n, along: u * 8, fade: 1, period: n });
 }
 
+/**
+ * How deep the taper (HAIR_SIZE.taper) is at `a` round from the front and
+ * `s` of the way from the crown to the hairline: 0 above it or at the
+ * front, 1 at the hairline round the sides and the back.
+ */
+export function taperAt(taper, a, s) {
+    if (!taper) return 0;
+    const round = smoothstep((Math.abs(a) - taper.front) / taper.spread);
+    return round * smoothstep((s - taper.from) / (1 - taper.from));
+}
+
+/**
+ * A texel's alpha in the taper, `t` deep (taperAt), with `shade` from
+ * strandShade: 1 above the taper, falling smoothly to 0 at the hairline
+ * ((1 - t) to the taper's `curve`), and a shade more see-through in the
+ * gaps between strands (the darker texels) by the taper's `gap`, so the
+ * strands show faintly through the fade. Smooth, not a grain: see
+ * HAIR_SIZE.taper.
+ */
+export function taperAlpha(t, shade, taper = HAIR_SIZE.taper) {
+    if (t <= 0) return 1;
+    const gap = clamp01((STRANDS.mean - shade) / (STRANDS.depth * 0.5));
+    return clamp01((1 - t) ** taper.curve * (1 - taper.gap * gap * t));
+}
+
 const MAPS = new Map();
 
 /**
@@ -305,7 +368,7 @@ const MAPS = new Map();
  * and kept: the maps are gray and the same for every color, and a visitor
  * rebuilds the figure at every click in the editor.
  */
-export function strandMap(key, at, flow, [width, height], { repeat = true } = {}) {
+export function strandMap(key, at, flow, [width, height], { repeat = true, alpha = null } = {}) {
     if (MAPS.has(key)) return MAPS.get(key);
     const data = new Uint8Array(width * height * 4);
     for (let j = 0; j < height; j++) {
@@ -313,12 +376,15 @@ export function strandMap(key, at, flow, [width, height], { repeat = true } = {}
         for (let i = 0; i < width; i++) {
             const u = (i + 0.5) / width;
             const { k, along, fade, period } = flow(at ? at(u, v) : null, u, v);
-            const g = Math.round(255 * strandShade(k, along, fade, period));
+            const shade = strandShade(k, along, fade, period);
+            const g = Math.round(255 * shade);
             const o = (j * width + i) * 4;
             data[o] = g;
             data[o + 1] = g;
             data[o + 2] = g;
-            data[o + 3] = 255;
+            // The taper (HAIR_SIZE.taper): `alpha(u, v)` is how deep it is
+            // here (0 none, 1 faded away), and the texel fades with it.
+            data[o + 3] = alpha ? Math.round(255 * taperAlpha(alpha(u, v), shade)) : 255;
         }
     }
     const texture = new THREE.DataTexture(data, width, height);
@@ -428,21 +494,23 @@ function parted(px, volume = HAIR_SIZE.volumes.short, edge = HAIR_SIZE.edges.sho
         const u = Math.abs(d) / P.width;
         // Steeply up out of the groove to the crest, then gently away.
         const roll = u < w.crest ? smoothstep((u - 0.5) / (w.crest - 0.5)) : Math.exp(-(((u - w.crest) / w.tail) ** 2));
-        // Over the whole top (Steve, 2026-10-25, see HAIR_SIZE.part): from
-        // behind the crown forward, fading at the temples, and nothing
-        // right at the crown, where the patch's columns meet (a lift there
-        // would step up off its padded first row).
+        // Over the whole top and down the back (Steve, 2026-10-25 and
+        // 2026-10-26, see HAIR_SIZE.part): from well behind the crown
+        // forward, fading at the temples, and nothing right at the crown,
+        // where the patch's columns meet (a lift there would step up off
+        // its padded first row).
         const run = smoothstep((phi - W.back) / W.fade) * (1 - smoothstep((Math.abs(a) - W.temple) / 0.4)) * smoothstep((s - 0.04) / 0.2);
         // Fullest toward the front, where a side part swoops.
         const swoop = W.swoop + (1 - W.swoop) * smoothstep((phi + 0.2) / 1.0);
         // Full to just inside the hairline, then gone at it (the patch's
         // border). Out from the head it would stand over the brow as a
         // shelf (preview, 2026-10-24); its lift turns forward instead
-        // (`front`, 0 over the crown to 1 at the hairline), so it sweeps
-        // up and over the forehead (Steve: "the swoosh should come forward
-        // over the forehead too").
+        // (`front`, 0 over the crown to 1 at the hairline, and only
+        // forward of the crown), so it sweeps up and over the forehead
+        // (Steve: "the swoosh should come forward over the forehead too").
         const edgeFade = 1 - smoothstep((s - P.edge) / (1 - P.edge));
-        return { height: w.lift * roll * run * swoop * edgeFade, away: Math.sign(d) || 1, front: smoothstep((s - P.turn) / (P.edge - P.turn)) };
+        const front = smoothstep((s - P.turn) / (P.edge - P.turn)) * smoothstep((phi - P.turnFrom) / 0.4);
+        return { height: w.lift * roll * run * swoop * edgeFade, away: Math.sign(d) || 1, front };
     };
     const floorAt = (x, y, z) => {
         const r = Math.hypot(x, y, z);
@@ -462,7 +530,9 @@ function parted(px, volume = HAIR_SIZE.volumes.short, edge = HAIR_SIZE.edges.sho
  * it is a proper closed solid. For a piece a hat would squash: a quiff's
  * crest, a part's waves.
  */
-function onCap(edge, thick, lift, { a0, a1, s0, s1, nu = 40, nv = 20, pad = 0.0004 }) {
+function onCap(edge, thick, lift, { a0, a1, s0, s1, nu = 40, nv = 20, pad = 0.0004, wrap = false }) {
+    // A piece all the way round (`wrap`) has no side walls, so its first
+    // and last columns are one column, lifted like any other.
     return solidGrid(nu, nv, (i, j, side) => {
         const a = a0 + ((a1 - a0) * i) / nu;
         const s = s0 + ((s1 - s0) * j) / nv;
@@ -470,12 +540,12 @@ function onCap(edge, thick, lift, { a0, a1, s0, s1, nu = 40, nv = 20, pad = 0.00
         const p = onSphere(SCALP + thick(a, s), a, t);
         if (!side) return p;
         const dir = onSphere(1, a, t);
-        if (i === 0 || i === nu || j === 0 || j === nv) return [p[0] + dir[0] * pad * 0.5, p[1] + dir[1] * pad * 0.5, p[2] + dir[2] * pad * 0.5];
+        if ((!wrap && (i === 0 || i === nu)) || j === 0 || j === nv) return [p[0] + dir[0] * pad * 0.5, p[1] + dir[1] * pad * 0.5, p[2] + dir[2] * pad * 0.5];
         const [lx, ly, lz] = lift(a, s, dir);
         const l = Math.hypot(lx, ly, lz);
         if (l < pad) return [p[0] + dir[0] * pad, p[1] + dir[1] * pad, p[2] + dir[2] * pad];
         return [p[0] + lx, p[1] + ly, p[2] + lz];
-    });
+    }, { wrap });
 }
 
 /**
@@ -494,27 +564,52 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
     const S = STRANDS;
     // Every piece gets a material of its own, with its map of strands (or
     // none: the afro, the shaved sides, a mohawk's fin).
-    const hairWith = (map) => new THREE.MeshStandardMaterial({ color, roughness: S.roughness, map: map || null });
+    const hairWith = (map, tapered) => new THREE.MeshStandardMaterial({
+        color, roughness: S.roughness, map: map || null,
+        // A tapered cap's map carries the taper in its alpha (see
+        // HAIR_SIZE.taper): blended, writing depth as any solid, its
+        // bare foot discarded.
+        transparent: Boolean(tapered),
+        alphaTest: tapered ? H.taper.cutoff : 0
+    });
     const tieMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(H.tie), roughness: 0.6 });
-    const add = (geometry, name, { hides = false, material, map = null } = {}) => {
-        const mesh = new THREE.Mesh(geometry, material || hairWith(map));
+    const add = (geometry, name, { hides = false, material, map = null, tapered = false } = {}) => {
+        const mesh = new THREE.Mesh(geometry, material || hairWith(map, tapered));
         mesh.name = name;
         mesh.castShadow = true;
         if (hides) mesh.userData.hatHides = true;
+        if (tapered) {
+            // The shadow pass ignores a blend, so left to itself the whole
+            // fade would cast as solid hair and lay a hard shadow on the
+            // neck from a rim that can barely be seen: its own depth
+            // material casts from the fade's upper half only (`shadowCut`),
+            // and the sun's soft shadow blurs that edge.
+            mesh.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map, alphaTest: H.taper.shadowCut });
+        }
         group.add(mesh);
         return mesh;
     };
-    /** The map for a cap over `edge`, its strands in `flow`. */
-    const capMap = (key, edge, flow) => strandMap(`${key}:scalp`, onScalp(edge), flow, S.size.scalp);
-    /** The map for a piece lying on a cap (`onCap`), over the same span. */
-    const patchMap = (key, edge, flow, { a0, a1, s0, s1 }) => strandMap(`${key}:patch`, (u, v) => {
+    /** The map for a cap over `edge`, its strands in `flow`, tapered at
+     *  its hairline round the sides and the back if `taper`. */
+    const capMap = (key, edge, flow, taper = null) => strandMap(`${key}:scalp`, onScalp(edge), flow, S.size.scalp, {
+        alpha: taper ? (u, v) => taperAt(taper, -Math.PI + 2 * Math.PI * u, v) : null
+    });
+    /** The map for a piece lying on a cap (`onCap`), over the same span,
+     *  fading out over the top of the cap's taper if `taper` (it has no
+     *  height there, and its skin would cover the fade). */
+    const patchMap = (key, edge, flow, { a0, a1, s0, s1 }, taper = null) => strandMap(`${key}:patch`, (u, v) => {
         const a = a0 + (a1 - a0) * u;
         return onSphere(SCALP, a, along(edge, Math.abs(a)) * (s0 + (s1 - s0) * v));
-    }, flow, S.size.patch);
+    }, flow, S.size.patch, {
+        alpha: taper ? (u, v) => smoothstep(taperAt(taper, a0 + (a1 - a0) * u, s0 + (s1 - s0) * v) / taper.patchFade) : null
+    });
     /** The map down a piece's own uv (a tail, a spike, a plait). */
     const downMap = (n) => strandMap(`down:${n}`, null, alongV(n), S.size.tube);
     const crownFlow = fallFrom(S.crown);
-    const cap = (edge, volume, flow = crownFlow, key = `${edge}:${volume}`) => add(scalp(H.edges[edge], thickness(H.volumes[volume])), 'scalp', { map: capMap(key, H.edges[edge], flow) });
+    /** A cap of `volume` over `edge`; the short cuts' edges are tapered. */
+    const cap = (edge, volume, { flow = crownFlow, taper = null, key = `${edge}:${volume}${taper ? ':taper' : ''}` } = {}) => add(
+        scalp(H.edges[edge], thickness(H.volumes[volume])), 'scalp', { map: capMap(key, H.edges[edge], flow, taper), tapered: Boolean(taper) }
+    );
     const sleekEdge = H.edges.sleek;
     /** A sleek cap, its strands drawn in to `pole` (where the hair is
      *  gathered), and the sleek cut's own thickness. */
@@ -529,27 +624,29 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
     /** A cut parted `px` from the middle (HAIR_SIZE.part), of `volume`
      *  over `edge`: the cap with its groove, the swooshes, and the line of
      *  scalp. */
-    const partedCut = (key, px, volume, edge) => {
+    const partedCut = (key, px, volume, edge, taper = null) => {
         const P = H.part;
         const part = parted(px, volume, edge);
         const flow = awayFromPart(px);
         // On a finer grid than the other cuts, so the groove is cut
         // (preview, 2026-10-24: on 48 columns the line of scalp sank in
         // and out of the hair in dashes).
-        add(scalp(part.edge, part.thick, { nu: P.grid[0], nv: P.grid[1] }), 'scalp', { map: capMap(key, part.edge, flow) });
+        add(scalp(part.edge, part.thick, { nu: P.grid[0], nv: P.grid[1] }), 'scalp', { map: capMap(key, part.edge, flow, taper), tapered: Boolean(taper) });
         // The swooshes either side, out from the head and leaning over
         // away from the part, turning up and forward over the brow
-        // toward the hairline, over the front and the top (they fade
-        // to nothing before this patch's border). On columns as fine
-        // as the cut's (preview, 2026-10-24: on half as many, the
-        // piece bridged the groove and buried the line of scalp).
+        // toward the hairline, all the way round (they fade to nothing
+        // before this patch's border, and down the back: 2026-10-26, a
+        // patch over the front alone was a knot from the side). On
+        // columns as fine as the cut's (preview, 2026-10-24: on half as
+        // many, the piece bridged the groove and buried the line of
+        // scalp).
         const forward = norm3(P.forward);
-        const span = { a0: -1.7, a1: 1.7, s0: 0.02, s1: 0.99 };
+        const span = { a0: -Math.PI, a1: Math.PI, s0: 0.02, s1: 0.99 };
         add(onCap(part.edge, part.thick, (a, s, dir) => {
             const { height, away, front } = part.wave(a, s);
             const out = [dir[0] + away * P.lean, dir[1], dir[2]];
             return out.map((o, k) => (o * (1 - front) + forward[k] * front) * height);
-        }, { ...span, nu: Math.round((P.grid[0] * 3.4) / (2 * Math.PI)), nv: 28 }), 'wave', { hides: true, map: patchMap(key, part.edge, flow, span) });
+        }, { ...span, nu: P.grid[0], nv: 28, wrap: true }), 'wave', { hides: true, map: patchMap(key, part.edge, flow, span, taper), tapered: Boolean(taper) });
         // The line of scalp along the groove's floor: in the plane `px`
         // from the middle, from just inside the hairline back to where
         // the groove has faded to about a third.
@@ -585,12 +682,12 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
 
     switch (style) {
         case 'short':
-            cap('short', 'short');
+            cap('short', 'short', { taper: H.taper });
             break;
         case 'leftPart':
         case 'rightPart':
         case 'centerPart':
-            partedCut(style, H.parts[style], H.volumes.short, H.edges.short);
+            partedCut(style, H.parts[style], H.volumes.short, H.edges.short, H.taper);
             break;
         case 'longCenter':
         case 'longSide':
@@ -620,7 +717,7 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             // Combed up and back from the brow: the strands fall away from
             // a pole low on the forehead.
             const flow = fallFrom(S.brow);
-            add(scalp(edge, base), 'scalp', { map: capMap('quiff', edge, flow) });
+            add(scalp(edge, base), 'scalp', { map: capMap('quiff', edge, flow, H.taper), tapered: true });
             const lean = norm3(Q.lean);
             const span = { a0: -1.35, a1: 1.35, s0: 0.04, s1: 0.99 };
             add(onCap(edge, base, (a, s) => {
@@ -642,7 +739,7 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             break;
         }
         case 'spiky': {
-            cap('short', 'sleek');
+            cap('short', 'sleek', { taper: H.taper });
             const K = H.spikes;
             for (const [a, t] of spread(K.count, H.edges.short, K.reach)) {
                 const dir = new THREE.Vector3(...onSphere(1, a, t));
