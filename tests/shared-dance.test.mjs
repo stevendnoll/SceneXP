@@ -228,27 +228,45 @@ describe('the jointing, against real three', () => {
             return measure(rig, d.keys[i]);
         };
         const near = (a, b) => a.distanceTo(b);
-        // Y: hands high and wide. M: both hands on top of the head.
+        // Y: hands high and wide. M (Steve's QA, 2026-10-26: "the M puts
+        // the hands on the head instead of the shoulders"): each hand on
+        // top of its own shoulder, below the head, the elbows up and out.
         const y = at('ymca', 0);
         expect(y.L.hand.y).toBeGreaterThan(1.75);
         expect(y.L.hand.x - y.R.hand.x).toBeGreaterThan(0.8);
         const m = at('ymca', 1);
         for (const k of ['L', 'R']) {
-            expect(near(m[k].hand, m.head)).toBeLessThan(0.2);
-            expect(m[k].hand.y).toBeGreaterThan(m.head.y + 0.08);
-            expect(Math.abs(m[k].elbow.x)).toBeGreaterThan(0.3);
+            expect(near(m[k].hand, m[k].shoulder)).toBeLessThan(0.17);
+            expect(m[k].hand.y).toBeGreaterThan(m[k].shoulder.y + 0.05);
+            expect(m[k].hand.y).toBeLessThan(m.head.y - 0.1);
+            expect(Math.abs(m[k].hand.x)).toBeLessThan(Math.abs(m[k].shoulder.x));
+            expect(Math.abs(m[k].elbow.x)).toBeGreaterThan(0.35);
+            expect(m[k].elbow.y).toBeGreaterThan(m[k].shoulder.y + 0.1);
         }
-        // C (Steve's QA, 2026-10-20: it read as a hand to the forehead): a
-        // lean to the right, the left arm arched OVER the head (its elbow
-        // up beside the head, its hand past it), the right curled in below.
+        // C (Steve's QA, 2026-10-20 and 2026-10-26: "doesn't look like a
+        // C"): a lean to the right, the left arm arched OVER the head (its
+        // elbow up beside the head, its hand just past the crown, to the
+        // right), the right arm bent out at the hip with its forearm
+        // pointing right: both curves open to the dancer's right.
         const c = at('ymca', 2);
         expect(c.head.x).toBeLessThan(-0.15);
-        expect(c.L.elbow.y).toBeGreaterThan(c.head.y);
-        expect(c.L.hand.x).toBeLessThan(c.head.x);
-        expect(c.L.hand.y).toBeGreaterThan(c.head.y + 0.1);
-        expect(c.R.elbow.x).toBeLessThan(-0.5);
-        expect(c.R.hand.x).toBeGreaterThan(c.R.elbow.x + 0.15);
-        expect(c.R.hand.y).toBeLessThan(c.R.elbow.y);
+        expect(c.L.elbow.y).toBeGreaterThan(c.head.y - 0.1);
+        expect(c.L.elbow.x).toBeGreaterThan(c.head.x + 0.2);
+        expect(c.L.hand.y).toBeGreaterThan(c.head.y + 0.12);
+        expect(c.L.hand.x).toBeLessThan(c.L.elbow.x - 0.1);
+        expect(c.R.hand.x).toBeLessThan(-0.5);
+        expect(c.R.hand.x).toBeLessThan(c.R.elbow.x - 0.1);
+        expect(c.R.hand.y).toBeGreaterThan(0.95);
+        expect(c.R.hand.y).toBeLessThan(1.25);
+        expect(c.R.hand.z).toBeGreaterThan(c.R.elbow.z);
+        // Between the letters: the hands on the hips, swaying one way then
+        // the other (the groove and the clap did not read as the YMCA).
+        const swayRight = at('ymca', 5);
+        const swayLeft = at('ymca', 6);
+        for (const k of ['L', 'R']) expect(swayRight[k].hand.y).toBeLessThan(1.1);
+        expect(swayRight.head.x).toBeLessThan(-0.03);
+        expect(swayLeft.head.x).toBeGreaterThan(0.03);
+        expect(Dn.danceOf('ymca').keys).toHaveLength(7);
         // A (the same QA: bent elbows made a U): arms all but straight, the
         // hands meeting in a peak over the head.
         const a = at('ymca', 3);
