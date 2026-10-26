@@ -193,10 +193,17 @@ export const HAIR_SIZE = Object.freeze({
      * keeps its full thickness and its edge, and only the last few
      * millimeters blend (Steve: "what if we only faded/blended the very
      * bottom of the back and sides of the hairline?"). The swoosh patch
-     * over a parted cut fades out over the top of the band (`patchFade`
-     * of the taper's depth), or its skin would cover it.
+     * over a parted cut ENDS where the band begins, cut (not blended) at
+     * `patchCut`: it has no height there, and its skin would cover the
+     * band. A patch that faded out over the band's top instead was drawn
+     * half see-through IN FRONT of the cap, writing depth, so the cap
+     * behind it was never drawn: skin with a ghost of hair over it
+     * between the solid hair and the band below (Steve, 2026-10-26: "a
+     * buzzline between the hairline and the fade area... a gap between
+     * where the hair ends and the buzzed fade starts"). Two blended
+     * surfaces must never overlap: one of them is cut.
      */
-    taper: { from: 0.9, front: 0.55, spread: 0.5, curve: 1.0, gap: 0.2, cutoff: 0.04, shadowCut: 0.5, patchFade: 0.25 },
+    taper: { from: 0.9, front: 0.55, spread: 0.5, curve: 1.0, gap: 0.2, cutoff: 0.04, shadowCut: 0.5, patchCut: 0.5 },
     spikes: { count: 26, height: 0.028, radius: 0.0095, reach: 0.78 },
     curls: { grid: [144, 36] },
     /** A fin in the head's middle plane, `front` radians forward of the
@@ -568,9 +575,10 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
         color, roughness: S.roughness, map: map || null,
         // A tapered cap's map carries the taper in its alpha (see
         // HAIR_SIZE.taper): blended, writing depth as any solid, its
-        // bare foot discarded.
-        transparent: Boolean(tapered),
-        alphaTest: tapered ? H.taper.cutoff : 0
+        // bare foot discarded. A piece lying on it (`tapered` 'cut') is
+        // cut where the band begins instead, never blended over it.
+        transparent: tapered === true,
+        alphaTest: tapered === true ? H.taper.cutoff : tapered === 'cut' ? H.taper.patchCut : 0
     });
     const tieMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(H.tie), roughness: 0.6 });
     const add = (geometry, name, { hides = false, material, map = null, tapered = false } = {}) => {
@@ -578,7 +586,7 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
         mesh.name = name;
         mesh.castShadow = true;
         if (hides) mesh.userData.hatHides = true;
-        if (tapered) {
+        if (tapered === true) {
             // The shadow pass ignores a blend, so left to itself the whole
             // fade would cast as solid hair and lay a hard shadow on the
             // neck from a rim that can barely be seen: its own depth
@@ -595,13 +603,14 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
         alpha: taper ? (u, v) => taperAt(taper, -Math.PI + 2 * Math.PI * u, v) : null
     });
     /** The map for a piece lying on a cap (`onCap`), over the same span,
-     *  fading out over the top of the cap's taper if `taper` (it has no
-     *  height there, and its skin would cover the fade). */
+     *  ending where the cap's taper begins if `taper` (it has no height
+     *  there, and its skin would cover the band): its alpha is all or
+     *  nothing, for the material's cut. */
     const patchMap = (key, edge, flow, { a0, a1, s0, s1 }, taper = null) => strandMap(`${key}:patch`, (u, v) => {
         const a = a0 + (a1 - a0) * u;
         return onSphere(SCALP, a, along(edge, Math.abs(a)) * (s0 + (s1 - s0) * v));
     }, flow, S.size.patch, {
-        alpha: taper ? (u, v) => smoothstep(taperAt(taper, a0 + (a1 - a0) * u, s0 + (s1 - s0) * v) / taper.patchFade) : null
+        alpha: taper ? (u, v) => (taperAt(taper, a0 + (a1 - a0) * u, s0 + (s1 - s0) * v) > 0 ? 1 : 0) : null
     });
     /** The map down a piece's own uv (a tail, a spike, a plait). */
     const downMap = (n) => strandMap(`down:${n}`, null, alongV(n), S.size.tube);
@@ -646,7 +655,7 @@ export function buildHair(style, color, { skin = DEFAULT_SKIN } = {}) {
             const { height, away, front } = part.wave(a, s);
             const out = [dir[0] + away * P.lean, dir[1], dir[2]];
             return out.map((o, k) => (o * (1 - front) + forward[k] * front) * height);
-        }, { ...span, nu: P.grid[0], nv: 28, wrap: true }), 'wave', { hides: true, map: patchMap(key, part.edge, flow, span, taper), tapered: Boolean(taper) });
+        }, { ...span, nu: P.grid[0], nv: 28, wrap: true }), 'wave', { hides: true, map: patchMap(key, part.edge, flow, span, taper), tapered: taper ? 'cut' : false });
         // The line of scalp along the groove's floor: in the plane `px`
         // from the middle, from just inside the hairline back to where
         // the groove has faded to about a third.

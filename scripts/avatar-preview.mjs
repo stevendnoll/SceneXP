@@ -58,7 +58,10 @@ const SHOTS = {
     torso: { cell: [240, 300], aim: [0, 1.1, 0], distance: 1.7, fov: 28, lift: 0.1 },
     /** The figure's left hand and wrist, close (the fingers and the thumb,
      *  2026-10-26). */
-    hand: { cell: [240, 260], aim: [0.3, 0.72, 0], distance: 0.6, fov: 24, lift: 0.04 }
+    hand: { cell: [240, 260], aim: [0.3, 0.72, 0], distance: 0.6, fov: 24, lift: 0.04 },
+    /** The hairline at the side and the nape, very close (the taper,
+     *  2026-10-26: about 3 px a millimeter). */
+    hairline: { cell: [360, 300], aim: [0, 1.52, 0], distance: 0.32, fov: 20, lift: 0 }
 };
 const TURNS = [0, 0.75];
 const ONLY = process.argv.slice(2);
@@ -121,6 +124,10 @@ await sheet('parts-side', [
     { ...fair, length: 'short' }, { ...fair, length: 'leftPart' }, { ...fair, length: 'rightPart' }, { ...fair, length: 'centerPart' },
     { skin: 'light', hair: 'blond', length: 'leftPart' }
 ], 'face', [Math.PI / 2, -Math.PI / 2, 2.4, Math.PI]);
+// The hairline's edge, very close, from the side, behind, and between.
+await sheet('hairline', [
+    { ...fair, length: 'leftPart' }, { ...fair, length: 'short' }, { ...deep, length: 'leftPart' }, { skin: 'light', hair: 'blond', length: 'quiff' }
+], 'hairline', [Math.PI / 2, Math.PI, 2.4]);
 await sheet('parts', [
     { ...fair, length: 'short' }, { ...fair, length: 'leftPart' }, { ...fair, length: 'rightPart' }, { ...fair, length: 'centerPart' },
     { ...deep, length: 'leftPart' }, { skin: 'light', hair: 'blond', length: 'centerPart' }

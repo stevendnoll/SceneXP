@@ -296,9 +296,10 @@ describe('the strands (Steve\'s QA, 2026-10-25: "a monochrome blob")', () => {
                     least = Math.min(least, data[k]);
                 }
                 expect(gray).toBe(true);
-                const tapered = TAPERED.includes(style) && ['scalp', 'wave'].includes(mesh.name);
-                expect(`${style} ${mesh.name} opaque: ${opaque}`).toBe(`${style} ${mesh.name} opaque: ${!tapered}`);
-                expect(`${style} ${mesh.name} alphaTest: ${mesh.material.alphaTest}`).toBe(`${style} ${mesh.name} alphaTest: ${tapered ? H.HAIR_SIZE.taper.cutoff : 0}`);
+                const tapered = TAPERED.includes(style) && mesh.name === 'scalp';
+                const cut = TAPERED.includes(style) && mesh.name === 'wave';
+                expect(`${style} ${mesh.name} opaque: ${opaque}`).toBe(`${style} ${mesh.name} opaque: ${!tapered && !cut}`);
+                expect(`${style} ${mesh.name} alphaTest: ${mesh.material.alphaTest}`).toBe(`${style} ${mesh.name} alphaTest: ${tapered ? H.HAIR_SIZE.taper.cutoff : cut ? H.HAIR_SIZE.taper.patchCut : 0}`);
                 expect(mesh.material.transparent).toBe(tapered);
                 const n = data.length / 4;
                 const mean = sum / n;
@@ -398,14 +399,22 @@ describe('the strands (Steve\'s QA, 2026-10-25: "a monochrome blob")', () => {
             expect(depth.depthPacking).toBe(THREE.RGBADepthPacking);
         }
         expect(pieces(H.buildHair('bob', 0x332211)).find((p) => p.mesh.name === 'scalp').mesh.customDepthMaterial).toBeUndefined();
-        // The swoosh patch over a parted cut fades out over the top of the
-        // taper, or its skin would cover the fade.
+        // The swoosh patch over a parted cut ends where the band begins,
+        // CUT and never blended (blended in front of the cap it hid the
+        // cap's own fade: Steve, 2026-10-26, "a buzzline... a gap").
         for (const style of ['leftPart', 'centerPart']) {
             const wave = pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'wave');
-            expect(wave.mesh.material.transparent).toBe(true);
+            expect(wave.mesh.material.transparent).toBe(false);
+            expect(wave.mesh.material.alphaTest).toBe(T.patchCut);
+            expect(wave.mesh.customDepthMaterial).toBeUndefined();
             const { data, width, height } = wave.mesh.material.map.image;
-            expect(data[(Math.floor(height * 0.995) * width + 2) * 4 + 3]).toBe(0);
-            expect(data[(Math.floor(height * 0.2) * width + 2) * 4 + 3]).toBe(255);
+            const rowAlpha = (s) => data[(Math.floor(((s - 0.02) / 0.97) * (height - 1)) * width + 2) * 4 + 3];
+            // All or nothing: whole just above the band, gone just inside it.
+            expect(rowAlpha(0.2)).toBe(255);
+            expect(rowAlpha(T.from - 0.02)).toBe(255);
+            expect(rowAlpha(T.from + 0.03)).toBe(0);
+            expect(rowAlpha(0.99)).toBe(0);
+            for (let k = 0; k < data.length; k += 4) expect([0, 255]).toContain(data[k + 3]);
         }
         for (const style of TAPERED) {
             const scalp = pieces(H.buildHair(style, 0x332211)).find((p) => p.mesh.name === 'scalp');

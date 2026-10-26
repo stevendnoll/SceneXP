@@ -166,7 +166,7 @@ export function render(object, camera, w, h, { bg = [236, 230, 220], light = nor
             tris.push({
                 world: p, screen: ids.map((i) => screen[i]), normals: ids.map((i) => normals[i] || face),
                 color: rgbOf(mat), alpha, side: mat ? mat.side : THREE.FrontSide, alphaTest: mat && mat.alphaTest ? mat.alphaTest : 0,
-                depthWrite: !mat || mat.depthWrite !== false,
+                depthWrite: !mat || mat.depthWrite !== false, blend: Boolean(mat && mat.transparent),
                 shadowTest: mesh.customDepthMaterial ? mesh.customDepthMaterial.alphaTest || 0 : null,
                 sample, uvs: sample ? ids.map((i) => [uv.getX(i), uv.getY(i)]) : null
             });
@@ -244,8 +244,8 @@ export function render(object, camera, w, h, { bg = [236, 230, 220], light = nor
                 const f = tri.sample(w0 * t0[0] + w1 * t1[0] + w2 * t2[0], w0 * t0[1] + w1 * t1[1] + w2 * t2[1]);
                 color = [tri.color[0] * f[0], tri.color[1] * f[1], tri.color[2] * f[2]];
                 // A blended material's map fades it by its alpha too (a
-                // tapered hairline, 2026-10-26).
-                if (tri.alpha < 1) alpha *= f[3];
+                // tapered hairline, 2026-10-26), at any opacity.
+                if (tri.blend) alpha *= f[3];
             }
             // A see-through surface writes depth as three does unless its
             // material says not to, so its own inside never shows through.
