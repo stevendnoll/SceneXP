@@ -234,6 +234,33 @@ function buildLights(light, mobile) {
     return lights;
 }
 
+/**
+ * The stage itself, without a renderer or a camera: the white cove, the
+ * soft shadow, the lights, and the plinth on its turntable, with the height
+ * a figure stands at. The studio draws it live; the export (js/export.js,
+ * 2026-10-26) draws the same stage into a picture or a clip, so an export
+ * looks exactly like the page. Returns `{ scene, turntable, standY, set }`,
+ * `set` naming the cove, the contact shadow and the plinth, so an export
+ * with a clear background can hide them.
+ */
+export function buildStage(config, { mobile = false } = {}) {
+    const S = config.studio;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(S.color);
+    const white = new THREE.MeshStandardMaterial({ color: S.color, roughness: 0.95, metalness: 0 });
+    const cove = buildCove(S.cove, white);
+    const contact = buildContact(S.plinth.radius, S.contact);
+    scene.add(cove);
+    scene.add(contact);
+    for (const light of buildLights(config.light, mobile)) scene.add(light);
+    const turntable = new THREE.Group();
+    turntable.name = 'turntable';
+    const plinth = buildPlinth(S.plinth);
+    turntable.add(plinth);
+    scene.add(turntable);
+    return { scene, turntable, standY: S.plinth.height, set: { cove, contact, plinth } };
+}
+
 // ---- The studio -----------------------------------------------------------------
 
 /**
@@ -271,18 +298,7 @@ export function createStudio(config, {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(S.color);
-    const white = new THREE.MeshStandardMaterial({ color: S.color, roughness: 0.95, metalness: 0 });
-    scene.add(buildCove(S.cove, white));
-    scene.add(buildContact(S.plinth.radius, S.contact));
-    for (const light of buildLights(config.light, mobile)) scene.add(light);
-
-    const turntable = new THREE.Group();
-    turntable.name = 'turntable';
-    turntable.add(buildPlinth(S.plinth));
-    scene.add(turntable);
-    const standY = S.plinth.height;
+    const { scene, turntable, standY } = buildStage(config, { mobile });
 
     const camera = new THREE.PerspectiveCamera(C.fov, 1, 0.05, 60);
 

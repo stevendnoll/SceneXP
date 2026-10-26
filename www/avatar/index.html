@@ -103,7 +103,7 @@
     <title>Your Avatar | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/avatar.min.css?v=6" as="style">
+    <link rel="preload" href="css/avatar.min.css?v=7" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -115,6 +115,7 @@
     <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
     <link rel="modulepreload" href="js/studio.min.js">
     <link rel="modulepreload" href="js/editor.min.js">
+    <link rel="modulepreload" href="js/export.min.js">
     <link rel="modulepreload" href="js/transfer.min.js">
     <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-layers-1.0.0.min.js">
@@ -123,13 +124,14 @@
     <link rel="modulepreload" href="../shared/js/avatar-hair-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-hats-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-wardrobe-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/recorder-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/promo-1.0.0.min.js">
     <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/avatar.min.css?v=6">
+    <link rel="stylesheet" href="css/avatar.min.css?v=7">
 
     <!-- When JS is off, the studio can't run: the static fallback below is
          the page. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -229,10 +231,12 @@
             <!-- The choices (js/editor.js builds the tabs and radio groups).
                  Surprise me rolls a random look onto the plinth and into the
                  radios, and nothing more: Save is still the only way to keep
-                 one, so a stray press never replaces a saved avatar. -->
+                 one, so a stray press never replaces a saved avatar. Export
+                 my avatar opens the dialog at the foot of the page (js/export.js). -->
             <div id="av-editor" class="av-editor">
                 <div class="av-random-row">
                     <button id="av-random" class="av-secondary av-random" type="button" title="A random look, from every choice there is">Surprise me</button>
+                    <button id="av-export-open" class="av-secondary av-random" type="button" title="A picture or a short video of your avatar, for anywhere else">Export my avatar</button>
                 </div>
                 <div id="av-tabs" class="av-tabs" role="tablist" aria-label="Choose what to change"></div>
                 <div id="av-panels" class="av-panels"></div>
@@ -275,6 +279,100 @@
             </div>
         </section>
     </div>
+
+    <!-- EXPORT MY AVATAR (js/export.js, 2026-10-26): a picture or a short
+         clip of the figure on screen, made on this device, for a profile
+         anywhere else. A native dialog: Escape closes it and focus stays
+         inside. Every option is a real radio, as the editor's are; the
+         swatches' colors are set through the CSSOM. Nothing is uploaded. -->
+    <dialog id="av-export" class="av-export" aria-labelledby="av-export-title">
+        <div class="av-export-card">
+            <div class="av-export-head">
+                <h2 id="av-export-title" class="av-export-title">Export my avatar</h2>
+                <button id="av-export-close" class="av-secondary" type="button">Done</button>
+            </div>
+            <div id="av-export-tabs" class="av-tabs av-export-tabs" role="tablist" aria-label="A picture or a video">
+                <button id="av-export-tab-picture" class="av-tab" type="button" role="tab" aria-controls="av-export-picture" aria-selected="true">Picture</button>
+                <button id="av-export-tab-clip" class="av-tab" type="button" role="tab" aria-controls="av-export-clip" aria-selected="false" tabindex="-1">Video</button>
+            </div>
+
+            <div id="av-export-picture" class="av-export-panel" role="tabpanel" aria-labelledby="av-export-tab-picture">
+                <canvas id="av-export-preview" class="av-export-preview" width="560" height="560" role="img" aria-label="A preview of your picture"></canvas>
+                <fieldset class="av-group">
+                    <legend class="av-legend">Framing</legend>
+                    <div class="av-options av-options-text">
+                        <label class="av-option av-option-text"><input id="av-export-framing-portrait" class="av-radio" type="radio" name="av-export-framing" value="portrait" checked><span class="av-word">Head and shoulders</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-framing-figure" class="av-radio" type="radio" name="av-export-framing" value="figure"><span class="av-word">Whole figure</span></label>
+                    </div>
+                </fieldset>
+                <fieldset class="av-group">
+                    <legend class="av-legend">Background</legend>
+                    <div class="av-options av-options-text">
+                        <label class="av-option av-option-text"><input id="av-export-background-studio" class="av-radio" type="radio" name="av-export-background" value="studio" checked><span class="av-word">The studio</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-background-clear" class="av-radio" type="radio" name="av-export-background" value="clear"><span class="av-word">Transparent</span></label>
+                    </div>
+                </fieldset>
+                <fieldset class="av-group">
+                    <legend class="av-legend">Border</legend>
+                    <div class="av-options av-options-text">
+                        <label class="av-option av-option-text"><input id="av-export-border-none" class="av-radio" type="radio" name="av-export-border" value="none" checked><span class="av-word">None</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-ring" class="av-radio" type="radio" name="av-export-border" value="ring"><span class="av-word">Ring</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-bold" class="av-radio" type="radio" name="av-export-border" value="bold"><span class="av-word">Bold ring</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-double" class="av-radio" type="radio" name="av-export-border" value="double"><span class="av-word">Double ring</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-gradient" class="av-radio" type="radio" name="av-export-border" value="gradient"><span class="av-word">Gradient ring</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-dotted" class="av-radio" type="radio" name="av-export-border" value="dotted"><span class="av-word">Dotted ring</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-square" class="av-radio" type="radio" name="av-export-border" value="square"><span class="av-word">Rounded square</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-badge" class="av-radio" type="radio" name="av-export-border" value="badge"><span class="av-word">Badge</span></label>
+                    </div>
+                </fieldset>
+                <fieldset id="av-export-color-group" class="av-group" hidden>
+                    <legend class="av-legend">Border color</legend>
+                    <div class="av-options av-options-swatch">
+                        <label class="av-option av-option-swatch" title="Match my shirt"><input id="av-export-color-match" class="av-radio" type="radio" name="av-export-color" value="match" checked><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Match my shirt</span></label>
+                        <label class="av-option av-option-swatch" title="White"><input id="av-export-color-white" class="av-radio" type="radio" name="av-export-color" value="white"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">White</span></label>
+                        <label class="av-option av-option-swatch" title="Ink"><input id="av-export-color-ink" class="av-radio" type="radio" name="av-export-color" value="ink"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Ink</span></label>
+                        <label class="av-option av-option-swatch" title="Navy"><input id="av-export-color-navy" class="av-radio" type="radio" name="av-export-color" value="navy"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Navy</span></label>
+                        <label class="av-option av-option-swatch" title="Red"><input id="av-export-color-red" class="av-radio" type="radio" name="av-export-color" value="red"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Red</span></label>
+                        <label class="av-option av-option-swatch" title="Gold"><input id="av-export-color-gold" class="av-radio" type="radio" name="av-export-color" value="gold"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Gold</span></label>
+                        <label class="av-option av-option-swatch" title="Teal"><input id="av-export-color-teal" class="av-radio" type="radio" name="av-export-color" value="teal"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Teal</span></label>
+                        <label class="av-option av-option-swatch" title="Pink"><input id="av-export-color-pink" class="av-radio" type="radio" name="av-export-color" value="pink"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Pink</span></label>
+                        <input id="av-export-color-custom" class="av-custom" type="color" value="#1d1d1f" aria-label="Custom border color" title="Any color">
+                    </div>
+                </fieldset>
+                <fieldset class="av-group">
+                    <legend class="av-legend">Size</legend>
+                    <div class="av-options av-options-text">
+                        <label class="av-option av-option-text"><input id="av-export-size-p512" class="av-radio" type="radio" name="av-export-size" value="p512"><span class="av-word">512 px</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-size-p1024" class="av-radio" type="radio" name="av-export-size" value="p1024" checked><span class="av-word">1024 px</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-size-p2048" class="av-radio" type="radio" name="av-export-size" value="p2048"><span class="av-word">2048 px</span></label>
+                    </div>
+                </fieldset>
+                <div class="av-row av-export-actions">
+                    <button id="av-export-picture-save" class="av-primary" type="button">Save picture</button>
+                </div>
+            </div>
+
+            <div id="av-export-clip" class="av-export-panel" role="tabpanel" aria-labelledby="av-export-tab-clip" hidden>
+                <div id="av-export-stage" class="av-export-stage"></div>
+                <p class="av-note">Your avatar waves and turns once round, about five seconds, with no sound. It loops.</p>
+                <fieldset class="av-group">
+                    <legend class="av-legend">Size</legend>
+                    <div class="av-options av-options-text">
+                        <label class="av-option av-option-text"><input id="av-export-clip-size-c720" class="av-radio" type="radio" name="av-export-clip-size" value="c720"><span class="av-word">720 square</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-clip-size-c1080" class="av-radio" type="radio" name="av-export-clip-size" value="c1080" checked><span class="av-word">1080 square</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-clip-size-story" class="av-radio" type="radio" name="av-export-clip-size" value="story"><span class="av-word">1080 by 1920 story</span></label>
+                    </div>
+                </fieldset>
+                <div class="av-row av-export-actions">
+                    <button id="av-export-clip-make" class="av-primary" type="button">Make the clip</button>
+                    <button id="av-export-clip-save" class="av-primary" type="button" hidden>Save video</button>
+                </div>
+            </div>
+
+            <p id="av-export-status" class="av-status av-export-status" role="status" aria-live="polite"></p>
+            <p class="av-note av-export-note">Made on this device. Nothing is uploaded, and your avatar is just as it was.</p>
+        </div>
+    </dialog>
 
     <script type="module" src="../lib/three/r186/three.min.js"></script>
     <script type="module" src="js/main.min.js"></script>

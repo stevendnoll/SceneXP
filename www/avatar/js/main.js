@@ -37,6 +37,7 @@ import { saveFile } from '../../shared/js/sharefile-1.0.0.min.js';
 import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { createStudio } from './studio.min.js';
 import { createEditor } from './editor.min.js';
+import { createExporter } from './export.min.js';
 import { returnTarget, readAvatarFile, FILE_ERRORS } from './transfer.min.js';
 
 /** Everything the page says, in one place (house style: polite, no
@@ -73,6 +74,7 @@ const state = {
     target: null,         // { path, name } for "Back to ..."
     studio: null,
     editor: null,
+    exporter: null,       // Export my avatar (js/export.js)
     lab: false
 };
 
@@ -287,6 +289,13 @@ function refreshPortrait() {
 function wire() {
     $('av-save').addEventListener('click', save);
     $('av-random').addEventListener('click', surprise);
+    // Export my avatar (2026-10-26): the figure on screen, saved or not.
+    // The dialog makes its own stage when it opens and lets it go when it
+    // closes, so the page's studio is untouched.
+    $('av-export-open').addEventListener('click', () => {
+        if (!state.exporter) state.exporter = createExporter(CONFIG, { mobile: isMobile() });
+        state.exporter.open(state.current);
+    });
     $('av-forget').addEventListener('click', () => askForget(true));
     $('av-forget-yes').addEventListener('click', forget);
     $('av-forget-no').addEventListener('click', () => {

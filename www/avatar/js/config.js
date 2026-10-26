@@ -168,6 +168,35 @@ export const AVATAR_PAGE = deepFreeze({
         }
     ],
 
+    /**
+     * Export my avatar (Steve, 2026-10-26; js/export.js): a picture or a
+     * clip of the figure on screen, made on the device. A picture is
+     * square, at one of `pictures` (pixels across), framed on the head and
+     * shoulders (the chip's portrait) or the whole figure, on the studio or
+     * clear, with a border or none. The preview in the dialog is drawn
+     * `preview` pixels across. A clip is `clip.seconds` long at `clip.fps`:
+     * the figure waves from `clip.waveAt` and turns once round from
+     * `clip.turnFrom` over `clip.turnSeconds`, so it ends facing the front
+     * as it began and loops cleanly, at one of `clip.sizes`.
+     */
+    export: {
+        pictures: [
+            { id: 'p512', px: 512, label: '512 px' },
+            { id: 'p1024', px: 1024, label: '1024 px' },
+            { id: 'p2048', px: 2048, label: '2048 px' }
+        ],
+        preview: 560,
+        clip: {
+            seconds: 4.5, fps: 30, waveAt: 0.3, turnFrom: 1.5, turnSeconds: 3.0,
+            bitrate: 8000000, mobileBitrate: 5000000,
+            sizes: [
+                { id: 'c720', w: 720, h: 720, label: '720 square' },
+                { id: 'c1080', w: 1080, h: 1080, label: '1080 square' },
+                { id: 'story', w: 1080, h: 1920, label: '1080 by 1920 story' }
+            ]
+        }
+    },
+
     /** Where the default portrait is served from (the home page's chip
      *  before a visitor saves one), and what the lab saves it as. */
     defaultPortrait: { path: '/assets/avatar/default.png', file: 'default.png' },

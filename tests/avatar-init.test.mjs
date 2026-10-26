@@ -1008,7 +1008,7 @@ describe('the page', () => {
         const { sameAvatar, normalizeAvatar, FIELDS } = await import('../www/shared/js/avatar-1.0.0.js');
         // Its own line above the tabs, outlined, so Save stays the one
         // filled button (the stub invents elements, so the markup is read).
-        expect(HTML).toMatch(/<button id="av-random" class="av-secondary av-random" type="button"[^>]*>Surprise me<\/button>\s*<\/div>\s*<div id="av-tabs"/);
+        expect(HTML).toMatch(/<button id="av-random" class="av-secondary av-random" type="button"[^>]*>Surprise me<\/button>\s*<button id="av-export-open" class="av-secondary av-random"[^>]*>Export my avatar<\/button>\s*<\/div>\s*<div id="av-tabs"/);
         // A seeded roll, so the look is the same each run.
         let t = 7;
         const seeded = () => {

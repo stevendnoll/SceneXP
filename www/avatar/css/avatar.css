@@ -236,10 +236,13 @@ body.av-body {
 
 /* ---- The tabs ------------------------------------------------------------ */
 
-/* Surprise me (2026-10-26), on its own line above the tabs: an outlined
-   button like the sharing ones, so Save stays the one filled button. */
+/* Surprise me and Export my avatar (2026-10-26), on their own line above
+   the tabs: outlined buttons like the sharing ones, so Save stays the one
+   filled button on the sheet. */
 .av-random-row {
     display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 14px;
 }
 
@@ -586,6 +589,106 @@ body.av-body {
     outline-offset: 2px;
 }
 
+/* ---- Export my avatar (2026-10-26) --------------------------------------- */
+
+/* A native dialog in the sheet's own style: a white card over a dimmed
+   page, scrolling inside itself when it is taller than the window. */
+.av-export {
+    width: min(540px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    margin: auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--av-radius);
+    background: var(--av-paper);
+    color: var(--av-ink);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+    overflow: auto;
+}
+
+.av-export::backdrop {
+    background: rgba(29, 29, 31, 0.45);
+}
+
+.av-export-card {
+    padding: 22px 22px 18px;
+}
+
+.av-export-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.av-export-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.av-export-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 18px;
+}
+
+.av-export-panel[hidden] {
+    display: none;
+}
+
+/* The preview, on a checkerboard so a transparent background reads as
+   transparent. */
+.av-export-preview {
+    display: block;
+    width: min(280px, 100%);
+    height: auto;
+    aspect-ratio: 1;
+    margin: 0 auto 18px;
+    border-radius: 12px;
+    background:
+        repeating-conic-gradient(#ebe8e2 0 25%, var(--av-paper) 0 50%) 0 0 / 20px 20px;
+}
+
+/* The clip as it is made, in the dialog: a recording wants its canvas
+   laid out and in view. */
+.av-export-stage {
+    display: flex;
+    justify-content: center;
+    margin: 0 auto 14px;
+}
+
+.av-export-stage:empty {
+    display: none;
+}
+
+.av-export-stage canvas {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 50vh;
+    border-radius: 12px;
+    background: var(--av-studio);
+}
+
+.av-export-actions {
+    margin-top: 4px;
+}
+
+.av-export-actions [hidden] {
+    display: none;
+}
+
+.av-export-status {
+    margin: 12px 0 6px;
+}
+
+.av-export-note {
+    text-align: center;
+}
+
 /* ---- A phone: the studio on top, the choices scrolling under it -------- */
 
 @media (max-width: 760px) {
@@ -630,6 +733,16 @@ body.av-body {
 
     .av-tab {
         padding: 8px 4px;
+    }
+
+    .av-export {
+        width: calc(100vw - 16px);
+        max-height: calc(100vh - 16px);
+        max-height: calc(100dvh - 16px);
+    }
+
+    .av-export-card {
+        padding: 18px 16px 16px;
     }
 }
 

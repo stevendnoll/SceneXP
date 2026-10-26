@@ -455,7 +455,7 @@ html [lang="en"]
     title
       "Your Avatar | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/avatar.min.css?v=6" rel="preload"]
+    link [as="style" href="css/avatar.min.css?v=7" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -466,6 +466,7 @@ html [lang="en"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
     link [href="js/studio.min.js" rel="modulepreload"]
     link [href="js/editor.min.js" rel="modulepreload"]
+    link [href="js/export.min.js" rel="modulepreload"]
     link [href="js/transfer.min.js" rel="modulepreload"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
@@ -474,10 +475,11 @@ html [lang="en"]
     link [href="../shared/js/avatar-hair-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/recorder-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/avatar.min.css?v=6" rel="stylesheet"]
+    link [href="css/avatar.min.css?v=7" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body.av-body
@@ -544,6 +546,8 @@ html [lang="en"]
           div.av-random-row
             button#av-random.av-secondary.av-random [title="A random look, from every choice there is" type="button"]
               "Surprise me"
+            button#av-export-open.av-secondary.av-random [title="A picture or a short video of your avatar, for anywhere else" type="button"]
+              "Export my avatar"
           div#av-tabs.av-tabs [aria-label="Choose what to change" role="tablist"]
           div#av-panels.av-panels
         div#av-actions.av-actions
@@ -580,6 +584,172 @@ html [lang="en"]
               "Lab"
             button#av-lab-portrait.av-secondary [type="button"]
               "Save the default portrait"
+    dialog#av-export.av-export [aria-labelledby="av-export-title"]
+      div.av-export-card
+        div.av-export-head
+          h2#av-export-title.av-export-title
+            "Export my avatar"
+          button#av-export-close.av-secondary [type="button"]
+            "Done"
+        div#av-export-tabs.av-tabs.av-export-tabs [aria-label="A picture or a video" role="tablist"]
+          button#av-export-tab-picture.av-tab [aria-controls="av-export-picture" aria-selected="true" role="tab" type="button"]
+            "Picture"
+          button#av-export-tab-clip.av-tab [aria-controls="av-export-clip" aria-selected="false" role="tab" tabindex="-1" type="button"]
+            "Video"
+        div#av-export-picture.av-export-panel [aria-labelledby="av-export-tab-picture" role="tabpanel"]
+          canvas#av-export-preview.av-export-preview [aria-label="A preview of your picture" height="560" role="img" width="560"]
+          fieldset.av-group
+            legend.av-legend
+              "Framing"
+            div.av-options.av-options-text
+              label.av-option.av-option-text
+                input#av-export-framing-portrait.av-radio [checked name="av-export-framing" type="radio" value="portrait"]
+                span.av-word
+                  "Head and shoulders"
+              label.av-option.av-option-text
+                input#av-export-framing-figure.av-radio [name="av-export-framing" type="radio" value="figure"]
+                span.av-word
+                  "Whole figure"
+          fieldset.av-group
+            legend.av-legend
+              "Background"
+            div.av-options.av-options-text
+              label.av-option.av-option-text
+                input#av-export-background-studio.av-radio [checked name="av-export-background" type="radio" value="studio"]
+                span.av-word
+                  "The studio"
+              label.av-option.av-option-text
+                input#av-export-background-clear.av-radio [name="av-export-background" type="radio" value="clear"]
+                span.av-word
+                  "Transparent"
+          fieldset.av-group
+            legend.av-legend
+              "Border"
+            div.av-options.av-options-text
+              label.av-option.av-option-text
+                input#av-export-border-none.av-radio [checked name="av-export-border" type="radio" value="none"]
+                span.av-word
+                  "None"
+              label.av-option.av-option-text
+                input#av-export-border-ring.av-radio [name="av-export-border" type="radio" value="ring"]
+                span.av-word
+                  "Ring"
+              label.av-option.av-option-text
+                input#av-export-border-bold.av-radio [name="av-export-border" type="radio" value="bold"]
+                span.av-word
+                  "Bold ring"
+              label.av-option.av-option-text
+                input#av-export-border-double.av-radio [name="av-export-border" type="radio" value="double"]
+                span.av-word
+                  "Double ring"
+              label.av-option.av-option-text
+                input#av-export-border-gradient.av-radio [name="av-export-border" type="radio" value="gradient"]
+                span.av-word
+                  "Gradient ring"
+              label.av-option.av-option-text
+                input#av-export-border-dotted.av-radio [name="av-export-border" type="radio" value="dotted"]
+                span.av-word
+                  "Dotted ring"
+              label.av-option.av-option-text
+                input#av-export-border-square.av-radio [name="av-export-border" type="radio" value="square"]
+                span.av-word
+                  "Rounded square"
+              label.av-option.av-option-text
+                input#av-export-border-badge.av-radio [name="av-export-border" type="radio" value="badge"]
+                span.av-word
+                  "Badge"
+          fieldset#av-export-color-group.av-group [hidden]
+            legend.av-legend
+              "Border color"
+            div.av-options.av-options-swatch
+              label.av-option.av-option-swatch [title="Match my shirt"]
+                input#av-export-color-match.av-radio [checked name="av-export-color" type="radio" value="match"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Match my shirt"
+              label.av-option.av-option-swatch [title="White"]
+                input#av-export-color-white.av-radio [name="av-export-color" type="radio" value="white"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "White"
+              label.av-option.av-option-swatch [title="Ink"]
+                input#av-export-color-ink.av-radio [name="av-export-color" type="radio" value="ink"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Ink"
+              label.av-option.av-option-swatch [title="Navy"]
+                input#av-export-color-navy.av-radio [name="av-export-color" type="radio" value="navy"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Navy"
+              label.av-option.av-option-swatch [title="Red"]
+                input#av-export-color-red.av-radio [name="av-export-color" type="radio" value="red"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Red"
+              label.av-option.av-option-swatch [title="Gold"]
+                input#av-export-color-gold.av-radio [name="av-export-color" type="radio" value="gold"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Gold"
+              label.av-option.av-option-swatch [title="Teal"]
+                input#av-export-color-teal.av-radio [name="av-export-color" type="radio" value="teal"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Teal"
+              label.av-option.av-option-swatch [title="Pink"]
+                input#av-export-color-pink.av-radio [name="av-export-color" type="radio" value="pink"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Pink"
+              input#av-export-color-custom.av-custom [aria-label="Custom border color" title="Any color" type="color" value="#1d1d1f"]
+          fieldset.av-group
+            legend.av-legend
+              "Size"
+            div.av-options.av-options-text
+              label.av-option.av-option-text
+                input#av-export-size-p512.av-radio [name="av-export-size" type="radio" value="p512"]
+                span.av-word
+                  "512 px"
+              label.av-option.av-option-text
+                input#av-export-size-p1024.av-radio [checked name="av-export-size" type="radio" value="p1024"]
+                span.av-word
+                  "1024 px"
+              label.av-option.av-option-text
+                input#av-export-size-p2048.av-radio [name="av-export-size" type="radio" value="p2048"]
+                span.av-word
+                  "2048 px"
+          div.av-row.av-export-actions
+            button#av-export-picture-save.av-primary [type="button"]
+              "Save picture"
+        div#av-export-clip.av-export-panel [aria-labelledby="av-export-tab-clip" hidden role="tabpanel"]
+          div#av-export-stage.av-export-stage
+          p.av-note
+            "Your avatar waves and turns once round, about five seconds, with no sound. It loops."
+          fieldset.av-group
+            legend.av-legend
+              "Size"
+            div.av-options.av-options-text
+              label.av-option.av-option-text
+                input#av-export-clip-size-c720.av-radio [name="av-export-clip-size" type="radio" value="c720"]
+                span.av-word
+                  "720 square"
+              label.av-option.av-option-text
+                input#av-export-clip-size-c1080.av-radio [checked name="av-export-clip-size" type="radio" value="c1080"]
+                span.av-word
+                  "1080 square"
+              label.av-option.av-option-text
+                input#av-export-clip-size-story.av-radio [name="av-export-clip-size" type="radio" value="story"]
+                span.av-word
+                  "1080 by 1920 story"
+          div.av-row.av-export-actions
+            button#av-export-clip-make.av-primary [type="button"]
+              "Make the clip"
+            button#av-export-clip-save.av-primary [hidden type="button"]
+              "Save video"
+        p#av-export-status.av-status.av-export-status [aria-live="polite" role="status"]
+        p.av-note.av-export-note
+          "Made on this device. Nothing is uploaded, and your avatar is just as it was."
     script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
@@ -1646,6 +1816,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/recorder-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
