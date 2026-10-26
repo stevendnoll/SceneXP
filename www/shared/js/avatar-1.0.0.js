@@ -19,7 +19,9 @@
  * TODAY'S LISTS COME FROM cast-1.0.0 (frozen, Leaf Blower and Derby Day run
  * on it): the shirts, pants, skin tones, hair colors and hair lengths. The
  * rest are new here. The default is Leaf Blower's shipped figure, so a visitor
- * who never makes an avatar sees no change in any scene.
+ * who never makes an avatar sees no change in any scene, with one deliberate
+ * exception since 2026-10-26: the standard hand is bigger than the rig's
+ * (HAND_SIZES), because the rig's was about half a real hand.
  *
  * THE STORE writes three localStorage keys (PLANNING 3.1), each call wrapped
  * so a browser that refuses storage simply gets the default every visit. It
@@ -178,10 +180,17 @@ export const LENS_COLORS = Object.freeze([
 
 /** The hands and the feet (Steve's QA, 2026-10-25): the rig's `handScale`
  *  and `footScale`. The feet's scale multiplies the muscles' (MUSCLES). */
+/** Steve's QA, 2026-10-26: every hand was about half a real one against
+ *  this head (the crowd part already asked the rig for 1.3), so the three
+ *  sizes moved up together and XL and XXL were appended. A saved avatar
+ *  keeps its id and gets the right-sized hand. `said` is how a size is
+ *  spoken in a sentence ("extra-large hands"). */
 export const HAND_SIZES = Object.freeze([
-    { id: 'small', label: 'Small', scale: 0.8 },
-    { id: 'standard', label: 'Standard', scale: 1 },
-    { id: 'large', label: 'Large', scale: 1.25 }
+    { id: 'small', label: 'Small', scale: 1.1 },
+    { id: 'standard', label: 'Standard', scale: 1.4 },
+    { id: 'large', label: 'Large', scale: 1.7 },
+    { id: 'xl', label: 'XL', scale: 2.0, said: 'extra-large' },
+    { id: 'xxl', label: 'XXL', scale: 2.4, said: 'extra-extra-large' }
 ]);
 
 export const FOOT_SIZES = Object.freeze([
@@ -451,7 +460,8 @@ export function listOf(field) {
 }
 
 /** Leaf Blower's shipped figure: a rust red shirt with long sleeves, navy
- *  pants, fair skin, dark brown short hair, and nothing new. */
+ *  pants, fair skin, dark brown short hair, and nothing new (but the
+ *  standard hand, bigger than the rig's since 2026-10-26). */
 export const DEFAULT_AVATAR = Object.freeze({
     v: AVATAR_VERSION,
     skin: 'fair',
@@ -684,7 +694,7 @@ export function describeAvatar(avatar) {
     const bottom = optionOf(BOTTOMS, a.bottom);
     // "a straight build with large hands and small feet".
     const limbs = [];
-    if (a.handSize !== 'standard') limbs.push(`${word(HAND_SIZES, a.handSize)} hands`);
+    if (a.handSize !== 'standard') limbs.push(`${optionOf(HAND_SIZES, a.handSize).said || word(HAND_SIZES, a.handSize)} hands`);
     if (a.footSize !== 'standard') limbs.push(`${word(FOOT_SIZES, a.footSize)} feet`);
     // "a purple sports jersey with the number 8 in white" (nothing said of
     // the standard color, which is the jersey's own trim).

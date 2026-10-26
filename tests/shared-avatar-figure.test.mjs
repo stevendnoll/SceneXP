@@ -129,8 +129,14 @@ describe('the rig\'s tags', () => {
 });
 
 describe('the figure', () => {
+    /** Leaf Blower's operator with the avatar's standard hands: the one
+     *  deliberate difference in the body since 2026-10-26 (Steve's QA: the
+     *  rig's hands are about half a real hand's size, so the avatar's
+     *  standard is bigger than the rig's default). */
+    const operator = (choice) => createPerson({ ...leavesPerson(choice), handScale: A.optionOf(A.HAND_SIZES, 'standard').scale });
+
     test('the default avatar is Leaf Blower\'s operator, mesh for mesh, with a smile', () => {
-        const today = meshes(createPerson(leavesPerson(DEFAULT_CHOICE)));
+        const today = meshes(operator(DEFAULT_CHOICE));
         const avatar = F.createAvatar(A.DEFAULT_AVATAR, { role: 'operator' });
         expect(meshes(avatar.group)).toEqual(today);
         // The deliberate differences: the short cut is avatar-hair's, lying
@@ -152,7 +158,7 @@ describe('the figure', () => {
             { shirt: 'teal', pants: 'black', skin: 'light', hair: 'blond', length: 'bald' },
             { shirt: 'mustard', pants: 'denim', skin: 'tan', hair: 'auburn', length: 'buzz' }
         ]) {
-            const rig = createPerson(leavesPerson(choice));
+            const rig = operator(choice);
             const today = meshes(rig);
             const avatar = F.createAvatar(A.fromCastChoice(choice), { role: 'operator' });
             expect(meshes(avatar.group)).toEqual(today);
@@ -502,6 +508,38 @@ describe('the pieces (M5), measured', () => {
         expect(firstFromFront(clear.person, pupil.x, pupil.y).userData.isPupil).toBe(true);
     });
 
+    test('every billed or brimmed hat clears the glasses under it, and sits where it did without them (2026-10-26)', async () => {
+        // Steve's QA: the sunglasses went "straight through the hat/bill".
+        // A bill over glasses is pitched flatter, and the hat lifted by what
+        // is still needed, measured on the built pieces; no glasses, no
+        // change.
+        const HT = await import('../www/shared/js/avatar-hats-1.0.0.js');
+        const hats = A.HATS.map((h) => h.id).filter((h) => h !== 'none');
+        const glassesKinds = ['round', 'sunglasses', 'aviators', 'sport', 'oversized'];
+        for (const hat of hats) {
+            const bare = F.createAvatar({ hat }).person.getObjectByName('hat');
+            expect(`${hat} lift without glasses: ${bare.userData.fit.lift}`).toBe(`${hat} lift without glasses: 0`);
+            for (const glasses of glassesKinds) {
+                const avatar = F.createAvatar({ hat, glasses });
+                const face = avatar.person.getObjectByName('head');
+                const clear = F.glassesClearance(face);
+                expect(clear.top).toBeGreaterThan(0.03);
+                const worn = face.getObjectByName('hat');
+                const low = HT.lowestOver(worn, clear);
+                // Clear by the gap, or not over the frames at all.
+                if (low !== Infinity) expect(`${hat} over ${glasses}: ${low >= clear.top + HT.OVER_GLASSES.gap - 1e-6}`).toBe(`${hat} over ${glasses}: true`);
+                // Lifted a little at most: a cap pushed up, not a hat afloat.
+                expect(worn.userData.fit.lift).toBeGreaterThanOrEqual(0);
+                expect(`${hat} over ${glasses} lift: ${worn.userData.fit.lift < 0.03}`).toBe(`${hat} over ${glasses} lift: true`);
+            }
+        }
+        // The cap does meet the frames without the measure: its bill is
+        // pitched down through the sunglasses' top, so the measure moves it.
+        const cap = F.createAvatar({ hat: 'cap', glasses: 'sunglasses' }).person.getObjectByName('hat');
+        expect(cap.userData.fit.lift).toBeGreaterThan(0);
+        expect(F.glassesClearance(F.createAvatar({}).person.getObjectByName('head'))).toBeNull();
+    });
+
     test('the new sunglasses (2026-10-25) clear the head, cover the eyes, and keep their bridge over the nose', () => {
         const c = HEAD();
         for (const kind of ['aviators', 'catEye', 'sport', 'oversized']) {
@@ -599,8 +637,20 @@ describe('the pieces (M5), measured', () => {
             const leg = F.createAvatar(look).person.children.find((o) => o.userData.isLeg);
             return leg.children.find((m) => m.userData.isShoe).geometry.parameters;
         };
-        expect(hand({ handSize: 'large' }) / hand({})).toBeCloseTo(A.optionOf(A.HAND_SIZES, 'large').scale, 6);
+        const scaleOf = (id) => A.optionOf(A.HAND_SIZES, id).scale;
+        expect(hand({ handSize: 'large' }) / hand({})).toBeCloseTo(scaleOf('large') / scaleOf('standard'), 6);
+        expect(hand({ handSize: 'xxl' }) / hand({})).toBeCloseTo(scaleOf('xxl') / scaleOf('standard'), 6);
         expect(hand({ handSize: 'small' })).toBeLessThan(hand({}));
+        // A huge hand never brings a club of a wrist: the wrist stops at
+        // most of the arm's own radius (2026-10-26).
+        const wristOf = (look) => {
+            const fore = F.createAvatar(look).arms.right.userData.forearm;
+            const cyl = fore.children.find((m) => m.isMesh && m.geometry.type === 'CylinderGeometry');
+            return cyl.geometry.parameters;
+        };
+        const huge = wristOf({ handSize: 'xxl' });
+        expect(huge.radiusBottom).toBeLessThan(huge.radiusTop * 0.9);
+        expect(huge.radiusBottom).toBeGreaterThan(wristOf({ handSize: 'small' }).radiusBottom);
         // The hands keep their size when the arms are strengthened.
         expect(hand({ handSize: 'large', muscles: 'athletic' })).toBe(hand({ handSize: 'large' }));
         // Athletic thickens the forearm at the elbow and leaves the wrist to

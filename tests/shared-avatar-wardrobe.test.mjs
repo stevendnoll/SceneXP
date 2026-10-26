@@ -259,8 +259,10 @@ describe('the shirts', () => {
         expect(size('88', 0.09).w).toBeCloseTo(0.15, 6);
         expect(Math.abs(size('88', 0.09).x)).toBeLessThan(1e-6);
 
-        // On the figure: two meshes named 'number', the chest's below the
-        // V and the back's larger, each proud of its side of the torso.
+        // On the figure: two meshes named 'number', the chest's centered a
+        // little above the torso's middle and under the V, the back's
+        // larger and centered, each proud of its side of the torso (Steve's
+        // QA, 2026-10-26: they sat too high and too small).
         const avatar = F.createAvatar({ sleeves: 'jersey', shirt: 'x241773', jerseyNumber: 'n8' });
         const numbers = named(avatar.person, 'number');
         expect(numbers).toHaveLength(2);
@@ -268,16 +270,41 @@ describe('the shirts', () => {
         torso.geometry.computeBoundingBox();
         const tb = torso.geometry.boundingBox;
         const top = torso.position.y + tb.max.y;
+        const middle = torso.position.y + (tb.max.y + tb.min.y) / 2;
         const front = numbers.find((n) => n.userData.side > 0);
         const back = numbers.find((n) => n.userData.side < 0);
         const fb = boxOf(avatar.person, front);
         const bb = boxOf(avatar.person, back);
         expect(fb.min.z).toBeGreaterThan(tb.max.z);
         expect(bb.max.z).toBeLessThan(tb.min.z);
-        expect(fb.max.y).toBeLessThan(top - 0.08);
+        expect((fb.max.y + fb.min.y) / 2).toBeCloseTo(middle + W.NUMBER_SIZE.front.center, 6);
+        expect((bb.max.y + bb.min.y) / 2).toBeCloseTo(middle + W.NUMBER_SIZE.back.center, 6);
+        const vBottom = Math.min(...named(avatar.person, 'trim').map((bar) => boxOf(avatar.person, bar).min.y));
+        expect(fb.max.y).toBeLessThan(vBottom);
         expect(fb.max.y - fb.min.y).toBeCloseTo(W.NUMBER_SIZE.front.height, 6);
         expect(bb.max.y - bb.min.y).toBeCloseTo(W.NUMBER_SIZE.back.height, 6);
-        expect(bb.max.y).toBeGreaterThan(fb.max.y);
+        expect(fb.max.y).toBeLessThan(top - 0.08);
+        // Two digits never overhang the cloth: on a straight torso the back
+        // number keeps its full height, and across a curvy waist it shrinks
+        // to fit while a single digit stays full height.
+        const widthOf = (look) => {
+            const a = F.createAvatar({ sleeves: 'jersey', shirt: 'navy', ...look });
+            const t = torsoOf(a);
+            const n = named(a.person, 'number').find((m) => m.userData.side < 0);
+            const b = boxOf(a.person, n);
+            return { number: b.max.x - b.min.x, height: b.max.y - b.min.y, torso: W.torsoWidthAt(t, W.NUMBER_SIZE.back.center - (b.max.y - b.min.y) / 2, W.NUMBER_SIZE.back.center + (b.max.y - b.min.y) / 2) };
+        };
+        const straight = widthOf({ jerseyNumber: 'n88' });
+        // Two digits at the full height would span 103% of a straight
+        // torso, so they settle a little under it (0.194 of 0.2 today).
+        expect(straight.height).toBeGreaterThan(W.NUMBER_SIZE.back.height * 0.9);
+        expect(straight.number).toBeLessThanOrEqual(straight.torso * W.NUMBER_SIZE.fit + 1e-6);
+        expect(straight.number).toBeGreaterThan(straight.torso * W.NUMBER_SIZE.fit - 1e-6);
+        const curvy = widthOf({ jerseyNumber: 'n88', build: 'curvy' });
+        expect(curvy.torso).toBeLessThan(straight.torso);
+        expect(curvy.height).toBeLessThan(W.NUMBER_SIZE.back.height);
+        expect(curvy.number).toBeLessThanOrEqual(curvy.torso * W.NUMBER_SIZE.fit + 1e-6);
+        expect(widthOf({ jerseyNumber: 'n8', build: 'curvy' }).height).toBeCloseTo(W.NUMBER_SIZE.back.height, 6);
         // Both read from outside: the chest's faces +z, the back's -z.
         const facing = (mesh) => new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion())).z;
         expect(facing(front)).toBeGreaterThan(0.99);

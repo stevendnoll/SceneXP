@@ -202,7 +202,8 @@ function maryJaneShoe(w, l, shoeMaterial, skinMaterial) {
  *           palm's side
  *   wrist   the wrist's radius as a share of the palm's width (a palm is a
  *           little wider than its wrist), never under `wristFloor` of the
- *           arm's radius
+ *           arm's radius, and never over `wristCap` of it (a huge hand is a
+ *           huge hand, not a club of an arm)
  *   turn    the hand turned this far about the arm so its thumb leads a
  *           little forward, as a hand hangs at rest
  */
@@ -213,8 +214,9 @@ export const HAND = Object.freeze({
     palmTop: 1.2,
     finger: Object.freeze({ radius: 0.135, lengths: Object.freeze([1.0, 1.15, 1.08, 0.85]), curl: 0.25 }),
     thumb: Object.freeze({ radius: 0.16, length: 0.85, out: 0.75, forward: 0.45 }),
-    wrist: 0.45,
+    wrist: 0.4,
     wristFloor: 0.45,
+    wristCap: 0.85,
     turn: 0.45
 });
 
@@ -761,7 +763,7 @@ export function createPerson(config) {
         // sized from the hand, a little narrower than the palm, so a bigger
         // hand gets a bigger wrist and a thicker arm never flares into one.
         const handUnit = HAND.unit * handScale * (1 - 0.1 * slim);
-        const wristRadius = Math.max(HAND.wrist * HAND.palm[0] * handUnit, HAND.wristFloor * armRadius);
+        const wristRadius = Math.min(Math.max(HAND.wrist * HAND.palm[0] * handUnit, HAND.wristFloor * armRadius), HAND.wristCap * armRadius);
         const forearm = new THREE.Mesh(
             new THREE.CylinderGeometry(armRadius, wristRadius, armLength * 0.45, 8),
             sleeveMaterial

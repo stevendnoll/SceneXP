@@ -170,8 +170,17 @@ await sheet('hood', [
 ], 'torso', [0, 0.75, Math.PI / 2, 2.4, Math.PI]);
 // Hand and foot sizes (Steve's QA, 2026-10-25), beside the standard.
 await sheet('hands', [
-    { handSize: 'small' }, { handSize: 'standard' }, { handSize: 'large' }, { handSize: 'large', muscles: 'buff' }, { handSize: 'small', build: 'slim', sleeves: 'short' }
+    { handSize: 'small' }, { handSize: 'standard' }, { handSize: 'large' }, { handSize: 'xl' }, { handSize: 'xxl' },
+    { handSize: 'xxl', muscles: 'buff', sleeves: 'short' }, { handSize: 'small', build: 'slim', sleeves: 'short' }
 ], 'torso', [0, 0.75]);
+// Hats over glasses (Steve's QA, 2026-10-26: the sunglasses went through
+// the cap's bill): every billed or brimmed hat over the biggest frames.
+await sheet('hats-glasses', [
+    { ...fair, hat: 'cap', hatColor: 'navy', glasses: 'sunglasses' }, { ...fair, hat: 'trucker', hatColor: 'rust', glasses: 'oversized' },
+    { ...fair, hat: 'ivyCap', hatColor: 'charcoal', glasses: 'aviators' }, { ...fair, hat: 'fedora', hatColor: 'charcoal', glasses: 'oversized' },
+    { ...fair, hat: 'cowboy', hatColor: 'mustard', glasses: 'sport' }, { ...fair, hat: 'sunHat', hatColor: 'white', glasses: 'catEye', length: 'long' },
+    { ...deep, hat: 'cap', hatColor: 'black', glasses: 'sport', length: 'buzz' }, { ...fair, hat: 'hardHat', hatColor: 'mustard', glasses: 'square' }
+], 'face', [0, 0.75, Math.PI / 2]);
 // The hand itself (Steve's QA, 2026-10-26: fingers and a thumb) and the
 // forearm narrowing to the wrist, close, from the front, the outside, the
 // side and behind (the palm).

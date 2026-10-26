@@ -65,7 +65,9 @@ export const AVATAR_PAGE = deepFreeze({
         fov: 30,
         zoom: { step: 0.34, wheel: 0.0016, trackpad: 4, pinch: 1.4, drift: 0.5, follow: 9, lowest: 0.15, highest: 1.62, torso: 1.1 },
         frames: {
-            body: { center: 0.94, height: 2.0, half: 0.62, lift: 0.22, margin: 1.06 },
+            // 2.1 tall since 2026-10-26: the bigger standard hand reaches
+            // higher mid-wave, and the whole figure must stay in the frame.
+            body: { center: 0.94, height: 2.1, half: 0.62, lift: 0.22, margin: 1.06 },
             face: { center: 1.53, height: 0.62, half: 0.3, lift: 0.05, margin: 1.0 },
             feet: { center: 0.3, height: 0.9, half: 0.45, lift: 0.5, margin: 1.0 }
         }

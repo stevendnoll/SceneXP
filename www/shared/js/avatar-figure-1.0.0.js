@@ -66,8 +66,10 @@ export { HAT_SIZE, trimUnder, HAIR_DRAWN };
  * 10 (2026-10-25): the hood, the jersey's V the right way up, more
  * sunglasses with colors, hand and foot sizes. 11 (2026-10-26): forearms
  * that narrow to the wrist, hands with fingers and a thumb, jersey numbers.
+ * 12 (2026-10-26): bigger hands, hats lifted clear of glasses, numbers
+ * bigger and centered.
  */
-export const RENDER_VERSION = 11;
+export const RENDER_VERSION = 12;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named
@@ -1222,6 +1224,28 @@ export function poseFor(gesture, t) {
  *                  moved. Under reduced motion a gesture ends at rest.
  *   dispose()      let its geometry and materials go
  */
+/**
+ * The glasses' frames on `face` (the head group), for a hat to clear
+ * (avatar-hats' `lowestOver`): their top, half width and depth range, taken
+ * over the frames in front of the face (`FRAMES_FROM` forward of the head's
+ * middle; the arms along the sides go under any hat as arms do). Null
+ * without glasses.
+ */
+export const FRAMES_FROM = 0.1;
+
+export function glassesClearance(face) {
+    const glasses = face.children.find((o) => o.name === 'glasses');
+    if (!glasses) return null;
+    const clear = { top: -Infinity, half: 0, z: [Infinity, -Infinity] };
+    eachVertex([glasses], (v) => {
+        if (v.z < FRAMES_FROM) return;
+        clear.top = Math.max(clear.top, v.y);
+        clear.half = Math.max(clear.half, Math.abs(v.x));
+        clear.z = [Math.min(clear.z[0], v.z), Math.max(clear.z[1], v.z)];
+    });
+    return clear.top === -Infinity ? null : clear;
+}
+
 export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = {} } = {}) {
     const a = withOverrides(normalizeAvatar(avatar), overrides);
     // A style drawn by avatar-hair (the short cut among them, since the
@@ -1283,7 +1307,7 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     }
     if (a.hat !== 'none') {
         const hair = face.children.find((o) => o.userData.isHair) || null;
-        face.add(buildHat(a.hat, colorOf('hatColor', a.hatColor), head, hair));
+        face.add(buildHat(a.hat, colorOf('hatColor', a.hatColor), head, hair, glassesClearance(face)));
     }
     const shoeColor = colorOf('shoeColor', a.shoeColor);
     // A white or nearly white shoe (a custom one too) gets the gray trim. The

@@ -125,7 +125,11 @@ describe('the lists', () => {
         expect(A.FRAME_COLORS.filter((o) => o.metal).map((o) => o.id)).toEqual(['gold', 'silver']);
         expect(A.LENS_COLORS.slice(0, 2).map((o) => o.id)).toEqual(['standard', 'clear']);
         expect(A.LENS_COLORS.find((o) => o.id === 'clear')).toMatchObject({ color: null, clear: true });
-        expect(A.HAND_SIZES.map((o) => o.id)).toEqual(['small', 'standard', 'large']);
+        // The hand sizes moved up together and grew XL and XXL on the end
+        // (Steve's QA, 2026-10-26: "hands still look a little too small").
+        expect(A.HAND_SIZES.map((o) => o.id)).toEqual(['small', 'standard', 'large', 'xl', 'xxl']);
+        expect(A.HAND_SIZES.map((o) => o.scale)).toEqual([1.1, 1.4, 1.7, 2.0, 2.4]);
+        expect(A.optionOf(A.HAND_SIZES, 'small').scale).toBeGreaterThan(1);
         expect(A.FOOT_SIZES.map((o) => o.id)).toEqual(['small', 'standard', 'large']);
         expect(A.MOUTHS.map((o) => o.id)).toEqual(['smile', 'bigSmile', 'grin', 'smirk', 'surprised']);
         expect(A.LIP_COLORS.map((o) => o.id)).toEqual(['natural', 'rose', 'red', 'berry', 'softPink']);
@@ -240,9 +244,9 @@ describe('the createPerson settings', () => {
         expect(A.personConfig({ bottom: 'shorts' }).hasSkirt).toBe(false);
         // The hands and the feet (2026-10-25): the rig's own scales, the
         // feet's over the muscles' (a buff figure with large feet has both).
-        expect(A.personConfig({})).toMatchObject({ handScale: 1, footScale: 1 });
+        expect(A.personConfig({})).toMatchObject({ handScale: A.optionOf(A.HAND_SIZES, 'standard').scale, footScale: 1 });
         expect(A.personConfig({ handSize: 'large' }).handScale).toBe(A.optionOf(A.HAND_SIZES, 'large').scale);
-        expect(A.personConfig({ handSize: 'small' }).handScale).toBeLessThan(1);
+        expect(A.personConfig({ handSize: 'small' }).handScale).toBeLessThan(A.personConfig({}).handScale);
         expect(A.personConfig({ footSize: 'small' }).footScale).toBeLessThan(1);
         expect(A.personConfig({ footSize: 'large', muscles: 'buff' }).footScale)
             .toBeCloseTo(A.optionOf(A.FOOT_SIZES, 'large').scale * A.optionOf(A.MUSCLES, 'buff').feet, 9);
@@ -268,6 +272,10 @@ describe('the createPerson settings', () => {
             const carried = { ...A.personConfig(A.fromCastChoice(choice)), role: 'operator' };
             for (const [key, value] of Object.entries(carried)) {
                 if (key in today) expect(`${i} ${key}: ${value}`).toBe(`${i} ${key}: ${today[key]}`);
+                // The one deliberate difference (2026-10-26): the avatar's
+                // standard hand is bigger than the rig's default, which is
+                // about half a real hand against this head.
+                else if (key === 'handScale') expect(`${i} ${key}: ${value}`).toBe(`${i} ${key}: ${A.optionOf(A.HAND_SIZES, 'standard').scale}`);
                 else expect(`${i} ${key}: ${value}`).toBe(`${i} ${key}: ${rigDefault(key)}`);
             }
             for (const key of Object.keys(today)) expect(carried).toHaveProperty(key);
@@ -335,6 +343,8 @@ describe('custom colors (Steve, 2026-10-24)', () => {
         expect(A.describeAvatar({ handSize: 'large' })).toMatch(/a straight build with large hands, /);
         expect(A.describeAvatar({ footSize: 'small', build: 'curvy' })).toMatch(/a curvy build with small feet, /);
         expect(A.describeAvatar({ handSize: 'small', footSize: 'large', muscles: 'buff' })).toMatch(/a buff, straight build with small hands and large feet, /);
+        expect(A.describeAvatar({ handSize: 'xl' })).toMatch(/a straight build with extra-large hands, /);
+        expect(A.describeAvatar({ handSize: 'xxl' })).toMatch(/a straight build with extra-extra-large hands, /);
         expect(A.describeAvatar({ sleeves: 'vneck', shirt: 'navy' })).toMatch(/a navy V-neck shirt, /);
     });
 

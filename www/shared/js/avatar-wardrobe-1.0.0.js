@@ -271,15 +271,43 @@ export const DIGITS = Object.freeze({
     9: ['#######', '#######', '##...##', '#######', '#######', '.....##', '.....##', '#######', '#######']
 });
 
-/** Where the number goes: on the chest below the V and across the back,
- *  each `height` meters tall with its top `below` the shoulders, a `gap` of
- *  pixels between two digits, `proud` of the cloth. */
+/** Where the number goes (Steve's QA, 2026-10-26: bigger, and nearer the
+ *  torso's middle): on the chest and across the back, each `height` meters
+ *  tall at most, its middle `center` above the torso's middle, a `gap` of
+ *  pixels between two digits, `proud` of the cloth. A number is never wider
+ *  than `fit` of the torso where it sits (`torsoWidthAt`), so two digits
+ *  across a curvy waist shrink to stay on the cloth. */
 export const NUMBER_SIZE = Object.freeze({
-    front: { height: 0.1, below: 0.085 },
-    back: { height: 0.17, below: 0.04 },
+    front: { height: 0.13, center: 0.02 },
+    back: { height: 0.2, center: 0 },
     gap: 1,
-    proud: 0.006
+    proud: 0.006,
+    fit: 0.85
 });
+
+/** The torso's width between `y0` and `y1` of its own middle: the least
+ *  across its outline there (an extruded torso's vertices all lie on its
+ *  outline, so a waist shows), or its full width where no vertex lies. */
+export function torsoWidthAt(torso, y0, y1) {
+    const { width } = torsoBox(torso);
+    const pos = torso.geometry.attributes.position;
+    let half = Infinity;
+    for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        const x = Math.abs(pos.getX(i));
+        if (y < y0 || y > y1 || x < width * 0.25) continue;
+        half = Math.min(half, x);
+    }
+    return half === Infinity ? width : 2 * half;
+}
+
+/** How wide `digits` are for each meter of height (DIGITS' grid). */
+export function numberAspect(digits) {
+    const rows = DIGITS[0].length;
+    const cols = DIGITS[0][0].length;
+    const n = String(digits).split('').filter((d) => DIGITS[d]).length;
+    return (n * cols + Math.max(0, n - 1) * NUMBER_SIZE.gap) / rows;
+}
 
 /**
  * `digits` ("8", "00") as one flat geometry `height` meters tall, centered
@@ -330,14 +358,18 @@ export function numberGeometry(digits, height) {
 export function numberJersey(person, digits, color, shirtColor) {
     const { torso } = bodyParts(person);
     if (!torso || !String(digits).length) return [];
-    const { height, depth } = torsoBox(torso);
-    const top = torso.position.y + height / 2;
+    const { depth } = torsoBox(torso);
     const spec = SHIRT_SIZE.jersey;
     const mat = material(color ?? (isLight(shirtColor) ? spec.dark : spec.light), 0.8);
+    const aspect = numberAspect(digits);
     const out = [];
     for (const [side, face] of [[1, NUMBER_SIZE.front], [-1, NUMBER_SIZE.back]]) {
-        const mesh = new THREE.Mesh(numberGeometry(digits, face.height), mat);
-        mesh.position.set(0, top - face.below - face.height / 2, side * (depth / 2 + NUMBER_SIZE.proud));
+        // As tall as the face allows, unless that is too wide for the torso
+        // where the number sits.
+        const across = torsoWidthAt(torso, face.center - face.height / 2, face.center + face.height / 2) * NUMBER_SIZE.fit;
+        const height = Math.min(face.height, across / aspect);
+        const mesh = new THREE.Mesh(numberGeometry(digits, height), mat);
+        mesh.position.set(0, torso.position.y + face.center, side * (depth / 2 + NUMBER_SIZE.proud));
         if (side < 0) mesh.rotation.y = Math.PI;
         mesh.name = 'number';
         mesh.userData.side = side;

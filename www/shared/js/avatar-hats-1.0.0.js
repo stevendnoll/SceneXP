@@ -73,6 +73,31 @@ export const HAT_SIZE = Object.freeze({
  *  least (meters, along the bill's middle). The ivy cap's stays short. */
 export const BILL_REACH = 0.085;
 
+/**
+ * A hat over glasses (Steve's QA, 2026-10-26: the sunglasses went "straight
+ * through the hat/bill"): a bill is pitched no more than `pitch` and droops
+ * no more than `droop`, and then the whole hat is lifted by whatever is
+ * still needed for its bill or brim to pass `gap` over the frames
+ * (`lowestOver`), as a cap is pushed up a little over sunglasses.
+ */
+export const OVER_GLASSES = Object.freeze({ pitch: 0.04, droop: 0.012, gap: 0.004, margin: 0.004 });
+
+/**
+ * The lowest any bill or brim of `hat` (a built hat group) comes over the
+ * frames in `clear` (`{ top, half, z: [near, far] }`: the frames' top, half
+ * width and depth range, in the head's coordinates), or Infinity when no
+ * part of it is over them.
+ */
+export function lowestOver(hat, clear) {
+    let low = Infinity;
+    const m = OVER_GLASSES.margin;
+    eachVertex([hat], (v) => {
+        if (Math.abs(v.x) > clear.half + m || v.z < clear.z[0] - m || v.z > clear.z[1] + m) return;
+        low = Math.min(low, v.y);
+    }, (mesh) => mesh.name === 'bill' || mesh.name === 'brim' || mesh.name === 'stitch');
+    return low;
+}
+
 // ---- Measuring the hair under a hat -------------------------------------------
 
 /** What a hat is fitted over: the shown meshes of the hair and the head,
@@ -227,12 +252,24 @@ function crownFrom(profile, mat, oval = 1) {
 
 /**
  * The hat `kind` in `color` (display hex), fitted over `head` and `hair`
- * (the hair group, or null when bald), as a group named 'hat'. Its fit is
- * kept in `userData.fit` for the tests: `{ fit, center, r, ... }`.
+ * (the hair group, or null when bald), as a group named 'hat', and kept
+ * clear of the glasses' frames in `clear` (see `lowestOver`; null without
+ * glasses). Its fit is kept in `userData.fit` for the tests: `{ fit, center,
+ * r, lift, ... }`.
  */
-export function buildHat(kind, color, head, hair) {
+export function buildHat(kind, color, head, hair, clear = null) {
     const H = HAT_SIZE;
     const spec = H[kind];
+    /** How far up the hat must go for its bill or brim to clear the
+     *  frames, once built. */
+    const liftFor = (group) => {
+        if (!clear) return 0;
+        const low = lowestOver(group, clear);
+        return low === Infinity ? 0 : Math.max(0, clear.top + OVER_GLASSES.gap - low);
+    };
+    const billSpec = spec.bill && clear
+        ? { ...spec.bill, pitch: Math.min(spec.bill.pitch, OVER_GLASSES.pitch), droop: Math.min(spec.bill.droop, OVER_GLASSES.droop) }
+        : spec.bill;
     if (hair) {
         hair.traverse((m) => {
             if (m.userData && m.userData.hatHides) m.visible = false;
@@ -268,7 +305,7 @@ export function buildHat(kind, color, head, hair) {
         pompom.name = 'pompom';
         hat.add(pompom);
         group.add(hat);
-        group.userData.fit = { kind, fit: 'perch', base: top };
+        group.userData.fit = { kind, fit: 'perch', base: top, lift: 0 };
         return finish(group);
     }
 
@@ -377,8 +414,10 @@ export function buildHat(kind, color, head, hair) {
                 holder.add(pleat);
             }
         }
-        if (hair) trimUnder(hair, () => baseY);
-        group.userData.fit = { kind, fit: 'crown', center: new THREE.Vector3(center.x, 0, center.z), r, oval, baseY, top: baseY + height, taper: kind === 'topHat' ? spec.flare : spec.taper || 1 };
+        const lift = liftFor(group);
+        holder.position.y += lift;
+        if (hair) trimUnder(hair, () => baseY + lift);
+        group.userData.fit = { kind, fit: 'crown', center: new THREE.Vector3(center.x, 0, center.z), r, oval, baseY: baseY + lift, top: baseY + lift + height, taper: kind === 'topHat' ? spec.flare : spec.taper || 1, lift };
         return finish(group);
     }
 
@@ -438,7 +477,7 @@ export function buildHat(kind, color, head, hair) {
         button.position.y = R;
         button.name = 'button';
         squash.add(button);
-        squash.add(bill(spec.bill, rimR * 2, [rimY + 0.002, rimR - 0.014], material(shade(color, spec.bill.shade || 1)), material(shade(color, 0.5)), stitchColor));
+        squash.add(bill(billSpec, rimR * 2, [rimY + 0.002, rimR - 0.014], material(shade(color, billSpec.shade || 1)), material(shade(color, 0.5)), stitchColor));
     } else if (kind === 'hardHat') {
         const gloss = shell.material;
         // A lip all the way round, wider into a peak at the front, and a
@@ -469,14 +508,18 @@ export function buildHat(kind, color, head, hair) {
         seam.rotation.z = Math.PI / 2 - spec.edge * 0.6;
         seam.name = 'seams';
         squash.add(seam);
-        squash.add(bill(spec.bill, rimR * 2, [rimY + 0.004, rimR - 0.01], material(color), material(shade(color, 0.5)), stitchColor));
+        squash.add(bill(billSpec, rimR * 2, [rimY + 0.004, rimR - 0.01], material(color), material(shade(color, 0.5)), stitchColor));
     }
+    // Over glasses, up by what the bill still needs (OVER_GLASSES).
+    const lift = liftFor(group);
+    center.y += lift;
+    dome.position.copy(center);
     // The rim is the dome's edge, a circle in a plane tipped by `tilt`: its
     // height at a depth `z`, from (y - cy) cos t + (z - cz) sin t = rimY.
     const t = spec.tilt;
     const rimLocal = rimY * scale[1];
     if (hair) trimUnder(hair, (z) => center.y + (rimLocal - (z - center.z) * Math.sin(t)) / Math.cos(t));
-    group.userData.fit = { kind, fit: 'dome', center: center.clone(), r: R, tilt: t, lean: spec.lean || 0, edge: spec.edge, scale };
+    group.userData.fit = { kind, fit: 'dome', center: center.clone(), r: R, tilt: t, lean: spec.lean || 0, edge: spec.edge, scale, lift };
     return finish(group);
 }
 
