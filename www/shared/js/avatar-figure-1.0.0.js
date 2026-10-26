@@ -36,7 +36,7 @@
  */
 
 import {
-    personConfig, withOverrides, normalizeAvatar, validPortraitSrc, colorOf, optionOf, BOTTOMS
+    personConfig, withOverrides, normalizeAvatar, validPortraitSrc, colorOf, optionOf, BOTTOMS, FRAME_COLORS, LENS_COLORS
 } from './avatar-1.0.0.min.js';
 import { createPerson } from './people-1.0.0.min.js';
 import { eachVertex, solidGrid } from './avatar-shapes-1.0.0.min.js';
@@ -62,8 +62,11 @@ export { HAT_SIZE, trimUnder, HAIR_DRAWN };
  * 6 (2026-10-24): a smoother head, solid beards.
  * 7 (2026-10-24): the hair styles (avatar-hair) and the hats (avatar-hats).
  * 8 (2026-10-24): the hair's solids turned right side out, and the parts.
+ * 9 (2026-10-25): strands, the swoosh, longer bills, flat pupils.
+ * 10 (2026-10-25): the hood, the jersey's V the right way up, more
+ * sunglasses with colors, hand and foot sizes.
  */
-export const RENDER_VERSION = 9;
+export const RENDER_VERSION = 10;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named
@@ -693,12 +696,19 @@ function solidBand(c, rIn, rOut, { half, top, bottom }, material, across = 36, d
 
 /**
  * The glasses: each frame round (a ring) or square (a ring of four sides,
- * turned to stand square), `x` either side of the nose and `y` above the
+ * turned to stand square), or an outline drawn point by point (`shape`: a
+ * teardrop, a cat's eye), `x` either side of the nose and `y` above the
  * head's middle (the eyes), `z` out (in front of the pupils and the nose's
  * tip), a bridge over the nose, and arms back past the sides of the head to
  * the ears, kept outside it (tests/shared-avatar-figure measures them).
  * Sunglasses are square frames a size up with dark lenses, and round
- * sunglasses round ones (Steve's QA, 2026-10-24).
+ * sunglasses round ones (Steve's QA, 2026-10-24). Steve's QA, 2026-10-25:
+ * aviators (thin gold teardrops with a double bridge), cat-eye frames
+ * (the outer top corners swept up), sport sunglasses (one `shield` lens
+ * curving round the face on a sphere of radius `shield.r` about the head,
+ * a bar along its top) and oversized frames (wide rounded squares,
+ * `stretch` wider than tall). A chosen frame or lens color (FRAME_COLORS,
+ * LENS_COLORS) replaces a style's own.
  */
 export const GLASSES_SIZE = Object.freeze({
     x: 0.035, y: 0.02, z: 0.143, tube: 0.0026, bridgeLift: 0.004,
@@ -706,43 +716,136 @@ export const GLASSES_SIZE = Object.freeze({
     square: { r: 0.027, sides: 4, turn: Math.PI / 4, frame: 0x1d1d1f },
     sunglasses: { r: 0.029, sides: 4, turn: Math.PI / 4, frame: 0x161618, lens: 0x22262c },
     roundSun: { r: 0.024, sides: 18, turn: 0, frame: 0x161618, lens: 0x22262c },
+    aviators: { r: 0.03, shape: 'teardrop', tube: 0.0016, x: 0.037, frame: 0xc9a24a, metal: true, lens: 0x2f3b36, doubleBridge: true },
+    catEye: { r: 0.026, shape: 'catEye', tube: 0.003, x: 0.037, frame: 0x1d1d1f, lens: 0x22262c },
+    sport: { shape: 'shield', frame: 0x1d1d1f, lens: 0x22262c, shield: { r: 0.15, half: 1.0, top: 0.04, bottom: -0.006, notch: 0.012, taper: 0.022, bar: 0.0028 } },
+    oversized: { r: 0.032, shape: 'wide', tube: 0.0034, x: 0.039, frame: 0x1d1d1f, lens: 0x22262c },
     /** Where each arm bends at the side of the head, and where it ends at
      *  the ear, as [x, y, z] from the head's middle (x for the right side). */
     side: [0.121, 0.02, 0.06],
     ear: [0.12, 0.014, -0.03]
 });
 
-function buildGlasses(kind, c) {
+/**
+ * A frame's outline as [x, y] points round its own middle, `r` its size,
+ * for the lens on side `s` (+1 the wearer's left, the viewer's right):
+ *
+ *   teardrop  an aviator's lens, widest across the top and rounding to a
+ *             narrower bottom, its top flatter than its bottom
+ *   catEye    wider than tall, the outer top corner swept up and out to a
+ *             point
+ *   wide      a rounded square wider than tall (a superellipse)
+ */
+function outline(shape, r, s, n = 36) {
+    const points = [];
+    for (let k = 0; k < n; k++) {
+        const t = (k / n) * Math.PI * 2;
+        const cos = Math.cos(t);
+        const sin = Math.sin(t);
+        if (shape === 'teardrop') {
+            points.push([r * cos * (0.8 + 0.2 * (1 + sin) / 2), r * (sin > 0 ? 0.7 * sin : 0.95 * sin)]);
+        } else if (shape === 'catEye') {
+            // The flick: the outer upper quarter pulled up and out, most at
+            // the corner itself (where cos and sin are both about 0.7).
+            const out = Math.max(0, s * cos);
+            const up = Math.max(0, sin);
+            const corner = Math.pow(out * up * 4, 1.5) / 8;
+            points.push([r * (1.1 * cos + s * 0.45 * corner), r * (sin > 0 ? 0.72 * sin : 0.82 * sin) + r * 0.75 * corner]);
+        } else {
+            const sq = (c) => Math.sign(c) * Math.pow(Math.abs(c), 0.55);
+            points.push([r * 1.12 * sq(cos), r * 0.82 * sq(sin)]);
+        }
+    }
+    return points;
+}
+
+function buildGlasses(kind, c, look = {}) {
     const G = GLASSES_SIZE;
     const spec = G[kind];
     const group = new THREE.Group();
     group.name = 'glasses';
-    const frame = new THREE.MeshStandardMaterial({ color: spec.frame, roughness: 0.35, metalness: 0.2 });
-    // Half a frame's width: a ring's radius, or a square's half side.
-    const halfW = spec.sides === 4 ? spec.r / Math.SQRT2 : spec.r;
-    for (const s of [-1, 1]) {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(spec.r, G.tube, 6, spec.sides), frame);
-        ring.rotation.z = spec.turn;
-        ring.position.set(c.x + s * G.x, c.y + G.y, c.z + G.z);
-        group.add(ring);
-        if (spec.lens) {
-            const lens = new THREE.Mesh(
-                new THREE.CircleGeometry(spec.r, spec.sides),
-                new THREE.MeshStandardMaterial({ color: spec.lens, roughness: 0.15, metalness: 0.4, side: THREE.DoubleSide })
-            );
-            lens.rotation.z = spec.turn;
-            lens.position.set(c.x + s * G.x, c.y + G.y, c.z + G.z - 0.001);
+    // A chosen frame color replaces the style's own, and shines only when
+    // it is a metal; a chosen lens color tints any frame, and "clear"
+    // empties any.
+    const frameColor = look.frame ?? spec.frame;
+    const metal = look.frame != null ? Boolean(look.metal) : Boolean(spec.metal);
+    const lensColor = look.clear ? null : (look.lens ?? spec.lens ?? null);
+    const frame = new THREE.MeshStandardMaterial({ color: frameColor, roughness: metal ? 0.3 : 0.35, metalness: metal ? 0.7 : 0.2 });
+    const lensMat = () => new THREE.MeshStandardMaterial({ color: lensColor, roughness: 0.15, metalness: 0.4, side: THREE.DoubleSide });
+    const tube = spec.tube || G.tube;
+    const x = spec.x || G.x;
+    const arms = (from, s) => {
+        const side = [c.x + s * G.side[0], c.y + G.side[1], c.z + G.side[2]];
+        const ear = [c.x + s * G.ear[0], c.y + G.ear[1], c.z + G.ear[2]];
+        group.add(rod(from, side, tube * 0.9, frame));
+        group.add(rod(side, ear, tube * 0.9, frame));
+    };
+    if (spec.shape === 'shield') {
+        // One lens round both eyes: a band of a sphere about the head's
+        // middle, its top edge `top` above the middle, its bottom `bottom`
+        // over the eyes, rising `notch` over the nose and `taper` toward
+        // the sides (the top dipping a little there too), and a bar along
+        // the top edge.
+        const S = spec.shield;
+        const down = (y) => Math.acos(Math.max(-1, Math.min(1, y / S.r)));
+        const edges = {
+            half: S.half,
+            top: [[0, down(S.top)], [S.half, down(S.top - S.taper * 0.4)]],
+            bottom: [[0, down(S.bottom + S.notch)], [0.22, down(S.bottom)], [0.5, down(S.bottom + S.taper * 0.3)], [S.half, down(S.bottom + S.taper)]]
+        };
+        if (lensColor !== null) {
+            const lens = band(c, S.r, edges, lensMat(), 40, 6);
             lens.name = 'lens';
             group.add(lens);
         }
-        const outer = [c.x + s * (G.x + halfW + G.tube), c.y + G.y, c.z + G.z];
-        const side = [c.x + s * G.side[0], c.y + G.side[1], c.z + G.side[2]];
-        const ear = [c.x + s * G.ear[0], c.y + G.ear[1], c.z + G.ear[2]];
-        group.add(rod(outer, side, G.tube * 0.9, frame));
-        group.add(rod(side, ear, G.tube * 0.9, frame));
+        const bar = [];
+        for (let k = 0; k <= 24; k++) {
+            const a = -S.half + (2 * S.half * k) / 24;
+            const t = along(edges.top, Math.abs(a));
+            bar.push(new THREE.Vector3(c.x + (S.r + 0.001) * Math.sin(t) * Math.sin(a), c.y + (S.r + 0.001) * Math.cos(t), c.z + (S.r + 0.001) * Math.sin(t) * Math.cos(a)));
+        }
+        group.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(bar), 48, S.bar, 6, false), frame));
+        for (const s of [-1, 1]) arms(bar[s < 0 ? 0 : bar.length - 1].toArray(), s);
+    } else {
+        // Half a frame's width: a ring's radius, a square's half side, or
+        // the outline's reach.
+        let halfW = spec.sides === 4 ? spec.r / Math.SQRT2 : spec.r * (spec.stretch || 1);
+        for (const s of [-1, 1]) {
+            const at = [c.x + s * x, c.y + G.y, c.z + G.z];
+            let ring;
+            let lens = null;
+            if (spec.shape) {
+                const points = outline(spec.shape, spec.r, s);
+                halfW = Math.max(...points.map(([px]) => Math.abs(px)));
+                const curve = new THREE.CatmullRomCurve3(points.map(([px, py]) => new THREE.Vector3(px, py, 0)), true);
+                ring = new THREE.Mesh(new THREE.TubeGeometry(curve, 72, tube, 6, true), frame);
+                if (lensColor !== null) lens = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(points.map(([px, py]) => new THREE.Vector2(px, py)))), lensMat());
+            } else {
+                ring = new THREE.Mesh(new THREE.TorusGeometry(spec.r, tube, 6, spec.sides), frame);
+                ring.rotation.z = spec.turn;
+                ring.scale.x = spec.stretch || 1;
+                if (lensColor !== null) {
+                    lens = new THREE.Mesh(new THREE.CircleGeometry(spec.r, spec.sides), lensMat());
+                    lens.rotation.z = spec.turn;
+                    lens.scale.x = spec.stretch || 1;
+                }
+            }
+            ring.position.set(...at);
+            group.add(ring);
+            if (lens) {
+                lens.position.set(at[0], at[1], at[2] - 0.001);
+                lens.name = 'lens';
+                group.add(lens);
+            }
+            arms([c.x + s * (x + halfW + tube), c.y + G.y, c.z + G.z], s);
+        }
+        const inner = x - halfW - tube;
+        const bridge = (lift) => rod([c.x - inner, c.y + G.y + lift, c.z + G.z], [c.x + inner, c.y + G.y + lift, c.z + G.z], tube * 0.9, frame);
+        // An aviator's second bar sits above the first; the bridge every
+        // style has is the group's last piece (the tests read it there).
+        if (spec.doubleBridge) group.add(bridge(G.bridgeLift + 0.008));
+        group.add(bridge(G.bridgeLift));
     }
-    const inner = G.x - halfW - G.tube;
-    group.add(rod([c.x - inner, c.y + G.y + G.bridgeLift, c.z + G.z], [c.x + inner, c.y + G.y + G.bridgeLift, c.z + G.z], G.tube * 0.9, frame));
     group.traverse((o) => {
         if (o.isMesh) o.castShadow = false;
     });
@@ -1125,7 +1228,7 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     if (a.muscles === 'athletic') strengthenArms(person, ATHLETIC_ARMS);
     if (bottomKind === 'skirt') fitSkirt(person, person.children.find((o) => o.userData.isSkirt));
     // The wardrobe's shirts and bottoms (2026-10-25), over the rig's own.
-    if (SHIRT_SIZE[a.sleeves]) dressShirt(person, a.sleeves, colorOf('shirt', a.shirt));
+    if (SHIRT_SIZE[a.sleeves]) dressShirt(person, a.sleeves, colorOf('shirt', a.shirt), skin);
     if (BOTTOM_SIZE[a.bottom]) dressBottom(person, a.bottom, colorOf('bottomColor', a.bottomColor));
 
     person.traverse((o) => {
@@ -1148,7 +1251,16 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
 
     // The pieces the rig has no option for (M5), after the shadows above:
     // none of them casts one (a hat's shadow would darken the whole face).
-    if (a.glasses !== 'none') face.add(buildGlasses(a.glasses, c));
+    if (a.glasses !== 'none') {
+        const frameOption = optionOf(FRAME_COLORS, a.frameColor);
+        const lensOption = optionOf(LENS_COLORS, a.lensColor);
+        face.add(buildGlasses(a.glasses, c, {
+            frame: colorOf('frameColor', a.frameColor),
+            metal: Boolean(frameOption && frameOption.metal),
+            lens: colorOf('lensColor', a.lensColor),
+            clear: Boolean(lensOption && lensOption.clear)
+        }));
+    }
     if (a.facial !== 'none') {
         const mouth = { bottom: Infinity, top: -Infinity };
         eachVertex([face.children.find((o) => o.name === 'mouth')], (v) => {

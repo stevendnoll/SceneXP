@@ -90,7 +90,10 @@ export const AVATAR_PAGE = deepFreeze({
      * no beard's color). A tab shows only when it has a field to show. Every
      * color field ends in a custom swatch (any color, the browser's own
      * picker). The face has three tabs (Steve's QA, 2026-10-24: one would
-     * have been a dozen groups long).
+     * have been a dozen groups long). Facial hair is on the Face tab, since
+     * the Hair tab is full of styles; the hands and the feet are part of
+     * the Build, and the Feet tab, being only shoes, says so (Steve's QA,
+     * 2026-10-25).
      */
     tabs: [
         {
@@ -98,7 +101,9 @@ export const AVATAR_PAGE = deepFreeze({
                 { key: 'skin', legend: 'Skin tone', kind: 'swatch' },
                 { key: 'faceShape', legend: 'Face shape', kind: 'text' },
                 { key: 'nose', legend: 'Nose', kind: 'text' },
-                { key: 'cheeks', legend: 'Cheeks', kind: 'text' }
+                { key: 'cheeks', legend: 'Cheeks', kind: 'text' },
+                { key: 'facial', legend: 'Facial hair', kind: 'text' },
+                { key: 'facialColor', legend: 'Facial hair color', kind: 'swatch', hideWhen: { field: 'facial', value: 'none' } }
             ]
         },
         {
@@ -106,7 +111,9 @@ export const AVATAR_PAGE = deepFreeze({
                 { key: 'eyeShape', legend: 'Eye shape', kind: 'text' },
                 { key: 'eyes', legend: 'Eye color', kind: 'swatch' },
                 { key: 'brows', legend: 'Eyebrows', kind: 'text' },
-                { key: 'glasses', legend: 'Glasses', kind: 'text' }
+                { key: 'glasses', legend: 'Glasses', kind: 'text' },
+                { key: 'frameColor', legend: 'Frame color', kind: 'swatch', hideWhen: { field: 'glasses', value: 'none' } },
+                { key: 'lensColor', legend: 'Lens color', kind: 'swatch', hideWhen: { field: 'glasses', value: 'none' } }
             ]
         },
         {
@@ -118,15 +125,15 @@ export const AVATAR_PAGE = deepFreeze({
         {
             id: 'hair', label: 'Hair', frame: 'face', fields: [
                 { key: 'length', legend: 'Style', kind: 'text' },
-                { key: 'hair', legend: 'Color', kind: 'swatch' },
-                { key: 'facial', legend: 'Facial hair', kind: 'text' },
-                { key: 'facialColor', legend: 'Facial hair color', kind: 'swatch', hideWhen: { field: 'facial', value: 'none' } }
+                { key: 'hair', legend: 'Color', kind: 'swatch' }
             ]
         },
         {
             id: 'build', label: 'Build', frame: 'body', fields: [
                 { key: 'build', legend: 'Build', kind: 'text' },
-                { key: 'muscles', legend: 'Muscles', kind: 'text' }
+                { key: 'muscles', legend: 'Muscles', kind: 'text' },
+                { key: 'handSize', legend: 'Hand size', kind: 'text' },
+                { key: 'footSize', legend: 'Foot size', kind: 'text' }
             ]
         },
         {
@@ -138,7 +145,7 @@ export const AVATAR_PAGE = deepFreeze({
             ]
         },
         {
-            id: 'feet', label: 'Feet', frame: 'feet', fields: [
+            id: 'shoes', label: 'Shoes', frame: 'feet', fields: [
                 { key: 'shoes', legend: 'Shoes', kind: 'text' },
                 { key: 'shoeColor', legend: 'Shoe color', kind: 'swatch' }
             ]

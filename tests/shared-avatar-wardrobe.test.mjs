@@ -16,6 +16,7 @@ let THREE;
 let W;
 let F;
 let A;
+let S;
 
 beforeAll(async () => {
     THREE = await loadRealThree();
@@ -23,6 +24,7 @@ beforeAll(async () => {
     W = await import('../www/shared/js/avatar-wardrobe-1.0.0.js');
     F = await import('../www/shared/js/avatar-figure-1.0.0.js');
     A = await import('../www/shared/js/avatar-1.0.0.min.js');
+    S = await import('../www/shared/js/avatar-shapes-1.0.0.min.js');
 });
 afterAll(() => {
     delete globalThis.THREE;
@@ -199,9 +201,19 @@ describe('the shirts', () => {
         expect(neckTop).toBeTruthy();
     });
 
+    /** Whether two bars make a V: each one's top end is further from the
+     *  middle than its bottom end (they drew a Λ until 2026-10-25). */
+    const isV = (person, bars) => bars.every((bar) => {
+        person.updateMatrixWorld(true);
+        const h = bar.geometry.parameters.height / 2;
+        const end = (y) => Math.abs(new THREE.Vector3(0, y, 0).applyMatrix4(bar.matrixWorld).x);
+        return end(h) > end(-h) + 0.02;
+    });
+
     test('a jersey has a V-neck, a band round each sleeve and a stripe down each side, in white on a dark shirt and dark on a light one', () => {
         const navy = F.createAvatar({ sleeves: 'jersey', shirt: 'navy' });
         expect(named(navy.person, 'trim')).toHaveLength(2);
+        expect(isV(navy.person, named(navy.person, 'trim'))).toBe(true);
         expect(named(navy.person, 'band')).toHaveLength(2);
         expect(named(navy.person, 'stripe')).toHaveLength(2);
         for (const band of named(navy.person, 'band')) expect(band.parent.userData.isArm).toBe(true);
@@ -214,25 +226,93 @@ describe('the shirts', () => {
         expect(navy.arms.right.userData.forearm.children[1].material.color.getHex()).toBe(skin.color.getHex());
     });
 
-    test('a hoodie\'s hood hangs behind the neck, its pocket sits low on the front, and two drawstrings hang from the neck', () => {
+    test('a hoodie\'s hood is one closed solid that stands up behind the neck and lies down the back; its pocket sits low on the front, and two drawstrings hang from the neck', () => {
         const avatar = F.createAvatar({ sleeves: 'hoodie', shirt: 'teal' });
         const torso = torsoOf(avatar);
         torso.geometry.computeBoundingBox();
         const tb = torso.geometry.boundingBox;
-        const hood = named(avatar.person, 'hood').find((m) => m.geometry.type === 'SphereGeometry');
+        const top = torso.position.y + tb.max.y;
+        const hoods = named(avatar.person, 'hood');
+        expect(hoods).toHaveLength(1);
+        const hood = hoods[0];
+        // A closed solid facing out, in the shirt's color, single-sided (the
+        // half ball before was open: Steve's QA, 2026-10-25).
+        expect(S.openEdges(hood.geometry)).toBe(0);
+        expect(S.facesOutward(hood.geometry)).toBe(true);
+        expect(hood.material.side).toBe(THREE.FrontSide);
         const hb = boxOf(avatar.person, hood);
-        // Behind the torso's front, mostly behind its middle, up round the
-        // neck and not over the face.
-        expect(hb.max.z).toBeLessThan(0.08);
-        expect((hb.min.z + hb.max.z) / 2).toBeLessThan(0);
-        expect(hb.max.y).toBeGreaterThan(torso.position.y + tb.max.y);
-        expect(hb.max.y).toBeLessThan(1.52);
+        // Up behind the neck (not over the face), down the back to well
+        // below the shoulders, as wide as the shoulders, and all of it
+        // behind the torso's middle: nothing in front of the neck.
+        expect(hb.max.y).toBeGreaterThan(top + 0.03);
+        expect(hb.max.y).toBeLessThan(top + 0.08);
+        expect(hb.min.y).toBeLessThan(top - 0.14);
+        expect(hb.max.x - hb.min.x).toBeGreaterThan(0.18);
+        expect(hb.max.z).toBeLessThan(0.02);
+        expect(hb.min.z).toBeLessThan(-tb.max.z - 0.02);
+        // The cloth is thick behind the neck (a roll) and thin at the
+        // hood's crown lying on the back: the solid's depth across the
+        // middle column near the top against near the bottom.
+        const pos = hood.geometry.attributes.position;
+        const depthAt = (y0, y1) => {
+            let near = -Infinity;
+            let far = Infinity;
+            for (let i = 0; i < pos.count; i++) {
+                if (Math.abs(pos.getX(i)) > 0.02 || pos.getY(i) < y0 || pos.getY(i) > y1) continue;
+                near = Math.max(near, pos.getZ(i));
+                far = Math.min(far, pos.getZ(i));
+            }
+            return near - far;
+        };
+        expect(depthAt(top + 0.03, top + 0.06)).toBeGreaterThan(depthAt(top - 0.17, top - 0.14) + 0.01);
         const pocket = named(avatar.person, 'pocket')[0];
         const pb = boxOf(avatar.person, pocket);
         expect(pb.min.z).toBeGreaterThan(tb.max.z - 0.004);
         expect(pb.min.y).toBeLessThan(torso.position.y);
         expect(pb.min.y).toBeGreaterThan(torso.position.y + tb.min.y);
         expect(named(avatar.person, 'drawstring')).toHaveLength(4);
+    });
+
+    test('a V-neck shirt (2026-10-25) opens to a wedge of skin under the throat, banded along its edges, with short sleeves and no collar', () => {
+        const avatar = F.createAvatar({ sleeves: 'vneck', shirt: 'navy', skin: 'deep' });
+        const torso = torsoOf(avatar);
+        torso.geometry.computeBoundingBox();
+        const tb = torso.geometry.boundingBox;
+        const top = torso.position.y + tb.max.y;
+        expect(W.bodyParts(avatar.person).collar.visible).toBe(false);
+        expect(A.personConfig({ sleeves: 'vneck' }).sleeveColor).toBeNull();
+        const skin = avatar.person.getObjectByName('head').children.find((o) => o.userData.isHead).material;
+        expect(avatar.arms.right.userData.forearm.children[1].material.color.getHex()).toBe(skin.color.getHex());
+        // The wedge: the skin's own material, on the chest's front, from the
+        // shoulders' height down, its point on the middle.
+        const wedge = named(avatar.person, 'vneck')[0];
+        expect(wedge.material).toBe(skin);
+        const wb = boxOf(avatar.person, wedge);
+        expect(wb.min.z).toBeGreaterThan(tb.max.z - 0.004);
+        expect(wb.max.y).toBeGreaterThan(top - 0.005);
+        expect(wb.min.y).toBeLessThan(top - 0.05);
+        expect(wb.max.x).toBeCloseTo(-wb.min.x, 6);
+        const lowest = (() => {
+            const pos = wedge.geometry.attributes.position;
+            let best = null;
+            for (let i = 0; i < pos.count; i++) if (!best || pos.getY(i) < best.y) best = { x: pos.getX(i), y: pos.getY(i) };
+            return best;
+        })();
+        expect(Math.abs(lowest.x)).toBeLessThan(1e-6);
+        // Two bands, a V (open at the top), in a darker shade of the shirt.
+        const bars = named(avatar.person, 'trim');
+        expect(bars).toHaveLength(2);
+        expect(isV(avatar.person, bars)).toBe(true);
+        const shirt = A.colorOf('shirt', 'navy');
+        for (const bar of bars) {
+            expect(bar.material.color.getHex()).not.toBe(shirt);
+            expect(bar.material.color.getHex()).toBe(new THREE.Color(shirt).multiplyScalar(W.SHIRT_SIZE.vneck.shade).getHex());
+        }
+        // Without a skin material the opening is skipped and the bands stay.
+        const bare = F.createAvatar({ sleeves: 'short' }).person;
+        W.dressShirt(bare, 'vneck', shirt);
+        expect(named(bare, 'vneck')).toHaveLength(0);
+        expect(named(bare, 'trim')).toHaveLength(2);
     });
 });
 

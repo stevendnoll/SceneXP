@@ -502,6 +502,114 @@ describe('the pieces (M5), measured', () => {
         expect(firstFromFront(clear.person, pupil.x, pupil.y).userData.isPupil).toBe(true);
     });
 
+    test('the new sunglasses (2026-10-25) clear the head, cover the eyes, and keep their bridge over the nose', () => {
+        const c = HEAD();
+        for (const kind of ['aviators', 'catEye', 'sport', 'oversized']) {
+            const avatar = F.createAvatar({ glasses: kind });
+            const person = avatar.person;
+            const glasses = person.getObjectByName('glasses');
+            const pts = vertices(person, glasses);
+            const nearest = Math.min(...pts.map((p) => p.distanceTo(c)));
+            expect(`${kind} clears the head: ${nearest > 0.12}`).toBe(`${kind} clears the head: true`);
+            // Every lens hides its pupil from the front.
+            for (const pupil of allIn(person, (o) => o.userData.isPupil)) {
+                const p = at(person, pupil);
+                expect(`${kind} over the pupil: ${firstFromFront(person, p.x, p.y).name}`).toBe(`${kind} over the pupil: lens`);
+            }
+            const nose = findIn(person, (o) => o.userData.isNose);
+            const noseTop = Math.max(...vertices(person, nose).map((p) => p.y));
+            if (kind !== 'sport') {
+                // Two frames, each drawn round an outline (a tube) or a
+                // ring, and the bridge last, over the nose.
+                const frames = glasses.children.filter((o) => o.geometry.type === 'TubeGeometry' || o.geometry.type === 'TorusGeometry');
+                expect(`${kind} frames: ${frames.length}`).toBe(`${kind} frames: 2`);
+                const bridge = glasses.children[glasses.children.length - 1];
+                expect(Math.min(...vertices(person, bridge).map((p) => p.y))).toBeGreaterThan(noseTop);
+            } else {
+                // One lens for both eyes, wider than the face, with a bar
+                // along its top.
+                const lenses = glasses.children.filter((o) => o.name === 'lens');
+                expect(lenses).toHaveLength(1);
+                const xs = vertices(person, lenses[0]).map((p) => p.x);
+                expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(0.2);
+                expect(glasses.children.some((o) => o.geometry.type === 'TubeGeometry')).toBe(true);
+            }
+            avatar.dispose();
+        }
+        // Aviators are teardrops, widest across the top: the frame's
+        // widest row is above its middle. A cat eye flicks up at its outer
+        // top corner: the frame's highest point is outward of its middle.
+        const frameOf = (kind, side) => {
+            const person = F.createAvatar({ glasses: kind }).person;
+            const frames = person.getObjectByName('glasses').children.filter((o) => o.geometry.type === 'TubeGeometry');
+            const frame = frames.find((f) => Math.sign(f.position.x) === side);
+            return { pts: vertices(person, frame), mid: at(person, frame) };
+        };
+        const aviator = frameOf('aviators', 1);
+        const rows = new Map();
+        for (const p of aviator.pts) {
+            const row = Math.round((p.y - aviator.mid.y) * 500) / 500;
+            rows.set(row, Math.max(rows.get(row) || 0, Math.abs(p.x - aviator.mid.x)));
+        }
+        const widest = [...rows.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        expect(widest).toBeGreaterThan(0);
+        const cat = frameOf('catEye', 1);
+        const highest = cat.pts.reduce((best, p) => (p.y > best.y ? p : best), cat.pts[0]);
+        expect(highest.x - cat.mid.x).toBeGreaterThan(0.012);
+        // The aviators' second bar is above the bridge every style has.
+        const aviators = F.createAvatar({ glasses: 'aviators' }).person.getObjectByName('glasses');
+        const bars = aviators.children.slice(-2).map((b) => at(aviators.parent, b).y);
+        expect(bars[0]).toBeGreaterThan(bars[1]);
+    });
+
+    test('a chosen frame color and lens color replace a style\'s own, metal frames shine, and clear lenses empty the frames (2026-10-25)', () => {
+        const glasses = (look) => F.createAvatar(look).person.getObjectByName('glasses');
+        const frameMat = (g) => g.children.find((o) => o.geometry.type === 'TorusGeometry' || o.geometry.type === 'TubeGeometry').material;
+        const lensMat = (g) => g.children.find((o) => o.name === 'lens').material;
+        // The style's own colors by default.
+        expect(frameMat(glasses({ glasses: 'round' })).color.getHex()).toBe(F.GLASSES_SIZE.round.frame);
+        expect(lensMat(glasses({ glasses: 'sunglasses' })).color.getHex()).toBe(F.GLASSES_SIZE.sunglasses.lens);
+        expect(frameMat(glasses({ glasses: 'aviators' })).metalness).toBeGreaterThan(0.5);
+        expect(frameMat(glasses({ glasses: 'round' })).metalness).toBeLessThan(0.5);
+        // Chosen ones, on any style, custom colors too.
+        expect(frameMat(glasses({ glasses: 'sunglasses', frameColor: 'red' })).color.getHex()).toBe(A.colorOf('frameColor', 'red'));
+        expect(frameMat(glasses({ glasses: 'sport', frameColor: 'x3d6fd6' })).color.getHex()).toBe(0x3d6fd6);
+        expect(lensMat(glasses({ glasses: 'catEye', lensColor: 'rose' })).color.getHex()).toBe(A.colorOf('lensColor', 'rose'));
+        expect(lensMat(glasses({ glasses: 'sport', lensColor: 'x80d0ff' })).color.getHex()).toBe(0x80d0ff);
+        // A metal shines, and a painted color on metal frames does not.
+        expect(frameMat(glasses({ glasses: 'round', frameColor: 'gold' })).metalness).toBeGreaterThan(0.5);
+        expect(frameMat(glasses({ glasses: 'aviators', frameColor: 'black' })).metalness).toBeLessThan(0.5);
+        // A tint fills clear frames with lenses; "clear" empties sunglasses.
+        expect(glasses({ glasses: 'round' }).children.filter((o) => o.name === 'lens')).toHaveLength(0);
+        expect(glasses({ glasses: 'round', lensColor: 'amber' }).children.filter((o) => o.name === 'lens')).toHaveLength(2);
+        expect(glasses({ glasses: 'sunglasses', lensColor: 'clear' }).children.filter((o) => o.name === 'lens')).toHaveLength(0);
+        expect(glasses({ glasses: 'sport', lensColor: 'clear' }).children.filter((o) => o.name === 'lens')).toHaveLength(0);
+    });
+
+    test('hand and foot sizes scale the rig\'s hands and shoes, the feet over the muscles\' (2026-10-25)', () => {
+        const hand = (look) => F.createAvatar(look).arms.right.userData.forearm.children[2].geometry.parameters.radius;
+        const shoe = (look) => {
+            const leg = F.createAvatar(look).person.children.find((o) => o.userData.isLeg);
+            return leg.children.find((m) => m.userData.isShoe).geometry.parameters;
+        };
+        expect(hand({ handSize: 'large' }) / hand({})).toBeCloseTo(A.optionOf(A.HAND_SIZES, 'large').scale, 6);
+        expect(hand({ handSize: 'small' })).toBeLessThan(hand({}));
+        // The hands keep their size when the arms are strengthened.
+        expect(hand({ handSize: 'large', muscles: 'athletic' })).toBe(hand({ handSize: 'large' }));
+        const large = shoe({ footSize: 'large' });
+        const standard = shoe({});
+        expect(large.width / standard.width).toBeCloseTo(A.optionOf(A.FOOT_SIZES, 'large').scale, 6);
+        expect(large.depth).toBeGreaterThan(standard.depth);
+        expect(shoe({ footSize: 'small' }).depth).toBeLessThan(standard.depth);
+        expect(shoe({ footSize: 'large', muscles: 'buff' }).width).toBeGreaterThan(shoe({ muscles: 'buff' }).width);
+        // Dressed shoes follow the block: a large foot's sneaker sole is wider.
+        const sole = (look) => {
+            const leg = F.createAvatar({ shoes: 'highTops', ...look }).person.children.find((o) => o.userData.isLeg);
+            return leg.children.find((m) => m.name === 'sole').geometry.parameters.width;
+        };
+        expect(sole({ footSize: 'large' })).toBeGreaterThan(sole({}));
+    });
+
     test('no facial hair covers any mouth, and each sits on the face', () => {
         for (const mouth of A.MOUTHS.map((m) => m.id)) {
             // The points of the mouth seen from the front with no facial hair

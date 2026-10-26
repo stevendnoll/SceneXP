@@ -84,6 +84,17 @@ await sheet('glasses', [
     { ...fair }, { ...fair, glasses: 'round' }, { ...fair, glasses: 'square' }, { ...fair, glasses: 'sunglasses' }, { ...fair, glasses: 'roundSun' },
     { ...deep, glasses: 'round', length: 'long' }, { ...deep, glasses: 'sunglasses', length: 'buzz' }
 ], 'face');
+// More sunglasses, and the frames' and lenses' colors (Steve's QA,
+// 2026-10-25), close.
+await sheet('sunglasses', [
+    { ...fair, glasses: 'aviators' }, { ...fair, glasses: 'catEye' }, { ...fair, glasses: 'sport' }, { ...fair, glasses: 'oversized' },
+    { ...deep, glasses: 'aviators', length: 'buzz' }, { skin: 'light', hair: 'blond', glasses: 'catEye', length: 'bob' }, { ...deep, glasses: 'sport', length: 'locs' }
+], 'close', [0, 0.75]);
+await sheet('glasses-colors', [
+    { ...fair, glasses: 'round', frameColor: 'gold', lensColor: 'amber' }, { ...fair, glasses: 'aviators', frameColor: 'silver', lensColor: 'blue' },
+    { ...fair, glasses: 'sunglasses', frameColor: 'red', lensColor: 'rose' }, { ...fair, glasses: 'catEye', frameColor: 'white', lensColor: 'green' },
+    { ...fair, glasses: 'oversized', frameColor: 'tortoise', lensColor: 'brown' }, { ...fair, glasses: 'sunglasses', lensColor: 'clear' }, { ...deep, glasses: 'sport', frameColor: 'blue', lensColor: 'x80d0ff' }
+], 'close', [0]);
 await sheet('facial', [
     { ...fair, facial: 'stubble' }, { ...fair, facial: 'mustache' }, { ...fair, facial: 'goatee' }, { ...fair, facial: 'beard' },
     { ...deep, facial: 'stubble' }, { ...deep, facial: 'beard', glasses: 'round' }, { skin: 'light', hair: 'blond', facial: 'beard', length: 'long' }
@@ -146,8 +157,21 @@ await sheet('wardrobe-shoes', [
 ], 'feet', [0.75, Math.PI / 2]);
 await sheet('shirts', [
     { sleeves: 'sweater', shirt: 'rust' }, { sleeves: 'turtleneck', shirt: 'charcoal' }, { sleeves: 'jersey', shirt: 'navy' }, { sleeves: 'jersey', shirt: 'white' },
-    { sleeves: 'buttonDown', shirt: 'white' }, { sleeves: 'hoodie', shirt: 'teal' }, { sleeves: 'hoodie', shirt: 'white', build: 'curvy' }
+    { sleeves: 'buttonDown', shirt: 'white' }, { sleeves: 'hoodie', shirt: 'teal' }, { sleeves: 'hoodie', shirt: 'white', build: 'curvy' },
+    { sleeves: 'vneck', shirt: 'navy' }, { sleeves: 'vneck', shirt: 'white', skin: 'deep' }
 ], 'torso', [0, 0.75, Math.PI]);
+// The hood from every side (Steve's QA, 2026-10-25: the old half ball
+// "looks like half of an oval, missing the other half").
+await sheet('hood', [
+    { sleeves: 'hoodie', shirt: 'teal' }, { sleeves: 'hoodie', shirt: 'rust', length: 'buzz' }, { sleeves: 'hoodie', shirt: 'white', build: 'curvy', length: 'ponytail' }
+], 'torso', [0, 0.75, Math.PI / 2, 2.4, Math.PI]);
+// Hand and foot sizes (Steve's QA, 2026-10-25), beside the standard.
+await sheet('hands', [
+    { handSize: 'small' }, { handSize: 'standard' }, { handSize: 'large' }, { handSize: 'large', muscles: 'buff' }, { handSize: 'small', build: 'slim', sleeves: 'short' }
+], 'torso', [0, 0.75]);
+await sheet('feet-sizes', [
+    { footSize: 'small' }, { footSize: 'standard' }, { footSize: 'large' }, { footSize: 'large', muscles: 'buff' }, { footSize: 'small', shoes: 'heels', build: 'curvy' }, { footSize: 'large', shoes: 'highTops' }
+], 'feet', [0, 0.75]);
 await sheet('bottoms', [
     { bottom: 'cargoPants', bottomColor: 'khaki' }, { bottom: 'cargoShorts', bottomColor: 'khaki' }, { bottom: 'sweatpants', bottomColor: 'charcoal' },
     { bottom: 'leggings', bottomColor: 'black', build: 'curvy' }, { bottom: 'basketballShorts', bottomColor: 'navy', shoes: 'highTops' }, { bottom: 'longSkirt', bottomColor: 'denim', build: 'curvy' }

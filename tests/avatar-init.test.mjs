@@ -469,17 +469,20 @@ describe('the editor and the way back', () => {
 
     test('every piece is offered since M5, and the tab order is the PRD\'s', () => {
         const tabs = E.visibleTabs(CONFIG.tabs).map((t) => t.id);
-        expect(tabs).toEqual(['face', 'eyes', 'mouth', 'hair', 'build', 'clothes', 'feet', 'hat']);
+        expect(tabs).toEqual(['face', 'eyes', 'mouth', 'hair', 'build', 'clothes', 'shoes', 'hat']);
         const fields = (id) => E.visibleFields(CONFIG.tabs.find((t) => t.id === id)).map((f) => f.key);
-        expect(fields('face')).toEqual(['skin', 'faceShape', 'nose', 'cheeks']);
-        expect(fields('eyes')).toEqual(['eyeShape', 'eyes', 'brows', 'glasses']);
+        // Facial hair is on the Face tab, and the glasses' colors follow
+        // the glasses (Steve's QA, 2026-10-25: the Hair tab was crowded).
+        expect(fields('face')).toEqual(['skin', 'faceShape', 'nose', 'cheeks', 'facial', 'facialColor']);
+        expect(fields('eyes')).toEqual(['eyeShape', 'eyes', 'brows', 'glasses', 'frameColor', 'lensColor']);
         expect(fields('mouth')).toEqual(['mouth', 'lips']);
-        expect(fields('hair')).toEqual(['length', 'hair', 'facial', 'facialColor']);
+        expect(fields('hair')).toEqual(['length', 'hair']);
+        expect(fields('shoes')).toEqual(['shoes', 'shoeColor']);
         // Every field of every tab is shown somewhere, once.
         const all = CONFIG.tabs.flatMap((t) => t.fields.map((f) => f.key));
         expect(new Set(all).size).toBe(all.length);
         const build = CONFIG.tabs.find((t) => t.id === 'build');
-        expect(E.visibleFields(build).map((f) => f.key)).toEqual(['build', 'muscles']);
+        expect(E.visibleFields(build).map((f) => f.key)).toEqual(['build', 'muscles', 'handSize', 'footSize']);
         const hat = CONFIG.tabs.find((t) => t.id === 'hat');
         expect(E.visibleFields(hat).map((f) => f.key)).toEqual(['hat', 'hatColor']);
         expect(E.optionsFor('shoes').map((o) => o.id)).toEqual(['classic', 'sneakers', 'maryJane', 'ankleBoots', 'workBoots', 'cowboyBoots', 'tallBoots',
@@ -516,7 +519,7 @@ describe('the editor and the way back', () => {
             tablist, panels, tabs: CONFIG.tabs, avatar: { skin: 'fair', eyes: 'darkBrown' },
             onChange: (k, id) => changes.push([k, id]), onTab: (t) => tabsSeen.push(t.id)
         });
-        expect(tablist.children.map((b) => b.textContent)).toEqual(['Face', 'Eyes', 'Mouth', 'Hair', 'Build', 'Clothes', 'Feet', 'Hat']);
+        expect(tablist.children.map((b) => b.textContent)).toEqual(['Face', 'Eyes', 'Mouth', 'Hair', 'Build', 'Clothes', 'Shoes', 'Hat']);
         // The first tab is shown quietly: the page opens on the whole figure.
         expect(ed.selected).toBe('face');
         expect(tabsSeen).toEqual([]);
@@ -547,7 +550,7 @@ describe('the editor and the way back', () => {
         fire(tablist, 'keydown', { key: 'a' });
         expect(ed.selected).toBe('eyes');
         tablist.children[6].click();
-        expect(ed.selected).toBe('feet');
+        expect(ed.selected).toBe('shoes');
         expect(ed.select('nowhere')).toBe(false);
         expect(ed.select('hat')).toBe(true);
         expect(tabsSeen[tabsSeen.length - 1]).toBe('hat');
@@ -564,7 +567,7 @@ describe('the editor and the way back', () => {
         const changes = [];
         const ed = E.createEditor({ tablist, panels, tabs: CONFIG.tabs, avatar: { hair: 'blond', facial: 'none', hat: 'none' }, onChange: (k, id) => changes.push([k, id]) });
         // One for each color field the page shows, and none for the rest.
-        expect(Object.keys(ed.customs).sort()).toEqual(['bottomColor', 'eyes', 'facialColor', 'hair', 'hatColor', 'lips', 'shirt', 'shoeColor', 'skin']);
+        expect(Object.keys(ed.customs).sort()).toEqual(['bottomColor', 'eyes', 'facialColor', 'frameColor', 'hair', 'hatColor', 'lensColor', 'lips', 'shirt', 'shoeColor', 'skin']);
         const hair = ed.customs.hair;
         expect(hair.type).toBe('color');
         expect(hair.getAttribute('aria-label')).toBe('Custom color');
@@ -747,7 +750,7 @@ describe('the page', () => {
         // (The real buttons from the tab row: the stub invents any id asked
         // for, and clicking an invented one would prove nothing.)
         const tab = (id) => dom.el('av-tabs').children.find((b) => b.id === `av-tab-${id}`);
-        for (const [id, framing] of [['hair', 'face'], ['clothes', 'body'], ['eyes', 'face'], ['feet', 'feet'], ['build', 'body'], ['mouth', 'face'], ['hat', 'face'], ['face', 'face']]) {
+        for (const [id, framing] of [['hair', 'face'], ['clothes', 'body'], ['eyes', 'face'], ['shoes', 'feet'], ['build', 'body'], ['mouth', 'face'], ['hat', 'face'], ['face', 'face']]) {
             expect(tab(id)).toBeTruthy();
             tab(id).click();
             expect(`${id}: ${state.studio.framing}`).toBe(`${id}: ${framing}`);
@@ -758,7 +761,7 @@ describe('the page', () => {
         dom.el('av-zoom-out').click();
         dom.el('av-zoom-out').click();
         expect(state.studio.zoom.zoom).toBe(0);
-        tab('feet').click();
+        tab('shoes').click();
         dom.el('av-zoom-out').click();
         dom.el('av-zoom-out').click();
         dom.el('av-zoom-out').click();

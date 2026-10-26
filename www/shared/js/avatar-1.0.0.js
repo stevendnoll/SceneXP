@@ -101,7 +101,7 @@ export const HAIR_COLORS = Object.freeze([
 export const CUSTOM_COLOR = /^x[0-9a-f]{6}$/;
 
 /** The fields that take a custom color as well as their swatches. */
-export const COLOR_FIELDS = Object.freeze(['skin', 'eyes', 'hair', 'shirt', 'bottomColor', 'shoeColor', 'hatColor', 'lips', 'facialColor']);
+export const COLOR_FIELDS = Object.freeze(['skin', 'eyes', 'hair', 'shirt', 'bottomColor', 'shoeColor', 'hatColor', 'lips', 'facialColor', 'frameColor', 'lensColor']);
 
 /** A custom color's id for a display hex (0x9c2b25 is "x9c2b25"). */
 export function customColor(hex) {
@@ -131,12 +131,61 @@ export const FACIAL = Object.freeze([
     { id: 'beard', label: 'Full beard' }
 ]);
 
+/** Glasses. The `sun` ones are said as they are ("aviators"); the rest get
+ *  "glasses" after them. Appended 2026-10-25 (Steve's QA: more sunglasses),
+ *  drawn by avatar-figure. */
 export const GLASSES = Object.freeze([
     { id: 'none', label: 'None' },
     { id: 'round', label: 'Round' },
     { id: 'square', label: 'Square' },
-    { id: 'sunglasses', label: 'Sunglasses' },
-    { id: 'roundSun', label: 'Round sunglasses' }
+    { id: 'sunglasses', label: 'Sunglasses', sun: true },
+    { id: 'roundSun', label: 'Round sunglasses', sun: true },
+    { id: 'aviators', label: 'Aviators', sun: true },
+    { id: 'catEye', label: 'Cat-eye sunglasses', sun: true },
+    { id: 'sport', label: 'Sport sunglasses', sun: true },
+    { id: 'oversized', label: 'Oversized sunglasses', sun: true }
+]);
+
+/** The frames' color (Steve's QA, 2026-10-25): each style's own unless
+ *  another is chosen. Gold and silver are `metal`, drawn with a shine. */
+export const FRAME_COLORS = Object.freeze([
+    { id: 'standard', label: 'Standard', color: null, swatch: 0x1d1d1f },
+    { id: 'black', label: 'Black', color: 0x1d1d1f },
+    { id: 'tortoise', label: 'Tortoiseshell', color: 0x5a3a1e },
+    { id: 'gold', label: 'Gold', color: 0xc9a24a, metal: true },
+    { id: 'silver', label: 'Silver', color: 0xb8bcc2, metal: true },
+    { id: 'white', label: 'White', color: 0xeeede8 },
+    { id: 'red', label: 'Red', color: 0x9c2b25 },
+    { id: 'pink', label: 'Pink', color: 0xe48fb8 },
+    { id: 'blue', label: 'Blue', color: 0x3d6fd6 }
+]);
+
+/** The lenses' color: each style's own (dark in sunglasses, none in clear
+ *  frames), `clear` (none in any frame), or a tint, which clear frames take
+ *  too. */
+export const LENS_COLORS = Object.freeze([
+    { id: 'standard', label: 'Standard', color: null, swatch: 0x22262c },
+    { id: 'clear', label: 'Clear', color: null, swatch: 0xe8eef3, clear: true },
+    { id: 'dark', label: 'Dark', color: 0x1b1d21 },
+    { id: 'brown', label: 'Brown', color: 0x5a3a24 },
+    { id: 'blue', label: 'Blue', color: 0x3a6fb0 },
+    { id: 'green', label: 'Green', color: 0x2f7a4f },
+    { id: 'amber', label: 'Amber', color: 0xd49a2a },
+    { id: 'rose', label: 'Rose', color: 0xd06a85 }
+]);
+
+/** The hands and the feet (Steve's QA, 2026-10-25): the rig's `handScale`
+ *  and `footScale`. The feet's scale multiplies the muscles' (MUSCLES). */
+export const HAND_SIZES = Object.freeze([
+    { id: 'small', label: 'Small', scale: 0.8 },
+    { id: 'standard', label: 'Standard', scale: 1 },
+    { id: 'large', label: 'Large', scale: 1.25 }
+]);
+
+export const FOOT_SIZES = Object.freeze([
+    { id: 'small', label: 'Small', scale: 0.88 },
+    { id: 'standard', label: 'Standard', scale: 1 },
+    { id: 'large', label: 'Large', scale: 1.15 }
 ]);
 
 /** The mouth (Steve's QA, 2026-10-24: expressions, lip colors, teeth). All
@@ -243,7 +292,9 @@ export const SLEEVES = Object.freeze([
     { id: 'turtleneck', label: 'Turtleneck', long: true, said: 'turtleneck' },
     { id: 'jersey', label: 'Sports jersey', said: 'sports jersey' },
     { id: 'buttonDown', label: 'Button-down shirt', long: true, dressShirt: true, said: 'button-down shirt' },
-    { id: 'hoodie', label: 'Hoodie', long: true, said: 'hoodie' }
+    { id: 'hoodie', label: 'Hoodie', long: true, said: 'hoodie' },
+    // Steve's QA, 2026-10-25: a V-neck (short sleeves, the collar cut away).
+    { id: 'vneck', label: 'V-neck shirt', said: 'V-neck shirt' }
 ]);
 
 /** The bottoms, each of a `kind` the figure dresses the legs for: pants
@@ -352,7 +403,13 @@ export const FIELDS = Object.freeze([
     Object.freeze(['eyeShape', EYE_SHAPES]),
     Object.freeze(['nose', NOSES]),
     Object.freeze(['faceShape', FACE_SHAPES]),
-    Object.freeze(['cheeks', CHEEKS])
+    Object.freeze(['cheeks', CHEEKS]),
+    // Appended 2026-10-25 (Steve's QA): the glasses' colors, the hands and
+    // the feet.
+    Object.freeze(['frameColor', FRAME_COLORS]),
+    Object.freeze(['lensColor', LENS_COLORS]),
+    Object.freeze(['handSize', HAND_SIZES]),
+    Object.freeze(['footSize', FOOT_SIZES])
 ]);
 
 /** The list a field's ids come from, or null for a field that is not one. */
@@ -388,7 +445,11 @@ export const DEFAULT_AVATAR = Object.freeze({
     eyeShape: 'round',
     nose: 'pointed',
     faceShape: 'round',
-    cheeks: 'none'
+    cheeks: 'none',
+    frameColor: 'standard',
+    lensColor: 'standard',
+    handSize: 'standard',
+    footSize: 'standard'
 });
 
 const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
@@ -504,7 +565,8 @@ export function personConfig(avatar, overrides = {}) {
         pantsColor: colorOf('bottomColor', a.bottomColor),
         hasSkirt: optionOf(BOTTOMS, a.bottom).kind === 'skirt',
         muscular: a.muscles === 'buff',
-        footScale: optionOf(MUSCLES, a.muscles).feet,
+        footScale: optionOf(MUSCLES, a.muscles).feet * optionOf(FOOT_SIZES, a.footSize).scale,
+        handScale: optionOf(HAND_SIZES, a.handSize).scale,
         skinTone: colorOf('skin', a.skin),
         hairColor: colorOf('hair', a.hair),
         hairStyle: a.length === 'bald' ? 'short' : a.length,
@@ -572,16 +634,26 @@ export function describeAvatar(avatar) {
     const extras = [];
     const beardColor = a.facialColor === 'match' ? '' : `${word(FACIAL_COLORS, a.facialColor)} `;
     if (a.facial !== 'none') extras.push(`${a.facial === 'stubble' ? '' : 'a '}${beardColor}${word(FACIAL, a.facial)}`);
-    if (a.glasses === 'sunglasses' || a.glasses === 'roundSun') extras.push(word(GLASSES, a.glasses));
-    else if (a.glasses !== 'none') extras.push(`${word(GLASSES, a.glasses)} glasses`);
+    if (a.glasses !== 'none') {
+        // "gold-framed aviators with blue lenses"; nothing said of the
+        // standard colors, or of clear lenses.
+        const glasses = optionOf(GLASSES, a.glasses);
+        const frame = a.frameColor === 'standard' ? '' : `${word(FRAME_COLORS, a.frameColor)}-framed `;
+        const lenses = a.lensColor === 'standard' || a.lensColor === 'clear' ? '' : ` with ${word(LENS_COLORS, a.lensColor)} lenses`;
+        extras.push(`${frame}${word(GLASSES, a.glasses)}${glasses.sun ? '' : ' glasses'}${lenses}`);
+    }
     const shoeColor = word(SHOE_COLORS, a.shoeColor);
     const shoes = a.shoes === 'classic' ? `classic ${shoeColor} shoes` : `${shoeColor} ${word(SHOES, a.shoes)}`;
     const muscles = a.muscles === 'standard' ? '' : `${word(MUSCLES, a.muscles)}, `;
     const shirt = name(SHIRTS, a.shirt);
     const sleeves = optionOf(SLEEVES, a.sleeves);
     const bottom = optionOf(BOTTOMS, a.bottom);
+    // "a straight build with large hands and small feet".
+    const limbs = [];
+    if (a.handSize !== 'standard') limbs.push(`${word(HAND_SIZES, a.handSize)} hands`);
+    if (a.footSize !== 'standard') limbs.push(`${word(FOOT_SIZES, a.footSize)} feet`);
     const clothes = [
-        `a ${muscles}${word(BUILDS, a.build)} build`,
+        `a ${muscles}${word(BUILDS, a.build)} build${limbs.length ? ` with ${limbs.join(' and ')}` : ''}`,
         sleeves.said ? `a ${shirt} ${sleeves.said}` : a.sleeves === 'tank' ? `a ${shirt} tank top` : `a ${shirt} shirt with ${a.sleeves} sleeves`,
         `${bottom.kind === 'skirt' ? 'a ' : ''}${name(PANTS, a.bottomColor)} ${bottom.label.toLowerCase()}`,
         shoes
