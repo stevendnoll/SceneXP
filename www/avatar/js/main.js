@@ -35,6 +35,8 @@ import { RENDER_VERSION } from '../../shared/js/avatar-figure-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
 import { saveFile } from '../../shared/js/sharefile-1.0.0.min.js';
 import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
+import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { createStudio } from './studio.min.js';
 import { createEditor } from './editor.min.js';
 import { createExporter } from './export.min.js';
@@ -75,7 +77,14 @@ const state = {
     studio: null,
     editor: null,
     exporter: null,       // Export my avatar (js/export.js)
-    lab: false
+    lab: false,
+    // The usage pings: the page wired (a tab chosen while it is built is
+    // not a visitor's), the visit's clock, the last field changed (one ping
+    // per drag), and the first turn and zoom (counted once a visit).
+    ready: false,
+    session: { start: Date.now(), ended: false },
+    recent: { key: '', at: 0 },
+    pinged: { turn: false, zoom: false }
 };
 
 function reducedMotion() {
@@ -117,6 +126,47 @@ function say(text, { good = false } = {}) {
     status.classList.toggle('av-status-good', good);
 }
 
+/**
+ * THE USAGE PINGS (Steve, 2026-10-26), through the shared telemetry part
+ * like every scene's: counts of what KIND of thing was done, never what was
+ * chosen (privacy.html: the avatar "is never in our usage pings"). So a
+ * change says its field and not its value, an export its kind and not its
+ * size, a save whether it was the first. Every parameter is one the server's
+ * log keeps (action, kind, outcome, seconds), and one thing done is one ping:
+ * a color picker dragged across a dozen values is one change
+ * (`CHANGE_QUIET`), and Keep on an arriving avatar is one answer, not an
+ * answer and a save. tests/avatar-init holds every ping to those rules.
+ */
+const CHANGE_QUIET = 1500;
+
+/** One ping per field changed, until `CHANGE_QUIET` ms of quiet or another
+ *  field. Returns whether it pinged. */
+function pingChange(key) {
+    const t = Date.now();
+    if (state.recent.key === key && t - state.recent.at < CHANGE_QUIET) {
+        state.recent.at = t;
+        return false;
+    }
+    state.recent = { key, at: t };
+    track('change', { kind: key });
+    return true;
+}
+
+/** Where the visitor came from, for the log: a scene's folder name, 'home',
+ *  or 'direct' for an address typed or followed from elsewhere. */
+function origin() {
+    if (!state.target) return 'direct';
+    if (state.target.path === '/') return 'home';
+    return state.target.path.replace(/\//g, '') || 'direct';
+}
+
+/** The visit's last ping, once: when the page is hidden or left. */
+function endVisit() {
+    if (state.session.ended) return;
+    state.session.ended = true;
+    trackFinal('session-end', { seconds: Math.round((Date.now() - state.session.start) / 1000) });
+}
+
 /** The camera's framing for a field: its own, or its tab's (the shoes
  *  look at the feet from the Clothes tab, 2026-10-26). */
 export function frameOf(key) {
@@ -155,13 +205,18 @@ function keepPortrait(avatar) {
     return src ? state.store.savePortrait(src, RENDER_VERSION) : false;
 }
 
-/** Save what is on screen. */
-function save() {
+/** Save what is on screen. `silent` leaves the ping to the caller (Keep on
+ *  an arriving avatar is one action). As a click handler it gets an event,
+ *  which carries no such flag. */
+function save({ silent = false } = {}) {
     const avatar = state.current;
+    const first = !state.saved;
     if (!state.store.save(avatar)) {
         say(WORDS.saveFailed);
+        if (!silent) track('save', { outcome: 'failed' });
         return false;
     }
+    if (!silent) track('save', { outcome: first ? 'first' : 'again' });
     state.saved = state.store.load();
     keepPortrait(avatar);
     if (state.studio) state.studio.celebrate();
@@ -178,6 +233,7 @@ function save() {
  * any choice: Save keeps it, and a saved avatar is untouched until then.
  */
 function surprise() {
+    track('surprise');
     show(randomAvatar());
     if (state.studio) {
         state.studio.setFrame('body');
@@ -195,6 +251,7 @@ function askForget(open) {
 }
 
 function forget() {
+    track('forget');
     state.store.forget();
     state.saved = null;
     askForget(false);
@@ -206,6 +263,7 @@ function forget() {
 
 /** Show an avatar that arrived by link or file, and ask. */
 function ask(avatar, from) {
+    track('incoming', { kind: from });
     if (!state.incoming) state.before = state.current;
     state.incoming = { avatar, from };
     show(avatar);
@@ -228,14 +286,19 @@ function answered() {
 
 function keep() {
     if (!state.incoming) return false;
+    const { from } = state.incoming;
     answered();
-    if (save()) say(WORDS.kept, { good: true });
+    const kept = save({ silent: true });
+    track('incoming', { kind: from, outcome: kept ? 'kept' : 'failed' });
+    if (kept) say(WORDS.kept, { good: true });
     $('av-save').focus();
     return true;
 }
 
 function decline() {
     if (!state.incoming) return false;
+    const { from } = state.incoming;
+    track('incoming', { kind: from, outcome: 'declined' });
     const back = state.before;
     answered();
     show(back);
@@ -261,6 +324,9 @@ async function openFile(file) {
     const result = await readAvatarFile(file);
     if (result.error) {
         if (FILE_ERRORS[result.error]) say(FILE_ERRORS[result.error]);
+        // A file that opened is counted as it arrives (`ask`); one that
+        // did not is counted here, by what went wrong.
+        track('file', { kind: 'open', outcome: result.error });
         return false;
     }
     ask(result.avatar, 'file');
@@ -268,6 +334,7 @@ async function openFile(file) {
 }
 
 function saveAvatarFile() {
+    track('file', { kind: 'save' });
     const blob = new Blob([toFile(state.current)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     saveFile(url, FILE_NAME);
@@ -299,7 +366,13 @@ function wire() {
     // The dialog makes its own stage when it opens and lets it go when it
     // closes, so the page's studio is untouched.
     $('av-export-open').addEventListener('click', () => {
-        if (!state.exporter) state.exporter = createExporter(CONFIG, { mobile: isMobile() });
+        track('export', { kind: 'open' });
+        if (!state.exporter) {
+            state.exporter = createExporter(CONFIG, {
+                mobile: isMobile(),
+                onExport: (kind, outcome) => track('export', { kind, outcome })
+            });
+        }
         state.exporter.open(state.current);
     });
     $('av-forget').addEventListener('click', () => askForget(true));
@@ -314,7 +387,7 @@ function wire() {
         title: WORDS.linkTitle,
         text: WORDS.linkText,
         url: linkUrl(state.current, window.location.origin)
-    }), { status: $('av-status'), message: 'Link copied' });
+    }), { status: $('av-status'), message: 'Link copied', onShare: (how) => track('share', { kind: how }) });
     $('av-file-save').addEventListener('click', saveAvatarFile);
     const picker = $('av-file-input');
     $('av-file-open').addEventListener('click', () => picker.click());
@@ -322,12 +395,24 @@ function wire() {
         const file = picker.files && picker.files[0];
         openFile(file).finally(() => { picker.value = ''; });
     });
-    $('av-turn-left').addEventListener('click', () => state.studio && state.studio.turnBy(-CONFIG.turntable.step));
-    $('av-turn-right').addEventListener('click', () => state.studio && state.studio.turnBy(CONFIG.turntable.step));
-    $('av-zoom-in').addEventListener('click', () => state.studio && state.studio.zoomIn());
-    $('av-zoom-out').addEventListener('click', () => state.studio && state.studio.zoomOut());
+    // The view's buttons, counted once a visit each (the turn and the
+    // zoom), since what matters is whether they are found at all.
+    const viewed = (what) => {
+        if (state.pinged[what]) return;
+        state.pinged[what] = true;
+        track('view', { kind: what });
+    };
+    $('av-turn-left').addEventListener('click', () => { viewed('turn'); if (state.studio) state.studio.turnBy(-CONFIG.turntable.step); });
+    $('av-turn-right').addEventListener('click', () => { viewed('turn'); if (state.studio) state.studio.turnBy(CONFIG.turntable.step); });
+    $('av-zoom-in').addEventListener('click', () => { viewed('zoom'); if (state.studio) state.studio.zoomIn(); });
+    $('av-zoom-out').addEventListener('click', () => { viewed('zoom'); if (state.studio) state.studio.zoomOut(); });
+    // The way back, as the visit's own last word (sendBeacon survives the
+    // page leaving), and the visit's end when the page is hidden or left.
+    $('av-return').addEventListener('click', () => trackFinal('leave', { kind: origin() }));
+    window.addEventListener('pagehide', endVisit);
     window.addEventListener('hashchange', readLink);
     document.addEventListener('visibilitychange', () => {
+        if (document.hidden) endVisit();
         if (!state.studio) return;
         if (document.hidden) state.studio.stop();
         else state.studio.start();
@@ -366,6 +451,7 @@ export async function init() {
         tabs: CONFIG.tabs,
         avatar: state.current,
         onChange(key, id) {
+            pingChange(key);
             show({ ...state.current, [key]: id });
             if (state.studio) {
                 // The camera goes to what was just chosen (the eyes, the shoes).
@@ -380,12 +466,22 @@ export async function init() {
         // there was no way back out; with the zoom by hand, they should.
         // The first tab, shown as the page opens, frames nothing.
         onTab(tab) {
+            if (state.ready) track('tab', { kind: tab.id });
             if (!state.studio) return;
             state.studio.setZoomTarget(tab.frame);
             state.studio.setFrame(tab.frame);
         }
     });
     wire();
+    state.ready = true;
+    // The visit's pings: the proof of work first, so every ping carries the
+    // hash that groups a visit (the same token the scenes use, so a visitor
+    // who came from one is still one visitor in the log), then the start,
+    // with where they came from and whether an avatar was waiting.
+    setMobile(isMobile());
+    const proof = await getProofOfWork(CONFIG.proofOfWork);
+    setProofHash(proof && proof.hash);
+    track('session-start', { kind: origin(), outcome: state.saved ? 'saved' : 'new' });
     readLink();
     refresh();
 

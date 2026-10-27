@@ -159,6 +159,9 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // longer offers a button that is gone.
     expect(text).toMatch(/moved into your avatar/i);
     expect(text).not.toMatch(/Forget my choice button/i);
+    // The avatar page's own pings (2026-10-26): kinds of action, never choices.
+    expect(text).toMatch(/count only what kind of thing was done/i);
+    expect(text).toMatch(/never what was chosen/i);
     // And its best time to clear the lawn (2026-10-08): only the seconds,
     // and how to clear that too.
     expect(text).toMatch(/keeps your fastest time, just the number of seconds/i);

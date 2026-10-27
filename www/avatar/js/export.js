@@ -383,6 +383,10 @@ export function createExporter(config, {
     win = typeof window === 'undefined' ? null : window,
     nav = typeof navigator === 'undefined' ? null : navigator,
     mobile = false,
+    /** Hears each picture or clip handed on: `onExport('picture' | 'clip',
+     *  'shared' | 'saved' | 'cancelled' | 'failed')`. The page's usage
+     *  pings, which count kinds and never sizes, borders or motions. */
+    onExport = () => {},
     now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000,
     makeRenderer = (c) => new THREE.WebGLRenderer({ canvas: c, antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'low-power' })
 } = {}) {
@@ -571,6 +575,7 @@ export function createExporter(config, {
     async function savePicture() {
         const result = await handOn(await makePicture(), { shared: WORDS.pictureShared, saved: WORDS.pictureSaved });
         if (result === 'failed') say(WORDS.pictureFailed);
+        onExport('picture', result);
         return result;
     }
 
@@ -693,7 +698,9 @@ export function createExporter(config, {
     }
 
     async function saveClip() {
-        return handOn(state.clip, { shared: WORDS.clipShared, saved: WORDS.clipSaved });
+        const result = await handOn(state.clip, { shared: WORDS.clipShared, saved: WORDS.clipSaved });
+        onExport('clip', result);
+        return result;
     }
 
     // ---- The dialog ----------------------------------------------------------------

@@ -766,10 +766,10 @@ describe('the page', () => {
         dom = null;
     });
 
-    async function boot({ hash = '', search = '', hostname = 'localhost', saved = null } = {}) {
+    async function boot({ hash = '', search = '', hostname = 'localhost', pathname = '/avatar/', saved = null } = {}) {
         installThree();
         dom = installDom();
-        Object.assign(dom.windowStub.location, { hash, search, hostname });
+        Object.assign(dom.windowStub.location, { hash, search, hostname, pathname });
         if (saved) globalThis.localStorage.setItem('scenexp-avatar', JSON.stringify(saved));
         jest.resetModules();
         const main = await import('../www/avatar/js/main.js');
@@ -1078,5 +1078,139 @@ describe('the page', () => {
         // Save keeps the look on screen, as any other.
         dom.el('av-save').click();
         expect(sameAvatar(JSON.parse(globalThis.localStorage.getItem('scenexp-avatar')), state.current)).toBe(true);
+    });
+
+    describe('the usage pings (Steve, 2026-10-26): kinds of action, never choices', () => {
+        /** The parameters the server's log keeps (specs/nginx-config.txt, the
+         *  scenexp_api log_format). Anything else is sent and never recorded. */
+        const LOGGED = ['action', 'timestamp', 'mobile', 'scene', 'lang', 'hash', 'kind', 'outcome', 'seconds', 'saved', 'destroyed'];
+        const BASE = 'http://localhost:8000/avatar/';
+        /** Everything a choice could leak: the ids the tests below pick. */
+        const CHOICES = /deep|teal|navy|gray|blue|beard|curvy|cowboy|maryJane/;
+        let sent;
+        const capture = (url) => sent.push(new URL(url, BASE));
+
+        beforeEach(() => {
+            sent = [];
+            globalThis.Image = class { set src(url) { capture(url); } };
+        });
+        afterEach(() => {
+            delete globalThis.Image;
+        });
+
+        /** The pings since `from`, each as "action kind=... outcome=...",
+         *  every parameter one the log keeps and none of them a choice. */
+        const pings = (from = 0) => sent.slice(from).map((u) => {
+            for (const k of u.searchParams.keys()) expect({ k, logged: LOGGED.includes(k) }).toEqual({ k, logged: true });
+            expect(u.search).not.toMatch(CHOICES);
+            const kind = u.searchParams.get('kind');
+            const outcome = u.searchParams.get('outcome');
+            return [u.searchParams.get('action'), kind && `kind=${kind}`, outcome && `outcome=${outcome}`].filter(Boolean).join(' ');
+        });
+        /** Boot with the way-out beacon captured too (the stub's sendBeacon
+         *  swallows it). */
+        const bootPinging = async (opts) => {
+            const main = await boot(opts);
+            globalThis.navigator.sendBeacon = (url) => { capture(url); return true; };
+            return main;
+        };
+
+        test('a visit starts with where it came from and whether an avatar was waiting, on the avatar scene, with the hash that groups a visit', async () => {
+            await bootPinging({ search: '?return=/leaves/', saved: { skin: 'deep' } });
+            expect(pings()).toEqual(['session-start kind=leaves outcome=saved']);
+            expect(sent[0].searchParams.get('scene')).toBe('avatar');
+            expect(sent[0].searchParams.get('mobile')).toBe('false');
+            // The stub has no window.crypto on purpose, so the proof of work
+            // takes its no-crypto path here and the hash is simply absent;
+            // the page asks for it under the same key every scene shares.
+            expect(sent[0].searchParams.get('hash')).toBeNull();
+            const { AVATAR_PAGE } = await import('../www/avatar/js/config.js');
+            expect(AVATAR_PAGE.proofOfWork).toEqual({ prefix: '11', storageKey: 'gallery-pow' });
+            // The way back is the visit's own last word, and the visit ends
+            // once, when the page is hidden.
+            dom.el('av-return').click();
+            expect(pings(1)).toEqual(['leave kind=leaves']);
+            dom.documentStub.hidden = true;
+            fire(dom.documentStub, 'visibilitychange');
+            fire(dom.documentStub, 'visibilitychange');
+            expect(pings(2)).toEqual(['session-end']);
+            expect(sent[2].searchParams.get('seconds')).toMatch(/^\d+$/);
+        });
+
+        test('from the home page or a typed address, with nothing saved', async () => {
+            await bootPinging({ search: '?return=/' });
+            expect(pings()).toEqual(['session-start kind=home outcome=new']);
+            await bootPinging();
+            expect(pings(1)).toEqual(['session-start kind=direct outcome=new']);
+        });
+
+        test('a change names its field and never its value, once per drag; a tab, a turn and a zoom are counted; nothing of the figure is', async () => {
+            const main = await bootPinging();
+            const { state } = main.__test__;
+            const n = sent.length;
+            const pick = (field, value) => {
+                const input = state.editor.inputs[field].find((i) => i.value === value);
+                input.checked = true;
+                fire(input, 'change');
+            };
+            pick('shirt', 'teal');
+            pick('shirt', 'navy');            // the same field straight after: one drag
+            pick('hair', 'gray');
+            expect(pings(n)).toEqual(['change kind=shirt', 'change kind=hair']);
+            const tab = (id) => dom.el('av-tabs').children.find((b) => b.id === `av-tab-${id}`);
+            tab('hair').click();
+            dom.el('av-turn-left').click();
+            dom.el('av-turn-right').click();
+            dom.el('av-zoom-in').click();
+            dom.el('av-zoom-out').click();
+            expect(pings(n + 2)).toEqual(['tab kind=hair', 'view kind=turn', 'view kind=zoom']);
+        });
+
+        test('Surprise me, Save (first, again, failed), Forget, Export, Share a link and Save a file, one ping each', async () => {
+            const main = await bootPinging();
+            const n = sent.length;
+            dom.el('av-random').click();
+            dom.el('av-save').click();
+            dom.el('av-save').click();
+            expect(pings(n)).toEqual(['surprise', 'save outcome=first', 'save outcome=again']);
+            dom.el('av-forget').click();
+            dom.el('av-forget-yes').click();
+            expect(pings(n + 3)).toEqual(['forget']);
+            dom.el('av-export-open').click();
+            expect(pings(n + 4)).toEqual(['export kind=open']);
+            dom.el('av-link').click();
+            await flushAsync(10);
+            expect(pings(n + 5)).toHaveLength(1);
+            expect(pings(n + 5)[0]).toMatch(/^share kind=(native|copy|mail|cancelled)$/);
+            const made = jest.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:avatar');
+            const revoked = jest.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+            dom.el('av-file-save').click();
+            expect(pings(n + 6)).toEqual(['file kind=save']);
+            made.mockRestore();
+            revoked.mockRestore();
+            globalThis.localStorage.setItem = () => { throw new Error('QuotaExceededError'); };
+            main.__test__.save();
+            expect(pings(n + 7)).toEqual(['save outcome=failed']);
+        });
+
+        test('an avatar arriving by link is counted on arrival and by its answer, as one action, with nothing of the avatar in it', async () => {
+            await bootPinging({ hash: '#a=1.deep.blue.gray.long.beard.round.curvy.teal.short.skirt.khaki.maryJane.red.cap.mustard' });
+            expect(pings()).toEqual(['session-start kind=direct outcome=new', 'incoming kind=link']);
+            dom.el('av-keep').click();
+            // Keep is one answer, not an answer and a save.
+            expect(pings(2)).toEqual(['incoming kind=link outcome=kept']);
+            // Declined, the same way.
+            const main = await bootPinging({ hash: '#a=1.deep.blue.gray.long.beard.round.curvy.teal.short.skirt.khaki.maryJane.red.cap.mustard' });
+            const n = sent.length;
+            main.__test__.decline();
+            expect(pings(n)).toEqual(['incoming kind=link outcome=declined']);
+        });
+
+        test('a file that would not open is counted by what went wrong', async () => {
+            const main = await bootPinging();
+            const n = sent.length;
+            await main.__test__.openFile(null);
+            expect(pings(n)).toEqual(['file kind=open outcome=none']);
+        });
     });
 });

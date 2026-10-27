@@ -207,6 +207,11 @@ export const AVATAR_PAGE = deepFreeze({
      *  before a visitor saves one), and what the lab saves it as. */
     defaultPortrait: { path: '/assets/avatar/default.png', file: 'default.png' },
 
+    /** The usage pings' proof of work (shared boot part), under the same key
+     *  every scene uses, so a visit that wanders through here stays one
+     *  visit in the log. */
+    proofOfWork: { prefix: '11', storageKey: 'gallery-pow' },
+
     quality: {
         maxPixelRatio: 2,
         maxPixelRatioMobile: 1.5,
