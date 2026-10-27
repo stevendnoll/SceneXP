@@ -434,7 +434,17 @@ describe('the portrait', () => {
             getContext: () => ({ drawImage: (...a) => calls.push(['drawImage', ...a.slice(1)]) }),
             toDataURL: () => png
         });
+        // Drawn with the avatar page's tone mapping and exposure whatever the
+        // renderer's own (a scene's, since M6), and both put back after.
+        renderer.toneMapping = THREE.NeutralToneMapping;
+        renderer.toneMappingExposure = 0.7;
+        const during = [];
+        const draw = renderer.render;
+        renderer.render = (scene, camera) => { during.push([renderer.toneMapping, renderer.toneMappingExposure]); draw(scene, camera); };
         expect(F.renderPortrait(renderer, { skin: 'deep' }, { doc })).toBe(png);
+        expect(during).toEqual([[THREE.ACESFilmicToneMapping, F.PORTRAIT.exposure]]);
+        expect(renderer.toneMapping).toBe(THREE.NeutralToneMapping);
+        expect(renderer.toneMappingExposure).toBe(0.7);
         const S = F.PORTRAIT.size;
         // Drawn into a square of S device pixels: S / ratio in CSS pixels.
         expect(calls).toContainEqual(['viewport', 0, 0, S / 2, S / 2]);

@@ -109,6 +109,19 @@
     display: none;
 }
 
+/* A scene's welcome card (M6, 2026-10-26): "Playing as [portrait] ...", the
+   portrait a small circle on the line with its words. The card's own sheet
+   lays the line out; this is the picture alone. */
+#avatar-playing-img {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    vertical-align: middle;
+    background: #e9e6e0;
+}
+
 /* The chip covers the bottom left of the window, so a page that carries it
    keeps its footer's last lines clear of it: room for the pill and its
    margin below the footer's own padding. */

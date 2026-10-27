@@ -4770,7 +4770,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Leaf Blower | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=13" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=14" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -4798,6 +4798,8 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/blower.min.js" rel="modulepreload"]
     link [href="js/view.min.js" rel="modulepreload"]
     link [href="js/cast.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
     link [href="js/lab.min.js" rel="modulepreload"]
     link [href="js/stick.min.js" rel="modulepreload"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
@@ -4811,9 +4813,15 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/hedge.min.js" rel="modulepreload"]
     link [href="js/surfaces.min.js" rel="modulepreload"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-shapes-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hair-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=2" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=13" rel="stylesheet"]
+    link [href="css/experience.min.css?v=14" rel="stylesheet"]
+    link [href="../shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -4894,11 +4902,12 @@ html [data-ui-theme="ember" lang="en"]
               "HELP"
             "The question mark in the corner brings you back here."
         div.welcome-more
-          p.cast-line
-            span#cast-name
-              "Playing in a rust red shirt and navy pants."
-            button#cast-btn.welcome-free.cast-btn [type="button"]
-              "Change your character"
+          p#avatar-playing.cast-line.avatar-line
+            img#avatar-playing-img [alt="" decoding="async" height="28" src="../assets/avatar/default.png" width="28"]
+            span#avatar-playing-text
+              "Playing as the usual figure."
+            a#avatar-playing-link.welcome-free.cast-btn [href="../avatar/?return=/leaves/"]
+              "Make your avatar"
           p#best-line.cast-line.best-line [hidden]
             span#best-text
             button#best-forget.welcome-free.cast-btn [type="button"]
@@ -4947,37 +4956,6 @@ html [data-ui-theme="ember" lang="en"]
       p#cheer-big.cheer-big
       p#cheer-small.cheer-small
       p#cheer-extra.cheer-extra
-    div#cast-modal.hidden [aria-labelledby="cast-title" aria-modal="true" role="dialog"]
-      div.cast-panel
-        h2#cast-title.cast-title
-          "Who is on leaf duty?"
-        fieldset.cast-group
-          legend
-            "Shirt"
-          div#cast-shirts.cast-options.cast-swatches
-        fieldset.cast-group
-          legend
-            "Pants"
-          div#cast-pants.cast-options.cast-swatches
-        fieldset.cast-group
-          legend
-            "Skin tone"
-          div#cast-skins.cast-options.cast-swatches
-        fieldset.cast-group
-          legend
-            "Hair color"
-          div#cast-hair.cast-options.cast-swatches
-        fieldset.cast-group
-          legend
-            "Hair"
-          div#cast-length.cast-options
-        button#cast-done.piece-enter.cast-done [type="button"]
-          "Done"
-        button#cast-forget.cast-forget [type="button"]
-          "Forget my choice"
-        p.cast-note
-          "Your choice is kept in this browser, so they are waiting for you next time."
-        p#cast-status.sr-only [aria-live="polite" role="status"]
     div#end-modal.hidden [aria-describedby="end-line" aria-labelledby="end-title" aria-modal="true" role="dialog"]
       div.modal-backdrop
       div.end-card
@@ -6059,8 +6037,8 @@ html [lang="en"]
               "Corner Office keeps everything you enter, your applications, interviews, contacts and follow-ups, along with your settings and which things in the office you have already opened, in your browser's local storage, so your office is just as you left it when you come back. None of it is ever sent anywhere: its usage pings say only what kind of thing you did, such as adding an application, and never anything you typed. Its Share my week button makes a picture of your week right on your device, with just how many applications you sent each week and your weekly goal, never a company or a role, and hands it only to your own share sheet or downloads folder. Its Out-tray saves a backup you can keep, and its Settings can clear the office on the spot."
             li
               strong
-                "Your character and best time in Leaf Blower."
-              "The leaf blower game keeps the character you choose, their shirt and pants colors, skin tone, hair color and hair length, in your browser's local storage, so they are waiting for you when you come back. When you clear the whole lawn before the clock runs out, it also keeps your fastest time, just the number of seconds, so you have a time to beat. The Forget my choice button on the character card and the Forget my best time button on the welcome card clear them on the spot."
+                "Your best time in Leaf Blower."
+              "When you clear the whole lawn before the clock runs out, the leaf blower game keeps your fastest time, just the number of seconds, in your browser's local storage, so you have a time to beat. The Forget my best time button on the welcome card clears it on the spot. The person on leaf duty is your avatar, described below. A character chosen on the game's own card before October 26, 2026 is moved into your avatar the next time the game opens, and the old record is removed."
             li
               strong
                 "Your avatar."

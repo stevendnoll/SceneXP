@@ -817,6 +817,18 @@ describe('the corner chip', () => {
         expect(els.link.title).toBe(A.CHIP_TITLES.unsaved);
     });
 
+    test('a scene\'s welcome card shows the chip without counting a home visit (M6, 2026-10-26)', () => {
+        installStorage();
+        const store = A.createAvatarStore({ win: null });
+        for (let i = 0; i < 3; i++) expect(A.installChip(parts(), { store, countVisit: false }).labelShown).toBe(true);
+        expect(store.chip().seen).toBe(0);
+        // The home page's own count is untouched by them, and still folds
+        // the label on its own schedule.
+        for (let i = 0; i <= A.CHIP_LABEL_VISITS; i++) A.installChip(parts(), { store });
+        expect(A.installChip(parts(), { store, countVisit: false }).labelShown).toBe(false);
+        expect(store.chip().seen).toBe(A.CHIP_LABEL_VISITS + 1);
+    });
+
     test('saved but with no portrait yet keeps the default picture, and no image means no chip', () => {
         installStorage();
         const store = A.createAvatarStore({ win: null });

@@ -1107,9 +1107,10 @@ export const CHIP_TITLES = Object.freeze({
  * saving or forgetting updates it in place.
  *
  * Returns `{ saved, labelShown, refresh, dispose }`, or null without an
- * image to show.
+ * image to show. `countVisit` false (a scene's welcome card, M6) leaves the
+ * home page's visit count alone.
  */
-export function installChip(els, { store = createAvatarStore(), defaultSrc = '' } = {}) {
+export function installChip(els, { store = createAvatarStore(), defaultSrc = '', countVisit = true } = {}) {
     const { img, label, hide, link } = els || {};
     if (!img) return null;
     let labelShown = false;
@@ -1134,7 +1135,9 @@ export function installChip(els, { store = createAvatarStore(), defaultSrc = '' 
     }
 
     saved = store.hasSaved();
-    const rule = store.noteVisit();
+    // A scene's welcome card (`countVisit` false) shows the chip without
+    // counting toward the home page's label rule.
+    const rule = countVisit ? store.noteVisit() : store.chip();
     labelShown = chipLabelShown({ saved, ...rule });
     refresh();
 

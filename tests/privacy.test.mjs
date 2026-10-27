@@ -57,7 +57,7 @@ const PERSISTENT = {
     // The shared figure store (promoted from www/leaves/js/cast.js on
     // 2026-10-19), under each scene's own key: Leaf Blower's character, and
     // Derby Day's family (M6, key derby-family).
-    'www/shared/js/cast-1.0.0.js': 'the character chosen in Leaf Blower, and the family dressed in Derby Day',
+    'www/shared/js/cast-1.0.0.js': 'the family dressed in Derby Day (and, until Leaf Blower moves it into the avatar, a character chosen there before 2026-10-26)',
     // The site-wide avatar (specs/avatar M1, 2026-10-23): the avatar, its
     // portrait, and the home chip's label rule, under three scenexp-avatar
     // keys.
@@ -154,9 +154,11 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // about most, a whole job search, and that none of it is sent.
     expect(text).toMatch(/Corner Office keeps everything you enter/i);
     expect(text).toMatch(/never anything you typed/i);
-    // The character chosen in Leaves (M4, 2026-10-06), and how to clear it.
-    expect(text).toMatch(/keeps the character you choose/i);
-    expect(text).toMatch(/Forget my choice button/i);
+    // The character chosen in Leaves (M4, 2026-10-06) became the visitor's
+    // avatar (2026-10-26): the page says where an old choice went, and no
+    // longer offers a button that is gone.
+    expect(text).toMatch(/moved into your avatar/i);
+    expect(text).not.toMatch(/Forget my choice button/i);
     // And its best time to clear the lawn (2026-10-08): only the seconds,
     // and how to clear that too.
     expect(text).toMatch(/keeps your fastest time, just the number of seconds/i);

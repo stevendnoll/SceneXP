@@ -1467,7 +1467,12 @@ export const PORTRAIT = Object.freeze({
     distance: 1.1,
     aimY: 1.565,
     lift: 0.03,
-    background: 0xe9e6e0
+    background: 0xe9e6e0,
+    // The avatar page's own tone mapping and exposure, set on whichever
+    // renderer draws the portrait (a scene's, since M6), so a portrait drawn
+    // in Leaf Blower matches one drawn on the avatar page.
+    toneMapping: 'ACESFilmicToneMapping',
+    exposure: 1.0
 });
 
 /** Above this many characters a PNG portrait is kept as a JPEG instead. */
@@ -1524,6 +1529,8 @@ export function renderPortrait(renderer, avatar, { overrides = {}, P = PORTRAIT,
         renderer.getScissor(scissor);
         const scissorTest = renderer.getScissorTest();
         const target = renderer.getRenderTarget();
+        const toneMapping = renderer.toneMapping;
+        const exposure = renderer.toneMappingExposure;
 
         // three's viewport takes CSS pixels, multiplies by the ratio and
         // rounds (r186), so `size / ratio` is exactly `size` device pixels,
@@ -1533,7 +1540,11 @@ export function renderPortrait(renderer, avatar, { overrides = {}, P = PORTRAIT,
         renderer.setViewport(0, 0, css, css);
         renderer.setScissor(0, 0, css, css);
         renderer.setScissorTest(true);
+        if (THREE[P.toneMapping] !== undefined) renderer.toneMapping = THREE[P.toneMapping];
+        renderer.toneMappingExposure = P.exposure;
         renderer.render(scene, camera);
+        renderer.toneMapping = toneMapping;
+        renderer.toneMappingExposure = exposure;
 
         const out = doc.createElement('canvas');
         out.width = size;

@@ -128,9 +128,11 @@ export const ARM_POSES = Object.freeze({
  * lying body about its length, `op.lift` raises it, and `op.hideBlower`
  * puts the blower away (the finale's dive).
  *
- * `options` dresses them: { person } for createPerson, { blower, bigBlower }
- * for the blowers' colors. The visitor's defaults are a flannel shirt and
- * jeans with an orange blower.
+ * `options` dresses them: { person } for createPerson, or a figure already
+ * built on the shared rig (the visitor's avatar, avatar-figure's
+ * `createAvatar(...).person`, M6 2026-10-26), { blower, bigBlower } for the
+ * blowers' colors. The visitor's defaults are a flannel shirt and jeans with
+ * an orange blower.
  */
 export function createOperatorFigure(B, look, options = {}) {
     const group = new THREE.Group();
@@ -147,7 +149,7 @@ export function createOperatorFigure(B, look, options = {}) {
     const holder = new THREE.Group();
     holder.position.y = -PIVOT;
     tilt.add(holder);
-    const person = createPerson({
+    const person = options.person && options.person.isObject3D ? options.person : createPerson({
         role: 'operator',
         shirtColor: 0x9c2b25,
         pantsColor: 0x34495e,

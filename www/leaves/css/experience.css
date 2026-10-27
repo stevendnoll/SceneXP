@@ -182,8 +182,7 @@ html:not(.touch-ui) #instructions .for-touch {
 
 /* A finger's worth (44 px) for the card's small buttons on a touch screen,
    where a near miss steps into the yard instead. */
-html.touch-ui #instructions .cast-btn,
-html.touch-ui .cast-forget {
+html.touch-ui #instructions .cast-btn {
     min-height: 44px;
 }
 
@@ -965,7 +964,7 @@ html.touch-ui .cast-forget {
     }
 }
 
-/* ---- The welcome card's character line (M4) ---- */
+/* ---- The welcome card's character line (M4), the avatar's since M6 ---- */
 
 #instructions .cast-line {
     margin: 1.25rem auto 0;
@@ -979,6 +978,23 @@ html.touch-ui .cast-forget {
     padding: 0.25rem 0.5rem;
 }
 
+/* "Playing as [portrait] ... Make your avatar": the portrait (sized by the
+   shared avatar sheet) sits on the line with its words and the link. */
+#instructions .avatar-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem 0.5rem;
+}
+
+#instructions .avatar-line .cast-btn {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    text-decoration: none;
+}
+
 /* The best time to clear the lawn, under the character line (2026-10-08),
    only once there is one. */
 #instructions .best-line {
@@ -989,164 +1005,9 @@ html.touch-ui .cast-forget {
     display: none;
 }
 
-/* ---- The character card (M4) ----
-   Beside the yard, not over it: a panel down the right on a wide screen and
-   a sheet along the bottom on a narrow one, so the character the camera has
-   come in close on stays in view while the choices are made. The scene is
-   not dimmed. Its own ink on a warm, nearly opaque paper. */
-
-#cast-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 200;
-    pointer-events: none;
-}
-
-#cast-modal.hidden {
-    display: none;
-}
-
-.cast-panel {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    bottom: 16px;
-    width: min(380px, calc(100vw - 32px));
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding: 1.4rem 1.3rem 1.2rem;
-    box-sizing: border-box;
-    border-radius: 16px;
-    background: rgba(247, 247, 244, 0.97);
-    color: var(--gallery-ink);
-    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.35);
-    pointer-events: auto;
-    font-family: var(--font-system);
-}
-
-@media (max-width: 719px) {
-    .cast-panel {
-        top: auto;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: auto;
-        max-height: 56vh;
-        max-height: 56dvh;
-        border-radius: 16px 16px 0 0;
-        padding-bottom: max(1.2rem, env(safe-area-inset-bottom));
-    }
-}
-
-.cast-title {
-    margin: 0 0 0.9rem;
-    font-size: 1.35rem;
-    font-weight: 700;
-}
-
-.cast-group {
-    margin: 0 0 0.9rem;
-    padding: 0;
-    border: none;
-}
-
-.cast-group legend {
-    margin-bottom: 0.4rem;
-    padding: 0;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--gallery-muted);
-}
-
-.cast-options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-}
-
-/* Each choice is a real radio button, hidden behind its label, so the arrow
-   keys move through a group and a screen reader names it. The resting look
-   is plain and only the chosen one is filled: a tinted resting control reads
-   as one already pressed. */
-.cast-option {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    min-height: 40px;
-    padding: 0.35rem 0.75rem;
-    border: 1.5px solid rgba(0, 0, 0, 0.18);
-    border-radius: 999px;
-    font-size: 0.9rem;
-    cursor: pointer;
-}
-
-.cast-option input {
-    position: absolute;
-    opacity: 0;
-    inset: 0;
-    margin: 0;
-    cursor: pointer;
-}
-
-.cast-option.chosen {
-    border-color: var(--gallery-accent);
-    background: rgba(61, 90, 128, 0.12);
-    font-weight: 600;
-}
-
-.cast-option:focus-within {
-    /* The card's own dark accent: #9db4d0 measured 1.96 on the paper. */
-    outline: 3px solid #3d5a80;
-    outline-offset: 2px;
-}
-
-#cast-done:focus-visible {
-    outline: 3px solid #3d5a80;
-    outline-offset: 2px;
-}
-
-.cast-swatches .cast-option {
-    padding: 4px;
-    min-width: 40px;
-    justify-content: center;
-}
-
-.cast-swatch {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
-}
-
-.cast-done {
-    border: none;
-    cursor: pointer;
-    font-size: 1rem;
-    margin-top: 0.3rem;
-}
-
-.cast-forget {
-    display: block;
-    margin: 0.6rem auto 0;
-    padding: 0.4rem 0.6rem;
-    border: none;
-    background: none;
-    color: var(--gallery-muted);
-    font: inherit;
-    font-size: 0.85rem;
-    text-decoration: underline;
-    cursor: pointer;
-}
-
-.cast-note {
-    margin: 0.4rem 0 0;
-    font-size: 0.78rem;
-    color: var(--gallery-muted);
-    text-align: center;
-}
+/* The character card of M4 (a panel of radio buttons beside the yard) was
+   retired on 2026-10-26: the avatar page is the editor now, and the welcome
+   card links to it. Its styles are in the git history with it. */
 
 /* THE LAB'S ?clean=1 (a QA host only, js/lab.js): nothing over the yard,
    for capturing the social card. The welcome and end cards still show. */
