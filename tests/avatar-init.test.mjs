@@ -788,6 +788,24 @@ describe('the page', () => {
         expect(css).not.toMatch(/\.av-tabs::-webkit-scrollbar/);
     });
 
+    test('the studio sticks to the viewport on a phone: the body is not a scroll container (Steve\'s phone QA, 2026-10-27)', () => {
+        // html's overflow is handed to the viewport, and once it is not
+        // `visible` the body keeps its own. `overflow: auto` on both made
+        // the body a scroll container, and the sticky studio stuck to it
+        // rather than to the viewport: the body never scrolls (it fits its
+        // content), so the studio scrolled away with the choices.
+        const css = readFileSync('www/avatar/css/avatar.css', 'utf8');
+        const rule = (selector) => [...css.matchAll(new RegExp(`(?:^|\\n)${selector} \\{([^}]*)\\}`, 'g'))].map((m) => m[1]).join('\n');
+        expect(rule('html')).toMatch(/overflow:\s*auto/);
+        expect(rule('body\\.av-body')).toMatch(/overflow:\s*visible/);
+        expect(rule('body\\.av-body')).not.toMatch(/overflow(-[xy])?:\s*(auto|scroll|hidden)/);
+        // The studio is sticky at the top on every width, and the phone
+        // rules leave its position alone.
+        expect(rule('\\.av-stage')).toMatch(/position:\s*sticky/);
+        const phone = css.slice(css.indexOf('@media (max-width: 760px)'));
+        expect(phone.match(/\.av-stage \{([^}]*)\}/)[1]).not.toMatch(/position/);
+    });
+
     test('every id the page looks up is in its markup, once', () => {
         const ids = [...MAIN.matchAll(/\$\('([\w-]+)'\)/g)].map((m) => m[1]);
         expect(ids.length).toBeGreaterThan(20);

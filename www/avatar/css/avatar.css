@@ -23,12 +23,27 @@
 
 /* The shared sheet makes a scene page a fixed app with no scrolling and no
    text selection. This page is a form beside a picture, so it scrolls on a
-   phone and its words can be selected. */
-html,
-body.av-body {
+   phone and its words can be selected.
+
+   THE VIEWPORT SCROLLS, NOT THE BODY (Steve's phone QA, 2026-10-27: the
+   studio scrolled away with the choices). html's overflow is handed to the
+   viewport, and once it is anything but `visible` the body keeps its own,
+   so `overflow: auto` on both made the body a scroll container. A sticky
+   element sticks to its nearest scroll container, and the body never
+   scrolls (it fits its content and the viewport moves it), so the sticky
+   studio rode off with the page. The body stays `visible` and the studio
+   sticks to the viewport. tests/avatar-init guards it. */
+html {
     height: auto;
     min-height: 100%;
     overflow: auto;
+    background: var(--av-studio);
+}
+
+body.av-body {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
     background: var(--av-studio);
     color: var(--av-ink);
     -webkit-user-select: auto;
