@@ -122,6 +122,11 @@
     background: #e9e6e0;
 }
 
+/* A card that shows the portrait only once an avatar is saved (X's and O's). */
+#avatar-playing-img[hidden] {
+    display: none;
+}
+
 /* The chip covers the bottom left of the window, so a page that carries it
    keeps its footer's last lines clear of it: room for the pill and its
    margin below the footer's own padding. */

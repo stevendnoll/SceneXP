@@ -237,3 +237,116 @@ describe('the silhouette', () => {
         expect(Math.abs(left - right)).toBeLessThan(Math.max(left, right) * 0.25);
     });
 });
+
+/**
+ * THE VISITOR AT QUARTERBACK (specs/avatar M7, 2026-10-26). With a saved
+ * avatar the quarterback is the avatar in its own clothes and the team's
+ * helmet, so the shell has to go over EVERY hair style the avatar page offers,
+ * not the rig's four. Measured here the way the hats are measured in
+ * tests/shared-avatar-hats: every vertex of hair still showing is either
+ * under the rim or inside the shell.
+ */
+describe("the visitor's avatar at quarterback", () => {
+    let roster;
+    let A;
+    let hats;
+    const QB = { team: 0, positionGroup: 'qb', position: 'qb' };
+    const WR = { team: 0, positionGroup: 'wr', position: 'wr1' };
+
+    beforeAll(async () => {
+        roster = await import(join(root, 'www/xo/js/roster.js'));
+        A = await import(join(root, 'www/shared/js/avatar-1.0.0.js'));
+        hats = await import(join(root, 'www/shared/js/avatar-hats-1.0.0.js'));
+    });
+
+    /** Whether a point, in the figure's own coordinates, is inside the shell's ball. */
+    const inShell = (v) => {
+        const [cx, cy, cz] = roster.SHELL.at;
+        const [sx, sy, sz] = roster.SHELL.scale;
+        const r = roster.SHELL.r;
+        return Math.hypot((v.x - cx) / (r * sx), (v.y - cy) / (r * sy), (v.z - cz) / (r * sz)) <= 1;
+    };
+    /** A figure at life size, at the origin, its matrices current. */
+    const plain = (person) => {
+        person.scale.setScalar(1);
+        person.position.set(0, 0, 0);
+        person.updateMatrixWorld(true);
+        return person;
+    };
+    const shown = (m) => {
+        for (let p = m; p; p = p.parent) if (p.visible === false) return false;
+        return true;
+    };
+
+    test('without a saved avatar the quarterback is exactly a plain player', () => {
+        const outline = (person) => {
+            const out = [];
+            // Everything but the root's own name, which carries the position.
+            person.traverse((o) => out.push(`${o.type}:${o === person ? '' : o.name}:${o.geometry ? o.geometry.type : ''}`));
+            return out;
+        };
+        const qb = roster.buildPlayer(QB, 0, null);
+        const wr = roster.buildPlayer(WR, 0, null);
+        expect(outline(qb)).toEqual(outline(wr));
+        expect(qb.userData.avatar).toBeUndefined();
+        expect(qb.children.filter((o) => o.name === 'jersey-mark').length).toBeGreaterThan(0);
+        expect(roster.helmetRim()).toBeCloseTo(1.367, 2);
+    });
+
+    test('with one: the hat comes off, the glasses stay, no letter on the shirt, and the helmet is the team\'s', () => {
+        const hat = A.HATS.find((h) => h.id !== 'none').id;
+        const qb = plain(roster.buildPlayer(QB, 0, { hat, glasses: 'sunglasses', shirt: 'teal' }));
+        expect(qb.userData.avatar).toBe(true);
+        const head = qb.children.find((o) => o.name === 'head');
+        expect(head).toBeDefined();
+        expect(head.children.find((o) => o.name === 'hat')).toBeUndefined();
+        expect(head.children.find((o) => o.name === 'glasses')).toBeDefined();
+        expect(qb.children.filter((o) => o.name === 'jersey-mark')).toHaveLength(0);
+        for (const name of ['helmet-crown', 'helmet-shell', 'helmet-flap', 'helmet-mask', 'helmet-strap']) {
+            expect(`${name}: ${qb.children.filter((o) => o.name === name).length > 0}`).toBe(`${name}: true`);
+        }
+        const shell = qb.children.find((o) => o.name === 'helmet-shell');
+        expect(shell.material.userData).toEqual({ kit: 'helmet', team: 0 });
+        // The shirt is the visitor's own: no material of theirs is tagged for the kit.
+        let tagged = 0;
+        qb.traverse((o) => {
+            if (o.isMesh && o.material.userData && (o.material.userData.kit === 'shirt' || o.material.userData.kit === 'sleeve')) tagged++;
+        });
+        expect(tagged).toBe(0);
+        // The field's gloved hands, as every other player's: the rig sizes
+        // the hand's geometry by `handScale`, so the two hands measure alike.
+        const handOf = (person) => {
+            const hand = person.userData.arms[0].userData.forearm.children.find((c) => c.userData && c.userData.isHand);
+            hand.updateMatrixWorld(true);
+            return box(hand).getSize(new THREE.Vector3());
+        };
+        const theirs = handOf(qb);
+        const ours = handOf(plain(roster.buildPlayer(WR, 0, null)));
+        expect(theirs.x).toBeCloseTo(ours.x, 6);
+        expect(theirs.y).toBeCloseTo(ours.y, 6);
+        expect(qb.userData.lift).toBeGreaterThan(0);
+    });
+
+    test('every hair style, on a round and an oval face, stays under the helmet or hangs from its rim', () => {
+        const rim = roster.helmetRim();
+        for (const faceShape of A.FACE_SHAPES.map((f) => f.id)) {
+            for (const style of A.HAIR_LENGTHS) {
+                const qb = plain(roster.buildPlayer(QB, 0, { length: style.id, faceShape }));
+                const head = qb.children.find((o) => o.name === 'head');
+                const hair = head.children.find((o) => o.userData && o.userData.isHair);
+                if (!hair) continue;
+                let out = 0;
+                let showing = 0;
+                hats.eachVertex([head], (v) => {
+                    showing++;
+                    if (v.y > rim + 0.002 && !inShell(v)) out++;
+                }, (m) => {
+                    if (!shown(m)) return false;
+                    for (let p = m; p; p = p.parent) if (p.userData && p.userData.isHair) return true;
+                    return false;
+                });
+                expect(`${faceShape} ${style.id}: ${out} of ${showing} out`).toBe(`${faceShape} ${style.id}: 0 of ${showing} out`);
+            }
+        }
+    });
+});

@@ -1640,9 +1640,11 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // AND HIS FEET GO ON THE GRASS, NOT THROUGH IT. The rig stands itself
         // at y = 0.055 because its shoes hang below its own origin, and writing
         // a flat zero here buried every player on the field to the ankle.
+        // The visitor's avatar at quarterback (M7) may stand on platform
+        // shoes, so a figure's own lift wins where the roster kept one.
         figure.position.set(
             p.x + (role ? role.x : 0) + (cheer ? cheer.x : 0),
-            FIGURE_LIFT + (role && role.y ? role.y : 0) + airborne
+            (figure.userData.lift ?? FIGURE_LIFT) + (role && role.y ? role.y : 0) + airborne
                 + (cheer ? cheer.y : 0),
             p.z + (role ? role.z : 0) + (cheer ? cheer.z : 0)
         );

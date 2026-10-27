@@ -8617,12 +8617,13 @@ html [data-ui-theme="neon" lang="en"]
     title
       "X's and O's | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=18" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=19" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
     link [href="js/field.min.js" rel="modulepreload"]
     link [href="js/roster.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-1.0.0.min.js" rel="modulepreload"]
     link [href="js/colors.min.js" rel="modulepreload"]
     link [href="js/ball.min.js" rel="modulepreload"]
     link [href="js/markers.min.js" rel="modulepreload"]
@@ -8652,7 +8653,10 @@ html [data-ui-theme="neon" lang="en"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="js/telemetry.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
     link [href="js/arm.min.js" rel="modulepreload"]
+    link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
     link [href="js/formations.min.js" rel="modulepreload"]
     link [href="js/routes.min.js" rel="modulepreload"]
     link [href="js/motion.min.js" rel="modulepreload"]
@@ -8660,10 +8664,15 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/fans.min.js" rel="modulepreload"]
     link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
     link [href="js/playbook.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-shapes-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hair-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=18" rel="stylesheet"]
+    link [href="css/experience.min.css?v=19" rel="stylesheet"]
+    link [href="../shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -8788,6 +8797,12 @@ html [data-ui-theme="neon" lang="en"]
           ". Good luck."
         p#welcome-resume.card-meta.welcome-resume [hidden]
         div#welcome-actions.card-actions
+        p#avatar-playing.card-meta.avatar-line
+          img#avatar-playing-img [alt="" decoding="async" height="28" hidden loading="lazy" src="../assets/avatar/default.png" width="28"]
+          span#avatar-playing-text
+            "Take the snap at quarterback as yourself."
+          a#avatar-playing-link.welcome-explore [href="../avatar/?return=/xo/"]
+            "Make your avatar"
         p.welcome-explore-row
           a#explore-link.welcome-explore [href="/"]
             "More 3D worlds to explore at SceneXP.com"

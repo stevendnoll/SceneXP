@@ -31,6 +31,8 @@
  * fixing it needs a new joint in the shared part rather than anything here.
  */
 import { createPerson } from '../../shared/js/people-1.0.0.min.js';
+import { createAvatar } from '../../shared/js/avatar-figure-1.0.0.min.js';
+import { trimUnder } from '../../shared/js/avatar-hats-1.0.0.min.js';
 import { XO_CONFIG as CFG } from './config.min.js';
 import { solveArm, calibrate } from './arm.min.js';
 import { jerseyOf, helmetOf, markInk } from './colors.min.js';
@@ -120,6 +122,25 @@ const HELMET = {
 };
 
 /**
+ * THE SHELL, WRITTEN ONCE: a ball of `r`, squashed by `scale`, centred `at`,
+ * swept `sweep` of a half-turn down from the top, so its lower edge at the
+ * back is `helmetRim()`. `buildHelmetParts` builds from these, and the
+ * visitor's avatar (M7, 2026-10-26) has its hair fitted under the same
+ * numbers, so the two can never drift apart.
+ */
+export const SHELL = Object.freeze({
+    r: 0.145,
+    scale: Object.freeze([1.06, 1.09, 1.16]),
+    at: Object.freeze([0, HEAD.y + HELMET.up, -0.010]),
+    sweep: 0.92,
+});
+
+/** The shell's lower edge at the back, where hair may hang out from under it. */
+export function helmetRim() {
+    return SHELL.at[1] + SHELL.r * SHELL.scale[1] * Math.cos(Math.PI * SHELL.sweep);
+}
+
+/**
  * The helmet, as a list of parts.
  *
  * SEPARATED FROM `addHelmet` SO IT CAN BE MEASURED. The test stub models no
@@ -162,13 +183,13 @@ export function buildHelmetParts(shellMat, maskMat) {
      * radius, a scale and a centre, so they meet seamlessly at the join.
      */
     const GAP = 1.40;                  // radians of face opening, about 80 degrees
-    const R = 0.145;
-    const AT = [0, HEAD.y + HELMET.up, -0.010];
+    const R = SHELL.r;
+    const AT = SHELL.at;
     // TALLER THAN IT WAS, and that is the other half of the floating shell. At
     // 1.04 the half-height was 0.151 and the hair reaches 0.171 above the head's
     // centre, so even a correctly placed shell of that size left the top of the
     // hair outside it. 1.09 covers the lot with 3mm to spare.
-    const SCALE = [1.06, 1.09, 1.16];
+    const SCALE = SHELL.scale;
     // Where the crown stops and the face opening begins. At 0.42 of a
     // half-turn the join sits at y = 1.56, which is above the eyes at 1.52, so
     // the opening starts at the brow the way a real shell does.
@@ -186,7 +207,7 @@ export function buildHelmetParts(shellMat, maskMat) {
         new THREE.SphereGeometry(
             R, 22, 10,
             Math.PI / 2 + GAP / 2, Math.PI * 2 - GAP,
-            CROWN, Math.PI * 0.92 - CROWN
+            CROWN, Math.PI * SHELL.sweep - CROWN
         ),
         shellMat
     );
@@ -871,8 +892,17 @@ function shareGeometryAndMaterials(root) {
         m.userData && m.userData.kit ? `${m.userData.kit}:${m.userData.team}` : '',
     ].join('|');
 
+    // THE VISITOR'S AVATAR IS LEFT ALONE (M7, 2026-10-26). Its face is shaped
+    // point by point from geometries that still carry their parameters, and
+    // its hair material carries a map the key below does not see, so sharing
+    // could swap either for a plain player's. One figure unshared is a
+    // rounding error against seventeen.
+    const own = new Set();
+    root.traverse((o) => {
+        if (o.userData && o.userData.avatar) o.traverse((m) => own.add(m));
+    });
     root.traverse((obj) => {
-        if (!obj.isMesh) return;
+        if (!obj.isMesh || own.has(obj)) return;
         meshes += 1;
         if (obj.geometry) {
             geomBefore.add(obj.geometry.uuid);
@@ -1038,18 +1068,70 @@ export function applyTeamColors() {
     }
 }
 
-/** Build every figure. Nothing is positioned here: view.js owns placement. */
-export function initRoster(scene, objects) {
-    disposeRoster();
-    group = new THREE.Group();
-    group.name = 'roster';
+/**
+ * THE VISITOR AT QUARTERBACK (specs/avatar M7, 2026-10-26). Their own avatar,
+ * as the avatar page draws it, in their own clothes, with the team's helmet
+ * over it: the hat comes off (nothing fits under a helmet), the glasses stay
+ * (Steve: sunglasses behind a facemask is funny), and there is no letter on
+ * the shirt, since the shirt is theirs. The field's shoulders and gloved
+ * hands, for the same reasons as every other player's.
+ *
+ * THE HAIR GOES UNDER THE SHELL. The helmet is a closed dome down to
+ * `helmetRim()` at the back, so every piece of hair but the rig's long
+ * box-shaped hanks is hidden (a shell hides the scalp whatever is on it),
+ * and the hanks are cut to hang from the rim (avatar-hats' `trimUnder`,
+ * the way a hat trims them). tests/xo-helmet measures every style.
+ */
+function buildAvatarPerson(avatar, kit) {
+    const { person } = createAvatar(avatar, {
+        overrides: { hat: 'none' },
+        role: 'customer',
+        extra: { shoulderRound: 0.35, handScale: 1.9 },
+    });
+    const face = person.children.find((o) => o.name === 'head');
+    const hair = face ? face.children.find((o) => o.userData && o.userData.isHair) : null;
+    if (hair) {
+        hair.traverse((m) => {
+            if (m.isMesh && !(m.geometry && m.geometry.type === 'BoxGeometry')) m.visible = false;
+        });
+        // The rim, in the head group's own coordinates: the head's middle at
+        // its origin, stretched for an oval face.
+        const stretch = Number.isFinite(face.scale.y) && face.scale.y > 0 ? face.scale.y : 1;
+        const rim = (helmetRim() - HEAD.y) / stretch;
+        trimUnder(hair, () => rim);
+    }
+    addHelmet(person, kit);
+    // Only the helmet wears the team's colors: the shirt is the visitor's own.
+    person.traverse((node) => {
+        const m = node.isMesh && node.material;
+        if (!m || Array.isArray(m)) return;
+        if (node.name === 'helmet-shell' || node.name === 'helmet-crown' || node.name === 'helmet-flap') {
+            m.userData = { ...(m.userData || {}), kit: 'helmet', team: 0 };
+        }
+    });
+    addContactShadow(person);
+    person.userData.avatar = true;
+    return person;
+}
 
-    objects.forEach((obj, i) => {
-        const { team, positionGroup, position } = obj.settings;
-        const kit = KITS[team];
-        const isLineman = positionGroup === 'x';
+/**
+ * ONE PLAYER, as the roster builds them: the `i`th figure for `settings`
+ * (`team`, `positionGroup`, `position`), and the visitor's `avatar` at
+ * quarterback when there is one (null otherwise, and the quarterback is a
+ * player like any other). Exported so the suite can measure a figure
+ * without a scene.
+ */
+export function buildPlayer(settings, i, avatar = null) {
+    const { team, positionGroup, position } = settings;
+    const kit = KITS[team];
+    const isLineman = positionGroup === 'x';
+    const visitor = Boolean(avatar) && position === 'qb' && team === 0;
 
-        const person = createPerson({
+    let person;
+    if (visitor) {
+        person = buildAvatarPerson(avatar, kit);
+    } else {
+        person = createPerson({
             role: 'customer',
             shirtColor: kit.shirt,
             // LONG SLEEVES, AND THEY ARE NOT DECORATION. Bare forearms are the
@@ -1096,55 +1178,69 @@ export function initRoster(scene, objects) {
         addJersey(person, TEAMS[team].glyph, isLineman);
         tagKit(person, team, kit);
         addContactShadow(person);
-        // Read before anything overwrites it, and only when it is a real
-        // number: under the test stub every property is a proxy.
-        if (Number.isFinite(person.position.y) && person.position.y > 0) {
-            FIGURE_LIFT = person.position.y * CFG.figureScale;
-        }
-        // Scaled as a whole, so the helmet, the contact shadow and every limb
-        // pivot move together. Scaling the rig's parts individually would put
-        // the helmet through the head.
-        person.scale.setScalar(CFG.figureScale);
+    }
+    // Read before anything overwrites it, and only when it is a real
+    // number: under the test stub every property is a proxy. The field's
+    // lift comes from the players; the visitor's own (platform shoes stand
+    // them taller) is theirs alone, kept on the figure for view.js.
+    const lift = Number.isFinite(person.position.y) && person.position.y > 0 ? person.position.y * CFG.figureScale : null;
+    if (lift !== null && !visitor) FIGURE_LIFT = lift;
+    person.userData.lift = lift;
+    // Scaled as a whole, so the helmet, the contact shadow and every limb
+    // pivot move together. Scaling the rig's parts individually would put
+    // the helmet through the head.
+    person.scale.setScalar(CFG.figureScale);
 
-        person.name = `player-${position}`;
-        person.userData.position = position;
-        person.userData.team = team;
-        person.userData.phase = Math.random() * Math.PI * 2;  // nobody in step
-        // YXZ, SO A LEAN HAPPENS ON THE FIGURE'S OWN AXIS. The tackle pitch is
-        // applied to rotation.x alongside the yaw in rotation.y, and on the
-        // default XYZ order the pitch is taken about the WORLD x axis first,
-        // which tips a player facing across the field sideways instead of
-        // forward.
-        person.rotation.order = 'YXZ';
-        // The arms, found once at build time rather than searched every frame.
-        // THE RESTING ANGLES ARE CAPTURED, NOT ASSUMED. The shared rig sets a
-        // slight natural pose on every shoulder, and every pose below starts
-        // from it. Hard-coding the numbers here would work until people-1.0.0
-        // changed one of them, at which point every player would develop a
-        // permanent lean that nothing in this file explains.
-        person.userData.arms = person.children.filter((c) => c.userData && c.userData.isArm);
-        for (const arm of person.userData.arms) {
-            arm.userData.restX = arm.rotation.x;
-            arm.userData.restZ = arm.rotation.z;
-        }
-        // AND THE LEGS, THE SAME WAY, WHICH IS NEW. The hip pivot was always
-        // there and nothing had ever asked for it, so `people-1.0.0` did not
-        // tag it: this file's own note used to say the legs were "bare meshes
-        // with no pivot", which was wrong and cost the game its stride. Found
-        // by the tag rather than by position, because a lookup by position into
-        // a shared rig is the fault `person-rig-seams.test.mjs` exists for.
-        person.userData.legs = person.children.filter((c) => c.userData && c.userData.isLeg);
-        for (const leg of person.userData.legs) leg.userData.restX = leg.rotation.x;
-        // AND THE ARM'S MEASUREMENTS GO THE SAME WAY, for the same reason.
-        // arm.js has to know where the shoulder is and how long the two
-        // segments are to put a hand anywhere, and reading them off a figure
-        // that was actually built means a change in the shared part arrives
-        // here rather than quietly moving every pose in the game.
-        measureArm(person);
+    person.name = `player-${position}`;
+    person.userData.position = position;
+    person.userData.team = team;
+    person.userData.phase = Math.random() * Math.PI * 2;  // nobody in step
+    // YXZ, SO A LEAN HAPPENS ON THE FIGURE'S OWN AXIS. The tackle pitch is
+    // applied to rotation.x alongside the yaw in rotation.y, and on the
+    // default XYZ order the pitch is taken about the WORLD x axis first,
+    // which tips a player facing across the field sideways instead of
+    // forward.
+    person.rotation.order = 'YXZ';
+    // The arms, found once at build time rather than searched every frame.
+    // THE RESTING ANGLES ARE CAPTURED, NOT ASSUMED. The shared rig sets a
+    // slight natural pose on every shoulder, and every pose below starts
+    // from it. Hard-coding the numbers here would work until people-1.0.0
+    // changed one of them, at which point every player would develop a
+    // permanent lean that nothing in this file explains.
+    person.userData.arms = person.children.filter((c) => c.userData && c.userData.isArm);
+    for (const arm of person.userData.arms) {
+        arm.userData.restX = arm.rotation.x;
+        arm.userData.restZ = arm.rotation.z;
+    }
+    // AND THE LEGS, THE SAME WAY, WHICH IS NEW. The hip pivot was always
+    // there and nothing had ever asked for it, so `people-1.0.0` did not
+    // tag it: this file's own note used to say the legs were "bare meshes
+    // with no pivot", which was wrong and cost the game its stride. Found
+    // by the tag rather than by position, because a lookup by position into
+    // a shared rig is the fault `person-rig-seams.test.mjs` exists for.
+    person.userData.legs = person.children.filter((c) => c.userData && c.userData.isLeg);
+    for (const leg of person.userData.legs) leg.userData.restX = leg.rotation.x;
+    // AND THE ARM'S MEASUREMENTS GO THE SAME WAY, for the same reason.
+    // arm.js has to know where the shoulder is and how long the two
+    // segments are to put a hand anywhere, and reading them off a figure
+    // that was actually built means a change in the shared part arrives
+    // here rather than quietly moving every pose in the game.
+    measureArm(person);
+    return person;
+}
 
+/** Build every figure. Nothing is positioned here: view.js owns placement.
+ *  `avatar` is the visitor's saved avatar, who takes the snap (M7), or null. */
+export function initRoster(scene, objects, { avatar = null } = {}) {
+    disposeRoster();
+    group = new THREE.Group();
+    group.name = 'roster';
+
+    objects.forEach((obj, i) => {
+        const person = buildPlayer(obj.settings, i, avatar);
         person.visible = false;
         group.add(person);
-        figures.set(position, person);
+        figures.set(obj.settings.position, person);
     });
 
     lastShareStats = shareGeometryAndMaterials(group);

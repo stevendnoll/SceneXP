@@ -1002,6 +1002,24 @@ body {
     margin: 0;
 }
 
+/* "Take the snap at quarterback as yourself." (specs/avatar M7): the avatar's
+ * portrait (shown once one is saved, sized by the shared avatar sheet), the
+ * words and the link to the avatar page, centred under the buttons like the
+ * directory link below it. */
+.avatar-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem 0.5rem;
+    margin: 0.9rem 0 0;
+    text-align: center;
+}
+
+.avatar-line .welcome-explore {
+    margin: 0;
+}
+
 /* ---- The opening title -------------------------------------------------------
  *
  * "Make them pay." over the last beat of the opening. Where the milestone title

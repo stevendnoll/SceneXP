@@ -18,6 +18,7 @@
 import { XO_CONFIG as CFG, FIELD, simToWorld, UNITS_TO_METRES } from './config.min.js';
 import { initField, setBandAt, fadeBand, updateScoreboard, applyFieldColors } from './field.min.js';
 import { initRoster, figureFor, TEAMS, applyTeamColors } from './roster.min.js';
+import { createAvatarStore, installChip } from '../../shared/js/avatar-1.0.0.min.js';
 import {
     loadColors, saveColors, setColors, resetColors, teamColors, warningsFor,
 } from './colors.min.js';
@@ -2411,7 +2412,15 @@ async function init() {
     // playbook shows a real formation rather than an empty pitch. The last
     // play a visitor chose is remembered, so a returning visitor sees theirs.
     const objects = lineUp(cycle.play, getSettings().lastPlay || 'pass2', '');
-    initRoster(scene, objects);
+    // THE VISITOR TAKES THE SNAP (specs/avatar M7, 2026-10-26): with an avatar
+    // saved on /avatar/, the quarterback is them, in their own clothes and the
+    // team's helmet. Without one, the usual quarterback. Read once a load: a
+    // save in another tab shows on the welcome card now and at quarterback
+    // next time.
+    avatarStore = createAvatarStore();
+    const avatar = avatarStore.hasSaved() ? avatarStore.load() : null;
+    initRoster(scene, objects, { avatar });
+    state.avatarQb = Boolean(avatar);
     initMarkers(scene, objects);
     initSpot(scene);
     initBall(scene);
@@ -2563,6 +2572,10 @@ async function init() {
     // cancels an image ping.
     const explore = document.getElementById('explore-link');
     if (explore) explore.addEventListener('click', () => reportFinal('explore-site'), { signal });
+    // The welcome card's line about the quarterback, kept fresh by another
+    // tab's save or forget for as long as this page runs.
+    showPlaying();
+    signal.addEventListener('abort', avatarStore.onChange(() => showPlaying()));
 
     installQaHook();
 
@@ -2582,6 +2595,33 @@ async function init() {
 
 /** Exposed for the suite, which boots this module under Node and needs a
  *  handle on what happened without a WebGL context. */
+// ---- The visitor's avatar (specs/avatar M7) ---------------------------------
+
+let avatarStore = null;
+let playing = null;
+
+/** The welcome card's line about who takes the snap: with a saved avatar,
+ *  its portrait and "Change your avatar"; without one, a quiet pointer to
+ *  the avatar page. The link brings the visitor back here (?return=). The
+ *  shared chip keeps the picture fresh without counting a home visit, and
+ *  the picture is decoration beside its words, so it is silent. */
+function showPlaying() {
+    const img = document.getElementById('avatar-playing-img');
+    const link = document.getElementById('avatar-playing-link');
+    const text = document.getElementById('avatar-playing-text');
+    if (!img || !link || !text || !avatarStore) return;
+    if (!playing) playing = installChip({ img, link }, { store: avatarStore, countVisit: false });
+    else playing.refresh();
+    const saved = Boolean(playing && playing.saved);
+    state.avatarSaved = saved;
+    img.hidden = !saved;
+    img.alt = '';
+    text.textContent = saved
+        ? 'You take the snap at quarterback as your avatar.'
+        : 'Take the snap at quarterback as yourself.';
+    link.textContent = saved ? 'Change your avatar' : 'Make your avatar';
+}
+
 export function getState() {
     return { ...state };
 }

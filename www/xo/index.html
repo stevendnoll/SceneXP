@@ -127,13 +127,14 @@
     <title>X's and O's | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=18" as="style">
+    <link rel="preload" href="css/experience.min.css?v=19" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
     <link rel="modulepreload" href="js/config.min.js">
     <link rel="modulepreload" href="js/field.min.js">
     <link rel="modulepreload" href="js/roster.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-1.0.0.min.js">
     <link rel="modulepreload" href="js/colors.min.js">
     <link rel="modulepreload" href="js/ball.min.js">
     <link rel="modulepreload" href="js/markers.min.js">
@@ -163,7 +164,10 @@
     <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
     <link rel="modulepreload" href="js/telemetry.min.js">
     <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-figure-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-hats-1.0.0.min.js">
     <link rel="modulepreload" href="js/arm.min.js">
+    <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
     <link rel="modulepreload" href="js/formations.min.js">
     <link rel="modulepreload" href="js/routes.min.js">
     <link rel="modulepreload" href="js/motion.min.js">
@@ -171,6 +175,10 @@
     <link rel="modulepreload" href="js/fans.min.js">
     <link rel="modulepreload" href="../shared/js/promo-1.0.0.min.js">
     <link rel="modulepreload" href="js/playbook.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-layers-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-shapes-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-hair-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-wardrobe-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/crowd-1.0.0.min.js">
     <!-- END generated modulepreload -->
 
@@ -180,7 +188,9 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=18">
+    <link rel="stylesheet" href="css/experience.min.css?v=19">
+    <!-- The welcome card's avatar portrait (shared with the home page). -->
+    <link rel="stylesheet" href="../shared/css/avatar-1.0.0.min.css">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback
          layout. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -363,6 +373,21 @@
             <p id="welcome-resume" class="card-meta welcome-resume" hidden></p>
 
             <div id="welcome-actions" class="card-actions"></div>
+
+            <!-- WHO TAKES THE SNAP (specs/avatar M7, 2026-10-26): with an
+                 avatar saved on the avatar page, the quarterback is the
+                 visitor, in their own clothes and the team's helmet, and
+                 their portrait sits on this line. Without one, a quiet
+                 pointer to the avatar page, which brings them back here
+                 (?return=). js/main.js fills the picture and the words in.
+                 No overlay shield, for the same reason as the directory link
+                 below. -->
+            <p id="avatar-playing" class="card-meta avatar-line">
+                <img id="avatar-playing-img" src="../assets/avatar/default.png" width="28" height="28" alt=""
+                    loading="lazy" decoding="async" hidden>
+                <span id="avatar-playing-text">Take the snap at quarterback as yourself.</span>
+                <a id="avatar-playing-link" class="welcome-explore" href="../avatar/?return=/xo/">Make your avatar</a>
+            </p>
 
             <!-- THE WAY BACK TO THE DIRECTORY, the same named link nine other
                  scenes carry at the foot of their welcome screen (see
