@@ -129,6 +129,9 @@ export function createPlay(audioObject = null) {
     return {
         playState, motion, routes, formations,
         game: { objects: [], throwTo: '', runForYourLife: false, ...factoryState().game },
+        /** Which hand the quarterback throws with, 'right' or 'left': where
+         *  a thrown ball starts (formations.generateBallObject). */
+        throwHand: 'right',
         frame: 0,
         live: false,
         /** Did the play clock run out on this one? See `tick`. */
@@ -1354,7 +1357,10 @@ export function throwTo(play, position) {
     if (target.settings.route && target.settings.route.type === 'bench') return false;
 
     game.throwTo = position;
-    const ballObj = play.formations.generateBallObject({ ...factoryState(), game }, play.routes);
+    // The ball leaves from the quarterback's throwing hand: `play.throwHand`
+    // ('left' or 'right', right by default) is set by main.js from the figure
+    // on the field, so a left-handed avatar's throws start on his left.
+    const ballObj = play.formations.generateBallObject({ ...factoryState(), game, throwHand: play.throwHand || 'right' }, play.routes);
     if (ballObj) game.objects.push(ballObj);
 
     const qb = play.routes.getObjectByPosition(game.objects, 'qb');

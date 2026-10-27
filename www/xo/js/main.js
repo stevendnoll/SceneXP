@@ -17,7 +17,7 @@
  */
 import { XO_CONFIG as CFG, FIELD, simToWorld, UNITS_TO_METRES } from './config.min.js';
 import { initField, setBandAt, fadeBand, updateScoreboard, applyFieldColors } from './field.min.js';
-import { initRoster, figureFor, TEAMS, applyTeamColors } from './roster.min.js';
+import { initRoster, figureFor, TEAMS, applyTeamColors, throwSideOf } from './roster.min.js';
 import { createAvatarStore, installChip } from '../../shared/js/avatar-1.0.0.min.js';
 import {
     loadColors, saveColors, setColors, resetColors, teamColors, warningsFor,
@@ -2421,6 +2421,11 @@ async function init() {
     const avatar = avatarStore.hasSaved() ? avatarStore.load() : null;
     initRoster(scene, objects, { avatar });
     state.avatarQb = Boolean(avatar);
+    // And the simulation starts a thrown ball at that quarterback's throwing
+    // hand (Steve's QA, 2026-10-26: the hold was right, the arc began on
+    // the left, where the 2D game's sprite threw from).
+    cycle.play.throwHand = throwSideOf(figureFor('qb')) === 1 ? 'left' : 'right';
+    state.throwHand = cycle.play.throwHand;
     initMarkers(scene, objects);
     initSpot(scene);
     initBall(scene);

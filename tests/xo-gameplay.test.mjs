@@ -1911,6 +1911,32 @@ describe('a man asked to run straight runs straight', () => {
     });
 });
 
+describe('a thrown ball leaves from the throwing hand (2026-10-26)', () => {
+    /** The ball's start beside the quarterback on the first throw of a play
+     *  with `throwHand`, as a sim-y offset from him (+y is his right). */
+    const startBeside = (throwHand) => {
+        const play = createPlayForDifficulty();
+        if (throwHand !== undefined) play.throwHand = throwHand;
+        lineUp(play, 'pass2', '');
+        snap(play);
+        for (let f = 0; f < 40; f += 1) tick(play);
+        const qb = play.game.objects.find((o) => o.settings.position === 'qb');
+        const elig = eligibleReceivers(play);
+        expect(throwTo(play, elig[0])).toBe(true);
+        const ball = play.game.objects.find((o) => o.settings.position === 'ball');
+        return { dy: ball.coords.startY - qb.coords.y, dx: ball.coords.startX - qb.coords.x };
+    };
+
+    test('on his right by default, on his left for a left-handed quarterback, four units behind either way', () => {
+        // The port started it 14 units at -y, the 2D sprite's left hand.
+        expect(startBeside(undefined)).toEqual({ dy: 14, dx: -4 });
+        expect(startBeside('right')).toEqual({ dy: 14, dx: -4 });
+        expect(startBeside('left')).toEqual({ dy: -14, dx: -4 });
+        // A fresh play throws right-handed until main.js says otherwise.
+        expect(createPlayForDifficulty().throwHand).toBe('right');
+    });
+});
+
 describe('a pass is led off where the receiver is going', () => {
     /**
      * WHAT WAS WRONG: `generateBallObject` leads the throw off

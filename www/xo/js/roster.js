@@ -499,16 +499,22 @@ function addContactShadow(person) {
  * avatar took the snap. Every pose is written for the positive side and
  * mirrored for the other, so the side is a sign and nothing else moves.
  *
- * AND IT IS A DEFAULT, NOT A RULE. A figure may carry its own
- * `userData.throwSide` (the avatar's handedness, `buildAvatarPerson`), and
- * every pose and the held ball read `throwSideOf(figure)` rather than this.
+ * AND IT IS A DEFAULT, NOT A RULE. A figure may have its own throwing arm
+ * (the avatar's handedness, `buildAvatarPerson`), and every pose and the
+ * held ball read `throwSideOf(figure)` rather than this.
  */
 export const THROWING_SIDE = -1;
+
+/** Each figure's own throwing arm, where it has one. Kept here rather than
+ *  on `userData`, which the suite's three stub absorbs: a value written
+ *  there reads back as nothing, so the page would pass its tests and still
+ *  be wrong. */
+const throwSides = new WeakMap();
 
 /** The arm `figure` throws with: its own, where the roster kept one (a
  *  left-handed avatar), or the field's. */
 export function throwSideOf(figure) {
-    const own = figure && figure.userData ? figure.userData.throwSide : undefined;
+    const own = figure ? throwSides.get(figure) : undefined;
     return own === 1 || own === -1 ? own : THROWING_SIDE;
 }
 
@@ -1110,7 +1116,7 @@ function buildAvatarPerson(avatar, kit) {
     const { person } = built;
     // Their own throwing arm (Steve, 2026-10-26): the avatar's handedness,
     // read by every pose and the held ball through `throwSideOf`.
-    person.userData.throwSide = built.avatar && built.avatar.handedness === 'left' ? 1 : -1;
+    throwSides.set(person, built.avatar && built.avatar.handedness === 'left' ? 1 : -1);
     const face = person.children.find((o) => o.name === 'head');
     const hair = face ? face.children.find((o) => o.userData && o.userData.isHair) : null;
     if (hair) {
