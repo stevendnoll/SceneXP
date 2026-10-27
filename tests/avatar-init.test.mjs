@@ -894,6 +894,11 @@ describe('the page', () => {
         dom.el('av-save').click();
         expect(JSON.parse(globalThis.localStorage.getItem('scenexp-avatar')).shirt).toBe('teal');
         expect(dom.el('av-status').textContent).toBe(main.WORDS.savedFor('Leaf Blower'));
+        // A save is a green note (Steve's QA, 2026-10-26: the plain line was
+        // easy to miss), and it says so in words a screen reader hears too.
+        expect(dom.el('av-status').classList.contains('av-status-good')).toBe(true);
+        expect(main.WORDS.savedFor('Leaf Blower')).toMatch(/saved on this device/);
+        expect(main.WORDS.saved).toMatch(/saved on this device/);
         expect(dom.el('av-forget').hidden).toBe(false);
         expect(dom.el('av-unsaved').textContent).toBe('');
         expect(dom.el('av-return').classList.contains('av-return-ready')).toBe(true);
@@ -922,6 +927,8 @@ describe('the page', () => {
         expect(state.saved).toBeNull();
         expect(state.current.skin).toBe('fair');
         expect(dom.el('av-status').textContent).toBe(main.WORDS.forgotten);
+        // Any other word takes the note back to plain.
+        expect(dom.el('av-status').classList.contains('av-status-good')).toBe(false);
     });
 
     test('a link\'s avatar is shown and asked about, taken out of the address, and kept only on Keep', async () => {

@@ -528,6 +528,46 @@ body.av-body {
     text-align: center;
 }
 
+/* A save: a green note with a check mark, risen in under the button, so it
+   cannot be missed beside the wave (Steve's QA, 2026-10-26). The check is a
+   data URL (the page's policy allows them for pictures), hidden from a
+   screen reader, which hears the words. */
+.av-status.av-status-good {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: #e7f4ec;
+    color: #1b5e3a;
+    font-weight: 600;
+    text-align: left;
+    animation: av-status-rise 0.35s ease-out both;
+}
+
+.av-status.av-status-good::before {
+    content: '';
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+    border-radius: 50%;
+    background: #1f8a50 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E") center / 12px no-repeat;
+}
+
+@keyframes av-status-rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .av-subhead {
     font-size: 15px;
     font-weight: 600;

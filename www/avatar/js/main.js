@@ -43,11 +43,11 @@ import { returnTarget, readAvatarFile, FILE_ERRORS } from './transfer.min.js';
 /** Everything the page says, in one place (house style: polite, no
  *  semicolons or em-dashes). */
 export const WORDS = Object.freeze({
-    saved: 'Saved. Scenes that show you will dress you this way.',
-    savedFor: (name) => `Saved. Your avatar is ready for ${name}.`,
+    saved: 'Your avatar is saved on this device. Scenes that show you will dress you this way.',
+    savedFor: (name) => `Your avatar is saved on this device and ready for ${name}.`,
     saveFailed: "This browser isn't keeping anything for this site right now, so your avatar couldn't be saved. A private window is often the reason.",
     forgotten: 'Your avatar is forgotten on this browser. Scenes will show the usual figure again.',
-    kept: 'Kept. This is your avatar on this browser now.',
+    kept: 'Kept. This is your avatar on this device now.',
     declined: 'No changes. Your avatar is just as it was.',
     fileSaved: `${FILE_NAME} is in your downloads. On your other device, open this page and choose Open a file.`,
     unsaved: 'Not saved yet.',
@@ -108,9 +108,13 @@ function isLocalHost() {
     return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '';
 }
 
-function say(text) {
+/** The status line under Save. A save is `good`: a green note with a check
+ *  mark, since the plain line was easy to miss beside the wave (Steve's QA,
+ *  2026-10-26). Any other word takes the note back to plain. */
+function say(text, { good = false } = {}) {
     const status = $('av-status');
     status.textContent = text;
+    status.classList.toggle('av-status-good', good);
 }
 
 /** The camera's framing for a field: its own, or its tab's (the shoes
@@ -161,7 +165,7 @@ function save() {
     state.saved = state.store.load();
     keepPortrait(avatar);
     if (state.studio) state.studio.celebrate();
-    say(state.target ? WORDS.savedFor(state.target.name) : WORDS.saved);
+    say(state.target ? WORDS.savedFor(state.target.name) : WORDS.saved, { good: true });
     refresh();
     return true;
 }
@@ -225,7 +229,7 @@ function answered() {
 function keep() {
     if (!state.incoming) return false;
     answered();
-    if (save()) say(WORDS.kept);
+    if (save()) say(WORDS.kept, { good: true });
     $('av-save').focus();
     return true;
 }
