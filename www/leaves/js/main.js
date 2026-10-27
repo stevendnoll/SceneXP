@@ -155,6 +155,9 @@ let solids = solidBoxes(CONFIG.yard);
 // another tab saving or forgetting.
 let avatarStore = null;
 let avatar = DEFAULT_AVATAR;
+// The blower the simulation's jet comes from: B, or B with its side flipped
+// for a left-handed avatar (operatorPerson).
+let jetB = B;
 let playing = null;
 let portraitOwed = false;
 let stopAvatarWatch = null;
@@ -415,7 +418,7 @@ async function init() {
     layFinds();
 
     operator = createOperator(B);
-    figure = createOperatorFigure(B, CONFIG.look, { person: operatorPerson() });
+    figure = createOperatorFigure(B, CONFIG.look, { person: operatorPerson(), hand: avatar.handedness });
     figure.update(operator, false, 0);
     scene.add(figure.group);
     neighborFigure = createOperatorFigure(B, CONFIG.look, {
@@ -1211,6 +1214,11 @@ function setText(id, text) {
  *  avatar page draws it, with no overrides (Steve, 2026-10-24: a tank top
  *  in October is their choice to make). */
 function operatorPerson() {
+    // The blower goes in the avatar's leading hand (Steve, 2026-10-26), and
+    // the jet the simulation blows starts beside that hand: `B.side` is the
+    // nozzle's offset to the right, so a left-handed operator blows from a
+    // blower whose side is the other way.
+    jetB = avatar.handedness === 'left' ? { ...B, side: -B.side } : B;
     return createAvatar(avatar, { role: 'operator', extra: { shoulderRound: 0.4 } }).person;
 }
 
@@ -1244,7 +1252,7 @@ function dressFigure() {
             if (o.material) o.material.dispose();
         });
     }
-    figure = createOperatorFigure(B, CONFIG.look, { person: operatorPerson() });
+    figure = createOperatorFigure(B, CONFIG.look, { person: operatorPerson(), hand: avatar.handedness });
     figure.update(operator, false, state.time, finale.plan ? finale.arms : 'carry');
     scene.add(figure.group);
     shade.owed = true;
@@ -1924,7 +1932,7 @@ function animate() {
     updateTrees(trees, state.time, state.reducedMotion ? 0.3 : 1);
     const blowing = isBlowing(free, pointer, keys, blowHold);
     const f = facing(operator.heading);
-    const jet = makeJet(B, operator.x, operator.z, f.x, f.z, blowing);
+    const jet = makeJet(jetB, operator.x, operator.z, f.x, f.z, blowing);
     if (inYard) {
         const finaleDone = diving ? stepFinale(dt) : false;
         const event = stepRound(round, dt, { blowing, finaleDone, spotless: isSpotless(counted) }, CONFIG.round);
@@ -2052,6 +2060,8 @@ export function getState() {
         endShown: endShown(),
         avatar: { ...avatar },
         avatarSaved: avatarStore ? avatarStore.hasSaved() : false,
+        hand: figure ? figure.hand : 'right',
+        jetSide: jetB.side,
         finale: finale.plan ? { t: finale.t, total: finale.plan.total, success: finale.plan.success, burst: finale.burst, arms: finale.arms } : null,
         finds: finds.map((f) => ({ id: f.id, x: f.x, z: f.z, found: f.found, shown: f.shown })),
         found: [...found],

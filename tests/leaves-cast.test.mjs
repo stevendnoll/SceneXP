@@ -235,6 +235,50 @@ describe('on the real three.js', () => {
         for (const h of hands) expect(h.distanceTo(hands[0])).toBeLessThan(0.02);
     });
 
+    test('a left-handed operator holds the blower in the left hand, the mirror of the right (2026-10-26)', () => {
+        const handOf = (fig, side) => {
+            let hand = null;
+            fig.group.traverse((o) => {
+                if (o.userData && o.userData.isArm && o.userData.armSide === side) {
+                    const f = o.userData.forearm;
+                    hand = new THREE.Vector3().setFromMatrixPosition(f.children[f.children.length - 1].matrixWorld);
+                }
+            });
+            return hand;
+        };
+        const tubeOf = (fig) => {
+            let tube = null;
+            fig.group.traverse((o) => { if (o.userData && o.userData.tube) tube = o.userData.tube; });
+            return new THREE.Vector3().setFromMatrixPosition(tube.matrixWorld);
+        };
+        const op = { x: 0, z: 0, heading: 0, speed: 0, stride: 0 };
+        const right = Op.createOperatorFigure(C.blower, C.look, { person: K.personConfig(K.DEFAULT_CHOICE) });
+        const left = Op.createOperatorFigure(C.blower, C.look, { person: K.personConfig(K.DEFAULT_CHOICE), hand: 'left' });
+        expect(right.hand).toBe('right');
+        expect(left.hand).toBe('left');
+        for (const arms of ['carry', 'wave', 'back']) {
+            right.update(op, false, 0.3, arms);
+            left.update(op, false, 0.3, arms);
+            right.group.updateMatrixWorld(true);
+            left.group.updateMatrixWorld(true);
+            const r = handOf(right, -1);
+            const l = handOf(left, 1);
+            // The leading hand lands at the mirror of the right's, and the
+            // other hand at the mirror of the right-hander's other hand.
+            expect(`${arms}: ${l.x.toFixed(3)} ${l.y.toFixed(3)} ${l.z.toFixed(3)}`).toBe(`${arms}: ${(-r.x).toFixed(3)} ${r.y.toFixed(3)} ${r.z.toFixed(3)}`);
+            const r2 = handOf(right, 1);
+            const l2 = handOf(left, -1);
+            expect(l2.x).toBeCloseTo(-r2.x, 3);
+        }
+        // The blower's tube hangs on the other side of the body too.
+        right.update(op, false, 0, 'carry');
+        left.update(op, false, 0, 'carry');
+        right.group.updateMatrixWorld(true);
+        left.group.updateMatrixWorld(true);
+        expect(tubeOf(left).x).toBeCloseTo(-tubeOf(right).x, 6);
+        expect(tubeOf(right).x).toBeLessThan(0);
+    });
+
     test('the chosen skin, hair, shirt and pants are what is drawn', () => {
         const choice = { shirt: 'teal', pants: 'khaki', skin: 'deep', hair: 'auburn', length: 'long' };
         const fig = Op.createOperatorFigure(C.blower, C.look, { person: K.personConfig(choice) });

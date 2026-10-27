@@ -327,6 +327,33 @@ describe('the wave', () => {
         avatar.dispose();
     });
 
+    test('a left-handed avatar waves with its left, the mirror of the right: palm to the viewer, thumb up and in (2026-10-26)', () => {
+        const peak = F.poseFor('wave', 1.0, 'left');
+        expect(peak.right).toEqual(F.REST);
+        expect(peak.left).toEqual(F.poseFor('wave', 1.0).right);
+        expect(F.poseFor('wave', 1.0, 'nonsense').right.twist).toBeCloseTo(F.WAVE_TWIST, 9);
+        const avatar = F.createAvatar({ handedness: 'left' });
+        const hand = findIn(avatar.arms.left, (o) => o.userData.isHand);
+        // The left hand's thumb is on ITS inner side, toward the body.
+        const inner = -1;
+        const thumbLocal = new THREE.Vector3(inner * Math.sin(HAND.thumb.out), -Math.cos(HAND.thumb.out), -Math.sin(HAND.thumb.forward)).normalize();
+        const world = (v) => {
+            avatar.group.updateMatrixWorld(true);
+            return v.clone().applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion()));
+        };
+        // Through the figure's own gesture, which reads its handedness.
+        expect(avatar.gesture('wave')).toBe(true);
+        avatar.tick(1.0);
+        const thumb = world(thumbLocal);
+        const fingers = world(new THREE.Vector3(0, -1, 0));
+        expect(world(new THREE.Vector3(0, 0, 1)).z).toBeLessThan(-0.5);   // the palm to the viewer
+        expect(thumb.y).toBeGreaterThan(0.8);                             // the thumb up
+        expect(thumb.x - fingers.x).toBeLessThan(-0.5);                   // and in, toward the head (the left hand is at +x)
+        // And the right arm never left its side.
+        expect(avatar.arms.right.rotation.z).toBeCloseTo(-F.REST.z, 9);
+        avatar.dispose();
+    });
+
     test('the right hand rises above the head mid-wave, and comes back down', () => {
         const avatar = F.createAvatar({});
         const hand = () => {

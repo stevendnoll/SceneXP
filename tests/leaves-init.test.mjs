@@ -1395,6 +1395,21 @@ describe('who is on leaf duty: the avatar (M6 of the avatar, 2026-10-26)', () =>
         expect(dom.el('avatar-playing-link').textContent).toBe('Change your avatar');
     });
 
+    test('a left-handed avatar carries the blower on the left, and the jet blows from that side (2026-10-26)', async () => {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        createAvatarStore({ win: null }).save({ handedness: 'left' });
+        const main = await boot();
+        expect(main.getState().hand).toBe('left');
+        expect(main.getState().jetSide).toBe(-C0.blower.side);
+        expect(() => frames(main, 0.5, 20)).not.toThrow();
+    });
+
+    test('the usual figure carries it on the right, as always', async () => {
+        const main = await boot();
+        expect(main.getState().hand).toBe('right');
+        expect(main.getState().jetSide).toBe(C0.blower.side);
+    });
+
     test('an outfit kept before shirts and pants moves in its colors', async () => {
         globalThis.localStorage.setItem('leaves-character', JSON.stringify({ preset: 'runner', skin: 'tan', hair: 'black', length: 'buzz' }));
         const main = await boot();

@@ -131,12 +131,20 @@ export const ARM_POSES = Object.freeze({
  * `options` dresses them: { person } for createPerson, or a figure already
  * built on the shared rig (the visitor's avatar, avatar-figure's
  * `createAvatar(...).person`, M6 2026-10-26), { blower, bigBlower } for the
- * blowers' colors. The visitor's defaults are a flannel shirt and jeans with
- * an orange blower.
+ * blowers' colors, and { hand } 'right' (as written) or 'left' (the avatar's
+ * handedness, Steve 2026-10-26): the blower in the other hand, every
+ * one-armed pose and the blower's pieces mirrored across the body. The jet
+ * the simulation blows must agree: see main.js `jetBlower`. The visitor's
+ * defaults are a flannel shirt and jeans with an orange blower.
  */
 export function createOperatorFigure(B, look, options = {}) {
     const group = new THREE.Group();
     group.name = options.name || 'operator';
+    // The mirror: 1 keeps every x and every sideways angle as written (the
+    // right hand), -1 flips them (the left). The carrying arm's side is the
+    // rig's: -1 is the figure's right.
+    const h = options.hand === 'left' ? -1 : 1;
+    const carrySide = -h;
     // The body tips about the hips: a pivot `PIVOT` up, holding everything
     // else lowered by as much, so with no tip the figure stands as before.
     // And a lying body rolls about its own length: the roll joint, at the
@@ -173,16 +181,16 @@ export function createOperatorFigure(B, look, options = {}) {
     // tube down to the nozzle. The big one is a backpack with a longer tube.
     const carried = new THREE.Group();
     holder.add(carried);
-    const tubeTo = new THREE.Vector3(-B.side, B.height, B.reach);
+    const tubeTo = new THREE.Vector3(-B.side * h, B.height, B.reach);
     function blowerModel(color, backpack) {
         const model = new THREE.Group();
         const body = new THREE.Mesh(
             backpack ? new THREE.BoxGeometry(0.34, 0.46, 0.24) : new THREE.BoxGeometry(0.2, 0.26, 0.36),
             new THREE.MeshLambertMaterial({ color }));
-        body.position.set(backpack ? 0 : -0.3, backpack ? 1.15 : 0.72, backpack ? -0.24 : 0.22);
+        body.position.set(backpack ? 0 : -0.3 * h, backpack ? 1.15 : 0.72, backpack ? -0.24 : 0.22);
         body.castShadow = true;
         model.add(body);
-        const from = backpack ? new THREE.Vector3(-0.22, 0.95, 0.05) : new THREE.Vector3(-0.28, 0.66, 0.4);
+        const from = backpack ? new THREE.Vector3(-0.22 * h, 0.95, 0.05) : new THREE.Vector3(-0.28 * h, 0.66, 0.4);
         const span = tubeTo.clone().sub(from);
         const tube = new THREE.Mesh(new THREE.CylinderGeometry(backpack ? 0.045 : 0.035, backpack ? 0.06 : 0.045, span.length(), 10),
             new THREE.MeshLambertMaterial({ color: 0x2b2b2b }));
@@ -205,7 +213,9 @@ export function createOperatorFigure(B, look, options = {}) {
             a.rotation.copy(rest[k].arm);
             if (rest[k].fore) a.userData.forearm.rotation.copy(rest[k].fore);
         });
-        const right = arms.find((a) => a.userData.armSide === -1);
+        // The one-armed poses are written for the right arm; on the left
+        // they are mirrored: the lift as written, the sideways angles flipped.
+        const right = arms.find((a) => a.userData.armSide === carrySide);
         if (name === 'folded') {
             const P = ARM_POSES.folded;
             arms.forEach((a) => {
@@ -215,10 +225,10 @@ export function createOperatorFigure(B, look, options = {}) {
             });
         } else if (name === 'wave' && right) {
             const P = ARM_POSES.wave;
-            right.rotation.set(...P.right.arm);
+            right.rotation.set(P.right.arm[0], P.right.arm[1] * h, P.right.arm[2] * h);
             if (right.userData.forearm) {
-                right.userData.forearm.rotation.set(P.right.fore[0], P.right.fore[1],
-                    P.right.fore[2] + P.swing * 0.5 * (1 + Math.sin(time * 7)));
+                right.userData.forearm.rotation.set(P.right.fore[0], P.right.fore[1] * h,
+                    (P.right.fore[2] + P.swing * 0.5 * (1 + Math.sin(time * 7))) * h);
             }
         } else if (name === 'up') {
             const P = ARM_POSES.up;
@@ -228,11 +238,11 @@ export function createOperatorFigure(B, look, options = {}) {
             });
         } else if (name === 'back' && right) {
             const P = ARM_POSES.back.right;
-            right.rotation.set(...P.arm);
+            right.rotation.set(P.arm[0], P.arm[1] * h, P.arm[2] * h);
             if (right.userData.forearm) right.userData.forearm.rotation.x = P.fore;
         } else if (name === 'carry' && right) {
             const P = ARM_POSES.carry.right;
-            right.rotation.set(...P.arm);
+            right.rotation.set(P.arm[0], P.arm[1] * h, P.arm[2] * h);
             if (right.userData.forearm) right.userData.forearm.rotation.x = P.fore;
         }
     }
@@ -264,9 +274,9 @@ export function createOperatorFigure(B, look, options = {}) {
         } else {
             // On the grass: the body only, since the tube would reach into
             // the ground. The backpack sits lower than it rides.
-            carried.position.set(-0.45, big ? -1.0 : -0.62, big ? 0.35 : 0.1);
-            carried.rotation.set(0, 0.4, 0);
+            carried.position.set(-0.45 * h, big ? -1.0 : -0.62, big ? 0.35 : 0.1);
+            carried.rotation.set(0, 0.4 * h, 0);
         }
     }
-    return { group, update };
+    return { group, update, hand: h < 0 ? 'left' : 'right' };
 }

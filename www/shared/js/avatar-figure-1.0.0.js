@@ -1233,10 +1233,14 @@ export const WAVE_TWIST = Math.PI;
  * sign). Up over the first 0.35 s, down over the last 0.45 s, so a gesture
  * never snaps.
  *
- *   wave   the right arm raised high, swinging side to side (Maya's wave),
- *          the hand turned so its palm faces the viewer
+ *   wave   the leading arm raised high, swinging side to side (Maya's
+ *          wave), the hand turned so its palm faces the viewer
+ *
+ * `hand` is which arm leads, 'right' or 'left' (the avatar's handedness,
+ * Steve 2026-10-26): the same numbers on the other arm, which `setPose`
+ * mirrors by the arm's side.
  */
-export function poseFor(gesture, t) {
+export function poseFor(gesture, t, hand = 'right') {
     const rest = { right: { ...REST }, left: { ...REST } };
     const total = GESTURES[gesture];
     if (!total || !(t >= 0) || t >= total) return rest;
@@ -1245,7 +1249,9 @@ export function poseFor(gesture, t) {
     const k = Math.min(up, down);
     const mix = (a, b) => a + (b - a) * k;
     const swing = 0.22 * Math.sin(t * Math.PI * 2 * 1.6) * k;
-    return { right: { z: mix(REST.z, 2.55) + swing, x: mix(REST.x, -0.12), fore: mix(0, -0.12), twist: mix(0, WAVE_TWIST) }, left: rest.left };
+    const lead = hand === 'left' ? 'left' : 'right';
+    rest[lead] = { z: mix(REST.z, 2.55) + swing, x: mix(REST.x, -0.12), fore: mix(0, -0.12), twist: mix(0, WAVE_TWIST) };
+    return rest;
 }
 
 // ---- The figure ---------------------------------------------------------------
@@ -1433,7 +1439,7 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
                 return true;
             }
             elapsed += Math.max(0, dt);
-            setPose(poseFor(gesture, elapsed));
+            setPose(poseFor(gesture, elapsed, a.handedness));
             if (elapsed >= GESTURES[gesture]) gesture = null;
             return true;
         },
