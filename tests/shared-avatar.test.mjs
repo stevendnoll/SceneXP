@@ -78,7 +78,7 @@ describe('the lists', () => {
         expect(FIELD_KEYS).toEqual(['skin', 'eyes', 'hair', 'length', 'facial', 'glasses', 'build', 'shirt',
             'sleeves', 'bottom', 'bottomColor', 'shoes', 'shoeColor', 'hat', 'hatColor', 'mouth', 'lips', 'muscles',
             'facialColor', 'brows', 'eyeShape', 'nose', 'faceShape', 'cheeks', 'frameColor', 'lensColor', 'handSize', 'footSize',
-            'jerseyNumber', 'numberColor', 'legwear', 'legwearColor', 'armwear', 'armwearColor']);
+            'jerseyNumber', 'numberColor', 'legwear', 'legwearColor', 'armwear', 'armwearColor', 'handedness']);
         for (const [key, list] of A.FIELDS) {
             const ids = list.map((o) => o.id);
             expect(`${key}: ${new Set(ids).size}`).toBe(`${key}: ${ids.length}`);
@@ -194,7 +194,8 @@ describe('normalizeAvatar takes anything', () => {
             bottomColor: 'denim', shoes: 'sneakers', shoeColor: 'black', hat: 'beanie', hatColor: 'mustard',
             mouth: 'smile', lips: 'natural', muscles: 'standard',
             facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
-            frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black'
+            frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black',
+            handedness: 'right'
         });
         // No free text survives, whatever it was called.
         expect(a.name).toBeUndefined();
@@ -375,6 +376,12 @@ describe('custom colors (Steve, 2026-10-24)', () => {
         expect(A.describeAvatar({ frameColor: 'gold', lensColor: 'amber' })).toBe(A.describeAvatar({}));
         expect(A.describeAvatar({ handSize: 'large' })).toMatch(/a straight build with large hands, /);
         expect(A.describeAvatar({ footSize: 'small', build: 'curvy' })).toMatch(/a curvy build with small feet, /);
+        // Which hand leads (2026-10-26): right by default and unsaid, left said.
+        expect(A.HANDEDNESS.map((h) => h.id)).toEqual(['right', 'left']);
+        expect(A.DEFAULT_AVATAR.handedness).toBe('right');
+        expect(A.normalizeAvatar({ handedness: 'ambidextrous' }).handedness).toBe('right');
+        expect(A.describeAvatar({ handedness: 'left', handSize: 'large' })).toMatch(/a straight build with large hands and a leading left hand, /);
+        expect(A.describeAvatar({ handedness: 'right' })).not.toMatch(/hand/);
         expect(A.describeAvatar({ handSize: 'small', footSize: 'large', muscles: 'buff' })).toMatch(/a buff, straight build with small hands and large feet, /);
         expect(A.describeAvatar({ handSize: 'xl' })).toMatch(/a straight build with extra-large hands, /);
         // The new builds, as a person would say them (2026-10-26).
@@ -544,7 +551,7 @@ describe('the link', () => {
     test('the default\'s link is pinned, so the field order can never move under a link already sent', () => {
         expect(A.encodeLink(A.DEFAULT_AVATAR))
             .toBe('a=1.fair.darkBrown.darkBrown.short.none.none.straight.rust.long.pants.navy.classic.black.none.navy.smile.natural.standard'
-                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard.none.black.none.black');
+                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard.none.black.none.black.right');
         // A link made before the mouth and the muscles (2026-10-23) still
         // opens, its new fields at their defaults.
         expect(A.decodeLink('#a=1.deep.blue.gray.long.beard.round.curvy.teal.short.skirt.khaki.maryJane.red.cap.mustard'))
@@ -552,7 +559,8 @@ describe('the link', () => {
                 shirt: 'teal', sleeves: 'short', bottom: 'skirt', bottomColor: 'khaki', shoes: 'maryJane', shoeColor: 'red', hat: 'cap',
                 hatColor: 'mustard', mouth: 'smile', lips: 'natural', muscles: 'standard',
                 facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
-                frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black' });
+                frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black',
+                handedness: 'right' });
         expect(A.linkUrl(A.DEFAULT_AVATAR, 'https://www.scenexp.com/'))
             .toBe(`https://www.scenexp.com/avatar/#${A.encodeLink(A.DEFAULT_AVATAR)}`);
         expect(A.linkUrl(null, '')).toBe(`/avatar/#${A.encodeLink(null)}`);

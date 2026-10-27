@@ -141,7 +141,10 @@ export const AVATAR_PAGE = deepFreeze({
                 { key: 'build', legend: 'Build', kind: 'text' },
                 { key: 'muscles', legend: 'Muscles', kind: 'text' },
                 { key: 'handSize', legend: 'Hand size', kind: 'text' },
-                { key: 'footSize', legend: 'Foot size', kind: 'text' }
+                { key: 'footSize', legend: 'Foot size', kind: 'text' },
+                // Which hand leads (Steve, 2026-10-26): the throwing arm in
+                // X's and O's. Right by default, as most people are.
+                { key: 'handedness', legend: 'Handedness', kind: 'text' }
             ]
         },
         {

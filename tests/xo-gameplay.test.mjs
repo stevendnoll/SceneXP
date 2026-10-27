@@ -2493,17 +2493,19 @@ describe('every pose the game can ask for actually runs', () => {
     test('a stiff-arm extends one arm and leaves the other running', () => {
         const held = figure();
         const free = figure();
+        // The free arm is the one not holding the ball, whichever hand the
+        // field throws with (right since 2026-10-26).
         for (let i = 0; i < 40; i += 1) {
             poseFigure(held, 6, i * 0.3, { carry: 'tuck' }, 1 / 60);
             poseFigure(free, 6, i * 0.3,
-                { carry: 'tuck', stiffArm: 1, stiffArmSide: -1 }, 1 / 60);
+                { carry: 'tuck', stiffArm: 1, stiffArmSide: -THROWING_SIDE }, 1 / 60);
         }
         const at = (f, side) => f.userData.arms.find((a) => a.userData.armSide === side);
         // The arm that did the stiff-arming has moved.
-        expect(Math.abs(at(free, -1).rotation.x - at(held, -1).rotation.x))
+        expect(Math.abs(at(free, -THROWING_SIDE).rotation.x - at(held, -THROWING_SIDE).rotation.x))
             .toBeGreaterThan(0.05);
         // ...and the one holding the ball is still holding it.
-        expect(at(free, 1).rotation.x).toBeCloseTo(at(held, 1).rotation.x, 6);
+        expect(at(free, THROWING_SIDE).rotation.x).toBeCloseTo(at(held, THROWING_SIDE).rotation.x, 6);
     });
 });
 

@@ -490,10 +490,27 @@ function addContactShadow(person) {
  * A pose's `hand` is written for the arm on the POSITIVE side and mirrored in x
  * for the other one, which is why there is only one number for both.
  *
- * `armSide` is -1 on one arm and +1 on the other, and the THROWING ARM is the
- * positive one, chosen once here so the ball and the arm cannot disagree.
+ * `armSide` is -1 on the figure's RIGHT arm and +1 on its left, and the
+ * THROWING ARM is chosen once here so the ball and the arm cannot disagree.
+ *
+ * RIGHT-HANDED SINCE 2026-10-26 (Steve: "the quarterback is currently
+ * left-handed. This has always seemed strange"). It was +1, the left, from
+ * the day the poses were written, and nobody noticed until the visitor's own
+ * avatar took the snap. Every pose is written for the positive side and
+ * mirrored for the other, so the side is a sign and nothing else moves.
+ *
+ * AND IT IS A DEFAULT, NOT A RULE. A figure may carry its own
+ * `userData.throwSide` (the avatar's handedness, `buildAvatarPerson`), and
+ * every pose and the held ball read `throwSideOf(figure)` rather than this.
  */
-export const THROWING_SIDE = 1;
+export const THROWING_SIDE = -1;
+
+/** The arm `figure` throws with: its own, where the roster kept one (a
+ *  left-handed avatar), or the field's. */
+export function throwSideOf(figure) {
+    const own = figure && figure.userData ? figure.userData.throwSide : undefined;
+    return own === 1 || own === -1 ? own : THROWING_SIDE;
+}
 
 /**
  * WHICH ARM A STIFF-ARM GOES OUT ON, and why it is not simply "the one nearest
@@ -518,10 +535,10 @@ export const THROWING_SIDE = 1;
  * arm does the work instead and the tuck stays honest. The lean and the sideways
  * travel still say which man he is getting away from.
  */
-export function stiffSide(act = {}) {
+export function stiffSide(act = {}, throwSide = THROWING_SIDE) {
     const want = act.stiffArmSide === -1 ? -1 : 1;
     const carrying = (act.carry || 'none') === 'tuck';
-    return (carrying && want === THROWING_SIDE) ? -THROWING_SIDE : want;
+    return (carrying && want === throwSide) ? -throwSide : want;
 }
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -569,6 +586,8 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
     const arms = figure.userData.arms;
     if (!arms || !arms.length) return;
     const P = CFG.pose;
+    // This figure's throwing arm (a left-handed avatar has its own).
+    const T = throwSideOf(figure);
 
     // A MAN ON HIS BACK IS NOT RUNNING. Without this the legs and arms keep
     // striding while the body is horizontal, which is the one thing that would
@@ -613,7 +632,7 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
     // Which arm may do the talking in a one-armed pose: the free one, and when
     // both are free the throwing side, so a defender with no ball still points
     // with the arm a carrier would have to use.
-    const leadSide = clamped ? -THROWING_SIDE : THROWING_SIDE;
+    const leadSide = clamped ? -T : T;
 
     for (const arm of arms) {
         const side = arm.userData.armSide;
@@ -643,10 +662,10 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
          * `celebration.js` decides who is celebrating and what with; this only
          * puts the hand where it says.
          */
-        const celebrating = cel && !(clamped && side === THROWING_SIDE);
+        const celebrating = cel && !(clamped && side === T);
         if (celebrating) {
             const C = P.celebration;
-            const ballArm = raising && side === THROWING_SIDE;
+            const ballArm = raising && side === T;
             const hand = ballArm
                 ? P.raise.hand
                 : (cel.arms === 'point'
@@ -697,7 +716,7 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
             x = lerp(x, a.armX, act.tackle);
             z = lerp(z, a.armZ, act.tackle);
             fore = lerp(fore, a.foreX, act.tackle);
-        } else if (act.stiffArm > 0 && side === stiffSide(act)) {
+        } else if (act.stiffArm > 0 && side === stiffSide(act, T)) {
             /**
              * THE STIFF-ARM, AND IT IS ONE ARM, WHICH IS THE WHOLE POINT.
              *
@@ -738,7 +757,7 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
             const H = P.throwHold;
             const snapped = act.snapT === undefined ? 1 : act.snapT;
             const ready = anglesFor(P.underCentre.hand, side);
-            if (side === THROWING_SIDE) {
+            if (side === T) {
                 // Cocked, and swept forward while the elbow straightens, which
                 // is what a throw is. Interpolating the two solved poses runs
                 // the hand up over the shoulder, past the ear and down across
@@ -787,7 +806,7 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
             x = lerp(x, a.armX, act.posting);
             z = lerp(z, a.armZ, act.posting);
             fore = lerp(fore, a.foreX, act.posting);
-        } else if (act.carry === 'tuck' && side === THROWING_SIDE) {
+        } else if (act.carry === 'tuck' && side === T) {
             // Only the carrying arm folds. The other one still runs, which is
             // what makes a tuck read as a tuck rather than as a shrug.
             const a = anglesFor(P.tuck.hand, side);
@@ -799,7 +818,7 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
         // THE SWEEP OF A THROW IS THE ONE THING THAT MAY SNAP. It is already a
         // timed animation with its own easing, and blending it a second time
         // would slow the release into a wave.
-        const snap = act.carry === 'throw' && side === THROWING_SIDE
+        const snap = act.carry === 'throw' && side === T
             && act.throwT > 0 && act.throwT < 1;
         arm.rotation.x = snap ? x : arm.rotation.x + (x - arm.rotation.x) * ease;
         arm.rotation.z = snap ? z : arm.rotation.z + (z - arm.rotation.z) * ease;
@@ -1083,11 +1102,15 @@ export function applyTeamColors() {
  * the way a hat trims them). tests/xo-helmet measures every style.
  */
 function buildAvatarPerson(avatar, kit) {
-    const { person } = createAvatar(avatar, {
+    const built = createAvatar(avatar, {
         overrides: { hat: 'none' },
         role: 'customer',
         extra: { shoulderRound: 0.35, handScale: 1.9 },
     });
+    const { person } = built;
+    // Their own throwing arm (Steve, 2026-10-26): the avatar's handedness,
+    // read by every pose and the held ball through `throwSideOf`.
+    person.userData.throwSide = built.avatar && built.avatar.handedness === 'left' ? 1 : -1;
     const face = person.children.find((o) => o.name === 'head');
     const hair = face ? face.children.find((o) => o.userData && o.userData.isHair) : null;
     if (hair) {

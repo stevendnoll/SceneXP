@@ -199,6 +199,14 @@ export const FOOT_SIZES = Object.freeze([
     { id: 'large', label: 'Large', scale: 1.15 }
 ]);
 
+/** Which hand leads (Steve, 2026-10-26): the throwing arm in X's and O's,
+ *  and whatever a scene does with a dominant hand after it. Most people are
+ *  right-handed, so that is the default. */
+export const HANDEDNESS = Object.freeze([
+    { id: 'right', label: 'Right-handed' },
+    { id: 'left', label: 'Left-handed' }
+]);
+
 /**
  * The number on a sports jersey (Steve's QA, 2026-10-26: "people who wear
  * jerseys wear the jersey of their favorite player"): none, or 0 to 99, or
@@ -532,7 +540,9 @@ export const FIELDS = Object.freeze([
     Object.freeze(['legwear', LEGWEAR]),
     Object.freeze(['legwearColor', LAYER_COLORS]),
     Object.freeze(['armwear', ARMWEAR]),
-    Object.freeze(['armwearColor', LAYER_COLORS])
+    Object.freeze(['armwearColor', LAYER_COLORS]),
+    // Appended 2026-10-26 (Steve): which hand leads.
+    Object.freeze(['handedness', HANDEDNESS])
 ]);
 
 /** The list a field's ids come from, or null for a field that is not one. */
@@ -579,7 +589,8 @@ export const DEFAULT_AVATAR = Object.freeze({
     legwear: 'none',
     legwearColor: 'black',
     armwear: 'none',
-    armwearColor: 'black'
+    armwearColor: 'black',
+    handedness: 'right'
 });
 
 const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
@@ -821,6 +832,8 @@ export function describeAvatar(avatar) {
     const limbs = [];
     if (a.handSize !== 'standard') limbs.push(`${optionOf(HAND_SIZES, a.handSize).said || word(HAND_SIZES, a.handSize)} hands`);
     if (a.footSize !== 'standard') limbs.push(`${word(FOOT_SIZES, a.footSize)} feet`);
+    // "a straight build with a leading left hand" (nothing said of the usual).
+    if (a.handedness === 'left') limbs.push('a leading left hand');
     // "a purple sports jersey with the number 8 in white" (nothing said of
     // the standard color, which is the jersey's own trim).
     const number = optionOf(JERSEY_NUMBERS, a.jerseyNumber);

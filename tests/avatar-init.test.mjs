@@ -506,7 +506,8 @@ describe('the editor and the way back', () => {
         const { FIELDS } = await import('../www/shared/js/avatar-1.0.0.js');
         expect([...all].sort()).toEqual(FIELDS.map(([key]) => key).sort());
         const build = CONFIG.tabs.find((t) => t.id === 'build');
-        expect(E.visibleFields(build).map((f) => f.key)).toEqual(['build', 'muscles', 'handSize', 'footSize']);
+        // Handedness last, under Foot size (Steve, 2026-10-26).
+        expect(E.visibleFields(build).map((f) => f.key)).toEqual(['build', 'muscles', 'handSize', 'footSize', 'handedness']);
         // The shoes are clothes, and still look at the feet when chosen.
         const clothes = CONFIG.tabs.find((t) => t.id === 'clothes');
         for (const key of ['shoes', 'shoeColor']) expect(clothes.fields.find((f) => f.key === key).frame).toBe('feet');

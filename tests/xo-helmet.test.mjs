@@ -350,3 +350,69 @@ describe("the visitor's avatar at quarterback", () => {
         }
     });
 });
+
+/**
+ * WHICH HAND THROWS (Steve, 2026-10-26): the quarterback was left-handed from
+ * the day the poses were written, and nobody noticed until the visitor's own
+ * avatar took the snap. Right-handed now, and a left-handed avatar throws
+ * with its left. The poses are mirrored, so one side's throw is the other's
+ * with the sideways angles negated.
+ */
+describe('which hand throws', () => {
+    let roster;
+    let CFG;
+    const QB = { team: 0, positionGroup: 'qb', position: 'qb' };
+
+    beforeAll(async () => {
+        roster = await import(join(root, 'www/xo/js/roster.js'));
+        ({ XO_CONFIG: CFG } = await import(join(root, 'www/xo/js/config.js')));
+    });
+
+    const armOn = (person, side) => person.userData.arms.find((a) => a.userData.armSide === side);
+    /** The cocked throw, mid-sweep, which the pose writes exactly (no easing). */
+    const cock = (person) => roster.poseFigure(person, 0, 0, { carry: 'throw', snapT: 1, throwT: 0.5 }, 1 / 60);
+
+    test('the field throws right-handed, and the figure\'s right arm is the negative side', () => {
+        expect(roster.THROWING_SIDE).toBe(-1);
+        const qb = roster.buildPlayer(QB, 0, null);
+        expect(roster.throwSideOf(qb)).toBe(-1);
+        // The rig hangs the right arm at negative x (the figure faces +z).
+        expect(armOn(qb, -1).position.x).toBeLessThan(0);
+        expect(roster.throwSideOf(null)).toBe(-1);
+        expect(roster.throwSideOf({ userData: { throwSide: 2 } })).toBe(-1);
+    });
+
+    test('a left-handed avatar throws with its left, the mirror of the field\'s right', () => {
+        const righty = roster.buildPlayer(QB, 0, { handedness: 'right' });
+        const lefty = roster.buildPlayer(QB, 0, { handedness: 'left' });
+        const plain = roster.buildPlayer(QB, 0, null);
+        expect(roster.throwSideOf(righty)).toBe(-1);
+        expect(roster.throwSideOf(lefty)).toBe(1);
+        cock(righty);
+        cock(lefty);
+        cock(plain);
+        // The right-handed avatar's right arm is cocked exactly as the field's.
+        expect(armOn(righty, -1).rotation.x).toBeCloseTo(armOn(plain, -1).rotation.x, 9);
+        expect(armOn(righty, -1).rotation.z).toBeCloseTo(armOn(plain, -1).rotation.z, 9);
+        // The left-handed one's LEFT arm is that pose mirrored: the lift the
+        // same, the sideways angle the other way, and the elbow the same.
+        expect(armOn(lefty, 1).rotation.x).toBeCloseTo(armOn(plain, -1).rotation.x, 9);
+        expect(armOn(lefty, 1).rotation.z).toBeCloseTo(-armOn(plain, -1).rotation.z, 9);
+        expect(armOn(lefty, 1).userData.forearm.rotation.x).toBeCloseTo(armOn(plain, -1).userData.forearm.rotation.x, 9);
+        // And their off hands match the same way.
+        expect(armOn(lefty, -1).rotation.x).toBeCloseTo(armOn(plain, 1).rotation.x, 2);
+        // A stiff-arm never takes the carrying arm, whichever it is.
+        expect(roster.stiffSide({ stiffArmSide: 1, carry: 'tuck' }, 1)).toBe(-1);
+        expect(roster.stiffSide({ stiffArmSide: -1, carry: 'tuck' }, -1)).toBe(1);
+    });
+
+    test('the held ball sits on the throwing side', async () => {
+        const view = await import(join(root, 'www/xo/js/view.js'));
+        const right = view.carryHold('throw', 1);
+        const left = view.carryHold('throw', 1, 1, 1);
+        expect(right.ball.x).toBeCloseTo(-CFG.pose.throwHold.ball.x, 9);
+        expect(left.ball.x).toBeCloseTo(CFG.pose.throwHold.ball.x, 9);
+        expect(left.ball.y).toBe(right.ball.y);
+        expect(left.aim.x).toBeCloseTo(-right.aim.x, 9);
+    });
+});
