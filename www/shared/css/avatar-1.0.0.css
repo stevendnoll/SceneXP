@@ -1,0 +1,152 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+/*
+ * avatar-1.0.0.css - the visitor's avatar as the site's pages show it
+ * (specs/avatar PLANNING 2.3). Today: the corner chip on the home page, a
+ * round portrait that links to /avatar/, with the "Make your avatar" label a
+ * new visitor sees beside it. The scenes' welcome-card row and the floating
+ * chip join here when they are built.
+ *
+ * SCOPED BY ID, like the other shared sheets: #avatar-chip and the parts
+ * inside it, found by shared/js/avatar-1.0.0's installChip through
+ * www/js/avatar-chip.js. It colors itself from the page's own tokens (the
+ * 2D pages' site.css: --bg-raised, --line, --text, --shadow, --accent-a)
+ * with a plain light fallback for a page that has none.
+ *
+ * The chip is fixed to the bottom left, inside the safe-area insets, under
+ * the sticky header (z-index 50) and the skip link (100). Its entrance is a
+ * short rise, and the label slides in beside it, neither of them under
+ * reduced motion (this sheet keeps its own rule: site.css's blanket cut
+ * does not reach a scene page).
+ */
+
+#avatar-chip {
+    position: fixed;
+    left: max(16px, env(safe-area-inset-left));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: calc(100vw - 32px);
+}
+
+#avatar-chip-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 4px;
+    border: 1px solid var(--line, rgba(23, 24, 29, 0.12));
+    border-radius: 999px;
+    background: var(--bg-raised, #ffffff);
+    color: var(--text, #17181d);
+    box-shadow: var(--shadow, 0 1px 2px rgba(23, 24, 29, 0.06), 0 8px 24px rgba(23, 24, 29, 0.12));
+    font-weight: 600;
+    font-size: 0.92rem;
+    line-height: 1.2;
+    text-decoration: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#avatar-chip-link:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lift, 0 2px 4px rgba(23, 24, 29, 0.08), 0 16px 40px rgba(23, 24, 29, 0.16));
+}
+
+#avatar-chip-link:focus-visible,
+#avatar-chip-hide:focus-visible {
+    outline: 2px solid var(--accent-a, #6c4cf1);
+    outline-offset: 2px;
+}
+
+/* The portrait: a 56 px circle (PRD section 7). Its soft background is the
+   portrait's own studio white, so a picture still loading reads as a blank
+   plinth rather than a hole. */
+#avatar-chip-img {
+    display: block;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #e9e6e0;
+}
+
+#avatar-chip-label {
+    padding-right: 0.75rem;
+    white-space: nowrap;
+}
+
+/* The label's dismiss button, beside the pill. */
+#avatar-chip-hide {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--line, rgba(23, 24, 29, 0.12));
+    border-radius: 50%;
+    background: var(--bg-raised, #ffffff);
+    color: var(--text-soft, #4b4e5a);
+    cursor: pointer;
+    box-shadow: var(--shadow, 0 1px 2px rgba(23, 24, 29, 0.06), 0 8px 24px rgba(23, 24, 29, 0.12));
+}
+
+#avatar-chip-hide:hover {
+    color: var(--text, #17181d);
+    background: var(--bg-inset, #eeeef5);
+}
+
+#avatar-chip-hide svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* The display rules above would otherwise override the attribute. */
+#avatar-chip-label[hidden],
+#avatar-chip-hide[hidden] {
+    display: none;
+}
+
+/* The chip covers the bottom left of the window, so a page that carries it
+   keeps its footer's last lines clear of it: room for the pill and its
+   margin below the footer's own padding. */
+body:has(#avatar-chip) .site-footer {
+    padding-bottom: 5rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    @keyframes avatar-chip-rise {
+        from {
+            opacity: 0;
+            transform: translateY(12px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes avatar-chip-label-in {
+        from {
+            opacity: 0;
+            transform: translateX(-8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    #avatar-chip {
+        animation: avatar-chip-rise 0.5s ease-out 0.3s both;
+    }
+
+    /* Plays when the script reveals the label (it ships hidden). */
+    #avatar-chip-label,
+    #avatar-chip-hide {
+        animation: avatar-chip-label-in 0.35s ease-out both;
+    }
+}

@@ -40,6 +40,9 @@ html [lang="en"]
               a [href="/#experiences"]
                 "Experiences"
             li
+              a [href="/avatar/"]
+                "Avatar"
+            li
               a [href="/contact.html"]
                 "Contact"
             li
@@ -94,6 +97,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Your avatar"
             li
               a [href="/contact.html"]
                 "Contact"
@@ -879,6 +885,9 @@ html [lang="en"]
               a [href="/#experiences"]
                 "Experiences"
             li
+              a [href="/avatar/"]
+                "Avatar"
+            li
               a [aria-current="page" href="/contact.html"]
                 "Contact"
             li
@@ -987,6 +996,9 @@ html [lang="en"]
               a [href="/#experiences"]
                 "Experiences"
             li
+              a [href="/avatar/"]
+                "Your avatar"
+            li
               a [href="/contact.html"]
                 "Contact"
             li
@@ -1083,6 +1095,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Avatar"
             li
               a [href="/contact.html"]
                 "Contact"
@@ -1412,6 +1427,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Your avatar"
             li
               a [href="/contact.html"]
                 "Contact"
@@ -3541,9 +3559,12 @@ html [lang="en"]
     link [as="style" href="/css/site.min.css?v=9" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="/css/site.min.css?v=9" rel="stylesheet"]
+    link [href="/shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
     script [src="/js/home.min.js?v=2" type="module"]
+    link [href="/shared/js/avatar-1.0.0.min.js" rel="modulepreload"]
+    script [src="/js/avatar-chip.min.js" type="module"]
   body
     a.skip-link [href="#main"]
       "Skip to main content"
@@ -3563,6 +3584,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Avatar"
             li
               a [href="/contact.html"]
                 "Contact"
@@ -4069,6 +4093,9 @@ html [lang="en"]
               a [href="/#experiences"]
                 "Experiences"
             li
+              a [href="/avatar/"]
+                "Your avatar"
+            li
               a [href="/contact.html"]
                 "Contact"
             li
@@ -4094,7 +4121,15 @@ html [lang="en"]
             "SceneXP © 2026"
             a [href="https://www.continuumcommercellc.com/" rel="noopener noreferrer" target="_blank" title="View the Continuum Commerce LLC website"]
               "Continuum Commerce LLC"
-            ".""
+            "."
+    aside#avatar-chip [aria-label="Your avatar"]
+      a#avatar-chip-link [href="/avatar/"]
+        img#avatar-chip-img [alt="Make your avatar" decoding="async" height="56" loading="lazy" src="/assets/avatar/default.png" width="56"]
+        span#avatar-chip-label [hidden]
+          "Make your avatar"
+      button#avatar-chip-hide [aria-label="Hide this note" hidden type="button"]
+        svg [aria-hidden="true" fill="none" focusable="false" stroke="currentColor" stroke-linecap="round" stroke-width="2.4" viewbox="0 0 24 24"]
+          path [d="M6 6l12 12M18 6 6 18"]"
 `;
 
 exports[`www/interstate/index.html 1`] = `
@@ -5952,6 +5987,9 @@ html [lang="en"]
               a [href="/#experiences"]
                 "Experiences"
             li
+              a [href="/avatar/"]
+                "Avatar"
+            li
               a [href="/contact.html"]
                 "Contact"
             li
@@ -6087,6 +6125,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Your avatar"
             li
               a [href="/contact.html"]
                 "Contact"
@@ -7491,6 +7532,9 @@ html [lang="en"]
               a [href="/#experiences"]
                 "Experiences"
             li
+              a [href="/avatar/"]
+                "Avatar"
+            li
               a [href="/contact.html"]
                 "Contact"
             li
@@ -7638,6 +7682,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Your avatar"
             li
               a [href="/contact.html"]
                 "Contact"

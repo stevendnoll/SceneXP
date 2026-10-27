@@ -112,6 +112,15 @@ const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
 // no directory card.
 const UNRELEASED = ['avatar', 'starfall'];
 
+// THE HOME PAGE MAY LINK TO THESE BEFORE THEY ARE RELEASED. The avatar's
+// chip, nav link and footer link are home page features built on the same
+// branch as its release (M4, 2026-10-26), and Steve checks them on the page
+// as they are built, so the home page names /avatar/ while the page itself
+// still carries noindex and the sitemap and llms.txt still leave it out. The
+// branch ships as one change, so the live home page never links to a
+// noindex page. Any other unreleased scene stays unlinked everywhere.
+const HOME_MAY_LINK = ['avatar'];
+
 const sceneSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true })
     .filter((d) => d.isDirectory() && !IGNORED_DIRS.includes(d.name))
     .map((d) => d.name)
@@ -130,7 +139,7 @@ describe('scenes still being built', () => {
             expect(sceneSlugs).toContain(slug);
             const page = readFileSync(join(process.cwd(), 'www', slug, 'index.html'), 'utf8');
             expect(page).toMatch(/<meta name="robots" content="noindex, nofollow">/);
-            expect(home).not.toContain(`/${slug}/`);
+            if (!HOME_MAY_LINK.includes(slug)) expect(home).not.toContain(`/${slug}/`);
             expect(sitemap).not.toContain(`/${slug}/`);
             expect(llms).not.toContain(`/${slug}/`);
         }

@@ -255,6 +255,9 @@
     <link rel="preload" href="/css/site.min.css?v=9" as="style">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/css/site.min.css?v=9">
+    <!-- The avatar chip's own sheet (shared with the scenes that show the
+         visitor's avatar). Small, so it is not preloaded ahead of the site's. -->
+    <link rel="stylesheet" href="/shared/css/avatar-1.0.0.min.css">
 
     <!-- Tiny and synchronous on purpose: applies the saved theme before first paint. -->
     <script src="/js/theme.min.js?v=1"></script>
@@ -262,6 +265,11 @@
     <!-- The spotlight slideshow and the "New" badges. A module, so it runs after
          the page has parsed, and the page is complete without it. -->
     <script type="module" src="/js/home.min.js?v=2"></script>
+    <!-- The avatar chip in the corner (specs/avatar PRD section 7). Its one
+         import is named here so the browser fetches both at once rather than
+         finding the second inside the first. No three.js on this page. -->
+    <link rel="modulepreload" href="/shared/js/avatar-1.0.0.min.js">
+    <script type="module" src="/js/avatar-chip.min.js"></script>
 </head>
 
 <body>
@@ -286,6 +294,7 @@
             <nav id="site-nav" class="site-nav" aria-label="Main">
                 <ul>
                     <li><a href="/#experiences">Experiences</a></li>
+                    <li><a href="/avatar/">Avatar</a></li>
                     <li><a href="/contact.html">Contact</a></li>
                     <li><a href="/contribute.html">Contribute</a></li>
                 </ul>
@@ -921,6 +930,7 @@
                 <h2>Explore</h2>
                 <ul>
                     <li><a href="/#experiences">Experiences</a></li>
+                    <li><a href="/avatar/">Your avatar</a></li>
                     <li><a href="/contact.html">Contact</a></li>
                     <li><a href="/contribute.html">Contribute</a></li>
                 </ul>
@@ -940,6 +950,30 @@
             </div>
         </div>
     </footer>
+
+    <!-- THE AVATAR CHIP (specs/avatar PRD section 7): the visitor's own
+         portrait once they have saved an avatar, the default face until then,
+         fixed to the bottom left and linking to the avatar page. A plain
+         image, so this page loads no three.js. /js/avatar-chip.min.js swaps
+         in the saved portrait from localStorage and shows the "Make your
+         avatar" label on a new visitor's first few visits, until they fold it
+         away or save; the label and its button ship hidden, since they are a
+         hint rather than content. The picture's alt names the link while the
+         label is folded, and is blank while the label's words sit beside it.
+         Last in the tab order, like any floating control. -->
+    <aside id="avatar-chip" aria-label="Your avatar">
+        <a id="avatar-chip-link" href="/avatar/">
+            <img id="avatar-chip-img" src="/assets/avatar/default.png" width="56" height="56" loading="lazy"
+                decoding="async" alt="Make your avatar">
+            <span id="avatar-chip-label" hidden>Make your avatar</span>
+        </a>
+        <button id="avatar-chip-hide" type="button" hidden aria-label="Hide this note">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor"
+                stroke-width="2.4" stroke-linecap="round">
+                <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+        </button>
+    </aside>
 </body>
 
 </html>
