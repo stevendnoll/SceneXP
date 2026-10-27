@@ -240,32 +240,26 @@ describe('the silhouette', () => {
 
 /**
  * THE VISITOR AT QUARTERBACK (specs/avatar M7, 2026-10-26). With a saved
- * avatar the quarterback is the avatar in its own clothes and the team's
- * helmet, so the shell has to go over EVERY hair style the avatar page offers,
- * not the rig's four. Measured here the way the hats are measured in
- * tests/shared-avatar-hats: every vertex of hair still showing is either
- * under the rim or inside the shell.
+ * avatar the quarterback is the avatar exactly as the avatar page draws it.
+ * NO HELMET (Steve's QA, 2026-10-27): the first build put the team's helmet
+ * over it, took the hat off and trimmed the hair under the rim, and the
+ * tests here measured every hair style under the shell. Now they measure the
+ * opposite: nothing of the avatar's head is hidden, trimmed or recolored.
  */
 describe("the visitor's avatar at quarterback", () => {
     let roster;
     let A;
-    let hats;
+    let figure;
     const QB = { team: 0, positionGroup: 'qb', position: 'qb' };
     const WR = { team: 0, positionGroup: 'wr', position: 'wr1' };
+    const HELMET_PARTS = ['helmet-crown', 'helmet-shell', 'helmet-flap', 'helmet-mask', 'helmet-strap'];
 
     beforeAll(async () => {
         roster = await import(join(root, 'www/xo/js/roster.js'));
         A = await import(join(root, 'www/shared/js/avatar-1.0.0.js'));
-        hats = await import(join(root, 'www/shared/js/avatar-hats-1.0.0.js'));
+        figure = await import(join(root, 'www/shared/js/avatar-figure-1.0.0.js'));
     });
 
-    /** Whether a point, in the figure's own coordinates, is inside the shell's ball. */
-    const inShell = (v) => {
-        const [cx, cy, cz] = roster.SHELL.at;
-        const [sx, sy, sz] = roster.SHELL.scale;
-        const r = roster.SHELL.r;
-        return Math.hypot((v.x - cx) / (r * sx), (v.y - cy) / (r * sy), (v.z - cz) / (r * sz)) <= 1;
-    };
     /** A figure at life size, at the origin, its matrices current. */
     const plain = (person) => {
         person.scale.setScalar(1);
@@ -291,26 +285,29 @@ describe("the visitor's avatar at quarterback", () => {
         expect(qb.userData.avatar).toBeUndefined();
         expect(qb.children.filter((o) => o.name === 'jersey-mark').length).toBeGreaterThan(0);
         expect(roster.helmetRim()).toBeCloseTo(1.367, 2);
+        // The usual quarterback keeps his helmet.
+        for (const name of HELMET_PARTS) {
+            expect(`${name}: ${qb.children.filter((o) => o.name === name).length > 0}`).toBe(`${name}: true`);
+        }
     });
 
-    test('with one: the hat comes off, the glasses stay, no letter on the shirt, and the helmet is the team\'s', () => {
+    test('with one: no helmet, their own hat and glasses, no letter on the shirt, and nothing recolors with the team', () => {
         const hat = A.HATS.find((h) => h.id !== 'none').id;
         const qb = plain(roster.buildPlayer(QB, 0, { hat, glasses: 'sunglasses', shirt: 'teal' }));
         expect(qb.userData.avatar).toBe(true);
         const head = qb.children.find((o) => o.name === 'head');
         expect(head).toBeDefined();
-        expect(head.children.find((o) => o.name === 'hat')).toBeUndefined();
+        expect(head.children.find((o) => o.name === 'hat')).toBeDefined();
         expect(head.children.find((o) => o.name === 'glasses')).toBeDefined();
         expect(qb.children.filter((o) => o.name === 'jersey-mark')).toHaveLength(0);
-        for (const name of ['helmet-crown', 'helmet-shell', 'helmet-flap', 'helmet-mask', 'helmet-strap']) {
-            expect(`${name}: ${qb.children.filter((o) => o.name === name).length > 0}`).toBe(`${name}: true`);
+        for (const name of HELMET_PARTS) {
+            expect(`${name}: ${qb.children.filter((o) => o.name === name).length}`).toBe(`${name}: 0`);
         }
-        const shell = qb.children.find((o) => o.name === 'helmet-shell');
-        expect(shell.material.userData).toEqual({ kit: 'helmet', team: 0 });
-        // The shirt is the visitor's own: no material of theirs is tagged for the kit.
+        // Nothing of theirs is tagged for the team's colors: not the shirt,
+        // and no longer a helmet.
         let tagged = 0;
         qb.traverse((o) => {
-            if (o.isMesh && o.material.userData && (o.material.userData.kit === 'shirt' || o.material.userData.kit === 'sleeve')) tagged++;
+            if (o.isMesh && o.material.userData && o.material.userData.kit) tagged++;
         });
         expect(tagged).toBe(0);
         // The field's gloved hands, as every other player's: the rig sizes
@@ -327,27 +324,32 @@ describe("the visitor's avatar at quarterback", () => {
         expect(qb.userData.lift).toBeGreaterThan(0);
     });
 
-    test('every hair style, on a round and an oval face, stays under the helmet or hangs from its rim', () => {
-        const rim = roster.helmetRim();
+    test('every hair style, on a round and an oval face, is shown whole: nothing hidden, nothing trimmed', () => {
+        // The hair as the avatar page itself draws it, piece for piece and
+        // vertex for vertex, so a hidden piece or a trimmed hank shows.
+        const hairOf = (person) => {
+            const head = person.children.find((o) => o.name === 'head');
+            const hair = head.children.find((o) => o.userData && o.userData.isHair);
+            if (!hair) return null;
+            const pieces = [];
+            hair.traverse((m) => {
+                if (m.isMesh) pieces.push(`${m.name}:${m.geometry.type}:${m.geometry.attributes.position.count}:${shown(m)}`);
+            });
+            return pieces;
+        };
+        let styles = 0;
         for (const faceShape of A.FACE_SHAPES.map((f) => f.id)) {
             for (const style of A.HAIR_LENGTHS) {
-                const qb = plain(roster.buildPlayer(QB, 0, { length: style.id, faceShape }));
-                const head = qb.children.find((o) => o.name === 'head');
-                const hair = head.children.find((o) => o.userData && o.userData.isHair);
-                if (!hair) continue;
-                let out = 0;
-                let showing = 0;
-                hats.eachVertex([head], (v) => {
-                    showing++;
-                    if (v.y > rim + 0.002 && !inShell(v)) out++;
-                }, (m) => {
-                    if (!shown(m)) return false;
-                    for (let p = m; p; p = p.parent) if (p.userData && p.userData.isHair) return true;
-                    return false;
-                });
-                expect(`${faceShape} ${style.id}: ${out} of ${showing} out`).toBe(`${faceShape} ${style.id}: 0 of ${showing} out`);
+                const avatar = { length: style.id, faceShape };
+                const theirs = hairOf(plain(roster.buildPlayer(QB, 0, avatar)));
+                const own = hairOf(plain(figure.createAvatar(avatar, { role: 'customer' }).person));
+                if (!own) continue;
+                styles++;
+                expect(theirs).toEqual(own);
+                expect(theirs.every((p) => p.endsWith(':true'))).toBe(true);
             }
         }
+        expect(styles).toBeGreaterThan(10);
     });
 });
 

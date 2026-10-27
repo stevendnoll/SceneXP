@@ -32,7 +32,6 @@
  */
 import { createPerson } from '../../shared/js/people-1.0.0.min.js';
 import { createAvatar } from '../../shared/js/avatar-figure-1.0.0.min.js';
-import { trimUnder } from '../../shared/js/avatar-hats-1.0.0.min.js';
 import { XO_CONFIG as CFG } from './config.min.js';
 import { solveArm, calibrate } from './arm.min.js';
 import { jerseyOf, helmetOf, markInk } from './colors.min.js';
@@ -1095,21 +1094,22 @@ export function applyTeamColors() {
 
 /**
  * THE VISITOR AT QUARTERBACK (specs/avatar M7, 2026-10-26). Their own avatar,
- * as the avatar page draws it, in their own clothes, with the team's helmet
- * over it: the hat comes off (nothing fits under a helmet), the glasses stay
- * (Steve: sunglasses behind a facemask is funny), and there is no letter on
- * the shirt, since the shirt is theirs. The field's shoulders and gloved
- * hands, for the same reasons as every other player's.
+ * exactly as the avatar page draws it: their clothes, their hair, their hat
+ * and their glasses, and no letter on the shirt, since the shirt is theirs.
+ * The field's shoulders and gloved hands, for the same reasons as every
+ * other player's.
  *
- * THE HAIR GOES UNDER THE SHELL. The helmet is a closed dome down to
- * `helmetRim()` at the back, so every piece of hair but the rig's long
- * box-shaped hanks is hidden (a shell hides the scalp whatever is on it),
- * and the hanks are cut to hang from the rim (avatar-hats' `trimUnder`,
- * the way a hat trims them). tests/xo-helmet measures every style.
+ * NO HELMET (Steve's QA, 2026-10-27: "what if they just played as the
+ * custom avatar? I think that might actually be funnier"). The first build
+ * put the team's helmet over the avatar, took the hat off and trimmed the
+ * hair under the rim. A bare head in the visitor's own hat among ten
+ * helmets is the better joke, and it keeps what they made in view. Nothing
+ * on the figure is tagged for the team colors now: the helmet was the one
+ * part that recolored, and the shirt never did. Without a saved avatar the
+ * usual quarterback keeps his helmet (`buildPlayer`).
  */
-function buildAvatarPerson(avatar, kit) {
+function buildAvatarPerson(avatar) {
     const built = createAvatar(avatar, {
-        overrides: { hat: 'none' },
         role: 'customer',
         extra: { shoulderRound: 0.35, handScale: 1.9 },
     });
@@ -1117,27 +1117,6 @@ function buildAvatarPerson(avatar, kit) {
     // Their own throwing arm (Steve, 2026-10-26): the avatar's handedness,
     // read by every pose and the held ball through `throwSideOf`.
     throwSides.set(person, built.avatar && built.avatar.handedness === 'left' ? 1 : -1);
-    const face = person.children.find((o) => o.name === 'head');
-    const hair = face ? face.children.find((o) => o.userData && o.userData.isHair) : null;
-    if (hair) {
-        hair.traverse((m) => {
-            if (m.isMesh && !(m.geometry && m.geometry.type === 'BoxGeometry')) m.visible = false;
-        });
-        // The rim, in the head group's own coordinates: the head's middle at
-        // its origin, stretched for an oval face.
-        const stretch = Number.isFinite(face.scale.y) && face.scale.y > 0 ? face.scale.y : 1;
-        const rim = (helmetRim() - HEAD.y) / stretch;
-        trimUnder(hair, () => rim);
-    }
-    addHelmet(person, kit);
-    // Only the helmet wears the team's colors: the shirt is the visitor's own.
-    person.traverse((node) => {
-        const m = node.isMesh && node.material;
-        if (!m || Array.isArray(m)) return;
-        if (node.name === 'helmet-shell' || node.name === 'helmet-crown' || node.name === 'helmet-flap') {
-            m.userData = { ...(m.userData || {}), kit: 'helmet', team: 0 };
-        }
-    });
     addContactShadow(person);
     person.userData.avatar = true;
     return person;
@@ -1158,7 +1137,7 @@ export function buildPlayer(settings, i, avatar = null) {
 
     let person;
     if (visitor) {
-        person = buildAvatarPerson(avatar, kit);
+        person = buildAvatarPerson(avatar);
     } else {
         person = createPerson({
             role: 'customer',
