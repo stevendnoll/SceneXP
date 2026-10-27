@@ -338,11 +338,11 @@ export async function init() {
     state.target = returnTarget(window.location.search);
     state.lab = isLocalHost() && /(^|[?&])lab=1(&|$)/.test(window.location.search.slice(1));
 
-    const back = $('av-return');
+    // The way back reads "Back to SceneXP" as it ships; a scene that sent
+    // the visitor here names itself instead.
     if (state.target) {
-        back.href = state.target.path;
-        back.textContent = `Back to ${state.target.name}`;
-        back.hidden = false;
+        $('av-return').href = state.target.path;
+        $('av-return-text').textContent = `Back to ${state.target.name}`;
     }
     $('av-lab').hidden = !state.lab;
 

@@ -814,9 +814,12 @@ describe('the page', () => {
         expect(dom.el('av-forget').hidden).toBe(true);
         expect(dom.el('av-unsaved').textContent).toBe('');
         expect(dom.el('av-canvas').getAttribute('aria-label')).toMatch(/^A figure with fair skin/);
-        // No way back without a scene to go back to (the markup's link is
-        // left as it ships, hidden), and no lab without ?lab=1.
-        expect(dom.el('av-return').textContent).toBe('');
+        // The way back is the home page as the markup ships it (Steve's QA,
+        // 2026-10-26: a plain back link, never a bare wordmark), left
+        // untouched without a scene to go back to, and no lab without ?lab=1.
+        expect(HTML).toMatch(/<a id="av-return" class="av-return" href="\/">\s*<svg[^>]*aria-hidden="true"[\s\S]*?<\/svg>\s*<span id="av-return-text">Back to SceneXP<\/span>\s*<\/a>/);
+        expect(HTML).not.toContain('av-brand');
+        expect(dom.el('av-return-text').textContent).toBe('');
         expect(dom.el('av-lab').hidden).toBe(true);
     });
 
@@ -849,8 +852,7 @@ describe('the page', () => {
     test('a choice changes the figure only, and Save keeps it, says so, and offers Forget', async () => {
         const main = await boot({ search: '?return=/leaves/' });
         const { state } = main.__test__;
-        expect(dom.el('av-return').hidden).toBe(false);
-        expect(dom.el('av-return').textContent).toBe('Back to Leaf Blower');
+        expect(dom.el('av-return-text').textContent).toBe('Back to Leaf Blower');
         expect(dom.el('av-return').href).toBe('/leaves/');
         const teal = state.editor.inputs.shirt.find((i) => i.value === 'teal');
         teal.checked = true;

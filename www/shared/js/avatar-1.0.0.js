@@ -1088,6 +1088,12 @@ export function createAvatarStore({ win = typeof window === 'undefined' ? null :
 
 // ---- The chip -----------------------------------------------------------------
 
+/** The chip link's tooltip, before and after a save. */
+export const CHIP_TITLES = Object.freeze({
+    unsaved: 'Make an avatar that looks like you',
+    saved: 'Your avatar. Change it any time.'
+});
+
 /**
  * The corner chip (PRD section 7): a round portrait that links to /avatar/.
  * `els` are its parts, found by the page: `img`, `label` (the "Make your
@@ -1096,8 +1102,9 @@ export function createAvatarStore({ win = typeof window === 'undefined' ? null :
  * Shows the saved portrait where there is one, and leaves the markup's
  * default picture otherwise. Counts this visit and shows or folds the label
  * by `chipLabelShown`. The picture's alt text carries the link's name only
- * when the label does not (the label's words would otherwise be read twice).
- * Another tab saving or forgetting updates it in place.
+ * when the label does not (the label's words would otherwise be read twice),
+ * and the link's title says what a press does (`CHIP_TITLES`). Another tab
+ * saving or forgetting updates it in place.
  *
  * Returns `{ saved, labelShown, refresh, dispose }`, or null without an
  * image to show.
@@ -1120,6 +1127,8 @@ export function installChip(els, { store = createAvatarStore(), defaultSrc = '' 
         const portrait = saved ? store.loadPortrait() : null;
         if (portrait) img.src = portrait.src;
         else if (defaultSrc) img.src = defaultSrc;
+        // The tooltip under a resting pointer (Steve's QA, 2026-10-26).
+        if (link) link.title = saved ? CHIP_TITLES.saved : CHIP_TITLES.unsaved;
         if (saved) setLabel(false);
         else setLabel(labelShown);
     }

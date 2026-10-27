@@ -461,7 +461,7 @@ html [lang="en"]
     title
       "Your Avatar | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/avatar.min.css?v=8" rel="preload"]
+    link [as="style" href="css/avatar.min.css?v=9" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -487,7 +487,7 @@ html [lang="en"]
     link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/avatar.min.css?v=8" rel="stylesheet"]
+    link [href="css/avatar.min.css?v=9" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body.av-body
@@ -530,10 +530,11 @@ html [lang="en"]
               path [d="M6.5 12h11M12 6.5v11"]
       section.av-sheet [aria-labelledby="av-heading"]
         div.av-top
-          a.av-brand [href="/"]
-            "SceneXP"
-          a#av-return.av-return [hidden href="/"]
-            "Back"
+          a#av-return.av-return [href="/"]
+            svg.av-return-icon [aria-hidden="true" focusable="false" viewbox="0 0 24 24"]
+              path [d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4"]
+            span#av-return-text
+              "Back to SceneXP"
         p.av-eyebrow
           "Your Avatar"
         h2#av-heading.av-heading
@@ -4123,8 +4124,8 @@ html [lang="en"]
               "Continuum Commerce LLC"
             "."
     aside#avatar-chip [aria-label="Your avatar"]
-      a#avatar-chip-link [href="/avatar/"]
-        img#avatar-chip-img [alt="Make your avatar" decoding="async" height="56" loading="lazy" src="/assets/avatar/default.png" width="56"]
+      a#avatar-chip-link [href="/avatar/" title="Make an avatar that looks like you"]
+        img#avatar-chip-img [alt="Make your avatar" decoding="async" height="64" loading="lazy" src="/assets/avatar/default.png" width="64"]
         span#avatar-chip-label [hidden]
           "Make your avatar"
       button#avatar-chip-hide [aria-label="Hide this note" hidden type="button"]

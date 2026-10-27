@@ -781,6 +781,7 @@ describe('the corner chip', () => {
         expect(els.img.src).toBe('/assets/avatar/default.png');
         expect(els.label.hidden).toBe(false);
         expect(els.img.alt).toBe('');
+        expect(els.link.title).toBe(A.CHIP_TITLES.unsaved);
         // Folded away: the picture names the link, focus stays on it, and
         // it stays folded.
         els.hide.click();
@@ -806,12 +807,14 @@ describe('the corner chip', () => {
         expect(chip.saved).toBe(true);
         expect(els.img.src).toBe(PNG);
         expect(els.img.alt).toBe('Your avatar');
+        expect(els.link.title).toBe(A.CHIP_TITLES.saved);
         // Forgotten in another tab: back to the default picture.
         store.forget();
         chip.refresh();
         expect(chip.saved).toBe(false);
         expect(els.img.src).toBe('/d.png');
         expect(els.img.alt).toBe('Make your avatar');
+        expect(els.link.title).toBe(A.CHIP_TITLES.unsaved);
     });
 
     test('saved but with no portrait yet keeps the default picture, and no image means no chip', () => {

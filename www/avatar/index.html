@@ -103,7 +103,7 @@
     <title>Your Avatar | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/avatar.min.css?v=8" as="style">
+    <link rel="preload" href="css/avatar.min.css?v=9" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -133,7 +133,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/avatar.min.css?v=8">
+    <link rel="stylesheet" href="css/avatar.min.css?v=9">
 
     <!-- When JS is off, the studio can't run: the static fallback below is
          the page. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -209,10 +209,19 @@
 
         <section class="av-sheet" aria-labelledby="av-heading">
             <div class="av-top">
-                <a class="av-brand" href="/">SceneXP</a>
-                <!-- "Back to Leaf Blower", when a scene sent the visitor here
-                     (?return=, checked by js/transfer.js). -->
-                <a id="av-return" class="av-return" href="/" hidden>Back</a>
+                <!-- The way back, always a plain back link (Steve's QA,
+                     2026-10-26: the bare SceneXP wordmark did not read as
+                     one): to the home page, or "Back to Leaf Blower" when a
+                     scene sent the visitor here (?return=, checked by
+                     js/transfer.js, which fills the words in). Filled in
+                     once the avatar is saved: the next thing to do. -->
+                <a id="av-return" class="av-return" href="/">
+                    <svg class="av-return-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <span id="av-return-text">Back to SceneXP</span>
+                </a>
             </div>
 
             <p class="av-eyebrow">Your Avatar</p>

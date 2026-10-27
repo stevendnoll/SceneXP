@@ -58,13 +58,14 @@
     outline-offset: 2px;
 }
 
-/* The portrait: a 56 px circle (PRD section 7). Its soft background is the
-   portrait's own studio white, so a picture still loading reads as a blank
-   plinth rather than a hole. */
+/* The portrait: a 64 px circle (PRD section 7 said about 56; Steve's QA,
+   2026-10-26: "a little bigger"). Its soft background is the portrait's own
+   studio white, so a picture still loading reads as a blank plinth rather
+   than a hole. */
 #avatar-chip-img {
     display: block;
-    width: 56px;
-    height: 56px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
     object-fit: cover;
     background: #e9e6e0;
@@ -112,7 +113,7 @@
    keeps its footer's last lines clear of it: room for the pill and its
    margin below the footer's own padding. */
 body:has(#avatar-chip) .site-footer {
-    padding-bottom: 5rem;
+    padding-bottom: 5.5rem;
 }
 
 @media (prefers-reduced-motion: no-preference) {

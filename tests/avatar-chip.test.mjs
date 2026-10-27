@@ -14,7 +14,7 @@
 import { readFileSync } from 'node:fs';
 import { jest } from '@jest/globals';
 import { CHIP_IDS, DEFAULT_PORTRAIT, bootChip } from '../www/js/avatar-chip.js';
-import { createAvatarStore, CHIP_LABEL_VISITS } from '../www/shared/js/avatar-1.0.0.js';
+import { createAvatarStore, CHIP_LABEL_VISITS, CHIP_TITLES } from '../www/shared/js/avatar-1.0.0.js';
 import { AVATAR_PAGE } from '../www/avatar/js/config.js';
 
 const HOME = readFileSync('www/index.html', 'utf8');
@@ -69,6 +69,7 @@ describe('the chip on the home page', () => {
         expect(chip.labelShown).toBe(true);
         expect(parts[CHIP_IDS.img].src).toBe(DEFAULT_PORTRAIT);
         expect(parts[CHIP_IDS.img].alt).toBe('');
+        expect(parts[CHIP_IDS.link].title).toBe(CHIP_TITLES.unsaved);
         expect(parts[CHIP_IDS.label].hidden).toBe(false);
         expect(parts[CHIP_IDS.hide].hidden).toBe(false);
         // Folded away: the picture names the link again, and focus lands on it.
@@ -89,6 +90,7 @@ describe('the chip on the home page', () => {
         expect(chip.saved).toBe(true);
         expect(parts[CHIP_IDS.img].src).toBe(PNG);
         expect(parts[CHIP_IDS.img].alt).toBe('Your avatar');
+        expect(parts[CHIP_IDS.link].title).toBe(CHIP_TITLES.saved);
         expect(parts[CHIP_IDS.label].hidden).toBe(true);
     });
 
@@ -152,8 +154,8 @@ describe('the markup', () => {
         expect(HOME.indexOf('<aside id="avatar-chip"')).toBeGreaterThan(HOME.indexOf('</footer>'));
         // The link goes to the avatar page, the picture is the default one,
         // sized and named for the no-script visitor.
-        expect(aside[0]).toMatch(/<a id="avatar-chip-link" href="\/avatar\/">/);
-        expect(aside[0]).toMatch(new RegExp(`<img id="avatar-chip-img" src="${DEFAULT_PORTRAIT}" width="56" height="56"[^>]*alt="Make your avatar">`));
+        expect(aside[0]).toMatch(new RegExp(`<a id="avatar-chip-link" href="/avatar/" title="${CHIP_TITLES.unsaved}">`));
+        expect(aside[0]).toMatch(new RegExp(`<img id="avatar-chip-img" src="${DEFAULT_PORTRAIT}" width="64" height="64"[^>]*alt="Make your avatar">`));
         // The label and its button are hints: both ship hidden for the script.
         expect(aside[0]).toMatch(/<span id="avatar-chip-label" hidden>Make your avatar<\/span>/);
         expect(aside[0]).toMatch(/<button id="avatar-chip-hide" type="button" hidden aria-label="[^"]+">/);

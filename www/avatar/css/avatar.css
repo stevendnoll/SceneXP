@@ -150,21 +150,16 @@ body.av-body {
     margin-bottom: 28px;
 }
 
-.av-brand {
-    color: var(--av-ink);
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    text-decoration: none;
-}
-
-.av-brand:hover {
-    text-decoration: underline;
-}
-
+/* The way back: a pill with an arrow, so it reads as a link at a glance
+   (Steve's QA, 2026-10-26). */
 .av-return {
-    padding: 7px 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px 7px 10px;
     border-radius: 999px;
     border: 1px solid var(--av-line);
+    background: var(--av-paper);
     color: var(--av-ink);
     font-size: 14px;
     font-weight: 600;
@@ -172,8 +167,14 @@ body.av-body {
     white-space: nowrap;
 }
 
-.av-return[hidden] {
-    display: none;
+.av-return:hover {
+    border-color: var(--av-ink);
+}
+
+.av-return-icon {
+    width: 16px;
+    height: 16px;
+    flex: none;
 }
 
 /* Once the avatar is saved, the way back is the next thing to do. */
