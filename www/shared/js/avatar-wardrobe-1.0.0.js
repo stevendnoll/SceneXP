@@ -662,10 +662,14 @@ export function dressShirt(person, style, color, skin = null) {
         // The hood, down: one closed solid from a roll behind the neck
         // over the shoulders and down the back (HOOD).
         add(new THREE.Mesh(hoodGeometry(top, depth / 2), material(color, 0.95)), 'hood');
-        // The kangaroo pocket, low on the front; two drawstrings hanging
-        // from the neck.
+        // The kangaroo pocket, low on the front, above the rig's belt
+        // (Steve's QA, 2026-10-26: 0.03 up, the pocket's bottom 10 mm sat
+        // over the belt with its face exactly on the belt's, fighting, and
+        // the buckle came up through it; the belt's top is 0.04 over the
+        // torso's bottom on every build, so 0.045 clears it by 5 mm); two
+        // drawstrings hanging from the neck.
         const pocket = add(new THREE.Mesh(new THREE.BoxGeometry(...spec.pocket), darker), 'pocket');
-        pocket.position.set(0, bottom + spec.pocket[1] / 2 + 0.03, front + spec.pocket[2] / 2 - 0.002);
+        pocket.position.set(0, bottom + spec.pocket[1] / 2 + 0.045, front + spec.pocket[2] / 2 - 0.002);
         const stringMat = material(isLight(color) ? 0x55524d : 0xe8e4dc, 0.9);
         for (const s of [-1, 1]) {
             const string = add(new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, spec.string, 6), stringMat), 'drawstring');

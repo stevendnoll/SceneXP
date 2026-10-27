@@ -474,6 +474,26 @@ describe('the shirts', () => {
         expect(pb.min.y).toBeLessThan(torso.position.y);
         expect(pb.min.y).toBeGreaterThan(torso.position.y + tb.min.y);
         expect(named(avatar.person, 'drawstring')).toHaveLength(4);
+        // And above the rig's belt and buckle (Steve's QA, 2026-10-26: the
+        // pocket's bottom lay over the belt with its face on the belt's
+        // face, fighting, and the buckle came up through it). The belt is
+        // the wide thin unnamed box at the belt line, the buckle the narrow
+        // one in front of it. Checked on every build, since the belt
+        // follows the torso: the pocket's bottom clears both tops.
+        for (const build of A.BUILDS.map((b) => b.id)) {
+            for (const muscles of ['standard', 'buff']) {
+                const a = F.createAvatar({ sleeves: 'hoodie', build, muscles, bottom: 'pants' });
+                const boxes = a.person.children.filter((m) => m.isMesh && !m.name && m.geometry.type === 'BoxGeometry');
+                const belt = boxes.find((m) => m.geometry.parameters.width > 0.2 && m.geometry.parameters.height < 0.05);
+                const buckle = boxes.find((m) => m.geometry.parameters.width < 0.05);
+                expect(belt && buckle).toBeTruthy();
+                const pocketBottom = boxOf(a.person, named(a.person, 'pocket')[0]).min.y;
+                const under = Math.max(boxOf(a.person, belt).max.y, boxOf(a.person, buckle).max.y);
+                expect(`${build} ${muscles}: pocket clears the belt by ${pocketBottom - under >= 0.004 ? '4 mm or more' : `${((pocketBottom - under) * 1000).toFixed(1)} mm`}`)
+                    .toBe(`${build} ${muscles}: pocket clears the belt by 4 mm or more`);
+                a.dispose();
+            }
+        }
     });
 
     test('a V-neck shirt (2026-10-25) opens to a wedge of skin under the throat, banded along its edges, with short sleeves and no collar', () => {
