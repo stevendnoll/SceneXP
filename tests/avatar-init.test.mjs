@@ -1002,6 +1002,21 @@ describe('the page', () => {
         expect(main.__test__.saveDefaultPortrait()).toBe(false);
     });
 
+    test('?clean=1 on a local server takes the floating buttons off the studio, for the social card (Steve, 2026-10-26)', async () => {
+        let main = await boot({ search: '?clean=1', hostname: 'www.scenexp.com' });
+        expect(main.__test__.state.clean).toBe(false);
+        expect(document.documentElement.classList.contains('clean')).toBe(false);
+        dom.uninstall();
+        main = await boot({ search: '?lab=1&clean=1', hostname: 'localhost' });
+        expect(main.__test__.state.clean).toBe(true);
+        // The class is what the stylesheet hides .av-turn and the stage's
+        // status under (avatar.css), and the lab still shows beside it.
+        expect(document.documentElement.classList.contains('clean')).toBe(true);
+        expect(dom.el('av-lab').hidden).toBe(false);
+        const css = readFileSync(new URL('../www/avatar/css/avatar.css', import.meta.url), 'utf8');
+        expect(css).toMatch(/html\.clean \.av-turn,\s*html\.clean \.av-stage-status \{\s*display: none;/);
+    });
+
     test('without WebGL 2 the choices still work, and the studio says why it is empty', async () => {
         installThree();
         dom = installDom();

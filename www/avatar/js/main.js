@@ -78,6 +78,7 @@ const state = {
     editor: null,
     exporter: null,       // Export my avatar (js/export.js)
     lab: false,
+    clean: false,         // ?clean=1 on a local server: nothing over the studio
     // The usage pings: the page wired (a tab chosen while it is built is
     // not a visitor's), the visit's clock, the last field changed (one ping
     // per drag), and the first turn and zoom (counted once a visit).
@@ -426,7 +427,12 @@ export async function init() {
     state.store = createAvatarStore();
     state.saved = state.store.hasSaved() ? state.store.load() : null;
     state.target = returnTarget(window.location.search);
-    state.lab = isLocalHost() && /(^|[?&])lab=1(&|$)/.test(window.location.search.slice(1));
+    const query = window.location.search.slice(1);
+    state.lab = isLocalHost() && /(^|[?&])lab=1(&|$)/.test(query);
+    // ?clean=1 on a local server, as in the scenes: nothing floating over
+    // the studio (the turn and zoom buttons), for the social card's capture.
+    state.clean = isLocalHost() && /(^|[?&])clean=1(&|$)/.test(query);
+    if (state.clean) document.documentElement.classList.add('clean');
 
     // The way back reads "Back to SceneXP" as it ships; a scene that sent
     // the visitor here names itself instead.

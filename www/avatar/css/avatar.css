@@ -98,6 +98,13 @@ body.av-body {
     display: none;
 }
 
+/* ?clean=1 on a local server (main.js, as the scenes do for a social
+   card's capture): nothing floating over the studio. */
+html.clean .av-turn,
+html.clean .av-stage-status {
+    display: none;
+}
+
 .av-turn-btn {
     width: 44px;
     height: 44px;
