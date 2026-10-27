@@ -64,6 +64,20 @@ export function blockShoes(person) {
  * `to` of its height (0 at its bottom, 1 at its top; a ball is whole),
  * following the part's own scale, in the part's parent's coordinates,
  * named. The pieces a layer or a short bottom is made of (2026-10-26).
+ *
+ * THE SHELL FOLLOWS THE PART'S OWN FACETS (Steve's QA, 2026-10-26: the long
+ * johns and the sleeves fought with a buff figure's legs and arms). A
+ * faceted ball's vertices sit ON its radius and its faces dip inside it, so
+ * a 12 by 10 shell round the rig's 8 by 8 knee was inside the knee's
+ * vertices wherever the two did not line up: measured, the knee under
+ * tights came 0.1 to 1.7 mm through the shell on every hip or heavy build,
+ * and the elbow 0.3 mm through every sleeve on a buff arm. A shell with the
+ * ball's own segments is a true offset, every face a little over `over`
+ * out. A cylinder shell keeps 16 sides where the part's divide them (the
+ * rig's 8: the vertices line up, so the shell is never inside) and takes
+ * the part's own count otherwise (a hip build's 14 sided thigh, which a 16
+ * sided shell cut into by 0.3 mm under tights on a buff full build).
+ * tests/shared-avatar-layers measures every shell on every build.
  */
 export function partShell(part, over, from, to, mat, name) {
     const p = part.geometry.parameters;
@@ -71,7 +85,7 @@ export function partShell(part, over, from, to, mat, name) {
     const sz = part.scale.z || 1;
     let mesh;
     if (part.geometry.type === 'SphereGeometry') {
-        mesh = new THREE.Mesh(new THREE.SphereGeometry(p.radius * sx + over, 12, 10), mat);
+        mesh = new THREE.Mesh(new THREE.SphereGeometry(p.radius * sx + over, p.widthSegments || 8, p.heightSegments || 8), mat);
         mesh.scale.set(1, (part.scale.y || 1) / sx, sz / sx);
         mesh.position.copy(part.position);
     } else {
@@ -79,7 +93,8 @@ export function partShell(part, over, from, to, mat, name) {
         const rAt = (t) => p.radiusBottom + (p.radiusTop - p.radiusBottom) * t;
         const a = Math.max(0, Math.min(1, from));
         const b = Math.max(a, Math.min(1, to));
-        mesh = new THREE.Mesh(new THREE.CylinderGeometry(rAt(b) * sx + over, rAt(a) * sx + over, Math.max(0.001, h * (b - a)), 16), mat);
+        const sides = p.radialSegments && 16 % p.radialSegments !== 0 ? p.radialSegments : 16;
+        mesh = new THREE.Mesh(new THREE.CylinderGeometry(rAt(b) * sx + over, rAt(a) * sx + over, Math.max(0.001, h * (b - a)), sides), mat);
         mesh.scale.z = sz / sx;
         mesh.position.copy(part.position);
         mesh.position.y = part.position.y - h / 2 + (h * (a + b)) / 2;

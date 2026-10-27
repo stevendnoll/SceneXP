@@ -246,4 +246,79 @@ describe('the underlayer', () => {
         const avatar = F.createAvatar({ bottom: 'skirt', legwear: 'fishnets' });
         expect(layered(avatar.person, 'fishnets')[0].material.userData.sheerFallback).toBe(true);
     });
+
+    /**
+     * The least clearance of every shell over the rig part under it, in
+     * millimeters: a ray from the part's axis through each of its vertices,
+     * meeting the shell's side (never its caps: a rim vertex sits on the
+     * cap's plane). Negative means the part comes through the shell.
+     */
+    function leastClearance(figure) {
+        figure.group.updateMatrixWorld(true);
+        const ray = new THREE.Raycaster();
+        const v = new THREE.Vector3();
+        const axis = new THREE.Vector3();
+        const dir = new THREE.Vector3();
+        const out = [];
+        figure.group.traverse((shell) => {
+            if (!shell.isMesh || !shell.userData.layer || shell.userData.isHand) return;
+            const ball = shell.geometry.type === 'SphereGeometry';
+            const kind = ball ? 'SphereGeometry' : 'CylinderGeometry';
+            // The rig's own part nearest the shell, of the shell's kind.
+            const part = shell.parent.children
+                .filter((m) => m.isMesh && !m.userData.layer && !m.name && m.geometry.type === kind)
+                .sort((a, b) => a.position.distanceTo(shell.position) - b.position.distanceTo(shell.position))[0];
+            if (!part) return;
+            const side = shell.material.side;
+            shell.material.side = THREE.DoubleSide;   // the ray starts inside
+            const pos = part.geometry.attributes.position;
+            let least = Infinity;
+            for (let i = 0; i < pos.count; i++) {
+                v.fromBufferAttribute(pos, i);
+                if (!ball && Math.abs(v.x) < 1e-6 && Math.abs(v.z) < 1e-6) continue;   // a cap's middle
+                axis.set(0, ball ? 0 : v.y, 0);
+                const vw = v.clone().applyMatrix4(part.matrixWorld);
+                const aw = axis.clone().applyMatrix4(part.matrixWorld);
+                dir.subVectors(vw, aw);
+                const reach = dir.length();
+                if (reach < 1e-6) continue;
+                ray.set(aw, dir.normalize());
+                let hits = ray.intersectObject(shell, false);
+                if (!ball) hits = hits.filter((h) => h.face && Math.abs(h.face.normal.y) < 0.7);
+                if (!hits.length) continue;
+                least = Math.min(least, Math.max(...hits.map((h) => h.distance)) - reach);
+            }
+            shell.material.side = side;
+            if (least < Infinity) out.push({ layer: shell.userData.layer, piece: shell.name, part: part.geometry.type, mm: least * 1000 });
+        });
+        return out;
+    }
+
+    test('every shell clears the part under it on every build (Steve\'s QA, 2026-10-26: long johns and sleeves fought with buff legs and arms)', () => {
+        // A 12 by 10 shell round the rig's 8 by 8 knee or elbow sat inside
+        // the ball's vertices wherever the two did not line up (the knee
+        // under tights 0.1 to 1.7 mm through on every hip or heavy build,
+        // the elbow 0.3 mm through every sleeve on a buff arm), and a 16
+        // sided shell cut 0.3 mm into a hip build's 14 sided thigh. The
+        // shell now follows the part's own facets, so every piece stands
+        // at least a millimeter off, on every build and every set of
+        // muscles, with every thin layer that covers a ball.
+        const looks = [];
+        for (const muscles of ['standard', 'athletic', 'buff']) {
+            for (const build of A.BUILDS.map((b) => b.id)) {
+                looks.push({ muscles, build, bottom: 'skirt', sleeves: 'tank', legwear: 'tights', armwear: 'thermalSleeves' });
+                looks.push({ muscles, build, bottom: 'bare', sleeves: 'leotard', legwear: 'longJohns', armwear: 'fishnetSleeves' });
+                looks.push({ muscles, build, bottom: 'shorts', sleeves: 'tank', legwear: 'thighHighs', armwear: 'longGloves' });
+            }
+        }
+        for (const look of looks) {
+            const figure = F.createAvatar(look);
+            const rows = leastClearance(figure);
+            figure.dispose();
+            expect(rows.length).toBeGreaterThan(3);
+            const worst = rows.sort((a, b) => a.mm - b.mm)[0];
+            const label = `${look.muscles} ${look.build} ${look.legwear} ${look.armwear}: ${worst.layer}/${worst.piece} over the ${worst.part}`;
+            expect(`${label} clears by ${worst.mm >= 1 ? 'a millimeter or more' : `${worst.mm.toFixed(2)} mm`}`).toBe(`${label} clears by a millimeter or more`);
+        }
+    });
 });
