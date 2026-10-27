@@ -803,6 +803,8 @@ export function createPerson(config) {
         hand.rotation.y = side * HAND.turn;
         hand.name = 'hand';
         hand.userData.isHand = true;
+        // Its unit, for a stand-in the size of the old ball (crowd-1.0.0).
+        hand.userData.handUnit = handUnit;
         foreGroup.add(hand);
 
         // Position arm group at shoulder

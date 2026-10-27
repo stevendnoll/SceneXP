@@ -196,16 +196,22 @@ function pieceFor(mesh) {
 }
 
 /** The rig's hand (a palm, four fingers and a thumb since 2026-10-26, some
- *  hundreds of triangles) as the crowd draws it: one block the size of the
- *  hand's box, twelve triangles. A crowd member is a few pixels tall; nobody
- *  can see its fingers, and a thousand of them is a thousand hands. The box
- *  reaches exactly where the hand's own box does, so a fan is the figure's
- *  size to the millimeter. */
-export function handStandIn(geometry) {
+ *  hundreds of triangles) as the crowd draws it: THE OLD BALL HAND, the
+ *  oval the rig drew before the fingers (a sphere of the hand's `unit`,
+ *  0.8 wide, 1 tall and 0.5 deep, at the hand's middle, which is where the
+ *  ball's was). A crowd member is a few pixels tall; nobody can see its
+ *  fingers, and a thousand of them is a thousand hands. The first stand-in
+ *  (2026-10-26, the same day) was a box the size of the fingered hand's
+ *  own box, which read as a paddle, too big and too flat, on every fan
+ *  (Steve's QA: "what if we just went back to the original round/oval
+ *  hands for the background crowd?"). `unit` is the hand's (the rig tags
+ *  it, userData.handUnit); without it, a third of the hand's height. */
+export function handStandIn(geometry, unit = null) {
     geometry.computeBoundingBox();
     const b = geometry.boundingBox;
-    const g = new THREE.BoxGeometry(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z);
-    g.translate((b.max.x + b.min.x) / 2, (b.max.y + b.min.y) / 2, (b.max.z + b.min.z) / 2);
+    const r = unit || (b.max.y - b.min.y) / 3;
+    const g = new THREE.SphereGeometry(r, 6, 5);
+    g.scale(0.8, 1, 0.5);
     return g;
 }
 
@@ -215,7 +221,7 @@ export function handStandIn(geometry) {
  *  members who stand near the camera: Steve's QA, 2026-10-26, the derby's
  *  families' hands read as flat paddles up close). */
 function bake(mesh, { realHands = false } = {}) {
-    const source = mesh.userData.isHand && !realHands ? handStandIn(mesh.geometry) : lighter(mesh.geometry);
+    const source = mesh.userData.isHand && !realHands ? handStandIn(mesh.geometry, mesh.userData.handUnit || null) : lighter(mesh.geometry);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', source.attributes.position.clone());
     g.setAttribute('normal', source.attributes.normal.clone());
