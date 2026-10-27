@@ -1009,12 +1009,14 @@ describe('the page', () => {
         dom.uninstall();
         main = await boot({ search: '?lab=1&clean=1', hostname: 'localhost' });
         expect(main.__test__.state.clean).toBe(true);
-        // The class is what the stylesheet hides .av-turn and the stage's
-        // status under (avatar.css), and the lab still shows beside it.
+        // The class is what the stylesheet hides the floating buttons, the
+        // stage's status and the whole sheet under (avatar.css), the
+        // studio then taking the window; the lab is built all the same.
         expect(document.documentElement.classList.contains('clean')).toBe(true);
         expect(dom.el('av-lab').hidden).toBe(false);
         const css = readFileSync(new URL('../www/avatar/css/avatar.css', import.meta.url), 'utf8');
-        expect(css).toMatch(/html\.clean \.av-turn,\s*html\.clean \.av-stage-status \{\s*display: none;/);
+        expect(css).toMatch(/html\.clean \.av-turn,\s*html\.clean \.av-stage-status,\s*html\.clean \.av-sheet \{\s*display: none;/);
+        expect(css).toMatch(/html\.clean \.av-app \{\s*grid-template-columns: minmax\(0, 1fr\);/);
     });
 
     test('without WebGL 2 the choices still work, and the studio says why it is empty', async () => {

@@ -99,10 +99,16 @@ body.av-body {
 }
 
 /* ?clean=1 on a local server (main.js, as the scenes do for a social
-   card's capture): nothing floating over the studio. */
+   card's capture): the studio alone, the whole window wide. Nothing
+   floating over it, and no sheet beside it (Steve, 2026-10-26). */
 html.clean .av-turn,
-html.clean .av-stage-status {
+html.clean .av-stage-status,
+html.clean .av-sheet {
     display: none;
+}
+
+html.clean .av-app {
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .av-turn-btn {
