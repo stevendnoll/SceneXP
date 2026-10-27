@@ -126,8 +126,10 @@ export function crowdLooks(n, C = DERBY_CONFIG) {
 export function familyOf(fieldId, C = DERBY_CONFIG) {
     const list = C.families[fieldId] || [];
     const paint = C.fieldColors[fieldId];
+    // By the finish, close to the camera: the rig's fingered hands, not
+    // the crowd's box (Steve's QA, 2026-10-26).
     return list.map((m) => ({
-        look: lookOf({ shirt: 'rust', pants: m.pants, skin: m.skin, hair: m.hair, length: m.length }, { kid: Boolean(m.kid), shirt: m.shirt === undefined ? paint : m.shirt }, C),
+        look: { ...lookOf({ shirt: 'rust', pants: m.pants, skin: m.skin, hair: m.hair, length: m.length }, { kid: Boolean(m.kid), shirt: m.shirt === undefined ? paint : m.shirt }, C), hands: 'real' },
         prop: m.prop || null,
         sign: m.sign || null
     }));
@@ -305,7 +307,11 @@ function buildProp(kind, text, made, grip = 0.57) {
  * safe.
  */
 export function createCrowd(C = DERBY_CONFIG, { capacity = 160 } = {}) {
-    const parts = buildCrowdParts({ scale: 1, poses: POSES });
+    // The fingered hands too (Steve's QA, 2026-10-26): the families stand
+    // by the camera at the finish, where the crowd's box hands read as flat
+    // paddles. Their looks say `hands: 'real'` (familyOf, familyMembers);
+    // the bleachers keep the box.
+    const parts = buildCrowdParts({ scale: 1, poses: POSES, realHands: true });
     const grip = (pose) => {
         const [a, b] = parts.hands[pose];
         return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);

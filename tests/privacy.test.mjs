@@ -57,7 +57,11 @@ const PERSISTENT = {
     // The shared figure store (promoted from www/leaves/js/cast.js on
     // 2026-10-19), under each scene's own key: Leaf Blower's character, and
     // Derby Day's family (M6, key derby-family).
-    'www/shared/js/cast-1.0.0.js': 'the character chosen in Leaf Blower, and the family dressed in Derby Day',
+    'www/shared/js/cast-1.0.0.js': 'the family dressed in Derby Day (and, until Leaf Blower moves it into the avatar, a character chosen there before 2026-10-26)',
+    // The site-wide avatar (specs/avatar M1, 2026-10-23): the avatar, its
+    // portrait, and the home chip's label rule, under three scenexp-avatar
+    // keys.
+    'www/shared/js/avatar-1.0.0.js': 'the visitor’s avatar, its portrait, and how often the home page has shown its label',
     'www/leaves/js/best.js': 'the fastest time to clear the lawn in Leaf Blower',
     // Released 2026-10-16, described in privacy.html as "Your home in
     // Whitestone Home Care".
@@ -150,9 +154,14 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // about most, a whole job search, and that none of it is sent.
     expect(text).toMatch(/Corner Office keeps everything you enter/i);
     expect(text).toMatch(/never anything you typed/i);
-    // The character chosen in Leaves (M4, 2026-10-06), and how to clear it.
-    expect(text).toMatch(/keeps the character you choose/i);
-    expect(text).toMatch(/Forget my choice button/i);
+    // The character chosen in Leaves (M4, 2026-10-06) became the visitor's
+    // avatar (2026-10-26): the page says where an old choice went, and no
+    // longer offers a button that is gone.
+    expect(text).toMatch(/moved into your avatar/i);
+    expect(text).not.toMatch(/Forget my choice button/i);
+    // The avatar page's own pings (2026-10-26): kinds of action, never choices.
+    expect(text).toMatch(/count only what kind of thing was done/i);
+    expect(text).toMatch(/never what was chosen/i);
     // And its best time to clear the lawn (2026-10-08): only the seconds,
     // and how to clear that too.
     expect(text).toMatch(/keeps your fastest time, just the number of seconds/i);
@@ -176,6 +185,18 @@ test('and the policy actually describes them, in words a visitor would use', () 
     expect(text).toMatch(/Forget my cars button/i);
     // And the family dressed on the family card (M6), forgotten with them.
     expect(text).toMatch(/how you dressed your family/i);
+    // The site-wide avatar (specs/avatar, 2026-10-23): what is kept, the
+    // portrait drawn on the device, that none of it travels, and how to
+    // clear it. The home chip's visit count joins it with the chip (M4).
+    expect(text).toMatch(/When you save an avatar on the Your Avatar page/i);
+    expect(text).toMatch(/small picture of its face, drawn right on your device/i);
+    // Custom colors (2026-10-24): still nothing typed, and said so.
+    expect(text).toMatch(/from your browser.s color picker, with no name and nothing typed/i);
+    expect(text).toMatch(/never in our usage pings/i);
+    // Export my avatar (2026-10-26): the picture or clip is made on the
+    // device and goes only to the visitor's own share sheet or downloads.
+    expect(text).toMatch(/picture or a short video you export of your avatar is made right on your device/i);
+    expect(text).toMatch(/Forget my avatar button/i);
 
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.

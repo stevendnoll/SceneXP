@@ -28,10 +28,27 @@ import { smoothstep } from './turntable.min.js';
 
 /** The shared rig's resting arm (people-1.0.0): splayed a little, a touch
  *  forward, the elbow straight. */
-export const REST = Object.freeze({ z: 0.15, x: 0.1, fore: 0 });
+export const REST = Object.freeze({ z: 0.15, x: 0.1, fore: 0, twist: 0 });
 
 /** How long each gesture lasts, seconds. */
 export const GESTURES = Object.freeze({ wave: 2.2, point: 1.9 });
+
+/**
+ * How far each gesture turns the hand about the arm (Steve's QA,
+ * 2026-10-26: "the rotation of Maya's hand/thumb is a little off"; the same
+ * finding as the avatar's wave the same day). The rig hangs the hand with
+ * its palm to the thigh and the thumb leading, so an arm swung straight up
+ * shows the visitor the back of the hand with the thumb out to the side,
+ * and an arm swung out to the house lays the hand flat with its back up
+ * and the thumb hanging. A half turn brings the waving palm round to the
+ * visitor, thumb up and in. Three quarters of a turn opens the pointing
+ * hand toward the visitor, palm up and out as a host presents a room, its
+ * thumb up (measured against the real rig: a half turn there put the palm
+ * straight up with the thumb along the arm, a quarter turn left the palm
+ * to the visitor with the thumb still low).
+ */
+export const WAVE_TWIST = Math.PI;
+export const POINT_TWIST = Math.PI * 0.75;
 
 /**
  * Her bubble portrait's framing: her face, square, for the round portrait
@@ -58,8 +75,9 @@ export function portraitPose(head, facing, P = PORTRAIT) {
  * Each arm's angles `t` seconds into a gesture: `{ near, far }`, the near
  * arm being the one on the house's side. `z` is the swing out from the
  * side (radians, before the side's sign), `x` the swing forward (negative
- * is forward), `fore` the elbow's bend. The arms rise, hold, and come down
- * eased, so a gesture never snaps.
+ * is forward), `fore` the elbow's bend, `twist` the hand's turn about the
+ * arm (before the side's sign). The arms rise, hold, and come down eased,
+ * so a gesture never snaps.
  *
  *   wave   the far arm raised high and swinging side to side (QA,
  *          2026-10-15: the near arm was tried, and the far one looked
@@ -78,9 +96,9 @@ export function poseFor(gesture, t) {
     const mix = (a, b) => a + (b - a) * k;
     if (gesture === 'wave') {
         const swing = 0.22 * Math.sin(t * Math.PI * 2 * 1.6) * k;
-        return { near: rest.near, far: { z: mix(REST.z, 2.55) + swing, x: mix(REST.x, -0.12), fore: mix(0, -0.12) } };
+        return { near: rest.near, far: { z: mix(REST.z, 2.55) + swing, x: mix(REST.x, -0.12), fore: mix(0, -0.12), twist: mix(0, WAVE_TWIST) } };
     }
-    return { near: { z: mix(REST.z, 1.0), x: mix(REST.x, -0.62), fore: mix(0, -0.22) }, far: rest.far };
+    return { near: { z: mix(REST.z, 1.0), x: mix(REST.x, -0.62), fore: mix(0, -0.22), twist: mix(0, POINT_TWIST) }, far: rest.far };
 }
 
 /**
@@ -200,6 +218,15 @@ export function buildMaya(config) {
         if (o.userData && o.userData.isArm) arms[o.userData.armSide < 0 ? 'near' : 'far'] = o;
     });
     const side = { near: -1, far: 1 };
+    // Each arm's hand, and the turn the rig hung it at, so a pose's twist
+    // is added to it and rest puts it back.
+    const hands = {};
+    for (const key of ['near', 'far']) {
+        if (!arms[key]) continue;
+        arms[key].traverse((o) => {
+            if (o.userData && o.userData.isHand && !hands[key]) hands[key] = { mesh: o, turn: o.rotation.y };
+        });
+    }
 
     let gesture = null;
     let elapsed = 0;
@@ -215,6 +242,7 @@ export function buildMaya(config) {
             arm.rotation.x = pose[key].x;
             const fore = arm.userData.forearm;
             if (fore) fore.rotation.x = pose[key].fore;
+            if (hands[key]) hands[key].mesh.rotation.y = hands[key].turn + side[key] * (pose[key].twist || 0);
         }
     }
     apply(poseFor(null, 0));

@@ -61,6 +61,8 @@ import {
 import { getProofOfWork, installCardFocusTrap, installCardScrollReset } from '../../shared/js/boot-1.0.0.min.js';
 import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { track, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
+import { createAvatarStore, DEFAULT_AVATAR } from '../../shared/js/avatar-1.0.0.min.js';
+import { createAvatar } from '../../shared/js/avatar-figure-1.0.0.min.js';
 
 const CONFIG = DERBY_CONFIG;
 const LANES = CONFIG.track.lanes;
@@ -719,6 +721,9 @@ function stageCars(entries) {
  * the table instead.
  */
 function placeCrowd() {
+    // The visitor at the table: a figure of its own, so it stands whether
+    // or not the baked crowd could be drawn (the suite's stub bakes nothing).
+    placeVolunteer();
     if (!crowd || !crowd.ready) return;
     if (!bleachers) {
         const seats = bleacherSeats(CONFIG);
@@ -727,8 +732,6 @@ function placeCrowd() {
         bleachers = seats.map((at, i) => ({ group: 'crowd', look: looks[i], at: { ...at, ry: (rand() - 0.5) * 0.4 }, keen: rand() < 0.35, phase: rand() * 6 }));
     }
     const list = bleachers.slice();
-    const W = CONFIG.weighIn;
-    list.push({ group: 'volunteer', look: lookOf({ shirt: 'mustard', pants: 'khaki', skin: 'medium', hair: 'gray', length: 'short' }, {}, CONFIG), at: { x: W.at.x - 0.25, y: 0, z: W.at.z - 0.55, ry: 0 }, phase: 0 });
     const mineEntry = state.crowdEntries.find((e) => e.mine);
     const carName = mineEntry ? mineEntry.name.replace(/ \(Outlaw\)$/, '') : garage.nameOf(garage.bench());
     const family = familyMembers(familyStore.load(), carName, CONFIG).map((m, rank) => ({ ...m, group: 'mine', phase: 1.3, rank }));
@@ -762,6 +765,32 @@ function placeCrowd() {
         c.n++;
     }
     state.familyCenters = Object.fromEntries(Object.entries(centers).map(([k, c]) => [k, { x: c.x / c.n, z: c.z / c.n }]));
+}
+
+/**
+ * THE VOLUNTEER AT THE WEIGH-IN TABLE IS THE VISITOR (Steve, 2026-10-26):
+ * their own avatar when one is saved on /avatar/, and the site's default
+ * avatar otherwise (the same figure the avatar page opens on), so the person
+ * who weighs the car is always the same person who would. A real figure
+ * from the avatar library rather than a member of the baked crowd, since an
+ * avatar brings pieces the crowd's one baked body cannot wear (a hat,
+ * glasses, a jersey). Built once, read once a visit, standing where the
+ * baked volunteer stood (a mustard shirt and khakis, until this), arms at
+ * rest, facing the table.
+ */
+let volunteer = null;
+
+function placeVolunteer() {
+    if (volunteer) return;
+    const W = CONFIG.weighIn;
+    const store = createAvatarStore();
+    const saved = store.hasSaved();
+    const built = createAvatar(saved ? store.load() : DEFAULT_AVATAR, { role: 'customer', extra: { shoulderRound: 0.35, handScale: 1.3 } });
+    built.group.position.set(W.at.x - 0.25, 0, W.at.z - 0.55);
+    built.group.rotation.y = 0;
+    scene.add(built.group);
+    volunteer = built;
+    state.volunteer = saved ? 'avatar' : 'default';
 }
 
 /** What the people are doing now (crowd.poseAt's moment). Reduced motion

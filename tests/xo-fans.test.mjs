@@ -87,9 +87,12 @@ describe('a fan is a whole person', () => {
         // A capped sphere is a little smaller than a round one, never bigger.
         expect(baked.min.y).toBeCloseTo(0, 3);
         expect(Math.abs(baked.max.y - (real.max.y + lift))).toBeLessThan(0.03);
-        expect(Math.abs(baked.max.x - real.max.x)).toBeLessThan(0.03);
-        expect(Math.abs(baked.min.x - real.min.x)).toBeLessThan(0.03);
-        expect(Math.abs(baked.max.z - real.max.z)).toBeLessThan(0.03);
+        // Across, the baked fan's hands are the old ball (crowd-1.0.0's
+        // stand-in since 2026-10-26), a centimeter narrower at the thumb
+        // than the rig's fingered hand, so a little more room either side.
+        expect(Math.abs(baked.max.x - real.max.x)).toBeLessThan(0.04);
+        expect(Math.abs(baked.min.x - real.min.x)).toBeLessThan(0.04);
+        expect(Math.abs(baked.max.z - real.max.z)).toBeLessThan(0.04);
     });
 
     test('the rebuilt torso sits exactly where the shared part put it', () => {

@@ -25,10 +25,12 @@
  * for a pile too small, flopping on the lawn and hurting their back, then
  * rolling over a little to look at the camera. A tap or a key skips it.
  *
- * M4, THE CHARACTER (2026-10-06): the welcome card's "Change your character"
- * opens a card beside the yard (cast.js for the choices) with the camera in
- * close on the person, who changes as each choice is made. The choice is
- * kept in this browser.
+ * M4, THE CHARACTER (2026-10-06), THE AVATAR SINCE 2026-10-26: the person on
+ * leaf duty is the visitor's own site-wide avatar (shared/js/avatar-1.0.0,
+ * made once at /avatar/), worn with no overrides. The welcome card shows its
+ * portrait and links to the avatar page, which brings the visitor back here.
+ * A character chosen on this scene's old card is moved into the avatar the
+ * first time the scene runs after that (cast.js), and the card is retired.
  *
  * M5, THE ENVIRONMENT (2026-10-06): the yard's trees (trees.js), whose
  * crowns hold some of the yard's leaves and keep letting them go, the trees
@@ -78,11 +80,10 @@ import { createLeafMesh } from './leafmesh.min.js';
 import { buildYard } from './yard.min.js';
 import { rakeFootprint } from './house.min.js';
 import { createOperator, stepOperator, standoffFor, facing, createOperatorFigure } from './blower.min.js';
-import { cameraFor, clearOfCrowns, cameraOn, cameraCast, castFrame, rayToGround, ease, clampZoom, orbitView } from './view.min.js';
-import {
-    SHIRTS, PANTS, SKINS, HAIR_COLORS, HAIR_LENGTHS, DEFAULT_CHOICE,
-    loadChoice, saveChoice, forgetChoice, personConfig, castLine
-} from './cast.min.js';
+import { cameraFor, clearOfCrowns, cameraOn, rayToGround, ease, clampZoom, orbitView } from './view.min.js';
+import { adoptChoice } from './cast.min.js';
+import { createAvatarStore, installChip, DEFAULT_AVATAR } from '../../shared/js/avatar-1.0.0.min.js';
+import { createAvatar, renderPortrait, RENDER_VERSION } from '../../shared/js/avatar-figure-1.0.0.min.js';
 import { isQaHost, labOptions, shortCount } from './lab.min.js';
 import { createStick, stickAim } from './stick.min.js';
 import {
@@ -139,7 +140,6 @@ let blocker = null;
 let helpBtn = null;
 let blowBtn = null;
 let endModal = null;
-let castModal = null;
 // The trees, their crowns' leaves, and every solid box on the ground (M5).
 let trees = [];
 let crowns = [];
@@ -148,11 +148,19 @@ let crowns = [];
 // them and the person and the dive go round them. Set in init().
 let WORLD = CONFIG;
 let solids = solidBoxes(CONFIG.yard);
-// Who is on leaf duty (cast.js), the choice as it was when the card opened
-// (to tell whether it changed), and the radio buttons the card is built of.
-let castChoice = { ...DEFAULT_CHOICE };
-let castBefore = null;
-const castInputs = [];
+// Who is on leaf duty (M6 of the avatar, 2026-10-26): the visitor's own
+// avatar from the shared store, the usual figure until one is saved; the
+// welcome card's chip (installChip's handle); whether a portrait is owed
+// (drawn on this renderer after a frame, keepPortrait); and the watch on
+// another tab saving or forgetting.
+let avatarStore = null;
+let avatar = DEFAULT_AVATAR;
+// The blower the simulation's jet comes from: B, or B with its side flipped
+// for a left-handed avatar (operatorPerson).
+let jetB = B;
+let playing = null;
+let portraitOwed = false;
+let stopAvatarWatch = null;
 let cleanupController = null;
 
 // The round, and the count of where the leaves are, refreshed a few times a
@@ -278,7 +286,6 @@ async function init() {
     helpBtn = document.getElementById('help-btn');
     blowBtn = document.getElementById('blow-btn');
     endModal = document.getElementById('end-modal');
-    castModal = document.getElementById('cast-modal');
     soundBtn = document.getElementById('sound-btn');
     toast.el = document.getElementById('find-toast');
     markSound();
@@ -286,9 +293,17 @@ async function init() {
     // The markup starts it hidden. Said again here so the round never begins
     // believing a card is up.
     if (endModal) endModal.classList.add('hidden');
-    if (castModal) castModal.classList.add('hidden');
-    castChoice = loadChoice();
-    setText('cast-name', castLine(castChoice));
+    // The avatar: a choice kept by the old character card moves in once.
+    avatarStore = createAvatarStore();
+    avatar = adoptChoice(avatarStore) || DEFAULT_AVATAR;
+    showPlaying();
+    portraitOwed = true;
+    stopAvatarWatch = avatarStore.onChange(() => {
+        avatar = avatarStore.hasSaved() ? avatarStore.load() : DEFAULT_AVATAR;
+        showPlaying();
+        if (figure) dressFigure();
+        portraitOwed = true;
+    });
 
     state.isMobile = detectMobile();
     state.touch = state.isMobile;
@@ -403,7 +418,7 @@ async function init() {
     layFinds();
 
     operator = createOperator(B);
-    figure = createOperatorFigure(B, CONFIG.look, { person: personConfig(castChoice) });
+    figure = createOperatorFigure(B, CONFIG.look, { person: operatorPerson(), hand: avatar.handedness });
     figure.update(operator, false, 0);
     scene.add(figure.group);
     neighborFigure = createOperatorFigure(B, CONFIG.look, {
@@ -546,8 +561,7 @@ function followCamera(dt) {
     // lawn inside the time, the same. Reduced motion keeps the usual view.
     const cheering = isCheering(cheer) && !state.reducedMotion;
     const beating = inBeat() && !state.reducedMotion;
-    if (castShown()) want = cameraCast(operator, aspect, CONFIG.camera, castFrame(window.innerWidth, window.innerHeight));
-    else if (beating) {
+    if (beating) {
         want = orbitView(cameraOn(cheerFocus(operator, CONFIG.yard.lawn), aspect, CONFIG.camera, CONFIG.cheer.span),
             cheerOrbit(finale.t, { ...CONFIG.cheer, seconds: finale.beat }));
     } else if (onPile) want = cameraOn(finale.plan.land, aspect, CONFIG.camera, CONFIG.finale.span);
@@ -579,7 +593,6 @@ function setupEventListeners() {
         }
         placeCamera(true);
         fitSky();
-        if (castShown()) frameCast();
     }, { signal });
 
     // Keep the view from being pinch-zoomed by iOS Safari, which ignores
@@ -589,7 +602,7 @@ function setupEventListeners() {
     ['gesturestart', 'gesturechange', 'gestureend'].forEach((type) =>
         document.addEventListener(type, (e) => {
             const t = e.target;
-            if (t && typeof t.closest === 'function' && t.closest('#blocker, #end-modal, #cast-modal')) return;
+            if (t && typeof t.closest === 'function' && t.closest('#blocker, #end-modal')) return;
             e.preventDefault();
         }, { passive: false, signal }));
 
@@ -628,10 +641,9 @@ function setupEventListeners() {
             dismiss(e);
         }, { signal });
         shieldOverlayControl(document.getElementById('explore-link'), { signal });
-        const castBtn = document.getElementById('cast-btn');
-        if (shieldOverlayControl(castBtn, { signal })) {
-            castBtn.addEventListener('click', openCast, { signal });
-        }
+        // "Make your avatar" is a link to the avatar page, which brings the
+        // visitor back here (?return=): shielded, like the directory link.
+        shieldOverlayControl(document.getElementById('avatar-playing-link'), { signal });
         const bestBtn = document.getElementById('best-forget');
         if (shieldOverlayControl(bestBtn, { signal })) {
             bestBtn.addEventListener('click', forgetBestTime, { signal });
@@ -792,7 +804,7 @@ function setupEventListeners() {
 /** The visitor may zoom while in the yard, but not over a card or during
  *  the dive, which has its own view. */
 function canZoom() {
-    return state.isLoaded && !welcomeShown() && !endShown() && !castShown() && round.phase !== 'finale';
+    return state.isLoaded && !welcomeShown() && !endShown() && round.phase !== 'finale';
 }
 
 /** Set the zoom, within its range. The camera eases there (followCamera). */
@@ -901,12 +913,6 @@ function onKeyDown(event) {
     // typing, or holding a modifier (the browser's own shortcuts).
     if (event.code === 'KeyM' && !event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey && !isTextEntry(event.target)) {
         if (state.isLoaded) toggleSound('key');
-        return;
-    }
-    // The character card keeps its keys too (its radio buttons take the
-    // arrows), and Escape is Done.
-    if (castShown()) {
-        if (event.code === 'Escape') closeCast();
         return;
     }
     // The end card keeps its keys: its buttons take Enter and Space, Tab is
@@ -1105,7 +1111,7 @@ function welcomeShown() {
  *  and the end card: nothing to press until the visitor is in, and nothing
  *  over a card. */
 function setChromeVisible(on) {
-    const shown = on && !welcomeShown() && !endShown() && !castShown();
+    const shown = on && !welcomeShown() && !endShown();
     if (helpBtn) helpBtn.classList.toggle('visible', shown);
     if (soundBtn) soundBtn.classList.toggle('visible', shown);
     if (!shown) hideToast();
@@ -1197,69 +1203,47 @@ function applySiteLinks() {
     if (explore) explore.href = CONFIG.site.home.path;
 }
 
-// ---- The character card (M4) ------------------------------------------------
-
-function castShown() {
-    return Boolean(castModal) && !castModal.classList.contains('hidden');
-}
+// ---- Who is on leaf duty: the avatar (M6) -----------------------------------
 
 function setText(id, text) {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
 }
 
-/** The card's radio buttons, one group per part of the choice, built once.
- *  Swatches are colored through the CSSOM, which the page's CSP allows
- *  where a style attribute it would not. */
-function buildCast() {
-    if (castInputs.length) return;
-    const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
-    [
-        { host: 'cast-shirts', key: 'shirt', list: SHIRTS, swatch: true },
-        { host: 'cast-pants', key: 'pants', list: PANTS, swatch: true },
-        { host: 'cast-skins', key: 'skin', list: SKINS, swatch: true },
-        { host: 'cast-hair', key: 'hair', list: HAIR_COLORS, swatch: true },
-        { host: 'cast-length', key: 'length', list: HAIR_LENGTHS }
-    ].forEach((group) => {
-        const host = document.getElementById(group.host);
-        if (!host) return;
-        group.list.forEach((option) => {
-            const label = document.createElement('label');
-            label.className = 'cast-option';
-            const input = document.createElement('input');
-            input.type = 'radio';
-            input.name = `cast-${group.key}`;
-            input.value = option.id;
-            label.appendChild(input);
-            const text = document.createElement('span');
-            text.textContent = option.label;
-            if (group.swatch) {
-                const dot = document.createElement('span');
-                dot.className = 'cast-swatch';
-                dot.style.backgroundColor = hex(option.color);
-                label.appendChild(dot);
-                text.className = 'sr-only';
-                label.title = option.label;
-            }
-            label.appendChild(text);
-            input.addEventListener('change', () => chooseCast(group.key, option.id, option.label));
-            host.appendChild(label);
-            castInputs.push({ key: group.key, id: option.id, input, label });
-        });
-    });
+/** The operator's body: the visitor's avatar on the shared rig, as the
+ *  avatar page draws it, with no overrides (Steve, 2026-10-24: a tank top
+ *  in October is their choice to make). */
+function operatorPerson() {
+    // The blower goes in the avatar's leading hand (Steve, 2026-10-26), and
+    // the jet the simulation blows starts beside that hand: `B.side` is the
+    // nozzle's offset to the right, so a left-handed operator blows from a
+    // blower whose side is the other way.
+    jetB = avatar.handedness === 'left' ? { ...B, side: -B.side } : B;
+    return createAvatar(avatar, { role: 'operator', extra: { shoulderRound: 0.4 } }).person;
 }
 
-/** Tick the chosen option in each group. */
-function markCast() {
-    castInputs.forEach(({ key, id, input, label }) => {
-        const on = castChoice[key] === id;
-        input.checked = on;
-        label.classList.toggle('chosen', on);
-    });
+/** The welcome card's "Playing as" row: the avatar's portrait (the default
+ *  face until one is saved) and the link to the avatar page, which brings
+ *  the visitor back here. The shared chip keeps the picture fresh, without
+ *  counting toward the home page's label; the words are this card's own.
+ *  The picture is decoration beside its words, so it is silent. */
+function showPlaying() {
+    const img = document.getElementById('avatar-playing-img');
+    const link = document.getElementById('avatar-playing-link');
+    if (!playing) {
+        const defaultSrc = img && typeof img.getAttribute === 'function' ? img.getAttribute('src') || '' : '';
+        playing = installChip({ img, link }, { store: avatarStore, defaultSrc, countVisit: false });
+    } else {
+        playing.refresh();
+    }
+    const saved = Boolean(playing && playing.saved);
+    setText('avatar-playing-text', saved ? 'Playing as your avatar.' : 'Playing as the usual figure.');
+    setText('avatar-playing-link', saved ? 'Change your avatar' : 'Make your avatar');
+    if (img) img.alt = '';
 }
 
-/** The person, dressed as the choice says: a new figure in place of the old,
- *  in whatever pose the old one held. */
+/** The person, dressed as the avatar says: a new figure in place of the
+ *  old, in whatever pose the old one held. */
 function dressFigure() {
     if (figure) {
         scene.remove(figure.group);
@@ -1268,72 +1252,28 @@ function dressFigure() {
             if (o.material) o.material.dispose();
         });
     }
-    figure = createOperatorFigure(B, CONFIG.look, { person: personConfig(castChoice) });
+    figure = createOperatorFigure(B, CONFIG.look, { person: operatorPerson(), hand: avatar.handedness });
     figure.update(operator, false, state.time, finale.plan ? finale.arms : 'carry');
     scene.add(figure.group);
     shade.owed = true;
 }
 
-function chooseCast(key, id, label) {
-    if (castChoice[key] === id) return;
-    castChoice = { ...castChoice, [key]: id };
-    markCast();
-    dressFigure();
-    setText('cast-status', label);
-}
-
-/** Shift the view so the person sits in the middle of what the card leaves
- *  visible. */
-function frameCast() {
-    if (!camera || !camera.setViewOffset) return;
-    const W = window.innerWidth;
-    const H = window.innerHeight;
-    const f = castFrame(W, H);
-    camera.setViewOffset(W, H, f.shiftX, f.shiftY, W, H);
-}
-
-/** "Change your character": the welcome card steps aside for the character
- *  card, and the person turns to face the camera as it comes in close. */
-function openCast() {
-    if (!state.isLoaded || castShown()) return;
-    buildCast();
-    markCast();
-    castBefore = { ...castChoice };
-    if (blocker) blocker.classList.add('hidden');
-    castModal.classList.remove('hidden');
-    setChromeVisible(false);
-    operator.heading = 0;
-    operator.speed = 0;
-    frameCast();
-    const chosen = castInputs.find((c) => c.input.checked) || castInputs[0];
-    if (chosen) {
-        try { chosen.input.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
-    }
-}
-
-/** Done (or Escape): keep the choice, and back to the welcome card. */
-function closeCast() {
-    if (!castShown()) return;
-    castModal.classList.add('hidden');
-    if (camera && camera.clearViewOffset) camera.clearViewOffset();
-    saveChoice(castChoice);
-    setText('cast-name', castLine(castChoice));
-    // Only that the character changed, not to what.
-    if (castBefore && Object.keys(castChoice).some((k) => castBefore[k] !== castChoice[k])) track('character', { outcome: 'changed' });
-    if (blocker) blocker.classList.remove('hidden');
-    const btn = document.getElementById('cast-btn');
-    if (btn) {
-        try { btn.focus({ preventScroll: true }); } catch (e) { /* not focusable */ }
-    }
-}
-
-/** "Forget my choice": nothing kept, and back to the default person. */
-function forgetCast() {
-    forgetChoice();
-    castChoice = { ...DEFAULT_CHOICE };
-    markCast();
-    dressFigure();
-    setText('cast-status', 'Your choice is forgotten.');
+/** A saved avatar with no portrait, or one drawn by an older figure (a
+ *  choice moved in from the old character card has none), drawn here on
+ *  this renderer after a frame, so the welcome card and the home chip show
+ *  the right face without a trip to the avatar page. The portrait draws in
+ *  a corner of the canvas, so the yard is drawn again at once. */
+function keepPortrait() {
+    portraitOwed = false;
+    if (!renderer || !avatarStore || !avatarStore.hasSaved()) return false;
+    const have = avatarStore.loadPortrait();
+    if (have && have.r === RENDER_VERSION) return false;
+    const src = renderPortrait(renderer, avatar);
+    if (!src) return false;
+    avatarStore.savePortrait(src, RENDER_VERSION);
+    renderer.render(scene, camera);
+    showPlaying();
+    return true;
 }
 
 // ---- The best time (best.js) -----------------------------------------------
@@ -1373,8 +1313,6 @@ function installRoundControls() {
         if (el) el.addEventListener('click', fn, { signal });
     };
     on('end-again', () => playAgain('end-card'));
-    on('cast-done', closeCast);
-    on('cast-forget', forgetCast);
     on('end-free', keepBlowing);
     on('hud-new', () => playAgain('hud'));
     installShare(
@@ -1700,9 +1638,6 @@ function fillEndPromo() {
 function hideEnd() {
     if (endModal) endModal.classList.add('hidden');
     if (trophy) trophy.hide();
-    if (castModal) castModal.classList.add('hidden');
-    castChoice = loadChoice();
-    setText('cast-name', castLine(castChoice));
     const el = document.activeElement;
     if (el && el !== document.body && typeof el.blur === 'function') el.blur();
     setChromeVisible(true);
@@ -1975,7 +1910,7 @@ function animate() {
     // In the yard (no card up), and free to move and blow (the round is not
     // over). Behind a card the round holds still: the clock pauses for the
     // welcome card, and nothing moves under the end card.
-    const inYard = !welcomeShown() && !endShown() && !castShown();
+    const inYard = !welcomeShown() && !endShown();
     // While every last leaf is celebrated nobody steers or blows.
     const cheering = isCheering(cheer);
     const free = inYard && canBlow(round) && !cheering;
@@ -1993,11 +1928,11 @@ function animate() {
         stepOperator(operator, aim, dt, B, walkArea(), solids);
     }
     // The crowns let their leaves go whenever the yard is in view.
-    if (!welcomeShown() && !castShown()) stepCrowns(crowns, sim, dt, CONFIG);
+    if (!welcomeShown()) stepCrowns(crowns, sim, dt, CONFIG);
     updateTrees(trees, state.time, state.reducedMotion ? 0.3 : 1);
     const blowing = isBlowing(free, pointer, keys, blowHold);
     const f = facing(operator.heading);
-    const jet = makeJet(B, operator.x, operator.z, f.x, f.z, blowing);
+    const jet = makeJet(jetB, operator.x, operator.z, f.x, f.z, blowing);
     if (inYard) {
         const finaleDone = diving ? stepFinale(dt) : false;
         const event = stepRound(round, dt, { blowing, finaleDone, spotless: isSpotless(counted) }, CONFIG.round);
@@ -2005,9 +1940,9 @@ function animate() {
     }
     // The neighbor carries on behind the end card (he waves), and holds
     // still behind the welcome card with everything else.
-    if (!welcomeShown() && !castShown()) stepTheNeighbor(dt);
+    if (!welcomeShown()) stepTheNeighbor(dt);
     const his = makeJet(neighborBlower(B, N, neighbor.big), neighbor.x, neighbor.z,
-        Math.sin(neighbor.heading), Math.cos(neighbor.heading), neighbor.blowing && !welcomeShown() && !castShown());
+        Math.sin(neighbor.heading), Math.cos(neighbor.heading), neighbor.blowing && !welcomeShown());
     countedAgo += delta;
     if (inYard && countedAgo >= 1 / CONFIG.round.tallyHz) {
         recount();
@@ -2022,7 +1957,7 @@ function animate() {
 
     // The trick-or-treaters (M6) hold still behind the welcome card with
     // everything else.
-    const yardInView = !welcomeShown() && !castShown();
+    const yardInView = !welcomeShown();
     if (yardInView) stepTheTreaters(dt, [jet, his]);
     const rising = riseFinds(delta);
     if (toast.until && state.time >= toast.until) hideToast();
@@ -2068,6 +2003,7 @@ function animate() {
         }
     }
     renderer.render(scene, camera);
+    if (portraitOwed) keepPortrait();
     stepPile(delta);
 }
 
@@ -2084,6 +2020,10 @@ function cleanup() {
     state.isRunning = false;
     if (renderer) renderer.setAnimationLoop(null);
     if (cleanupController) cleanupController.abort();
+    if (stopAvatarWatch) {
+        stopAvatarWatch();
+        stopAvatarWatch = null;
+    }
     sound.dispose();
 }
 
@@ -2118,8 +2058,10 @@ export function getState() {
         endPercent: endCount.shown,
         neighbor: { ...neighbor },
         endShown: endShown(),
-        castShown: castShown(),
-        cast: { ...castChoice },
+        avatar: { ...avatar },
+        avatarSaved: avatarStore ? avatarStore.hasSaved() : false,
+        hand: figure ? figure.hand : 'right',
+        jetSide: jetB.side,
         finale: finale.plan ? { t: finale.t, total: finale.plan.total, success: finale.plan.success, burst: finale.burst, arms: finale.arms } : null,
         finds: finds.map((f) => ({ id: f.id, x: f.x, z: f.z, found: f.found, shown: f.shown })),
         found: [...found],

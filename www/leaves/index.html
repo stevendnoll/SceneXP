@@ -108,7 +108,7 @@
     <title>Leaf Blower | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=13" as="style">
+    <link rel="preload" href="css/experience.min.css?v=14" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -137,6 +137,8 @@
     <link rel="modulepreload" href="js/blower.min.js">
     <link rel="modulepreload" href="js/view.min.js">
     <link rel="modulepreload" href="js/cast.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-figure-1.0.0.min.js">
     <link rel="modulepreload" href="js/lab.min.js">
     <link rel="modulepreload" href="js/stick.min.js">
     <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
@@ -150,12 +152,19 @@
     <link rel="modulepreload" href="js/hedge.min.js">
     <link rel="modulepreload" href="js/surfaces.min.js">
     <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-layers-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-shapes-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-hair-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-hats-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-wardrobe-1.0.0.min.js">
     <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=13">
+    <link rel="stylesheet" href="css/experience.min.css?v=14">
+    <!-- The welcome card's avatar chip (shared with the home page). -->
+    <link rel="stylesheet" href="../shared/css/avatar-1.0.0.min.css">
 
     <!-- When JS is off, the 3D scene can't run: swap in a static fallback layout.
          A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -252,8 +261,20 @@
                  so the button stays the thing to press. Each control is
                  shielded from the overlay's click-to-step-in by main.js. -->
             <div class="welcome-more">
-                <p class="cast-line"><span id="cast-name">Playing in a rust red shirt and navy pants.</span>
-                    <button id="cast-btn" class="welcome-free cast-btn" type="button">Change your character</button></p>
+                <!-- WHO IS ON LEAF DUTY (M6 of the avatar, 2026-10-26): the
+                     visitor's own avatar, made once at /avatar/ and worn by
+                     every scene that shows them, its portrait beside the
+                     words (the default face until one is saved). The link
+                     brings them back here (?return=). js/main.js fills the
+                     picture and the words in, and a character chosen on the
+                     old card of this scene is moved into the avatar the
+                     first time the scene runs. -->
+                <p id="avatar-playing" class="cast-line avatar-line">
+                    <img id="avatar-playing-img" src="../assets/avatar/default.png" width="28" height="28" alt=""
+                        decoding="async">
+                    <span id="avatar-playing-text">Playing as the usual figure.</span>
+                    <a id="avatar-playing-link" class="welcome-free cast-btn" href="../avatar/?return=/leaves/">Make your avatar</a>
+                </p>
                 <p id="best-line" class="cast-line best-line" hidden><span id="best-text"></span>
                     <button id="best-forget" class="welcome-free cast-btn" type="button">Forget my best time</button></p>
                 <p class="welcome-ways">
@@ -348,42 +369,6 @@
         <p id="cheer-big" class="cheer-big"></p>
         <p id="cheer-small" class="cheer-small"></p>
         <p id="cheer-extra" class="cheer-extra"></p>
-    </div>
-
-    <!-- The character card (M4), opened from the welcome card. It sits
-         beside the yard (a sheet along the bottom on a phone) rather than over
-         it, with the camera in close on the character, so every choice shows
-         on them as it is made. The choices are radio buttons, built by
-         main.js from js/cast.js. Done (or Escape) goes back to the welcome
-         card, and the choice is kept in this browser. -->
-    <div id="cast-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="cast-title">
-        <div class="cast-panel">
-            <h2 id="cast-title" class="cast-title">Who is on leaf duty?</h2>
-            <fieldset class="cast-group">
-                <legend>Shirt</legend>
-                <div id="cast-shirts" class="cast-options cast-swatches"></div>
-            </fieldset>
-            <fieldset class="cast-group">
-                <legend>Pants</legend>
-                <div id="cast-pants" class="cast-options cast-swatches"></div>
-            </fieldset>
-            <fieldset class="cast-group">
-                <legend>Skin tone</legend>
-                <div id="cast-skins" class="cast-options cast-swatches"></div>
-            </fieldset>
-            <fieldset class="cast-group">
-                <legend>Hair color</legend>
-                <div id="cast-hair" class="cast-options cast-swatches"></div>
-            </fieldset>
-            <fieldset class="cast-group">
-                <legend>Hair</legend>
-                <div id="cast-length" class="cast-options"></div>
-            </fieldset>
-            <button id="cast-done" class="piece-enter cast-done" type="button">Done</button>
-            <button id="cast-forget" class="cast-forget" type="button">Forget my choice</button>
-            <p class="cast-note">Your choice is kept in this browser, so they are waiting for you next time.</p>
-            <p id="cast-status" class="sr-only" role="status" aria-live="polite"></p>
-        </div>
     </div>
 
     <!-- The end of a round. No close button and no backdrop dismissal: the

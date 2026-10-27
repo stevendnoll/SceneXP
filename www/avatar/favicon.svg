@@ -1,0 +1,11 @@
+<!-- A FIGURE ON ITS PLINTH, the page in miniature: a round head and
+     shoulders in the default avatar's rust red shirt, standing on a pale
+     stone disc on the studio's warm white. At 16 pixels what is left is a
+     head over shoulders, which still reads as a person. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Your Avatar">
+  <rect width="32" height="32" rx="7" fill="#f1efea"/>
+  <ellipse cx="16" cy="27" rx="10" ry="2.4" fill="#d9d4cb"/>
+  <path d="M7.5 26.2c0-5.4 3.8-8.7 8.5-8.7s8.5 3.3 8.5 8.7z" fill="#9c2b25"/>
+  <circle cx="16" cy="11.5" r="5.2" fill="#e0ac86"/>
+  <path d="M10.8 11.2c0-3.6 2.3-5.9 5.2-5.9s5.2 2.3 5.2 5.9c-1.2-1.9-3-2.8-5.2-2.8s-4 .9-5.2 2.8z" fill="#3b2a1e"/>
+</svg>

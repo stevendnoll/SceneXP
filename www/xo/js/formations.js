@@ -4002,7 +4002,14 @@ export class TeamFormationsClass {
     const receiverObj = animations.getObjectByPosition(game.objects, game.throwTo);
     if ( qbObj && receiverObj ) {
       const startX = (qbObj.coords.x - 4);
-      const startY = (qbObj.coords.y - 14);
+      // FROM THE THROWING HAND (2026-10-26). The port started every ball 14
+      // units at -y, which is the quarterback's LEFT when he faces downfield
+      // (+y is his right: see config.js simToWorld, +y runs to world +z, and a
+      // figure facing +x has its right side at +z). That was the 2D game's
+      // left-handed quarterback, drawn as a sprite that never showed it.
+      // `state.throwHand` is 'left' or 'right' (play.js, from the roster's
+      // figure), and right is the default, as most people are.
+      const startY = (qbObj.coords.y + (state.throwHand === 'left' ? -14 : 14));
       const recX = receiverObj.coords.x;
       const recY = receiverObj.coords.y;
       let targetX = receiverObj.coords.x;

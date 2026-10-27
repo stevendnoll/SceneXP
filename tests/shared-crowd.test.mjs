@@ -76,6 +76,49 @@ describe('the parts', () => {
         expect(Crowd.FIGURE).toEqual({ role: 'customer', shoulderRound: 0.35, handScale: 1.3 });
         const xo = Crowd.buildCrowdParts();
         expect(Object.keys(xo.arms)).toEqual(['down', 'up', 'cards']);
+        // No fingered hands unless asked: the stands keep the box.
+        expect(xo.arms.down.fingers).toBeUndefined();
+    });
+
+    test('with realHands the fingered hands are baked beside the box, for the few who stand near (2026-10-26)', () => {
+        const near = Crowd.buildCrowdParts({ poses: ['down', 'up'], realHands: true });
+        const tri = (g) => g.index.count / 3;
+        for (const pose of ['down', 'up']) {
+            // The stand-in pair is still the stand-in pair, a few dozen
+            // triangles a hand; the fingered pair is the rig's own hands,
+            // some hundreds each.
+            expect(tri(near.arms[pose].hand)).toBe(tri(parts.arms[pose].hand));
+            expect(tri(near.arms[pose].hand)).toBeLessThan(120);
+            expect(tri(near.arms[pose].fingers)).toBeGreaterThan(800);
+            // Both pairs sit in the same place: the stand-in is the old
+            // ball at the hand's middle, so the two boxes share a middle
+            // (within a centimeter), and the ball is the smaller.
+            const a = box(near.arms[pose].hand);
+            const b = box(near.arms[pose].fingers);
+            const mid = (bb) => [(bb.min.x + bb.max.x) / 2, (bb.min.y + bb.max.y) / 2, (bb.min.z + bb.max.z) / 2];
+            const [ax, ay, az] = mid(a);
+            const [bx, by, bz] = mid(b);
+            expect(Math.hypot(ax - bx, ay - by, az - bz)).toBeLessThan(0.02);
+            expect(a.max.y - a.min.y).toBeLessThan(b.max.y - b.min.y);
+        }
+        // The stand-in is the old ball hand: the hand's unit tall (its
+        // radius), 0.8 as wide and half as deep (the rig's crowd figure has
+        // handScale 1.3 on a 0.04 unit).
+        const ball = Crowd.handStandIn(new THREE.BoxGeometry(0.1, 0.15, 0.03), 0.052);
+        const bb = box(ball);
+        expect(bb.max.y - bb.min.y).toBeCloseTo(0.104, 3);
+        // A few-sided ball's rings sit a little inside its radius, so the
+        // width and the depth are the oval's less a few percent.
+        expect(bb.max.x - bb.min.x).toBeGreaterThan(0.104 * 0.8 * 0.9);
+        expect(bb.max.x - bb.min.x).toBeLessThan(0.104 * 0.8 + 0.001);
+        expect(bb.max.z - bb.min.z).toBeGreaterThan(0.104 * 0.5 * 0.8);
+        expect(bb.max.z - bb.min.z).toBeLessThan(0.104 * 0.5 + 0.001);
+        // Without the unit, a third of the hand's height.
+        const guessed = box(Crowd.handStandIn(new THREE.BoxGeometry(0.1, 0.15, 0.03)));
+        expect(guessed.max.y - guessed.min.y).toBeCloseTo(0.1, 3);
+        // The budget counts whichever pair a member wears.
+        expect(Crowd.crowdCost(near, 'down', 'short', { realHands: true }).triangles)
+            .toBeGreaterThan(Crowd.crowdCost(near).triangles + 800);
     });
 });
 

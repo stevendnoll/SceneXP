@@ -141,24 +141,58 @@ describe('the shared rig hands out a real elbow', () => {
         expect(worldOf(handOf(arm)).distanceTo(before)).toBeGreaterThan(0.2);
     });
 
-    test('the hand is still findable by geometry, from inside an arm', () => {
+    test('the hand is still findable from inside an arm, by its tag', () => {
         // www/jamar and www/seedtoseed give their leads big capable hands by
-        // walking the built figure for the rig's own 0.04-radius sphere and
-        // scaling it where it stands. The parent tag is what tells that
-        // sphere apart from every other small ball on a person, and when the
-        // hand moved down into the forearm group the test for it went quiet:
-        // two scenes lost the detail with nothing to show for it.
+        // walking the built figure for the hand and scaling it where it
+        // stands. They matched the rig's 0.04-radius ball until 2026-10-26,
+        // when the hand became a palm with fingers and a thumb in one mesh;
+        // now they match the tag, and this holds the rig to tagging it. The
+        // sources are read too, so neither scene can slip back to matching
+        // a ball that is no longer there.
         const person = createPerson({ role: 'customer' });
         const found = [];
         person.traverse((child) => {
-            if (!child.isMesh || !child.geometry) return;
-            const params = child.geometry.parameters || {};
-            if (child.geometry.type !== 'SphereGeometry' || params.radius !== 0.04) return;
+            if (!child.isMesh || !child.userData.isHand) return;
             const owner = (child.parent && child.parent.userData) || {};
             if (owner.isArm || owner.isForearm) found.push(child);
         });
         expect(found).toHaveLength(2);
         expect(found).toEqual(expect.arrayContaining(armsOf(person).map(handOf)));
+        for (const scene of ['jamar', 'seedtoseed']) {
+            const source = readFileSync(join(root, `www/${scene}/js/store.js`), 'utf8');
+            expect(source).toMatch(/child\.userData\.isHand/);
+            expect(source).not.toMatch(/params\.radius === 0\.04/);
+        }
+    });
+
+    test('the forearm narrows from the elbow to a wrist narrower than the palm (2026-10-26)', () => {
+        // Steve's QA of the avatar: the forearm tapered the OTHER way (0.9 of
+        // the arm's radius at the elbow, all of it at the wrist), so a
+        // muscular wrist came out twice the hand's width. The wrist is
+        // sized from the hand now, so it stays put whatever the arm does.
+        const measure = (config) => {
+            const fore = armsOf(createPerson(config))[0].userData.forearm;
+            const cyl = fore.children.find((c) => c.isMesh && c.geometry.type === 'CylinderGeometry');
+            const hand = handOf(fore.parent);
+            hand.geometry.computeBoundingBox();
+            const b = hand.geometry.boundingBox;
+            return { elbow: cyl.geometry.parameters.radiusTop, wrist: cyl.geometry.parameters.radiusBottom, palm: b.max.x - b.min.x, hand: b.max.y - b.min.y };
+        };
+        const plain = measure({ role: 'customer' });
+        expect(plain.elbow).toBeCloseTo(0.045, 9);
+        expect(plain.wrist).toBeLessThan(plain.elbow * 0.7);
+        expect(plain.wrist * 2).toBeLessThan(plain.palm);
+        // A thicker arm keeps its wrist to the hand: never twice the palm.
+        const buff = measure({ role: 'customer', muscular: true });
+        expect(buff.elbow).toBeGreaterThan(plain.elbow * 1.5);
+        expect(buff.wrist * 2).toBeLessThan(buff.palm * 1.1);
+        // And a bigger hand brings a bigger wrist with it.
+        const big = measure({ role: 'customer', handScale: 1.3 });
+        expect(big.palm).toBeCloseTo(plain.palm * 1.3, 6);
+        expect(big.wrist).toBeGreaterThan(plain.wrist);
+        // The hand is longer than it is wide (its width taking in the
+        // thumb), as a hand with fingers is.
+        expect(plain.hand).toBeGreaterThan(plain.palm * 1.2);
     });
 });
 
@@ -547,6 +581,67 @@ describe('the rig\'s hips: off by default, a woman\'s build from the legs when a
         expect(shin.radiusBottom).toBeLessThan(was.shin.radiusBottom);
         // The legs still swing from the hip, tagged as before.
         expect(legsOf(person).map((l) => l.position.y)).toEqual([0.75, 0.75]);
+    });
+
+    test('the builds\' shape numbers (2026-10-26): shoulders and seat widen or narrow the torso\'s ends, a waist below 0 bows it out, girth deepens it, legs thicken them, and each at 1 is the figure as it was', () => {
+        const base = { role: 'customer', shoulderRound: 0.35 };
+        /** The torso's width across a band of its height (its own
+         *  middle), from its outline. */
+        const widthAt = (person, y0, y1) => {
+            const torso = torsoOf(person) || person.children.find((c) => c.isMesh && c.geometry.type === 'ExtrudeGeometry' && Math.abs(c.position.y - 1.025) < 1e-6);
+            const { width } = (() => {
+                torso.geometry.computeBoundingBox();
+                const b = torso.geometry.boundingBox;
+                return { width: b.max.x - b.min.x, depth: b.max.z - b.min.z };
+            })();
+            const pos = torso.geometry.attributes.position;
+            let half = 0;
+            for (let i = 0; i < pos.count; i++) {
+                const y = pos.getY(i);
+                if (y < y0 || y > y1) continue;
+                half = Math.max(half, Math.abs(pos.getX(i)));
+            }
+            // A straight side has no vertex between its corners: full width.
+            return { width: half > 0 ? 2 * half : width, full: width, depth: boxOf(torso, person).max.z - boxOf(torso, person).min.z };
+        };
+        const plain = createPerson(base);
+        // Bands down the side, clear of the shoulders' rounding at the top
+        // and the corners at the bottom.
+        const top = (p) => widthAt(p, 0.1, 0.16).width;
+        const bottom = (p) => widthAt(p, -0.22, -0.16).width;
+        const middle = (p) => widthAt(p, -0.06, -0.01).width;
+        expect(top(plain)).toBeCloseTo(bottom(plain), 3);
+        // Lean shoulders over a wider seat: a pear. The arms hang from the
+        // shoulders and the legs and the belt sit on the seat.
+        const pear = createPerson({ ...base, shoulders: 0.86, seat: 1.08 });
+        // (The side is still coming in at the band; at the shoulders it is
+        // 0.86 of the width.)
+        expect(top(pear)).toBeLessThan(top(plain) - 0.02);
+        expect(bottom(pear)).toBeGreaterThan(bottom(plain) + 0.02);
+        const armX = (p) => Math.abs(armsOf(p)[0].position.x);
+        const legX = (p) => Math.abs(legsOf(p)[0].position.x);
+        expect(armX(pear)).toBeLessThan(armX(plain));
+        expect(legX(pear)).toBeGreaterThan(legX(plain));
+        // Broad: the other way about.
+        const broad = createPerson({ ...base, shoulders: 1.15, seat: 0.94 });
+        expect(top(broad)).toBeGreaterThan(top(plain) * 1.1);
+        expect(bottom(broad)).toBeLessThan(bottom(plain));
+        expect(armX(broad)).toBeGreaterThan(armX(plain));
+        // A waist below 0 bows the middle OUT past both ends.
+        const round = createPerson({ ...base, waist: -0.12, girth: 1.3 });
+        expect(middle(round)).toBeGreaterThan(top(round) + 0.02);
+        expect(middle(round)).toBeGreaterThan(bottom(round) + 0.02);
+        expect(middle(plain)).toBeLessThanOrEqual(top(plain) + 1e-6);
+        expect(widthAt(round, 0, 0).depth).toBeCloseTo(widthAt(plain, 0, 0).depth * 1.3, 3);
+        // Thicker legs, over the muscles' own.
+        const thick = createPerson({ ...base, legs: 1.25 });
+        expect(pieces(legsOf(thick)[0]).thigh.radiusTop).toBeCloseTo(0.065 * 1.25, 9);
+        expect(pieces(legsOf(createPerson({ ...base, legs: 1.25, muscular: true }))[0]).thigh.radiusTop).toBeCloseTo(0.065 * 1.35 * 1.25, 9);
+        // At 1, 1, 0 and 1 nothing differs, vertex for vertex.
+        const same = createPerson({ ...base, shoulders: 1, seat: 1, waist: 0, girth: 1, legs: 1 });
+        const rounded = (p) => p.children.find((c) => c.isMesh && c.geometry.type === 'ExtrudeGeometry' && Math.abs(c.position.y - 1.025) < 1e-6);
+        const posOf = (p) => Array.from(rounded(p).geometry.attributes.position.array);
+        expect(posOf(same)).toEqual(posOf(plain));
     });
 
     test('more than 1 is 1, and less than 0 is none', () => {

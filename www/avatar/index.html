@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         img-src allows data: for the portrait this page draws; blob: is not
+         needed, because the avatar file is saved through a download link. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <!-- RELEASED 2026-10-27 (specs/avatar M5): the robots tag that kept the
+         page out of search while it was built is gone, and no robots tag
+         belongs here. tests/directory.test.mjs lists the page under
+         SITE_PAGES: in the sitemap and llms.txt, with no directory card. -->
+    <meta name="description" content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself. Your avatar is kept in your own browser.">
+    <meta name="theme-color" content="#F1EFEA">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they stay literal absolute URLs naming where this page is served
+         (www.scenexp.com/avatar). When serving from a new domain, update the
+         canonical, og:url, og:image, twitter:image, and the JSON-LD ids. -->
+    <link rel="canonical" href="https://www.scenexp.com/avatar/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Your Avatar">
+    <meta property="og:description" content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/avatar/">
+    <meta property="og:locale" content="en_US">
+    <!-- THE SOCIAL CARD (M5, 2026-10-27): Steve's screenshot of the studio
+         (?clean=1, the figure alone on the plinth), converted by the house
+         recipe (sRGB profile applied, then stripped, 1200x630, JPEG q92 at
+         4:4:4 with a WebP twin). JPEG, not WebP (LinkedIn previews no WebP),
+         and exactly one og:image. og:image:alt describes THIS picture, so it
+         is rewritten with the card. tests/page-rules.test.mjs opens the file. -->
+    <meta property="og:image" content="https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A small figure in a yellow hoodie, black pants and red boots, with a dark ivy cap, black-framed glasses and a reddish-brown beard, stands on a round white plinth in a bright white studio.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Your Avatar">
+    <meta name="twitter:description" content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself.">
+    <meta name="twitter:image" content="https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1">
+    <meta name="twitter:image:alt" content="A small figure in a yellow hoodie, black pants and red boots, with a dark ivy cap, black-framed glasses and a reddish-brown beard, stands on a round white plinth in a bright white studio.">
+
+    <!-- Structured data: a web application that is part of SceneXP.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "@id": "https://www.scenexp.com/avatar/#app",
+      "url": "https://www.scenexp.com/avatar/",
+      "name": "Your Avatar",
+      "datePublished": "2026-10-27",
+      "image": "https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1",
+      "description": "A browser-based 3D avatar maker for SceneXP. Choose a face shape, eyes, eyebrows, a nose, an expression, hair and facial hair in any color, a build, clothes, shoes and a hat on a figure that turns on a plinth in a white studio, and save it. The avatar is kept only in the visitor's own browser, and SceneXP scenes that show the visitor as a person dress them that way. It can be moved to another device with a link or a small file.",
+      "applicationCategory": "EntertainmentApplication",
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires JavaScript. The 3D studio needs WebGL 2.",
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
+      "isAccessibleForFree": true,
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Continuum Commerce LLC"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this page). -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Your Avatar",
+          "item": "https://www.scenexp.com/avatar/"
+        }
+      ]
+    }
+    </script>
+
+    <title>Your Avatar | SceneXP</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
+    <link rel="preload" href="css/avatar.min.css?v=13" as="style">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-figure-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/sharefile-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="js/studio.min.js">
+    <link rel="modulepreload" href="js/editor.min.js">
+    <link rel="modulepreload" href="js/export.min.js">
+    <link rel="modulepreload" href="js/transfer.min.js">
+    <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-layers-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-shapes-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-hair-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-hats-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-wardrobe-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/recorder-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/dance-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/promo-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/crowd-1.0.0.min.js">
+    <!-- END generated modulepreload -->
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
+    <link rel="stylesheet" href="css/avatar.min.css?v=13">
+
+    <!-- When JS is off, the studio can't run: the static fallback below is
+         the page. A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body class="av-body">
+    <!-- The live page's heading, for anybody navigating by heading. The panel
+         shows its own words, under an h2. -->
+    <h1 class="sr-only">Your Avatar</h1>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers). -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Your Avatar</h1>
+            <p>This is where you make a figure that looks like you, and it
+                needs JavaScript to run. You choose a face shape, eyes, eyebrows,
+                a nose, an expression, hair in any color, a build, clothes, shoes and a hat on a figure that turns slowly
+                in a bright white studio, and press Save. SceneXP scenes that
+                show you as a person then dress you that way.</p>
+            <p>Your avatar is kept only in your own browser. Nothing about it
+                is sent to us.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/">More 3D worlds to explore at SceneXP.com</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <!-- The page itself, shown by main.js (`hidden` keeps it out of the way
+         with JavaScript off). The studio on one side and the choices on the
+         other on a computer; the studio on top and the choices below on a
+         phone. -->
+    <div id="avatar-app" class="av-app" hidden>
+        <div class="av-stage">
+            <!-- The figure on its plinth (js/studio.js). Drag to turn it, or
+                 use the two buttons. Its name is the figure in words, kept
+                 current by main.js. -->
+            <canvas id="av-canvas" class="av-canvas" role="img"
+                aria-label="Your avatar, standing on a round plinth in a white studio"></canvas>
+            <p id="av-stage-status" class="av-stage-status" role="status" aria-live="polite"></p>
+            <!-- The view: zoom out, turn, turn, zoom in. The wheel, a trackpad
+                 and a pinch zoom too, toward where they point. -->
+            <div id="av-turn" class="av-turn">
+                <button id="av-zoom-out" class="av-turn-btn" type="button" aria-label="Zoom out" title="Zoom out">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6.5 12h11" />
+                    </svg>
+                </button>
+                <button id="av-turn-left" class="av-turn-btn" type="button" aria-label="Turn left" title="Turn left">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 7.5 5 11.5l4 4" />
+                        <path d="M5.5 11.5h8a5 5 0 0 1 5 5v1" />
+                    </svg>
+                </button>
+                <button id="av-turn-right" class="av-turn-btn" type="button" aria-label="Turn right" title="Turn right">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m15 7.5 4 4-4 4" />
+                        <path d="M18.5 11.5h-8a5 5 0 0 0-5 5v1" />
+                    </svg>
+                </button>
+                <button id="av-zoom-in" class="av-turn-btn" type="button" aria-label="Zoom in" title="Zoom in">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6.5 12h11M12 6.5v11" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <section class="av-sheet" aria-labelledby="av-heading">
+            <div class="av-top">
+                <!-- The way back, always a plain back link (Steve's QA,
+                     2026-10-26: the bare SceneXP wordmark did not read as
+                     one): to the home page, or "Back to Leaf Blower" when a
+                     scene sent the visitor here (?return=, checked by
+                     js/transfer.js, which fills the words in). Filled in
+                     once the avatar is saved: the next thing to do. -->
+                <a id="av-return" class="av-return" href="/">
+                    <svg class="av-return-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <span id="av-return-text">Back to SceneXP</span>
+                </a>
+            </div>
+
+            <p class="av-eyebrow">Your Avatar</p>
+            <h2 id="av-heading" class="av-heading">Step into SceneXP as you</h2>
+            <p class="av-lede">Choose a look, then press Save. Your avatar is kept in this browser, and scenes that show you as a person will dress you this way.</p>
+
+            <!-- An avatar that arrived by link or file, on the plinth, waiting
+                 for an answer. Never kept silently (PRD section 6). -->
+            <div id="av-incoming" class="av-incoming" role="region" aria-labelledby="av-incoming-text" hidden>
+                <p id="av-incoming-text" class="av-incoming-text">Keep this avatar?</p>
+                <p id="av-incoming-replaces" class="av-note" hidden>Keeping it replaces the one saved on this browser.</p>
+                <div class="av-row">
+                    <button id="av-keep" class="av-primary" type="button">Keep this avatar</button>
+                    <button id="av-decline" class="av-secondary" type="button">Not now</button>
+                </div>
+            </div>
+
+            <!-- The choices (js/editor.js builds the tabs and radio groups).
+                 Surprise me rolls a random look onto the plinth and into the
+                 radios, and nothing more: Save is still the only way to keep
+                 one, so a stray press never replaces a saved avatar. Export
+                 my avatar opens the dialog at the foot of the page (js/export.js). -->
+            <div id="av-editor" class="av-editor">
+                <div class="av-random-row">
+                    <button id="av-random" class="av-secondary av-random" type="button" title="A random look, from every choice there is">Surprise me</button>
+                    <button id="av-export-open" class="av-secondary av-random" type="button" title="A picture or a short video of your avatar, for anywhere else">Export my avatar</button>
+                </div>
+                <div id="av-tabs" class="av-tabs" role="tablist" aria-label="Choose what to change"></div>
+                <div id="av-panels" class="av-panels"></div>
+            </div>
+
+            <div id="av-actions" class="av-actions">
+                <!-- The one filled button on the page. -->
+                <button id="av-save" class="av-primary av-save" type="button">Save my avatar</button>
+                <p id="av-unsaved" class="av-note av-unsaved"></p>
+                <p id="av-status" class="av-status" role="status" aria-live="polite"></p>
+
+                <h3 class="av-subhead">Take it to another device</h3>
+                <div class="av-row av-transfer">
+                    <button id="av-link" class="av-secondary" type="button">Share a link</button>
+                    <button id="av-file-save" class="av-secondary" type="button">Save a file</button>
+                    <button id="av-file-open" class="av-secondary" type="button">Open a file</button>
+                </div>
+                <!-- Opened by the button above. Hidden, and out of the tab
+                     order, since the button is the way to it. -->
+                <input id="av-file-input" type="file" accept=".json,application/json" hidden tabindex="-1" aria-label="Open an avatar file">
+
+                <p class="av-note av-privacy">Your avatar stays on this device, and nothing about it is sent to us. <a href="/privacy.html">Privacy</a></p>
+
+                <button id="av-forget" class="av-forget" type="button" hidden>Forget my avatar</button>
+                <div id="av-forget-confirm" class="av-confirm" hidden>
+                    <p class="av-confirm-text">Forget your avatar on this browser? Scenes will show the usual figure again.</p>
+                    <div class="av-row">
+                        <button id="av-forget-yes" class="av-secondary av-danger" type="button">Forget it</button>
+                        <button id="av-forget-no" class="av-secondary" type="button">Keep it</button>
+                    </div>
+                </div>
+
+                <!-- The lab (a local server with ?lab=1 only): the default
+                     portrait the home page's chip shows, saved as a PNG to
+                     commit to www/assets/avatar/ (PRD section 11, question 4). -->
+                <div id="av-lab" class="av-lab" hidden>
+                    <p class="av-note">Lab</p>
+                    <button id="av-lab-portrait" class="av-secondary" type="button">Save the default portrait</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- EXPORT MY AVATAR (js/export.js, 2026-10-26): a picture or a short
+         clip of the figure on screen, made on this device, for a profile
+         anywhere else. A native dialog: Escape closes it and focus stays
+         inside. Every option is a real radio, as the editor's are; the
+         swatches' colors are set through the CSSOM. Nothing is uploaded. -->
+    <dialog id="av-export" class="av-export" aria-labelledby="av-export-title">
+        <div class="av-export-card">
+            <div class="av-export-head">
+                <h2 id="av-export-title" class="av-export-title">Export my avatar</h2>
+                <button id="av-export-close" class="av-secondary" type="button">Done</button>
+            </div>
+            <div id="av-export-tabs" class="av-tabs av-export-tabs" role="tablist" aria-label="A picture or a video">
+                <button id="av-export-tab-picture" class="av-tab" type="button" role="tab" aria-controls="av-export-picture" aria-selected="true">Picture</button>
+                <button id="av-export-tab-clip" class="av-tab" type="button" role="tab" aria-controls="av-export-clip" aria-selected="false" tabindex="-1">Video</button>
+            </div>
+
+            <div id="av-export-picture" class="av-export-panel" role="tabpanel" aria-labelledby="av-export-tab-picture">
+                <canvas id="av-export-preview" class="av-export-preview" width="560" height="560" role="img" aria-label="A preview of your picture"></canvas>
+                <!-- Turn the plinth for the picture (a side profile, a
+                     three-quarter view), in the page's own steps. -->
+                <div class="av-export-turn">
+                    <button id="av-export-turn-left" class="av-secondary av-export-turn-btn" type="button" aria-label="Turn left" title="Turn left">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M9 7.5 5 11.5l4 4" />
+                            <path d="M5.5 11.5h8a5 5 0 0 1 5 5v1" />
+                        </svg>
+                    </button>
+                    <button id="av-export-turn-right" class="av-secondary av-export-turn-btn" type="button" aria-label="Turn right" title="Turn right">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="m15 7.5 4 4-4 4" />
+                            <path d="M18.5 11.5h-8a5 5 0 0 0-5 5v1" />
+                        </svg>
+                    </button>
+                </div>
+                <fieldset class="av-group">
+                    <legend class="av-legend">Framing</legend>
+                    <div class="av-options av-options-text">
+                        <label class="av-option av-option-text"><input id="av-export-framing-portrait" class="av-radio" type="radio" name="av-export-framing" value="portrait" checked><span class="av-word">Head and shoulders</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-framing-figure" class="av-radio" type="radio" name="av-export-framing" value="figure"><span class="av-word">Whole figure</span></label>
+                    </div>
+                </fieldset>
+                <fieldset class="av-group">
+                    <legend class="av-legend">Background</legend>
+                    <div class="av-options av-options-text">
+                        <label class="av-option av-option-text"><input id="av-export-background-studio" class="av-radio" type="radio" name="av-export-background" value="studio" checked><span class="av-word">The studio</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-background-clear" class="av-radio" type="radio" name="av-export-background" value="clear"><span class="av-word">Transparent</span></label>
+                    </div>
+                </fieldset>
+                <fieldset class="av-group">
+                    <legend class="av-legend">Border</legend>
+                    <div class="av-options av-options-text">
+                        <label class="av-option av-option-text"><input id="av-export-border-none" class="av-radio" type="radio" name="av-export-border" value="none" checked><span class="av-word">None</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-ring" class="av-radio" type="radio" name="av-export-border" value="ring"><span class="av-word">Ring</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-bold" class="av-radio" type="radio" name="av-export-border" value="bold"><span class="av-word">Bold ring</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-double" class="av-radio" type="radio" name="av-export-border" value="double"><span class="av-word">Double ring</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-gradient" class="av-radio" type="radio" name="av-export-border" value="gradient"><span class="av-word">Gradient ring</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-dotted" class="av-radio" type="radio" name="av-export-border" value="dotted"><span class="av-word">Dotted ring</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-square" class="av-radio" type="radio" name="av-export-border" value="square"><span class="av-word">Rounded square</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-border-badge" class="av-radio" type="radio" name="av-export-border" value="badge"><span class="av-word">Badge</span></label>
+                    </div>
+                </fieldset>
+                <fieldset id="av-export-color-group" class="av-group" hidden>
+                    <legend class="av-legend">Border color</legend>
+                    <div class="av-options av-options-swatch">
+                        <label class="av-option av-option-swatch" title="Match my shirt"><input id="av-export-color-match" class="av-radio" type="radio" name="av-export-color" value="match" checked><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Match my shirt</span></label>
+                        <label class="av-option av-option-swatch" title="White"><input id="av-export-color-white" class="av-radio" type="radio" name="av-export-color" value="white"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">White</span></label>
+                        <label class="av-option av-option-swatch" title="Ink"><input id="av-export-color-ink" class="av-radio" type="radio" name="av-export-color" value="ink"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Ink</span></label>
+                        <label class="av-option av-option-swatch" title="Navy"><input id="av-export-color-navy" class="av-radio" type="radio" name="av-export-color" value="navy"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Navy</span></label>
+                        <label class="av-option av-option-swatch" title="Red"><input id="av-export-color-red" class="av-radio" type="radio" name="av-export-color" value="red"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Red</span></label>
+                        <label class="av-option av-option-swatch" title="Gold"><input id="av-export-color-gold" class="av-radio" type="radio" name="av-export-color" value="gold"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Gold</span></label>
+                        <label class="av-option av-option-swatch" title="Teal"><input id="av-export-color-teal" class="av-radio" type="radio" name="av-export-color" value="teal"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Teal</span></label>
+                        <label class="av-option av-option-swatch" title="Pink"><input id="av-export-color-pink" class="av-radio" type="radio" name="av-export-color" value="pink"><span class="av-swatch" aria-hidden="true"></span><span class="sr-only">Pink</span></label>
+                        <input id="av-export-color-custom" class="av-custom" type="color" value="#1d1d1f" aria-label="Custom border color" title="Any color">
+                    </div>
+                </fieldset>
+                <fieldset class="av-group">
+                    <legend class="av-legend">Size</legend>
+                    <div class="av-options av-options-text">
+                        <label class="av-option av-option-text"><input id="av-export-size-p512" class="av-radio" type="radio" name="av-export-size" value="p512"><span class="av-word">512 px</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-size-p1024" class="av-radio" type="radio" name="av-export-size" value="p1024" checked><span class="av-word">1024 px</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-size-p2048" class="av-radio" type="radio" name="av-export-size" value="p2048"><span class="av-word">2048 px</span></label>
+                    </div>
+                </fieldset>
+                <div class="av-row av-export-actions">
+                    <button id="av-export-picture-save" class="av-primary" type="button">Save picture</button>
+                </div>
+            </div>
+
+            <div id="av-export-clip" class="av-export-panel" role="tabpanel" aria-labelledby="av-export-tab-clip" hidden>
+                <div id="av-export-stage" class="av-export-stage"></div>
+                <p class="av-note">A few seconds of your avatar, with no sound. It loops.</p>
+                <!-- The motion: the turn alone, the wave and the turn, or one
+                     of the shared dances (dance-1.0.0), facing the front. -->
+                <fieldset class="av-group">
+                    <legend class="av-legend">Motion</legend>
+                    <div class="av-options av-options-text">
+                        <label class="av-option av-option-text"><input id="av-export-motion-none" class="av-radio" type="radio" name="av-export-motion" value="none"><span class="av-word">None</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-wave" class="av-radio" type="radio" name="av-export-motion" value="wave" checked><span class="av-word">Wave</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-robot" class="av-radio" type="radio" name="av-export-motion" value="robot"><span class="av-word">The Robot</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-chicken" class="av-radio" type="radio" name="av-export-motion" value="chicken"><span class="av-word">The Chicken Dance</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-ymca" class="av-radio" type="radio" name="av-export-motion" value="ymca"><span class="av-word">The YMCA</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-macarena" class="av-radio" type="radio" name="av-export-motion" value="macarena"><span class="av-word">The Macarena</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-floss" class="av-radio" type="radio" name="av-export-motion" value="floss"><span class="av-word">The Floss</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-sprinkler" class="av-radio" type="radio" name="av-export-motion" value="sprinkler"><span class="av-word">The Sprinkler</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-disco" class="av-radio" type="radio" name="av-export-motion" value="disco"><span class="av-word">The Disco Point</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-motion-dab" class="av-radio" type="radio" name="av-export-motion" value="dab"><span class="av-word">The Dab</span></label>
+                    </div>
+                </fieldset>
+                <fieldset class="av-group">
+                    <legend class="av-legend">Size</legend>
+                    <div class="av-options av-options-text">
+                        <label class="av-option av-option-text"><input id="av-export-clip-size-c720" class="av-radio" type="radio" name="av-export-clip-size" value="c720"><span class="av-word">720 square</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-clip-size-c1080" class="av-radio" type="radio" name="av-export-clip-size" value="c1080" checked><span class="av-word">1080 square</span></label>
+                        <label class="av-option av-option-text"><input id="av-export-clip-size-story" class="av-radio" type="radio" name="av-export-clip-size" value="story"><span class="av-word">1080 by 1920 story</span></label>
+                    </div>
+                </fieldset>
+                <div class="av-row av-export-actions">
+                    <button id="av-export-clip-make" class="av-primary" type="button">Make the clip</button>
+                    <button id="av-export-clip-save" class="av-primary" type="button" hidden>Save video</button>
+                </div>
+            </div>
+
+            <p id="av-export-status" class="av-status av-export-status" role="status" aria-live="polite"></p>
+            <p class="av-note av-export-note">Made on this device. Nothing is uploaded, and your avatar is just as it was.</p>
+        </div>
+    </dialog>
+
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

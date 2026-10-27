@@ -27,7 +27,7 @@
  */
 import { XO_CONFIG as CFG, simToWorld, FIELD, SIM, UNITS_TO_METRES } from './config.min.js';
 import { bandAt } from './scoring.min.js';
-import { figureFor, poseFigure, THROWING_SIDE, FIGURE_LIFT } from './roster.min.js';
+import { figureFor, poseFigure, THROWING_SIDE, throwSideOf, FIGURE_LIFT } from './roster.min.js';
 import { getBall, aimBall, placeSpot, BALL_FAT } from './ball.min.js';
 import { placeMarker, hideMarker } from './markers.min.js';
 import { toRigSpace, RIG } from './arm.min.js';
@@ -1640,9 +1640,11 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // AND HIS FEET GO ON THE GRASS, NOT THROUGH IT. The rig stands itself
         // at y = 0.055 because its shoes hang below its own origin, and writing
         // a flat zero here buried every player on the field to the ankle.
+        // The visitor's avatar at quarterback (M7) may stand on platform
+        // shoes, so a figure's own lift wins where the roster kept one.
         figure.position.set(
             p.x + (role ? role.x : 0) + (cheer ? cheer.x : 0),
-            FIGURE_LIFT + (role && role.y ? role.y : 0) + airborne
+            (figure.userData.lift ?? FIGURE_LIFT) + (role && role.y ? role.y : 0) + airborne
                 + (cheer ? cheer.y : 0),
             p.z + (role ? role.z : 0) + (cheer ? cheer.z : 0)
         );
@@ -2260,11 +2262,11 @@ export function toWorld(figure, v, direction = false) {
  * by the hands rather than merely arriving at the same time as them.
  *
  * `x` is mirrored onto the throwing side here, once, in the same way the poses
- * in roster.js mirror a hand.
+ * in roster.js mirror a hand. `side` is the carrier's own throwing arm
+ * (`throwSideOf`), the field's by default.
  */
-export function carryHold(mode, snapped, lift = 1) {
+export function carryHold(mode, snapped, lift = 1, side = THROWING_SIDE) {
     const P = CFG.pose;
-    const side = THROWING_SIDE;
     const put = (spot, aim) => ({
         ball: { x: side * spot.x, y: spot.y, z: spot.z },
         aim: { x: side * aim.x, y: aim.y, z: aim.z },
@@ -2384,7 +2386,7 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             // to be holding it.
             const mode = carryFor(carrier, carrier);
             const hold = carryHold(mode, snapProgress(),
-                raisingBall(carrier.settings.position));
+                raisingBall(carrier.settings.position), throwSideOf(figure));
 
             // THE OFFSET IS THE SAME RIG SPACE THE POSES ARE WRITTEN IN, so the
             // ball's `x` runs along the throwing side and its `z` is the way he

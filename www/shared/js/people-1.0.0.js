@@ -34,59 +34,73 @@
  * outline has no corner anywhere. The hip, the shoulders and the depth stay
  * exactly as they were: only the middle of each side moves in.
  *
+ * WITH `shoulders` OR `seat` OFF 1 (2026-10-26, the avatar's builds) the
+ * outline is a trapezoid softened the same way: `w` times `shoulders` across
+ * the top and `w` times `seat` across the bottom, each side a smooth S from
+ * the one to the other through the waist. A waist BELOW 0 bows the sides
+ * out instead, for a fuller middle. At 1, 1 and 0 the outline is exactly the
+ * one every figure built before.
+ *
  * @param {number} w Finished width
  * @param {number} h Finished height
  * @param {number} d Finished depth
  * @param {number} round Shoulder radius as a fraction of the half-width
- * @param {number} [waist=0] How much narrower the waist is, 0 to 0.3 of the width
+ * @param {number} [waist=0] How much narrower the waist is, -0.3 (fuller) to 0.3 of the width
+ * @param {number} [shoulders=1] The top's width as a share of `w`
+ * @param {number} [seat=1] The bottom's width as a share of `w`
  * @returns {THREE.ExtrudeGeometry}
  */
-function roundedTorsoGeometry(w, h, d, round, waist = 0) {
+function roundedTorsoGeometry(w, h, d, round, waist = 0, shoulders = 1, seat = 1) {
     // Small enough that it never eats a face, large enough to catch a
     // highlight along each edge under the room's key light.
     const bevel = Math.min(0.02, w / 4, h / 4, d / 4);
     const hw = (w - 2 * bevel) / 2;
     const hh = (h - 2 * bevel) / 2;
+    const hwTop = hw * shoulders;
+    const hwBot = hw * seat;
     // Clamped so an over-large `round` rounds the shoulders away entirely
     // rather than folding the outline back through itself.
-    const topR = Math.min(round * (w / 2), hw, hh);
-    const botR = Math.min(0.02, hw, hh);
+    const topR = Math.min(round * (w / 2), hwTop, hh);
+    const botR = Math.min(0.02, hwBot, hh);
 
-    // The waist: how far in each side comes (in the shape's own half-width,
-    // so the bevel still finishes it to `w * (1 - pinch)`), and its height.
-    const pinch = Math.max(0, Math.min(0.3, waist));
+    // The waist: how far in (or out, below 0) each side comes from the
+    // mean of the top and the bottom (in the shape's own half-width, so the
+    // bevel still finishes it to `w * (1 - pinch)`), and its height.
+    const pinch = Math.max(-0.3, Math.min(0.3, waist));
     const inset = (w / 2) * pinch;
+    const curved = pinch !== 0 || shoulders !== seat;
     const hip = -hh + botR;
     const shoulder = hh - topR;
     const at = -hh + h * WAIST_AT;
-    // One side, from `y0` to `y1` at its full half-width `x` (signed), in to
-    // the waist and out again, every tangent upright where it meets the next.
-    const side = (x, y0, y1) => {
-        if (!(inset > 0)) {
-            shape.lineTo(x, y1);
+    // One side, from `y0` at half-width `x0` to `y1` at `x1` (signed), in
+    // to the waist and out again, every tangent upright where it meets the
+    // next; a straight line when nothing bends it.
+    const side = (x0, y0, x1, y1) => {
+        if (!curved) {
+            shape.lineTo(x1, y1);
             return;
         }
-        const xw = x - Math.sign(x) * inset;
+        const xw = (x0 + x1) / 2 - Math.sign(x0) * inset;
         const half1 = (at - y0) / 2;
         const half2 = (y1 - at) / 2;
-        shape.bezierCurveTo(x, y0 + half1, xw, at - half1, xw, at);
-        shape.bezierCurveTo(xw, at + half2, x, y1 - half2, x, y1);
+        shape.bezierCurveTo(x0, y0 + half1, xw, at - half1, xw, at);
+        shape.bezierCurveTo(xw, at + half2, x1, y1 - half2, x1, y1);
     };
 
     const shape = new THREE.Shape();
-    shape.moveTo(-hw, hip);
-    side(-hw, hip, shoulder);
-    shape.absarc(-hw + topR, hh - topR, topR, Math.PI, Math.PI / 2, true);
-    shape.lineTo(hw - topR, hh);
-    shape.absarc(hw - topR, hh - topR, topR, Math.PI / 2, 0, true);
-    side(hw, shoulder, hip);
-    shape.absarc(hw - botR, -hh + botR, botR, 0, -Math.PI / 2, true);
-    shape.lineTo(-hw + botR, -hh);
-    shape.absarc(-hw + botR, -hh + botR, botR, -Math.PI / 2, -Math.PI, true);
+    shape.moveTo(-hwBot, hip);
+    side(-hwBot, hip, -hwTop, shoulder);
+    shape.absarc(-hwTop + topR, hh - topR, topR, Math.PI, Math.PI / 2, true);
+    shape.lineTo(hwTop - topR, hh);
+    shape.absarc(hwTop - topR, hh - topR, topR, Math.PI / 2, 0, true);
+    side(hwTop, shoulder, hwBot, hip);
+    shape.absarc(hwBot - botR, -hh + botR, botR, 0, -Math.PI / 2, true);
+    shape.lineTo(-hwBot + botR, -hh);
+    shape.absarc(-hwBot + botR, -hh + botR, botR, -Math.PI / 2, -Math.PI, true);
 
     const depth = d - 2 * bevel;
     const geometry = new THREE.ExtrudeGeometry(shape, {
-        depth, steps: 1, curveSegments: inset > 0 ? 10 : 5,
+        depth, steps: 1, curveSegments: curved ? 10 : 5,
         bevelEnabled: true, bevelSegments: 2,
         bevelThickness: bevel, bevelSize: bevel, bevelOffset: 0
     });
@@ -183,6 +197,124 @@ function maryJaneShoe(w, l, shoeMaterial, skinMaterial) {
 }
 
 /**
+ * The hand (2026-10-26, Steve's QA of the avatar: the old hand was one
+ * squashed ball, "could we add more detail... a few finger lines, a thumb").
+ * Every measure is in hand units: `unit` meters at a standard hand (the old
+ * ball's radius), times the figure's `handScale`.
+ *
+ *   palm    [width, height, depth], a slab hanging from the wrist, `width`
+ *           across the knuckles and `palmNeck` across its top, which is
+ *           `palmTop` above the hand's middle: up inside the forearm, whose
+ *           end is 0.034 m (0.85 of a standard unit) above that middle, so
+ *           the top must clear it on a small hand and its corners must stay
+ *           inside the wrist's circle (the hand is turned)
+ *   finger  the radius of each of the four fingers, and each one's length
+ *           from the palm, index to little finger; `curl` radians toward
+ *           the palm
+ *   thumb   its radius and length, from the palm's upper inner corner, `out`
+ *           radians away from the fingers and `forward` radians toward the
+ *           palm's side
+ *   wrist   the wrist's radius as a share of the palm's width (a palm is a
+ *           little wider than its wrist), never under `wristFloor` of the
+ *           arm's radius, and never over `wristCap` of it (a huge hand is a
+ *           huge hand, not a club of an arm)
+ *   turn    the hand turned this far about the arm so its thumb leads a
+ *           little forward, as a hand hangs at rest
+ */
+export const HAND = Object.freeze({
+    unit: 0.04,
+    palm: Object.freeze([1.4, 1.9, 0.5]),
+    palmNeck: 1.0,
+    palmTop: 1.2,
+    finger: Object.freeze({ radius: 0.135, lengths: Object.freeze([1.0, 1.15, 1.08, 0.85]), curl: 0.25 }),
+    thumb: Object.freeze({ radius: 0.16, length: 0.85, out: 0.75, forward: 0.45 }),
+    wrist: 0.4,
+    wristFloor: 0.45,
+    wristCap: 0.85,
+    turn: 0.45
+});
+
+/**
+ * One geometry (no addons in the bundle, so the pieces are merged here) of
+ * the hand in HAND, `unit` meters a hand unit, its thumb on the `inner` side
+ * (+1 or -1 along x). The hand's middle is the origin; the back of the hand
+ * faces +z, the fingers hang down -y.
+ */
+export function handGeometry(unit, inner) {
+    const H = HAND;
+    const parts = [];
+    const place = (geometry, position, rotation = null) => {
+        const m = new THREE.Matrix4();
+        if (rotation) m.makeRotationFromEuler(rotation);
+        m.setPosition(position[0] * unit, position[1] * unit, position[2] * unit);
+        parts.push({ geometry, matrix: m });
+    };
+    const [pw, ph, pd] = H.palm;
+    // The palm: a slab that widens from the wrist to the knuckles, its top
+    // narrower than the wrist and up inside the forearm's end, so no ledge
+    // shows at the wrist (a flat-topped block lit from above drew a bright
+    // ring there).
+    const palmBottom = H.palmTop - ph;
+    const outline = new THREE.Shape();
+    outline.moveTo(-pw / 2 * unit, palmBottom * unit);
+    outline.lineTo(pw / 2 * unit, palmBottom * unit);
+    outline.lineTo(H.palmNeck / 2 * unit, H.palmTop * unit);
+    outline.lineTo(-H.palmNeck / 2 * unit, H.palmTop * unit);
+    outline.closePath();
+    place(new THREE.ExtrudeGeometry(outline, { depth: pd * unit, bevelEnabled: false }), [0, 0, -pd / 2]);
+    // The fingers, side by side across the palm's bottom, each a capsule
+    // sunk a little into the palm, curled toward the palm (-z).
+    H.finger.lengths.forEach((length, k) => {
+        const r = H.finger.radius;
+        const c = H.finger.curl;
+        const x = ((k + 0.5) / 4 - 0.5) * pw * 0.92;
+        const body = Math.max(0.05, length - 2 * r);
+        const half = body / 2 + r;
+        // A turn of +curl about x carries the capsule's top to (0, cos c,
+        // sin c) and its tip to (0, -cos c, -sin c): toward the palm. The
+        // top is sunk a little way into the palm's bottom.
+        const sink = r * 0.6;
+        place(new THREE.CapsuleGeometry(r * unit, body * unit, 3, 8),
+            [x, palmBottom + sink - half * Math.cos(c), -half * Math.sin(c)], new THREE.Euler(c, 0, 0));
+    });
+    // The thumb, from the palm's upper inner corner, out and down.
+    {
+        const r = H.thumb.radius;
+        const body = Math.max(0.05, H.thumb.length - 2 * r);
+        const dir = new THREE.Vector3(inner * Math.sin(H.thumb.out), -Math.cos(H.thumb.out), -Math.sin(H.thumb.forward)).normalize();
+        const base = new THREE.Vector3(inner * (pw / 2 - r * 0.8), H.palmTop - ph * 0.3, 0);
+        const middle = base.clone().addScaledVector(dir, body / 2 + r * 0.6);
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().negate());
+        place(new THREE.CapsuleGeometry(r * unit, body * unit, 3, 8), [middle.x, middle.y, middle.z], new THREE.Euler().setFromQuaternion(q));
+    }
+    return mergeParts(parts);
+}
+
+/** `parts` ([{ geometry, matrix }]) as one non-indexed geometry with
+ *  positions and normals; the pieces are disposed. */
+export function mergeParts(parts) {
+    const positions = [];
+    const normals = [];
+    for (const { geometry, matrix } of parts) {
+        const g = geometry.index ? geometry.toNonIndexed() : geometry;
+        g.applyMatrix4(matrix);
+        const p = g.getAttribute('position');
+        const n = g.getAttribute('normal');
+        const count = (Number(p.count) || 0) * 3;
+        for (let i = 0; i < count; i++) {
+            positions.push(p.array[i]);
+            normals.push(n.array[i]);
+        }
+        if (g !== geometry) g.dispose();
+        geometry.dispose();
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    out.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    return out;
+}
+
+/**
  * Create a detailed person figure
  * @param {Object} config - Person configuration
  * @returns {THREE.Group} The person group
@@ -211,8 +343,13 @@ export function createPerson(config) {
         dressShirt = false,    // button-down dress shirt: center placket + long sleeves, no jacket/tie
         shoulderRound = 0,     // 0 = square box torso; up to ~0.6 rounds the shoulders and softens every edge
         hips = 0,              // 0 = straight (as before); up to 1 a woman's build: thighs full at the hip, meeting, tapering to the knee, a slimmer calf
-        waist = 0,             // 0 = straight sides (as before); up to 0.3 an hourglass: the torso's sides curve in to a waist that much narrower (rounded torso only, shoulderRound > 0)
+        waist = 0,             // 0 = straight sides (as before); up to 0.3 an hourglass: the torso's sides curve in to a waist that much narrower; below 0 (to -0.3) they bow out, a fuller middle (rounded torso only, shoulderRound > 0)
         slender = 0,           // 0 = as before; up to 1 slimmer arms and wrists (15%), smaller hands and narrower shoes
+        // The builds (2026-10-26, the avatar's body types): each 1 (or 0) is exactly the figure built before.
+        shoulders = 1,         // the torso's width across the top, as a share of its width (0.86 a pear's lean shoulders, 1.15 broad); the arms hang from it (rounded torso only)
+        seat = 1,              // the torso's width across the bottom, the same way (1.08 a pear's hips); the legs and the belt follow it (rounded torso only)
+        girth = 1,             // the torso's depth, as a share (1.3 a round middle)
+        legs = 1,              // the legs' thickness, as a share (over the muscles' own)
         shoeColor = 0x1a1a1a,  // the shoes' color (black, as every figure has worn them)
         shoeStyle = 'block',   // 'block' (the box every figure has worn) | 'maryJane': a low rounded shoe, the instep showing, a strap across it
         sleeveColor = null     // long sleeves in this color; null keeps bare forearms
@@ -280,12 +417,12 @@ export function createPerson(config) {
     const neckHeight = 0.08;
     const torsoHeight = 0.55;
     const torsoWidth = 0.38 * (muscular ? 1.3 : 1);    // broader chest & shoulders
-    const torsoDepth = 0.22 * (muscular ? 1.18 : 1);
+    const torsoDepth = 0.22 * (muscular ? 1.18 : 1) * girth;
     const armLength = 0.55;
     const slim = Math.max(0, Math.min(1, slender));
     const armRadius = 0.045 * (muscular ? 1.55 : 1) * (1 - 0.15 * slim);   // thicker arms; slimmer on a slender build
     const legLength = 0.75;
-    const legRadius = 0.065 * (muscular ? 1.35 : 1);   // thicker legs on a muscular build
+    const legRadius = 0.065 * (muscular ? 1.35 : 1) * legs;   // thicker legs on a muscular build, or a build's own
     const hipShape = Math.max(0, Math.min(1, hips));
     const footLength = 0.18;
 
@@ -296,6 +433,9 @@ export function createPerson(config) {
     );
     head.position.y = legLength + torsoHeight + neckHeight + headRadius;
     head.castShadow = true;
+    // Tagged, as the arms and legs are, so a part that adds to the face (the
+    // avatar's smile, glasses and hats) finds it without matching a radius.
+    head.userData.isHead = true;
     person.add(head);
 
     // Face details - eyes
@@ -310,6 +450,7 @@ export function createPerson(config) {
         );
         eye.position.set(offsetX, head.position.y + 0.02, headRadius - 0.01);
         eye.scale.z = 0.5;
+        eye.userData.isEye = true;
         person.add(eye);
 
         // Pupil. Tagged so the zombie transform can recolor it reliably: the
@@ -331,6 +472,7 @@ export function createPerson(config) {
     );
     nose.position.set(0, head.position.y - 0.01, headRadius);
     nose.rotation.x = Math.PI / 2;
+    nose.userData.isNose = true;
     person.add(nose);
 
     // Ears
@@ -341,11 +483,15 @@ export function createPerson(config) {
         );
         ear.position.set(side * (headRadius - 0.01), head.position.y, 0);
         ear.scale.set(0.4, 0.7, 0.5);
+        ear.userData.isEar = true;
         person.add(ear);
     });
 
-    // Hair (styled based on role) - positioned to not cover face
+    // Hair (styled based on role) - positioned to not cover face. Tagged: it
+    // sits at y 0 with its children at their own heights, so it cannot be
+    // found by position.
     const hairGroup = new THREE.Group();
+    hairGroup.userData.isHair = true;
     if (hairStyle === 'buzz') {
         // Close-cropped buzz cut: one tight cap hugging the skull with no
         // added volume, trimmed to expose the forehead and clear the ears.
@@ -441,9 +587,11 @@ export function createPerson(config) {
     // soft-edged slab with rounded shoulders, which is what a figure seen
     // close up in a seated scene wants: the box's hard top corners read as
     // points from any three-quarter angle.
+    // The builds' shoulder and seat widths shape the rounded torso only, as
+    // the waist does; the box stays the box.
     const torso = new THREE.Mesh(
         shoulderRound > 0
-            ? roundedTorsoGeometry(torsoWidth, torsoHeight, torsoDepth, shoulderRound, waist)
+            ? roundedTorsoGeometry(torsoWidth, torsoHeight, torsoDepth, shoulderRound, waist, shoulders, seat)
             : new THREE.BoxGeometry(torsoWidth, torsoHeight, torsoDepth),
         shirtMaterial
     );
@@ -629,27 +777,39 @@ export function createPerson(config) {
         );
         foreGroup.add(elbow);
 
-        // Forearm
+        // Forearm: the arm's full radius at the elbow, narrowing to the
+        // wrist (it tapered the OTHER way until 2026-10-26, wider at the
+        // wrist than the elbow, and on a muscular build the wrist came out
+        // twice the hand's width: Steve's QA of the avatar). The wrist is
+        // sized from the hand, a little narrower than the palm, so a bigger
+        // hand gets a bigger wrist and a thicker arm never flares into one.
+        const handUnit = HAND.unit * handScale * (1 - 0.1 * slim);
+        const wristRadius = Math.min(Math.max(HAND.wrist * HAND.palm[0] * handUnit, HAND.wristFloor * armRadius), HAND.wristCap * armRadius);
         const forearm = new THREE.Mesh(
-            new THREE.CylinderGeometry(armRadius * 0.9, armRadius, armLength * 0.45, 8),
+            new THREE.CylinderGeometry(armRadius, wristRadius, armLength * 0.45, 8),
             sleeveMaterial
         );
         forearm.position.y = -armLength * 0.25;
         foreGroup.add(forearm);
 
         // Hand (handScale enlarges it relative to the figure; a slender
-        // build's is a little smaller, to suit its wrist)
-        const hand = new THREE.Mesh(
-            new THREE.SphereGeometry(0.04 * handScale * (1 - 0.1 * slim), 8, 8),
-            skinMaterial
-        );
+        // build's is a little smaller, to suit its wrist). One mesh: a palm,
+        // four fingers and a thumb on the inner side (HAND), its middle
+        // where the old ball's was, so every scene that reaches for the hand
+        // finds it where it always was. Tagged, so a scene that enlarges it
+        // need not know its geometry.
+        const hand = new THREE.Mesh(handGeometry(handUnit, -side), skinMaterial);
         hand.position.y = -armLength * 0.5 - 0.02;
-        hand.scale.set(0.8, 1, 0.5);
+        hand.rotation.y = side * HAND.turn;
+        hand.name = 'hand';
+        hand.userData.isHand = true;
+        // Its unit, for a stand-in the size of the old ball (crowd-1.0.0).
+        hand.userData.handUnit = handUnit;
         foreGroup.add(hand);
 
         // Position arm group at shoulder
         armGroup.position.set(
-            side * (torsoWidth / 2 + armRadius * 0.5),
+            side * ((torsoWidth * shoulders) / 2 + armRadius * 0.5),
             legLength + torsoHeight - 0.05,
             0
         );
@@ -716,12 +876,14 @@ export function createPerson(config) {
             );
             shoe.position.y = -legLength - 0.05 + shoeHeight / 2;
             shoe.position.z = shoeLength * 0.2;
+            // Tagged as the mary jane is, so the avatar's sneakers find it.
+            shoe.userData.isShoe = true;
             legGroup.add(shoe);
         }
 
         // Position leg group at hip
         legGroup.position.set(
-            side * (torsoWidth / 4 + 0.006 * hipShape),
+            side * ((torsoWidth * seat) / 4 + 0.006 * hipShape),
             legLength,
             0
         );
@@ -741,7 +903,7 @@ export function createPerson(config) {
     // === BELT (skipped when wearing a skirt) ===
     if (!hasSkirt) {
         const belt = new THREE.Mesh(
-            new THREE.BoxGeometry(torsoWidth + 0.02, 0.04, torsoDepth + 0.02),
+            new THREE.BoxGeometry(torsoWidth * seat + 0.02, 0.04, torsoDepth + 0.02),
             new THREE.MeshStandardMaterial({ color: 0x2c1810, roughness: 0.5, metalness: 0.2 })
         );
         belt.position.y = legLength + 0.02;
@@ -767,6 +929,7 @@ export function createPerson(config) {
         );
         skirt.position.y = legLength - 0.12; // waist (~0.80) down to mid-thigh (~0.46)
         skirt.castShadow = true;
+        skirt.userData.isSkirt = true;
         person.add(skirt);
     }
 

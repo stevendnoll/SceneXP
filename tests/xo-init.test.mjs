@@ -1231,3 +1231,49 @@ describe('what comes after the final score', () => {
         expect(nextSlug('xo')).toBe('earthdefense');
     });
 });
+
+describe("the visitor's avatar at quarterback (specs/avatar M7, 2026-10-26)", () => {
+    const PNG = `data:image/png;base64,${'iVBORw0KGgo'.repeat(10)}AAA=`;
+
+    test('without a saved avatar: the usual quarterback, and a quiet pointer to the avatar page', async () => {
+        const main = await boot();
+        expect(main.getState().avatarQb).toBe(false);
+        expect(main.getState().avatarSaved).toBe(false);
+        // The usual quarterback throws right-handed, and the simulation is
+        // told so (the ball starts at his throwing hand).
+        expect(main.getState().throwHand).toBe('right');
+        expect(dom.el('avatar-playing-img').hidden).toBe(true);
+        expect(dom.el('avatar-playing-text').textContent).toBe('Take the snap at quarterback as yourself.');
+        expect(dom.el('avatar-playing-link').textContent).toBe('Make your avatar');
+        // Nothing is counted toward the home page's label by looking.
+        expect(globalThis.localStorage.getItem('scenexp-avatar-chip')).toBeNull();
+        const page = await readFile(new URL('../www/xo/index.html', import.meta.url), 'utf8');
+        expect(page).toMatch(/<a id="avatar-playing-link" class="welcome-explore" href="\.\.\/avatar\/\?return=\/xo\/">Make your avatar<\/a>/);
+        expect(page).toMatch(/<img id="avatar-playing-img" src="\.\.\/assets\/avatar\/default\.png" width="28" height="28" alt=""[^>]*hidden>/);
+        expect(page).toContain('shared/css/avatar-1.0.0.min.css');
+    });
+
+    test('with one: the visitor takes the snap, with their portrait on the card, and another tab\'s forget takes it off', async () => {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        const store = createAvatarStore({ win: null });
+        store.save({ skin: 'deep', shirt: 'teal', handedness: 'left' });
+        store.savePortrait(PNG, 1);
+        const main = await boot();
+        expect(main.getState().avatarQb).toBe(true);
+        // A left-handed avatar's throws start on his left.
+        expect(main.getState().throwHand).toBe('left');
+        expect(main.getState().avatarSaved).toBe(true);
+        expect(dom.el('avatar-playing-img').hidden).toBe(false);
+        expect(dom.el('avatar-playing-img').src).toBe(PNG);
+        expect(dom.el('avatar-playing-img').alt).toBe('');
+        expect(dom.el('avatar-playing-text').textContent).toBe('You take the snap at quarterback as your avatar.');
+        expect(dom.el('avatar-playing-link').textContent).toBe('Change your avatar');
+        store.forget();
+        fire(dom.windowStub, 'storage', { key: 'scenexp-avatar' });
+        expect(main.getState().avatarSaved).toBe(false);
+        expect(dom.el('avatar-playing-img').hidden).toBe(true);
+        expect(dom.el('avatar-playing-link').textContent).toBe('Make your avatar');
+        // The quarterback on the field changes on the next load, not mid-game.
+        expect(main.getState().avatarQb).toBe(true);
+    });
+});

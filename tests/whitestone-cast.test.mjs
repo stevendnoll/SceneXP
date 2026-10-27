@@ -10,7 +10,8 @@
  */
 import { loadRealThree } from './helpers/real-three.mjs';
 import { CONFIG } from '../www/whitestone/js/config.js';
-import { REST, GESTURES, poseFor, swayAt, speakSeconds, buildMaya, smileArc, portraitPose, PORTRAIT } from '../www/whitestone/js/cast.js';
+import { REST, GESTURES, WAVE_TWIST, POINT_TWIST, poseFor, swayAt, speakSeconds, buildMaya, smileArc, portraitPose, PORTRAIT } from '../www/whitestone/js/cast.js';
+import { HAND } from '../www/shared/js/people-1.0.0.js';
 import { framePose, subjectPoints } from '../www/whitestone/js/turntable.js';
 import { firstPick, buildLights } from '../www/whitestone/js/stage.js';
 
@@ -49,6 +50,11 @@ describe('the gestures (pure)', () => {
         expect(point.far).toEqual(REST);
         expect(point.near.z).toBeGreaterThan(0.9);
         expect(point.near.x).toBeLessThan(-0.4);
+        // The hand turns with the arm (Steve's QA, 2026-10-26), from rest.
+        expect(wave.far.twist).toBeCloseTo(WAVE_TWIST, 9);
+        expect(point.near.twist).toBeCloseTo(POINT_TWIST, 9);
+        expect(poseFor('wave', 0.01).far.twist).toBeLessThan(0.1);
+        expect(REST.twist).toBe(0);
     });
 
     test('the sway is a few hundredths of a radian, and a line takes about as long as it is to say', () => {
@@ -110,6 +116,54 @@ describe('built with the real three.js', () => {
         }
         return maya;
     };
+
+    test('her waving palm faces the visitor with the thumb up and in, and her pointing hand turns thumb up (Steve, 2026-10-26)', () => {
+        /** The hand mesh of `side`, and a vector in its own coordinates as
+         *  the world sees it. */
+        const handOf = (maya, side) => {
+            let hand = null;
+            maya.group.traverse((o) => {
+                if (o.userData && o.userData.isForearm && o.userData.armSide === side) hand = o.children.find((c) => c.userData && c.userData.isHand);
+            });
+            return hand;
+        };
+        const world = (maya, hand, v) => {
+            maya.group.updateMatrixWorld(true);
+            return v.clone().applyQuaternion(hand.getWorldQuaternion(new REAL.Quaternion()));
+        };
+        const thumbLocal = (inner) => new REAL.Vector3(inner * Math.sin(HAND.thumb.out), -Math.cos(HAND.thumb.out), -Math.sin(HAND.thumb.forward)).normalize();
+        // The wave: the far arm, her left (+1), whose thumb is on its inner
+        // side (-x). She faces the visitor three quarters on: the palm (the
+        // hand's -z) toward +z, the thumb up and in toward her head.
+        const waving = posed('wave', 1.0);
+        const farHand = handOf(waving, 1);
+        expect(world(waving, farHand, new REAL.Vector3(0, 0, 1)).z).toBeLessThan(-0.4);
+        const thumb = world(waving, farHand, thumbLocal(-1));
+        expect(thumb.y).toBeGreaterThan(0.6);     // measured 0.75: up, leaning in
+        const fingers = world(waving, farHand, new REAL.Vector3(0, -1, 0));
+        expect(fingers.y).toBeGreaterThan(0.6);   // the arm is raised short of straight up
+        // Untwisted, the same swing showed the back of the hand and the
+        // thumb out to the side: this test can fail.
+        const bare = posed(null, 0);
+        const bareHand = handOf(bare, 1);
+        const p = poseFor('wave', 1.0);
+        bareHand.parent.parent.rotation.z = p.far.z;
+        bareHand.parent.parent.rotation.x = p.far.x;
+        expect(world(bare, bareHand, new REAL.Vector3(0, 0, 1)).z).toBeGreaterThan(0.4);
+        expect(Math.abs(world(bare, bareHand, thumbLocal(-1)).y)).toBeLessThan(0.3);
+        // The point: the near arm, her right (-1), out toward the house,
+        // the palm opened toward the visitor and up, the thumb up rather
+        // than hanging under the hand (measured: 0.50 up, the palm 0.91
+        // toward the visitor).
+        const pointing = posed('point', 1.0);
+        const nearHand = handOf(pointing, -1);
+        expect(world(pointing, nearHand, thumbLocal(1)).y).toBeGreaterThan(0.45);
+        expect(world(pointing, nearHand, new REAL.Vector3(0, 0, -1)).z).toBeGreaterThan(0.8);
+        const bareNear = handOf(bare, -1);
+        bareNear.parent.parent.rotation.z = -poseFor('point', 1.0).near.z;
+        bareNear.parent.parent.rotation.x = poseFor('point', 1.0).near.x;
+        expect(world(bare, bareNear, thumbLocal(1)).y).toBeLessThan(-0.3);
+    });
 
     test('she smiles (QA, 2026-10-15): rose lips below her nose, centered, on her face, the corners lifted', () => {
         const maya = buildMaya(CONFIG);

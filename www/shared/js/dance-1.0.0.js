@@ -141,19 +141,30 @@ const TAIL = { waist: { x: 0.45, z: 0.12 }, root: { rz: 0.06 }, armL: { x: 0.5, 
 const CLAP = { armL: { x: -0.95, z: -0.55, fore: -1.25 }, armR: { x: -0.95, z: -0.55, fore: -1.25 } };
 const APART = { armL: { x: -0.95, z: -0.1, fore: -1.25 }, armR: { x: -0.95, z: -0.1, fore: -1.25 } };
 
-// The YMCA, each letter held: Y up in a V, M the hands on the head, C to the
-// right, A the hands meeting overhead.
+// The YMCA, each letter held: Y up in a V, M the hands on the shoulders with
+// the elbows out, C to the dancer's right, A the hands meeting overhead.
 const Y = { armL: { x: -0.2, z: 2.55 }, armR: { x: -0.2, z: 2.55 }, root: { y: 0.03 } };
-const ON_HEAD = { x: -0.02, z: 2.7, y: 1.48, fore: -1.49 };
-const M = { armL: ON_HEAD, armR: ON_HEAD, neck: { x: 0.1 } };
-// The C (Steve's QA, 2026-10-20: it read as a hand to the forehead): a lean
-// to the right, the left arm arched up over the head and the right curved
-// out below, the body the C's back, open to the audience's right.
-const C_ = { armL: { x: 0.64, z: 3.21, y: 2.47, fore: -1.11 }, armR: { x: 0.1, z: 1.52, y: -1.07, fore: -2.06 }, waist: { z: 0.3 }, neck: { z: 0.1 } };
+// The M (Steve's QA, 2026-10-26: "the M puts the hands on the head instead
+// of the shoulders"): each hand on top of its own shoulder beside the neck,
+// the elbow up and out. Solved against the rig from hand and elbow targets.
+const ON_SHOULDER = { x: 0.06, z: 2.21, y: 1.13, fore: -2.59 };
+const M = { armL: ON_SHOULDER, armR: ON_SHOULDER, neck: { x: 0.1 } };
+// The C (Steve's QA, 2026-10-20: it read as a hand to the forehead; and
+// 2026-10-26: "the C definitely doesn't look like a C"): the body leans to
+// the right and both arms curve to the right with it, the left arched over
+// the head (its elbow up beside the head, its hand just past the crown) and
+// the right bent out at the hip, its forearm pointing right: a C open to
+// the dancer's right. Both arms solved against the rig from hand and elbow
+// targets, with the lean on.
+const C_ = { armL: { x: 0.3, z: 2.34, y: 1.82, fore: -1.22 }, armR: { x: 0, z: 0.56, y: 0.83, fore: -2.01 }, waist: { z: 0.3 }, neck: { z: 0.1 } };
 // The A: both arms all but straight, leaning in past upright (z beyond pi)
 // to hands meeting over the head (the same QA: it was a narrow V).
 const PEAK = { x: 0, z: 3.39, y: 0.46, fore: -0.31 };
 const A = { armL: PEAK, armR: PEAK, root: { y: 0.03 } };
+// Between the letters (the same QA: the groove, a clap and an apart "don't
+// look like the original YMCA moves"): the hands on the hips, swaying to
+// one side and the other, as the song's verse is danced.
+const HIPS = { armL: HAND_ON_HIP, armR: HAND_ON_HIP, waist: { z: 0.12 }, root: { rz: 0.04, y: 0.02 }, neck: { z: -0.08 } };
 
 // The Macarena, one arm then the other.
 const MAC = {
@@ -217,7 +228,7 @@ export const DANCES = Object.freeze([
     },
     {
         id: 'ymca', name: 'the YMCA', beat: 0.6, hold: 0.5, bounce: 0,
-        keys: [Y, M, C_, A, A, { ...Y, via: true }, GROOVE, { ...APART, root: { y: 0.04 } }, CLAP]
+        keys: [Y, M, C_, A, A, HIPS, mirror(HIPS)]
     },
     {
         id: 'macarena', name: 'the Macarena', beat: 0.34, hold: 0.35, bounce: 0.01,

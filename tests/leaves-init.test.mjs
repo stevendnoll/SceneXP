@@ -453,15 +453,16 @@ describe('the welcome card', () => {
     });
 
     // Before 2026-10-09 the card took Enter and Space from every control on
-    // it: a keyboard on "Change your character" stepped into the yard.
+    // it: a keyboard on "Change your character" (now "Make your avatar")
+    // stepped into the yard.
     test('a focused button on the card keeps Enter and Space for itself', async () => {
         await boot();
-        const castBtn = dom.el('cast-btn');
-        castBtn.tagName = 'BUTTON';
-        const down = fire(dom.documentStub, 'keydown', { code: 'Enter', target: castBtn });
+        const freeBtn = dom.el('free-btn');
+        freeBtn.tagName = 'BUTTON';
+        const down = fire(dom.documentStub, 'keydown', { code: 'Enter', target: freeBtn });
         expect(down.defaultPrevented).toBe(false);
         expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
-        fire(dom.documentStub, 'keydown', { code: 'Space', target: castBtn });
+        fire(dom.documentStub, 'keydown', { code: 'Space', target: freeBtn });
         expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
         // With nothing focused, Enter and Space still step in.
         fire(dom.documentStub, 'keydown', { code: 'Enter' });
@@ -1345,80 +1346,99 @@ describe('the finale (M3)', () => {
     }, LONG);
 });
 
-describe('the character card (M4)', () => {
-    /** The radio button for `id` in the group hosted by `host`. */
-    function option(host, id) {
-        const label = dom.el(host).children.find((l) => l.children[0].value === id);
-        return label.children[0];
-    }
+describe('who is on leaf duty: the avatar (M6 of the avatar, 2026-10-26)', () => {
+    const PNG = `data:image/png;base64,${'iVBORw0KGgo'.repeat(10)}AAA=`;
 
-    test('opens from the welcome card, beside a paused yard, with the current choice ticked', async () => {
+    test('the welcome card plays as the usual figure until an avatar is saved, and links to the avatar page with the way back', async () => {
         const main = await boot();
-        expect(dom.el('cast-name').textContent).toBe('Playing in a rust red shirt and navy pants.');
-        fire(dom.el('cast-btn'), 'click');
-        const s = main.getState();
-        expect(s.castShown).toBe(true);
-        expect(dom.el('blocker').classList.contains('hidden')).toBe(true);
-        expect(dom.el('round-hud').classList.contains('visible')).toBe(false);
-        // Shirts and pants as swatches, no outfits (Steve's QA, 2026-10-08).
-        expect(dom.el('cast-shirts').children).toHaveLength(8);
-        expect(dom.el('cast-pants').children).toHaveLength(6);
-        expect(await readFile(PAGE, 'utf8')).not.toMatch(/cast-presets|<legend>Outfit<\/legend>/);
-        expect(dom.el('cast-length').children).toHaveLength(4);
-        expect(option('cast-shirts', 'rust').checked).toBe(true);
-        expect(option('cast-pants', 'navy').checked).toBe(true);
-        // Nothing moves and no clock runs while it is open.
-        fire(dom.documentStub, 'keydown', { code: 'Space' });
-        frames(main, 1, 20);
-        expect(main.getState().round.phase).toBe('ready');
-        expect(main.getState().blowing).toBe(false);
+        const { DEFAULT_AVATAR } = await import('../www/shared/js/avatar-1.0.0.js');
+        expect(main.getState().avatar).toEqual(DEFAULT_AVATAR);
+        expect(main.getState().avatarSaved).toBe(false);
+        expect(dom.el('avatar-playing-text').textContent).toBe('Playing as the usual figure.');
+        expect(dom.el('avatar-playing-link').textContent).toBe('Make your avatar');
+        expect(dom.el('avatar-playing-img').alt).toBe('');
+        // Nothing is kept by looking, and no home visit is counted.
+        expect(globalThis.localStorage.getItem('scenexp-avatar')).toBeNull();
+        expect(globalThis.localStorage.getItem('scenexp-avatar-chip')).toBeNull();
+        const page = await readFile(PAGE, 'utf8');
+        expect(page).toMatch(/<a id="avatar-playing-link" class="welcome-free cast-btn" href="\.\.\/avatar\/\?return=\/leaves\/">Make your avatar<\/a>/);
+        expect(page).toMatch(/<img id="avatar-playing-img" src="\.\.\/assets\/avatar\/default\.png" width="28" height="28" alt=""/);
+        expect(page).toContain('shared/css/avatar-1.0.0.min.css');
+        // The old character card is gone, and so is its key.
+        expect(page).not.toMatch(/cast-modal|id="cast-btn"|Change your character|Forget my choice/);
+        expect(main.getState().castShown).toBeUndefined();
     });
 
-    test('each choice changes the person at once, and Done keeps it and goes back to the welcome card', async () => {
+    test('a saved avatar is who turns up, with its portrait on the card', async () => {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        const { RENDER_VERSION } = await import('../www/shared/js/avatar-figure-1.0.0.js');
+        const store = createAvatarStore({ win: null });
+        store.save({ skin: 'deep', shirt: 'teal', hat: 'cap' });
+        store.savePortrait(PNG, RENDER_VERSION);
         const main = await boot();
-        fire(dom.el('cast-btn'), 'click');
-        for (const [host, id] of [['cast-shirts', 'pumpkin'], ['cast-pants', 'denim'], ['cast-hair', 'gray']]) {
-            const input = option(host, id);
-            input.checked = true;
-            fire(input, 'change');
-        }
-        expect(main.getState().cast).toMatchObject({ shirt: 'pumpkin', pants: 'denim', hair: 'gray' });
-        expect(dom.el('cast-status').textContent).toBe('Gray');
+        expect(main.getState().avatar).toMatchObject({ skin: 'deep', shirt: 'teal', hat: 'cap' });
+        expect(main.getState().avatarSaved).toBe(true);
+        expect(dom.el('avatar-playing-text').textContent).toBe('Playing as your avatar.');
+        expect(dom.el('avatar-playing-link').textContent).toBe('Change your avatar');
+        expect(dom.el('avatar-playing-img').src).toBe(PNG);
         expect(() => frames(main, 0.5, 20)).not.toThrow();
-        fire(dom.el('cast-done'), 'click');
-        expect(main.getState().castShown).toBe(false);
-        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
-        expect(dom.el('cast-name').textContent).toBe('Playing in a pumpkin orange shirt and denim blue pants.');
-        expect(JSON.parse(globalThis.localStorage.getItem('leaves-character'))).toEqual({ shirt: 'pumpkin', pants: 'denim', skin: 'fair', hair: 'gray', length: 'short' });
     });
 
-    test('a kept choice is who turns up next visit, and Escape is Done', async () => {
+    test('a character chosen on the old card moves into the avatar once, counts as saved, and the old key goes', async () => {
         globalThis.localStorage.setItem('leaves-character', JSON.stringify({ shirt: 'teal', pants: 'black', skin: 'brown', hair: 'blond', length: 'bald' }));
         const main = await boot();
-        expect(main.getState().cast).toEqual({ shirt: 'teal', pants: 'black', skin: 'brown', hair: 'blond', length: 'bald' });
-        expect(dom.el('cast-name').textContent).toBe('Playing in a teal shirt and black pants.');
-        fire(dom.el('cast-btn'), 'click');
-        fire(dom.documentStub, 'keydown', { code: 'Escape' });
-        expect(main.getState().castShown).toBe(false);
-        expect(dom.el('blocker').classList.contains('hidden')).toBe(false);
+        expect(globalThis.localStorage.getItem('leaves-character')).toBeNull();
+        expect(main.getState().avatar).toMatchObject({ skin: 'brown', hair: 'blond', length: 'bald', shirt: 'teal', bottomColor: 'black' });
+        expect(main.getState().avatarSaved).toBe(true);
+        expect(JSON.parse(globalThis.localStorage.getItem('scenexp-avatar'))).toMatchObject({ skin: 'brown', shirt: 'teal' });
+        expect(dom.el('avatar-playing-text').textContent).toBe('Playing as your avatar.');
+        expect(dom.el('avatar-playing-link').textContent).toBe('Change your avatar');
     });
 
-    test('an outfit kept before shirts and pants turns up in its colors', async () => {
+    test('a left-handed avatar carries the blower on the left, and the jet blows from that side (2026-10-26)', async () => {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        createAvatarStore({ win: null }).save({ handedness: 'left' });
+        const main = await boot();
+        expect(main.getState().hand).toBe('left');
+        expect(main.getState().jetSide).toBe(-C0.blower.side);
+        expect(() => frames(main, 0.5, 20)).not.toThrow();
+    });
+
+    test('the usual figure carries it on the right, as always', async () => {
+        const main = await boot();
+        expect(main.getState().hand).toBe('right');
+        expect(main.getState().jetSide).toBe(C0.blower.side);
+    });
+
+    test('an outfit kept before shirts and pants moves in its colors', async () => {
         globalThis.localStorage.setItem('leaves-character', JSON.stringify({ preset: 'runner', skin: 'tan', hair: 'black', length: 'buzz' }));
         const main = await boot();
-        expect(main.getState().cast).toEqual({ shirt: 'teal', pants: 'black', skin: 'tan', hair: 'black', length: 'buzz' });
-        expect(dom.el('cast-name').textContent).toBe('Playing in a teal shirt and black pants.');
+        expect(main.getState().avatar).toMatchObject({ shirt: 'teal', bottomColor: 'black', skin: 'tan', hair: 'black', length: 'buzz' });
+        expect(globalThis.localStorage.getItem('leaves-character')).toBeNull();
     });
 
-    test('Forget my choice clears what was kept and brings back the default person', async () => {
-        globalThis.localStorage.setItem('leaves-character', JSON.stringify({ shirt: 'white', pants: 'charcoal', skin: 'deep', hair: 'gray', length: 'long' }));
+    test('an avatar already saved wins over an old choice, and the old key still goes', async () => {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        createAvatarStore({ win: null }).save({ skin: 'deep' });
+        globalThis.localStorage.setItem('leaves-character', JSON.stringify({ shirt: 'white', pants: 'charcoal', skin: 'fair', hair: 'gray', length: 'long' }));
         const main = await boot();
-        fire(dom.el('cast-btn'), 'click');
-        fire(dom.el('cast-forget'), 'click');
-        expect(globalThis.localStorage.getItem('leaves-character')).toBe(null);
-        expect(main.getState().cast).toEqual({ shirt: 'rust', pants: 'navy', skin: 'fair', hair: 'darkBrown', length: 'short' });
-        expect(option('cast-shirts', 'rust').checked).toBe(true);
-        expect(dom.el('cast-status').textContent).toMatch(/forgotten/);
+        expect(main.getState().avatar.skin).toBe('deep');
+        expect(globalThis.localStorage.getItem('leaves-character')).toBeNull();
+    });
+
+    test('an avatar saved or forgotten in another tab dresses the person again and refreshes the card', async () => {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        const main = await boot();
+        const store = createAvatarStore({ win: null });
+        store.save({ skin: 'deep' });
+        fire(dom.windowStub, 'storage', { key: 'scenexp-avatar' });
+        expect(main.getState().avatar.skin).toBe('deep');
+        expect(dom.el('avatar-playing-text').textContent).toBe('Playing as your avatar.');
+        store.forget();
+        fire(dom.windowStub, 'storage', { key: 'scenexp-avatar' });
+        expect(main.getState().avatarSaved).toBe(false);
+        expect(dom.el('avatar-playing-text').textContent).toBe('Playing as the usual figure.');
+        expect(() => frames(main, 0.5, 20)).not.toThrow();
     });
 });
 
@@ -1544,7 +1564,10 @@ describe('delights and surprises (M6)', () => {
         main = await boot();
         expect(main.getState().soundLevel).toBe(C0.sound.master);
         expect(C0.sound.masterMobile).toBeLessThan(C0.sound.master);
-    });
+        // Two full boots of the yard: under the full suite's parallel workers
+        // this crossed jest's 5 s (Steve, 2026-10-27), as the Halloween test
+        // below would without its allowance. It passes alone in well under it.
+    }, 20000);
 
     // Steve's M6 QA: "I didn't hear the blowing sound while the neighbor was
     // outside blowing."

@@ -128,7 +128,7 @@ const _reducedMotion = (typeof window !== 'undefined' && window.matchMedia)
 // measured values. The desk and the sheet get fixed at M3 because the arm
 // solve depends on them, and the whole frame is measured in portrait at
 // M4 before anything else is polished.
-const LAYOUT = {
+export const LAYOUT = {
     room: { minX: -3.8, maxX: 3.8, minZ: -4.4, maxZ: 3.0, height: 3.05, wallT: 0.15 },
 
     // The glass wall: a floor-to-ceiling curtain wall taking almost the
@@ -511,7 +511,7 @@ const JOHN_LOOK = {
 // scene ending in a point rather than a hand. All three of the cast get
 // the same enlargement, matching the other SceneXP scenes that put people
 // near the camera.
-const HAND_SCALE = 1.4;
+export const HAND_SCALE = 1.4;
 
 // Rounded shoulders on all three, for the same reason as the hands: the
 // shared rig's plain box torso is built for a figure crossing a street,
@@ -525,7 +525,7 @@ const HAND_SCALE = 1.4;
 // cosmetic here: every one of the three has at least one arm rotated well
 // away from its rest angle, which on the square build leaves an open disc
 // where the upper arm meets the body.
-const SHOULDER_ROUND = 0.4;
+export const SHOULDER_ROUND = 0.4;
 
 // The showroom palette. Bright and slightly cool on purpose: showrooms
 // are lit by their glass. The flyer's navy and gold do the accenting.
@@ -3566,14 +3566,22 @@ function createFixtures() {
 // outside a box of half-width 0.2125 and half-depth 0.1325, which is the
 // rig's own flush-arm position, with 5mm of margin. Anything further in
 // than a naturally hanging arm is the fault.
-const LEG_SPLAY = 0.27;
-const JOHN_SCALE = 1.10;
-const JOHN_POINT_ARM = { shoulder: -0.850, rotZ: -0.587, elbow: -0.720 };
+// RE-SOLVED FOR THE FINGERED HAND (2026-10-26). The shared rig's hand grew
+// a palm, fingers and a thumb that day (people-1.0.0 HAND), and the finger
+// tips hang 10cm below the hand's middle where the old ball reached 6cm,
+// so the pose solved for the ball put his fingertip 27mm THROUGH the page
+// (Steve: "John's hands seem to be going through the papers"). Measured on
+// the real rig with the new hand, the lowest point of the hand now sits
+// 2mm over the page, still squarely on it (tests/automan-pose.test.mjs
+// holds it there). The dealer's hands on his keys were 5mm in, the same way.
+export const LEG_SPLAY = 0.27;
+export const JOHN_SCALE = 1.10;
+export const JOHN_POINT_ARM = { shoulder: -0.900, rotZ: -0.587, elbow: -0.730 };
 // His right side faces AWAY from the desk (he sits at its west end), so
 // this arm used to reach across his own chest to get a hand onto the desk
 // top, which is exactly how it read. It rests on his thigh now.
 const JOHN_REST_ARM = { shoulder: 0.008, rotZ: 0.046, elbow: -1.369 };
-const JOHN_LEAN = 0.300;
+export const JOHN_LEAN = 0.300;
 // The lean tips his head down with the rest of him, so the neck takes
 // most of it back and leaves him looking level at the dealer rather than
 // at his own knees. It holds the same 0.095 residual pitch the deeper
@@ -3597,8 +3605,15 @@ const JOHN_NECK_X = -0.205;
 // x 0.225, outside the torso, and the palms rest 90% of the way along the
 // thigh, at the knee. Solved against the leg AND the body together, which
 // is the only way this pose is solvable at all.
-const CUSTOMER_SCALE = { x: 0.96, y: 0.97, z: 0.96 };
-const CUSTOMER_REST_ARM = { shoulder: -0.254, roll: -0.046, elbow: -0.734 };
+export const CUSTOMER_SCALE = { x: 0.96, y: 0.97, z: 0.96 };
+// HER HANDS ARE SMALLER (Steve, 2026-10-26: "it's a female NPC, so it
+// should probably have smaller hands"): 1.2 of the rig's hand against the
+// men's 1.4, and the resting pose re-solved for them on the real rig, since
+// shorter fingers left the old pose hovering 15mm over her thighs. The
+// fingertips now rest 2 to 4mm over the thigh, the elbows outside the
+// torso as before (tests/automan-pose.test.mjs measures both hands).
+export const CUSTOMER_HAND_SCALE = 1.2;
+export const CUSTOMER_REST_ARM = { shoulder: -0.200, roll: -0.040, elbow: -0.760 };
 
 // THE DEALER IS WORKING. He used to sit squared up to the pair with his
 // forearms on the desk, which read as a man waiting. He now turns
@@ -3624,9 +3639,11 @@ const CUSTOMER_REST_ARM = { shoulder: -0.254, roll: -0.046, elbow: -0.734 };
 // own centre, so the hand rested 15mm INSIDE the keyboard. The check
 // agreed with it, because it measured the same point against the same
 // wrong surface.
-const DEALER_TURN = 0.24;
-const DEALER_TYPE_ARM = { shoulder: -1.044, roll: 0.217, elbow: -0.810 };
-const DEALER_LEAN = 0.296;
+export const DEALER_TURN = 0.24;
+// Re-solved for the fingered hand with John's (2026-10-26): the underside
+// of each hand 2mm over the keys, a little nearer his body than before.
+export const DEALER_TYPE_ARM = { shoulder: -0.970, roll: 0.217, elbow: -0.945 };
+export const DEALER_LEAN = 0.296;
 // The lean tips his head with the rest of him, so the neck's rest angle
 // carries the offset: 0.296 of lean less 0.276 of neck leaves the same
 // 0.02 of downward pitch the old light lean did. dealerTargets works from
@@ -3716,7 +3733,7 @@ function createCustomer() {
         skinTone: 0xd9a97f,
         hairColor: 0x3a2a1e,
         eyeColor: 0x3b2a1c,
-        handScale: HAND_SCALE,
+        handScale: CUSTOMER_HAND_SCALE,
         shoulderRound: SHOULDER_ROUND
     });
     customer.scale.set(CUSTOMER_SCALE.x, CUSTOMER_SCALE.y, CUSTOMER_SCALE.z);

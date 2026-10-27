@@ -2766,11 +2766,25 @@ const XO_CONFIG = {
     },
 
     /** Floodlit night, deliberately. A day/night cycle is off: this is one
-     *  game under the lights, and night flatters low-poly geometry. */
+     *  game under the lights, and night flatters low-poly geometry.
+     *
+     *  BRIGHTER FLOODLIGHTS (Steve's phone QA, 2026-10-27: "if the phone's
+     *  screen is dim, the game is really dark"). Computed through three's
+     *  lambert (radiance over pi) and the ACES curve, the old numbers drew
+     *  the default #1f5c2e turf at about 0,39,12 and the shadow side of an
+     *  orange jersey at 52,26,2, and the card's turf measures near 2,52,25:
+     *  the whole scene sat well under ACES's shoulder, in its toe. Ambient
+     *  0.55 to 1.2, key 1.15 to 1.7, fill 0.45 to 0.8 lifts the turf to
+     *  about 0,58,21, a lit jersey by a quarter and its shadow side by
+     *  two thirds (85,46,6), while white paint goes 176 to 201, nowhere
+     *  near clipping. The ambient leads because a phone draws no cast
+     *  shadows (main.js), so its darkness is the general level, and the
+     *  ambient's navy keeps the night. The milestone shows dim and raise
+     *  from whatever these are (spectacle.js `base`), so they scale. */
     lighting: {
-        ambient: { color: 0x415066, intensity: 0.55 },
-        key: { color: 0xffffff, intensity: 1.15, position: [-30, 55, 30] },
-        fill: { color: 0xbcd2ff, intensity: 0.45, position: [40, 48, -25] },
+        ambient: { color: 0x415066, intensity: 1.2 },
+        key: { color: 0xffffff, intensity: 1.7, position: [-30, 55, 30] },
+        fill: { color: 0xbcd2ff, intensity: 0.8, position: [40, 48, -25] },
         pylons: 4,                  // corner floodlight towers
     },
 
@@ -2842,8 +2856,10 @@ const XO_CONFIG = {
         cardsAt: 1.6,
         cardsForward: 0.46,
         /** How high a fan's hands reach with their arms up, per unit of scale.
-         *  The finale shot climbs until the near stand clears the teams. */
-        reach: 1.88,
+         *  The finale shot climbs until the near stand clears the teams.
+         *  1.88 until 2026-10-26, when the rig's hand grew fingers (measured
+         *  1.897 with them up; tests/xo-fans holds this over it). */
+        reach: 1.92,
         /** The bounce once the number lands at 500, per unit of scale. */
         bounce: 0.1,
         /**

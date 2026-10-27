@@ -51,10 +51,7 @@ beforeAll(async () => {
     // this is testing the same numbers the game runs on rather than the
     // defaults written into arm.js.
     const one = arms[0];
-    const hand0 = one.userData.forearm.children.find(
-        (c) => c.isMesh && c.geometry.type === 'SphereGeometry'
-            && c.geometry.parameters.radius < 0.045
-    );
+    const hand0 = one.userData.forearm.children.find((c) => c.isMesh && c.userData.isHand);
     arm.calibrate({
         shoulderX: Math.abs(one.position.x),
         shoulderY: one.position.y,
@@ -67,10 +64,7 @@ beforeAll(async () => {
     const part = (side) => {
         const a = arms.find((x) => x.userData.armSide === side);
         const f = a.userData.forearm;
-        const h = f.children.find(
-            (c) => c.isMesh && c.geometry.type === 'SphereGeometry'
-                && c.geometry.parameters.radius < 0.045
-        );
+        const h = f.children.find((c) => c.isMesh && c.userData.isHand);
         return { a, f, h };
     };
     const set = (side, armX, armZ, foreX) => {

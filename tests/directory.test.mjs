@@ -106,7 +106,21 @@ const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
 // 2026-10-06 and left at its release as Leaf Blower on 2026-10-09.
 // Whitestone Home Care joined at M0 on 2026-10-12, on the proto-1 branch.
 // Derby Day joined at M1 on 2026-10-19, its graybox race in the open.
+// Your Avatar (www/avatar) joined at M3 on 2026-10-23 and left at its release
+// on 2026-10-26, into SITE_PAGES below rather than the directory. While it
+// was here the home page was allowed to link to it (its chip, nav and footer
+// links were built on the release branch, and Steve checked them on the
+// page), an exception that left with it: an unreleased scene is unlinked
+// everywhere.
 const UNRELEASED = ['starfall'];
+
+// SITE PAGES IN FOLDERS. Your Avatar draws a figure on a canvas, so the scan
+// below finds it with the scenes, but it is not an experience: it is the page
+// every scene's visitor figure comes from. Released, it is listed where a
+// page is listed (the sitemap, llms.txt under Pages, the home page's nav and
+// footer) and nowhere a scene is (no directory card, no JSON-LD list entry),
+// and like any released page it carries no noindex.
+const SITE_PAGES = ['avatar'];
 
 const sceneSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true })
     .filter((d) => d.isDirectory() && !IGNORED_DIRS.includes(d.name))
@@ -115,7 +129,7 @@ const sceneSlugs = readdirSync(join(process.cwd(), 'www'), { withFileTypes: true
     .filter((name) => readFileSync(join(process.cwd(), 'www', name, 'index.html'), 'utf8')
         .includes('<canvas'))     // a scene page, not a directory blocker
     .sort();
-const builtSlugs = sceneSlugs.filter((name) => !UNRELEASED.includes(name));
+const builtSlugs = sceneSlugs.filter((name) => !UNRELEASED.includes(name) && !SITE_PAGES.includes(name));
 
 describe('scenes still being built', () => {
     // One test that walks the list rather than one per entry, so the rule
@@ -129,6 +143,28 @@ describe('scenes still being built', () => {
             expect(home).not.toContain(`/${slug}/`);
             expect(sitemap).not.toContain(`/${slug}/`);
             expect(llms).not.toContain(`/${slug}/`);
+        }
+    });
+});
+
+describe('site pages in folders', () => {
+    test('each exists, is indexed, and is listed as a page, not as a scene', () => {
+        for (const slug of SITE_PAGES) {
+            expect(sceneSlugs).toContain(slug);
+            expect(UNRELEASED).not.toContain(slug);
+            // Comments stripped first, for the reason given under "is not
+            // quietly hidden from search" below.
+            const page = read('www', slug, 'index.html').replace(/<!--[\s\S]*?-->/g, '');
+            expect(`${slug} robots: ${/<meta\s+name="robots"/i.test(page)}`).toBe(`${slug} robots: false`);
+            expect(`${slug} noindex: ${/noindex/i.test(page)}`).toBe(`${slug} noindex: false`);
+            // Listed like a page.
+            expect(sitemap).toContain(`<loc>https://www.scenexp.com/${slug}/</loc>`);
+            const pagesSection = llms.split('## Experiences')[0];
+            expect(pagesSection).toContain(`(https://www.scenexp.com/${slug}/)`);
+            expect(home).toContain(`href="/${slug}/"`);
+            // And not like a scene.
+            expect(slugs).not.toContain(slug);
+            expect(home).not.toContain(`"url": "https://www.scenexp.com/${slug}/"`);
         }
     });
 });
@@ -155,9 +191,12 @@ describe('every card is wired into the whole site', () => {
         const llmsSlugs = [...llms.matchAll(
             /\(https:\/\/www\.scenexp\.com\/([^/)]+)\/\)/g)].map((m) => m[1]).sort();
 
+        // The sitemap and llms.txt list the site pages that live in folders
+        // too, and the home page's cards never do.
+        const listedSlugs = [...builtSlugs, ...SITE_PAGES].sort();
         expect([...slugs].sort()).toEqual(builtSlugs);
-        expect(sitemapSlugs).toEqual(builtSlugs);
-        expect(llmsSlugs).toEqual(builtSlugs);
+        expect(sitemapSlugs).toEqual(listedSlugs);
+        expect(llmsSlugs).toEqual(listedSlugs);
     });
 
     test('the home page is never staler than the newest experience', () => {

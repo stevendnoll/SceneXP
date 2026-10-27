@@ -1095,9 +1095,9 @@ function createBoothFriends() {
         }
         if (!child.isMesh || !child.geometry) return;
         const params = child.geometry.parameters || {};
-        if (child.geometry.type === 'SphereGeometry' && params.radius === 0.04 &&
-            child.parent && child.parent.userData &&
-            (child.parent.userData.isArm || child.parent.userData.isForearm)) {
+        // The rig tags its hands (2026-10-26: a hand is a palm, fingers and
+        // a thumb in one mesh now, no longer a 0.04 ball to match).
+        if (child.userData && child.userData.isHand) {
             child.scale.multiplyScalar(1.55);
         } else if (child.geometry.type === 'BoxGeometry' && params.depth === 0.18) {
             child.scale.set(1.5, 1.2, 1.4);

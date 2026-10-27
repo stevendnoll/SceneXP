@@ -102,23 +102,33 @@ describe('the choices', () => {
             .toEqual({ shirt: 'teal', pants: K.DEFAULT_CHOICE.pants, skin: K.DEFAULT_CHOICE.skin, hair: 'blond', length: K.DEFAULT_CHOICE.length });
     });
 
-    test('the welcome card says what they are wearing', () => {
-        expect(K.castLine({ shirt: 'pumpkin', pants: 'denim' })).toBe('Playing in a pumpkin orange shirt and denim blue pants.');
-        expect(K.castLine(null)).toBe('Playing in a rust red shirt and navy pants.');
-        for (const shirt of K.SHIRTS) {
-            for (const pants of K.PANTS) expect(K.castLine({ shirt: shirt.id, pants: pants.id })).not.toMatch(/[—;]/);
-        }
-    });
 });
 
-describe('kept in this browser', () => {
-    test('saved, read back, and forgotten, under one key', () => {
+describe('kept in this browser, until the avatar takes it (2026-10-26)', () => {
+    /** A stand-in for the shared avatar store: what is saved, and whether
+     *  a save is refused. */
+    function avatarStore({ saved = null, refuse = false } = {}) {
+        const s = {
+            saved,
+            saves: 0,
+            hasSaved: () => s.saved !== null,
+            load: () => ({ ...s.saved }),
+            save(avatar) {
+                s.saves++;
+                if (refuse) return false;
+                s.saved = { ...avatar };
+                return true;
+            }
+        };
+        return s;
+    }
+    const CHOICE = { shirt: 'forest', pants: 'charcoal', skin: 'tan', hair: 'black', length: 'buzz' };
+
+    test('a kept choice is read back and forgotten under one key', () => {
         globalThis.localStorage = storage();
         expect(K.loadChoice()).toEqual(K.DEFAULT_CHOICE);
-        const choice = { shirt: 'forest', pants: 'charcoal', skin: 'tan', hair: 'black', length: 'buzz' };
-        expect(K.saveChoice(choice)).toBe(true);
-        expect([...globalThis.localStorage.map.keys()]).toEqual([K.STORAGE_KEY]);
-        expect(K.loadChoice()).toEqual(choice);
+        globalThis.localStorage.setItem(K.STORAGE_KEY, JSON.stringify(CHOICE));
+        expect(K.loadChoice()).toEqual(CHOICE);
         expect(K.forgetChoice()).toBe(true);
         expect(K.loadChoice()).toEqual(K.DEFAULT_CHOICE);
     });
@@ -132,10 +142,58 @@ describe('kept in this browser', () => {
     test('a browser that refuses storage still gets a person, every visit', () => {
         globalThis.localStorage = storage({ refuse: true });
         expect(K.loadChoice()).toEqual(K.DEFAULT_CHOICE);
-        expect(K.saveChoice({ shirt: 'teal' })).toBe(false);
         expect(K.forgetChoice()).toBe(false);
+        expect(K.adoptChoice(avatarStore())).toBeNull();
         delete globalThis.localStorage;
         expect(K.loadChoice()).toEqual(K.DEFAULT_CHOICE);
+        expect(K.adoptChoice(avatarStore())).toBeNull();
+    });
+
+    test('nothing kept anywhere: the usual figure, and nothing written', () => {
+        globalThis.localStorage = storage();
+        const store = avatarStore();
+        expect(K.adoptChoice(store)).toBeNull();
+        expect(store.saves).toBe(0);
+        expect(globalThis.localStorage.map.size).toBe(0);
+    });
+
+    test('a kept choice moves into the avatar as the same person, counts as saved, and the old key goes', async () => {
+        const { fromCastChoice } = await import('../www/shared/js/avatar-1.0.0.js');
+        globalThis.localStorage = storage();
+        globalThis.localStorage.setItem(K.STORAGE_KEY, JSON.stringify(CHOICE));
+        const store = avatarStore();
+        const avatar = K.adoptChoice(store);
+        expect(avatar).toEqual(fromCastChoice(CHOICE));
+        expect(avatar).toMatchObject({ skin: 'tan', hair: 'black', length: 'buzz', shirt: 'forest', bottomColor: 'charcoal' });
+        expect(store.saved).toEqual(avatar);
+        expect(globalThis.localStorage.map.has(K.STORAGE_KEY)).toBe(false);
+        // Next visit: the avatar, and nothing to move.
+        expect(K.adoptChoice(store)).toEqual(avatar);
+        expect(store.saves).toBe(1);
+    });
+
+    test('an outfit kept before shirts and pants moves in its nearest colors', () => {
+        globalThis.localStorage = storage();
+        globalThis.localStorage.setItem(K.STORAGE_KEY, JSON.stringify({ preset: 'runner', skin: 'tan', hair: 'black', length: 'buzz' }));
+        expect(K.adoptChoice(avatarStore())).toMatchObject({ shirt: 'teal', bottomColor: 'black', skin: 'tan' });
+    });
+
+    test('an avatar already saved wins, and the old key still goes', () => {
+        globalThis.localStorage = storage();
+        globalThis.localStorage.setItem(K.STORAGE_KEY, JSON.stringify(CHOICE));
+        const store = avatarStore({ saved: { skin: 'deep' } });
+        expect(K.adoptChoice(store)).toEqual({ skin: 'deep' });
+        expect(store.saves).toBe(0);
+        expect(globalThis.localStorage.map.has(K.STORAGE_KEY)).toBe(false);
+    });
+
+    test('a save the browser refuses keeps the old key for next time, and the person is still worn today', () => {
+        globalThis.localStorage = storage();
+        globalThis.localStorage.setItem(K.STORAGE_KEY, JSON.stringify(CHOICE));
+        const store = avatarStore({ refuse: true });
+        expect(K.adoptChoice(store)).toMatchObject({ skin: 'tan', shirt: 'forest' });
+        expect(store.saved).toBeNull();
+        expect(globalThis.localStorage.map.has(K.STORAGE_KEY)).toBe(true);
     });
 });
 
@@ -175,6 +233,50 @@ describe('on the real three.js', () => {
         }
         // The right hand lands in the same place on every body, at the handle.
         for (const h of hands) expect(h.distanceTo(hands[0])).toBeLessThan(0.02);
+    });
+
+    test('a left-handed operator holds the blower in the left hand, the mirror of the right (2026-10-26)', () => {
+        const handOf = (fig, side) => {
+            let hand = null;
+            fig.group.traverse((o) => {
+                if (o.userData && o.userData.isArm && o.userData.armSide === side) {
+                    const f = o.userData.forearm;
+                    hand = new THREE.Vector3().setFromMatrixPosition(f.children[f.children.length - 1].matrixWorld);
+                }
+            });
+            return hand;
+        };
+        const tubeOf = (fig) => {
+            let tube = null;
+            fig.group.traverse((o) => { if (o.userData && o.userData.tube) tube = o.userData.tube; });
+            return new THREE.Vector3().setFromMatrixPosition(tube.matrixWorld);
+        };
+        const op = { x: 0, z: 0, heading: 0, speed: 0, stride: 0 };
+        const right = Op.createOperatorFigure(C.blower, C.look, { person: K.personConfig(K.DEFAULT_CHOICE) });
+        const left = Op.createOperatorFigure(C.blower, C.look, { person: K.personConfig(K.DEFAULT_CHOICE), hand: 'left' });
+        expect(right.hand).toBe('right');
+        expect(left.hand).toBe('left');
+        for (const arms of ['carry', 'wave', 'back']) {
+            right.update(op, false, 0.3, arms);
+            left.update(op, false, 0.3, arms);
+            right.group.updateMatrixWorld(true);
+            left.group.updateMatrixWorld(true);
+            const r = handOf(right, -1);
+            const l = handOf(left, 1);
+            // The leading hand lands at the mirror of the right's, and the
+            // other hand at the mirror of the right-hander's other hand.
+            expect(`${arms}: ${l.x.toFixed(3)} ${l.y.toFixed(3)} ${l.z.toFixed(3)}`).toBe(`${arms}: ${(-r.x).toFixed(3)} ${r.y.toFixed(3)} ${r.z.toFixed(3)}`);
+            const r2 = handOf(right, 1);
+            const l2 = handOf(left, -1);
+            expect(l2.x).toBeCloseTo(-r2.x, 3);
+        }
+        // The blower's tube hangs on the other side of the body too.
+        right.update(op, false, 0, 'carry');
+        left.update(op, false, 0, 'carry');
+        right.group.updateMatrixWorld(true);
+        left.group.updateMatrixWorld(true);
+        expect(tubeOf(left).x).toBeCloseTo(-tubeOf(right).x, 6);
+        expect(tubeOf(right).x).toBeLessThan(0);
     });
 
     test('the chosen skin, hair, shirt and pants are what is drawn', () => {

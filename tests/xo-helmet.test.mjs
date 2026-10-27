@@ -237,3 +237,184 @@ describe('the silhouette', () => {
         expect(Math.abs(left - right)).toBeLessThan(Math.max(left, right) * 0.25);
     });
 });
+
+/**
+ * THE VISITOR AT QUARTERBACK (specs/avatar M7, 2026-10-26). With a saved
+ * avatar the quarterback is the avatar exactly as the avatar page draws it.
+ * NO HELMET (Steve's QA, 2026-10-27): the first build put the team's helmet
+ * over it, took the hat off and trimmed the hair under the rim, and the
+ * tests here measured every hair style under the shell. Now they measure the
+ * opposite: nothing of the avatar's head is hidden, trimmed or recolored.
+ */
+describe("the visitor's avatar at quarterback", () => {
+    let roster;
+    let A;
+    let figure;
+    const QB = { team: 0, positionGroup: 'qb', position: 'qb' };
+    const WR = { team: 0, positionGroup: 'wr', position: 'wr1' };
+    const HELMET_PARTS = ['helmet-crown', 'helmet-shell', 'helmet-flap', 'helmet-mask', 'helmet-strap'];
+
+    beforeAll(async () => {
+        roster = await import(join(root, 'www/xo/js/roster.js'));
+        A = await import(join(root, 'www/shared/js/avatar-1.0.0.js'));
+        figure = await import(join(root, 'www/shared/js/avatar-figure-1.0.0.js'));
+    });
+
+    /** A figure at life size, at the origin, its matrices current. */
+    const plain = (person) => {
+        person.scale.setScalar(1);
+        person.position.set(0, 0, 0);
+        person.updateMatrixWorld(true);
+        return person;
+    };
+    const shown = (m) => {
+        for (let p = m; p; p = p.parent) if (p.visible === false) return false;
+        return true;
+    };
+
+    test('without a saved avatar the quarterback is exactly a plain player', () => {
+        const outline = (person) => {
+            const out = [];
+            // Everything but the root's own name, which carries the position.
+            person.traverse((o) => out.push(`${o.type}:${o === person ? '' : o.name}:${o.geometry ? o.geometry.type : ''}`));
+            return out;
+        };
+        const qb = roster.buildPlayer(QB, 0, null);
+        const wr = roster.buildPlayer(WR, 0, null);
+        expect(outline(qb)).toEqual(outline(wr));
+        expect(qb.userData.avatar).toBeUndefined();
+        expect(qb.children.filter((o) => o.name === 'jersey-mark').length).toBeGreaterThan(0);
+        expect(roster.helmetRim()).toBeCloseTo(1.367, 2);
+        // The usual quarterback keeps his helmet.
+        for (const name of HELMET_PARTS) {
+            expect(`${name}: ${qb.children.filter((o) => o.name === name).length > 0}`).toBe(`${name}: true`);
+        }
+    });
+
+    test('with one: no helmet, their own hat and glasses, no letter on the shirt, and nothing recolors with the team', () => {
+        const hat = A.HATS.find((h) => h.id !== 'none').id;
+        const qb = plain(roster.buildPlayer(QB, 0, { hat, glasses: 'sunglasses', shirt: 'teal' }));
+        expect(qb.userData.avatar).toBe(true);
+        const head = qb.children.find((o) => o.name === 'head');
+        expect(head).toBeDefined();
+        expect(head.children.find((o) => o.name === 'hat')).toBeDefined();
+        expect(head.children.find((o) => o.name === 'glasses')).toBeDefined();
+        expect(qb.children.filter((o) => o.name === 'jersey-mark')).toHaveLength(0);
+        for (const name of HELMET_PARTS) {
+            expect(`${name}: ${qb.children.filter((o) => o.name === name).length}`).toBe(`${name}: 0`);
+        }
+        // Nothing of theirs is tagged for the team's colors: not the shirt,
+        // and no longer a helmet.
+        let tagged = 0;
+        qb.traverse((o) => {
+            if (o.isMesh && o.material.userData && o.material.userData.kit) tagged++;
+        });
+        expect(tagged).toBe(0);
+        // The field's gloved hands, as every other player's: the rig sizes
+        // the hand's geometry by `handScale`, so the two hands measure alike.
+        const handOf = (person) => {
+            const hand = person.userData.arms[0].userData.forearm.children.find((c) => c.userData && c.userData.isHand);
+            hand.updateMatrixWorld(true);
+            return box(hand).getSize(new THREE.Vector3());
+        };
+        const theirs = handOf(qb);
+        const ours = handOf(plain(roster.buildPlayer(WR, 0, null)));
+        expect(theirs.x).toBeCloseTo(ours.x, 6);
+        expect(theirs.y).toBeCloseTo(ours.y, 6);
+        expect(qb.userData.lift).toBeGreaterThan(0);
+    });
+
+    test('every hair style, on a round and an oval face, is shown whole: nothing hidden, nothing trimmed', () => {
+        // The hair as the avatar page itself draws it, piece for piece and
+        // vertex for vertex, so a hidden piece or a trimmed hank shows.
+        const hairOf = (person) => {
+            const head = person.children.find((o) => o.name === 'head');
+            const hair = head.children.find((o) => o.userData && o.userData.isHair);
+            if (!hair) return null;
+            const pieces = [];
+            hair.traverse((m) => {
+                if (m.isMesh) pieces.push(`${m.name}:${m.geometry.type}:${m.geometry.attributes.position.count}:${shown(m)}`);
+            });
+            return pieces;
+        };
+        let styles = 0;
+        for (const faceShape of A.FACE_SHAPES.map((f) => f.id)) {
+            for (const style of A.HAIR_LENGTHS) {
+                const avatar = { length: style.id, faceShape };
+                const theirs = hairOf(plain(roster.buildPlayer(QB, 0, avatar)));
+                const own = hairOf(plain(figure.createAvatar(avatar, { role: 'customer' }).person));
+                if (!own) continue;
+                styles++;
+                expect(theirs).toEqual(own);
+                expect(theirs.every((p) => p.endsWith(':true'))).toBe(true);
+            }
+        }
+        expect(styles).toBeGreaterThan(10);
+    });
+});
+
+/**
+ * WHICH HAND THROWS (Steve, 2026-10-26): the quarterback was left-handed from
+ * the day the poses were written, and nobody noticed until the visitor's own
+ * avatar took the snap. Right-handed now, and a left-handed avatar throws
+ * with its left. The poses are mirrored, so one side's throw is the other's
+ * with the sideways angles negated.
+ */
+describe('which hand throws', () => {
+    let roster;
+    let CFG;
+    const QB = { team: 0, positionGroup: 'qb', position: 'qb' };
+
+    beforeAll(async () => {
+        roster = await import(join(root, 'www/xo/js/roster.js'));
+        ({ XO_CONFIG: CFG } = await import(join(root, 'www/xo/js/config.js')));
+    });
+
+    const armOn = (person, side) => person.userData.arms.find((a) => a.userData.armSide === side);
+    /** The cocked throw, mid-sweep, which the pose writes exactly (no easing). */
+    const cock = (person) => roster.poseFigure(person, 0, 0, { carry: 'throw', snapT: 1, throwT: 0.5 }, 1 / 60);
+
+    test('the field throws right-handed, and the figure\'s right arm is the negative side', () => {
+        expect(roster.THROWING_SIDE).toBe(-1);
+        const qb = roster.buildPlayer(QB, 0, null);
+        expect(roster.throwSideOf(qb)).toBe(-1);
+        // The rig hangs the right arm at negative x (the figure faces +z).
+        expect(armOn(qb, -1).position.x).toBeLessThan(0);
+        expect(roster.throwSideOf(null)).toBe(-1);
+        expect(roster.throwSideOf({ userData: { throwSide: 2 } })).toBe(-1);
+    });
+
+    test('a left-handed avatar throws with its left, the mirror of the field\'s right', () => {
+        const righty = roster.buildPlayer(QB, 0, { handedness: 'right' });
+        const lefty = roster.buildPlayer(QB, 0, { handedness: 'left' });
+        const plain = roster.buildPlayer(QB, 0, null);
+        expect(roster.throwSideOf(righty)).toBe(-1);
+        expect(roster.throwSideOf(lefty)).toBe(1);
+        cock(righty);
+        cock(lefty);
+        cock(plain);
+        // The right-handed avatar's right arm is cocked exactly as the field's.
+        expect(armOn(righty, -1).rotation.x).toBeCloseTo(armOn(plain, -1).rotation.x, 9);
+        expect(armOn(righty, -1).rotation.z).toBeCloseTo(armOn(plain, -1).rotation.z, 9);
+        // The left-handed one's LEFT arm is that pose mirrored: the lift the
+        // same, the sideways angle the other way, and the elbow the same.
+        expect(armOn(lefty, 1).rotation.x).toBeCloseTo(armOn(plain, -1).rotation.x, 9);
+        expect(armOn(lefty, 1).rotation.z).toBeCloseTo(-armOn(plain, -1).rotation.z, 9);
+        expect(armOn(lefty, 1).userData.forearm.rotation.x).toBeCloseTo(armOn(plain, -1).userData.forearm.rotation.x, 9);
+        // And their off hands match the same way.
+        expect(armOn(lefty, -1).rotation.x).toBeCloseTo(armOn(plain, 1).rotation.x, 2);
+        // A stiff-arm never takes the carrying arm, whichever it is.
+        expect(roster.stiffSide({ stiffArmSide: 1, carry: 'tuck' }, 1)).toBe(-1);
+        expect(roster.stiffSide({ stiffArmSide: -1, carry: 'tuck' }, -1)).toBe(1);
+    });
+
+    test('the held ball sits on the throwing side', async () => {
+        const view = await import(join(root, 'www/xo/js/view.js'));
+        const right = view.carryHold('throw', 1);
+        const left = view.carryHold('throw', 1, 1, 1);
+        expect(right.ball.x).toBeCloseTo(-CFG.pose.throwHold.ball.x, 9);
+        expect(left.ball.x).toBeCloseTo(CFG.pose.throwHold.ball.x, 9);
+        expect(left.ball.y).toBe(right.ball.y);
+        expect(left.aim.x).toBeCloseTo(-right.aim.x, 9);
+    });
+});

@@ -40,6 +40,9 @@ html [lang="en"]
               a [href="/#experiences"]
                 "Experiences"
             li
+              a [href="/avatar/"]
+                "Avatar"
+            li
               a [href="/contact.html"]
                 "Contact"
             li
@@ -94,6 +97,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Your avatar"
             li
               a [href="/contact.html"]
                 "Contact"
@@ -377,6 +383,441 @@ html [lang="en"]
           "John Walker, The Auto Man""
 `;
 
+exports[`www/avatar/index.html 1`] = `
+"<!doctype html>
+html [lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself. Your avatar is kept in your own browser." name="description"]
+    meta [content="#F1EFEA" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/avatar/" rel="canonical"]
+    meta [content="Your Avatar" property="og:title"]
+    meta [content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/avatar/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="A small figure in a yellow hoodie, black pants and red boots, with a dark ivy cap, black-framed glasses and a reddish-brown beard, stands on a round white plinth in a bright white studio." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Your Avatar" name="twitter:title"]
+    meta [content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself." name="twitter:description"]
+    meta [content="https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1" name="twitter:image"]
+    meta [content="A small figure in a yellow hoodie, black pants and red boots, with a dark ivy cap, black-framed glasses and a reddish-brown beard, stands on a round white plinth in a bright white studio." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "@id": "https://www.scenexp.com/avatar/#app",
+        "url": "https://www.scenexp.com/avatar/",
+        "name": "Your Avatar",
+        "datePublished": "2026-10-27",
+        "image": "https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1",
+        "description": "A browser-based 3D avatar maker for SceneXP. Choose a face shape, eyes, eyebrows, a nose, an expression, hair and facial hair in any color, a build, clothes, shoes and a hat on a figure that turns on a plinth in a white studio, and save it. The avatar is kept only in the visitor's own browser, and SceneXP scenes that show the visitor as a person dress them that way. It can be moved to another device with a link or a small file.",
+        "applicationCategory": "EntertainmentApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript. The 3D studio needs WebGL 2.",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
+        "isAccessibleForFree": true,
+        "author": {
+          "@type": "Person",
+          "name": "Steve Noll"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Continuum Commerce LLC"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Your Avatar",
+            "item": "https://www.scenexp.com/avatar/"
+          }
+        ]
+      }
+    title
+      "Your Avatar | SceneXP"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="css/avatar.min.css?v=13" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/studio.min.js" rel="modulepreload"]
+    link [href="js/editor.min.js" rel="modulepreload"]
+    link [href="js/export.min.js" rel="modulepreload"]
+    link [href="js/transfer.min.js" rel="modulepreload"]
+    link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-shapes-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hair-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/recorder-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/dance-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
+    link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="css/avatar.min.css?v=13" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body.av-body
+    h1.sr-only
+      "Your Avatar"
+    noscript
+      div.noscript-fallback
+        h1
+          "Your Avatar"
+        p
+          "This is where you make a figure that looks like you, and it needs JavaScript to run. You choose a face shape, eyes, eyebrows, a nose, an expression, hair in any color, a build, clothes, shoes and a hat on a figure that turns slowly in a bright white studio, and press Save. SceneXP scenes that show you as a person then dress you that way."
+        p
+          "Your avatar is kept only in your own browser. Nothing about it is sent to us."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/"]
+                "More 3D worlds to explore at SceneXP.com"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    div#avatar-app.av-app [hidden]
+      div.av-stage
+        canvas#av-canvas.av-canvas [aria-label="Your avatar, standing on a round plinth in a white studio" role="img"]
+        p#av-stage-status.av-stage-status [aria-live="polite" role="status"]
+        div#av-turn.av-turn
+          button#av-zoom-out.av-turn-btn [aria-label="Zoom out" title="Zoom out" type="button"]
+            svg [aria-hidden="true" viewbox="0 0 24 24"]
+              path [d="M6.5 12h11"]
+          button#av-turn-left.av-turn-btn [aria-label="Turn left" title="Turn left" type="button"]
+            svg [aria-hidden="true" viewbox="0 0 24 24"]
+              path [d="M9 7.5 5 11.5l4 4"]
+              path [d="M5.5 11.5h8a5 5 0 0 1 5 5v1"]
+          button#av-turn-right.av-turn-btn [aria-label="Turn right" title="Turn right" type="button"]
+            svg [aria-hidden="true" viewbox="0 0 24 24"]
+              path [d="m15 7.5 4 4-4 4"]
+              path [d="M18.5 11.5h-8a5 5 0 0 0-5 5v1"]
+          button#av-zoom-in.av-turn-btn [aria-label="Zoom in" title="Zoom in" type="button"]
+            svg [aria-hidden="true" viewbox="0 0 24 24"]
+              path [d="M6.5 12h11M12 6.5v11"]
+      section.av-sheet [aria-labelledby="av-heading"]
+        div.av-top
+          a#av-return.av-return [href="/"]
+            svg.av-return-icon [aria-hidden="true" focusable="false" viewbox="0 0 24 24"]
+              path [d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4"]
+            span#av-return-text
+              "Back to SceneXP"
+        p.av-eyebrow
+          "Your Avatar"
+        h2#av-heading.av-heading
+          "Step into SceneXP as you"
+        p.av-lede
+          "Choose a look, then press Save. Your avatar is kept in this browser, and scenes that show you as a person will dress you this way."
+        div#av-incoming.av-incoming [aria-labelledby="av-incoming-text" hidden role="region"]
+          p#av-incoming-text.av-incoming-text
+            "Keep this avatar?"
+          p#av-incoming-replaces.av-note [hidden]
+            "Keeping it replaces the one saved on this browser."
+          div.av-row
+            button#av-keep.av-primary [type="button"]
+              "Keep this avatar"
+            button#av-decline.av-secondary [type="button"]
+              "Not now"
+        div#av-editor.av-editor
+          div.av-random-row
+            button#av-random.av-secondary.av-random [title="A random look, from every choice there is" type="button"]
+              "Surprise me"
+            button#av-export-open.av-secondary.av-random [title="A picture or a short video of your avatar, for anywhere else" type="button"]
+              "Export my avatar"
+          div#av-tabs.av-tabs [aria-label="Choose what to change" role="tablist"]
+          div#av-panels.av-panels
+        div#av-actions.av-actions
+          button#av-save.av-primary.av-save [type="button"]
+            "Save my avatar"
+          p#av-unsaved.av-note.av-unsaved
+          p#av-status.av-status [aria-live="polite" role="status"]
+          h3.av-subhead
+            "Take it to another device"
+          div.av-row.av-transfer
+            button#av-link.av-secondary [type="button"]
+              "Share a link"
+            button#av-file-save.av-secondary [type="button"]
+              "Save a file"
+            button#av-file-open.av-secondary [type="button"]
+              "Open a file"
+          input#av-file-input [accept=".json,application/json" aria-label="Open an avatar file" hidden tabindex="-1" type="file"]
+          p.av-note.av-privacy
+            "Your avatar stays on this device, and nothing about it is sent to us."
+            a [href="/privacy.html"]
+              "Privacy"
+          button#av-forget.av-forget [hidden type="button"]
+            "Forget my avatar"
+          div#av-forget-confirm.av-confirm [hidden]
+            p.av-confirm-text
+              "Forget your avatar on this browser? Scenes will show the usual figure again."
+            div.av-row
+              button#av-forget-yes.av-secondary.av-danger [type="button"]
+                "Forget it"
+              button#av-forget-no.av-secondary [type="button"]
+                "Keep it"
+          div#av-lab.av-lab [hidden]
+            p.av-note
+              "Lab"
+            button#av-lab-portrait.av-secondary [type="button"]
+              "Save the default portrait"
+    dialog#av-export.av-export [aria-labelledby="av-export-title"]
+      div.av-export-card
+        div.av-export-head
+          h2#av-export-title.av-export-title
+            "Export my avatar"
+          button#av-export-close.av-secondary [type="button"]
+            "Done"
+        div#av-export-tabs.av-tabs.av-export-tabs [aria-label="A picture or a video" role="tablist"]
+          button#av-export-tab-picture.av-tab [aria-controls="av-export-picture" aria-selected="true" role="tab" type="button"]
+            "Picture"
+          button#av-export-tab-clip.av-tab [aria-controls="av-export-clip" aria-selected="false" role="tab" tabindex="-1" type="button"]
+            "Video"
+        div#av-export-picture.av-export-panel [aria-labelledby="av-export-tab-picture" role="tabpanel"]
+          canvas#av-export-preview.av-export-preview [aria-label="A preview of your picture" height="560" role="img" width="560"]
+          div.av-export-turn
+            button#av-export-turn-left.av-secondary.av-export-turn-btn [aria-label="Turn left" title="Turn left" type="button"]
+              svg [aria-hidden="true" viewbox="0 0 24 24"]
+                path [d="M9 7.5 5 11.5l4 4"]
+                path [d="M5.5 11.5h8a5 5 0 0 1 5 5v1"]
+            button#av-export-turn-right.av-secondary.av-export-turn-btn [aria-label="Turn right" title="Turn right" type="button"]
+              svg [aria-hidden="true" viewbox="0 0 24 24"]
+                path [d="m15 7.5 4 4-4 4"]
+                path [d="M18.5 11.5h-8a5 5 0 0 0-5 5v1"]
+          fieldset.av-group
+            legend.av-legend
+              "Framing"
+            div.av-options.av-options-text
+              label.av-option.av-option-text
+                input#av-export-framing-portrait.av-radio [checked name="av-export-framing" type="radio" value="portrait"]
+                span.av-word
+                  "Head and shoulders"
+              label.av-option.av-option-text
+                input#av-export-framing-figure.av-radio [name="av-export-framing" type="radio" value="figure"]
+                span.av-word
+                  "Whole figure"
+          fieldset.av-group
+            legend.av-legend
+              "Background"
+            div.av-options.av-options-text
+              label.av-option.av-option-text
+                input#av-export-background-studio.av-radio [checked name="av-export-background" type="radio" value="studio"]
+                span.av-word
+                  "The studio"
+              label.av-option.av-option-text
+                input#av-export-background-clear.av-radio [name="av-export-background" type="radio" value="clear"]
+                span.av-word
+                  "Transparent"
+          fieldset.av-group
+            legend.av-legend
+              "Border"
+            div.av-options.av-options-text
+              label.av-option.av-option-text
+                input#av-export-border-none.av-radio [checked name="av-export-border" type="radio" value="none"]
+                span.av-word
+                  "None"
+              label.av-option.av-option-text
+                input#av-export-border-ring.av-radio [name="av-export-border" type="radio" value="ring"]
+                span.av-word
+                  "Ring"
+              label.av-option.av-option-text
+                input#av-export-border-bold.av-radio [name="av-export-border" type="radio" value="bold"]
+                span.av-word
+                  "Bold ring"
+              label.av-option.av-option-text
+                input#av-export-border-double.av-radio [name="av-export-border" type="radio" value="double"]
+                span.av-word
+                  "Double ring"
+              label.av-option.av-option-text
+                input#av-export-border-gradient.av-radio [name="av-export-border" type="radio" value="gradient"]
+                span.av-word
+                  "Gradient ring"
+              label.av-option.av-option-text
+                input#av-export-border-dotted.av-radio [name="av-export-border" type="radio" value="dotted"]
+                span.av-word
+                  "Dotted ring"
+              label.av-option.av-option-text
+                input#av-export-border-square.av-radio [name="av-export-border" type="radio" value="square"]
+                span.av-word
+                  "Rounded square"
+              label.av-option.av-option-text
+                input#av-export-border-badge.av-radio [name="av-export-border" type="radio" value="badge"]
+                span.av-word
+                  "Badge"
+          fieldset#av-export-color-group.av-group [hidden]
+            legend.av-legend
+              "Border color"
+            div.av-options.av-options-swatch
+              label.av-option.av-option-swatch [title="Match my shirt"]
+                input#av-export-color-match.av-radio [checked name="av-export-color" type="radio" value="match"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Match my shirt"
+              label.av-option.av-option-swatch [title="White"]
+                input#av-export-color-white.av-radio [name="av-export-color" type="radio" value="white"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "White"
+              label.av-option.av-option-swatch [title="Ink"]
+                input#av-export-color-ink.av-radio [name="av-export-color" type="radio" value="ink"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Ink"
+              label.av-option.av-option-swatch [title="Navy"]
+                input#av-export-color-navy.av-radio [name="av-export-color" type="radio" value="navy"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Navy"
+              label.av-option.av-option-swatch [title="Red"]
+                input#av-export-color-red.av-radio [name="av-export-color" type="radio" value="red"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Red"
+              label.av-option.av-option-swatch [title="Gold"]
+                input#av-export-color-gold.av-radio [name="av-export-color" type="radio" value="gold"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Gold"
+              label.av-option.av-option-swatch [title="Teal"]
+                input#av-export-color-teal.av-radio [name="av-export-color" type="radio" value="teal"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Teal"
+              label.av-option.av-option-swatch [title="Pink"]
+                input#av-export-color-pink.av-radio [name="av-export-color" type="radio" value="pink"]
+                span.av-swatch [aria-hidden="true"]
+                span.sr-only
+                  "Pink"
+              input#av-export-color-custom.av-custom [aria-label="Custom border color" title="Any color" type="color" value="#1d1d1f"]
+          fieldset.av-group
+            legend.av-legend
+              "Size"
+            div.av-options.av-options-text
+              label.av-option.av-option-text
+                input#av-export-size-p512.av-radio [name="av-export-size" type="radio" value="p512"]
+                span.av-word
+                  "512 px"
+              label.av-option.av-option-text
+                input#av-export-size-p1024.av-radio [checked name="av-export-size" type="radio" value="p1024"]
+                span.av-word
+                  "1024 px"
+              label.av-option.av-option-text
+                input#av-export-size-p2048.av-radio [name="av-export-size" type="radio" value="p2048"]
+                span.av-word
+                  "2048 px"
+          div.av-row.av-export-actions
+            button#av-export-picture-save.av-primary [type="button"]
+              "Save picture"
+        div#av-export-clip.av-export-panel [aria-labelledby="av-export-tab-clip" hidden role="tabpanel"]
+          div#av-export-stage.av-export-stage
+          p.av-note
+            "A few seconds of your avatar, with no sound. It loops."
+          fieldset.av-group
+            legend.av-legend
+              "Motion"
+            div.av-options.av-options-text
+              label.av-option.av-option-text
+                input#av-export-motion-none.av-radio [name="av-export-motion" type="radio" value="none"]
+                span.av-word
+                  "None"
+              label.av-option.av-option-text
+                input#av-export-motion-wave.av-radio [checked name="av-export-motion" type="radio" value="wave"]
+                span.av-word
+                  "Wave"
+              label.av-option.av-option-text
+                input#av-export-motion-robot.av-radio [name="av-export-motion" type="radio" value="robot"]
+                span.av-word
+                  "The Robot"
+              label.av-option.av-option-text
+                input#av-export-motion-chicken.av-radio [name="av-export-motion" type="radio" value="chicken"]
+                span.av-word
+                  "The Chicken Dance"
+              label.av-option.av-option-text
+                input#av-export-motion-ymca.av-radio [name="av-export-motion" type="radio" value="ymca"]
+                span.av-word
+                  "The YMCA"
+              label.av-option.av-option-text
+                input#av-export-motion-macarena.av-radio [name="av-export-motion" type="radio" value="macarena"]
+                span.av-word
+                  "The Macarena"
+              label.av-option.av-option-text
+                input#av-export-motion-floss.av-radio [name="av-export-motion" type="radio" value="floss"]
+                span.av-word
+                  "The Floss"
+              label.av-option.av-option-text
+                input#av-export-motion-sprinkler.av-radio [name="av-export-motion" type="radio" value="sprinkler"]
+                span.av-word
+                  "The Sprinkler"
+              label.av-option.av-option-text
+                input#av-export-motion-disco.av-radio [name="av-export-motion" type="radio" value="disco"]
+                span.av-word
+                  "The Disco Point"
+              label.av-option.av-option-text
+                input#av-export-motion-dab.av-radio [name="av-export-motion" type="radio" value="dab"]
+                span.av-word
+                  "The Dab"
+          fieldset.av-group
+            legend.av-legend
+              "Size"
+            div.av-options.av-options-text
+              label.av-option.av-option-text
+                input#av-export-clip-size-c720.av-radio [name="av-export-clip-size" type="radio" value="c720"]
+                span.av-word
+                  "720 square"
+              label.av-option.av-option-text
+                input#av-export-clip-size-c1080.av-radio [checked name="av-export-clip-size" type="radio" value="c1080"]
+                span.av-word
+                  "1080 square"
+              label.av-option.av-option-text
+                input#av-export-clip-size-story.av-radio [name="av-export-clip-size" type="radio" value="story"]
+                span.av-word
+                  "1080 by 1920 story"
+          div.av-row.av-export-actions
+            button#av-export-clip-make.av-primary [type="button"]
+              "Make the clip"
+            button#av-export-clip-save.av-primary [hidden type="button"]
+              "Save video"
+        p#av-export-status.av-status.av-export-status [aria-live="polite" role="status"]
+        p.av-note.av-export-note
+          "Made on this device. Nothing is uploaded, and your avatar is just as it was."
+    script [src="../lib/three/r186/three.min.js" type="module"]
+    script [src="js/main.min.js" type="module"]"
+`;
+
 exports[`www/contact.html 1`] = `
 "<!doctype html>
 html [lang="en"]
@@ -446,6 +887,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Avatar"
             li
               a [aria-current="page" href="/contact.html"]
                 "Contact"
@@ -555,6 +999,9 @@ html [lang="en"]
               a [href="/#experiences"]
                 "Experiences"
             li
+              a [href="/avatar/"]
+                "Your avatar"
+            li
               a [href="/contact.html"]
                 "Contact"
             li
@@ -651,6 +1098,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Avatar"
             li
               a [href="/contact.html"]
                 "Contact"
@@ -980,6 +1430,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Your avatar"
             li
               a [href="/contact.html"]
                 "Contact"
@@ -1433,13 +1886,21 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
     link [href="js/decals.min.js" rel="modulepreload"]
     link [href="js/carve.min.js" rel="modulepreload"]
     link [href="js/livery.min.js" rel="modulepreload"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/recorder-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-shapes-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hair-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/experience.min.css?v=7" rel="stylesheet"]
@@ -3108,9 +3569,12 @@ html [lang="en"]
     link [as="style" href="/css/site.min.css?v=9" rel="preload"]
     link [href="/favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="/css/site.min.css?v=9" rel="stylesheet"]
+    link [href="/shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     script [src="/js/theme.min.js?v=1"]
     script [defer src="/js/nav.min.js?v=1"]
     script [src="/js/home.min.js?v=2" type="module"]
+    link [href="/shared/js/avatar-1.0.0.min.js" rel="modulepreload"]
+    script [src="/js/avatar-chip.min.js" type="module"]
   body
     a.skip-link [href="#main"]
       "Skip to main content"
@@ -3130,6 +3594,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Avatar"
             li
               a [href="/contact.html"]
                 "Contact"
@@ -3636,6 +4103,9 @@ html [lang="en"]
               a [href="/#experiences"]
                 "Experiences"
             li
+              a [href="/avatar/"]
+                "Your avatar"
+            li
               a [href="/contact.html"]
                 "Contact"
             li
@@ -3661,7 +4131,15 @@ html [lang="en"]
             "SceneXP © 2026"
             a [href="https://www.continuumcommercellc.com/" rel="noopener noreferrer" target="_blank" title="View the Continuum Commerce LLC website"]
               "Continuum Commerce LLC"
-            ".""
+            "."
+    aside#avatar-chip [aria-label="Your avatar"]
+      a#avatar-chip-link [href="/avatar/" title="Make an avatar that looks like you"]
+        img#avatar-chip-img [alt="Make your avatar" decoding="async" height="64" loading="lazy" src="/assets/avatar/default.png" width="64"]
+        span#avatar-chip-label [hidden]
+          "Make your avatar"
+      button#avatar-chip-hide [aria-label="Hide this note" hidden type="button"]
+        svg [aria-hidden="true" fill="none" focusable="false" stroke="currentColor" stroke-linecap="round" stroke-width="2.4" viewbox="0 0 24 24"]
+          path [d="M6 6l12 12M18 6 6 18"]"
 `;
 
 exports[`www/interstate/index.html 1`] = `
@@ -4301,7 +4779,7 @@ html [data-ui-theme="ember" lang="en"]
     title
       "Leaf Blower | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=13" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=14" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -4329,6 +4807,8 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/blower.min.js" rel="modulepreload"]
     link [href="js/view.min.js" rel="modulepreload"]
     link [href="js/cast.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
     link [href="js/lab.min.js" rel="modulepreload"]
     link [href="js/stick.min.js" rel="modulepreload"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
@@ -4342,9 +4822,15 @@ html [data-ui-theme="ember" lang="en"]
     link [href="js/hedge.min.js" rel="modulepreload"]
     link [href="js/surfaces.min.js" rel="modulepreload"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-shapes-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hair-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=2" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=13" rel="stylesheet"]
+    link [href="css/experience.min.css?v=14" rel="stylesheet"]
+    link [href="../shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -4425,11 +4911,12 @@ html [data-ui-theme="ember" lang="en"]
               "HELP"
             "The question mark in the corner brings you back here."
         div.welcome-more
-          p.cast-line
-            span#cast-name
-              "Playing in a rust red shirt and navy pants."
-            button#cast-btn.welcome-free.cast-btn [type="button"]
-              "Change your character"
+          p#avatar-playing.cast-line.avatar-line
+            img#avatar-playing-img [alt="" decoding="async" height="28" src="../assets/avatar/default.png" width="28"]
+            span#avatar-playing-text
+              "Playing as the usual figure."
+            a#avatar-playing-link.welcome-free.cast-btn [href="../avatar/?return=/leaves/"]
+              "Make your avatar"
           p#best-line.cast-line.best-line [hidden]
             span#best-text
             button#best-forget.welcome-free.cast-btn [type="button"]
@@ -4478,37 +4965,6 @@ html [data-ui-theme="ember" lang="en"]
       p#cheer-big.cheer-big
       p#cheer-small.cheer-small
       p#cheer-extra.cheer-extra
-    div#cast-modal.hidden [aria-labelledby="cast-title" aria-modal="true" role="dialog"]
-      div.cast-panel
-        h2#cast-title.cast-title
-          "Who is on leaf duty?"
-        fieldset.cast-group
-          legend
-            "Shirt"
-          div#cast-shirts.cast-options.cast-swatches
-        fieldset.cast-group
-          legend
-            "Pants"
-          div#cast-pants.cast-options.cast-swatches
-        fieldset.cast-group
-          legend
-            "Skin tone"
-          div#cast-skins.cast-options.cast-swatches
-        fieldset.cast-group
-          legend
-            "Hair color"
-          div#cast-hair.cast-options.cast-swatches
-        fieldset.cast-group
-          legend
-            "Hair"
-          div#cast-length.cast-options
-        button#cast-done.piece-enter.cast-done [type="button"]
-          "Done"
-        button#cast-forget.cast-forget [type="button"]
-          "Forget my choice"
-        p.cast-note
-          "Your choice is kept in this browser, so they are waiting for you next time."
-        p#cast-status.sr-only [aria-live="polite" role="status"]
     div#end-modal.hidden [aria-describedby="end-line" aria-labelledby="end-title" aria-modal="true" role="dialog"]
       div.modal-backdrop
       div.end-card
@@ -5519,6 +5975,9 @@ html [lang="en"]
               a [href="/#experiences"]
                 "Experiences"
             li
+              a [href="/avatar/"]
+                "Avatar"
+            li
               a [href="/contact.html"]
                 "Contact"
             li
@@ -5587,8 +6046,12 @@ html [lang="en"]
               "Corner Office keeps everything you enter, your applications, interviews, contacts and follow-ups, along with your settings and which things in the office you have already opened, in your browser's local storage, so your office is just as you left it when you come back. None of it is ever sent anywhere: its usage pings say only what kind of thing you did, such as adding an application, and never anything you typed. Its Share my week button makes a picture of your week right on your device, with just how many applications you sent each week and your weekly goal, never a company or a role, and hands it only to your own share sheet or downloads folder. Its Out-tray saves a backup you can keep, and its Settings can clear the office on the spot."
             li
               strong
-                "Your character and best time in Leaf Blower."
-              "The leaf blower game keeps the character you choose, their shirt and pants colors, skin tone, hair color and hair length, in your browser's local storage, so they are waiting for you when you come back. When you clear the whole lawn before the clock runs out, it also keeps your fastest time, just the number of seconds, so you have a time to beat. The Forget my choice button on the character card and the Forget my best time button on the welcome card clear them on the spot."
+                "Your best time in Leaf Blower."
+              "When you clear the whole lawn before the clock runs out, the leaf blower game keeps your fastest time, just the number of seconds, in your browser's local storage, so you have a time to beat. The Forget my best time button on the welcome card clears it on the spot. The person on leaf duty is your avatar, described below. A character chosen on the game's own card before October 26, 2026 is moved into your avatar the next time the game opens, and the old record is removed."
+            li
+              strong
+                "Your avatar."
+              "When you save an avatar on the Your Avatar page, its choices are kept in your browser's local storage: its face, eyes, expression, hair, build, clothes and shoes, each one picked from a short list or, for a color, from your browser's color picker, with no name and nothing typed. Beside them is a small picture of its face, drawn right on your device. Nothing about your avatar is ever sent to us, and it is never in our usage pings. The page's pings, described below, count only what kind of thing was done, such as a save or a change to the hair, and never what was chosen. A link or a file you make to move it to another device holds only those choices, and the part of the link that holds them is never sent to our server. A picture or a short video you export of your avatar is made right on your device and handed only to your own share sheet or downloads folder. The Forget my avatar button on that page clears it on the spot."
             li
               strong
                 "Your cars in Derby Day."
@@ -5628,7 +6091,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated October 22, 2026."
+              "Last updated October 26, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand
@@ -5650,6 +6113,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Your avatar"
             li
               a [href="/contact.html"]
                 "Contact"
@@ -7054,6 +7520,9 @@ html [lang="en"]
               a [href="/#experiences"]
                 "Experiences"
             li
+              a [href="/avatar/"]
+                "Avatar"
+            li
               a [href="/contact.html"]
                 "Contact"
             li
@@ -7201,6 +7670,9 @@ html [lang="en"]
             li
               a [href="/#experiences"]
                 "Experiences"
+            li
+              a [href="/avatar/"]
+                "Your avatar"
             li
               a [href="/contact.html"]
                 "Contact"
@@ -8154,12 +8626,13 @@ html [data-ui-theme="neon" lang="en"]
     title
       "X's and O's | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=18" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=19" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
     link [href="js/field.min.js" rel="modulepreload"]
     link [href="js/roster.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-1.0.0.min.js" rel="modulepreload"]
     link [href="js/colors.min.js" rel="modulepreload"]
     link [href="js/ball.min.js" rel="modulepreload"]
     link [href="js/markers.min.js" rel="modulepreload"]
@@ -8189,7 +8662,9 @@ html [data-ui-theme="neon" lang="en"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="js/telemetry.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
     link [href="js/arm.min.js" rel="modulepreload"]
+    link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
     link [href="js/formations.min.js" rel="modulepreload"]
     link [href="js/routes.min.js" rel="modulepreload"]
     link [href="js/motion.min.js" rel="modulepreload"]
@@ -8197,10 +8672,16 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/fans.min.js" rel="modulepreload"]
     link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
     link [href="js/playbook.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-shapes-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hair-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=18" rel="stylesheet"]
+    link [href="css/experience.min.css?v=19" rel="stylesheet"]
+    link [href="../shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body
@@ -8325,6 +8806,12 @@ html [data-ui-theme="neon" lang="en"]
           ". Good luck."
         p#welcome-resume.card-meta.welcome-resume [hidden]
         div#welcome-actions.card-actions
+        p#avatar-playing.card-meta.avatar-line
+          img#avatar-playing-img [alt="" decoding="async" height="28" hidden loading="lazy" src="../assets/avatar/default.png" width="28"]
+          span#avatar-playing-text
+            "Take the snap at quarterback as yourself."
+          a#avatar-playing-link.welcome-explore [href="../avatar/?return=/xo/"]
+            "Make your avatar"
         p.welcome-explore-row
           a#explore-link.welcome-explore [href="/"]
             "More 3D worlds to explore at SceneXP.com"

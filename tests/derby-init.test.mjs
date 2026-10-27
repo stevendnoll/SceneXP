@@ -53,6 +53,23 @@ function frames(main, seconds, fps = 30) {
     spy.mockRestore();
 }
 
+describe('the volunteer at the weigh-in table is the visitor (2026-10-26)', () => {
+    test('the default avatar when none is saved, dressed as the avatar page opens', async () => {
+        const main = await boot();
+        expect(main.getState().volunteer).toBe('default');
+    });
+
+    test('the saved avatar when there is one, built once', async () => {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        createAvatarStore({ win: null }).save({ skin: 'deep', hat: 'cap' });
+        const main = await boot();
+        expect(main.getState().volunteer).toBe('avatar');
+        // The baked crowd no longer carries a volunteer of its own.
+        const page = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../www/derby/js/main.js', import.meta.url), 'utf8'));
+        expect(page).not.toMatch(/group: 'volunteer', look: lookOf/);
+    });
+});
+
 /** The inputs a choices box holds (each label's first child). */
 const inputsOf = (id) => dom.el(id).children.map((label) => label.children[0]);
 const choose = (input, on = true) => {
