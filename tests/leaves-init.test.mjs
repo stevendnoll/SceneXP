@@ -1564,7 +1564,10 @@ describe('delights and surprises (M6)', () => {
         main = await boot();
         expect(main.getState().soundLevel).toBe(C0.sound.master);
         expect(C0.sound.masterMobile).toBeLessThan(C0.sound.master);
-    });
+        // Two full boots of the yard: under the full suite's parallel workers
+        // this crossed jest's 5 s (Steve, 2026-10-27), as the Halloween test
+        // below would without its allowance. It passes alone in well under it.
+    }, 20000);
 
     // Steve's M6 QA: "I didn't hear the blowing sound while the neighbor was
     // outside blowing."
