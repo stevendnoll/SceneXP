@@ -405,12 +405,12 @@ html [lang="en"]
     meta [content="image/jpeg" property="og:image:type"]
     meta [content="1200" property="og:image:width"]
     meta [content="630" property="og:image:height"]
-    meta [content="A small figure in a rust red shirt and navy pants stands on a round stone plinth in a bright white studio, beside a row of color swatches for skin, hair and clothes." property="og:image:alt"]
+    meta [content="A small figure in a yellow hoodie, black pants and red boots, with a dark ivy cap, black-framed glasses and a reddish-brown beard, stands on a round white plinth in a bright white studio." property="og:image:alt"]
     meta [content="summary_large_image" name="twitter:card"]
     meta [content="Your Avatar" name="twitter:title"]
     meta [content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself." name="twitter:description"]
     meta [content="https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1" name="twitter:image"]
-    meta [content="A small figure in a rust red shirt and navy pants stands on a round stone plinth in a bright white studio, beside a row of color swatches for skin, hair and clothes." name="twitter:image:alt"]
+    meta [content="A small figure in a yellow hoodie, black pants and red boots, with a dark ivy cap, black-framed glasses and a reddish-brown beard, stands on a round white plinth in a bright white studio." name="twitter:image:alt"]
     script [type="application/ld+json"]
       {
         "@context": "https://schema.org",
@@ -418,7 +418,7 @@ html [lang="en"]
         "@id": "https://www.scenexp.com/avatar/#app",
         "url": "https://www.scenexp.com/avatar/",
         "name": "Your Avatar",
-        "datePublished": "2026-10-26",
+        "datePublished": "2026-10-27",
         "image": "https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1",
         "description": "A browser-based 3D avatar maker for SceneXP. Choose a face shape, eyes, eyebrows, a nose, an expression, hair and facial hair in any color, a build, clothes, shoes and a hat on a figure that turns on a plinth in a white studio, and save it. The avatar is kept only in the visitor's own browser, and SceneXP scenes that show the visitor as a person dress them that way. It can be moved to another device with a link or a small file.",
         "applicationCategory": "EntertainmentApplication",

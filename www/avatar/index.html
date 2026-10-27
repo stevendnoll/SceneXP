@@ -11,7 +11,7 @@
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <!-- RELEASED 2026-10-26 (specs/avatar M5): the robots tag that kept the
+    <!-- RELEASED 2026-10-27 (specs/avatar M5): the robots tag that kept the
          page out of search while it was built is gone, and no robots tag
          belongs here. tests/directory.test.mjs lists the page under
          SITE_PAGES: in the sitemap and llms.txt, with no directory card. -->
@@ -32,22 +32,24 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/avatar/">
     <meta property="og:locale" content="en_US">
-    <!-- THE SOCIAL CARD (M5, 2026-10-26): Steve's screenshot of the studio,
-         converted by the house recipe (sRGB profile applied, then stripped,
-         1200x630, q92). JPEG, not WebP (LinkedIn previews no WebP), and
-         exactly one og:image. tests/page-rules.test.mjs opens the file. -->
+    <!-- THE SOCIAL CARD (M5, 2026-10-27): Steve's screenshot of the studio
+         (?clean=1, the figure alone on the plinth), converted by the house
+         recipe (sRGB profile applied, then stripped, 1200x630, JPEG q92 at
+         4:4:4 with a WebP twin). JPEG, not WebP (LinkedIn previews no WebP),
+         and exactly one og:image. og:image:alt describes THIS picture, so it
+         is rewritten with the card. tests/page-rules.test.mjs opens the file. -->
     <meta property="og:image" content="https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1">
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="A small figure in a rust red shirt and navy pants stands on a round stone plinth in a bright white studio, beside a row of color swatches for skin, hair and clothes.">
+    <meta property="og:image:alt" content="A small figure in a yellow hoodie, black pants and red boots, with a dark ivy cap, black-framed glasses and a reddish-brown beard, stands on a round white plinth in a bright white studio.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Your Avatar">
     <meta name="twitter:description" content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself.">
     <meta name="twitter:image" content="https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1">
-    <meta name="twitter:image:alt" content="A small figure in a rust red shirt and navy pants stands on a round stone plinth in a bright white studio, beside a row of color swatches for skin, hair and clothes.">
+    <meta name="twitter:image:alt" content="A small figure in a yellow hoodie, black pants and red boots, with a dark ivy cap, black-framed glasses and a reddish-brown beard, stands on a round white plinth in a bright white studio.">
 
     <!-- Structured data: a web application that is part of SceneXP.
          JSON-LD is a data block (not executed), so it is allowed under the CSP. -->
@@ -58,7 +60,7 @@
       "@id": "https://www.scenexp.com/avatar/#app",
       "url": "https://www.scenexp.com/avatar/",
       "name": "Your Avatar",
-      "datePublished": "2026-10-26",
+      "datePublished": "2026-10-27",
       "image": "https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1",
       "description": "A browser-based 3D avatar maker for SceneXP. Choose a face shape, eyes, eyebrows, a nose, an expression, hair and facial hair in any color, a build, clothes, shoes and a hat on a figure that turns on a plinth in a white studio, and save it. The avatar is kept only in the visitor's own browser, and SceneXP scenes that show the visitor as a person dress them that way. It can be moved to another device with a link or a small file.",
       "applicationCategory": "EntertainmentApplication",
