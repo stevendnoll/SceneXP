@@ -623,8 +623,11 @@ body.av-body {
 
 /* ---- Focus --------------------------------------------------------------- */
 
+/* The dialog stands outside the sheet, so its buttons are named here too
+   (the accessibility sweep, 2026-10-26). */
 .av-sheet a:focus-visible,
 .av-sheet button:focus-visible,
+.av-export button:focus-visible,
 .av-turn-btn:focus-visible {
     outline: 2px solid var(--av-focus);
     outline-offset: 2px;
@@ -739,6 +742,18 @@ body.av-body {
     max-height: 50vh;
     border-radius: 12px;
     background: var(--av-studio);
+}
+
+/* Reduced motion: the clip records unseen (export.js makeClip), laid out
+   as a recording wants but not watched. The status line is the progress. */
+.av-export-stage canvas.is-unseen {
+    opacity: 0;
+}
+
+/* Make the clip, while one is made: it takes no press, and says so. */
+.av-export [aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: progress;
 }
 
 .av-export-actions {

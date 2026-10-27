@@ -193,6 +193,9 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // Custom colors (2026-10-24): still nothing typed, and said so.
     expect(text).toMatch(/from your browser.s color picker, with no name and nothing typed/i);
     expect(text).toMatch(/never in our usage pings/i);
+    // Export my avatar (2026-10-26): the picture or clip is made on the
+    // device and goes only to the visitor's own share sheet or downloads.
+    expect(text).toMatch(/picture or a short video you export of your avatar is made right on your device/i);
     expect(text).toMatch(/Forget my avatar button/i);
 
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure

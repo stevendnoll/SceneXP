@@ -20,8 +20,8 @@
  * (replaceState, never a new history entry), so a reload does not ask again
  * and Back still leaves the page in one press.
  *
- * NO USAGE PINGS YET, and never the avatar's choices (PRD section 9). Whether
- * this page logs anything at all is Steve's call (specs/avatar, M3 notes).
+ * THE USAGE PINGS COUNT KINDS, NEVER CHOICES (PRD section 9, Steve's call of
+ * 2026-10-26): see `pingChange` and the notes above it.
  *
  * `__test__` reaches the page's state for tests/avatar-init.test.mjs.
  */
@@ -370,6 +370,7 @@ function wire() {
         if (!state.exporter) {
             state.exporter = createExporter(CONFIG, {
                 mobile: isMobile(),
+                reducedMotion,
                 onExport: (kind, outcome) => track('export', { kind, outcome })
             });
         }

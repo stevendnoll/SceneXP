@@ -23,6 +23,14 @@
  * own share sheet (sharefile-1.0.0) or downloads folder and nowhere else, and
  * exporting changes nothing about the avatar, saved or not.
  *
+ * WHILE A CLIP IS MADE (the accessibility sweep, 2026-10-26): Make the clip
+ * is marked busy (aria-disabled) and ignores a press, never `disabled`, so
+ * the keyboard focus that pressed it is not dropped on the floor, and the
+ * status line inside the dialog says what is happening. Under reduced
+ * motion the clip is recorded unseen, Derby Day's way: its canvas stays laid
+ * out (a recording wants that) at opacity 0, and the status line is the
+ * progress.
+ *
  * Every browser API is handed in (`doc`, `win`, `nav`, `makeRenderer`,
  * `now`), so tests run the whole path with fakes; the arithmetic and the
  * drawing are pure and exported.
@@ -383,6 +391,8 @@ export function createExporter(config, {
     win = typeof window === 'undefined' ? null : window,
     nav = typeof navigator === 'undefined' ? null : navigator,
     mobile = false,
+    /** Asked as a clip begins: under reduced motion it is recorded unseen. */
+    reducedMotion = () => false,
     /** Hears each picture or clip handed on: `onExport('picture' | 'clip',
      *  'shared' | 'saved' | 'cancelled' | 'failed')`. The page's usage
      *  pings, which count kinds and never sizes, borders or motions. */
@@ -587,12 +597,22 @@ export function createExporter(config, {
         return pickMime((t) => win.MediaRecorder.isTypeSupported(t));
     }
 
+    /** Make the clip reads busy while one is made, and takes no press:
+     *  a flag, not `disabled`, so the focus on it stays put. */
+    function setBusy(busy) {
+        const makeBtn = $(ids.makeClip);
+        if (!makeBtn) return;
+        if (busy) makeBtn.setAttribute('aria-disabled', 'true');
+        else makeBtn.removeAttribute('aria-disabled');
+    }
+
     function stopClip() {
         const r = state.recording;
         if (!r) return;
         r.cancelled = true;
         try { r.rec.recorder.stop(); } catch (e) { /* already stopped */ }
         state.recording = null;
+        setBusy(false);
     }
 
     function clearStage() {
@@ -620,6 +640,8 @@ export function createExporter(config, {
         out.width = size.w;
         out.height = size.h;
         out.setAttribute('aria-hidden', 'true');
+        // Reduced motion: recorded, not watched (the canvas stays laid out).
+        if (out.classList && reducedMotion()) out.classList.add('is-unseen');
         const holder = $(ids.stage);
         if (holder) holder.appendChild(out);
         const g = out.getContext('2d');
@@ -646,8 +668,7 @@ export function createExporter(config, {
             rig = jointPerson(s.figure.person);
             s.figure.group.add(rig.root);
         }
-        const makeBtn = $(ids.makeClip);
-        if (makeBtn) makeBtn.disabled = true;
+        setBusy(true);
         say(WORDS.clipMaking(plan.seconds));
         const recording = { rec, out, g, size, mime, plan, rig, t0: now(), last: 0, waved: false, cancelled: false };
         state.recording = recording;
@@ -679,9 +700,9 @@ export function createExporter(config, {
         };
         win.requestAnimationFrame(step);
         return rec.done.then((blob) => {
-            if (makeBtn) makeBtn.disabled = false;
             if (recording.cancelled) return null;
             state.recording = null;
+            setBusy(false);
             state.clip = { blob, name: clipName(size, extensionOf(mime), plan.motion) };
             if (saveBtn) {
                 saveBtn.hidden = false;
@@ -690,8 +711,8 @@ export function createExporter(config, {
             say(WORDS.clipReady);
             return state.clip;
         }).catch(() => {
-            if (makeBtn) makeBtn.disabled = false;
             state.recording = null;
+            setBusy(false);
             say(WORDS.clipFailed);
             return null;
         });
@@ -837,7 +858,8 @@ export function createExporter(config, {
     on(ids.turnLeft, 'click', () => turnBy(-config.turntable.step));
     on(ids.turnRight, 'click', () => turnBy(config.turntable.step));
     on(ids.savePicture, 'click', savePicture);
-    on(ids.makeClip, 'click', makeClip);
+    // A press while a clip is made is nothing (the button reads busy).
+    on(ids.makeClip, 'click', () => { if (!state.recording) makeClip(); });
     on(ids.saveClip, 'click', saveClip);
 
     return {

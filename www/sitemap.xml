@@ -8,7 +8,7 @@
          restyled. A crawler that trusts a stale date has no reason to come back
          for the new card. Asserted in tests/directory.test.mjs: this date can
          never be older than the newest experience below. -->
-    <lastmod>2026-10-20</lastmod>
+    <lastmod>2026-10-26</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/contact.html</loc>
@@ -20,7 +20,13 @@
   </url>
   <url>
     <loc>https://www.scenexp.com/privacy.html</loc>
-    <lastmod>2026-10-22</lastmod>
+    <lastmod>2026-10-26</lastmod>
+  </url>
+  <url>
+    <!-- A site page in a folder, not an experience: the figure every scene's
+         visitor wears is made here. Released 2026-10-26. -->
+    <loc>https://www.scenexp.com/avatar/</loc>
+    <lastmod>2026-10-26</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/terms.html</loc>
@@ -84,7 +90,7 @@
   </url>
   <url>
     <loc>https://www.scenexp.com/xo/</loc>
-    <lastmod>2026-10-09</lastmod>
+    <lastmod>2026-10-26</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/tornado/</loc>
@@ -96,11 +102,11 @@
   </url>
   <url>
     <loc>https://www.scenexp.com/derby/</loc>
-    <lastmod>2026-10-20</lastmod>
+    <lastmod>2026-10-26</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/leaves/</loc>
-    <lastmod>2026-10-09</lastmod>
+    <lastmod>2026-10-26</lastmod>
   </url>
   <url>
     <loc>https://www.scenexp.com/whitestone/</loc>

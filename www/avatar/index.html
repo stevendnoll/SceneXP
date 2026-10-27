@@ -11,10 +11,10 @@
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <!-- STILL BEING BUILT (specs/avatar M3): kept out of search until its
-         release in M5, as tests/directory.test.mjs requires of every scene in
-         its UNRELEASED list. -->
-    <meta name="robots" content="noindex, nofollow">
+    <!-- RELEASED 2026-10-26 (specs/avatar M5): the robots tag that kept the
+         page out of search while it was built is gone, and no robots tag
+         belongs here. tests/directory.test.mjs lists the page under
+         SITE_PAGES: in the sitemap and llms.txt, with no directory card. -->
     <meta name="description" content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself. Your avatar is kept in your own browser.">
     <meta name="theme-color" content="#F1EFEA">
     <meta name="author" content="Steve Noll">
@@ -32,9 +32,10 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/avatar/">
     <meta property="og:locale" content="en_US">
-    <!-- THE SOCIAL CARD is captured once the look is approved (M5), so it is
-         in tests/page-rules.test.mjs's PENDING_CARDS until then. JPEG, not
-         WebP (LinkedIn previews no WebP), and exactly one og:image. -->
+    <!-- THE SOCIAL CARD (M5, 2026-10-26): Steve's screenshot of the studio,
+         converted by the house recipe (sRGB profile applied, then stripped,
+         1200x630, q92). JPEG, not WebP (LinkedIn previews no WebP), and
+         exactly one og:image. tests/page-rules.test.mjs opens the file. -->
     <meta property="og:image" content="https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1">
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
@@ -57,6 +58,7 @@
       "@id": "https://www.scenexp.com/avatar/#app",
       "url": "https://www.scenexp.com/avatar/",
       "name": "Your Avatar",
+      "datePublished": "2026-10-26",
       "image": "https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1",
       "description": "A browser-based 3D avatar maker for SceneXP. Choose a face shape, eyes, eyebrows, a nose, an expression, hair and facial hair in any color, a build, clothes, shoes and a hat on a figure that turns on a plinth in a white studio, and save it. The avatar is kept only in the visitor's own browser, and SceneXP scenes that show the visitor as a person dress them that way. It can be moved to another device with a link or a small file.",
       "applicationCategory": "EntertainmentApplication",
@@ -103,7 +105,7 @@
     <title>Your Avatar | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/avatar.min.css?v=10" as="style">
+    <link rel="preload" href="css/avatar.min.css?v=11" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -135,7 +137,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/avatar.min.css?v=10">
+    <link rel="stylesheet" href="css/avatar.min.css?v=11">
 
     <!-- When JS is off, the studio can't run: the static fallback below is
          the page. A <noscript> <link> is CSP-safe (no inline styles). -->

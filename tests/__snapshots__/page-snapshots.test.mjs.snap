@@ -391,7 +391,6 @@ html [lang="en"]
     meta [content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"]
     meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
-    meta [content="noindex, nofollow" name="robots"]
     meta [content="Make a figure that looks like you, once, and step into SceneXP's 3D scenes as yourself. Your avatar is kept in your own browser." name="description"]
     meta [content="#F1EFEA" name="theme-color"]
     meta [content="Steve Noll" name="author"]
@@ -419,6 +418,7 @@ html [lang="en"]
         "@id": "https://www.scenexp.com/avatar/#app",
         "url": "https://www.scenexp.com/avatar/",
         "name": "Your Avatar",
+        "datePublished": "2026-10-26",
         "image": "https://www.scenexp.com/avatar/assets/og-avatar.jpg?v=1",
         "description": "A browser-based 3D avatar maker for SceneXP. Choose a face shape, eyes, eyebrows, a nose, an expression, hair and facial hair in any color, a build, clothes, shoes and a hat on a figure that turns on a plinth in a white studio, and save it. The avatar is kept only in the visitor's own browser, and SceneXP scenes that show the visitor as a person dress them that way. It can be moved to another device with a link or a small file.",
         "applicationCategory": "EntertainmentApplication",
@@ -461,7 +461,7 @@ html [lang="en"]
     title
       "Your Avatar | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/avatar.min.css?v=10" rel="preload"]
+    link [as="style" href="css/avatar.min.css?v=11" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -489,7 +489,7 @@ html [lang="en"]
     link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/avatar.min.css?v=10" rel="stylesheet"]
+    link [href="css/avatar.min.css?v=11" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body.av-body
@@ -6051,7 +6051,7 @@ html [lang="en"]
             li
               strong
                 "Your avatar."
-              "When you save an avatar on the Your Avatar page, its choices are kept in your browser's local storage: its face, eyes, expression, hair, build, clothes and shoes, each one picked from a short list or, for a color, from your browser's color picker, with no name and nothing typed. Beside them is a small picture of its face, drawn right on your device. Nothing about your avatar is ever sent to us, and it is never in our usage pings. The page's pings, described below, count only what kind of thing was done, such as a save or a change to the hair, and never what was chosen. A link or a file you make to move it to another device holds only those choices, and the part of the link that holds them is never sent to our server. The Forget my avatar button on that page clears it on the spot."
+              "When you save an avatar on the Your Avatar page, its choices are kept in your browser's local storage: its face, eyes, expression, hair, build, clothes and shoes, each one picked from a short list or, for a color, from your browser's color picker, with no name and nothing typed. Beside them is a small picture of its face, drawn right on your device. Nothing about your avatar is ever sent to us, and it is never in our usage pings. The page's pings, described below, count only what kind of thing was done, such as a save or a change to the hair, and never what was chosen. A link or a file you make to move it to another device holds only those choices, and the part of the link that holds them is never sent to our server. A picture or a short video you export of your avatar is made right on your device and handed only to your own share sheet or downloads folder. The Forget my avatar button on that page clears it on the spot."
             li
               strong
                 "Your cars in Derby Day."
@@ -6091,7 +6091,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated October 22, 2026."
+              "Last updated October 26, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand

@@ -71,9 +71,9 @@ const WITHHELD_CARDS = ['www/interstate/index.html', 'www/seedtoseed/index.html'
 // left with its release on 2026-10-16.
 // Derby Day (2026-10-19, M1 graybox) waits for its card until the hall is
 // dressed and the look approved (M7).
-// Your Avatar (2026-10-23, M3) waits for its card until the studio's look is
-// approved (M5).
-const PENDING_CARDS = ['www/avatar/index.html', 'www/starfall/index.html'];
+// Your Avatar (2026-10-23, M3) waited for its card until the studio's look
+// was approved, and left with its release on 2026-10-26.
+const PENDING_CARDS = ['www/starfall/index.html'];
 
 /** Pages reached only through a link somebody shares, never by browsing.
  *  They carry full preview tags, so the link looks right in a message, and

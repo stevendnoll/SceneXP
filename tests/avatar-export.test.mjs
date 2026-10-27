@@ -589,8 +589,19 @@ describe('the dialog, end to end with fakes', () => {
         const pending = ex.makeClip();
         expect(dom.el('av-export-status').textContent).toBe(X.WORDS.clipMaking(CONFIG.export.clip.seconds));
         expect(ex.state.recording.rig).toBeNull();
-        expect(dom.el('av-export-clip-make').disabled).toBe(true);
+        // Busy, never disabled (the accessibility sweep, 2026-10-26): a
+        // disabled button drops the focus that pressed it. A press while
+        // the clip is made is nothing.
+        const makeBtn = dom.el('av-export-clip-make');
+        expect(makeBtn.disabled).toBeFalsy();
+        expect(makeBtn.getAttribute('aria-disabled')).toBe('true');
+        const first = FakeRecorder.last;
+        fire(makeBtn, 'click');
+        expect(FakeRecorder.last).toBe(first);
+        expect(ex.state.recording).toBeTruthy();
         expect(FakeRecorder.last.options).toEqual({ mimeType: 'video/mp4', videoBitsPerSecond: CONFIG.export.clip.bitrate });
+        // Seen: the recording is watched unless motion is reduced.
+        expect(dom.el('av-export-stage').children[0].classList.contains('is-unseen')).toBe(false);
         // The stage holds the recording canvas, at the story's size.
         const out = dom.el('av-export-stage').children[0];
         expect([out.width, out.height]).toEqual([1080, 1920]);
@@ -623,7 +634,7 @@ describe('the dialog, end to end with fakes', () => {
         expect(ex.state.clip).toBe(clip);
         expect(dom.el('av-export-clip-save').hidden).toBe(false);
         expect(dom.el('av-export-clip-save').textContent).toBe('Save video');
-        expect(dom.el('av-export-clip-make').disabled).toBe(false);
+        expect(dom.el('av-export-clip-make').getAttribute('aria-disabled')).toBeNull();
         expect(dom.el('av-export-status').textContent).toBe(X.WORDS.clipReady);
         expect(await ex.saveClip()).toBe('saved');
         expect(made[made.length - 1].download).toBe('scenexp-avatar-wave-1080x1920.mp4');
@@ -653,10 +664,24 @@ describe('the dialog, end to end with fakes', () => {
         frame();
         const danced = await dancing;
         expect(danced.name).toBe('scenexp-avatar-floss-720x720.mp4');
-        // Closing mid-clip cancels it quietly.
+        // Closing mid-clip cancels it quietly, and the button is free again.
         const again = ex.makeClip();
+        expect(dom.el('av-export-clip-make').getAttribute('aria-disabled')).toBe('true');
         ex.close();
         expect(await again).toBeNull();
+        expect(dom.el('av-export-clip-make').getAttribute('aria-disabled')).toBeNull();
+        // Under reduced motion the clip is recorded unseen (Derby Day's way,
+        // the accessibility sweep 2026-10-26): the canvas is laid out in
+        // the stage and drawn, with the unseen class on it.
+        const still = exporter({ reducedMotion: () => true });
+        still.open({});
+        const quiet = still.makeClip();
+        const unseen = dom.el('av-export-stage').children[0];
+        expect(unseen.classList.contains('is-unseen')).toBe(true);
+        frame();
+        expect(still.state.recording.angle).toBe(0);
+        still.close();
+        expect(await quiet).toBeNull();
     });
 
     test('a browser that cannot record is told so, and a recorder that fails too', async () => {
@@ -677,7 +702,7 @@ describe('the dialog, end to end with fakes', () => {
         window.Blob = Blob;
         expect(await ex.makeClip()).toBeNull();
         expect(dom.el('av-export-status').textContent).toBe(X.WORDS.clipFailed);
-        expect(dom.el('av-export-clip-make').disabled).toBe(false);
+        expect(dom.el('av-export-clip-make').getAttribute('aria-disabled')).toBeNull();
     });
 });
 
