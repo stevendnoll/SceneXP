@@ -210,9 +210,12 @@ export function handStandIn(geometry) {
 }
 
 /** ONE MESH, BAKED: its lighter geometry moved to where it sits in the
- *  figure, with only the attributes a crowd is drawn with. */
-function bake(mesh) {
-    const source = mesh.userData.isHand ? handStandIn(mesh.geometry) : lighter(mesh.geometry);
+ *  figure, with only the attributes a crowd is drawn with. A hand is the
+ *  stand-in box unless `realHands` (the rig's fingered hand, for the few
+ *  members who stand near the camera: Steve's QA, 2026-10-26, the derby's
+ *  families' hands read as flat paddles up close). */
+function bake(mesh, { realHands = false } = {}) {
+    const source = mesh.userData.isHand && !realHands ? handStandIn(mesh.geometry) : lighter(mesh.geometry);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', source.attributes.position.clone());
     g.setAttribute('normal', source.attributes.normal.clone());
@@ -318,12 +321,12 @@ function poseArms(person, pose, rest, armPoses) {
 }
 
 /** Every mesh under `root` that passes `keep`, sorted into pieces and baked. */
-function collect(root, keep) {
+function collect(root, keep, options = {}) {
     const out = {};
     root.traverse((obj) => {
         if (!obj.isMesh || !keep(obj)) return;
         const piece = pieceFor(obj);
-        (out[piece] = out[piece] || []).push(bake(obj));
+        (out[piece] = out[piece] || []).push(bake(obj, options));
     });
     return out;
 }
@@ -366,14 +369,19 @@ function handsOf(person, lift) {
  *   body.fixed                             vertex coloured
  *   hair[style]                            tinted per member
  *   arms[pose].sleeve / arms[pose].hand    tinted per member
+ *   arms[pose].fingers                     with `realHands`: the rig's own
+ *                                          fingered hands, for a member whose
+ *                                          look says `hands: 'real'`
  *   hands[pose]                            [[x, y, z], [x, y, z]], each arm's hand
  *   eyeHeight, top                         metres above the soles
  *
  * `scale` sizes the figure, `poses` names the arm poses to bake ('down' and
- * any of `armPoses`), `figure` adds createPerson options. Returns null where
- * there is no real geometry to read (the test stub).
+ * any of `armPoses`), `figure` adds createPerson options. `realHands` also
+ * bakes the fingered hands (some 1,100 triangles a pair against the box's
+ * 24), for a scene whose few near members would show the box. Returns null
+ * where there is no real geometry to read (the test stub).
  */
-export function buildCrowdParts({ scale = 1, poses = POSES, armPoses = ARM_POSES, hair = HAIR, figure = FIGURE } = {}) {
+export function buildCrowdParts({ scale = 1, poses = POSES, armPoses = ARM_POSES, hair = HAIR, figure = FIGURE, realHands = false } = {}) {
     const probe = new THREE.SphereGeometry(1, 3, 2);
     const real = probe.attributes && probe.attributes.position
         && ArrayBuffer.isView(probe.attributes.position.array);
@@ -408,6 +416,10 @@ export function buildCrowdParts({ scale = 1, poses = POSES, armPoses = ARM_POSES
             sleeve: mergePieces([...(limb.sleeve || []), ...(limb.shirt || [])], { lift }),
             hand: mergePieces(limb.skin || [], { lift })
         };
+        if (realHands) {
+            const fingered = collect(person, (m) => onArm(m, person) && m.userData.isHand, { realHands: true });
+            parts.arms[pose].fingers = mergePieces(fingered.skin || [], { lift });
+        }
         parts.hands[pose] = handsOf(person, lift);
     }
 
@@ -432,9 +444,11 @@ export function buildCrowdParts({ scale = 1, poses = POSES, armPoses = ARM_POSES
     return parts;
 }
 
-/** Vertices and triangles in one member as drawn in one pose, for a budget. */
-export function crowdCost(parts, pose = 'down', hair = 'short') {
-    const list = [...Object.values(parts.body), parts.hair[hair], parts.arms[pose].sleeve, parts.arms[pose].hand];
+/** Vertices and triangles in one member as drawn in one pose, for a budget
+ *  (with the fingered hands, where they are baked and `realHands` asks). */
+export function crowdCost(parts, pose = 'down', hair = 'short', { realHands = false } = {}) {
+    const arm = parts.arms[pose];
+    const list = [...Object.values(parts.body), parts.hair[hair], arm.sleeve, realHands && arm.fingers ? arm.fingers : arm.hand];
     let vertices = 0;
     let triangles = 0;
     for (const g of list) {
@@ -573,8 +587,10 @@ export function clapAt(t, { phase = 0, rate = 15, still = false } = {}) {
  * `pose` (pitch tips a held prop toward the front, heldCheerAt); a member
  * is redrawn only when that changes. `hop` is a share of `hopHeight`
  * meters, `lean` a sway from the feet. A member is { look: { shirt, pants,
- * skin, hair, style (or null), scale }, at: { x, y, z, ry }, ... } with
- * anything else the scene's own.
+ * skin, hair, style (or null), scale, hands }, at: { x, y, z, ry }, ... }
+ * with anything else the scene's own. A look's `hands: 'real'` draws the
+ * rig's fingered hands in place of the box, where the parts were baked
+ * with `realHands` (the derby's families, who stand by the camera).
  *
  * PROPS: `propFor(member)` gives { mesh, pose, hand ('right' or 'both'),
  * made (things to dispose) } or null; the mesh is set in the hand the pose
@@ -613,8 +629,13 @@ export function createCrowdView({ parts, poses, poseOf, propFor = () => null, ho
     };
     const body = Object.fromEntries(Object.entries(parts.body).map(([k, g]) => [k, instanced(g, k === 'fixed')]));
     const hair = Object.fromEntries(Object.keys(parts.hair).map((s) => [s, instanced(parts.hair[s])]));
-    const arms = Object.fromEntries(poses.map((p) => [p, { sleeve: instanced(parts.arms[p].sleeve), hand: instanced(parts.arms[p].hand) }]));
-    const pieces = [...Object.values(body), ...Object.values(hair), ...poses.flatMap((p) => [arms[p].sleeve, arms[p].hand])];
+    const arms = Object.fromEntries(poses.map((p) => [p, {
+        sleeve: instanced(parts.arms[p].sleeve),
+        hand: instanced(parts.arms[p].hand),
+        fingers: parts.arms[p].fingers ? instanced(parts.arms[p].fingers) : null
+    }]));
+    const pieces = [...Object.values(body), ...Object.values(hair), ...poses.flatMap((p) => [arms[p].sleeve, arms[p].hand, ...(arms[p].fingers ? [arms[p].fingers] : [])])];
+    const realHands = (m) => m.look.hands === 'real';
     const props = new THREE.Group();
     group.add(props);
 
@@ -673,6 +694,7 @@ export function createCrowdView({ parts, poses, poseOf, propFor = () => null, ho
                 for (const p of poses) {
                     arms[p].sleeve.setColorAt(i, colour(L.shirt));
                     arms[p].hand.setColorAt(i, colour(L.skin));
+                    if (arms[p].fingers) arms[p].fingers.setColorAt(i, colour(L.skin));
                 }
                 for (const s of Object.keys(hair)) hair[s].setColorAt(i, colour(L.hair));
                 const prop = propFor(m);
@@ -704,9 +726,15 @@ export function createCrowdView({ parts, poses, poseOf, propFor = () => null, ho
                 const mat = away ? zero : matrixOf(m, p.hop, lean);
                 for (const k of Object.keys(body)) body[k].setMatrixAt(i, mat);
                 for (const s of Object.keys(hair)) hair[s].setMatrixAt(i, m.look.style === s ? mat : zero);
+                // The hands: the box, or the fingered pair where the look
+                // asks and the pose has them baked.
+                const fingered = realHands(m);
                 for (const pose of poses) {
-                    arms[pose].sleeve.setMatrixAt(i, pose === p.pose ? mat : zero);
-                    arms[pose].hand.setMatrixAt(i, pose === p.pose ? mat : zero);
+                    const on = pose === p.pose;
+                    const real = on && fingered && Boolean(arms[pose].fingers);
+                    arms[pose].sleeve.setMatrixAt(i, on ? mat : zero);
+                    arms[pose].hand.setMatrixAt(i, on && !real ? mat : zero);
+                    if (arms[pose].fingers) arms[pose].fingers.setMatrixAt(i, real ? mat : zero);
                 }
                 const prop = m._prop;
                 if (!prop) return;

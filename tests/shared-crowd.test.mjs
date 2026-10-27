@@ -76,6 +76,30 @@ describe('the parts', () => {
         expect(Crowd.FIGURE).toEqual({ role: 'customer', shoulderRound: 0.35, handScale: 1.3 });
         const xo = Crowd.buildCrowdParts();
         expect(Object.keys(xo.arms)).toEqual(['down', 'up', 'cards']);
+        // No fingered hands unless asked: the stands keep the box.
+        expect(xo.arms.down.fingers).toBeUndefined();
+    });
+
+    test('with realHands the fingered hands are baked beside the box, for the few who stand near (2026-10-26)', () => {
+        const near = Crowd.buildCrowdParts({ poses: ['down', 'up'], realHands: true });
+        const tri = (g) => g.index.count / 3;
+        for (const pose of ['down', 'up']) {
+            // The box pair is still the box pair; the fingered pair is the
+            // rig's own hands, some hundreds of triangles each.
+            expect(tri(near.arms[pose].hand)).toBe(tri(parts.arms[pose].hand));
+            expect(tri(near.arms[pose].hand)).toBeLessThan(30);
+            expect(tri(near.arms[pose].fingers)).toBeGreaterThan(800);
+            // Both pairs reach the same place: the box is the hand's own
+            // box, and turned with a raised hand its corners overhang the
+            // fingers by a centimeter at most.
+            const a = box(near.arms[pose].hand);
+            const b = box(near.arms[pose].fingers);
+            expect(Math.abs(a.max.y - b.max.y)).toBeLessThan(0.02);
+            expect(Math.abs(a.min.y - b.min.y)).toBeLessThan(0.02);
+        }
+        // The budget counts whichever pair a member wears.
+        expect(Crowd.crowdCost(near, 'down', 'short', { realHands: true }).triangles)
+            .toBeGreaterThan(Crowd.crowdCost(near).triangles + 800);
     });
 });
 

@@ -298,9 +298,11 @@ describe('drawn, against real three', () => {
         const crowd = Cr.createCrowd(C, { capacity: 40 });
         expect(crowd.ready).toBe(true);
         const meshes = crowd.group.children.filter((c) => c.isInstancedMesh);
-        // Four body pieces, three hair styles, two pieces for each arm pose.
-        expect(meshes.length).toBe(4 + 3 + 2 * Cr.POSES.length);
-        const kid = { group: 'mine', phase: 0, look: Cr.lookOf({}, { kid: true }, C), at: { x: 1, y: 0, z: -1, ry: 0 }, prop: 'sign', sign: 'GO!' };
+        // Four body pieces, three hair styles, three pieces for each arm
+        // pose: the sleeve, the box hands and, since 2026-10-26, the
+        // fingered hands the families wear.
+        expect(meshes.length).toBe(4 + 3 + 3 * Cr.POSES.length);
+        const kid = { group: 'mine', phase: 0, look: { ...Cr.lookOf({}, { kid: true }, C), hands: 'real' }, at: { x: 1, y: 0, z: -1, ry: 0 }, prop: 'sign', sign: 'GO!' };
         const fan = { group: 'crowd', phase: 0, keen: true, look: Cr.lookOf({ length: 'bald' }, {}, C), at: { x: 2, y: 0.42, z: -2.2, ry: 0.2 } };
         crowd.set([kid, fan]);
         for (const m of meshes) expect(m.count).toBe(2);
@@ -324,6 +326,19 @@ describe('drawn, against real three', () => {
         expect(scaleOf(down, 0)).toBe(0);
         expect(scaleOf(down, 1)).toBeCloseTo(1, 6);
         expect(scaleOf(up, 1)).toBe(0);
+        // The kid (a family member) wears the fingered hands in that pose
+        // and not the box; the fan on the bleachers the box and not the
+        // fingers (Steve's QA, 2026-10-26: flat paddles by the finish).
+        expect(crowd.parts.arms.hold.fingers).toBeTruthy();
+        expect(scaleOf(byName(crowd.parts.arms.hold.fingers), 0)).toBeCloseTo(C.crowd.kidScale, 6);
+        expect(scaleOf(byName(crowd.parts.arms.hold.hand), 0)).toBe(0);
+        expect(scaleOf(byName(crowd.parts.arms.down.hand), 1)).toBeCloseTo(1, 6);
+        expect(scaleOf(byName(crowd.parts.arms.down.fingers), 1)).toBe(0);
+        // And the families' looks ask for them, the bleachers' do not.
+        const Fam = await import('../www/derby/js/family.js');
+        for (const m of Fam.familyMembers(null, 'Comet', C)) expect(m.look.hands).toBe('real');
+        for (const id of Object.keys(C.families)) for (const m of Cr.familyOf(id, C)) expect(m.look.hands).toBe('real');
+        for (const look of Cr.crowdLooks(5, C)) expect(look.hands).toBeUndefined();
         // The bald fan wears no hair, the kid one style only.
         const hairs = Object.values(crowd.parts.hair).map(byName);
         expect(hairs.filter((h) => scaleOf(h, 1) > 0)).toHaveLength(0);

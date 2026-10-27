@@ -43,9 +43,11 @@ export function createFamilyStore() {
 export function familyMembers(family, carName, C = DERBY_CONFIG) {
     const f = normalizeFamily(family);
     const words = `GO ${String(carName || '').toUpperCase()}!`;
+    // The visitor's own family stands nearest the camera, so it wears the
+    // rig's fingered hands rather than the crowd's box (2026-10-26).
     return [
-        { look: lookOf(f.grownUp, {}, C), prop: null, sign: null },
-        { look: lookOf(f.kid, { kid: true }, C), prop: 'sign', sign: words.length > 18 ? 'GO GO GO!' : words }
+        { look: { ...lookOf(f.grownUp, {}, C), hands: 'real' }, prop: null, sign: null },
+        { look: { ...lookOf(f.kid, { kid: true }, C), hands: 'real' }, prop: 'sign', sign: words.length > 18 ? 'GO GO GO!' : words }
     ];
 }
 
