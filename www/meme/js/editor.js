@@ -157,10 +157,13 @@ export function slotLabel(slots, k, roleNames = []) {
 /**
  * The people in `container`: a row a role saying who wears it (`noteFor
  * (role)`), with the friend's row offering a pasted link and an opened
- * file, and a random role's row a reshuffle. `onLink(text)`, `onFile()`
- * and `onReshuffle(roleId)` hear the presses. Returns the rows.
+ * file, and a random role's row a reshuffle and, beside it, Customize (M8):
+ * a disclosure button over an empty space (`custom`) the page builds the
+ * avatar editor into, open for the role `customizing` names. `onLink(text)`,
+ * `onFile()`, `onReshuffle(roleId)` and `onCustomize(roleId)` hear the
+ * presses. Returns the rows.
  */
-export function buildPeople(container, { roles, noteFor, onLink = () => {}, onFile = () => {}, onReshuffle = () => {}, doc = typeof document === 'undefined' ? null : document }) {
+export function buildPeople(container, { roles, noteFor, customizing = null, onLink = () => {}, onFile = () => {}, onReshuffle = () => {}, onCustomize = () => {}, doc = typeof document === 'undefined' ? null : document }) {
     empty(container);
     const rows = [];
     for (const role of roles) {
@@ -211,14 +214,36 @@ export function buildPeople(container, { roles, noteFor, onLink = () => {}, onFi
             row.input = input;
         }
         if (role.cast === 'random') {
+            // Someone else for a stranger at random, Customize to dress this
+            // one by hand (Steve, 2026-10-28: memes are oddly specific).
+            const buttons = doc.createElement('div');
+            buttons.className = 'mm-row';
             const again = doc.createElement('button');
             again.type = 'button';
             again.className = 'mm-secondary mm-small';
             again.id = `mm-reshuffle-${role.id}`;
             again.textContent = 'Someone else';
             again.addEventListener('click', () => onReshuffle(role.id));
-            item.appendChild(again);
+            const open = role.id === customizing;
+            const dress = doc.createElement('button');
+            dress.type = 'button';
+            dress.className = 'mm-secondary mm-small';
+            dress.id = `mm-customize-${role.id}-button`;
+            dress.textContent = 'Customize';
+            dress.setAttribute('aria-expanded', open ? 'true' : 'false');
+            dress.setAttribute('aria-controls', `mm-customize-${role.id}`);
+            dress.addEventListener('click', () => onCustomize(role.id));
+            buttons.appendChild(again);
+            buttons.appendChild(dress);
+            item.appendChild(buttons);
+            const custom = doc.createElement('div');
+            custom.className = 'mm-customize';
+            custom.id = `mm-customize-${role.id}`;
+            custom.hidden = !open;
+            item.appendChild(custom);
             row.reshuffle = again;
+            row.customize = dress;
+            row.custom = custom;
         }
         container.appendChild(item);
         rows.push(row);

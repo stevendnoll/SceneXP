@@ -15,8 +15,14 @@
  * of words stays readable in a chat), the faces by cell joined with `,`
  * (`-` for the template's own), and, only when one was picked, the
  * background color as six hex digits (M8: `.../-,-,-,-,-,-,-,-/1b2a55`; a
- * link without it reads as the template's own, so older links still do). `a=` is the avatar part's own link, so
- * the avatar page would read the same fragment.
+ * link without it reads as the template's own, so older links still do).
+ * `a=` is the avatar part's own link, so the avatar page would read the
+ * same fragment. The other people the maker chose (M8: a friend pasted,
+ * opened or brought along, anyone dressed by hand with Customize) follow,
+ * each in the avatar link's own shape under its role's id
+ * (`&friend=1.deep.black...&other=1.fair....`), so the meme opens with the
+ * very people it was made with; a crowd role with nobody chosen is left
+ * out, and the friend who opens it gets someone from their own crowd.
  *
  * NOTHING IN A LINK IS TRUSTED. The decoder gives up on anything over
  * `max`, an unknown version, no template or an unknown one, and hands what
@@ -56,16 +62,27 @@ export function encodeMeme(meme) {
     return `m=${REMIX_VERSION}/${meme.template}/${captions}/${faces}${tint}`;
 }
 
+/** The people part of a link: each chosen person's avatar link under the
+ *  role's id (`friend=1.deep....`), the friend first, then the cast by
+ *  role id. Empty for nobody. */
+export function encodePeople(meme) {
+    const people = [];
+    if (meme.friend) people.push(['friend', meme.friend]);
+    for (const id of Object.keys(meme.cast || {}).sort()) people.push([id, meme.cast[id]]);
+    return people.map(([id, a]) => `&${id}=${encodeLink(a).slice(2)}`).join('');
+}
+
 /**
- * The fragment (without the `#`) for `meme` and the maker's `avatar`
- * (null for none), trimmed to `max` characters by shortening the longest
- * caption a character at a time.
+ * The fragment (without the `#`) for `meme` (its people with it) and the
+ * maker's `avatar` (null for none), trimmed to `max` characters by
+ * shortening the longest caption a character at a time.
  */
 export function encodeRemix(meme, avatar = null, { max = 2000 } = {}) {
     const captions = meme.captions.slice();
+    const people = encodePeople(meme);
     const build = () => {
         const part = encodeMeme({ ...meme, captions });
-        return avatar ? `${part}&${encodeLink(avatar)}` : part;
+        return `${avatar ? `${part}&${encodeLink(avatar)}` : part}${people}`;
     };
     let out = build();
     while (out.length > max) {
@@ -81,9 +98,10 @@ export function encodeRemix(meme, avatar = null, { max = 2000 } = {}) {
 /**
  * The meme and the avatar a fragment carries (`#m=...`, with or without
  * the `#`, among other `&` parts), as `{ meme, avatar }` with `meme` made
- * valid by `rules` (state.js's normalizeMeme's), or null when there is no
- * meme in it, it is too long, or its version or template is not one this
- * reads. `avatar` is null when the link carries none.
+ * valid by `rules` (state.js's normalizeMeme's), the people the maker
+ * chose in its `friend` and `cast`, or null when there is no meme in it, it
+ * is too long, or its version or template is not one this reads. `avatar`
+ * is null when the link carries none.
  */
 export function decodeRemix(hash, rules, { max = 2000, normalize } = {}) {
     if (typeof hash !== 'string' || hash.length > max) return null;
@@ -96,10 +114,25 @@ export function decodeRemix(hash, rules, { max = 2000, normalize } = {}) {
     const captions = decoded.some((c) => c === null) ? [] : decoded;
     const expressions = faceText === '' ? [] : faceText.split(',').map((f) => (f === '-' ? null : f));
     const tint = /^[0-9a-fA-F]{6}$/.test(tintText) ? `#${tintText}` : null;
-    const meme = normalize({ template, captions, expressions, tint }, rules);
-    // The avatar part alone goes to the avatar's decoder: its own ceiling
-    // is sized for a link that holds nothing else.
-    const avatarPart = hash.replace(/^#/, '').split('&').find((p) => p.startsWith('a='));
+    // Each part alone goes to the avatar's decoder: its own ceiling is sized
+    // for a link that holds nothing else. A person is read for a crowd role
+    // of this template alone, under the role's own id.
+    const parts = hash.replace(/^#/, '').split('&');
+    const personOf = (id) => {
+        const p = parts.find((x) => x.startsWith(`${id}=`));
+        return p ? decodeLink(`a=${p.slice(id.length + 1)}`) : null;
+    };
+    const roles = rules.templates.find((t) => t.id === template).roles.filter((r) => r.cast === 'random');
+    let friend = null;
+    const cast = {};
+    for (const role of roles) {
+        const person = personOf(role.id);
+        if (!person) continue;
+        if (role.id === 'friend') friend = person;
+        else cast[role.id] = person;
+    }
+    const meme = normalize({ template, captions, expressions, tint, friend, cast }, rules);
+    const avatarPart = parts.find((p) => p.startsWith('a='));
     return { meme, avatar: avatarPart ? decodeLink(avatarPart) : null };
 }
 

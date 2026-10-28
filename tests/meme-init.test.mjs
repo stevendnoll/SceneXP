@@ -539,7 +539,7 @@ describe('the page', () => {
         fire(input, 'input');
         main.__test__.onExpression(0, 'rage');
         const kept = JSON.parse(globalThis.localStorage.getItem('scenexp-meme'));
-        expect(kept).toEqual({ v: 1, template: 'thenNow', captions: ['', 'now'], expressions: ['rage', null], tint: null, friend: null });
+        expect(kept).toEqual({ v: 1, template: 'thenNow', captions: ['', 'now'], expressions: ['rage', null], tint: null, friend: null, cast: {} });
         // Back again: the same meme, said so, the chip and the figure right.
         dom.uninstall();
         installThree();
@@ -794,11 +794,12 @@ describe('the page', () => {
         expect(rows[1].children[1].textContent).toBe(main.WORDS.personRandom);
         expect(dom.el('mm-captions').children.map((f) => f.children[0].textContent)).toEqual(['Label on You', 'Label on A Friend', 'Label on Someone']);
         // The crowd member is kept for the visit, and a reshuffle changes them.
-        // (The stub does not find a built element by id: the rows are walked.)
+        // (The stub does not find a built element by id: the rows are walked,
+        // the buttons sitting in a row of their own since M8's Customize.)
         const someone = main.avatarForRole('other');
         expect(main.avatarForRole('other')).toBe(someone);
         const wasFigure = state.stage.panels[0].figures[2];
-        const reshuffleOf = (row) => row.children.find((c) => c.id && c.id.startsWith('mm-reshuffle-'));
+        const reshuffleOf = (row) => row.children.flatMap((c) => [c, ...(c.children || [])]).find((c) => c.id && c.id.startsWith('mm-reshuffle-'));
         fire(reshuffleOf(dom.el('mm-people').children[2]), 'click');
         expect(main.avatarForRole('other')).not.toBe(someone);
         expect(state.stage.panels[0].figures[2]).not.toBe(wasFigure);
@@ -844,6 +845,171 @@ describe('the page', () => {
         state.friend = { skin: 'deep' };
         main.showTemplate(state.template, main.currentMeme());
         expect(state.stage.panels[0].figures[1].avatar.skin).toBe('deep');
+    });
+
+    // The People tab's rows (the stub does not find a built element by id,
+    // so the rows are walked).
+    const people = () => dom.el('mm-people').children;
+    const all = (el) => [el, ...(el.children || []).flatMap(all)];
+    const buttonIn = (row, text) => all(row).find((c) => c.tagName && c.tagName.toLowerCase() === 'button' && c.textContent === text);
+    const spaceOf = (row) => row.children.find((c) => c.className === 'mm-customize');
+
+    test('Customize dresses anyone but you with the avatar editor: live on the stage, kept, carried in the link, and given back to the crowd by Someone else (M8)', async () => {
+        let main = await boot();
+        let { state } = main.__test__;
+        main.pickTemplate('headTurn');
+        // You have no Customize: the lead is your own avatar, changed on the
+        // avatar page.
+        expect(buttonIn(people()[0], 'Customize')).toBeUndefined();
+        expect(buttonIn(people()[1], 'Customize')).toBeTruthy();
+        const open = buttonIn(people()[2], 'Customize');
+        expect(buttonIn(people()[2], 'Someone else')).toBeTruthy();
+        expect(open.getAttribute('aria-expanded')).toBe('false');
+        expect(open.getAttribute('aria-controls')).toBe('mm-customize-other');
+        expect(spaceOf(people()[2]).hidden).toBe(true);
+        const someone = main.avatarForRole('other');
+        fire(open, 'click');
+        expect(state.customizing).toBe('other');
+        expect(buttonIn(people()[2], 'Customize').getAttribute('aria-expanded')).toBe('true');
+        expect(spaceOf(people()[2]).hidden).toBe(false);
+        // The stage looks into the panel Someone stands in.
+        expect(state.stage.viewing).toBe(0);
+        // The whole editor, its ids its own, seeded with whoever stands
+        // there; the face the meme sets and the handedness no meme reads
+        // are left out, with a line saying so.
+        const space = spaceOf(people()[2]);
+        const tablist = space.children.find((c) => c.getAttribute && c.getAttribute('role') === 'tablist');
+        expect(tablist.children.map((b) => b.textContent)).toEqual(['Face', 'Eyes', 'Hair', 'Build', 'Clothes', 'Layers']);
+        expect(tablist.children[0].id).toBe('mm-cz-tab-face');
+        expect(tablist.getAttribute('aria-label')).toBe('Choices for Someone');
+        expect(space.children[0].textContent).toBe(main.WORDS.customizeNote);
+        expect(Object.keys(state.editor.inputs).filter((key) => key === 'mouth' || key === 'handedness')).toEqual([]);
+        expect(state.editor.inputs.skin.find((i) => i.checked).value).toBe(someone.skin);
+        // A choice dresses them at once, in the panel, and the row says so.
+        const was = state.stage.panels[0].figures[2];
+        const pick = state.editor.inputs.skin.find((i) => i.value !== someone.skin);
+        pick.checked = true;
+        fire(pick, 'change');
+        expect(main.avatarForRole('other').skin).toBe(pick.value);
+        expect(main.avatarForRole('other').shirt).toBe(someone.shirt);
+        expect(state.stage.panels[0].figures[2]).not.toBe(was);
+        expect(state.stage.panels[0].figures[2].avatar.skin).toBe(pick.value);
+        expect(people()[2].children[1].textContent).toBe(main.WORDS.personDressed);
+        expect(state.pinged.dressed).toBe(true);
+        // The tab chosen stays chosen when the tab is drawn again.
+        fire(tablist, 'keydown', { key: 'ArrowRight' });
+        expect(state.customizeTab).toBe('eyes');
+        // Kept with the meme, and carried in its link.
+        expect(JSON.parse(globalThis.localStorage.getItem('scenexp-meme')).cast.other.skin).toBe(pick.value);
+        const { encodeRemix } = await import('../www/meme/js/remix.js');
+        expect(encodeRemix(main.currentMeme())).toContain(`&other=1.${pick.value}.`);
+        // Opening the friend's closes Someone's; Done closes it, the stage
+        // steps back out, and the focus goes back to the button.
+        fire(buttonIn(people()[1], 'Customize'), 'click');
+        expect(state.customizing).toBe('friend');
+        expect(spaceOf(people()[2]).hidden).toBe(true);
+        expect(state.customizeTab).toBeNull();
+        fire(buttonIn(people()[1], 'Done'), 'click');
+        expect(state.customizing).toBeNull();
+        expect(state.stage.viewing).toBeNull();
+        expect(buttonIn(people()[1], 'Customize').focused).toBe(true);
+        expect(buttonIn(people()[1], 'Customize').getAttribute('aria-expanded')).toBe('false');
+        expect(main.closeCustomize()).toBe(false);
+        // Customize again closes it; nobody dresses the lead.
+        expect(main.toggleCustomize('other')).toBe(true);
+        expect(main.toggleCustomize('other')).toBe(false);
+        expect(main.toggleCustomize('you')).toBe(false);
+        expect(main.dress('you', { skin: 'deep' })).toBe(false);
+        // The friend dressed by hand is still the friend.
+        expect(main.dress('friend', { ...main.avatarForRole('friend'), skin: 'light' })).toBe(true);
+        expect(state.friend.skin).toBe('light');
+        expect(people()[1].children[1].textContent).toBe(main.WORDS.personDressed);
+        // Another meme keeps them; one without Someone closes the editor.
+        main.toggleCustomize('other');
+        main.pickTemplate('handshake');
+        expect(state.customizing).toBeNull();
+        main.pickTemplate('headTurn');
+        expect(main.avatarForRole('other').skin).toBe(pick.value);
+        // Someone else gives them back to the crowd, the open editor seeded
+        // with the stranger who stepped in.
+        main.toggleCustomize('other');
+        // Pressed from the keyboard: the row is drawn again and the focus
+        // lands on the new Someone else, not on the page.
+        buttonIn(people()[2], 'Someone else').focus();
+        fire(buttonIn(people()[2], 'Someone else'), 'click');
+        expect(buttonIn(people()[2], 'Someone else').focused).toBe(true);
+        expect(people()[2].children[1].textContent).toBe(main.WORDS.personRandom);
+        expect(main.currentMeme().cast).toEqual({});
+        expect(state.customizing).toBe('other');
+        expect(state.editor.inputs.skin.find((i) => i.checked).value).toBe(main.avatarForRole('other').skin);
+        // Dressed again and back another day: there, and said so.
+        main.dress('other', { ...main.avatarForRole('other'), skin: 'deep' });
+        const kept = JSON.parse(globalThis.localStorage.getItem('scenexp-meme'));
+        dom.uninstall();
+        installThree();
+        dom = installDom();
+        Object.assign(dom.el('mm-canvas'), { clientWidth: 800, clientHeight: 600 });
+        globalThis.localStorage.setItem('scenexp-meme', JSON.stringify(kept));
+        jest.resetModules();
+        main = await import('../www/meme/js/main.js');
+        await flushAsync(30);
+        ({ state } = main.__test__);
+        expect(state.restored).toBe(true);
+        expect(main.avatarForRole('other').skin).toBe('deep');
+        expect(people()[2].children[1].textContent).toBe(main.WORDS.personDressed);
+        // Start over gives everyone back to the crowd.
+        fire(dom.el('mm-start-over'), 'click');
+        main.pickTemplate('headTurn');
+        expect(main.currentMeme().cast).toEqual({});
+        expect(main.currentMeme().friend).toBeNull();
+        expect(people()[2].children[1].textContent).toBe(main.WORDS.personRandom);
+    });
+
+    test('the editor leaves out what the meme sets for that person: the Handshake\'s build and shirt, the spacesuit (M8)', async () => {
+        const main = await boot();
+        const { state } = main.__test__;
+        main.pickTemplate('handshake');
+        expect(main.setByMeme(state.template, 'friend').sort()).toEqual(['build', 'handedness', 'mouth', 'muscles', 'shirt', 'sleeves']);
+        main.toggleCustomize('friend');
+        // Compared by field name: a failure prints the names, not elements.
+        const offered = () => [...Object.keys(state.editor.inputs), ...Object.keys(state.editor.customs)];
+        expect(offered().filter((key) => ['build', 'muscles', 'shirt', 'sleeves', 'handedness', 'mouth'].includes(key))).toEqual([]);
+        expect(['skin', 'bottom', 'hat'].filter((key) => !offered().includes(key))).toEqual([]);
+        // Still open on another meme with a friend, the editor drawn for it.
+        main.pickTemplate('alwaysHasBeen');
+        expect(state.customizing).toBe('friend');
+        expect(offered().filter((key) => ['shirt', 'sleeves', 'bottom', 'bottomColor', 'hat', 'hatColor'].includes(key))).toEqual([]);
+        // Gazing at the Earth with the face the avatar has, so its mouth is
+        // offered.
+        expect(offered()).toContain('mouth');
+        // A dressed person in a spacesuit still wears the meme's suit.
+        main.dress('friend', { ...main.avatarForRole('friend'), shirt: 'teal', skin: 'deep' });
+        expect(state.stage.panels[0].figures[1].avatar.skin).toBe('deep');
+        expect(state.stage.panels[0].figures[1].avatar.shirt).toBe('white');
+    });
+
+    test('a link\'s people arrive as the maker chose them, said so, and stay through Make it mine (M8)', async () => {
+        installThree();
+        dom = installDom();
+        Object.assign(dom.el('mm-canvas'), { clientWidth: 800, clientHeight: 600 });
+        globalThis.localStorage.setItem('scenexp-avatar', JSON.stringify({ v: 1, skin: 'fair' }));
+        dom.windowStub.location.hash = '#m=1/headTurn/me|them|you/-&a=1.deep.black&friend=1.medium.black&other=1.light.black';
+        jest.resetModules();
+        const main = await import('../www/meme/js/main.js');
+        await flushAsync(30);
+        const { state } = main.__test__;
+        expect(state.stage.panels[0].figures.map((f) => f.avatar.skin)).toEqual(['deep', 'medium', 'light']);
+        expect(people().map((r) => r.children[1].textContent)).toEqual([main.WORDS.personMaker, main.WORDS.personSent, main.WORDS.personSent]);
+        // Make it mine: the visitor leads, the maker becomes the friend, and
+        // Someone stays as sent, kept and carried on.
+        fire(dom.el('mm-make-mine'), 'click');
+        expect(state.stage.panels[0].figures.map((f) => f.avatar.skin)).toEqual(['fair', 'deep', 'light']);
+        expect(people().map((r) => r.children[1].textContent)).toEqual([main.WORDS.personYou, main.WORDS.personMaker, main.WORDS.personSent]);
+        expect(main.currentMeme().cast.other.skin).toBe('light');
+        expect(JSON.parse(globalThis.localStorage.getItem('scenexp-meme')).cast.other.skin).toBe('light');
+        // Dressed by hand after that, they are the visitor's own doing.
+        main.dress('other', { ...main.avatarForRole('other'), skin: 'brown' });
+        expect(people()[2].children[1].textContent).toBe(main.WORDS.personDressed);
     });
 
     test('Make it mine keeps both of us when the template has a friend\'s role (D5)', async () => {

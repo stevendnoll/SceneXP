@@ -61,6 +61,63 @@ describe('round trips', () => {
         expect(decode('m=1/panic/a||/-,-,-,-,-,-/1b2a55').meme.tint).toBeNull();
     });
 
+    test('the people the maker chose travel under their roles\' ids, and nobody from the crowd does (M8)', () => {
+        const friend = normalizeAvatar({ skin: 'deep', shirt: 'teal' });
+        const other = normalizeAvatar({ skin: 'light', hat: 'beret', shirt: 'xabcdef' });
+        const lead = normalizeAvatar({ skin: 'medium' });
+        const made = meme({ template: 'headTurn', captions: ['me', 'them', 'you'], friend, cast: { other } });
+        const hash = R.encodeRemix(made, lead);
+        expect(hash).toContain(`&${encodeLink(lead)}`);
+        expect(hash).toContain(`&friend=${encodeLink(friend).slice(2)}`);
+        expect(hash).toContain(`&other=${encodeLink(other).slice(2)}`);
+        // The friend first, then the cast.
+        expect(hash.indexOf('&friend=')).toBeLessThan(hash.indexOf('&other='));
+        const back = decode(hash);
+        expect(back.meme).toEqual(made);
+        expect(back.avatar).toEqual(lead);
+        // Nobody chosen, nothing sent: the friend who opens it gets their
+        // own crowd.
+        const plain = R.encodeRemix(meme({ template: 'headTurn', captions: ['a'] }), lead);
+        expect(plain).not.toMatch(/&(friend|other)=/);
+        expect(decode(plain).meme.friend).toBeNull();
+        expect(decode(plain).meme.cast).toEqual({});
+        expect(R.encodePeople(meme({ template: 'headTurn' }))).toBe('');
+    });
+
+    test('a person is read only for a crowd role of the link\'s own template, and a broken one is nobody', () => {
+        const someone = encodeLink(normalizeAvatar({ skin: 'deep' })).slice(2);
+        // The Handshake has no Someone: an `other=` part is ignored.
+        const handshake = decode(`m=1/handshake/a|b|c/-&friend=${someone}&other=${someone}`);
+        expect(handshake.meme.friend.skin).toBe('deep');
+        expect(handshake.meme.cast).toEqual({});
+        // The lead is never read from a role part, nor from a made-up one.
+        expect(decode(`m=1/headTurn/a||/-&you=${someone}&stranger=${someone}`).meme.cast).toEqual({});
+        expect(decode(`m=1/headTurn/a||/-&you=${someone}`).avatar).toBeNull();
+        // A broken part is nobody, and the meme still opens.
+        for (const bad of ['9.deep', 'x', '', '1.' + 'q'.repeat(900)]) {
+            const back = decode(`m=1/headTurn/a||/-&other=${bad}&friend=${bad}`);
+            expect(back.meme.template).toBe('headTurn');
+            expect(back.meme.cast).toEqual({});
+            expect(back.meme.friend).toBeNull();
+        }
+    });
+
+    test('three people in their heaviest clothes and every caption full still fit under the ceiling', () => {
+        // Every color field a custom color: the longest an avatar's link gets.
+        const heavy = (skin) => normalizeAvatar({ skin, eyes: 'x111111', hair: 'x222222', shirt: 'x333333', bottomColor: 'x444444', shoeColor: 'x555555', hatColor: 'x666666', hat: 'beret', lips: 'x777777', facial: 'beard', facialColor: 'x888888', glasses: 'round', frameColor: 'x999999', lensColor: 'xaaaaaa', sleeves: 'jersey', jerseyNumber: 'n00', numberColor: 'xbbbbbb', legwear: 'fishnets', legwearColor: 'xcccccc', armwear: 'fishnets', armwearColor: 'xdddddd' });
+        const t = TEMPLATES.find((x) => x.id === 'headTurn');
+        const full = meme({ template: t.id, captions: slotsOf(t).map(() => 'W'.repeat(CONFIG.caption.maxChars)), friend: heavy('deep'), cast: { other: heavy('light') } });
+        const hash = R.encodeRemix(full, heavy('medium'), { max: MAX });
+        expect(hash.length).toBeLessThan(MAX);
+        expect(decode(hash).meme).toEqual(full);
+        // Emoji in every caption: trimmed to fit, the people all still there.
+        const emoji = meme({ ...full, captions: slotsOf(t).map(() => '🙂'.repeat(CONFIG.caption.maxChars / 2)) });
+        const trimmed = R.encodeRemix(emoji, heavy('medium'), { max: MAX });
+        expect(trimmed.length).toBeLessThanOrEqual(MAX);
+        expect(decode(trimmed).meme.cast.other).toEqual(heavy('light'));
+        expect(decode(trimmed).meme.friend).toEqual(heavy('deep'));
+    });
+
     test('a space travels as a plus and the words stay readable', () => {
         const hash = R.encodeRemix(meme({ template: 'surprised', captions: ['when the build passes'] }));
         expect(hash).toBe('m=1/surprised/when+the+build+passes/-');
@@ -119,7 +176,7 @@ describe('what is turned away or degraded', () => {
 
     test('a known template with broken captions is that template with empty captions', () => {
         const back = decode('m=1/panic/%E0%A4%A|fine/-,rage');
-        expect(back.meme).toEqual({ v: 1, template: 'panic', captions: ['', '', ''], expressions: [null, 'rage', null, null, null, null], tint: null, friend: null });
+        expect(back.meme).toEqual({ v: 1, template: 'panic', captions: ['', '', ''], expressions: [null, 'rage', null, null, null, null], tint: null, friend: null, cast: {} });
         expect(decode('m=1/panic').meme).toEqual(meme({ template: 'panic' }));
         expect(decode('m=1/panic/one/bored,smug').meme.expressions).toEqual([null, 'smug', null, null, null, null]);
     });

@@ -13,13 +13,13 @@ const RULES = { templates: TEMPLATES, byOrder, slotsOf, expressions: EXPRESSIONS
 describe('normalizeMeme', () => {
     test('nothing becomes the first meme with empty captions, the templates\' own faces and no friend', () => {
         for (const raw of [undefined, null, 3, 'x', {}, []]) {
-            expect(S.normalizeMeme(raw, RULES)).toEqual({ v: 1, template: 'surprised', captions: [''], expressions: [null], tint: null, friend: null });
+            expect(S.normalizeMeme(raw, RULES)).toEqual({ v: 1, template: 'surprised', captions: [''], expressions: [null], tint: null, friend: null, cast: {} });
         }
     });
 
     test('a valid meme comes back as it is, padded to its template\'s slots, its friend made valid', () => {
         const meme = { v: 1, template: 'panic', captions: ['a', 'b'], expressions: [null, 'rage', null, null, null, null] };
-        expect(S.normalizeMeme(meme, RULES)).toEqual({ v: 1, template: 'panic', captions: ['a', 'b', ''], expressions: [null, 'rage', null, null, null, null], tint: null, friend: null });
+        expect(S.normalizeMeme(meme, RULES)).toEqual({ v: 1, template: 'panic', captions: ['a', 'b', ''], expressions: [null, 'rage', null, null, null, null], tint: null, friend: null, cast: {} });
         const withFriend = S.normalizeMeme({ template: 'handshake', friend: { skin: 'deep', hat: 'castle' } }, RULES);
         expect(withFriend.friend.skin).toBe('deep');
         expect(withFriend.friend.hat).toBe('none');
@@ -49,6 +49,22 @@ describe('normalizeMeme', () => {
         }
         // Panic offers none, so a color sent with it is dropped.
         expect(S.normalizeMeme({ template: 'panic', tint: '#1b2a55' }, RULES).tint).toBeNull();
+    });
+
+    test('the people dressed by hand or sent are kept by crowd role, made valid, and nobody else is (M8)', () => {
+        const kept = S.normalizeMeme({ template: 'headTurn', cast: { other: { skin: 'deep', hat: 'castle' } } }, RULES);
+        expect(kept.cast.other.skin).toBe('deep');
+        expect(kept.cast.other.hat).toBe('none');
+        // Kept whatever the template, as the friend is: the role ids are the
+        // catalog's, so Someone comes back on The Head Turn.
+        expect(S.normalizeMeme({ template: 'surprised', cast: { other: { skin: 'deep' } } }, RULES).cast.other.skin).toBe('deep');
+        // The lead is the visitor's, the friend's role is `friend`, and a
+        // role no template has is nobody's.
+        expect(S.normalizeMeme({ template: 'headTurn', cast: { you: { skin: 'deep' }, friend: { skin: 'deep' }, stranger: { skin: 'deep' } } }, RULES).cast).toEqual({});
+        // Not an object, an array, or an inherited key: nothing.
+        for (const cast of [null, 'other', 7, [], { other: 'deep' }, { other: [] }, JSON.parse('{"__proto__": {"other": {"skin": "deep"}}}')]) {
+            expect(S.normalizeMeme({ template: 'headTurn', cast }, RULES).cast).toEqual({});
+        }
     });
 
     test('sameMeme compares the whole meme', () => {

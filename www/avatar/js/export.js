@@ -42,7 +42,7 @@ import { shareFile, canShareFiles, saveFile } from '../../shared/js/sharefile-1.
 import { canRecord, pickMime, extensionOf, startRecording } from '../../shared/js/recorder-1.0.0.min.js';
 import { DANCES, danceOf, loopOf, danceAt, blendPoses, jointPerson, applyPose, REST as DANCE_REST } from '../../shared/js/dance-1.0.0.min.js';
 import { buildStage, frameFor } from './studio.min.js';
-import { tabKey } from './editor.min.js';
+import { tabKey } from '../../shared/js/avatar-editor-1.0.0.min.js';
 
 /** Everything the dialog says (house style: polite, no semicolons or
  *  em-dashes). */

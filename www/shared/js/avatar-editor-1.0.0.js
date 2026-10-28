@@ -1,9 +1,12 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * editor.js - the choices (PRD section 6): tabs, and in each a few groups of
- * real radio buttons built from the avatar's own lists, so the browser gives
- * every group its arrow keys and a screen reader hears "Skin tone, Fair, 2 of
- * 6".
+ * avatar-editor.js - the avatar's choices (specs/avatar PRD section 6): tabs,
+ * and in each a few groups of real radio buttons built from the avatar's own
+ * lists, so the browser gives every group its arrow keys and a screen reader
+ * hears "Skin tone, Fair, 2 of 6". Built for /avatar/ and promoted here on
+ * 2026-10-28 so Meme Studio can dress the other people in a meme with the
+ * very same editor (Steve: "the full avatar editor"). Its classes are `av-`
+ * ones, styled by each page that shows it.
  *
  * ONLY WHAT IS DRAWN IS OFFERED. A field shows when this version of the figure
  * draws more than one of its options (avatar-figure's `drawnOptions`), so the
@@ -19,20 +22,114 @@
  * security policy allows, where a style attribute would not be.
  */
 
-import { listOf, optionOf, colorOf, customColor, CUSTOM_COLOR, COLOR_FIELDS } from '../../shared/js/avatar-1.0.0.min.js';
-import { drawnOptions } from '../../shared/js/avatar-figure-1.0.0.min.js';
+import { listOf, optionOf, colorOf, customColor, CUSTOM_COLOR, COLOR_FIELDS } from './avatar-1.0.0.min.js';
+import { drawnOptions } from './avatar-figure-1.0.0.min.js';
+
+const deepFreeze = (o) => {
+    for (const v of Object.values(o)) if (v && typeof v === 'object') deepFreeze(v);
+    return Object.freeze(o);
+};
+
+/**
+ * The editor's tabs (specs/avatar PRD section 6), in order, each with the
+ * part of the figure it is about (`frame`: a page's camera may look there)
+ * and its fields. `kind` is 'swatch' (a color) or 'text' (a word). A field
+ * shows only when this version draws more than one of its options, and only
+ * while the field it `requires` shows; a field with `hideWhen` steps aside
+ * while the avatar holds that value (no beard, no beard's color), and one
+ * with `showWhen` shows only while it does (a jersey's number, on the
+ * jersey). A 'number' field is typed, not chosen from a row (a hundred
+ * buttons would be no row). A tab shows only when it has a field to show.
+ * Every color field ends in a custom swatch (any color, the browser's own
+ * picker). A field with a `frame` of its own is framed by it when chosen,
+ * not by its tab's (the shoes, on the Clothes tab, still look at the feet).
+ *
+ * SIX TABS IN TWO ROWS OF THREE (Steve's QA, 2026-10-26, down from nine):
+ * the mouth's two groups sit on the Face tab between the cheeks and the
+ * facial hair (top down, and the beard wraps the mouth); the shoes are
+ * clothes; the hat is on the Hair tab, since every hat is fitted to the hair
+ * under it. Facial hair is on the Face tab, since the Hair tab is full of
+ * styles (2026-10-25); the hands and the feet are part of the Build. Every
+ * field of the avatar is on a tab, once (tests/avatar-init).
+ */
+export const EDITOR_TABS = deepFreeze([
+    {
+        id: 'face', label: 'Face', frame: 'face', fields: [
+            { key: 'skin', legend: 'Skin tone', kind: 'swatch' },
+            { key: 'faceShape', legend: 'Face shape', kind: 'text' },
+            { key: 'nose', legend: 'Nose', kind: 'text' },
+            { key: 'cheeks', legend: 'Cheeks', kind: 'text' },
+            { key: 'mouth', legend: 'Expression', kind: 'text' },
+            { key: 'lips', legend: 'Lip color', kind: 'swatch' },
+            { key: 'facial', legend: 'Facial hair', kind: 'text' },
+            { key: 'facialColor', legend: 'Facial hair color', kind: 'swatch', hideWhen: { field: 'facial', value: 'none' } }
+        ]
+    },
+    {
+        id: 'eyes', label: 'Eyes', frame: 'face', fields: [
+            { key: 'eyeShape', legend: 'Eye shape', kind: 'text' },
+            { key: 'eyes', legend: 'Eye color', kind: 'swatch' },
+            { key: 'brows', legend: 'Eyebrows', kind: 'text' },
+            { key: 'glasses', legend: 'Glasses', kind: 'text' },
+            { key: 'frameColor', legend: 'Frame color', kind: 'swatch', hideWhen: { field: 'glasses', value: 'none' } },
+            { key: 'lensColor', legend: 'Lens color', kind: 'swatch', hideWhen: { field: 'glasses', value: 'none' } }
+        ]
+    },
+    {
+        id: 'hair', label: 'Hair', frame: 'face', fields: [
+            { key: 'length', legend: 'Style', kind: 'text' },
+            { key: 'hair', legend: 'Color', kind: 'swatch' },
+            { key: 'hat', legend: 'Hat', kind: 'text' },
+            { key: 'hatColor', legend: 'Hat color', kind: 'swatch', requires: 'hat', hideWhen: { field: 'hat', value: 'none' } }
+        ]
+    },
+    {
+        id: 'build', label: 'Build', frame: 'body', fields: [
+            { key: 'build', legend: 'Build', kind: 'text' },
+            { key: 'muscles', legend: 'Muscles', kind: 'text' },
+            { key: 'handSize', legend: 'Hand size', kind: 'text' },
+            { key: 'footSize', legend: 'Foot size', kind: 'text' },
+            // Which hand leads (Steve, 2026-10-26): the throwing arm in
+            // X's and O's. Right by default, as most people are.
+            { key: 'handedness', legend: 'Handedness', kind: 'text' }
+        ]
+    },
+    {
+        id: 'clothes', label: 'Clothes', frame: 'body', fields: [
+            { key: 'shirt', legend: 'Shirt', kind: 'swatch' },
+            { key: 'sleeves', legend: 'Style', kind: 'text' },
+            { key: 'jerseyNumber', legend: 'Jersey number', kind: 'number', showWhen: { field: 'sleeves', value: 'jersey' } },
+            { key: 'numberColor', legend: 'Number color', kind: 'swatch', showWhen: { field: 'sleeves', value: 'jersey' } },
+            { key: 'bottom', legend: 'Pants, skirt or shorts', kind: 'text' },
+            { key: 'bottomColor', legend: 'Color', kind: 'swatch' },
+            { key: 'shoes', legend: 'Shoes', kind: 'text', frame: 'feet' },
+            { key: 'shoeColor', legend: 'Shoe color', kind: 'swatch', frame: 'feet' }
+        ]
+    },
+    {
+        // The underlayer (Steve's QA, 2026-10-26): what shows where the
+        // legs and the arms are bare, each with a color of its own.
+        id: 'layers', label: 'Layers', frame: 'body', fields: [
+            { key: 'legwear', legend: 'Legs', kind: 'text' },
+            { key: 'legwearColor', legend: 'Legwear color', kind: 'swatch', hideWhen: { field: 'legwear', value: 'none' } },
+            { key: 'armwear', legend: 'Arms', kind: 'text' },
+            { key: 'armwearColor', legend: 'Armwear color', kind: 'swatch', hideWhen: { field: 'armwear', value: 'none' } }
+        ]
+    }
+]);
 
 /** The options a field offers today. */
 export function optionsFor(key) {
     return drawnOptions(key, listOf(key) || []);
 }
 
-/** The fields of `tab` that show: more than one option drawn, and the field
+/** The fields of `tab` that show: more than one option drawn, none of
+ *  `omit` (the fields a page sets itself: a meme's costume), and the field
  *  each `requires` showing too, by the same rule (a chain of them, or a
  *  loop, is followed to its end). */
-export function visibleFields(tab) {
+export function visibleFields(tab, omit = []) {
     const visible = (field, seen = new Set()) => {
-        if (seen.has(field.key) || optionsFor(field.key).length < 2) return false;
+        if (seen.has(field.key) || omit.includes(field.key) || optionsFor(field.key).length < 2) return false;
         if (!field.requires) return true;
         const needed = tab.fields.find((g) => g.key === field.requires);
         return Boolean(needed) && visible(needed, new Set([...seen, field.key]));
@@ -40,9 +137,9 @@ export function visibleFields(tab) {
     return tab.fields.filter((f) => visible(f));
 }
 
-/** The tabs that have a field to show. */
-export function visibleTabs(tabs) {
-    return tabs.filter((tab) => visibleFields(tab).length > 0);
+/** The tabs that have a field to show, none of `omit` counted. */
+export function visibleTabs(tabs, omit = []) {
+    return tabs.filter((tab) => visibleFields(tab, omit).length > 0);
 }
 
 /** A list color as a CSS hex: 0x9c2b25 is "#9c2b25". */
@@ -81,12 +178,15 @@ export function tabKey(key, index, count) {
 /**
  * Build the editor into `tablist` (the row of tabs) and `panels` (where the
  * tab panels go), showing `avatar`. `onChange(key, id)` hears every choice,
- * `onTab(tab)` every tab chosen (its `frame` moves the camera).
+ * `onTab(tab)` every tab chosen (its `frame` moves the camera). `omit` names
+ * fields not offered (a page that sets them itself), and `prefix` starts
+ * every id and radio group name ('av' unless given), so a second editor on a
+ * page never shares one with the first.
  *
  * Returns `{ tabs, set(avatar), select(id), selected, inputs }`.
  */
-export function createEditor({ doc = document, tablist, panels, tabs, avatar, onChange = () => {}, onTab = () => {} }) {
-    const shown = visibleTabs(tabs);
+export function createEditor({ doc = document, tablist, panels, tabs, avatar, onChange = () => {}, onTab = () => {}, omit = [], prefix = 'av' }) {
+    const shown = visibleTabs(tabs, omit);
     const buttons = [];
     const panes = [];
     const inputs = {};
@@ -109,7 +209,7 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
         const label = make('label', `av-option av-option-${field.kind}`);
         const input = make('input', 'av-radio');
         input.type = 'radio';
-        input.name = `av-${field.key}`;
+        input.name = `${prefix}-${field.key}`;
         input.value = option.id;
         input.checked = avatar[field.key] === option.id;
         input.addEventListener('change', () => {
@@ -227,18 +327,18 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
     shown.forEach((tab, i) => {
         const button = make('button', 'av-tab', tab.label);
         button.type = 'button';
-        button.id = `av-tab-${tab.id}`;
+        button.id = `${prefix}-tab-${tab.id}`;
         button.setAttribute('role', 'tab');
-        button.setAttribute('aria-controls', `av-panel-${tab.id}`);
+        button.setAttribute('aria-controls', `${prefix}-panel-${tab.id}`);
         button.addEventListener('click', () => api.select(tab.id));
         tablist.appendChild(button);
         buttons.push(button);
 
         const pane = make('div', 'av-panel');
-        pane.id = `av-panel-${tab.id}`;
+        pane.id = `${prefix}-panel-${tab.id}`;
         pane.setAttribute('role', 'tabpanel');
         pane.setAttribute('aria-labelledby', button.id);
-        for (const field of visibleFields(tab)) {
+        for (const field of visibleFields(tab, omit)) {
             const group = make('fieldset', 'av-group');
             group.appendChild(make('legend', 'av-legend', field.legend));
             const row = make('div', `av-options av-options-${field.kind}`);

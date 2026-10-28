@@ -3,7 +3,8 @@
  * state.js - the meme being made (specs/meme PLANNING 4.2): which template,
  * the captions by slot, the expression chosen for each cell (null for the
  * template's own), the background color picked where a template offers
- * one (M8), and the roles (M5). Pure, no THREE and no DOM, so the
+ * one (M8), and the roles (M5): a friend's avatar, and anyone else dressed
+ * by hand (M8's Customize) or sent in a link. Pure, no THREE and no DOM, so the
  * remix link and the tests read it without a scene.
  *
  * `normalizeMeme` reduces anything to a valid meme: an unknown template
@@ -42,8 +43,34 @@ export function normalizeMeme(raw, { templates, byOrder, slotsOf, expressions, m
         tint: template.tint && typeof r.tint === 'string' && /^#[0-9a-fA-F]{6}$/.test(r.tint) ? r.tint.toLowerCase() : null,
         // A friend's avatar (M5), made valid, or none. It is already in
         // the visitor's hands (pasted or opened), so it is kept with the meme.
-        friend: r.friend && typeof r.friend === 'object' ? normalizeAvatar(r.friend) : null
+        friend: r.friend && typeof r.friend === 'object' ? normalizeAvatar(r.friend) : null,
+        // Anyone else in a crowd role who is not from the crowd (M8): dressed
+        // by hand with Customize, or sent in a link. By role id, only for a
+        // crowd role some template declares (the friend's is `friend`), each
+        // made valid. A role the crowd fills is not kept: it is rolled again.
+        cast: castOf(r.cast, templates)
     };
+}
+
+/** The crowd roles a dressed person may be kept for: every `random` role
+ *  of the catalog but the friend's, which is kept as `friend`. */
+function castRoles(templates) {
+    const ids = new Set();
+    for (const t of templates) for (const role of t.roles) if (role.cast === 'random' && role.id !== 'friend') ids.add(role.id);
+    return [...ids];
+}
+
+/** `raw`'s people, made valid, for the roles `castRoles` names alone, read
+ *  from its own properties only. */
+function castOf(raw, templates) {
+    const out = {};
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    for (const id of castRoles(templates)) {
+        if (!Object.prototype.hasOwnProperty.call(raw, id)) continue;
+        const a = raw[id];
+        if (a && typeof a === 'object' && !Array.isArray(a)) out[id] = normalizeAvatar(a);
+    }
+    return out;
 }
 
 /** Whether two memes are the same meme. */

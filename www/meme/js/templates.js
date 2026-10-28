@@ -401,6 +401,9 @@ export function validateTemplate(t, { expressions, poses, scenes = [], paints = 
     const roles = Array.isArray(t.roles) ? t.roles : [];
     if (!roles.length) bad.push(`${where}: needs a role`);
     for (const role of roles) {
+        // A role's id names its person in a remix link (`&friend=...`), so
+        // it is a plain word and never the link's own `m` or `a`.
+        if (typeof role.id !== 'string' || !/^[a-z][a-zA-Z0-9]*$/.test(role.id) || ['m', 'a'].includes(role.id)) bad.push(`${where}: role id "${role.id}" must be a lowerCamelCase word, not m or a`);
         if (!['avatar', 'random'].includes(role.cast)) bad.push(`${where}: role "${role.id}" casts "${role.cast}", not avatar or random`);
         if (typeof role.label !== 'string' || !role.label) bad.push(`${where}: role "${role.id}" needs a label`);
     }

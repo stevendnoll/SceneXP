@@ -480,7 +480,7 @@ describe('the editor and the way back', () => {
         installThree();
         dom = installDom();
         jest.resetModules();
-        E = await import('../www/avatar/js/editor.js');
+        E = await import('../www/shared/js/avatar-editor-1.0.0.js');
         T = await import('../www/avatar/js/transfer.js');
         ({ AVATAR_PAGE: CONFIG } = await import('../www/avatar/js/config.js'));
     });

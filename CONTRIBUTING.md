@@ -467,7 +467,9 @@ happens in it, use generic props, and give it nobody's likeness.
    never changes once shipped), a `title` and a one-line `line` for the
    picker, an `order` in the picker, a `grid` of rows of `{ span }` cells,
    the `roles` (`avatar` for the visitor, `random` for anyone else, and a
-   role with the id `friend` is where a friend's avatar stands), and one
+   role with the id `friend` is where a friend's avatar stands; a role's
+   id is a plain word, since it names that person in a remix link, and
+   every `random` role can be dressed by hand with Customize), and one
    entry in `cells` for each grid cell, in reading order. A cell names its
    `figures` (a role, a `pose`, an `expression`, where it stands and which
    way it turns), its caption slots (`top`, `bottom`, `center`, a

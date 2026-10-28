@@ -25,8 +25,9 @@
  */
 
 import { MEME_PAGE as CONFIG } from './config.min.js';
-import { createAvatarStore, randomAvatar, decodeLink, fromFile, sameAvatar, MAX_FILE } from '../../shared/js/avatar-1.0.0.min.js';
-import { EXPRESSIONS } from '../../shared/js/avatar-expressions-1.0.0.min.js';
+import { createAvatarStore, randomAvatar, decodeLink, fromFile, sameAvatar, normalizeAvatar, MAX_FILE } from '../../shared/js/avatar-1.0.0.min.js';
+import { EXPRESSIONS, expressionOverrides } from '../../shared/js/avatar-expressions-1.0.0.min.js';
+import { EDITOR_TABS, createEditor } from '../../shared/js/avatar-editor-1.0.0.min.js';
 import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
@@ -58,6 +59,10 @@ export const WORDS = Object.freeze({
     personMaker: 'The friend who sent this meme, as their avatar.',
     personFriend: 'Your friend, as their avatar.',
     personRandom: 'A visitor from the crowd.',
+    personDressed: 'Dressed by you.',
+    personSent: 'Chosen by the friend who sent this meme.',
+    customizeNote: "This meme sets some of this person's look itself, so those choices are left out here.",
+    customizeDone: 'Done',
     friendAdded: "Your friend is in. Their avatar stays on this device and nothing about it is sent to us.",
     friendBadLink: "That doesn't look like an avatar link. It starts with #a= and comes from the avatar page's Share a link.",
     friendFileLarge: 'That file is too large to be an avatar file. Please choose scenexp-avatar.json.',
@@ -93,6 +98,12 @@ const state = {
     friend: null,         // the avatar in the friend's role: pasted, opened, or the maker's (D5)
     friendIsMaker: false,
     cast: {},             // a random avatar a role, kept for the visit so a reshuffle is a change
+    dressed: new Set(),   // the crowd roles dressed by hand here (M8's Customize)
+    sent: new Set(),      // the crowd roles whose person came in a link
+    customizing: null,    // the role whose editor is open, or null
+    customizeTab: null,   // that editor's tab, kept when the People tab is drawn again
+    editor: null,         // that editor (the shared avatar editor)
+    peopleRows: [],       // the People tab's rows (editor.js buildPeople)
     incoming: false,      // a link's meme is on the stage, waiting for an answer
     anchors: [],          // where each panel's figures' labels pin on the stage, CSS pixels
     props: [],            // where each panel's prop surfaces (the chart's sheet) are on the stage
@@ -110,7 +121,7 @@ const state = {
     rects: [],            // where each panel is on the stage, CSS pixels
     restored: false,
     ready: false,
-    pinged: { typed: new Set(), stepped: false, faced: false, tinted: false },
+    pinged: { typed: new Set(), stepped: false, faced: false, tinted: false, dressed: false },
     session: { start: Date.now(), ended: false }
 };
 
@@ -146,7 +157,18 @@ function say(text) {
 
 /** The meme as it stands, valid, for the store and the link. */
 export function currentMeme() {
-    return normalizeMeme({ template: state.template.id, captions: state.captions, expressions: state.expressions, tint: state.tint, friend: state.friend }, RULES());
+    return normalizeMeme({ template: state.template.id, captions: state.captions, expressions: state.expressions, tint: state.tint, friend: state.friend, cast: chosenCast() }, RULES());
+}
+
+/** The crowd roles' people who are not from the crowd (dressed here, or
+ *  sent in a link), by role id: kept with the meme and carried in the link.
+ *  The friend's is the meme's `friend`. */
+function chosenCast() {
+    const out = {};
+    for (const id of new Set([...state.dressed, ...state.sent])) {
+        if (id !== 'friend' && state.cast[id]) out[id] = state.cast[id];
+    }
+    return out;
 }
 
 /** Keep the meme in this browser. Quiet when the browser refuses. */
@@ -275,8 +297,137 @@ function ownTint(template) {
 /** What the People tab says of a role. */
 function noteFor(role) {
     if (role.cast === 'avatar') return state.maker ? WORDS.personMaker : state.avatar ? WORDS.personYou : WORDS.personStandIn;
-    if (role.id === 'friend' && state.friend) return state.friendIsMaker ? WORDS.personMaker : WORDS.personFriend;
+    if (role.id === 'friend' && state.friend && state.friendIsMaker) return WORDS.personMaker;
+    if (state.dressed.has(role.id)) return WORDS.personDressed;
+    if (state.sent.has(role.id)) return WORDS.personSent;
+    if (role.id === 'friend' && state.friend) return WORDS.personFriend;
     return WORDS.personRandom;
+}
+
+/**
+ * The fields `template` sets itself for the people of `roleId` (their
+ * costume's overrides and the mouth of the face they wear), and the
+ * handedness, which no meme reads (a meme names its sides): left out of
+ * that role's editor (M8).
+ */
+export function setByMeme(template, roleId) {
+    const keys = new Set(['handedness']);
+    for (const cell of template.cells) {
+        for (const f of cell.figures) {
+            if (f.role !== roleId) continue;
+            for (const key of Object.keys(f.overrides || {})) keys.add(key);
+            for (const key of Object.keys(expressionOverrides(f.expression))) keys.add(key);
+        }
+    }
+    return [...keys];
+}
+
+/**
+ * Dress the person in `roleId` by hand (M8's Customize): `avatar`, made
+ * valid, worn in every panel at once. The friend's role keeps it as the
+ * friend; any other crowd role keeps it in place of its stranger.
+ */
+export function dress(roleId, avatar) {
+    const role = state.template.roles.find((r) => r.id === roleId && r.cast === 'random');
+    if (!role) return false;
+    const a = normalizeAvatar(avatar);
+    if (roleId === 'friend') {
+        state.friend = a;
+        state.friendIsMaker = false;
+    } else {
+        state.cast[roleId] = a;
+    }
+    state.dressed.add(roleId);
+    state.sent.delete(roleId);
+    if (state.stage) {
+        state.stage.recast(roleId);
+        state.stage.touch();
+    }
+    // The groups a choice makes moot (no hat, no hat's color) follow it.
+    if (state.editor && state.customizing === roleId) state.editor.set(a);
+    const row = state.peopleRows.find((r) => r.role === roleId);
+    if (row) row.note.textContent = noteFor(role);
+    refreshPreview();
+    keep();
+    if (state.ready && !state.pinged.dressed) {
+        state.pinged.dressed = true;
+        track('person-dressed', { kind: state.template.id, outcome: roleId });
+    }
+    return true;
+}
+
+/** The editor for the role in `row`, built into its row's space: a line
+ *  when the meme sets some fields itself, the tabs and their choices
+ *  seeded with whoever stands there, and Done. */
+function buildCustomizer(row, template) {
+    const host = row.custom;
+    host.textContent = '';
+    const role = template.roles.find((r) => r.id === row.role);
+    const omit = setByMeme(template, row.role);
+    if (omit.some((key) => key !== 'handedness')) {
+        const note = document.createElement('p');
+        note.className = 'mm-note';
+        note.textContent = WORDS.customizeNote;
+        host.appendChild(note);
+    }
+    const tablist = document.createElement('div');
+    tablist.className = 'av-tabs';
+    tablist.setAttribute('role', 'tablist');
+    tablist.setAttribute('aria-label', `Choices for ${role.label}`);
+    const panels = document.createElement('div');
+    panels.className = 'mm-cz-panels';
+    host.appendChild(tablist);
+    host.appendChild(panels);
+    state.editor = createEditor({
+        doc: document,
+        tablist,
+        panels,
+        tabs: EDITOR_TABS,
+        avatar: avatarForRole(row.role),
+        omit,
+        prefix: 'mm-cz',
+        onChange: (key, id) => dress(row.role, { ...avatarForRole(row.role), [key]: id }),
+        onTab: (tab) => { state.customizeTab = tab.id; }
+    });
+    if (state.customizeTab) state.editor.select(state.customizeTab, { quiet: true });
+    const done = document.createElement('button');
+    done.type = 'button';
+    done.className = 'mm-secondary mm-small';
+    done.textContent = WORDS.customizeDone;
+    done.addEventListener('click', closeCustomize);
+    host.appendChild(done);
+}
+
+/** Open the editor for `roleId` under its row (closing any other), the
+ *  stage looking into the first panel that person stands in; or close it
+ *  when it is the one open. Returns whether it is open now. */
+export function toggleCustomize(roleId) {
+    if (state.customizing === roleId) {
+        closeCustomize();
+        return false;
+    }
+    if (!state.template.roles.some((r) => r.id === roleId && r.cast === 'random')) return false;
+    state.customizing = roleId;
+    state.customizeTab = null;
+    showPeople(state.template);
+    const cell = state.template.cells.findIndex((c) => c.figures.some((f) => f.role === roleId));
+    if (state.stage && cell >= 0) state.stage.view(cell);
+    return true;
+}
+
+/** Close the open editor, the stage back out to every panel, and the
+ *  focus back on the button that opened it. */
+export function closeCustomize() {
+    const was = state.customizing;
+    if (!was) return false;
+    state.customizing = null;
+    state.customizeTab = null;
+    state.editor = null;
+    showPeople(state.template);
+    if (state.stage && state.stage.viewing !== null) state.stage.view(null);
+    const row = state.peopleRows.find((r) => r.role === was);
+    if (row && row.customize && row.customize.focus) row.customize.focus();
+    return true;
 }
 
 /** A word on the People tab's own status line. */
@@ -285,16 +436,32 @@ function sayPeople(text) {
 }
 
 /** The People tab: who is in the meme, where each comes from, a friend by
- *  their link or file, and a reshuffle for anyone from the crowd. */
+ *  their link or file, a reshuffle for anyone from the crowd, and the
+ *  editor under the row being dressed by hand. Drawn again whole, so the
+ *  focus goes back to the control that had it. */
 function showPeople(template) {
-    buildPeople($('mm-people'), {
+    const active = typeof document !== 'undefined' && document.activeElement ? document.activeElement.id : '';
+    if (state.customizing && !template.roles.some((r) => r.id === state.customizing && r.cast === 'random')) {
+        state.customizing = null;
+        state.customizeTab = null;
+    }
+    state.editor = null;
+    state.peopleRows = buildPeople($('mm-people'), {
         roles: template.roles,
         noteFor,
+        customizing: state.customizing,
         onLink: useFriendLink,
         onFile: () => { const input = $('mm-friend-file'); if (input && input.click) input.click(); },
-        onReshuffle: reshuffle
+        onReshuffle: reshuffle,
+        onCustomize: toggleCustomize
     });
+    const open = state.peopleRows.find((r) => r.role === state.customizing);
+    if (open) buildCustomizer(open, template);
     $('mm-make-avatar').hidden = Boolean(state.avatar);
+    if (active) {
+        const again = state.peopleRows.flatMap((r) => [r.reshuffle, r.customize, r.input]).find((el) => el && el.id === active);
+        if (again && again.focus) again.focus();
+    }
 }
 
 /** A friend's avatar from their link (the whole address or its fragment).
@@ -339,6 +506,8 @@ export async function useFriendFile(file) {
 function setFriend(avatar) {
     state.friend = avatar;
     state.friendIsMaker = false;
+    state.dressed.delete('friend');
+    state.sent.delete('friend');
     if (state.stage) {
         state.stage.recast('friend');
         state.stage.touch();
@@ -352,6 +521,8 @@ function setFriend(avatar) {
 /** Someone else from the crowd in a random role. */
 export function reshuffle(roleId) {
     state.cast[roleId] = randomAvatar();
+    state.dressed.delete(roleId);
+    state.sent.delete(roleId);
     if (roleId === 'friend') {
         state.friend = null;
         state.friendIsMaker = false;
@@ -382,6 +553,14 @@ export function showTemplate(template, meme = null) {
     if (meme && meme.friend && !(state.friend && sameAvatar(state.friend, meme.friend))) {
         state.friend = meme.friend;
         state.friendIsMaker = false;
+    }
+    // A meme's people (restored: dressed here before), each taking their
+    // role; the same person again keeps how they came to be there.
+    for (const [id, person] of Object.entries((meme && meme.cast) || {})) {
+        if (state.cast[id] && sameAvatar(state.cast[id], person)) continue;
+        state.cast[id] = person;
+        state.dressed.add(id);
+        state.sent.delete(id);
     }
     if (state.stage) {
         state.stage.setTemplate(template, avatarForRole, { tint: state.tint });
@@ -445,7 +624,17 @@ export function readLink() {
     if (!found) return false;
     state.maker = found.avatar;
     state.friend = null;
+    state.dressed.clear();
+    state.sent.clear();
+    state.customizing = null;
     showTemplate(templateOf(found.meme.template), found.meme);
+    // The people the maker chose came with the link.
+    for (const id of Object.keys(found.meme.cast)) {
+        state.dressed.delete(id);
+        state.sent.add(id);
+    }
+    if (found.meme.friend) state.sent.add('friend');
+    showPeople(state.template);
     showIncoming(true);
     say(WORDS.fromFriend);
     if (state.tabs) state.tabs.select('mm-tab-meme');
@@ -472,6 +661,8 @@ export function makeItMine() {
     state.maker = null;
     state.friend = maker && state.template.roles.some((r) => r.id === 'friend') ? maker : null;
     state.friendIsMaker = Boolean(state.friend);
+    state.sent.delete('friend');
+    state.dressed.delete('friend');
     showTemplate(state.template, currentMeme());
     showIncoming(false);
     say(WORDS.mine);
@@ -500,6 +691,12 @@ export function startOver() {
     state.maker = null;
     state.friend = null;
     state.friendIsMaker = false;
+    // Everyone dressed by hand or sent goes back to the crowd.
+    for (const id of new Set([...state.dressed, ...state.sent])) delete state.cast[id];
+    state.dressed.clear();
+    state.sent.clear();
+    state.customizing = null;
+    state.customizeTab = null;
     showIncoming(false);
     if (state.memes) state.memes.clear();
     showTemplate(byOrder()[0]);
@@ -603,7 +800,7 @@ export async function init() {
     state.memes = createMemeStore({ key: CONFIG.storageKey });
     const kept = state.memes.load();
     const restored = kept ? normalizeMeme(kept, RULES()) : null;
-    state.restored = Boolean(restored && (restored.captions.some(Boolean) || restored.expressions.some(Boolean) || restored.tint || restored.template !== byOrder()[0].id));
+    state.restored = Boolean(restored && (restored.captions.some(Boolean) || restored.expressions.some(Boolean) || restored.tint || Object.keys(restored.cast).length || restored.template !== byOrder()[0].id));
 
     const stageStatus = $('mm-stage-status');
     stageStatus.textContent = WORDS.loading;
@@ -681,6 +878,7 @@ export const __test__ = {
     onExpression,
     onTint,
     onKey,
+    noteFor,
     leadAvatar,
     showNext
 };

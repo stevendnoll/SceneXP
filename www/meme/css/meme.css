@@ -412,6 +412,219 @@ body.mm-body {
     display: none;
 }
 
+/* ---- Customize (M8): the shared avatar editor under a person's row ---------- */
+
+/* The editor's own classes (www/shared/js/avatar-editor-1.0.0.js), drawn as
+   the avatar page draws them (avatar.css), here in the sheet's colors and
+   scoped to the space it opens in, a little smaller for a row of the sheet. */
+.mm-customize {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--mm-line);
+}
+
+.mm-customize[hidden] {
+    display: none;
+}
+
+.mm-customize .mm-note {
+    margin: 0 0 12px;
+}
+
+.mm-customize .av-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px;
+    padding: 3px;
+    background: var(--mm-well);
+    border-radius: 16px;
+    margin-bottom: 16px;
+}
+
+.mm-customize .av-tab {
+    min-width: 0;
+    padding: 8px 6px;
+    border: 0;
+    border-radius: 13px;
+    background: transparent;
+    color: var(--mm-muted);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mm-customize .av-tab:hover {
+    color: var(--mm-ink);
+}
+
+.mm-customize .av-tab[aria-selected="true"] {
+    background: var(--mm-paper);
+    color: var(--mm-ink);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.mm-customize .av-tab:focus-visible {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 2px;
+}
+
+.mm-customize .av-panel[hidden],
+.mm-customize .av-group[hidden],
+.mm-customize .av-option[hidden] {
+    display: none;
+}
+
+.mm-customize .av-group {
+    border: 0;
+    margin: 0 0 18px;
+    padding: 0;
+    min-width: 0;
+}
+
+.mm-customize .av-legend {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mm-muted);
+    margin-bottom: 8px;
+    padding: 0;
+}
+
+.mm-customize .av-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.mm-customize .av-option {
+    position: relative;
+    display: inline-flex;
+    cursor: pointer;
+}
+
+/* The radio is the whole option, invisible: the swatch or the word beside
+   it shows its state. Still a real radio, so the arrow keys move through
+   the group and a screen reader hears "2 of 6". */
+.mm-customize .av-radio {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.mm-customize .av-swatch {
+    display: block;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--swatch);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
+}
+
+.mm-customize .av-radio:checked + .av-swatch {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14), 0 0 0 3px var(--mm-paper), 0 0 0 5px var(--mm-ink);
+}
+
+.mm-customize .av-word {
+    display: inline-block;
+    padding: 7px 14px;
+    border: 1px solid var(--mm-line);
+    border-radius: 999px;
+    background: var(--mm-paper);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.mm-customize .av-option:hover .av-word {
+    border-color: var(--mm-ink);
+}
+
+.mm-customize .av-radio:checked + .av-word {
+    background: var(--mm-ink);
+    border-color: var(--mm-ink);
+    color: var(--mm-paper);
+}
+
+.mm-customize .av-radio:focus-visible + .av-swatch,
+.mm-customize .av-radio:focus-visible + .av-word {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 4px;
+}
+
+/* Any color: the browser's own color input, drawn as one more swatch, a
+   rainbow until a custom color is chosen. */
+.mm-customize .av-custom {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: conic-gradient(#e94b4b, #f2c94c, #6fcf97, #2d9cdb, #9b51e0, #e94b4b);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
+    cursor: pointer;
+}
+
+.mm-customize .av-custom::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.mm-customize .av-custom::-webkit-color-swatch {
+    border: 0;
+    border-radius: 50%;
+    opacity: 0;
+}
+
+.mm-customize .av-custom::-moz-color-swatch {
+    border: 0;
+    border-radius: 50%;
+    opacity: 0;
+}
+
+.mm-customize .av-custom.is-chosen {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14), 0 0 0 3px var(--mm-paper), 0 0 0 5px var(--mm-ink);
+}
+
+.mm-customize .av-custom.is-chosen::-webkit-color-swatch {
+    opacity: 1;
+}
+
+.mm-customize .av-custom.is-chosen::-moz-color-swatch {
+    opacity: 1;
+}
+
+.mm-customize .av-custom:focus-visible {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 4px;
+}
+
+/* A typed number (a jersey's): one short box in the row's own pill. */
+.mm-customize .av-number {
+    width: 5.5em;
+    padding: 7px 14px;
+    border: 1px solid var(--mm-line);
+    border-radius: 999px;
+    background: var(--mm-paper);
+    color: inherit;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 500;
+    text-align: center;
+}
+
+.mm-customize .av-number:focus-visible {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 4px;
+}
+
+.mm-customize > .mm-secondary {
+    margin-top: 2px;
+}
+
 /* ---- The size --------------------------------------------------------------- */
 
 .mm-group {

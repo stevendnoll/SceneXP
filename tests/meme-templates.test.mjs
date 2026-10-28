@@ -302,6 +302,13 @@ describe('the rules catch', () => {
         expect(problems((t) => { t.cells[0].scene = 'plan'; })).toEqual([]);
     });
 
+    test('a role id that is not a plain word, or is one the link keeps for itself (M8)', () => {
+        for (const id of ['m', 'a', 'Friend', 'the friend', '', 7, 'x=y']) {
+            expect(problems((t) => { t.roles = [{ ...t.roles[0], id }]; t.cells[0].figures[0].role = id; })).toEqual(expect.arrayContaining([expect.stringMatching(/must be a lowerCamelCase word, not m or a/)]));
+        }
+        expect(problems((t) => { t.roles = [{ ...t.roles[0], id: 'lead' }]; t.cells[0].figures[0].role = 'lead'; })).toEqual([]);
+    });
+
     test('a tint that is not true or false, a template offering one no cell follows, and a cell following one not offered (M8)', () => {
         expect(problems((t) => { t.tint = 'yes'; })).toEqual(expect.arrayContaining([expect.stringMatching(/tint must be true or false/)]));
         expect(problems((t) => { t.tint = true; })).toEqual([expect.stringMatching(/offers a tint, but no cell follows it/)]);
