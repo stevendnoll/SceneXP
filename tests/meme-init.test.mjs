@@ -792,48 +792,27 @@ describe('the page', () => {
         expect(state.captions).toEqual(['me', 'you', 'deal']);
     });
 
-    test('the video section shows only where the browser can record, and Make the video starts one clip at a time', async () => {
-        let main = await boot();
-        expect(dom.el('mm-clip').hidden).toBe(true);
-        expect(await main.makeClip()).toBeNull();
-        dom.uninstall();
-        // A browser with a recorder.
-        installThree();
-        dom = installDom();
-        Object.assign(dom.el('mm-canvas'), { clientWidth: 800, clientHeight: 600 });
-        class FakeRecorder {
-            constructor(stream, options) { this.mimeType = options.mimeType; FakeRecorder.made = (FakeRecorder.made || 0) + 1; }
-            start() {}
-            stop() { this.ondataavailable({ data: new Blob(['clip'], { type: 'video/mp4' }) }); this.onstop(); }
-        }
-        FakeRecorder.isTypeSupported = () => true;
-        window.MediaRecorder = FakeRecorder;
-        window.HTMLCanvasElement = function () {};
-        window.HTMLCanvasElement.prototype.captureStream = () => ({});
-        window.Blob = Blob;
-        const create = document.createElement;
-        document.createElement = (tag) => {
-            const el = create(tag);
-            if (tag === 'canvas') el.captureStream = () => ({});
-            return el;
-        };
-        jest.resetModules();
-        main = await import('../www/meme/js/main.js');
-        await flushAsync(30);
-        const { state } = main.__test__;
-        expect(dom.el('mm-clip').hidden).toBe(false);
-        fire(dom.el('mm-clip-make'), 'click');
-        expect(state.exporter.state.recording).toBeTruthy();
-        expect(dom.el('mm-clip-make').getAttribute('aria-disabled')).toBe('true');
-        expect(dom.el('mm-status').textContent).toMatch(/^Making your video/);
-        const made = FakeRecorder.made;
-        fire(dom.el('mm-clip-make'), 'click');
-        expect(FakeRecorder.made).toBe(made);
-        // Picking another meme lets a half-made clip go.
-        main.pickTemplate('panic');
-        expect(state.exporter.state.recording).toBeNull();
-        expect(dom.el('mm-clip-make').getAttribute('aria-disabled')).toBeNull();
-        document.createElement = create;
+    test('there is no video at launch: no section, no recorder fetched, and nowhere promises one', () => {
+        // Held back by Steve on 2026-10-28 (the clip is whole in commit
+        // 21f3068). A HALF-REMOVAL is the failure here: a button wired to
+        // nothing, a recorder every phone downloads for a feature that is
+        // not there, or a card that still offers a video.
+        expect(HTML).not.toMatch(/id="mm-clip/);
+        // The preload list is the page's import graph, written by the build.
+        expect(HTML).not.toContain('recorder-1.0.0');
+        expect(MAIN).not.toMatch(/makeClip|mm-clip/);
+        expect(HTML.replace(/<!--[\s\S]*?-->/g, '')).not.toMatch(/video/i);
+        // What the rest of the site says about this page.
+        const home = readFileSync('www/index.html', 'utf8');
+        const cards = [...home.matchAll(/data-slug="meme"[\s\S]*?<\/li>/g)].map((m) => m[0]);
+        expect(cards).toHaveLength(2);     // the Featured slide and the card
+        for (const card of cards) expect(card).not.toMatch(/video/i);
+        const bullet = readFileSync('www/llms.txt', 'utf8').split('\n').find((l) => l.includes('(https://www.scenexp.com/meme/)'));
+        expect(bullet).toBeTruthy();
+        expect(bullet).not.toMatch(/video/i);
+        const privacy = readFileSync('www/privacy.html', 'utf8').match(/<li><strong>Your last meme in Meme Studio\.[\s\S]*?<\/li>/);
+        expect(privacy).not.toBeNull();
+        expect(privacy[0]).not.toMatch(/video/i);
     });
 
     test('every word the page says keeps the house style', async () => {

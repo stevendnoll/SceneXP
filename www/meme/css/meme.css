@@ -532,36 +532,6 @@ body.mm-body {
     margin-top: 14px;
 }
 
-/* ---- The video ----------------------------------------------------------- */
-
-.mm-clip[hidden] {
-    display: none;
-}
-
-.mm-clip-stage {
-    margin-top: 10px;
-}
-
-.mm-clip-stage:empty {
-    display: none;
-}
-
-.mm-clip-stage canvas {
-    display: block;
-    width: 100%;
-    max-width: 248px;
-    height: auto;
-    border-radius: 12px;
-    background: #111;
-}
-
-/* Reduced motion: the clip is recorded, not watched. The canvas stays laid
-   out (a recording wants that) and out of sight. */
-.mm-clip-stage canvas.is-unseen {
-    opacity: 0;
-    max-height: 1px;
-}
-
 .mm-primary {
     padding: 13px 22px;
     border: 0;

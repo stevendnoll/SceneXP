@@ -15,7 +15,7 @@
          belongs here. The page is listed in the directory (Worlds and
          games), the promo catalog, the sitemap and llms.txt, which
          tests/directory.test.mjs holds together. -->
-    <meta name="description" content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption, then share as a picture, a short video, or a link a friend can remix with their own avatar.">
+    <meta name="description" content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption, then share as a picture or as a link a friend can remix with their own avatar.">
     <meta name="theme-color" content="#F1EFEA">
     <meta name="author" content="Steve Noll">
 
@@ -66,7 +66,7 @@
       "name": "Meme Studio",
       "datePublished": "2026-10-28",
       "image": "https://www.scenexp.com/meme/assets/og-meme.jpg?v=1",
-      "description": "A browser-based 3D meme generator for SceneXP. The visitor's own avatar stars in a meme laid out as a grid of small lit 3D boxes, one for each panel. Choose a template, type a caption for each panel, add a friend's avatar, and share the result as a picture, a short vertical video, or a link the friend can open and remix with their own avatar. Everything is made on the visitor's own device and nothing is uploaded.",
+      "description": "A browser-based 3D meme generator for SceneXP. The visitor's own avatar stars in a meme laid out as a grid of small lit 3D boxes, one for each panel. Choose a template, type a caption for each panel, add a friend's avatar, and share the result as a picture or as a link the friend can open and remix with their own avatar. Everything is made on the visitor's own device and nothing is uploaded.",
       "applicationCategory": "EntertainmentApplication",
       "operatingSystem": "Any",
       "browserRequirements": "Requires JavaScript. The 3D stage needs WebGL 2.",
@@ -111,7 +111,7 @@
     <title>Meme Studio | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/meme.min.css?v=2" as="style">
+    <link rel="preload" href="css/meme.min.css?v=3" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -133,7 +133,6 @@
     <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
     <link rel="modulepreload" href="js/panels.min.js">
     <link rel="modulepreload" href="../shared/js/sharefile-1.0.0.min.js">
-    <link rel="modulepreload" href="../shared/js/recorder-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-figure-1.0.0.min.js">
     <link rel="modulepreload" href="js/poses.min.js">
     <link rel="modulepreload" href="js/hands.min.js">
@@ -152,7 +151,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/meme.min.css?v=2">
+    <link rel="stylesheet" href="css/meme.min.css?v=3">
 
     <!-- When JS is off, the stage can't run: the static fallback below is
          the page. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -174,9 +173,9 @@
                 to run. Your SceneXP avatar stands in each panel of a classic
                 meme layout, built as a row of small lit 3D boxes. You choose a
                 template, type a caption for each panel, and add a friend's
-                avatar if you like. Then you share the result as a picture, a
-                short vertical video, or a link your friend can open and remix
-                with their own avatar.</p>
+                avatar if you like. Then you share the result as a picture, or
+                as a link your friend can open and remix with their own
+                avatar.</p>
             <p>Everything is made on your own device. Nothing you type or make
                 is sent to us.</p>
             <nav aria-label="Site sections">
@@ -222,7 +221,7 @@
                  step, before the stage has finished loading. -->
             <p class="mm-eyebrow">Meme Studio</p>
             <h2 id="mm-heading" class="mm-heading">Put yourself in the meme</h2>
-            <p id="mm-lede" class="mm-lede">Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a short video.</p>
+            <p id="mm-lede" class="mm-lede">Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a link.</p>
 
             <!-- A meme that arrived by link (js/remix.js, M4): the friend's
                  meme as made, and the one next step. Hidden otherwise. -->
@@ -292,24 +291,14 @@
             </div>
             <p class="mm-note">The link carries the meme and your avatar. Whoever opens it can put their own avatar in your place.</p>
 
-            <!-- THE VIDEO (js/exporter.js, M6): a 9:16 clip, the camera
-                 gliding from panel to panel as the captions appear, ending on
-                 the whole meme. Recorded as it plays, in the canvas placed
-                 here, so it takes as long to make as it lasts. No sound. -->
-            <div id="mm-clip" class="mm-clip" hidden>
-                <h3 class="mm-subhead">Your video</h3>
-                <p class="mm-note">A short vertical video of your meme, panel by panel, with no sound. It takes as long to make as it lasts.</p>
-                <div id="mm-clip-stage" class="mm-clip-stage"></div>
-                <div class="mm-row">
-                    <button id="mm-clip-make" class="mm-primary" type="button">Make the video</button>
-                    <button id="mm-clip-save" class="mm-primary" type="button" hidden>Save video</button>
-                </div>
-            </div>
-
+            <!-- NO VIDEO AT LAUNCH (Steve, 2026-10-28): the short vertical
+                 clip (M6) stood here, and was held back so the first release
+                 shares pictures and links only. js/exporter.js says where it
+                 is kept. -->
             <p id="mm-status" class="mm-status" role="status" aria-live="polite"></p>
 
-            <!-- WHAT NEXT (M7): built by main.js once the first picture,
-                 video or link has been shared or saved, which is when a
+            <!-- WHAT NEXT (M7): built by main.js once the first picture or
+                 link has been shared or saved, which is when a
                  visitor has finished something. With an avatar it names the
                  next experience (promo-1.0.0, PAIRS: X's and O's, where the
                  avatar takes the snap). With none it names the avatar page

@@ -3649,7 +3649,7 @@ html [lang="en"]
                     h3
                       "Meme Studio"
                     p.spotlight-text
-                      "Your avatar stars in a 3D meme you caption yourself. Share it as a picture or a short video, or send a link a friend can remix with their own avatar."
+                      "Your avatar stars in a 3D meme you caption yourself. Share it as a picture, or send a link a friend can remix with their own avatar."
                     span.experience-cta
                       "Make your meme →"
               li.spotlight-slide [aria-label="2 of 4" aria-roledescription="slide" data-slug="derby"]
@@ -3716,7 +3716,7 @@ html [lang="en"]
                     h3
                       "Meme Studio"
                     p
-                      "Your avatar stars in a meme built from small lit 3D boxes. Pick one of ten templates, type a caption for each panel, choose the faces, and bring a friend's avatar in too. Then share it as a picture, a short video, or a link your friend can open and remix with their own avatar."
+                      "Your avatar stars in a meme built from small lit 3D boxes. Pick one of ten templates, type a caption for each panel, choose the faces, and bring a friend's avatar in too. Then share it as a picture, or as a link your friend can open and remix with their own avatar."
                     p.experience-date
                       "Released"
                       time [datetime="2026-10-28"]
@@ -5201,7 +5201,7 @@ html [lang="en"]
     meta [content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"]
     meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
-    meta [content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption, then share as a picture, a short video, or a link a friend can remix with their own avatar." name="description"]
+    meta [content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption, then share as a picture or as a link a friend can remix with their own avatar." name="description"]
     meta [content="#F1EFEA" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/meme/" rel="canonical"]
@@ -5230,7 +5230,7 @@ html [lang="en"]
         "name": "Meme Studio",
         "datePublished": "2026-10-28",
         "image": "https://www.scenexp.com/meme/assets/og-meme.jpg?v=1",
-        "description": "A browser-based 3D meme generator for SceneXP. The visitor's own avatar stars in a meme laid out as a grid of small lit 3D boxes, one for each panel. Choose a template, type a caption for each panel, add a friend's avatar, and share the result as a picture, a short vertical video, or a link the friend can open and remix with their own avatar. Everything is made on the visitor's own device and nothing is uploaded.",
+        "description": "A browser-based 3D meme generator for SceneXP. The visitor's own avatar stars in a meme laid out as a grid of small lit 3D boxes, one for each panel. Choose a template, type a caption for each panel, add a friend's avatar, and share the result as a picture or as a link the friend can open and remix with their own avatar. Everything is made on the visitor's own device and nothing is uploaded.",
         "applicationCategory": "EntertainmentApplication",
         "operatingSystem": "Any",
         "browserRequirements": "Requires JavaScript. The 3D stage needs WebGL 2.",
@@ -5271,7 +5271,7 @@ html [lang="en"]
     title
       "Meme Studio | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/meme.min.css?v=2" rel="preload"]
+    link [as="style" href="css/meme.min.css?v=3" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -5292,7 +5292,6 @@ html [lang="en"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
     link [href="js/panels.min.js" rel="modulepreload"]
     link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
-    link [href="../shared/js/recorder-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
     link [href="js/poses.min.js" rel="modulepreload"]
     link [href="js/hands.min.js" rel="modulepreload"]
@@ -5308,7 +5307,7 @@ html [lang="en"]
     link [href="js/scenes/fine.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/meme.min.css?v=2" rel="stylesheet"]
+    link [href="css/meme.min.css?v=3" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body.mm-body
@@ -5319,7 +5318,7 @@ html [lang="en"]
         h1
           "Meme Studio"
         p
-          "This is a meme generator with you in it, and it needs JavaScript to run. Your SceneXP avatar stands in each panel of a classic meme layout, built as a row of small lit 3D boxes. You choose a template, type a caption for each panel, and add a friend's avatar if you like. Then you share the result as a picture, a short vertical video, or a link your friend can open and remix with their own avatar."
+          "This is a meme generator with you in it, and it needs JavaScript to run. Your SceneXP avatar stands in each panel of a classic meme layout, built as a row of small lit 3D boxes. You choose a template, type a caption for each panel, and add a friend's avatar if you like. Then you share the result as a picture, or as a link your friend can open and remix with their own avatar."
         p
           "Everything is made on your own device. Nothing you type or make is sent to us."
         nav [aria-label="Site sections"]
@@ -5350,7 +5349,7 @@ html [lang="en"]
         h2#mm-heading.mm-heading
           "Put yourself in the meme"
         p#mm-lede.mm-lede
-          "Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a short video."
+          "Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a link."
         div#mm-incoming.mm-incoming [aria-labelledby="mm-incoming-text" hidden role="region"]
           p#mm-incoming-text.mm-incoming-text
             "A friend made this meme for you."
@@ -5413,17 +5412,6 @@ html [lang="en"]
             "Start over"
         p.mm-note
           "The link carries the meme and your avatar. Whoever opens it can put their own avatar in your place."
-        div#mm-clip.mm-clip [hidden]
-          h3.mm-subhead
-            "Your video"
-          p.mm-note
-            "A short vertical video of your meme, panel by panel, with no sound. It takes as long to make as it lasts."
-          div#mm-clip-stage.mm-clip-stage
-          div.mm-row
-            button#mm-clip-make.mm-primary [type="button"]
-              "Make the video"
-            button#mm-clip-save.mm-primary [hidden type="button"]
-              "Save video"
         p#mm-status.mm-status [aria-live="polite" role="status"]
         div#mm-next.mm-next [hidden]
         p.mm-note.mm-privacy
@@ -6331,7 +6319,7 @@ html [lang="en"]
             li
               strong
                 "Your last meme in Meme Studio."
-              "Meme Studio keeps the meme you are making in your browser's local storage, so it is just as you left it when you come back: which meme you picked, your captions, the face chosen for each panel, and the avatar of a friend in it, whether you added them from their link or file or they sent you the meme. Your own avatar is read from where the Your Avatar page keeps it, never copied. None of it is ever sent to us. The page's usage pings say only which meme you picked and what kind of thing you did, such as saving a picture, and never anything you typed. A picture or a short video you make of your meme is made right on your device and handed only to your own share sheet or downloads folder. A link you share holds the meme, your captions and your avatar in the part of the link that is never sent to our server, by you or by the friend who opens it. The Start over button clears your meme on the spot."
+              "Meme Studio keeps the meme you are making in your browser's local storage, so it is just as you left it when you come back: which meme you picked, your captions, the face chosen for each panel, and the avatar of a friend in it, whether you added them from their link or file or they sent you the meme. Your own avatar is read from where the Your Avatar page keeps it, never copied. None of it is ever sent to us. The page's usage pings say only which meme you picked and what kind of thing you did, such as saving a picture, and never anything you typed. A picture you make of your meme is made right on your device and handed only to your own share sheet or downloads folder. A link you share holds the meme, your captions and your avatar in the part of the link that is never sent to our server, by you or by the friend who opens it. The Start over button clears your meme on the spot."
             li
               strong
                 "You can remove any of it whenever you like."

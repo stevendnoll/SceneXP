@@ -493,8 +493,7 @@ happens in it, use generic props, and give it nobody's likeness.
    tests/meme-remix.test.mjs tests/meme-exporter.test.mjs
    tests/meme-shadows.test.mjs` runs the validator over your entry, sends
    it through a remix link and back, fits its boxes in the frame at every
-   shape of screen, plans its video under the length limit, and checks
-   its shadows stay in their own panels. The catalog suite names every
+   shape of screen, and checks its shadows stay in their own panels. The catalog suite names every
    template and the picker's order on purpose, so add your id to both lists
    at its top. The catalog is also frozen by a snapshot, so that a shipped
    template only ever changes on purpose: a new one means updating it once,

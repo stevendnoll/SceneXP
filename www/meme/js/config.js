@@ -122,21 +122,15 @@ export const MEME_PAGE = deepFreeze({
      *  canvas height, bottom right. */
     wordmark: { text: 'SceneXP.com', height: 0.024, inset: 0.03 },
 
-    /** Export sizes (PRD 5.6): pictures as PNG, the clip through the shared
-     *  recorder at `clip.fps`, with each panel held `clip.hold` seconds and
-     *  `clip.glide` between panels (a cut under reduced motion), and the
-     *  whole grid held `clip.ending` at the end. The preview on the sheet
-     *  is drawn `preview` pixels across. */
+    /** Export sizes (PRD 5.6): pictures as PNG. The preview on the sheet is
+     *  drawn `preview` pixels across. (The video's `clip` settings left with
+     *  the video, held back from the launch, and are in commit 21f3068.) */
     export: {
         pictures: [
             { id: 'square', w: 1080, h: 1080, label: '1080 square' },
             { id: 'portrait', w: 1080, h: 1350, label: '1080 by 1350 portrait' }
         ],
-        preview: 540,
-        clip: {
-            w: 1080, h: 1920, fps: 30, hold: 1.6, glide: 0.5, ending: 1.5, longest: 15, fade: 0.4,
-            bitrate: 8000000, mobileBitrate: 5000000
-        }
+        preview: 540
     },
 
     /** The remix link (PLANNING 4.3): the longest fragment `decodeRemix`

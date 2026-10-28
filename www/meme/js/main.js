@@ -2,8 +2,9 @@
 /**
  * main.js - Meme Studio (/meme/, specs/meme PRD): the visitor's own avatar
  * stars in a meme laid out as a grid of small lit 3D boxes, captioned by the
- * visitor and shared as a picture, a short video, or a link a friend can
- * remix with their own avatar.
+ * visitor and shared as a picture, or as a link a friend can remix with
+ * their own avatar. (The short video, M6, was held back from the launch:
+ * exporter.js says where it is kept.)
  *
  * THE FIRST THIRTY SECONDS ARE WORDS AND ONE NEXT STEP. The sheet says what
  * this is and what to do before the stage has finished loading.
@@ -12,8 +13,8 @@
  * People); the picker with a glyph of each grid; a caption field a slot; a
  * row of expression chips a panel; the view buttons that step into a panel
  * by keyboard; the last meme kept in this browser and restored on return.
- * The people, the rest of the templates, the remix link and the clip
- * arrive milestone by milestone (specs/meme/TASKS.md).
+ * The people, the rest of the templates and the remix link arrived
+ * milestone by milestone (specs/meme/TASKS.md).
  *
  * NOTHING IS UPLOADED. The avatar store is read, never written, by this
  * page; the meme store (state.js) is this page's own. The usage pings count
@@ -383,8 +384,6 @@ export function showTemplate(template, meme = null) {
 export function pickTemplate(id) {
     const template = templateOf(id);
     if (state.template && template.id === state.template.id) return template;
-    // A clip half made is of the old meme: let it go.
-    if (state.exporter) state.exporter.stopClip();
     showTemplate(template);
     keep();
     if (state.ready) track('template-picked', { kind: template.id });
@@ -492,8 +491,8 @@ async function savePicture() {
     return result;
 }
 
-/** How a picture, a video or the link went that counts as finished: the
- *  file shared or saved, the link handed to the sheet, copied or mailed.
+/** How a picture or the link went that counts as finished: the picture
+ *  shared or saved, the link handed to the sheet, copied or mailed.
  *  A dismissed sheet or a failure is not. */
 const FINISHED = Object.freeze(['shared', 'saved', 'native', 'copy', 'mail']);
 
@@ -529,18 +528,8 @@ function onKey(e) {
     state.stage.view(null);
 }
 
-/** Make the video of the meme as it stands. A press while one is made is
- *  nothing (the button reads busy). */
-export function makeClip() {
-    if (!state.exporter || state.exporter.state.recording) return Promise.resolve(null);
-    if (state.ready) track('clip-started', { kind: state.template.id });
-    return state.exporter.makeClip(state.template, state.captions);
-}
-
 function wire() {
     $('mm-picture-save').addEventListener('click', savePicture);
-    $('mm-clip-make').addEventListener('click', makeClip);
-    $('mm-clip-save').addEventListener('click', () => { if (state.exporter) state.exporter.saveClip(); });
     $('mm-start-over').addEventListener('click', startOver);
     $('mm-make-mine').addEventListener('click', makeItMine);
     $('mm-keep-theirs').addEventListener('click', keepTheirs);
@@ -613,9 +602,6 @@ export async function init() {
             });
             state.exporter = createExporter(CONFIG, {
                 stage: state.stage,
-                mobile: isMobile(),
-                reducedMotion,
-                say,
                 onExport: (kind, outcome) => {
                     track(`export-${kind}`, { kind: state.template.id, outcome });
                     showNext(outcome);
@@ -637,8 +623,6 @@ export async function init() {
     const saveBtn = $('mm-picture-save');
     saveBtn.textContent = state.exporter ? state.exporter.buttonLabel() : EXPORT_WORDS.saveButton;
     saveBtn.hidden = !state.exporter;
-    // The video, where this browser can record one.
-    $('mm-clip').hidden = !(state.exporter && state.exporter.clipMime());
     $('mm-hint').hidden = !state.stage;
     $('mm-view').hidden = !state.stage;
     wire();
