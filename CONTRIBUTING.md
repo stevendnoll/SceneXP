@@ -476,7 +476,13 @@ happens in it, use generic props, and give it nobody's likeness.
    figure's own, never the visitor's handedness.
 2. **Props, if it needs any**, are a builder in `www/meme/js/scenes/`,
    registered in `scenes/index.js`. `plan.js` (an easel with a chart) is
-   the smallest one to copy.
+   the smallest one to copy. **A backdrop that needs more than a color**
+   names a painter for the wall or the floor, `paint: { wall: 'city',
+   floor: 'sidewalk' }`, and each is painted in that surface's own color
+   (`backdrop`, and an optional `floor`). The painters live in
+   `www/meme/js/backdrops.js` and draw pixels in code, so nothing is
+   downloaded. A new one goes in its `PAINTS` list and is measured in
+   `tests/meme-backdrops.test.mjs`.
 3. **A new pose or expression is solved on the real rig, not guessed by
    eye.** Poses live in `www/meme/js/poses.js`, with their hand positions
    held by `tests/meme-poses.test.mjs`. Expressions are a shared part, so a

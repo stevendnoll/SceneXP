@@ -17,15 +17,17 @@ import { withOverrides, DEFAULT_AVATAR } from '../www/shared/js/avatar-1.0.0.js'
 let POSES;
 let SIDES;
 let SCENE_IDS;
+let PAINT_IDS;
 beforeAll(async () => {
     installThree();
     jest.resetModules();
     ({ POSES, SIDES } = await import('../www/meme/js/poses.js'));
     ({ SCENE_IDS } = await import('../www/meme/js/scenes/index.js'));
+    ({ PAINT_IDS } = await import('../www/meme/js/backdrops.js'));
 });
 afterAll(() => { delete globalThis.THREE; });
 
-const rules = () => ({ expressions: EXPRESSIONS.map((e) => e.id), poses: POSES, scenes: SCENE_IDS, sides: SIDES, maxSlots: CONFIG.caption.maxSlots });
+const rules = () => ({ expressions: EXPRESSIONS.map((e) => e.id), poses: POSES, scenes: SCENE_IDS, paints: PAINT_IDS, sides: SIDES, maxSlots: CONFIG.caption.maxSlots });
 
 /** A deep, writable copy of a frozen template. */
 const copy = (t) => JSON.parse(JSON.stringify(t));
@@ -87,6 +89,11 @@ describe('the catalog', () => {
         expect(now.figures[0].overrides).toEqual({ build: 'broad', muscles: 'buff' });
         // Galaxy Brain brightens row by row, and The Plan repeats its last step.
         expect(T.templateOf('galaxyBrain').cells.filter((c) => c.figures.length).map((c) => c.figures[0].glow)).toEqual([0, 0.45, 0.75, 1]);
+        // Its background is the visitor's to color, pale to deep down the
+        // faces' walls; the words' walls stay paper (Steve, M8). Only it.
+        expect(T.templateOf('galaxyBrain').tint).toBe(true);
+        expect(T.templateOf('galaxyBrain').cells.map((c) => c.tint)).toEqual([undefined, 0.15, undefined, 0.4, undefined, 0.7, undefined, 1]);
+        expect(T.TEMPLATES.filter((t) => t.tint).map((t) => t.id)).toEqual(['galaxyBrain']);
         // The hat and the hair stay on every row (Steve, 2026-10-28).
         expect(T.templateOf('galaxyBrain').cells.every((c) => !c.figures.length || !c.figures[0].overrides)).toBe(true);
         expect(T.templateOf('plan').cells.every((c) => c.scene === 'plan' && c.figures[0].pose === 'present')).toBe(true);
@@ -155,6 +162,31 @@ describe('the catalog', () => {
         for (const f of shakers) expect(withOverrides(DEFAULT_AVATAR, f.overrides).shirt).toBe(f.overrides.shirt);
         // The Plan's words go on the chart (Steve, 2026-10-28).
         expect(T.slotsOf(T.templateOf('plan'))).toEqual([0, 1, 2, 3].map((cell) => ({ cell, slot: 'prop', prop: 'board' })));
+    });
+
+    test('the backdrops carry their memes, and The Plan dresses its presenter in black (Steve, M8)', () => {
+        const cell = (id, i = 0) => T.templateOf(id).cells[i];
+        expect(cell('headTurn').paint).toEqual({ wall: 'city', floor: 'sidewalk' });
+        expect(cell('handshake').paint).toEqual({ wall: 'storm' });
+        expect(cell('handshake').scene).toBe('handshake');
+        expect(T.templateOf('plan').cells.every((c) => c.paint && c.paint.wall === 'wash')).toBe(true);
+        expect(cell('everythingIsFine').paint).toEqual({ wall: 'soot' });
+        // Every piece of the outfit is black, and every override names a
+        // real option or a custom color, so none is dropped on the floor.
+        for (const c of T.templateOf('plan').cells) {
+            const o = c.figures[0].overrides;
+            expect(Object.keys(o).sort()).toEqual(['armwearColor', 'bottomColor', 'hatColor', 'legwearColor', 'shirt', 'shoeColor']);
+            const dressed = withOverrides(DEFAULT_AVATAR, o);
+            for (const [key, value] of Object.entries(o)) expect({ [key]: dressed[key] }).toEqual({ [key]: value });
+        }
+        // Everything Is Fine: the table on the camera's right (scenes/fine.js),
+        // the figure standing on its left, turned toward it, the face round
+        // to the camera (Steve, M8).
+        const [figure] = cell('everythingIsFine').figures;
+        expect(figure).toMatchObject({ pose: 'stand', expression: 'sweat' });
+        expect(figure.at[0]).toBeLessThan(0);
+        expect(figure.turn).toBeGreaterThan(0.3);
+        expect(figure.look).toBeLessThan(0);
     });
 
     test('an unknown id falls back to the first in the picker\'s order', () => {
@@ -268,5 +300,29 @@ describe('the rules catch', () => {
         expect(problems((t) => { delete t.cells[0].backdrop; })).toEqual([]);
         expect(problems((t) => { t.cells[0].scene = 'castle'; })).toEqual([expect.stringMatching(/scene "castle" has no builder/)]);
         expect(problems((t) => { t.cells[0].scene = 'plan'; })).toEqual([]);
+    });
+
+    test('a tint that is not true or false, a template offering one no cell follows, and a cell following one not offered (M8)', () => {
+        expect(problems((t) => { t.tint = 'yes'; })).toEqual(expect.arrayContaining([expect.stringMatching(/tint must be true or false/)]));
+        expect(problems((t) => { t.tint = true; })).toEqual([expect.stringMatching(/offers a tint, but no cell follows it/)]);
+        expect(problems((t) => { t.cells[0].tint = 0.5; })).toEqual([expect.stringMatching(/follows a tint the template does not offer/)]);
+        expect(problems((t) => { t.tint = true; t.cells[0].tint = 1.5; })).toEqual([expect.stringMatching(/tint must be 0 to 1/)]);
+        expect(problems((t) => { t.tint = true; t.cells[0].tint = 1; t.cells[0].paint = { wall: 'wash' }; })).toEqual([expect.stringMatching(/painted wall cannot follow a tint/)]);
+        expect(problems((t) => { t.tint = true; t.cells[0].tint = 1; })).toEqual([]);
+        expect(problems((t) => { t.tint = false; })).toEqual([]);
+    });
+
+    test('a floor that is not a color, and paint on a surface a box lacks or with no painter (M8)', () => {
+        expect(problems((t) => { t.cells[0].floor = 'gray'; })).toEqual([expect.stringMatching(/floor must be/)]);
+        expect(problems((t) => { t.cells[0].floor = '#CBC7C0'; })).toEqual([]);
+        expect(problems((t) => { t.cells[0].paint = 'city'; })).toEqual([expect.stringMatching(/paint must be/)]);
+        expect(problems((t) => { t.cells[0].paint = null; })).toEqual([expect.stringMatching(/paint must be/)]);
+        expect(problems((t) => { t.cells[0].paint = { ceiling: 'city' }; })).toEqual([expect.stringMatching(/paint names "ceiling"/)]);
+        expect(problems((t) => { t.cells[0].paint = { wall: 'mural' }; })).toEqual([expect.stringMatching(/paint "mural" has no painter/)]);
+        expect(problems((t) => { t.cells[0].paint = { wall: 'city', floor: 'sidewalk' }; })).toEqual([]);
+        // A catalog checked without the painters' list knows none.
+        const t = base();
+        t.cells[0].paint = { wall: 'city' };
+        expect(T.validateTemplate(t, { ...rules(), paints: undefined })).toEqual([expect.stringMatching(/paint "city" has no painter/)]);
     });
 });

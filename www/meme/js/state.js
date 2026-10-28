@@ -2,7 +2,8 @@
 /**
  * state.js - the meme being made (specs/meme PLANNING 4.2): which template,
  * the captions by slot, the expression chosen for each cell (null for the
- * template's own), and the roles (M5). Pure, no THREE and no DOM, so the
+ * template's own), the background color picked where a template offers
+ * one (M8), and the roles (M5). Pure, no THREE and no DOM, so the
  * remix link and the tests read it without a scene.
  *
  * `normalizeMeme` reduces anything to a valid meme: an unknown template
@@ -36,6 +37,9 @@ export function normalizeMeme(raw, { templates, byOrder, slotsOf, expressions, m
         template: template.id,
         captions: slots.map((_, k) => String(captions[k] == null ? '' : captions[k]).slice(0, maxChars)),
         expressions: template.cells.map((cell, i) => (cell.figures.length && expressions.includes(chosen[i]) ? chosen[i] : null)),
+        // The background color (M8), lowercase '#rrggbb', only for a
+        // template that offers one; null is the template's own.
+        tint: template.tint && typeof r.tint === 'string' && /^#[0-9a-fA-F]{6}$/.test(r.tint) ? r.tint.toLowerCase() : null,
         // A friend's avatar (M5), made valid, or none. It is already in
         // the visitor's hands (pasted or opened), so it is kept with the meme.
         friend: r.friend && typeof r.friend === 'object' ? normalizeAvatar(r.friend) : null

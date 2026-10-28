@@ -111,7 +111,7 @@
     <title>Meme Studio | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/meme.min.css?v=3" as="style">
+    <link rel="preload" href="css/meme.min.css?v=4" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -137,6 +137,7 @@
     <link rel="modulepreload" href="js/poses.min.js">
     <link rel="modulepreload" href="js/hands.min.js">
     <link rel="modulepreload" href="js/scenes/index.min.js">
+    <link rel="modulepreload" href="js/backdrops.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-layers-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-shapes-1.0.0.min.js">
@@ -146,12 +147,13 @@
     <link rel="modulepreload" href="js/scenes/plan.min.js">
     <link rel="modulepreload" href="js/scenes/space.min.js">
     <link rel="modulepreload" href="js/scenes/fine.min.js">
+    <link rel="modulepreload" href="js/scenes/handshake.min.js">
     <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/meme.min.css?v=3">
+    <link rel="stylesheet" href="css/meme.min.css?v=4">
 
     <!-- When JS is off, the stage can't run: the static fallback below is
          the page. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -246,6 +248,9 @@
 
                 <div id="mm-panel-meme" class="mm-panel" role="tabpanel" aria-labelledby="mm-tab-meme">
                     <div id="mm-picker" class="mm-picker" role="group" aria-label="Choose a meme"></div>
+                    <!-- The background color, for a meme that offers one
+                         (js/editor.js buildTintRow). -->
+                    <div id="mm-tint" class="mm-tint" hidden></div>
                     <p id="mm-hint" class="mm-note mm-hint" hidden>Tap a panel to step into it, and tap again to step back. Drag to tilt the view.</p>
                     <!-- The view by keyboard: what a tap on the stage does. -->
                     <div id="mm-view" class="mm-view" role="group" aria-label="Look at" hidden></div>

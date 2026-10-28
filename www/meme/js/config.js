@@ -117,6 +117,32 @@ export const MEME_PAGE = deepFreeze({
      *  second. */
     fire: { count: 14, countMobile: 7, size: 0.5, rise: 0.35 },
 
+    /** And its smoke under the ceiling (M8): `count` puffs, fewer on a
+     *  phone, each about `size` meters tall, drifting `drift` meters a
+     *  second. */
+    smoke: { count: 10, countMobile: 6, size: 0.75, drift: 0.04 },
+
+    /**
+     * A template's background color, where it offers one (Galaxy Brain,
+     * M8): the visitor picks one color, the deepest row wears it and the
+     * rows above fade from `paper` toward it, each by its cell's `tint`
+     * share (templates.js). A pick lighter than `cap` (HSL lightness) is
+     * darkened to it, so the last row stays dark enough for the glow to
+     * bloom. `swatches` are offered beside the meme's own and any color.
+     */
+    tint: {
+        paper: '#F4F1EA',
+        cap: 0.42,
+        swatches: [
+            { id: 'black', label: 'Black', color: '#121214' },
+            { id: 'midnight', label: 'Midnight blue', color: '#1B2A55' },
+            { id: 'teal', label: 'Teal', color: '#145E5C' },
+            { id: 'forest', label: 'Forest green', color: '#275A33' },
+            { id: 'crimson', label: 'Crimson', color: '#8A1C2C' },
+            { id: 'orange', label: 'Burnt orange', color: '#A9481A' }
+        ]
+    },
+
     /** The wordmark on every export (D3): text only, in the caption face,
      *  white with the dark outline, `height` and `inset` as shares of the
      *  canvas height, bottom right. */

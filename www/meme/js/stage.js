@@ -123,8 +123,10 @@ const smoothstep = (t) => {
  * The stage on `canvas`. Returns the controller main.js drives:
  *
  *   scene, camera, renderer
- *   setTemplate(template, avatarFor)  the panels rebuilt for a template,
- *                       `avatarFor(roleId)` giving each role's avatar
+ *   setTemplate(template, avatarFor, { tint })  the panels rebuilt for a
+ *                       template, `avatarFor(roleId)` giving each role's
+ *                       avatar, `tint` the background color picked (M8)
+ *   setTint(hex | null) the walls that follow a tint recolored
  *   setExpression(cellIndex, id)  a cell's figure built again with a face
  *   panels              the built panels, in cell order
  *   cameraFor(index)    a cell's camera in world meters, { eye, aim, fov }
@@ -258,6 +260,14 @@ export function createStage(config, {
         return n;
     }
 
+    /** The background color picked (M8), or null for the template's own,
+     *  on every wall that follows one. Returns how many walls changed. */
+    function setTint(tint) {
+        const n = panels.filter((panel) => panel.setTint(tint)).length;
+        if (n) dirty = true;
+        return n;
+    }
+
     function view(index) {
         const was = viewing;
         viewing = Number.isInteger(index) && panels[index] ? index : null;
@@ -366,13 +376,13 @@ export function createStage(config, {
 
     let avatars = () => null;
 
-    function setTemplate(next, avatarFor) {
+    function setTemplate(next, avatarFor, { tint = null } = {}) {
         clearPanels();
         template = next;
         avatars = avatarFor;
         const spots = layoutPanels(next, config.box);
         panels = next.cells.map((cell, i) => {
-            const panel = buildPanel(cell, config, avatarFor, { mobile });
+            const panel = buildPanel(cell, config, avatarFor, { mobile, tint });
             panel.group.position.set(spots[i].x, spots[i].y, spots[i].z);
             scene.add(panel.group);
             return panel;
@@ -457,6 +467,7 @@ export function createStage(config, {
         reducedMotion,
         setTemplate,
         setExpression,
+        setTint,
         recast,
         cameraFor,
         gridPose,

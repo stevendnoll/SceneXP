@@ -13,6 +13,8 @@
  *   line      one line under the title
  *   order     where it sits in the picker (the one-person, instant-payoff
  *             templates first)
+ *   tint      true when the visitor may color its background (M8); its
+ *             cells that follow the pick name their own `tint`
  *   grid      rows of cells, each `{ span }`; every row's spans sum to the
  *             same count (the template's columns)
  *   roles     the people in it: `cast` is 'avatar' (the visitor, or a
@@ -43,6 +45,13 @@
  *     camera    `{ eye, aim, fov }` in the box's own coordinates (its
  *               origin at the middle of its floor, +z toward the open side)
  *     backdrop  the back wall's color, or the box's default
+ *     tint      in a template that offers one, how far this wall goes from
+ *               paper (0) to the visitor's color (1); `backdrop` is worn
+ *               until a color is picked
+ *     floor     the floor's color, or the box's default
+ *     paint     `{ wall, floor }`, a painter (backdrops.js) for either
+ *               surface, painted in that surface's color (M8: the city
+ *               block, the storm, the wash, the soot)
  *     scene     a builder in scenes/ for props (scenes/index.js), or none
  *
  * Adding a template is one entry here (and a builder when it has props).
@@ -152,19 +161,22 @@ const THEN_NOW = {
 /** Galaxy Brain (template 5): four rows of escalation, the words on the
  *  left, the head glowing brighter on the right: a halo behind it that
  *  grows, then rays (panels.js GLOW). The visitor keeps the hat and the
- *  hair (Steve, 2026-10-28: the glow behind is the whole effect). */
+ *  hair (Steve, 2026-10-28: the glow behind is the whole effect). The
+ *  background is the visitor's to color (Steve, M8): the faces' walls
+ *  follow one pick, pale to deep down the rows, by each cell's `tint`. */
 const GALAXY_BRAIN = {
     id: 'galaxyBrain',
     title: 'Galaxy Brain',
     line: 'Four rows, each one brighter.',
     order: 5,
+    tint: true,
     grid: [[{ span: 1 }, { span: 1 }], [{ span: 1 }, { span: 1 }], [{ span: 1 }, { span: 1 }], [{ span: 1 }, { span: 1 }]],
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
     cells: [
-        textCell(), faceCell({ expression: 'none', glow: 0 }, '#E3DFD7'),
-        textCell(), faceCell({ expression: 'smug', glow: 0.45 }, '#C9BFE6'),
-        textCell(), faceCell({ expression: 'bigGrin', glow: 0.75 }, '#9A82D6'),
-        textCell(), faceCell({ expression: 'shocked', glow: 1 }, '#4B2E99')
+        textCell(), { ...faceCell({ expression: 'none', glow: 0 }, '#E3DFD7'), tint: 0.15 },
+        textCell(), { ...faceCell({ expression: 'smug', glow: 0.45 }, '#C9BFE6'), tint: 0.4 },
+        textCell(), { ...faceCell({ expression: 'bigGrin', glow: 0.75 }, '#9A82D6'), tint: 0.7 },
+        textCell(), { ...faceCell({ expression: 'shocked', glow: 1 }, '#4B2E99'), tint: 1 }
     ]
 };
 
@@ -173,13 +185,19 @@ const GALAXY_BRAIN = {
  *  stands on the camera's left (scenes/plan.js), so the figure turns a
  *  little toward it with the right arm out to it, and faces the room for
  *  three steps; only in the last does the head turn to the chart, shocked
- *  (Steve, 2026-10-28: the look at the board is the fourth panel alone). */
+ *  (Steve, 2026-10-28: the look at the board is the fourth panel alone).
+ *  A tan wall in a soft gradient, and the presenter dressed all in black
+ *  (Steve, M8). A black outfit is a costume; nothing more of anyone's
+ *  character (no scarf, no bald head) is added. */
+const BLACK = 'x1f1f22';
+const ALL_BLACK = { shirt: BLACK, hatColor: BLACK, bottomColor: 'black', shoeColor: 'black', legwearColor: 'black', armwearColor: 'black' };
 const PLAN_CELL = (expression, look = 0.2) => ({
-    figures: [you({ pose: 'present', side: 'right', look, expression, at: [0.5, 0], turn: -0.2 })],
+    figures: [you({ pose: 'present', side: 'right', look, expression, at: [0.5, 0], turn: -0.2, overrides: ALL_BLACK })],
     // The step is written on the chart (Steve, 2026-10-28).
     captions: [{ prop: 'board' }],
     camera: { eye: [0.03, 1.35, 3.1], aim: [-0.02, 1.15, 0], fov: 36 },
-    backdrop: '#D7E2EA',
+    backdrop: '#D9BF93',
+    paint: { wall: 'wash' },
     scene: 'plan'
 });
 const PLAN = {
@@ -204,7 +222,9 @@ const TWO_ROLES = THREE_ROLES.slice(0, 2);
  *  furious) and looks back over the shoulder, taken, at Someone, who has
  *  just passed them and walks on toward the camera in the foreground on
  *  the left. A label on each. (Steve, 2026-10-28: the friend is the one
- *  beside you; the passer-by is nearer the camera than either of you.) */
+ *  beside you; the passer-by is nearer the camera than either of you.)
+ *  Out on a city block: facades across the street under a strip of sky,
+ *  a sidewalk underfoot (Steve, M8). */
 const HEAD_TURN = {
     id: 'headTurn',
     title: 'The Head Turn',
@@ -220,7 +240,9 @@ const HEAD_TURN = {
         ],
         captions: [{ label: 0 }, { label: 1 }, { label: 2 }],
         camera: { eye: [0, 1.35, 3.3], aim: [0, 1.05, 0], fov: 38 },
-        backdrop: '#CFE3EE'
+        backdrop: '#B9D3E6',
+        floor: '#CBC7C0',
+        paint: { wall: 'city', floor: 'sidewalk' }
     }]
 };
 
@@ -229,7 +251,9 @@ const HEAD_TURN = {
  *  HANDSHAKE, solved on the rig. Both are built broad and buff in short
  *  sleeves, white on the camera's left and red on the right (Steve,
  *  2026-10-28: "the super buff arms" are the other crux), the meme's
- *  costume as the spacesuit is Always Has Been's. */
+ *  costume as the spacesuit is Always Has Been's. Dark gray clouds behind
+ *  them with the light pooled round the clasp (scenes/handshake.js,
+ *  Steve, M8). */
 const BUFF = { build: 'broad', muscles: 'buff', sleeves: 'short' };
 /** A true red for the second shirt: the swatches have only a rust, so
  *  this is a custom color id (avatar-1.0.0 `customColor`), which the
@@ -246,7 +270,10 @@ const HANDSHAKE_CELL = {
     ],
     captions: [{ label: 0 }, { label: 1 }, 'bottom'],
     camera: { eye: [0, 1.35, 3.0], aim: [0, 1.0, 0], fov: 36 },
-    backdrop: '#F2D6B3'
+    backdrop: '#3E4146',
+    floor: '#2C2E32',
+    paint: { wall: 'storm' },
+    scene: 'handshake'
 };
 const HANDSHAKE = {
     id: 'handshake',
@@ -288,7 +315,10 @@ const ALWAYS = {
 };
 
 /** Everything Is Fine (template 10): one person, calm at a table while
- *  the room burns. */
+ *  the room burns. The table on the camera's right and the figure
+ *  standing on its left, turned toward it with the face round to the
+ *  camera; soot down the wall and smoke under the ceiling (Steve, M8; the
+ *  figure stands until the shared figure can sit). */
 const FINE_TEMPLATE = {
     id: 'everythingIsFine',
     title: 'Everything Is Fine',
@@ -297,10 +327,11 @@ const FINE_TEMPLATE = {
     grid: [[{ span: 1 }]],
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
     cells: [{
-        figures: [{ role: 'you', pose: 'stand', expression: 'sweat', at: [0.2, 0.05], turn: -0.15 }],
+        figures: [{ role: 'you', pose: 'stand', expression: 'sweat', look: -0.5, at: [-0.22, 0.1], turn: 0.55 }],
         captions: ['top', 'bottom'],
-        camera: { eye: [0.1, 1.3, 2.9], aim: [0, 1.0, 0], fov: 38 },
+        camera: { eye: [0.05, 1.3, 2.9], aim: [0.05, 1.0, 0], fov: 38 },
         backdrop: '#F0A070',
+        paint: { wall: 'soot' },
         scene: 'fine'
     }]
 };
@@ -339,11 +370,11 @@ export function slotsOf(template) {
 
 /**
  * What is wrong with a template, as a list of sentences (empty for a valid
- * one). `expressions`, `poses` and `scenes` are the ids the scene knows,
- * `sides` the arm sides (poses.js SIDES), `maxSlots` the most caption slots
- * a template may carry (config.caption.maxSlots).
+ * one). `expressions`, `poses`, `scenes` and `paints` are the ids the scene
+ * knows, `sides` the arm sides (poses.js SIDES), `maxSlots` the most
+ * caption slots a template may carry (config.caption.maxSlots).
  */
-export function validateTemplate(t, { expressions, poses, scenes = [], sides = ['right', 'left'], maxSlots }) {
+export function validateTemplate(t, { expressions, poses, scenes = [], paints = [], sides = ['right', 'left'], maxSlots }) {
     const bad = [];
     const where = `template "${t && t.id}"`;
     if (!t || typeof t.id !== 'string' || !/^[a-z][a-zA-Z0-9]*$/.test(t.id)) bad.push(`${where}: id must be a lowerCamelCase word`);
@@ -351,6 +382,8 @@ export function validateTemplate(t, { expressions, poses, scenes = [], sides = [
     if (typeof t.title !== 'string' || !t.title) bad.push(`${where}: needs a title`);
     if (typeof t.line !== 'string' || !t.line) bad.push(`${where}: needs a line`);
     if (!Number.isInteger(t.order) || t.order < 1) bad.push(`${where}: order must be a whole number from 1`);
+    if (t.tint !== undefined && typeof t.tint !== 'boolean') bad.push(`${where}: tint must be true or false`);
+    if (t.tint === true && !(t.cells || []).some((c) => c && c.tint !== undefined)) bad.push(`${where}: offers a tint, but no cell follows it`);
     if (!Array.isArray(t.grid) || !t.grid.length) {
         bad.push(`${where}: needs a grid of rows`);
         return bad;
@@ -405,6 +438,20 @@ export function validateTemplate(t, { expressions, poses, scenes = [], sides = [
         const vec = (v) => Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(n));
         if (!vec(cam.eye) || !vec(cam.aim) || !(cam.fov > 0 && cam.fov < 120)) bad.push(`${here}: camera needs eye, aim and a fov under 120`);
         if (cell.backdrop !== undefined && !/^#[0-9a-fA-F]{6}$/.test(cell.backdrop)) bad.push(`${here}: backdrop must be a hex color`);
+        if (cell.floor !== undefined && !/^#[0-9a-fA-F]{6}$/.test(cell.floor)) bad.push(`${here}: floor must be a hex color`);
+        if (cell.tint !== undefined) {
+            if (t.tint !== true) bad.push(`${here}: follows a tint the template does not offer`);
+            else if (!(cell.tint >= 0 && cell.tint <= 1)) bad.push(`${here}: tint must be 0 to 1`);
+            if (cell.paint && cell.paint.wall) bad.push(`${here}: a painted wall cannot follow a tint`);
+        }
+        if (cell.paint !== undefined) {
+            const paint = cell.paint && typeof cell.paint === 'object' ? cell.paint : null;
+            if (!paint) bad.push(`${here}: paint must be { wall, floor }`);
+            for (const [surface, id] of Object.entries(paint || {})) {
+                if (!['wall', 'floor'].includes(surface)) bad.push(`${here}: paint names "${surface}", not the wall or the floor`);
+                else if (!paints.includes(id)) bad.push(`${here}: paint "${id}" has no painter`);
+            }
+        }
         if (cell.scene !== undefined && !scenes.includes(cell.scene)) bad.push(`${here}: scene "${cell.scene}" has no builder`);
     });
     if (figures === 0) bad.push(`${where}: nobody is in it`);

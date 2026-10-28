@@ -40,6 +40,27 @@ describe('round trips', () => {
         }
     });
 
+    test('a background color travels as six hex digits after the faces, only when one was picked (M8)', () => {
+        const picked = meme({ template: 'galaxyBrain', captions: ['a', 'b', 'c', 'd'], tint: '#1B2A55' });
+        const hash = R.encodeRemix(picked);
+        expect(hash).toBe('m=1/galaxyBrain/a|b|c|d/-,-,-,-,-,-,-,-/1b2a55');
+        expect(decode(hash).meme).toEqual(picked);
+        expect(decode(hash).meme.tint).toBe('#1b2a55');
+        // The meme's own sends nothing extra, so a link reads as it did
+        // before there were colors, and an older link is the meme's own.
+        const own = meme({ template: 'galaxyBrain', captions: ['a'] });
+        expect(R.encodeRemix(own)).toBe('m=1/galaxyBrain/a|||/-,-,-,-,-,-,-,-');
+        expect(decode('m=1/galaxyBrain/a|||/-,-,-,-,-,-,-,-').meme.tint).toBeNull();
+        // Anything else in that place is the meme's own, never an error.
+        for (const bad of ['1b2a5', 'zzzzzz', '1b2a55ff', '%23ffffff', '<b>']) {
+            const back = decode(`m=1/galaxyBrain/a|||/-,-,-,-,-,-,-,-/${bad}`);
+            expect(back.meme.template).toBe('galaxyBrain');
+            expect(back.meme.tint).toBeNull();
+        }
+        // A template that offers no color drops one sent with it.
+        expect(decode('m=1/panic/a||/-,-,-,-,-,-/1b2a55').meme.tint).toBeNull();
+    });
+
     test('a space travels as a plus and the words stay readable', () => {
         const hash = R.encodeRemix(meme({ template: 'surprised', captions: ['when the build passes'] }));
         expect(hash).toBe('m=1/surprised/when+the+build+passes/-');
@@ -98,7 +119,7 @@ describe('what is turned away or degraded', () => {
 
     test('a known template with broken captions is that template with empty captions', () => {
         const back = decode('m=1/panic/%E0%A4%A|fine/-,rage');
-        expect(back.meme).toEqual({ v: 1, template: 'panic', captions: ['', '', ''], expressions: [null, 'rage', null, null, null, null], friend: null });
+        expect(back.meme).toEqual({ v: 1, template: 'panic', captions: ['', '', ''], expressions: [null, 'rage', null, null, null, null], tint: null, friend: null });
         expect(decode('m=1/panic').meme).toEqual(meme({ template: 'panic' }));
         expect(decode('m=1/panic/one/bored,smug').meme.expressions).toEqual([null, 'smug', null, null, null, null]);
     });

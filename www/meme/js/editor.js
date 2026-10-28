@@ -360,6 +360,110 @@ export function buildExpressionRows(container, { template, expressions, chosen =
 }
 
 /**
+ * The background color (M8) in `container`, for a template that offers one
+ * (`offered`; the container is hidden otherwise): real radio buttons, so
+ * the browser gives the group its arrow keys, for the meme's own (`own`,
+ * its deepest wall's color, shown as its swatch) and each of `swatches`
+ * (`{ id, label, color }`), then the browser's own color input for any
+ * color, which opens the device's picker. `chosen` is the picked
+ * '#rrggbb', or null for the meme's own. `onChoose(hex | null)` hears a
+ * choice; while the picker is dragged, once a frame at most. Returns
+ * `{ radios, custom, set(hex | null) }`, or null when nothing is offered.
+ *
+ * Swatch colors are set as a custom property through the CSSOM, which the
+ * page's security policy allows where a style attribute would not be (the
+ * avatar page's way).
+ */
+export function buildTintRow(container, { offered, own, swatches, chosen = null, onChoose = () => {}, doc = typeof document === 'undefined' ? null : document }) {
+    empty(container);
+    container.hidden = !offered;
+    if (!offered) return null;
+    const group = doc.createElement('fieldset');
+    group.className = 'mm-group';
+    const legend = doc.createElement('legend');
+    legend.className = 'mm-legend';
+    legend.textContent = 'Background color';
+    group.appendChild(legend);
+    const row = doc.createElement('div');
+    row.className = 'mm-options';
+    const radios = [];
+    const option = (value, text, color) => {
+        const label = doc.createElement('label');
+        label.className = 'mm-option';
+        const input = doc.createElement('input');
+        input.className = 'mm-radio';
+        input.type = 'radio';
+        input.name = 'mm-tint';
+        input.value = value;
+        input.addEventListener('change', () => {
+            if (!input.checked) return;
+            custom.classList.remove('is-chosen');
+            onChoose(value || null);
+        });
+        const word = doc.createElement('span');
+        word.className = 'mm-word mm-swatch';
+        const dot = doc.createElement('span');
+        dot.className = 'mm-dot';
+        dot.setAttribute('aria-hidden', 'true');
+        dot.style.setProperty('--mm-dot', color);
+        word.appendChild(dot);
+        word.appendChild(doc.createTextNode(text));
+        label.appendChild(input);
+        label.appendChild(word);
+        row.appendChild(label);
+        radios.push(input);
+    };
+    const anyLabel = doc.createElement('label');
+    anyLabel.className = 'mm-option';
+    const custom = doc.createElement('input');
+    custom.type = 'color';
+    custom.className = 'mm-color';
+    custom.setAttribute('aria-label', 'Any color for the background');
+    custom.title = 'Any color';
+    option('', "The meme's own", own);
+    for (const s of swatches) option(s.color.toLowerCase(), s.label, s.color);
+    let pending = null;
+    const send = () => {
+        if (pending === null) return;
+        const hex = pending.toLowerCase();
+        pending = null;
+        for (const r of radios) r.checked = false;
+        custom.classList.add('is-chosen');
+        onChoose(hex);
+    };
+    custom.addEventListener('input', () => {
+        const first = pending === null;
+        pending = custom.value;
+        if (!first) return;
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(send);
+        else send();
+    });
+    custom.addEventListener('change', () => {
+        pending = custom.value;
+        send();
+    });
+    anyLabel.appendChild(custom);
+    const anyWord = doc.createElement('span');
+    anyWord.className = 'mm-any';
+    anyWord.textContent = 'Any color';
+    anyLabel.appendChild(anyWord);
+    row.appendChild(anyLabel);
+    group.appendChild(row);
+    container.appendChild(group);
+    /** Show `hex` as chosen: its swatch, or the color input for one that
+     *  is none of them, or the meme's own for null. */
+    const set = (hex) => {
+        const value = hex ? hex.toLowerCase() : '';
+        const match = radios.find((r) => r.value === value);
+        for (const r of radios) r.checked = r === match;
+        custom.classList.toggle('is-chosen', !match);
+        custom.value = hex || own;
+    };
+    set(chosen);
+    return { radios, custom, set };
+}
+
+/**
  * The view buttons in `container`: "All panels" and one a panel, doing by
  * keyboard what a tap on the stage does. `onView(index | null)` hears a
  * press. Returns `{ buttons, select(index | null) }`.

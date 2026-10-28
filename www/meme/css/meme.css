@@ -465,6 +465,82 @@ body.mm-body {
     outline-offset: 2px;
 }
 
+/* ---- The background color (M8) ----------------------------------------------- */
+
+.mm-tint {
+    margin: 0 0 14px;
+}
+
+.mm-tint[hidden] {
+    display: none;
+}
+
+.mm-tint .mm-group {
+    margin: 0;
+}
+
+.mm-swatch {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+/* The swatch's color comes through the CSSOM (--mm-dot), never a style
+   attribute, so the policy stays strict. */
+.mm-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--mm-dot, #888888);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.mm-option:has(.mm-color) {
+    align-items: center;
+    gap: 7px;
+    padding: 4px 14px 4px 6px;
+    border: 1px solid var(--mm-line);
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mm-color {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+}
+
+.mm-color::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.mm-color::-webkit-color-swatch {
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 50%;
+}
+
+.mm-color::-moz-color-swatch {
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 50%;
+}
+
+.mm-option:has(.mm-color.is-chosen) {
+    background: var(--mm-ink);
+    border-color: var(--mm-ink);
+    color: var(--mm-paper);
+}
+
+.mm-color:focus-visible {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 2px;
+}
+
 /* ---- The caption fields -------------------------------------------------- */
 
 .mm-field {

@@ -23,6 +23,7 @@ import { expressionOverrides, applyExpression } from '../../shared/js/avatar-exp
 import { armsFor, headTurnFor, legsFor, nodFor, POINTING, FISTED, ENLARGED, STRIDE } from './poses.min.js';
 import { pointWith, fistWith, openWith } from './hands.min.js';
 import { SCENES } from './scenes/index.min.js';
+import { paintTexture, haloTexture, tintOf } from './backdrops.min.js';
 
 /**
  * The glow (Galaxy Brain). THE GLOW IS BEHIND THE HEAD, NOT IN IT (QA
@@ -42,30 +43,9 @@ export const GLOW = Object.freeze({
     rays: Object.freeze({ from: 0.5, count: 14, least: 0.4, most: 1.1, width: 0.05, opacity: 0.6 })
 });
 
-let haloMap = null;
-
-/** The halo's soft disc, drawn in code once a session as a data texture
- *  (no picture file ships, and the preview rasterizer can read it): white,
- *  its alpha fading from the middle to the rim. */
-export function haloTexture(n = GLOW.halo.texels) {
-    if (haloMap) return haloMap;
-    const data = new Uint8Array(n * n * 4);
-    for (let y = 0; y < n; y++) {
-        for (let x = 0; x < n; x++) {
-            const r = Math.hypot(((x + 0.5) / n) * 2 - 1, ((y + 0.5) / n) * 2 - 1);
-            const k = Math.max(0, Math.min(1, 1 - r));
-            const a = k * k * (3 - 2 * k);
-            const o = (y * n + x) * 4;
-            data[o] = 255;
-            data[o + 1] = 255;
-            data[o + 2] = 255;
-            data[o + 3] = Math.round(255 * a);
-        }
-    }
-    haloMap = new THREE.DataTexture(data, n, n);
-    haloMap.needsUpdate = true;
-    return haloMap;
-}
+/** The halo's soft disc (backdrops.js, where The Handshake's glow finds
+ *  it too). */
+export { haloTexture };
 
 /** The rays' fan: `count` thin triangles from radius `inner` to `outer`,
  *  `width` wide at the base, in the x-y plane about the origin. */
@@ -99,7 +79,7 @@ export function buildGlow(glow) {
         color: G.color, map, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide
     });
     const radius = G.halo.least + (G.halo.most - G.halo.least) * glow;
-    const halo = new THREE.Mesh(new THREE.PlaneGeometry(radius * 2, radius * 2), additive(G.halo.opacity * Math.min(1, 0.6 + glow), haloTexture()));
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(radius * 2, radius * 2), additive(G.halo.opacity * Math.min(1, 0.6 + glow), haloTexture(G.halo.texels)));
     halo.name = 'halo';
     group.add(halo);
     if (glow >= G.rays.from) {
@@ -115,9 +95,11 @@ export function buildGlow(glow) {
 /**
  * An open box: back wall, floor, ceiling and two sides, its origin at the
  * middle of its floor and its open side toward +z. `backdrop` colors the
- * back wall; the rest take the box's own colors.
+ * back wall and `floor` the floor (the box's own unless given); the rest
+ * take the box's own colors. `paint` names a painter (backdrops.js) for the
+ * `wall` and the `floor`, each painted in that surface's color.
  */
-export function buildBox(B, backdrop = B.wall) {
+export function buildBox(B, backdrop = B.wall, { floor: floorColor = B.floor, paint = null } = {}) {
     const group = new THREE.Group();
     group.name = 'box';
     group.userData.isBox = true;
@@ -126,9 +108,18 @@ export function buildBox(B, backdrop = B.wall) {
     // which is lit only through its opening (config.light). A plane casts
     // from either side, so the sun's side of it never matters.
     const material = (color, roughness) => new THREE.MeshStandardMaterial({ color, roughness, metalness: 0, shadowSide: THREE.DoubleSide });
+    // A painted surface: its picture, drawn in the surface's own color, on
+    // a white material so the picture's colors are the ones seen.
+    const painted = (id, color, dims, roughness) => {
+        const map = id ? paintTexture(id, color, dims) : null;
+        if (!map) return material(color, roughness);
+        const mat = material(0xffffff, roughness);
+        mat.map = map;
+        return mat;
+    };
     const wall = material(B.wall, 0.95);
-    const back = material(backdrop, 0.95);
-    const floor = material(B.floor, 0.9);
+    const back = painted(paint && paint.wall, backdrop, { width: B.width, height: B.height }, 0.95);
+    const floor = painted(paint && paint.floor, floorColor, { width: B.width, height: B.depth }, 0.9);
     const plane = (w, h, mat, name) => {
         const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
         mesh.name = name;
@@ -327,20 +318,31 @@ export function boxRect(box, B, camera, w, h) {
     return { x: min[0], y: min[1], w: max[0] - min[0], h: max[1] - min[1] };
 }
 
+/** The back wall's color for `cell` with the visitor's `tint` ('#rrggbb',
+ *  or null for the template's own): its share of the way to the tint
+ *  (backdrops.js `tintOf`, config.tint `T`) when the cell follows one and
+ *  a color is picked, else its own backdrop (the box's wall without). */
+export function backdropOf(cell, tint, T, B) {
+    if (tint && cell.tint !== undefined) return tintOf(tint, cell.tint, T);
+    return cell.backdrop || B.wall;
+}
+
 /**
  * One panel: the box with its figures inside and its props (`cell.scene`,
  * built after the figures so a prop can be fitted to one), `avatarFor(roleId)`
- * giving the avatar each role wears, `mobile` for props that scale down.
- * Returns `{ group, box, figures, props, replaceFigure, tick, dispose }`.
+ * giving the avatar each role wears, `mobile` for props that scale down,
+ * `tint` the visitor's background color where the template offers one.
+ * Returns `{ group, box, figures, props, replaceFigure, setTint, tick,
+ * dispose }`.
  */
-export function buildPanel(cell, config, avatarFor, { mobile = false } = {}) {
-    const box = buildBox(config.box, cell.backdrop || config.box.wall);
+export function buildPanel(cell, config, avatarFor, { mobile = false, tint = null } = {}) {
+    const box = buildBox(config.box, backdropOf(cell, tint, config.tint, config.box), { floor: cell.floor || config.box.floor, paint: cell.paint || null });
     const figures = cell.figures.map((spec) => {
         const figure = makeFigure(avatarFor(spec.role), spec);
         box.add(figure.group);
         return figure;
     });
-    const props = cell.scene && SCENES[cell.scene] ? SCENES[cell.scene](box, config, { figures, mobile }) : null;
+    const props = cell.scene && SCENES[cell.scene] ? SCENES[cell.scene](box, config, { figures, mobile, cell }) : null;
     return {
         group: box,
         box,
@@ -366,6 +368,14 @@ export function buildPanel(cell, config, avatarFor, { mobile = false } = {}) {
             // A prop fitted to the figure (a helmet) is fitted again.
             if (props && props.userData && typeof props.userData.fit === 'function') props.userData.fit(figure);
             return figure;
+        },
+        /** The back wall in the visitor's `tint` (null for the template's
+         *  own). True when the wall follows one. */
+        setTint(tint) {
+            if (cell.tint === undefined) return false;
+            const back = box.getObjectByName('back');
+            back.material.color.set(backdropOf(cell, tint, config.tint, config.box));
+            return true;
         },
         dispose() {
             for (const f of figures) f.dispose();

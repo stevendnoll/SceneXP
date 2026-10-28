@@ -13,13 +13,13 @@ const RULES = { templates: TEMPLATES, byOrder, slotsOf, expressions: EXPRESSIONS
 describe('normalizeMeme', () => {
     test('nothing becomes the first meme with empty captions, the templates\' own faces and no friend', () => {
         for (const raw of [undefined, null, 3, 'x', {}, []]) {
-            expect(S.normalizeMeme(raw, RULES)).toEqual({ v: 1, template: 'surprised', captions: [''], expressions: [null], friend: null });
+            expect(S.normalizeMeme(raw, RULES)).toEqual({ v: 1, template: 'surprised', captions: [''], expressions: [null], tint: null, friend: null });
         }
     });
 
     test('a valid meme comes back as it is, padded to its template\'s slots, its friend made valid', () => {
         const meme = { v: 1, template: 'panic', captions: ['a', 'b'], expressions: [null, 'rage', null, null, null, null] };
-        expect(S.normalizeMeme(meme, RULES)).toEqual({ v: 1, template: 'panic', captions: ['a', 'b', ''], expressions: [null, 'rage', null, null, null, null], friend: null });
+        expect(S.normalizeMeme(meme, RULES)).toEqual({ v: 1, template: 'panic', captions: ['a', 'b', ''], expressions: [null, 'rage', null, null, null, null], tint: null, friend: null });
         const withFriend = S.normalizeMeme({ template: 'handshake', friend: { skin: 'deep', hat: 'castle' } }, RULES);
         expect(withFriend.friend.skin).toBe('deep');
         expect(withFriend.friend.hat).toBe('none');
@@ -39,6 +39,16 @@ describe('normalizeMeme', () => {
         // Captions that are not strings become strings or nothing.
         expect(S.normalizeMeme({ template: 'surprised', captions: [42] }, RULES).captions).toEqual(['42']);
         expect(S.normalizeMeme({ template: 'surprised', captions: [null] }, RULES).captions).toEqual(['']);
+    });
+
+    test('a background color is kept for a template that offers one, lowercase, and nowhere else (M8)', () => {
+        expect(S.normalizeMeme({ template: 'galaxyBrain', tint: '#1B2A55' }, RULES).tint).toBe('#1b2a55');
+        expect(S.normalizeMeme({ template: 'galaxyBrain' }, RULES).tint).toBeNull();
+        for (const tint of ['1b2a55', '#1b2a5', '#1b2a55ff', 'navy', 7, null, { r: 1 }, '#gggggg']) {
+            expect(S.normalizeMeme({ template: 'galaxyBrain', tint }, RULES).tint).toBeNull();
+        }
+        // Panic offers none, so a color sent with it is dropped.
+        expect(S.normalizeMeme({ template: 'panic', tint: '#1b2a55' }, RULES).tint).toBeNull();
     });
 
     test('sameMeme compares the whole meme', () => {

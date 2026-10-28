@@ -12,8 +12,10 @@
  *
  * `m=` is the meme: the link's version, the template's id, the captions by
  * slot joined with `|` (each percent-encoded, a space written `+` so a line
- * of words stays readable in a chat), and the faces by cell joined with
- * `,` (`-` for the template's own). `a=` is the avatar part's own link, so
+ * of words stays readable in a chat), the faces by cell joined with `,`
+ * (`-` for the template's own), and, only when one was picked, the
+ * background color as six hex digits (M8: `.../-,-,-,-,-,-,-,-/1b2a55`; a
+ * link without it reads as the template's own, so older links still do). `a=` is the avatar part's own link, so
  * the avatar page would read the same fragment.
  *
  * NOTHING IN A LINK IS TRUSTED. The decoder gives up on anything over
@@ -50,7 +52,8 @@ export function decodeCaption(text) {
 export function encodeMeme(meme) {
     const captions = meme.captions.map(encodeCaption).join('|');
     const faces = meme.expressions.map((e) => e || '-').join(',');
-    return `m=${REMIX_VERSION}/${meme.template}/${captions}/${faces}`;
+    const tint = meme.tint ? `/${meme.tint.slice(1)}` : '';
+    return `m=${REMIX_VERSION}/${meme.template}/${captions}/${faces}${tint}`;
 }
 
 /**
@@ -86,13 +89,14 @@ export function decodeRemix(hash, rules, { max = 2000, normalize } = {}) {
     if (typeof hash !== 'string' || hash.length > max) return null;
     const part = hash.replace(/^#/, '').split('&').find((p) => p.startsWith('m='));
     if (!part) return null;
-    const [version, template, captionText = '', faceText = ''] = part.slice(2).split('/');
+    const [version, template, captionText = '', faceText = '', tintText = ''] = part.slice(2).split('/');
     if (version !== String(REMIX_VERSION)) return null;
     if (!rules.templates.some((t) => t.id === template)) return null;
     const decoded = captionText === '' ? [] : captionText.split('|').map(decodeCaption);
     const captions = decoded.some((c) => c === null) ? [] : decoded;
     const expressions = faceText === '' ? [] : faceText.split(',').map((f) => (f === '-' ? null : f));
-    const meme = normalize({ template, captions, expressions }, rules);
+    const tint = /^[0-9a-fA-F]{6}$/.test(tintText) ? `#${tintText}` : null;
+    const meme = normalize({ template, captions, expressions, tint }, rules);
     // The avatar part alone goes to the avatar's decoder: its own ceiling
     // is sized for a link that holds nothing else.
     const avatarPart = hash.replace(/^#/, '').split('&').find((p) => p.startsWith('a='));

@@ -32,7 +32,7 @@ import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/tele
 import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { createStage } from './stage.min.js';
 import { TEMPLATES, byOrder, slotsOf, templateOf } from './templates.min.js';
-import { buildTabs, buildCaptionFields, buildTemplatePicker, buildExpressionRows, buildViewButtons, buildPeople } from './editor.min.js';
+import { buildTabs, buildCaptionFields, buildTemplatePicker, buildExpressionRows, buildViewButtons, buildPeople, buildTintRow } from './editor.min.js';
 import { normalizeMeme, createMemeStore } from './state.min.js';
 import { decodeRemix, remixUrl } from './remix.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
@@ -99,6 +99,7 @@ const state = {
     template: null,
     captions: [],
     expressions: [],      // a cell's chosen face, or null for the template's
+    tint: null,           // the background color picked (M8), or null for the template's own
     sizeId: CONFIG.export.pictures[0].id,
     stage: null,
     exporter: null,
@@ -109,7 +110,7 @@ const state = {
     rects: [],            // where each panel is on the stage, CSS pixels
     restored: false,
     ready: false,
-    pinged: { typed: new Set(), stepped: false, faced: false },
+    pinged: { typed: new Set(), stepped: false, faced: false, tinted: false },
     session: { start: Date.now(), ended: false }
 };
 
@@ -145,7 +146,7 @@ function say(text) {
 
 /** The meme as it stands, valid, for the store and the link. */
 export function currentMeme() {
-    return normalizeMeme({ template: state.template.id, captions: state.captions, expressions: state.expressions, friend: state.friend }, RULES());
+    return normalizeMeme({ template: state.template.id, captions: state.captions, expressions: state.expressions, tint: state.tint, friend: state.friend }, RULES());
 }
 
 /** Keep the meme in this browser. Quiet when the browser refuses. */
@@ -250,6 +251,27 @@ function onExpression(cellIndex, id) {
     }
 }
 
+/** A background color picked (M8), or null for the meme's own. */
+function onTint(hex) {
+    state.tint = hex || null;
+    if (state.stage) {
+        state.stage.setTint(state.tint);
+        state.stage.touch();
+    }
+    refreshPreview();
+    keep();
+    if (state.ready && !state.pinged.tinted) {
+        state.pinged.tinted = true;
+        track('tint-set', { kind: state.template.id });
+    }
+}
+
+/** The color a tinted template wears as its own: its deepest wall's. */
+function ownTint(template) {
+    const cells = template.cells.filter((c) => c.tint !== undefined).sort((a, b) => b.tint - a.tint);
+    return cells.length ? cells[0].backdrop : CONFIG.box.wall;
+}
+
 /** What the People tab says of a role. */
 function noteFor(role) {
     if (role.cast === 'avatar') return state.maker ? WORDS.personMaker : state.avatar ? WORDS.personYou : WORDS.personStandIn;
@@ -352,6 +374,9 @@ export function showTemplate(template, meme = null) {
     const slots = slotsOf(template);
     state.captions = slots.map((_, k) => (meme ? meme.captions[k] : state.captions[k]) || '');
     state.expressions = template.cells.map((_, i) => (meme ? meme.expressions[i] : null) || null);
+    // A meme's color (restored, or from a link); otherwise the one picked
+    // stays for the visit, worn by any template that offers one.
+    if (meme) state.tint = meme.tint || null;
     // A meme's friend (restored, or the maker moved over) takes the role;
     // the same friend again keeps whoever they were.
     if (meme && meme.friend && !(state.friend && sameAvatar(state.friend, meme.friend))) {
@@ -359,7 +384,7 @@ export function showTemplate(template, meme = null) {
         state.friendIsMaker = false;
     }
     if (state.stage) {
-        state.stage.setTemplate(template, avatarForRole);
+        state.stage.setTemplate(template, avatarForRole, { tint: state.tint });
         state.expressions.forEach((id, i) => { if (id) state.stage.setExpression(i, id); });
     }
     state.fields = buildCaptionFields($('mm-captions'), {
@@ -370,6 +395,7 @@ export function showTemplate(template, meme = null) {
         onInput: onCaption
     });
     buildExpressionRows($('mm-faces'), { template, expressions: EXPRESSIONS, chosen: state.expressions, onChoose: onExpression });
+    buildTintRow($('mm-tint'), { offered: Boolean(template.tint), own: ownTint(template), swatches: CONFIG.tint.swatches, chosen: state.tint, onChoose: onTint });
     state.views = buildViewButtons($('mm-view'), { count: template.cells.length, onView: (index) => { if (state.stage) state.stage.view(index); } });
     showPeople(template);
     if (state.picker) state.picker.select(template.id);
@@ -470,6 +496,7 @@ export function keepTheirs() {
 export function startOver() {
     state.captions = [];
     state.expressions = [];
+    state.tint = null;
     state.maker = null;
     state.friend = null;
     state.friendIsMaker = false;
@@ -576,7 +603,7 @@ export async function init() {
     state.memes = createMemeStore({ key: CONFIG.storageKey });
     const kept = state.memes.load();
     const restored = kept ? normalizeMeme(kept, RULES()) : null;
-    state.restored = Boolean(restored && (restored.captions.some(Boolean) || restored.expressions.some(Boolean) || restored.template !== byOrder()[0].id));
+    state.restored = Boolean(restored && (restored.captions.some(Boolean) || restored.expressions.some(Boolean) || restored.tint || restored.template !== byOrder()[0].id));
 
     const stageStatus = $('mm-stage-status');
     stageStatus.textContent = WORDS.loading;
@@ -652,6 +679,7 @@ export const __test__ = {
     savePicture,
     onCaption,
     onExpression,
+    onTint,
     onKey,
     leadAvatar,
     showNext

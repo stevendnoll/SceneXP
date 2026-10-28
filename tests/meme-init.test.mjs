@@ -539,7 +539,7 @@ describe('the page', () => {
         fire(input, 'input');
         main.__test__.onExpression(0, 'rage');
         const kept = JSON.parse(globalThis.localStorage.getItem('scenexp-meme'));
-        expect(kept).toEqual({ v: 1, template: 'thenNow', captions: ['', 'now'], expressions: ['rage', null], friend: null });
+        expect(kept).toEqual({ v: 1, template: 'thenNow', captions: ['', 'now'], expressions: ['rage', null], tint: null, friend: null });
         // Back again: the same meme, said so, the chip and the figure right.
         dom.uninstall();
         installThree();
@@ -576,6 +576,79 @@ describe('the page', () => {
         await flushAsync(30);
         expect(main.__test__.state.restored).toBe(false);
         expect(main.__test__.state.template.id).toBe('surprised');
+    });
+
+    test('Galaxy Brain offers a background color: a swatch or any color recolors its walls, is kept, travels, comes back, and Start over clears it (M8)', async () => {
+        let main = await boot();
+        let { state } = main.__test__;
+        const { MEME_PAGE } = await import('../www/meme/js/config.js');
+        const { encodeMeme } = await import('../www/meme/js/remix.js');
+        // A meme with no color to pick shows nothing.
+        expect(dom.el('mm-tint').hidden).toBe(true);
+        expect(dom.el('mm-tint').children).toHaveLength(0);
+        main.pickTemplate('galaxyBrain');
+        const row = () => dom.el('mm-tint').children[0].children[1].children;
+        const radios = () => row().slice(0, -1).map((label) => label.children[0]);
+        const custom = () => row()[row().length - 1].children[0];
+        expect(dom.el('mm-tint').hidden).toBe(false);
+        expect(dom.el('mm-tint').children[0].children[0].textContent).toBe('Background color');
+        // The meme's own, each swatch, then any color; the own one chosen,
+        // its dot the meme's deepest wall.
+        expect(radios().map((r) => r.value)).toEqual(['', ...MEME_PAGE.tint.swatches.map((w) => w.color.toLowerCase())]);
+        expect(radios().map((r) => r.checked)).toEqual([true, ...MEME_PAGE.tint.swatches.map(() => false)]);
+        expect(row()[0].children[1].children[0].style.getPropertyValue('--mm-dot')).toBe('#4B2E99');
+        expect(custom().type).toBe('color');
+        expect(custom().getAttribute('aria-label')).toBe('Any color for the background');
+        expect(state.tint).toBeNull();
+        const setTint = jest.spyOn(state.stage, 'setTint');
+        // A swatch.
+        const teal = radios()[3];
+        teal.checked = true;
+        fire(teal, 'change');
+        expect(state.tint).toBe(MEME_PAGE.tint.swatches[2].color.toLowerCase());
+        expect(setTint).toHaveBeenLastCalledWith(state.tint);
+        expect(state.pinged.tinted).toBe(true);
+        expect(JSON.parse(globalThis.localStorage.getItem('scenexp-meme')).tint).toBe(state.tint);
+        // Any color: the radios let go and the picker is shown chosen.
+        custom().value = '#336699';
+        fire(custom(), 'change');
+        expect(state.tint).toBe('#336699');
+        expect(radios().every((r) => !r.checked)).toBe(true);
+        expect(custom().classList.contains('is-chosen')).toBe(true);
+        expect(encodeMeme(main.currentMeme())).toMatch(/\/336699$/);
+        // A meme without a color hides the row and keeps none; back on
+        // Galaxy Brain the color picked this visit is still there.
+        main.pickTemplate('panic');
+        expect(dom.el('mm-tint').hidden).toBe(true);
+        expect(main.currentMeme().tint).toBeNull();
+        main.pickTemplate('galaxyBrain');
+        expect(setTint).toHaveBeenCalledTimes(2);
+        expect(custom().classList.contains('is-chosen')).toBe(true);
+        expect(custom().value).toBe('#336699');
+        const kept = JSON.parse(globalThis.localStorage.getItem('scenexp-meme'));
+        expect(kept.tint).toBe('#336699');
+        // Back again: the color restored, a change worth welcoming back.
+        dom.uninstall();
+        installThree();
+        dom = installDom();
+        Object.assign(dom.el('mm-canvas'), { clientWidth: 800, clientHeight: 600 });
+        globalThis.localStorage.setItem('scenexp-meme', JSON.stringify({ ...kept, captions: [] }));
+        jest.resetModules();
+        main = await import('../www/meme/js/main.js');
+        await flushAsync(30);
+        ({ state } = main.__test__);
+        expect(state.restored).toBe(true);
+        expect(state.tint).toBe('#336699');
+        expect(custom().classList.contains('is-chosen')).toBe(true);
+        // The meme's own again is null.
+        radios()[0].checked = true;
+        fire(radios()[0], 'change');
+        expect(state.tint).toBeNull();
+        expect(custom().classList.contains('is-chosen')).toBe(false);
+        // Start over forgets it.
+        main.__test__.onTint('#121214');
+        fire(dom.el('mm-start-over'), 'click');
+        expect(state.tint).toBeNull();
     });
 
     test('a browser that keeps nothing is told so, once, and the page works on', async () => {
