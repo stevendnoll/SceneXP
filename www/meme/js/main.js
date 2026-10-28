@@ -8,12 +8,13 @@
  * THE FIRST THIRTY SECONDS ARE WORDS AND ONE NEXT STEP. The sheet says what
  * this is and what to do before the stage has finished loading.
  *
- * M1 (2026-10-27): one panel that reads as a meme. The first template stands
- * in the stage with the visitor's avatar (or a stand-in) wearing its
- * expression, one caption field feeds the live caption over the stage and
- * the preview of the picture, and the picture goes to the share sheet or
- * the downloads folder. The picker, the people, the rest of the templates
- * and the clip arrive milestone by milestone (specs/meme/TASKS.md).
+ * M2 (2026-10-27): the grid. A picker of templates, each a grid of
+ * shadowboxes the visitor's avatar (or a stand-in) stands in, posed and
+ * wearing each panel's expression; a caption field a slot, the captions
+ * laid over the live stage where each panel is; a tap into a panel and
+ * out; the picture at two sizes. The people, the rest of the templates,
+ * the remix link and the clip arrive milestone by milestone
+ * (specs/meme/TASKS.md).
  *
  * NOTHING IS UPLOADED. The avatar store is read, never written, by this
  * page. The usage pings count kinds of things done (which template, what
@@ -28,8 +29,9 @@ import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { createStage } from './stage.min.js';
-import { byOrder, slotsOf } from './templates.min.js';
-import { buildCaptionFields } from './editor.min.js';
+import { byOrder, slotsOf, templateOf } from './templates.min.js';
+import { buildCaptionFields, buildTemplatePicker } from './editor.min.js';
+import { drawCaptions } from './compose.min.js';
 import { createExporter, WORDS as EXPORT_WORDS } from './exporter.min.js';
 
 /** Everything the page says, in one place (house style: polite, no
@@ -38,7 +40,7 @@ export const WORDS = Object.freeze({
     loading: 'Setting up the studio…',
     noStage: "This browser can't draw the 3D stage. Please try another browser, or a newer one.",
     noAvatar: 'You have no avatar yet, so a visitor is standing in for you. Make yours at any time.',
-    withAvatar: 'Your avatar is here. Type a caption to make the meme yours.',
+    withAvatar: 'Your avatar is here. Pick a meme and type a caption to make it yours.',
     pictureSaved: EXPORT_WORDS.pictureSaved,
     pictureShared: EXPORT_WORDS.pictureShared,
     pictureFailed: EXPORT_WORDS.pictureFailed
@@ -52,11 +54,14 @@ const state = {
     standIn: null,        // a random avatar for a visitor with none saved
     template: null,
     captions: [],
+    sizeId: CONFIG.export.pictures[0].id,
     stage: null,
     exporter: null,
     fields: null,
+    picker: null,
+    rects: [],            // where each panel is on the stage, CSS pixels
     ready: false,
-    pinged: { typed: new Set() },
+    pinged: { typed: new Set(), stepped: false },
     session: { start: Date.now(), ended: false }
 };
 
@@ -98,14 +103,39 @@ export function avatarForRole(roleId) {
     return randomAvatar();
 }
 
-/** The live caption over the stage: the first top caption, as typed (the
- *  stylesheet sets it in capitals). */
-function showLiveCaption() {
-    const slots = slotsOf(state.template);
-    const k = slots.findIndex((s) => s.cell === 0 && s.slot === 'top');
-    const el = $('mm-caption-live');
-    el.textContent = k >= 0 ? state.captions[k] || '' : '';
-    el.hidden = !el.textContent;
+/** The chosen picture size, from the radios. */
+export function readSize() {
+    for (const p of CONFIG.export.pictures) {
+        const input = $(`mm-size-${p.id}`);
+        if (input && input.checked) return p.id;
+    }
+    return CONFIG.export.pictures[0].id;
+}
+
+/**
+ * The captions over the live stage (the overlay canvas, drawn the way the
+ * picture is, through compose.js), where the stage last said each panel
+ * is. Drawn in CSS pixels on a canvas the stage's size.
+ */
+export function drawOverlay(rects = state.rects) {
+    const overlay = $('mm-overlay');
+    const stageCanvas = $('mm-canvas');
+    if (!overlay || !state.template) return false;
+    const w = stageCanvas.clientWidth || 0;
+    const h = stageCanvas.clientHeight || 0;
+    if (!w || !h) return false;
+    const ratio = Math.min(window.devicePixelRatio || 1, CONFIG.quality.maxPixelRatio);
+    const pw = Math.round(w * ratio);
+    const ph = Math.round(h * ratio);
+    if (overlay.width !== pw) overlay.width = pw;
+    if (overlay.height !== ph) overlay.height = ph;
+    const ctx = overlay.getContext('2d');
+    if (!ctx) return false;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, pw, ph);
+    ctx.scale(ratio, ratio);
+    drawCaptions(ctx, state.template, state.captions, rects, CONFIG.caption);
+    return true;
 }
 
 /** The preview of the picture, drawn once a frame at most. */
@@ -116,7 +146,7 @@ export function refreshPreview() {
     previewPending = true;
     const draw = () => {
         previewPending = false;
-        state.exporter.drawPreview($('mm-preview'), state.template, state.captions, CONFIG.export.pictures[0].id);
+        state.exporter.drawPreview($('mm-preview'), state.template, state.captions, state.sizeId);
     };
     if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(draw);
     else draw();
@@ -125,7 +155,7 @@ export function refreshPreview() {
 
 function onCaption(k, value) {
     state.captions[k] = value;
-    showLiveCaption();
+    drawOverlay();
     refreshPreview();
     if (state.ready && value && !state.pinged.typed.has(k)) {
         state.pinged.typed.add(k);
@@ -134,7 +164,7 @@ function onCaption(k, value) {
 }
 
 /** Show a template: the panels built, the caption fields laid out, the
- *  preview drawn. */
+ *  preview drawn. Captions already typed stay by slot. */
 export function showTemplate(template) {
     state.template = template;
     state.captions = slotsOf(template).map((_, k) => state.captions[k] || '');
@@ -145,14 +175,25 @@ export function showTemplate(template) {
         maxChars: CONFIG.caption.maxChars,
         onInput: onCaption
     });
-    showLiveCaption();
+    if (state.picker) state.picker.select(template.id);
+    state.rects = state.stage ? state.stage.screenRects() : [];
+    drawOverlay();
     if (state.stage) state.stage.touch();
     refreshPreview();
 }
 
+export function pickTemplate(id) {
+    const template = templateOf(id);
+    if (state.template && template.id === state.template.id) return template;
+    showTemplate(template);
+    if (state.ready) track('template-picked', { kind: template.id });
+    return template;
+}
+
 async function savePicture() {
     if (!state.exporter) return 'failed';
-    const result = await state.exporter.savePicture(state.template, state.captions, CONFIG.export.pictures[0].id);
+    state.sizeId = readSize();
+    const result = await state.exporter.savePicture(state.template, state.captions, state.sizeId);
     if (result === 'shared') say(WORDS.pictureShared);
     else if (result === 'saved') say(WORDS.pictureSaved);
     else if (result === 'failed') say(WORDS.pictureFailed);
@@ -166,8 +207,22 @@ function endVisit() {
     trackFinal('session-end', { seconds: Math.round((Date.now() - state.session.start) / 1000) });
 }
 
+/** A key the stage answers, unless something else on the page has the
+ *  focus (a caption field keeps its Escape). */
+function onKey(e) {
+    if (e.key !== 'Escape' || !state.stage || state.stage.viewing === null) return;
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+    state.stage.view(null);
+}
+
 function wire() {
     $('mm-picture-save').addEventListener('click', savePicture);
+    for (const p of CONFIG.export.pictures) {
+        const input = $(`mm-size-${p.id}`);
+        if (input) input.addEventListener('change', () => { state.sizeId = readSize(); refreshPreview(); });
+    }
+    window.addEventListener('keydown', onKey);
     window.addEventListener('pagehide', endVisit);
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) endVisit();
@@ -187,7 +242,19 @@ export async function init() {
     stageStatus.textContent = WORDS.loading;
     if (webgl2()) {
         try {
-            state.stage = createStage(CONFIG, { canvas: $('mm-canvas'), mobile: isMobile(), reducedMotion });
+            state.stage = createStage(CONFIG, {
+                canvas: $('mm-canvas'),
+                mobile: isMobile(),
+                reducedMotion,
+                onFrame(rects, viewing) {
+                    state.rects = rects;
+                    drawOverlay(rects);
+                    if (viewing !== null && !state.pinged.stepped && state.ready) {
+                        state.pinged.stepped = true;
+                        track('panel-stepped', { kind: state.template.id });
+                    }
+                }
+            });
             state.exporter = createExporter(CONFIG, {
                 stage: state.stage,
                 onExport: (kind, outcome) => track(`export-${kind}`, { kind: state.template.id, outcome })
@@ -197,11 +264,13 @@ export async function init() {
             state.exporter = null;
         }
     }
+    state.picker = buildTemplatePicker($('mm-picker'), { templates: byOrder(), selected: byOrder()[0].id, onPick: (t) => pickTemplate(t.id) });
     showTemplate(byOrder()[0]);
     say(state.avatar ? WORDS.withAvatar : WORDS.noAvatar);
     const saveBtn = $('mm-picture-save');
     saveBtn.textContent = state.exporter ? state.exporter.buttonLabel() : EXPORT_WORDS.saveButton;
     saveBtn.hidden = !state.exporter;
+    $('mm-hint').hidden = !state.stage;
     wire();
     state.ready = true;
 
@@ -226,7 +295,8 @@ export const __test__ = {
     state,
     endVisit,
     savePicture,
-    onCaption
+    onCaption,
+    onKey
 };
 
 if (typeof document !== 'undefined' && typeof window !== 'undefined' && document.getElementById('meme-app')) {

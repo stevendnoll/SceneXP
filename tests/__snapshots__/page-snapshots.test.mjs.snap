@@ -5260,19 +5260,22 @@ html [lang="en"]
     link [href="js/stage.min.js" rel="modulepreload"]
     link [href="js/templates.min.js" rel="modulepreload"]
     link [href="js/editor.min.js" rel="modulepreload"]
+    link [href="js/compose.min.js" rel="modulepreload"]
     link [href="js/exporter.min.js" rel="modulepreload"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
     link [href="js/panels.min.js" rel="modulepreload"]
-    link [href="js/compose.min.js" rel="modulepreload"]
     link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-expressions-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/poses.min.js" rel="modulepreload"]
+    link [href="js/scenes/index.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-shapes-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-hair-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/scenes/plan.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/meme.min.css?v=1" rel="stylesheet"]
@@ -5302,8 +5305,8 @@ html [lang="en"]
                 "Privacy"
     div#meme-app.mm-app [hidden]
       div.mm-stage
-        canvas#mm-canvas.mm-canvas [aria-label="Your meme's panel: a figure with your avatar's face, standing in a small lit box" role="img"]
-        p#mm-caption-live.mm-caption-live [aria-hidden="true" hidden]
+        canvas#mm-canvas.mm-canvas [aria-label="Your meme's panels: small lit boxes with a figure wearing your avatar's face in each" role="img"]
+        canvas#mm-overlay.mm-overlay [aria-hidden="true"]
         p#mm-stage-status.mm-stage-status [aria-live="polite" role="status"]
       section.mm-sheet [aria-labelledby="mm-heading"]
         div.mm-top
@@ -5319,10 +5322,29 @@ html [lang="en"]
         p#mm-lede.mm-lede
           "Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a short video."
         div#mm-editor.mm-editor
+          h3.mm-subhead
+            "The meme"
+          div#mm-picker.mm-picker [aria-label="Choose a meme" role="group"]
+          p#mm-hint.mm-note.mm-hint [hidden]
+            "Tap a panel to step into it, and tap again to step back. Drag to tilt the view."
+          h3.mm-subhead
+            "Your captions"
           div#mm-captions.mm-captions
         h3.mm-subhead
           "Your picture"
-        canvas#mm-preview.mm-preview [aria-label="A preview of your meme picture, with your caption and the SceneXP.com mark in the corner" height="540" role="img" width="540"]
+        canvas#mm-preview.mm-preview [aria-label="A preview of your meme picture, with your captions and the SceneXP.com mark in the corner" height="540" role="img" width="540"]
+        fieldset.mm-group
+          legend.mm-legend
+            "Size"
+          div.mm-options
+            label.mm-option
+              input#mm-size-square.mm-radio [checked name="mm-size" type="radio" value="square"]
+              span.mm-word
+                "Square"
+            label.mm-option
+              input#mm-size-portrait.mm-radio [name="mm-size" type="radio" value="portrait"]
+              span.mm-word
+                "Portrait"
         div.mm-row
           button#mm-picture-save.mm-primary [hidden type="button"]
             "Save picture"

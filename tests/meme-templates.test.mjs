@@ -7,25 +7,38 @@
  * The catalog is data, so this is the whole test of a template's shape;
  * what it looks like is judged by eye (scripts/meme-preview.mjs).
  */
+import { jest } from '@jest/globals';
+import { installThree } from './helpers/three-stub.mjs';
 import * as T from '../www/meme/js/templates.js';
 import { EXPRESSIONS } from '../www/shared/js/avatar-expressions-1.0.0.js';
 import { MEME_PAGE as CONFIG } from '../www/meme/js/config.js';
 
-const RULES = { expressions: EXPRESSIONS.map((e) => e.id), poses: T.POSES, maxSlots: CONFIG.caption.maxSlots };
+let POSES;
+let SCENE_IDS;
+beforeAll(async () => {
+    installThree();
+    jest.resetModules();
+    ({ POSES } = await import('../www/meme/js/poses.js'));
+    ({ SCENE_IDS } = await import('../www/meme/js/scenes/index.js'));
+});
+afterAll(() => { delete globalThis.THREE; });
+
+const rules = () => ({ expressions: EXPRESSIONS.map((e) => e.id), poses: POSES, scenes: SCENE_IDS, maxSlots: CONFIG.caption.maxSlots });
 
 /** A deep, writable copy of a frozen template. */
 const copy = (t) => JSON.parse(JSON.stringify(t));
 
 describe('the catalog', () => {
-    test('has at least one template, each valid, with distinct ids and orders', () => {
-        expect(T.TEMPLATES.length).toBeGreaterThan(0);
+    test('has the six first-cut templates, each valid, with distinct ids and orders', () => {
+        expect(T.TEMPLATES.map((t) => t.id).sort()).toEqual(['galaxyBrain', 'nopeYep', 'panic', 'plan', 'surprised', 'thenNow']);
         for (const t of T.TEMPLATES) {
-            expect({ [t.id]: T.validateTemplate(t, RULES) }).toEqual({ [t.id]: [] });
+            expect({ [t.id]: T.validateTemplate(t, rules()) }).toEqual({ [t.id]: [] });
         }
         const ids = T.TEMPLATES.map((t) => t.id);
         expect(new Set(ids).size).toBe(ids.length);
         const orders = T.TEMPLATES.map((t) => t.order);
         expect(new Set(orders).size).toBe(orders.length);
+        expect(T.byOrder().map((t) => t.id)).toEqual(['surprised', 'panic', 'nopeYep', 'thenNow', 'galaxyBrain', 'plan']);
     });
 
     test('is frozen all the way down, so nothing at run time can change a template', () => {
@@ -41,14 +54,26 @@ describe('the catalog', () => {
         }
     });
 
-    test('Surprised is one wide panel, one top caption, the visitor shocked, and first in the picker', () => {
-        const t = T.templateOf('surprised');
-        expect(t.grid).toEqual([[{ span: 1 }]]);
-        expect(T.columnsOf(t)).toBe(1);
-        expect(T.slotsOf(t)).toEqual([{ cell: 0, slot: 'top' }]);
-        expect(t.roles).toEqual([{ id: 'you', label: 'You', cast: 'avatar' }]);
-        expect(t.cells[0].figures[0]).toMatchObject({ role: 'you', expression: 'shocked', pose: 'stand' });
-        expect(T.byOrder()[0].id).toBe('surprised');
+    test('the shapes are the ones the PRD lists', () => {
+        const shape = (id) => T.templateOf(id).grid.map((row) => row.map((c) => c.span));
+        expect(shape('surprised')).toEqual([[1]]);
+        expect(shape('panic')).toEqual([[1, 1], [1, 1], [1, 1]]);
+        expect(shape('nopeYep')).toEqual([[1, 1], [1, 1]]);
+        expect(shape('thenNow')).toEqual([[1, 1]]);
+        expect(shape('galaxyBrain')).toEqual([[1, 1], [1, 1], [1, 1], [1, 1]]);
+        expect(shape('plan')).toEqual([[1, 1], [1, 1]]);
+        // The words sit in their own cells beside the faces.
+        expect(T.slotsOf(T.templateOf('panic'))).toEqual([{ cell: 0, slot: 'center' }, { cell: 2, slot: 'center' }, { cell: 4, slot: 'center' }]);
+        expect(T.templateOf('panic').cells[1].figures[0].expression).toBe('shocked');
+        expect(T.templateOf('panic').cells[3].figures[0].expression).toBe('deadpan');
+        // Then vs Now changes the build, not the person.
+        const [then, now] = T.templateOf('thenNow').cells;
+        expect(then.figures[0].overrides).toEqual({ build: 'slim', muscles: 'standard' });
+        expect(now.figures[0].overrides).toEqual({ build: 'broad', muscles: 'buff' });
+        // Galaxy Brain brightens row by row, and The Plan repeats its last step.
+        expect(T.templateOf('galaxyBrain').cells.filter((c) => c.figures.length).map((c) => c.figures[0].glow)).toEqual([0, 0.35, 0.7, 1]);
+        expect(T.templateOf('plan').cells.every((c) => c.scene === 'plan' && c.figures[0].pose === 'present')).toBe(true);
+        expect(T.templateOf('nopeYep').cells.map((c) => (c.figures[0] || {}).pose)).toEqual(['dismiss', undefined, 'approve', undefined]);
     });
 
     test('an unknown id falls back to the first in the picker\'s order', () => {
@@ -67,7 +92,7 @@ describe('the catalog', () => {
             { ...t.cells[0], captions: [] },
             { ...t.cells[0], captions: ['bottom'] }
         ];
-        expect(T.validateTemplate(t, RULES)).toEqual([]);
+        expect(T.validateTemplate(t, rules())).toEqual([]);
         expect(T.columnsOf(t)).toBe(2);
         expect(T.slotsOf(t)).toEqual([{ cell: 0, slot: 'top' }, { cell: 0, slot: 'bottom' }, { cell: 2, slot: 'bottom' }]);
     });
@@ -78,11 +103,11 @@ describe('the rules catch', () => {
     const problems = (mutate) => {
         const t = base();
         mutate(t);
-        return T.validateTemplate(t, RULES);
+        return T.validateTemplate(t, rules());
     };
 
     test('nothing at all, or a template with no grid', () => {
-        expect(T.validateTemplate(null, RULES)).toEqual([expect.stringMatching(/id must be/)]);
+        expect(T.validateTemplate(null, rules())).toEqual([expect.stringMatching(/id must be/)]);
         expect(problems((t) => { t.grid = []; })).toEqual([expect.stringMatching(/needs a grid/)]);
     });
 
@@ -115,11 +140,14 @@ describe('the rules catch', () => {
         expect(problems((t) => { delete t.roles; })).toEqual(expect.arrayContaining([expect.stringMatching(/needs a role/)]));
     });
 
-    test('a figure whose role, pose or expression is unknown, and a cell with no figures', () => {
+    test('a figure whose role, pose, expression, glow or overrides are wrong, a cell with no figure list, and a template with nobody in it', () => {
         expect(problems((t) => { t.cells[0].figures[0].role = 'them'; })).toEqual([expect.stringMatching(/role "them" is not declared/)]);
         expect(problems((t) => { t.cells[0].figures[0].pose = 'moonwalk'; })).toEqual([expect.stringMatching(/pose "moonwalk"/)]);
         expect(problems((t) => { t.cells[0].figures[0].expression = 'bored'; })).toEqual([expect.stringMatching(/expression "bored"/)]);
-        expect(problems((t) => { delete t.cells[0].figures; })).toEqual([expect.stringMatching(/needs figures/)]);
+        expect(problems((t) => { t.cells[0].figures[0].glow = 2; })).toEqual([expect.stringMatching(/glow must be 0 to 1/)]);
+        expect(problems((t) => { t.cells[0].figures[0].overrides = 'slim'; })).toEqual([expect.stringMatching(/overrides must be/)]);
+        expect(problems((t) => { delete t.cells[0].figures; })).toEqual(expect.arrayContaining([expect.stringMatching(/needs figures/)]));
+        expect(problems((t) => { t.cells[0].figures = []; })).toEqual([expect.stringMatching(/nobody is in it/)]);
     });
 
     test('captions: a missing list, a bad slot, and more slots than the cap', () => {
@@ -127,17 +155,18 @@ describe('the rules catch', () => {
         expect(problems((t) => { t.cells[0].captions = ['middle']; })).toEqual([expect.stringMatching(/slot "middle"/)]);
         expect(problems((t) => { t.cells[0].captions = ['top', 'bottom', 'top', 'bottom', 'top', 'bottom', 'top']; }))
             .toEqual([expect.stringMatching(/7 caption slots, over the cap of 6/)]);
-        // No cap given: any count goes.
         const t = base();
         t.cells[0].captions = ['top', 'bottom', 'top', 'bottom', 'top', 'bottom', 'top'];
-        expect(T.validateTemplate(t, { ...RULES, maxSlots: undefined })).toEqual([]);
+        expect(T.validateTemplate(t, { ...rules(), maxSlots: undefined })).toEqual([]);
     });
 
-    test('a camera missing a part or too wide, and a backdrop that is not a color', () => {
+    test('a camera missing a part or too wide, a backdrop that is not a color, and a scene with no builder', () => {
         expect(problems((t) => { t.cells[0].camera = { eye: [0, 1, 2], aim: [0, 1], fov: 30 }; })).toEqual([expect.stringMatching(/camera needs/)]);
         expect(problems((t) => { t.cells[0].camera.fov = 120; })).toEqual([expect.stringMatching(/camera needs/)]);
         expect(problems((t) => { delete t.cells[0].camera; })).toEqual([expect.stringMatching(/camera needs/)]);
         expect(problems((t) => { t.cells[0].backdrop = 'yellow'; })).toEqual([expect.stringMatching(/backdrop must be/)]);
         expect(problems((t) => { delete t.cells[0].backdrop; })).toEqual([]);
+        expect(problems((t) => { t.cells[0].scene = 'castle'; })).toEqual([expect.stringMatching(/scene "castle" has no builder/)]);
+        expect(problems((t) => { t.cells[0].scene = 'plan'; })).toEqual([]);
     });
 });

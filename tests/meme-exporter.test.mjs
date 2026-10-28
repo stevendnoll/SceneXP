@@ -88,11 +88,189 @@ function fakeDoc(options) {
     };
 }
 
-function stageWithSurprised() {
-    const stage = S.createStage(CONFIG, { canvas: { clientWidth: 800, clientHeight: 600 }, makeRenderer: fakeRenderer });
+/** A canvas that records its listeners, for taps and drags. */
+function stageCanvas(w = 800, h = 600) {
+    const listeners = {};
+    return {
+        clientWidth: w,
+        clientHeight: h,
+        listeners,
+        addEventListener: (t, fn) => { listeners[t] = fn; },
+        getBoundingClientRect: () => ({ left: 0, top: 0, width: w, height: h }),
+        setPointerCapture() {}
+    };
+}
+
+function stageWithSurprised(options = {}) {
+    const stage = S.createStage(CONFIG, { canvas: stageCanvas(), makeRenderer: fakeRenderer, ...options });
     stage.setTemplate(T.templateOf('surprised'), () => DEFAULT_AVATAR);
     return stage;
 }
+
+/** The corners of an arrangement, projected through a pose: the most any
+ *  corner reaches from the frame's middle (under 1 is inside). */
+function reach(pose, aspect, size, depth) {
+    const cam = new THREE.PerspectiveCamera(pose.fov, aspect, 0.05, 80);
+    cam.position.fromArray(pose.eye);
+    cam.lookAt(...pose.aim);
+    cam.updateMatrixWorld(true);
+    let most = 0;
+    for (const x of [-size.width / 2, size.width / 2]) for (const y of [0, size.height]) for (const z of [-depth / 2, depth / 2]) {
+        const p = new THREE.Vector3(x, y, z).project(cam);
+        most = Math.max(most, Math.abs(p.x), Math.abs(p.y));
+    }
+    return most;
+}
+
+describe('the arrangement', () => {
+    test('every template\'s boxes fit the frame at every shape of canvas, with room to spare', async () => {
+        const { arrangementSize } = await import('../www/meme/js/panels.js');
+        for (const t of T.TEMPLATES) {
+            const size = arrangementSize(t, CONFIG.box);
+            for (const aspect of [0.5, 1, 2.2]) {
+                const pose = S.framingFor(size, aspect, CONFIG.camera.fov, CONFIG.view, CONFIG.box.depth);
+                const most = reach(pose, aspect, size, CONFIG.box.depth);
+                expect(`${t.id} @${aspect}: ${most < 0.97 && most > 0.6}`).toBe(`${t.id} @${aspect}: true`);
+            }
+        }
+    });
+
+    test('the live stage frames the arrangement, refits when the canvas changes shape, and says where each panel is', () => {
+        const canvas = stageCanvas(800, 600);
+        const stage = S.createStage(CONFIG, { canvas, makeRenderer: fakeRenderer });
+        stage.setTemplate(T.templateOf('nopeYep'), () => DEFAULT_AVATAR);
+        expect(stage.viewing).toBeNull();
+        expect(stage.panels).toHaveLength(4);
+        stage.fit();
+        const rects = stage.screenRects();
+        expect(rects).toHaveLength(4);
+        for (const r of rects) {
+            expect(r.x).toBeGreaterThanOrEqual(0);
+            expect(r.y).toBeGreaterThanOrEqual(0);
+            expect(r.x + r.w).toBeLessThanOrEqual(800);
+            expect(r.y + r.h).toBeLessThanOrEqual(600);
+            expect(r.w).toBeGreaterThan(50);
+        }
+        // Reading order: the first row above the second, left before right.
+        expect(rects[0].y).toBeLessThan(rects[2].y);
+        expect(rects[0].x).toBeLessThan(rects[1].x);
+        expect(rects[0].x + rects[0].w).toBeLessThanOrEqual(rects[1].x + 1);
+        // A taller canvas: the arrangement framed again, narrower.
+        const wide = stage.pose.eye[2];
+        canvas.clientWidth = 300;
+        stage.fit();
+        expect(stage.pose.eye[2]).toBeGreaterThan(wide);
+        stage.dispose();
+    });
+
+    test('a tap glides into the panel under it and a tap glides out, a cut under reduced motion, Escape left to the page', () => {
+        let t = 0;
+        const canvas = stageCanvas(800, 600);
+        const stage = S.createStage(CONFIG, { canvas, makeRenderer: fakeRenderer, now: () => t });
+        stage.setTemplate(T.templateOf('panic'), () => DEFAULT_AVATAR);
+        stage.start();
+        stage.fit();
+        const rects = stage.screenRects();
+        const tap = (x, y) => {
+            canvas.listeners.pointerdown({ clientX: x, clientY: y, button: 0, pointerId: 1 });
+            canvas.listeners.pointerup({ clientX: x, clientY: y });
+        };
+        const middle = (r) => [r.x + r.w / 2, r.y + r.h / 2];
+        tap(...middle(rects[3]));
+        expect(stage.viewing).toBe(3);
+        expect(stage.gliding).toBe(true);
+        // Mid-glide the camera is between, and at the end it is the cell's.
+        t = CONFIG.view.glide / 2;
+        stage.frame();
+        const target = stage.cameraFor(3);
+        expect(stage.pose.eye[2]).toBeGreaterThan(target.eye[2]);
+        expect(stage.gliding).toBe(true);
+        t = CONFIG.view.glide + 0.01;
+        stage.frame();
+        expect(stage.gliding).toBe(false);
+        expect(stage.pose).toEqual(target);
+        // Looking into one, that panel is the whole canvas and the others nowhere.
+        expect(stage.screenRects()).toEqual([null, null, null, { x: 0, y: 0, w: 800, h: 600 }, null, null]);
+        // A tap anywhere glides back out.
+        tap(5, 5);
+        expect(stage.viewing).toBeNull();
+        t += CONFIG.view.glide + 0.01;
+        stage.frame();
+        expect(stage.gliding).toBe(false);
+        // A tap on the ground between panels is nothing.
+        tap(1, 1);
+        expect(stage.viewing).toBeNull();
+        stage.dispose();
+        // Under reduced motion the move is a cut.
+        const still = S.createStage(CONFIG, { canvas: stageCanvas(), makeRenderer: fakeRenderer, reducedMotion: () => true });
+        still.setTemplate(T.templateOf('panic'), () => DEFAULT_AVATAR);
+        still.start();
+        still.view(1);
+        expect(still.gliding).toBe(false);
+        expect(still.pose).toEqual(still.cameraFor(1));
+        still.view(99);
+        expect(still.viewing).toBeNull();
+        still.dispose();
+    });
+
+    test('a drag tilts the view within its limits and is not a tap, and reduced motion never tilts', () => {
+        const canvas = stageCanvas(800, 600);
+        const stage = S.createStage(CONFIG, { canvas, makeRenderer: fakeRenderer });
+        stage.setTemplate(T.templateOf('surprised'), () => DEFAULT_AVATAR);
+        stage.fit();
+        const before = stage.camera.position.clone();
+        canvas.listeners.pointerdown({ clientX: 400, clientY: 300, button: 0 });
+        canvas.listeners.pointermove({ clientX: 440, clientY: 300 });
+        expect(stage.tilt.yaw).toBeCloseTo(-40 * CONFIG.view.tilt.perPixel, 9);
+        expect(stage.camera.position.distanceTo(before)).toBeGreaterThan(0.01);
+        canvas.listeners.pointermove({ clientX: 2000, clientY: -2000 });
+        expect(stage.tilt.yaw).toBe(-CONFIG.view.tilt.yaw);
+        expect(stage.tilt.pitch).toBe(-CONFIG.view.tilt.pitch);
+        canvas.listeners.pointerup({ clientX: 2000, clientY: -2000 });
+        expect(stage.viewing).toBeNull();
+        // A right button press is nothing, and a cancelled pointer drops the drag.
+        canvas.listeners.pointerdown({ clientX: 1, clientY: 1, button: 2 });
+        canvas.listeners.pointermove({ clientX: 50, clientY: 50 });
+        expect(stage.tilt.yaw).toBe(-CONFIG.view.tilt.yaw);
+        canvas.listeners.pointerdown({ clientX: 1, clientY: 1, button: 0 });
+        canvas.listeners.pointercancel({});
+        canvas.listeners.pointermove({ clientX: 50, clientY: 50 });
+        canvas.listeners.pointerup({ clientX: 50, clientY: 50 });
+        stage.dispose();
+        const still = S.createStage(CONFIG, { canvas: stageCanvas(), makeRenderer: fakeRenderer, reducedMotion: () => true });
+        still.setTemplate(T.templateOf('surprised'), () => DEFAULT_AVATAR);
+        still.canvasListeners = null;
+        stage.dispose();
+        still.dispose();
+    });
+
+    test('a figure wears its pose, its turned head and its glow, and a text cell holds no figure', () => {
+        const stage = S.createStage(CONFIG, { canvas: stageCanvas(), makeRenderer: fakeRenderer });
+        stage.setTemplate(T.templateOf('galaxyBrain'), () => DEFAULT_AVATAR);
+        const faces = stage.panels.filter((p) => p.figures.length);
+        expect(faces).toHaveLength(4);
+        expect(stage.panels.filter((p) => !p.figures.length)).toHaveLength(4);
+        expect(faces[0].figures[0].glowLight).toBeNull();
+        expect(faces[3].figures[0].glowLight.intensity).toBeCloseTo(2.4, 9);
+        expect(faces[1].figures[0].glowLight.intensity).toBeCloseTo(2.4 * 0.35, 9);
+        const skull = faces[3].figures[0].person.getObjectByName('head').children.find((o) => o.userData.isHead);
+        expect(skull.material.emissiveIntensity).toBeGreaterThan(0.5);
+        // The glowing head's skin is its own: the arms keep the shared one.
+        const arm = faces[3].figures[0].arms.right;
+        let armSkin = null;
+        arm.traverse((o) => { if (o.isMesh && !armSkin && o.material.color.getHex() === skull.material.color.getHex()) armSkin = o.material; });
+        expect(armSkin).not.toBe(skull.material);
+        stage.setTemplate(T.templateOf('plan'), () => DEFAULT_AVATAR);
+        for (const p of stage.panels) {
+            expect(p.props.name).toBe('plan');
+            expect(p.box.getObjectByName('board')).toBeTruthy();
+            const head = p.figures[0].person.getObjectByName('head');
+            expect(head.rotation.y).toBeCloseTo(-0.25, 9);
+            expect(p.figures[0].group.rotation.y).toBe(0.3);
+        }
+        stage.dispose();
+    });
+});
 
 describe('the camera', () => {
     test('Surprised frames the whole head in the square, low enough for the caption above it', () => {
@@ -127,6 +305,10 @@ describe('the camera', () => {
 
     test('the live view looks through the panel\'s camera, and the panel stands in a box of the cell\'s color', () => {
         const stage = stageWithSurprised();
+        // The arrangement first (one box, framed), then into the panel.
+        expect(stage.pose.fov).toBe(CONFIG.camera.fov);
+        stage.view(0);
+        expect(stage.viewing).toBe(0);
         expect(stage.pose).toEqual(stage.cameraFor(0));
         expect(stage.camera.fov).toBe(28);
         const back = stage.panels[0].box.getObjectByName('back');

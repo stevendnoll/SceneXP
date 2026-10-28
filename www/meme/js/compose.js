@@ -89,10 +89,10 @@ export function fitCaption(measure, text, maxWidth, { fontPx, minPx, maxLines })
 }
 
 /**
- * Draw one caption on a panel's `rect` at its `slot` ('top' or 'bottom'):
- * capitals (when `C.uppercase`), white on a black outline, centered,
- * shrunk to fit. Returns what was drawn (`{ fontPx, lines }`), or null for
- * an empty caption.
+ * Draw one caption on a panel's `rect` at its `slot` ('top', 'bottom' or
+ * 'center'): capitals (when `C.uppercase`), white on a black outline,
+ * centered, shrunk to fit. Returns what was drawn (`{ fontPx, lines }`),
+ * or null for an empty caption.
  */
 export function drawCaption(ctx, text, rect, slot, C) {
     const t = String(text || '').trim();
@@ -108,17 +108,19 @@ export function drawCaption(ctx, text, rect, slot, C) {
     const fit = fitCaption(measure, shown, rect.w - 2 * inset, { fontPx, minPx, maxLines: C.maxLines });
     ctx.font = captionFont(fit.fontPx, C.font);
     ctx.textAlign = 'center';
-    ctx.textBaseline = slot === 'bottom' ? 'alphabetic' : 'top';
+    ctx.textBaseline = slot === 'bottom' ? 'alphabetic' : slot === 'center' ? 'middle' : 'top';
     ctx.lineJoin = 'round';
     ctx.lineWidth = fit.fontPx * C.stroke;
     ctx.strokeStyle = C.outline;
     ctx.fillStyle = C.fill;
     const lineH = fit.fontPx * C.lineHeight;
     const x = rect.x + rect.w / 2;
+    const n = fit.lines.length;
     fit.lines.forEach((line, i) => {
-        const y = slot === 'bottom'
-            ? rect.y + rect.h - inset - (fit.lines.length - 1 - i) * lineH
-            : rect.y + inset + i * lineH;
+        let y;
+        if (slot === 'bottom') y = rect.y + rect.h - inset - (n - 1 - i) * lineH;
+        else if (slot === 'center') y = rect.y + rect.h / 2 + (i - (n - 1) / 2) * lineH;
+        else y = rect.y + inset + i * lineH;
         ctx.strokeText(line, x, y);
         ctx.fillText(line, x, y);
     });
@@ -160,10 +162,23 @@ export function composeMeme(ctx, { template, captions = [], w, h, config, imageF
         const image = imageFor ? imageFor(i, r) : null;
         if (image) ctx.drawImage(image, r.x, r.y, r.w, r.h);
     });
-    let k = 0;
-    template.cells.forEach((cell, i) => {
-        for (const slot of cell.captions) drawCaption(ctx, captions[k++], rects[i], slot, config.caption);
-    });
+    drawCaptions(ctx, template, captions, rects, config.caption);
     if (wordmark) drawWordmark(ctx, w, h, config.wordmark, config.caption);
     return rects;
+}
+
+/**
+ * Every caption of a template over its panel's rect, in reading order:
+ * `rects[i]` is cell i's rect, or null to skip a cell (one off screen).
+ * The live overlay draws through here too, so the stage and the picture
+ * agree.
+ */
+export function drawCaptions(ctx, template, captions, rects, C) {
+    let k = 0;
+    template.cells.forEach((cell, i) => {
+        for (const slot of cell.captions) {
+            const text = captions[k++];
+            if (rects[i]) drawCaption(ctx, text, rects[i], slot, C);
+        }
+    });
 }

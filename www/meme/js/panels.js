@@ -2,22 +2,31 @@
 /**
  * panels.js - a meme's panels as shadowboxes (specs/meme PLANNING 5.1 and
  * 5.3): each cell of the template is an open box with a lit scene inside,
- * its figures dressed from avatars and wearing the cell's expression, and a
- * camera of its own in the box's coordinates. The composite (compose.js)
- * draws each panel through that camera; the live stage looks through it
- * too (M1), or at the whole arrangement (M2).
+ * its figures dressed from avatars, posed, and wearing the cell's
+ * expression, and a camera of its own in the box's coordinates. The
+ * composite (compose.js) draws each panel through that camera; the live
+ * stage looks at the whole arrangement or glides into one.
  *
  * THE BOX IS THE BACKDROP. Its back wall fills a cell's frame, so nothing
  * from a neighboring box shows at the edge, and a template's own color on
- * that wall is what makes a panel read at thumbnail size.
+ * that wall is what makes a panel read at thumbnail size. A cell with no
+ * figures is a plain wall for a caption (the text cells of Panic / Calm).
  *
  * Every figure is the shared avatar figure built with the expression's
- * overrides, then tweaked (avatar-expressions). Nothing here writes to the
- * avatar store.
+ * overrides and the figure's own (a slim build, a buff one), then tweaked
+ * (avatar-expressions), posed (poses.js), and lit from within for a glow
+ * (Galaxy Brain). Nothing here writes to the avatar store.
  */
 
 import { createAvatar } from '../../shared/js/avatar-figure-1.0.0.min.js';
 import { expressionOverrides, applyExpression } from '../../shared/js/avatar-expressions-1.0.0.min.js';
+import { armsFor, headTurnFor } from './poses.min.js';
+import { SCENES } from './scenes/index.min.js';
+
+/** The glow (Galaxy Brain): the head's own light, `color` at `intensity`
+ *  times the figure's `glow`, reaching `distance`, and the head's skin lit
+ *  from within by `emissive` of it. */
+export const GLOW = Object.freeze({ color: 0xffd27a, intensity: 2.4, distance: 1.6, emissive: 0.55 });
 
 /**
  * An open box: back wall, floor, ceiling and two sides, its origin at the
@@ -54,6 +63,18 @@ export function buildBox(B, backdrop = B.wall) {
     return group;
 }
 
+/** The boxes' span, meters: `columns` across and `rows` up, `gap` between. */
+export function arrangementSize(template, B) {
+    const columns = template.grid[0].reduce((n, c) => n + c.span, 0);
+    const rows = template.grid.length;
+    return {
+        columns,
+        rows,
+        width: columns * B.width + (columns - 1) * B.gap,
+        height: rows * B.height + (rows - 1) * B.gap
+    };
+}
+
 /**
  * Where each cell's box stands in the arrangement, in meters: the grid laid
  * out on the stage with the top row highest, a box a column wide (a spanning
@@ -62,17 +83,15 @@ export function buildBox(B, backdrop = B.wall) {
  * order. One cell stands at the origin.
  */
 export function layoutPanels(template, B) {
-    const columns = template.grid[0].reduce((n, c) => n + c.span, 0);
-    const rows = template.grid.length;
+    const { width, rows } = arrangementSize(template, B);
     const unit = B.width + B.gap;
-    const totalW = columns * B.width + (columns - 1) * B.gap;
     const out = [];
     template.grid.forEach((row, r) => {
         let col = 0;
         for (const cell of row) {
-            const left = -totalW / 2 + col * unit;
-            const width = cell.span * B.width + (cell.span - 1) * B.gap;
-            out.push({ x: left + width / 2, y: (rows - 1 - r) * (B.height + B.gap), z: 0 });
+            const left = -width / 2 + col * unit;
+            const cellW = cell.span * B.width + (cell.span - 1) * B.gap;
+            out.push({ x: left + cellW / 2, y: (rows - 1 - r) * (B.height + B.gap), z: 0 });
             col += cell.span;
         }
     });
@@ -89,24 +108,48 @@ export function cellCamera(cell, box) {
 
 /**
  * A figure for a cell's figure spec: the avatar built with the expression's
- * mouth, the expression's tweaks laid on, standing `at` and turned `turn`
- * in the box. Returns the shared figure with `undoExpression` added.
+ * mouth and the spec's own `overrides`, the expression's tweaks laid on,
+ * posed, its head turned, standing `at` and turned `turn` in the box, and
+ * glowing when `glow` is above zero. Returns the shared figure with
+ * `undoExpression`, `glowLight` and `spec` added.
  */
 export function makeFigure(avatar, spec) {
-    const figure = createAvatar(avatar, { overrides: expressionOverrides(spec.expression) });
+    const figure = createAvatar(avatar, { overrides: { ...expressionOverrides(spec.expression), ...(spec.overrides || {}) } });
+    figure.spec = spec;
     figure.undoExpression = applyExpression(figure, spec.expression);
+    figure.setPose(armsFor(spec.pose, figure.avatar.handedness));
+    const head = figure.person.getObjectByName('head');
+    if (head) head.rotation.y = headTurnFor(spec.pose, figure.avatar.handedness);
     const at = spec.at || [0, 0];
     figure.group.position.set(at[0], 0, at[1]);
     figure.group.rotation.y = spec.turn || 0;
+    figure.glowLight = null;
+    if (spec.glow > 0 && head) {
+        const skull = head.children.find((o) => o.userData.isHead);
+        if (skull) {
+            // The head's own skin, lit from within: a material of its own,
+            // so the arms and the legs keep the shared one.
+            skull.material = skull.material.clone();
+            skull.material.emissive = new THREE.Color(GLOW.color);
+            skull.material.emissiveIntensity = GLOW.emissive * spec.glow;
+        }
+        const light = new THREE.PointLight(GLOW.color, GLOW.intensity * spec.glow, GLOW.distance, 1.5);
+        light.name = 'glow';
+        light.position.set(0, 0.1, 0.1);
+        head.add(light);
+        figure.glowLight = light;
+    }
     return figure;
 }
 
 /**
- * One panel: the box with its figures inside, `avatarFor(roleId)` giving
- * the avatar each role wears. Returns `{ group, box, figures, dispose }`.
+ * One panel: the box with its props (`cell.scene`) and its figures inside,
+ * `avatarFor(roleId)` giving the avatar each role wears. Returns
+ * `{ group, box, figures, props, dispose }`.
  */
 export function buildPanel(cell, config, avatarFor) {
     const box = buildBox(config.box, cell.backdrop || config.box.wall);
+    const props = cell.scene && SCENES[cell.scene] ? SCENES[cell.scene](box, config) : null;
     const figures = cell.figures.map((spec) => {
         const figure = makeFigure(avatarFor(spec.role), spec);
         box.add(figure.group);
@@ -116,6 +159,7 @@ export function buildPanel(cell, config, avatarFor) {
         group: box,
         box,
         figures,
+        props,
         dispose() {
             for (const f of figures) f.dispose();
             box.traverse((o) => {

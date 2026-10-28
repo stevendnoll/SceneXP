@@ -119,19 +119,22 @@
     <link rel="modulepreload" href="js/stage.min.js">
     <link rel="modulepreload" href="js/templates.min.js">
     <link rel="modulepreload" href="js/editor.min.js">
+    <link rel="modulepreload" href="js/compose.min.js">
     <link rel="modulepreload" href="js/exporter.min.js">
     <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
     <link rel="modulepreload" href="js/panels.min.js">
-    <link rel="modulepreload" href="js/compose.min.js">
     <link rel="modulepreload" href="../shared/js/sharefile-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-figure-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-expressions-1.0.0.min.js">
+    <link rel="modulepreload" href="js/poses.min.js">
+    <link rel="modulepreload" href="js/scenes/index.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-layers-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-shapes-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-hair-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-hats-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-wardrobe-1.0.0.min.js">
+    <link rel="modulepreload" href="js/scenes/plan.min.js">
     <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
@@ -183,10 +186,10 @@
             <!-- The meme's panels as lit shadowboxes (js/stage.js). M0 is the
                  empty studio; the boxes and the figures arrive in M1 and M2. -->
             <canvas id="mm-canvas" class="mm-canvas" role="img"
-                aria-label="Your meme's panel: a figure with your avatar's face, standing in a small lit box"></canvas>
-            <!-- The caption as it will be drawn, over the live panel (the
-                 input on the sheet is the one a screen reader hears). -->
-            <p id="mm-caption-live" class="mm-caption-live" aria-hidden="true" hidden></p>
+                aria-label="Your meme's panels: small lit boxes with a figure wearing your avatar's face in each"></canvas>
+            <!-- The captions as they will be drawn, over the live panels
+                 (the inputs on the sheet are what a screen reader hears). -->
+            <canvas id="mm-overlay" class="mm-overlay" aria-hidden="true"></canvas>
             <p id="mm-stage-status" class="mm-stage-status" role="status" aria-live="polite"></p>
         </div>
 
@@ -209,16 +212,28 @@
             <h2 id="mm-heading" class="mm-heading">Put yourself in the meme</h2>
             <p id="mm-lede" class="mm-lede">Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a short video.</p>
 
-            <!-- The editor (js/editor.js): the caption fields, one real text
-                 input a slot (M1). The Template and People tabs come in M3. -->
+            <!-- The editor (js/editor.js): the picker, then the caption
+                 fields, one real text input a slot. The People tab comes
+                 in M3 and M5. -->
             <div id="mm-editor" class="mm-editor">
+                <h3 class="mm-subhead">The meme</h3>
+                <div id="mm-picker" class="mm-picker" role="group" aria-label="Choose a meme"></div>
+                <p id="mm-hint" class="mm-note mm-hint" hidden>Tap a panel to step into it, and tap again to step back. Drag to tilt the view.</p>
+                <h3 class="mm-subhead">Your captions</h3>
                 <div id="mm-captions" class="mm-captions"></div>
             </div>
 
             <!-- The picture as it will be shared: the composite drawn small
-                 (js/exporter.js), then the one filled button. -->
+                 (js/exporter.js), its size, then the one filled button. -->
             <h3 class="mm-subhead">Your picture</h3>
-            <canvas id="mm-preview" class="mm-preview" width="540" height="540" role="img" aria-label="A preview of your meme picture, with your caption and the SceneXP.com mark in the corner"></canvas>
+            <canvas id="mm-preview" class="mm-preview" width="540" height="540" role="img" aria-label="A preview of your meme picture, with your captions and the SceneXP.com mark in the corner"></canvas>
+            <fieldset class="mm-group">
+                <legend class="mm-legend">Size</legend>
+                <div class="mm-options">
+                    <label class="mm-option"><input id="mm-size-square" class="mm-radio" type="radio" name="mm-size" value="square" checked><span class="mm-word">Square</span></label>
+                    <label class="mm-option"><input id="mm-size-portrait" class="mm-radio" type="radio" name="mm-size" value="portrait"><span class="mm-word">Portrait</span></label>
+                </div>
+            </fieldset>
             <div class="mm-row">
                 <button id="mm-picture-save" class="mm-primary" type="button" hidden>Save picture</button>
             </div>

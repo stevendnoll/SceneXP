@@ -149,10 +149,21 @@ describe('the page', () => {
         dom = null;
     });
 
+    /** The overlay's 2D context, recording what is drawn (the stub makes a
+     *  fresh context each call, so the page is handed this one). */
+    function overlayContext() {
+        const drawn = [];
+        const ctx = { drawn, measureText: (s) => ({ width: s.length * 2 }), fillText: (text) => drawn.push(text) };
+        for (const m of ['setTransform', 'clearRect', 'scale', 'strokeText']) ctx[m] = () => {};
+        dom.el('mm-overlay').getContext = () => ctx;
+        return ctx;
+    }
+
     async function boot({ saved = null, webgl = true } = {}) {
         installThree();
         dom = installDom();
         Object.assign(dom.windowStub.location, { hostname: 'localhost', pathname: '/meme/' });
+        Object.assign(dom.el('mm-canvas'), { clientWidth: 800, clientHeight: 600 });
         if (!webgl) delete dom.windowStub.WebGL2RenderingContext;
         if (saved) globalThis.localStorage.setItem('scenexp-avatar', JSON.stringify(saved));
         jest.resetModules();
@@ -229,15 +240,80 @@ describe('the page', () => {
         expect(input.id).toBe('mm-caption-0');
         expect(input.getAttribute('maxlength')).toBe('60');
         expect(fields[0].children[2].textContent).toBe('0 / 60');
-        expect(dom.el('mm-caption-live').hidden).toBe(true);
         expect(dom.el('mm-picture-save').hidden).toBe(false);
         expect(dom.el('mm-picture-save').textContent).toBe('Save picture');
+        expect(dom.el('mm-hint').hidden).toBe(false);
+        // The picker: six templates in order, the first pressed.
+        const picks = dom.el('mm-picker').children;
+        expect(picks.map((b) => b.dataset.template)).toEqual(['surprised', 'panic', 'nopeYep', 'thenNow', 'galaxyBrain', 'plan']);
+        expect(picks.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false', 'false', 'false', 'false']);
+        expect(picks[1].children[0].textContent).toBe('Panic / Calm / Panic');
     });
 
-    test('typing a caption shows it over the stage, counts it, redraws the preview, and pings once a slot', async () => {
+    test('picking a template rebuilds the panels and the fields, keeps typed captions by slot, and pings once', async () => {
         const main = await boot();
         const { state } = main.__test__;
         const input = dom.el('mm-captions').children[0].children[1];
+        input.value = 'first';
+        fire(input, 'input');
+        fire(dom.el('mm-picker').children[1], 'click');
+        expect(state.template.id).toBe('panic');
+        expect(state.stage.panels).toHaveLength(6);
+        expect(state.stage.panels.filter((p) => p.figures.length)).toHaveLength(3);
+        const fields = dom.el('mm-captions').children;
+        expect(fields).toHaveLength(3);
+        expect(fields.map((f) => f.children[0].textContent)).toEqual(['Panel 1: Caption', 'Panel 2: Caption', 'Panel 3: Caption']);
+        expect(fields[0].children[1].value).toBe('first');
+        expect(state.captions).toEqual(['first', '', '']);
+        expect(dom.el('mm-picker').children.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false', 'false', 'false', 'false']);
+        // The same template again is nothing.
+        const panels = state.stage.panels;
+        expect(main.pickTemplate('panic').id).toBe('panic');
+        expect(state.stage.panels).toBe(panels);
+        // Then vs Now changes the build on both figures.
+        main.pickTemplate('thenNow');
+        expect(state.stage.panels.map((p) => p.figures[0].avatar.build)).toEqual(['slim', 'broad']);
+        expect(state.stage.panels.map((p) => p.figures[0].avatar.muscles)).toEqual(['standard', 'buff']);
+    });
+
+    test('the captions are laid over the stage where the panels are, and the picture\'s size follows the radios', async () => {
+        const main = await boot();
+        const { state } = main.__test__;
+        // The stage's frame says where the panels are; the overlay draws there.
+        const { drawn } = overlayContext();
+        main.pickTemplate('panic');
+        const input = dom.el('mm-captions').children[1].children[1];
+        input.value = 'kalm';
+        fire(input, 'input');
+        expect(drawn).toContain('KALM');
+        expect(state.rects).toHaveLength(6);
+        // Stepping into a panel is counted once.
+        state.stage.view(3);
+        for (const fn of dom.loops) fn();
+        expect(state.pinged.stepped).toBe(true);
+        expect(state.stage.viewing).toBe(3);
+        // Escape steps out, unless a caption field has the focus.
+        input.tagName = 'INPUT';
+        document.activeElement = input;
+        main.__test__.onKey({ key: 'Escape' });
+        expect(state.stage.viewing).toBe(3);
+        document.activeElement = null;
+        main.__test__.onKey({ key: 'Escape' });
+        expect(state.stage.viewing).toBeNull();
+        main.__test__.onKey({ key: 'Escape' });
+        // The size radios.
+        expect(main.readSize()).toBe('square');
+        dom.el('mm-size-portrait').checked = true;
+        fire(dom.el('mm-size-portrait'), 'change');
+        expect(state.sizeId).toBe('portrait');
+        expect(main.readSize()).toBe('portrait');
+    });
+
+    test('typing a caption draws it over the stage, counts it, redraws the preview, and pings once a slot', async () => {
+        const main = await boot();
+        const { state } = main.__test__;
+        const input = dom.el('mm-captions').children[0].children[1];
+        const { drawn } = overlayContext();
         // The boot asked for a preview frame: let it draw, so the next
         // keystroke asks for a frame of its own.
         for (const fn of dom.loops) fn();
@@ -245,8 +321,9 @@ describe('the page', () => {
         input.value = 'when the tests pass';
         fire(input, 'input');
         expect(state.captions).toEqual(['when the tests pass']);
-        expect(dom.el('mm-caption-live').textContent).toBe('when the tests pass');
-        expect(dom.el('mm-caption-live').hidden).toBe(false);
+        // Drawn over the stage in capitals (the stub's camera projects no
+        // real rect, so the wrapping is not judged here: compose's suite does).
+        expect(drawn.join(' ')).toMatch(/^WHEN\b/);
         expect(dom.el('mm-captions').children[0].children[2].textContent).toBe('19 / 60');
         // The preview waits for a frame, then is drawn once however many
         // keystrokes came in.
@@ -254,18 +331,14 @@ describe('the page', () => {
         input.value = 'when the tests pass!';
         fire(input, 'input');
         expect(dom.loops.length).toBe(before + 1);
-        const drawn = state.exporter.rendered;
+        const rendered = state.exporter.rendered;
         dom.loops[before]();
-        expect(state.exporter.rendered).toBe(drawn + 1);
+        expect(state.exporter.rendered).toBe(rendered + 1);
         expect(state.pinged.typed.has(0)).toBe(true);
         // Over the cap, cut.
         input.value = 'x'.repeat(70);
         fire(input, 'input');
         expect(state.captions[0]).toHaveLength(60);
-        // Emptied, the live caption hides.
-        input.value = '';
-        fire(input, 'input');
-        expect(dom.el('mm-caption-live').hidden).toBe(true);
         // Restored captions go through the same path.
         state.fields.set(['again']);
         expect(input.value).toBe('again');
@@ -311,7 +384,14 @@ describe('the page', () => {
         expect(main.__test__.state.exporter).toBeNull();
         expect(dom.el('meme-app').hidden).toBe(false);
         expect(dom.el('mm-captions').children).toHaveLength(1);
+        expect(dom.el('mm-picker').children).toHaveLength(6);
         expect(dom.el('mm-picture-save').hidden).toBe(true);
+        expect(dom.el('mm-hint').hidden).toBe(true);
+        // No stage, no panels on it: the overlay has nothing to draw.
+        const { drawn } = overlayContext();
+        main.drawOverlay();
+        expect(drawn).toEqual([]);
+        expect(main.__test__.state.rects).toEqual([]);
         expect(dom.el('mm-stage-status').textContent).toBe(main.WORDS.noStage);
         expect(dom.el('mm-stage-status').hidden).not.toBe(true);
         expect(main.refreshPreview()).toBe(false);

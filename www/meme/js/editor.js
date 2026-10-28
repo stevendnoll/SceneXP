@@ -10,13 +10,52 @@
  */
 
 /** What a slot's field is called: "Caption" alone, "Top caption" and
- *  "Bottom caption" on a two-slot panel, numbered across panels. */
+ *  "Bottom caption" on a two-slot panel, numbered across panels (by the
+ *  panel's place among the ones with captions, so a template whose words
+ *  sit beside its pictures still counts 1, 2, 3). */
 export function slotLabel(slots, k) {
     const { cell, slot } = slots[k];
-    const cells = new Set(slots.map((s) => s.cell)).size;
+    const cells = [...new Set(slots.map((s) => s.cell))];
     const siblings = slots.filter((s) => s.cell === cell).length;
-    const which = siblings > 1 ? `${slot === 'top' ? 'Top' : 'Bottom'} caption` : 'Caption';
-    return cells > 1 ? `Panel ${cell + 1}: ${which}` : which;
+    const names = { top: 'Top', bottom: 'Bottom', center: 'Middle' };
+    const which = siblings > 1 ? `${names[slot] || 'Top'} caption` : 'Caption';
+    return cells.length > 1 ? `Panel ${cells.indexOf(cell) + 1}: ${which}` : which;
+}
+
+/**
+ * The template picker in `container`: a button a template in the picker's
+ * order, the chosen one pressed. `onPick(template)` hears a choice.
+ * Returns `{ buttons, select(id) }`.
+ */
+export function buildTemplatePicker(container, { templates, selected, onPick = () => {}, doc = typeof document === 'undefined' ? null : document }) {
+    container.textContent = '';
+    const buttons = [];
+    const select = (id) => {
+        for (const b of buttons) b.setAttribute('aria-pressed', b.dataset.template === id ? 'true' : 'false');
+    };
+    for (const t of templates) {
+        const b = doc.createElement('button');
+        b.type = 'button';
+        b.className = 'mm-pick';
+        b.dataset.template = t.id;
+        b.setAttribute('aria-pressed', 'false');
+        const title = doc.createElement('span');
+        title.className = 'mm-pick-title';
+        title.textContent = t.title;
+        const line = doc.createElement('span');
+        line.className = 'mm-pick-line';
+        line.textContent = t.line;
+        b.appendChild(title);
+        b.appendChild(line);
+        b.addEventListener('click', () => {
+            select(t.id);
+            onPick(t);
+        });
+        container.appendChild(b);
+        buttons.push(b);
+    }
+    select(selected);
+    return { buttons, select };
 }
 
 /**
@@ -24,7 +63,7 @@ export function slotLabel(slots, k) {
  * `onInput(k, value)` hears every change. Returns `{ inputs, set(captions) }`.
  */
 export function buildCaptionFields(container, { slots, captions = [], maxChars, onInput = () => {}, doc = typeof document === 'undefined' ? null : document, idPrefix = 'mm-caption' }) {
-    while (container.firstChild) container.removeChild(container.firstChild);
+    container.textContent = '';
     const inputs = [];
     const counters = [];
     slots.forEach((_, k) => {

@@ -135,6 +135,28 @@ describe('a caption', () => {
         expect(C.drawCaption(plain, 'as typed', rect, 'top', { ...K, uppercase: false }).lines).toEqual(['as typed']);
     });
 
+    test('a centered caption sits in the middle of its panel, its lines either side of the middle', () => {
+        const rect = { x: 0, y: 100, w: 300, h: 300 };
+        const K = CONFIG.caption;
+        const one = recordingContext(0.6);
+        C.drawCaption(one, 'KALM', rect, 'center', K);
+        expect(one.calls.filter((c) => c[0] === 'fillText').map((c) => c[3])).toEqual([250]);
+        expect(one.textBaseline).toBe('middle');
+        const two = recordingContext(0.6);
+        const fit = C.drawCaption(two, 'ONE LINE IS NOT ENOUGH FOR THIS', rect, 'center', K);
+        const ys = two.calls.filter((c) => c[0] === 'fillText').map((c) => c[3]);
+        expect(fit.lines).toHaveLength(2);
+        expect((ys[0] + ys[1]) / 2).toBeCloseTo(250, 9);
+        expect(ys[1] - ys[0]).toBeCloseTo(fit.fontPx * K.lineHeight, 9);
+    });
+
+    test('drawCaptions skips a cell with no rect and keeps counting its captions', () => {
+        const template = { cells: [{ captions: ['top'] }, { captions: ['center'] }, { captions: ['bottom'] }] };
+        const ctx = recordingContext();
+        C.drawCaptions(ctx, template, ['a', 'b', 'c'], [{ x: 0, y: 0, w: 100, h: 100 }, null, { x: 0, y: 100, w: 100, h: 100 }], CONFIG.caption);
+        expect(ctx.calls.filter((c) => c[0] === 'fillText').map((c) => c[1])).toEqual(['A', 'C']);
+    });
+
     test('two lines stack down from the top and up from the bottom', () => {
         const rect = { x: 0, y: 0, w: 300, h: 300 };
         const K = CONFIG.caption;

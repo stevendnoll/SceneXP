@@ -35,10 +35,20 @@ export const MEME_PAGE = deepFreeze({
         exposure: 1.0
     },
 
-    /** The camera on the whole arrangement: `eye` where it stands, `aim`
-     *  what it looks at, `fov` vertical in degrees. M2 adds the glide into
-     *  a panel; M1 looks into the one panel through its cell's camera. */
+    /** The camera on the whole arrangement: `eye` where it stands and `aim`
+     *  what it looks at before a template is shown, `fov` vertical in
+     *  degrees. With one, the arrangement is framed (`view`). */
     camera: { fov: 32, eye: [0, 1.5, 5.2], aim: [0, 1.0, 0] },
+
+    /**
+     * The live view (PLANNING 5.1): the whole arrangement framed with
+     * `margin` to spare, the camera standing `lift` of its distance above
+     * the arrangement's middle; a tap on a panel glides into it over
+     * `glide` seconds (a cut under reduced motion) and a tap again glides
+     * out; a drag tilts the view up to `tilt.yaw` and `tilt.pitch` radians,
+     * `tilt.perPixel` radians a pixel; a tap moves less than `tapPixels`.
+     */
+    view: { margin: 1.12, lift: 0.08, glide: 0.6, tilt: { yaw: 0.35, pitch: 0.18, perPixel: 0.004 }, tapPixels: 6 },
 
     /**
      * A shadowbox (PLANNING 5.1): the open box each panel's scene stands in,
