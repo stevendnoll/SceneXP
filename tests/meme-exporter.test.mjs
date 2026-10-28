@@ -20,6 +20,7 @@ let THREE;
 let X;
 let S;
 let T;
+let P;
 let CONFIG;
 let DEFAULT_AVATAR;
 /** A hat the visitor may wear (avatar-1.0.0's options). */
@@ -32,6 +33,7 @@ beforeAll(async () => {
     X = await import('../www/meme/js/exporter.js');
     S = await import('../www/meme/js/stage.js');
     T = await import('../www/meme/js/templates.js');
+    P = await import('../www/meme/js/panels.js');
     ({ MEME_PAGE: CONFIG } = await import('../www/meme/js/config.js'));
     ({ DEFAULT_AVATAR } = await import('../www/shared/js/avatar-1.0.0.js'));
 });
@@ -502,6 +504,31 @@ describe('the words on the board', () => {
         const all = stage.projectAll(stage.camera, 800, 600);
         expect(all.props).toHaveLength(4);
         expect(all.props[3].board.w).toBeGreaterThan(0);
+        stage.dispose();
+    });
+});
+
+describe('a label over the head', () => {
+    test('The Handshake pins both labels above the heads, so neither covers the clasp', () => {
+        const canvas = stageCanvas(800, 600);
+        const stage = S.createStage(CONFIG, { canvas, makeRenderer: fakeRenderer });
+        stage.setTemplate(T.templateOf('handshake'), () => DEFAULT_AVATAR);
+        const exporter = X.createExporter(CONFIG, { stage, doc: fakeDoc(), win: {}, nav: {}, makeRenderer: fakeRenderer });
+        const anchors = exporter.anchorsFor(0, 1080, 1080);
+        stage.panels[0].figures.forEach((f, i) => {
+            const head = f.head();
+            const cam = new THREE.PerspectiveCamera(stage.cameraFor(0).fov, 1, 0.05, 80);
+            cam.position.fromArray(stage.cameraFor(0).eye);
+            cam.lookAt(...stage.cameraFor(0).aim);
+            cam.updateMatrixWorld(true);
+            const headPx = P.projectPoint(head.toArray(), cam, 1080, 1080);
+            expect(anchors[i].y).toBeLessThan(headPx.y - 60);   // above the head on the picture
+            expect(anchors[i].y).toBeGreaterThan(40);          // and still inside it
+        });
+        // A figure without its own says config's: the chest.
+        stage.setTemplate(T.templateOf('surprised'), () => DEFAULT_AVATAR);
+        const f = stage.panels[0].figures[0];
+        expect(P.labelAnchor(f, CONFIG.label.below)[1]).toBeCloseTo(f.head().y - CONFIG.label.below, 9);
         stage.dispose();
     });
 });

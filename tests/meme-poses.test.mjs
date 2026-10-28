@@ -182,6 +182,14 @@ test('a pointing hand swaps the leading hand\'s geometry for a fist with the ind
     const fisted = Hd.fistWith(figure, 'right');
     expect(fisted).toBe(other);
     expect(other.userData.shape).toBe('fist');
+    // The open hand at the same larger size: the rig's shape, scaled, so a
+    // palm out beside a pointing fist is one size.
+    const opened = Hd.openWith(figure, 'right');
+    expect(opened).toBe(other);
+    expect(other.userData.shape).toBe('open');
+    const big = reach(other.geometry);
+    expect(big.max.x - big.min.x).toBeCloseTo((open.max.x - open.min.x) * Hd.FIST.scale, 3);
+    expect(big.max.y - big.min.y).toBeCloseTo((open.max.y - open.min.y) * Hd.FIST.scale, 3);
     expect(Hd.pointWith({ arms: {} }, 'left')).toBeNull();
     expect(Hd.fistWith({ arms: {} }, 'right')).toBeNull();
     figure.dispose();
@@ -204,6 +212,14 @@ test('the point and the aim stand the thumb up, so the index shows in profile an
     expect(aim.thumb.y).toBeGreaterThan(0.9);
     // The back of the hand outward (the figure's right), the palm in.
     expect(aim.back.x).toBeLessThan(-0.9);
+    // The dismiss shows its palm to the camera, the thumb toward the body's
+    // middle (the camera's left for the left hand; Steve, 2026-10-28: the
+    // back of the hand was showing).
+    figure.setPose(P.armsFor('dismiss', 'left'));
+    const dismiss = axesOf(figure, 'left');
+    expect(dismiss.back.z).toBeLessThan(-0.5);
+    expect(dismiss.thumb.x).toBeLessThan(-0.8);
+    expect(P.ENLARGED).toEqual(['dismiss', 'approve', 'present']);
     figure.dispose();
 });
 

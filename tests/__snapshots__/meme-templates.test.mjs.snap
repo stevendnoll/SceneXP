@@ -1028,6 +1028,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
               -0.23,
             ],
             "expression": "bigGrin",
+            "labelBelow": -0.2,
             "overrides": {
               "build": "broad",
               "muscles": "buff",
@@ -1045,6 +1046,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
               0.23,
             ],
             "expression": "bigGrin",
+            "labelBelow": -0.2,
             "overrides": {
               "build": "broad",
               "muscles": "buff",
@@ -1141,7 +1143,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
             },
             "pose": "stand",
             "role": "friend",
-            "turn": 3.641592653589793,
+            "turn": 4.091592653589793,
           },
         ],
         "scene": "space",

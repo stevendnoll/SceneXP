@@ -26,7 +26,9 @@
  *               and nodded `nod` radians (negative looks up), its legs in
  *               a `stride` (radians, the right leg forward when positive),
  *               the leading hand's `twist` about the forearm (radians,
- *               the pose's own unless given),
+ *               the pose's own unless given), where its label pins
+ *               (`labelBelow`, meters under the head's middle, negative
+ *               for over the head; config.label.below unless given),
  *               `expression` (avatar-expressions), `overrides` on the
  *               avatar (a build, a muscle), where (`at` [x, z] from the
  *               box's middle, `turn` radians, facing the open side at 0,
@@ -235,10 +237,12 @@ const BUFF = { build: 'broad', muscles: 'buff', sleeves: 'short' };
 const RED_SHIRT = 'xc0262a';
 const HANDSHAKE_CELL = {
     figures: [
-        { role: 'you', pose: 'shake', side: 'right', expression: 'bigGrin', at: [-0.4, -0.23], turn: Math.PI / 2 - 0.5, overrides: { ...BUFF, shirt: 'white' } },
+        // The labels over the heads, so neither covers the clasp (Steve,
+        // 2026-10-28: the handshake is the crux).
+        { role: 'you', pose: 'shake', side: 'right', expression: 'bigGrin', at: [-0.4, -0.23], turn: Math.PI / 2 - 0.5, labelBelow: -0.2, overrides: { ...BUFF, shirt: 'white' } },
         // The friend's hand turned its own way (poses.js: the stances are
         // not a mirror pair), its back away from the camera behind yours.
-        { role: 'friend', pose: 'shake', side: 'right', twist: 0.91, expression: 'bigGrin', at: [0.4, 0.23], turn: -Math.PI / 2 + 0.5, overrides: { ...BUFF, shirt: RED_SHIRT } }
+        { role: 'friend', pose: 'shake', side: 'right', twist: 0.91, expression: 'bigGrin', at: [0.4, 0.23], turn: -Math.PI / 2 + 0.5, labelBelow: -0.2, overrides: { ...BUFF, shirt: RED_SHIRT } }
     ],
     captions: [{ label: 0 }, { label: 1 }, 'bottom'],
     camera: { eye: [0, 1.35, 3.0], aim: [0, 1.0, 0], fov: 36 },
@@ -272,8 +276,9 @@ const ALWAYS = {
         figures: [
             { role: 'you', pose: 'aim', side: 'right', look: 0.9, expression: 'smug', at: [0.65, 0.2], turn: -Math.PI / 2 + 0.3, overrides: SUIT },
             // Facing back and to the camera's left (a turn past pi goes
-            // toward -x), the head pitched well up: at the Earth.
-            { role: 'friend', pose: 'stand', expression: 'none', at: [-0.3, 0.1], turn: Math.PI + 0.5, nod: -0.5, overrides: SUIT }
+            // toward -x), far enough round that the camera sees some face,
+            // the head pitched well up: at the Earth.
+            { role: 'friend', pose: 'stand', expression: 'none', at: [-0.3, 0.1], turn: Math.PI + 0.95, nod: -0.5, overrides: SUIT }
         ],
         captions: ['top', 'bottom'],
         camera: { eye: [0, 1.4, 3.2], aim: [0, 1.0, 0], fov: 38 },
@@ -382,6 +387,7 @@ export function validateTemplate(t, { expressions, poses, scenes = [], sides = [
             if (f.stride !== undefined && !Number.isFinite(f.stride)) bad.push(`${here}: stride must be radians`);
             if (f.nod !== undefined && !Number.isFinite(f.nod)) bad.push(`${here}: nod must be radians`);
             if (f.twist !== undefined && !Number.isFinite(f.twist)) bad.push(`${here}: twist must be radians`);
+            if (f.labelBelow !== undefined && !Number.isFinite(f.labelBelow)) bad.push(`${here}: labelBelow must be meters`);
             if (f.glow !== undefined && !(f.glow >= 0 && f.glow <= 1)) bad.push(`${here}: glow must be 0 to 1`);
             if (f.overrides !== undefined && (typeof f.overrides !== 'object' || f.overrides === null)) bad.push(`${here}: overrides must be an object of avatar fields`);
         }

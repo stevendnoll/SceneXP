@@ -131,7 +131,10 @@ describe('the catalog', () => {
         expect(aimer.look).toBeGreaterThan(0.5);          // the face round to the camera
         expect(Math.abs(aimer.turn + Math.PI / 2)).toBeLessThan(0.5);   // side-on, the arm toward the friend
         expect(gazer.role).toBe('friend');
-        expect(Math.abs(gazer.turn - Math.PI)).toBeLessThan(0.8);
+        // Past pi, toward -x (the Earth's side), far enough round that the
+        // camera sees some face (Steve, 2026-10-28).
+        expect(gazer.turn - Math.PI).toBeGreaterThan(0.8);
+        expect(gazer.turn - Math.PI).toBeLessThan(1.3);
         expect(gazer.nod).toBeLessThan(0);
         expect(aimer.at[0]).toBeGreaterThan(gazer.at[0] + 0.8);
         // The Handshake is right hands or the hands miss, and both are
@@ -141,6 +144,8 @@ describe('the catalog', () => {
         expect(shakers.every((f) => f.side === 'right')).toBe(true);
         expect(shakers[0].twist).toBeUndefined();            // the pose's own
         expect(shakers[1].twist).toBeCloseTo(0.91, 9);       // the friend's, solved with it
+        // Both labels over the heads, clear of the clasp (Steve, 2026-10-28).
+        expect(shakers.every((f) => f.labelBelow < 0)).toBe(true);
         expect(shakers.map((f) => f.overrides)).toEqual([
             { build: 'broad', muscles: 'buff', sleeves: 'short', shirt: 'white' },
             { build: 'broad', muscles: 'buff', sleeves: 'short', shirt: 'xc0262a' }
@@ -231,6 +236,8 @@ describe('the rules catch', () => {
         expect(problems((t) => { t.cells[0].figures[0].nod = NaN; })).toEqual([expect.stringMatching(/nod must be radians/)]);
         expect(problems((t) => { t.cells[0].figures[0].twist = 'up'; })).toEqual([expect.stringMatching(/twist must be radians/)]);
         expect(problems((t) => { t.cells[0].figures[0].twist = 0.9; })).toEqual([]);
+        expect(problems((t) => { t.cells[0].figures[0].labelBelow = 'top'; })).toEqual([expect.stringMatching(/labelBelow must be meters/)]);
+        expect(problems((t) => { t.cells[0].figures[0].labelBelow = -0.3; })).toEqual([]);
         expect(problems((t) => { t.cells[0].figures[0].stride = 0.4; t.cells[0].figures[0].nod = -0.3; })).toEqual([]);
         expect(problems((t) => { delete t.cells[0].figures; })).toEqual(expect.arrayContaining([expect.stringMatching(/needs figures/)]));
         expect(problems((t) => { t.cells[0].figures = []; })).toEqual([expect.stringMatching(/nobody is in it/)]);

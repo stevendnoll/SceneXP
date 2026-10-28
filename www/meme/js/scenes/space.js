@@ -18,9 +18,10 @@ export const SPACE = Object.freeze({
      *  shape), in the hand's own frame, which the pose's twist stands
      *  thumb up (poses.js): the barrel along the fingers' -y out past the
      *  knuckles of the fist (hands.js), the body `body` [across, along,
-     *  deep] meters round the fist, the fin on the thumb side (up),
-     *  `barrel` beyond. Upright, not on its side (Steve, 2026-10-28). */
-    blaster: Object.freeze({ body: Object.freeze([0.06, 0.15, 0.065]), barrel: 0.13, barrelR: 0.017, ringR: 0.032, fin: 0.04, color: 0xd9dde3, trim: 0xff8a3d })
+     *  deep] meters round the fist, the fin on the thumb side (up), the
+     *  `grip` [thick, long, deep] handle out of the bottom, `barrel`
+     *  beyond. Upright, not on its side (Steve, 2026-10-28). */
+    blaster: Object.freeze({ body: Object.freeze([0.06, 0.15, 0.065]), barrel: 0.13, barrelR: 0.017, ringR: 0.032, fin: 0.04, grip: Object.freeze([0.045, 0.07, 0.05]), color: 0xd9dde3, trim: 0xff8a3d })
 });
 
 /** A seeded roll, so the stars stand still between builds. */
@@ -112,6 +113,14 @@ export function build(box, config, { figures = [] } = {}) {
         const fin = new THREE.Mesh(new THREE.BoxGeometry(Bl.fin, bl * 0.55, bh * 0.3), trim);
         fin.position.set(inner * (bw / 2 + Bl.fin / 2), grip - bl * 0.35, 0);
         gun.add(fin);
+        // The handle, down out of the bottom of the fist (the pinky side,
+        // which the thumb-up twist points at the floor), so the gun reads
+        // as held upright (Steve, 2026-10-28).
+        const [gw, gl, gd] = Bl.grip;
+        const handle = new THREE.Mesh(new THREE.BoxGeometry(gl, gw, gd), trim);
+        handle.position.set(-inner * (bw / 2 + gl / 2 + 0.035), grip + bl * 0.05, 0);
+        handle.rotation.z = inner * 0.25;
+        gun.add(handle);
         gun.traverse((o) => { if (o.isMesh) o.castShadow = true; });
         hand.add(gun);
         return gun;

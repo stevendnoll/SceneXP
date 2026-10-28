@@ -20,8 +20,8 @@
 
 import { createAvatar } from '../../shared/js/avatar-figure-1.0.0.min.js';
 import { expressionOverrides, applyExpression } from '../../shared/js/avatar-expressions-1.0.0.min.js';
-import { armsFor, headTurnFor, legsFor, nodFor, POINTING, FISTED, STRIDE } from './poses.min.js';
-import { pointWith, fistWith } from './hands.min.js';
+import { armsFor, headTurnFor, legsFor, nodFor, POINTING, FISTED, ENLARGED, STRIDE } from './poses.min.js';
+import { pointWith, fistWith, openWith } from './hands.min.js';
 import { SCENES } from './scenes/index.min.js';
 
 /**
@@ -232,6 +232,7 @@ export function makeFigure(avatar, spec) {
     figure.setPose(arms);
     if (POINTING.includes(spec.pose)) pointWith(figure, side);
     else if (FISTED.includes(spec.pose)) fistWith(figure, side);
+    else if (ENLARGED.includes(spec.pose)) openWith(figure, side);
     const head = figure.person.getObjectByName('head');
     if (head) {
         head.rotation.y = headTurnFor(spec.pose, spec.look === undefined ? side : spec.look);
@@ -262,10 +263,13 @@ export function makeFigure(avatar, spec) {
 }
 
 /** Where a label pins to a figure: over its chest, `below` meters under
- *  the head's middle, in world meters. */
+ *  the head's middle (the figure's own `labelBelow` when its spec names
+ *  one: negative puts the label over the head, clear of a clasp at chest
+ *  height, Steve 2026-10-28), in world meters. */
 export function labelAnchor(figure, below) {
     const head = figure.head();
-    return [head.x, head.y - below, head.z];
+    const own = figure.spec && figure.spec.labelBelow;
+    return [head.x, head.y - (Number.isFinite(own) ? own : below), head.z];
 }
 
 /** A world point on a `w` by `h` picture through `camera`, in pixels, or

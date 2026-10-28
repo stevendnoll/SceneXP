@@ -11,7 +11,9 @@
  * (2026-10-27, the figure facing +z, its right arm):
  *
  *   dismiss   the hand at chest height, 0.45 m forward, palm out
- *             (-0.37, 1.37, 0.45)
+ *             (-0.37, 1.37, 0.45). Twist 0 is the palm to the camera with
+ *             the thumb toward the body's middle; pi showed the back of
+ *             the hand (Steve's QA, 2026-10-28)
  *   approve   the hand at head height, forward (-0.37, 1.58, 0.46)
  *   present   the hand out to the side toward a chart (-0.70, 1.24, 0.22)
  *   shake     the hand at chest height, raised, for a handshake: two
@@ -60,7 +62,7 @@ export const MAX_HEAD_TURN = 1.1;
  *  the rig's rest. */
 export const ARM_POSES = Object.freeze({
     stand: null,
-    dismiss: Object.freeze({ z: 0.4, x: -1.1, fore: -1.1, twist: Math.PI }),
+    dismiss: Object.freeze({ z: 0.4, x: -1.1, fore: -1.1, twist: 0 }),
     approve: Object.freeze({ z: 0.3, x: -1.9, fore: -0.4, twist: 0 }),
     present: Object.freeze({ z: 1.25, x: -0.5, fore: -0.6, twist: 0 }),
     shake: Object.freeze({ z: -0.06, x: -0.84, fore: -1.28, twist: 1.22 }),
@@ -75,6 +77,11 @@ export const ARM_POSES = Object.freeze({
  *  thing held in the fist stands upright, its barrel past the knuckles. */
 export const POINTING = Object.freeze(['point']);
 export const FISTED = Object.freeze(['aim']);
+
+/** The poses whose leading hand stays the rig's open hand but is drawn
+ *  at the fist's larger size, so every action hand is one size (Steve,
+ *  2026-10-28: the Nope hand beside the Yep fist). */
+export const ENLARGED = Object.freeze(['dismiss', 'approve', 'present']);
 
 /** Where The Handshake stands its two figures: `gap` apart across, each
  *  `aside` toward its own left (so the right hands meet), turned `turn`

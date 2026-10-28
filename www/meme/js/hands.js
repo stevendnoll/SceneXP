@@ -14,12 +14,15 @@
  *             blaster), the barrel out past the knuckles
  *   pointing  the fist with the index out straight and long, a cartoon's
  *             point, drawn a little larger than the rig's hand
+ *   open      the rig's own hand at that larger size, for the other
+ *             action poses (a palm out, a hand raised), so the two hands
+ *             of Nope / Yep are one size
  *
  * The rig's open hand curled its three fingers in the first cut (the same
  * capsules, bent), which read as a lumpy palm at panel size.
  */
 
-import { HAND, mergeParts } from '../../shared/js/people-1.0.0.min.js';
+import { HAND, handGeometry, mergeParts } from '../../shared/js/people-1.0.0.min.js';
 
 /** The shapes' measures in hand units (people-1.0.0 HAND): the curled
  *  fingers' block `knuckles` wide, `curl` tall and `deep` toward the palm;
@@ -126,4 +129,11 @@ export function pointWith(figure, side) {
  *  null when there is none. */
 export function fistWith(figure, side) {
     return swapHand(figure, side, 'fist', (unit, inner) => fistGeometry(unit, inner));
+}
+
+/** The hand on `side` of `figure` the rig's own open hand, drawn at the
+ *  fist's larger size, so an action hand is one size whatever its shape.
+ *  Returns the hand mesh, or null when there is none. */
+export function openWith(figure, side) {
+    return swapHand(figure, side, 'open', (unit, inner) => handGeometry(unit, inner));
 }
