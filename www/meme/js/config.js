@@ -1,0 +1,118 @@
+// © 2026 Continuum Commerce LLC. MIT licensed.
+/**
+ * config.js - Meme Studio (/meme/, specs/meme PLANNING): the studio, its
+ * light and camera, the caption rules, the wordmark, the export sizes and
+ * the remix link's ceiling. Every number a QA round might move is here, in
+ * meters, seconds, pixels and radians.
+ *
+ * DEEP FROZEN, so nothing at run time can change the page's tuning by
+ * accident.
+ */
+
+function deepFreeze(o) {
+    for (const v of Object.values(o)) if (v && typeof v === 'object') deepFreeze(v);
+    return Object.freeze(o);
+}
+
+export const MEME_PAGE = deepFreeze({
+    /** The soft studio the shadowboxes float in: the avatar page's warm
+     *  white, a floor far larger than any frame so its edge is never seen. */
+    studio: {
+        color: '#F1EFEA',
+        floor: { size: 60, color: '#ECE8E1' }
+    },
+
+    /** Soft daylight from an unseen skylight: an even sky, one sun from
+     *  high in front whose shadow falls into the boxes, and a cool fill, as
+     *  the avatar's studio is lit. */
+    light: {
+        sky: { color: '#F6F8FB', ground: '#ECE7DF', intensity: 2.2 },
+        sun: {
+            color: '#FFF6EA', intensity: 1.8, position: [2.0, 5, 4.0], target: [0, 0.8, 0],
+            shadow: { size: 1024, reach: 2.6, near: 1, far: 14, bias: -0.0004, normalBias: 0.02, radius: 4 }
+        },
+        fill: { color: '#E6EDF5', intensity: 0.5, position: [-3, 2.4, 2.6] },
+        exposure: 1.0
+    },
+
+    /** The camera on the whole arrangement: `eye` where it stands, `aim`
+     *  what it looks at, `fov` vertical in degrees. M2 adds the glide into
+     *  a panel; M1 looks into the one panel through its cell's camera. */
+    camera: { fov: 32, eye: [0, 1.5, 5.2], aim: [0, 1.0, 0] },
+
+    /**
+     * A shadowbox (PLANNING 5.1): the open box each panel's scene stands in,
+     * in meters, its origin at the middle of its floor and its open side
+     * toward +z. Tall enough for a figure with a hat, wide enough that a
+     * cell's camera sees only its own back wall on a wide screen. `gap` is
+     * the space between boxes in the arrangement (M2). `wall` and `floor`
+     * are its default colors; a cell may name its own `backdrop`.
+     */
+    box: { width: 2.4, height: 2.3, depth: 1.4, gap: 0.12, wall: '#E9E4DC', floor: '#DDD7CE' },
+
+    /**
+     * Captions (PLANNING D1 and D4, 2026-10-27). `font` is the caption
+     * face, a system stack with nothing fetched: Impact where the device
+     * has it (macOS, Windows, iOS), the condensed fallback on Android. It
+     * is named once here and once in css/meme.css (`--mm-caption-font`),
+     * and tests/meme-init holds the two the same. `maxChars` a slot,
+     * `maxSlots` a template, `maxLines` a caption once wrapped.
+     */
+    caption: {
+        font: 'Impact, "Arial Narrow Bold", "Roboto Condensed", sans-serif',
+        maxChars: 60,
+        maxSlots: 6,
+        maxLines: 2,
+        /** How a caption is drawn on a panel (compose.js): the face `size`
+         *  as a share of the panel's height, shrinking to `smallest` of that
+         *  to fit, the `stroke` as a share of the face, `inset` from the
+         *  panel's edge as a share of its height, the line height, and the
+         *  classic white on a black outline in capitals. */
+        size: 0.11, smallest: 0.55, stroke: 0.09, inset: 0.04, lineHeight: 1.04,
+        fill: '#ffffff', outline: '#000000', uppercase: true
+    },
+
+    /** The composite picture (compose.js): the panels tiled on a dark
+     *  ground with a `gutter` between and around them, as a share of the
+     *  picture's height. */
+    panel: { gutter: 0.012, background: '#111111' },
+
+    /** The wordmark on every export (D3): text only, in the caption face,
+     *  white with the dark outline, `height` and `inset` as shares of the
+     *  canvas height, bottom right. */
+    wordmark: { text: 'SceneXP.com', height: 0.024, inset: 0.03 },
+
+    /** Export sizes (PRD 5.6): pictures as PNG, the clip through the shared
+     *  recorder at `clip.fps`, with each panel held `clip.hold` seconds and
+     *  `clip.glide` between panels (a cut under reduced motion), and the
+     *  whole grid held `clip.ending` at the end. The preview on the sheet
+     *  is drawn `preview` pixels across. */
+    export: {
+        pictures: [
+            { id: 'square', w: 1080, h: 1080, label: '1080 square' },
+            { id: 'portrait', w: 1080, h: 1350, label: '1080 by 1350 portrait' }
+        ],
+        preview: 540,
+        clip: {
+            w: 1080, h: 1920, fps: 30, hold: 1.6, glide: 0.5, ending: 1.5, longest: 15,
+            bitrate: 8000000, mobileBitrate: 5000000
+        }
+    },
+
+    /** The remix link (PLANNING 4.3): the longest fragment `decodeRemix`
+     *  reads, with room for every slot at its cap and the longest avatar. */
+    remix: { maxLength: 2000 },
+
+    /** Where the last meme is kept in this browser (F8). */
+    storageKey: 'scenexp-meme',
+
+    /** The usage pings' proof of work (shared boot part), under the same
+     *  key every scene uses, so a visit that wanders through here stays one
+     *  visit in the log. */
+    proofOfWork: { prefix: '11', storageKey: 'gallery-pow' },
+
+    quality: {
+        maxPixelRatio: 2,
+        maxPixelRatioMobile: 1.5
+    }
+});

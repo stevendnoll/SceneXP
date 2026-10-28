@@ -1,0 +1,14 @@
+<!-- A MEME IN MINIATURE: a grid of three panels on the studio's warm white,
+     the wide bottom one holding a small round face with wide eyes and an
+     open mouth. At 16 pixels what is left is a grid with a face in it,
+     which still reads as a meme. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Meme Studio">
+  <rect width="32" height="32" rx="7" fill="#f1efea"/>
+  <rect x="5" y="5" width="10" height="9" rx="2" fill="#1d1d1f"/>
+  <rect x="17" y="5" width="10" height="9" rx="2" fill="#1d1d1f"/>
+  <rect x="5" y="16" width="22" height="11" rx="2" fill="#1d1d1f"/>
+  <circle cx="16" cy="21.5" r="3.6" fill="#e0ac86"/>
+  <circle cx="14.7" cy="20.6" r="0.7" fill="#1d1d1f"/>
+  <circle cx="17.3" cy="20.6" r="0.7" fill="#1d1d1f"/>
+  <ellipse cx="16" cy="23" rx="1" ry="0.8" fill="#1d1d1f"/>
+</svg>

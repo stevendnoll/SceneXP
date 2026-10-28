@@ -112,7 +112,8 @@ const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
 // links were built on the release branch, and Steve checked them on the
 // page), an exception that left with it: an unreleased scene is unlinked
 // everywhere.
-const UNRELEASED = ['starfall'];
+// Meme Studio (www/meme) joined at M0 on 2026-10-27, on the meme-1 branch.
+const UNRELEASED = ['starfall', 'meme'];
 
 // SITE PAGES IN FOLDERS. Your Avatar draws a figure on a canvas, so the scan
 // below finds it with the scenes, but it is not an experience: it is the page

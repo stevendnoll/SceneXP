@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         img-src allows data: for the pictures this page draws on its own canvases. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <!-- BEING BUILT (specs/meme M0, 2026-10-27): out of search until the
+         release milestone (M7), when this tag goes, the social card is
+         captured, and the page is listed in the directory, the sitemap and
+         llms.txt. tests/directory.test.mjs holds it under UNRELEASED and
+         tests/page-rules.test.mjs under PENDING_CARDS until then. -->
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description" content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption, then share as a picture, a short video, or a link a friend can remix with their own avatar.">
+    <meta name="theme-color" content="#F1EFEA">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they stay literal absolute URLs naming where this page is served
+         (www.scenexp.com/meme). When serving from a new domain, update the
+         canonical, og:url, og:image, twitter:image, and the JSON-LD ids. -->
+    <link rel="canonical" href="https://www.scenexp.com/meme/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Meme Studio">
+    <meta property="og:description" content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption and share.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/meme/">
+    <meta property="og:locale" content="en_US">
+    <!-- THE SOCIAL CARD IS PENDING (M7): the file is captured from Steve's
+         screenshot once the look is approved, through the house recipe
+         (1200x630 JPEG with a WebP twin). JPEG, not WebP (LinkedIn previews
+         no WebP), and exactly one og:image. og:image:alt describes THIS
+         picture, so it is rewritten with the card. -->
+    <meta property="og:image" content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=1">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A grid of small lit boxes, each holding a 3D figure making a face, with a bold white caption across every box.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Meme Studio">
+    <meta name="twitter:description" content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption and share.">
+    <meta name="twitter:image" content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=1">
+    <meta name="twitter:image:alt" content="A grid of small lit boxes, each holding a 3D figure making a face, with a bold white caption across every box.">
+
+    <!-- Structured data: a web application that is part of SceneXP.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP.
+         datePublished is added at release (M7), when the date is known. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "@id": "https://www.scenexp.com/meme/#app",
+      "url": "https://www.scenexp.com/meme/",
+      "name": "Meme Studio",
+      "image": "https://www.scenexp.com/meme/assets/og-meme.jpg?v=1",
+      "description": "A browser-based 3D meme generator for SceneXP. The visitor's own avatar stars in a meme laid out as a grid of small lit 3D boxes, one for each panel. Choose a template, type a caption for each panel, add a friend's avatar, and share the result as a picture, a short vertical video, or a link the friend can open and remix with their own avatar. Everything is made on the visitor's own device and nothing is uploaded.",
+      "applicationCategory": "EntertainmentApplication",
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires JavaScript. The 3D stage needs WebGL 2.",
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
+      "isAccessibleForFree": true,
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Continuum Commerce LLC"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this page). -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Meme Studio",
+          "item": "https://www.scenexp.com/meme/"
+        }
+      ]
+    }
+    </script>
+
+    <title>Meme Studio | SceneXP</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
+    <link rel="preload" href="css/meme.min.css?v=1" as="style">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="js/stage.min.js">
+    <link rel="modulepreload" href="js/templates.min.js">
+    <link rel="modulepreload" href="js/editor.min.js">
+    <link rel="modulepreload" href="js/exporter.min.js">
+    <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
+    <link rel="modulepreload" href="js/panels.min.js">
+    <link rel="modulepreload" href="js/compose.min.js">
+    <link rel="modulepreload" href="../shared/js/sharefile-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-figure-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-expressions-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-layers-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-shapes-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-hair-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-hats-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-wardrobe-1.0.0.min.js">
+    <!-- END generated modulepreload -->
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
+    <link rel="stylesheet" href="css/meme.min.css?v=1">
+
+    <!-- When JS is off, the stage can't run: the static fallback below is
+         the page. A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body class="mm-body">
+    <!-- The live page's heading, for anybody navigating by heading. The sheet
+         shows its own words, under an h2. -->
+    <h1 class="sr-only">Meme Studio</h1>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers). -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Meme Studio</h1>
+            <p>This is a meme generator with you in it, and it needs JavaScript
+                to run. Your SceneXP avatar stands in each panel of a classic
+                meme layout, built as a row of small lit 3D boxes. You choose a
+                template, type a caption for each panel, and add a friend's
+                avatar if you like. Then you share the result as a picture, a
+                short vertical video, or a link your friend can open and remix
+                with their own avatar.</p>
+            <p>Everything is made on your own device. Nothing you type or make
+                is sent to us.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/">More 3D worlds to explore at SceneXP.com</a></li>
+                    <li><a href="/avatar/">Make your avatar</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <!-- The page itself, shown by main.js (`hidden` keeps it out of the way
+         with JavaScript off). The stage on one side and the sheet on the
+         other on a computer; the stage on top and the sheet below on a
+         phone (PLANNING section 6.4). -->
+    <div id="meme-app" class="mm-app" hidden>
+        <div class="mm-stage">
+            <!-- The meme's panels as lit shadowboxes (js/stage.js). M0 is the
+                 empty studio; the boxes and the figures arrive in M1 and M2. -->
+            <canvas id="mm-canvas" class="mm-canvas" role="img"
+                aria-label="Your meme's panel: a figure with your avatar's face, standing in a small lit box"></canvas>
+            <!-- The caption as it will be drawn, over the live panel (the
+                 input on the sheet is the one a screen reader hears). -->
+            <p id="mm-caption-live" class="mm-caption-live" aria-hidden="true" hidden></p>
+            <p id="mm-stage-status" class="mm-stage-status" role="status" aria-live="polite"></p>
+        </div>
+
+        <section class="mm-sheet" aria-labelledby="mm-heading">
+            <div class="mm-top">
+                <!-- The way back, always a plain back link (the avatar page's
+                     lesson: a bare wordmark did not read as one). -->
+                <a id="mm-return" class="mm-return" href="/">
+                    <svg class="mm-return-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <span id="mm-return-text">Back to SceneXP</span>
+                </a>
+            </div>
+
+            <!-- Words first (the house habit): what this is and the one next
+                 step, before the stage has finished loading. -->
+            <p class="mm-eyebrow">Meme Studio</p>
+            <h2 id="mm-heading" class="mm-heading">Put yourself in the meme</h2>
+            <p id="mm-lede" class="mm-lede">Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a short video.</p>
+
+            <!-- The editor (js/editor.js): the caption fields, one real text
+                 input a slot (M1). The Template and People tabs come in M3. -->
+            <div id="mm-editor" class="mm-editor">
+                <div id="mm-captions" class="mm-captions"></div>
+            </div>
+
+            <!-- The picture as it will be shared: the composite drawn small
+                 (js/exporter.js), then the one filled button. -->
+            <h3 class="mm-subhead">Your picture</h3>
+            <canvas id="mm-preview" class="mm-preview" width="540" height="540" role="img" aria-label="A preview of your meme picture, with your caption and the SceneXP.com mark in the corner"></canvas>
+            <div class="mm-row">
+                <button id="mm-picture-save" class="mm-primary" type="button" hidden>Save picture</button>
+            </div>
+
+            <p id="mm-status" class="mm-status" role="status" aria-live="polite"></p>
+
+            <p class="mm-note mm-privacy">Made on this device. Nothing you type or make is sent to us. <a href="/privacy.html">Privacy</a></p>
+            <p class="mm-note mm-report">Seen a meme from here that should not exist? <a href="/contact.html">Please tell us</a>.</p>
+        </section>
+    </div>
+
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

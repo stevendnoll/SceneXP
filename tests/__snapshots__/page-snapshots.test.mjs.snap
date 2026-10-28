@@ -5171,6 +5171,175 @@ html [data-ui-theme="ember" lang="en"]
     script [src="js/main.min.js" type="module"]"
 `;
 
+exports[`www/meme/index.html 1`] = `
+"<!doctype html>
+html [lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="noindex, nofollow" name="robots"]
+    meta [content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption, then share as a picture, a short video, or a link a friend can remix with their own avatar." name="description"]
+    meta [content="#F1EFEA" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/meme/" rel="canonical"]
+    meta [content="Meme Studio" property="og:title"]
+    meta [content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption and share." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/meme/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=1" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="A grid of small lit boxes, each holding a 3D figure making a face, with a bold white caption across every box." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Meme Studio" name="twitter:title"]
+    meta [content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption and share." name="twitter:description"]
+    meta [content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=1" name="twitter:image"]
+    meta [content="A grid of small lit boxes, each holding a 3D figure making a face, with a bold white caption across every box." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "@id": "https://www.scenexp.com/meme/#app",
+        "url": "https://www.scenexp.com/meme/",
+        "name": "Meme Studio",
+        "image": "https://www.scenexp.com/meme/assets/og-meme.jpg?v=1",
+        "description": "A browser-based 3D meme generator for SceneXP. The visitor's own avatar stars in a meme laid out as a grid of small lit 3D boxes, one for each panel. Choose a template, type a caption for each panel, add a friend's avatar, and share the result as a picture, a short vertical video, or a link the friend can open and remix with their own avatar. Everything is made on the visitor's own device and nothing is uploaded.",
+        "applicationCategory": "EntertainmentApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript. The 3D stage needs WebGL 2.",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
+        "isAccessibleForFree": true,
+        "author": {
+          "@type": "Person",
+          "name": "Steve Noll"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Continuum Commerce LLC"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Meme Studio",
+            "item": "https://www.scenexp.com/meme/"
+          }
+        ]
+      }
+    title
+      "Meme Studio | SceneXP"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="css/meme.min.css?v=1" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/stage.min.js" rel="modulepreload"]
+    link [href="js/templates.min.js" rel="modulepreload"]
+    link [href="js/editor.min.js" rel="modulepreload"]
+    link [href="js/exporter.min.js" rel="modulepreload"]
+    link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/panels.min.js" rel="modulepreload"]
+    link [href="js/compose.min.js" rel="modulepreload"]
+    link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-expressions-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-shapes-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hair-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
+    link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="css/meme.min.css?v=1" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body.mm-body
+    h1.sr-only
+      "Meme Studio"
+    noscript
+      div.noscript-fallback
+        h1
+          "Meme Studio"
+        p
+          "This is a meme generator with you in it, and it needs JavaScript to run. Your SceneXP avatar stands in each panel of a classic meme layout, built as a row of small lit 3D boxes. You choose a template, type a caption for each panel, and add a friend's avatar if you like. Then you share the result as a picture, a short vertical video, or a link your friend can open and remix with their own avatar."
+        p
+          "Everything is made on your own device. Nothing you type or make is sent to us."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/"]
+                "More 3D worlds to explore at SceneXP.com"
+            li
+              a [href="/avatar/"]
+                "Make your avatar"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    div#meme-app.mm-app [hidden]
+      div.mm-stage
+        canvas#mm-canvas.mm-canvas [aria-label="Your meme's panel: a figure with your avatar's face, standing in a small lit box" role="img"]
+        p#mm-caption-live.mm-caption-live [aria-hidden="true" hidden]
+        p#mm-stage-status.mm-stage-status [aria-live="polite" role="status"]
+      section.mm-sheet [aria-labelledby="mm-heading"]
+        div.mm-top
+          a#mm-return.mm-return [href="/"]
+            svg.mm-return-icon [aria-hidden="true" focusable="false" viewbox="0 0 24 24"]
+              path [d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4"]
+            span#mm-return-text
+              "Back to SceneXP"
+        p.mm-eyebrow
+          "Meme Studio"
+        h2#mm-heading.mm-heading
+          "Put yourself in the meme"
+        p#mm-lede.mm-lede
+          "Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a short video."
+        div#mm-editor.mm-editor
+          div#mm-captions.mm-captions
+        h3.mm-subhead
+          "Your picture"
+        canvas#mm-preview.mm-preview [aria-label="A preview of your meme picture, with your caption and the SceneXP.com mark in the corner" height="540" role="img" width="540"]
+        div.mm-row
+          button#mm-picture-save.mm-primary [hidden type="button"]
+            "Save picture"
+        p#mm-status.mm-status [aria-live="polite" role="status"]
+        p.mm-note.mm-privacy
+          "Made on this device. Nothing you type or make is sent to us."
+          a [href="/privacy.html"]
+            "Privacy"
+        p.mm-note.mm-report
+          "Seen a meme from here that should not exist?"
+          a [href="/contact.html"]
+            "Please tell us"
+          "."
+    script [src="../lib/three/r186/three.min.js" type="module"]
+    script [src="js/main.min.js" type="module"]"
+`;
+
 exports[`www/office/index.html 1`] = `
 "<!doctype html>
 html [lang="en"]
