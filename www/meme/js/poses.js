@@ -14,12 +14,24 @@
  *             (-0.37, 1.37, 0.45)
  *   approve   the hand at head height, forward (-0.37, 1.58, 0.46)
  *   present   the hand out to the side toward a chart (-0.70, 1.24, 0.22)
- *   shake     the hand forward at the waist, the elbow bent, for a
- *             handshake: two figures facing each other put their right
- *             hands half a meter apart in depth (each hand is on its own
- *             right side), so The Handshake stands each figure 0.23 m to
- *             its own left, and the hands land about a hand's width apart
- *             (measured 2026-10-27: 0.07 m across, the same height)
+ *   shake     the hand at chest height, raised, for a handshake: two
+ *             figures facing each other put their right hands half a
+ *             meter apart in depth (each hand is on its own right side),
+ *             so The Handshake stands each figure 0.23 m to its own left,
+ *             and the hands land ON ONE SPOT (re-solved 2026-10-28 for
+ *             Steve's QA, "the strong hand grip is the crux", both
+ *             figures scored together since their stances are not a
+ *             mirror pair, ON THE BROAD, BUFF BUILD the template dresses
+ *             them in, whose wider shoulders move the hands: the forearm
+ *             rising to the clasp, both hands at (-0.13, 1.28, 0.22)
+ *             within a millimeter)
+ *   point     the arm out to the figure's own side and forward at chest
+ *             height, the forearm, and so the index (hands.js), pointing
+ *             that way: solved for the left arm, the hand at
+ *             (0.62, 1.27, 0.37), the forearm along (0.67, 0.17, 0.72)
+ *   aim       the arm straight out in front at shoulder height, a little
+ *             across the body, for a thing held: the hand at
+ *             (-0.14, 1.39, 0.56), the forearm level along +z
  *
  * tests/meme-poses.test.mjs holds the hands to those regions, so a rig edit
  * that moves them is caught.
@@ -47,9 +59,14 @@ export const ARM_POSES = Object.freeze({
     dismiss: Object.freeze({ z: 0.4, x: -1.1, fore: -1.1, twist: Math.PI }),
     approve: Object.freeze({ z: 0.3, x: -1.9, fore: -0.4, twist: 0 }),
     present: Object.freeze({ z: 1.25, x: -0.5, fore: -0.6, twist: 0 }),
-    shake: Object.freeze({ z: 0.1, x: -1.0, fore: -0.7, twist: 0 }),
+    shake: Object.freeze({ z: -0.16, x: -0.85, fore: -1.26, twist: 0 }),
+    point: Object.freeze({ z: 0.87, x: -1.09, fore: -0.51, twist: 0 }),
+    aim: Object.freeze({ z: -0.13, x: -1.76, fore: 0.07, twist: 0 }),
     lookBack: null
 });
+
+/** The poses that swap the leading hand for the pointing one (hands.js). */
+export const POINTING = Object.freeze(['point']);
 
 /** Where The Handshake stands its two figures: `gap` apart across, each
  *  `aside` toward its own left (so the right hands meet), turned `turn`
@@ -64,8 +81,33 @@ export const HEAD_TURNS = Object.freeze({
     approve: 0,
     present: 0.25,
     shake: 0,
+    point: 0.35,
+    aim: 0,
     lookBack: 0.95
 });
+
+/** The most a leg swings for a stride, radians, and the arms' swing with
+ *  it (the opposite arm forward, as a walk does). */
+export const STRIDE = Object.freeze({ most: 0.55, arm: 0.35 });
+
+/** The most the head nods, radians, up (negative about x) or down. */
+export const MAX_NOD = 0.6;
+
+/**
+ * The legs' swing for a stride of `stride` radians (positive: the figure's
+ * right leg forward), as `{ right, left }` rotations about x for the rig's
+ * leg groups (a leg hangs -y, so a negative x turn swings it forward),
+ * capped at `STRIDE.most`. Zero for none.
+ */
+export function legsFor(stride) {
+    const s = Math.max(-STRIDE.most, Math.min(STRIDE.most, Number(stride) || 0));
+    return { right: -s, left: s };
+}
+
+/** The head's nod for `nod` radians about x (negative looks up), capped. */
+export function nodFor(nod) {
+    return Math.max(-MAX_NOD, Math.min(MAX_NOD, Number(nod) || 0));
+}
 
 export const POSES = Object.freeze(Object.keys(ARM_POSES));
 

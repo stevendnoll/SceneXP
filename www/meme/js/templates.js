@@ -22,7 +22,9 @@
  *               `pose` (poses.js) on `side` (the arm that leads, 'right'
  *               unless said) with the head turned `look` ('right' or
  *               'left' by the pose's measure, or radians, positive toward
- *               the figure's left; toward the leading arm unless said),
+ *               the figure's left; toward the leading arm unless said)
+ *               and nodded `nod` radians (negative looks up), its legs in
+ *               a `stride` (radians, the right leg forward when positive),
  *               `expression` (avatar-expressions), `overrides` on the
  *               avatar (a build, a muscle), where (`at` [x, z] from the
  *               box's middle, `turn` radians, facing the open side at 0,
@@ -31,7 +33,9 @@
  *               its right arm is on the camera's left. The meme names the
  *               side; the avatar's handedness never changes a panel (QA
  *               2026-10-28).
- *     captions  the slots, 'top', 'bottom' and/or 'center', in that order
+ *     captions  the slots, 'top', 'bottom' and/or 'center', in that order,
+ *               a `{ label }` pinned to a figure, or a `{ prop }` drawn on
+ *               a surface the cell's scene names (the chart's sheet)
  *     camera    `{ eye, aim, fov }` in the box's own coordinates (its
  *               origin at the middle of its floor, +z toward the open side)
  *     backdrop  the back wall's color, or the box's default
@@ -43,7 +47,9 @@
  */
 
 /** The caption slots a cell may carry, in the order they are drawn. A
- *  label pinned to a figure is `{ label: figureIndex }`. */
+ *  label pinned to a figure is `{ label: figureIndex }`; a caption on a
+ *  prop's surface (the chart's sheet) is `{ prop: 'board' }`, drawn where
+ *  the scene's builder says that surface is (panels.js `propRects`). */
 export const SLOTS = Object.freeze(['top', 'bottom', 'center']);
 
 const deepFreeze = (o) => {
@@ -101,7 +107,11 @@ const PANIC = {
  *  thing away, then pointing at the one they like, the words on the right.
  *  The words are on the camera's right, the figure's left: the left arm
  *  leads in both rows, the head turned away from the words in the first
- *  and toward them in the second (the classic staging, 2026-10-28). */
+ *  and toward them in the second, the index out (the classic staging,
+ *  2026-10-28: "a big part of the meme is in the point"). */
+/** The camera a touch to the camera's right of the figure, so the arm
+ *  reaching that way, and the pointing finger, stay in a square frame. */
+const NOPE_CAMERA = { eye: [0.1, 1.3, 2.4], aim: [0.1, 1.2, 0], fov: 34 };
 const NOPE_YEP = {
     id: 'nopeYep',
     title: 'Nope / Yep',
@@ -110,9 +120,9 @@ const NOPE_YEP = {
     grid: [[{ span: 1 }, { span: 1 }], [{ span: 1 }, { span: 1 }]],
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
     cells: [
-        { figures: [you({ pose: 'dismiss', side: 'left', look: 'right', expression: 'deadpan' })], captions: [], camera: { eye: [0, 1.3, 2.1], aim: [0, 1.2, 0], fov: 34 }, backdrop: '#E7C8C0' },
+        { figures: [you({ pose: 'dismiss', side: 'left', look: 'right', expression: 'deadpan' })], captions: [], camera: NOPE_CAMERA, backdrop: '#E7C8C0' },
         textCell(),
-        { figures: [you({ pose: 'approve', side: 'left', look: 0.35, expression: 'bigGrin' })], captions: [], camera: { eye: [0, 1.3, 2.1], aim: [0, 1.2, 0], fov: 34 }, backdrop: '#C8E0CF' },
+        { figures: [you({ pose: 'point', side: 'left', look: 'left', expression: 'bigGrin' })], captions: [], camera: NOPE_CAMERA, backdrop: '#C8E0CF' },
         textCell()
     ]
 };
@@ -134,9 +144,8 @@ const THEN_NOW = {
 
 /** Galaxy Brain (template 5): four rows of escalation, the words on the
  *  left, the head glowing brighter on the right: a halo behind it that
- *  grows, then rays (panels.js GLOW). The hat comes off from the second
- *  row, so the glow is round the head and nothing sits on it. */
-const BARE = { hat: 'none' };
+ *  grows, then rays (panels.js GLOW). The visitor keeps the hat and the
+ *  hair (Steve, 2026-10-28: the glow behind is the whole effect). */
 const GALAXY_BRAIN = {
     id: 'galaxyBrain',
     title: 'Galaxy Brain',
@@ -146,21 +155,23 @@ const GALAXY_BRAIN = {
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
     cells: [
         textCell(), faceCell({ expression: 'none', glow: 0 }, '#E3DFD7'),
-        textCell(), faceCell({ expression: 'smug', glow: 0.35, overrides: BARE }, '#C9BFE6'),
-        textCell(), faceCell({ expression: 'bigGrin', glow: 0.7, overrides: BARE }, '#9A82D6'),
-        textCell(), faceCell({ expression: 'shocked', glow: 1, overrides: BARE }, '#4B2E99')
+        textCell(), faceCell({ expression: 'smug', glow: 0.45 }, '#C9BFE6'),
+        textCell(), faceCell({ expression: 'bigGrin', glow: 0.75 }, '#9A82D6'),
+        textCell(), faceCell({ expression: 'shocked', glow: 1 }, '#4B2E99')
     ]
 };
 
 /** The Plan (template 7): two by two, the visitor presenting a chart,
  *  pleased, pleased, pleased, then the last step twice over. The chart
  *  stands on the camera's left (scenes/plan.js), so the figure turns a
- *  little toward it, the right arm out to it, and looks at it, until the
- *  last step, where the face comes round to the camera. */
-const PLAN_CELL = (expression, look = 'right') => ({
-    figures: [you({ pose: 'present', side: 'right', look, expression, at: [0.38, 0], turn: -0.2 })],
-    captions: ['top'],
-    camera: { eye: [-0.1, 1.35, 2.8], aim: [-0.12, 1.15, 0], fov: 34 },
+ *  little toward it with the right arm out to it, and faces the room for
+ *  three steps; only in the last does the head turn to the chart, shocked
+ *  (Steve, 2026-10-28: the look at the board is the fourth panel alone). */
+const PLAN_CELL = (expression, look = 0.2) => ({
+    figures: [you({ pose: 'present', side: 'right', look, expression, at: [0.5, 0], turn: -0.2 })],
+    // The step is written on the chart (Steve, 2026-10-28).
+    captions: [{ prop: 'board' }],
+    camera: { eye: [0.03, 1.35, 3.1], aim: [-0.02, 1.15, 0], fov: 36 },
     backdrop: '#D7E2EA',
     scene: 'plan'
 });
@@ -171,7 +182,7 @@ const PLAN = {
     order: 6,
     grid: [[{ span: 1 }, { span: 1 }], [{ span: 1 }, { span: 1 }]],
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
-    cells: [PLAN_CELL('smug'), PLAN_CELL('smug'), PLAN_CELL('bigGrin'), PLAN_CELL('shocked', 0.2)]
+    cells: [PLAN_CELL('smug'), PLAN_CELL('smug'), PLAN_CELL('bigGrin'), PLAN_CELL('shocked', 'right')]
 };
 
 const THREE_ROLES = [
@@ -182,9 +193,10 @@ const THREE_ROLES = [
 const TWO_ROLES = THREE_ROLES.slice(0, 2);
 
 /** The Head Turn (template 1): one wide panel, three people. The visitor
- *  walks with Someone and looks back at A Friend passing the other way
- *  (on the camera's left, the visitor's right); Someone is not pleased. A
- *  label on each. */
+ *  walks with Someone and looks back, taken, at A Friend walking away on
+ *  the camera's left (the visitor's right), seen from behind mid-stride;
+ *  Someone, on the camera's right, is furious. A label on each. (Steve,
+ *  2026-10-28: the "oh" face, the walk away, the mad face.) */
 const HEAD_TURN = {
     id: 'headTurn',
     title: 'The Head Turn',
@@ -194,9 +206,9 @@ const HEAD_TURN = {
     roles: THREE_ROLES,
     cells: [{
         figures: [
-            { role: 'you', pose: 'lookBack', look: 'right', expression: 'smug', at: [0.05, 0.1], turn: 0.25 },
-            { role: 'friend', pose: 'stand', expression: 'none', at: [-0.78, -0.15], turn: 1.9 },
-            { role: 'other', pose: 'stand', expression: 'rage', at: [0.8, 0], turn: -0.3 }
+            { role: 'you', pose: 'lookBack', look: 'right', expression: 'ooh', at: [0.05, 0.1], turn: 0.25, stride: 0.3 },
+            { role: 'friend', pose: 'stand', expression: 'none', at: [-0.78, -0.2], turn: Math.PI + 0.15, stride: 0.5 },
+            { role: 'other', pose: 'stand', expression: 'rage', at: [0.8, 0], turn: -0.3, look: 'right' }
         ],
         captions: [{ label: 0 }, { label: 1 }, { label: 2 }],
         camera: { eye: [0, 1.35, 3.3], aim: [0, 1.05, 0], fov: 38 },
@@ -204,13 +216,21 @@ const HEAD_TURN = {
     }]
 };
 
-/** The Handshake (template 2): two people clasping hands, a label on each
- *  and one under the hands. The stances are poses.js's HANDSHAKE, solved
- *  on the rig. */
+/** The Handshake (template 2): two people clasping hands at chest height,
+ *  a label on each and one under the hands. The stances are poses.js's
+ *  HANDSHAKE, solved on the rig. Both are built broad and buff in short
+ *  sleeves, white on the camera's left and red on the right (Steve,
+ *  2026-10-28: "the super buff arms" are the other crux), the meme's
+ *  costume as the spacesuit is Always Has Been's. */
+const BUFF = { build: 'broad', muscles: 'buff', sleeves: 'short' };
+/** A true red for the second shirt: the swatches have only a rust, so
+ *  this is a custom color id (avatar-1.0.0 `customColor`), which the
+ *  override accepts for any color field. */
+const RED_SHIRT = 'xc0262a';
 const HANDSHAKE_CELL = {
     figures: [
-        { role: 'you', pose: 'shake', side: 'right', expression: 'bigGrin', at: [-0.4, -0.23], turn: Math.PI / 2 - 0.5 },
-        { role: 'friend', pose: 'shake', side: 'right', expression: 'bigGrin', at: [0.4, 0.23], turn: -Math.PI / 2 + 0.5 }
+        { role: 'you', pose: 'shake', side: 'right', expression: 'bigGrin', at: [-0.4, -0.23], turn: Math.PI / 2 - 0.5, overrides: { ...BUFF, shirt: 'white' } },
+        { role: 'friend', pose: 'shake', side: 'right', expression: 'bigGrin', at: [0.4, 0.23], turn: -Math.PI / 2 + 0.5, overrides: { ...BUFF, shirt: RED_SHIRT } }
     ],
     captions: [{ label: 0 }, { label: 1 }, 'bottom'],
     camera: { eye: [0, 1.35, 3.0], aim: [0, 1.0, 0], fov: 36 },
@@ -226,9 +246,13 @@ const HANDSHAKE = {
     cells: [HANDSHAKE_CELL]
 };
 
-/** Always Has Been (template 6): two people in helmets, the Earth below,
- *  the stars behind. The visitor, on the camera's left, looks back over
- *  the left shoulder at A Friend, whose right hand is up between them. */
+/** Always Has Been (template 6): two people in helmets, the Earth hanging
+ *  up in the camera's top left, the stars behind. A Friend, on the left,
+ *  has turned away to gaze up at it; the visitor stands side-on at the
+ *  right with the blaster out level at the back of the friend's helmet,
+ *  the face turned to the camera (Steve, 2026-10-28: the visitor takes
+ *  the punchline, the face the camera sees). */
+const SUIT = { shirt: 'white', sleeves: 'long', bottom: 'pants', bottomColor: 'white', hat: 'none' };
 const ALWAYS = {
     id: 'alwaysHasBeen',
     title: 'Always Has Been',
@@ -238,8 +262,8 @@ const ALWAYS = {
     roles: TWO_ROLES,
     cells: [{
         figures: [
-            { role: 'you', pose: 'lookBack', look: 'left', expression: 'shocked', at: [-0.35, 0.1], turn: 0.5, overrides: { shirt: 'white', sleeves: 'long', bottom: 'pants', bottomColor: 'white', hat: 'none' } },
-            { role: 'friend', pose: 'approve', side: 'right', expression: 'smug', at: [0.5, -0.35], turn: -0.6, overrides: { shirt: 'white', sleeves: 'long', bottom: 'pants', bottomColor: 'white', hat: 'none' } }
+            { role: 'you', pose: 'aim', side: 'right', look: 0.9, expression: 'smug', at: [0.65, 0.2], turn: -Math.PI / 2 + 0.3, overrides: SUIT },
+            { role: 'friend', pose: 'stand', expression: 'none', at: [-0.3, 0.1], turn: Math.PI - 0.55, nod: -0.35, overrides: SUIT }
         ],
         captions: ['top', 'bottom'],
         camera: { eye: [0, 1.4, 3.2], aim: [0, 1.0, 0], fov: 38 },
@@ -290,7 +314,8 @@ export function slotsOf(template) {
     const out = [];
     template.cells.forEach((cell, i) => {
         for (const slot of cell.captions) {
-            if (slot && typeof slot === 'object') out.push({ cell: i, slot: 'label', figure: slot.label });
+            if (slot && typeof slot === 'object' && slot.prop) out.push({ cell: i, slot: 'prop', prop: slot.prop });
+            else if (slot && typeof slot === 'object') out.push({ cell: i, slot: 'label', figure: slot.label });
             else out.push({ cell: i, slot });
         }
     });
@@ -344,14 +369,19 @@ export function validateTemplate(t, { expressions, poses, scenes = [], sides = [
             if (!expressions.includes(f.expression)) bad.push(`${here}: expression "${f.expression}" is not one the scene knows`);
             if (f.side !== undefined && !sides.includes(f.side)) bad.push(`${here}: side "${f.side}" is not right or left`);
             if (f.look !== undefined && !sides.includes(f.look) && !Number.isFinite(f.look)) bad.push(`${here}: look must be right, left or radians`);
+            if (f.stride !== undefined && !Number.isFinite(f.stride)) bad.push(`${here}: stride must be radians`);
+            if (f.nod !== undefined && !Number.isFinite(f.nod)) bad.push(`${here}: nod must be radians`);
             if (f.glow !== undefined && !(f.glow >= 0 && f.glow <= 1)) bad.push(`${here}: glow must be 0 to 1`);
             if (f.overrides !== undefined && (typeof f.overrides !== 'object' || f.overrides === null)) bad.push(`${here}: overrides must be an object of avatar fields`);
         }
         if (!Array.isArray(cell.captions)) bad.push(`${here}: needs captions (an empty list is fine)`);
         for (const slot of cell.captions || []) {
-            if (slot && typeof slot === 'object') {
+            if (slot && typeof slot === 'object' && slot.prop !== undefined) {
+                if (typeof slot.prop !== 'string' || !slot.prop) bad.push(`${here}: a prop slot needs the surface's name`);
+                else if (cell.scene === undefined) bad.push(`${here}: caption on "${slot.prop}", but the cell has no scene to draw it`);
+            } else if (slot && typeof slot === 'object') {
                 if (!Number.isInteger(slot.label) || !(cell.figures || [])[slot.label]) bad.push(`${here}: label pinned to figure ${slot.label}, which is not there`);
-            } else if (!SLOTS.includes(slot)) bad.push(`${here}: caption slot "${slot}" is not top, bottom, center or a label`);
+            } else if (!SLOTS.includes(slot)) bad.push(`${here}: caption slot "${slot}" is not top, bottom, center, a label or a prop`);
         }
         slots += (cell.captions || []).length;
         const cam = cell.camera || {};

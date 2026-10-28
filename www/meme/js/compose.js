@@ -186,25 +186,31 @@ export function drawWordmark(ctx, w, h, W, C) {
 /**
  * The whole picture on `ctx`, `w` by `h`: the ground, each panel's image
  * (`imageFor(cellIndex, rect)` returns a canvas or image to draw, or null
- * to leave the ground), the captions in reading order from `captions`, and
+ * to leave the ground), the captions in reading order from `captions`
+ * (labels at `anchorsFor(cellIndex, rect)`'s points, captions on props in
+ * `propsFor(cellIndex, rect)`'s rects, both in the panel's own pixels), and
  * the wordmark unless `wordmark` is false. Returns the panels' rects.
  */
-export function composeMeme(ctx, { template, captions = [], w, h, config, imageFor, anchorsFor = null, wordmark = true }) {
+export function composeMeme(ctx, { template, captions = [], w, h, config, imageFor, anchorsFor = null, propsFor = null, wordmark = true }) {
     const gutter = h * config.panel.gutter;
     const rects = layoutGrid(template, w, h, { gutter, padding: gutter });
     ctx.fillStyle = config.panel.background;
     ctx.fillRect(0, 0, w, h);
     const anchors = [];
+    const props = [];
     template.cells.forEach((cell, i) => {
         const r = rects[i];
         const image = imageFor ? imageFor(i, r) : null;
         if (image) ctx.drawImage(image, r.x, r.y, r.w, r.h);
-        // The figures' anchors come with the panel's image (the same
-        // camera), in the panel's own pixels, moved onto the picture.
+        // The figures' anchors and the props' surfaces come with the
+        // panel's image (the same camera), in the panel's own pixels,
+        // moved onto the picture.
         const local = anchorsFor ? anchorsFor(i, r) : null;
         anchors.push(local ? local.map((p) => (p ? { x: r.x + p.x, y: r.y + p.y } : null)) : null);
+        const surfaces = propsFor ? propsFor(i, r) : null;
+        props.push(surfaces ? Object.fromEntries(Object.entries(surfaces).map(([k, s]) => [k, s ? { x: r.x + s.x, y: r.y + s.y, w: s.w, h: s.h } : null])) : null);
     });
-    drawCaptions(ctx, template, captions, rects, config.caption, { anchors, label: config.label });
+    drawCaptions(ctx, template, captions, rects, config.caption, { anchors, label: config.label, props });
     if (wordmark) drawWordmark(ctx, w, h, config.wordmark, config.caption);
     return rects;
 }
@@ -213,16 +219,23 @@ export function composeMeme(ctx, { template, captions = [], w, h, config, imageF
  * Every caption of a template over its panel's rect, in reading order:
  * `rects[i]` is cell i's rect, or null to skip a cell (one off screen).
  * A label pinned to a figure is drawn at `anchors[i][figure]` (a point in
- * the same pixels as the rects), when there is one. The live overlay draws
- * through here too, so the stage and the picture agree.
+ * the same pixels as the rects), when there is one. A caption on a prop's
+ * surface (`{ prop: 'board' }`) is drawn across the top of `props[i][name]`
+ * (a rect in the same pixels), when there is one, so it sits on the board
+ * in the picture, up where the presenting hand is not (Steve, 2026-10-28).
+ * The live overlay draws through here too, so the stage and the picture
+ * agree.
  */
-export function drawCaptions(ctx, template, captions, rects, C, { anchors = [], label = null } = {}) {
+export function drawCaptions(ctx, template, captions, rects, C, { anchors = [], label = null, props = [] } = {}) {
     let k = 0;
     template.cells.forEach((cell, i) => {
         for (const slot of cell.captions) {
             const text = captions[k++];
             if (!rects[i]) continue;
-            if (slot && typeof slot === 'object') {
+            if (slot && typeof slot === 'object' && slot.prop) {
+                const surface = props[i] ? props[i][slot.prop] : null;
+                if (surface) drawCaption(ctx, text, surface, 'top', C);
+            } else if (slot && typeof slot === 'object') {
                 const point = anchors[i] ? anchors[i][slot.label] : null;
                 if (label) drawLabel(ctx, text, point, rects[i], label, C);
             } else {

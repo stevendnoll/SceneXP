@@ -188,6 +188,34 @@ describe('a caption', () => {
         expect(me[3]).toBeCloseTo(rects[0].y + rects[0].h / 2, 6);
     });
 
+    test('a caption on a prop is drawn across the top of that surface\'s rect, sized to it, and skipped without one', () => {
+        const template = { grid: [[{ span: 1 }]], cells: [{ captions: [{ prop: 'board' }, 'bottom'], scene: 'plan' }] };
+        const board = { x: 50, y: 80, w: 200, h: 120 };
+        const ctx = recordingContext(0.5);
+        C.drawCaptions(ctx, template, ['step one', 'profit'], [{ x: 0, y: 0, w: 400, h: 400 }], CONFIG.caption, { props: [{ board }] });
+        const texts = ctx.calls.filter((c) => c[0] === 'fillText');
+        expect(texts.map((c) => c[1])).toEqual(['STEP ONE', 'PROFIT']);
+        // Centered across the board, not the panel, from its top (where the
+        // presenting hand is not), and sized by the board's height.
+        expect(texts[0][2]).toBeCloseTo(board.x + board.w / 2, 6);
+        expect(texts[0][3]).toBeCloseTo(board.y + board.h * CONFIG.caption.inset, 6);
+        expect(texts[0][4].px).toBeLessThanOrEqual(Math.round(board.h * CONFIG.caption.size));
+        expect(texts[0][4].px).toBeLessThan(texts[1][4].px);
+        // No surface (a camera that cannot see the board): the caption waits.
+        const none = recordingContext(0.5);
+        C.drawCaptions(none, template, ['step one', 'profit'], [{ x: 0, y: 0, w: 400, h: 400 }], CONFIG.caption, { props: [{ board: null }] });
+        expect(none.calls.filter((c) => c[0] === 'fillText').map((c) => c[1])).toEqual(['PROFIT']);
+        const bare = recordingContext(0.5);
+        C.drawCaptions(bare, template, ['step one', 'profit'], [{ x: 0, y: 0, w: 400, h: 400 }], CONFIG.caption);
+        expect(bare.calls.filter((c) => c[0] === 'fillText').map((c) => c[1])).toEqual(['PROFIT']);
+        // Through the picture: the panel's own pixels moved by its rect.
+        const pic = recordingContext(0.5);
+        const rects = C.composeMeme(pic, { template, captions: ['step one', ''], w: 1000, h: 1000, config: CONFIG, propsFor: (i, r) => ({ board: { x: r.w * 0.1, y: r.h * 0.2, w: r.w * 0.4, h: r.h * 0.3 } }) });
+        const step = pic.calls.find((c) => c[0] === 'fillText' && c[1] === 'STEP ONE');
+        expect(step[2]).toBeCloseTo(rects[0].x + rects[0].w * 0.3, 6);
+        expect(step[3]).toBeCloseTo(rects[0].y + rects[0].h * 0.2 + rects[0].h * 0.3 * CONFIG.caption.inset, 6);
+    });
+
     test('drawCaptions skips a cell with no rect and keeps counting its captions', () => {
         const template = { cells: [{ captions: ['top'] }, { captions: ['center'] }, { captions: ['bottom'] }] };
         const ctx = recordingContext();

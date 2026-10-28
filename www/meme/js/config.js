@@ -35,12 +35,15 @@ export const MEME_PAGE = deepFreeze({
      *
      * The ceiling's own shadow line on the back wall sits at the box's
      * height less the depth times the tangent of the sun's elevation, and
-     * tests/meme-shadows holds it above what the face camera sees.
+     * tests/meme-shadows holds it above what the face camera sees. The
+     * side wall's shadow strip is the same sum with the azimuth, so the
+     * sun stands only a few degrees off square (a camera nudged sideways
+     * for a pointing arm saw a dark bar at the panel's edge, 2026-10-28).
      */
     light: {
         sky: { color: '#F6F8FB', ground: '#ECE7DF', intensity: 2.2 },
         sun: {
-            color: '#FFF6EA', intensity: 1.8, position: [1.2, 1.2, 6.0], target: [0, 0.8, 0],
+            color: '#FFF6EA', intensity: 1.8, position: [0.6, 1.2, 6.0], target: [0, 0.8, 0],
             shadow: { size: 1024, reach: 2.6, bias: -0.0004, normalBias: 0.03, radius: 4 }
         },
         fill: { color: '#E6EDF5', intensity: 0.5, position: [-3, 2.4, 2.6] },

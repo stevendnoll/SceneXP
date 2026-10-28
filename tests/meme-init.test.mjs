@@ -457,7 +457,7 @@ describe('the page', () => {
         expect(rows).toHaveLength(3);
         expect(rows[0].children[0].textContent).toBe('Panel 1: Face');
         const chips = rows[1].children[1].children;
-        expect(chips).toHaveLength(10);
+        expect(chips).toHaveLength(11);
         expect(chips.map((c) => c.getAttribute('aria-checked')).filter((v) => v === 'true')).toHaveLength(1);
         const own = chips.find((c) => c.dataset.value === 'deadpan');
         expect(own.getAttribute('aria-checked')).toBe('true');

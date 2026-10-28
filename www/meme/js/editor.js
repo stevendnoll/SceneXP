@@ -149,6 +149,7 @@ export function slotLabel(slots, k, roleNames = []) {
     const names = { top: 'Top', bottom: 'Bottom', center: 'Middle' };
     let which;
     if (slot === 'label') which = `Label on ${roleNames[figure] || `figure ${figure + 1}`}`;
+    else if (slot === 'prop') which = 'On the board';
     else which = siblings > 1 ? `${names[slot] || 'Top'} caption` : 'Caption';
     return cells.length > 1 ? `Panel ${cells.indexOf(cell) + 1}: ${which}` : which;
 }

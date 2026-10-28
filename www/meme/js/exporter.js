@@ -33,7 +33,7 @@
  */
 
 import { composeMeme, drawCaptions, drawWordmark } from './compose.min.js';
-import { labelAnchor, projectPoint } from './panels.min.js';
+import { labelAnchor, projectPoint, propRects } from './panels.min.js';
 import { shareFile, canShareFiles, saveFile } from '../../shared/js/sharefile-1.0.0.min.js';
 import { canRecord, pickMime, extensionOf, startRecording } from '../../shared/js/recorder-1.0.0.min.js';
 
@@ -229,6 +229,14 @@ export function createExporter(config, {
         return panel.figures.map((f) => projectPoint(labelAnchor(f, config.label.below), camera, w, h));
     }
 
+    /** Where cell `index`'s prop surfaces (the chart's sheet) land on a `w`
+     *  by `h` panel drawn through its camera, in the panel's own pixels. */
+    function propsFor(index, w, h) {
+        const panel = stage.panels[index];
+        if (!panel) return null;
+        return propRects(panel, aim(stage.cameraFor(index), w, h), w, h);
+    }
+
     /** The composite of `template` with `captions`, `w` by `h`, on `out`. */
     function compose(out, template, captions, w, h) {
         if (out.width !== w) out.width = w;
@@ -238,7 +246,8 @@ export function createExporter(config, {
         composeMeme(ctx, {
             template, captions, w, h, config,
             imageFor: (i, r) => renderPanel(i, r.w, r.h),
-            anchorsFor: (i, r) => anchorsFor(i, r.w, r.h)
+            anchorsFor: (i, r) => anchorsFor(i, r.w, r.h),
+            propsFor: (i, r) => propsFor(i, r.w, r.h)
         });
         return true;
     }
@@ -372,13 +381,14 @@ export function createExporter(config, {
             if (f.alpha > 0) {
                 g.globalAlpha = f.alpha;
                 if (f.mode === 'grid') {
-                    const { rects, anchors } = stage.projectAll(aim(f.pose, C.w, C.h), C.w, C.h);
-                    drawCaptions(g, template, captions, rects, config.caption, { anchors, label: config.label });
+                    const { rects, anchors, props } = stage.projectAll(aim(f.pose, C.w, C.h), C.w, C.h);
+                    drawCaptions(g, template, captions, rects, config.caption, { anchors, label: config.label, props });
                     drawWordmark(g, C.w, C.h, config.wordmark, config.caption);
                 } else {
                     const rects = template.cells.map((_, i) => (i === f.index ? { x: 0, y: 0, w: C.w, h: C.h } : null));
                     const anchors = template.cells.map((_, i) => (i === f.index ? anchorsFor(i, C.w, C.h) : null));
-                    drawCaptions(g, template, captions, rects, config.caption, { anchors, label: config.label });
+                    const props = template.cells.map((_, i) => (i === f.index ? propsFor(i, C.w, C.h) : null));
+                    drawCaptions(g, template, captions, rects, config.caption, { anchors, label: config.label, props });
                 }
                 g.globalAlpha = 1;
             }
@@ -425,6 +435,7 @@ export function createExporter(config, {
         makePicture,
         savePicture,
         anchorsFor,
+        propsFor,
         clipMime,
         makeClip,
         saveClip,

@@ -24,7 +24,7 @@
  * so it is measured on the real library.
  */
 
-import { buildPanel, layoutPanels, cellCamera, arrangementSize, labelAnchor, projectPoint, boxRect } from './panels.min.js';
+import { buildPanel, layoutPanels, cellCamera, arrangementSize, labelAnchor, projectPoint, boxRect, propRects } from './panels.min.js';
 
 /** The room: the background, the floor and the lights, in one scene. */
 /** The sun's direction from config.light `L`: from its target toward it,
@@ -296,15 +296,28 @@ export function createStage(config, {
         return projectAll(camera, w, h).rects;
     }
 
-    /** Every panel's opening and every figure's label point on a `w` by
-     *  `h` picture through any `cam` (the clip's, the live one): `{ rects,
-     *  anchors }` in cell order. */
+    /** Every panel's opening, every figure's label point and every prop
+     *  surface on a `w` by `h` picture through any `cam` (the clip's, the
+     *  live one): `{ rects, anchors, props }` in cell order. */
     function projectAll(cam, w, h) {
         cam.updateMatrixWorld(true);
         return {
             rects: panels.map((panel) => boxRect(panel.box, config.box, cam, w, h)),
-            anchors: panels.map((panel) => panel.figures.map((f) => projectPoint(labelAnchor(f, config.label.below), cam, w, h)))
+            anchors: panels.map((panel) => panel.figures.map((f) => projectPoint(labelAnchor(f, config.label.below), cam, w, h))),
+            props: panels.map((panel) => propRects(panel, cam, w, h))
         };
+    }
+
+    /** Where each panel's prop surfaces land on the canvas, CSS pixels:
+     *  `{ board: rect }` a panel (or null), null for a panel not shown. */
+    function screenProps() {
+        const w = canvas.clientWidth || 0;
+        const h = canvas.clientHeight || 0;
+        if (!template) return [];
+        return panels.map((panel, i) => {
+            if (viewing !== null && !glide && i !== viewing) return null;
+            return propRects(panel, camera, w, h);
+        });
     }
 
     /** The camera on the whole arrangement for a picture of `aspect`. */
@@ -343,7 +356,7 @@ export function createStage(config, {
         dirty = false;
         frames++;
         renderer.render(scene, camera);
-        onFrame(screenRects(), viewing, Boolean(glide), screenAnchors());
+        onFrame(screenRects(), viewing, Boolean(glide), screenAnchors(), screenProps());
     }
 
     function clearPanels() {
@@ -451,6 +464,7 @@ export function createStage(config, {
         view,
         screenRects,
         screenAnchors,
+        screenProps,
         touch() { dirty = true; },
         fit,
         frame,

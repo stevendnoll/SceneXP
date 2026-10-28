@@ -253,13 +253,17 @@ describe('the arrangement', () => {
         expect(faces).toHaveLength(4);
         expect(stage.panels.filter((p) => !p.figures.length)).toHaveLength(4);
         expect(faces[0].figures[0].glowLight).toBeNull();
-        expect(faces[3].figures[0].glowLight.intensity).toBeCloseTo(2.4, 9);
-        expect(faces[1].figures[0].glowLight.intensity).toBeCloseTo(2.4 * 0.35, 9);
+        expect(faces[3].figures[0].glowLight.intensity).toBeCloseTo(2.0, 9);
+        expect(faces[1].figures[0].glowLight.intensity).toBeCloseTo(2.0 * 0.45, 9);
+        // The light is ahead of the face, never inside the head, and the
+        // skin is the shared one, untinted (Steve, 2026-10-28: a tinted
+        // skull showed through the hair's parting).
+        expect(faces[3].figures[0].glowLight.position.z).toBeGreaterThan(0.3);
         const skull = faces[3].figures[0].person.getObjectByName('head').children.find((o) => o.userData.isHead);
-        expect(skull.material.emissiveIntensity).toBeGreaterThan(0.5);
+        expect(skull.material.emissive.getHex()).toBe(0);
         // The glow stands behind the head, outside any hat or hair (QA
         // 2026-10-28): a halo from the second row, rays from the third,
-        // each bigger than the last, and the hat off.
+        // each bigger than the last.
         expect(faces[0].figures[0].glow).toBeNull();
         const halo = (i) => faces[i].figures[0].glow.getObjectByName('halo');
         const rays = (i) => faces[i].figures[0].glow.getObjectByName('rays');
@@ -277,25 +281,20 @@ describe('the arrangement', () => {
         const at = faces[3].figures[0].glow.getWorldPosition(new THREE.Vector3());
         expect(at.y).toBeCloseTo(middle.y, 6);
         expect(at.z).toBeLessThan(middle.z);
-        // A visitor in a hat keeps it in the first row and loses it after.
+        // A visitor in a hat keeps it in every row (Steve, 2026-10-28).
         stage.setTemplate(T.templateOf('galaxyBrain'), () => ({ ...DEFAULT_AVATAR, hat: HAT }));
         const hats = stage.panels.filter((p) => p.figures.length).map((p) => Boolean(p.figures[0].person.getObjectByName('hat')));
-        expect(hats).toEqual([true, false, false, false]);
-        // The glowing head's skin is its own: the arms keep the shared one.
-        const arm = faces[3].figures[0].arms.right;
-        let armSkin = null;
-        arm.traverse((o) => { if (o.isMesh && !armSkin && o.material.color.getHex() === skull.material.color.getHex()) armSkin = o.material; });
-        expect(armSkin).not.toBe(skull.material);
+        expect(hats).toEqual([true, true, true, true]);
         // The Plan: the body leans toward the chart on the camera's left,
-        // the head turns to it for three steps and round to the camera on
-        // the last, whatever hand the avatar favors (QA 2026-10-28).
+        // the face to the room for three steps, and only the last turns to
+        // the chart, whatever hand the avatar favors (QA 2026-10-28).
         for (const handedness of ['right', 'left']) {
             stage.setTemplate(T.templateOf('plan'), () => ({ ...DEFAULT_AVATAR, handedness }));
             stage.panels.forEach((p, i) => {
                 expect(p.props.name).toBe('plan');
                 expect(p.box.getObjectByName('board')).toBeTruthy();
                 const head = p.figures[0].person.getObjectByName('head');
-                expect(head.rotation.y).toBeCloseTo(i < 3 ? -0.25 : 0.2, 9);
+                expect(head.rotation.y).toBeCloseTo(i < 3 ? 0.2 : -0.25, 9);
                 expect(p.figures[0].group.rotation.y).toBeCloseTo(-0.2, 9);
             });
         }
@@ -464,6 +463,45 @@ describe('the clip', () => {
         expect(await none.makeClip(stage.template, [])).toBeNull();
         expect(said[said.length - 1]).toBe(X.WORDS.noClip);
         expect(await none.saveClip()).toBe('failed');
+        stage.dispose();
+    });
+});
+
+describe('the words on the board', () => {
+    test('The Plan\'s chart is a surface the picture and the stage can place a caption on', () => {
+        const canvas = stageCanvas(800, 600);
+        const stage = S.createStage(CONFIG, { canvas, makeRenderer: fakeRenderer });
+        stage.setTemplate(T.templateOf('plan'), () => DEFAULT_AVATAR);
+        const exporter = X.createExporter(CONFIG, { stage, doc: fakeDoc(), win: {}, nav: {}, makeRenderer: fakeRenderer });
+        const props = exporter.propsFor(0, 1080, 1080);
+        expect(Object.keys(props)).toEqual(['board']);
+        const b = props.board;
+        // On the camera's left, inside the panel, wide enough to read.
+        expect(b.x).toBeGreaterThan(0);
+        expect(b.x).toBeLessThan(300);
+        expect(b.x + b.w).toBeLessThan(640);
+        expect(b.y).toBeGreaterThan(100);
+        expect(b.y + b.h).toBeLessThan(800);
+        expect(b.w).toBeGreaterThan(250);
+        expect(b.h).toBeGreaterThan(150);
+        expect(exporter.propsFor(9, 100, 100)).toBeNull();
+        // A template with no surfaces has none.
+        stage.setTemplate(T.templateOf('surprised'), () => DEFAULT_AVATAR);
+        expect(exporter.propsFor(0, 100, 100)).toBeNull();
+        // Live: one rect a panel on the stage, each inside its panel.
+        stage.setTemplate(T.templateOf('plan'), () => DEFAULT_AVATAR);
+        stage.fit();
+        const live = stage.screenProps();
+        const rects = stage.screenRects();
+        expect(live).toHaveLength(4);
+        live.forEach((p, i) => {
+            expect(p.board.x).toBeGreaterThanOrEqual(rects[i].x - 1);
+            expect(p.board.x + p.board.w).toBeLessThanOrEqual(rects[i].x + rects[i].w + 1);
+        });
+        // The projection of every panel carries the surfaces too.
+        const all = stage.projectAll(stage.camera, 800, 600);
+        expect(all.props).toHaveLength(4);
+        expect(all.props[3].board.w).toBeGreaterThan(0);
         stage.dispose();
     });
 });

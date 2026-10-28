@@ -12,6 +12,7 @@ import { installThree } from './helpers/three-stub.mjs';
 import * as T from '../www/meme/js/templates.js';
 import { EXPRESSIONS } from '../www/shared/js/avatar-expressions-1.0.0.js';
 import { MEME_PAGE as CONFIG } from '../www/meme/js/config.js';
+import { withOverrides, DEFAULT_AVATAR } from '../www/shared/js/avatar-1.0.0.js';
 
 let POSES;
 let SIDES;
@@ -85,9 +86,11 @@ describe('the catalog', () => {
         expect(then.figures[0].overrides).toEqual({ build: 'slim', muscles: 'standard' });
         expect(now.figures[0].overrides).toEqual({ build: 'broad', muscles: 'buff' });
         // Galaxy Brain brightens row by row, and The Plan repeats its last step.
-        expect(T.templateOf('galaxyBrain').cells.filter((c) => c.figures.length).map((c) => c.figures[0].glow)).toEqual([0, 0.35, 0.7, 1]);
+        expect(T.templateOf('galaxyBrain').cells.filter((c) => c.figures.length).map((c) => c.figures[0].glow)).toEqual([0, 0.45, 0.75, 1]);
+        // The hat and the hair stay on every row (Steve, 2026-10-28).
+        expect(T.templateOf('galaxyBrain').cells.every((c) => !c.figures.length || !c.figures[0].overrides)).toBe(true);
         expect(T.templateOf('plan').cells.every((c) => c.scene === 'plan' && c.figures[0].pose === 'present')).toBe(true);
-        expect(T.templateOf('nopeYep').cells.map((c) => (c.figures[0] || {}).pose)).toEqual(['dismiss', undefined, 'approve', undefined]);
+        expect(T.templateOf('nopeYep').cells.map((c) => (c.figures[0] || {}).pose)).toEqual(['dismiss', undefined, 'point', undefined]);
     });
 
     test('the meme names the arm and the look, in the figure\'s own sides (QA 2026-10-28)', () => {
@@ -96,22 +99,49 @@ describe('the catalog', () => {
         // left. The left arm waves them off with the head turned away, then
         // points at them with the face turned toward them.
         expect(figure('nopeYep', 0)).toMatchObject({ side: 'left', look: 'right' });
-        expect(figure('nopeYep', 2).side).toBe('left');
-        expect(figure('nopeYep', 2).look).toBeGreaterThan(0);
+        expect(figure('nopeYep', 2)).toMatchObject({ pose: 'point', side: 'left', look: 'left' });
         // The Plan: the chart is on the camera's left, so the right arm
-        // presents it, the body leans toward it and the face follows,
-        // except the last step, which comes round toward the camera.
-        for (const cell of [0, 1, 2]) expect(figure('plan', cell)).toMatchObject({ side: 'right', look: 'right' });
-        expect(figure('plan', 3).side).toBe('right');
-        expect(figure('plan', 3).look).toBeGreaterThan(0);
+        // presents it and the body leans toward it, the face to the room;
+        // only the last step turns to look at the chart (Steve, 2026-10-28).
+        for (const cell of [0, 1, 2]) {
+            expect(figure('plan', cell).side).toBe('right');
+            expect(figure('plan', cell).look).toBeGreaterThan(0);
+        }
+        expect(figure('plan', 3)).toMatchObject({ side: 'right', look: 'right', expression: 'shocked' });
         expect(T.templateOf('plan').cells.every((c) => c.figures[0].turn < 0)).toBe(true);
-        // The looks back: at A Friend on the camera's left in The Head Turn,
-        // on the camera's right in Always Has Been.
-        expect(figure('headTurn').look).toBe('right');
-        expect(figure('alwaysHasBeen').look).toBe('left');
-        expect(figure('alwaysHasBeen', 0, 1).side).toBe('right');
-        // The Handshake is right hands or the hands miss.
-        expect(T.templateOf('handshake').cells[0].figures.every((f) => f.side === 'right')).toBe(true);
+        // The Head Turn (Steve, 2026-10-28): the visitor looks back, taken,
+        // at A Friend on the camera's left, who walks away from the camera
+        // mid-stride; Someone on the right is furious and glaring.
+        const [you, friend, other] = T.templateOf('headTurn').cells[0].figures;
+        expect(you).toMatchObject({ pose: 'lookBack', look: 'right', expression: 'ooh' });
+        expect(Math.abs(friend.turn - Math.PI)).toBeLessThan(0.5);
+        expect(friend.stride).toBeGreaterThan(0.3);
+        expect(other.expression).toBe('rage');
+        // Always Has Been (Steve, 2026-10-28): the roles swapped. A Friend
+        // has turned away to gaze up at the Earth; the visitor, nearer the
+        // camera, faces it with the blaster up.
+        const [aimer, gazer] = T.templateOf('alwaysHasBeen').cells[0].figures;
+        expect(aimer).toMatchObject({ role: 'you', pose: 'aim', side: 'right' });
+        expect(aimer.look).toBeGreaterThan(0.5);          // the face round to the camera
+        expect(Math.abs(aimer.turn + Math.PI / 2)).toBeLessThan(0.5);   // side-on, the arm toward the friend
+        expect(gazer.role).toBe('friend');
+        expect(Math.abs(gazer.turn - Math.PI)).toBeLessThan(0.8);
+        expect(gazer.nod).toBeLessThan(0);
+        expect(aimer.at[0]).toBeGreaterThan(gazer.at[0] + 0.8);
+        // The Handshake is right hands or the hands miss, and both are
+        // broad and buff in short sleeves, white on the left, red on the
+        // right (Steve, 2026-10-28).
+        const shakers = T.templateOf('handshake').cells[0].figures;
+        expect(shakers.every((f) => f.side === 'right')).toBe(true);
+        expect(shakers.map((f) => f.overrides)).toEqual([
+            { build: 'broad', muscles: 'buff', sleeves: 'short', shirt: 'white' },
+            { build: 'broad', muscles: 'buff', sleeves: 'short', shirt: 'xc0262a' }
+        ]);
+        // Both shirts are colors the avatar model accepts (a swatch, or a
+        // custom color id), so neither override is dropped on the floor.
+        for (const f of shakers) expect(withOverrides(DEFAULT_AVATAR, f.overrides).shirt).toBe(f.overrides.shirt);
+        // The Plan's words go on the chart (Steve, 2026-10-28).
+        expect(T.slotsOf(T.templateOf('plan'))).toEqual([0, 1, 2, 3].map((cell) => ({ cell, slot: 'prop', prop: 'board' })));
     });
 
     test('an unknown id falls back to the first in the picker\'s order', () => {
@@ -189,6 +219,9 @@ describe('the rules catch', () => {
         expect(problems((t) => { t.cells[0].figures[0].look = 'left'; })).toEqual([]);
         expect(problems((t) => { t.cells[0].figures[0].look = -0.4; })).toEqual([]);
         expect(problems((t) => { t.cells[0].figures[0].side = 'left'; })).toEqual([]);
+        expect(problems((t) => { t.cells[0].figures[0].stride = 'long'; })).toEqual([expect.stringMatching(/stride must be radians/)]);
+        expect(problems((t) => { t.cells[0].figures[0].nod = NaN; })).toEqual([expect.stringMatching(/nod must be radians/)]);
+        expect(problems((t) => { t.cells[0].figures[0].stride = 0.4; t.cells[0].figures[0].nod = -0.3; })).toEqual([]);
         expect(problems((t) => { delete t.cells[0].figures; })).toEqual(expect.arrayContaining([expect.stringMatching(/needs figures/)]));
         expect(problems((t) => { t.cells[0].figures = []; })).toEqual([expect.stringMatching(/nobody is in it/)]);
     });
@@ -199,6 +232,10 @@ describe('the rules catch', () => {
         expect(problems((t) => { t.cells[0].captions = [{ label: 3 }]; })).toEqual([expect.stringMatching(/label pinned to figure 3/)]);
         expect(problems((t) => { t.cells[0].captions = [{ label: 'a' }]; })).toEqual([expect.stringMatching(/label pinned to figure a/)]);
         expect(problems((t) => { t.cells[0].captions = [{ label: 0 }, 'top']; })).toEqual([]);
+        // A caption on a prop needs a name and a scene to draw it.
+        expect(problems((t) => { t.cells[0].captions = [{ prop: '' }]; })).toEqual([expect.stringMatching(/prop slot needs the surface's name/)]);
+        expect(problems((t) => { t.cells[0].captions = [{ prop: 'board' }]; })).toEqual([expect.stringMatching(/no scene to draw it/)]);
+        expect(problems((t) => { t.cells[0].captions = [{ prop: 'board' }]; t.cells[0].scene = 'plan'; })).toEqual([]);
         expect(problems((t) => { t.cells[0].captions = ['top', 'bottom', 'top', 'bottom', 'top', 'bottom', 'top']; }))
             .toEqual([expect.stringMatching(/7 caption slots, over the cap of 6/)]);
         const t = base();

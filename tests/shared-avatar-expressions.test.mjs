@@ -86,7 +86,7 @@ function snapshot(head) {
 
 test('the list leads with the saved face, and an unknown id is that face', () => {
     expect(X.EXPRESSIONS[0].id).toBe('none');
-    expect(X.EXPRESSIONS.map((e) => e.id)).toEqual(['none', 'shocked', 'rage', 'smug', 'deadpan', 'crying', 'sideEye', 'raisedBrow', 'sweat', 'bigGrin']);
+    expect(X.EXPRESSIONS.map((e) => e.id)).toEqual(['none', 'shocked', 'rage', 'smug', 'deadpan', 'crying', 'sideEye', 'raisedBrow', 'sweat', 'bigGrin', 'ooh']);
     expect(X.expressionOf('shocked').label).toBe('Shocked');
     expect(X.expressionOf('nope')).toBe(X.EXPRESSIONS[0]);
     expect(X.expressionOf(undefined)).toBe(X.EXPRESSIONS[0]);
@@ -95,7 +95,12 @@ test('the list leads with the saved face, and an unknown id is that face', () =>
 
 test('the overrides are the figure part\'s own mouths, and nothing for the saved face', () => {
     expect(X.expressionOverrides('shocked')).toEqual({ mouth: 'surprised' });
-    expect(X.expressionOverrides('rage')).toEqual({ mouth: 'grin' });
+    // Rage is a smile turned over, a frown (a grin read as glee, 2026-10-28).
+    expect(X.expressionOverrides('rage')).toEqual({ mouth: 'smile' });
+    expect(X.EXPRESSION_SIZE.rage.mouthFlip).toBe(true);
+    // Ooh is the surprised mouth without the thrown-open eyes.
+    expect(X.expressionOverrides('ooh')).toEqual({ mouth: 'surprised' });
+    expect(X.EXPRESSION_SIZE.ooh.openLids).toBeUndefined();
     expect(X.expressionOverrides('bigGrin')).toEqual({ mouth: 'bigSmile' });
     expect(X.expressionOverrides('none')).toEqual({});
     expect(X.expressionOverrides('nope')).toEqual({});

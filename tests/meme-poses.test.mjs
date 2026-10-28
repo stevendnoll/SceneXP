@@ -32,10 +32,12 @@ function handOf(figure, side) {
     return hand.getWorldPosition(new THREE.Vector3());
 }
 
-test('the handshake: two figures stood as The Handshake stands them bring their right hands together', () => {
+test('the handshake: two figures stood as The Handshake stands them clasp right hands on one spot, chest high', () => {
     const H = P.HANDSHAKE;
-    const a = F.createAvatar({});
-    const b = F.createAvatar({});
+    // The template's costume: the pose is solved on this build.
+    const BUFF = { build: 'broad', muscles: 'buff', sleeves: 'short' };
+    const a = F.createAvatar(BUFF);
+    const b = F.createAvatar(BUFF);
     a.group.position.set(-H.gap / 2, 0, -H.aside);
     a.group.rotation.y = Math.PI / 2 - H.turn;
     b.group.position.set(H.gap / 2, 0, H.aside);
@@ -44,18 +46,33 @@ test('the handshake: two figures stood as The Handshake stands them bring their 
     b.setPose(P.armsFor('shake'));
     const ha = handOf(a, 'right');
     const hb = handOf(b, 'right');
-    expect(ha.distanceTo(hb)).toBeLessThan(0.15);
+    // Touching (Steve, 2026-10-28: "the strong hand grip is the crux"), not
+    // a hand's width apart as before.
+    expect(ha.distanceTo(hb)).toBeLessThan(0.04);
     expect(Math.abs(ha.y - hb.y)).toBeLessThan(0.02);
-    // At the waist, between the two, in front of neither's back.
-    expect(ha.y).toBeGreaterThan(0.9);
+    // Chest high, between the two, the forearms rising to the clasp.
+    expect(ha.y).toBeGreaterThan(1.18);
     expect(ha.y).toBeLessThan(1.4);
-    expect(Math.abs((ha.x + hb.x) / 2)).toBeLessThan(0.25);
-    a.dispose();
-    b.dispose();
+    expect(Math.abs((ha.x + hb.x) / 2)).toBeLessThan(0.2);
+    const elbow = a.arms.right.userData.forearm.getWorldPosition(new THREE.Vector3());
+    expect(ha.y).toBeGreaterThan(elbow.y + 0.08);
+    // On the standard build the shoulders are narrower, so the hands cross
+    // a little: still a clasp at panel size.
+    const c = F.createAvatar({});
+    const d = F.createAvatar({});
+    c.group.position.copy(a.group.position);
+    c.group.rotation.y = a.group.rotation.y;
+    d.group.position.copy(b.group.position);
+    d.group.rotation.y = b.group.rotation.y;
+    c.setPose(P.armsFor('shake'));
+    d.setPose(P.armsFor('shake'));
+    expect(handOf(c, 'right').distanceTo(handOf(d, 'right'))).toBeLessThan(0.25);
+    for (const f of [a, b, c, d]) f.dispose();
 });
 
 test('the list names every pose once, stand and lookBack moving no arm', () => {
-    expect(P.POSES).toEqual(['stand', 'dismiss', 'approve', 'present', 'shake', 'lookBack']);
+    expect(P.POSES).toEqual(['stand', 'dismiss', 'approve', 'present', 'shake', 'point', 'aim', 'lookBack']);
+    expect(P.POINTING).toEqual(['point']);
     expect(P.ARM_POSES.stand).toBeNull();
     expect(P.ARM_POSES.lookBack).toBeNull();
     const rest = P.armsFor('stand');
@@ -87,7 +104,65 @@ test('each pose lands the leading hand where it was solved, and rests the other'
     expect(hand.x).toBeLessThan(-0.55);
     expect(hand.y).toBeGreaterThan(shoulder.y - 0.2);
     expect(hand.z).toBeGreaterThan(0.1);
+    // Aim: the arm straight out in front at shoulder height, the forearm
+    // level (solved 2026-10-28), for a thing held.
+    figure.setPose(P.armsFor('aim'));
+    hand = handOf(figure, 'right');
+    expect(hand.z).toBeGreaterThan(0.5);
+    expect(Math.abs(hand.y - shoulder.y)).toBeLessThan(0.12);
+    expect(Math.abs(hand.x)).toBeLessThan(0.2);
     figure.dispose();
+});
+
+test('the point puts the hand out to the leading side at chest height, the forearm, and so the index, pointing that way', () => {
+    const figure = F.createAvatar({});
+    figure.setPose(P.armsFor('point', 'left'));
+    const hand = handOf(figure, 'left');
+    const elbow = figure.arms.left.userData.forearm.getWorldPosition(new THREE.Vector3());
+    const dir = hand.clone().sub(elbow).normalize();
+    expect(hand.x).toBeGreaterThan(0.5);
+    expect(hand.y).toBeGreaterThan(1.15);
+    expect(hand.y).toBeLessThan(1.4);
+    expect(hand.z).toBeGreaterThan(0.25);
+    // To the figure's left and forward, near level: the finger follows.
+    expect(dir.x).toBeGreaterThan(0.5);
+    expect(dir.z).toBeGreaterThan(0.5);
+    expect(Math.abs(dir.y)).toBeLessThan(0.3);
+    figure.dispose();
+});
+
+test('a pointing hand swaps the leading hand\'s geometry for the index-out one, the same unit, and leaves the other hand', async () => {
+    const Hd = await import('../www/meme/js/hands.js');
+    const figure = F.createAvatar({});
+    const before = Hd.handOf(figure, 'left');
+    const other = Hd.handOf(figure, 'right');
+    const oldGeometry = before.geometry;
+    const unit = before.userData.handUnit;
+    const hand = Hd.pointWith(figure, 'left');
+    expect(hand).toBe(before);
+    expect(hand.geometry).not.toBe(oldGeometry);
+    expect(hand.userData.pointing).toBe(true);
+    expect(hand.userData.handUnit).toBe(unit);
+    expect(other.userData.pointing).toBeUndefined();
+    // The index reaches further down the hand's -y than any finger of the
+    // rig's open hand, and the curled fingers stay within the palm's depth.
+    const reach = (g) => { g.computeBoundingBox(); return g.boundingBox; };
+    const open = reach(F.createAvatar({}).arms.left.children.length ? oldGeometry : oldGeometry);
+    const point = reach(hand.geometry);
+    expect(point.min.y).toBeLessThan(open.min.y - 0.005);
+    expect(point.min.z).toBeLessThan(open.min.z);   // the curl comes toward the palm
+    expect(Hd.pointWith({ arms: {} }, 'left')).toBeNull();
+    figure.dispose();
+});
+
+test('a stride swings the legs from the hips the opposite ways, capped, and a nod is capped', () => {
+    expect(P.legsFor(0)).toEqual({ right: -0, left: 0 });
+    expect(P.legsFor(0.3)).toEqual({ right: -0.3, left: 0.3 });
+    expect(P.legsFor(9)).toEqual({ right: -P.STRIDE.most, left: P.STRIDE.most });
+    expect(P.legsFor('x')).toEqual({ right: -0, left: 0 });
+    expect(P.nodFor(-0.35)).toBeCloseTo(-0.35, 9);
+    expect(P.nodFor(-9)).toBe(-P.MAX_NOD);
+    expect(P.nodFor(NaN)).toBe(0);
 });
 
 test('the side asked for leads, mirrored, whatever the avatar\'s handedness', () => {

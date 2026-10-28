@@ -20,7 +20,8 @@
 
 import { createAvatar } from '../../shared/js/avatar-figure-1.0.0.min.js';
 import { expressionOverrides, applyExpression } from '../../shared/js/avatar-expressions-1.0.0.min.js';
-import { armsFor, headTurnFor } from './poses.min.js';
+import { armsFor, headTurnFor, legsFor, nodFor, POINTING, STRIDE } from './poses.min.js';
+import { pointWith } from './hands.min.js';
 import { SCENES } from './scenes/index.min.js';
 
 /**
@@ -30,12 +31,14 @@ import { SCENES } from './scenes/index.min.js';
  * the head's middle, its radius from `least` to `most` by the figure's
  * `glow`, and from `rays.from` up, `rays.count` rays reach out from it to
  * `rays.least`..`rays.most`, both drawn additive so they bloom on a dark
- * backdrop. The head's own light (`intensity` times glow, reaching
- * `distance`) and the skin's `emissive` tint stay, for the face.
+ * backdrop. A warm light `ahead` of the face (`intensity` times glow,
+ * reaching `distance`) is the halo's bounce. NOTHING IS LIT FROM INSIDE
+ * THE HEAD (Steve, 2026-10-28: a tinted skull showed through the hair's
+ * parting like a brain), and the hat and hair stay on.
  */
 export const GLOW = Object.freeze({
-    color: 0xffd27a, intensity: 2.4, distance: 1.6, emissive: 0.7,
-    halo: Object.freeze({ least: 0.2, most: 0.5, behind: 0.22, opacity: 0.95, texels: 64 }),
+    color: 0xffd27a, intensity: 2.0, distance: 1.4, ahead: 0.45,
+    halo: Object.freeze({ least: 0.26, most: 0.5, behind: 0.22, opacity: 0.95, texels: 64 }),
     rays: Object.freeze({ from: 0.5, count: 14, least: 0.4, most: 1.1, width: 0.05, opacity: 0.6 })
 });
 
@@ -196,10 +199,12 @@ export function cellCamera(cell, box) {
 /**
  * A figure for a cell's figure spec: the avatar built with the expression's
  * mouth and the spec's own `overrides`, the expression's tweaks laid on,
- * posed on the spec's `side`, its head turned the spec's `look` (toward the
- * leading arm when unsaid), standing `at` and turned `turn` in the box, and
- * glowing when `glow` is above zero (the halo behind the head, the head's
- * light and tint). Returns the shared figure with `undoExpression`,
+ * posed on the spec's `side` (a pointing hand for a pointing pose), its
+ * legs in a `stride`, its head turned the spec's `look` (toward the
+ * leading arm when unsaid) and nodded its `nod`, standing `at` and turned
+ * `turn` in the box, and
+ * glowing when `glow` is above zero (the halo behind the head, the light
+ * ahead of it). Returns the shared figure with `undoExpression`,
  * `glow` (the halo group, or null), `glowLight` and `spec` added.
  */
 export function makeFigure(avatar, spec) {
@@ -208,9 +213,28 @@ export function makeFigure(avatar, spec) {
     figure.undoExpression = applyExpression(figure, spec.expression);
     // The template's side and look, never the avatar's handedness (poses.js).
     const side = spec.side || 'right';
-    figure.setPose(armsFor(spec.pose, side));
+    const arms = armsFor(spec.pose, side);
+    // A stride swings the legs from the hips (the rig tags them) and, when
+    // the arms are at rest, the arms the other way, as a walk does.
+    if (spec.stride) {
+        const legs = legsFor(spec.stride);
+        const swing = (legs.left / STRIDE.most) * STRIDE.arm;
+        for (const leg of figure.person.children) {
+            if (!leg.userData || !leg.userData.isLeg) continue;
+            leg.rotation.x = leg.userData.legSide > 0 ? legs.left : legs.right;
+        }
+        if (!spec.pose || spec.pose === 'stand' || spec.pose === 'lookBack') {
+            arms.right = { ...arms.right, x: arms.right.x - swing };
+            arms.left = { ...arms.left, x: arms.left.x + swing };
+        }
+    }
+    figure.setPose(arms);
+    if (POINTING.includes(spec.pose)) pointWith(figure, side);
     const head = figure.person.getObjectByName('head');
-    if (head) head.rotation.y = headTurnFor(spec.pose, spec.look === undefined ? side : spec.look);
+    if (head) {
+        head.rotation.y = headTurnFor(spec.pose, spec.look === undefined ? side : spec.look);
+        if (spec.nod) head.rotation.x = nodFor(spec.nod);
+    }
     figure.glow = buildGlow(spec.glow);
     if (figure.glow) {
         // Behind the head's middle, in the figure's own meters (the group
@@ -224,17 +248,11 @@ export function makeFigure(avatar, spec) {
     figure.group.rotation.y = spec.turn || 0;
     figure.glowLight = null;
     if (spec.glow > 0 && head) {
-        const skull = head.children.find((o) => o.userData.isHead);
-        if (skull) {
-            // The head's own skin, lit from within: a material of its own,
-            // so the arms and the legs keep the shared one.
-            skull.material = skull.material.clone();
-            skull.material.emissive = new THREE.Color(GLOW.color);
-            skull.material.emissiveIntensity = GLOW.emissive * spec.glow;
-        }
+        // The halo's bounce on the face: a warm light ahead of the head,
+        // outside it, so no hair or hat is lit from inside.
         const light = new THREE.PointLight(GLOW.color, GLOW.intensity * spec.glow, GLOW.distance, 1.5);
         light.name = 'glow';
-        light.position.set(0, 0.1, 0.1);
+        light.position.set(0, 0, GLOW.ahead);
         head.add(light);
         figure.glowLight = light;
     }
@@ -255,6 +273,35 @@ export function projectPoint(point, camera, w, h) {
     const p = new THREE.Vector3(point[0], point[1], point[2]).project(camera);
     if (p.z > 1) return null;
     return { x: ((p.x + 1) / 2) * w, y: ((1 - p.y) / 2) * h };
+}
+
+/**
+ * Where a panel's prop surfaces land on a `w` by `h` picture through
+ * `camera`: `{ board: rect, ... }` for each surface the panel's props name
+ * (`props.userData.surfaces`, a map of name to four corners in the box's
+ * own meters), each the rect round its projected corners, or null when a
+ * corner is behind the camera. Null for a panel with no surfaces.
+ */
+export function propRects(panel, camera, w, h) {
+    const surfaces = panel && panel.props && panel.props.userData && panel.props.userData.surfaces;
+    if (!surfaces) return null;
+    panel.box.updateMatrixWorld(true);
+    const out = {};
+    for (const [name, corners] of Object.entries(surfaces)) {
+        let min = [Infinity, Infinity];
+        let max = [-Infinity, -Infinity];
+        let rect = null;
+        for (const c of corners) {
+            const world = panel.box.localToWorld(new THREE.Vector3(c[0], c[1], c[2]));
+            const p = projectPoint([world.x, world.y, world.z], camera, w, h);
+            if (!p) { min = null; break; }
+            min = [Math.min(min[0], p.x), Math.min(min[1], p.y)];
+            max = [Math.max(max[0], p.x), Math.max(max[1], p.y)];
+        }
+        if (min) rect = { x: min[0], y: min[1], w: max[0] - min[0], h: max[1] - min[1] };
+        out[name] = rect;
+    }
+    return out;
 }
 
 /** Where a box's opening lands on a `w` by `h` picture through `camera`:

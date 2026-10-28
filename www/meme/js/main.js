@@ -93,6 +93,7 @@ const state = {
     cast: {},             // a random avatar a role, kept for the visit so a reshuffle is a change
     incoming: false,      // a link's meme is on the stage, waiting for an answer
     anchors: [],          // where each panel's figures' labels pin on the stage, CSS pixels
+    props: [],            // where each panel's prop surfaces (the chart's sheet) are on the stage
     template: null,
     captions: [],
     expressions: [],      // a cell's chosen face, or null for the template's
@@ -203,7 +204,7 @@ export function drawOverlay(rects = state.rects) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, pw, ph);
     ctx.scale(ratio, ratio);
-    drawCaptions(ctx, state.template, state.captions, rects, CONFIG.caption, { anchors: state.anchors, label: CONFIG.label });
+    drawCaptions(ctx, state.template, state.captions, rects, CONFIG.caption, { anchors: state.anchors, label: CONFIG.label, props: state.props });
     return true;
 }
 
@@ -372,6 +373,7 @@ export function showTemplate(template, meme = null) {
     if (state.picker) state.picker.select(template.id);
     state.rects = state.stage ? state.stage.screenRects() : [];
     state.anchors = state.stage ? state.stage.screenAnchors() : [];
+    state.props = state.stage ? state.stage.screenProps() : [];
     drawOverlay();
     if (state.stage) state.stage.touch();
     refreshPreview();
@@ -570,9 +572,10 @@ export async function init() {
                 canvas: $('mm-canvas'),
                 mobile: isMobile(),
                 reducedMotion,
-                onFrame(rects, viewing, gliding, anchors) {
+                onFrame(rects, viewing, gliding, anchors, props) {
                     state.rects = rects;
                     state.anchors = anchors || [];
+                    state.props = props || [];
                     drawOverlay(rects);
                     if (viewing !== null && !state.pinged.stepped && state.ready) {
                         state.pinged.stepped = true;

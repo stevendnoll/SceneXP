@@ -41,7 +41,8 @@ export const EXPRESSIONS = Object.freeze([
     { id: 'sideEye', label: 'Side-eye' },
     { id: 'raisedBrow', label: 'One brow raised' },
     { id: 'sweat', label: 'Sweating' },
-    { id: 'bigGrin', label: 'Big grin' }
+    { id: 'bigGrin', label: 'Big grin' },
+    { id: 'ooh', label: 'Ooh' }
 ]);
 
 /** The rig's head radius, meters: a drop laid on the face sits on it. */
@@ -67,27 +68,33 @@ export const HEAD_R = 0.12;
  */
 export const EXPRESSION_SIZE = Object.freeze({
     shocked: Object.freeze({ eyes: 1.3, pupils: 0.75, openLids: true }),
-    rage: Object.freeze({ eyes: Object.freeze([1.05, 0.72]), browTilt: 0.5 }),
+    // Rage frowns: a grin under angry brows read as glee at panel size
+    // (Steve's meme QA, 2026-10-28), so the mouth is a smile turned over.
+    rage: Object.freeze({ eyes: Object.freeze([1.05, 0.72]), browTilt: 0.5, mouthFlip: true }),
     smug: Object.freeze({ eyes: Object.freeze([1, 0.6]), browTilt: 0.12 }),
     deadpan: Object.freeze({ eyes: Object.freeze([1, 0.72]), mouthFlat: 0.22 }),
     crying: Object.freeze({ mouthFlip: true, browTilt: -0.4, tears: true }),
     sideEye: Object.freeze({ eyes: Object.freeze([1, 0.8]), pupilShift: 0.0055 }),
     raisedBrow: Object.freeze({ eyes: Object.freeze([1, 0.85]), browLift: Object.freeze({ left: 0.007, right: -0.0015 }) }),
     sweat: Object.freeze({ browTilt: -0.3, mouthFlat: 0.3, sweat: true }),
-    bigGrin: Object.freeze({ eyes: Object.freeze([1, 0.85]) })
+    bigGrin: Object.freeze({ eyes: Object.freeze([1, 0.85]) }),
+    // Ooh: taken with something. The surprised mouth without the alarm:
+    // the eyes a touch narrowed rather than thrown open (2026-10-28).
+    ooh: Object.freeze({ eyes: Object.freeze([1.05, 0.9]), browLift: Object.freeze({ left: 0.004, right: 0.004 }) })
 });
 
 /** The avatar fields an expression sets before the figure is built. */
 const OVERRIDES = Object.freeze({
     shocked: Object.freeze({ mouth: 'surprised' }),
-    rage: Object.freeze({ mouth: 'grin' }),
+    rage: Object.freeze({ mouth: 'smile' }),
     smug: Object.freeze({ mouth: 'smirk' }),
     deadpan: Object.freeze({ mouth: 'smile' }),
     crying: Object.freeze({ mouth: 'smile' }),
     sideEye: Object.freeze({ mouth: 'smirk' }),
     raisedBrow: Object.freeze({ mouth: 'smirk' }),
     sweat: Object.freeze({ mouth: 'smile' }),
-    bigGrin: Object.freeze({ mouth: 'bigSmile' })
+    bigGrin: Object.freeze({ mouth: 'bigSmile' }),
+    ooh: Object.freeze({ mouth: 'surprised' })
 });
 
 /** The tears and the drops: a small ball stretched tall, `r` across, in a
