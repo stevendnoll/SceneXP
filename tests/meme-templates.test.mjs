@@ -14,16 +14,17 @@ import { EXPRESSIONS } from '../www/shared/js/avatar-expressions-1.0.0.js';
 import { MEME_PAGE as CONFIG } from '../www/meme/js/config.js';
 
 let POSES;
+let SIDES;
 let SCENE_IDS;
 beforeAll(async () => {
     installThree();
     jest.resetModules();
-    ({ POSES } = await import('../www/meme/js/poses.js'));
+    ({ POSES, SIDES } = await import('../www/meme/js/poses.js'));
     ({ SCENE_IDS } = await import('../www/meme/js/scenes/index.js'));
 });
 afterAll(() => { delete globalThis.THREE; });
 
-const rules = () => ({ expressions: EXPRESSIONS.map((e) => e.id), poses: POSES, scenes: SCENE_IDS, maxSlots: CONFIG.caption.maxSlots });
+const rules = () => ({ expressions: EXPRESSIONS.map((e) => e.id), poses: POSES, scenes: SCENE_IDS, sides: SIDES, maxSlots: CONFIG.caption.maxSlots });
 
 /** A deep, writable copy of a frozen template. */
 const copy = (t) => JSON.parse(JSON.stringify(t));
@@ -87,6 +88,30 @@ describe('the catalog', () => {
         expect(T.templateOf('galaxyBrain').cells.filter((c) => c.figures.length).map((c) => c.figures[0].glow)).toEqual([0, 0.35, 0.7, 1]);
         expect(T.templateOf('plan').cells.every((c) => c.scene === 'plan' && c.figures[0].pose === 'present')).toBe(true);
         expect(T.templateOf('nopeYep').cells.map((c) => (c.figures[0] || {}).pose)).toEqual(['dismiss', undefined, 'approve', undefined]);
+    });
+
+    test('the meme names the arm and the look, in the figure\'s own sides (QA 2026-10-28)', () => {
+        const figure = (id, cell = 0, i = 0) => T.templateOf(id).cells[cell].figures[i];
+        // Nope / Yep: the words are on the camera's right, the figure's
+        // left. The left arm waves them off with the head turned away, then
+        // points at them with the face turned toward them.
+        expect(figure('nopeYep', 0)).toMatchObject({ side: 'left', look: 'right' });
+        expect(figure('nopeYep', 2).side).toBe('left');
+        expect(figure('nopeYep', 2).look).toBeGreaterThan(0);
+        // The Plan: the chart is on the camera's left, so the right arm
+        // presents it, the body leans toward it and the face follows,
+        // except the last step, which comes round toward the camera.
+        for (const cell of [0, 1, 2]) expect(figure('plan', cell)).toMatchObject({ side: 'right', look: 'right' });
+        expect(figure('plan', 3).side).toBe('right');
+        expect(figure('plan', 3).look).toBeGreaterThan(0);
+        expect(T.templateOf('plan').cells.every((c) => c.figures[0].turn < 0)).toBe(true);
+        // The looks back: at A Friend on the camera's left in The Head Turn,
+        // on the camera's right in Always Has Been.
+        expect(figure('headTurn').look).toBe('right');
+        expect(figure('alwaysHasBeen').look).toBe('left');
+        expect(figure('alwaysHasBeen', 0, 1).side).toBe('right');
+        // The Handshake is right hands or the hands miss.
+        expect(T.templateOf('handshake').cells[0].figures.every((f) => f.side === 'right')).toBe(true);
     });
 
     test('an unknown id falls back to the first in the picker\'s order', () => {
@@ -159,6 +184,11 @@ describe('the rules catch', () => {
         expect(problems((t) => { t.cells[0].figures[0].expression = 'bored'; })).toEqual([expect.stringMatching(/expression "bored"/)]);
         expect(problems((t) => { t.cells[0].figures[0].glow = 2; })).toEqual([expect.stringMatching(/glow must be 0 to 1/)]);
         expect(problems((t) => { t.cells[0].figures[0].overrides = 'slim'; })).toEqual([expect.stringMatching(/overrides must be/)]);
+        expect(problems((t) => { t.cells[0].figures[0].side = 'both'; })).toEqual([expect.stringMatching(/side "both" is not right or left/)]);
+        expect(problems((t) => { t.cells[0].figures[0].look = 'away'; })).toEqual([expect.stringMatching(/look must be right, left or radians/)]);
+        expect(problems((t) => { t.cells[0].figures[0].look = 'left'; })).toEqual([]);
+        expect(problems((t) => { t.cells[0].figures[0].look = -0.4; })).toEqual([]);
+        expect(problems((t) => { t.cells[0].figures[0].side = 'left'; })).toEqual([]);
         expect(problems((t) => { delete t.cells[0].figures; })).toEqual(expect.arrayContaining([expect.stringMatching(/needs figures/)]));
         expect(problems((t) => { t.cells[0].figures = []; })).toEqual([expect.stringMatching(/nobody is in it/)]);
     });

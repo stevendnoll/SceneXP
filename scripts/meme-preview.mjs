@@ -25,7 +25,12 @@ globalThis.THREE = THREE;
 const { MEME_PAGE: CONFIG } = await import('../www/meme/js/config.js');
 const { TEMPLATES } = await import('../www/meme/js/templates.js');
 const { buildPanel, layoutPanels, cellCamera } = await import('../www/meme/js/panels.js');
+const { sunDirection } = await import('../www/meme/js/stage.js');
 const { randomAvatar, DEFAULT_AVATAR } = await import('../www/shared/js/avatar-1.0.0.js');
+
+// The page's own sun, so the shadows fall where the browser's do (every
+// opaque surface casts here, as the box's planes do there, 2026-10-28).
+const SUN = sunDirection(CONFIG.light).toArray();
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'specs', 'meme', 'previews');
@@ -61,7 +66,7 @@ for (const template of TEMPLATES) {
             const cam = new THREE.PerspectiveCamera(pose.fov, 1, 0.02, 40);
             cam.position.fromArray(pose.eye);
             cam.lookAt(...pose.aim);
-            const pixels = render(root, cam, size, size, { light: norm([0.35, 0.8, 0.5]) });
+            const pixels = render(root, cam, size, size, { light: norm(SUN) });
             // Placed by hand: the sheet's cells are not one size.
             for (let y = 0; y < size; y++) {
                 out.set(pixels.subarray(y * size * 3, (y + 1) * size * 3), ((row * Math.max(...SIZES) + y) * W + x) * 3);

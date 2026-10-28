@@ -19,11 +19,18 @@
  *             stand-in with none saved) or 'random' (a cast member)
  *   cells     one per grid entry, in reading order:
  *     figures   who stands in it (none for a plain caption cell): `role`,
- *               `pose` (poses.js), `expression` (avatar-expressions),
- *               `overrides` on the avatar (a build, a muscle), where (`at`
- *               [x, z] from the box's middle, `turn` radians, facing the
- *               open side at 0), `glow` 0 to 1, and a `label` pinned to it
- *               (M5)
+ *               `pose` (poses.js) on `side` (the arm that leads, 'right'
+ *               unless said) with the head turned `look` ('right' or
+ *               'left' by the pose's measure, or radians, positive toward
+ *               the figure's left; toward the leading arm unless said),
+ *               `expression` (avatar-expressions), `overrides` on the
+ *               avatar (a build, a muscle), where (`at` [x, z] from the
+ *               box's middle, `turn` radians, facing the open side at 0,
+ *               positive toward +x), `glow` 0 to 1, and a `label` pinned
+ *               to it (M5). SIDES ARE THE FIGURE'S OWN: facing the camera,
+ *               its right arm is on the camera's left. The meme names the
+ *               side; the avatar's handedness never changes a panel (QA
+ *               2026-10-28).
  *     captions  the slots, 'top', 'bottom' and/or 'center', in that order
  *     camera    `{ eye, aim, fov }` in the box's own coordinates (its
  *               origin at the middle of its floor, +z toward the open side)
@@ -91,7 +98,10 @@ const PANIC = {
 };
 
 /** Nope / Yep (template 3): two rows, the figure on the left waving a
- *  thing away, then pointing at the one they like, the words on the right. */
+ *  thing away, then pointing at the one they like, the words on the right.
+ *  The words are on the camera's right, the figure's left: the left arm
+ *  leads in both rows, the head turned away from the words in the first
+ *  and toward them in the second (the classic staging, 2026-10-28). */
 const NOPE_YEP = {
     id: 'nopeYep',
     title: 'Nope / Yep',
@@ -100,9 +110,9 @@ const NOPE_YEP = {
     grid: [[{ span: 1 }, { span: 1 }], [{ span: 1 }, { span: 1 }]],
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
     cells: [
-        { figures: [you({ pose: 'dismiss', expression: 'deadpan' })], captions: [], camera: { eye: [0, 1.3, 2.1], aim: [0, 1.2, 0], fov: 34 }, backdrop: '#E7C8C0' },
+        { figures: [you({ pose: 'dismiss', side: 'left', look: 'right', expression: 'deadpan' })], captions: [], camera: { eye: [0, 1.3, 2.1], aim: [0, 1.2, 0], fov: 34 }, backdrop: '#E7C8C0' },
         textCell(),
-        { figures: [you({ pose: 'approve', expression: 'bigGrin' })], captions: [], camera: { eye: [0, 1.3, 2.1], aim: [0, 1.2, 0], fov: 34 }, backdrop: '#C8E0CF' },
+        { figures: [you({ pose: 'approve', side: 'left', look: 0.35, expression: 'bigGrin' })], captions: [], camera: { eye: [0, 1.3, 2.1], aim: [0, 1.2, 0], fov: 34 }, backdrop: '#C8E0CF' },
         textCell()
     ]
 };
@@ -123,7 +133,10 @@ const THEN_NOW = {
 };
 
 /** Galaxy Brain (template 5): four rows of escalation, the words on the
- *  left, the head glowing brighter on the right. */
+ *  left, the head glowing brighter on the right: a halo behind it that
+ *  grows, then rays (panels.js GLOW). The hat comes off from the second
+ *  row, so the glow is round the head and nothing sits on it. */
+const BARE = { hat: 'none' };
 const GALAXY_BRAIN = {
     id: 'galaxyBrain',
     title: 'Galaxy Brain',
@@ -133,16 +146,19 @@ const GALAXY_BRAIN = {
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
     cells: [
         textCell(), faceCell({ expression: 'none', glow: 0 }, '#E3DFD7'),
-        textCell(), faceCell({ expression: 'smug', glow: 0.35 }, '#C9BFE6'),
-        textCell(), faceCell({ expression: 'bigGrin', glow: 0.7 }, '#9A82D6'),
-        textCell(), faceCell({ expression: 'shocked', glow: 1 }, '#4B2E99')
+        textCell(), faceCell({ expression: 'smug', glow: 0.35, overrides: BARE }, '#C9BFE6'),
+        textCell(), faceCell({ expression: 'bigGrin', glow: 0.7, overrides: BARE }, '#9A82D6'),
+        textCell(), faceCell({ expression: 'shocked', glow: 1, overrides: BARE }, '#4B2E99')
     ]
 };
 
 /** The Plan (template 7): two by two, the visitor presenting a chart,
- *  pleased, pleased, pleased, then the last step twice over. */
-const PLAN_CELL = (expression) => ({
-    figures: [you({ pose: 'present', expression, at: [0.45, 0], turn: 0.3 })],
+ *  pleased, pleased, pleased, then the last step twice over. The chart
+ *  stands on the camera's left (scenes/plan.js), so the figure turns a
+ *  little toward it, the right arm out to it, and looks at it, until the
+ *  last step, where the face comes round to the camera. */
+const PLAN_CELL = (expression, look = 'right') => ({
+    figures: [you({ pose: 'present', side: 'right', look, expression, at: [0.38, 0], turn: -0.2 })],
     captions: ['top'],
     camera: { eye: [-0.1, 1.35, 2.8], aim: [-0.12, 1.15, 0], fov: 34 },
     backdrop: '#D7E2EA',
@@ -155,7 +171,7 @@ const PLAN = {
     order: 6,
     grid: [[{ span: 1 }, { span: 1 }], [{ span: 1 }, { span: 1 }]],
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
-    cells: [PLAN_CELL('smug'), PLAN_CELL('smug'), PLAN_CELL('bigGrin'), PLAN_CELL('shocked')]
+    cells: [PLAN_CELL('smug'), PLAN_CELL('smug'), PLAN_CELL('bigGrin'), PLAN_CELL('shocked', 0.2)]
 };
 
 const THREE_ROLES = [
@@ -166,8 +182,9 @@ const THREE_ROLES = [
 const TWO_ROLES = THREE_ROLES.slice(0, 2);
 
 /** The Head Turn (template 1): one wide panel, three people. The visitor
- *  walks with Someone and looks back at A Friend passing the other way;
- *  Someone is not pleased. A label on each. */
+ *  walks with Someone and looks back at A Friend passing the other way
+ *  (on the camera's left, the visitor's right); Someone is not pleased. A
+ *  label on each. */
 const HEAD_TURN = {
     id: 'headTurn',
     title: 'The Head Turn',
@@ -177,7 +194,7 @@ const HEAD_TURN = {
     roles: THREE_ROLES,
     cells: [{
         figures: [
-            { role: 'you', pose: 'lookBack', expression: 'smug', at: [0.05, 0.1], turn: 0.25 },
+            { role: 'you', pose: 'lookBack', look: 'right', expression: 'smug', at: [0.05, 0.1], turn: 0.25 },
             { role: 'friend', pose: 'stand', expression: 'none', at: [-0.78, -0.15], turn: 1.9 },
             { role: 'other', pose: 'stand', expression: 'rage', at: [0.8, 0], turn: -0.3 }
         ],
@@ -192,8 +209,8 @@ const HEAD_TURN = {
  *  on the rig. */
 const HANDSHAKE_CELL = {
     figures: [
-        { role: 'you', pose: 'shake', expression: 'bigGrin', at: [-0.4, -0.23], turn: Math.PI / 2 - 0.5 },
-        { role: 'friend', pose: 'shake', expression: 'bigGrin', at: [0.4, 0.23], turn: -Math.PI / 2 + 0.5 }
+        { role: 'you', pose: 'shake', side: 'right', expression: 'bigGrin', at: [-0.4, -0.23], turn: Math.PI / 2 - 0.5 },
+        { role: 'friend', pose: 'shake', side: 'right', expression: 'bigGrin', at: [0.4, 0.23], turn: -Math.PI / 2 + 0.5 }
     ],
     captions: [{ label: 0 }, { label: 1 }, 'bottom'],
     camera: { eye: [0, 1.35, 3.0], aim: [0, 1.0, 0], fov: 36 },
@@ -210,7 +227,8 @@ const HANDSHAKE = {
 };
 
 /** Always Has Been (template 6): two people in helmets, the Earth below,
- *  the stars behind. The visitor looks back at A Friend. */
+ *  the stars behind. The visitor, on the camera's left, looks back over
+ *  the left shoulder at A Friend, whose right hand is up between them. */
 const ALWAYS = {
     id: 'alwaysHasBeen',
     title: 'Always Has Been',
@@ -220,8 +238,8 @@ const ALWAYS = {
     roles: TWO_ROLES,
     cells: [{
         figures: [
-            { role: 'you', pose: 'lookBack', expression: 'shocked', at: [-0.35, 0.1], turn: 0.5, overrides: { shirt: 'white', sleeves: 'long', bottom: 'pants', bottomColor: 'white', hat: 'none' } },
-            { role: 'friend', pose: 'approve', expression: 'smug', at: [0.5, -0.35], turn: -0.6, overrides: { shirt: 'white', sleeves: 'long', bottom: 'pants', bottomColor: 'white', hat: 'none' } }
+            { role: 'you', pose: 'lookBack', look: 'left', expression: 'shocked', at: [-0.35, 0.1], turn: 0.5, overrides: { shirt: 'white', sleeves: 'long', bottom: 'pants', bottomColor: 'white', hat: 'none' } },
+            { role: 'friend', pose: 'approve', side: 'right', expression: 'smug', at: [0.5, -0.35], turn: -0.6, overrides: { shirt: 'white', sleeves: 'long', bottom: 'pants', bottomColor: 'white', hat: 'none' } }
         ],
         captions: ['top', 'bottom'],
         camera: { eye: [0, 1.4, 3.2], aim: [0, 1.0, 0], fov: 38 },
@@ -282,10 +300,10 @@ export function slotsOf(template) {
 /**
  * What is wrong with a template, as a list of sentences (empty for a valid
  * one). `expressions`, `poses` and `scenes` are the ids the scene knows,
- * `maxSlots` the most caption slots a template may carry
- * (config.caption.maxSlots).
+ * `sides` the arm sides (poses.js SIDES), `maxSlots` the most caption slots
+ * a template may carry (config.caption.maxSlots).
  */
-export function validateTemplate(t, { expressions, poses, scenes = [], maxSlots }) {
+export function validateTemplate(t, { expressions, poses, scenes = [], sides = ['right', 'left'], maxSlots }) {
     const bad = [];
     const where = `template "${t && t.id}"`;
     if (!t || typeof t.id !== 'string' || !/^[a-z][a-zA-Z0-9]*$/.test(t.id)) bad.push(`${where}: id must be a lowerCamelCase word`);
@@ -324,6 +342,8 @@ export function validateTemplate(t, { expressions, poses, scenes = [], maxSlots 
             if (!roles.some((r) => r.id === f.role)) bad.push(`${here}: figure's role "${f.role}" is not declared`);
             if (!poses.includes(f.pose)) bad.push(`${here}: pose "${f.pose}" is not one the scene knows`);
             if (!expressions.includes(f.expression)) bad.push(`${here}: expression "${f.expression}" is not one the scene knows`);
+            if (f.side !== undefined && !sides.includes(f.side)) bad.push(`${here}: side "${f.side}" is not right or left`);
+            if (f.look !== undefined && !sides.includes(f.look) && !Number.isFinite(f.look)) bad.push(`${here}: look must be right, left or radians`);
             if (f.glow !== undefined && !(f.glow >= 0 && f.glow <= 1)) bad.push(`${here}: glow must be 0 to 1`);
             if (f.overrides !== undefined && (typeof f.overrides !== 'object' || f.overrides === null)) bad.push(`${here}: overrides must be an object of avatar fields`);
         }

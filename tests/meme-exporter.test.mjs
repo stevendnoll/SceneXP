@@ -22,6 +22,8 @@ let S;
 let T;
 let CONFIG;
 let DEFAULT_AVATAR;
+/** A hat the visitor may wear (avatar-1.0.0's options). */
+const HAT = 'beanie';
 
 beforeAll(async () => {
     THREE = await loadRealThree();
@@ -255,18 +257,47 @@ describe('the arrangement', () => {
         expect(faces[1].figures[0].glowLight.intensity).toBeCloseTo(2.4 * 0.35, 9);
         const skull = faces[3].figures[0].person.getObjectByName('head').children.find((o) => o.userData.isHead);
         expect(skull.material.emissiveIntensity).toBeGreaterThan(0.5);
+        // The glow stands behind the head, outside any hat or hair (QA
+        // 2026-10-28): a halo from the second row, rays from the third,
+        // each bigger than the last, and the hat off.
+        expect(faces[0].figures[0].glow).toBeNull();
+        const halo = (i) => faces[i].figures[0].glow.getObjectByName('halo');
+        const rays = (i) => faces[i].figures[0].glow.getObjectByName('rays');
+        expect(halo(1)).toBeTruthy();
+        expect(rays(1)).toBeUndefined();
+        expect(halo(2)).toBeTruthy();
+        expect(rays(2)).toBeTruthy();
+        expect(rays(3)).toBeTruthy();
+        expect(halo(2).geometry.parameters.width).toBeGreaterThan(halo(1).geometry.parameters.width);
+        expect(halo(3).geometry.parameters.width).toBeGreaterThan(halo(2).geometry.parameters.width);
+        expect(halo(3).material.blending).toBe(THREE.AdditiveBlending);
+        expect(halo(3).material.map.isDataTexture).toBe(true);
+        expect(halo(2).material.map).toBe(halo(3).material.map);   // one disc a session
+        const middle = faces[3].figures[0].head();
+        const at = faces[3].figures[0].glow.getWorldPosition(new THREE.Vector3());
+        expect(at.y).toBeCloseTo(middle.y, 6);
+        expect(at.z).toBeLessThan(middle.z);
+        // A visitor in a hat keeps it in the first row and loses it after.
+        stage.setTemplate(T.templateOf('galaxyBrain'), () => ({ ...DEFAULT_AVATAR, hat: HAT }));
+        const hats = stage.panels.filter((p) => p.figures.length).map((p) => Boolean(p.figures[0].person.getObjectByName('hat')));
+        expect(hats).toEqual([true, false, false, false]);
         // The glowing head's skin is its own: the arms keep the shared one.
         const arm = faces[3].figures[0].arms.right;
         let armSkin = null;
         arm.traverse((o) => { if (o.isMesh && !armSkin && o.material.color.getHex() === skull.material.color.getHex()) armSkin = o.material; });
         expect(armSkin).not.toBe(skull.material);
-        stage.setTemplate(T.templateOf('plan'), () => DEFAULT_AVATAR);
-        for (const p of stage.panels) {
-            expect(p.props.name).toBe('plan');
-            expect(p.box.getObjectByName('board')).toBeTruthy();
-            const head = p.figures[0].person.getObjectByName('head');
-            expect(head.rotation.y).toBeCloseTo(-0.25, 9);
-            expect(p.figures[0].group.rotation.y).toBe(0.3);
+        // The Plan: the body leans toward the chart on the camera's left,
+        // the head turns to it for three steps and round to the camera on
+        // the last, whatever hand the avatar favors (QA 2026-10-28).
+        for (const handedness of ['right', 'left']) {
+            stage.setTemplate(T.templateOf('plan'), () => ({ ...DEFAULT_AVATAR, handedness }));
+            stage.panels.forEach((p, i) => {
+                expect(p.props.name).toBe('plan');
+                expect(p.box.getObjectByName('board')).toBeTruthy();
+                const head = p.figures[0].person.getObjectByName('head');
+                expect(head.rotation.y).toBeCloseTo(i < 3 ? -0.25 : 0.2, 9);
+                expect(p.figures[0].group.rotation.y).toBeCloseTo(-0.2, 9);
+            });
         }
         stage.dispose();
     });

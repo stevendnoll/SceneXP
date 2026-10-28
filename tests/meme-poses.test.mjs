@@ -2,9 +2,10 @@
 /**
  * The poses (www/meme/js/poses.js, specs/meme PLANNING 5.2), measured on
  * the REAL rig: each pose puts the leading hand where it was solved to go
- * (2026-10-27), the other arm rests, a left-handed avatar leads with the
- * other arm, and the head turns no further than the cap. A rig edit that
- * moves a hand is caught here, not in a browser.
+ * (2026-10-27), the other arm rests, the template's side leads (never the
+ * avatar's handedness, QA 2026-10-28), and the head turns the template's
+ * way, no further than the cap. A rig edit that moves a hand is caught
+ * here, not in a browser.
  */
 import { loadRealThree } from './helpers/real-three.mjs';
 
@@ -89,9 +90,10 @@ test('each pose lands the leading hand where it was solved, and rests the other'
     figure.dispose();
 });
 
-test('a left-handed avatar leads with the left arm, mirrored', () => {
+test('the side asked for leads, mirrored, whatever the avatar\'s handedness', () => {
+    expect(P.SIDES).toEqual(['right', 'left']);
     const figure = F.createAvatar({ handedness: 'left' });
-    figure.setPose(P.armsFor('present', figure.avatar.handedness));
+    figure.setPose(P.armsFor('present', 'left'));
     const left = handOf(figure, 'left');
     expect(left.x).toBeGreaterThan(0.55);
     figure.setPose(P.armsFor('present', 'right'));
@@ -99,15 +101,28 @@ test('a left-handed avatar leads with the left arm, mirrored', () => {
     expect(right.x).toBeCloseTo(-left.x, 2);
     expect(right.y).toBeCloseTo(left.y, 2);
     expect(right.z).toBeCloseTo(left.z, 2);
+    // Nothing but the side is read: a left-handed avatar's right arm leads
+    // when the template says right.
+    expect(P.armsFor('present')).toEqual(P.armsFor('present', 'right'));
+    expect(P.armsFor('present', 'left').right).toEqual(F.REST);
     figure.dispose();
 });
 
-test('the head turns toward the leading side, never past the cap', () => {
+test('the head turns the way it is told, never past the cap', () => {
     expect(P.headTurnFor('stand')).toBe(0);
     expect(P.headTurnFor('approve')).toBe(0);
+    // Toward the figure's right is a negative turn about +y (-x on the rig).
     expect(P.headTurnFor('dismiss')).toBeCloseTo(-P.HEAD_TURNS.dismiss, 9);
+    expect(P.headTurnFor('dismiss', 'right')).toBeCloseTo(-P.HEAD_TURNS.dismiss, 9);
     expect(P.headTurnFor('dismiss', 'left')).toBeCloseTo(P.HEAD_TURNS.dismiss, 9);
-    expect(Math.abs(P.headTurnFor('lookBack'))).toBeLessThanOrEqual(P.MAX_HEAD_TURN);
+    expect(P.headTurnFor('lookBack', 'left')).toBeCloseTo(P.HEAD_TURNS.lookBack, 9);
+    // Radians of its own, either way, capped; nonsense is no turn.
+    expect(P.headTurnFor('approve', 0.35)).toBeCloseTo(0.35, 9);
+    expect(P.headTurnFor('approve', -0.35)).toBeCloseTo(-0.35, 9);
+    expect(P.headTurnFor('approve', 0)).toBe(0);
+    expect(P.headTurnFor('approve', 9)).toBe(P.MAX_HEAD_TURN);
+    expect(P.headTurnFor('approve', -9)).toBe(-P.MAX_HEAD_TURN);
+    expect(P.headTurnFor('approve', NaN)).toBe(0);
     expect(P.headTurnFor('nope')).toBe(0);
-    for (const id of P.POSES) expect(Math.abs(P.headTurnFor(id))).toBeLessThanOrEqual(P.MAX_HEAD_TURN);
+    for (const id of P.POSES) for (const look of P.SIDES) expect(Math.abs(P.headTurnFor(id, look))).toBeLessThanOrEqual(P.MAX_HEAD_TURN);
 });

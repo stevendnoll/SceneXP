@@ -26,6 +26,13 @@
  *
  * The rig has no neck, so a head turn is the head group turned, capped at
  * `MAX_HEAD_TURN` where the face would leave the shoulders.
+ *
+ * THE MEME DECIDES THE SIDE, NOT THE AVATAR (QA 2026-10-28): a left-handed
+ * avatar used to lead with its left arm and look the other way, which
+ * mirrored Nope / Yep and pointed The Plan's figure away from its chart.
+ * Handedness is never read here. A template names the arm (`side`) and the
+ * way the head turns (`look`), in the FIGURE'S OWN sides: a figure facing
+ * the camera has its right on the camera's left.
  */
 
 import { REST } from '../../shared/js/avatar-figure-1.0.0.min.js';
@@ -49,8 +56,8 @@ export const ARM_POSES = Object.freeze({
  *  radians from facing each other toward the camera. */
 export const HANDSHAKE = Object.freeze({ gap: 0.8, aside: 0.23, turn: 0.5 });
 
-/** The head's turn for each pose, radians, toward the figure's leading
- *  side (a figure that turns its back looks back over its shoulder). */
+/** How far the head turns for each pose, radians (a figure that turns its
+ *  back looks back over its shoulder). Which way is the figure's `look`. */
 export const HEAD_TURNS = Object.freeze({
     stand: 0,
     dismiss: 0.45,
@@ -62,21 +69,29 @@ export const HEAD_TURNS = Object.freeze({
 
 export const POSES = Object.freeze(Object.keys(ARM_POSES));
 
-/** The `setPose` pose for `id`: the leading arm by `handedness` ('right'
- *  or 'left'), the other at rest. Rest for `stand` or an unknown id. */
-export function armsFor(id, handedness = 'right') {
+/** The arm sides a figure may lead with. */
+export const SIDES = Object.freeze(['right', 'left']);
+
+/** The `setPose` pose for `id`: the leading arm on `side` ('right' or
+ *  'left', the figure's own), the other at rest. Rest for `stand` or an
+ *  unknown id. */
+export function armsFor(id, side = 'right') {
     const lead = ARM_POSES[id];
     const rest = { ...REST };
     if (!lead) return { right: { ...rest }, left: { ...rest } };
-    const side = handedness === 'left' ? 'left' : 'right';
-    return side === 'right' ? { right: { ...lead }, left: rest } : { right: rest, left: { ...lead } };
+    return side === 'left' ? { right: rest, left: { ...lead } } : { right: { ...lead }, left: rest };
 }
 
-/** The head's turn for `id`, radians about +y, toward the leading side
- *  (a right-handed figure turns toward its right, which is -x on the rig,
- *  a negative turn about +y). Capped. */
-export function headTurnFor(id, handedness = 'right') {
-    const turn = Math.min(MAX_HEAD_TURN, Math.max(0, HEAD_TURNS[id] || 0));
+/**
+ * The head's turn for pose `id`, radians about +y, capped. `look` is the
+ * figure's own side to turn toward, 'right' (-x on the rig, a negative
+ * turn) or 'left' (positive), by the pose's measure in `HEAD_TURNS`; or a
+ * number of radians of its own, positive toward the figure's left.
+ */
+export function headTurnFor(id, look = 'right') {
+    const cap = (t) => Math.max(-MAX_HEAD_TURN, Math.min(MAX_HEAD_TURN, t));
+    if (typeof look === 'number') return Number.isFinite(look) ? cap(look) : 0;
+    const turn = cap(Math.max(0, HEAD_TURNS[id] || 0));
     if (turn === 0) return 0;
-    return handedness === 'left' ? turn : -turn;
+    return look === 'left' ? turn : -turn;
 }

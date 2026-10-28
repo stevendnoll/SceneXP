@@ -22,14 +22,26 @@ export const MEME_PAGE = deepFreeze({
         floor: { size: 60, color: '#ECE8E1' }
     },
 
-    /** Soft daylight from an unseen skylight: an even sky, one sun from
-     *  high in front whose shadow falls into the boxes, and a cool fill, as
-     *  the avatar's studio is lit. */
+    /**
+     * Soft daylight: an even sky, one sun, and a cool fill, as the avatar's
+     * studio is lit. THE SUN COMES IN THROUGH THE OPENINGS (QA 2026-10-28):
+     * it stands low in front, a touch to the right, so each box is lit only
+     * through its own front and a figure's shadow lands on its own back
+     * wall as a flash photo's does, never in the panel below. The box's
+     * planes cast (panels.js), so the ceiling and the side keep a
+     * neighbor's shadow out. `position` less `target` is only a direction:
+     * the stage re-aims the sun at each arrangement and sizes its shadow
+     * camera to it (`fitSun`), `reach` being the least half-extent.
+     *
+     * The ceiling's own shadow line on the back wall sits at the box's
+     * height less the depth times the tangent of the sun's elevation, and
+     * tests/meme-shadows holds it above what the face camera sees.
+     */
     light: {
         sky: { color: '#F6F8FB', ground: '#ECE7DF', intensity: 2.2 },
         sun: {
-            color: '#FFF6EA', intensity: 1.8, position: [2.0, 5, 4.0], target: [0, 0.8, 0],
-            shadow: { size: 1024, reach: 2.6, near: 1, far: 14, bias: -0.0004, normalBias: 0.02, radius: 4 }
+            color: '#FFF6EA', intensity: 1.8, position: [1.2, 1.2, 6.0], target: [0, 0.8, 0],
+            shadow: { size: 1024, reach: 2.6, bias: -0.0004, normalBias: 0.03, radius: 4 }
         },
         fill: { color: '#E6EDF5', intensity: 0.5, position: [-3, 2.4, 2.6] },
         exposure: 1.0

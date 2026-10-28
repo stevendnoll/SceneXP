@@ -23,10 +23,91 @@ import { expressionOverrides, applyExpression } from '../../shared/js/avatar-exp
 import { armsFor, headTurnFor } from './poses.min.js';
 import { SCENES } from './scenes/index.min.js';
 
-/** The glow (Galaxy Brain): the head's own light, `color` at `intensity`
- *  times the figure's `glow`, reaching `distance`, and the head's skin lit
- *  from within by `emissive` of it. */
-export const GLOW = Object.freeze({ color: 0xffd27a, intensity: 2.4, distance: 1.6, emissive: 0.55 });
+/**
+ * The glow (Galaxy Brain). THE GLOW IS BEHIND THE HEAD, NOT IN IT (QA
+ * 2026-10-28: lit from within, the skull hid under any hat or hair, and
+ * bare it read as a tinted head). A `halo` disc of `color` stands `behind`
+ * the head's middle, its radius from `least` to `most` by the figure's
+ * `glow`, and from `rays.from` up, `rays.count` rays reach out from it to
+ * `rays.least`..`rays.most`, both drawn additive so they bloom on a dark
+ * backdrop. The head's own light (`intensity` times glow, reaching
+ * `distance`) and the skin's `emissive` tint stay, for the face.
+ */
+export const GLOW = Object.freeze({
+    color: 0xffd27a, intensity: 2.4, distance: 1.6, emissive: 0.7,
+    halo: Object.freeze({ least: 0.2, most: 0.5, behind: 0.22, opacity: 0.95, texels: 64 }),
+    rays: Object.freeze({ from: 0.5, count: 14, least: 0.4, most: 1.1, width: 0.05, opacity: 0.6 })
+});
+
+let haloMap = null;
+
+/** The halo's soft disc, drawn in code once a session as a data texture
+ *  (no picture file ships, and the preview rasterizer can read it): white,
+ *  its alpha fading from the middle to the rim. */
+export function haloTexture(n = GLOW.halo.texels) {
+    if (haloMap) return haloMap;
+    const data = new Uint8Array(n * n * 4);
+    for (let y = 0; y < n; y++) {
+        for (let x = 0; x < n; x++) {
+            const r = Math.hypot(((x + 0.5) / n) * 2 - 1, ((y + 0.5) / n) * 2 - 1);
+            const k = Math.max(0, Math.min(1, 1 - r));
+            const a = k * k * (3 - 2 * k);
+            const o = (y * n + x) * 4;
+            data[o] = 255;
+            data[o + 1] = 255;
+            data[o + 2] = 255;
+            data[o + 3] = Math.round(255 * a);
+        }
+    }
+    haloMap = new THREE.DataTexture(data, n, n);
+    haloMap.needsUpdate = true;
+    return haloMap;
+}
+
+/** The rays' fan: `count` thin triangles from radius `inner` to `outer`,
+ *  `width` wide at the base, in the x-y plane about the origin. */
+export function raysGeometry(count, inner, outer, width) {
+    const pos = [];
+    for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2 + 0.2;
+        const c = Math.cos(a);
+        const s = Math.sin(a);
+        // The triangle's base across the ray, its tip along it.
+        pos.push(c * inner - s * width, s * inner + c * width, 0);
+        pos.push(c * inner + s * width, s * inner - c * width, 0);
+        pos.push(c * outer, s * outer, 0);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    return geometry;
+}
+
+/**
+ * The glow behind a head for `glow` (0 to 1): a group holding the `halo`
+ * and, from `GLOW.rays.from` up, the `rays`, facing +z, to stand at the
+ * head's middle. Null for no glow.
+ */
+export function buildGlow(glow) {
+    if (!(glow > 0)) return null;
+    const G = GLOW;
+    const group = new THREE.Group();
+    group.name = 'glow';
+    const additive = (opacity, map = null) => new THREE.MeshBasicMaterial({
+        color: G.color, map, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide
+    });
+    const radius = G.halo.least + (G.halo.most - G.halo.least) * glow;
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(radius * 2, radius * 2), additive(G.halo.opacity * Math.min(1, 0.6 + glow), haloTexture()));
+    halo.name = 'halo';
+    group.add(halo);
+    if (glow >= G.rays.from) {
+        const reach = G.rays.least + (G.rays.most - G.rays.least) * glow;
+        const rays = new THREE.Mesh(raysGeometry(G.rays.count, radius * 0.6, reach, G.rays.width), additive(G.rays.opacity * glow));
+        rays.name = 'rays';
+        rays.position.z = -0.01;
+        group.add(rays);
+    }
+    return group;
+}
 
 /**
  * An open box: back wall, floor, ceiling and two sides, its origin at the
@@ -37,13 +118,19 @@ export function buildBox(B, backdrop = B.wall) {
     const group = new THREE.Group();
     group.name = 'box';
     group.userData.isBox = true;
-    const wall = new THREE.MeshStandardMaterial({ color: B.wall, roughness: 0.95, metalness: 0 });
-    const back = new THREE.MeshStandardMaterial({ color: backdrop, roughness: 0.95, metalness: 0 });
-    const floor = new THREE.MeshStandardMaterial({ color: B.floor, roughness: 0.9, metalness: 0 });
-    const plane = (w, h, material, name) => {
-        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
+    // THE PLANES CAST AS WELL AS RECEIVE (QA 2026-10-28): the ceiling and
+    // the sides keep the sun, and so a neighbor's shadow, out of the box,
+    // which is lit only through its opening (config.light). A plane casts
+    // from either side, so the sun's side of it never matters.
+    const material = (color, roughness) => new THREE.MeshStandardMaterial({ color, roughness, metalness: 0, shadowSide: THREE.DoubleSide });
+    const wall = material(B.wall, 0.95);
+    const back = material(backdrop, 0.95);
+    const floor = material(B.floor, 0.9);
+    const plane = (w, h, mat, name) => {
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
         mesh.name = name;
         mesh.receiveShadow = true;
+        mesh.castShadow = true;
         group.add(mesh);
         return mesh;
     };
@@ -109,17 +196,29 @@ export function cellCamera(cell, box) {
 /**
  * A figure for a cell's figure spec: the avatar built with the expression's
  * mouth and the spec's own `overrides`, the expression's tweaks laid on,
- * posed, its head turned, standing `at` and turned `turn` in the box, and
- * glowing when `glow` is above zero. Returns the shared figure with
- * `undoExpression`, `glowLight` and `spec` added.
+ * posed on the spec's `side`, its head turned the spec's `look` (toward the
+ * leading arm when unsaid), standing `at` and turned `turn` in the box, and
+ * glowing when `glow` is above zero (the halo behind the head, the head's
+ * light and tint). Returns the shared figure with `undoExpression`,
+ * `glow` (the halo group, or null), `glowLight` and `spec` added.
  */
 export function makeFigure(avatar, spec) {
     const figure = createAvatar(avatar, { overrides: { ...expressionOverrides(spec.expression), ...(spec.overrides || {}) } });
     figure.spec = spec;
     figure.undoExpression = applyExpression(figure, spec.expression);
-    figure.setPose(armsFor(spec.pose, figure.avatar.handedness));
+    // The template's side and look, never the avatar's handedness (poses.js).
+    const side = spec.side || 'right';
+    figure.setPose(armsFor(spec.pose, side));
     const head = figure.person.getObjectByName('head');
-    if (head) head.rotation.y = headTurnFor(spec.pose, figure.avatar.handedness);
+    if (head) head.rotation.y = headTurnFor(spec.pose, spec.look === undefined ? side : spec.look);
+    figure.glow = buildGlow(spec.glow);
+    if (figure.glow) {
+        // Behind the head's middle, in the figure's own meters (the group
+        // still stands at the origin here).
+        const middle = figure.head();
+        figure.glow.position.set(middle.x, middle.y, middle.z - GLOW.halo.behind);
+        figure.group.add(figure.glow);
+    }
     const at = spec.at || [0, 0];
     figure.group.position.set(at[0], 0, at[1]);
     figure.group.rotation.y = spec.turn || 0;

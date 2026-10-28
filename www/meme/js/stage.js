@@ -27,6 +27,40 @@
 import { buildPanel, layoutPanels, cellCamera, arrangementSize, labelAnchor, projectPoint, boxRect } from './panels.min.js';
 
 /** The room: the background, the floor and the lights, in one scene. */
+/** The sun's direction from config.light `L`: from its target toward it,
+ *  unit length. */
+export function sunDirection(L) {
+    return new THREE.Vector3(...L.sun.position).sub(new THREE.Vector3(...L.sun.target)).normalize();
+}
+
+/**
+ * The sun aimed at an arrangement of `size` (its width and height, meters,
+ * standing on y = 0) from config.light `L`'s direction, its shadow camera
+ * sized to cover every box of it (half the longer side plus the box's
+ * depth, no less than `L.sun.shadow.reach`), so the top row of a tall
+ * template is shadowed like the bottom one. `B` is config.box. Returns the
+ * reach.
+ */
+export function fitSun(sun, size, L, B) {
+    const sh = L.sun.shadow || { reach: 0 };
+    const reach = Math.max(sh.reach, Math.max(size.width, size.height) / 2 + B.depth);
+    const center = new THREE.Vector3(0, size.height / 2, 0);
+    const distance = reach * 2 + 2;
+    sun.target.position.copy(center);
+    sun.position.copy(center).addScaledVector(sunDirection(L), distance);
+    const cam = sun.shadow && sun.shadow.camera;
+    if (cam) {
+        cam.left = -reach;
+        cam.right = reach;
+        cam.top = reach;
+        cam.bottom = -reach;
+        cam.near = 0.5;
+        cam.far = distance + reach + 1;
+        if (typeof cam.updateProjectionMatrix === 'function') cam.updateProjectionMatrix();
+    }
+    return reach;
+}
+
 export function buildStudio(config, { mobile = false } = {}) {
     const S = config.studio;
     const L = config.light;
@@ -48,24 +82,16 @@ export function buildStudio(config, { mobile = false } = {}) {
 
     const sun = new THREE.DirectionalLight(L.sun.color, L.sun.intensity);
     sun.name = 'sun';
-    sun.position.set(...L.sun.position);
-    sun.target.position.set(...L.sun.target);
     const sh = L.sun.shadow;
     if (sh) {
         sun.castShadow = true;
         const size = mobile ? sh.size / 2 : sh.size;
         sun.shadow.mapSize.set(size, size);
-        const cam = sun.shadow.camera;
-        cam.left = -sh.reach;
-        cam.right = sh.reach;
-        cam.top = sh.reach;
-        cam.bottom = -sh.reach;
-        cam.near = sh.near;
-        cam.far = sh.far;
         sun.shadow.bias = sh.bias;
         sun.shadow.normalBias = sh.normalBias;
         sun.shadow.radius = sh.radius;
     }
+    fitSun(sun, { width: config.box.width, height: config.box.height }, L, config.box);
     scene.add(sun);
     scene.add(sun.target);
 
@@ -338,6 +364,7 @@ export function createStage(config, {
             scene.add(panel.group);
             return panel;
         });
+        fitSun(lights.sun, arrangementSize(next, config.box), config.light, config.box);
         scene.updateMatrixWorld(true);
         if (viewing !== null) onView(null);
         viewing = null;
