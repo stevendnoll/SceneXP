@@ -99,6 +99,7 @@ const smoothstep = (t) => {
  *   scene, camera, renderer
  *   setTemplate(template, avatarFor)  the panels rebuilt for a template,
  *                       `avatarFor(roleId)` giving each role's avatar
+ *   setExpression(cellIndex, id)  a cell's figure built again with a face
  *   panels              the built panels, in cell order
  *   cameraFor(index)    a cell's camera in world meters, { eye, aim, fov }
  *   view(index | null)  glide into a panel, or back out to all of them
@@ -113,6 +114,8 @@ export function createStage(config, {
     reducedMotion = () => false,
     now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000,
     onFrame = () => {},
+    /** Hears `view(index | null)` whenever what is looked at changes. */
+    onView = () => {},
     makeRenderer = (c) => new THREE.WebGLRenderer({ canvas: c, antialias: true, powerPreference: 'low-power' })
 } = {}) {
     const C = config.camera;
@@ -203,8 +206,21 @@ export function createStage(config, {
         return viewing === null ? allPose() : cameraFor(viewing);
     }
 
+    /** A cell's first figure built again wearing `expression` (null for
+     *  the template's own). */
+    function setExpression(cellIndex, expression) {
+        const panel = panels[cellIndex];
+        if (!panel || !panel.figures.length) return null;
+        const own = template.cells[cellIndex].figures[0].expression;
+        const figure = panel.replaceFigure(0, { expression: expression || own }, avatars(template.cells[cellIndex].figures[0].role));
+        dirty = true;
+        return figure;
+    }
+
     function view(index) {
+        const was = viewing;
         viewing = Number.isInteger(index) && panels[index] ? index : null;
+        if (viewing !== was) onView(viewing);
         const to = targetPose();
         if (reducedMotion() || !running) {
             glide = null;
@@ -269,9 +285,12 @@ export function createStage(config, {
         panels = [];
     }
 
+    let avatars = () => null;
+
     function setTemplate(next, avatarFor) {
         clearPanels();
         template = next;
+        avatars = avatarFor;
         const spots = layoutPanels(next, config.box);
         panels = next.cells.map((cell, i) => {
             const panel = buildPanel(cell, config, avatarFor);
@@ -280,6 +299,7 @@ export function createStage(config, {
             return panel;
         });
         scene.updateMatrixWorld(true);
+        if (viewing !== null) onView(null);
         viewing = null;
         glide = null;
         tilt.yaw = 0;
@@ -356,6 +376,7 @@ export function createStage(config, {
         get tilt() { return { ...tilt }; },
         reducedMotion,
         setTemplate,
+        setExpression,
         cameraFor,
         view,
         screenRects,

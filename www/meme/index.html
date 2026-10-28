@@ -113,19 +113,20 @@
     <link rel="modulepreload" href="js/main.min.js">
     <link rel="modulepreload" href="js/config.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-expressions-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
     <link rel="modulepreload" href="js/stage.min.js">
     <link rel="modulepreload" href="js/templates.min.js">
     <link rel="modulepreload" href="js/editor.min.js">
+    <link rel="modulepreload" href="js/state.min.js">
     <link rel="modulepreload" href="js/compose.min.js">
     <link rel="modulepreload" href="js/exporter.min.js">
     <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
     <link rel="modulepreload" href="js/panels.min.js">
     <link rel="modulepreload" href="../shared/js/sharefile-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-figure-1.0.0.min.js">
-    <link rel="modulepreload" href="../shared/js/avatar-expressions-1.0.0.min.js">
     <link rel="modulepreload" href="js/poses.min.js">
     <link rel="modulepreload" href="js/scenes/index.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-layers-1.0.0.min.js">
@@ -212,15 +213,33 @@
             <h2 id="mm-heading" class="mm-heading">Put yourself in the meme</h2>
             <p id="mm-lede" class="mm-lede">Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a short video.</p>
 
-            <!-- The editor (js/editor.js): the picker, then the caption
-                 fields, one real text input a slot. The People tab comes
-                 in M3 and M5. -->
+            <!-- The editor (js/editor.js, M3): three tabs. Meme holds the
+                 picker and the faces, Captions one real text input a slot,
+                 People who is in it. Arrow keys move between the tabs. -->
             <div id="mm-editor" class="mm-editor">
-                <h3 class="mm-subhead">The meme</h3>
-                <div id="mm-picker" class="mm-picker" role="group" aria-label="Choose a meme"></div>
-                <p id="mm-hint" class="mm-note mm-hint" hidden>Tap a panel to step into it, and tap again to step back. Drag to tilt the view.</p>
-                <h3 class="mm-subhead">Your captions</h3>
-                <div id="mm-captions" class="mm-captions"></div>
+                <div id="mm-tabs" class="mm-tabs" role="tablist" aria-label="Choose what to change">
+                    <button id="mm-tab-meme" class="mm-tab" type="button" role="tab" aria-controls="mm-panel-meme" aria-selected="true">Meme</button>
+                    <button id="mm-tab-captions" class="mm-tab" type="button" role="tab" aria-controls="mm-panel-captions" aria-selected="false" tabindex="-1">Captions</button>
+                    <button id="mm-tab-people" class="mm-tab" type="button" role="tab" aria-controls="mm-panel-people" aria-selected="false" tabindex="-1">People</button>
+                </div>
+
+                <div id="mm-panel-meme" class="mm-panel" role="tabpanel" aria-labelledby="mm-tab-meme">
+                    <div id="mm-picker" class="mm-picker" role="group" aria-label="Choose a meme"></div>
+                    <p id="mm-hint" class="mm-note mm-hint" hidden>Tap a panel to step into it, and tap again to step back. Drag to tilt the view.</p>
+                    <!-- The view by keyboard: what a tap on the stage does. -->
+                    <div id="mm-view" class="mm-view" role="group" aria-label="Look at" hidden></div>
+                    <h3 class="mm-subhead">The faces</h3>
+                    <div id="mm-faces" class="mm-faces"></div>
+                </div>
+
+                <div id="mm-panel-captions" class="mm-panel" role="tabpanel" aria-labelledby="mm-tab-captions" hidden>
+                    <div id="mm-captions" class="mm-captions"></div>
+                </div>
+
+                <div id="mm-panel-people" class="mm-panel" role="tabpanel" aria-labelledby="mm-tab-people" hidden>
+                    <ul id="mm-people" class="mm-people"></ul>
+                    <p class="mm-note"><a id="mm-make-avatar" class="mm-link" href="/avatar/">Make your avatar</a></p>
+                </div>
             </div>
 
             <!-- The picture as it will be shared: the composite drawn small
@@ -236,6 +255,7 @@
             </fieldset>
             <div class="mm-row">
                 <button id="mm-picture-save" class="mm-primary" type="button" hidden>Save picture</button>
+                <button id="mm-start-over" class="mm-secondary" type="button">Start over</button>
             </div>
 
             <p id="mm-status" class="mm-status" role="status" aria-live="polite"></p>

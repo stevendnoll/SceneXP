@@ -8,29 +8,31 @@
  * THE FIRST THIRTY SECONDS ARE WORDS AND ONE NEXT STEP. The sheet says what
  * this is and what to do before the stage has finished loading.
  *
- * M2 (2026-10-27): the grid. A picker of templates, each a grid of
- * shadowboxes the visitor's avatar (or a stand-in) stands in, posed and
- * wearing each panel's expression; a caption field a slot, the captions
- * laid over the live stage where each panel is; a tap into a panel and
- * out; the picture at two sizes. The people, the rest of the templates,
- * the remix link and the clip arrive milestone by milestone
- * (specs/meme/TASKS.md).
+ * M3 (2026-10-27): the editor on a phone. Three tabs (Meme, Captions,
+ * People); the picker with a glyph of each grid; a caption field a slot; a
+ * row of expression chips a panel; the view buttons that step into a panel
+ * by keyboard; the last meme kept in this browser and restored on return.
+ * The people, the rest of the templates, the remix link and the clip
+ * arrive milestone by milestone (specs/meme/TASKS.md).
  *
  * NOTHING IS UPLOADED. The avatar store is read, never written, by this
- * page. The usage pings count kinds of things done (which template, what
- * happened to a picture), never what was typed.
+ * page; the meme store (state.js) is this page's own. The usage pings count
+ * kinds of things done (which template, what happened to a picture), never
+ * what was typed.
  *
  * `__test__` reaches the page's state for tests/meme-init.test.mjs.
  */
 
 import { MEME_PAGE as CONFIG } from './config.min.js';
 import { createAvatarStore, randomAvatar } from '../../shared/js/avatar-1.0.0.min.js';
+import { EXPRESSIONS } from '../../shared/js/avatar-expressions-1.0.0.min.js';
 import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { createStage } from './stage.min.js';
-import { byOrder, slotsOf, templateOf } from './templates.min.js';
-import { buildCaptionFields, buildTemplatePicker } from './editor.min.js';
+import { TEMPLATES, byOrder, slotsOf, templateOf } from './templates.min.js';
+import { buildTabs, buildCaptionFields, buildTemplatePicker, buildExpressionRows, buildViewButtons } from './editor.min.js';
+import { normalizeMeme, createMemeStore } from './state.min.js';
 import { drawCaptions } from './compose.min.js';
 import { createExporter, WORDS as EXPORT_WORDS } from './exporter.min.js';
 
@@ -41,27 +43,47 @@ export const WORDS = Object.freeze({
     noStage: "This browser can't draw the 3D stage. Please try another browser, or a newer one.",
     noAvatar: 'You have no avatar yet, so a visitor is standing in for you. Make yours at any time.',
     withAvatar: 'Your avatar is here. Pick a meme and type a caption to make it yours.',
+    welcomeBack: 'Welcome back. Your last meme is just as you left it.',
+    notKept: "This browser isn't keeping anything for this site right now, so your meme won't be here next time. A private window is often the reason.",
+    cleared: 'Started over. The first meme is ready for you.',
     pictureSaved: EXPORT_WORDS.pictureSaved,
     pictureShared: EXPORT_WORDS.pictureShared,
-    pictureFailed: EXPORT_WORDS.pictureFailed
+    pictureFailed: EXPORT_WORDS.pictureFailed,
+    personYou: 'You, as your avatar.',
+    personStandIn: 'You, as a visitor standing in until you make your avatar.',
+    personRandom: 'A visitor from the crowd.'
 });
 
 const $ = (id) => document.getElementById(id);
 
+/** The sheet's tabs and their panels, as the markup has them. */
+export const TABS = Object.freeze([
+    { tab: 'mm-tab-meme', panel: 'mm-panel-meme' },
+    { tab: 'mm-tab-captions', panel: 'mm-panel-captions' },
+    { tab: 'mm-tab-people', panel: 'mm-panel-people' }
+]);
+
+const RULES = () => ({ templates: TEMPLATES, byOrder, slotsOf, expressions: EXPRESSIONS.map((e) => e.id), maxChars: CONFIG.caption.maxChars });
+
 const state = {
-    store: null,
+    store: null,          // the avatar store
+    memes: null,          // the meme store (state.js)
     avatar: null,         // the saved avatar, or null
     standIn: null,        // a random avatar for a visitor with none saved
     template: null,
     captions: [],
+    expressions: [],      // a cell's chosen face, or null for the template's
     sizeId: CONFIG.export.pictures[0].id,
     stage: null,
     exporter: null,
     fields: null,
     picker: null,
+    tabs: null,
+    views: null,
     rects: [],            // where each panel is on the stage, CSS pixels
+    restored: false,
     ready: false,
-    pinged: { typed: new Set(), stepped: false },
+    pinged: { typed: new Set(), stepped: false, faced: false },
     session: { start: Date.now(), ended: false }
 };
 
@@ -93,6 +115,17 @@ function webgl2() {
 /** The status line on the sheet. */
 function say(text) {
     $('mm-status').textContent = text;
+}
+
+/** The meme as it stands, valid, for the store and (M4) the link. */
+export function currentMeme() {
+    return normalizeMeme({ template: state.template.id, captions: state.captions, expressions: state.expressions }, RULES());
+}
+
+/** Keep the meme in this browser. Quiet when the browser refuses. */
+function keep() {
+    if (!state.memes || !state.ready) return false;
+    return state.memes.save(currentMeme());
 }
 
 /** The avatar a role wears: the visitor's (or the stand-in) for the lead,
@@ -157,24 +190,68 @@ function onCaption(k, value) {
     state.captions[k] = value;
     drawOverlay();
     refreshPreview();
+    keep();
     if (state.ready && value && !state.pinged.typed.has(k)) {
         state.pinged.typed.add(k);
         track('caption-typed', { kind: state.template.id });
     }
 }
 
-/** Show a template: the panels built, the caption fields laid out, the
- *  preview drawn. Captions already typed stay by slot. */
-export function showTemplate(template) {
+function onExpression(cellIndex, id) {
+    state.expressions[cellIndex] = id;
+    if (state.stage) {
+        state.stage.setExpression(cellIndex, id);
+        state.stage.touch();
+    }
+    refreshPreview();
+    keep();
+    if (state.ready && !state.pinged.faced) {
+        state.pinged.faced = true;
+        track('expression-set', { kind: state.template.id });
+    }
+}
+
+/** The People tab: who is in the meme and where each comes from (M5
+ *  adds a friend's avatar and the reshuffle). */
+function showPeople(template) {
+    const list = $('mm-people');
+    list.textContent = '';
+    for (const role of template.roles) {
+        const item = document.createElement('li');
+        item.className = 'mm-person';
+        const name = document.createElement('span');
+        name.className = 'mm-person-role';
+        name.textContent = role.label;
+        const note = document.createElement('span');
+        note.className = 'mm-person-note';
+        note.textContent = role.cast === 'avatar' ? (state.avatar ? WORDS.personYou : WORDS.personStandIn) : WORDS.personRandom;
+        item.appendChild(name);
+        item.appendChild(note);
+        list.appendChild(item);
+    }
+    $('mm-make-avatar').hidden = Boolean(state.avatar);
+}
+
+/** Show a template with `meme`'s captions and faces: the panels built,
+ *  the fields and the chips laid out, the preview drawn. */
+export function showTemplate(template, meme = null) {
     state.template = template;
-    state.captions = slotsOf(template).map((_, k) => state.captions[k] || '');
-    if (state.stage) state.stage.setTemplate(template, avatarForRole);
+    const slots = slotsOf(template);
+    state.captions = slots.map((_, k) => (meme ? meme.captions[k] : state.captions[k]) || '');
+    state.expressions = template.cells.map((_, i) => (meme ? meme.expressions[i] : null) || null);
+    if (state.stage) {
+        state.stage.setTemplate(template, avatarForRole);
+        state.expressions.forEach((id, i) => { if (id) state.stage.setExpression(i, id); });
+    }
     state.fields = buildCaptionFields($('mm-captions'), {
-        slots: slotsOf(template),
+        slots,
         captions: state.captions,
         maxChars: CONFIG.caption.maxChars,
         onInput: onCaption
     });
+    buildExpressionRows($('mm-faces'), { template, expressions: EXPRESSIONS, chosen: state.expressions, onChoose: onExpression });
+    state.views = buildViewButtons($('mm-view'), { count: template.cells.length, onView: (index) => { if (state.stage) state.stage.view(index); } });
+    showPeople(template);
     if (state.picker) state.picker.select(template.id);
     state.rects = state.stage ? state.stage.screenRects() : [];
     drawOverlay();
@@ -186,8 +263,20 @@ export function pickTemplate(id) {
     const template = templateOf(id);
     if (state.template && template.id === state.template.id) return template;
     showTemplate(template);
+    keep();
     if (state.ready) track('template-picked', { kind: template.id });
     return template;
+}
+
+/** Start over: the first meme, nothing typed, the store cleared. */
+export function startOver() {
+    state.captions = [];
+    state.expressions = [];
+    if (state.memes) state.memes.clear();
+    showTemplate(byOrder()[0]);
+    say(WORDS.cleared);
+    if (state.tabs) state.tabs.select('mm-tab-meme');
+    if (state.ready) track('start-over', { kind: state.template.id });
 }
 
 async function savePicture() {
@@ -218,6 +307,7 @@ function onKey(e) {
 
 function wire() {
     $('mm-picture-save').addEventListener('click', savePicture);
+    $('mm-start-over').addEventListener('click', startOver);
     for (const p of CONFIG.export.pictures) {
         const input = $(`mm-size-${p.id}`);
         if (input) input.addEventListener('change', () => { state.sizeId = readSize(); refreshPreview(); });
@@ -237,6 +327,10 @@ export async function init() {
     state.store = createAvatarStore();
     state.avatar = state.store.hasSaved() ? state.store.load() : null;
     state.standIn = randomAvatar();
+    state.memes = createMemeStore({ key: CONFIG.storageKey });
+    const kept = state.memes.load();
+    const restored = kept ? normalizeMeme(kept, RULES()) : null;
+    state.restored = Boolean(restored && (restored.captions.some(Boolean) || restored.expressions.some(Boolean) || restored.template !== byOrder()[0].id));
 
     const stageStatus = $('mm-stage-status');
     stageStatus.textContent = WORDS.loading;
@@ -253,6 +347,9 @@ export async function init() {
                         state.pinged.stepped = true;
                         track('panel-stepped', { kind: state.template.id });
                     }
+                },
+                onView(index) {
+                    if (state.views) state.views.select(index);
                 }
             });
             state.exporter = createExporter(CONFIG, {
@@ -264,23 +361,27 @@ export async function init() {
             state.exporter = null;
         }
     }
+    state.tabs = buildTabs(TABS, { onTab: (id) => { if (state.ready) track('tab', { kind: id.replace('mm-tab-', '') }); } });
     state.picker = buildTemplatePicker($('mm-picker'), { templates: byOrder(), selected: byOrder()[0].id, onPick: (t) => pickTemplate(t.id) });
-    showTemplate(byOrder()[0]);
-    say(state.avatar ? WORDS.withAvatar : WORDS.noAvatar);
+    showTemplate(restored ? templateOf(restored.template) : byOrder()[0], restored);
+    if (state.restored) say(WORDS.welcomeBack);
+    else if (!state.memes.available) say(WORDS.notKept);
+    else say(state.avatar ? WORDS.withAvatar : WORDS.noAvatar);
     const saveBtn = $('mm-picture-save');
     saveBtn.textContent = state.exporter ? state.exporter.buttonLabel() : EXPORT_WORDS.saveButton;
     saveBtn.hidden = !state.exporter;
     $('mm-hint').hidden = !state.stage;
+    $('mm-view').hidden = !state.stage;
     wire();
     state.ready = true;
 
     // The visit's pings: the proof of work first, so every ping carries the
     // hash that groups a visit (the same token the scenes use), then the
-    // start, with whether an avatar was waiting.
+    // start, with whether an avatar was waiting and whether a meme was.
     setMobile(isMobile());
     const proof = await getProofOfWork(CONFIG.proofOfWork);
     setProofHash(proof && proof.hash);
-    track('session-start', { outcome: state.avatar ? 'avatar' : 'no-avatar' });
+    track('session-start', { kind: state.restored ? 'returning' : 'new', outcome: state.avatar ? 'avatar' : 'no-avatar' });
 
     if (!state.stage) {
         stageStatus.textContent = WORDS.noStage;
@@ -296,6 +397,7 @@ export const __test__ = {
     endVisit,
     savePicture,
     onCaption,
+    onExpression,
     onKey
 };
 

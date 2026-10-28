@@ -184,6 +184,45 @@ body.mm-body {
     margin-bottom: 24px;
 }
 
+/* ---- The tabs ------------------------------------------------------------ */
+
+.mm-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border-radius: 16px;
+    background: var(--mm-well);
+    margin-bottom: 18px;
+}
+
+.mm-tab {
+    min-width: 0;
+    padding: 8px 6px;
+    border: 0;
+    border-radius: 13px;
+    background: transparent;
+    color: var(--mm-muted);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mm-tab:hover {
+    color: var(--mm-ink);
+}
+
+.mm-tab[aria-selected="true"] {
+    background: var(--mm-paper);
+    color: var(--mm-ink);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.mm-panel[hidden] {
+    display: none;
+}
+
 /* ---- The picker ---------------------------------------------------------- */
 
 .mm-picker {
@@ -195,7 +234,9 @@ body.mm-body {
 
 .mm-pick {
     display: grid;
-    gap: 2px;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
     padding: 10px 12px;
     border: 1px solid var(--mm-line);
     border-radius: 12px;
@@ -216,6 +257,19 @@ body.mm-body {
     color: var(--mm-paper);
 }
 
+.mm-pick-glyph {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    opacity: 0.8;
+}
+
+.mm-pick-words {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
 .mm-pick-title {
     font-size: 14px;
     font-weight: 700;
@@ -227,7 +281,94 @@ body.mm-body {
 }
 
 .mm-hint {
-    margin: 0 0 20px;
+    margin: 0 0 12px;
+}
+
+/* The view by keyboard, and the people. */
+.mm-view {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.mm-view[hidden] {
+    display: none;
+}
+
+.mm-view-btn,
+.mm-chip,
+.mm-secondary {
+    padding: 7px 12px;
+    border: 1px solid var(--mm-line);
+    border-radius: 999px;
+    background: var(--mm-paper);
+    color: var(--mm-ink);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mm-secondary {
+    padding: 13px 22px;
+    font-size: 16px;
+}
+
+.mm-view-btn:hover,
+.mm-chip:hover,
+.mm-secondary:hover {
+    border-color: var(--mm-ink);
+}
+
+.mm-view-btn[aria-pressed="true"],
+.mm-chip[aria-checked="true"] {
+    background: var(--mm-ink);
+    border-color: var(--mm-ink);
+    color: var(--mm-paper);
+}
+
+.mm-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    grid-column: 1 / -1;
+}
+
+.mm-people {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+}
+
+.mm-person {
+    display: grid;
+    gap: 2px;
+    padding: 10px 12px;
+    border: 1px solid var(--mm-line);
+    border-radius: 12px;
+}
+
+.mm-person-role {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.mm-person-note {
+    font-size: 13px;
+    color: var(--mm-muted);
+}
+
+.mm-link {
+    color: var(--mm-ink);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.mm-link[hidden] {
+    display: none;
 }
 
 /* ---- The size --------------------------------------------------------------- */

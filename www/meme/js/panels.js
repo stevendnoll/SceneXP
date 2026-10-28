@@ -160,6 +160,17 @@ export function buildPanel(cell, config, avatarFor) {
         box,
         figures,
         props,
+        /** Figure `i` built again with `changes` laid over its spec (a new
+         *  expression), the old one let go. Returns the new figure. */
+        replaceFigure(i, changes, avatar = avatarFor(cell.figures[i].role)) {
+            const old = figures[i];
+            if (!old) return null;
+            old.dispose();
+            const figure = makeFigure(avatar, { ...cell.figures[i], ...changes });
+            box.add(figure.group);
+            figures[i] = figure;
+            return figure;
+        },
         dispose() {
             for (const f of figures) f.dispose();
             box.traverse((o) => {

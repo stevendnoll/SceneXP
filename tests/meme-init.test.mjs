@@ -247,7 +247,16 @@ describe('the page', () => {
         const picks = dom.el('mm-picker').children;
         expect(picks.map((b) => b.dataset.template)).toEqual(['surprised', 'panic', 'nopeYep', 'thenNow', 'galaxyBrain', 'plan']);
         expect(picks.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false', 'false', 'false', 'false']);
-        expect(picks[1].children[0].textContent).toBe('Panic / Calm / Panic');
+        // A glyph of the grid, then the words.
+        expect(picks[1].children[0].tagName.toLowerCase()).toBe('svg');
+        expect(picks[1].children[0].children).toHaveLength(6);
+        expect(picks[1].children[1].children[0].textContent).toBe('Panic / Calm / Panic');
+        // Every tab and panel the page wires is in the markup, once.
+        for (const { tab, panel } of main.TABS) {
+            expect(HTML.split(`id="${tab}"`).length - 1).toBe(1);
+            expect(HTML.split(`id="${panel}"`).length - 1).toBe(1);
+            expect(HTML).toContain(`aria-controls="${panel}"`);
+        }
     });
 
     test('picking a template rebuilds the panels and the fields, keeps typed captions by slot, and pings once', async () => {
@@ -410,6 +419,151 @@ describe('the page', () => {
         expect(state.stage.running).toBe(true);
         endVisit();
         expect(state.session.ended).toBe(true);
+    });
+
+    test('the tabs switch panels by click and by arrow keys, and only the chosen tab is in the tab order', async () => {
+        const main = await boot();
+        const { state } = main.__test__;
+        const tabs = ['mm-tab-meme', 'mm-tab-captions', 'mm-tab-people'].map((id) => dom.el(id));
+        const panels = ['mm-panel-meme', 'mm-panel-captions', 'mm-panel-people'].map((id) => dom.el(id));
+        expect(state.tabs.selected).toBe('mm-tab-meme');
+        expect(panels.map((p) => p.hidden)).toEqual([false, true, true]);
+        fire(tabs[1], 'click');
+        expect(state.tabs.selected).toBe('mm-tab-captions');
+        expect(panels.map((p) => p.hidden)).toEqual([true, false, true]);
+        expect(tabs.map((t) => t.tabIndex)).toEqual([-1, 0, -1]);
+        expect(tabs.map((t) => t.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false']);
+        fire(tabs[1], 'keydown', { key: 'ArrowRight' });
+        expect(state.tabs.selected).toBe('mm-tab-people');
+        expect(tabs[2].focused).toBe(true);
+        fire(tabs[2], 'keydown', { key: 'ArrowRight' });
+        expect(state.tabs.selected).toBe('mm-tab-meme');
+        fire(tabs[0], 'keydown', { key: 'End' });
+        expect(state.tabs.selected).toBe('mm-tab-people');
+        fire(tabs[2], 'keydown', { key: 'Tab' });
+        expect(state.tabs.selected).toBe('mm-tab-people');
+        expect(state.tabs.select('nope')).toBe(false);
+        // The people: the visitor, standing in, and the way to an avatar.
+        expect(dom.el('mm-people').children).toHaveLength(1);
+        expect(dom.el('mm-people').children[0].textContent).toContain(main.WORDS.personStandIn);
+        expect(dom.el('mm-make-avatar').hidden).toBe(false);
+    });
+
+    test('a face chip rebuilds that panel\'s figure, the meme\'s own face is null, and arrows move along the row', async () => {
+        const main = await boot();
+        const { state } = main.__test__;
+        main.pickTemplate('panic');
+        const rows = dom.el('mm-faces').children;
+        expect(rows).toHaveLength(3);
+        expect(rows[0].children[0].textContent).toBe('Panel 1: Face');
+        const chips = rows[1].children[1].children;
+        expect(chips).toHaveLength(10);
+        expect(chips.map((c) => c.getAttribute('aria-checked')).filter((v) => v === 'true')).toHaveLength(1);
+        const own = chips.find((c) => c.dataset.value === 'deadpan');
+        expect(own.getAttribute('aria-checked')).toBe('true');
+        expect(own.textContent).toBe("Deadpan (the meme's own)");
+        const before = state.stage.panels[3].figures[0];
+        fire(chips.find((c) => c.dataset.value === 'rage'), 'click');
+        expect(state.expressions).toEqual([null, null, null, 'rage', null, null]);
+        expect(state.stage.panels[3].figures[0]).not.toBe(before);
+        expect(state.stage.panels[3].figures[0].spec.expression).toBe('rage');
+        expect(state.pinged.faced).toBe(true);
+        // Back to the meme's own: null again, the figure its own face.
+        fire(own, 'click');
+        expect(state.expressions[3]).toBeNull();
+        expect(state.stage.panels[3].figures[0].spec.expression).toBe('deadpan');
+        // An arrow from the chosen chip moves and chooses.
+        fire(own, 'keydown', { key: 'ArrowRight' });
+        const after = chips.findIndex((c) => c.getAttribute('aria-checked') === 'true');
+        expect(after).toBe(chips.indexOf(own) + 1);
+        expect(chips[after].focused).toBe(true);
+        expect(state.expressions[3]).toBe(chips[after].dataset.value);
+        fire(own, 'keydown', { key: 'Tab' });
+        // A text cell has no chips, and a cell with no figure takes no face.
+        expect(state.stage.setExpression(0, 'rage')).toBeNull();
+        expect(state.stage.setExpression(99, 'rage')).toBeNull();
+    });
+
+    test('the view buttons step into a panel and out by keyboard, following the stage too', async () => {
+        const main = await boot();
+        const { state } = main.__test__;
+        main.pickTemplate('nopeYep');
+        const buttons = dom.el('mm-view').children;
+        expect(buttons.map((b) => b.textContent)).toEqual(['All panels', 'Panel 1', 'Panel 2', 'Panel 3', 'Panel 4']);
+        expect(buttons[0].getAttribute('aria-pressed')).toBe('true');
+        fire(buttons[3], 'click');
+        expect(state.stage.viewing).toBe(2);
+        expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'false', 'true', 'false']);
+        // The stage changing its view (a tap, Escape) presses the right button.
+        state.stage.view(null);
+        expect(buttons[0].getAttribute('aria-pressed')).toBe('true');
+        state.stage.view(1);
+        expect(buttons[2].getAttribute('aria-pressed')).toBe('true');
+        // A new template steps out.
+        main.pickTemplate('plan');
+        expect(state.stage.viewing).toBeNull();
+        expect(dom.el('mm-view').children[0].getAttribute('aria-pressed')).toBe('true');
+    });
+
+    test('the meme is kept in this browser on every change and restored on return, and Start over clears it', async () => {
+        let main = await boot();
+        let { state } = main.__test__;
+        expect(state.restored).toBe(false);
+        main.pickTemplate('thenNow');
+        const input = dom.el('mm-captions').children[1].children[1];
+        input.value = 'now';
+        fire(input, 'input');
+        main.__test__.onExpression(0, 'rage');
+        const kept = JSON.parse(globalThis.localStorage.getItem('scenexp-meme'));
+        expect(kept).toEqual({ v: 1, template: 'thenNow', captions: ['', 'now'], expressions: ['rage', null] });
+        // Back again: the same meme, said so, the chip and the figure right.
+        dom.uninstall();
+        installThree();
+        dom = installDom();
+        Object.assign(dom.el('mm-canvas'), { clientWidth: 800, clientHeight: 600 });
+        globalThis.localStorage.setItem('scenexp-meme', JSON.stringify(kept));
+        jest.resetModules();
+        main = await import('../www/meme/js/main.js');
+        await flushAsync(30);
+        ({ state } = main.__test__);
+        expect(state.restored).toBe(true);
+        expect(state.template.id).toBe('thenNow');
+        expect(state.captions).toEqual(['', 'now']);
+        expect(state.expressions).toEqual(['rage', null]);
+        expect(state.stage.panels[0].figures[0].spec.expression).toBe('rage');
+        expect(dom.el('mm-captions').children[1].children[1].value).toBe('now');
+        expect(dom.el('mm-faces').children[0].children[1].children.find((c) => c.dataset.value === 'rage').getAttribute('aria-checked')).toBe('true');
+        expect(dom.el('mm-status').textContent).toBe(main.WORDS.welcomeBack);
+        expect(main.currentMeme()).toEqual(kept);
+        // Start over: the first meme, nothing kept.
+        fire(dom.el('mm-start-over'), 'click');
+        expect(state.template.id).toBe('surprised');
+        expect(state.captions).toEqual(['']);
+        expect(globalThis.localStorage.getItem('scenexp-meme')).toBeNull();
+        expect(dom.el('mm-status').textContent).toBe(main.WORDS.cleared);
+        expect(state.tabs.selected).toBe('mm-tab-meme');
+        // Rubbish in the store is the first meme, not a return.
+        dom.uninstall();
+        installThree();
+        dom = installDom();
+        globalThis.localStorage.setItem('scenexp-meme', '{"template":"castle","captions":[]}');
+        jest.resetModules();
+        main = await import('../www/meme/js/main.js');
+        await flushAsync(30);
+        expect(main.__test__.state.restored).toBe(false);
+        expect(main.__test__.state.template.id).toBe('surprised');
+    });
+
+    test('a browser that keeps nothing is told so, once, and the page works on', async () => {
+        installThree();
+        dom = installDom();
+        globalThis.localStorage.setItem = () => { throw new Error('denied'); };
+        jest.resetModules();
+        const main = await import('../www/meme/js/main.js');
+        await flushAsync(30);
+        expect(dom.el('mm-status').textContent).toBe(main.WORDS.notKept);
+        main.pickTemplate('panic');
+        expect(main.__test__.state.template.id).toBe('panic');
     });
 
     test('every word the page says keeps the house style', async () => {

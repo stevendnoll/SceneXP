@@ -5254,19 +5254,20 @@ html [lang="en"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-expressions-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
     link [href="js/stage.min.js" rel="modulepreload"]
     link [href="js/templates.min.js" rel="modulepreload"]
     link [href="js/editor.min.js" rel="modulepreload"]
+    link [href="js/state.min.js" rel="modulepreload"]
     link [href="js/compose.min.js" rel="modulepreload"]
     link [href="js/exporter.min.js" rel="modulepreload"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
     link [href="js/panels.min.js" rel="modulepreload"]
     link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
-    link [href="../shared/js/avatar-expressions-1.0.0.min.js" rel="modulepreload"]
     link [href="js/poses.min.js" rel="modulepreload"]
     link [href="js/scenes/index.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
@@ -5322,14 +5323,28 @@ html [lang="en"]
         p#mm-lede.mm-lede
           "Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a short video."
         div#mm-editor.mm-editor
-          h3.mm-subhead
-            "The meme"
-          div#mm-picker.mm-picker [aria-label="Choose a meme" role="group"]
-          p#mm-hint.mm-note.mm-hint [hidden]
-            "Tap a panel to step into it, and tap again to step back. Drag to tilt the view."
-          h3.mm-subhead
-            "Your captions"
-          div#mm-captions.mm-captions
+          div#mm-tabs.mm-tabs [aria-label="Choose what to change" role="tablist"]
+            button#mm-tab-meme.mm-tab [aria-controls="mm-panel-meme" aria-selected="true" role="tab" type="button"]
+              "Meme"
+            button#mm-tab-captions.mm-tab [aria-controls="mm-panel-captions" aria-selected="false" role="tab" tabindex="-1" type="button"]
+              "Captions"
+            button#mm-tab-people.mm-tab [aria-controls="mm-panel-people" aria-selected="false" role="tab" tabindex="-1" type="button"]
+              "People"
+          div#mm-panel-meme.mm-panel [aria-labelledby="mm-tab-meme" role="tabpanel"]
+            div#mm-picker.mm-picker [aria-label="Choose a meme" role="group"]
+            p#mm-hint.mm-note.mm-hint [hidden]
+              "Tap a panel to step into it, and tap again to step back. Drag to tilt the view."
+            div#mm-view.mm-view [aria-label="Look at" hidden role="group"]
+            h3.mm-subhead
+              "The faces"
+            div#mm-faces.mm-faces
+          div#mm-panel-captions.mm-panel [aria-labelledby="mm-tab-captions" hidden role="tabpanel"]
+            div#mm-captions.mm-captions
+          div#mm-panel-people.mm-panel [aria-labelledby="mm-tab-people" hidden role="tabpanel"]
+            ul#mm-people.mm-people
+            p.mm-note
+              a#mm-make-avatar.mm-link [href="/avatar/"]
+                "Make your avatar"
         h3.mm-subhead
           "Your picture"
         canvas#mm-preview.mm-preview [aria-label="A preview of your meme picture, with your captions and the SceneXP.com mark in the corner" height="540" role="img" width="540"]
@@ -5348,6 +5363,8 @@ html [lang="en"]
         div.mm-row
           button#mm-picture-save.mm-primary [hidden type="button"]
             "Save picture"
+          button#mm-start-over.mm-secondary [type="button"]
+            "Start over"
         p#mm-status.mm-status [aria-live="polite" role="status"]
         p.mm-note.mm-privacy
           "Made on this device. Nothing you type or make is sent to us."
