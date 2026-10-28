@@ -5269,6 +5269,7 @@ html [lang="en"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
     link [href="js/panels.min.js" rel="modulepreload"]
     link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/recorder-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
     link [href="js/poses.min.js" rel="modulepreload"]
     link [href="js/scenes/index.min.js" rel="modulepreload"]
@@ -5388,6 +5389,17 @@ html [lang="en"]
             "Start over"
         p.mm-note
           "The link carries the meme and your avatar. Whoever opens it can put their own avatar in your place."
+        div#mm-clip.mm-clip [hidden]
+          h3.mm-subhead
+            "Your video"
+          p.mm-note
+            "A short vertical video of your meme, panel by panel, with no sound. It takes as long to make as it lasts."
+          div#mm-clip-stage.mm-clip-stage
+          div.mm-row
+            button#mm-clip-make.mm-primary [type="button"]
+              "Make the video"
+            button#mm-clip-save.mm-primary [hidden type="button"]
+              "Save video"
         p#mm-status.mm-status [aria-live="polite" role="status"]
         p.mm-note.mm-privacy
           "Made on this device. Nothing you type or make is sent to us."

@@ -24,7 +24,7 @@
  * so it is measured on the real library.
  */
 
-import { buildPanel, layoutPanels, cellCamera, arrangementSize, labelAnchor, projectPoint } from './panels.min.js';
+import { buildPanel, layoutPanels, cellCamera, arrangementSize, labelAnchor, projectPoint, boxRect } from './panels.min.js';
 
 /** The room: the background, the floor and the lights, in one scene. */
 export function buildStudio(config, { mobile = false } = {}) {
@@ -192,7 +192,7 @@ export function createStage(config, {
     }
 
     function allPose() {
-        return framingFor(arrangementSize(template, config.box), aspect(), C.fov, V, config.box.depth);
+        return gridPose(aspect());
     }
 
     function cameraFor(index) {
@@ -267,22 +267,24 @@ export function createStage(config, {
         const h = canvas.clientHeight || 0;
         if (!template) return [];
         if (viewing !== null && !glide) return panels.map((_, i) => (i === viewing ? { x: 0, y: 0, w, h } : null));
-        const B = config.box;
-        camera.updateMatrixWorld(true);
-        return panels.map((panel) => {
-            panel.box.updateMatrixWorld(true);
-            let min = [Infinity, Infinity];
-            let max = [-Infinity, -Infinity];
-            for (const [x, y] of [[-B.width / 2, 0], [B.width / 2, 0], [-B.width / 2, B.height], [B.width / 2, B.height]]) {
-                const p = panel.box.localToWorld(new THREE.Vector3(x, y, B.depth / 2)).project(camera);
-                if (p.z > 1) return null;
-                const sx = ((p.x + 1) / 2) * w;
-                const sy = ((1 - p.y) / 2) * h;
-                min = [Math.min(min[0], sx), Math.min(min[1], sy)];
-                max = [Math.max(max[0], sx), Math.max(max[1], sy)];
-            }
-            return { x: min[0], y: min[1], w: max[0] - min[0], h: max[1] - min[1] };
-        });
+        return projectAll(camera, w, h).rects;
+    }
+
+    /** Every panel's opening and every figure's label point on a `w` by
+     *  `h` picture through any `cam` (the clip's, the live one): `{ rects,
+     *  anchors }` in cell order. */
+    function projectAll(cam, w, h) {
+        cam.updateMatrixWorld(true);
+        return {
+            rects: panels.map((panel) => boxRect(panel.box, config.box, cam, w, h)),
+            anchors: panels.map((panel) => panel.figures.map((f) => projectPoint(labelAnchor(f, config.label.below), cam, w, h)))
+        };
+    }
+
+    /** The camera on the whole arrangement for a picture of `aspect`. */
+    function gridPose(aspect) {
+        if (!template) return { eye: C.eye.slice(), aim: C.aim.slice(), fov: C.fov };
+        return framingFor(arrangementSize(template, config.box), aspect, C.fov, V, config.box.depth);
     }
 
     /** Where each panel's figures' labels pin on the canvas, CSS pixels:
@@ -417,6 +419,8 @@ export function createStage(config, {
         setExpression,
         recast,
         cameraFor,
+        gridPose,
+        projectAll,
         view,
         screenRects,
         screenAnchors,

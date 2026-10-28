@@ -380,6 +380,8 @@ export function showTemplate(template, meme = null) {
 export function pickTemplate(id) {
     const template = templateOf(id);
     if (state.template && template.id === state.template.id) return template;
+    // A clip half made is of the old meme: let it go.
+    if (state.exporter) state.exporter.stopClip();
     showTemplate(template);
     keep();
     if (state.ready) track('template-picked', { kind: template.id });
@@ -503,8 +505,18 @@ function onKey(e) {
     state.stage.view(null);
 }
 
+/** Make the video of the meme as it stands. A press while one is made is
+ *  nothing (the button reads busy). */
+export function makeClip() {
+    if (!state.exporter || state.exporter.state.recording) return Promise.resolve(null);
+    if (state.ready) track('clip-started', { kind: state.template.id });
+    return state.exporter.makeClip(state.template, state.captions);
+}
+
 function wire() {
     $('mm-picture-save').addEventListener('click', savePicture);
+    $('mm-clip-make').addEventListener('click', makeClip);
+    $('mm-clip-save').addEventListener('click', () => { if (state.exporter) state.exporter.saveClip(); });
     $('mm-start-over').addEventListener('click', startOver);
     $('mm-make-mine').addEventListener('click', makeItMine);
     $('mm-keep-theirs').addEventListener('click', keepTheirs);
@@ -573,6 +585,9 @@ export async function init() {
             });
             state.exporter = createExporter(CONFIG, {
                 stage: state.stage,
+                mobile: isMobile(),
+                reducedMotion,
+                say,
                 onExport: (kind, outcome) => track(`export-${kind}`, { kind: state.template.id, outcome })
             });
         } catch (e) {
@@ -591,6 +606,8 @@ export async function init() {
     const saveBtn = $('mm-picture-save');
     saveBtn.textContent = state.exporter ? state.exporter.buttonLabel() : EXPORT_WORDS.saveButton;
     saveBtn.hidden = !state.exporter;
+    // The video, where this browser can record one.
+    $('mm-clip').hidden = !(state.exporter && state.exporter.clipMime());
     $('mm-hint').hidden = !state.stage;
     $('mm-view').hidden = !state.stage;
     wire();

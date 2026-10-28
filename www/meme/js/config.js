@@ -114,7 +114,7 @@ export const MEME_PAGE = deepFreeze({
         ],
         preview: 540,
         clip: {
-            w: 1080, h: 1920, fps: 30, hold: 1.6, glide: 0.5, ending: 1.5, longest: 15,
+            w: 1080, h: 1920, fps: 30, hold: 1.6, glide: 0.5, ending: 1.5, longest: 15, fade: 0.4,
             bitrate: 8000000, mobileBitrate: 5000000
         }
     },

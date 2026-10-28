@@ -128,6 +128,7 @@
     <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
     <link rel="modulepreload" href="js/panels.min.js">
     <link rel="modulepreload" href="../shared/js/sharefile-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/recorder-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-figure-1.0.0.min.js">
     <link rel="modulepreload" href="js/poses.min.js">
     <link rel="modulepreload" href="js/scenes/index.min.js">
@@ -281,6 +282,20 @@
                 <button id="mm-start-over" class="mm-secondary" type="button">Start over</button>
             </div>
             <p class="mm-note">The link carries the meme and your avatar. Whoever opens it can put their own avatar in your place.</p>
+
+            <!-- THE VIDEO (js/exporter.js, M6): a 9:16 clip, the camera
+                 gliding from panel to panel as the captions appear, ending on
+                 the whole meme. Recorded as it plays, in the canvas placed
+                 here, so it takes as long to make as it lasts. No sound. -->
+            <div id="mm-clip" class="mm-clip" hidden>
+                <h3 class="mm-subhead">Your video</h3>
+                <p class="mm-note">A short vertical video of your meme, panel by panel, with no sound. It takes as long to make as it lasts.</p>
+                <div id="mm-clip-stage" class="mm-clip-stage"></div>
+                <div class="mm-row">
+                    <button id="mm-clip-make" class="mm-primary" type="button">Make the video</button>
+                    <button id="mm-clip-save" class="mm-primary" type="button" hidden>Save video</button>
+                </div>
+            </div>
 
             <p id="mm-status" class="mm-status" role="status" aria-live="polite"></p>
 

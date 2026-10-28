@@ -158,6 +158,23 @@ export function projectPoint(point, camera, w, h) {
     return { x: ((p.x + 1) / 2) * w, y: ((1 - p.y) / 2) * h };
 }
 
+/** Where a box's opening lands on a `w` by `h` picture through `camera`:
+ *  the rect round its four front corners, or null when one is behind the
+ *  camera. `B` is config.box. */
+export function boxRect(box, B, camera, w, h) {
+    box.updateMatrixWorld(true);
+    let min = [Infinity, Infinity];
+    let max = [-Infinity, -Infinity];
+    for (const [x, y] of [[-B.width / 2, 0], [B.width / 2, 0], [-B.width / 2, B.height], [B.width / 2, B.height]]) {
+        const world = box.localToWorld(new THREE.Vector3(x, y, B.depth / 2));
+        const p = projectPoint([world.x, world.y, world.z], camera, w, h);
+        if (!p) return null;
+        min = [Math.min(min[0], p.x), Math.min(min[1], p.y)];
+        max = [Math.max(max[0], p.x), Math.max(max[1], p.y)];
+    }
+    return { x: min[0], y: min[1], w: max[0] - min[0], h: max[1] - min[1] };
+}
+
 /**
  * One panel: the box with its figures inside and its props (`cell.scene`,
  * built after the figures so a prop can be fitted to one), `avatarFor(roleId)`
