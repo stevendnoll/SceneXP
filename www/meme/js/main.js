@@ -768,7 +768,7 @@ function wire() {
     installShare($('mm-link'), () => ({
         title: WORDS.linkTitle,
         text: WORDS.linkText,
-        url: remixUrl(currentMeme(), leadAvatar(), window.location.href, { max: CONFIG.remix.maxLength })
+        url: remixUrl(currentMeme(), leadAvatar(), window.location.href, { max: CONFIG.remix.maxLength, templates: TEMPLATES })
     }), {
         status: $('mm-status'),
         message: WORDS.linkCopied,

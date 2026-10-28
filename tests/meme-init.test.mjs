@@ -667,7 +667,7 @@ describe('the page', () => {
         expect(main.__test__.state.template.id).toBe('panic');
     });
 
-    const LINK = (captions = ['from+a+friend'], avatar = 'a=1.deep.black') => `#m=1/panic/${captions.join('|')}/-,rage,-,-,-,-&${avatar}`;
+    const LINK = (captions = ['from+a+friend'], avatar = 'a=1.deep.black') => `#m=2/panic/${captions.join('~')}/-,rage,-,-,-,-&${avatar}`;
 
     test('a meme in the address is shown as made, the maker in the lead, asked about, and the fragment dropped', async () => {
         const replaced = [];
@@ -750,8 +750,13 @@ describe('the page', () => {
     test('Share link hands the meme and the lead\'s avatar to the shared ladder, and says when it was copied', async () => {
         const main = await boot();
         const { state } = main.__test__;
+        // Someone dressed on The Head Turn is kept for the visit, but Then
+        // vs Now has no role for them, so the link carries nobody else.
+        main.pickTemplate('headTurn');
+        main.dress('other', { ...main.avatarForRole('other'), skin: 'deep' });
         main.pickTemplate('thenNow');
         main.__test__.onCaption(0, 'then');
+        expect(main.currentMeme().cast.other.skin).toBe('deep');
         const copied = [];
         globalThis.navigator.clipboard = { writeText: async (text) => { copied.push(text); } };
         window.setTimeout = (fn) => { fn(); return 0; };
@@ -759,7 +764,8 @@ describe('the page', () => {
         await flushAsync(20);
         expect(copied).toHaveLength(1);
         expect(copied[0]).toContain(main.WORDS.linkText);
-        expect(copied[0]).toMatch(/#m=1\/thenNow\/then\|\/-,-&a=1\./);
+        expect(copied[0]).toMatch(/#m=2\/thenNow\/then~\/-,-&a=1\./);
+        expect(copied[0]).not.toMatch(/&(other|friend)=/);
         // The page's own directory (the stub's is /test/), never a path
         // written down.
         expect(copied[0]).toContain(`${dom.windowStub.location.href}#m=`);
@@ -997,7 +1003,7 @@ describe('the page', () => {
         dom = installDom();
         Object.assign(dom.el('mm-canvas'), { clientWidth: 800, clientHeight: 600 });
         globalThis.localStorage.setItem('scenexp-avatar', JSON.stringify({ v: 1, skin: 'fair' }));
-        dom.windowStub.location.hash = '#m=1/headTurn/me|them|you/-&a=1.deep.black&friend=1.medium.black&other=1.light.black';
+        dom.windowStub.location.hash = '#m=2/headTurn/me~them~you/-&a=1.deep.black&friend=1.medium.black&other=1.light.black';
         jest.resetModules();
         const main = await import('../www/meme/js/main.js');
         await flushAsync(30);
@@ -1021,7 +1027,7 @@ describe('the page', () => {
         dom = installDom();
         Object.assign(dom.el('mm-canvas'), { clientWidth: 800, clientHeight: 600 });
         globalThis.localStorage.setItem('scenexp-avatar', JSON.stringify({ v: 1, skin: 'fair' }));
-        dom.windowStub.location.hash = '#m=1/handshake/me|you|deal/-&a=1.deep.black';
+        dom.windowStub.location.hash = '#m=2/handshake/me~you~deal/-&a=1.deep.black';
         jest.resetModules();
         const main = await import('../www/meme/js/main.js');
         await flushAsync(30);

@@ -8,11 +8,12 @@
  * or its logs (the avatar page's precedent, and the telemetry part reads
  * the path alone). The link reads:
  *
- *   #m=1/panic/first+line|second|third/-,rage,-,-,-,-&a=1.fair.darkBrown....
+ *   #m=2/panic/first+line~second~third/-,rage,-,-,-,-&a=1.fair.darkBrown....
  *
  * `m=` is the meme: the link's version, the template's id, the captions by
- * slot joined with `|` (each percent-encoded, a space written `+` so a line
- * of words stays readable in a chat), the faces by cell joined with `,`
+ * slot joined with `~` (each percent-encoded, a `~` of its own as well, and
+ * a space written `+` so a line of words stays readable in a chat), the
+ * faces by cell joined with `,`
  * (`-` for the template's own), and, only when one was picked, the
  * background color as six hex digits (M8: `.../-,-,-,-,-,-,-,-/1b2a55`; a
  * link without it reads as the template's own, so older links still do).
@@ -23,6 +24,14 @@
  * (`&friend=1.deep.black...&other=1.fair....`), so the meme opens with the
  * very people it was made with; a crowd role with nobody chosen is left
  * out, and the friend who opens it gets someone from their own crowd.
+ *
+ * EVERY CHARACTER IS ONE A URL CARRIES AS IT IS (Steve's QA, 2026-10-28).
+ * Version 1 joined the captions with `|`, which is not one, so a browser
+ * or an app on the way may write it `%7C`, and three captions arrived as
+ * one: "ME|WORK|MEMES". A `~` is unreserved: nothing has cause to touch
+ * it, and since a caption's own `~` is escaped, a bare one is always the
+ * join. A version 1 link is still read, its joins as `|` or `%7C` (one
+ * from before the change has no other way to say it).
  *
  * NOTHING IN A LINK IS TRUSTED. The decoder gives up on anything over
  * `max`, an unknown version, no template or an unknown one, and hands what
@@ -38,11 +47,15 @@
 
 import { encodeLink, decodeLink } from '../../shared/js/avatar-1.0.0.min.js';
 
-export const REMIX_VERSION = 1;
+export const REMIX_VERSION = 2;
 
-/** A caption as it travels: percent-encoded, a space as `+`. */
+/** What joins the captions, by the link's version. */
+const JOIN = Object.freeze({ 1: /\||%7C/i, 2: '~' });
+
+/** A caption as it travels: percent-encoded, a `~` too (the join), a space
+ *  as `+`. */
 export function encodeCaption(text) {
-    return encodeURIComponent(String(text == null ? '' : text)).replace(/%20/g, '+');
+    return encodeURIComponent(String(text == null ? '' : text)).replace(/~/g, '%7E').replace(/%20/g, '+');
 }
 
 /** A caption read back, or null for one that cannot be read. */
@@ -56,7 +69,7 @@ export function decodeCaption(text) {
 
 /** The `m=` part alone for a meme (the normalized object from state.js). */
 export function encodeMeme(meme) {
-    const captions = meme.captions.map(encodeCaption).join('|');
+    const captions = meme.captions.map(encodeCaption).join(JOIN[REMIX_VERSION]);
     const faces = meme.expressions.map((e) => e || '-').join(',');
     const tint = meme.tint ? `/${meme.tint.slice(1)}` : '';
     return `m=${REMIX_VERSION}/${meme.template}/${captions}/${faces}${tint}`;
@@ -64,22 +77,28 @@ export function encodeMeme(meme) {
 
 /** The people part of a link: each chosen person's avatar link under the
  *  role's id (`friend=1.deep....`), the friend first, then the cast by
- *  role id. Empty for nobody. */
-export function encodePeople(meme) {
+ *  role id. Empty for nobody. With the catalog (`templates`), only the
+ *  people the meme's own template has a crowd role for go: a meme keeps
+ *  everyone dressed this visit, and one with no role for them would carry
+ *  them for nothing, at the captions' expense near the ceiling. */
+export function encodePeople(meme, templates = null) {
+    const template = templates ? templates.find((t) => t.id === meme.template) : null;
+    const wanted = (id) => !templates || Boolean(template && template.roles.some((r) => r.id === id && r.cast === 'random'));
     const people = [];
-    if (meme.friend) people.push(['friend', meme.friend]);
-    for (const id of Object.keys(meme.cast || {}).sort()) people.push([id, meme.cast[id]]);
+    if (meme.friend && wanted('friend')) people.push(['friend', meme.friend]);
+    for (const id of Object.keys(meme.cast || {}).sort()) if (wanted(id)) people.push([id, meme.cast[id]]);
     return people.map(([id, a]) => `&${id}=${encodeLink(a).slice(2)}`).join('');
 }
 
 /**
- * The fragment (without the `#`) for `meme` (its people with it) and the
- * maker's `avatar` (null for none), trimmed to `max` characters by
- * shortening the longest caption a character at a time.
+ * The fragment (without the `#`) for `meme` (its people with it, only those
+ * its template has a role for when `templates` is given) and the maker's
+ * `avatar` (null for none), trimmed to `max` characters by shortening the
+ * longest caption a character at a time.
  */
-export function encodeRemix(meme, avatar = null, { max = 2000 } = {}) {
+export function encodeRemix(meme, avatar = null, { max = 2000, templates = null } = {}) {
     const captions = meme.captions.slice();
-    const people = encodePeople(meme);
+    const people = encodePeople(meme, templates);
     const build = () => {
         const part = encodeMeme({ ...meme, captions });
         return `${avatar ? `${part}&${encodeLink(avatar)}` : part}${people}`;
@@ -108,9 +127,9 @@ export function decodeRemix(hash, rules, { max = 2000, normalize } = {}) {
     const part = hash.replace(/^#/, '').split('&').find((p) => p.startsWith('m='));
     if (!part) return null;
     const [version, template, captionText = '', faceText = '', tintText = ''] = part.slice(2).split('/');
-    if (version !== String(REMIX_VERSION)) return null;
+    if (!Object.prototype.hasOwnProperty.call(JOIN, version)) return null;
     if (!rules.templates.some((t) => t.id === template)) return null;
-    const decoded = captionText === '' ? [] : captionText.split('|').map(decodeCaption);
+    const decoded = captionText === '' ? [] : captionText.split(JOIN[version]).map(decodeCaption);
     const captions = decoded.some((c) => c === null) ? [] : decoded;
     const expressions = faceText === '' ? [] : faceText.split(',').map((f) => (f === '-' ? null : f));
     const tint = /^[0-9a-fA-F]{6}$/.test(tintText) ? `#${tintText}` : null;
