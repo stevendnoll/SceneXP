@@ -24,7 +24,9 @@ export const FINE = Object.freeze({
     table: Object.freeze({ at: Object.freeze([0.45, 0, 0.05]), w: 0.7, h: 0.74, d: 0.5, top: 0x8a6a4e, leg: 0x5a4332 }),
     mug: Object.freeze({ r: 0.045, h: 0.09, color: 0xf3efe6, from: -0.22 }),
     flame: Object.freeze({ colors: Object.freeze([0xffb347, 0xff7a1a, 0xffd36b]), floor: 0.05, spread: 0.9 }),
-    smoke: Object.freeze({ colors: Object.freeze([0x3b3431, 0x4a423e, 0x2f2a28]), from: 1.9, to: 2.25, spread: 1.05, opacity: 0.8 })
+    // Mid grays, a little see-through (Steve, 2026-10-28: the first cut's
+    // near-black read too dark).
+    smoke: Object.freeze({ colors: Object.freeze([0x6e6764, 0x7d7672, 0x625c59]), from: 1.9, to: 2.25, spread: 1.05, opacity: 0.65 })
 });
 
 /** A seeded roll, so the flames stand where they stood last build. */

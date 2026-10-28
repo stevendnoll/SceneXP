@@ -124,7 +124,7 @@ describe('the painters', () => {
         const [u, v] = D.PAINTS.wash.at;
         for (const [eu, ev] of [[0.03, 0.03], [0.97, 0.03], [0.03, 0.97], [0.97, 0.97]]) expect(patch(wash, u, v)).toBeGreaterThan(patch(wash, eu, ev, 0.02) + 20);
         const soot = D.paintPixels('soot', '#F0A070', WALL(), 64);
-        expect(patch(soot, 0.5, 0.95, 0.04)).toBeLessThan(patch(soot, 0.5, 0.2) - 80);
+        expect(patch(soot, 0.5, 0.95, 0.04)).toBeLessThan(patch(soot, 0.5, 0.2) - 50);
         const base = D.rgb('#F0A070');
         const low = at(soot, 0.5, 0.2);
         low.forEach((c, i) => expect(Math.abs(c - base[i])).toBeLessThan(3));

@@ -64,7 +64,8 @@ export const PAINTS = Object.freeze({
         light: Object.freeze({ at: Object.freeze([0.42, 0.55]), radius: 0.42, color: '#E2D5BA', strength: 0.9 })
     }),
     wash: Object.freeze({ size: 256, at: Object.freeze([0.5, 0.62]), light: 0.3, dark: 0.2 }),
-    soot: Object.freeze({ size: 256, color: '#2A2320', line: 0.66, depth: 0.88, scale: 4, octaves: 4 })
+    // A warm gray-brown, not black (Steve, 2026-10-28: too dark).
+    soot: Object.freeze({ size: 256, color: '#4A403B', line: 0.66, depth: 0.7, scale: 4, octaves: 4 })
 });
 
 export const PAINT_IDS = Object.freeze(Object.keys(PAINTS));
