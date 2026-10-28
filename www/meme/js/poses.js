@@ -23,8 +23,12 @@
  *             figures scored together since their stances are not a
  *             mirror pair, ON THE BROAD, BUFF BUILD the template dresses
  *             them in, whose wider shoulders move the hands: the forearm
- *             rising to the clasp, both hands at (-0.13, 1.28, 0.22)
- *             within a millimeter)
+ *             rising to the clasp, the hands vertical with the thumbs up,
+ *             the visitor's a palm's thickness nearer the camera with its
+ *             back to it and the friend's behind it with its back away,
+ *             at (-0.14, 1.28, 0.25) and (-0.14, 1.28, 0.19). The twist
+ *             here is the visitor's; the friend's hand needs 0.91, which
+ *             the template gives as the figure's own `twist`)
  *   point     the arm out to the figure's own side and forward at chest
  *             height, the forearm, and so the index (hands.js), pointing
  *             that way: solved for the left arm, the hand at
@@ -59,14 +63,18 @@ export const ARM_POSES = Object.freeze({
     dismiss: Object.freeze({ z: 0.4, x: -1.1, fore: -1.1, twist: Math.PI }),
     approve: Object.freeze({ z: 0.3, x: -1.9, fore: -0.4, twist: 0 }),
     present: Object.freeze({ z: 1.25, x: -0.5, fore: -0.6, twist: 0 }),
-    shake: Object.freeze({ z: -0.16, x: -0.85, fore: -1.26, twist: 0 }),
-    point: Object.freeze({ z: 0.87, x: -1.09, fore: -0.51, twist: 0 }),
-    aim: Object.freeze({ z: -0.13, x: -1.76, fore: 0.07, twist: 0 }),
+    shake: Object.freeze({ z: -0.06, x: -0.84, fore: -1.28, twist: 1.22 }),
+    point: Object.freeze({ z: 0.87, x: -1.09, fore: -0.51, twist: 1.48 }),
+    aim: Object.freeze({ z: -0.13, x: -1.76, fore: 0.07, twist: 1.14 }),
     lookBack: null
 });
 
-/** The poses that swap the leading hand for the pointing one (hands.js). */
+/** The poses that swap the leading hand for the pointing one, and for
+ *  the fist (hands.js). The twists above were solved so the thumb is up
+ *  on each (2026-10-28): the point's index then shows in profile, and a
+ *  thing held in the fist stands upright, its barrel past the knuckles. */
 export const POINTING = Object.freeze(['point']);
+export const FISTED = Object.freeze(['aim']);
 
 /** Where The Handshake stands its two figures: `gap` apart across, each
  *  `aside` toward its own left (so the right hands meet), turned `turn`
@@ -115,13 +123,16 @@ export const POSES = Object.freeze(Object.keys(ARM_POSES));
 export const SIDES = Object.freeze(['right', 'left']);
 
 /** The `setPose` pose for `id`: the leading arm on `side` ('right' or
- *  'left', the figure's own), the other at rest. Rest for `stand` or an
- *  unknown id. */
-export function armsFor(id, side = 'right') {
+ *  'left', the figure's own), the other at rest, the hand's `twist` about
+ *  the forearm the pose's own unless given (radians; a template gives one
+ *  where two figures share a pose but not a stance, The Handshake). Rest
+ *  for `stand` or an unknown id. */
+export function armsFor(id, side = 'right', twist = undefined) {
     const lead = ARM_POSES[id];
     const rest = { ...REST };
     if (!lead) return { right: { ...rest }, left: { ...rest } };
-    return side === 'left' ? { right: rest, left: { ...lead } } : { right: { ...lead }, left: rest };
+    const arm = Number.isFinite(twist) ? { ...lead, twist } : { ...lead };
+    return side === 'left' ? { right: rest, left: arm } : { right: arm, left: rest };
 }
 
 /**

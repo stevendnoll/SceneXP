@@ -169,6 +169,38 @@ describe('a caption', () => {
         expect(C.drawLabel(recordingContext(), '  ', { x: 1, y: 1 }, rect, CONFIG.label, CONFIG.caption)).toBeNull();
     });
 
+    test('a label that would overlap the one before it moves down past it, or up at the panel\'s bottom', () => {
+        const template = { grid: [[{ span: 1 }]], cells: [{ captions: [{ label: 0 }, { label: 1 }, { label: 2 }] }] };
+        const rect = { x: 0, y: 0, w: 400, h: 400 };
+        // Three people abreast, their chests at one height, with labels
+        // wider than the space between them: the second drops below the
+        // first, the third below both.
+        const anchors = [[{ x: 100, y: 200 }, { x: 130, y: 200 }, { x: 160, y: 200 }]];
+        const ctx = recordingContext(0.6);
+        C.drawCaptions(ctx, template, ['you', 'friend', 'someone'], [rect], CONFIG.caption, { anchors, label: CONFIG.label });
+        const texts = ctx.calls.filter((c) => c[0] === 'fillText');
+        expect(texts).toHaveLength(3);
+        const ys = texts.map((c) => c[3]);
+        expect(ys[0]).toBe(200);
+        expect(ys[1]).toBeGreaterThan(ys[0] + 10);
+        expect(ys[2]).toBeGreaterThan(ys[1] + 10);
+        // Apart, nothing moves.
+        const wide = recordingContext(0.6);
+        C.drawCaptions(wide, template, ['me', 'them', 'who'], [rect], CONFIG.caption, { anchors: [[{ x: 60, y: 200 }, { x: 200, y: 200 }, { x: 340, y: 200 }]], label: CONFIG.label });
+        expect(wide.calls.filter((c) => c[0] === 'fillText').map((c) => c[3])).toEqual([200, 200, 200]);
+        // At the bottom, the next goes up instead.
+        const low = recordingContext(0.6);
+        C.drawCaptions(low, template, ['you', 'friend', ''], [rect], CONFIG.caption, { anchors: [[{ x: 100, y: 395 }, { x: 130, y: 395 }, null]], label: CONFIG.label });
+        const lowYs = low.calls.filter((c) => c[0] === 'fillText').map((c) => c[3]);
+        expect(lowYs[1]).toBeLessThan(lowYs[0] - 10);
+        // The box comes back with the drawing.
+        const one = recordingContext(0.6);
+        const drawn = C.drawLabel(one, 'me', { x: 100, y: 200 }, rect, CONFIG.label, CONFIG.caption);
+        expect(drawn.box.w).toBeGreaterThan(0);
+        expect(drawn.box.y).toBeLessThan(200);
+        expect(drawn.box.y + drawn.box.h).toBeGreaterThan(200);
+    });
+
     test('labels go to their anchors through drawCaptions and composeMeme, moved into the panel\'s rect', () => {
         const template = { grid: [[{ span: 1 }]], cells: [{ captions: [{ label: 0 }, { label: 1 }, 'top'] }] };
         const ctx = recordingContext(0.5);
@@ -199,8 +231,15 @@ describe('a caption', () => {
         // presenting hand is not), and sized by the board's height.
         expect(texts[0][2]).toBeCloseTo(board.x + board.w / 2, 6);
         expect(texts[0][3]).toBeCloseTo(board.y + board.h * CONFIG.caption.inset, 6);
-        expect(texts[0][4].px).toBeLessThanOrEqual(Math.round(board.h * CONFIG.caption.size));
-        expect(texts[0][4].px).toBeLessThan(texts[1][4].px);
+        // Bigger than a panel of the board's height would get (Steve,
+        // 2026-10-28: the words were too small), and up to three lines.
+        expect(texts[0][4].px).toBe(Math.round(board.h * CONFIG.caption.size * CONFIG.caption.board.scale));
+        expect(CONFIG.caption.board.maxLines).toBeGreaterThanOrEqual(3);
+        const long = recordingContext(0.5);
+        C.drawCaptions(long, template, ['a caption long enough to need three lines on a small board', ''], [{ x: 0, y: 0, w: 400, h: 400 }], CONFIG.caption, { props: [{ board }] });
+        const lines = long.calls.filter((c) => c[0] === 'fillText');
+        expect(lines.length).toBeGreaterThanOrEqual(2);
+        expect(lines.length).toBeLessThanOrEqual(CONFIG.caption.board.maxLines);
         // No surface (a camera that cannot see the board): the caption waits.
         const none = recordingContext(0.5);
         C.drawCaptions(none, template, ['step one', 'profit'], [{ x: 0, y: 0, w: 400, h: 400 }], CONFIG.caption, { props: [{ board: null }] });

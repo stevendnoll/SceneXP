@@ -14,10 +14,13 @@ export const SPACE = Object.freeze({
     earth: Object.freeze({ r: 0.3, at: Object.freeze([-0.85, 1.72, -0.36]), sea: 0x2f6fc4, land: 0x4f9a5a, cloud: 0xffffff }),
     helmet: Object.freeze({ r: 0.175, color: 0xbfe3ff, opacity: 0.22 }),
     /** The blaster a figure in the `aim` pose holds: a cartoon ray gun
-     *  (chunky, a ring round the muzzle, no real firearm's shape), in the
-     *  hand's own frame (the fingers along -y, the back of the hand +z):
-     *  the body `body` meters long along the fingers, `barrel` beyond it. */
-    blaster: Object.freeze({ body: Object.freeze([0.055, 0.14, 0.05]), barrel: 0.12, barrelR: 0.016, ringR: 0.03, color: 0xd9dde3, trim: 0xff8a3d })
+     *  (chunky, a ring round the muzzle, a fin on top, no real firearm's
+     *  shape), in the hand's own frame, which the pose's twist stands
+     *  thumb up (poses.js): the barrel along the fingers' -y out past the
+     *  knuckles of the fist (hands.js), the body `body` [across, along,
+     *  deep] meters round the fist, the fin on the thumb side (up),
+     *  `barrel` beyond. Upright, not on its side (Steve, 2026-10-28). */
+    blaster: Object.freeze({ body: Object.freeze([0.06, 0.15, 0.065]), barrel: 0.13, barrelR: 0.017, ringR: 0.032, fin: 0.04, color: 0xd9dde3, trim: 0xff8a3d })
 });
 
 /** A seeded roll, so the stars stand still between builds. */
@@ -85,25 +88,29 @@ export function build(box, config, { figures = [] } = {}) {
     const glass = new THREE.MeshStandardMaterial({ color: S.helmet.color, transparent: true, opacity: S.helmet.opacity, roughness: 0.1, metalness: 0.1, depthWrite: false });
     const shell = new THREE.MeshStandardMaterial({ color: S.blaster.color, roughness: 0.5, metalness: 0.2 });
     const trim = new THREE.MeshStandardMaterial({ color: S.blaster.trim, roughness: 0.6 });
-    /** The blaster in `hand` (the rig's hand mesh), its barrel along the
-     *  fingers, so it points where the forearm points. */
-    const arm = (hand) => {
+    /** The blaster in `hand` (the rig's hand mesh, made a fist), `inner`
+     *  the thumb's side (+1 or -1 along the hand's x, which the pose
+     *  stands up): the barrel along the fingers, out past the knuckles,
+     *  the body round the fist, the fin on the thumb side. */
+    const arm = (hand, inner) => {
         const Bl = S.blaster;
         const gun = new THREE.Group();
         gun.name = 'blaster';
         const [bw, bl, bh] = Bl.body;
+        // The fist's middle is a little under the hand's origin.
+        const grip = -0.03;
         const body = new THREE.Mesh(new THREE.BoxGeometry(bw, bl, bh), shell);
-        body.position.set(0, -bl * 0.35, -bh * 0.5);
+        body.position.set(0, grip - bl * 0.25, 0);
         gun.add(body);
         const barrel = new THREE.Mesh(new THREE.CylinderGeometry(Bl.barrelR, Bl.barrelR * 1.2, Bl.barrel, 12), shell);
-        barrel.position.set(0, -bl * 0.85 - Bl.barrel / 2, -bh * 0.5);
+        barrel.position.set(0, grip - bl * 0.75 - Bl.barrel / 2, 0);
         gun.add(barrel);
         const ring = new THREE.Mesh(new THREE.TorusGeometry(Bl.ringR, Bl.barrelR * 0.45, 8, 16), trim);
         ring.rotation.x = Math.PI / 2;
-        ring.position.set(0, -bl * 0.85 - Bl.barrel * 0.55, -bh * 0.5);
+        ring.position.set(0, grip - bl * 0.75 - Bl.barrel * 0.6, 0);
         gun.add(ring);
-        const fin = new THREE.Mesh(new THREE.BoxGeometry(bw * 0.3, bl * 0.5, bh * 0.9), trim);
-        fin.position.set(0, -bl * 0.3, -bh * 1.3);
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(Bl.fin, bl * 0.55, bh * 0.3), trim);
+        fin.position.set(inner * (bw / 2 + Bl.fin / 2), grip - bl * 0.35, 0);
         gun.add(fin);
         gun.traverse((o) => { if (o.isMesh) o.castShadow = true; });
         hand.add(gun);
@@ -120,9 +127,10 @@ export function build(box, config, { figures = [] } = {}) {
         head.add(helmet);
         if (figure.spec && figure.spec.pose === 'aim') {
             let hand = null;
-            const limb = figure.arms && figure.arms[figure.spec.side || 'right'];
+            const side = figure.spec.side || 'right';
+            const limb = figure.arms && figure.arms[side];
             if (limb) limb.traverse((o) => { if (!hand && o.userData && o.userData.isHand) hand = o; });
-            if (hand) arm(hand);
+            if (hand) arm(hand, side === 'left' ? -1 : 1);
         }
         return helmet;
     };

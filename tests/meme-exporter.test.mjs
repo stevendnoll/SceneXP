@@ -521,9 +521,9 @@ describe('the three-person templates', () => {
             expect(p.y).toBeGreaterThan(200);
             expect(p.y).toBeLessThan(900);
         }
-        // Left to right: the friend, the visitor, the other.
-        expect(anchors[1].x).toBeLessThan(anchors[0].x);
-        expect(anchors[0].x).toBeLessThan(anchors[2].x);
+        // Left to right: Someone (the other), the visitor, the friend.
+        expect(anchors[2].x).toBeLessThan(anchors[0].x);
+        expect(anchors[0].x).toBeLessThan(anchors[1].x);
         expect(exporter.anchorsFor(9, 100, 100)).toBeNull();
         stage.fit();
         const live = stage.screenAnchors();

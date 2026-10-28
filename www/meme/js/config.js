@@ -94,13 +94,18 @@ export const MEME_PAGE = deepFreeze({
          *  panel's edge as a share of its height, the line height, and the
          *  classic white on a black outline in capitals. */
         size: 0.11, smallest: 0.55, stroke: 0.09, inset: 0.04, lineHeight: 1.04,
-        fill: '#ffffff', outline: '#000000', uppercase: true
+        fill: '#ffffff', outline: '#000000', uppercase: true,
+        /** A caption on a prop's surface (the chart's sheet): the face
+         *  `scale` times the size a panel of the sheet's height would get,
+         *  since the sheet is small, up to `maxLines` lines (Steve,
+         *  2026-10-28: bigger words on the board). */
+        board: { scale: 1.9, maxLines: 3 }
     },
 
     /** A label pinned to a figure (compose.js): the face `size` as a share
      *  of the panel's height, at most `maxWidth` of the panel's width, over
      *  the figure's chest, `below` the head's middle in meters. */
-    label: { size: 0.062, maxWidth: 0.46, below: 0.32 },
+    label: { size: 0.062, maxWidth: 0.34, below: 0.32, gap: 0.01 },
 
     /** The composite picture (compose.js): the panels tiled on a dark
      *  ground with a `gutter` between and around them, as a share of the

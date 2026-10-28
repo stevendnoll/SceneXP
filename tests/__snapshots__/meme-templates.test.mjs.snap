@@ -246,17 +246,17 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
   {
     "cells": [
       {
-        "backdrop": "#E7C8C0",
+        "backdrop": "#C9736A",
         "camera": {
           "aim": [
-            0.1,
+            0.05,
             1.2,
             0,
           ],
           "eye": [
-            0.1,
+            0.05,
             1.3,
-            2.4,
+            2.6,
           ],
           "fov": 34,
         },
@@ -264,7 +264,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "figures": [
           {
             "at": [
-              0,
+              -0.1,
               0,
             ],
             "expression": "deadpan",
@@ -297,17 +297,17 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "figures": [],
       },
       {
-        "backdrop": "#C8E0CF",
+        "backdrop": "#6FAE86",
         "camera": {
           "aim": [
-            0.1,
+            0.05,
             1.2,
             0,
           ],
           "eye": [
-            0.1,
+            0.05,
             1.3,
-            2.4,
+            2.6,
           ],
           "fov": 34,
         },
@@ -315,7 +315,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "figures": [
           {
             "at": [
-              0,
+              -0.1,
               0,
             ],
             "expression": "bigGrin",
@@ -930,37 +930,38 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "figures": [
           {
             "at": [
-              0.05,
-              0.1,
+              0.12,
+              -0.05,
             ],
             "expression": "ooh",
             "look": "right",
             "pose": "lookBack",
             "role": "you",
             "stride": 0.3,
-            "turn": 0.25,
+            "turn": 0.3,
           },
           {
             "at": [
-              -0.78,
-              -0.2,
-            ],
-            "expression": "none",
-            "pose": "stand",
-            "role": "friend",
-            "stride": 0.5,
-            "turn": 3.291592653589793,
-          },
-          {
-            "at": [
-              0.8,
-              0,
+              0.78,
+              -0.1,
             ],
             "expression": "rage",
             "look": "right",
             "pose": "stand",
+            "role": "friend",
+            "stride": -0.3,
+            "turn": -0.15,
+          },
+          {
+            "at": [
+              -0.72,
+              0.45,
+            ],
+            "expression": "smug",
+            "pose": "stand",
             "role": "other",
-            "turn": -0.3,
+            "stride": 0.5,
+            "turn": 0.2,
           },
         ],
       },
@@ -1054,6 +1055,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
             "role": "friend",
             "side": "right",
             "turn": -1.0707963267948966,
+            "twist": 0.91,
           },
         ],
       },
@@ -1129,7 +1131,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
               0.1,
             ],
             "expression": "none",
-            "nod": -0.35,
+            "nod": -0.5,
             "overrides": {
               "bottom": "pants",
               "bottomColor": "white",
@@ -1139,7 +1141,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
             },
             "pose": "stand",
             "role": "friend",
-            "turn": 2.5915926535897933,
+            "turn": 3.641592653589793,
           },
         ],
         "scene": "space",

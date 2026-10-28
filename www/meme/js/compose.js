@@ -127,13 +127,21 @@ export function drawCaption(ctx, text, rect, slot, C) {
     return fit;
 }
 
+/** Whether two boxes `{ x, y, w, h }` overlap. */
+function overlaps(a, b) {
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
 /**
  * A label pinned to a figure at `point` (pixels, the figure's chest) in a
  * panel's `rect`: smaller than a caption, centered on the point, kept
- * inside the panel. `L` is config.label, `C` config.caption. Returns what
- * was drawn, or null for an empty label or no point.
+ * inside the panel, and moved down (or up, at the bottom) past any box in
+ * `avoid` it would overlap (the labels already on the panel: three people
+ * abreast put theirs at one height, Steve 2026-10-28). `L` is
+ * config.label, `C` config.caption. Returns what was drawn, with its
+ * `box`, or null for an empty label or no point.
  */
-export function drawLabel(ctx, text, point, rect, L, C) {
+export function drawLabel(ctx, text, point, rect, L, C, avoid = []) {
     const t = String(text || '').trim();
     if (!t || !point) return null;
     const shown = C.uppercase ? t.toUpperCase() : t;
@@ -156,12 +164,25 @@ export function drawLabel(ctx, text, point, rect, L, C) {
     const widest = Math.max(...fit.lines.map((l) => measure(l, fit.fontPx)));
     const x = Math.min(rect.x + rect.w - widest / 2, Math.max(rect.x + widest / 2, point.x));
     const n = fit.lines.length;
-    const top = Math.min(rect.y + rect.h - n * lineH, Math.max(rect.y + lineH / 2, point.y - ((n - 1) / 2) * lineH));
+    const lowest = rect.y + rect.h - n * lineH;
+    const highest = rect.y + lineH / 2;
+    const clamp = (y) => Math.min(lowest, Math.max(highest, y));
+    let top = clamp(point.y - ((n - 1) / 2) * lineH);
+    const gap = rect.h * (L.gap || 0);
+    const boxAt = (y) => ({ x: x - widest / 2, y: y - lineH / 2, w: widest, h: n * lineH });
+    // Down past each box in the way, or up past it when the panel's
+    // bottom is reached.
+    for (let tries = 0; tries < 8; tries++) {
+        const hit = avoid.find((b) => overlaps(boxAt(top), b));
+        if (!hit) break;
+        const below = hit.y + hit.h + gap + lineH / 2;
+        top = below <= lowest ? below : clamp(hit.y - gap - (n - 0.5) * lineH);
+    }
     fit.lines.forEach((line, i) => {
         ctx.strokeText(line, x, top + i * lineH);
         ctx.fillText(line, x, top + i * lineH);
     });
-    return { ...fit, x, y: top };
+    return { ...fit, x, y: top, box: boxAt(top) };
 }
 
 /** The wordmark, bottom right, in the caption face: `W` is config.wordmark,
@@ -228,16 +249,22 @@ export function composeMeme(ctx, { template, captions = [], w, h, config, imageF
  */
 export function drawCaptions(ctx, template, captions, rects, C, { anchors = [], label = null, props = [] } = {}) {
     let k = 0;
+    const onBoard = C.board ? { ...C, size: C.size * C.board.scale, maxLines: C.board.maxLines } : C;
     template.cells.forEach((cell, i) => {
+        // The labels drawn on this panel so far, so the next keeps clear.
+        const placed = [];
         for (const slot of cell.captions) {
             const text = captions[k++];
             if (!rects[i]) continue;
             if (slot && typeof slot === 'object' && slot.prop) {
                 const surface = props[i] ? props[i][slot.prop] : null;
-                if (surface) drawCaption(ctx, text, surface, 'top', C);
+                if (surface) drawCaption(ctx, text, surface, 'top', onBoard);
             } else if (slot && typeof slot === 'object') {
                 const point = anchors[i] ? anchors[i][slot.label] : null;
-                if (label) drawLabel(ctx, text, point, rects[i], label, C);
+                if (label) {
+                    const drawn = drawLabel(ctx, text, point, rects[i], label, C, placed);
+                    if (drawn) placed.push(drawn.box);
+                }
             } else {
                 drawCaption(ctx, text, rects[i], slot, C);
             }

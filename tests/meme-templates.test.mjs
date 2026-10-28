@@ -109,14 +109,20 @@ describe('the catalog', () => {
         }
         expect(figure('plan', 3)).toMatchObject({ side: 'right', look: 'right', expression: 'shocked' });
         expect(T.templateOf('plan').cells.every((c) => c.figures[0].turn < 0)).toBe(true);
-        // The Head Turn (Steve, 2026-10-28): the visitor looks back, taken,
-        // at A Friend on the camera's left, who walks away from the camera
-        // mid-stride; Someone on the right is furious and glaring.
+        // The Head Turn (Steve, 2026-10-28, round three): A Friend walks
+        // beside the visitor on the camera's right, furious; Someone has
+        // just passed and walks on toward the camera in the foreground on
+        // the left, mid-stride; the visitor looks back at them, taken.
         const [you, friend, other] = T.templateOf('headTurn').cells[0].figures;
         expect(you).toMatchObject({ pose: 'lookBack', look: 'right', expression: 'ooh' });
-        expect(Math.abs(friend.turn - Math.PI)).toBeLessThan(0.5);
-        expect(friend.stride).toBeGreaterThan(0.3);
-        expect(other.expression).toBe('rage');
+        expect(friend).toMatchObject({ role: 'friend', expression: 'rage', look: 'right' });
+        expect(friend.at[0]).toBeGreaterThan(0.5);
+        expect(other.role).toBe('other');
+        expect(other.at[0]).toBeLessThan(-0.5);
+        expect(other.at[1]).toBeGreaterThan(you.at[1] + 0.3);     // nearer the camera
+        expect(other.at[1]).toBeGreaterThan(friend.at[1] + 0.3);
+        expect(Math.abs(other.turn)).toBeLessThan(0.6);              // toward the camera
+        expect(other.stride).toBeGreaterThan(0.3);
         // Always Has Been (Steve, 2026-10-28): the roles swapped. A Friend
         // has turned away to gaze up at the Earth; the visitor, nearer the
         // camera, faces it with the blaster up.
@@ -133,6 +139,8 @@ describe('the catalog', () => {
         // right (Steve, 2026-10-28).
         const shakers = T.templateOf('handshake').cells[0].figures;
         expect(shakers.every((f) => f.side === 'right')).toBe(true);
+        expect(shakers[0].twist).toBeUndefined();            // the pose's own
+        expect(shakers[1].twist).toBeCloseTo(0.91, 9);       // the friend's, solved with it
         expect(shakers.map((f) => f.overrides)).toEqual([
             { build: 'broad', muscles: 'buff', sleeves: 'short', shirt: 'white' },
             { build: 'broad', muscles: 'buff', sleeves: 'short', shirt: 'xc0262a' }
@@ -221,6 +229,8 @@ describe('the rules catch', () => {
         expect(problems((t) => { t.cells[0].figures[0].side = 'left'; })).toEqual([]);
         expect(problems((t) => { t.cells[0].figures[0].stride = 'long'; })).toEqual([expect.stringMatching(/stride must be radians/)]);
         expect(problems((t) => { t.cells[0].figures[0].nod = NaN; })).toEqual([expect.stringMatching(/nod must be radians/)]);
+        expect(problems((t) => { t.cells[0].figures[0].twist = 'up'; })).toEqual([expect.stringMatching(/twist must be radians/)]);
+        expect(problems((t) => { t.cells[0].figures[0].twist = 0.9; })).toEqual([]);
         expect(problems((t) => { t.cells[0].figures[0].stride = 0.4; t.cells[0].figures[0].nod = -0.3; })).toEqual([]);
         expect(problems((t) => { delete t.cells[0].figures; })).toEqual(expect.arrayContaining([expect.stringMatching(/needs figures/)]));
         expect(problems((t) => { t.cells[0].figures = []; })).toEqual([expect.stringMatching(/nobody is in it/)]);

@@ -25,6 +25,8 @@
  *               the figure's left; toward the leading arm unless said)
  *               and nodded `nod` radians (negative looks up), its legs in
  *               a `stride` (radians, the right leg forward when positive),
+ *               the leading hand's `twist` about the forearm (radians,
+ *               the pose's own unless given),
  *               `expression` (avatar-expressions), `overrides` on the
  *               avatar (a build, a muscle), where (`at` [x, z] from the
  *               box's middle, `turn` radians, facing the open side at 0,
@@ -109,9 +111,10 @@ const PANIC = {
  *  leads in both rows, the head turned away from the words in the first
  *  and toward them in the second, the index out (the classic staging,
  *  2026-10-28: "a big part of the meme is in the point"). */
-/** The camera a touch to the camera's right of the figure, so the arm
- *  reaching that way, and the pointing finger, stay in a square frame. */
-const NOPE_CAMERA = { eye: [0.1, 1.3, 2.4], aim: [0.1, 1.2, 0], fov: 34 };
+/** The camera a touch to the camera's right of the figure, and the figure
+ *  a little to the left, so the arm reaching right, and the whole fist
+ *  with its finger, stay in a square frame. */
+const NOPE_CAMERA = { eye: [0.05, 1.3, 2.6], aim: [0.05, 1.2, 0], fov: 34 };
 const NOPE_YEP = {
     id: 'nopeYep',
     title: 'Nope / Yep',
@@ -120,9 +123,11 @@ const NOPE_YEP = {
     grid: [[{ span: 1 }, { span: 1 }], [{ span: 1 }, { span: 1 }]],
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
     cells: [
-        { figures: [you({ pose: 'dismiss', side: 'left', look: 'right', expression: 'deadpan' })], captions: [], camera: NOPE_CAMERA, backdrop: '#E7C8C0' },
+        // Backdrops deep enough that a pale hand and a dark one both read
+        // against them (Steve, 2026-10-28: the first cut's pastels did not).
+        { figures: [you({ pose: 'dismiss', side: 'left', look: 'right', expression: 'deadpan', at: [-0.1, 0] })], captions: [], camera: NOPE_CAMERA, backdrop: '#C9736A' },
         textCell(),
-        { figures: [you({ pose: 'point', side: 'left', look: 'left', expression: 'bigGrin' })], captions: [], camera: NOPE_CAMERA, backdrop: '#C8E0CF' },
+        { figures: [you({ pose: 'point', side: 'left', look: 'left', expression: 'bigGrin', at: [-0.1, 0] })], captions: [], camera: NOPE_CAMERA, backdrop: '#6FAE86' },
         textCell()
     ]
 };
@@ -193,10 +198,11 @@ const THREE_ROLES = [
 const TWO_ROLES = THREE_ROLES.slice(0, 2);
 
 /** The Head Turn (template 1): one wide panel, three people. The visitor
- *  walks with Someone and looks back, taken, at A Friend walking away on
- *  the camera's left (the visitor's right), seen from behind mid-stride;
- *  Someone, on the camera's right, is furious. A label on each. (Steve,
- *  2026-10-28: the "oh" face, the walk away, the mad face.) */
+ *  walks toward the camera beside A Friend (on the camera's right, who is
+ *  furious) and looks back over the shoulder, taken, at Someone, who has
+ *  just passed them and walks on toward the camera in the foreground on
+ *  the left. A label on each. (Steve, 2026-10-28: the friend is the one
+ *  beside you; the passer-by is nearer the camera than either of you.) */
 const HEAD_TURN = {
     id: 'headTurn',
     title: 'The Head Turn',
@@ -206,9 +212,9 @@ const HEAD_TURN = {
     roles: THREE_ROLES,
     cells: [{
         figures: [
-            { role: 'you', pose: 'lookBack', look: 'right', expression: 'ooh', at: [0.05, 0.1], turn: 0.25, stride: 0.3 },
-            { role: 'friend', pose: 'stand', expression: 'none', at: [-0.78, -0.2], turn: Math.PI + 0.15, stride: 0.5 },
-            { role: 'other', pose: 'stand', expression: 'rage', at: [0.8, 0], turn: -0.3, look: 'right' }
+            { role: 'you', pose: 'lookBack', look: 'right', expression: 'ooh', at: [0.12, -0.05], turn: 0.3, stride: 0.3 },
+            { role: 'friend', pose: 'stand', expression: 'rage', look: 'right', at: [0.78, -0.1], turn: -0.15, stride: -0.3 },
+            { role: 'other', pose: 'stand', expression: 'smug', at: [-0.72, 0.45], turn: 0.2, stride: 0.5 }
         ],
         captions: [{ label: 0 }, { label: 1 }, { label: 2 }],
         camera: { eye: [0, 1.35, 3.3], aim: [0, 1.05, 0], fov: 38 },
@@ -230,7 +236,9 @@ const RED_SHIRT = 'xc0262a';
 const HANDSHAKE_CELL = {
     figures: [
         { role: 'you', pose: 'shake', side: 'right', expression: 'bigGrin', at: [-0.4, -0.23], turn: Math.PI / 2 - 0.5, overrides: { ...BUFF, shirt: 'white' } },
-        { role: 'friend', pose: 'shake', side: 'right', expression: 'bigGrin', at: [0.4, 0.23], turn: -Math.PI / 2 + 0.5, overrides: { ...BUFF, shirt: RED_SHIRT } }
+        // The friend's hand turned its own way (poses.js: the stances are
+        // not a mirror pair), its back away from the camera behind yours.
+        { role: 'friend', pose: 'shake', side: 'right', twist: 0.91, expression: 'bigGrin', at: [0.4, 0.23], turn: -Math.PI / 2 + 0.5, overrides: { ...BUFF, shirt: RED_SHIRT } }
     ],
     captions: [{ label: 0 }, { label: 1 }, 'bottom'],
     camera: { eye: [0, 1.35, 3.0], aim: [0, 1.0, 0], fov: 36 },
@@ -263,7 +271,9 @@ const ALWAYS = {
     cells: [{
         figures: [
             { role: 'you', pose: 'aim', side: 'right', look: 0.9, expression: 'smug', at: [0.65, 0.2], turn: -Math.PI / 2 + 0.3, overrides: SUIT },
-            { role: 'friend', pose: 'stand', expression: 'none', at: [-0.3, 0.1], turn: Math.PI - 0.55, nod: -0.35, overrides: SUIT }
+            // Facing back and to the camera's left (a turn past pi goes
+            // toward -x), the head pitched well up: at the Earth.
+            { role: 'friend', pose: 'stand', expression: 'none', at: [-0.3, 0.1], turn: Math.PI + 0.5, nod: -0.5, overrides: SUIT }
         ],
         captions: ['top', 'bottom'],
         camera: { eye: [0, 1.4, 3.2], aim: [0, 1.0, 0], fov: 38 },
@@ -371,6 +381,7 @@ export function validateTemplate(t, { expressions, poses, scenes = [], sides = [
             if (f.look !== undefined && !sides.includes(f.look) && !Number.isFinite(f.look)) bad.push(`${here}: look must be right, left or radians`);
             if (f.stride !== undefined && !Number.isFinite(f.stride)) bad.push(`${here}: stride must be radians`);
             if (f.nod !== undefined && !Number.isFinite(f.nod)) bad.push(`${here}: nod must be radians`);
+            if (f.twist !== undefined && !Number.isFinite(f.twist)) bad.push(`${here}: twist must be radians`);
             if (f.glow !== undefined && !(f.glow >= 0 && f.glow <= 1)) bad.push(`${here}: glow must be 0 to 1`);
             if (f.overrides !== undefined && (typeof f.overrides !== 'object' || f.overrides === null)) bad.push(`${here}: overrides must be an object of avatar fields`);
         }

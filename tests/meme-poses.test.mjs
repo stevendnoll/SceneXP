@@ -42,14 +42,32 @@ test('the handshake: two figures stood as The Handshake stands them clasp right 
     a.group.rotation.y = Math.PI / 2 - H.turn;
     b.group.position.set(H.gap / 2, 0, H.aside);
     b.group.rotation.y = -Math.PI / 2 + H.turn;
+    // The friend's hand has a twist of its own (the template's), as the
+    // stances are not a mirror pair.
+    const FRIEND_TWIST = 0.91;
     a.setPose(P.armsFor('shake'));
-    b.setPose(P.armsFor('shake'));
+    b.setPose(P.armsFor('shake', 'right', FRIEND_TWIST));
     const ha = handOf(a, 'right');
     const hb = handOf(b, 'right');
-    // Touching (Steve, 2026-10-28: "the strong hand grip is the crux"), not
-    // a hand's width apart as before.
-    expect(ha.distanceTo(hb)).toBeLessThan(0.04);
-    expect(Math.abs(ha.y - hb.y)).toBeLessThan(0.02);
+    // A clasp (Steve, 2026-10-28): the hands vertical, thumbs up, the
+    // visitor's a palm's thickness nearer the camera with its back to it,
+    // the friend's just behind with its back away, the same height.
+    const d = hb.clone().sub(ha);
+    expect(Math.abs(d.x)).toBeLessThan(0.03);
+    expect(Math.abs(d.y)).toBeLessThan(0.02);
+    expect(d.z).toBeLessThan(-0.03);
+    expect(d.z).toBeGreaterThan(-0.1);
+    const axesOf = (figure) => {
+        let hand = null;
+        figure.arms.right.traverse((o) => { if (o.userData && o.userData.isHand && !hand) hand = o; });
+        const at = hand.getWorldPosition(new THREE.Vector3());
+        const dir = (v) => v.applyMatrix4(hand.matrixWorld).sub(at).normalize();
+        return { thumb: dir(new THREE.Vector3(1, 0, 0)), back: dir(new THREE.Vector3(0, 0, 1)) };
+    };
+    expect(axesOf(a).back.z).toBeGreaterThan(0.8);
+    expect(axesOf(b).back.z).toBeLessThan(-0.8);
+    expect(axesOf(a).thumb.y).toBeGreaterThan(0.7);
+    expect(axesOf(b).thumb.y).toBeGreaterThan(0.7);
     // Chest high, between the two, the forearms rising to the clasp.
     expect(ha.y).toBeGreaterThan(1.18);
     expect(ha.y).toBeLessThan(1.4);
@@ -59,15 +77,20 @@ test('the handshake: two figures stood as The Handshake stands them clasp right 
     // On the standard build the shoulders are narrower, so the hands cross
     // a little: still a clasp at panel size.
     const c = F.createAvatar({});
-    const d = F.createAvatar({});
+    const e = F.createAvatar({});
     c.group.position.copy(a.group.position);
     c.group.rotation.y = a.group.rotation.y;
-    d.group.position.copy(b.group.position);
-    d.group.rotation.y = b.group.rotation.y;
+    e.group.position.copy(b.group.position);
+    e.group.rotation.y = b.group.rotation.y;
     c.setPose(P.armsFor('shake'));
-    d.setPose(P.armsFor('shake'));
-    expect(handOf(c, 'right').distanceTo(handOf(d, 'right'))).toBeLessThan(0.25);
-    for (const f of [a, b, c, d]) f.dispose();
+    e.setPose(P.armsFor('shake', 'right', FRIEND_TWIST));
+    expect(handOf(c, 'right').distanceTo(handOf(e, 'right'))).toBeLessThan(0.25);
+    // A twist asked for is the hand's; none asked keeps the pose's own.
+    expect(P.armsFor('shake', 'right', 0.5).right.twist).toBe(0.5);
+    expect(P.armsFor('shake', 'left', 0.5).left.twist).toBe(0.5);
+    expect(P.armsFor('shake').right.twist).toBe(P.ARM_POSES.shake.twist);
+    expect(P.armsFor('shake', 'right', NaN).right.twist).toBe(P.ARM_POSES.shake.twist);
+    for (const f of [a, b, c, e]) f.dispose();
 });
 
 test('the list names every pose once, stand and lookBack moving no arm', () => {
@@ -131,27 +154,56 @@ test('the point puts the hand out to the leading side at chest height, the forea
     figure.dispose();
 });
 
-test('a pointing hand swaps the leading hand\'s geometry for the index-out one, the same unit, and leaves the other hand', async () => {
+test('a pointing hand swaps the leading hand\'s geometry for a fist with the index out, larger, and leaves the other hand', async () => {
     const Hd = await import('../www/meme/js/hands.js');
     const figure = F.createAvatar({});
     const before = Hd.handOf(figure, 'left');
     const other = Hd.handOf(figure, 'right');
     const oldGeometry = before.geometry;
     const unit = before.userData.handUnit;
+    const reach = (g) => { g.computeBoundingBox(); return g.boundingBox.clone(); };
+    const open = reach(oldGeometry);
     const hand = Hd.pointWith(figure, 'left');
     expect(hand).toBe(before);
     expect(hand.geometry).not.toBe(oldGeometry);
     expect(hand.userData.pointing).toBe(true);
+    expect(hand.userData.shape).toBe('pointing');
     expect(hand.userData.handUnit).toBe(unit);
-    expect(other.userData.pointing).toBeUndefined();
-    // The index reaches further down the hand's -y than any finger of the
-    // rig's open hand, and the curled fingers stay within the palm's depth.
-    const reach = (g) => { g.computeBoundingBox(); return g.boundingBox; };
-    const open = reach(F.createAvatar({}).arms.left.children.length ? oldGeometry : oldGeometry);
+    expect(other.userData.shape).toBeUndefined();
+    // The index reaches well past the rig's open fingers, and the fist is
+    // thicker than the open palm.
     const point = reach(hand.geometry);
-    expect(point.min.y).toBeLessThan(open.min.y - 0.005);
-    expect(point.min.z).toBeLessThan(open.min.z);   // the curl comes toward the palm
+    expect(point.min.y).toBeLessThan(open.min.y - 0.02);
+    expect(point.max.z - point.min.z).toBeGreaterThan(open.max.z - open.min.z);
+    // A fist alone is shorter: no index past the knuckles.
+    const fist = reach(Hd.fistGeometry(unit, -1));
+    expect(fist.min.y).toBeGreaterThan(point.min.y + 0.02);
+    expect(fist.min.y).toBeLessThan(open.min.y + 0.03);
+    const fisted = Hd.fistWith(figure, 'right');
+    expect(fisted).toBe(other);
+    expect(other.userData.shape).toBe('fist');
     expect(Hd.pointWith({ arms: {} }, 'left')).toBeNull();
+    expect(Hd.fistWith({ arms: {} }, 'right')).toBeNull();
+    figure.dispose();
+});
+
+test('the point and the aim stand the thumb up, so the index shows in profile and a thing held is upright', () => {
+    const axesOf = (figure, side) => {
+        let hand = null;
+        figure.arms[side].traverse((o) => { if (o.userData && o.userData.isHand && !hand) hand = o; });
+        figure.group.updateMatrixWorld(true);
+        const at = hand.getWorldPosition(new THREE.Vector3());
+        const dir = (v) => v.applyMatrix4(hand.matrixWorld).sub(at).normalize();
+        return { thumb: dir(new THREE.Vector3(side === 'left' ? -1 : 1, 0, 0)), back: dir(new THREE.Vector3(0, 0, 1)) };
+    };
+    const figure = F.createAvatar({});
+    figure.setPose(P.armsFor('point', 'left'));
+    expect(axesOf(figure, 'left').thumb.y).toBeGreaterThan(0.9);
+    figure.setPose(P.armsFor('aim', 'right'));
+    const aim = axesOf(figure, 'right');
+    expect(aim.thumb.y).toBeGreaterThan(0.9);
+    // The back of the hand outward (the figure's right), the palm in.
+    expect(aim.back.x).toBeLessThan(-0.9);
     figure.dispose();
 });
 
