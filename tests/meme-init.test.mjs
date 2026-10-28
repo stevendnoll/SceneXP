@@ -405,6 +405,71 @@ describe('the page', () => {
         expect(dom.el('mm-status').textContent).toBe(main.WORDS.pictureFailed);
     });
 
+    test('a visitor with no avatar is offered one at the top of the sheet, and the lede tells the truth (Steve\'s QA, 2026-10-28)', async () => {
+        const main = await boot();
+        expect(dom.el('mm-start').hidden).toBe(false);
+        expect(dom.el('mm-lede').textContent).toBe(main.WORDS.ledeNoAvatar);
+        // The markup's own lede is the one a visitor with an avatar keeps.
+        const page = HTML.replace(/<!--[\s\S]*?-->/g, '');
+        expect(page).toContain(`id="mm-lede" class="mm-lede">${main.WORDS.lede}</p>`);
+        expect(main.WORDS.lede.endsWith(main.WORDS.ledeNoAvatar)).toBe(true);
+        // A link styled as the sheet's strong pill, straight under the
+        // heading, the way back carried, and the meme already kept.
+        expect(page).toMatch(/<a id="mm-start-avatar" class="mm-primary mm-start-button" href="\/avatar\/\?return=\/meme\/">Make your avatar<\/a>/);
+        expect(page.indexOf('id="mm-start"')).toBeGreaterThan(page.indexOf('id="mm-lede"'));
+        expect(page.indexOf('id="mm-start"')).toBeLessThan(page.indexOf('id="mm-incoming"'));
+        expect(page).toMatch(/<div id="mm-start"[^>]*role="region"[^>]*aria-labelledby="mm-start-text"[^>]*hidden>/);
+        // A display of its own would outrank [hidden]: the rule says none.
+        expect(CSS).toMatch(/\n\.mm-start\[hidden\] \{\s*display:\s*none;\s*\}/);
+    });
+
+    test('with an avatar saved there is nothing to offer, and one saved later takes the lead on the way back (Steve\'s QA, 2026-10-28)', async () => {
+        let main = await boot({ saved: { v: 1, skin: 'deep' } });
+        expect(dom.el('mm-start').hidden).toBe(true);
+        expect(dom.el('mm-lede').textContent).toBe(main.WORDS.lede);
+        expect(main.adoptSavedAvatar()).toBe(false);
+        dom.uninstall();
+        // No avatar, then one made on the avatar page and back by the
+        // browser's Back: the page comes back from its cache as it was.
+        main = await boot();
+        const { state } = main.__test__;
+        main.pickTemplate('headTurn');
+        const standIn = state.stage.panels[0].figures[0];
+        fire(dom.windowStub, 'pageshow', { persisted: false });
+        expect(state.avatar).toBeNull();
+        globalThis.localStorage.setItem('scenexp-avatar', JSON.stringify({ v: 1, skin: 'light', shirt: 'teal' }));
+        fire(dom.windowStub, 'pageshow', { persisted: true });
+        expect(state.avatar).toMatchObject({ skin: 'light', shirt: 'teal' });
+        expect(state.stage.panels[0].figures[0]).not.toBe(standIn);
+        expect(state.stage.panels[0].figures[0].avatar.skin).toBe('light');
+        expect(dom.el('mm-start').hidden).toBe(true);
+        expect(dom.el('mm-lede').textContent).toBe(main.WORDS.lede);
+        expect(dom.el('mm-people').children[0].children[1].textContent).toBe(main.WORDS.personYou);
+        expect(dom.el('mm-make-avatar').hidden).toBe(true);
+        expect(dom.el('mm-status').textContent).toBe(main.WORDS.withAvatar);
+        // Saved again in another tab: the same, by the storage event.
+        globalThis.localStorage.setItem('scenexp-avatar', JSON.stringify({ v: 1, skin: 'brown' }));
+        fire(dom.windowStub, 'storage', { key: 'scenexp-avatar' });
+        expect(state.stage.panels[0].figures[0].avatar.skin).toBe('brown');
+        // The same avatar again changes nothing.
+        expect(main.adoptSavedAvatar()).toBe(false);
+    });
+
+    test('a friend\'s meme waiting on its card hides the offer, which comes back once it is answered', async () => {
+        installThree();
+        dom = installDom();
+        Object.assign(dom.el('mm-canvas'), { clientWidth: 800, clientHeight: 600 });
+        dom.windowStub.location.hash = '#m=2/surprised/hi/-&a=1.deep.black';
+        jest.resetModules();
+        const main = await import('../www/meme/js/main.js');
+        await flushAsync(30);
+        expect(dom.el('mm-incoming').hidden).toBe(false);
+        expect(dom.el('mm-start').hidden).toBe(true);
+        fire(dom.el('mm-keep-theirs'), 'click');
+        expect(dom.el('mm-start').hidden).toBe(false);
+        expect(main.__test__.state.incoming).toBe(false);
+    });
+
     test('a saved avatar is found and said so, wears the lead role, and is never changed', async () => {
         const saved = { v: 1, skin: 'deep', shirt: 'teal' };
         const main = await boot({ saved });

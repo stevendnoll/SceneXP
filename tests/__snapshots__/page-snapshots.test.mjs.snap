@@ -5271,7 +5271,7 @@ html [lang="en"]
     title
       "Meme Studio | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/meme.min.css?v=5" rel="preload"]
+    link [as="style" href="css/meme.min.css?v=6" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -5310,7 +5310,7 @@ html [lang="en"]
     link [href="js/scenes/handshake.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/meme.min.css?v=5" rel="stylesheet"]
+    link [href="css/meme.min.css?v=6" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body.mm-body
@@ -5353,6 +5353,13 @@ html [lang="en"]
           "Put yourself in the meme"
         p#mm-lede.mm-lede
           "Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a link."
+        div#mm-start.mm-start [aria-labelledby="mm-start-text" hidden role="region"]
+          p#mm-start-text.mm-start-text
+            "A visitor is standing in for you."
+          p.mm-start-note
+            "Make your avatar once and you'll star in every meme here. This one will be waiting when you come back."
+          a#mm-start-avatar.mm-primary.mm-start-button [href="/avatar/?return=/meme/"]
+            "Make your avatar"
         div#mm-incoming.mm-incoming [aria-labelledby="mm-incoming-text" hidden role="region"]
           p#mm-incoming-text.mm-incoming-text
             "A friend made this meme for you."

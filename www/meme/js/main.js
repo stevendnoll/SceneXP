@@ -47,6 +47,10 @@ export const WORDS = Object.freeze({
     loading: 'Setting up the studio…',
     noStage: "This browser can't draw the 3D stage. Please try another browser, or a newer one.",
     noAvatar: 'You have no avatar yet, so a visitor is standing in for you. Make yours at any time.',
+    // The lede in the markup, and the same without its first sentence for a
+    // visitor with no avatar, for whom it is not true (Steve's QA, 2026-10-28).
+    lede: 'Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a link.',
+    ledeNoAvatar: 'Pick a meme, type your captions, and share it as a picture or a link.',
     withAvatar: 'Your avatar is here. Pick a meme and type a caption to make it yours.',
     welcomeBack: 'Welcome back. Your last meme is just as you left it.',
     notKept: "This browser isn't keeping anything for this site right now, so your meme won't be here next time. A private window is often the reason.",
@@ -613,6 +617,39 @@ function showIncoming(on) {
     state.incoming = on;
     $('mm-incoming').hidden = !on;
     $('mm-incoming-note').hidden = true;
+    showStart();
+}
+
+/** The way to an avatar of one's own at the top of the sheet: shown while
+ *  none is saved, except while a friend's meme waits on its card (which
+ *  has its own way there); and the lede, which says the visitor's avatar
+ *  is standing in the first meme only when it is. */
+function showStart() {
+    const none = !state.avatar;
+    $('mm-start').hidden = !none || state.incoming;
+    $('mm-lede').textContent = none ? WORDS.ledeNoAvatar : WORDS.lede;
+}
+
+/**
+ * An avatar saved since the page opened: made on the avatar page and come
+ * back by the browser's Back (the page restored as it was left), or in
+ * another tab. It takes the lead, unless a friend's meme is leading with
+ * the maker's, and the way to make one steps aside. True when one did.
+ */
+export function adoptSavedAvatar() {
+    if (!state.store || !state.store.hasSaved()) return false;
+    const saved = state.store.load();
+    if (state.avatar && sameAvatar(state.avatar, saved)) return false;
+    state.avatar = saved;
+    if (state.stage && state.template) {
+        for (const role of state.template.roles) if (role.cast === 'avatar') state.stage.recast(role.id);
+        state.stage.touch();
+    }
+    showPeople(state.template);
+    showStart();
+    if (!state.incoming) say(WORDS.withAvatar);
+    refreshPreview();
+    return true;
 }
 
 /**
@@ -778,6 +815,10 @@ function wire() {
         }
     });
     window.addEventListener('hashchange', readLink);
+    // Back from the avatar page with a new avatar: a page restored from the
+    // browser's cache runs nothing again, so it asks the store itself.
+    window.addEventListener('pageshow', (e) => { if (e && e.persisted) adoptSavedAvatar(); });
+    state.store.onChange(adoptSavedAvatar);
     for (const p of CONFIG.export.pictures) {
         const input = $(`mm-size-${p.id}`);
         if (input) input.addEventListener('change', () => { state.sizeId = readSize(); refreshPreview(); });
@@ -842,6 +883,7 @@ export async function init() {
     if (state.restored) say(WORDS.welcomeBack);
     else if (!state.memes.available) say(WORDS.notKept);
     else say(state.avatar ? WORDS.withAvatar : WORDS.noAvatar);
+    showStart();
     // A link's meme outranks the kept one: a friend's gift is why they came.
     const arrived = readLink();
     const saveBtn = $('mm-picture-save');

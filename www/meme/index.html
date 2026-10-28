@@ -115,7 +115,7 @@
     <title>Meme Studio | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/meme.min.css?v=5" as="style">
+    <link rel="preload" href="css/meme.min.css?v=6" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -158,7 +158,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/meme.min.css?v=5">
+    <link rel="stylesheet" href="css/meme.min.css?v=6">
 
     <!-- When JS is off, the stage can't run: the static fallback below is
          the page. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -229,6 +229,18 @@
             <p class="mm-eyebrow">Meme Studio</p>
             <h2 id="mm-heading" class="mm-heading">Put yourself in the meme</h2>
             <p id="mm-lede" class="mm-lede">Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a link.</p>
+
+            <!-- A visitor with no avatar of their own (Steve's QA, 2026-10-28:
+                 the way to one was a link at the foot of the People tab).
+                 The one step that makes the page theirs, at the top. Shown by
+                 main.js only while no avatar is saved, and never while a
+                 friend's meme waits on its own card, which has its own way
+                 there. The meme is kept, so it waits for the way back. -->
+            <div id="mm-start" class="mm-start" role="region" aria-labelledby="mm-start-text" hidden>
+                <p id="mm-start-text" class="mm-start-text">A visitor is standing in for you.</p>
+                <p class="mm-start-note">Make your avatar once and you'll star in every meme here. This one will be waiting when you come back.</p>
+                <a id="mm-start-avatar" class="mm-primary mm-start-button" href="/avatar/?return=/meme/">Make your avatar</a>
+            </div>
 
             <!-- A meme that arrived by link (js/remix.js, M4): the friend's
                  meme as made, and the one next step. Hidden otherwise. -->

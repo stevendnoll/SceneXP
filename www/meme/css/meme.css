@@ -186,6 +186,48 @@ body.mm-body {
 
 /* ---- A meme that arrived ------------------------------------------------- */
 
+/* The way to an avatar of one's own, for a visitor with none (Steve's QA,
+   2026-10-28): a warm card at the top of the sheet, found by where it is
+   and what it says. Its button is the sheet's own strong pill, never a
+   tinted one: a fill already says "chosen" here (the pressed chips). */
+.mm-start {
+    background: #fff3c9;
+    border: 1px solid #efd98c;
+    border-radius: var(--mm-radius);
+    padding: 16px 18px 18px;
+    margin-bottom: 20px;
+}
+
+.mm-start[hidden] {
+    display: none;
+}
+
+.mm-start-text {
+    margin: 0;
+    color: var(--mm-ink);
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.mm-start-note {
+    margin: 6px 0 14px;
+    color: #4a4a50;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.mm-start-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.mm-start-button:focus-visible {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 3px;
+}
+
 .mm-incoming {
     background: var(--mm-well);
     border-radius: var(--mm-radius);
