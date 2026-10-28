@@ -98,7 +98,7 @@ describe('what is turned away or degraded', () => {
 
     test('a known template with broken captions is that template with empty captions', () => {
         const back = decode('m=1/panic/%E0%A4%A|fine/-,rage');
-        expect(back.meme).toEqual({ v: 1, template: 'panic', captions: ['', '', ''], expressions: [null, 'rage', null, null, null, null] });
+        expect(back.meme).toEqual({ v: 1, template: 'panic', captions: ['', '', ''], expressions: [null, 'rage', null, null, null, null], friend: null });
         expect(decode('m=1/panic').meme).toEqual(meme({ template: 'panic' }));
         expect(decode('m=1/panic/one/bored,smug').meme.expressions).toEqual([null, 'smug', null, null, null, null]);
     });

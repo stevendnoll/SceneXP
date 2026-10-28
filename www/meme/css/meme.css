@@ -338,6 +338,24 @@ body.mm-body {
     font-size: 16px;
 }
 
+.mm-secondary.mm-small {
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+.mm-person .mm-field {
+    margin: 8px 0 0;
+}
+
+.mm-person .mm-row {
+    margin-top: 8px;
+}
+
+.mm-person > .mm-secondary {
+    justify-self: start;
+    margin-top: 6px;
+}
+
 .mm-view-btn:hover,
 .mm-chip:hover,
 .mm-secondary:hover {

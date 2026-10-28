@@ -31,8 +31,30 @@ function handOf(figure, side) {
     return hand.getWorldPosition(new THREE.Vector3());
 }
 
+test('the handshake: two figures stood as The Handshake stands them bring their right hands together', () => {
+    const H = P.HANDSHAKE;
+    const a = F.createAvatar({});
+    const b = F.createAvatar({});
+    a.group.position.set(-H.gap / 2, 0, -H.aside);
+    a.group.rotation.y = Math.PI / 2 - H.turn;
+    b.group.position.set(H.gap / 2, 0, H.aside);
+    b.group.rotation.y = -Math.PI / 2 + H.turn;
+    a.setPose(P.armsFor('shake'));
+    b.setPose(P.armsFor('shake'));
+    const ha = handOf(a, 'right');
+    const hb = handOf(b, 'right');
+    expect(ha.distanceTo(hb)).toBeLessThan(0.15);
+    expect(Math.abs(ha.y - hb.y)).toBeLessThan(0.02);
+    // At the waist, between the two, in front of neither's back.
+    expect(ha.y).toBeGreaterThan(0.9);
+    expect(ha.y).toBeLessThan(1.4);
+    expect(Math.abs((ha.x + hb.x) / 2)).toBeLessThan(0.25);
+    a.dispose();
+    b.dispose();
+});
+
 test('the list names every pose once, stand and lookBack moving no arm', () => {
-    expect(P.POSES).toEqual(['stand', 'dismiss', 'approve', 'present', 'lookBack']);
+    expect(P.POSES).toEqual(['stand', 'dismiss', 'approve', 'present', 'shake', 'lookBack']);
     expect(P.ARM_POSES.stand).toBeNull();
     expect(P.ARM_POSES.lookBack).toBeNull();
     const rest = P.armsFor('stand');

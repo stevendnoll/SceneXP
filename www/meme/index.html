@@ -138,6 +138,8 @@
     <link rel="modulepreload" href="../shared/js/avatar-hats-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-wardrobe-1.0.0.min.js">
     <link rel="modulepreload" href="js/scenes/plan.min.js">
+    <link rel="modulepreload" href="js/scenes/space.min.js">
+    <link rel="modulepreload" href="js/scenes/fine.min.js">
     <!-- END generated modulepreload -->
 
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
@@ -250,7 +252,14 @@
                 </div>
 
                 <div id="mm-panel-people" class="mm-panel" role="tabpanel" aria-labelledby="mm-tab-people" hidden>
+                    <!-- Who is in the meme (js/editor.js buildPeople): the
+                         visitor, a friend by their avatar link or file (M5),
+                         and anyone else from the crowd, reshuffled on a press. -->
                     <ul id="mm-people" class="mm-people"></ul>
+                    <!-- Opened by the friend's row's button. Hidden, and out
+                         of the tab order, since the button is the way to it. -->
+                    <input id="mm-friend-file" type="file" accept=".json,application/json" hidden tabindex="-1" aria-label="Open a friend's avatar file">
+                    <p id="mm-people-status" class="mm-note" role="status" aria-live="polite"></p>
                     <p class="mm-note"><a id="mm-make-avatar" class="mm-link" href="/avatar/">Make your avatar</a></p>
                 </div>
             </div>

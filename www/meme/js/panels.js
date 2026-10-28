@@ -142,24 +142,49 @@ export function makeFigure(avatar, spec) {
     return figure;
 }
 
+/** Where a label pins to a figure: over its chest, `below` meters under
+ *  the head's middle, in world meters. */
+export function labelAnchor(figure, below) {
+    const head = figure.head();
+    return [head.x, head.y - below, head.z];
+}
+
+/** A world point on a `w` by `h` picture through `camera`, in pixels, or
+ *  null behind it. */
+export function projectPoint(point, camera, w, h) {
+    camera.updateMatrixWorld(true);
+    const p = new THREE.Vector3(point[0], point[1], point[2]).project(camera);
+    if (p.z > 1) return null;
+    return { x: ((p.x + 1) / 2) * w, y: ((1 - p.y) / 2) * h };
+}
+
 /**
- * One panel: the box with its props (`cell.scene`) and its figures inside,
- * `avatarFor(roleId)` giving the avatar each role wears. Returns
- * `{ group, box, figures, props, dispose }`.
+ * One panel: the box with its figures inside and its props (`cell.scene`,
+ * built after the figures so a prop can be fitted to one), `avatarFor(roleId)`
+ * giving the avatar each role wears, `mobile` for props that scale down.
+ * Returns `{ group, box, figures, props, replaceFigure, tick, dispose }`.
  */
-export function buildPanel(cell, config, avatarFor) {
+export function buildPanel(cell, config, avatarFor, { mobile = false } = {}) {
     const box = buildBox(config.box, cell.backdrop || config.box.wall);
-    const props = cell.scene && SCENES[cell.scene] ? SCENES[cell.scene](box, config) : null;
     const figures = cell.figures.map((spec) => {
         const figure = makeFigure(avatarFor(spec.role), spec);
         box.add(figure.group);
         return figure;
     });
+    const props = cell.scene && SCENES[cell.scene] ? SCENES[cell.scene](box, config, { figures, mobile }) : null;
     return {
         group: box,
         box,
         figures,
         props,
+        /** Move the props that move. True when something did. */
+        tick(dt) {
+            if (props && props.userData && typeof props.userData.tick === 'function') {
+                props.userData.tick(dt);
+                return true;
+            }
+            return false;
+        },
         /** Figure `i` built again with `changes` laid over its spec (a new
          *  expression), the old one let go. Returns the new figure. */
         replaceFigure(i, changes, avatar = avatarFor(cell.figures[i].role)) {
@@ -169,6 +194,8 @@ export function buildPanel(cell, config, avatarFor) {
             const figure = makeFigure(avatar, { ...cell.figures[i], ...changes });
             box.add(figure.group);
             figures[i] = figure;
+            // A prop fitted to the figure (a helmet) is fitted again.
+            if (props && props.userData && typeof props.userData.fit === 'function') props.userData.fit(figure);
             return figure;
         },
         dispose() {

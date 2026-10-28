@@ -24,14 +24,14 @@
  */
 
 import { MEME_PAGE as CONFIG } from './config.min.js';
-import { createAvatarStore, randomAvatar } from '../../shared/js/avatar-1.0.0.min.js';
+import { createAvatarStore, randomAvatar, decodeLink, fromFile, sameAvatar, MAX_FILE } from '../../shared/js/avatar-1.0.0.min.js';
 import { EXPRESSIONS } from '../../shared/js/avatar-expressions-1.0.0.min.js';
 import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { createStage } from './stage.min.js';
 import { TEMPLATES, byOrder, slotsOf, templateOf } from './templates.min.js';
-import { buildTabs, buildCaptionFields, buildTemplatePicker, buildExpressionRows, buildViewButtons } from './editor.min.js';
+import { buildTabs, buildCaptionFields, buildTemplatePicker, buildExpressionRows, buildViewButtons, buildPeople } from './editor.min.js';
 import { normalizeMeme, createMemeStore } from './state.min.js';
 import { decodeRemix, remixUrl } from './remix.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
@@ -54,7 +54,14 @@ export const WORDS = Object.freeze({
     personYou: 'You, as your avatar.',
     personStandIn: 'You, as a visitor standing in until you make your avatar.',
     personMaker: 'The friend who sent this meme, as their avatar.',
+    personFriend: 'Your friend, as their avatar.',
     personRandom: 'A visitor from the crowd.',
+    friendAdded: "Your friend is in. Their avatar stays on this device and nothing about it is sent to us.",
+    friendBadLink: "That doesn't look like an avatar link. It starts with #a= and comes from the avatar page's Share a link.",
+    friendFileLarge: 'That file is too large to be an avatar file. Please choose scenexp-avatar.json.',
+    friendFileUnreadable: 'This browser could not read that file. Please try it again.',
+    friendNotAvatar: "That file doesn't hold a SceneXP avatar. Please choose scenexp-avatar.json.",
+    reshuffled: 'Someone else stepped in.',
     fromFriend: 'A friend made this meme for you. Make it yours with your own avatar, or keep it as it is.',
     mine: "It's yours now. Your avatar is in the lead role.",
     mineNoAvatar: 'Make your avatar first, then come back here. This meme will be waiting.',
@@ -81,8 +88,11 @@ const state = {
     avatar: null,         // the saved avatar, or null
     standIn: null,        // a random avatar for a visitor with none saved
     maker: null,          // the avatar a link's meme was made with, while it leads
-    friend: null,         // the avatar in the friend's role (D5, M5)
+    friend: null,         // the avatar in the friend's role: pasted, opened, or the maker's (D5)
+    friendIsMaker: false,
+    cast: {},             // a random avatar a role, kept for the visit so a reshuffle is a change
     incoming: false,      // a link's meme is on the stage, waiting for an answer
+    anchors: [],          // where each panel's figures' labels pin on the stage, CSS pixels
     template: null,
     captions: [],
     expressions: [],      // a cell's chosen face, or null for the template's
@@ -130,9 +140,9 @@ function say(text) {
     $('mm-status').textContent = text;
 }
 
-/** The meme as it stands, valid, for the store and (M4) the link. */
+/** The meme as it stands, valid, for the store and the link. */
 export function currentMeme() {
-    return normalizeMeme({ template: state.template.id, captions: state.captions, expressions: state.expressions }, RULES());
+    return normalizeMeme({ template: state.template.id, captions: state.captions, expressions: state.expressions, friend: state.friend }, RULES());
 }
 
 /** Keep the meme in this browser. Quiet when the browser refuses. */
@@ -148,7 +158,13 @@ export function avatarForRole(roleId) {
     const role = state.template.roles.find((r) => r.id === roleId);
     if (!role || role.cast === 'avatar') return state.maker || state.avatar || state.standIn;
     if (role.id === 'friend' && state.friend) return state.friend;
-    return randomAvatar();
+    if (!state.cast[roleId]) state.cast[roleId] = randomAvatar();
+    return state.cast[roleId];
+}
+
+/** The role labels of a cell's figures, for the fields. */
+function roleNamesFor(cellIndex) {
+    return state.template.cells[cellIndex].figures.map((f) => (state.template.roles.find((r) => r.id === f.role) || {}).label || f.role);
 }
 
 /** The avatar the lead wears right now, for the link. */
@@ -187,7 +203,7 @@ export function drawOverlay(rects = state.rects) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, pw, ph);
     ctx.scale(ratio, ratio);
-    drawCaptions(ctx, state.template, state.captions, rects, CONFIG.caption);
+    drawCaptions(ctx, state.template, state.captions, rects, CONFIG.caption, { anchors: state.anchors, label: CONFIG.label });
     return true;
 }
 
@@ -231,26 +247,99 @@ function onExpression(cellIndex, id) {
     }
 }
 
-/** The People tab: who is in the meme and where each comes from (M5
- *  adds a friend's avatar and the reshuffle). */
+/** What the People tab says of a role. */
+function noteFor(role) {
+    if (role.cast === 'avatar') return state.maker ? WORDS.personMaker : state.avatar ? WORDS.personYou : WORDS.personStandIn;
+    if (role.id === 'friend' && state.friend) return state.friendIsMaker ? WORDS.personMaker : WORDS.personFriend;
+    return WORDS.personRandom;
+}
+
+/** A word on the People tab's own status line. */
+function sayPeople(text) {
+    $('mm-people-status').textContent = text;
+}
+
+/** The People tab: who is in the meme, where each comes from, a friend by
+ *  their link or file, and a reshuffle for anyone from the crowd. */
 function showPeople(template) {
-    const list = $('mm-people');
-    list.textContent = '';
-    for (const role of template.roles) {
-        const item = document.createElement('li');
-        item.className = 'mm-person';
-        const name = document.createElement('span');
-        name.className = 'mm-person-role';
-        name.textContent = role.label;
-        const note = document.createElement('span');
-        note.className = 'mm-person-note';
-        if (role.cast === 'avatar') note.textContent = state.maker ? WORDS.personMaker : state.avatar ? WORDS.personYou : WORDS.personStandIn;
-        else note.textContent = WORDS.personRandom;
-        item.appendChild(name);
-        item.appendChild(note);
-        list.appendChild(item);
-    }
+    buildPeople($('mm-people'), {
+        roles: template.roles,
+        noteFor,
+        onLink: useFriendLink,
+        onFile: () => { const input = $('mm-friend-file'); if (input && input.click) input.click(); },
+        onReshuffle: reshuffle
+    });
     $('mm-make-avatar').hidden = Boolean(state.avatar);
+}
+
+/** A friend's avatar from their link (the whole address or its fragment).
+ *  True when one was there. */
+export function useFriendLink(text) {
+    const s = String(text || '').trim();
+    const hash = s.includes('#') ? s.slice(s.indexOf('#')) : s;
+    const avatar = decodeLink(hash);
+    if (!avatar) {
+        sayPeople(WORDS.friendBadLink);
+        return false;
+    }
+    setFriend(avatar);
+    if (state.ready) track('friend-added', { kind: 'link' });
+    return true;
+}
+
+/** A friend's avatar from their file, read only when it is small. */
+export async function useFriendFile(file) {
+    if (!file) return false;
+    if (!(file.size <= MAX_FILE)) {
+        sayPeople(WORDS.friendFileLarge);
+        return false;
+    }
+    let text;
+    try {
+        text = await file.text();
+    } catch (e) {
+        sayPeople(WORDS.friendFileUnreadable);
+        return false;
+    }
+    const avatar = fromFile(text);
+    if (!avatar) {
+        sayPeople(WORDS.friendNotAvatar);
+        return false;
+    }
+    setFriend(avatar);
+    if (state.ready) track('friend-added', { kind: 'file' });
+    return true;
+}
+
+function setFriend(avatar) {
+    state.friend = avatar;
+    state.friendIsMaker = false;
+    if (state.stage) {
+        state.stage.recast('friend');
+        state.stage.touch();
+    }
+    showPeople(state.template);
+    sayPeople(WORDS.friendAdded);
+    refreshPreview();
+    keep();
+}
+
+/** Someone else from the crowd in a random role. */
+export function reshuffle(roleId) {
+    state.cast[roleId] = randomAvatar();
+    if (roleId === 'friend') {
+        state.friend = null;
+        state.friendIsMaker = false;
+    }
+    if (state.stage) {
+        state.stage.recast(roleId);
+        state.stage.touch();
+    }
+    showPeople(state.template);
+    sayPeople(WORDS.reshuffled);
+    refreshPreview();
+    keep();
+    if (state.ready) track('reshuffle', { kind: state.template.id });
 }
 
 /** Show a template with `meme`'s captions and faces: the panels built,
@@ -260,6 +349,12 @@ export function showTemplate(template, meme = null) {
     const slots = slotsOf(template);
     state.captions = slots.map((_, k) => (meme ? meme.captions[k] : state.captions[k]) || '');
     state.expressions = template.cells.map((_, i) => (meme ? meme.expressions[i] : null) || null);
+    // A meme's friend (restored, or the maker moved over) takes the role;
+    // the same friend again keeps whoever they were.
+    if (meme && meme.friend && !(state.friend && sameAvatar(state.friend, meme.friend))) {
+        state.friend = meme.friend;
+        state.friendIsMaker = false;
+    }
     if (state.stage) {
         state.stage.setTemplate(template, avatarForRole);
         state.expressions.forEach((id, i) => { if (id) state.stage.setExpression(i, id); });
@@ -268,6 +363,7 @@ export function showTemplate(template, meme = null) {
         slots,
         captions: state.captions,
         maxChars: CONFIG.caption.maxChars,
+        roleNamesFor,
         onInput: onCaption
     });
     buildExpressionRows($('mm-faces'), { template, expressions: EXPRESSIONS, chosen: state.expressions, onChoose: onExpression });
@@ -275,6 +371,7 @@ export function showTemplate(template, meme = null) {
     showPeople(template);
     if (state.picker) state.picker.select(template.id);
     state.rects = state.stage ? state.stage.screenRects() : [];
+    state.anchors = state.stage ? state.stage.screenAnchors() : [];
     drawOverlay();
     if (state.stage) state.stage.touch();
     refreshPreview();
@@ -344,6 +441,7 @@ export function makeItMine() {
     const maker = state.maker;
     state.maker = null;
     state.friend = maker && state.template.roles.some((r) => r.id === 'friend') ? maker : null;
+    state.friendIsMaker = Boolean(state.friend);
     showTemplate(state.template, currentMeme());
     showIncoming(false);
     say(WORDS.mine);
@@ -370,6 +468,7 @@ export function startOver() {
     state.expressions = [];
     state.maker = null;
     state.friend = null;
+    state.friendIsMaker = false;
     showIncoming(false);
     if (state.memes) state.memes.clear();
     showTemplate(byOrder()[0]);
@@ -409,6 +508,12 @@ function wire() {
     $('mm-start-over').addEventListener('click', startOver);
     $('mm-make-mine').addEventListener('click', makeItMine);
     $('mm-keep-theirs').addEventListener('click', keepTheirs);
+    $('mm-friend-file').addEventListener('change', (e) => {
+        const input = (e && e.target) || $('mm-friend-file');
+        const file = input && input.files ? input.files[0] : null;
+        useFriendFile(file);
+        if (input) input.value = '';
+    });
     // The link: the meme and the lead's avatar, through the shared ladder
     // (the share sheet, the clipboard, a mail), the copy said on the sheet.
     installShare($('mm-link'), () => ({
@@ -453,8 +558,9 @@ export async function init() {
                 canvas: $('mm-canvas'),
                 mobile: isMobile(),
                 reducedMotion,
-                onFrame(rects, viewing) {
+                onFrame(rects, viewing, gliding, anchors) {
                     state.rects = rects;
+                    state.anchors = anchors || [];
                     drawOverlay(rects);
                     if (viewing !== null && !state.pinged.stepped && state.ready) {
                         state.pinged.stepped = true;

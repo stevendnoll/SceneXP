@@ -24,7 +24,7 @@
  * so it is measured on the real library.
  */
 
-import { buildPanel, layoutPanels, cellCamera, arrangementSize } from './panels.min.js';
+import { buildPanel, layoutPanels, cellCamera, arrangementSize, labelAnchor, projectPoint } from './panels.min.js';
 
 /** The room: the background, the floor and the lights, in one scene. */
 export function buildStudio(config, { mobile = false } = {}) {
@@ -217,6 +217,21 @@ export function createStage(config, {
         return figure;
     }
 
+    /** Every figure of `roleId` built again with `avatarFor`'s avatar (a
+     *  friend added, a cast member reshuffled). Returns how many. */
+    function recast(roleId) {
+        let n = 0;
+        panels.forEach((panel, i) => {
+            template.cells[i].figures.forEach((spec, k) => {
+                if (spec.role !== roleId) return;
+                panel.replaceFigure(k, {}, avatars(roleId));
+                n++;
+            });
+        });
+        if (n) dirty = true;
+        return n;
+    }
+
     function view(index) {
         const was = viewing;
         viewing = Number.isInteger(index) && panels[index] ? index : null;
@@ -270,14 +285,37 @@ export function createStage(config, {
         });
     }
 
+    /** Where each panel's figures' labels pin on the canvas, CSS pixels:
+     *  an array a panel of points (or null) in the figures' order, or
+     *  null for a panel not shown. */
+    function screenAnchors() {
+        const w = canvas.clientWidth || 0;
+        const h = canvas.clientHeight || 0;
+        if (!template) return [];
+        return panels.map((panel, i) => {
+            if (viewing !== null && !glide && i !== viewing) return null;
+            return panel.figures.map((f) => projectPoint(labelAnchor(f, config.label.below), camera, w, h));
+        });
+    }
+
+    let last = null;
+
     function frame() {
         if (!fit()) return;
+        const t = now();
+        const dt = last === null ? 0 : Math.min(0.1, Math.max(0, t - last));
+        last = t;
         stepGlide();
+        // Props that move (the flames) keep the stage drawing, unless the
+        // visitor asked for less motion.
+        if (!reducedMotion()) {
+            for (const p of panels) if (p.tick(dt)) dirty = true;
+        }
         if (!dirty) return;
         dirty = false;
         frames++;
         renderer.render(scene, camera);
-        onFrame(screenRects(), viewing, Boolean(glide));
+        onFrame(screenRects(), viewing, Boolean(glide), screenAnchors());
     }
 
     function clearPanels() {
@@ -293,7 +331,7 @@ export function createStage(config, {
         avatars = avatarFor;
         const spots = layoutPanels(next, config.box);
         panels = next.cells.map((cell, i) => {
-            const panel = buildPanel(cell, config, avatarFor);
+            const panel = buildPanel(cell, config, avatarFor, { mobile });
             panel.group.position.set(spots[i].x, spots[i].y, spots[i].z);
             scene.add(panel.group);
             return panel;
@@ -377,9 +415,11 @@ export function createStage(config, {
         reducedMotion,
         setTemplate,
         setExpression,
+        recast,
         cameraFor,
         view,
         screenRects,
+        screenAnchors,
         touch() { dirty = true; },
         fit,
         frame,

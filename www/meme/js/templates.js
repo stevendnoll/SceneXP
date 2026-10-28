@@ -35,7 +35,8 @@
  * every entry.
  */
 
-/** The caption slots a cell may carry, in the order they are drawn. */
+/** The caption slots a cell may carry, in the order they are drawn. A
+ *  label pinned to a figure is `{ label: figureIndex }`. */
 export const SLOTS = Object.freeze(['top', 'bottom', 'center']);
 
 const deepFreeze = (o) => {
@@ -157,7 +158,97 @@ const PLAN = {
     cells: [PLAN_CELL('smug'), PLAN_CELL('smug'), PLAN_CELL('bigGrin'), PLAN_CELL('shocked')]
 };
 
-export const TEMPLATES = deepFreeze([SURPRISED, PANIC, NOPE_YEP, THEN_NOW, GALAXY_BRAIN, PLAN]);
+const THREE_ROLES = [
+    { id: 'you', label: 'You', cast: 'avatar' },
+    { id: 'friend', label: 'A Friend', cast: 'random' },
+    { id: 'other', label: 'Someone', cast: 'random' }
+];
+const TWO_ROLES = THREE_ROLES.slice(0, 2);
+
+/** The Head Turn (template 1): one wide panel, three people. The visitor
+ *  walks with Someone and looks back at A Friend passing the other way;
+ *  Someone is not pleased. A label on each. */
+const HEAD_TURN = {
+    id: 'headTurn',
+    title: 'The Head Turn',
+    line: 'Three people, one of them looking back.',
+    order: 7,
+    grid: [[{ span: 1 }]],
+    roles: THREE_ROLES,
+    cells: [{
+        figures: [
+            { role: 'you', pose: 'lookBack', expression: 'smug', at: [0.05, 0.1], turn: 0.25 },
+            { role: 'friend', pose: 'stand', expression: 'none', at: [-0.78, -0.15], turn: 1.9 },
+            { role: 'other', pose: 'stand', expression: 'rage', at: [0.8, 0], turn: -0.3 }
+        ],
+        captions: [{ label: 0 }, { label: 1 }, { label: 2 }],
+        camera: { eye: [0, 1.35, 3.3], aim: [0, 1.05, 0], fov: 38 },
+        backdrop: '#CFE3EE'
+    }]
+};
+
+/** The Handshake (template 2): two people clasping hands, a label on each
+ *  and one under the hands. The stances are poses.js's HANDSHAKE, solved
+ *  on the rig. */
+const HANDSHAKE_CELL = {
+    figures: [
+        { role: 'you', pose: 'shake', expression: 'bigGrin', at: [-0.4, -0.23], turn: Math.PI / 2 - 0.5 },
+        { role: 'friend', pose: 'shake', expression: 'bigGrin', at: [0.4, 0.23], turn: -Math.PI / 2 + 0.5 }
+    ],
+    captions: [{ label: 0 }, { label: 1 }, 'bottom'],
+    camera: { eye: [0, 1.35, 3.0], aim: [0, 1.0, 0], fov: 36 },
+    backdrop: '#F2D6B3'
+};
+const HANDSHAKE = {
+    id: 'handshake',
+    title: 'The Handshake',
+    line: 'Two people, one thing they agree on.',
+    order: 8,
+    grid: [[{ span: 1 }]],
+    roles: TWO_ROLES,
+    cells: [HANDSHAKE_CELL]
+};
+
+/** Always Has Been (template 6): two people in helmets, the Earth below,
+ *  the stars behind. The visitor looks back at A Friend. */
+const ALWAYS = {
+    id: 'alwaysHasBeen',
+    title: 'Always Has Been',
+    line: 'Two people in space, one realization.',
+    order: 9,
+    grid: [[{ span: 1 }]],
+    roles: TWO_ROLES,
+    cells: [{
+        figures: [
+            { role: 'you', pose: 'lookBack', expression: 'shocked', at: [-0.35, 0.1], turn: 0.5, overrides: { shirt: 'white', sleeves: 'long', bottom: 'pants', bottomColor: 'white', hat: 'none' } },
+            { role: 'friend', pose: 'approve', expression: 'smug', at: [0.5, -0.35], turn: -0.6, overrides: { shirt: 'white', sleeves: 'long', bottom: 'pants', bottomColor: 'white', hat: 'none' } }
+        ],
+        captions: ['top', 'bottom'],
+        camera: { eye: [0, 1.4, 3.2], aim: [0, 1.0, 0], fov: 38 },
+        backdrop: '#05060C',
+        scene: 'space'
+    }]
+};
+
+/** Everything Is Fine (template 10): one person, calm at a table while
+ *  the room burns. */
+const FINE_TEMPLATE = {
+    id: 'everythingIsFine',
+    title: 'Everything Is Fine',
+    line: 'One calm person. One burning room.',
+    order: 10,
+    grid: [[{ span: 1 }]],
+    roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
+    cells: [{
+        figures: [{ role: 'you', pose: 'stand', expression: 'sweat', at: [0.2, 0.05], turn: -0.15 }],
+        captions: ['top', 'bottom'],
+        camera: { eye: [0.1, 1.3, 2.9], aim: [0, 1.0, 0], fov: 38 },
+        backdrop: '#F0A070',
+        scene: 'fine'
+    }]
+};
+
+export const TEMPLATES = deepFreeze([SURPRISED, PANIC, NOPE_YEP, THEN_NOW, GALAXY_BRAIN, PLAN, HEAD_TURN, HANDSHAKE, ALWAYS, FINE_TEMPLATE]);
 
 /** The templates in the picker's order. */
 export function byOrder(templates = TEMPLATES) {
@@ -174,12 +265,16 @@ export function columnsOf(template) {
     return template.grid[0].reduce((n, c) => n + c.span, 0);
 }
 
-/** Every caption slot of a template in reading order: `{ cell, slot }`,
- *  the index into the meme's captions being the index here. */
+/** Every caption slot of a template in reading order: `{ cell, slot }`
+ *  (`{ cell, slot: 'label', figure }` for a label pinned to a figure), the
+ *  index into the meme's captions being the index here. */
 export function slotsOf(template) {
     const out = [];
     template.cells.forEach((cell, i) => {
-        for (const slot of cell.captions) out.push({ cell: i, slot });
+        for (const slot of cell.captions) {
+            if (slot && typeof slot === 'object') out.push({ cell: i, slot: 'label', figure: slot.label });
+            else out.push({ cell: i, slot });
+        }
     });
     return out;
 }
@@ -234,7 +329,9 @@ export function validateTemplate(t, { expressions, poses, scenes = [], maxSlots 
         }
         if (!Array.isArray(cell.captions)) bad.push(`${here}: needs captions (an empty list is fine)`);
         for (const slot of cell.captions || []) {
-            if (!SLOTS.includes(slot)) bad.push(`${here}: caption slot "${slot}" is not top, bottom or center`);
+            if (slot && typeof slot === 'object') {
+                if (!Number.isInteger(slot.label) || !(cell.figures || [])[slot.label]) bad.push(`${here}: label pinned to figure ${slot.label}, which is not there`);
+            } else if (!SLOTS.includes(slot)) bad.push(`${here}: caption slot "${slot}" is not top, bottom, center or a label`);
         }
         slots += (cell.captions || []).length;
         const cam = cell.camera || {};

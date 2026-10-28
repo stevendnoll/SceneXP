@@ -11,15 +11,19 @@ import { EXPRESSIONS } from '../www/shared/js/avatar-expressions-1.0.0.js';
 const RULES = { templates: TEMPLATES, byOrder, slotsOf, expressions: EXPRESSIONS.map((e) => e.id), maxChars: 60 };
 
 describe('normalizeMeme', () => {
-    test('nothing becomes the first meme with empty captions and the templates\' own faces', () => {
+    test('nothing becomes the first meme with empty captions, the templates\' own faces and no friend', () => {
         for (const raw of [undefined, null, 3, 'x', {}, []]) {
-            expect(S.normalizeMeme(raw, RULES)).toEqual({ v: 1, template: 'surprised', captions: [''], expressions: [null] });
+            expect(S.normalizeMeme(raw, RULES)).toEqual({ v: 1, template: 'surprised', captions: [''], expressions: [null], friend: null });
         }
     });
 
-    test('a valid meme comes back as it is, padded to its template\'s slots', () => {
+    test('a valid meme comes back as it is, padded to its template\'s slots, its friend made valid', () => {
         const meme = { v: 1, template: 'panic', captions: ['a', 'b'], expressions: [null, 'rage', null, null, null, null] };
-        expect(S.normalizeMeme(meme, RULES)).toEqual({ v: 1, template: 'panic', captions: ['a', 'b', ''], expressions: [null, 'rage', null, null, null, null] });
+        expect(S.normalizeMeme(meme, RULES)).toEqual({ v: 1, template: 'panic', captions: ['a', 'b', ''], expressions: [null, 'rage', null, null, null, null], friend: null });
+        const withFriend = S.normalizeMeme({ template: 'handshake', friend: { skin: 'deep', hat: 'castle' } }, RULES);
+        expect(withFriend.friend.skin).toBe('deep');
+        expect(withFriend.friend.hat).toBe('none');
+        expect(S.normalizeMeme({ template: 'handshake', friend: 'nope' }, RULES).friend).toBeNull();
     });
 
     test('an unknown template, over-long captions, extra captions, and unknown or misplaced faces are made right', () => {

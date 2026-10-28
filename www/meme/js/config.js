@@ -82,10 +82,20 @@ export const MEME_PAGE = deepFreeze({
         fill: '#ffffff', outline: '#000000', uppercase: true
     },
 
+    /** A label pinned to a figure (compose.js): the face `size` as a share
+     *  of the panel's height, at most `maxWidth` of the panel's width, over
+     *  the figure's chest, `below` the head's middle in meters. */
+    label: { size: 0.062, maxWidth: 0.46, below: 0.32 },
+
     /** The composite picture (compose.js): the panels tiled on a dark
      *  ground with a `gutter` between and around them, as a share of the
      *  picture's height. */
     panel: { gutter: 0.012, background: '#111111' },
+
+    /** Everything Is Fine's flames (scenes/fine.js): `count` sprites, half
+     *  on a phone, each `size` meters across, licking `rise` meters a
+     *  second. */
+    fire: { count: 14, countMobile: 7, size: 0.5, rise: 0.35 },
 
     /** The wordmark on every export (D3): text only, in the caption face,
      *  white with the dark outline, `height` and `inset` as shares of the

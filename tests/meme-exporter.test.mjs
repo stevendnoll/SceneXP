@@ -272,6 +272,81 @@ describe('the arrangement', () => {
     });
 });
 
+describe('the three-person templates', () => {
+    test('The Head Turn pins every label inside the panel, in the picture and on the stage', () => {
+        const canvas = stageCanvas(800, 600);
+        const stage = S.createStage(CONFIG, { canvas, makeRenderer: fakeRenderer });
+        stage.setTemplate(T.templateOf('headTurn'), () => DEFAULT_AVATAR);
+        expect(stage.panels[0].figures).toHaveLength(3);
+        const exporter = X.createExporter(CONFIG, { stage, doc: fakeDoc(), win: {}, nav: {}, makeRenderer: fakeRenderer });
+        const anchors = exporter.anchorsFor(0, 1080, 1080);
+        expect(anchors).toHaveLength(3);
+        for (const p of anchors) {
+            expect(p.x).toBeGreaterThan(80);
+            expect(p.x).toBeLessThan(1000);
+            expect(p.y).toBeGreaterThan(200);
+            expect(p.y).toBeLessThan(900);
+        }
+        // Left to right: the friend, the visitor, the other.
+        expect(anchors[1].x).toBeLessThan(anchors[0].x);
+        expect(anchors[0].x).toBeLessThan(anchors[2].x);
+        expect(exporter.anchorsFor(9, 100, 100)).toBeNull();
+        stage.fit();
+        const live = stage.screenAnchors();
+        expect(live).toHaveLength(1);
+        expect(live[0]).toHaveLength(3);
+        for (const p of live[0]) {
+            expect(p.x).toBeGreaterThan(0);
+            expect(p.x).toBeLessThan(800);
+        }
+        // Looking into another panel, a panel's anchors are nothing.
+        stage.setTemplate(T.templateOf('panic'), () => DEFAULT_AVATAR);
+        stage.view(1);
+        expect(stage.screenAnchors().map((a) => (a ? a.length : null))).toEqual([null, 1, null, null, null, null]);
+        stage.dispose();
+    });
+
+    test('Always Has Been has stars, an Earth and a helmet on each head; Everything Is Fine has its flames, fewer on a phone, moving when ticked', () => {
+        const stage = S.createStage(CONFIG, { canvas: stageCanvas(), makeRenderer: fakeRenderer });
+        stage.setTemplate(T.templateOf('alwaysHasBeen'), () => DEFAULT_AVATAR);
+        const box = stage.panels[0].box;
+        expect(box.getObjectByName('stars').geometry.attributes.position.count).toBe(220);
+        expect(box.getObjectByName('earth')).toBeTruthy();
+        for (const f of stage.panels[0].figures) expect(f.person.getObjectByName('head').getObjectByName('helmet')).toBeTruthy();
+        expect(stage.panels[0].figures[0].avatar.shirt).toBe('white');
+        // A figure built again keeps a helmet.
+        stage.recast('friend');
+        expect(stage.panels[0].figures[1].person.getObjectByName('head').getObjectByName('helmet')).toBeTruthy();
+        expect(stage.panels[0].tick(0.1)).toBe(false);
+        stage.setTemplate(T.templateOf('everythingIsFine'), () => DEFAULT_AVATAR);
+        const flames = () => stage.panels[0].box.getObjectByName('fine').children.filter((o) => o.name === 'flame');
+        expect(flames()).toHaveLength(CONFIG.fire.count);
+        expect(stage.panels[0].box.getObjectByName('mug')).toBeTruthy();
+        const before = flames().map((f) => f.position.y);
+        expect(stage.panels[0].tick(0.2)).toBe(true);
+        expect(flames().map((f) => f.position.y)).not.toEqual(before);
+        stage.dispose();
+        const phone = S.createStage(CONFIG, { canvas: stageCanvas(), makeRenderer: fakeRenderer, mobile: true });
+        phone.setTemplate(T.templateOf('everythingIsFine'), () => DEFAULT_AVATAR);
+        expect(phone.panels[0].box.getObjectByName('fine').children.filter((o) => o.name === 'flame')).toHaveLength(CONFIG.fire.countMobile);
+        phone.dispose();
+    });
+
+    test('recast builds every figure of a role again with the role\'s avatar, and nothing for a role not there', () => {
+        const avatars = { you: DEFAULT_AVATAR, friend: { ...DEFAULT_AVATAR, skin: 'deep' } };
+        const stage = S.createStage(CONFIG, { canvas: stageCanvas(), makeRenderer: fakeRenderer });
+        stage.setTemplate(T.templateOf('handshake'), (role) => avatars[role]);
+        const was = stage.panels[0].figures[1];
+        avatars.friend = { ...DEFAULT_AVATAR, skin: 'light' };
+        expect(stage.recast('friend')).toBe(1);
+        expect(stage.panels[0].figures[1]).not.toBe(was);
+        expect(stage.panels[0].figures[1].avatar.skin).toBe('light');
+        expect(stage.panels[0].figures[0].avatar.skin).toBe(DEFAULT_AVATAR.skin);
+        expect(stage.recast('other')).toBe(0);
+        stage.dispose();
+    });
+});
+
 describe('the camera', () => {
     test('Surprised frames the whole head in the square, low enough for the caption above it', () => {
         const stage = stageWithSurprised();

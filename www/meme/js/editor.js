@@ -142,30 +142,104 @@ export function buildTemplatePicker(container, { templates, selected, onPick = (
  *  "Bottom caption" on a two-slot panel, numbered across panels (by the
  *  panel's place among the ones with captions, so a template whose words
  *  sit beside its pictures still counts 1, 2, 3). */
-export function slotLabel(slots, k) {
-    const { cell, slot } = slots[k];
+export function slotLabel(slots, k, roleNames = []) {
+    const { cell, slot, figure } = slots[k];
     const cells = [...new Set(slots.map((s) => s.cell))];
     const siblings = slots.filter((s) => s.cell === cell).length;
     const names = { top: 'Top', bottom: 'Bottom', center: 'Middle' };
-    const which = siblings > 1 ? `${names[slot] || 'Top'} caption` : 'Caption';
+    let which;
+    if (slot === 'label') which = `Label on ${roleNames[figure] || `figure ${figure + 1}`}`;
+    else which = siblings > 1 ? `${names[slot] || 'Top'} caption` : 'Caption';
     return cells.length > 1 ? `Panel ${cells.indexOf(cell) + 1}: ${which}` : which;
+}
+
+/**
+ * The people in `container`: a row a role saying who wears it (`noteFor
+ * (role)`), with the friend's row offering a pasted link and an opened
+ * file, and a random role's row a reshuffle. `onLink(text)`, `onFile()`
+ * and `onReshuffle(roleId)` hear the presses. Returns the rows.
+ */
+export function buildPeople(container, { roles, noteFor, onLink = () => {}, onFile = () => {}, onReshuffle = () => {}, doc = typeof document === 'undefined' ? null : document }) {
+    empty(container);
+    const rows = [];
+    for (const role of roles) {
+        const item = doc.createElement('li');
+        item.className = 'mm-person';
+        const name = doc.createElement('span');
+        name.className = 'mm-person-role';
+        name.textContent = role.label;
+        const note = doc.createElement('span');
+        note.className = 'mm-person-note';
+        note.textContent = noteFor(role);
+        item.appendChild(name);
+        item.appendChild(note);
+        const row = { role: role.id, item, note };
+        if (role.id === 'friend') {
+            const field = doc.createElement('label');
+            field.className = 'mm-field';
+            field.setAttribute('for', 'mm-friend-link');
+            const fieldName = doc.createElement('span');
+            fieldName.className = 'mm-field-label';
+            fieldName.textContent = "A friend's avatar link";
+            const input = doc.createElement('input');
+            input.id = 'mm-friend-link';
+            input.className = 'mm-input';
+            input.type = 'text';
+            input.setAttribute('autocomplete', 'off');
+            input.setAttribute('placeholder', 'Paste the link from their avatar page');
+            field.appendChild(fieldName);
+            field.appendChild(input);
+            const buttons = doc.createElement('div');
+            buttons.className = 'mm-row';
+            const use = doc.createElement('button');
+            use.type = 'button';
+            use.className = 'mm-secondary mm-small';
+            use.id = 'mm-friend-use';
+            use.textContent = 'Use this link';
+            use.addEventListener('click', () => onLink(input.value));
+            const open = doc.createElement('button');
+            open.type = 'button';
+            open.className = 'mm-secondary mm-small';
+            open.id = 'mm-friend-open';
+            open.textContent = 'Open their avatar file';
+            open.addEventListener('click', onFile);
+            buttons.appendChild(use);
+            buttons.appendChild(open);
+            item.appendChild(field);
+            item.appendChild(buttons);
+            row.input = input;
+        }
+        if (role.cast === 'random') {
+            const again = doc.createElement('button');
+            again.type = 'button';
+            again.className = 'mm-secondary mm-small';
+            again.id = `mm-reshuffle-${role.id}`;
+            again.textContent = 'Someone else';
+            again.addEventListener('click', () => onReshuffle(role.id));
+            item.appendChild(again);
+            row.reshuffle = again;
+        }
+        container.appendChild(item);
+        rows.push(row);
+    }
+    return rows;
 }
 
 /**
  * The caption fields in `container`, one per slot, holding `captions`.
  * `onInput(k, value)` hears every change. Returns `{ inputs, set(captions) }`.
  */
-export function buildCaptionFields(container, { slots, captions = [], maxChars, onInput = () => {}, doc = typeof document === 'undefined' ? null : document, idPrefix = 'mm-caption' }) {
+export function buildCaptionFields(container, { slots, captions = [], maxChars, roleNamesFor = () => [], onInput = () => {}, doc = typeof document === 'undefined' ? null : document, idPrefix = 'mm-caption' }) {
     empty(container);
     const inputs = [];
     const counters = [];
-    slots.forEach((_, k) => {
+    slots.forEach((s, k) => {
         const field = doc.createElement('label');
         field.className = 'mm-field';
         field.setAttribute('for', `${idPrefix}-${k}`);
         const name = doc.createElement('span');
         name.className = 'mm-field-label';
-        name.textContent = slotLabel(slots, k);
+        name.textContent = slotLabel(slots, k, roleNamesFor(s.cell));
         const input = doc.createElement('input');
         input.id = `${idPrefix}-${k}`;
         input.className = 'mm-input';

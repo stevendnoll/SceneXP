@@ -150,6 +150,44 @@ describe('a caption', () => {
         expect(ys[1] - ys[0]).toBeCloseTo(fit.fontPx * K.lineHeight, 9);
     });
 
+    test('a label is drawn at its figure\'s point, kept inside the panel, and skipped without a point', () => {
+        const rect = { x: 100, y: 100, w: 400, h: 400 };
+        const ctx = recordingContext(0.5);
+        const at = C.drawLabel(ctx, 'me', { x: 300, y: 300 }, rect, CONFIG.label, CONFIG.caption);
+        expect(at.lines).toEqual(['ME']);
+        expect(at.fontPx).toBe(Math.round(rect.h * CONFIG.label.size));
+        expect(at.x).toBe(300);
+        expect(at.y).toBe(300);
+        expect(ctx.textBaseline).toBe('middle');
+        // A point by the edge: pulled inside.
+        const edge = recordingContext(0.5);
+        const pulled = C.drawLabel(edge, 'a long label indeed', { x: 490, y: 495 }, rect, CONFIG.label, CONFIG.caption);
+        expect(pulled.x).toBeLessThan(490);
+        expect(pulled.y).toBeLessThan(495);
+        expect(pulled.x).toBeLessThanOrEqual(rect.x + rect.w);
+        expect(C.drawLabel(recordingContext(), 'x', null, rect, CONFIG.label, CONFIG.caption)).toBeNull();
+        expect(C.drawLabel(recordingContext(), '  ', { x: 1, y: 1 }, rect, CONFIG.label, CONFIG.caption)).toBeNull();
+    });
+
+    test('labels go to their anchors through drawCaptions and composeMeme, moved into the panel\'s rect', () => {
+        const template = { grid: [[{ span: 1 }]], cells: [{ captions: [{ label: 0 }, { label: 1 }, 'top'] }] };
+        const ctx = recordingContext(0.5);
+        C.drawCaptions(ctx, template, ['me', 'them', 'cap'], [{ x: 0, y: 0, w: 400, h: 400 }], CONFIG.caption, { anchors: [[{ x: 100, y: 200 }, null]], label: CONFIG.label });
+        const texts = ctx.calls.filter((c) => c[0] === 'fillText');
+        expect(texts.map((c) => c[1])).toEqual(['ME', 'CAP']);
+        expect(texts[0].slice(2, 4)).toEqual([100, 200]);
+        // Without a label config, labels are left out; captions still drawn.
+        const bare = recordingContext(0.5);
+        C.drawCaptions(bare, template, ['me', 'them', 'cap'], [{ x: 0, y: 0, w: 400, h: 400 }], CONFIG.caption);
+        expect(bare.calls.filter((c) => c[0] === 'fillText').map((c) => c[1])).toEqual(['CAP']);
+        // Through the picture: the panel's own pixels moved by its rect.
+        const pic = recordingContext(0.5);
+        const rects = C.composeMeme(pic, { template, captions: ['me', '', ''], w: 1000, h: 1000, config: CONFIG, anchorsFor: (i, r) => [{ x: r.w / 2, y: r.h / 2 }, null] });
+        const me = pic.calls.find((c) => c[0] === 'fillText' && c[1] === 'ME');
+        expect(me[2]).toBeCloseTo(rects[0].x + rects[0].w / 2, 6);
+        expect(me[3]).toBeCloseTo(rects[0].y + rects[0].h / 2, 6);
+    });
+
     test('drawCaptions skips a cell with no rect and keeps counting its captions', () => {
         const template = { cells: [{ captions: ['top'] }, { captions: ['center'] }, { captions: ['bottom'] }] };
         const ctx = recordingContext();

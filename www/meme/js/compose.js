@@ -127,6 +127,43 @@ export function drawCaption(ctx, text, rect, slot, C) {
     return fit;
 }
 
+/**
+ * A label pinned to a figure at `point` (pixels, the figure's chest) in a
+ * panel's `rect`: smaller than a caption, centered on the point, kept
+ * inside the panel. `L` is config.label, `C` config.caption. Returns what
+ * was drawn, or null for an empty label or no point.
+ */
+export function drawLabel(ctx, text, point, rect, L, C) {
+    const t = String(text || '').trim();
+    if (!t || !point) return null;
+    const shown = C.uppercase ? t.toUpperCase() : t;
+    const fontPx = Math.max(1, Math.round(rect.h * L.size));
+    const minPx = Math.max(1, Math.round(fontPx * C.smallest));
+    const measure = (s, px) => {
+        ctx.font = captionFont(px, C.font);
+        return ctx.measureText(s).width;
+    };
+    const maxWidth = rect.w * L.maxWidth;
+    const fit = fitCaption(measure, shown, maxWidth, { fontPx, minPx, maxLines: C.maxLines });
+    ctx.font = captionFont(fit.fontPx, C.font);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = fit.fontPx * C.stroke;
+    ctx.strokeStyle = C.outline;
+    ctx.fillStyle = C.fill;
+    const lineH = fit.fontPx * C.lineHeight;
+    const widest = Math.max(...fit.lines.map((l) => measure(l, fit.fontPx)));
+    const x = Math.min(rect.x + rect.w - widest / 2, Math.max(rect.x + widest / 2, point.x));
+    const n = fit.lines.length;
+    const top = Math.min(rect.y + rect.h - n * lineH, Math.max(rect.y + lineH / 2, point.y - ((n - 1) / 2) * lineH));
+    fit.lines.forEach((line, i) => {
+        ctx.strokeText(line, x, top + i * lineH);
+        ctx.fillText(line, x, top + i * lineH);
+    });
+    return { ...fit, x, y: top };
+}
+
 /** The wordmark, bottom right, in the caption face: `W` is config.wordmark,
  *  `C` config.caption. Returns where it was drawn. */
 export function drawWordmark(ctx, w, h, W, C) {
@@ -152,17 +189,22 @@ export function drawWordmark(ctx, w, h, W, C) {
  * to leave the ground), the captions in reading order from `captions`, and
  * the wordmark unless `wordmark` is false. Returns the panels' rects.
  */
-export function composeMeme(ctx, { template, captions = [], w, h, config, imageFor, wordmark = true }) {
+export function composeMeme(ctx, { template, captions = [], w, h, config, imageFor, anchorsFor = null, wordmark = true }) {
     const gutter = h * config.panel.gutter;
     const rects = layoutGrid(template, w, h, { gutter, padding: gutter });
     ctx.fillStyle = config.panel.background;
     ctx.fillRect(0, 0, w, h);
+    const anchors = [];
     template.cells.forEach((cell, i) => {
         const r = rects[i];
         const image = imageFor ? imageFor(i, r) : null;
         if (image) ctx.drawImage(image, r.x, r.y, r.w, r.h);
+        // The figures' anchors come with the panel's image (the same
+        // camera), in the panel's own pixels, moved onto the picture.
+        const local = anchorsFor ? anchorsFor(i, r) : null;
+        anchors.push(local ? local.map((p) => (p ? { x: r.x + p.x, y: r.y + p.y } : null)) : null);
     });
-    drawCaptions(ctx, template, captions, rects, config.caption);
+    drawCaptions(ctx, template, captions, rects, config.caption, { anchors, label: config.label });
     if (wordmark) drawWordmark(ctx, w, h, config.wordmark, config.caption);
     return rects;
 }
@@ -170,15 +212,22 @@ export function composeMeme(ctx, { template, captions = [], w, h, config, imageF
 /**
  * Every caption of a template over its panel's rect, in reading order:
  * `rects[i]` is cell i's rect, or null to skip a cell (one off screen).
- * The live overlay draws through here too, so the stage and the picture
- * agree.
+ * A label pinned to a figure is drawn at `anchors[i][figure]` (a point in
+ * the same pixels as the rects), when there is one. The live overlay draws
+ * through here too, so the stage and the picture agree.
  */
-export function drawCaptions(ctx, template, captions, rects, C) {
+export function drawCaptions(ctx, template, captions, rects, C, { anchors = [], label = null } = {}) {
     let k = 0;
     template.cells.forEach((cell, i) => {
         for (const slot of cell.captions) {
             const text = captions[k++];
-            if (rects[i]) drawCaption(ctx, text, rects[i], slot, C);
+            if (!rects[i]) continue;
+            if (slot && typeof slot === 'object') {
+                const point = anchors[i] ? anchors[i][slot.label] : null;
+                if (label) drawLabel(ctx, text, point, rects[i], label, C);
+            } else {
+                drawCaption(ctx, text, rects[i], slot, C);
+            }
         }
     });
 }

@@ -16,6 +16,8 @@
  * page goes on without it.
  */
 
+import { normalizeAvatar } from '../../shared/js/avatar-1.0.0.min.js';
+
 export const MEME_VERSION = 1;
 
 /**
@@ -33,7 +35,10 @@ export function normalizeMeme(raw, { templates, byOrder, slotsOf, expressions, m
         v: MEME_VERSION,
         template: template.id,
         captions: slots.map((_, k) => String(captions[k] == null ? '' : captions[k]).slice(0, maxChars)),
-        expressions: template.cells.map((cell, i) => (cell.figures.length && expressions.includes(chosen[i]) ? chosen[i] : null))
+        expressions: template.cells.map((cell, i) => (cell.figures.length && expressions.includes(chosen[i]) ? chosen[i] : null)),
+        // A friend's avatar (M5), made valid, or none. It is already in
+        // the visitor's hands (pasted or opened), so it is kept with the meme.
+        friend: r.friend && typeof r.friend === 'object' ? normalizeAvatar(r.friend) : null
     };
 }
 

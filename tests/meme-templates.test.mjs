@@ -29,8 +29,8 @@ const rules = () => ({ expressions: EXPRESSIONS.map((e) => e.id), poses: POSES, 
 const copy = (t) => JSON.parse(JSON.stringify(t));
 
 describe('the catalog', () => {
-    test('has the six first-cut templates, each valid, with distinct ids and orders', () => {
-        expect(T.TEMPLATES.map((t) => t.id).sort()).toEqual(['galaxyBrain', 'nopeYep', 'panic', 'plan', 'surprised', 'thenNow']);
+    test('has the ten first-cut templates, each valid, with distinct ids and orders', () => {
+        expect(T.TEMPLATES.map((t) => t.id).sort()).toEqual(['alwaysHasBeen', 'everythingIsFine', 'galaxyBrain', 'handshake', 'headTurn', 'nopeYep', 'panic', 'plan', 'surprised', 'thenNow']);
         for (const t of T.TEMPLATES) {
             expect({ [t.id]: T.validateTemplate(t, rules()) }).toEqual({ [t.id]: [] });
         }
@@ -38,7 +38,20 @@ describe('the catalog', () => {
         expect(new Set(ids).size).toBe(ids.length);
         const orders = T.TEMPLATES.map((t) => t.order);
         expect(new Set(orders).size).toBe(orders.length);
-        expect(T.byOrder().map((t) => t.id)).toEqual(['surprised', 'panic', 'nopeYep', 'thenNow', 'galaxyBrain', 'plan']);
+        expect(T.byOrder().map((t) => t.id)).toEqual(['surprised', 'panic', 'nopeYep', 'thenNow', 'galaxyBrain', 'plan', 'headTurn', 'handshake', 'alwaysHasBeen', 'everythingIsFine']);
+    });
+
+    test('the catalog is frozen in the snapshot: a shipped template changes only on purpose', () => {
+        expect(T.TEMPLATES).toMatchSnapshot();
+    });
+
+    test('the three-person templates pin a label to each figure, and the friends\' roles are declared', () => {
+        expect(T.slotsOf(T.templateOf('headTurn'))).toEqual([{ cell: 0, slot: 'label', figure: 0 }, { cell: 0, slot: 'label', figure: 1 }, { cell: 0, slot: 'label', figure: 2 }]);
+        expect(T.templateOf('headTurn').roles.map((r) => r.id)).toEqual(['you', 'friend', 'other']);
+        expect(T.slotsOf(T.templateOf('handshake'))).toEqual([{ cell: 0, slot: 'label', figure: 0 }, { cell: 0, slot: 'label', figure: 1 }, { cell: 0, slot: 'bottom' }]);
+        expect(T.templateOf('alwaysHasBeen').cells[0].scene).toBe('space');
+        expect(T.templateOf('everythingIsFine').cells[0].scene).toBe('fine');
+        expect(T.templateOf('headTurn').cells[0].figures[0].pose).toBe('lookBack');
     });
 
     test('is frozen all the way down, so nothing at run time can change a template', () => {
@@ -153,6 +166,9 @@ describe('the rules catch', () => {
     test('captions: a missing list, a bad slot, and more slots than the cap', () => {
         expect(problems((t) => { delete t.cells[0].captions; })).toEqual([expect.stringMatching(/needs captions/)]);
         expect(problems((t) => { t.cells[0].captions = ['middle']; })).toEqual([expect.stringMatching(/slot "middle"/)]);
+        expect(problems((t) => { t.cells[0].captions = [{ label: 3 }]; })).toEqual([expect.stringMatching(/label pinned to figure 3/)]);
+        expect(problems((t) => { t.cells[0].captions = [{ label: 'a' }]; })).toEqual([expect.stringMatching(/label pinned to figure a/)]);
+        expect(problems((t) => { t.cells[0].captions = [{ label: 0 }, 'top']; })).toEqual([]);
         expect(problems((t) => { t.cells[0].captions = ['top', 'bottom', 'top', 'bottom', 'top', 'bottom', 'top']; }))
             .toEqual([expect.stringMatching(/7 caption slots, over the cap of 6/)]);
         const t = base();

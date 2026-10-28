@@ -243,10 +243,10 @@ describe('the page', () => {
         expect(dom.el('mm-picture-save').hidden).toBe(false);
         expect(dom.el('mm-picture-save').textContent).toBe('Save picture');
         expect(dom.el('mm-hint').hidden).toBe(false);
-        // The picker: six templates in order, the first pressed.
+        // The picker: ten templates in order, the first pressed.
         const picks = dom.el('mm-picker').children;
-        expect(picks.map((b) => b.dataset.template)).toEqual(['surprised', 'panic', 'nopeYep', 'thenNow', 'galaxyBrain', 'plan']);
-        expect(picks.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false', 'false', 'false', 'false']);
+        expect(picks.map((b) => b.dataset.template)).toEqual(['surprised', 'panic', 'nopeYep', 'thenNow', 'galaxyBrain', 'plan', 'headTurn', 'handshake', 'alwaysHasBeen', 'everythingIsFine']);
+        expect(picks.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', ...Array(9).fill('false')]);
         // A glyph of the grid, then the words.
         expect(picks[1].children[0].tagName.toLowerCase()).toBe('svg');
         expect(picks[1].children[0].children).toHaveLength(6);
@@ -274,7 +274,7 @@ describe('the page', () => {
         expect(fields.map((f) => f.children[0].textContent)).toEqual(['Panel 1: Caption', 'Panel 2: Caption', 'Panel 3: Caption']);
         expect(fields[0].children[1].value).toBe('first');
         expect(state.captions).toEqual(['first', '', '']);
-        expect(dom.el('mm-picker').children.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false', 'false', 'false', 'false']);
+        expect(dom.el('mm-picker').children.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', ...Array(8).fill('false')]);
         // The same template again is nothing.
         const panels = state.stage.panels;
         expect(main.pickTemplate('panic').id).toBe('panic');
@@ -393,7 +393,7 @@ describe('the page', () => {
         expect(main.__test__.state.exporter).toBeNull();
         expect(dom.el('meme-app').hidden).toBe(false);
         expect(dom.el('mm-captions').children).toHaveLength(1);
-        expect(dom.el('mm-picker').children).toHaveLength(6);
+        expect(dom.el('mm-picker').children).toHaveLength(10);
         expect(dom.el('mm-picture-save').hidden).toBe(true);
         expect(dom.el('mm-hint').hidden).toBe(true);
         // No stage, no panels on it: the overlay has nothing to draw.
@@ -515,7 +515,7 @@ describe('the page', () => {
         fire(input, 'input');
         main.__test__.onExpression(0, 'rage');
         const kept = JSON.parse(globalThis.localStorage.getItem('scenexp-meme'));
-        expect(kept).toEqual({ v: 1, template: 'thenNow', captions: ['', 'now'], expressions: ['rage', null] });
+        expect(kept).toEqual({ v: 1, template: 'thenNow', captions: ['', 'now'], expressions: ['rage', null], friend: null });
         // Back again: the same meme, said so, the chip and the figure right.
         dom.uninstall();
         installThree();
@@ -664,6 +664,87 @@ describe('the page', () => {
         expect(copied[0]).toContain(`${dom.windowStub.location.href}#m=`);
         delete globalThis.navigator.clipboard;
         expect(state.template.id).toBe('thenNow');
+    });
+
+    test('the People tab fills a friend by link or file, reshuffles the crowd, names the labels, and keeps the friend', async () => {
+        const main = await boot();
+        const { state } = main.__test__;
+        main.pickTemplate('headTurn');
+        const rows = dom.el('mm-people').children;
+        expect(rows).toHaveLength(3);
+        expect(rows.map((r) => r.children[0].textContent)).toEqual(['You', 'A Friend', 'Someone']);
+        expect(rows[1].children[1].textContent).toBe(main.WORDS.personRandom);
+        expect(dom.el('mm-captions').children.map((f) => f.children[0].textContent)).toEqual(['Label on You', 'Label on A Friend', 'Label on Someone']);
+        // The crowd member is kept for the visit, and a reshuffle changes them.
+        // (The stub does not find a built element by id: the rows are walked.)
+        const someone = main.avatarForRole('other');
+        expect(main.avatarForRole('other')).toBe(someone);
+        const wasFigure = state.stage.panels[0].figures[2];
+        const reshuffleOf = (row) => row.children.find((c) => c.id && c.id.startsWith('mm-reshuffle-'));
+        fire(reshuffleOf(dom.el('mm-people').children[2]), 'click');
+        expect(main.avatarForRole('other')).not.toBe(someone);
+        expect(state.stage.panels[0].figures[2]).not.toBe(wasFigure);
+        expect(dom.el('mm-people-status').textContent).toBe(main.WORDS.reshuffled);
+        // A friend's link, pasted whole or as its fragment.
+        const friendRow = () => dom.el('mm-people').children[1];
+        const linkInput = () => friendRow().children[2].children[1];
+        const useButton = () => friendRow().children[3].children[0];
+        expect(linkInput().id).toBe('mm-friend-link');
+        expect(useButton().textContent).toBe('Use this link');
+        linkInput().value = 'nonsense';
+        fire(useButton(), 'click');
+        expect(state.friend).toBeNull();
+        expect(dom.el('mm-people-status').textContent).toBe(main.WORDS.friendBadLink);
+        linkInput().value = 'https://www.scenexp.com/avatar/#a=1.deep.black';
+        fire(useButton(), 'click');
+        expect(state.friend).toMatchObject({ skin: 'deep' });
+        expect(state.stage.panels[0].figures[1].avatar.skin).toBe('deep');
+        expect(dom.el('mm-people').children[1].children[1].textContent).toBe(main.WORDS.personFriend);
+        expect(dom.el('mm-people-status').textContent).toBe(main.WORDS.friendAdded);
+        expect(JSON.parse(globalThis.localStorage.getItem('scenexp-meme')).friend.skin).toBe('deep');
+        // A friend's file: too large, unreadable, not an avatar, and right.
+        expect(await main.useFriendFile(null)).toBe(false);
+        expect(await main.useFriendFile({ size: 99999 })).toBe(false);
+        expect(dom.el('mm-people-status').textContent).toBe(main.WORDS.friendFileLarge);
+        expect(await main.useFriendFile({ size: 10, text: async () => { throw new Error('no'); } })).toBe(false);
+        expect(dom.el('mm-people-status').textContent).toBe(main.WORDS.friendFileUnreadable);
+        expect(await main.useFriendFile({ size: 10, text: async () => '{"x":1}' })).toBe(false);
+        expect(dom.el('mm-people-status').textContent).toBe(main.WORDS.friendNotAvatar);
+        const file = { size: 80, text: async () => JSON.stringify({ scenexp: 'avatar', v: 1, avatar: { skin: 'light' } }) };
+        expect(await main.useFriendFile(file)).toBe(true);
+        expect(state.friend.skin).toBe('light');
+        expect(state.stage.panels[0].figures[1].avatar.skin).toBe('light');
+        // The file input's change goes the same way.
+        dom.el('mm-friend-file').files = [{ size: 80, text: async () => JSON.stringify({ scenexp: 'avatar', v: 1, avatar: { skin: 'medium' } }) }];
+        fire(dom.el('mm-friend-file'), 'change', { target: dom.el('mm-friend-file') });
+        await flushAsync(10);
+        expect(state.friend.skin).toBe('medium');
+        // Someone else in the friend's role lets the friend go.
+        fire(reshuffleOf(friendRow()), 'click');
+        expect(state.friend).toBeNull();
+        // A restored meme brings its friend back.
+        state.friend = { skin: 'deep' };
+        main.showTemplate(state.template, main.currentMeme());
+        expect(state.stage.panels[0].figures[1].avatar.skin).toBe('deep');
+    });
+
+    test('Make it mine keeps both of us when the template has a friend\'s role (D5)', async () => {
+        installThree();
+        dom = installDom();
+        Object.assign(dom.el('mm-canvas'), { clientWidth: 800, clientHeight: 600 });
+        globalThis.localStorage.setItem('scenexp-avatar', JSON.stringify({ v: 1, skin: 'fair' }));
+        dom.windowStub.location.hash = '#m=1/handshake/me|you|deal/-&a=1.deep.black';
+        jest.resetModules();
+        const main = await import('../www/meme/js/main.js');
+        await flushAsync(30);
+        const { state } = main.__test__;
+        expect(state.stage.panels[0].figures.map((f) => f.avatar.skin)).toEqual(['deep', expect.any(String)]);
+        fire(dom.el('mm-make-mine'), 'click');
+        expect(state.friend).toMatchObject({ skin: 'deep' });
+        expect(state.friendIsMaker).toBe(true);
+        expect(state.stage.panels[0].figures.map((f) => f.avatar.skin)).toEqual(['fair', 'deep']);
+        expect(dom.el('mm-people').children[1].children[1].textContent).toBe(main.WORDS.personMaker);
+        expect(state.captions).toEqual(['me', 'you', 'deal']);
     });
 
     test('every word the page says keeps the house style', async () => {

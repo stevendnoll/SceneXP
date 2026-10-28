@@ -14,6 +14,12 @@
  *             (-0.37, 1.37, 0.45)
  *   approve   the hand at head height, forward (-0.37, 1.58, 0.46)
  *   present   the hand out to the side toward a chart (-0.70, 1.24, 0.22)
+ *   shake     the hand forward at the waist, the elbow bent, for a
+ *             handshake: two figures facing each other put their right
+ *             hands half a meter apart in depth (each hand is on its own
+ *             right side), so The Handshake stands each figure 0.23 m to
+ *             its own left, and the hands land about a hand's width apart
+ *             (measured 2026-10-27: 0.07 m across, the same height)
  *
  * tests/meme-poses.test.mjs holds the hands to those regions, so a rig edit
  * that moves them is caught.
@@ -34,8 +40,14 @@ export const ARM_POSES = Object.freeze({
     dismiss: Object.freeze({ z: 0.4, x: -1.1, fore: -1.1, twist: Math.PI }),
     approve: Object.freeze({ z: 0.3, x: -1.9, fore: -0.4, twist: 0 }),
     present: Object.freeze({ z: 1.25, x: -0.5, fore: -0.6, twist: 0 }),
+    shake: Object.freeze({ z: 0.1, x: -1.0, fore: -0.7, twist: 0 }),
     lookBack: null
 });
+
+/** Where The Handshake stands its two figures: `gap` apart across, each
+ *  `aside` toward its own left (so the right hands meet), turned `turn`
+ *  radians from facing each other toward the camera. */
+export const HANDSHAKE = Object.freeze({ gap: 0.8, aside: 0.23, turn: 0.5 });
 
 /** The head's turn for each pose, radians, toward the figure's leading
  *  side (a figure that turns its back looks back over its shoulder). */
@@ -44,6 +56,7 @@ export const HEAD_TURNS = Object.freeze({
     dismiss: 0.45,
     approve: 0,
     present: 0.25,
+    shake: 0,
     lookBack: 0.95
 });
 

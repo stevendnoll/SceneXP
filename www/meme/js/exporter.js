@@ -18,6 +18,7 @@
  */
 
 import { composeMeme } from './compose.min.js';
+import { labelAnchor, projectPoint } from './panels.min.js';
 import { shareFile, canShareFiles, saveFile } from '../../shared/js/sharefile-1.0.0.min.js';
 
 /** Everything the exporter says (house style: polite, no semicolons or
@@ -110,13 +111,32 @@ export function createExporter(config, {
         return o.canvas;
     }
 
+    /** Where cell `index`'s figures' labels pin on a `w` by `h` panel drawn
+     *  through its camera, in the panel's own pixels. */
+    function anchorsFor(index, w, h) {
+        const o = ensure();
+        const pose = stage.cameraFor(index);
+        o.camera.fov = pose.fov;
+        o.camera.aspect = w / h;
+        o.camera.updateProjectionMatrix();
+        o.camera.position.set(pose.eye[0], pose.eye[1], pose.eye[2]);
+        o.camera.lookAt(pose.aim[0], pose.aim[1], pose.aim[2]);
+        const panel = stage.panels[index];
+        if (!panel) return null;
+        return panel.figures.map((f) => projectPoint(labelAnchor(f, config.label.below), o.camera, w, h));
+    }
+
     /** The composite of `template` with `captions`, `w` by `h`, on `out`. */
     function compose(out, template, captions, w, h) {
         if (out.width !== w) out.width = w;
         if (out.height !== h) out.height = h;
         const ctx = out.getContext('2d');
         if (!ctx) return false;
-        composeMeme(ctx, { template, captions, w, h, config, imageFor: (i, r) => renderPanel(i, r.w, r.h) });
+        composeMeme(ctx, {
+            template, captions, w, h, config,
+            imageFor: (i, r) => renderPanel(i, r.w, r.h),
+            anchorsFor: (i, r) => anchorsFor(i, r.w, r.h)
+        });
         return true;
     }
 
@@ -165,6 +185,7 @@ export function createExporter(config, {
         drawPreview,
         makePicture,
         savePicture,
+        anchorsFor,
         /** What the button says before it is pressed: Share where the sheet
          *  takes a PNG, Save otherwise. */
         buttonLabel() {

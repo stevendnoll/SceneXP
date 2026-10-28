@@ -5279,6 +5279,8 @@ html [lang="en"]
     link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
     link [href="js/scenes/plan.min.js" rel="modulepreload"]
+    link [href="js/scenes/space.min.js" rel="modulepreload"]
+    link [href="js/scenes/fine.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/meme.min.css?v=1" rel="stylesheet"]
@@ -5357,6 +5359,8 @@ html [lang="en"]
             div#mm-captions.mm-captions
           div#mm-panel-people.mm-panel [aria-labelledby="mm-tab-people" hidden role="tabpanel"]
             ul#mm-people.mm-people
+            input#mm-friend-file [accept=".json,application/json" aria-label="Open a friend's avatar file" hidden tabindex="-1" type="file"]
+            p#mm-people-status.mm-note [aria-live="polite" role="status"]
             p.mm-note
               a#mm-make-avatar.mm-link [href="/avatar/"]
                 "Make your avatar"
