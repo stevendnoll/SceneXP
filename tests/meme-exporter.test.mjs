@@ -508,6 +508,36 @@ describe('the words on the board', () => {
     });
 });
 
+describe('the blaster', () => {
+    test('stands upright in the fist: the barrel level at the friend, one grip below, a low sight above, no fin', () => {
+        const stage = S.createStage(CONFIG, { canvas: stageCanvas(800, 600), makeRenderer: fakeRenderer });
+        stage.setTemplate(T.templateOf('alwaysHasBeen'), () => DEFAULT_AVATAR);
+        stage.scene.updateMatrixWorld(true);
+        const gun = stage.panels[0].box.getObjectByName('blaster');
+        expect(gun).toBeTruthy();
+        expect(gun.children.map((c) => c.name).sort()).toEqual(['barrel', 'body', 'handle', 'ring', 'sight']);
+        const at = (name) => gun.getObjectByName(name).getWorldPosition(new THREE.Vector3());
+        const body = at('body');
+        const hand = gun.parent.getWorldPosition(new THREE.Vector3());
+        // Held as a pistol (Steve, 2026-10-28): the frame sits over the
+        // fist, the grip passes down through it and out below, and the
+        // sight is a bump on the frame, not a fin.
+        expect(body.y).toBeGreaterThan(hand.y + 0.03);
+        expect(at('handle').y).toBeLessThan(hand.y - 0.01);
+        expect(at('handle').y).toBeLessThan(body.y - 0.06);
+        expect(at('sight').y).toBeGreaterThan(body.y + 0.02);
+        expect(gun.getObjectByName('sight').geometry.parameters.width).toBeLessThan(0.012);
+        expect(gun.getObjectByName('handle').geometry.parameters.width).toBeGreaterThan(0.08);
+        // The barrel runs level toward the friend (the camera's left).
+        const barrel = at('barrel');
+        expect(barrel.x).toBeLessThan(body.x - 0.08);
+        expect(Math.abs(barrel.y - body.y)).toBeLessThan(0.04);
+        const friendHead = stage.panels[0].figures[1].head();
+        expect(Math.abs(barrel.y - friendHead.y)).toBeLessThan(0.2);
+        stage.dispose();
+    });
+});
+
 describe('a label over the head', () => {
     test('The Handshake pins both labels above the heads, so neither covers the clasp', () => {
         const canvas = stageCanvas(800, 600);

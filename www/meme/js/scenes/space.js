@@ -14,14 +14,16 @@ export const SPACE = Object.freeze({
     earth: Object.freeze({ r: 0.3, at: Object.freeze([-0.85, 1.72, -0.36]), sea: 0x2f6fc4, land: 0x4f9a5a, cloud: 0xffffff }),
     helmet: Object.freeze({ r: 0.175, color: 0xbfe3ff, opacity: 0.22 }),
     /** The blaster a figure in the `aim` pose holds: a cartoon ray gun
-     *  (chunky, a ring round the muzzle, a fin on top, no real firearm's
+     *  (chunky, a ring round the muzzle, a low sight on top, no real firearm's
      *  shape), in the hand's own frame, which the pose's twist stands
      *  thumb up (poses.js): the barrel along the fingers' -y out past the
-     *  knuckles of the fist (hands.js), the body `body` [across, along,
-     *  deep] meters round the fist, the fin on the thumb side (up), the
-     *  `grip` [thick, long, deep] handle out of the bottom, `barrel`
-     *  beyond. Upright, not on its side (Steve, 2026-10-28). */
-    blaster: Object.freeze({ body: Object.freeze([0.06, 0.15, 0.065]), barrel: 0.13, barrelR: 0.017, ringR: 0.032, fin: 0.04, grip: Object.freeze([0.045, 0.07, 0.05]), color: 0xd9dde3, trim: 0xff8a3d })
+     *  knuckles of the fist (hands.js): the frame `body` [across, along,
+     *  deep] meters sitting `over` the fist's top and reaching `ahead` of
+     *  the hand's middle back over the knuckles, a low `sight` on it, the
+     *  `grip` [thick, long, deep] down through the fist and out below it,
+     *  raked back `rake` radians, `barrel` out of the frame's front.
+     *  Upright, held as a pistol is (Steve, 2026-10-28). */
+    blaster: Object.freeze({ body: Object.freeze([0.045, 0.14, 0.05]), over: 0.028, ahead: 0.03, barrel: 0.12, barrelR: 0.016, ringR: 0.03, sight: 0.008, grip: Object.freeze([0.03, 0.12, 0.04]), rake: 0.22, color: 0xd9dde3, trim: 0xff8a3d })
 });
 
 /** A seeded roll, so the stars stand still between builds. */
@@ -92,34 +94,43 @@ export function build(box, config, { figures = [] } = {}) {
     /** The blaster in `hand` (the rig's hand mesh, made a fist), `inner`
      *  the thumb's side (+1 or -1 along the hand's x, which the pose
      *  stands up): the barrel along the fingers, out past the knuckles,
-     *  the body round the fist, the fin on the thumb side. */
+     *  the body round the fist, a low sight on the thumb side, the grip out
+     *  of the bottom. Each piece is named, for the suite. */
     const arm = (hand, inner) => {
         const Bl = S.blaster;
         const gun = new THREE.Group();
         gun.name = 'blaster';
         const [bw, bl, bh] = Bl.body;
-        // The fist's middle is a little under the hand's origin.
-        const grip = -0.03;
+        const up = (v) => inner * v;
+        // The frame sits ON TOP of the fist and runs forward over the
+        // knuckles; the grip passes DOWN THROUGH the fist, its top under
+        // the frame and its end just out below the fist, raked back a
+        // little; the barrel out of the frame's front (Steve, 2026-10-28:
+        // a body round the fist with a grip hanging under it read as a
+        // tube with a loose handle).
+        const frameX = up(Bl.over + bw / 2);
         const body = new THREE.Mesh(new THREE.BoxGeometry(bw, bl, bh), shell);
-        body.position.set(0, grip - bl * 0.25, 0);
+        body.name = 'body';
+        body.position.set(frameX, Bl.ahead - bl / 2, 0);
         gun.add(body);
         const barrel = new THREE.Mesh(new THREE.CylinderGeometry(Bl.barrelR, Bl.barrelR * 1.2, Bl.barrel, 12), shell);
-        barrel.position.set(0, grip - bl * 0.75 - Bl.barrel / 2, 0);
+        barrel.name = 'barrel';
+        barrel.position.set(frameX, Bl.ahead - bl - Bl.barrel / 2, 0);
         gun.add(barrel);
         const ring = new THREE.Mesh(new THREE.TorusGeometry(Bl.ringR, Bl.barrelR * 0.45, 8, 16), trim);
+        ring.name = 'ring';
         ring.rotation.x = Math.PI / 2;
-        ring.position.set(0, grip - bl * 0.75 - Bl.barrel * 0.6, 0);
+        ring.position.set(frameX, Bl.ahead - bl - Bl.barrel * 0.6, 0);
         gun.add(ring);
-        const fin = new THREE.Mesh(new THREE.BoxGeometry(Bl.fin, bl * 0.55, bh * 0.3), trim);
-        fin.position.set(inner * (bw / 2 + Bl.fin / 2), grip - bl * 0.35, 0);
-        gun.add(fin);
-        // The handle, down out of the bottom of the fist (the pinky side,
-        // which the thumb-up twist points at the floor), so the gun reads
-        // as held upright (Steve, 2026-10-28).
+        const sight = new THREE.Mesh(new THREE.BoxGeometry(Bl.sight, bl * 0.15, bh * 0.25), trim);
+        sight.name = 'sight';
+        sight.position.set(frameX + up(bw / 2 + Bl.sight / 2), Bl.ahead - bl * 0.8, 0);
+        gun.add(sight);
         const [gw, gl, gd] = Bl.grip;
         const handle = new THREE.Mesh(new THREE.BoxGeometry(gl, gw, gd), trim);
-        handle.position.set(-inner * (bw / 2 + gl / 2 + 0.035), grip + bl * 0.05, 0);
-        handle.rotation.z = inner * 0.25;
+        handle.name = 'handle';
+        handle.position.set(up(Bl.over - gl / 2), Bl.ahead - bl * 0.25 + gw * 0.1, 0);
+        handle.rotation.z = up(-Bl.rake);
         gun.add(handle);
         gun.traverse((o) => { if (o.isMesh) o.castShadow = true; });
         hand.add(gun);
