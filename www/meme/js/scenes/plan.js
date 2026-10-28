@@ -1,7 +1,8 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * scenes/plan.js - the props of The Plan (template 7): a flip chart on an
- * easel beside the figure, a white sheet in a dark frame, the caption drawn
+ * easel beside the figure, on the camera's right (Steve, 2026-10-28: where
+ * the board usually is), a white sheet in a dark frame, the caption drawn
  * over the panel standing in for what is written on it. Generic (PRD
  * section 7): an easel is an easel.
  */
@@ -10,7 +11,7 @@
  *  tipped back `lean` radians, on two legs. Big enough to carry the
  *  panel's caption (Steve, 2026-10-28: the words go on the board). */
 export const CHART = Object.freeze({
-    at: Object.freeze([-0.48, 1.3, -0.1]), w: 0.96, h: 0.8, depth: 0.03, lean: 0.12,
+    at: Object.freeze([0.48, 1.3, -0.1]), w: 0.96, h: 0.8, depth: 0.03, lean: 0.12,
     frame: 0x2a2d31, sheet: 0xfbfaf6, leg: 0x6b5a48, legR: 0.012, sheetShare: Object.freeze([0.92, 0.9])
 });
 

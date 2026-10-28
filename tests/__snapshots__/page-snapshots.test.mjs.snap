@@ -461,7 +461,7 @@ html [lang="en"]
     title
       "Your Avatar | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/avatar.min.css?v=13" rel="preload"]
+    link [as="style" href="css/avatar.min.css?v=14" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -489,7 +489,7 @@ html [lang="en"]
     link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/avatar.min.css?v=13" rel="stylesheet"]
+    link [href="css/avatar.min.css?v=14" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body.av-body

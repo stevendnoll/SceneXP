@@ -782,10 +782,25 @@ describe('the page', () => {
         const rule = css.match(/\n\.av-tabs \{([^}]*)\}/)[1];
         expect(rule).toMatch(/display:\s*grid/);
         expect(rule).toMatch(/grid-template-columns:\s*repeat\(3,/);
-        const config = readFileSync('www/avatar/js/config.js', 'utf8');
-        expect((config.match(/^\s+id: '[a-z]+', label: '[A-Za-z]+', frame:/gm) || []).length % 3).toBe(0);
+        // The tabs live in the shared editor since 2026-10-28; read there,
+        // and found (a count of none would pass the rows of three).
+        const tabs = readFileSync('www/shared/js/avatar-editor-1.0.0.js', 'utf8').match(/^\s+id: '[a-z]+', label: '[A-Za-z]+', frame:/gm) || [];
+        expect(tabs).toHaveLength(6);
+        expect(tabs.length % 3).toBe(0);
         expect(rule).not.toMatch(/overflow/);
         expect(css).not.toMatch(/\.av-tabs::-webkit-scrollbar/);
+    });
+
+    test('an option the editor hides is hidden: its display does not outrank the hidden attribute (Steve\'s QA, 2026-10-28)', () => {
+        // `.av-option` is inline-flex, which beats the browser's own rule
+        // for [hidden], so Bare legs showed under every bottom.
+        const css = readFileSync('www/avatar/css/avatar.css', 'utf8');
+        expect(css).toMatch(/\n\.av-option \{[^}]*display:\s*inline-flex/);
+        expect(css).toMatch(/\n\.av-option\[hidden\] \{\s*display:\s*none;\s*\}/);
+        // Meme Studio's copy of the editor's styles holds it too.
+        expect(readFileSync('www/meme/css/meme.css', 'utf8')).toMatch(/\.mm-customize \.av-option\[hidden\] \{\s*display:\s*none;\s*\}/);
+        const html = readFileSync('www/avatar/index.html', 'utf8');
+        expect(html.match(/css\/avatar\.min\.css\?v=(\d+)/g)).toEqual(['css/avatar.min.css?v=14', 'css/avatar.min.css?v=14']);
     });
 
     test('the studio sticks to the viewport on a phone: the body is not a scroll container (Steve\'s phone QA, 2026-10-27)', () => {

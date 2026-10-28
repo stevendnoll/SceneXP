@@ -68,6 +68,10 @@ describe('the studio, on the real three', () => {
         const up = new THREE.Vector3(0, 0, 1).applyQuaternion(floor.quaternion);
         expect(up.y).toBeCloseTo(1, 5);
         expect(floor.geometry.parameters.width).toBe(CONFIG.studio.floor.size);
+        // Under the boxes, which stand on y = 0, by enough that a box's own
+        // floor never fights it for a pixel (Steve's QA, 2026-10-28).
+        expect(floor.position.y).toBe(-CONFIG.studio.floor.below);
+        expect(CONFIG.studio.floor.below).toBeGreaterThanOrEqual(0.005);
         expect(lights.sky.isHemisphereLight).toBe(true);
         expect(lights.sun.isDirectionalLight).toBe(true);
         expect(lights.fill.isDirectionalLight).toBe(true);

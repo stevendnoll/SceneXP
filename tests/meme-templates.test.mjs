@@ -107,21 +107,30 @@ describe('the catalog', () => {
         // points at them with the face turned toward them.
         expect(figure('nopeYep', 0)).toMatchObject({ side: 'left', look: 'right' });
         expect(figure('nopeYep', 2)).toMatchObject({ pose: 'point', side: 'left', look: 'left' });
-        // The Plan: the chart is on the camera's left, so the right arm
+        // The Plan: the chart is on the camera's right and the presenter on
+        // its left (Steve's QA, 2026-10-28), so the figure's own left arm
         // presents it and the body leans toward it, the face to the room;
-        // only the last step turns to look at the chart (Steve, 2026-10-28).
+        // only the last step turns to look at the chart, well round to it.
         for (const cell of [0, 1, 2]) {
-            expect(figure('plan', cell).side).toBe('right');
-            expect(figure('plan', cell).look).toBeGreaterThan(0);
+            expect(figure('plan', cell).side).toBe('left');
+            expect(figure('plan', cell).look + figure('plan', cell).turn).toBeCloseTo(0, 9);
         }
-        expect(figure('plan', 3)).toMatchObject({ side: 'right', look: 'right', expression: 'shocked' });
-        expect(T.templateOf('plan').cells.every((c) => c.figures[0].turn < 0)).toBe(true);
+        expect(figure('plan', 3)).toMatchObject({ side: 'left', expression: 'shocked' });
+        expect(figure('plan', 3).look + figure('plan', 3).turn).toBeGreaterThan(0.9);
+        expect(T.templateOf('plan').cells.every((c) => c.figures[0].turn > 0 && c.figures[0].at[0] < 0)).toBe(true);
         // The Head Turn (Steve, 2026-10-28, round three): A Friend walks
         // beside the visitor on the camera's right, furious; Someone has
         // just passed and walks on toward the camera in the foreground on
         // the left, mid-stride; the visitor looks back at them, taken.
         const [you, friend, other] = T.templateOf('headTurn').cells[0].figures;
-        expect(you).toMatchObject({ pose: 'lookBack', look: 'right', expression: 'ooh' });
+        expect(you).toMatchObject({ pose: 'lookBack', expression: 'ooh' });
+        // Looking back toward Someone (camera left) but with the face still
+        // round to the camera, not past them off the panel (Steve's QA,
+        // 2026-10-28): the face's turn from the camera, body and head
+        // together, between a tenth and a half of a right angle.
+        expect(you.look).toBeLessThan(0);
+        expect(-(you.turn + you.look)).toBeGreaterThan(0.15);
+        expect(-(you.turn + you.look)).toBeLessThan(0.8);
         expect(friend).toMatchObject({ role: 'friend', expression: 'rage', look: 'right' });
         expect(friend.at[0]).toBeGreaterThan(0.5);
         expect(other.role).toBe('other');

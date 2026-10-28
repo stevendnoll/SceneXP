@@ -182,20 +182,22 @@ const GALAXY_BRAIN = {
 
 /** The Plan (template 7): two by two, the visitor presenting a chart,
  *  pleased, pleased, pleased, then the last step twice over. The chart
- *  stands on the camera's left (scenes/plan.js), so the figure turns a
- *  little toward it with the right arm out to it, and faces the room for
- *  three steps; only in the last does the head turn to the chart, shocked
- *  (Steve, 2026-10-28: the look at the board is the fourth panel alone).
+ *  stands on the camera's right and the presenter on its left (Steve's QA,
+ *  2026-10-28: where the board usually is), so the figure turns a little
+ *  toward it with the left arm out to it (its own left, the camera's
+ *  right), and faces the room for three steps; only in the last does the
+ *  head turn to the chart, shocked, well round toward it (Steve: the look
+ *  at the board is the fourth panel alone, and it was too slight).
  *  A tan wall in a soft gradient, and the presenter dressed all in black
  *  (Steve, M8). A black outfit is a costume; nothing more of anyone's
  *  character (no scarf, no bald head) is added. */
 const BLACK = 'x1f1f22';
 const ALL_BLACK = { shirt: BLACK, hatColor: BLACK, bottomColor: 'black', shoeColor: 'black', legwearColor: 'black', armwearColor: 'black' };
-const PLAN_CELL = (expression, look = 0.2) => ({
-    figures: [you({ pose: 'present', side: 'right', look, expression, at: [0.5, 0], turn: -0.2, overrides: ALL_BLACK })],
+const PLAN_CELL = (expression, look = -0.2) => ({
+    figures: [you({ pose: 'present', side: 'left', look, expression, at: [-0.5, 0], turn: 0.2, overrides: ALL_BLACK })],
     // The step is written on the chart (Steve, 2026-10-28).
     captions: [{ prop: 'board' }],
-    camera: { eye: [0.03, 1.35, 3.1], aim: [-0.02, 1.15, 0], fov: 36 },
+    camera: { eye: [-0.03, 1.35, 3.1], aim: [0.02, 1.15, 0], fov: 36 },
     backdrop: '#D9BF93',
     paint: { wall: 'wash' },
     scene: 'plan'
@@ -207,7 +209,7 @@ const PLAN = {
     order: 6,
     grid: [[{ span: 1 }, { span: 1 }], [{ span: 1 }, { span: 1 }]],
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
-    cells: [PLAN_CELL('smug'), PLAN_CELL('smug'), PLAN_CELL('bigGrin'), PLAN_CELL('shocked', 'right')]
+    cells: [PLAN_CELL('smug'), PLAN_CELL('smug'), PLAN_CELL('bigGrin'), PLAN_CELL('shocked', 0.9)]
 };
 
 const THREE_ROLES = [
@@ -234,7 +236,11 @@ const HEAD_TURN = {
     roles: THREE_ROLES,
     cells: [{
         figures: [
-            { role: 'you', pose: 'lookBack', look: 'right', expression: 'ooh', at: [0.12, -0.05], turn: 0.3, stride: 0.3 },
+            // The head turned back only part way, so the face stays round
+            // to the camera and reads as looking at Someone in the
+            // foreground, not at something off the panel (Steve's QA,
+            // 2026-10-28: the pose's own 0.95 looked past them).
+            { role: 'you', pose: 'lookBack', look: -0.55, expression: 'ooh', at: [0.12, -0.05], turn: 0.3, stride: 0.3 },
             { role: 'friend', pose: 'stand', expression: 'rage', look: 'right', at: [0.78, -0.1], turn: -0.15, stride: -0.3 },
             { role: 'other', pose: 'stand', expression: 'smug', at: [-0.72, 0.45], turn: 0.2, stride: 0.5 }
         ],

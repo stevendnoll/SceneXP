@@ -72,6 +72,9 @@ export function buildStudio(config, { mobile = false } = {}) {
         new THREE.MeshStandardMaterial({ color: S.floor.color, roughness: 0.95, metalness: 0 })
     );
     floor.rotation.x = -Math.PI / 2;
+    // A little under the boxes, which stand on y = 0: never level with a
+    // box's own floor, or the two fight for the same pixels.
+    floor.position.y = -S.floor.below;
     floor.name = 'floor';
     floor.receiveShadow = true;
     scene.add(floor);

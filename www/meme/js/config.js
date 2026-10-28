@@ -16,10 +16,13 @@ function deepFreeze(o) {
 
 export const MEME_PAGE = deepFreeze({
     /** The soft studio the shadowboxes float in: the avatar page's warm
-     *  white, a floor far larger than any frame so its edge is never seen. */
+     *  white, a floor far larger than any frame so its edge is never seen,
+     *  `below` meters under the boxes' own floors (Steve's QA, 2026-10-28:
+     *  level with the bottom row's floors, the two fought for every pixel,
+     *  plainest on The Handshake's dark floor). */
     studio: {
         color: '#F1EFEA',
-        floor: { size: 60, color: '#ECE8E1' }
+        floor: { size: 60, color: '#ECE8E1', below: 0.01 }
     },
 
     /**

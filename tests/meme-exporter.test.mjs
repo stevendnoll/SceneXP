@@ -287,7 +287,7 @@ describe('the arrangement', () => {
         stage.setTemplate(T.templateOf('galaxyBrain'), () => ({ ...DEFAULT_AVATAR, hat: HAT }));
         const hats = stage.panels.filter((p) => p.figures.length).map((p) => Boolean(p.figures[0].person.getObjectByName('hat')));
         expect(hats).toEqual([true, true, true, true]);
-        // The Plan: the body leans toward the chart on the camera's left,
+        // The Plan: the body leans toward the chart on the camera's right,
         // the face to the room for three steps, and only the last turns to
         // the chart, whatever hand the avatar favors (QA 2026-10-28).
         for (const handedness of ['right', 'left']) {
@@ -296,8 +296,8 @@ describe('the arrangement', () => {
                 expect(p.props.name).toBe('plan');
                 expect(p.box.getObjectByName('board')).toBeTruthy();
                 const head = p.figures[0].person.getObjectByName('head');
-                expect(head.rotation.y).toBeCloseTo(i < 3 ? 0.2 : -0.25, 9);
-                expect(p.figures[0].group.rotation.y).toBeCloseTo(-0.2, 9);
+                expect(head.rotation.y).toBeCloseTo(i < 3 ? -0.2 : 0.9, 9);
+                expect(p.figures[0].group.rotation.y).toBeCloseTo(0.2, 9);
             });
         }
         stage.dispose();
@@ -313,10 +313,10 @@ describe('the words on the board', () => {
         const props = exporter.propsFor(0, 1080, 1080);
         expect(Object.keys(props)).toEqual(['board']);
         const b = props.board;
-        // On the camera's left, inside the panel, wide enough to read.
-        expect(b.x).toBeGreaterThan(0);
-        expect(b.x).toBeLessThan(300);
-        expect(b.x + b.w).toBeLessThan(640);
+        // On the camera's right, inside the panel, wide enough to read.
+        expect(b.x).toBeGreaterThan(440);
+        expect(b.x + b.w).toBeGreaterThan(780);
+        expect(b.x + b.w).toBeLessThan(1080);
         expect(b.y).toBeGreaterThan(100);
         expect(b.y + b.h).toBeLessThan(800);
         expect(b.w).toBeGreaterThan(250);

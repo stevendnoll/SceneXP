@@ -733,12 +733,12 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "backdrop": "#D9BF93",
         "camera": {
           "aim": [
-            -0.02,
+            0.02,
             1.15,
             0,
           ],
           "eye": [
-            0.03,
+            -0.03,
             1.35,
             3.1,
           ],
@@ -752,11 +752,11 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "figures": [
           {
             "at": [
-              0.5,
+              -0.5,
               0,
             ],
             "expression": "smug",
-            "look": 0.2,
+            "look": -0.2,
             "overrides": {
               "armwearColor": "black",
               "bottomColor": "black",
@@ -767,8 +767,8 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
             },
             "pose": "present",
             "role": "you",
-            "side": "right",
-            "turn": -0.2,
+            "side": "left",
+            "turn": 0.2,
           },
         ],
         "paint": {
@@ -780,12 +780,12 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "backdrop": "#D9BF93",
         "camera": {
           "aim": [
-            -0.02,
+            0.02,
             1.15,
             0,
           ],
           "eye": [
-            0.03,
+            -0.03,
             1.35,
             3.1,
           ],
@@ -799,11 +799,11 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "figures": [
           {
             "at": [
-              0.5,
+              -0.5,
               0,
             ],
             "expression": "smug",
-            "look": 0.2,
+            "look": -0.2,
             "overrides": {
               "armwearColor": "black",
               "bottomColor": "black",
@@ -814,8 +814,8 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
             },
             "pose": "present",
             "role": "you",
-            "side": "right",
-            "turn": -0.2,
+            "side": "left",
+            "turn": 0.2,
           },
         ],
         "paint": {
@@ -827,12 +827,12 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "backdrop": "#D9BF93",
         "camera": {
           "aim": [
-            -0.02,
+            0.02,
             1.15,
             0,
           ],
           "eye": [
-            0.03,
+            -0.03,
             1.35,
             3.1,
           ],
@@ -846,11 +846,11 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "figures": [
           {
             "at": [
-              0.5,
+              -0.5,
               0,
             ],
             "expression": "bigGrin",
-            "look": 0.2,
+            "look": -0.2,
             "overrides": {
               "armwearColor": "black",
               "bottomColor": "black",
@@ -861,8 +861,8 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
             },
             "pose": "present",
             "role": "you",
-            "side": "right",
-            "turn": -0.2,
+            "side": "left",
+            "turn": 0.2,
           },
         ],
         "paint": {
@@ -874,12 +874,12 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "backdrop": "#D9BF93",
         "camera": {
           "aim": [
-            -0.02,
+            0.02,
             1.15,
             0,
           ],
           "eye": [
-            0.03,
+            -0.03,
             1.35,
             3.1,
           ],
@@ -893,11 +893,11 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "figures": [
           {
             "at": [
-              0.5,
+              -0.5,
               0,
             ],
             "expression": "shocked",
-            "look": "right",
+            "look": 0.9,
             "overrides": {
               "armwearColor": "black",
               "bottomColor": "black",
@@ -908,8 +908,8 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
             },
             "pose": "present",
             "role": "you",
-            "side": "right",
-            "turn": -0.2,
+            "side": "left",
+            "turn": 0.2,
           },
         ],
         "paint": {
@@ -983,7 +983,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
               -0.05,
             ],
             "expression": "ooh",
-            "look": "right",
+            "look": -0.55,
             "pose": "lookBack",
             "role": "you",
             "stride": 0.3,

@@ -111,3 +111,20 @@ test('a template shown on the stage re-aims the sun at it', async () => {
     expect(stage.lights.sun.shadow.camera.top).toBeGreaterThanOrEqual(size.height / 2 + CONFIG.box.depth);
     stage.dispose();
 });
+
+test('every box in the bottom row stands on its own floor, clear of the studio\'s (Steve\'s QA, 2026-10-28)', () => {
+    // Level, the two floors fought for every pixel along the bottom of each
+    // bottom-row panel: plainest on The Handshake's dark floor over the
+    // studio's pale one, there in most memes.
+    const renderer = { shadowMap: {}, setPixelRatio() {}, setSize() {}, render() {}, setAnimationLoop() {}, dispose() {} };
+    const stage = S.createStage(CONFIG, { canvas: { clientWidth: 800, clientHeight: 600 }, makeRenderer: () => renderer });
+    const studio = stage.floor.getWorldPosition(new THREE.Vector3()).y;
+    for (const id of ['handshake', 'headTurn', 'galaxyBrain']) {
+        stage.setTemplate(T.templateOf(id), () => ({}));
+        stage.scene.updateMatrixWorld(true);
+        const floors = stage.panels.map((p) => p.box.getObjectByName('floor').getWorldPosition(new THREE.Vector3()).y);
+        expect(Math.min(...floors)).toBeCloseTo(0, 9);
+        for (const y of floors) expect(y - studio).toBeGreaterThanOrEqual(0.005);
+    }
+    stage.dispose();
+});
