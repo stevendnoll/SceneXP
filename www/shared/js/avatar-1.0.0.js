@@ -659,36 +659,108 @@ export function withOverrides(avatar, overrides = {}) {
 /**
  * How often a random avatar goes without a piece it could go without: a
  * field with a "none" (facial hair, glasses, a hat, legwear, armwear) is
- * none this share of the time. A straight roll over the lists would wear a
- * hat thirteen times in fourteen and glasses seven in eight: a costume
- * every time.
+ * none this share of the time, unless its look says otherwise
+ * (RANDOM_LOOKS). A straight roll over the lists would wear a hat thirteen
+ * times in fourteen and glasses seven in eight: a costume every time.
  */
 export const NONE_ODDS = 0.5;
+
+/** How often a random avatar is left-handed (Steve, 2026-10-28: an even
+ *  roll made half of them left-handed). About one person in ten is. */
+export const LEFT_HANDED_ODDS = 0.1;
+
+/**
+ * THE LOOKS A RANDOM AVATAR IS ROLLED IN (Steve, 2026-10-28: "the random
+ * avatars are a little too random"). The editor's lists are named by style,
+ * never by who wears them, and a visitor may wear anything at all. The dice
+ * are another matter: a stranger made at random reads best when the pieces
+ * go together the way they usually do, so each roll first picks a look, and
+ * the look sets aside what would usually be out of place on it. Generally
+ * speaking, not a rule about anybody: the mixed look keeps the free roll,
+ * so now and then a stranger is a real surprise ("it's funny to
+ * occasionally get a truly random avatar"). A look is never stored or said.
+ * An avatar has no field for it, and one that is saved is simply what it
+ * is.
+ *
+ *   share     how often the look is rolled (the shares sum to 1)
+ *   without   per field, the ids this look never rolls
+ *   none      per field, how often a piece it can go without is none
+ *             (NONE_ODDS unless given): 1 is never worn
+ *
+ * Steve's to tune. tests/shared-avatar holds every id here to a real
+ * option, and every field to something left to roll.
+ */
+export const RANDOM_LOOKS = Object.freeze([
+    Object.freeze({
+        id: 'masculine',
+        share: 0.45,
+        without: Object.freeze({
+            length: Object.freeze(['pigtails', 'spaceBuns', 'bob']),
+            glasses: Object.freeze(['catEye']),
+            build: Object.freeze(['curvy', 'pear']),
+            sleeves: Object.freeze(['leotard', 'bodysuit']),
+            bottom: Object.freeze(['skirt', 'longSkirt', 'miniSkirt', 'pleatedSkirt', 'tutu', 'leggings', 'shortShorts']),
+            shoes: Object.freeze(['maryJane', 'flats', 'heels', 'platforms']),
+            lips: Object.freeze(['rose', 'red', 'berry', 'softPink']),
+            eyeShape: Object.freeze(['lashes'])
+        }),
+        none: Object.freeze({ legwear: 1, armwear: 1 })
+    }),
+    Object.freeze({
+        id: 'feminine',
+        share: 0.45,
+        without: Object.freeze({
+            length: Object.freeze(['bald']),
+            build: Object.freeze(['broad']),
+            muscles: Object.freeze(['buff'])
+        }),
+        none: Object.freeze({ facial: 1 })
+    }),
+    Object.freeze({ id: 'mixed', share: 0.1, without: Object.freeze({}), none: Object.freeze({}) })
+]);
 
 /**
  * A random avatar (Steve, 2026-10-26: a "Surprise me" button on /avatar/),
  * from the lists alone, never a custom color, so it is always said in
- * words. Every field is rolled in the link's order with `rand` (0 up to 1,
- * Math.random unless given), under the editor's own rules: a field with a
- * "none" is none `NONE_ODDS` of the time and one of the rest evenly
- * otherwise; an option offered only with another (`onlyWith`, bare legs
- * under a one-piece) is in the draw only while that field, rolled before
- * it, holds one of its values; and a jersey number is drawn only on a
- * jersey (a number then, never none). Nothing is kept: the caller shows it,
- * and only Save keeps it.
+ * words. A look is rolled first (RANDOM_LOOKS, by its share, unless `look`
+ * names one), then every field in the link's order with `rand` (0 up to 1,
+ * Math.random unless given), under the editor's own rules and the look's:
+ * an id the look sets aside is never drawn; a field with a "none" is none
+ * the look's odds of the time (NONE_ODDS unless it says) and one of the
+ * rest evenly otherwise; an option offered only with another (`onlyWith`,
+ * bare legs under a one-piece) is in the draw only while that field, rolled
+ * before it, holds one of its values; a jersey number is drawn only on a
+ * jersey (a number then, never none); and the left hand leads
+ * LEFT_HANDED_ODDS of the time. Nothing is kept: the caller shows it, and
+ * only Save keeps it.
  */
-export function randomAvatar(rand = Math.random) {
+export function randomAvatar(rand = Math.random, { look = null } = {}) {
     const out = { v: AVATAR_VERSION };
     const roll = () => Math.min(0.999999, Math.max(0, Number(rand()) || 0));
     const pick = (options) => options[Math.floor(roll() * options.length)].id;
+    const chosen = RANDOM_LOOKS.find((l) => l.id === look) || lookAt(roll());
     for (const [key, list] of FIELDS) {
-        const offered = list.filter((o) => !o.onlyWith || o.onlyWith.values.includes(out[o.onlyWith.field]));
+        const without = chosen.without[key] || [];
+        const offered = list.filter((o) => !without.includes(o.id)
+            && (!o.onlyWith || o.onlyWith.values.includes(out[o.onlyWith.field])));
         const rest = offered.filter((o) => o.id !== 'none');
-        if (key === 'jerseyNumber') out[key] = out.sleeves === 'jersey' ? pick(rest) : 'none';
-        else if (rest.length < offered.length && roll() < NONE_ODDS) out[key] = 'none';
+        const noneOdds = own(chosen.none, key) ? chosen.none[key] : NONE_ODDS;
+        if (key === 'handedness') out[key] = roll() < LEFT_HANDED_ODDS ? 'left' : 'right';
+        else if (key === 'jerseyNumber') out[key] = out.sleeves === 'jersey' ? pick(rest) : 'none';
+        else if (rest.length < offered.length && roll() < noneOdds) out[key] = 'none';
         else out[key] = pick(rest.length ? rest : offered);
     }
     return normalizeAvatar(out);
+}
+
+/** The look a roll `r` (0 up to 1) lands in, by the looks' shares. */
+function lookAt(r) {
+    let edge = 0;
+    for (const l of RANDOM_LOOKS) {
+        edge += l.share;
+        if (r < edge) return l;
+    }
+    return RANDOM_LOOKS[RANDOM_LOOKS.length - 1];
 }
 
 /**

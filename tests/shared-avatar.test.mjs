@@ -479,13 +479,13 @@ describe('a random avatar (Surprise me, 2026-10-26)', () => {
         expect(A.normalizeAvatar(A.randomAvatar())).toEqual(A.randomAvatar(() => 0) === null ? null : expect.anything());
     });
 
-    test('a piece it can go without is worn about half the time, and every option comes up', () => {
+    test('the mixed look is the free roll: a piece it can go without is worn about half the time, and every option comes up', () => {
         const rand = rng(8);
         const seen = {};
         const none = {};
         const N = 3000;
         for (let i = 0; i < N; i++) {
-            const a = A.randomAvatar(rand);
+            const a = A.randomAvatar(rand, { look: 'mixed' });
             for (const key of FIELD_KEYS) {
                 (seen[key] = seen[key] || new Set()).add(a[key]);
                 if (a[key] === 'none') none[key] = (none[key] || 0) + 1;
@@ -508,6 +508,78 @@ describe('a random avatar (Surprise me, 2026-10-26)', () => {
         }
         // The lists hold no custom color, so none is ever drawn.
         for (const key of A.COLOR_FIELDS) for (const id of seen[key]) expect(A.CUSTOM_COLOR.test(id)).toBe(false);
+    });
+
+    test('the looks are sound: shares that sum to one, real ids, and something left to roll in every field', () => {
+        const ids = A.RANDOM_LOOKS.map((l) => l.id);
+        expect(ids).toEqual(['masculine', 'feminine', 'mixed']);
+        expect(A.RANDOM_LOOKS.reduce((t, l) => t + l.share, 0)).toBeCloseTo(1, 9);
+        for (const look of A.RANDOM_LOOKS) {
+            expect(Object.isFrozen(look)).toBe(true);
+            for (const [key, gone] of Object.entries(look.without)) {
+                const list = A.listOf(key);
+                expect(`${look.id}.${key} is a field: ${Boolean(list)}`).toBe(`${look.id}.${key} is a field: true`);
+                // A typo would set nothing aside, silently.
+                for (const id of gone) expect(`${look.id}.${key}.${id}: ${Boolean(A.optionOf(list, id))}`).toBe(`${look.id}.${key}.${id}: true`);
+                const left = list.filter((o) => !gone.includes(o.id) && o.id !== 'none');
+                expect(`${look.id}.${key} left: ${left.length > 0}`).toBe(`${look.id}.${key} left: true`);
+            }
+            for (const [key, odds] of Object.entries(look.none)) {
+                expect(`${look.id}.${key} has a none: ${Boolean(A.optionOf(A.listOf(key), 'none'))}`).toBe(`${look.id}.${key} has a none: true`);
+                expect(odds).toBeGreaterThanOrEqual(0);
+                expect(odds).toBeLessThanOrEqual(1);
+            }
+        }
+    });
+
+    test('each look keeps to itself: no facial hair on the feminine, no skirts, heels or layers on the masculine', () => {
+        const rand = rng(31);
+        const N = 1500;
+        for (const look of ['masculine', 'feminine']) {
+            const rules = A.RANDOM_LOOKS.find((l) => l.id === look);
+            let bearded = 0;
+            for (let i = 0; i < N; i++) {
+                const a = A.randomAvatar(rand, { look });
+                expect(A.normalizeAvatar(a)).toEqual(a);
+                for (const [key, gone] of Object.entries(rules.without)) {
+                    expect(`${look} ${key}: ${gone.includes(a[key]) ? a[key] : 'kept'}`).toBe(`${look} ${key}: kept`);
+                }
+                for (const [key, odds] of Object.entries(rules.none)) {
+                    if (odds === 1) expect(`${look} ${key}: ${a[key]}`).toBe(`${look} ${key}: none`);
+                }
+                if (a.facial !== 'none') bearded++;
+            }
+            // Facial hair on about half of the masculine look, and never on
+            // the feminine (Steve: "female NPCs usually don't have facial
+            // hair"). Layers never on the masculine.
+            if (look === 'masculine') expect(Math.abs(bearded / N - (1 - A.NONE_ODDS))).toBeLessThan(0.05);
+            else expect(bearded).toBe(0);
+        }
+        // A look that names nothing is rolled as usual.
+        expect(A.normalizeAvatar(A.randomAvatar(rng(2), { look: 'nobody' }))).toBeTruthy();
+    });
+
+    test('rolled by share: about one in ten is left-handed, and now and then a stranger is a real surprise', () => {
+        const rand = rng(57);
+        const N = 6000;
+        let left = 0;
+        let bearded = 0;
+        let surprise = 0;
+        const skirts = A.BOTTOMS.filter((o) => o.kind === 'skirt').map((o) => o.id);
+        for (let i = 0; i < N; i++) {
+            const a = A.randomAvatar(rand);
+            if (a.handedness === 'left') left++;
+            if (a.facial !== 'none') bearded++;
+            if (a.facial !== 'none' && skirts.includes(a.bottom)) surprise++;
+        }
+        // Not the even roll it was (half of them left-handed).
+        expect(Math.abs(left / N - A.LEFT_HANDED_ODDS)).toBeLessThan(0.02);
+        // Facial hair at the looks' own odds, weighed by their shares.
+        const expected = A.RANDOM_LOOKS.reduce((t, l) => t + l.share * (1 - (l.none.facial ?? A.NONE_ODDS)), 0);
+        expect(Math.abs(bearded / N - expected)).toBeLessThan(0.03);
+        // Only the mixed look puts a beard over a skirt: rare, never gone.
+        expect(surprise).toBeGreaterThan(0);
+        expect(surprise / N).toBeLessThan(0.04);
     });
 
     test('a generator that misbehaves still gives a real avatar', () => {
