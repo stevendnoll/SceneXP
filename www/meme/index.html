@@ -10,12 +10,11 @@
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <!-- BEING BUILT (specs/meme M0, 2026-10-27): out of search until the
-         release milestone (M7), when this tag goes, the social card is
-         captured, and the page is listed in the directory, the sitemap and
-         llms.txt. tests/directory.test.mjs holds it under UNRELEASED and
-         tests/page-rules.test.mjs under PENDING_CARDS until then. -->
-    <meta name="robots" content="noindex, nofollow">
+    <!-- RELEASED 2026-10-28 (specs/meme M7): the robots tag that kept the
+         page out of search while it was built is gone, and no robots tag
+         belongs here. The page is listed in the directory (Worlds and
+         games), the promo catalog, the sitemap and llms.txt, which
+         tests/directory.test.mjs holds together. -->
     <meta name="description" content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption, then share as a picture, a short video, or a link a friend can remix with their own avatar.">
     <meta name="theme-color" content="#F1EFEA">
     <meta name="author" content="Steve Noll">
@@ -33,27 +32,31 @@
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/meme/">
     <meta property="og:locale" content="en_US">
-    <!-- THE SOCIAL CARD IS PENDING (M7): the file is captured from Steve's
-         screenshot once the look is approved, through the house recipe
-         (1200x630 JPEG with a WebP twin). JPEG, not WebP (LinkedIn previews
-         no WebP), and exactly one og:image. og:image:alt describes THIS
-         picture, so it is rewritten with the card. -->
+    <!-- THE SOCIAL CARD (M7, 2026-10-28): Steve's screenshot of three
+         figures walking out of a box, converted by the house recipe (the
+         Apple display profile applied, then stripped, 1200x630, JPEG q92 at
+         4:4:4 with a WebP twin at q92 with sharp_yuv). The curve was steep
+         (JPEG 0.77, 0.66 and 0.49% RMSE at q80, 86 and 92), so q92 stood.
+         JPEG, not WebP (LinkedIn previews no WebP), and exactly one
+         og:image. og:image:alt describes THIS picture, so it is rewritten
+         with the card. tests/page-rules.test.mjs opens the file. -->
     <meta property="og:image" content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=1">
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="A grid of small lit boxes, each holding a 3D figure making a face, with a bold white caption across every box.">
+    <meta property="og:image:alt" content="Three 3D figures walk toward the camera out of a pale gray box: one with red pigtails, round blue glasses and a white number 7 jersey, one in a white and navy cap, dark glasses, a short gray beard and a navy sweater, mouth open in surprise, and one in a dark beanie and a teal hoodie, frowning.">
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Meme Studio">
     <meta name="twitter:description" content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption and share.">
     <meta name="twitter:image" content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=1">
-    <meta name="twitter:image:alt" content="A grid of small lit boxes, each holding a 3D figure making a face, with a bold white caption across every box.">
+    <meta name="twitter:image:alt" content="Three 3D figures walk toward the camera out of a pale gray box: one with red pigtails, round blue glasses and a white number 7 jersey, one in a white and navy cap, dark glasses, a short gray beard and a navy sweater, mouth open in surprise, and one in a dark beanie and a teal hoodie, frowning.">
 
     <!-- Structured data: a web application that is part of SceneXP.
          JSON-LD is a data block (not executed), so it is allowed under the CSP.
-         datePublished is added at release (M7), when the date is known. -->
+         datePublished is the release date the home card prints
+         (tests/home-dates.test.mjs holds the two together). -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -61,6 +64,7 @@
       "@id": "https://www.scenexp.com/meme/#app",
       "url": "https://www.scenexp.com/meme/",
       "name": "Meme Studio",
+      "datePublished": "2026-10-28",
       "image": "https://www.scenexp.com/meme/assets/og-meme.jpg?v=1",
       "description": "A browser-based 3D meme generator for SceneXP. The visitor's own avatar stars in a meme laid out as a grid of small lit 3D boxes, one for each panel. Choose a template, type a caption for each panel, add a friend's avatar, and share the result as a picture, a short vertical video, or a link the friend can open and remix with their own avatar. Everything is made on the visitor's own device and nothing is uploaded.",
       "applicationCategory": "EntertainmentApplication",
@@ -107,7 +111,7 @@
     <title>Meme Studio | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/meme.min.css?v=1" as="style">
+    <link rel="preload" href="css/meme.min.css?v=2" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -123,6 +127,7 @@
     <link rel="modulepreload" href="js/state.min.js">
     <link rel="modulepreload" href="js/remix.min.js">
     <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/promo-1.0.0.min.js">
     <link rel="modulepreload" href="js/compose.min.js">
     <link rel="modulepreload" href="js/exporter.min.js">
     <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
@@ -147,7 +152,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/meme.min.css?v=1">
+    <link rel="stylesheet" href="css/meme.min.css?v=2">
 
     <!-- When JS is off, the stage can't run: the static fallback below is
          the page. A <noscript> <link> is CSP-safe (no inline styles). -->
@@ -227,7 +232,7 @@
                     <button id="mm-make-mine" class="mm-primary" type="button">Make it mine</button>
                     <button id="mm-keep-theirs" class="mm-secondary" type="button">Keep it as it is</button>
                 </div>
-                <p id="mm-incoming-note" class="mm-note" hidden>You have no avatar yet. <a class="mm-link" href="/avatar/">Make yours</a>, then come back here: this meme will be waiting.</p>
+                <p id="mm-incoming-note" class="mm-note" hidden>You have no avatar yet. <a class="mm-link" href="/avatar/?return=/meme/">Make yours</a>, then come back here: this meme will be waiting.</p>
             </div>
 
             <!-- The editor (js/editor.js, M3): three tabs. Meme holds the
@@ -262,7 +267,10 @@
                          of the tab order, since the button is the way to it. -->
                     <input id="mm-friend-file" type="file" accept=".json,application/json" hidden tabindex="-1" aria-label="Open a friend's avatar file">
                     <p id="mm-people-status" class="mm-note" role="status" aria-live="polite"></p>
-                    <p class="mm-note"><a id="mm-make-avatar" class="mm-link" href="/avatar/">Make your avatar</a></p>
+                    <!-- The avatar page's Back button returns here
+                         (?return= is checked against the promo catalog),
+                         and the meme is already kept, so it is waiting. -->
+                    <p class="mm-note"><a id="mm-make-avatar" class="mm-link" href="/avatar/?return=/meme/">Make your avatar</a></p>
                 </div>
             </div>
 
@@ -299,6 +307,15 @@
             </div>
 
             <p id="mm-status" class="mm-status" role="status" aria-live="polite"></p>
+
+            <!-- WHAT NEXT (M7): built by main.js once the first picture,
+                 video or link has been shared or saved, which is when a
+                 visitor has finished something. With an avatar it names the
+                 next experience (promo-1.0.0, PAIRS: X's and O's, where the
+                 avatar takes the snap). With none it names the avatar page
+                 instead, which comes back here. The directory link sits
+                 under it. -->
+            <div id="mm-next" class="mm-next" hidden></div>
 
             <p class="mm-note mm-privacy">Made on this device. Nothing you type or make is sent to us. <a href="/privacy.html">Privacy</a></p>
             <p class="mm-note mm-report">Seen a meme from here that should not exist? <a href="/contact.html">Please tell us</a>.</p>

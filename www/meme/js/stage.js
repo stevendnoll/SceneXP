@@ -151,7 +151,7 @@ export function createStage(config, {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = config.light.exposure;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
 
     const { scene, floor, lights } = buildStudio(config, { mobile });
     const camera = new THREE.PerspectiveCamera(C.fov, 1, 0.05, 80);

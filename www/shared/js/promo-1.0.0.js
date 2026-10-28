@@ -50,6 +50,7 @@
  *  `art` carries the home page's own cache-busting query string verbatim, so a
  *  visitor who has seen the directory already has the file. */
 export const EXPERIENCES = Object.freeze([
+    { slug: 'meme', category: 'worlds', title: 'Meme Studio', line: 'Put yourself in the meme', art: '/meme/assets/og-meme.webp?v=1' },
     { slug: 'derby', category: 'worlds', title: 'Derby Day', line: 'A wooden derby car race', art: '/derby/assets/og-derby.webp?v=1' },
     { slug: 'leaves', category: 'worlds', title: 'Leaf Blower', line: 'A leaf blower game in an autumn front yard', art: '/leaves/assets/og-leaves.webp?v=1' },
     { slug: 'office', category: 'worlds', title: 'Corner Office', line: 'A job search tracker in a 3D office', art: '/office/assets/og-office.webp?v=1' },
@@ -90,6 +91,11 @@ export const PAIRS = Object.freeze({
     // sitting (2026-10-09). The category's next would have been the job
     // tracker. One way only: X's and O's keeps Earth Defense.
     leaves: 'xo',
+    // A meme starring your avatar, then a game it plays in: X's and O's
+    // puts the avatar at quarterback (Steve, 2026-10-28). The category's
+    // next would have been Derby Day. A visitor with no avatar is shown the
+    // avatar page instead (the meme page passes `entry`).
+    meme: 'xo',
     // Two fractals. One you fall into and one you grow.
     mandelbrot: 'garden',
     garden: 'mandelbrot'
@@ -139,18 +145,24 @@ export function nextExperience(slug) {
  * built rather than at boot, which is after the scene has stopped needing the
  * network.
  *
+ * `entry` names something other than the catalog's recommendation, for a
+ * page that knows better at that moment: `{ slug, title, line, art }`, and
+ * an `href` when the address is not `/<slug>/` (the avatar page with a
+ * `?return=`, for a visitor who has no avatar yet). It is drawn exactly as
+ * a catalog entry is.
+ *
  * Returns null when there is nothing to recommend or no document to build in,
  * and the caller simply shows no card.
  */
-export function createPromoCard(slug, { eyebrow = 'Next on SceneXP', doc = null } = {}) {
+export function createPromoCard(slug, { eyebrow = 'Next on SceneXP', doc = null, entry = null } = {}) {
     const d = doc || (typeof document !== 'undefined' ? document : null);
     if (!d || typeof d.createElement !== 'function') return null;
-    const next = nextExperience(slug);
+    const next = entry || nextExperience(slug);
     if (!next) return null;
 
     const link = d.createElement('a');
     link.className = 'promo-card';
-    link.href = `/${next.slug}/`;
+    link.href = next.href || `/${next.slug}/`;
     link.dataset.slug = next.slug;
 
     const art = d.createElement('img');

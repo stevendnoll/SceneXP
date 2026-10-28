@@ -16,7 +16,7 @@
  *   the sticky stage sticks to the viewport.
  */
 import { jest } from '@jest/globals';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { loadRealThree } from './helpers/real-three.mjs';
 import { installThree } from './helpers/three-stub.mjs';
 import { installDom, flushAsync, fire } from './helpers/dom-stub.mjs';
@@ -205,15 +205,35 @@ describe('the page', () => {
         expect(phone.match(/\.mm-stage \{([^}]*)\}/)[1]).not.toMatch(/position/);
     });
 
-    test('the page is being built: out of search, with the words and the next step already there', () => {
+    test('the page is released: in search, with the words and the next step already there', () => {
         const page = HTML.replace(/<!--[\s\S]*?-->/g, '');
-        expect(page).toMatch(/<meta name="robots" content="noindex, nofollow">/);
+        // Released 2026-10-28 (M7): no robots tag at all, the directory
+        // suite's rule for a listed page.
+        expect(page).not.toMatch(/<meta\s+name="robots"/i);
+        expect(page).not.toMatch(/noindex/i);
         expect(page).toMatch(/<title>Meme Studio \| SceneXP<\/title>/);
         // Words before scenery: the heading and the one next step are in the
         // markup, so they show before the stage has drawn anything.
         expect(page).toMatch(/<h2 id="mm-heading"[^>]*>Put yourself in the meme<\/h2>/);
         expect(page).toMatch(/id="mm-lede"[^>]*>Your avatar is already standing in the first one\./);
-        expect(page).toContain('href="/avatar/"');
+    });
+
+    test('both ways to the avatar page come back here, and the avatar page takes the way back', async () => {
+        // The avatar page's Back button follows `?return=` only for the home
+        // page and the promo catalog's scenes (no open redirect), so this
+        // link worked only once Meme Studio joined the catalog at release.
+        const page = HTML.replace(/<!--[\s\S]*?-->/g, '');
+        expect(page).toMatch(/<a id="mm-make-avatar" class="mm-link" href="\/avatar\/\?return=\/meme\/">/);
+        expect(page).toMatch(/<p id="mm-incoming-note"[^>]*>[^<]*<a class="mm-link" href="\/avatar\/\?return=\/meme\/">/);
+        const { returnTarget } = await import('../www/avatar/js/transfer.js');
+        expect(returnTarget('?return=/meme/')).toEqual({ path: '/meme/', name: 'Meme Studio' });
+        // The card for a visitor with no avatar names that page as the page
+        // names itself, with its own card's art, and the same way back.
+        const { MEME_PAGE } = await import('../www/meme/js/config.js');
+        const avatar = MEME_PAGE.next.avatar;
+        expect(readFileSync('www/avatar/index.html', 'utf8')).toContain(`<meta property="og:title" content="${avatar.title}">`);
+        expect(existsSync(`www${avatar.art.replace(/\?.*$/, '')}`)).toBe(true);
+        expect(avatar.href).toBe('/avatar/?return=/meme/');
     });
 
     test('it boots: the page shown, the first template standing with a stand-in, the stage started, nothing written', async () => {
@@ -366,9 +386,13 @@ describe('the page', () => {
         window.setTimeout = () => 0;   // the revoke timer, never left running
         const saves = [];
         document.body.appendChild = (el) => saves.push(el);
+        expect(dom.el('mm-next').children).toHaveLength(0);
         expect(await main.__test__.savePicture()).toBe('saved');
         expect(saves[0].download).toBe('scenexp-meme-surprised-1080x1080.png');
         expect(dom.el('mm-status').textContent).toBe(main.WORDS.pictureSaved);
+        // Finished, so what comes next: with no avatar, the avatar page.
+        expect(dom.el('mm-next').hidden).toBe(false);
+        expect(dom.el('mm-next').children[0].href).toBe('/avatar/?return=/meme/');
         fire(dom.el('mm-picture-save'), 'click');
         await flushAsync(10);
         expect(saves).toHaveLength(2);
@@ -664,6 +688,27 @@ describe('the page', () => {
         expect(copied[0]).toContain(`${dom.windowStub.location.href}#m=`);
         delete globalThis.navigator.clipboard;
         expect(state.template.id).toBe('thenNow');
+        // A link copied is a meme finished: what comes next appears.
+        expect(dom.el('mm-next').children[0].href).toBe('/avatar/?return=/meme/');
+    });
+
+    test('what comes next is built once, on a finish only: X\'s and O\'s for a visitor with an avatar, then the directory', async () => {
+        const main = await boot({ saved: { v: 1, skin: 'deep', shirt: 'teal' } });
+        const { showNext } = main.__test__;
+        const host = dom.el('mm-next');
+        // A dismissed sheet or a failure is not a finish.
+        for (const how of ['cancelled', 'failed', undefined]) expect(showNext(how)).toBe(false);
+        expect(host.children).toHaveLength(0);
+        expect(showNext('shared')).toBe(true);
+        expect(host.hidden).toBe(false);
+        expect(host.children).toHaveLength(2);
+        // The catalog's pick for a meme (promo PAIRS), the directory under it.
+        expect(host.children[0].href).toBe('/xo/');
+        expect(host.children[0].dataset.slug).toBe('xo');
+        expect(host.children[1].href).toBe('/');
+        // Once: a second finish adds nothing.
+        for (const how of ['saved', 'native', 'copy', 'mail']) expect(showNext(how)).toBe(false);
+        expect(host.children).toHaveLength(2);
     });
 
     test('the People tab fills a friend by link or file, reshuffles the crowd, names the labels, and keeps the friend', async () => {

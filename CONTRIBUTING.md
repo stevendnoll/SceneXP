@@ -430,6 +430,12 @@ source of truth either way.
    and the grouping together, so a world added correctly everywhere else
    still fails the suite without it.
 
+   And one list in the shared parts: the "Next on SceneXP" card that some
+   scenes show a visitor who has just finished picks from `EXPERIENCES` in
+   `www/shared/js/promo-1.0.0.js`. Add your world there in the same place
+   it sits on the home page. `tests/shared-promo.test.mjs` reads the home
+   page and fails if the two disagree.
+
    `tests/directory.test.mjs` checks all of that agrees, so if you put your
    world in one place and forget another, the suite will tell you which.
 
@@ -447,6 +453,52 @@ source of truth either way.
    them, which is the reminder rather than the rule.
 8. **Open a pull request** telling us the story behind your world. We read
    every one with genuine delight.
+
+## Adding a meme template
+
+Meme Studio (`www/meme`) puts a visitor's own avatar into a meme, and it
+welcomes new templates. A template is mostly data. Each one is a situation
+and a panel layout, never a copy of a source image: name it for what
+happens in it, use generic props, and give it nobody's likeness.
+
+1. **Add an entry to `www/meme/js/templates.js`** and put it in the
+   `TEMPLATES` list. The comment at the top of that file describes every
+   field. In short: an `id` (it travels in remix links and file names, so it
+   never changes once shipped), a `title` and a one-line `line` for the
+   picker, an `order` in the picker, a `grid` of rows of `{ span }` cells,
+   the `roles` (`avatar` for the visitor, `random` for anyone else, and a
+   role with the id `friend` is where a friend's avatar stands), and one
+   entry in `cells` for each grid cell, in reading order. A cell names its
+   `figures` (a role, a `pose`, an `expression`, where it stands and which
+   way it turns), its caption slots (`top`, `bottom`, `center`, a
+   `{ label }` pinned to a figure, or a `{ prop }` drawn on a prop's
+   surface), its `camera`, and its `backdrop` color. Sides are the
+   figure's own, never the visitor's handedness.
+2. **Props, if it needs any**, are a builder in `www/meme/js/scenes/`,
+   registered in `scenes/index.js`. `plan.js` (an easel with a chart) is
+   the smallest one to copy.
+3. **A new pose or expression is solved on the real rig, not guessed by
+   eye.** Poses live in `www/meme/js/poses.js`, with their hand positions
+   held by `tests/meme-poses.test.mjs`. Expressions are a shared part, so a
+   new one goes in `www/shared/js/avatar-expressions-1.0.0.js` with its
+   undo, and `tests/shared-avatar-expressions.test.mjs` checks it on real
+   Three.js.
+4. **Look at it at thumbnail size before polishing it**, since that is how
+   a meme is read in a chat. `npm run build && node
+   --experimental-vm-modules scripts/meme-preview.mjs <your-id>` draws each
+   panel at 200 and 600 pixels to `specs/meme/previews/` (git-ignored).
+   The light there is rough and captions are not drawn, so judge the
+   framing and the faces, then look in the browser.
+5. **Run the meme suites.** `npm test -- tests/meme-templates.test.mjs
+   tests/meme-remix.test.mjs tests/meme-exporter.test.mjs
+   tests/meme-shadows.test.mjs` runs the validator over your entry, sends
+   it through a remix link and back, fits its boxes in the frame at every
+   shape of screen, plans its video under the length limit, and checks
+   its shadows stay in their own panels. The catalog suite names every
+   template and the picker's order on purpose, so add your id to both lists
+   at its top. The catalog is also frozen by a snapshot, so that a shipped
+   template only ever changes on purpose: a new one means updating it once,
+   deliberately, with `npm test -- -u tests/meme-templates.test.mjs`.
 
 ## House rules
 

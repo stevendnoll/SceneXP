@@ -185,7 +185,7 @@ export function createExporter(config, {
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = config.light.exposure;
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.shadowMap.type = THREE.PCFShadowMap;
         const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 80);
         own = { canvas, renderer, camera };
         return own;

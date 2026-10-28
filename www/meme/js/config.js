@@ -146,6 +146,20 @@ export const MEME_PAGE = deepFreeze({
     /** Where the last meme is kept in this browser (F8). */
     storageKey: 'scenexp-meme',
 
+    /** What comes next once something is shared or saved (M7). A visitor
+     *  with an avatar is shown the promo catalog's pick (PAIRS: X's and
+     *  O's). One with none is shown the avatar page, drawn as a catalog
+     *  entry is (promo-1.0.0 `entry`), whose Back button returns here. */
+    next: {
+        avatar: {
+            slug: 'avatar',
+            title: 'Your Avatar',
+            line: 'Make a figure that looks like you',
+            art: '/avatar/assets/og-avatar.webp?v=1',
+            href: '/avatar/?return=/meme/'
+        }
+    },
+
     /** The usage pings' proof of work (shared boot part), under the same
      *  key every scene uses, so a visit that wanders through here stays one
      *  visit in the log. */

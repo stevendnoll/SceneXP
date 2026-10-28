@@ -125,6 +125,9 @@ describe('nextSlug', () => {
         expect(mod.nextSlug('earthdefense')).toBe('xo');
         expect(mod.nextSlug('mandelbrot')).toBe('garden');
         expect(mod.nextSlug('garden')).toBe('mandelbrot');
+        // A meme starring your avatar, then a game your avatar plays in
+        // (Steve, 2026-10-28). The category order would have said Derby Day.
+        expect(mod.nextSlug('meme')).toBe('xo');
     });
 
     test('falls back to the next in the same category', () => {
@@ -208,6 +211,24 @@ describe('createPromoCard', () => {
 
     test('is nothing at all when there is nothing to recommend', () => {
         expect(mod.createPromoCard('job', { doc: fakeDoc() })).toBe(null);
+    });
+
+    /** A page that knows better at that moment names its own: Meme Studio
+     *  shows a visitor with no avatar the avatar page, which is no
+     *  experience and so no catalog entry, at an address with a way back. */
+    test('takes an entry of its own, drawn as a catalog entry is', () => {
+        const entry = { slug: 'avatar', title: 'Your Avatar', line: 'Make a figure that looks like you', art: '/avatar/assets/og-avatar.webp?v=1', href: '/avatar/?return=/meme/' };
+        const card = mod.createPromoCard('meme', { doc: fakeDoc(), entry });
+        expect(card.href).toBe('/avatar/?return=/meme/');
+        expect(card.dataset.slug).toBe('avatar');
+        expect(find(card, 'promo-title').textContent).toBe('Your Avatar');
+        expect(find(card, 'promo-line').textContent).toBe('Make a figure that looks like you');
+        expect(find(card, 'promo-art').src).toBe('/avatar/assets/og-avatar.webp?v=1');
+        // Without an href, the address is the slug's, as a catalog entry's.
+        const plain = mod.createPromoCard('meme', { doc: fakeDoc(), entry: { ...entry, href: undefined } });
+        expect(plain.href).toBe('/avatar/');
+        // An entry outranks even a slug the catalog has never heard of.
+        expect(mod.createPromoCard('job', { doc: fakeDoc(), entry })).toBeTruthy();
     });
 
     test('is nothing at all with no document to build in', () => {

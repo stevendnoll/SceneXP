@@ -35,6 +35,7 @@ import { buildTabs, buildCaptionFields, buildTemplatePicker, buildExpressionRows
 import { normalizeMeme, createMemeStore } from './state.min.js';
 import { decodeRemix, remixUrl } from './remix.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
+import { createPromoCard, createDirectoryLink } from '../../shared/js/promo-1.0.0.min.js';
 import { drawCaptions } from './compose.min.js';
 import { createExporter, WORDS as EXPORT_WORDS } from './exporter.min.js';
 
@@ -491,6 +492,27 @@ async function savePicture() {
     return result;
 }
 
+/** How a picture, a video or the link went that counts as finished: the
+ *  file shared or saved, the link handed to the sheet, copied or mailed.
+ *  A dismissed sheet or a failure is not. */
+const FINISHED = Object.freeze(['shared', 'saved', 'native', 'copy', 'mail']);
+
+/** What comes next (M7), built once, the first time something is
+ *  finished: the catalog's pick for a visitor with an avatar, the avatar
+ *  page for one with none, and the directory under it. Returns whether it
+ *  was built. */
+function showNext(outcome) {
+    if (!FINISHED.includes(outcome)) return false;
+    const host = $('mm-next');
+    if (!host || host.children.length) return false;
+    const card = createPromoCard('meme', state.avatar ? {} : { entry: CONFIG.next.avatar });
+    if (card) host.appendChild(card);
+    const link = createDirectoryLink();
+    if (link) host.appendChild(link);
+    host.hidden = false;
+    return true;
+}
+
 /** The visit's last ping, once: when the page is hidden or left. */
 function endVisit() {
     if (state.session.ended) return;
@@ -537,7 +559,10 @@ function wire() {
     }), {
         status: $('mm-status'),
         message: WORDS.linkCopied,
-        onShare: (how) => track('remix-link', { kind: state.template.id, outcome: how })
+        onShare: (how) => {
+            track('remix-link', { kind: state.template.id, outcome: how });
+            showNext(how);
+        }
     });
     window.addEventListener('hashchange', readLink);
     for (const p of CONFIG.export.pictures) {
@@ -591,7 +616,10 @@ export async function init() {
                 mobile: isMobile(),
                 reducedMotion,
                 say,
-                onExport: (kind, outcome) => track(`export-${kind}`, { kind: state.template.id, outcome })
+                onExport: (kind, outcome) => {
+                    track(`export-${kind}`, { kind: state.template.id, outcome });
+                    showNext(outcome);
+                }
             });
         } catch (e) {
             state.stage = null;
@@ -641,7 +669,8 @@ export const __test__ = {
     onCaption,
     onExpression,
     onKey,
-    leadAvatar
+    leadAvatar,
+    showNext
 };
 
 if (typeof document !== 'undefined' && typeof window !== 'undefined' && document.getElementById('meme-app')) {

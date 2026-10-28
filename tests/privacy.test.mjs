@@ -71,7 +71,10 @@ const PERSISTENT = {
     'www/whitestone/tasks/js/main.js': 'on a cleaner’s device, the key and visit pass of a checklist shared with them, and the visit’s marks and add-ons',
     // Derby Day's garage (M3, 2026-10-19): up to four cars, their results,
     // the trophies, and the units and sound settings.
-    'www/derby/js/garage.js': 'the cars a visitor builds in Derby Day, their results and trophies, and its settings'
+    'www/derby/js/garage.js': 'the cars a visitor builds in Derby Day, their results and trophies, and its settings',
+    // Meme Studio's last meme (specs/meme M3, released 2026-10-28): the
+    // template, captions, faces, and a friend's avatar when one is in it.
+    'www/meme/js/state.js': 'the last meme made in Meme Studio, with a friend’s avatar if one is in it'
 };
 
 /**
@@ -102,11 +105,25 @@ function sourceFiles(dir, out = []) {
     return out;
 }
 
+/**
+ * A WRITER IS ANY FILE THAT CAN WRITE THE STORE, HOWEVER IT HOLDS IT. Until
+ * 2026-10-28 this only matched `localStorage.setItem` written out, and Meme
+ * Studio's store (www/meme/js/state.js) writes through a handle,
+ * `s.setItem(key, ...)`, after looking the store up once. It reached its
+ * release day keeping a visitor's meme and a friend's avatar with no word in
+ * the policy and this suite green. So a file also counts when its code names
+ * the API at all and calls `.setItem` or `.removeItem` on anything. Comments
+ * are stripped for that second half, so a file that only mentions the API in
+ * prose is not swept in.
+ */
 function writersOf(api) {
     const found = [];
     for (const full of sourceFiles(WWW)) {
         const src = readFileSync(full, 'utf8');
-        if (new RegExp(`\\b${api}\\.(?:set|remove)Item`).test(src)) {
+        const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+        const direct = new RegExp(`\\b${api}\\.(?:set|remove)Item`).test(src);
+        const handle = new RegExp(`\\b${api}\\b`).test(code) && /\.(?:set|remove)Item\s*\(/.test(code);
+        if (direct || handle) {
             found.push(full.slice(process.cwd().length + 1));
         }
     }
@@ -197,6 +214,14 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // device and goes only to the visitor's own share sheet or downloads.
     expect(text).toMatch(/picture or a short video you export of your avatar is made right on your device/i);
     expect(text).toMatch(/Forget my avatar button/i);
+    // Meme Studio (released 2026-10-28): the last meme and a friend's
+    // avatar kept, the visitor's own avatar only read, the pings never what
+    // was typed, the link's fragment never sent, and how to clear it.
+    expect(text).toMatch(/Meme Studio keeps the meme you are making/i);
+    expect(text).toMatch(/the avatar of a friend in it/i);
+    expect(text).toMatch(/Your own avatar is read from where the Your Avatar page keeps it, never copied/i);
+    expect(text).toMatch(/which meme you picked and what kind of thing you did/i);
+    expect(text).toMatch(/Start over button clears your meme/i);
 
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.
@@ -225,6 +250,7 @@ const NAMED_IN_POLICY = {
     leaves: 'Leaf Blower',
     whitestone: 'Whitestone Home Care',
     derby: 'Derby Day',
+    meme: 'Meme Studio',
 };
 
 test('every experience that keeps something is named in the policy', () => {

@@ -31,6 +31,7 @@ const CATEGORY_OF = {
     whitestone: 'business', automan: 'business', interstate: 'business', seedtoseed: 'business', sunnyvalejenn: 'business',
     steve: 'worlds', mandelbrot: 'worlds', earthdefense: 'worlds', highwater: 'worlds', garden: 'worlds',
     xo: 'worlds', tornado: 'worlds', office: 'worlds', leaves: 'worlds', derby: 'worlds',
+    meme: 'worlds',
 };
 
 // THE MARKUP IS THE SOURCE OF TRUTH now that the catalog array is gone. Each
@@ -112,8 +113,9 @@ const IGNORED_DIRS = ['js', 'css', 'assets', 'shared', 'lib', 'snaps'];
 // links were built on the release branch, and Steve checked them on the
 // page), an exception that left with it: an unreleased scene is unlinked
 // everywhere.
-// Meme Studio (www/meme) joined at M0 on 2026-10-27, on the meme-1 branch.
-const UNRELEASED = ['starfall', 'meme'];
+// Meme Studio (www/meme) joined at M0 on 2026-10-27, on the meme-1 branch,
+// and left at its M7 release on 2026-10-28, into the directory.
+const UNRELEASED = ['starfall'];
 
 // SITE PAGES IN FOLDERS. Your Avatar draws a figure on a canvas, so the scan
 // below finds it with the scenes, but it is not an experience: it is the page

@@ -605,6 +605,57 @@ body.mm-body {
     display: none;
 }
 
+/* WHAT NEXT (M7): the shared promo card (styles-1.0.0's .promo-card), built
+   for the dark end screens of the games, redrawn for this white sheet: a
+   hairline card on paper, ink for the title, the muted grey for the rest.
+   Laid out where it sits, so it is left-aligned with the sheet and not
+   centered as on an end screen. */
+.mm-next {
+    margin-top: 20px;
+}
+
+.mm-next[hidden] {
+    display: none;
+}
+
+.mm-next .promo-card {
+    max-width: none;
+    margin: 0;
+    background: var(--mm-paper);
+    border-color: var(--mm-line);
+}
+
+.mm-next .promo-card:hover,
+.mm-next .promo-card:focus-visible {
+    background: var(--mm-well);
+    border-color: var(--mm-muted);
+}
+
+.mm-next .promo-art {
+    background: var(--mm-well);
+}
+
+.mm-next .promo-eyebrow,
+.mm-next .promo-line {
+    color: var(--mm-muted);
+}
+
+.mm-next .promo-title {
+    color: var(--mm-ink);
+}
+
+.mm-next .promo-explore {
+    margin: 8px 0 0;
+    padding: 8px 0;
+    color: var(--mm-muted);
+    text-align: left;
+}
+
+.mm-next .promo-explore:hover,
+.mm-next .promo-explore:focus-visible {
+    color: var(--mm-ink);
+}
+
 /* Keyboard focus, everywhere on the sheet. */
 .mm-sheet a:focus-visible,
 .mm-sheet button:focus-visible,
