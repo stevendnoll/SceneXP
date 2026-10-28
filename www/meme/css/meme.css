@@ -184,6 +184,29 @@ body.mm-body {
     margin-bottom: 24px;
 }
 
+/* ---- A meme that arrived ------------------------------------------------- */
+
+.mm-incoming {
+    background: var(--mm-well);
+    border-radius: var(--mm-radius);
+    padding: 16px 18px;
+    margin-bottom: 20px;
+}
+
+.mm-incoming[hidden] {
+    display: none;
+}
+
+.mm-incoming-text {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.mm-incoming .mm-row {
+    margin-top: 0;
+}
+
 /* ---- The tabs ------------------------------------------------------------ */
 
 .mm-tabs {

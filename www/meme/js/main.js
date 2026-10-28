@@ -33,6 +33,8 @@ import { createStage } from './stage.min.js';
 import { TEMPLATES, byOrder, slotsOf, templateOf } from './templates.min.js';
 import { buildTabs, buildCaptionFields, buildTemplatePicker, buildExpressionRows, buildViewButtons } from './editor.min.js';
 import { normalizeMeme, createMemeStore } from './state.min.js';
+import { decodeRemix, remixUrl } from './remix.min.js';
+import { installShare } from '../../shared/js/share-1.0.0.min.js';
 import { drawCaptions } from './compose.min.js';
 import { createExporter, WORDS as EXPORT_WORDS } from './exporter.min.js';
 
@@ -51,7 +53,15 @@ export const WORDS = Object.freeze({
     pictureFailed: EXPORT_WORDS.pictureFailed,
     personYou: 'You, as your avatar.',
     personStandIn: 'You, as a visitor standing in until you make your avatar.',
-    personRandom: 'A visitor from the crowd.'
+    personMaker: 'The friend who sent this meme, as their avatar.',
+    personRandom: 'A visitor from the crowd.',
+    fromFriend: 'A friend made this meme for you. Make it yours with your own avatar, or keep it as it is.',
+    mine: "It's yours now. Your avatar is in the lead role.",
+    mineNoAvatar: 'Make your avatar first, then come back here. This meme will be waiting.',
+    keptTheirs: "Kept as your friend made it. Change anything you like, it's your copy.",
+    linkTitle: 'A meme from SceneXP',
+    linkText: 'Here is a meme I made with my avatar. Open it to put yourself in it.',
+    linkCopied: 'Link copied'
 });
 
 const $ = (id) => document.getElementById(id);
@@ -70,6 +80,9 @@ const state = {
     memes: null,          // the meme store (state.js)
     avatar: null,         // the saved avatar, or null
     standIn: null,        // a random avatar for a visitor with none saved
+    maker: null,          // the avatar a link's meme was made with, while it leads
+    friend: null,         // the avatar in the friend's role (D5, M5)
+    incoming: false,      // a link's meme is on the stage, waiting for an answer
     template: null,
     captions: [],
     expressions: [],      // a cell's chosen face, or null for the template's
@@ -128,12 +141,19 @@ function keep() {
     return state.memes.save(currentMeme());
 }
 
-/** The avatar a role wears: the visitor's (or the stand-in) for the lead,
- *  a random cast member otherwise. */
+/** The avatar a role wears: the maker's while a link's meme waits, else
+ *  the visitor's (or the stand-in) for the lead; the friend's for the
+ *  friend's role when one is kept (D5); a random cast member otherwise. */
 export function avatarForRole(roleId) {
     const role = state.template.roles.find((r) => r.id === roleId);
-    if (!role || role.cast === 'avatar') return state.avatar || state.standIn;
+    if (!role || role.cast === 'avatar') return state.maker || state.avatar || state.standIn;
+    if (role.id === 'friend' && state.friend) return state.friend;
     return randomAvatar();
+}
+
+/** The avatar the lead wears right now, for the link. */
+function leadAvatar() {
+    return state.maker || state.avatar || state.standIn;
 }
 
 /** The chosen picture size, from the radios. */
@@ -224,7 +244,8 @@ function showPeople(template) {
         name.textContent = role.label;
         const note = document.createElement('span');
         note.className = 'mm-person-note';
-        note.textContent = role.cast === 'avatar' ? (state.avatar ? WORDS.personYou : WORDS.personStandIn) : WORDS.personRandom;
+        if (role.cast === 'avatar') note.textContent = state.maker ? WORDS.personMaker : state.avatar ? WORDS.personYou : WORDS.personStandIn;
+        else note.textContent = WORDS.personRandom;
         item.appendChild(name);
         item.appendChild(note);
         list.appendChild(item);
@@ -268,10 +289,88 @@ export function pickTemplate(id) {
     return template;
 }
 
-/** Start over: the first meme, nothing typed, the store cleared. */
+// ---- A meme that arrived by link ----------------------------------------------
+
+/** The link's fragment taken out of the address bar (replaceState, never
+ *  a new history entry), so a reload does not ask again and Back still
+ *  leaves the page in one press. */
+function dropFragment() {
+    try {
+        if (window.history && typeof window.history.replaceState === 'function') {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+    } catch (e) { /* a browser that will not: the fragment stays */ }
+}
+
+/** Show or hide the arrival card. */
+function showIncoming(on) {
+    state.incoming = on;
+    $('mm-incoming').hidden = !on;
+    $('mm-incoming-note').hidden = true;
+}
+
+/**
+ * A meme in the address: shown as made, the maker's avatar in the lead,
+ * and asked about. Returns true when one was there.
+ */
+export function readLink() {
+    const found = decodeRemix(window.location.hash || '', RULES(), { max: CONFIG.remix.maxLength, normalize: normalizeMeme });
+    if (!found) return false;
+    state.maker = found.avatar;
+    state.friend = null;
+    showTemplate(templateOf(found.meme.template), found.meme);
+    showIncoming(true);
+    say(WORDS.fromFriend);
+    if (state.tabs) state.tabs.select('mm-tab-meme');
+    dropFragment();
+    if (state.ready) track('arrived-by-link', { kind: state.template.id, outcome: found.avatar ? 'avatar' : 'no-avatar' });
+    return true;
+}
+
+/**
+ * Make it mine: the visitor's avatar takes the lead, and the maker's moves
+ * to the friend's role when the template has one (D5). Without an avatar,
+ * the way to make one, the meme kept for the return.
+ */
+export function makeItMine() {
+    if (!state.incoming) return false;
+    if (!state.avatar) {
+        $('mm-incoming-note').hidden = false;
+        say(WORDS.mineNoAvatar);
+        keep();
+        if (state.ready) track('make-it-mine', { kind: state.template.id, outcome: 'no-avatar' });
+        return false;
+    }
+    const maker = state.maker;
+    state.maker = null;
+    state.friend = maker && state.template.roles.some((r) => r.id === 'friend') ? maker : null;
+    showTemplate(state.template, currentMeme());
+    showIncoming(false);
+    say(WORDS.mine);
+    keep();
+    if (state.ready) track('make-it-mine', { kind: state.template.id, outcome: state.friend ? 'both' : 'avatar' });
+    return true;
+}
+
+/** Keep it as it is: the friend's meme, their avatar and all, the
+ *  visitor's copy to change. */
+export function keepTheirs() {
+    if (!state.incoming) return false;
+    showIncoming(false);
+    say(WORDS.keptTheirs);
+    keep();
+    if (state.ready) track('make-it-mine', { kind: state.template.id, outcome: 'theirs' });
+    return true;
+}
+
+/** Start over: the first meme, nothing typed, the store cleared, the
+ *  visitor's own avatar back in the lead. */
 export function startOver() {
     state.captions = [];
     state.expressions = [];
+    state.maker = null;
+    state.friend = null;
+    showIncoming(false);
     if (state.memes) state.memes.clear();
     showTemplate(byOrder()[0]);
     say(WORDS.cleared);
@@ -308,6 +407,20 @@ function onKey(e) {
 function wire() {
     $('mm-picture-save').addEventListener('click', savePicture);
     $('mm-start-over').addEventListener('click', startOver);
+    $('mm-make-mine').addEventListener('click', makeItMine);
+    $('mm-keep-theirs').addEventListener('click', keepTheirs);
+    // The link: the meme and the lead's avatar, through the shared ladder
+    // (the share sheet, the clipboard, a mail), the copy said on the sheet.
+    installShare($('mm-link'), () => ({
+        title: WORDS.linkTitle,
+        text: WORDS.linkText,
+        url: remixUrl(currentMeme(), leadAvatar(), window.location.href, { max: CONFIG.remix.maxLength })
+    }), {
+        status: $('mm-status'),
+        message: WORDS.linkCopied,
+        onShare: (how) => track('remix-link', { kind: state.template.id, outcome: how })
+    });
+    window.addEventListener('hashchange', readLink);
     for (const p of CONFIG.export.pictures) {
         const input = $(`mm-size-${p.id}`);
         if (input) input.addEventListener('change', () => { state.sizeId = readSize(); refreshPreview(); });
@@ -367,6 +480,8 @@ export async function init() {
     if (state.restored) say(WORDS.welcomeBack);
     else if (!state.memes.available) say(WORDS.notKept);
     else say(state.avatar ? WORDS.withAvatar : WORDS.noAvatar);
+    // A link's meme outranks the kept one: a friend's gift is why they came.
+    const arrived = readLink();
     const saveBtn = $('mm-picture-save');
     saveBtn.textContent = state.exporter ? state.exporter.buttonLabel() : EXPORT_WORDS.saveButton;
     saveBtn.hidden = !state.exporter;
@@ -381,7 +496,8 @@ export async function init() {
     setMobile(isMobile());
     const proof = await getProofOfWork(CONFIG.proofOfWork);
     setProofHash(proof && proof.hash);
-    track('session-start', { kind: state.restored ? 'returning' : 'new', outcome: state.avatar ? 'avatar' : 'no-avatar' });
+    track('session-start', { kind: arrived ? 'by-link' : state.restored ? 'returning' : 'new', outcome: state.avatar ? 'avatar' : 'no-avatar' });
+    if (arrived) track('arrived-by-link', { kind: state.template.id, outcome: state.maker ? 'avatar' : 'no-avatar' });
 
     if (!state.stage) {
         stageStatus.textContent = WORDS.noStage;
@@ -398,7 +514,8 @@ export const __test__ = {
     savePicture,
     onCaption,
     onExpression,
-    onKey
+    onKey,
+    leadAvatar
 };
 
 if (typeof document !== 'undefined' && typeof window !== 'undefined' && document.getElementById('meme-app')) {

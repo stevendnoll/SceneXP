@@ -121,6 +121,8 @@
     <link rel="modulepreload" href="js/templates.min.js">
     <link rel="modulepreload" href="js/editor.min.js">
     <link rel="modulepreload" href="js/state.min.js">
+    <link rel="modulepreload" href="js/remix.min.js">
+    <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
     <link rel="modulepreload" href="js/compose.min.js">
     <link rel="modulepreload" href="js/exporter.min.js">
     <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
@@ -213,6 +215,17 @@
             <h2 id="mm-heading" class="mm-heading">Put yourself in the meme</h2>
             <p id="mm-lede" class="mm-lede">Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a short video.</p>
 
+            <!-- A meme that arrived by link (js/remix.js, M4): the friend's
+                 meme as made, and the one next step. Hidden otherwise. -->
+            <div id="mm-incoming" class="mm-incoming" role="region" aria-labelledby="mm-incoming-text" hidden>
+                <p id="mm-incoming-text" class="mm-incoming-text">A friend made this meme for you.</p>
+                <div class="mm-row">
+                    <button id="mm-make-mine" class="mm-primary" type="button">Make it mine</button>
+                    <button id="mm-keep-theirs" class="mm-secondary" type="button">Keep it as it is</button>
+                </div>
+                <p id="mm-incoming-note" class="mm-note" hidden>You have no avatar yet. <a class="mm-link" href="/avatar/">Make yours</a>, then come back here: this meme will be waiting.</p>
+            </div>
+
             <!-- The editor (js/editor.js, M3): three tabs. Meme holds the
                  picker and the faces, Captions one real text input a slot,
                  People who is in it. Arrow keys move between the tabs. -->
@@ -255,8 +268,10 @@
             </fieldset>
             <div class="mm-row">
                 <button id="mm-picture-save" class="mm-primary" type="button" hidden>Save picture</button>
+                <button id="mm-link" class="mm-secondary" type="button" title="A link that opens this meme, for a friend to make their own">Share link</button>
                 <button id="mm-start-over" class="mm-secondary" type="button">Start over</button>
             </div>
+            <p class="mm-note">The link carries the meme and your avatar. Whoever opens it can put their own avatar in your place.</p>
 
             <p id="mm-status" class="mm-status" role="status" aria-live="polite"></p>
 

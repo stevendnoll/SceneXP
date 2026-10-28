@@ -566,6 +566,106 @@ describe('the page', () => {
         expect(main.__test__.state.template.id).toBe('panic');
     });
 
+    const LINK = (captions = ['from+a+friend'], avatar = 'a=1.deep.black') => `#m=1/panic/${captions.join('|')}/-,rage,-,-,-,-&${avatar}`;
+
+    test('a meme in the address is shown as made, the maker in the lead, asked about, and the fragment dropped', async () => {
+        const replaced = [];
+        installThree();
+        dom = installDom();
+        Object.assign(dom.el('mm-canvas'), { clientWidth: 800, clientHeight: 600 });
+        dom.windowStub.location.hash = LINK();
+        dom.windowStub.location.pathname = '/meme/';
+        dom.windowStub.location.search = '';
+        dom.windowStub.history = { replaceState: (s, t, url) => replaced.push(url) };
+        jest.resetModules();
+        const main = await import('../www/meme/js/main.js');
+        await flushAsync(30);
+        const { state } = main.__test__;
+        expect(state.incoming).toBe(true);
+        expect(state.template.id).toBe('panic');
+        expect(state.captions).toEqual(['from a friend', '', '']);
+        expect(state.expressions).toEqual([null, 'rage', null, null, null, null]);
+        expect(state.maker).toMatchObject({ skin: 'deep' });
+        expect(main.avatarForRole('you')).toBe(state.maker);
+        expect(state.stage.panels[1].figures[0].avatar.skin).toBe('deep');
+        expect(dom.el('mm-incoming').hidden).toBe(false);
+        expect(dom.el('mm-status').textContent).toBe(main.WORDS.fromFriend);
+        expect(dom.el('mm-people').children[0].textContent).toContain(main.WORDS.personMaker);
+        expect(replaced).toEqual(['/meme/']);
+        // No avatar of their own: the way to make one, and the meme kept.
+        fire(dom.el('mm-make-mine'), 'click');
+        expect(state.incoming).toBe(true);
+        expect(dom.el('mm-incoming-note').hidden).toBe(false);
+        expect(dom.el('mm-status').textContent).toBe(main.WORDS.mineNoAvatar);
+        expect(JSON.parse(globalThis.localStorage.getItem('scenexp-meme')).captions).toEqual(['from a friend', '', '']);
+        // Kept as it is: the maker stays in the lead, the card goes.
+        fire(dom.el('mm-keep-theirs'), 'click');
+        expect(state.incoming).toBe(false);
+        expect(dom.el('mm-incoming').hidden).toBe(true);
+        expect(main.avatarForRole('you')).toBe(state.maker);
+        expect(dom.el('mm-status').textContent).toBe(main.WORDS.keptTheirs);
+        expect(main.makeItMine()).toBe(false);
+        expect(main.keepTheirs()).toBe(false);
+        // Start over puts the visitor's own figure back.
+        fire(dom.el('mm-start-over'), 'click');
+        expect(state.maker).toBeNull();
+        expect(main.avatarForRole('you')).toBe(state.standIn);
+    });
+
+    test('with an avatar of their own, Make it mine puts it in the lead and keeps the meme, and a bad link is nothing', async () => {
+        installThree();
+        dom = installDom();
+        Object.assign(dom.el('mm-canvas'), { clientWidth: 800, clientHeight: 600 });
+        globalThis.localStorage.setItem('scenexp-avatar', JSON.stringify({ v: 1, skin: 'fair', shirt: 'teal' }));
+        dom.windowStub.location.hash = LINK(['hello']);
+        jest.resetModules();
+        const main = await import('../www/meme/js/main.js');
+        await flushAsync(30);
+        const { state } = main.__test__;
+        expect(state.stage.panels[1].figures[0].avatar.skin).toBe('deep');
+        fire(dom.el('mm-make-mine'), 'click');
+        expect(state.incoming).toBe(false);
+        expect(state.maker).toBeNull();
+        expect(state.friend).toBeNull();   // no friend's role in this template (M5)
+        expect(main.avatarForRole('you')).toBe(state.avatar);
+        expect(state.stage.panels[1].figures[0].avatar.skin).toBe('fair');
+        expect(state.captions).toEqual(['hello', '', '']);
+        expect(state.expressions[1]).toBe('rage');
+        expect(dom.el('mm-status').textContent).toBe(main.WORDS.mine);
+        expect(JSON.parse(globalThis.localStorage.getItem('scenexp-meme')).template).toBe('panic');
+        // A link that is not a meme changes nothing.
+        dom.windowStub.location.hash = '#m=9/panic//';
+        expect(main.readLink()).toBe(false);
+        expect(state.incoming).toBe(false);
+        // A link arriving later (hashchange) is read the same way.
+        dom.windowStub.location.hash = '#m=1/surprised/again/-';
+        fire(dom.windowStub, 'hashchange');
+        expect(state.incoming).toBe(true);
+        expect(state.template.id).toBe('surprised');
+        expect(state.maker).toBeNull();
+        expect(main.__test__.leadAvatar()).toBe(state.avatar);
+    });
+
+    test('Share link hands the meme and the lead\'s avatar to the shared ladder, and says when it was copied', async () => {
+        const main = await boot();
+        const { state } = main.__test__;
+        main.pickTemplate('thenNow');
+        main.__test__.onCaption(0, 'then');
+        const copied = [];
+        globalThis.navigator.clipboard = { writeText: async (text) => { copied.push(text); } };
+        window.setTimeout = (fn) => { fn(); return 0; };
+        fire(dom.el('mm-link'), 'click');
+        await flushAsync(20);
+        expect(copied).toHaveLength(1);
+        expect(copied[0]).toContain(main.WORDS.linkText);
+        expect(copied[0]).toMatch(/#m=1\/thenNow\/then\|\/-,-&a=1\./);
+        // The page's own directory (the stub's is /test/), never a path
+        // written down.
+        expect(copied[0]).toContain(`${dom.windowStub.location.href}#m=`);
+        delete globalThis.navigator.clipboard;
+        expect(state.template.id).toBe('thenNow');
+    });
+
     test('every word the page says keeps the house style', async () => {
         const main = await boot();
         for (const w of Object.values(main.WORDS)) {
