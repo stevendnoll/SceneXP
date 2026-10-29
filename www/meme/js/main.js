@@ -78,7 +78,6 @@ export const WORDS = Object.freeze({
     mineNoAvatar: 'Make your avatar first, then come back here. This meme will be waiting.',
     keptTheirs: "Kept as your friend made it. Change anything you like, it's your copy.",
     linkTitle: 'A meme from SceneXP',
-    linkText: 'Here is a meme I made with my avatar. Open it to put yourself in it.',
     linkCopied: 'Link copied'
 });
 
@@ -802,10 +801,11 @@ function wire() {
     });
     // The link: the meme and the lead's avatar, through the shared ladder
     // (the share sheet, the clipboard, a mail), the copy said on the sheet.
+    // No sentence goes with it: a sheet's Copy would put the sentence in
+    // front of the link, and the friend has to open it (share-1.0.0).
     installShare($('mm-link'), () => ({
         title: WORDS.linkTitle,
-        text: WORDS.linkText,
-        url: remixUrl(currentMeme(), leadAvatar(), window.location.href, { max: CONFIG.remix.maxLength, templates: TEMPLATES })
+        url:remixUrl(currentMeme(), leadAvatar(), window.location.href, { max: CONFIG.remix.maxLength, templates: TEMPLATES })
     }), {
         status: $('mm-status'),
         message: WORDS.linkCopied,

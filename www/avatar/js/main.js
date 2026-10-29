@@ -61,8 +61,7 @@ export const WORDS = Object.freeze({
     loading: 'Setting up the studio…',
     noStudio: "This browser can't draw the 3D studio, but your choices still work and you can save them.",
     labSaved: `The default portrait was saved as ${CONFIG.defaultPortrait.file}. It goes in www${CONFIG.defaultPortrait.path.replace(/\/[^/]*$/, '/')}.`,
-    linkTitle: 'My SceneXP avatar',
-    linkText: 'My avatar for SceneXP. Open this link to keep it on this device too.'
+    linkTitle: 'My SceneXP avatar'
 });
 
 const $ = (id) => document.getElementById(id);
@@ -385,9 +384,10 @@ function wire() {
     });
     $('av-keep').addEventListener('click', keep);
     $('av-decline').addEventListener('click', decline);
+    // No sentence goes with the link: a sheet's Copy would put it in front,
+    // and the link is pasted into another browser to be opened (share-1.0.0).
     installShare($('av-link'), () => ({
         title: WORDS.linkTitle,
-        text: WORDS.linkText,
         url: linkUrl(state.current, window.location.origin)
     }), { status: $('av-status'), message: 'Link copied', onShare: (how) => track('share', { kind: how }) });
     $('av-file-save').addEventListener('click', saveAvatarFile);

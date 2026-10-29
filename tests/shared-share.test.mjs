@@ -155,11 +155,27 @@ describe('the ladder', () => {
         expect(share).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://elsewhere.test/' }));
     });
 
-    test('a payload with nothing in it still sends the page', async () => {
+    test('a payload with nothing in it still sends the page, and no blank fields', async () => {
         const share = jest.fn(async () => {});
         installEnvironment({ share });
         await mod.shareLink({});
-        expect(share).toHaveBeenCalledWith({ title: '', text: '', url: 'https://example.test/xo/' });
+        expect(share).toHaveBeenCalledWith({ url: 'https://example.test/xo/' });
+    });
+
+    /** A phone's Copy joins the sentence to the link, so a link meant to be
+     *  opened in another browser leaves the sentence out (Meme Studio's
+     *  remix link, found on a phone 2026-10-28). */
+    test('a link with no sentence reaches the sheet and the clipboard as the link alone', async () => {
+        const share = jest.fn(async () => {});
+        installEnvironment({ share });
+        await mod.shareLink({ title: 'A meme', url: 'https://elsewhere.test/meme/#m=2' });
+        expect(share).toHaveBeenCalledWith({ title: 'A meme', url: 'https://elsewhere.test/meme/#m=2' });
+        expect('text' in share.mock.calls[0][0]).toBe(false);
+
+        const writeText = jest.fn(async () => {});
+        installEnvironment({ clipboard: { writeText } });
+        await mod.shareLink({ title: 'A meme', url: 'https://elsewhere.test/meme/#m=2' });
+        expect(writeText).toHaveBeenCalledWith('https://elsewhere.test/meme/#m=2');
     });
 
     test('onCopied fires on the clipboard rung and on no other', async () => {
