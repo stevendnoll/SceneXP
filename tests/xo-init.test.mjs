@@ -1394,6 +1394,140 @@ describe('the visitor plays as the player they chose', () => {
 });
 
 /**
+ * THE PHOTO MOMENTS OF A PLAY (specs/xo-photos-plan, Step 3). A real play's
+ * outcome is a random roll, so each event is SET on the live play through
+ * `__test__` and the page is left to notice it: who held the ball, the
+ * whistle's tackle, the fifty. What is asserted is the wiring, that each one
+ * becomes a moment of the right kind and is taken on a LATER frame than the
+ * one it happened on. moments.js and snapshot.js have their own suite.
+ */
+describe('the moments worth a photo', () => {
+    let now = 200000;
+    const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
+    const kinds = (main) => main.__test__.moments().map((m) => `${m.kind}:${m.hero}:${m.partner || ''}`);
+    const find = (main, position) => main.__test__.play().game.objects.find((o) => o.settings.position === position);
+
+    async function snapped() {
+        const main = await toLivePlay();
+        press('Snap the ball');
+        await flushAsync();
+        frames(3);
+        return main;
+    }
+
+    test('a throw, then a catch: both taken, a frame or more after they happened', async () => {
+        const main = await snapped();
+        press('Throw A');
+        await flushAsync();
+        // Noted, not yet taken: the throw is photographed mid-sweep.
+        expect(main.__test__.pending().map((m) => m.kind)).toEqual(['release']);
+        expect(main.__test__.moments()).toEqual([]);
+        // The ball arrives in receiver A's hands before the next frame, as a
+        // short pass does on a slow phone, and before the real flight can
+        // land it (which it does, a dozen frames on).
+        find(main, 'wr1').state.hasBall = true;
+        frames(1);
+        expect(main.__test__.pending().map((m) => `${m.kind}:${m.hero}`)).toEqual(['release:qb', 'catch:wr1']);
+        expect(main.__test__.moments()).toEqual([]);
+        frames(15);
+        expect(kinds(main)).toEqual(expect.arrayContaining(['catch:wr1:', 'release:qb:wr1']));
+        // Neither is still waiting. (The real play may have gone on to a
+        // tackle, which is its own moment.)
+        expect(main.__test__.pending().filter((m) => m.kind === 'catch' || m.kind === 'release')).toEqual([]);
+        const moment = main.__test__.moments().find((m) => m.kind === 'catch');
+        expect(moment.at).toBeGreaterThan(0);
+        expect(moment.snapshot).toBeTruthy();
+    });
+
+    test('a ball in an O\'s hands is a pick', async () => {
+        const main = await snapped();
+        press('Throw B');
+        await flushAsync();
+        find(main, 'db2').state.hasBall = true;
+        frames(15);
+        expect(kinds(main)).toContain('pick:db2:');
+        expect(kinds(main).some((k) => k.startsWith('catch'))).toBe(false);
+    });
+
+    test('a tackle at the whistle is the carrier with the man who brought him down, and a sack when nobody threw', async () => {
+        const main = await snapped();
+        const play = main.__test__.play();
+        // The quarterback still has it, nobody threw, and he is down.
+        play.playState.state.tackled = true;
+        play.playState.state.anim.done = true;
+        frames(120);
+        const sack = main.__test__.moments().find((m) => m.kind === 'sack');
+        expect(sack).toBeTruthy();
+        expect(sack.hero).toBe('qb');
+        expect(['db1', 'db2', 'db3', 'db4', 's1', 's2']).toContain(sack.partner);
+        // Taken after the contact, not at the whistle.
+        expect(sack.at).toBeGreaterThan(0);
+    });
+
+    test('crossing into the fifty is the whistle, and it is the carrier\'s', async () => {
+        const main = await snapped();
+        press('Keep it');
+        await flushAsync();
+        const play = main.__test__.play();
+        play.playState.state.anim.run50 = true;
+        play.playState.state.anim.done = true;
+        frames(30);
+        expect(kinds(main)).toContain('fifty:qb:');
+    });
+
+    test('the console lists them on the result card, shows one with the card out of the way, and puts the field back', async () => {
+        const main = await boot();
+        const xo = globalThis.window.xo;
+        expect(xo.moments()).toMatch(/^No moments yet/);
+        expect(xo.moment(1)).toBe('On the result card only, after a play.');
+
+        dom.el('welcome-actions').children[0].click();
+        await flushAsync();
+        const body = dom.el('playbook').querySelector('.playbook-body');
+        deep(body).find((n) => n.dataset && n.dataset.slug).click();
+        await flushAsync();
+        press('Snap the ball');
+        await flushAsync();
+        press('Throw A');
+        await flushAsync();
+        await runToResult(() => dom.loops[0](now += 16.7));
+        // Watch the replay is offered on the card, so the card is the screen.
+        const lines = xo.moments().split('\n');
+        expect(lines.length).toBeGreaterThan(0);
+        expect(lines.length).toBeLessThanOrEqual(3);
+        for (const [i, line] of lines.entries()) {
+            expect(line).toMatch(new RegExp(`^${i + 1}\\. (Fifty|Interception|Catch|Sack|Tackle|Throw): [a-z]`));
+            expect(line).toMatch(/\d\.\d s after the snap$/);
+        }
+
+        const camera = await import('../www/xo/js/camera.min.js');
+        expect(xo.moment(1)).toMatch(/^Showing /);
+        expect(dom.el('result').hidden).toBe(true);
+        frames(1);
+        expect(camera.getDriver()).toBe('show');
+        expect(xo.moment(9)).toMatch(/^No moment 9\. This play has \d\.$/);
+        expect(xo.moment()).toBe('Back to the field as it was.');
+        expect(dom.el('result').hidden).toBe(false);
+        frames(1);
+        expect(camera.getDriver()).toBe('play');
+
+        // Shown and left up, the next play takes it down with it, and the next
+        // snap starts the list again.
+        xo.moment(1);
+        dom.el('result-actions').children.find((b) => b.textContent === 'Next play').click();
+        await flushAsync();
+        frames(1);
+        expect(camera.getDriver()).toBe('idle');
+        deep(body).find((n) => n.dataset && n.dataset.slug).click();
+        await flushAsync();
+        press('Snap the ball');
+        await flushAsync();
+        expect(xo.moments()).toMatch(/^No moments yet/);
+        expect(main.getState().isLoaded).toBe(true);
+    });
+});
+
+/**
  * CHOOSING WHO TO PLAY AS (specs/xo-photos-plan, Step 2): the playbook's row,
  * the tags on the plays that sit the visitor out, and the pre-snap "Play as…"
  * that asks for a player on the field.

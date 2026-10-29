@@ -17,7 +17,7 @@
  */
 import { XO_CONFIG as CFG, FIELD, simToWorld, UNITS_TO_METRES } from './config.min.js';
 import { initField, setBandAt, fadeBand, updateScoreboard, applyFieldColors } from './field.min.js';
-import { initRoster, figureFor, TEAMS, applyTeamColors, throwSideOf } from './roster.min.js';
+import { initRoster, figureFor, TEAMS, applyTeamColors, throwSideOf, getRosterGroup } from './roster.min.js';
 import { createAvatarStore, installChip } from '../../shared/js/avatar-1.0.0.min.js';
 import {
     loadColors, saveColors, setColors, resetColors, teamColors, warningsFor,
@@ -25,7 +25,12 @@ import {
 import { initBall, getBall } from './ball.min.js';
 import {
     initMarkers, setPulse, initSpot, showSpot, hideSpot, markerGeometry, applyMarkerColors,
+    getMarkerGroup,
 } from './markers.min.js';
+import {
+    ballEvent, tackleKind, delayFor, rankMoments, KIND_NAMES, previewShot,
+} from './moments.min.js';
+import { captureDrawn, applyDrawn } from './snapshot.min.js';
 import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments, noteThrow,
     setVisitorJumps, standingReach,
@@ -133,6 +138,18 @@ const cycle = {
     pick: null,
     pickedAt: -Infinity,
     glow: null,
+    /**
+     * THE PHOTO MOMENTS OF THIS PLAY (specs/xo-photos-plan, Step 3).
+     * `moments` are taken: `{ kind, hero, partner, at, focus, snapshot }`.
+     * `pendingMoments` are waiting for their frame: `{ kind, hero, partner,
+     * due }`, `due` on `state.elapsed`. `ballWas` is who held the ball last
+     * frame, for a catch or a pick. `shown` is a moment the console has put on
+     * the field, with the live frame kept to put back.
+     */
+    moments: [],
+    pendingMoments: [],
+    ballWas: null,
+    shown: null,
     held: 0,
     accumulator: 0,
     playNumber: 0,        // 1 to CFG.rules.playsPerGame
@@ -420,6 +437,8 @@ function driverForPhase(phase) {
     // reading matter it is just a moving background: a visitor trying to read
     // six lines of rules watches the pitch slide sideways underneath them.
     if (phase === 'welcome') return 'play';
+    // A moment the console has put on the field brings its own shot.
+    if (cycle.shown) return 'show';
     if (phase === 'playbook') return 'idle';
     if (phase === 'replay') return 'replay';
     if (phase === 'show' || phase === 'opening') return 'show';
@@ -429,6 +448,7 @@ function driverForPhase(phase) {
 /** What the active driver needs to know. Only the replay driver needs
  *  anything, and what it needs is where the ball was on this frame. */
 function cameraState() {
+    if (cycle.shown) return { shot: cycle.shown.shot };
     if (cycle.phase === 'show') return { shot: cycle.showShot };
     if (cycle.phase === 'opening') return { shot: cycle.openingShot };
     if (cycle.phase !== 'replay') return {};
@@ -689,9 +709,24 @@ function beginSettle() {
      * the other.
      */
     const tackleToo = !party || party.occasion === 'sack';
+    // A FIFTY IS THE WHISTLE: the simulation ends the play on the step the
+    // carrier crosses into the band, so this frame is the crossing. The
+    // offense's only, as the lit band is (`litFor`).
+    const crossing = cycle.play.playState.state.anim.run50 ? ballCarrier(cycle.play) : null;
+    if (crossing && litFor(crossing.settings.position)) noteMoment('fifty', crossing.settings.position);
     if (tackleToo && pair.tackler) {
         cycle.tackle = pair;
-        startTakedown(cycle.play.game.objects, pair.tackler, pair.carrier);
+        const contact = startTakedown(cycle.play.game.objects, pair.tackler, pair.carrier);
+        // AND A TACKLE IS THE CONTACT, timed off the same clock as the grunt,
+        // with the man who made it in the picture too.
+        if (contact !== false) {
+            const kind = tackleKind({
+                carrier: pair.carrier,
+                threw: !!cycle.play.game.throwTo,
+                ran: !!cycle.play.game.runForYourLife,
+            });
+            noteMoment(kind, pair.carrier, pair.tackler, contact + delayFor(kind));
+        }
         // Long enough to land the hit and let him lie there for a beat. A
         // card opening over a man in mid-air is worse than no animation at
         // all.
@@ -935,6 +970,9 @@ function onSnap() {
         cycle.glow = null;
         hideSpot();
     }
+    // A new play, and its moments start empty. The quarterback has the ball.
+    resetMoments();
+    cycle.ballWas = { holder: 'qb', team: 0, thrown: false };
     snap(cycle.play);
     visit.plays += 1;
     report('snap', { outcome: calledFields() });
@@ -968,6 +1006,8 @@ function onThrow(position) {
         // the time puts the wrong man in the air (QA round twenty-four).
         noteThrow(position);
         playSound('wind');
+        // The throw, half way through the arm's sweep, with the man it went to.
+        noteMoment('release', 'qb', position);
         // THE BALL IS UP, AND SO IS THE ONE THING LEFT TO DO. With the jump
         // the visitor's, the row becomes the Jump button until the ball comes
         // down or he has gone up for it.
@@ -1092,6 +1132,9 @@ function finishPlay() {
     // result card is open has finished it just as much as one who clicks on.
     saveGame(cycle);
 
+    // Anything still waiting for its frame is taken now, on the last frame of
+    // the play, rather than lost: the card is about to freeze the field.
+    takeMoments(true);
     landTackle();
     presentResult();
 }
@@ -1160,6 +1203,7 @@ function startReplay() {
     });
     uiClick();
     hideResult();
+    putBackLive();
     // THE HUD STAYS UP THROUGH A REPLAY, carrying one button. It used to be
     // hidden for the duration, so a replay that started on its own (D36 plays
     // the highlights unasked) had no way out but to wait for it.
@@ -1245,6 +1289,9 @@ function onNext() {
     });
     uiClick();
     hideResult();
+    // A moment the console left on the field goes, and the field as it was
+    // comes back, before anything else is drawn over it.
+    putBackLive();
     const then = last ? finishGame : openPlaybook;
     /**
      * A MILESTONE SHOW PLAYS HERE, BETWEEN THE CARD AND WHATEVER COMES NEXT.
@@ -1639,6 +1686,7 @@ function installQaHook() {
     if (typeof window === 'undefined' || !qaEnabled(window.location && window.location.href)) return;
     window.xo = Object.freeze({
         show: qaShow, opening: qaOpening, colors: qaColors, playAs: qaPlayAs,
+        moments: qaMoments, moment: qaMoment,
         levels: [...CFG.milestones.built],
     });
 }
@@ -1760,7 +1808,8 @@ function startTakedown(objects, tacklerPos, carrierPos, from = 0) {
     // noise from nowhere.
     const hit = contactFraction(gap) * CFG.pose.takedown.dive;
     if (from < hit) playSound('grunt', (hit - from) * 1000);
-    return true;
+    // How long until the two bodies meet, for the photo of it.
+    return Math.max(0, hit - from);
 }
 
 /**
@@ -1915,6 +1964,9 @@ function stepCycle(delta) {
             record(cycle.play.game.objects);
             cycle.accumulator -= SIM_STEP;
         }
+        // BEFORE THE WHISTLE IS ANSWERED, because a pick ends the play on the
+        // very step the ball is caught.
+        watchBall();
         tendJumpRow();
         /**
          * THE CLOCK IS READ FROM THE SIMULATION, NEVER COUNTED HERE.
@@ -1969,6 +2021,9 @@ function stepCycle(delta) {
 
     syncFigures(cycle.play.game.objects, delta, { live: cycle.phase === 'live' });
     showBall(cycle.play.game.objects, delta);
+    // After everything is drawn for this frame, so a moment due now keeps
+    // exactly what is about to be rendered.
+    takeMoments();
 }
 
 /**
@@ -2702,6 +2757,8 @@ function playAs(slot) {
     if (next === state.playAs) return true;
     state.playAs = next;
     if (visitorAvatar) {
+        // The last play's moments hold the figures this throws away.
+        resetMoments();
         buildRoster();
         const objects = cycle.play.game.objects;
         const fresh = cycle.play.frame === 0;
@@ -2816,6 +2873,130 @@ function tendPickSpot(delta) {
     if (figure && figure.visible) showSpot(figure.position.x, figure.position.z);
 }
 
+// ---- The photo moments (specs/xo-photos-plan, Step 3) -----------------------
+
+function resetMoments() {
+    cycle.moments = [];
+    cycle.pendingMoments = [];
+    cycle.ballWas = null;
+}
+
+/** A moment worth a photo has happened, to be taken `delay` seconds from now
+ *  (its kind's own `after` unless the caller knows better, as a tackle does). */
+function noteMoment(kind, hero, partner = null, delay = delayFor(kind)) {
+    if (!hero) return;
+    cycle.pendingMoments.push({ kind, hero, partner, due: state.elapsed + delay });
+}
+
+/** Who holds the ball this frame, against last frame: a catch or a pick. */
+function watchBall() {
+    const holder = ballCarrier(cycle.play);
+    const now = {
+        holder: holder ? holder.settings.position : '',
+        team: holder ? holder.settings.team : -1,
+        thrown: !!cycle.play.game.throwTo,
+    };
+    const event = ballEvent(cycle.ballWas, now);
+    cycle.ballWas = now;
+    if (event) noteMoment(event.kind, event.hero, event.partner);
+}
+
+/** Everything on the field that moves, which is what a snapshot keeps. */
+function movingRoots() {
+    return [getRosterGroup(), getBall(), getMarkerGroup()];
+}
+
+/**
+ * TAKE EVERY MOMENT WHOSE FRAME HAS COME, or every one still waiting when
+ * `flush` (the card is opening and there will be no more frames).
+ *
+ * `focus` is where the picture is of: the hero, or the middle of the two for
+ * a tackle, on the ground, with the hero's heading. Read off the DRAWN
+ * figures, which are what the snapshot holds.
+ */
+function takeMoments(flush = false) {
+    if (!cycle.pendingMoments.length) return;
+    const due = cycle.pendingMoments.filter((m) => flush || m.due <= state.elapsed);
+    if (!due.length) return;
+    cycle.pendingMoments = cycle.pendingMoments.filter((m) => !due.includes(m));
+    for (const m of due) {
+        const figures = [m.hero, m.partner].filter(Boolean).map(figureFor).filter(Boolean);
+        const focus = figures.length ? {
+            x: figures.reduce((s, f) => s + (Number(f.position.x) || 0), 0) / figures.length,
+            z: figures.reduce((s, f) => s + (Number(f.position.z) || 0), 0) / figures.length,
+            yaw: Number(figures[0].rotation.y) || 0,
+        } : { x: 0, z: 0, yaw: 0 };
+        cycle.moments.push({
+            kind: m.kind,
+            hero: m.hero,
+            partner: m.partner,
+            at: sinceSnap(),
+            focus,
+            snapshot: captureDrawn(movingRoots()),
+        });
+    }
+}
+
+/** This play's moments, best first, for whoever the visitor is. */
+function rankedMoments() {
+    return rankMoments(cycle.moments, visitorAvatar ? state.playAs : null);
+}
+
+/** "Tackle: receiver B, brought down by safety 1, 2.4 s after the snap". */
+function describeMoment(m) {
+    const who = slotOf(m.hero).phrase;
+    const by = m.partner && (m.kind === 'tackle' || m.kind === 'sack')
+        ? `, brought down by ${slotOf(m.partner).phrase}` : '';
+    const to = m.partner && m.kind === 'release' ? `, to ${slotOf(m.partner).phrase}` : '';
+    return `${KIND_NAMES[m.kind]}: ${who}${by}${to}, ${m.at.toFixed(1)} s after the snap`;
+}
+
+/**
+ * PUT A MOMENT ON THE FIELD, for the console (`xo.moment(n)`), and the live
+ * frame back after. The card and the spot step aside while it is up, and the
+ * camera holds a plain close shot of it (`previewShot`) until the photo camera
+ * exists. Nothing on the field is stepped in the result phase, so it stays.
+ */
+function showMoment(m) {
+    if (!cycle.shown) cycle.shown = { live: captureDrawn(movingRoots()), shot: null };
+    applyDrawn(m.snapshot);
+    cycle.shown.shot = previewShot(m.focus);
+    hideResult();
+    hideSpot();
+}
+
+function putBackLive() {
+    if (!cycle.shown) return false;
+    applyDrawn(cycle.shown.live);
+    cycle.shown = null;
+    return true;
+}
+
+/**
+ * `xo.moments()` lists the last play's moments, best first; `xo.moment(1)`
+ * puts the first of them on the field with the card out of the way, and
+ * `xo.moment()` brings the field and the card back. On the result card only:
+ * that is the one screen where nothing on the field is being drawn.
+ */
+export function qaMoments() {
+    const list = rankedMoments();
+    if (!list.length) return 'No moments yet. Play a down, then ask on the result card.';
+    return list.map((m, i) => `${i + 1}. ${describeMoment(m)}`).join('\n');
+}
+
+export function qaMoment(n) {
+    if (cycle.phase !== 'result') return 'On the result card only, after a play.';
+    if (n === undefined || n === 0) {
+        if (putBackLive()) presentResult();
+        return 'Back to the field as it was.';
+    }
+    const list = rankedMoments();
+    const m = list[Math.round(n) - 1];
+    if (!m) return `No moment ${n}. This play has ${list.length}.`;
+    showMoment(m);
+    return `Showing ${describeMoment(m)}. xo.moment() puts the field back.`;
+}
+
 /**
  * `xo.playAs('wr2')` puts the visitor's avatar at receiver B from the console
  * (localhost or ?qa), before the playbook row exists, through the same path
@@ -2854,6 +3035,18 @@ function showPlaying() {
 export function getState() {
     return { ...state };
 }
+
+/**
+ * For tests/xo-init.test.mjs: the play on the field and its photo moments
+ * (specs/xo-photos-plan, Step 3). The suite sets a catch, a pick, a tackle or
+ * a fifty on the play directly, because the random roll of a real play cannot
+ * be relied on to produce any one of them.
+ */
+export const __test__ = {
+    play: () => cycle.play,
+    moments: () => cycle.moments.slice(),
+    pending: () => cycle.pendingMoments.slice(),
+};
 
 /** `beginMilestone` is exposed for the suite too: reaching 100 by actually
  *  playing needs two fifties in a row, which no test should depend on. */

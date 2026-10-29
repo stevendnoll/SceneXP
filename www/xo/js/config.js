@@ -1151,6 +1151,28 @@ const XO_CONFIG = {
      */
     pick: { glow: 1.6, guard: 0.45 },
 
+    /**
+     * THE MOMENTS WORTH A PHOTO (specs/xo-photos-plan, Step 3, moments.js).
+     *
+     * `after` is how many seconds past each event the picture is taken, so
+     * "just as" lands on the frame that reads best. A catch and a pick are the
+     * ball arriving in the hands, a fifty is the whistle as he crosses, a
+     * tackle and a sack are counted from the takedown's moment of CONTACT (the
+     * frame the grunt is timed to) and wait for the lean to show, and a throw
+     * is half way through the arm's sweep (`pose.throwRelease.time`). Starting
+     * values, for Steve's QA to tune.
+     *
+     * `keep` is how many a play offers. `preview` is a plain close shot for
+     * the console hook (`xo.moment(n)`) until the photo camera exists (Step
+     * 4): `distance` metres off the hero across the field, from the side with
+     * more grass, `height` up, aimed at `aimY`.
+     */
+    moments: {
+        after: { catch: 0.05, pick: 0.05, fifty: 0.1, tackle: 0.15, sack: 0.15, release: 0.17 },
+        keep: 3,
+        preview: { distance: 9, height: 2.4, aimY: 2.0, fov: 32 },
+    },
+
     /** The two kits, from the 2D game's own rgba(255,153,44) and
      *  rgba(155,207,255). Two hues rather than two values, which is what keeps
      *  them separable at 45m under floodlights (D23). */
