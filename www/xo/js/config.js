@@ -1199,6 +1199,10 @@ const XO_CONFIG = {
         fov: 24, widen: 1.15, maxFov: 50, ahead: 0.45, rise: 0.04, floor: 1.0, lead: 0.9,
         reach: 2.0, aimAt: 0.5, margin: 0.1, clear: 0.9, near: 0.5, far: 400,
         markers: false,
+        /** Seconds the photo sheet ignores a pointer press after it opens,
+         *  as the Team colors card does (`colors.armFor`): the tap on "See the
+         *  photo" lands where Share is about to be. */
+        armFor: 0.45,
     },
 
     /** The two kits, from the 2D game's own rgba(255,153,44) and

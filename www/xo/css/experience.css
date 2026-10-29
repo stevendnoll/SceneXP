@@ -825,8 +825,85 @@ body {
 .card-actions {
     margin-top: 1.2rem;
     display: flex;
+    /* The result card can carry three now (the replay, the photo, the next
+       play), which is more than a 320 pixel phone has across. */
+    flex-wrap: wrap;
     justify-content: center;
     gap: 0.5rem;
+}
+
+/* ---- The photo sheet (specs/xo-photos-plan, Step 5) -------------------------
+ *
+ * The picture is 4 by 5 and is as large as the screen allows: as wide as the
+ * card, or as tall as most of the screen, whichever comes first, so the
+ * caption, the pager and the buttons always fit under it without a scroll on
+ * a phone. The frame holds that shape while the photo develops, so nothing
+ * jumps when it lands.
+ */
+.photo-frame {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: min(100%, calc(min(56vh, 34rem) * 0.8));
+    aspect-ratio: 4 / 5;
+    margin: 0.9rem auto 0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #0b0f15;
+}
+
+.photo-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.photo-wait {
+    margin: 0;
+    padding: 1rem;
+    color: #aeb6c6;
+    font-size: 0.95rem;
+}
+
+/* A display rule beats the browser's own [hidden], so it is restated. */
+.photo-wait[hidden],
+.photo-pager[hidden],
+.photo-nudge[hidden] {
+    display: none;
+}
+
+.photo-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8rem;
+    margin-top: 0.7rem;
+}
+
+.photo-count {
+    min-width: 4.5ch;
+    color: #c9d1de;
+    font-variant-numeric: tabular-nums;
+}
+
+.photo-nudge-link {
+    color: #ff992c;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+}
+
+.photo-nudge-link:hover,
+.photo-nudge-link:focus-visible {
+    color: #ffb76b;
+}
+
+/* STILL DEVELOPING. Never `disabled` (that would throw keyboard focus out of
+   the dialog), so it is dimmed and says so when pressed. */
+.hud-btn[aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: progress;
 }
 
 /* Under the actions and the status line. The card itself is the shared sheet's

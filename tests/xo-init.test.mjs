@@ -1538,6 +1538,194 @@ describe('the moments worth a photo', () => {
 });
 
 /**
+ * THE PHOTO SHEET (specs/xo-photos-plan, Step 5): offered on the result card
+ * when the play left a moment, opened over the field with the card out of the
+ * way, made ahead so Share has a file under the tap, and handed to the share
+ * sheet or the downloads folder. A catch (and a tackle, where wanted) is set
+ * on the live play through `__test__`, as in the moments tests above.
+ */
+describe('the photo sheet', () => {
+    const PLAY_KEY = 'exes-n-ohs-play-settings';
+    let now = 300000;
+    const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
+    const find = (main, position) => main.__test__.play().game.objects.find((o) => o.settings.position === position);
+    const resultLabels = () => dom.el('result-actions').children.map((b) => b.textContent);
+    const share = () => dom.el('photo-share');
+
+    /** Canvases that can encode a file, which the stub's cannot. */
+    function canvasesEncode() {
+        const make = dom.documentStub.createElement;
+        dom.documentStub.createElement = (tag) => {
+            const node = make(tag);
+            if (tag === 'canvas') node.toBlob = (cb, type) => cb({ size: 2048, type });
+            return node;
+        };
+    }
+
+    /** A thrown ball caught by receiver A, then whatever the play does; with
+     *  `downed`, he is brought down at once too. Leaves the result card up. */
+    async function aCatch({ downed = false } = {}) {
+        const main = await toLivePlay();
+        press('Snap the ball');
+        await flushAsync();
+        frames(3);
+        press('Throw A');
+        await flushAsync();
+        find(main, 'wr1').state.hasBall = true;
+        frames(2);
+        if (downed) {
+            const st = main.__test__.play().playState.state;
+            st.tackled = true;
+            st.anim.done = true;
+        }
+        await runToResult(() => dom.loops[0](now += 16.7));
+        return main;
+    }
+
+    async function ranked(main, visitor = null) {
+        const { rankMoments } = await import('../www/xo/js/moments.min.js');
+        return rankMoments(main.__test__.moments(), visitor);
+    }
+
+    test('offered on the card, opened over the field, developing, then ready, then closed back to the card', async () => {
+        const sent = [];
+        globalThis.Image = class { set src(url) { sent.push(new URL(url, 'http://localhost:8000/xo/')); } };
+        try {
+            const main = await aCatch();
+            expect(resultLabels()).toEqual(['Watch the replay', 'See the photo', 'Next play']);
+            const photoBtn = dom.el('result-actions').children.find((b) => b.id === 'result-photo-btn');
+            expect(photoBtn.getAttribute('aria-label')).toBe('See the photo of this play');
+
+            photoBtn.click();
+            await flushAsync();
+            const best = (await ranked(main))[0];
+            const words = await import('../www/xo/js/moments.min.js');
+            expect(dom.el('photo').hidden).toBe(false);
+            expect(dom.el('result').hidden).toBe(true);
+            expect(dom.el('photo-panel').focused).toBe(true);
+            expect(dom.el('photo-title').textContent).toBe(words.photoTitle(best.kind));
+            expect(dom.el('photo-caption').textContent).toBe(words.photoCaption(best, null));
+            // Still developing: the words, and Share busy rather than disabled.
+            expect(dom.el('photo-wait').hidden).toBe(false);
+            expect(share().getAttribute('aria-disabled')).toBe('true');
+            expect(share().disabled).toBe(false);
+            // No avatar, so the nudge, in the moment's own words.
+            expect(dom.el('photo-nudge').hidden).toBe(false);
+            expect(dom.el('photo-nudge-text').textContent).toBe(words.photoNudge(best.kind));
+
+            frames(1);
+            await flushAsync();
+            const picture = dom.el('photo-frame').children.find((c) => c.className === 'photo-canvas');
+            expect(picture).toBeTruthy();
+            expect(picture.getAttribute('role')).toBe('img');
+            expect(picture.getAttribute('aria-label')).toBe(words.photoCaption(best, null));
+            expect(dom.el('photo-wait').hidden).toBe(true);
+            expect(share().getAttribute('aria-disabled')).toBe('false');
+
+            const opened = sent.find((u) => u.searchParams.get('action') === 'photo');
+            expect(opened.searchParams.get('kind')).toBe('opened');
+
+            dom.el('photo-close').click();
+            await flushAsync();
+            expect(dom.el('photo').hidden).toBe(true);
+            expect(dom.el('result').hidden).toBe(false);
+            expect(photoBtn.focused).toBe(true);
+            expect(dom.el('photo-frame').children.some((c) => c.className === 'photo-canvas')).toBe(false);
+
+            // Escape closes it too, and the photo made the first time is the
+            // one hung the second, not made again.
+            photoBtn.click();
+            await flushAsync();
+            await flushAsync();
+            expect(dom.el('photo-frame').children.find((c) => c.className === 'photo-canvas')).toBe(picture);
+            fire(dom.documentStub, 'keydown', { key: 'Escape' });
+            expect(dom.el('photo').hidden).toBe(true);
+            expect(main.getState().isLoaded).toBe(true);
+        } finally {
+            delete globalThis.Image;
+        }
+    });
+
+    test('Share hands a ready file to the share sheet with the address; a closed sheet is nobody\'s failure', async () => {
+        canvasesEncode();
+        const handed = [];
+        globalThis.navigator.canShare = () => true;
+        globalThis.navigator.share = async (data) => { handed.push(data); };
+        dom.windowStub.File = class { constructor(parts, name, opts) { this.name = name; this.type = opts.type; } };
+        const main = await aCatch();
+        dom.el('result-actions').children.find((b) => b.id === 'result-photo-btn').click();
+        await flushAsync();
+        expect(share().textContent).toBe('Share picture');
+        // Pressed before the photo has developed: said so, nothing sent.
+        const { sharePhoto } = await import('../www/xo/js/photo-ui.min.js');
+        await expect(sharePhoto()).resolves.toBe('');
+        expect(dom.el('photo-status').textContent).toBe('Developing the photo…');
+        expect(handed).toEqual([]);
+
+        frames(1);
+        await flushAsync();
+        await flushAsync();
+        await expect(sharePhoto()).resolves.toBe('shared');
+        const best = (await ranked(main))[0];
+        expect(handed).toHaveLength(1);
+        expect(handed[0].files[0].name).toBe(`scenexp-xo-${best.kind}-1080x1350.jpg`);
+        expect(handed[0].files[0].type).toBe('image/jpeg');
+        expect(handed[0].title).toBe("X's and O's");
+        expect(handed[0].text).toMatch(/in X's and O's! http:\/\/.+\/$/);
+        expect(dom.el('photo-status').textContent).toBe('Shared.');
+
+        globalThis.navigator.share = async () => { const e = new Error('closed'); e.name = 'AbortError'; throw e; };
+        await expect(sharePhoto()).resolves.toBe('cancelled');
+        expect(dom.el('photo-status').textContent).toBe('Shared.');
+    });
+
+    test('where a file cannot be shared, Save puts it in the downloads folder', async () => {
+        canvasesEncode();
+        delete globalThis.navigator.share;
+        delete globalThis.navigator.canShare;
+        const made = [];
+        const real = globalThis.URL.createObjectURL;
+        globalThis.URL.createObjectURL = (blob) => { made.push(blob); return 'blob:photo'; };
+        try {
+            await aCatch();
+            dom.el('result-actions').children.find((b) => b.id === 'result-photo-btn').click();
+            await flushAsync();
+            expect(share().textContent).toBe('Save picture');
+            frames(1);
+            await flushAsync();
+            await flushAsync();
+            const { sharePhoto } = await import('../www/xo/js/photo-ui.min.js');
+            await expect(sharePhoto()).resolves.toBe('saved');
+            expect(made).toHaveLength(1);
+            expect(dom.el('photo-status').textContent).toBe('Your photo is in your downloads.');
+        } finally {
+            globalThis.URL.createObjectURL = real;
+        }
+    });
+
+    test('with an avatar: the visitor is "you", no nudge, and the pager walks every moment round', async () => {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        createAvatarStore({ win: null }).save({ skin: 'deep', shirt: 'teal' });
+        globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'wr1' }));
+        const main = await aCatch({ downed: true });
+        const list = await ranked(main, 'wr1');
+        expect(list.map((m) => m.kind)).toEqual(['catch', 'tackle', 'release']);
+        dom.el('result-actions').children.find((b) => b.id === 'result-photo-btn').click();
+        await flushAsync();
+        expect(dom.el('photo-nudge').hidden).toBe(true);
+        expect(dom.el('photo-pager').hidden).toBe(false);
+        const page = () => `${dom.el('photo-count').textContent}: ${dom.el('photo-caption').textContent}`;
+        expect(page()).toBe('1 of 3: You make the catch.');
+        dom.el('photo-next').click();
+        expect(page()).toMatch(/^2 of 3: .+ brings you down\.$/);
+        dom.el('photo-prev').click();
+        dom.el('photo-prev').click();
+        expect(page()).toBe('3 of 3: The quarterback lets it fly to you.');
+        expect(dom.el('photo-title').textContent).toBe('The throw');
+    });
+});
+
+/**
  * CHOOSING WHO TO PLAY AS (specs/xo-photos-plan, Step 2): the playbook's row,
  * the tags on the plays that sit the visitor out, and the pre-snap "Play as…"
  * that asks for a player on the field.

@@ -850,7 +850,7 @@ export function showHelp(onClose) {
  * button onward. It takes focus so the game can be played entirely by keyboard
  * without ever hunting for where the focus went.
  */
-export function showResult(outcome, playNumber, playsPerGame, runningTotal, canReplay = false) {
+export function showResult(outcome, playNumber, playsPerGame, runningTotal, canReplay = false, canPhoto = false) {
     const card = el('result');
     if (!card) return;
     const isLast = playNumber >= playsPerGame;
@@ -876,6 +876,15 @@ export function showResult(outcome, playNumber, playsPerGame, runningTotal, canR
             () => handlers.onReplay(), 'of this play'));
     }
 
+    // AND THE PHOTO OF IT, when the play left a moment worth one
+    // (specs/xo-photos-plan, Step 5). Made only if pressed.
+    if (handlers.onPhoto && canPhoto) {
+        const photo = button('See the photo', 'hud-btn',
+            () => handlers.onPhoto(), 'of this play');
+        photo.id = 'result-photo-btn';
+        box.appendChild(photo);
+    }
+
     const next = button(isLast ? 'See how you did' : 'Next play',
         'hud-btn hud-btn-primary', () => handlers.onNext && handlers.onNext());
     box.appendChild(next);
@@ -891,4 +900,21 @@ export function showResult(outcome, playNumber, playsPerGame, runningTotal, canR
 export function hideResult() {
     const card = el('result');
     if (card) card.hidden = true;
+}
+
+/**
+ * BACK TO THE CARD AS IT WAS, after a sheet that opened from it closes, with
+ * focus on the button that opened the sheet. Not `showResult` again: that
+ * rebuilds the row and reads the whole result out a second time.
+ */
+export function returnToResult(focusId) {
+    const card = el('result');
+    if (!card) return;
+    card.hidden = false;
+    const box = el('result-actions');
+    const back = box && box.children && box.children.find
+        ? box.children.find((b) => b.id === focusId)
+        : null;
+    const target = back || (focusId ? el(focusId) : null);
+    if (target && target.focus) target.focus();
 }

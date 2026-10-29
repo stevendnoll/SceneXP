@@ -6312,7 +6312,7 @@ html [lang="en"]
             li
               strong
                 "Your game of X's and O's."
-              "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the player your avatar plays as if you chose one other than the quarterback, the colors you chose for the teams and the field, whether you turned the sound on or off, and whether you turned on Auto jump, so the game comes back the way you left it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot."
+              "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the player your avatar plays as if you chose one other than the quarterback, the colors you chose for the teams and the field, whether you turned the sound on or off, and whether you turned on Auto jump, so the game comes back the way you left it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot. A photo of a play is drawn right on your device and handed only to your own share sheet or downloads folder. It is never sent to us."
             li
               strong
                 "Your job search in Corner Office."
@@ -8905,7 +8905,7 @@ html [data-ui-theme="neon" lang="en"]
     title
       "X's and O's | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=20" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=21" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -8928,6 +8928,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/progress.min.js" rel="modulepreload"]
     link [href="js/scoring.min.js" rel="modulepreload"]
     link [href="js/hud.min.js" rel="modulepreload"]
+    link [href="js/photo-ui.min.js" rel="modulepreload"]
     link [href="js/opening.min.js" rel="modulepreload"]
     link [href="js/colors-ui.min.js" rel="modulepreload"]
     link [href="js/colors-preview.min.js" rel="modulepreload"]
@@ -8965,7 +8966,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=20" rel="stylesheet"]
+    link [href="css/experience.min.css?v=21" rel="stylesheet"]
     link [href="../shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
@@ -9189,6 +9190,32 @@ html [data-ui-theme="neon" lang="en"]
         p#result-detail.card-detail
         p#result-running.card-meta
         div#result-actions.card-actions
+    div#photo.card-overlay [hidden]
+      div#photo-panel.card-panel.photo-panel [aria-describedby="photo-caption" aria-labelledby="photo-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#photo-title.card-title
+          "The photo"
+        div#photo-frame.photo-frame
+          p#photo-wait.photo-wait
+            "Developing the photo…"
+        p#photo-caption.card-detail.photo-caption
+        div#photo-pager.photo-pager [hidden]
+          button#photo-prev.hud-btn [aria-label="Previous photo" type="button"]
+            "Previous"
+          span#photo-count.photo-count
+            "1 of 1"
+          button#photo-next.hud-btn [aria-label="Next photo" type="button"]
+            "Next"
+        p#photo-nudge.card-meta.photo-nudge [hidden]
+          span#photo-nudge-text
+            "Want to be in the picture?"
+          a#photo-nudge-link.photo-nudge-link [href="../avatar/?return=/xo/"]
+            "Make your avatar"
+        p#photo-status.sr-only [aria-live="polite" role="status"]
+        div.card-actions
+          button#photo-close.hud-btn [type="button"]
+            "Close"
+          button#photo-share.hud-btn.hud-btn-primary [aria-disabled="true" type="button"]
+            "Share picture"
     div#summary.card-overlay [hidden]
       div.card-panel [aria-labelledby="summary-title" aria-modal="true" role="dialog"]
         h2#summary-title.card-title

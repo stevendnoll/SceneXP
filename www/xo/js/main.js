@@ -61,8 +61,9 @@ import {
     clearActions, showResult, hideResult, announce, showWelcome, showHelp, showSkipReplay,
     showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
     hideMilestoneTitle, showSkipOpening, setOpeningTitle, hideOpeningTitle, hideWelcome,
-    showInFlight, setJumpCue, showPick, setPickChoice,
+    showInFlight, setJumpCue, showPick, setPickChoice, returnToResult,
 } from './hud.min.js';
+import { initPhotoSheet, showPhotoSheet, photoSheetOpen } from './photo-ui.min.js';
 import { openingFrame, planOpening, castAt, propsAt } from './opening.min.js';
 import { initColorsCard, showColorsCard, colorsCardOpen } from './colors-ui.min.js';
 import { drawColorsPreviews } from './colors-preview.min.js';
@@ -1192,7 +1193,35 @@ function presentResult() {
     // column rises past the card, which a ring on the grass could not.
     if (cycle.spotAt) showSpot(cycle.spotAt.x, cycle.spotAt.z);
     showResult(cycle.lastOutcome, cycle.playNumber, CFG.rules.playsPerGame,
-        cycle.total, !isEmpty());
+        cycle.total, !isEmpty(), rankedMoments().length > 0);
+}
+
+/**
+ * "SEE THE PHOTO" (specs/xo-photos-plan, Step 5): the sheet over the field,
+ * with this play's best moments, and back to the card where it was when it
+ * closes. The card steps aside while the sheet is up, because only one dialog
+ * may claim the screen at a time (the focus trap wraps the last one it finds).
+ */
+function openPhotos() {
+    if (cycle.phase !== 'result' || photoSheetOpen()) return;
+    const moments = rankedMoments();
+    if (!moments.length) return;
+    uiClick();
+    // A moment the console left on the field goes first: the sheet is of the
+    // play, and the field behind it should be the field as it finished.
+    if (putBackLive() && cycle.spotAt) showSpot(cycle.spotAt.x, cycle.spotAt.z);
+    hideResult();
+    showPhotoSheet(moments, {
+        visitor: visitorAvatar ? state.playAs : null,
+        back: () => returnToResult('result-photo-btn'),
+    });
+}
+
+/** One moment's photo and its file, for the sheet: drawn on the next frame,
+ *  then encoded. */
+async function makePhoto(moment) {
+    const picture = await requestPhoto(moment);
+    return { picture, blob: await photoBlob(picture) };
 }
 
 /** Roll the recording. The live simulation is not touched: playback rebuilds
@@ -2557,6 +2586,8 @@ async function init() {
         onPlayAs: openPick,
         onPickCancel: cancelPick,
         onPickChoose: () => choosePick(),
+        // The photo of the play, from the result card (Step 5).
+        onPhoto: openPhotos,
         onJump: () => onJump(),
         onReplay: startReplay,
         onSkipReplay,
@@ -2604,6 +2635,14 @@ async function init() {
         apply: ({ teams, field }) => applyColors({ teams, field }),
         report,
         announce,
+    });
+    // THE PHOTO SHEET. The address that goes with a shared picture is where
+    // the page is served from, so a share is right on localhost, on a staging
+    // host and in production alike (as the score share's is, summary.js).
+    initPhotoSheet({
+        make: makePhoto,
+        report,
+        url: () => new URL('.', window.location.href).href,
     });
 
     setProgress(0.9, 'Almost ready…');

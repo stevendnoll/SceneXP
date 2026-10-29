@@ -127,7 +127,7 @@
     <title>X's and O's | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=20" as="style">
+    <link rel="preload" href="css/experience.min.css?v=21" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -151,6 +151,7 @@
     <link rel="modulepreload" href="js/progress.min.js">
     <link rel="modulepreload" href="js/scoring.min.js">
     <link rel="modulepreload" href="js/hud.min.js">
+    <link rel="modulepreload" href="js/photo-ui.min.js">
     <link rel="modulepreload" href="js/opening.min.js">
     <link rel="modulepreload" href="js/colors-ui.min.js">
     <link rel="modulepreload" href="js/colors-preview.min.js">
@@ -194,7 +195,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=20">
+    <link rel="stylesheet" href="css/experience.min.css?v=21">
     <!-- The welcome card's avatar portrait (shared with the home page). -->
     <link rel="stylesheet" href="../shared/css/avatar-1.0.0.min.css">
 
@@ -586,6 +587,42 @@
             <p id="result-detail" class="card-detail"></p>
             <p id="result-running" class="card-meta"></p>
             <div id="result-actions" class="card-actions"></div>
+        </div>
+    </div>
+
+    <!-- THE PHOTO OF THE PLAY (specs/xo-photos-plan, Step 5), opened from the
+         result card's "See the photo": the best moments of the play just over,
+         one at a time, drawn from where a sideline photographer would stand,
+         and a way to share or save each. js/photo-ui.js fills it. The picture
+         is a canvas the page draws, never an image fetched from anywhere, and
+         nothing is uploaded. tabindex="-1" so the panel takes focus when it
+         opens without joining the tab order, as the Team colors card does. -->
+    <div id="photo" class="card-overlay" hidden>
+        <div id="photo-panel" class="card-panel photo-panel" role="dialog" aria-modal="true"
+            aria-labelledby="photo-title" aria-describedby="photo-caption" tabindex="-1">
+            <h2 id="photo-title" class="card-title">The photo</h2>
+            <div id="photo-frame" class="photo-frame">
+                <p id="photo-wait" class="photo-wait">Developing the photo…</p>
+            </div>
+            <p id="photo-caption" class="card-detail photo-caption"></p>
+            <div id="photo-pager" class="photo-pager" hidden>
+                <button id="photo-prev" class="hud-btn" type="button" aria-label="Previous photo">Previous</button>
+                <span id="photo-count" class="photo-count">1 of 1</span>
+                <button id="photo-next" class="hud-btn" type="button" aria-label="Next photo">Next</button>
+            </div>
+            <!-- For a visitor with no avatar: under a picture of somebody else
+                 doing the thing, which is when the offer lands best. -->
+            <p id="photo-nudge" class="card-meta photo-nudge" hidden>
+                <span id="photo-nudge-text">Want to be in the picture?</span>
+                <a id="photo-nudge-link" class="photo-nudge-link" href="../avatar/?return=/xo/">Make your avatar</a>
+            </p>
+            <!-- Inside the dialog, where a screen reader will read it. -->
+            <p id="photo-status" class="sr-only" role="status" aria-live="polite"></p>
+            <div class="card-actions">
+                <button id="photo-close" class="hud-btn" type="button">Close</button>
+                <button id="photo-share" class="hud-btn hud-btn-primary" type="button"
+                    aria-disabled="true">Share picture</button>
+            </div>
         </div>
     </div>
 

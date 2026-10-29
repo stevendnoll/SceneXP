@@ -17,6 +17,7 @@
  *            says, because a picture of a throw is rarely the best one
  */
 import { XO_CONFIG as CFG } from './config.min.js';
+import { slotOf } from './playas.min.js';
 
 /** Best first. After "is the visitor in it", this is the ranking. */
 export const KINDS = Object.freeze(['fifty', 'pick', 'catch', 'sack', 'tackle', 'release']);
@@ -89,3 +90,82 @@ export const KIND_NAMES = Object.freeze({
     fifty: 'Fifty', pick: 'Interception', catch: 'Catch',
     sack: 'Sack', tackle: 'Tackle', release: 'Throw',
 });
+
+// ---- What a photo says (specs/xo-photos-plan, Step 5) -----------------------
+//
+// The sheet's title, the line under the picture, the words that go with it to
+// a share sheet, and the nudge toward the avatar page for a visitor without
+// one. The visitor is "you" wherever their own player is in the picture.
+// House style: polite, no semicolons and no em-dashes.
+
+/** "The catch". */
+export function photoTitle(kind) {
+    return KIND_NAMES[kind] ? `The ${KIND_NAMES[kind].toLowerCase()}` : 'The photo';
+}
+
+/**
+ * THE LINE UNDER THE PICTURE, which is also what a screen reader is told the
+ * picture is. `visitor` is the slot the visitor's avatar plays, or null.
+ */
+export function photoCaption(m, visitor = null) {
+    const you = (slot) => Boolean(visitor) && slot === visitor;
+    // A name at the start of a sentence, and one anywhere else. There is one
+    // quarterback, so he is "the" quarterback; receiver B is one of four.
+    const name = (slot) => (you(slot) ? 'you'
+        : slot === 'qb' ? 'the quarterback' : slotOf(slot).phrase);
+    const lead = (slot) => {
+        const n = name(slot);
+        return n[0].toUpperCase() + n.slice(1);
+    };
+    const solo = (yours, theirs) => (you(m.hero) ? yours : `${lead(m.hero)} ${theirs}`);
+    switch (m.kind) {
+        case 'catch': return solo('You make the catch.', 'makes the catch.');
+        case 'pick': return solo('You pick it off.', 'picks it off.');
+        case 'fifty': return solo('You go in for fifty.', 'goes in for fifty.');
+        case 'release': {
+            const to = m.partner ? ` to ${name(m.partner)}` : '';
+            return solo(`You let it fly${to}.`, `lets it fly${to}.`);
+        }
+        case 'tackle':
+            if (!m.partner) return `${lead(m.hero)} ${you(m.hero) ? 'are' : 'is'} brought down.`;
+            if (you(m.partner)) return `You bring down ${name(m.hero)}.`;
+            if (you(m.hero)) return `${lead(m.partner)} brings you down.`;
+            return `${lead(m.partner)} brings down ${name(m.hero)}.`;
+        case 'sack':
+            if (!m.partner) return `${lead(m.hero)} ${you(m.hero) ? 'are' : 'is'} sacked.`;
+            return you(m.partner)
+                ? 'You sack the quarterback.'
+                : `${lead(m.partner)} sacks ${you(m.hero) ? 'you' : 'the quarterback'}.`;
+        default: return `${lead(m.hero)} in X's and O's.`;
+    }
+}
+
+const SHARE_LINES = Object.freeze({
+    catch: "What a catch in X's and O's!",
+    pick: "Picked off in X's and O's!",
+    fifty: "Fifty points in X's and O's!",
+    tackle: "What a hit in X's and O's!",
+    sack: "Sacked in X's and O's!",
+    release: "Let it fly in X's and O's!",
+});
+
+/** The words that go with the picture to a share sheet, with the address. */
+export function photoShareText(kind, url = '') {
+    const line = SHARE_LINES[kind] || "A moment from X's and O's.";
+    return url ? `${line} ${url}` : line;
+}
+
+const NUDGES = Object.freeze({
+    catch: 'Want to be the one making the catch?',
+    pick: 'Want to be the one picking it off?',
+    fifty: 'Want to be the one going in for fifty?',
+    tackle: 'Want to be the one making the hit?',
+    sack: 'Want to be the one making the sack?',
+    release: 'Want to be the one throwing it?',
+});
+
+/** For a visitor with no avatar, the moment that lands best: under a picture
+ *  of somebody else doing the thing. */
+export function photoNudge(kind) {
+    return NUDGES[kind] || 'Want to be in the picture?';
+}

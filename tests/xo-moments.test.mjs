@@ -123,6 +123,55 @@ describe('the best of them', () => {
     });
 });
 
+describe('what a photo says', () => {
+    const m = (kind, hero, partner = null) => ({ kind, hero, partner });
+
+    test('the line under the picture, and "you" wherever the visitor\'s player is in it', () => {
+        const cases = [
+            [m('catch', 'wr1'), null, 'Receiver A makes the catch.'],
+            [m('catch', 'wr1'), 'wr1', 'You make the catch.'],
+            [m('catch', 'wr1'), 'wr2', 'Receiver A makes the catch.'],
+            [m('pick', 'db2'), null, 'Defensive back 2 picks it off.'],
+            [m('pick', 'db2'), 'db2', 'You pick it off.'],
+            [m('fifty', 'qb'), null, 'The quarterback goes in for fifty.'],
+            [m('fifty', 'wr3'), 'wr3', 'You go in for fifty.'],
+            [m('release', 'qb', 'wr2'), null, 'The quarterback lets it fly to receiver B.'],
+            [m('release', 'qb', 'wr2'), 'qb', 'You let it fly to receiver B.'],
+            [m('release', 'qb', 'wr2'), 'wr2', 'The quarterback lets it fly to you.'],
+            [m('tackle', 'wr1', 's1'), null, 'Safety 1 brings down receiver A.'],
+            [m('tackle', 'wr1', 's1'), 's1', 'You bring down receiver A.'],
+            [m('tackle', 'wr1', 's1'), 'wr1', 'Safety 1 brings you down.'],
+            [m('tackle', 'qb', 'x2'), null, 'Lineman 2 brings down the quarterback.'],
+            [m('sack', 'qb', 'db4'), null, 'Defensive back 4 sacks the quarterback.'],
+            [m('sack', 'qb', 'db4'), 'db4', 'You sack the quarterback.'],
+            [m('sack', 'qb', 'db4'), 'qb', 'Defensive back 4 sacks you.'],
+            [m('tackle', 'wr4'), null, 'Receiver D is brought down.'],
+            [m('tackle', 'wr4'), 'wr4', 'You are brought down.'],
+        ];
+        for (const [moment, visitor, line] of cases) {
+            expect(`${moment.kind} ${visitor}: ${M.photoCaption(moment, visitor)}`).toBe(`${moment.kind} ${visitor}: ${line}`);
+        }
+    });
+
+    test('a title, the words that go with a share, and the nudge, for every kind, in the house style', () => {
+        for (const kind of M.KINDS) {
+            const lines = [M.photoTitle(kind), M.photoShareText(kind), M.photoNudge(kind),
+                M.photoCaption(m(kind, 'qb', 's2'), null), M.photoCaption(m(kind, 'qb', 's2'), 'qb')];
+            for (const line of lines) {
+                expect(line).not.toMatch(/[;—]/);
+                expect(line.length).toBeGreaterThan(5);
+            }
+            expect(M.photoTitle(kind)).toMatch(/^The [a-z]+$/);
+            expect(M.photoShareText(kind)).toMatch(/X's and O's!$/);
+            expect(M.photoNudge(kind)).toMatch(/^Want to be the one .+\?$/);
+        }
+        expect(M.photoTitle('catch')).toBe('The catch');
+        expect(M.photoShareText('fifty', 'https://www.scenexp.com/xo/'))
+            .toBe("Fifty points in X's and O's! https://www.scenexp.com/xo/");
+        expect(M.photoTitle('nonsense')).toBe('The photo');
+    });
+});
+
 /**
  * THE SNAPSHOT, ON A REAL THREE.
  */
