@@ -1480,6 +1480,7 @@ describe('the moments worth a photo', () => {
         const xo = globalThis.window.xo;
         expect(xo.moments()).toMatch(/^No moments yet/);
         expect(xo.moment(1)).toBe('On the result card only, after a play.');
+        await expect(xo.photo(1)).resolves.toBe('On the result card only, after a play.');
 
         dom.el('welcome-actions').children[0].click();
         await flushAsync();
@@ -1510,6 +1511,15 @@ describe('the moments worth a photo', () => {
         expect(dom.el('result').hidden).toBe(false);
         frames(1);
         expect(camera.getDriver()).toBe('play');
+
+        // The photo is drawn on the next frame, in the frame loop. The stub's
+        // canvas cannot encode a file, which is the answer a browser without
+        // toBlob gets, and the page carries on.
+        const photo = xo.photo(1);
+        frames(1);
+        await expect(photo).resolves.toBe("This browser couldn't make the picture.");
+        await expect(xo.photo(9)).resolves.toMatch(/^No moment 9\./);
+        expect(dom.el('result').hidden).toBe(false);
 
         // Shown and left up, the next play takes it down with it, and the next
         // snap starts the list again.

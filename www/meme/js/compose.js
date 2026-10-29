@@ -11,6 +11,7 @@
  * gutter, captions in capitals, white with a heavy black outline, top and
  * bottom. The caption shrinks to fit its lines and never overflows.
  */
+import { drawWordmark as drawSharedWordmark } from '../../shared/js/wordmark-1.0.0.min.js';
 
 /** How many columns a template's grid has (its first row's spans). */
 function columnsOf(template) {
@@ -186,22 +187,14 @@ export function drawLabel(ctx, text, point, rect, L, C, avoid = []) {
 }
 
 /** The wordmark, bottom right, in the caption face: `W` is config.wordmark,
- *  `C` config.caption. Returns where it was drawn. */
+ *  `C` config.caption. Returns where it was drawn. Drawn by the shared part
+ *  since 2026-10-29 (X's and O's stamps its photos with it too), handed this
+ *  page's own numbers so nothing about the meme's mark changed. */
 export function drawWordmark(ctx, w, h, W, C) {
-    const px = Math.max(1, Math.round(h * W.height));
-    const inset = h * W.inset;
-    ctx.font = captionFont(px, C.font);
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'alphabetic';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = px * C.stroke;
-    ctx.strokeStyle = C.outline;
-    ctx.fillStyle = C.fill;
-    const x = w - inset;
-    const y = h - inset;
-    ctx.strokeText(W.text, x, y);
-    ctx.fillText(W.text, x, y);
-    return { x, y, px };
+    return drawSharedWordmark(ctx, w, h, {
+        text: W.text, height: W.height, inset: W.inset,
+        font: C.font, stroke: C.stroke, fill: C.fill, outline: C.outline,
+    });
 }
 
 /**

@@ -404,6 +404,12 @@ export function hideSpot() {
     if (spot) spot.visible = false;
 }
 
+/** The spot itself, for a photo to put out of sight while it is taken (it
+ *  marks where a play ENDED, and a photo is of a moment during one). */
+export function getSpot() {
+    return spot;
+}
+
 export function getMarkerGroup() {
     return group;
 }

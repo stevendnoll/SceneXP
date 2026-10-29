@@ -123,18 +123,6 @@ describe('the best of them', () => {
     });
 });
 
-describe('the console\'s plain shot of a moment', () => {
-    test('from the side with more grass, inside the stands, aimed at the hero', () => {
-        const edge = FIELD.width / 2 + FIELD.sideline;
-        for (const z of [-10, -4, 0, 4, 10]) {
-            const shot = M.previewShot({ x: 12, z, yaw: 0 });
-            expect(Math.abs(shot.position.z)).toBeLessThanOrEqual(edge);
-            expect(Math.abs(shot.position.z - z)).toBeCloseTo(CFG.moments.preview.distance, 9);
-            expect(shot.target).toEqual({ x: 12, y: CFG.moments.preview.aimY, z });
-        }
-    });
-});
-
 /**
  * THE SNAPSHOT, ON A REAL THREE.
  */

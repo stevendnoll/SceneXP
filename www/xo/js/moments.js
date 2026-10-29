@@ -89,18 +89,3 @@ export const KIND_NAMES = Object.freeze({
     fifty: 'Fifty', pick: 'Interception', catch: 'Catch',
     sack: 'Sack', tackle: 'Tackle', release: 'Throw',
 });
-
-/**
- * A PLAIN CLOSE SHOT OF A MOMENT, for the console hook until the photo camera
- * is built (Step 4 replaces this). Across the field from the side with more
- * grass, so it never stands in a stand, at chest height, aimed at the hero.
- */
-export function previewShot(focus) {
-    const S = CFG.moments.preview;
-    const side = focus.z >= 0 ? -1 : 1;
-    return {
-        position: { x: focus.x, y: S.height, z: focus.z + side * S.distance },
-        target: { x: focus.x, y: S.aimY, z: focus.z },
-        fov: S.fov,
-    };
-}

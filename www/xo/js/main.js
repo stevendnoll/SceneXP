@@ -25,12 +25,14 @@ import {
 import { initBall, getBall } from './ball.min.js';
 import {
     initMarkers, setPulse, initSpot, showSpot, hideSpot, markerGeometry, applyMarkerColors,
-    getMarkerGroup,
+    getMarkerGroup, getSpot,
 } from './markers.min.js';
 import {
-    ballEvent, tackleKind, delayFor, rankMoments, KIND_NAMES, previewShot,
+    ballEvent, tackleKind, delayFor, rankMoments, KIND_NAMES,
 } from './moments.min.js';
 import { captureDrawn, applyDrawn } from './snapshot.min.js';
+import { photoShot, drawPhoto, photoBlob, photoName } from './photo.min.js';
+import { saveFile } from '../../shared/js/sharefile-1.0.0.min.js';
 import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments, noteThrow,
     setVisitorJumps, standingReach,
@@ -1686,7 +1688,7 @@ function installQaHook() {
     if (typeof window === 'undefined' || !qaEnabled(window.location && window.location.href)) return;
     window.xo = Object.freeze({
         show: qaShow, opening: qaOpening, colors: qaColors, playAs: qaPlayAs,
-        moments: qaMoments, moment: qaMoment,
+        moments: qaMoments, moment: qaMoment, photo: qaPhoto,
         levels: [...CFG.milestones.built],
     });
 }
@@ -2192,6 +2194,9 @@ function animate(now) {
     // corner of this frame's buffer and the main render below clears it.
     // Drawn after, the frame would be shown with a player in the corner.
     if (colorsCardOpen()) drawColorsPreviews(renderer, state.elapsed, { calm: reducedMotion });
+    // AND ANY PHOTO OWED, for the same reason: it borrows the whole buffer,
+    // and the render below paints the live field back over it unseen.
+    takePhotos();
     renderer.render(scene, camera);
 }
 
@@ -2906,13 +2911,25 @@ function movingRoots() {
     return [getRosterGroup(), getBall(), getMarkerGroup()];
 }
 
+/** A drawn figure's root, as the photo camera needs it (photo.js). */
+function bodyOf(figure) {
+    return {
+        x: Number(figure.position.x) || 0,
+        y: Number(figure.position.y) || 0,
+        z: Number(figure.position.z) || 0,
+        yaw: Number(figure.rotation.y) || 0,
+        pitch: Number(figure.rotation.x) || 0,
+    };
+}
+
 /**
  * TAKE EVERY MOMENT WHOSE FRAME HAS COME, or every one still waiting when
  * `flush` (the card is opening and there will be no more frames).
  *
- * `focus` is where the picture is of: the hero, or the middle of the two for
- * a tackle, on the ground, with the hero's heading. Read off the DRAWN
- * figures, which are what the snapshot holds.
+ * `bodies` are who the picture is of, the hero first and the man with him
+ * for a tackle, and `others` everybody else standing, for the photographer to
+ * keep out of the way of. All of it read off the DRAWN figures, which are
+ * what the snapshot holds.
  */
 function takeMoments(flush = false) {
     if (!cycle.pendingMoments.length) return;
@@ -2920,18 +2937,20 @@ function takeMoments(flush = false) {
     if (!due.length) return;
     cycle.pendingMoments = cycle.pendingMoments.filter((m) => !due.includes(m));
     for (const m of due) {
-        const figures = [m.hero, m.partner].filter(Boolean).map(figureFor).filter(Boolean);
-        const focus = figures.length ? {
-            x: figures.reduce((s, f) => s + (Number(f.position.x) || 0), 0) / figures.length,
-            z: figures.reduce((s, f) => s + (Number(f.position.z) || 0), 0) / figures.length,
-            yaw: Number(figures[0].rotation.y) || 0,
-        } : { x: 0, z: 0, yaw: 0 };
+        const named = [m.hero, m.partner].filter(Boolean);
+        const bodies = named.map(figureFor).filter(Boolean).map(bodyOf);
+        const others = cycle.play.game.objects
+            .filter((o) => o.settings && o.settings.position !== 'ball' && !named.includes(o.settings.position))
+            .map((o) => figureFor(o.settings.position))
+            .filter((f) => f && f.visible)
+            .map((f) => ({ x: Number(f.position.x) || 0, z: Number(f.position.z) || 0 }));
         cycle.moments.push({
             kind: m.kind,
             hero: m.hero,
             partner: m.partner,
             at: sinceSnap(),
-            focus,
+            bodies,
+            others,
             snapshot: captureDrawn(movingRoots()),
         });
     }
@@ -2954,15 +2973,40 @@ function describeMoment(m) {
 /**
  * PUT A MOMENT ON THE FIELD, for the console (`xo.moment(n)`), and the live
  * frame back after. The card and the spot step aside while it is up, and the
- * camera holds a plain close shot of it (`previewShot`) until the photo camera
- * exists. Nothing on the field is stepped in the result phase, so it stays.
+ * camera takes the photographer's shot of it at the screen's own shape, which
+ * is the photo's camera at another aspect. Nothing on the field is stepped in
+ * the result phase, so it stays.
  */
 function showMoment(m) {
     if (!cycle.shown) cycle.shown = { live: captureDrawn(movingRoots()), shot: null };
     applyDrawn(m.snapshot);
-    cycle.shown.shot = previewShot(m.focus);
+    cycle.shown.shot = photoShot(m, camera && camera.aspect > 0 ? Number(camera.aspect) : 0.8);
     hideResult();
     hideSpot();
+}
+
+/**
+ * PHOTOS OWED, drawn in the frame loop before the frame's own render (see
+ * photo.js): `{ moment, resolve }`. A photo asked for between frames waits for
+ * the next one, because only there can the canvas be borrowed unseen.
+ */
+const photosOwed = [];
+
+function requestPhoto(moment) {
+    return new Promise((resolve) => photosOwed.push({ moment, resolve }));
+}
+
+/** Draw every photo owed. The rings on the grass and the end-of-play spot are
+ *  put out of sight for the picture (`photo.markers`). */
+function takePhotos() {
+    if (!photosOwed.length) return;
+    const hide = [getSpot(), ...(CFG.photo.markers ? [] : [getMarkerGroup()])];
+    for (const owed of photosOwed.splice(0)) {
+        owed.resolve(drawPhoto({
+            renderer, scene, canvas: renderer && renderer.domElement,
+            moment: owed.moment, roots: movingRoots(), hide,
+        }));
+    }
 }
 
 function putBackLive() {
@@ -2982,6 +3026,29 @@ export function qaMoments() {
     const list = rankedMoments();
     if (!list.length) return 'No moments yet. Play a down, then ask on the result card.';
     return list.map((m, i) => `${i + 1}. ${describeMoment(m)}`).join('\n');
+}
+
+/**
+ * `xo.photo(1)` makes the photo of the first moment and saves it to the
+ * downloads folder, so the picture itself can be judged before the photo sheet
+ * exists (Step 5). Resolves to a sentence for the console.
+ */
+export async function qaPhoto(n = 1) {
+    if (cycle.phase !== 'result') return 'On the result card only, after a play.';
+    const list = rankedMoments();
+    const m = list[Math.round(n) - 1];
+    if (!m) return `No moment ${n}. This play has ${list.length}.`;
+    const picture = await requestPhoto(m);
+    const blob = await photoBlob(picture);
+    if (!blob || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+        return "This browser couldn't make the picture.";
+    }
+    const url = URL.createObjectURL(blob);
+    const name = photoName(m.kind);
+    saveFile(url, name);
+    // Long enough for the download to have started from it.
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return `Saved ${name} (${Math.round(blob.size / 1024)} KB): ${describeMoment(m)}.`;
 }
 
 export function qaMoment(n) {

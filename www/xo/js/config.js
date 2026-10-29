@@ -1162,15 +1162,43 @@ const XO_CONFIG = {
      * is half way through the arm's sweep (`pose.throwRelease.time`). Starting
      * values, for Steve's QA to tune.
      *
-     * `keep` is how many a play offers. `preview` is a plain close shot for
-     * the console hook (`xo.moment(n)`) until the photo camera exists (Step
-     * 4): `distance` metres off the hero across the field, from the side with
-     * more grass, `height` up, aimed at `aimY`.
+     * `keep` is how many a play offers.
      */
     moments: {
         after: { catch: 0.05, pick: 0.05, fifty: 0.1, tackle: 0.15, sack: 0.15, release: 0.17 },
         keep: 3,
-        preview: { distance: 9, height: 2.4, aimY: 2.0, fov: 32 },
+    },
+
+    /**
+     * THE PHOTO OF A MOMENT (specs/xo-photos-plan, Step 4, photo.js).
+     *
+     * 1080 by 1350, the portrait a phone's feed shows whole (D9), a JPEG at
+     * `quality`, stamped `wordmark` in the corner (D2, D8). Drawn at
+     * `supersample` times that and drawn down, which is how a phone, whose
+     * renderer runs without antialiasing, still gets smooth edges.
+     *
+     * THE CAMERA IS A PHOTOGRAPHER ON THE FIELD with a long lens: `fov`
+     * vertical degrees, opened by `widen` at a time up to `maxFov` only when
+     * the lens would need the photographer to stand off the grass. They stand
+     * to the hero's side and `ahead` of him (0 square to his side, 1 at 45
+     * degrees in front), so the picture sees a face rather than a shoulder,
+     * nearly level (`rise`, no lower than `floor` metres) at the height of the
+     * players' chests, aimed `lead` metres in front of him so there is room in
+     * the frame to run into.
+     *
+     * A body is `reach` figure units tall with its hands up (the catch, the
+     * celebration), at `aimAt` of which the aim sits, and the frame keeps
+     * `margin` clear at every edge. `clear` is how near another player may
+     * stand to the line of sight before a side counts as blocked. `markers`
+     * says whether the rings and letters on the grass are in the picture: off,
+     * because a photo is of the people and the rings are the game's HUD.
+     */
+    photo: {
+        width: 1080, height: 1350, supersample: 2, type: 'image/jpeg', quality: 0.9,
+        wordmark: 'SceneXP.com/xo',
+        fov: 24, widen: 1.15, maxFov: 50, ahead: 0.45, rise: 0.04, floor: 1.0, lead: 0.9,
+        reach: 2.0, aimAt: 0.5, margin: 0.1, clear: 0.9, near: 0.5, far: 400,
+        markers: false,
     },
 
     /** The two kits, from the 2D game's own rgba(255,153,44) and
