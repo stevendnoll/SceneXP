@@ -517,6 +517,16 @@ export function throwSideOf(figure) {
     return own === 1 || own === -1 ? own : THROWING_SIDE;
 }
 
+/** Which figure is the visitor's own avatar. Kept here rather than read off
+ *  `userData.avatar` for the reason `throwSides` is: under the suite's stub
+ *  every `userData` field reads back as something, so every figure would
+ *  look like the visitor. */
+const visitorFigures = new WeakSet();
+
+export function isVisitorFigure(figure) {
+    return Boolean(figure) && visitorFigures.has(figure);
+}
+
 /**
  * WHICH ARM A STIFF-ARM GOES OUT ON, and why it is not simply "the one nearest
  * the defender".
@@ -1093,7 +1103,8 @@ export function applyTeamColors() {
 }
 
 /**
- * THE VISITOR AT QUARTERBACK (specs/avatar M7, 2026-10-26). Their own avatar,
+ * THE VISITOR ON THE FIELD (specs/avatar M7, 2026-10-26, at quarterback; at
+ * any slot they choose since specs/xo-photos-plan). Their own avatar,
  * exactly as the avatar page draws it: their clothes, their hair, their hat
  * and their glasses, and no letter on the shirt, since the shirt is theirs.
  * The field's shoulders and gloved hands, for the same reasons as every
@@ -1119,21 +1130,23 @@ function buildAvatarPerson(avatar) {
     throwSides.set(person, built.avatar && built.avatar.handedness === 'left' ? 1 : -1);
     addContactShadow(person);
     person.userData.avatar = true;
+    visitorFigures.add(person);
     return person;
 }
 
 /**
  * ONE PLAYER, as the roster builds them: the `i`th figure for `settings`
- * (`team`, `positionGroup`, `position`), and the visitor's `avatar` at
- * quarterback when there is one (null otherwise, and the quarterback is a
- * player like any other). Exported so the suite can measure a figure
- * without a scene.
+ * (`team`, `positionGroup`, `position`), and the visitor's `avatar` in slot
+ * `as` when there is one (null otherwise, and every slot is a player like any
+ * other). `as` is the quarterback unless the visitor chose another player
+ * (specs/xo-photos-plan, playas.js). Exported so the suite can measure a
+ * figure without a scene.
  */
-export function buildPlayer(settings, i, avatar = null) {
+export function buildPlayer(settings, i, avatar = null, as = 'qb') {
     const { team, positionGroup, position } = settings;
     const kit = KITS[team];
     const isLineman = positionGroup === 'x';
-    const visitor = Boolean(avatar) && position === 'qb' && team === 0;
+    const visitor = Boolean(avatar) && position === as;
 
     let person;
     if (visitor) {
@@ -1238,14 +1251,21 @@ export function buildPlayer(settings, i, avatar = null) {
 }
 
 /** Build every figure. Nothing is positioned here: view.js owns placement.
- *  `avatar` is the visitor's saved avatar, who takes the snap (M7), or null. */
-export function initRoster(scene, objects, { avatar = null } = {}) {
+ *  `avatar` is the visitor's saved avatar or null, and `as` the slot it
+ *  plays (the quarterback, M7, unless they chose another).
+ *
+ *  A CHANGE OF SLOT REBUILDS EVERYTHING, through this, the boot's own path.
+ *  Swapping two figures would have to respect `shareGeometryAndMaterials`,
+ *  which interns across the whole roster, and every per-figure fact (the
+ *  throwing arm, the measured limbs, the view's drawn history) belongs to the
+ *  figure objects and goes with them. */
+export function initRoster(scene, objects, { avatar = null, as = 'qb' } = {}) {
     disposeRoster();
     group = new THREE.Group();
     group.name = 'roster';
 
     objects.forEach((obj, i) => {
-        const person = buildPlayer(obj.settings, i, avatar);
+        const person = buildPlayer(obj.settings, i, avatar, as);
         person.visible = false;
         group.add(person);
         figures.set(obj.settings.position, person);

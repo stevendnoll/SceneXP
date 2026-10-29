@@ -18,6 +18,7 @@ import { OffensivePlaybookClass } from './playbook.min.js';
 import { XO_CONFIG as CFG } from './config.min.js';
 import { muteButton } from './hud.min.js';
 import { autoJump, setAutoJump } from './jump.min.js';
+import { DEFAULT_SLOT, normalizeSlot } from './playas.min.js';
 
 /**
  * ALL SEVENTEEN PLAYS, WHICH IS WHAT THE 2D GAME HAS.
@@ -107,11 +108,25 @@ let onHelp = null;
 let onColors = null;
 /** Told when the defense is changed, for the usage log (see telemetry.js). */
 let onDefense = null;
-let settings = { lastPlay: '', defense: '' };
+let settings = { lastPlay: '', defense: '', playAs: DEFAULT_SLOT };
 
 // ---- Persistence -----------------------------------------------------------
 
+/**
+ * READ ONCE, ON FIRST ASK, NOT AT `initPlaybook`.
+ *
+ * main.js lines the teams up and builds the roster before the playbook is
+ * initialised, and both read from here: the formation behind the welcome card
+ * is the visitor's last play, and the player their avatar lines up as is the
+ * one they chose. Loaded only inside `initPlaybook`, both read the defaults,
+ * so a returning visitor always saw the second play in the book whatever they
+ * had last called.
+ */
+let loaded = false;
+
 function load() {
+    if (loaded) return;
+    loaded = true;
     try {
         const raw = localStorage.getItem(CFG.storage.play);
         if (!raw) return;
@@ -124,11 +139,19 @@ function load() {
         delete stored.defence;
         settings = { ...settings, ...stored };
     } catch (e) { /* private mode, or a value from an older shape. Defaults. */ }
+    // Whatever was stored, a slot that is not one of the seventeen is the
+    // quarterback (a hand-edited value, or db6, who never plays).
+    settings.playAs = normalizeSlot(settings.playAs);
 }
 
+/** Written whole, except that the quarterback, which is everybody who never
+ *  chose, is left out: a visitor who has not touched Play as stores exactly
+ *  what they stored before it existed. */
 function save() {
+    const { playAs, ...rest } = settings;
+    const out = playAs === DEFAULT_SLOT ? rest : settings;
     try {
-        localStorage.setItem(CFG.storage.play, JSON.stringify(settings));
+        localStorage.setItem(CFG.storage.play, JSON.stringify(out));
     } catch (e) { /* nothing here is worth failing a play over */ }
 }
 
@@ -734,5 +757,15 @@ export function isOpen() {
 
 /** The stored preferences, for anything that needs to know what is selected. */
 export function getSettings() {
+    load();
     return { ...settings };
+}
+
+/** Who the visitor's avatar plays as (playas.js), remembered with the rest
+ *  (specs/xo-photos-plan D4). Returns the slot as stored. */
+export function setPlayAs(slot) {
+    load();
+    settings.playAs = normalizeSlot(slot);
+    save();
+    return settings.playAs;
 }

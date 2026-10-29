@@ -351,6 +351,35 @@ describe("the visitor's avatar at quarterback", () => {
         }
         expect(styles).toBeGreaterThan(10);
     });
+
+    /**
+     * AT ANY SLOT THEY CHOOSE (specs/xo-photos-plan, Step 1). The avatar goes
+     * wherever `as` says and nowhere else, and the quarterback it left is a
+     * plain player again: helmeted, lettered, and throwing with the field's
+     * right hand whichever hand the avatar has.
+     */
+    test('at the slot the visitor chose: the avatar there, and every other slot a plain player', async () => {
+        const { SLOTS } = await import(join(root, 'www/xo/js/playas.js'));
+        const look = { shirt: 'teal', handedness: 'left' };
+        const settingsOf = (id, team) => ({ team, positionGroup: id.replace(/\d+$/, ''), position: id });
+        const helmeted = (person) => HELMET_PARTS.every((name) => person.children.some((o) => o.name === name));
+        for (const s of SLOTS) {
+            const theirs = roster.buildPlayer(settingsOf(s.id, s.team), 0, look, s.id);
+            expect(`${s.id}: ${roster.isVisitorFigure(theirs)} ${helmeted(theirs)}`).toBe(`${s.id}: true false`);
+            expect(theirs.userData.avatar).toBe(true);
+            if (s.id === 'qb') continue;
+            // The quarterback they left, and this slot when they chose the
+            // quarterback (the default), are both the usual player.
+            const qb = roster.buildPlayer(QB, 0, look, s.id);
+            expect(`${s.id}: ${roster.isVisitorFigure(qb)} ${helmeted(qb)}`).toBe(`${s.id}: false true`);
+            expect(roster.throwSideOf(qb)).toBe(roster.THROWING_SIDE);
+            const usual = roster.buildPlayer(settingsOf(s.id, s.team), 0, look);
+            expect(`${s.id}: ${roster.isVisitorFigure(usual)} ${helmeted(usual)}`).toBe(`${s.id}: false true`);
+        }
+        // Without an avatar no slot is ever the visitor.
+        expect(roster.isVisitorFigure(roster.buildPlayer(WR, 0, null, 'wr1'))).toBe(false);
+        expect(roster.isVisitorFigure(null)).toBe(false);
+    });
 });
 
 /**

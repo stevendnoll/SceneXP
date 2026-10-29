@@ -83,8 +83,9 @@ import {
     isMuted, toggleMuted,
 } from './audio.min.js';
 import {
-    initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings,
+    initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings, setPlayAs,
 } from './playbook-ui.min.js';
+import { isSlot, SLOTS, playingLine, DEFAULT_SLOT } from './playas.min.js';
 import {
     installCardFocusTrap, installCardScrollReset, getProofOfWork,
 } from '../../shared/js/boot-1.0.0.min.js';
@@ -97,6 +98,8 @@ const state = {
     isLoaded: false,
     lastFrame: 0,
     elapsed: 0,
+    /** The player the visitor's avatar is (playas.js), stored or not. */
+    playAs: DEFAULT_SLOT,
 };
 
 /**
@@ -1618,7 +1621,8 @@ function applyColors({ teams = true, field = true } = {}) {
 function installQaHook() {
     if (typeof window === 'undefined' || !qaEnabled(window.location && window.location.href)) return;
     window.xo = Object.freeze({
-        show: qaShow, opening: qaOpening, colors: qaColors, levels: [...CFG.milestones.built],
+        show: qaShow, opening: qaOpening, colors: qaColors, playAs: qaPlayAs,
+        levels: [...CFG.milestones.built],
     });
 }
 
@@ -2412,20 +2416,15 @@ async function init() {
     // playbook shows a real formation rather than an empty pitch. The last
     // play a visitor chose is remembered, so a returning visitor sees theirs.
     const objects = lineUp(cycle.play, getSettings().lastPlay || 'pass2', '');
-    // THE VISITOR TAKES THE SNAP (specs/avatar M7, 2026-10-26): with an avatar
-    // saved on /avatar/, the quarterback is them, in their own clothes and the
-    // team's helmet. Without one, the usual quarterback. Read once a load: a
-    // save in another tab shows on the welcome card now and at quarterback
-    // next time.
+    // THE VISITOR IS ON THE FIELD (specs/avatar M7, 2026-10-26): with an
+    // avatar saved on /avatar/, one player is them, in their own clothes.
+    // The quarterback, unless they chose another (specs/xo-photos-plan).
+    // Without one, every player is the usual player. Read once a load: a save
+    // in another tab shows on the welcome card now and on the field next time.
     avatarStore = createAvatarStore();
-    const avatar = avatarStore.hasSaved() ? avatarStore.load() : null;
-    initRoster(scene, objects, { avatar });
-    state.avatarQb = Boolean(avatar);
-    // And the simulation starts a thrown ball at that quarterback's throwing
-    // hand (Steve's QA, 2026-10-26: the hold was right, the arc began on
-    // the left, where the 2D game's sprite threw from).
-    cycle.play.throwHand = throwSideOf(figureFor('qb')) === 1 ? 'left' : 'right';
-    state.throwHand = cycle.play.throwHand;
+    visitorAvatar = avatarStore.hasSaved() ? avatarStore.load() : null;
+    state.playAs = getSettings().playAs;
+    buildRoster();
     initMarkers(scene, objects);
     initSpot(scene);
     initBall(scene);
@@ -2604,6 +2603,69 @@ async function init() {
 
 let avatarStore = null;
 let playing = null;
+/** The avatar read at boot, or null. Kept for a rebuild when the visitor
+ *  chooses another player, which must not pick up a save from another tab
+ *  mid-game any more than the boot does. */
+let visitorAvatar = null;
+
+/**
+ * THE ROSTER, WITH THE VISITOR WHERE THEY CHOSE TO BE.
+ *
+ * And the simulation is told which hand the quarterback throws with, because
+ * a thrown ball starts there (Steve's QA, 2026-10-26: the hold was right, the
+ * arc began on the left, where the 2D game's sprite threw from). That is the
+ * avatar's own hand only while the avatar is the quarterback.
+ */
+function buildRoster() {
+    initRoster(scene, cycle.play.game.objects, { avatar: visitorAvatar, as: state.playAs });
+    state.avatarQb = Boolean(visitorAvatar) && state.playAs === DEFAULT_SLOT;
+    cycle.play.throwHand = throwSideOf(figureFor('qb')) === 1 ? 'left' : 'right';
+    state.throwHand = cycle.play.throwHand;
+}
+
+/** Where a change of player can happen: the field is standing still and
+ *  nothing on it is mid-animation. During a play, a replay, a show or the
+ *  opening, a rebuilt roster would lose whatever the figures were doing. */
+const REBUILD_PHASES = new Set(['welcome', 'playbook', 'presnap']);
+
+/**
+ * PLAY AS ANOTHER PLAYER (specs/xo-photos-plan). Remembered whether or not
+ * there is an avatar, and the roster rebuilt only when there is one to move.
+ * Returns false, changing nothing, outside `REBUILD_PHASES`.
+ *
+ * THE REBUILT FIGURES ARE DRAWN AT ONCE, because outside a play nothing else
+ * would draw them: behind the playbook and the welcome card the field holds
+ * its last frame and `stepCycle` returns early. A formation nobody has
+ * snapped yet is drawn as one, facing the other team. A field a play has
+ * finished on is drawn as it finished, with the tackle and the party still on.
+ */
+function playAs(slot) {
+    if (!REBUILD_PHASES.has(cycle.phase) || !cycle.play) return false;
+    const next = setPlayAs(slot);
+    if (next === state.playAs) return true;
+    state.playAs = next;
+    if (visitorAvatar) {
+        buildRoster();
+        const objects = cycle.play.game.objects;
+        const fresh = cycle.play.frame === 0;
+        syncFigures(objects, 0, fresh ? { presnap: true } : { live: false });
+        showBall(objects, 0);
+    }
+    showPlaying();
+    return true;
+}
+
+/**
+ * `xo.playAs('wr2')` puts the visitor's avatar at receiver B from the console
+ * (localhost or ?qa), before the playbook row exists, through the same path
+ * the row will take. `xo.playAs()` reads the slot in effect.
+ */
+export function qaPlayAs(slot) {
+    if (slot === undefined) return state.playAs;
+    if (!isSlot(slot)) return `No player "${slot}". One of: ${SLOTS.map((s) => s.id).join(', ')}.`;
+    if (!playAs(slot)) return `Not now: players can be changed before the snap, not during "${cycle.phase}".`;
+    return state.playAs;
+}
 
 /** The welcome card's line about who takes the snap: with a saved avatar,
  *  its portrait and "Change your avatar"; without one, a quiet pointer to
@@ -2621,8 +2683,9 @@ function showPlaying() {
     state.avatarSaved = saved;
     img.hidden = !saved;
     img.alt = '';
+    // The player they chose, or the quarterback they always were.
     text.textContent = saved
-        ? 'You take the snap at quarterback as your avatar.'
+        ? playingLine(state.playAs)
         : 'Take the snap at quarterback as yourself.';
     link.textContent = saved ? 'Change your avatar' : 'Make your avatar';
 }

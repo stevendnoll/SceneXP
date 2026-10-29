@@ -1119,6 +1119,28 @@ const XO_CONFIG = {
      *  figure does not look pressable. */
     qb: { letter: 'Q', ink: '#ffd166' },
 
+    /**
+     * WHERE THE VISITOR WAITS WHEN THEIR PLAY DOES NOT USE THEM
+     * (specs/xo-photos-plan, D1). On the X's own sideline (`crowd.xSide`),
+     * `out` metres beyond the touchline and `along` line intervals from the
+     * near goal line, watching the ball.
+     *
+     * NOT BESIDE THE LINE OF SCRIMMAGE, WHERE A REAL BENCH WOULD BE, BECAUSE NO
+     * PHONE CAN SEE IT THERE. The play camera fits the touchlines with
+     * `camera.sideMargin` to spare at the near end line, where the frame is
+     * narrowest, and a body is 1.45m across. Measured through `playDriver` on
+     * upright phones from 320x568 to 430x932, a man 0.8m out at the line of
+     * scrimmage has his outer shoulder at 1.10 to 1.17 of the half-frame,
+     * which is off the screen. The frame widens down the field, and 4.5
+     * intervals along (31.5m, between the last two lines) the same shoulder
+     * is at 0.89 to 0.97 on every one of them. Landscape has room anywhere.
+     *
+     * 0.8m OUT is the opening's own line (`opening.stage.line.out`): the body
+     * clears the paint, and `keepInbounds` holds every man in play inside the
+     * touchline by his own half-width, so the two never overlap.
+     */
+    bench: { along: 4.5, out: 0.8 },
+
     /** The two kits, from the 2D game's own rgba(255,153,44) and
      *  rgba(155,207,255). Two hues rather than two values, which is what keeps
      *  them separable at 45m under floodlights (D23). */

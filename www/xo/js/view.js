@@ -27,7 +27,7 @@
  */
 import { XO_CONFIG as CFG, simToWorld, FIELD, SIM, UNITS_TO_METRES } from './config.min.js';
 import { bandAt } from './scoring.min.js';
-import { figureFor, poseFigure, THROWING_SIDE, throwSideOf, FIGURE_LIFT } from './roster.min.js';
+import { figureFor, poseFigure, THROWING_SIDE, throwSideOf, FIGURE_LIFT, isVisitorFigure } from './roster.min.js';
 import { getBall, aimBall, placeSpot, BALL_FAT } from './ball.min.js';
 import { placeMarker, hideMarker } from './markers.min.js';
 import { toRigSpace, RIG } from './arm.min.js';
@@ -1367,6 +1367,85 @@ export function stillFor(net, was) {
 }
 
 /**
+ * WHERE THE VISITOR WAITS when their play leaves them out (config `bench`), in
+ * world metres, on their own team's sideline. Pure, and exported so the suite
+ * can put it through the play camera.
+ */
+export function benchSpot(team = 0) {
+    const B = CFG.bench;
+    const side = team === 0 ? CFG.crowd.xSide : -CFG.crowd.xSide;
+    return {
+        x: FIELD.lineInterval * B.along,
+        z: side * (FIELD.width / 2 + B.out),
+    };
+}
+
+/** What a man on the sideline watches: the ball in the air, whoever is
+ *  carrying it, or the quarterback before anybody is. Drawn positions, so he
+ *  follows what the visitor sees. Null when there is nothing to watch. */
+function watchedBall(carrier) {
+    if (flight.has) return { x: flight.x, z: flight.z };
+    const held = figureFor(carrier ? carrier.settings.position : 'qb');
+    if (!held || !held.visible) return null;
+    return { x: Number(held.position.x) || 0, z: Number(held.position.z) || 0 };
+}
+
+/** How `team` is taking the whistle, from the first of its men on the field
+ *  the party has an entry for, or null when there is no party. */
+function teamMood(objects, team) {
+    if (!party) return null;
+    for (const o of objects) {
+        if (o.settings.team !== team || BENCHED(o)) continue;
+        const entry = party.get(o.settings.position);
+        if (entry && entry.arms) return entry;
+    }
+    return null;
+}
+
+/**
+ * THE VISITOR, STANDING ON THE SIDELINE AND WATCHING THE BALL.
+ *
+ * PLACED, NEVER EASED OR WALKED, and his drawn history is left empty so that
+ * coming back into a formation on the next play is a placement too. A walk
+ * from the sideline would be a sprint of twenty-five metres across the field.
+ *
+ * AT THE WHISTLE HE DOES WHAT HIS TEAM DOES: both arms up while the X's are
+ * celebrating and a slump while the O's are. Read off a team-mate's entry in
+ * the party rather than planned, because the celebration was planned for the
+ * men on the field and he is not one of them. Never the dance itself, which
+ * belongs to whoever has the ball.
+ */
+function waitOnSideline(figure, team, objects, carrier, delta) {
+    const spot = benchSpot(team);
+    figure.userData.at = null;
+    figure.userData.walkFrom = null;
+    figure.userData.cheerAt = null;
+    figure.position.set(spot.x, figure.userData.lift ?? FIGURE_LIFT, spot.z);
+
+    // Facing the field when there is nothing to watch, which is the way the
+    // sideline faces.
+    const ball = watchedBall(carrier);
+    const want = ball
+        ? Math.atan2(ball.x - spot.x, ball.z - spot.z)
+        : Math.atan2(0, -spot.z);
+    figure.userData.facing = want;
+    if (!figure.visible) figure.rotation.y = want;
+    else figure.rotation.y += wrapAngle(want - figure.rotation.y) * (1 - Math.exp(-delta * TURN_RESPONSE));
+
+    const mood = teamMood(objects, team);
+    poseFigure(figure, 0, figure.userData.phase, {
+        carry: 'none',
+        celebrate: mood
+            ? { arms: mood.arms === 'slump' ? 'slump' : 'up', amount: mood.amount }
+            : null,
+    }, delta);
+    const settle = 1 - Math.exp(-delta / CFG.pose.blend);
+    figure.rotation.x -= figure.rotation.x * settle;
+    figure.rotation.z -= figure.rotation.z * settle;
+    figure.visible = true;
+}
+
+/**
  * Move every figure to where the simulation says its player is.
  *
  * Called once per frame after play.tick(). Benched players are hidden rather
@@ -1422,10 +1501,19 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         const figure = figureFor(obj.settings.position);
         if (!figure) continue;
         if (BENCHED(obj)) {
-            figure.visible = false;
             // A benched player's letter must not sit on the grass with nobody
             // standing on it.
             hideMarker(obj.settings.position);
+            // THE VISITOR IS NOT HIDDEN, THEY WAIT ON THE SIDELINE (Steve,
+            // specs/xo-photos-plan D1). Everybody else sits out unseen, as
+            // before. Not while the opening or a show has the field: both
+            // stage the home sideline, and a show's camera looks at the X's
+            // stand straight past where the visitor would be standing.
+            if (isVisitorFigure(figure) && !script && staging.at < 0) {
+                waitOnSideline(figure, obj.settings.team, objects, carrier, delta);
+            } else {
+                figure.visible = false;
+            }
             continue;
         }
 

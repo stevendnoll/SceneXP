@@ -19,7 +19,7 @@
  * actually told apart.
  */
 import { jest } from '@jest/globals';
-import { installThree } from './helpers/three-stub.mjs';
+import { installThree, keepPropRecords } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { readFile } from 'node:fs/promises';
 
@@ -1275,5 +1275,120 @@ describe("the visitor's avatar at quarterback (specs/avatar M7, 2026-10-26)", ()
         expect(dom.el('avatar-playing-link').textContent).toBe('Make your avatar');
         // The quarterback on the field changes on the next load, not mid-game.
         expect(main.getState().avatarQb).toBe(true);
+    });
+});
+
+/**
+ * PLAY AS ANY PLAYER (specs/xo-photos-plan, Step 1). The slot is stored with
+ * the play settings and read at boot, before the playbook is built. The
+ * playbook row and the pick come in Step 2, so here the console hook drives
+ * it, through the same `playAs` the row will call.
+ */
+describe('the visitor plays as the player they chose', () => {
+    const PLAY_KEY = 'exes-n-ohs-play-settings';
+
+    async function saveAvatar(look = { skin: 'deep', shirt: 'teal', handedness: 'left' }) {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        createAvatarStore({ win: null }).save(look);
+    }
+    const roster = () => import('../www/xo/js/roster.min.js');
+    /** Which slots the visitor's avatar is drawn in. */
+    async function visitorSlots() {
+        const r = await roster();
+        const { SLOTS } = await import('../www/xo/js/playas.min.js');
+        return SLOTS.map((s) => s.id).filter((id) => r.isVisitorFigure(r.figureFor(id)));
+    }
+
+    test('a stored choice is read at boot: the avatar at receiver C, the usual quarterback throwing right-handed', async () => {
+        await saveAvatar();
+        globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ lastPlay: 'pass1', playAs: 'wr3' }));
+        const main = await boot();
+        expect(main.getState().isLoaded).toBe(true);
+        expect(main.getState().playAs).toBe('wr3');
+        expect(await visitorSlots()).toEqual(['wr3']);
+        // The avatar is left-handed, and it is not the one throwing.
+        expect(main.getState().avatarQb).toBe(false);
+        expect(main.getState().throwHand).toBe('right');
+        expect(dom.el('avatar-playing-text').textContent).toBe('You line up at receiver C as your avatar.');
+    });
+
+    test('the console hook moves them before the snap, says why not during a play, and remembers', async () => {
+        await saveAvatar();
+        const main = await boot();
+        expect(main.getState().isLoaded).toBe(true);
+        const xo = globalThis.window.xo;
+        expect(xo.playAs()).toBe('qb');
+        expect(await visitorSlots()).toEqual(['qb']);
+        expect(main.getState().throwHand).toBe('left');
+
+        // On the welcome card.
+        expect(xo.playAs('wr2')).toBe('wr2');
+        expect(await visitorSlots()).toEqual(['wr2']);
+        expect(main.getState().throwHand).toBe('right');
+        expect(dom.el('avatar-playing-text').textContent).toBe('You line up at receiver B as your avatar.');
+        expect(JSON.parse(globalThis.localStorage.getItem(PLAY_KEY)).playAs).toBe('wr2');
+
+        // Nobody by that name, and nothing moves.
+        expect(xo.playAs('db6')).toMatch(/^No player "db6"/);
+        expect(xo.playAs('captain')).toMatch(/One of: qb, wr1, wr2/);
+        expect(await visitorSlots()).toEqual(['wr2']);
+
+        // Before the snap, on the defense.
+        dom.el('welcome-actions').children[0].click();   // Take the field
+        await flushAsync();
+        const body = dom.el('playbook').querySelector('.playbook-body');
+        deep(body).find((n) => n.dataset && n.dataset.slug).click();
+        await flushAsync();
+        expect(xo.playAs('s1')).toBe('s1');
+        expect(await visitorSlots()).toEqual(['s1']);
+
+        // During the play, refused.
+        press('Snap the ball');
+        await flushAsync();
+        expect(xo.playAs('wr1')).toMatch(/^Not now/);
+        expect(await visitorSlots()).toEqual(['s1']);
+        expect(main.getState().playAs).toBe('s1');
+
+        // Back to the quarterback, which stores nothing at all.
+        await runToResultFromZero();
+        dom.el('result-actions').children
+            .find((b) => b.textContent === 'Next play').click();
+        await flushAsync();
+        // The playbook is open over the field the play finished on.
+        expect(xo.playAs('qb')).toBe('qb');
+        expect(main.getState().throwHand).toBe('left');
+        expect('playAs' in JSON.parse(globalThis.localStorage.getItem(PLAY_KEY))).toBe(false);
+    });
+
+    test('without an avatar the choice is kept, and nobody on the field is the visitor', async () => {
+        const main = await boot();
+        expect(main.getState().isLoaded).toBe(true);
+        expect(globalThis.window.xo.playAs('wr4')).toBe('wr4');
+        expect(main.getState().playAs).toBe('wr4');
+        expect(await visitorSlots()).toEqual([]);
+        expect(main.getState().throwHand).toBe('right');
+        expect(dom.el('avatar-playing-text').textContent).toBe('Take the snap at quarterback as yourself.');
+    });
+
+    test('a play that sits the visitor out has them on the sideline, and every other benched player out of sight', async () => {
+        // Real `visible` flags on every Group, which the plain stub swallows.
+        keepPropRecords();
+        await saveAvatar();
+        // Jumbo Split benches receivers C and D. It is the play behind the
+        // welcome card because it was the last one called, which is only true
+        // if the stored settings are read before the line-up.
+        globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ lastPlay: 'jumbo1', playAs: 'wr3' }));
+        const main = await boot();
+        expect(main.getState().isLoaded).toBe(true);
+        const r = await roster();
+        expect(r.isVisitorFigure(r.figureFor('wr3'))).toBe(true);
+        expect(r.figureFor('wr4').visible).toBe(false);
+        expect(r.figureFor('wr3').visible).toBe(true);
+        expect(r.figureFor('wr1').visible).toBe(true);
+        // Change to a player who IS in this formation and the sideline empties.
+        globalThis.window.xo.playAs('wr1');
+        expect(r.figureFor('wr3').visible).toBe(false);
+        expect(r.figureFor('wr1').visible).toBe(true);
+        expect(r.isVisitorFigure(r.figureFor('wr1'))).toBe(true);
     });
 });
