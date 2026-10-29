@@ -76,13 +76,23 @@ async function importAvatar() {
  * saved, or anything failing on the way (a module that will not load), in
  * which case the scene keeps its usual cast. Start it early in a scene's boot
  * and await it where the cast is built. `load` is the import, for tests.
+ *
+ * The figure carries `another()`, which builds a second cameo of the same
+ * avatar for a scene that shows it twice (Roqui's mirror wall holds a twin
+ * of every dancer): a figure of its own, nothing shared with the first.
  */
 export async function loadCameo({ role = 'customer', load = importAvatar } = {}) {
     if (!hasSavedAvatar()) return null;
     try {
         const { store, createAvatar } = await load();
         if (!store.hasSaved()) return null;
-        return asCameo(createAvatar(store.load(), { role }));
+        const avatar = store.load();
+        const build = () => {
+            const figure = asCameo(createAvatar(avatar, { role }));
+            figure.another = build;
+            return figure;
+        };
+        return build();
     } catch (e) {
         return null;
     }

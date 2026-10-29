@@ -48,6 +48,7 @@ import {
 } from '../../shared/js/checklist-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
+import { loadCameo } from '../../shared/js/cameo-1.0.0.min.js';
 import {
     initAutopilot, toggleAutopilot, setAutopilotEnabled,
     isAutopilotEnabled, onAutopilotChange, updateAutopilot
@@ -205,6 +206,12 @@ async function init() {
     // are baked into the HTML for the no-JS path.
     applySiteLinks();
 
+    // The visitor's own avatar, out on the sidewalk with the passersby when
+    // one is saved on /avatar/ (null otherwise, and nothing more is
+    // downloaded). Started now so its modules load while the proof of work
+    // runs.
+    const cameoReady = loadCameo({ role: 'pedestrian' });
+
     // Soft bot deterrent: solve a tiny proof of work before building the scene
     // (or reuse a still-valid one from sessionStorage). Hand the hash to the
     // telemetry layer so it tags every ping.
@@ -216,7 +223,7 @@ async function init() {
     initScene(canvas, FAMILY_CONFIG);
 
     updateLoadingStatus('Laying out the course…', 55);
-    initStore();
+    initStore({ cameo: await cameoReady });
     removeTestObjects();
 
     updateLoadingStatus('Raising the ship…', 75);
@@ -930,7 +937,8 @@ function updateHover() {
             clearHover();
             hoveredPedestrian = pedestrian;
             if (lookLabel) {
-                lookLabel.textContent = `${state.isMobile ? 'Tap' : 'Click'} to greet the passerby`;
+                const verb = state.isMobile ? 'Tap' : 'Click';
+                lookLabel.textContent = pedestrian.userData.isCameo ? `${verb} to say hello to yourself` : `${verb} to greet the passerby`;
                 lookLabel.classList.add('visible');
             }
             if (hud) hud.classList.add('targeting');
@@ -1077,6 +1085,15 @@ const PASSERBY_LINES = [
     "Best mini golf on Coastal Highway, and the family playing tonight is there every summer."
 ];
 
+// The visitor's own avatar out on the sidewalk (cameo-1.0.0): a few words
+// for the person who made it, shown in place of a passerby's line.
+const CAMEO_TITLE = "Look Who's at the Shore";
+const CAMEO_LINES = [
+    "Well, look who made it to the shore! You picked a perfect summer evening for it.",
+    "Fancy meeting you here. The course has a pirate ship with a real plank, if you're feeling brave.",
+    "Good taste in boardwalks, and in outfits. Save room for fries after your round."
+];
+
 // The pair on the far background hole.
 const BG_GOLFER_LINES = [
     "Evening. We are three over par and having the night of our lives.",
@@ -1169,8 +1186,9 @@ function openPasserbyModal(pedMesh) {
     // Stop the passerby and turn them to face the player while they "speak".
     pausePedestrianForDialog(pedMesh, _playerPos);
 
-    if (dialogModalTitle) dialogModalTitle.textContent = 'Out on the Sidewalk';
-    if (dialogModalMessage) dialogModalMessage.textContent = pickRandomLine(PASSERBY_LINES);
+    const cameo = !!pedMesh.userData.isCameo;
+    if (dialogModalTitle) dialogModalTitle.textContent = cameo ? CAMEO_TITLE : 'Out on the Sidewalk';
+    if (dialogModalMessage) dialogModalMessage.textContent = pickRandomLine(cameo ? CAMEO_LINES : PASSERBY_LINES);
     setDialogReturnVisible(false);
     dialogModal.classList.remove('hidden');
     hud.classList.remove('visible');

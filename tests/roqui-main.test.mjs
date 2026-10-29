@@ -228,6 +228,17 @@ test('desktop tour: pointer lock, hover labels, every dialog, nudge, celebration
   expect(dom.el('dialog-modal').classList.contains('hidden')).toBe(true);
   await jest.advanceTimersByTimeAsync(700);
 
+  // The visitor's own avatar in the class (cameo-1.0.0): its hover and its
+  // words are for the person who made it. (It is a dancer, so it counts as
+  // meeting one, already ticked above.)
+  rayHits = [hitFor({ isDancer: true, isCameo: true })];
+  stepFrames(10);
+  expect(dom.el('look-label').textContent).toContain('say hello to yourself');
+  clickScene({ isDancer: true, isCameo: true });
+  expect(dom.el('dialog-title').textContent).toBe("Look Who's Dancing");
+  expect(dom.el('dialog-message').textContent).toMatch(/^(Well, look who|Fancy meeting you here|Good taste in dance classes)/);
+  await escapeAndSettle();
+
   // Discoveries 3-5: mirror, disco ball, water table. Crossing four
   // discoveries queues the partway nudge, which escapeAndSettle closes.
   for (const kind of ['mirror', 'disco', 'water']) {

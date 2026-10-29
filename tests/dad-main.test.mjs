@@ -201,7 +201,7 @@ test('pointer lock starts play, the crosshair hover cycles targets, and Escape p
   expect(dom.el('look-label').textContent).toContain('greet the rider');
   ray.hit = WALKER;
   stepFrames(10);
-  expect(dom.el('look-label').textContent).toContain('chat with the customer');
+  expect(dom.el('look-label').textContent).toContain('chat with a walker');
   ray.hit = null;
   stepFrames(10);
   expect(dom.el('look-label').classList.contains('visible')).toBe(false);

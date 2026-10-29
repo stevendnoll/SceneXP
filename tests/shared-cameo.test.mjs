@@ -115,6 +115,28 @@ describe('loading the cameo', () => {
     });
 });
 
+describe('another of the same avatar (a mirror\'s twin)', () => {
+    test('is a figure of its own, the same avatar, shaped as a cameo with the same role', async () => {
+        const saved = { ...A.DEFAULT_AVATAR, hair: 'copper', hat: 'beanie' };
+        expect(A.normalizeAvatar(saved)).toMatchObject({ hair: 'copper', hat: 'beanie' });
+        installStorage().setItem(C.AVATAR_KEY, JSON.stringify(saved));
+        const first = await C.loadCameo({ role: 'pedestrian' });
+        const twin = first.another();
+        expect(twin.group).not.toBe(first.group);
+        expect(A.sameAvatar(twin.avatar, first.avatar)).toBe(true);
+        expect(twin.group.userData).toMatchObject({ isCameo: true, role: 'pedestrian', isPedestrian: true });
+        expect(twin.group.position.y).toBe(C.FLOOR);
+        // Nothing shared: a tint on one twin's materials never reaches the other.
+        const mats = new Set();
+        first.group.traverse((o) => { if (o.isMesh) mats.add(o.material); });
+        let shared = 0;
+        twin.group.traverse((o) => { if (o.isMesh && mats.has(o.material)) shared++; });
+        expect(shared).toBe(0);
+        // And it can make another in turn.
+        expect(typeof twin.another).toBe('function');
+    });
+});
+
 describe('a cameo is shaped like a createPerson root', () => {
     async function savedCameo(avatar) {
         installStorage().setItem(C.AVATAR_KEY, JSON.stringify({ ...A.DEFAULT_AVATAR, ...avatar }));
@@ -132,6 +154,24 @@ describe('a cameo is shaped like a createPerson root', () => {
         });
         expect(meshes).toBeGreaterThan(30);
         expect(cameo.person.userData.role).toBeUndefined();
+    });
+
+    test('every look keeps its limbs where a scene\'s rig finds them: a tagged arm and leg each side, on the figure', async () => {
+        // Roqui's class swings these by their tags (isArm, isLeg), straight
+        // off the figure's children; a wardrobe piece that wrapped a limb in
+        // a group of its own would leave a dancer frozen, silently.
+        const looks = [
+            ...A.BOTTOMS.map((b) => ({ bottom: b.id })),
+            ...A.BUILDS.map((b) => ({ build: b.id })),
+            ...A.SLEEVES.map((s) => ({ sleeves: s.id })),
+            { sleeves: 'leotard', bottom: 'bare', legwear: 'fishnets', armwear: 'longGloves' },
+            { muscles: 'buff', shoes: 'platforms' }
+        ];
+        for (const look of looks) {
+            const cameo = await savedCameo(look);
+            const sides = (tag) => cameo.person.children.filter((c) => c.userData[tag]).map((c) => Math.sign(c.position.x)).sort();
+            expect({ look, arms: sides('isArm'), legs: sides('isLeg') }).toEqual({ look, arms: [-1, 1], legs: [-1, 1] });
+        }
     });
 
     test.each([

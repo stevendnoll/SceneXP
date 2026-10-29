@@ -45,6 +45,7 @@ import {
 } from '../../shared/js/checklist-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
+import { loadCameo } from '../../shared/js/cameo-1.0.0.min.js';
 import {
     initAutopilot, toggleAutopilot, setAutopilotEnabled,
     isAutopilotEnabled, onAutopilotChange, updateAutopilot
@@ -197,6 +198,12 @@ async function init() {
     // are baked into the HTML for the no-JS path.
     applySiteLinks();
 
+    // The visitor's own avatar, dancing in the class when one is saved on
+    // /avatar/ (null otherwise, and nothing more is downloaded). Started now
+    // so its modules load while the proof of work runs. A pedestrian, as
+    // the regulars are built.
+    const cameoReady = loadCameo({ role: 'pedestrian' });
+
     // Soft bot deterrent: solve a tiny proof of work before building the scene
     // (or reuse a still-valid one from sessionStorage). Hand the hash to the
     // telemetry layer so it tags every ping.
@@ -208,7 +215,7 @@ async function init() {
     initScene(canvas, ROQUI_CONFIG);
 
     updateLoadingStatus('Rolling out the dance floor…', 55);
-    initStore();
+    initStore({ cameo: await cameoReady });
     removeTestObjects();
 
     updateLoadingStatus('Warming up the playlist…', 75);
@@ -914,7 +921,7 @@ function updateHover() {
             hoveredDancer = dancer;
             if (lookLabel) {
                 const verb = state.isMobile ? 'tap' : 'click';
-                lookLabel.textContent = `${verb} to say hi between songs`;
+                lookLabel.textContent = dancer.userData.isCameo ? `${verb} to say hello to yourself` : `${verb} to say hi between songs`;
                 lookLabel.classList.add('visible');
             }
             if (hud) hud.classList.add('targeting');
@@ -1023,6 +1030,15 @@ const DANCER_LINES = [
     "You should see this room when the whole class claps on the beat. Pure joy, front to back."
 ];
 
+// The visitor's own avatar in the class (cameo-1.0.0): a few words for the
+// person who made it, shown in place of a regular's line.
+const CAMEO_TITLE = "Look Who's Dancing";
+const CAMEO_LINES = [
+    "Well, look who joined the class! You've got the moves, just keep following Roqui.",
+    "Fancy meeting you here. Roqui cues every step a beat early, so you'll never get lost.",
+    "Good taste in dance classes, and in outfits. Check the mirror, you look great out there."
+];
+
 function pickLine(list, key) {
     // Defensive: callers may pass a list that no longer exists (e.g. scenery
     // whose hint entry was removed), so never index into undefined.
@@ -1079,9 +1095,10 @@ function openDancerModal(dancerMesh) {
     // The clicked dancer steps out and turns to chat; the class dances on.
     pauseDancerForDialog(dancerMesh);
 
-    if (dialogModalTitle) dialogModalTitle.textContent = 'Between Songs';
+    const cameo = !!dancerMesh.userData.isCameo;
+    if (dialogModalTitle) dialogModalTitle.textContent = cameo ? CAMEO_TITLE : 'Between Songs';
     // Random each click so re-clicking the same dancer gives a fresh line.
-    if (dialogModalMessage) dialogModalMessage.textContent = pickRandomLine(DANCER_LINES);
+    if (dialogModalMessage) dialogModalMessage.textContent = pickRandomLine(cameo ? CAMEO_LINES : DANCER_LINES);
     setDialogReturnVisible(false);
     dialogModal.classList.remove('hidden');
     hud.classList.remove('visible');

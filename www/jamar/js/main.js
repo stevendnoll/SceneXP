@@ -41,6 +41,7 @@ import { initStore, updateBar, drawTvTo, setNowPlaying } from './store.min.js';
 import { getOutdoorPropMeshes } from '../../shared/js/world-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { installPropList, propListItems } from '../../shared/js/proplist-1.0.0.min.js';
+import { loadCameo } from '../../shared/js/cameo-1.0.0.min.js';
 
 // ---- Application state ----------------------------------------------------
 
@@ -91,6 +92,11 @@ async function init() {
 
     if (!canvas) return;
 
+    // The visitor's own avatar, at the high-top with the regulars when one
+    // is saved on /avatar/ (null otherwise, and nothing more is downloaded).
+    // Started now so its modules load while the proof of work runs.
+    const cameoReady = loadCameo();
+
     // Soft bot deterrent: solve a tiny proof of work before building the scene
     // (or reuse a still-valid one from sessionStorage). Hand the hash to the
     // telemetry layer so it tags every ping.
@@ -103,7 +109,7 @@ async function init() {
     placeCamera();
 
     updateLoadingStatus('Warming up the speakers…', 50);
-    initStore();
+    initStore({ cameo: await cameoReady });
     removeTestObjects();
 
     updateLoadingStatus('Handing Jamar the mic…', 80);
@@ -451,6 +457,16 @@ const PROP_CONTENT = {
             'They do not know Jamar personally. By the second chorus, that had stopped mattering.'
         ]
     },
+    // The visitor's own avatar at the high-top (cameo-1.0.0), only there
+    // when one is saved: a few words for the person who made it.
+    cameo: {
+        title: "Look Who's at the Bar",
+        lines: [
+            "Well, look who made it to Jamar's birthday! You're right on time for the big finish.",
+            'Fancy meeting you here. Best spot in the house for the birthday act, and dressed for the occasion.',
+            'Good taste in karaoke bars, and in outfits. Pick a song on the jukebox if you like, the whole room will sing along.'
+        ]
+    },
     stage: {
         title: 'The Corner Stage',
         lines: [
@@ -632,7 +648,10 @@ function openPropDialog(kind) {
     const content = PROP_CONTENT[kind];
     if (!content || !dialogModal) return;
     dialogOpen = true;
-    track('click-prop', { kind });
+    // Nothing about a visitor's avatar is ever in the pings (the privacy
+    // policy), not even that they have one, so their own figure at the
+    // high-top counts as the regulars.
+    track('click-prop', { kind: kind === 'cameo' ? 'patrons' : kind });
     if (dialogTitle) dialogTitle.textContent = content.title;
     if (dialogMessage) dialogMessage.textContent = content.lines[propTick++ % content.lines.length];
     dialogReturnFocus = document.activeElement;

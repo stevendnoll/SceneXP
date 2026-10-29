@@ -964,7 +964,7 @@ function updateHover() {
             hoveredVisitor = visitor;
             if (lookLabel) {
                 const verb = state.isMobile ? 'Tap' : 'Click';
-                lookLabel.textContent = visitor.userData.isCameo ? `${verb} to say hello to yourself` : `${verb} to chat with the customer`;
+                lookLabel.textContent = visitor.userData.isCameo ? `${verb} to say hello to yourself` : `${verb} to chat with a walker`;
                 lookLabel.classList.add('visible');
             }
             if (hud) hud.classList.add('targeting');

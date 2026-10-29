@@ -44,7 +44,7 @@
 import { getScene, getRenderer } from '../../shared/js/scene-1.0.0.min.js';
 import { initWorld, registerOutdoorProp } from '../../shared/js/world-1.0.0.min.js';
 import { JAMAR_CONFIG } from './config.min.js';
-import { createPerson } from '../../shared/js/people-1.0.0.min.js';
+import { createPerson, HAND } from '../../shared/js/people-1.0.0.min.js';
 
 // World mesh group (the static room plus everything in it)
 let barGroup = null;
@@ -326,9 +326,11 @@ export function setNowPlaying(song) {
 }
 
 /**
- * Initialize the bar world
+ * Initialize the bar world. `cameo` is the visitor's own avatar, built by
+ * cameo-1.0.0's loadCameo when one is saved (null otherwise), who stands
+ * at the high-top as one of the regulars.
  */
-export function initStore() {
+export function initStore({ cameo = null } = {}) {
     const scene = getScene();
     if (!scene) {
         return;
@@ -351,7 +353,7 @@ export function initStore() {
     createBackBar();         // shelves of glowing bottles
     createBartender();       // polishing a glass, enjoying the show
     createHighTop();         // the tall table by the open floor
-    createPatrons();         // two regulars swaying beside it
+    createPatrons(cameo);    // two regulars swaying beside it
     createDecor();           // neon, banner, disco ball, darts, jukebox, posters, string lights
     createHouseLighting();   // pendants, stage wash, and the screen's glow
 
@@ -961,10 +963,36 @@ function seatHeightY(seatTop, scaleY) {
     return seatTop + 0.05 - 0.75 * scaleY;
 }
 
+/** How far past a regular's a hand reaches in front of its arm: the
+ *  frontmost of its vertices in the arm's own frame, less what the rig's
+ *  own hand (`HAND.unit`) reaches. The hand's shape is built in its unit
+ *  about its own middle, so a regular's reach is this one's in proportion.
+ *  Zero where there is no tagged hand to measure. */
+function reachPastRegular(arm) {
+    let hand = null;
+    arm.traverse((o) => {
+        if (!hand && o.userData && o.userData.isHand) hand = o;
+    });
+    const pos = hand && hand.geometry && hand.geometry.attributes && hand.geometry.attributes.position;
+    const unit = hand && hand.userData.handUnit;
+    if (!pos || !(pos.count > 0) || !(unit > 0)) return 0;
+    arm.updateMatrixWorld(true);
+    const toArm = new THREE.Matrix4().copy(arm.matrixWorld).invert().multiply(hand.matrixWorld);
+    const v = new THREE.Vector3();
+    let front = -Infinity;
+    for (let i = 0; i < pos.count; i++) front = Math.max(front, v.fromBufferAttribute(pos, i).applyMatrix4(toArm).z);
+    return Math.max(0, front * (1 - HAND.unit / unit));
+}
+
 /** Put a pint glass in a figure's hand: the glass parents to the tagged
  *  arm group so it rides every gesture, and updateBar counter-rotates it
- *  each frame so the beer stays level mid-toast. side is +1 or -1. */
-function giveGlass(person, side) {
+ *  each frame so the beer stays level mid-toast. side is +1 or -1.
+ *  `fit` is for the visitor's own avatar, whose hand may be bigger than
+ *  the rig's (its standard is 1.4 times it, its largest twice): the glass
+ *  moves out by as much as the hand reaches past a regular's, so it sits
+ *  in front of the palm the way a regular's does rather than inside it.
+ *  Exported for tests/jamar-cameo. */
+export function giveGlass(person, side, { fit = false } = {}) {
     let arm = null;
     person.children.forEach((group) => {
         if (group.isGroup && group.userData.isArm &&
@@ -978,7 +1006,7 @@ function giveGlass(person, side) {
     // rotation pivots about this origin, so the figure reads as gripping
     // the glass in its hand rather than balancing it on the forearm.
     glass.children.forEach((part) => { part.position.y -= 0.06; });
-    glass.position.set(0, -0.57, 0.045);
+    glass.position.set(0, -0.57, 0.045 + (fit ? reachPastRegular(arm) : 0));
     arm.add(glass);
     return { arm, glass };
 }
@@ -1465,7 +1493,7 @@ function createHighTop() {
     barGroup.add(registerOutdoorProp(hightop, 'hightop'));
 }
 
-function createPatrons() {
+function createPatrons(cameo) {
     const H = LAYOUT.hightop;
 
     // Two regulars, three-quarter turned toward the stage, mid-singalong.
@@ -1488,15 +1516,20 @@ function createPatrons() {
         }
     ];
 
-    configs.forEach((spot) => {
-        const patron = createPerson(Object.assign({
+    configs.forEach((spot, i) => {
+        // The visitor's own avatar (cameo-1.0.0), when one is saved, takes
+        // the first regular's place: the one turned side-on to the camera,
+        // where the other shows it their back. Shown exactly as made, with
+        // the regular's glass in the regular's hand, and a card of its own.
+        const isCameo = i === 0 && Boolean(cameo);
+        const patron = isCameo ? cameo.group : createPerson(Object.assign({
             role: 'customer', x: 0, z: 0, rotationY: 0
         }, spot.look));
         patron.position.set(spot.x, 0.055, spot.z);
         patron.rotation.y = spot.yaw;
-        const held = giveGlass(patron, spot.glassSide);
+        const held = giveGlass(isCameo ? cameo.person : patron, spot.glassSide, { fit: isCameo });
         if (held.arm) held.arm.rotation.x = -1.1;   // hand-held glass hovers at high-top height
-        barGroup.add(registerOutdoorProp(patron, 'patrons'));
+        barGroup.add(isCameo ? registerOutdoorProp(patron, 'cameo') : registerOutdoorProp(patron, 'patrons'));
         patrons.push({
             group: patron, baseYaw: spot.yaw,
             glassArm: held.arm, glass: held.glass,

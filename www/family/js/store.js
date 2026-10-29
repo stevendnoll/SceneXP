@@ -381,9 +381,11 @@ const brickBorderMaterial = new THREE.MeshStandardMaterial({ color: 0x9b4a3c, ro
 const blackIron = new THREE.MeshStandardMaterial({ color: 0x232323, roughness: 0.5, metalness: 0.6 });
 
 /**
- * Initialize the mini golf world
+ * Initialize the mini golf world. `cameo` is the visitor's own avatar, built
+ * by cameo-1.0.0's loadCameo when one is saved (null otherwise), who walks
+ * the sidewalk as one of the passersby.
  */
-export function initStore() {
+export function initStore({ cameo = null } = {}) {
     const scene = getScene();
     if (!scene) {
         return;
@@ -405,7 +407,7 @@ export function initStore() {
     createProps();            // palms, cannons, chest, skull rock, torches
     createFamilyGolfers();    // Mom, Dad, and young Steve, mid round
     createBackgroundGolfers();// a pair of players on the far hole (desktop)
-    createSidewalkPedestrians(); // passersby out on the sidewalk (shared part)
+    createSidewalkPedestrians({ cameo: cameo && cameo.group }); // passersby out on the sidewalk (shared part)
 
     // Add background scenery (drifting clouds, per the config toggles)
     createBackgroundScenery();

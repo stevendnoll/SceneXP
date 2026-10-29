@@ -249,6 +249,43 @@ describe('createSidewalkPedestrians', () => {
     expect(union.has(npcs.INDOOR_VISITOR_LOOK.shirtColor)).toBe(false);
   });
 
+  test('a cameo (the visitor\'s own avatar) walks in the first passerby\'s place on a street with no zombies', async () => {
+    await boot({ pedestrians: { count: 3, ...PED_PATH }, zombiesAtNight: false });
+    const cameo = new StubGroup();
+    cameo.userData = { isCameo: true, isPedestrian: true };
+    peds.createSidewalkPedestrians({ cameo });
+    const meshes = peds.getPedestrianMeshes();
+    expect(meshes).toHaveLength(3);
+    expect(meshes[0]).toBe(cameo);
+    expect(cameo.position.z).toBe(26.5);
+    expect(cameo.position.y).toBe(0.055);
+    expect([Math.PI / 2, -Math.PI / 2]).toContain(cameo.rotation.y);
+    // Only the other two are drawn.
+    expect(meshes.slice(1).every((m) => m !== cameo && m.userData.isPedestrian === true)).toBe(true);
+  });
+
+  test('a cameo walks the sidewalk like the others', async () => {
+    await boot({ pedestrians: { count: 1, ...PED_PATH }, zombiesAtNight: false });
+    pinRandom();
+    const cameo = new StubGroup();
+    peds.createSidewalkPedestrians({ cameo });
+    const x0 = cameo.position.x;
+    for (let i = 0; i < 20; i++) peds.updateSidewalkPedestrians(null, 0.1, 0);
+    expect(Math.abs(cameo.position.x - x0)).toBeGreaterThan(1);
+    expect(Math.abs(cameo.position.y - 0.055)).toBeLessThan(0.03);
+  });
+
+  test('a street whose passersby turn into zombies takes no cameo: all are drawn as before', async () => {
+    for (const config of [{}, { zombiesAtNight: true }]) {
+      await boot({ pedestrians: { count: 2, ...PED_PATH }, ...config });
+      const cameo = new StubGroup();
+      peds.createSidewalkPedestrians({ cameo });
+      const meshes = peds.getPedestrianMeshes();
+      expect(meshes).toHaveLength(2);
+      expect(meshes).not.toContain(cameo);
+    }
+  });
+
   test('mobile halves the crew, rounded up', async () => {
     await boot({ pedestrians: { count: 5, ...PED_PATH } });
     globalThis.navigator.maxTouchPoints = 5;
