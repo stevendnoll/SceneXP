@@ -35,6 +35,15 @@
  * actually being served from, so a share is correct on localhost, on a staging
  * host and in production with nothing to remember.
  *
+ * A LINK MEANT TO BE OPENED CARRIES NO SENTENCE, and that is the caller's
+ * choice to make by leaving `text` out. A phone's share sheet joins the two:
+ * its Copy action puts "sentence https://..." on the clipboard (iOS and
+ * Android both), so a remix link or an avatar link pasted into another
+ * browser's address bar is a search for the sentence, not the page. A score
+ * wants its sentence. A link the friend must open wants to be the link alone,
+ * and the page's own social card says what it is. An empty field is not
+ * sent at all, so a sheet is never handed a blank line to add.
+ *
  * NOTHING HERE TOUCHES THE NETWORK and nothing is logged from inside it. The
  * caller is told HOW the share went and decides whether that is worth
  * recording, which keeps this module free of the telemetry part and means a
@@ -80,8 +89,12 @@ export async function shareLink(data, { onCopied = null } = {}) {
     const nav = typeof navigator !== 'undefined' ? navigator : null;
 
     if (nav && typeof nav.share === 'function') {
+        // Only the fields with something in them (see the note at the top).
+        const sheet = { url: payload.url };
+        if (payload.title) sheet.title = payload.title;
+        if (payload.text) sheet.text = payload.text;
         try {
-            await nav.share(payload);
+            await nav.share(sheet);
             return 'native';
         } catch (e) {
             // BACKING OUT IS A DECISION, NOT AN ERROR. Falling through here

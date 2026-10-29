@@ -920,6 +920,27 @@ describe('the page', () => {
         expect(dom.el('av-lab').hidden).toBe(true);
     });
 
+    test('Share a link hands over the link alone, on the sheet and on the clipboard (Steve\'s phone, 2026-10-28)', async () => {
+        // A sheet's Copy joins a sentence to the front of the link, and
+        // this link is pasted into another browser to be opened there.
+        await boot();
+        const sheets = [];
+        globalThis.navigator.share = async (data) => { sheets.push(data); };
+        dom.el('av-link').click();
+        await flushAsync(10);
+        expect(sheets).toHaveLength(1);
+        expect(sheets[0].title).toBe('My SceneXP avatar');
+        expect('text' in sheets[0]).toBe(false);
+        expect(sheets[0].url).toMatch(/\/avatar\/#a=1\./);
+        delete globalThis.navigator.share;
+        const copied = [];
+        globalThis.navigator.clipboard = { writeText: async (text) => { copied.push(text); } };
+        dom.el('av-link').click();
+        await flushAsync(10);
+        expect(copied).toEqual([sheets[0].url]);
+        delete globalThis.navigator.clipboard;
+    });
+
     test('Save a file offers scenexp-avatar.json holding what is on screen, and lets the address go', async () => {
         const main = await boot();
         jest.useFakeTimers();

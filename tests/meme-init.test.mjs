@@ -828,12 +828,14 @@ describe('the page', () => {
         fire(dom.el('mm-link'), 'click');
         await flushAsync(20);
         expect(copied).toHaveLength(1);
-        expect(copied[0]).toContain(main.WORDS.linkText);
+        // The link alone, nothing in front: a friend pastes it into a
+        // browser, where a sentence first is a search, not the meme.
+        expect(copied[0]).not.toMatch(/\s/);
         expect(copied[0]).toMatch(/#m=2\/thenNow\/then~\/-,-&a=1\./);
         expect(copied[0]).not.toMatch(/&(other|friend)=/);
         // The page's own directory (the stub's is /test/), never a path
         // written down.
-        expect(copied[0]).toContain(`${dom.windowStub.location.href}#m=`);
+        expect(copied[0].startsWith(`${dom.windowStub.location.href}#m=`)).toBe(true);
         delete globalThis.navigator.clipboard;
         expect(state.template.id).toBe('thenNow');
         // A link copied is a meme finished: what comes next appears.
