@@ -38,7 +38,7 @@ import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { getProofOfWork } from '../../shared/js/boot-1.0.0.min.js';
 import { createStudio } from './studio.min.js';
-import { createEditor } from './editor.min.js';
+import { createEditor } from '../../shared/js/avatar-editor-1.0.0.min.js';
 import { createExporter } from './export.min.js';
 import { returnTarget, readAvatarFile, FILE_ERRORS } from './transfer.min.js';
 

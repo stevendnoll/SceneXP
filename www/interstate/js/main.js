@@ -45,6 +45,7 @@ import {
 } from '../../shared/js/checklist-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
+import { loadCameo } from '../../shared/js/cameo-1.0.0.min.js';
 import {
     initAutopilot, toggleAutopilot, setAutopilotEnabled,
     isAutopilotEnabled, onAutopilotChange, updateAutopilot
@@ -221,6 +222,11 @@ async function init() {
     // (The Home button this used to wire first was removed from this scene.)
     applySiteLinks();
 
+    // The visitor's own avatar, waiting on a car with the others when one is
+    // saved on /avatar/ (null otherwise, and nothing more is downloaded).
+    // Started now so its modules load while the proof of work runs.
+    const cameoReady = loadCameo();
+
     // Soft bot deterrent: solve a tiny proof of work before building the scene
     // (or reuse a still-valid one from sessionStorage). Hand the hash to the
     // telemetry layer so it tags every ping.
@@ -261,7 +267,8 @@ async function init() {
         { x: -4.2, z: 4.0,  lookAtX: -2.6, lookAtZ: 4.0 },   // vending machine
         { x: -9.0, z: 12.4, lookAtX: -9.0, lookAtZ: 10.4 }   // service counter
     ]);
-    initGalleryVisitors(INTERSTATE_CONFIG.indoorVisitors.count);
+    const cameo = await cameoReady;
+    initGalleryVisitors(INTERSTATE_CONFIG.indoorVisitors.count, { cameo: cameo && cameo.group });
     buildRaycastTargets();
 
     // Discovery checklist: install the tire item list, restore any session
@@ -1142,7 +1149,8 @@ function updateHover() {
             clearHover();
             hoveredVisitor = visitor;
             if (lookLabel) {
-                lookLabel.textContent = `${state.isMobile ? 'Tap' : 'Click'} to chat with the customer`;
+                const verb = state.isMobile ? 'Tap' : 'Click';
+                lookLabel.textContent = visitor.userData.isCameo ? `${verb} to say hello to yourself` : `${verb} to chat with the customer`;
                 lookLabel.classList.add('visible');
             }
             if (hud) hud.classList.add('targeting');
@@ -1359,6 +1367,15 @@ const VISITOR_LINES = [
     "Honest work and fair prices here. That is why I keep coming back."
 ];
 
+// The visitor's own avatar in the waiting room (cameo-1.0.0): a few words
+// for the person who made it, shown in place of a customer's line.
+const CAMEO_TITLE = "Look Who's Waiting";
+const CAMEO_LINES = [
+    "Well, look who stopped by the shop! Pull up a chair, the good ones are by the front glass.",
+    "Fancy meeting you here. You can watch the cars go up on the lift through the big window.",
+    "Good taste in tire shops, and in outfits. The host at the counter is happy to help."
+];
+
 function pickLine(list, key) {
     // Defensive: callers may pass a list that no longer exists (e.g. scenery
     // whose hint entry was removed), so never index into undefined.
@@ -1504,9 +1521,10 @@ function openVisitorModal(visitorMesh) {
     // Stop the visitor and turn them to face the player while they "speak".
     pauseCustomerForDialog(visitorMesh, _playerPos);
 
-    if (dialogModalTitle) dialogModalTitle.textContent = 'A Waiting Customer';
+    const cameo = !!visitorMesh.userData.isCameo;
+    if (dialogModalTitle) dialogModalTitle.textContent = cameo ? CAMEO_TITLE : 'A Waiting Customer';
     // Random each click so re-clicking the same visitor gives a fresh line.
-    if (dialogModalMessage) dialogModalMessage.textContent = pickRandomLine(VISITOR_LINES);
+    if (dialogModalMessage) dialogModalMessage.textContent = pickRandomLine(cameo ? CAMEO_LINES : VISITOR_LINES);
     setDialogReturnVisible(false); // already inside the gallery
     dialogModal.classList.remove('hidden');
     hud.classList.remove('visible');

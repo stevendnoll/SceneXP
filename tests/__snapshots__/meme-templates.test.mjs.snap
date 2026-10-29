@@ -1,0 +1,1295 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`the catalog the catalog is frozen in the snapshot: a shipped template changes only on purpose 1`] = `
+[
+  {
+    "cells": [
+      {
+        "backdrop": "#F3D98A",
+        "camera": {
+          "aim": [
+            0,
+            1.54,
+            0,
+          ],
+          "eye": [
+            0,
+            1.62,
+            1.15,
+          ],
+          "fov": 28,
+        },
+        "captions": [
+          "top",
+        ],
+        "figures": [
+          {
+            "at": [
+              0,
+              0,
+            ],
+            "expression": "shocked",
+            "pose": "stand",
+            "role": "you",
+            "turn": 0,
+          },
+        ],
+      },
+    ],
+    "grid": [
+      [
+        {
+          "span": 1,
+        },
+      ],
+    ],
+    "id": "surprised",
+    "line": "One face says it all.",
+    "order": 1,
+    "roles": [
+      {
+        "cast": "avatar",
+        "id": "you",
+        "label": "You",
+      },
+    ],
+    "title": "Surprised",
+  },
+  {
+    "cells": [
+      {
+        "backdrop": "#F4F1EA",
+        "camera": {
+          "aim": [
+            0,
+            1.15,
+            -0.7,
+          ],
+          "eye": [
+            0,
+            1.15,
+            0.45,
+          ],
+          "fov": 30,
+        },
+        "captions": [
+          "center",
+        ],
+        "figures": [],
+      },
+      {
+        "backdrop": "#F3B6A6",
+        "camera": {
+          "aim": [
+            0,
+            1.54,
+            0,
+          ],
+          "eye": [
+            0,
+            1.62,
+            1.15,
+          ],
+          "fov": 28,
+        },
+        "captions": [],
+        "figures": [
+          {
+            "at": [
+              0,
+              0,
+            ],
+            "expression": "shocked",
+            "pose": "stand",
+            "role": "you",
+            "turn": 0,
+          },
+        ],
+      },
+      {
+        "backdrop": "#F4F1EA",
+        "camera": {
+          "aim": [
+            0,
+            1.15,
+            -0.7,
+          ],
+          "eye": [
+            0,
+            1.15,
+            0.45,
+          ],
+          "fov": 30,
+        },
+        "captions": [
+          "center",
+        ],
+        "figures": [],
+      },
+      {
+        "backdrop": "#BFD9C8",
+        "camera": {
+          "aim": [
+            0,
+            1.54,
+            0,
+          ],
+          "eye": [
+            0,
+            1.62,
+            1.15,
+          ],
+          "fov": 28,
+        },
+        "captions": [],
+        "figures": [
+          {
+            "at": [
+              0,
+              0,
+            ],
+            "expression": "deadpan",
+            "pose": "stand",
+            "role": "you",
+            "turn": 0,
+          },
+        ],
+      },
+      {
+        "backdrop": "#F4F1EA",
+        "camera": {
+          "aim": [
+            0,
+            1.15,
+            -0.7,
+          ],
+          "eye": [
+            0,
+            1.15,
+            0.45,
+          ],
+          "fov": 30,
+        },
+        "captions": [
+          "center",
+        ],
+        "figures": [],
+      },
+      {
+        "backdrop": "#F3B6A6",
+        "camera": {
+          "aim": [
+            0,
+            1.54,
+            0,
+          ],
+          "eye": [
+            0,
+            1.62,
+            1.15,
+          ],
+          "fov": 28,
+        },
+        "captions": [],
+        "figures": [
+          {
+            "at": [
+              0,
+              0,
+            ],
+            "expression": "shocked",
+            "pose": "stand",
+            "role": "you",
+            "turn": 0,
+          },
+        ],
+      },
+    ],
+    "grid": [
+      [
+        {
+          "span": 1,
+        },
+        {
+          "span": 1,
+        },
+      ],
+      [
+        {
+          "span": 1,
+        },
+        {
+          "span": 1,
+        },
+      ],
+      [
+        {
+          "span": 1,
+        },
+        {
+          "span": 1,
+        },
+      ],
+    ],
+    "id": "panic",
+    "line": "Three rows, one rollercoaster.",
+    "order": 2,
+    "roles": [
+      {
+        "cast": "avatar",
+        "id": "you",
+        "label": "You",
+      },
+    ],
+    "title": "Panic / Calm / Panic",
+  },
+  {
+    "cells": [
+      {
+        "backdrop": "#C9736A",
+        "camera": {
+          "aim": [
+            0.05,
+            1.2,
+            0,
+          ],
+          "eye": [
+            0.05,
+            1.3,
+            2.6,
+          ],
+          "fov": 34,
+        },
+        "captions": [],
+        "figures": [
+          {
+            "at": [
+              -0.1,
+              0,
+            ],
+            "expression": "deadpan",
+            "look": "right",
+            "pose": "dismiss",
+            "role": "you",
+            "side": "left",
+            "turn": 0,
+          },
+        ],
+      },
+      {
+        "backdrop": "#F4F1EA",
+        "camera": {
+          "aim": [
+            0,
+            1.15,
+            -0.7,
+          ],
+          "eye": [
+            0,
+            1.15,
+            0.45,
+          ],
+          "fov": 30,
+        },
+        "captions": [
+          "center",
+        ],
+        "figures": [],
+      },
+      {
+        "backdrop": "#6FAE86",
+        "camera": {
+          "aim": [
+            0.05,
+            1.2,
+            0,
+          ],
+          "eye": [
+            0.05,
+            1.3,
+            2.6,
+          ],
+          "fov": 34,
+        },
+        "captions": [],
+        "figures": [
+          {
+            "at": [
+              -0.1,
+              0,
+            ],
+            "expression": "bigGrin",
+            "look": "left",
+            "pose": "point",
+            "role": "you",
+            "side": "left",
+            "turn": 0,
+          },
+        ],
+      },
+      {
+        "backdrop": "#F4F1EA",
+        "camera": {
+          "aim": [
+            0,
+            1.15,
+            -0.7,
+          ],
+          "eye": [
+            0,
+            1.15,
+            0.45,
+          ],
+          "fov": 30,
+        },
+        "captions": [
+          "center",
+        ],
+        "figures": [],
+      },
+    ],
+    "grid": [
+      [
+        {
+          "span": 1,
+        },
+        {
+          "span": 1,
+        },
+      ],
+      [
+        {
+          "span": 1,
+        },
+        {
+          "span": 1,
+        },
+      ],
+    ],
+    "id": "nopeYep",
+    "line": "Not that one. This one.",
+    "order": 3,
+    "roles": [
+      {
+        "cast": "avatar",
+        "id": "you",
+        "label": "You",
+      },
+    ],
+    "title": "Nope / Yep",
+  },
+  {
+    "cells": [
+      {
+        "backdrop": "#C9D3DF",
+        "camera": {
+          "aim": [
+            0,
+            1.2,
+            0,
+          ],
+          "eye": [
+            0,
+            1.35,
+            2.4,
+          ],
+          "fov": 34,
+        },
+        "captions": [
+          "top",
+        ],
+        "figures": [
+          {
+            "at": [
+              0,
+              0,
+            ],
+            "expression": "crying",
+            "overrides": {
+              "build": "slim",
+              "muscles": "standard",
+            },
+            "pose": "stand",
+            "role": "you",
+            "turn": 0,
+          },
+        ],
+      },
+      {
+        "backdrop": "#F0C66E",
+        "camera": {
+          "aim": [
+            0,
+            1.2,
+            0,
+          ],
+          "eye": [
+            0,
+            1.35,
+            2.4,
+          ],
+          "fov": 34,
+        },
+        "captions": [
+          "top",
+        ],
+        "figures": [
+          {
+            "at": [
+              0,
+              0,
+            ],
+            "expression": "smug",
+            "overrides": {
+              "build": "broad",
+              "muscles": "buff",
+            },
+            "pose": "stand",
+            "role": "you",
+            "turn": 0,
+          },
+        ],
+      },
+    ],
+    "grid": [
+      [
+        {
+          "span": 1,
+        },
+        {
+          "span": 1,
+        },
+      ],
+    ],
+    "id": "thenNow",
+    "line": "Same person. New build.",
+    "order": 4,
+    "roles": [
+      {
+        "cast": "avatar",
+        "id": "you",
+        "label": "You",
+      },
+    ],
+    "title": "Then vs Now",
+  },
+  {
+    "cells": [
+      {
+        "backdrop": "#F4F1EA",
+        "camera": {
+          "aim": [
+            0,
+            1.15,
+            -0.7,
+          ],
+          "eye": [
+            0,
+            1.15,
+            0.45,
+          ],
+          "fov": 30,
+        },
+        "captions": [
+          "center",
+        ],
+        "figures": [],
+      },
+      {
+        "backdrop": "#E3DFD7",
+        "camera": {
+          "aim": [
+            0,
+            1.54,
+            0,
+          ],
+          "eye": [
+            0,
+            1.62,
+            1.15,
+          ],
+          "fov": 28,
+        },
+        "captions": [],
+        "figures": [
+          {
+            "at": [
+              0,
+              0,
+            ],
+            "expression": "none",
+            "glow": 0,
+            "pose": "stand",
+            "role": "you",
+            "turn": 0,
+          },
+        ],
+        "tint": 0.15,
+      },
+      {
+        "backdrop": "#F4F1EA",
+        "camera": {
+          "aim": [
+            0,
+            1.15,
+            -0.7,
+          ],
+          "eye": [
+            0,
+            1.15,
+            0.45,
+          ],
+          "fov": 30,
+        },
+        "captions": [
+          "center",
+        ],
+        "figures": [],
+      },
+      {
+        "backdrop": "#C9BFE6",
+        "camera": {
+          "aim": [
+            0,
+            1.54,
+            0,
+          ],
+          "eye": [
+            0,
+            1.62,
+            1.15,
+          ],
+          "fov": 28,
+        },
+        "captions": [],
+        "figures": [
+          {
+            "at": [
+              0,
+              0,
+            ],
+            "expression": "smug",
+            "glow": 0.45,
+            "pose": "stand",
+            "role": "you",
+            "turn": 0,
+          },
+        ],
+        "tint": 0.4,
+      },
+      {
+        "backdrop": "#F4F1EA",
+        "camera": {
+          "aim": [
+            0,
+            1.15,
+            -0.7,
+          ],
+          "eye": [
+            0,
+            1.15,
+            0.45,
+          ],
+          "fov": 30,
+        },
+        "captions": [
+          "center",
+        ],
+        "figures": [],
+      },
+      {
+        "backdrop": "#9A82D6",
+        "camera": {
+          "aim": [
+            0,
+            1.54,
+            0,
+          ],
+          "eye": [
+            0,
+            1.62,
+            1.15,
+          ],
+          "fov": 28,
+        },
+        "captions": [],
+        "figures": [
+          {
+            "at": [
+              0,
+              0,
+            ],
+            "expression": "bigGrin",
+            "glow": 0.75,
+            "pose": "stand",
+            "role": "you",
+            "turn": 0,
+          },
+        ],
+        "tint": 0.7,
+      },
+      {
+        "backdrop": "#F4F1EA",
+        "camera": {
+          "aim": [
+            0,
+            1.15,
+            -0.7,
+          ],
+          "eye": [
+            0,
+            1.15,
+            0.45,
+          ],
+          "fov": 30,
+        },
+        "captions": [
+          "center",
+        ],
+        "figures": [],
+      },
+      {
+        "backdrop": "#4B2E99",
+        "camera": {
+          "aim": [
+            0,
+            1.54,
+            0,
+          ],
+          "eye": [
+            0,
+            1.62,
+            1.15,
+          ],
+          "fov": 28,
+        },
+        "captions": [],
+        "figures": [
+          {
+            "at": [
+              0,
+              0,
+            ],
+            "expression": "shocked",
+            "glow": 1,
+            "pose": "stand",
+            "role": "you",
+            "turn": 0,
+          },
+        ],
+        "tint": 1,
+      },
+    ],
+    "grid": [
+      [
+        {
+          "span": 1,
+        },
+        {
+          "span": 1,
+        },
+      ],
+      [
+        {
+          "span": 1,
+        },
+        {
+          "span": 1,
+        },
+      ],
+      [
+        {
+          "span": 1,
+        },
+        {
+          "span": 1,
+        },
+      ],
+      [
+        {
+          "span": 1,
+        },
+        {
+          "span": 1,
+        },
+      ],
+    ],
+    "id": "galaxyBrain",
+    "line": "Four rows, each one brighter.",
+    "order": 5,
+    "roles": [
+      {
+        "cast": "avatar",
+        "id": "you",
+        "label": "You",
+      },
+    ],
+    "tint": true,
+    "title": "Galaxy Brain",
+  },
+  {
+    "cells": [
+      {
+        "backdrop": "#D9BF93",
+        "camera": {
+          "aim": [
+            0.02,
+            1.15,
+            0,
+          ],
+          "eye": [
+            -0.03,
+            1.35,
+            3.1,
+          ],
+          "fov": 36,
+        },
+        "captions": [
+          {
+            "prop": "board",
+          },
+        ],
+        "figures": [
+          {
+            "at": [
+              -0.5,
+              0,
+            ],
+            "expression": "smug",
+            "look": -0.2,
+            "overrides": {
+              "armwearColor": "black",
+              "bottomColor": "black",
+              "hatColor": "x1f1f22",
+              "legwearColor": "black",
+              "shirt": "x1f1f22",
+              "shoeColor": "black",
+            },
+            "pose": "present",
+            "role": "you",
+            "side": "left",
+            "turn": 0.2,
+          },
+        ],
+        "paint": {
+          "wall": "wash",
+        },
+        "scene": "plan",
+      },
+      {
+        "backdrop": "#D9BF93",
+        "camera": {
+          "aim": [
+            0.02,
+            1.15,
+            0,
+          ],
+          "eye": [
+            -0.03,
+            1.35,
+            3.1,
+          ],
+          "fov": 36,
+        },
+        "captions": [
+          {
+            "prop": "board",
+          },
+        ],
+        "figures": [
+          {
+            "at": [
+              -0.5,
+              0,
+            ],
+            "expression": "smug",
+            "look": -0.2,
+            "overrides": {
+              "armwearColor": "black",
+              "bottomColor": "black",
+              "hatColor": "x1f1f22",
+              "legwearColor": "black",
+              "shirt": "x1f1f22",
+              "shoeColor": "black",
+            },
+            "pose": "present",
+            "role": "you",
+            "side": "left",
+            "turn": 0.2,
+          },
+        ],
+        "paint": {
+          "wall": "wash",
+        },
+        "scene": "plan",
+      },
+      {
+        "backdrop": "#D9BF93",
+        "camera": {
+          "aim": [
+            0.02,
+            1.15,
+            0,
+          ],
+          "eye": [
+            -0.03,
+            1.35,
+            3.1,
+          ],
+          "fov": 36,
+        },
+        "captions": [
+          {
+            "prop": "board",
+          },
+        ],
+        "figures": [
+          {
+            "at": [
+              -0.5,
+              0,
+            ],
+            "expression": "bigGrin",
+            "look": -0.2,
+            "overrides": {
+              "armwearColor": "black",
+              "bottomColor": "black",
+              "hatColor": "x1f1f22",
+              "legwearColor": "black",
+              "shirt": "x1f1f22",
+              "shoeColor": "black",
+            },
+            "pose": "present",
+            "role": "you",
+            "side": "left",
+            "turn": 0.2,
+          },
+        ],
+        "paint": {
+          "wall": "wash",
+        },
+        "scene": "plan",
+      },
+      {
+        "backdrop": "#D9BF93",
+        "camera": {
+          "aim": [
+            0.02,
+            1.15,
+            0,
+          ],
+          "eye": [
+            -0.03,
+            1.35,
+            3.1,
+          ],
+          "fov": 36,
+        },
+        "captions": [
+          {
+            "prop": "board",
+          },
+        ],
+        "figures": [
+          {
+            "at": [
+              -0.5,
+              0,
+            ],
+            "expression": "shocked",
+            "look": 0.9,
+            "overrides": {
+              "armwearColor": "black",
+              "bottomColor": "black",
+              "hatColor": "x1f1f22",
+              "legwearColor": "black",
+              "shirt": "x1f1f22",
+              "shoeColor": "black",
+            },
+            "pose": "present",
+            "role": "you",
+            "side": "left",
+            "turn": 0.2,
+          },
+        ],
+        "paint": {
+          "wall": "wash",
+        },
+        "scene": "plan",
+      },
+    ],
+    "grid": [
+      [
+        {
+          "span": 1,
+        },
+        {
+          "span": 1,
+        },
+      ],
+      [
+        {
+          "span": 1,
+        },
+        {
+          "span": 1,
+        },
+      ],
+    ],
+    "id": "plan",
+    "line": "Step one, step two, step three, and step three again.",
+    "order": 6,
+    "roles": [
+      {
+        "cast": "avatar",
+        "id": "you",
+        "label": "You",
+      },
+    ],
+    "title": "The Plan",
+  },
+  {
+    "cells": [
+      {
+        "backdrop": "#B9D3E6",
+        "camera": {
+          "aim": [
+            0,
+            1.05,
+            0,
+          ],
+          "eye": [
+            0,
+            1.35,
+            3.3,
+          ],
+          "fov": 38,
+        },
+        "captions": [
+          {
+            "label": 0,
+          },
+          {
+            "label": 1,
+          },
+          {
+            "label": 2,
+          },
+        ],
+        "figures": [
+          {
+            "at": [
+              0.12,
+              -0.05,
+            ],
+            "expression": "ooh",
+            "look": -0.55,
+            "pose": "lookBack",
+            "role": "you",
+            "stride": 0.3,
+            "turn": 0.3,
+          },
+          {
+            "at": [
+              0.78,
+              -0.1,
+            ],
+            "expression": "rage",
+            "look": "right",
+            "pose": "stand",
+            "role": "friend",
+            "stride": -0.3,
+            "turn": -0.15,
+          },
+          {
+            "at": [
+              -0.72,
+              0.45,
+            ],
+            "expression": "smug",
+            "pose": "stand",
+            "role": "other",
+            "stride": 0.5,
+            "turn": 0.2,
+          },
+        ],
+        "floor": "#CBC7C0",
+        "paint": {
+          "floor": "sidewalk",
+          "wall": "city",
+        },
+      },
+    ],
+    "grid": [
+      [
+        {
+          "span": 1,
+        },
+      ],
+    ],
+    "id": "headTurn",
+    "line": "Three people, one of them looking back.",
+    "order": 7,
+    "roles": [
+      {
+        "cast": "avatar",
+        "id": "you",
+        "label": "You",
+      },
+      {
+        "cast": "random",
+        "id": "friend",
+        "label": "A Friend",
+      },
+      {
+        "cast": "random",
+        "id": "other",
+        "label": "Someone",
+      },
+    ],
+    "title": "The Head Turn",
+  },
+  {
+    "cells": [
+      {
+        "backdrop": "#3E4146",
+        "camera": {
+          "aim": [
+            0,
+            1,
+            0,
+          ],
+          "eye": [
+            0,
+            1.35,
+            3,
+          ],
+          "fov": 36,
+        },
+        "captions": [
+          {
+            "label": 0,
+          },
+          {
+            "label": 1,
+          },
+          "bottom",
+        ],
+        "figures": [
+          {
+            "at": [
+              -0.4,
+              -0.23,
+            ],
+            "expression": "bigGrin",
+            "labelBelow": -0.2,
+            "overrides": {
+              "build": "broad",
+              "muscles": "buff",
+              "shirt": "white",
+              "sleeves": "short",
+            },
+            "pose": "shake",
+            "role": "you",
+            "side": "right",
+            "turn": 1.0707963267948966,
+          },
+          {
+            "at": [
+              0.4,
+              0.23,
+            ],
+            "expression": "bigGrin",
+            "labelBelow": -0.2,
+            "overrides": {
+              "build": "broad",
+              "muscles": "buff",
+              "shirt": "xc0262a",
+              "sleeves": "short",
+            },
+            "pose": "shake",
+            "role": "friend",
+            "side": "right",
+            "turn": -1.0707963267948966,
+            "twist": 0.91,
+          },
+        ],
+        "floor": "#2C2E32",
+        "paint": {
+          "wall": "storm",
+        },
+        "scene": "handshake",
+      },
+    ],
+    "grid": [
+      [
+        {
+          "span": 1,
+        },
+      ],
+    ],
+    "id": "handshake",
+    "line": "Two people, one thing they agree on.",
+    "order": 8,
+    "roles": [
+      {
+        "cast": "avatar",
+        "id": "you",
+        "label": "You",
+      },
+      {
+        "cast": "random",
+        "id": "friend",
+        "label": "A Friend",
+      },
+    ],
+    "title": "The Handshake",
+  },
+  {
+    "cells": [
+      {
+        "backdrop": "#05060C",
+        "camera": {
+          "aim": [
+            0,
+            1,
+            0,
+          ],
+          "eye": [
+            0,
+            1.4,
+            3.2,
+          ],
+          "fov": 38,
+        },
+        "captions": [
+          "top",
+          "bottom",
+        ],
+        "figures": [
+          {
+            "at": [
+              0.65,
+              0.2,
+            ],
+            "expression": "smug",
+            "look": 0.9,
+            "overrides": {
+              "bottom": "pants",
+              "bottomColor": "white",
+              "hat": "none",
+              "shirt": "white",
+              "sleeves": "long",
+            },
+            "pose": "aim",
+            "role": "you",
+            "side": "right",
+            "turn": -1.2707963267948965,
+          },
+          {
+            "at": [
+              -0.3,
+              0.1,
+            ],
+            "expression": "none",
+            "nod": -0.5,
+            "overrides": {
+              "bottom": "pants",
+              "bottomColor": "white",
+              "hat": "none",
+              "shirt": "white",
+              "sleeves": "long",
+            },
+            "pose": "stand",
+            "role": "friend",
+            "turn": 4.091592653589793,
+          },
+        ],
+        "scene": "space",
+      },
+    ],
+    "grid": [
+      [
+        {
+          "span": 1,
+        },
+      ],
+    ],
+    "id": "alwaysHasBeen",
+    "line": "Two people in space, one realization.",
+    "order": 9,
+    "roles": [
+      {
+        "cast": "avatar",
+        "id": "you",
+        "label": "You",
+      },
+      {
+        "cast": "random",
+        "id": "friend",
+        "label": "A Friend",
+      },
+    ],
+    "title": "Always Has Been",
+  },
+  {
+    "cells": [
+      {
+        "backdrop": "#F0A070",
+        "camera": {
+          "aim": [
+            0.05,
+            1,
+            0,
+          ],
+          "eye": [
+            0.05,
+            1.3,
+            2.9,
+          ],
+          "fov": 38,
+        },
+        "captions": [
+          "top",
+          "bottom",
+        ],
+        "figures": [
+          {
+            "at": [
+              -0.22,
+              0.1,
+            ],
+            "expression": "sweat",
+            "look": -0.5,
+            "pose": "stand",
+            "role": "you",
+            "turn": 0.55,
+          },
+        ],
+        "paint": {
+          "wall": "soot",
+        },
+        "scene": "fine",
+      },
+    ],
+    "grid": [
+      [
+        {
+          "span": 1,
+        },
+      ],
+    ],
+    "id": "everythingIsFine",
+    "line": "One calm person. One burning room.",
+    "order": 10,
+    "roles": [
+      {
+        "cast": "avatar",
+        "id": "you",
+        "label": "You",
+      },
+    ],
+    "title": "Everything Is Fine",
+  },
+]
+`;

@@ -370,7 +370,10 @@ describe('on the page', () => {
     });
 
     async function bootWith({ readyState = 'complete', reduce = false } = {}) {
-        jest.useFakeTimers();
+        // The clock pinned where the slides' dates are recent (the newest is
+        // 2026-09-28): on the real date the badges this page boots with ran
+        // out on 2026-10-28, thirty days on, and the suite with them.
+        jest.useFakeTimers({ now: new Date('2026-10-01T12:00:00') });
         // AS STRICT AS A BROWSER. A browser's setTimeout and clearTimeout throw
         // "Illegal invocation" for any `this` but the global object, and Node's
         // do not, so the page's own timers once called them as methods of a

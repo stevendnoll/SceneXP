@@ -1,12 +1,15 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * config.js - Your Avatar (/avatar/, specs/avatar PLANNING section 4): the
- * studio, its camera, the turntable, and the editor's tabs. Every number a QA
- * round might move is here, in meters, seconds and radians.
+ * studio, its camera, the turntable, and the editor's tabs (the shared
+ * editor's). Every number a QA round might move is here, in meters, seconds
+ * and radians.
  *
  * DEEP FROZEN, so nothing at run time can change the page's tuning by
  * accident.
  */
+
+import { EDITOR_TABS } from '../../shared/js/avatar-editor-1.0.0.min.js';
 
 function deepFreeze(o) {
     for (const v of Object.values(o)) if (v && typeof v === 'object') deepFreeze(v);
@@ -83,93 +86,10 @@ export const AVATAR_PAGE = deepFreeze({
      *  turned to face the front. */
     waveAfterSave: 0.35,
 
-    /**
-     * The editor's tabs (PRD section 6), in order, each with the camera's
-     * framing and its fields. `kind` is 'swatch' (a color) or 'text' (a
-     * word). A field shows only when this version draws more than one of its
-     * options, and only while the field it `requires` shows; a field with
-     * `hideWhen` steps aside while the avatar holds that value (no beard,
-     * no beard's color), and one with `showWhen` shows only while it does
-     * (a jersey's number, on the jersey). A 'number' field is typed, not
-     * chosen from a row (a hundred buttons would be no row). A tab shows
-     * only when it has a field to show. Every color field ends in a custom
-     * swatch (any color, the browser's own picker). A field with a `frame`
-     * of its own is framed by it when chosen, not by its tab's (the shoes,
-     * on the Clothes tab, still look at the feet).
-     *
-     * SIX TABS IN TWO ROWS OF THREE (Steve's QA, 2026-10-26, down from
-     * nine): the mouth's two groups sit on the Face tab between the cheeks
-     * and the facial hair (top down, and the beard wraps the mouth); the
-     * shoes are clothes; the hat is on the Hair tab, since every hat is
-     * fitted to the hair under it. Facial hair is on the Face tab, since
-     * the Hair tab is full of styles (2026-10-25); the hands and the feet
-     * are part of the Build.
-     */
-    tabs: [
-        {
-            id: 'face', label: 'Face', frame: 'face', fields: [
-                { key: 'skin', legend: 'Skin tone', kind: 'swatch' },
-                { key: 'faceShape', legend: 'Face shape', kind: 'text' },
-                { key: 'nose', legend: 'Nose', kind: 'text' },
-                { key: 'cheeks', legend: 'Cheeks', kind: 'text' },
-                { key: 'mouth', legend: 'Expression', kind: 'text' },
-                { key: 'lips', legend: 'Lip color', kind: 'swatch' },
-                { key: 'facial', legend: 'Facial hair', kind: 'text' },
-                { key: 'facialColor', legend: 'Facial hair color', kind: 'swatch', hideWhen: { field: 'facial', value: 'none' } }
-            ]
-        },
-        {
-            id: 'eyes', label: 'Eyes', frame: 'face', fields: [
-                { key: 'eyeShape', legend: 'Eye shape', kind: 'text' },
-                { key: 'eyes', legend: 'Eye color', kind: 'swatch' },
-                { key: 'brows', legend: 'Eyebrows', kind: 'text' },
-                { key: 'glasses', legend: 'Glasses', kind: 'text' },
-                { key: 'frameColor', legend: 'Frame color', kind: 'swatch', hideWhen: { field: 'glasses', value: 'none' } },
-                { key: 'lensColor', legend: 'Lens color', kind: 'swatch', hideWhen: { field: 'glasses', value: 'none' } }
-            ]
-        },
-        {
-            id: 'hair', label: 'Hair', frame: 'face', fields: [
-                { key: 'length', legend: 'Style', kind: 'text' },
-                { key: 'hair', legend: 'Color', kind: 'swatch' },
-                { key: 'hat', legend: 'Hat', kind: 'text' },
-                { key: 'hatColor', legend: 'Hat color', kind: 'swatch', requires: 'hat', hideWhen: { field: 'hat', value: 'none' } }
-            ]
-        },
-        {
-            id: 'build', label: 'Build', frame: 'body', fields: [
-                { key: 'build', legend: 'Build', kind: 'text' },
-                { key: 'muscles', legend: 'Muscles', kind: 'text' },
-                { key: 'handSize', legend: 'Hand size', kind: 'text' },
-                { key: 'footSize', legend: 'Foot size', kind: 'text' },
-                // Which hand leads (Steve, 2026-10-26): the throwing arm in
-                // X's and O's. Right by default, as most people are.
-                { key: 'handedness', legend: 'Handedness', kind: 'text' }
-            ]
-        },
-        {
-            id: 'clothes', label: 'Clothes', frame: 'body', fields: [
-                { key: 'shirt', legend: 'Shirt', kind: 'swatch' },
-                { key: 'sleeves', legend: 'Style', kind: 'text' },
-                { key: 'jerseyNumber', legend: 'Jersey number', kind: 'number', showWhen: { field: 'sleeves', value: 'jersey' } },
-                { key: 'numberColor', legend: 'Number color', kind: 'swatch', showWhen: { field: 'sleeves', value: 'jersey' } },
-                { key: 'bottom', legend: 'Pants, skirt or shorts', kind: 'text' },
-                { key: 'bottomColor', legend: 'Color', kind: 'swatch' },
-                { key: 'shoes', legend: 'Shoes', kind: 'text', frame: 'feet' },
-                { key: 'shoeColor', legend: 'Shoe color', kind: 'swatch', frame: 'feet' }
-            ]
-        },
-        {
-            // The underlayer (Steve's QA, 2026-10-26): what shows where the
-            // legs and the arms are bare, each with a color of its own.
-            id: 'layers', label: 'Layers', frame: 'body', fields: [
-                { key: 'legwear', legend: 'Legs', kind: 'text' },
-                { key: 'legwearColor', legend: 'Legwear color', kind: 'swatch', hideWhen: { field: 'legwear', value: 'none' } },
-                { key: 'armwear', legend: 'Arms', kind: 'text' },
-                { key: 'armwearColor', legend: 'Armwear color', kind: 'swatch', hideWhen: { field: 'armwear', value: 'none' } }
-            ]
-        }
-    ],
+    /** The editor's tabs (PRD section 6): the shared editor's own, where
+     *  their layout and its history are written down, since Meme Studio
+     *  shows the same editor (2026-10-28). */
+    tabs: EDITOR_TABS,
 
     /**
      * Export my avatar (Steve, 2026-10-26; js/export.js): a picture or a

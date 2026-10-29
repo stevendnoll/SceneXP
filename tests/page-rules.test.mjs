@@ -73,6 +73,9 @@ const WITHHELD_CARDS = ['www/interstate/index.html', 'www/seedtoseed/index.html'
 // dressed and the look approved (M7).
 // Your Avatar (2026-10-23, M3) waited for its card until the studio's look
 // was approved, and left with its release on 2026-10-26.
+// Meme Studio (2026-10-27, M0) waited for its card until the boxes and the
+// figures were built and the look approved, and left with its release on
+// 2026-10-28.
 const PENDING_CARDS = ['www/starfall/index.html'];
 
 /** Pages reached only through a link somebody shares, never by browsing.

@@ -336,6 +336,16 @@ test('garden interactions: hover labels, guests, props, and the sky', async () =
   expect(dom.el('dialog-return-btn').classList.contains('hidden')).toBe(true);
   await escapeAndResume();
 
+  // The visitor's own avatar among the guests (cameo-1.0.0): its hover and
+  // its words are for the person who made it.
+  ray.hits = [hit({ isCustomer: true, isCameo: true })];
+  stepFrames(10);
+  expect(dom.el('look-label').textContent).toContain('say hello to yourself');
+  tap(canvas);
+  expect(dom.el('dialog-title').textContent).toBe("Look Who's in the Garden");
+  expect(dom.el('dialog-message').textContent).toMatch(/^(Well, look who|Fancy meeting you here|Good taste in gardens)/);
+  await escapeAndResume();
+
   // Outdoor props show their titles; discovery props tick the checklist, and
   // the far-corner shortcut teleports home and closes the card.
   const propCases = [

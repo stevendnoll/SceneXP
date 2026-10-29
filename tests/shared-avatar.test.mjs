@@ -78,7 +78,7 @@ describe('the lists', () => {
         expect(FIELD_KEYS).toEqual(['skin', 'eyes', 'hair', 'length', 'facial', 'glasses', 'build', 'shirt',
             'sleeves', 'bottom', 'bottomColor', 'shoes', 'shoeColor', 'hat', 'hatColor', 'mouth', 'lips', 'muscles',
             'facialColor', 'brows', 'eyeShape', 'nose', 'faceShape', 'cheeks', 'frameColor', 'lensColor', 'handSize', 'footSize',
-            'jerseyNumber', 'numberColor', 'legwear', 'legwearColor', 'armwear', 'armwearColor', 'handedness']);
+            'jerseyNumber', 'numberColor', 'legwear', 'legwearColor', 'armwear', 'armwearColor', 'handedness', 'jerseyName']);
         for (const [key, list] of A.FIELDS) {
             const ids = list.map((o) => o.id);
             expect(`${key}: ${new Set(ids).size}`).toBe(`${key}: ${ids.length}`);
@@ -195,9 +195,10 @@ describe('normalizeAvatar takes anything', () => {
             mouth: 'smile', lips: 'natural', muscles: 'standard',
             facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
             frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black',
-            handedness: 'right'
+            handedness: 'right', jerseyName: 'none'
         });
-        // No free text survives, whatever it was called.
+        // No free text survives, whatever it was called: the one typed field
+        // (the jersey's name, 2026-10-28) keeps only a name it can be.
         expect(a.name).toBeUndefined();
     });
 
@@ -479,13 +480,13 @@ describe('a random avatar (Surprise me, 2026-10-26)', () => {
         expect(A.normalizeAvatar(A.randomAvatar())).toEqual(A.randomAvatar(() => 0) === null ? null : expect.anything());
     });
 
-    test('a piece it can go without is worn about half the time, and every option comes up', () => {
+    test('the mixed look is the free roll: a piece it can go without is worn about half the time, and every option comes up', () => {
         const rand = rng(8);
         const seen = {};
         const none = {};
         const N = 3000;
         for (let i = 0; i < N; i++) {
-            const a = A.randomAvatar(rand);
+            const a = A.randomAvatar(rand, { look: 'mixed' });
             for (const key of FIELD_KEYS) {
                 (seen[key] = seen[key] || new Set()).add(a[key]);
                 if (a[key] === 'none') none[key] = (none[key] || 0) + 1;
@@ -508,6 +509,78 @@ describe('a random avatar (Surprise me, 2026-10-26)', () => {
         }
         // The lists hold no custom color, so none is ever drawn.
         for (const key of A.COLOR_FIELDS) for (const id of seen[key]) expect(A.CUSTOM_COLOR.test(id)).toBe(false);
+    });
+
+    test('the looks are sound: shares that sum to one, real ids, and something left to roll in every field', () => {
+        const ids = A.RANDOM_LOOKS.map((l) => l.id);
+        expect(ids).toEqual(['masculine', 'feminine', 'mixed']);
+        expect(A.RANDOM_LOOKS.reduce((t, l) => t + l.share, 0)).toBeCloseTo(1, 9);
+        for (const look of A.RANDOM_LOOKS) {
+            expect(Object.isFrozen(look)).toBe(true);
+            for (const [key, gone] of Object.entries(look.without)) {
+                const list = A.listOf(key);
+                expect(`${look.id}.${key} is a field: ${Boolean(list)}`).toBe(`${look.id}.${key} is a field: true`);
+                // A typo would set nothing aside, silently.
+                for (const id of gone) expect(`${look.id}.${key}.${id}: ${Boolean(A.optionOf(list, id))}`).toBe(`${look.id}.${key}.${id}: true`);
+                const left = list.filter((o) => !gone.includes(o.id) && o.id !== 'none');
+                expect(`${look.id}.${key} left: ${left.length > 0}`).toBe(`${look.id}.${key} left: true`);
+            }
+            for (const [key, odds] of Object.entries(look.none)) {
+                expect(`${look.id}.${key} has a none: ${Boolean(A.optionOf(A.listOf(key), 'none'))}`).toBe(`${look.id}.${key} has a none: true`);
+                expect(odds).toBeGreaterThanOrEqual(0);
+                expect(odds).toBeLessThanOrEqual(1);
+            }
+        }
+    });
+
+    test('each look keeps to itself: no facial hair on the feminine, no skirts, heels or layers on the masculine', () => {
+        const rand = rng(31);
+        const N = 1500;
+        for (const look of ['masculine', 'feminine']) {
+            const rules = A.RANDOM_LOOKS.find((l) => l.id === look);
+            let bearded = 0;
+            for (let i = 0; i < N; i++) {
+                const a = A.randomAvatar(rand, { look });
+                expect(A.normalizeAvatar(a)).toEqual(a);
+                for (const [key, gone] of Object.entries(rules.without)) {
+                    expect(`${look} ${key}: ${gone.includes(a[key]) ? a[key] : 'kept'}`).toBe(`${look} ${key}: kept`);
+                }
+                for (const [key, odds] of Object.entries(rules.none)) {
+                    if (odds === 1) expect(`${look} ${key}: ${a[key]}`).toBe(`${look} ${key}: none`);
+                }
+                if (a.facial !== 'none') bearded++;
+            }
+            // Facial hair on about half of the masculine look, and never on
+            // the feminine (Steve: "female NPCs usually don't have facial
+            // hair"). Layers never on the masculine.
+            if (look === 'masculine') expect(Math.abs(bearded / N - (1 - A.NONE_ODDS))).toBeLessThan(0.05);
+            else expect(bearded).toBe(0);
+        }
+        // A look that names nothing is rolled as usual.
+        expect(A.normalizeAvatar(A.randomAvatar(rng(2), { look: 'nobody' }))).toBeTruthy();
+    });
+
+    test('rolled by share: about one in ten is left-handed, and now and then a stranger is a real surprise', () => {
+        const rand = rng(57);
+        const N = 6000;
+        let left = 0;
+        let bearded = 0;
+        let surprise = 0;
+        const skirts = A.BOTTOMS.filter((o) => o.kind === 'skirt').map((o) => o.id);
+        for (let i = 0; i < N; i++) {
+            const a = A.randomAvatar(rand);
+            if (a.handedness === 'left') left++;
+            if (a.facial !== 'none') bearded++;
+            if (a.facial !== 'none' && skirts.includes(a.bottom)) surprise++;
+        }
+        // Not the even roll it was (half of them left-handed).
+        expect(Math.abs(left / N - A.LEFT_HANDED_ODDS)).toBeLessThan(0.02);
+        // Facial hair at the looks' own odds, weighed by their shares.
+        const expected = A.RANDOM_LOOKS.reduce((t, l) => t + l.share * (1 - (l.none.facial ?? A.NONE_ODDS)), 0);
+        expect(Math.abs(bearded / N - expected)).toBeLessThan(0.03);
+        // Only the mixed look puts a beard over a skirt: rare, never gone.
+        expect(surprise).toBeGreaterThan(0);
+        expect(surprise / N).toBeLessThan(0.04);
     });
 
     test('a generator that misbehaves still gives a real avatar', () => {
@@ -551,7 +624,7 @@ describe('the link', () => {
     test('the default\'s link is pinned, so the field order can never move under a link already sent', () => {
         expect(A.encodeLink(A.DEFAULT_AVATAR))
             .toBe('a=1.fair.darkBrown.darkBrown.short.none.none.straight.rust.long.pants.navy.classic.black.none.navy.smile.natural.standard'
-                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard.none.black.none.black.right');
+                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard.none.black.none.black.right.none');
         // A link made before the mouth and the muscles (2026-10-23) still
         // opens, its new fields at their defaults.
         expect(A.decodeLink('#a=1.deep.blue.gray.long.beard.round.curvy.teal.short.skirt.khaki.maryJane.red.cap.mustard'))
@@ -560,7 +633,7 @@ describe('the link', () => {
                 hatColor: 'mustard', mouth: 'smile', lips: 'natural', muscles: 'standard',
                 facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
                 frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black',
-                handedness: 'right' });
+                handedness: 'right', jerseyName: 'none' });
         expect(A.linkUrl(A.DEFAULT_AVATAR, 'https://www.scenexp.com/'))
             .toBe(`https://www.scenexp.com/avatar/#${A.encodeLink(A.DEFAULT_AVATAR)}`);
         expect(A.linkUrl(null, '')).toBe(`/avatar/#${A.encodeLink(null)}`);
@@ -850,5 +923,79 @@ describe('the corner chip', () => {
         // Parts the page left out are simply not touched.
         const bare = { img: { alt: '', src: '' } };
         expect(A.installChip(bare, { store }).saved).toBe(true);
+    });
+});
+
+describe('the name on the jersey\'s back (Steve\'s son, 2026-10-28)', () => {
+    test('typing makes a name: capitals, accents dropped, curly apostrophes made straight, anything else left out, twelve at most', () => {
+        const cases = [
+            ['Smith', 'SMITH'], ['van  dyke', 'VAN DYKE'], ['O’Neil', "O'NEIL"], ['José', 'JOSE'], ['Zoë', 'ZOE'],
+            ['smith-jones', 'SMITH-JONES'], ['  lead', 'LEAD'], ['<b>x</b>', 'BXB'], ['straße', 'STRASSE'],
+            ['abcdefghijklmnop', 'ABCDEFGHIJKL'], ['NONE', 'NONE'], ['de la cruz ', 'DE LA CRUZ']
+        ];
+        for (const [typed, name] of cases) expect(`${typed}: ${A.jerseyName(typed)}`).toBe(`${typed}: ${name}`);
+        // Nothing that is a name: none.
+        for (const typed of ['', '   ', '12345', '---', "'", '\u{1F600}', null, undefined, 42]) expect(A.jerseyName(typed)).toBe('none');
+        // While typing, the box keeps a space at the end for the next word.
+        expect(A.typedJerseyName('van ')).toBe('VAN ');
+        expect(A.typedJerseyName(' van')).toBe('VAN');
+        expect(A.typedJerseyName('a'.repeat(20))).toHaveLength(A.JERSEY_NAME.max);
+    });
+
+    test('only a real name is kept from anywhere; none is the default, and NONE is a name', () => {
+        expect(A.DEFAULT_AVATAR.jerseyName).toBe('none');
+        // The field is the last, appended: links made before still read.
+        expect(A.FIELDS[A.FIELDS.length - 1][0]).toBe('jerseyName');
+        for (const name of ['SMITH', "O'NEIL", 'VAN DYKE', 'SMITH-JONES', 'ABCDEFGHIJKL', 'NONE', 'X']) {
+            expect(A.normalizeAvatar({ jerseyName: name }).jerseyName).toBe(name);
+            expect(A.isJerseyName(name)).toBe(true);
+        }
+        // Lower case, too long, marks it cannot hold, spaces at the ends or
+        // twice, no letter at all, markup, and anything not a string: none.
+        for (const name of ['smith', 'ABCDEFGHIJKLM', 'SMITH!', 'SMITH.', ' SMITH', 'SMITH ', 'VAN  DYKE', '---', "'", '<B>', 'SMÍTH', 'NO\nLL', 7, null, ['SMITH'], { SMITH: 1 }]) {
+            expect(`${JSON.stringify(name)}: ${A.normalizeAvatar({ jerseyName: name }).jerseyName}`).toBe(`${JSON.stringify(name)}: none`);
+        }
+        expect(A.isJerseyName('none')).toBe(false);
+        // A scene's overrides are held to the same rule.
+        expect(A.withOverrides({}, { jerseyName: 'SMITH' }).jerseyName).toBe('SMITH');
+        expect(A.withOverrides({ jerseyName: 'SMITH' }, { jerseyName: '<i>' }).jerseyName).toBe('SMITH');
+    });
+
+    test('a link carries the name in characters a URL keeps as they are, and reads it back; an older link has none', () => {
+        const a = A.normalizeAvatar({ sleeves: 'jersey', jerseyNumber: 'n8', jerseyName: "O'NEIL VAN" });
+        const link = A.encodeLink(a);
+        expect(link.endsWith(".O%27NEIL_VAN")).toBe(true);
+        expect(link).toMatch(/^[A-Za-z0-9\-._~!$&()*+,;=:@/?%]*$/);
+        expect(link).not.toMatch(/[ ']/);
+        expect(A.decodeLink(link)).toEqual(a);
+        expect(A.decodeLink(`#${link}&m=2/x`)).toEqual(a);
+        // A browser that left the apostrophe as it is, or one that wrote the
+        // space as %20: the same name.
+        expect(A.decodeLink(link.replace('%27', "'")).jerseyName).toBe("O'NEIL VAN");
+        expect(A.decodeLink(link.replace('_', '%20')).jerseyName).toBe("O'NEIL VAN");
+        // A link from before the name: the same figure, no name.
+        const older = link.slice(0, link.lastIndexOf('.'));
+        expect(A.decodeLink(older)).toEqual({ ...a, jerseyName: 'none' });
+        // A broken or hostile name part is none; the rest still reads.
+        for (const bad of ['%E0%A4%A', '%3Cscript%3E', 'smith', 'A'.repeat(40), '..']) {
+            const back = A.decodeLink(`${older}.${bad}`);
+            expect(back.jerseyName).toBe('none');
+            expect(back.jerseyNumber).toBe('n8');
+        }
+        // The longest name still leaves the link far under its ceiling.
+        expect(A.encodeLink({ ...a, jerseyName: "O'O'O'O'O'O'" }).length).toBeLessThan(A.MAX_LINK / 2);
+    });
+
+    test('a file keeps it, a stranger never has one, and the figure in words says it', () => {
+        const a = A.normalizeAvatar({ sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n8', jerseyName: 'SMITH' });
+        expect(A.fromFile(A.toFile(a))).toEqual(a);
+        const rand = rng(5);
+        for (let i = 0; i < 300; i++) expect(A.randomAvatar(rand).jerseyName).toBe('none');
+        expect(A.describeAvatar(a)).toMatch(/a navy sports jersey with the name SMITH and the number 8,/);
+        expect(A.describeAvatar({ ...a, jerseyNumber: 'none' })).toMatch(/a navy sports jersey with the name SMITH,/);
+        expect(A.describeAvatar({ ...a, numberColor: 'gold' })).toMatch(/with the name SMITH and the number 8 in gold,/);
+        // Off the jersey the name is kept but neither drawn nor said.
+        expect(A.describeAvatar({ ...a, sleeves: 'short' })).not.toMatch(/SMITH/);
+        expect(A.normalizeAvatar({ ...a, sleeves: 'short' }).jerseyName).toBe('SMITH');
     });
 });

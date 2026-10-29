@@ -126,6 +126,7 @@ function pressEscape() {
 // Plain raycast stand-ins: main.js only walks userData/parent on these.
 const golfer = (golferKey) => ({ userData: { isGolfer: true, golferKey }, parent: null });
 const PASSERBY = { userData: { isPedestrian: true }, parent: null };
+const CAMEO = { userData: { isPedestrian: true, isCameo: true }, parent: null };
 const BG_GOLFER = { userData: { isBgGolfer: true }, parent: null };
 const prop = (propKind) => ({ userData: { isProp: true, propKind }, parent: null });
 const PIECE = {
@@ -268,6 +269,17 @@ test('clicks open every dialog kind, and four discoveries surface the nudge', as
   clickCanvas();
   expect(title.textContent).toBe('Out on the Sidewalk');
   expect(dom.el('dialog-return-btn').classList.contains('hidden')).toBe(true);
+  pressEscape();
+  await jest.advanceTimersByTimeAsync(250);
+
+  // The visitor's own avatar out on the sidewalk (cameo-1.0.0): its hover
+  // and its words are for the person who made it.
+  ray.hit = CAMEO;
+  stepFrames(10);
+  expect(dom.el('look-label').textContent).toContain('say hello to yourself');
+  clickCanvas();
+  expect(title.textContent).toBe("Look Who's at the Shore");
+  expect(dom.el('dialog-message').textContent).toMatch(/^(Well, look who|Fancy meeting you here|Good taste in boardwalks)/);
   pressEscape();
   await jest.advanceTimersByTimeAsync(250);
 

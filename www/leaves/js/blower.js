@@ -15,6 +15,7 @@
  * figure is the shared person rig with a blower in the right hand.
  */
 import { createPerson } from '../../shared/js/people-1.0.0.min.js';
+import { closeHand, gripPoint } from '../../shared/js/hands-1.0.0.min.js';
 import { PIVOT } from './finale.min.js';
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
@@ -103,7 +104,13 @@ export function stepOperator(op, aim, dt, B, area, boxes = []) {
 // (2026-10-06), since a pose on the shared rig that looks right in numbers
 // can put a hand inside the chest. Angles are for the arm on side `s`
 // (+1 the figure's left, -1 its right; the figure faces +z).
-//   carry   the right hand down at the blower's handle (the left hangs)
+//   carry   the right arm hanging straight and a little out from the side,
+//           the hand turned palm in (`twist`) and closed into a fist round
+//           the blower's handle, the knuckles' line front to back within 3
+//           degrees of level (re-solved 2026-10-28 on the real rig, Steve:
+//           the hand hovered over the blower; the fist lands at hip height,
+//           0.70 m up, and the blower's body hangs under it 5 cm or more
+//           clear of the thigh on every build). The left hangs.
 //   folded  both hands crossed in front of the chest, at 1.08 m
 //   wave    the right hand up beside the head, at 1.71 m, swinging
 //   up      both arms straight overhead, hands at 1.87 m (the dive, M3)
@@ -111,7 +118,7 @@ export function stepOperator(op, aim, dt, B, area, boxes = []) {
 //           behind (the flop, M3)
 //   down    both arms hanging (no blower)
 export const ARM_POSES = Object.freeze({
-    carry: { right: { arm: [-0.55, 0, -0.25], fore: -0.45 }, left: null },
+    carry: { right: { arm: [-0.1, 0, -0.25], fore: 0, twist: Math.PI / 2 }, left: null },
     folded: { arm: [-0.6, -1.6], fore: -1.5 },
     wave: { right: { arm: [0, 0, -2], fore: [0, 0, -1.2] }, swing: 0.5 },
     up: { arm: [-3.08, 0, -0.04] },
@@ -119,8 +126,21 @@ export const ARM_POSES = Object.freeze({
 });
 
 /**
+ * The small blower's handle (Steve, 2026-10-28: "a little round handle" on
+ * top, which the hand holds): an arch `radius` meters across the bar's line,
+ * of `thick` tube, standing on the body, its top the bar the fist closes
+ * round. The body (`body`: across, tall, long) hangs under it; the hose is
+ * `hose` meters thick.
+ */
+export const HANDHELD = Object.freeze({ radius: 0.075, thick: 0.016, body: Object.freeze([0.2, 0.26, 0.36]), hose: Object.freeze([0.035, 0.045]), handle: 0x2b2b2b });
+
+/**
  * A person holding a leaf blower whose nozzle tip sits where the jet starts
- * (B.reach ahead, B.height up, B.side to the right). Returns { group,
+ * (B.reach ahead, B.height up, B.side to the right). THE BLOWER IS HUNG FROM
+ * THE HAND (2026-10-28): the carrying pose is set once, the fist's grip
+ * (hands-1.0.0 `gripPoint`) measured where it lands on this body, and the
+ * handle built round it, so every build and hand size holds it; only the
+ * hose bends to meet the nozzle, which never moves. Returns { group,
  * update(op, blowing, time, arms, big) }: `arms` is a pose from ARM_POSES
  * ('carry' when absent), and `big` swaps in the big blower (a backpack
  * model). Away from 'carry' the blower is set down on the grass beside them.
@@ -176,36 +196,78 @@ export function createOperatorFigure(B, look, options = {}) {
         if (o.userData && o.userData.isLeg) legs.push(o);
     });
     const rest = arms.map((a) => ({ arm: a.rotation.clone(), fore: a.userData.forearm ? a.userData.forearm.rotation.clone() : null }));
+    // The carrying hand (the rig tags it), its own turn kept to give back,
+    // and the fist it closes into while it carries (hands-1.0.0).
+    const carryArm = arms.find((a) => a.userData.armSide === carrySide);
+    let carryHand = null;
+    if (carryArm) carryArm.traverse((o) => { if (!carryHand && o.userData && o.userData.isHand) carryHand = o; });
+    const handTurn = carryHand ? carryHand.rotation.y : 0;
+    let fist = null;
+    // How much further out than the pose the carrying arm swings on this
+    // body (radians), so the blower's body clears its legs and a skirt's
+    // hem (solved below).
+    let carryOut = 0;
 
-    // The blower, in the figure's own frame: a body at the right hip and a
-    // tube down to the nozzle. The big one is a backpack with a longer tube.
+    // The blower, in the figure's own frame, built round the fist's grip
+    // (measured below, once the carrying pose is set): the body under its
+    // handle and a hose out to the nozzle. The big one is a backpack whose
+    // hose runs down to a sleeve in the fist and on to the nozzle.
     const carried = new THREE.Group();
     holder.add(carried);
     const tubeTo = new THREE.Vector3(-B.side * h, B.height, B.reach);
-    function blowerModel(color, backpack) {
-        const model = new THREE.Group();
-        const body = new THREE.Mesh(
-            backpack ? new THREE.BoxGeometry(0.34, 0.46, 0.24) : new THREE.BoxGeometry(0.2, 0.26, 0.36),
-            new THREE.MeshLambertMaterial({ color }));
-        body.position.set(backpack ? 0 : -0.3 * h, backpack ? 1.15 : 0.72, backpack ? -0.24 : 0.22);
-        body.castShadow = true;
-        model.add(body);
-        const from = backpack ? new THREE.Vector3(-0.22 * h, 0.95, 0.05) : new THREE.Vector3(-0.28 * h, 0.66, 0.4);
-        const span = tubeTo.clone().sub(from);
-        const tube = new THREE.Mesh(new THREE.CylinderGeometry(backpack ? 0.045 : 0.035, backpack ? 0.06 : 0.045, span.length(), 10),
-            new THREE.MeshLambertMaterial({ color: 0x2b2b2b }));
+    const dark = new THREE.MeshLambertMaterial({ color: HANDHELD.handle });
+    /** A hose of radii `r0` to `r1` from `from` to `to`, named. */
+    const hose = (from, to, r0, r1, name) => {
+        const span = to.clone().sub(from);
+        const tube = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, span.length(), 10), dark);
         tube.position.copy(from).addScaledVector(span, 0.5);
         tube.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.clone().normalize());
         tube.castShadow = true;
-        model.add(tube);
-        model.userData.tube = tube;
+        tube.name = name;
+        return tube;
+    };
+    function blowerModel(color, backpack, grip) {
+        const model = new THREE.Group();
+        const tubes = [];
+        const H = HANDHELD;
+        if (!backpack) {
+            // The handle: an arch over the body along its length, its top
+            // the bar in the fist.
+            const handle = new THREE.Mesh(new THREE.TorusGeometry(H.radius, H.thick, 8, 18, Math.PI), dark);
+            handle.name = 'handle';
+            handle.rotation.y = Math.PI / 2;
+            handle.position.set(grip.x, grip.y - H.radius, grip.z);
+            handle.castShadow = true;
+            model.add(handle);
+        }
+        const [bw, bh, bl] = H.body;
+        const body = new THREE.Mesh(
+            backpack ? new THREE.BoxGeometry(0.34, 0.46, 0.24) : new THREE.BoxGeometry(bw, bh, bl),
+            new THREE.MeshLambertMaterial({ color }));
+        body.name = 'body';
+        // The handheld's top a little into the handle's feet.
+        if (backpack) body.position.set(0, 1.15, -0.24);
+        else body.position.set(grip.x, grip.y - H.radius - bh / 2 + 0.004, grip.z);
+        body.castShadow = true;
+        model.add(body);
+        if (backpack) {
+            // As a backpack blower is built: a flexible hose from the
+            // bottom of the pack, down behind the arm, to the back of a
+            // rigid tube the fist holds (so the hose never runs down the
+            // arm), and the tube on from the fist to the nozzle.
+            const sleeveBack = grip.clone().add(new THREE.Vector3(0, 0, -0.2));
+            const sleeveFront = grip.clone().add(new THREE.Vector3(0, 0, 0.07));
+            tubes.push(hose(new THREE.Vector3(-0.15 * h, 0.94, -0.24), sleeveBack, 0.04, 0.04, 'hose'));
+            tubes.push(hose(sleeveBack, sleeveFront, 0.045, 0.045, 'sleeve'));
+            tubes.push(hose(sleeveFront, tubeTo, 0.045, 0.06, 'tube'));
+        } else {
+            tubes.push(hose(new THREE.Vector3(grip.x, body.position.y - 0.04, body.position.z + bl / 2 - 0.02), tubeTo, H.hose[0], H.hose[1], 'tube'));
+        }
+        for (const t of tubes) model.add(t);
+        model.userData.tubes = tubes;
+        model.userData.body = body;
         return model;
     }
-    const small = blowerModel(options.blower ?? look.blower, false);
-    const bigOne = blowerModel(options.bigBlower ?? look.blower, true);
-    bigOne.visible = false;
-    carried.add(small, bigOne);
-
     const base = legs.map((l) => l.rotation.x);
     let shown = '';
     function pose(name, time) {
@@ -213,6 +275,17 @@ export function createOperatorFigure(B, look, options = {}) {
             a.rotation.copy(rest[k].arm);
             if (rest[k].fore) a.userData.forearm.rotation.copy(rest[k].fore);
         });
+        // The carrying hand is a fist round the handle only while it
+        // carries, and the rig's own open hand for everything else.
+        if (carryHand) {
+            const carrying = name === 'carry';
+            if (carrying && !fist) fist = closeHand(carryHand);
+            if (!carrying && fist) {
+                fist.open();
+                fist = null;
+            }
+            carryHand.rotation.y = carrying ? carrySide * ARM_POSES.carry.right.twist : handTurn;
+        }
         // The one-armed poses are written for the right arm; on the left
         // they are mirrored: the lift as written, the sideways angles flipped.
         const right = arms.find((a) => a.userData.armSide === carrySide);
@@ -242,10 +315,61 @@ export function createOperatorFigure(B, look, options = {}) {
             if (right.userData.forearm) right.userData.forearm.rotation.x = P.fore;
         } else if (name === 'carry' && right) {
             const P = ARM_POSES.carry.right;
-            right.rotation.set(P.arm[0], P.arm[1] * h, P.arm[2] * h);
+            right.rotation.set(P.arm[0], P.arm[1] * h, (P.arm[2] - carryOut) * h);
             if (right.userData.forearm) right.userData.forearm.rotation.x = P.fore;
         }
     }
+
+    // Where the fist closes on this body: the carrying pose set, the grip
+    // measured in the figure's own frame (the hand found by the rig's tag),
+    // or the old hip spot for a figure with no hand to find.
+    const measureGrip = () => {
+        pose('carry', 0);
+        group.updateMatrixWorld(true);
+        return fist
+            ? holder.worldToLocal(gripPoint(fist.unit).applyMatrix4(carryHand.matrixWorld))
+            : new THREE.Vector3(-0.3 * h, 0.7, 0.05);
+    };
+    // THE ARM SWINGS OUT AS FAR AS THIS BODY NEEDS (2026-10-28): the
+    // blower's body, hung under the fist, must clear the legs and a
+    // skirt's hem, which flares out as wide as the blower hangs. Measured
+    // on the drawn legs and skirt (their boxes, at the body's heights), in
+    // small steps, from the solved pose, which every pair of trousers
+    // already clears.
+    const [bodyW, bodyH] = HANDHELD.body;
+    const outward = (box) => (carrySide < 0 ? -box.min.x : box.max.x);
+    const obstacles = [];
+    person.traverse((o) => {
+        if (!o.isMesh) return;
+        for (let p = o; p && p !== person; p = p.parent) {
+            if (p.userData && (p.userData.isLeg || p.userData.isSkirt)) {
+                obstacles.push(o);
+                return;
+            }
+        }
+    });
+    let grip = measureGrip();
+    for (let k = 0; k < 16 && fist; k++) {
+        const top = grip.y - HANDHELD.radius;
+        let reach = 0;
+        for (const o of obstacles) {
+            const box = new THREE.Box3().setFromObject(o, true);
+            box.min.copy(holder.worldToLocal(box.min.clone()));
+            box.max.copy(holder.worldToLocal(box.max.clone()));
+            if (box.max.y < top - bodyH || box.min.y > top) continue;
+            reach = Math.max(reach, outward(box));
+        }
+        if (Math.abs(grip.x) - bodyW / 2 >= reach + 0.015) break;
+        carryOut += 0.03;
+        grip = measureGrip();
+    }
+    const small = blowerModel(options.blower ?? look.blower, false, grip);
+    const bigOne = blowerModel(options.bigBlower ?? look.blower, true, grip);
+    bigOne.visible = false;
+    carried.add(small, bigOne);
+    shown = 'carry';
+    // Set down, the handheld's body rests on the grass.
+    const setDown = -(small.userData.body.position.y - HANDHELD.body[1] / 2) + 0.005;
 
     function update(op, blowing, time, armsName = 'carry', big = false) {
         group.position.set(op.x, op.lift || 0, op.z);
@@ -266,15 +390,15 @@ export function createOperatorFigure(B, look, options = {}) {
         // Carried, the blower trembles while it runs. Otherwise it is set down
         // on the grass to their right.
         const carrying = armsName === 'carry';
-        small.userData.tube.visible = carrying;
-        bigOne.userData.tube.visible = carrying;
+        for (const t of [...small.userData.tubes, ...bigOne.userData.tubes]) t.visible = carrying;
         if (carrying) {
             carried.position.set(0, blowing ? 0.006 * Math.sin(time * 90) : 0, 0);
             carried.rotation.set(0, 0, 0);
         } else {
-            // On the grass: the body only, since the tube would reach into
-            // the ground. The backpack sits lower than it rides.
-            carried.position.set(-0.45 * h, big ? -1.0 : -0.62, big ? 0.35 : 0.1);
+            // On the grass: the body only (and the handheld's handle), since
+            // the hose would reach into the ground. The backpack sits lower
+            // than it rides.
+            carried.position.set(-0.45 * h, big ? -1.0 : setDown, big ? 0.35 : 0.1);
             carried.rotation.set(0, 0.4 * h, 0);
         }
     }

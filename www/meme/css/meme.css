@@ -1,0 +1,1026 @@
+/* © 2026 Continuum Commerce LLC. MIT licensed. */
+/* Meme Studio (/meme/): the stage beside a white sheet on a computer, the
+   stage pinned on top with the sheet scrolling under it on a phone. The
+   avatar page's layout and manners (calm, white, hairline borders, one
+   filled button), since the figures in the memes were made there.
+
+   The shared sheet (styles-1.0.0) brings the reset, .sr-only and the system
+   font. Everything here is this page's own, under mm- names, so nothing
+   collides with the shared sheet's id rules. */
+
+:root {
+    --mm-ink: #1d1d1f;
+    --mm-muted: #5f5f66;
+    --mm-paper: #ffffff;
+    --mm-studio: #f1efea;
+    --mm-well: #f3f1ec;
+    --mm-line: #dedad3;
+    --mm-focus: #2563d6;
+    --mm-radius: 18px;
+    /* THE CAPTION FACE (PLANNING D1, 2026-10-27): a system stack, nothing
+       fetched. Impact is on macOS, Windows and iOS. Android gets the
+       condensed fallback. Named once here and once in js/config.js
+       (`caption.font`), and tests/meme-init holds the two the same. */
+    --mm-caption-font: Impact, "Arial Narrow Bold", "Roboto Condensed", sans-serif;
+    color-scheme: light;
+}
+
+/* The shared sheet makes a scene page a fixed app with no scrolling and no
+   text selection. This page is a form beside a picture, so it scrolls on a
+   phone and its words can be selected.
+
+   THE VIEWPORT SCROLLS, NOT THE BODY (the avatar page's phone lesson,
+   2026-10-27): html's overflow is handed to the viewport, the body stays
+   `visible`, and the sticky stage sticks to the viewport rather than to a
+   body that never scrolls. tests/meme-init guards it. */
+html {
+    height: auto;
+    min-height: 100%;
+    overflow: auto;
+    background: var(--mm-studio);
+}
+
+body.mm-body {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+    background: var(--mm-studio);
+    color: var(--mm-ink);
+    -webkit-user-select: auto;
+    user-select: auto;
+}
+
+.mm-app {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 440px);
+    min-height: 100vh;
+    min-height: 100dvh;
+}
+
+.mm-app[hidden] {
+    display: none;
+}
+
+/* ---- The stage ----------------------------------------------------------- */
+
+.mm-stage {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
+    z-index: 1;
+    background: var(--mm-studio);
+}
+
+.mm-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* A sideways drag tilts the view, and an upright one still scrolls
+       the page on a phone. */
+    touch-action: pan-y;
+    cursor: pointer;
+}
+
+.mm-stage-status {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    margin: 0;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--mm-muted);
+    font-size: 14px;
+    text-align: center;
+    max-width: 80%;
+}
+
+.mm-stage-status:empty,
+.mm-stage-status[hidden] {
+    display: none;
+}
+
+/* The captions over the live panels: a canvas the stage's size, drawn the
+   way the picture is (compose.js), so the stage and the picture agree. It
+   takes no pointer: the stage under it takes the taps and the drags. */
+.mm-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+/* ---- The sheet ----------------------------------------------------------- */
+
+.mm-sheet {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+    background: var(--mm-paper);
+    box-shadow: -1px 0 0 var(--mm-line);
+    padding: 24px 32px calc(40px + env(safe-area-inset-bottom));
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.mm-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 28px;
+}
+
+/* The way back: a pill with an arrow, so it reads as a link at a glance. */
+.mm-return {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px 7px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--mm-line);
+    background: var(--mm-paper);
+    color: var(--mm-ink);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.mm-return:hover {
+    border-color: var(--mm-ink);
+}
+
+.mm-return-icon {
+    width: 16px;
+    height: 16px;
+    flex: none;
+}
+
+.mm-eyebrow {
+    color: var(--mm-muted);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.mm-heading {
+    font-size: 28px;
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 10px;
+}
+
+.mm-lede {
+    color: var(--mm-muted);
+    margin-bottom: 24px;
+}
+
+/* ---- A meme that arrived ------------------------------------------------- */
+
+/* The way to an avatar of one's own, for a visitor with none (Steve's QA,
+   2026-10-28): a warm card at the top of the sheet, found by where it is
+   and what it says. Its button is the sheet's own strong pill, never a
+   tinted one: a fill already says "chosen" here (the pressed chips). */
+.mm-start {
+    background: #fff3c9;
+    border: 1px solid #efd98c;
+    border-radius: var(--mm-radius);
+    padding: 16px 18px 18px;
+    margin-bottom: 20px;
+}
+
+.mm-start[hidden] {
+    display: none;
+}
+
+.mm-start-text {
+    margin: 0;
+    color: var(--mm-ink);
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.mm-start-note {
+    margin: 6px 0 14px;
+    color: #4a4a50;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.mm-start-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.mm-start-button:focus-visible {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 3px;
+}
+
+.mm-incoming {
+    background: var(--mm-well);
+    border-radius: var(--mm-radius);
+    padding: 16px 18px;
+    margin-bottom: 20px;
+}
+
+.mm-incoming[hidden] {
+    display: none;
+}
+
+.mm-incoming-text {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.mm-incoming .mm-row {
+    margin-top: 0;
+}
+
+/* ---- The tabs ------------------------------------------------------------ */
+
+.mm-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border-radius: 16px;
+    background: var(--mm-well);
+    margin-bottom: 18px;
+}
+
+.mm-tab {
+    min-width: 0;
+    padding: 8px 6px;
+    border: 0;
+    border-radius: 13px;
+    background: transparent;
+    color: var(--mm-muted);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mm-tab:hover {
+    color: var(--mm-ink);
+}
+
+.mm-tab[aria-selected="true"] {
+    background: var(--mm-paper);
+    color: var(--mm-ink);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.mm-panel[hidden] {
+    display: none;
+}
+
+/* ---- The picker ---------------------------------------------------------- */
+
+.mm-picker {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.mm-pick {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--mm-line);
+    border-radius: 12px;
+    background: var(--mm-paper);
+    color: var(--mm-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.mm-pick:hover {
+    border-color: var(--mm-ink);
+}
+
+.mm-pick[aria-pressed="true"] {
+    background: var(--mm-ink);
+    border-color: var(--mm-ink);
+    color: var(--mm-paper);
+}
+
+.mm-pick-glyph {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    opacity: 0.8;
+}
+
+.mm-pick-words {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.mm-pick-title {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.mm-pick-line {
+    font-size: 12px;
+    opacity: 0.75;
+}
+
+.mm-hint {
+    margin: 0 0 12px;
+}
+
+/* The view by keyboard, and the people. */
+.mm-view {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.mm-view[hidden] {
+    display: none;
+}
+
+.mm-view-btn,
+.mm-chip,
+.mm-secondary {
+    padding: 7px 12px;
+    border: 1px solid var(--mm-line);
+    border-radius: 999px;
+    background: var(--mm-paper);
+    color: var(--mm-ink);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mm-secondary {
+    padding: 13px 22px;
+    font-size: 16px;
+}
+
+.mm-secondary.mm-small {
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+.mm-person .mm-field {
+    margin: 8px 0 0;
+}
+
+.mm-person .mm-row {
+    margin-top: 8px;
+}
+
+.mm-person > .mm-secondary {
+    justify-self: start;
+    margin-top: 6px;
+}
+
+.mm-view-btn:hover,
+.mm-chip:hover,
+.mm-secondary:hover {
+    border-color: var(--mm-ink);
+}
+
+.mm-view-btn[aria-pressed="true"],
+.mm-chip[aria-checked="true"] {
+    background: var(--mm-ink);
+    border-color: var(--mm-ink);
+    color: var(--mm-paper);
+}
+
+.mm-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    grid-column: 1 / -1;
+}
+
+.mm-people {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+}
+
+.mm-person {
+    display: grid;
+    gap: 2px;
+    padding: 10px 12px;
+    border: 1px solid var(--mm-line);
+    border-radius: 12px;
+}
+
+.mm-person-role {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.mm-person-note {
+    font-size: 13px;
+    color: var(--mm-muted);
+}
+
+.mm-link {
+    color: var(--mm-ink);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.mm-link[hidden] {
+    display: none;
+}
+
+/* ---- Customize (M8): the shared avatar editor under a person's row ---------- */
+
+/* The editor's own classes (www/shared/js/avatar-editor-1.0.0.js), drawn as
+   the avatar page draws them (avatar.css), here in the sheet's colors and
+   scoped to the space it opens in, a little smaller for a row of the sheet. */
+.mm-customize {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--mm-line);
+}
+
+.mm-customize[hidden] {
+    display: none;
+}
+
+.mm-customize .mm-note {
+    margin: 0 0 12px;
+}
+
+.mm-customize .av-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px;
+    padding: 3px;
+    background: var(--mm-well);
+    border-radius: 16px;
+    margin-bottom: 16px;
+}
+
+.mm-customize .av-tab {
+    min-width: 0;
+    padding: 8px 6px;
+    border: 0;
+    border-radius: 13px;
+    background: transparent;
+    color: var(--mm-muted);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mm-customize .av-tab:hover {
+    color: var(--mm-ink);
+}
+
+.mm-customize .av-tab[aria-selected="true"] {
+    background: var(--mm-paper);
+    color: var(--mm-ink);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.mm-customize .av-tab:focus-visible {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 2px;
+}
+
+.mm-customize .av-panel[hidden],
+.mm-customize .av-group[hidden],
+.mm-customize .av-option[hidden] {
+    display: none;
+}
+
+.mm-customize .av-group {
+    border: 0;
+    margin: 0 0 18px;
+    padding: 0;
+    min-width: 0;
+}
+
+.mm-customize .av-legend {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mm-muted);
+    margin-bottom: 8px;
+    padding: 0;
+}
+
+.mm-customize .av-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.mm-customize .av-option {
+    position: relative;
+    display: inline-flex;
+    cursor: pointer;
+}
+
+/* The radio is the whole option, invisible: the swatch or the word beside
+   it shows its state. Still a real radio, so the arrow keys move through
+   the group and a screen reader hears "2 of 6". */
+.mm-customize .av-radio {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.mm-customize .av-swatch {
+    display: block;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--swatch);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
+}
+
+.mm-customize .av-radio:checked + .av-swatch {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14), 0 0 0 3px var(--mm-paper), 0 0 0 5px var(--mm-ink);
+}
+
+.mm-customize .av-word {
+    display: inline-block;
+    padding: 7px 14px;
+    border: 1px solid var(--mm-line);
+    border-radius: 999px;
+    background: var(--mm-paper);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.mm-customize .av-option:hover .av-word {
+    border-color: var(--mm-ink);
+}
+
+.mm-customize .av-radio:checked + .av-word {
+    background: var(--mm-ink);
+    border-color: var(--mm-ink);
+    color: var(--mm-paper);
+}
+
+.mm-customize .av-radio:focus-visible + .av-swatch,
+.mm-customize .av-radio:focus-visible + .av-word {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 4px;
+}
+
+/* Any color: the browser's own color input, drawn as one more swatch, a
+   rainbow until a custom color is chosen. */
+.mm-customize .av-custom {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: conic-gradient(#e94b4b, #f2c94c, #6fcf97, #2d9cdb, #9b51e0, #e94b4b);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
+    cursor: pointer;
+}
+
+.mm-customize .av-custom::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.mm-customize .av-custom::-webkit-color-swatch {
+    border: 0;
+    border-radius: 50%;
+    opacity: 0;
+}
+
+.mm-customize .av-custom::-moz-color-swatch {
+    border: 0;
+    border-radius: 50%;
+    opacity: 0;
+}
+
+.mm-customize .av-custom.is-chosen {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14), 0 0 0 3px var(--mm-paper), 0 0 0 5px var(--mm-ink);
+}
+
+.mm-customize .av-custom.is-chosen::-webkit-color-swatch {
+    opacity: 1;
+}
+
+.mm-customize .av-custom.is-chosen::-moz-color-swatch {
+    opacity: 1;
+}
+
+.mm-customize .av-custom:focus-visible {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 4px;
+}
+
+/* A typed number (a jersey's): one short box in the row's own pill. */
+.mm-customize .av-number {
+    width: 5.5em;
+    padding: 7px 14px;
+    border: 1px solid var(--mm-line);
+    border-radius: 999px;
+    background: var(--mm-paper);
+    color: inherit;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 500;
+    text-align: center;
+}
+
+.mm-customize .av-name {
+    width: min(15em, 100%);
+    padding: 7px 14px;
+    border: 1px solid var(--mm-line);
+    border-radius: 999px;
+    background: var(--mm-paper);
+    color: inherit;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.mm-customize .av-name::placeholder {
+    letter-spacing: normal;
+    text-transform: none;
+    font-weight: 500;
+}
+
+.mm-customize .av-name:focus-visible,
+.mm-customize .av-number:focus-visible {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 4px;
+}
+
+.mm-customize > .mm-secondary {
+    margin-top: 2px;
+}
+
+/* ---- The size --------------------------------------------------------------- */
+
+.mm-group {
+    border: 0;
+    padding: 0;
+    margin: 14px 0 0;
+}
+
+.mm-legend {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mm-muted);
+    margin-bottom: 6px;
+}
+
+.mm-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.mm-option {
+    position: relative;
+    display: inline-flex;
+}
+
+.mm-radio {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+}
+
+.mm-word {
+    padding: 8px 14px;
+    border: 1px solid var(--mm-line);
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mm-radio:checked + .mm-word {
+    background: var(--mm-ink);
+    border-color: var(--mm-ink);
+    color: var(--mm-paper);
+}
+
+.mm-radio:focus-visible + .mm-word {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 2px;
+}
+
+/* ---- The background color (M8) ----------------------------------------------- */
+
+.mm-tint {
+    margin: 0 0 14px;
+}
+
+.mm-tint[hidden] {
+    display: none;
+}
+
+.mm-tint .mm-group {
+    margin: 0;
+}
+
+.mm-swatch {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+/* The swatch's color comes through the CSSOM (--mm-dot), never a style
+   attribute, so the policy stays strict. */
+.mm-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--mm-dot, #888888);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.mm-option:has(.mm-color) {
+    align-items: center;
+    gap: 7px;
+    padding: 4px 14px 4px 6px;
+    border: 1px solid var(--mm-line);
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mm-color {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+}
+
+.mm-color::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.mm-color::-webkit-color-swatch {
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 50%;
+}
+
+.mm-color::-moz-color-swatch {
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 50%;
+}
+
+.mm-option:has(.mm-color.is-chosen) {
+    background: var(--mm-ink);
+    border-color: var(--mm-ink);
+    color: var(--mm-paper);
+}
+
+.mm-color:focus-visible {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 2px;
+}
+
+/* ---- The caption fields -------------------------------------------------- */
+
+.mm-field {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px 10px;
+    margin-bottom: 16px;
+}
+
+.mm-field-label {
+    grid-column: 1 / -1;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mm-muted);
+    letter-spacing: 0.02em;
+}
+
+.mm-input {
+    grid-column: 1 / -1;
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--mm-line);
+    border-radius: 12px;
+    background: var(--mm-well);
+    color: var(--mm-ink);
+    font: inherit;
+    font-size: 16px;
+}
+
+.mm-input:focus {
+    border-color: var(--mm-ink);
+    background: var(--mm-paper);
+}
+
+.mm-count {
+    grid-column: 2;
+    justify-self: end;
+    font-size: 12px;
+    color: var(--mm-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- The picture --------------------------------------------------------- */
+
+.mm-subhead {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 24px 0 10px;
+}
+
+.mm-preview {
+    display: block;
+    width: 100%;
+    max-width: 440px;
+    height: auto;
+    border-radius: 12px;
+    background: #111;
+    box-shadow: 0 1px 0 var(--mm-line);
+}
+
+.mm-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.mm-primary {
+    padding: 13px 22px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--mm-ink);
+    color: var(--mm-paper);
+    font: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mm-primary:hover {
+    background: #000;
+}
+
+.mm-primary[hidden] {
+    display: none;
+}
+
+.mm-status {
+    min-height: 1.5em;
+    margin: 16px 0 0;
+    color: var(--mm-muted);
+    font-size: 14px;
+}
+
+.mm-note {
+    color: var(--mm-muted);
+    font-size: 14px;
+    margin-top: 20px;
+}
+
+.mm-note a {
+    color: var(--mm-ink);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.mm-note[hidden] {
+    display: none;
+}
+
+/* WHAT NEXT (M7): the shared promo card (styles-1.0.0's .promo-card), built
+   for the dark end screens of the games, redrawn for this white sheet: a
+   hairline card on paper, ink for the title, the muted grey for the rest.
+   Laid out where it sits, so it is left-aligned with the sheet and not
+   centered as on an end screen. */
+.mm-next {
+    margin-top: 20px;
+}
+
+.mm-next[hidden] {
+    display: none;
+}
+
+.mm-next .promo-card {
+    max-width: none;
+    margin: 0;
+    background: var(--mm-paper);
+    border-color: var(--mm-line);
+}
+
+.mm-next .promo-card:hover,
+.mm-next .promo-card:focus-visible {
+    background: var(--mm-well);
+    border-color: var(--mm-muted);
+}
+
+.mm-next .promo-art {
+    background: var(--mm-well);
+}
+
+.mm-next .promo-eyebrow,
+.mm-next .promo-line {
+    color: var(--mm-muted);
+}
+
+.mm-next .promo-title {
+    color: var(--mm-ink);
+}
+
+.mm-next .promo-explore {
+    margin: 8px 0 0;
+    padding: 8px 0;
+    color: var(--mm-muted);
+    text-align: left;
+}
+
+.mm-next .promo-explore:hover,
+.mm-next .promo-explore:focus-visible {
+    color: var(--mm-ink);
+}
+
+/* Keyboard focus, everywhere on the sheet. */
+.mm-sheet a:focus-visible,
+.mm-sheet button:focus-visible,
+.mm-sheet input:focus-visible {
+    outline: 2px solid var(--mm-focus);
+    outline-offset: 2px;
+}
+
+/* ---- Phones -------------------------------------------------------------- */
+
+@media (max-width: 760px) {
+    .mm-app {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .mm-stage {
+        height: 46vh;
+        height: 46svh;
+    }
+
+    .mm-sheet {
+        position: relative;
+        top: auto;
+        height: auto;
+        overflow: visible;
+        /* The stage stays above the sheet (z-index), so the sheet scrolls
+           under it and the meme is always in view. */
+        border-radius: 20px 20px 0 0;
+        box-shadow: 0 -1px 0 var(--mm-line);
+        padding: 20px 20px calc(32px + env(safe-area-inset-bottom));
+    }
+
+    .mm-top {
+        margin-bottom: 18px;
+    }
+
+    .mm-heading {
+        font-size: 24px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mm-sheet {
+        scroll-behavior: auto;
+    }
+}

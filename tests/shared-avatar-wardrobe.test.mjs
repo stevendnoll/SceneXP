@@ -324,6 +324,73 @@ describe('the shirts', () => {
         expect(named(F.createAvatar({ sleeves: 'short', shirt: 'navy', jerseyNumber: 'n8' }).person, 'number')).toHaveLength(0);
     });
 
+    test('a name is set across the jersey\'s back over the number, in the number\'s color, from a bold 5 by 7 alphabet (Steve\'s son, 2026-10-28)', () => {
+        // The alphabet: A to Z, a hyphen, an apostrophe and a space, each 7
+        // rows, every letter 5 across and its own shape.
+        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+        expect(Object.keys(W.LETTERS).sort()).toEqual([...letters, ' ', "'", '-'].sort());
+        for (const [ch, rows] of Object.entries(W.LETTERS)) {
+            expect(rows).toHaveLength(7);
+            for (const row of rows) expect(`${ch} ${/^[#.]+$/.test(row) && row.length === rows[0].length}`).toBe(`${ch} true`);
+        }
+        for (const ch of letters) expect(W.LETTERS[ch][0]).toHaveLength(5);
+        expect(new Set(letters.map((ch) => W.LETTERS[ch].join('/'))).size).toBe(26);
+        // Everything avatar-1.0.0 lets a name hold has a glyph.
+        expect(A.JERSEY_NAME.pattern.source.replace(/\(\?=\.\*\[A-Z\]\)/, '')).toMatch(/\[A-Z'-\]/);
+        // The geometry: bold makes every glyph one wider, a pixel between
+        // two, centered; a letter the alphabet lacks is left out.
+        const size = (name, h) => {
+            const g = W.nameGeometry(name, h);
+            g.computeBoundingBox();
+            return { w: g.boundingBox.max.x - g.boundingBox.min.x, h: g.boundingBox.max.y - g.boundingBox.min.y, x: (g.boundingBox.max.x + g.boundingBox.min.x) / 2 };
+        };
+        expect(W.NAME_SIZE.bold).toBe(true);
+        expect(size('H', 0.07).h).toBeCloseTo(0.07, 6);
+        expect(size('H', 0.07).w).toBeCloseTo(0.06, 6);                 // 6 of 7 rows' pixels
+        expect(size('HH', 0.07).w).toBeCloseTo(0.13, 6);                // 6 + 1 + 6
+        expect(Math.abs(size('HH', 0.07).x)).toBeLessThan(1e-6);
+        expect(W.nameAspect('HH')).toBeCloseTo(13 / 7, 9);
+        expect(W.nameAspect('H8!')).toBeCloseTo(W.nameAspect('H'), 9);
+        // On the figure: one mesh named 'jerseyName' on the back, facing
+        // out, centered over the back number with clear cloth between, under
+        // the shoulders, in the number's own color.
+        const avatar = F.createAvatar({ sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n8', jerseyName: 'SMITH' });
+        const names = named(avatar.person, 'jerseyName');
+        expect(names).toHaveLength(1);
+        const torso = torsoOf(avatar);
+        torso.geometry.computeBoundingBox();
+        const tb = torso.geometry.boundingBox;
+        const middle = torso.position.y + (tb.max.y + tb.min.y) / 2;
+        const nb = boxOf(avatar.person, names[0]);
+        const back = named(avatar.person, 'number').find((n) => n.userData.side < 0);
+        const bb = boxOf(avatar.person, back);
+        expect(nb.max.z).toBeLessThan(tb.min.z);
+        expect((nb.max.y + nb.min.y) / 2).toBeCloseTo(middle + W.NAME_SIZE.center, 6);
+        expect(nb.min.y - bb.max.y).toBeGreaterThan(0.02);
+        expect(nb.max.y).toBeLessThan(torso.position.y + tb.max.y - 0.08);
+        expect(Math.abs((nb.max.x + nb.min.x) / 2)).toBeLessThan(1e-6);
+        expect(nb.max.y - nb.min.y).toBeCloseTo(W.NAME_SIZE.height, 6);
+        const facing = (mesh) => new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion())).z;
+        expect(facing(names[0])).toBeLessThan(-0.99);
+        expect(names[0].material.color.getHex()).toBe(back.material.color.getHex());
+        const gold = F.createAvatar({ sleeves: 'jersey', shirt: 'navy', jerseyName: 'NOLL', numberColor: 'gold' });
+        expect(named(gold.person, 'jerseyName')[0].material.color.getHex()).toBe(new THREE.Color(A.optionOf(A.NUMBER_COLORS, 'gold').color).getHex());
+        // A name alone, with no number: still there, in the same place.
+        expect(named(gold.person, 'number')).toHaveLength(0);
+        const alone = boxOf(gold.person, named(gold.person, 'jerseyName')[0]);
+        expect((alone.max.y + alone.min.y) / 2).toBeCloseTo(middle + W.NAME_SIZE.center, 6);
+        // A long name sets smaller rather than run off the back.
+        const long = F.createAvatar({ sleeves: 'jersey', shirt: 'navy', jerseyName: 'ABCDEFGHIJKL' });
+        const lb = boxOf(long.person, named(long.person, 'jerseyName')[0]);
+        expect(lb.max.y - lb.min.y).toBeLessThan(W.NAME_SIZE.height * 0.8);
+        expect(lb.max.x - lb.min.x).toBeLessThanOrEqual(W.torsoWidthAt(torsoOf(long), W.NAME_SIZE.center - W.NAME_SIZE.height / 2, W.NAME_SIZE.center + W.NAME_SIZE.height / 2) * W.NAME_SIZE.fit + 1e-6);
+        // Nothing for none, on another shirt, or with no letters to set.
+        expect(named(F.createAvatar({ sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n8' }).person, 'jerseyName')).toHaveLength(0);
+        expect(named(F.createAvatar({ sleeves: 'short', shirt: 'navy', jerseyName: 'SMITH' }).person, 'jerseyName')).toHaveLength(0);
+        expect(W.nameJersey(avatar.person, '', null, 0x2f4a6d)).toBeNull();
+        expect(W.nameJersey(avatar.person, '88', null, 0x2f4a6d)).toBeNull();
+    });
+
     test('every build wears every shirt: hem bands and waistbands are as wide as the torso\'s bottom, the jersey\'s stripes follow its sides, and the numbers stay on the cloth (2026-10-26)', () => {
         const builds = A.BUILDS.map((b) => b.id);
         expect(builds).toHaveLength(7);
@@ -370,6 +437,17 @@ describe('the shirts', () => {
                 const across = W.torsoWidthAt(jt, nb.min.y - jt.position.y, nb.max.y - jt.position.y);
                 expect(`${build} number: ${nb.max.x - nb.min.x <= across * W.NUMBER_SIZE.fit + 1e-6}`).toBe(`${build} number: true`);
             }
+            // Nor does the longest name, which stays clear over the number
+            // and on the back (2026-10-28).
+            const named12 = F.createAvatar({ build, sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n88', jerseyName: 'WWWWWWWWWWWW' });
+            const nt = torsoOf(named12);
+            const name = boxOf(named12.person, named(named12.person, 'jerseyName')[0]);
+            const nameAcross = W.torsoWidthAt(nt, name.min.y - nt.position.y, name.max.y - nt.position.y);
+            expect(`${build} name: ${name.max.x - name.min.x <= nameAcross * W.NAME_SIZE.fit + 1e-6}`).toBe(`${build} name: true`);
+            const backNumber = boxOf(named12.person, named(named12.person, 'number').find((m) => m.userData.side < 0));
+            expect(`${build} name over number: ${name.min.y > backNumber.max.y + 0.02}`).toBe(`${build} name over number: true`);
+            nt.geometry.computeBoundingBox();
+            expect(`${build} name on the back: ${name.max.z < nt.position.z + nt.geometry.boundingBox.min.z}`).toBe(`${build} name on the back: true`);
         }
     });
 

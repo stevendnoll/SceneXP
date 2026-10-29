@@ -169,6 +169,27 @@ test('prop taps open the dialog card and rotate its lines', async () => {
   expect(modal.classList.contains('hidden')).toBe(true);
 });
 
+test('the visitor\'s own avatar at the high-top has a card of its own, and the pings never say so', async () => {
+  const sent = [];
+  globalThis.Image = class { set src(url) { sent.push(url); } };
+  try {
+    await bootJamar();
+    const canvas = dom.el('game-canvas');
+    ray.hits = [propHit('cameo')];
+    tap(canvas);
+    expect(dom.el('dialog-title').textContent).toBe("Look Who's at the Bar");
+    expect(dom.el('dialog-message').textContent).toMatch(/^(Well, look who|Fancy meeting you here|Good taste in karaoke bars)/);
+    // A tap on it counts as the regulars: nothing about an avatar, not even
+    // that there is one, is ever in a ping (the privacy policy).
+    const taps = sent.filter((url) => url.includes('action=click-prop'));
+    expect(taps).toHaveLength(1);
+    expect(taps[0]).toContain('kind=patrons');
+    expect(sent.join(' ')).not.toContain('cameo');
+  } finally {
+    delete globalThis.Image;
+  }
+});
+
 test('the jukebox opens from a tap and a song choice closes it', async () => {
   await bootJamar();
   const canvas = dom.el('game-canvas');

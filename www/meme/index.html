@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+    <!-- Security: restrict resource loading to same-origin (no third-party scripts/styles).
+         img-src allows data: for the pictures this page draws on its own canvases. -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <!-- RELEASED 2026-10-28 (specs/meme M7): the robots tag that kept the
+         page out of search while it was built is gone, and no robots tag
+         belongs here. The page is listed in the directory (Worlds and
+         games), the promo catalog, the sitemap and llms.txt, which
+         tests/directory.test.mjs holds together. -->
+    <meta name="description" content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption, then share as a picture or as a link a friend can remix with their own avatar.">
+    <meta name="theme-color" content="#F1EFEA">
+    <meta name="author" content="Steve Noll">
+
+    <!-- PER-DEPLOYMENT BLOCK. Crawlers read these without running JavaScript,
+         so they stay literal absolute URLs naming where this page is served
+         (www.scenexp.com/meme). When serving from a new domain, update the
+         canonical, og:url, og:image, twitter:image, and the JSON-LD ids. -->
+    <link rel="canonical" href="https://www.scenexp.com/meme/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Meme Studio">
+    <meta property="og:description" content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption and share.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SceneXP">
+    <meta property="og:url" content="https://www.scenexp.com/meme/">
+    <meta property="og:locale" content="en_US">
+    <!-- THE SOCIAL CARD (M8 recapture, 2026-10-28, ?v=2): Steve's
+         screenshot of The Head Turn on its painted city block, captioned
+         MEMES, ME and WORK, converted by the house recipe (the Apple display
+         profile applied, then stripped, which a bare strip would miss by
+         2.89% RMSE; the screenshot's all-opaque alpha removed; 1200x630,
+         JPEG q92 at 4:4:4 with a WebP twin at q92 with sharp_yuv). The curve
+         was steep (JPEG 0.93, 0.78 and 0.58% RMSE at q80, 86 and 92), so q92
+         stood, 102 KB; sharp_yuv earned its 1.3 KB on the purple hair and
+         the MEMES caption (1.77 against 1.99%, 1.02 against 1.14%), 48 KB.
+         JPEG, not WebP (LinkedIn previews no WebP), and exactly one
+         og:image. og:image:alt describes THIS picture, so it is rewritten
+         with the card. tests/page-rules.test.mjs opens the file. -->
+    <meta property="og:image" content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=2">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A 3D meme on a painted city street: three figures walk toward the camera on a sidewalk, each labeled in white meme letters. MEMES, on the left, has a purple bob, a lilac top, a black mini skirt and fishnet tights. ME, in the middle, has a beard and a navy sweater and glances toward MEMES with an open mouth. WORK, on the right, frowns in a yellow beanie and a teal T-shirt.">
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Meme Studio">
+    <meta name="twitter:description" content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption and share.">
+    <meta name="twitter:image" content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=2">
+    <meta name="twitter:image:alt" content="A 3D meme on a painted city street: three figures walk toward the camera on a sidewalk, each labeled in white meme letters. MEMES, on the left, has a purple bob, a lilac top, a black mini skirt and fishnet tights. ME, in the middle, has a beard and a navy sweater and glances toward MEMES with an open mouth. WORK, on the right, frowns in a yellow beanie and a teal T-shirt.">
+
+    <!-- Structured data: a web application that is part of SceneXP.
+         JSON-LD is a data block (not executed), so it is allowed under the CSP.
+         datePublished is the release date the home card prints
+         (tests/home-dates.test.mjs holds the two together). -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "@id": "https://www.scenexp.com/meme/#app",
+      "url": "https://www.scenexp.com/meme/",
+      "name": "Meme Studio",
+      "datePublished": "2026-10-28",
+      "image": "https://www.scenexp.com/meme/assets/og-meme.jpg?v=2",
+      "description": "A browser-based 3D meme generator for SceneXP. The visitor's own avatar stars in a meme laid out as a grid of small lit 3D boxes, one for each panel. Choose a template, type a caption for each panel, add a friend's avatar or dress anyone else in it by hand, and share the result as a picture or as a link the friend can open and remix with their own avatar. Everything is made on the visitor's own device and nothing is uploaded.",
+      "applicationCategory": "EntertainmentApplication",
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires JavaScript. The 3D stage needs WebGL 2.",
+      "inLanguage": "en-US",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://www.scenexp.com/#website"
+      },
+      "isAccessibleForFree": true,
+      "author": {
+        "@type": "Person",
+        "name": "Steve Noll"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Continuum Commerce LLC"
+      }
+    }
+    </script>
+    <!-- Breadcrumbs for search results (SceneXP > this page). -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "SceneXP",
+          "item": "https://www.scenexp.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Meme Studio",
+          "item": "https://www.scenexp.com/meme/"
+        }
+      ]
+    }
+    </script>
+
+    <title>Meme Studio | SceneXP</title>
+
+    <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
+    <link rel="preload" href="css/meme.min.css?v=7" as="style">
+    <link rel="modulepreload" href="../lib/three/r186/three.min.js">
+    <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
+    <link rel="modulepreload" href="js/main.min.js">
+    <link rel="modulepreload" href="js/config.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-expressions-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-editor-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/boot-1.0.0.min.js">
+    <link rel="modulepreload" href="js/stage.min.js">
+    <link rel="modulepreload" href="js/templates.min.js">
+    <link rel="modulepreload" href="js/editor.min.js">
+    <link rel="modulepreload" href="js/state.min.js">
+    <link rel="modulepreload" href="js/remix.min.js">
+    <link rel="modulepreload" href="../shared/js/share-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/promo-1.0.0.min.js">
+    <link rel="modulepreload" href="js/compose.min.js">
+    <link rel="modulepreload" href="js/exporter.min.js">
+    <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-figure-1.0.0.min.js">
+    <link rel="modulepreload" href="js/panels.min.js">
+    <link rel="modulepreload" href="../shared/js/sharefile-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-layers-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-shapes-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-hair-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-hats-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/avatar-wardrobe-1.0.0.min.js">
+    <link rel="modulepreload" href="js/poses.min.js">
+    <link rel="modulepreload" href="../shared/js/hands-1.0.0.min.js">
+    <link rel="modulepreload" href="js/scenes/index.min.js">
+    <link rel="modulepreload" href="js/backdrops.min.js">
+    <link rel="modulepreload" href="js/scenes/plan.min.js">
+    <link rel="modulepreload" href="js/scenes/space.min.js">
+    <link rel="modulepreload" href="js/scenes/fine.min.js">
+    <link rel="modulepreload" href="js/scenes/handshake.min.js">
+    <!-- END generated modulepreload -->
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
+
+    <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
+    <link rel="stylesheet" href="css/meme.min.css?v=7">
+
+    <!-- When JS is off, the stage can't run: the static fallback below is
+         the page. A <noscript> <link> is CSP-safe (no inline styles). -->
+    <noscript>
+        <link rel="stylesheet" href="../shared/css/no-js-1.0.0.min.css">
+    </noscript>
+</head>
+
+<body class="mm-body">
+    <!-- The live page's heading, for anybody navigating by heading. The sheet
+         shows its own words, under an h2. -->
+    <h1 class="sr-only">Meme Studio</h1>
+
+    <!-- Shown when JavaScript is disabled (and read by non-rendering crawlers). -->
+    <noscript>
+        <div class="noscript-fallback">
+            <h1>Meme Studio</h1>
+            <p>This is a meme generator with you in it, and it needs JavaScript
+                to run. Your SceneXP avatar stands in each panel of a classic
+                meme layout, built as a row of small lit 3D boxes. You choose a
+                template, type a caption for each panel, and add a friend's
+                avatar if you like. Then you share the result as a picture, or
+                as a link your friend can open and remix with their own
+                avatar.</p>
+            <p>Everything is made on your own device. Nothing you type or make
+                is sent to us.</p>
+            <nav aria-label="Site sections">
+                <ul>
+                    <li><a href="/">More 3D worlds to explore at SceneXP.com</a></li>
+                    <li><a href="/avatar/">Make your avatar</a></li>
+                    <li><a href="/privacy.html">Privacy</a></li>
+                </ul>
+            </nav>
+        </div>
+    </noscript>
+
+    <!-- The page itself, shown by main.js (`hidden` keeps it out of the way
+         with JavaScript off). The stage on one side and the sheet on the
+         other on a computer; the stage on top and the sheet below on a
+         phone (PLANNING section 6.4). -->
+    <div id="meme-app" class="mm-app" hidden>
+        <div class="mm-stage">
+            <!-- The meme's panels as lit shadowboxes (js/stage.js). M0 is the
+                 empty studio; the boxes and the figures arrive in M1 and M2. -->
+            <canvas id="mm-canvas" class="mm-canvas" role="img"
+                aria-label="Your meme's panels: small lit boxes with a figure wearing your avatar's face in each"></canvas>
+            <!-- The captions as they will be drawn, over the live panels
+                 (the inputs on the sheet are what a screen reader hears). -->
+            <canvas id="mm-overlay" class="mm-overlay" aria-hidden="true"></canvas>
+            <p id="mm-stage-status" class="mm-stage-status" role="status" aria-live="polite"></p>
+        </div>
+
+        <section class="mm-sheet" aria-labelledby="mm-heading">
+            <div class="mm-top">
+                <!-- The way back, always a plain back link (the avatar page's
+                     lesson: a bare wordmark did not read as one). -->
+                <a id="mm-return" class="mm-return" href="/">
+                    <svg class="mm-return-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <span id="mm-return-text">Back to SceneXP</span>
+                </a>
+            </div>
+
+            <!-- Words first (the house habit): what this is and the one next
+                 step, before the stage has finished loading. -->
+            <p class="mm-eyebrow">Meme Studio</p>
+            <h2 id="mm-heading" class="mm-heading">Put yourself in the meme</h2>
+            <p id="mm-lede" class="mm-lede">Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a link.</p>
+
+            <!-- A visitor with no avatar of their own (Steve's QA, 2026-10-28:
+                 the way to one was a link at the foot of the People tab).
+                 The one step that makes the page theirs, at the top. Shown by
+                 main.js only while no avatar is saved, and never while a
+                 friend's meme waits on its own card, which has its own way
+                 there. The meme is kept, so it waits for the way back. -->
+            <div id="mm-start" class="mm-start" role="region" aria-labelledby="mm-start-text" hidden>
+                <p id="mm-start-text" class="mm-start-text">A visitor is standing in for you.</p>
+                <p class="mm-start-note">Make your avatar once and you'll star in every meme here. This one will be waiting when you come back.</p>
+                <a id="mm-start-avatar" class="mm-primary mm-start-button" href="/avatar/?return=/meme/">Make your avatar</a>
+            </div>
+
+            <!-- A meme that arrived by link (js/remix.js, M4): the friend's
+                 meme as made, and the one next step. Hidden otherwise. -->
+            <div id="mm-incoming" class="mm-incoming" role="region" aria-labelledby="mm-incoming-text" hidden>
+                <p id="mm-incoming-text" class="mm-incoming-text">A friend made this meme for you.</p>
+                <div class="mm-row">
+                    <button id="mm-make-mine" class="mm-primary" type="button">Make it mine</button>
+                    <button id="mm-keep-theirs" class="mm-secondary" type="button">Keep it as it is</button>
+                </div>
+                <p id="mm-incoming-note" class="mm-note" hidden>You have no avatar yet. <a class="mm-link" href="/avatar/?return=/meme/">Make yours</a>, then come back here: this meme will be waiting.</p>
+            </div>
+
+            <!-- The editor (js/editor.js, M3): three tabs. Meme holds the
+                 picker and the faces, Captions one real text input a slot,
+                 People who is in it. Arrow keys move between the tabs. -->
+            <div id="mm-editor" class="mm-editor">
+                <div id="mm-tabs" class="mm-tabs" role="tablist" aria-label="Choose what to change">
+                    <button id="mm-tab-meme" class="mm-tab" type="button" role="tab" aria-controls="mm-panel-meme" aria-selected="true">Meme</button>
+                    <button id="mm-tab-captions" class="mm-tab" type="button" role="tab" aria-controls="mm-panel-captions" aria-selected="false" tabindex="-1">Captions</button>
+                    <button id="mm-tab-people" class="mm-tab" type="button" role="tab" aria-controls="mm-panel-people" aria-selected="false" tabindex="-1">People</button>
+                </div>
+
+                <div id="mm-panel-meme" class="mm-panel" role="tabpanel" aria-labelledby="mm-tab-meme">
+                    <div id="mm-picker" class="mm-picker" role="group" aria-label="Choose a meme"></div>
+                    <!-- The background color, for a meme that offers one
+                         (js/editor.js buildTintRow). -->
+                    <div id="mm-tint" class="mm-tint" hidden></div>
+                    <p id="mm-hint" class="mm-note mm-hint" hidden>Tap a panel to step into it, and tap again to step back. Drag to tilt the view.</p>
+                    <!-- The view by keyboard: what a tap on the stage does. -->
+                    <div id="mm-view" class="mm-view" role="group" aria-label="Look at" hidden></div>
+                    <h3 class="mm-subhead">The faces</h3>
+                    <div id="mm-faces" class="mm-faces"></div>
+                </div>
+
+                <div id="mm-panel-captions" class="mm-panel" role="tabpanel" aria-labelledby="mm-tab-captions" hidden>
+                    <div id="mm-captions" class="mm-captions"></div>
+                </div>
+
+                <div id="mm-panel-people" class="mm-panel" role="tabpanel" aria-labelledby="mm-tab-people" hidden>
+                    <!-- Who is in the meme (js/editor.js buildPeople): the
+                         visitor, a friend by their avatar link or file (M5),
+                         and anyone else from the crowd, reshuffled on a press. -->
+                    <ul id="mm-people" class="mm-people"></ul>
+                    <!-- Opened by the friend's row's button. Hidden, and out
+                         of the tab order, since the button is the way to it. -->
+                    <input id="mm-friend-file" type="file" accept=".json,application/json" hidden tabindex="-1" aria-label="Open a friend's avatar file">
+                    <p id="mm-people-status" class="mm-note" role="status" aria-live="polite"></p>
+                    <!-- The avatar page's Back button returns here
+                         (?return= is checked against the promo catalog),
+                         and the meme is already kept, so it is waiting. -->
+                    <p class="mm-note"><a id="mm-make-avatar" class="mm-link" href="/avatar/?return=/meme/">Make your avatar</a></p>
+                </div>
+            </div>
+
+            <!-- The picture as it will be shared: the composite drawn small
+                 (js/exporter.js), its size, then the one filled button. -->
+            <h3 class="mm-subhead">Your picture</h3>
+            <canvas id="mm-preview" class="mm-preview" width="540" height="540" role="img" aria-label="A preview of your meme picture, with your captions and the SceneXP.com mark in the corner"></canvas>
+            <fieldset class="mm-group">
+                <legend class="mm-legend">Size</legend>
+                <div class="mm-options">
+                    <label class="mm-option"><input id="mm-size-square" class="mm-radio" type="radio" name="mm-size" value="square" checked><span class="mm-word">Square</span></label>
+                    <label class="mm-option"><input id="mm-size-portrait" class="mm-radio" type="radio" name="mm-size" value="portrait"><span class="mm-word">Portrait</span></label>
+                </div>
+            </fieldset>
+            <div class="mm-row">
+                <button id="mm-picture-save" class="mm-primary" type="button" hidden>Save picture</button>
+                <button id="mm-link" class="mm-secondary" type="button" title="A link that opens this meme, for a friend to make their own">Share link</button>
+                <button id="mm-start-over" class="mm-secondary" type="button">Start over</button>
+            </div>
+            <p class="mm-note">The link carries the meme and your avatar. Whoever opens it can put their own avatar in your place.</p>
+
+            <!-- NO VIDEO AT LAUNCH (Steve, 2026-10-28): the short vertical
+                 clip (M6) stood here, and was held back so the first release
+                 shares pictures and links only. js/exporter.js says where it
+                 is kept. -->
+            <p id="mm-status" class="mm-status" role="status" aria-live="polite"></p>
+
+            <!-- WHAT NEXT (M7): built by main.js once the first picture or
+                 link has been shared or saved, which is when a
+                 visitor has finished something. With an avatar it names the
+                 next experience (promo-1.0.0, PAIRS: X's and O's, where the
+                 avatar takes the snap). With none it names the avatar page
+                 instead, which comes back here. The directory link sits
+                 under it. -->
+            <div id="mm-next" class="mm-next" hidden></div>
+
+            <p class="mm-note mm-privacy">Made on this device. Nothing you type or make is sent to us. <a href="/privacy.html">Privacy</a></p>
+            <p class="mm-note mm-report">Seen a meme from here that should not exist? <a href="/contact.html">Please tell us</a>.</p>
+        </section>
+    </div>
+
+    <script type="module" src="../lib/three/r186/three.min.js"></script>
+    <script type="module" src="js/main.min.js"></script>
+</body>
+
+</html>

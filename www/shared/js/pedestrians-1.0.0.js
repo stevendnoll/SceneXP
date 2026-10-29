@@ -58,10 +58,20 @@ let pedestriansAreZombies = false;
 let pedestrianInDialog = null;
 let pedestrianPreviousState = null;
 
-export function createSidewalkPedestrians() {
+/**
+ * Put the passersby on the sidewalk. A `cameo` (2026-10-28) is the visitor's
+ * own avatar, from cameo-1.0.0's loadCameo built with the 'pedestrian' role:
+ * it walks in the first drawn passerby's place. A street whose pedestrians
+ * turn into zombies after dark takes no cameo (a visitor's own avatar is
+ * never made a zombie, and one calm walker among the shambling would read as
+ * a mistake), so it is walked only where zombiesAtNight is false. Without
+ * one, the passersby are exactly as before.
+ */
+export function createSidewalkPedestrians({ cameo = null } = {}) {
     applyPedestrianConfig();
     const scene = getScene();
     const { count, sidewalkZ, minX, maxX } = PEDESTRIAN_CONFIG;
+    const walker = getWorldConfig().zombiesAtNight === false ? cameo : null;
 
     // Reduce pedestrian count on mobile (half, rounded up)
     const isMobile = isMobileDevice();
@@ -96,13 +106,19 @@ export function createSidewalkPedestrians() {
         const appearance = appearances[i];
 
         // Create the pedestrian mesh
-        const pedestrian = createPerson({
-            role: 'pedestrian',
-            x: startX,
-            z: sidewalkZ,
-            rotationY: direction > 0 ? Math.PI / 2 : -Math.PI / 2,
-            ...appearance
-        });
+        let pedestrian;
+        if (i === 0 && walker) {
+            pedestrian = walker;
+            pedestrian.rotation.y = direction > 0 ? Math.PI / 2 : -Math.PI / 2;
+        } else {
+            pedestrian = createPerson({
+                role: 'pedestrian',
+                x: startX,
+                z: sidewalkZ,
+                rotationY: direction > 0 ? Math.PI / 2 : -Math.PI / 2,
+                ...appearance
+            });
+        }
 
         pedestrian.position.set(startX, 0.055, sidewalkZ);
         scene.add(pedestrian);

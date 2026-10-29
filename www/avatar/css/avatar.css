@@ -348,6 +348,13 @@ html.clean .av-app {
     cursor: pointer;
 }
 
+/* The display above outranks the browser's own rule for [hidden], so an
+   option offered only with another choice (bare legs, under a one-piece)
+   needs its own (Steve's QA, 2026-10-28: Bare legs showed all the time). */
+.av-option[hidden] {
+    display: none;
+}
+
 /* The radio itself is the whole option, invisible: the swatch or the word
    beside it shows its state. Still a real radio, so the arrow keys move
    through the group and a screen reader hears "2 of 6". */
@@ -469,6 +476,38 @@ html.clean .av-app {
 }
 
 .av-number:focus-visible {
+    outline: 2px solid var(--av-focus);
+    outline-offset: 4px;
+}
+
+/* A typed name (the jersey's back, 2026-10-28): the number's pill, wide
+   enough for twelve capitals, which it is always shown in. 16 px, so a
+   phone does not zoom in on it. */
+.av-name {
+    width: min(15em, 100%);
+    padding: 8px 16px;
+    border: 1px solid var(--av-line);
+    border-radius: 999px;
+    background: var(--av-paper);
+    color: inherit;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.av-name::placeholder {
+    letter-spacing: normal;
+    text-transform: none;
+    font-weight: 500;
+}
+
+.av-name:hover {
+    border-color: var(--av-ink);
+}
+
+.av-name:focus-visible {
     outline: 2px solid var(--av-focus);
     outline-offset: 4px;
 }

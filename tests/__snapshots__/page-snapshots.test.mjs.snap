@@ -461,7 +461,7 @@ html [lang="en"]
     title
       "Your Avatar | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/avatar.min.css?v=13" rel="preload"]
+    link [as="style" href="css/avatar.min.css?v=15" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -473,7 +473,7 @@ html [lang="en"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
     link [href="js/studio.min.js" rel="modulepreload"]
-    link [href="js/editor.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-editor-1.0.0.min.js" rel="modulepreload"]
     link [href="js/export.min.js" rel="modulepreload"]
     link [href="js/transfer.min.js" rel="modulepreload"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
@@ -489,7 +489,7 @@ html [lang="en"]
     link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/avatar.min.css?v=13" rel="stylesheet"]
+    link [href="css/avatar.min.css?v=15" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
   body.av-body
@@ -1540,6 +1540,7 @@ html [data-ui-theme="garden" lang="en"]
     link [href="../shared/js/checklist-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/cameo-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/autopilot-1.0.0.min.js" rel="modulepreload"]
     link [href="js/listings.min.js" rel="modulepreload"]
     link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
@@ -2571,6 +2572,7 @@ html [data-ui-theme="surf" lang="en"]
     link [href="../shared/js/checklist-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/cameo-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/autopilot-1.0.0.min.js" rel="modulepreload"]
     link [href="js/listings.min.js" rel="modulepreload"]
     link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
@@ -3427,60 +3429,66 @@ html [lang="en"]
               {
                 "@type": "ListItem",
                 "position": 1,
+                "url": "https://www.scenexp.com/meme/",
+                "name": "Meme Studio"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
                 "url": "https://www.scenexp.com/derby/",
                 "name": "Derby Day"
               },
               {
                 "@type": "ListItem",
-                "position": 2,
+                "position": 3,
                 "url": "https://www.scenexp.com/leaves/",
                 "name": "Leaf Blower"
               },
               {
                 "@type": "ListItem",
-                "position": 3,
+                "position": 4,
                 "url": "https://www.scenexp.com/office/",
                 "name": "Corner Office"
               },
               {
                 "@type": "ListItem",
-                "position": 4,
+                "position": 5,
                 "url": "https://www.scenexp.com/tornado/",
                 "name": "Tornado Alley"
               },
               {
                 "@type": "ListItem",
-                "position": 5,
+                "position": 6,
                 "url": "https://www.scenexp.com/xo/",
                 "name": "X's and O's"
               },
               {
                 "@type": "ListItem",
-                "position": 6,
+                "position": 7,
                 "url": "https://www.scenexp.com/garden/",
                 "name": "Fractal Garden"
               },
               {
                 "@type": "ListItem",
-                "position": 7,
+                "position": 8,
                 "url": "https://www.scenexp.com/highwater/",
                 "name": "High Water"
               },
               {
                 "@type": "ListItem",
-                "position": 8,
+                "position": 9,
                 "url": "https://www.scenexp.com/earthdefense/",
                 "name": "Earth Defense"
               },
               {
                 "@type": "ListItem",
-                "position": 9,
+                "position": 10,
                 "url": "https://www.scenexp.com/mandelbrot/",
                 "name": "The Mandelbrot Set"
               },
               {
                 "@type": "ListItem",
-                "position": 10,
+                "position": 11,
                 "url": "https://www.scenexp.com/steve/",
                 "name": "Steve's Home Office"
               }
@@ -3629,10 +3637,27 @@ html [lang="en"]
             h2#spotlight-heading
               "Featured"
             ul.spotlight-slides
-              li.spotlight-slide.is-active [aria-label="1 of 4" aria-roledescription="slide" data-slug="derby"]
+              li.spotlight-slide.is-active [aria-label="1 of 4" aria-roledescription="slide" data-slug="meme"]
+                a [href="/meme/"]
+                  div.spotlight-media
+                    img [alt="A 3D meme on a painted city street: three figures walk toward the camera on a sidewalk, each labeled in white meme letters. MEMES, on the left, has a purple bob, a lilac top, a black mini skirt and fishnet tights. ME, in the middle, has a beard and a navy sweater and glances toward MEMES with an open mouth. WORK, on the right, frowns in a yellow beanie and a teal T-shirt." decoding="async" fetchpriority="high" height="630" loading="eager" src="/meme/assets/og-meme.webp?v=2" width="1200"]
+                  div.spotlight-body
+                    p.spotlight-date
+                      "Released"
+                      time [datetime="2026-10-28"]
+                        "October 28, 2026"
+                    p.experience-eyebrow
+                      "Put yourself in the meme"
+                    h3
+                      "Meme Studio"
+                    p.spotlight-text
+                      "Your avatar stars in a 3D meme you caption yourself. Share it as a picture, or send a link a friend can remix with their own avatar."
+                    span.experience-cta
+                      "Make your meme →"
+              li.spotlight-slide [aria-label="2 of 4" aria-roledescription="slide" data-slug="derby"]
                 a [href="/derby/"]
                   div.spotlight-media
-                    img [alt="Four wooden derby cars in blue, yellow, green and orange crossing a checkered finish line side by side, seen from above in a photo finish." decoding="async" fetchpriority="high" height="630" loading="eager" src="/derby/assets/og-derby.webp?v=1" width="1200"]
+                    img [alt="Four wooden derby cars in blue, yellow, green and orange crossing a checkered finish line side by side, seen from above in a photo finish." decoding="async" height="630" loading="lazy" src="/derby/assets/og-derby.webp?v=1" width="1200"]
                   div.spotlight-body
                     p.spotlight-date
                       "Released"
@@ -3646,7 +3671,7 @@ html [lang="en"]
                       "Carve a wooden derby car, tune its axles and race it down a four-lane track. Then send it to a friend and see whose car is faster."
                     span.experience-cta
                       "Build your car →"
-              li.spotlight-slide [aria-label="2 of 4" aria-roledescription="slide" data-slug="leaves"]
+              li.spotlight-slide [aria-label="3 of 4" aria-roledescription="slide" data-slug="leaves"]
                 a [href="/leaves/"]
                   div.spotlight-media
                     img [alt="A person with a leaf blower stands on the front walk of a white board and batten house, beside a porch with pumpkins and an orange wreath on the door, while a long pile of red, orange and gold leaves sweeps across the lawn onto a blue tarp by the hedge, and the afternoon sun throws leafy tree shadows across the grass and the siding." decoding="async" height="630" loading="lazy" src="/leaves/assets/og-leaves.webp?v=1" width="1200"]
@@ -3663,7 +3688,7 @@ html [lang="en"]
                       "Twelve thousand autumn leaves and a leaf blower. Blow them onto the tarp before the clock runs out, then take a running dive into the pile."
                     span.experience-cta
                       "Grab the leaf blower →"
-              li.spotlight-slide [aria-label="3 of 4" aria-roledescription="slide" data-slug="xo"]
+              li.spotlight-slide [aria-label="4 of 4" aria-roledescription="slide" data-slug="xo"]
                 a [href="/xo/"]
                   div.spotlight-media
                     img [alt="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." decoding="async" height="630" loading="lazy" src="/xo/assets/og-xo.webp?v=1" width="1200"]
@@ -3680,27 +3705,26 @@ html [lang="en"]
                       "You are on offense for all ten plays. Pick a play, snap the ball, then throw to an open receiver or keep it and run. 500 is a perfect game."
                     span.experience-cta
                       "Call the first play →"
-              li.spotlight-slide [aria-label="4 of 4" aria-roledescription="slide" data-slug="garden"]
-                a [href="/garden/"]
-                  div.spotlight-media
-                    img [alt="Five fractal fruit trees in full summer leaf, their canopies heavy with red fruit, standing on dark mulch mounds in a walled garden plot. Each trunk has a small blue water gauge at its base. Behind the wall a pale lake sits below gray rolling hills, under a blue sky with white clouds." decoding="async" height="630" loading="lazy" src="/garden/assets/og-garden.webp?v=3" width="1200"]
-                  div.spotlight-body
-                    p.spotlight-date
-                      "Released"
-                      time [datetime="2026-08-26"]
-                        "August 26, 2026"
-                    p.experience-eyebrow
-                      "A garden you plant and tend yourself"
-                    h3
-                      "Fractal Garden"
-                    p.spotlight-text
-                      "Plant a walled garden of fractal trees and tend them through spring blossom, summer fruit, autumn color and winter snow. Every tree you plant is still standing when you come back."
-                    span.experience-cta
-                      "Plant your first tree →"
           section.experience-group [aria-labelledby="worlds-and-games" data-category="worlds"]
             h2#worlds-and-games
               "Worlds and games"
             ul.experience-grid
+              li.experience-card [data-slug="meme"]
+                a [href="/meme/"]
+                  img [alt="A 3D meme on a painted city street: three figures walk toward the camera on a sidewalk, each labeled in white meme letters. MEMES, on the left, has a purple bob, a lilac top, a black mini skirt and fishnet tights. ME, in the middle, has a beard and a navy sweater and glances toward MEMES with an open mouth. WORK, on the right, frowns in a yellow beanie and a teal T-shirt." decoding="async" height="630" loading="lazy" src="/meme/assets/og-meme.webp?v=2" width="1200"]
+                  div.experience-card-body
+                    p.experience-eyebrow
+                      "Put yourself in the meme"
+                    h3
+                      "Meme Studio"
+                    p
+                      "Your avatar stars in a meme built from small lit 3D boxes. Pick one of ten templates, type a caption for each panel, choose the faces, and bring a friend's avatar in too. Then share it as a picture, or as a link your friend can open and remix with their own avatar."
+                    p.experience-date
+                      "Released"
+                      time [datetime="2026-10-28"]
+                        "October 28, 2026"
+                    span.experience-cta
+                      "Make your meme →"
               li.experience-card [data-slug="derby"]
                 a [href="/derby/"]
                   img [alt="Four wooden derby cars in blue, yellow, green and orange crossing a checkered finish line side by side, seen from above in a photo finish." decoding="async" height="630" loading="lazy" src="/derby/assets/og-derby.webp?v=1" width="1200"]
@@ -4241,6 +4265,7 @@ html [lang="en"]
     link [href="../shared/js/checklist-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/cameo-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/autopilot-1.0.0.min.js" rel="modulepreload"]
     link [href="js/listings.min.js" rel="modulepreload"]
     link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
@@ -4605,6 +4630,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/proplist-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/cameo-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.svg" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
@@ -4821,6 +4847,7 @@ html [data-ui-theme="ember" lang="en"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="js/hedge.min.js" rel="modulepreload"]
     link [href="js/surfaces.min.js" rel="modulepreload"]
+    link [href="../shared/js/hands-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-shapes-1.0.0.min.js" rel="modulepreload"]
@@ -5167,6 +5194,251 @@ html [data-ui-theme="ember" lang="en"]
         circle [cx="12" cy="12" fill="none" r="9"]
         path [d="M9.3 9.2a2.8 2.8 0 1 1 3.4 3.3v1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"]
         circle [cx="12.1" cy="17.4" fill="currentColor" r="1.05" stroke="none"]
+    script [src="../lib/three/r186/three.min.js" type="module"]
+    script [src="js/main.min.js" type="module"]"
+`;
+
+exports[`www/meme/index.html 1`] = `
+"<!doctype html>
+html [lang="en"]
+  head
+    meta [charset="UTF-8"]
+    meta [content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="strict-origin-when-cross-origin" name="referrer"]
+    meta [content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption, then share as a picture or as a link a friend can remix with their own avatar." name="description"]
+    meta [content="#F1EFEA" name="theme-color"]
+    meta [content="Steve Noll" name="author"]
+    link [href="https://www.scenexp.com/meme/" rel="canonical"]
+    meta [content="Meme Studio" property="og:title"]
+    meta [content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption and share." property="og:description"]
+    meta [content="website" property="og:type"]
+    meta [content="SceneXP" property="og:site_name"]
+    meta [content="https://www.scenexp.com/meme/" property="og:url"]
+    meta [content="en_US" property="og:locale"]
+    meta [content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=2" property="og:image"]
+    meta [content="image/jpeg" property="og:image:type"]
+    meta [content="1200" property="og:image:width"]
+    meta [content="630" property="og:image:height"]
+    meta [content="A 3D meme on a painted city street: three figures walk toward the camera on a sidewalk, each labeled in white meme letters. MEMES, on the left, has a purple bob, a lilac top, a black mini skirt and fishnet tights. ME, in the middle, has a beard and a navy sweater and glances toward MEMES with an open mouth. WORK, on the right, frowns in a yellow beanie and a teal T-shirt." property="og:image:alt"]
+    meta [content="summary_large_image" name="twitter:card"]
+    meta [content="Meme Studio" name="twitter:title"]
+    meta [content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption and share." name="twitter:description"]
+    meta [content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=2" name="twitter:image"]
+    meta [content="A 3D meme on a painted city street: three figures walk toward the camera on a sidewalk, each labeled in white meme letters. MEMES, on the left, has a purple bob, a lilac top, a black mini skirt and fishnet tights. ME, in the middle, has a beard and a navy sweater and glances toward MEMES with an open mouth. WORK, on the right, frowns in a yellow beanie and a teal T-shirt." name="twitter:image:alt"]
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "@id": "https://www.scenexp.com/meme/#app",
+        "url": "https://www.scenexp.com/meme/",
+        "name": "Meme Studio",
+        "datePublished": "2026-10-28",
+        "image": "https://www.scenexp.com/meme/assets/og-meme.jpg?v=2",
+        "description": "A browser-based 3D meme generator for SceneXP. The visitor's own avatar stars in a meme laid out as a grid of small lit 3D boxes, one for each panel. Choose a template, type a caption for each panel, add a friend's avatar or dress anyone else in it by hand, and share the result as a picture or as a link the friend can open and remix with their own avatar. Everything is made on the visitor's own device and nothing is uploaded.",
+        "applicationCategory": "EntertainmentApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript. The 3D stage needs WebGL 2.",
+        "inLanguage": "en-US",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://www.scenexp.com/#website"
+        },
+        "isAccessibleForFree": true,
+        "author": {
+          "@type": "Person",
+          "name": "Steve Noll"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Continuum Commerce LLC"
+        }
+      }
+    script [type="application/ld+json"]
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "SceneXP",
+            "item": "https://www.scenexp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Meme Studio",
+            "item": "https://www.scenexp.com/meme/"
+          }
+        ]
+      }
+    title
+      "Meme Studio | SceneXP"
+    link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
+    link [as="style" href="css/meme.min.css?v=7" rel="preload"]
+    link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
+    link [href="js/main.min.js" rel="modulepreload"]
+    link [href="js/config.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-expressions-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-editor-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/stage.min.js" rel="modulepreload"]
+    link [href="js/templates.min.js" rel="modulepreload"]
+    link [href="js/editor.min.js" rel="modulepreload"]
+    link [href="js/state.min.js" rel="modulepreload"]
+    link [href="js/remix.min.js" rel="modulepreload"]
+    link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/compose.min.js" rel="modulepreload"]
+    link [href="js/exporter.min.js" rel="modulepreload"]
+    link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/panels.min.js" rel="modulepreload"]
+    link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-shapes-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hair-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/poses.min.js" rel="modulepreload"]
+    link [href="../shared/js/hands-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/scenes/index.min.js" rel="modulepreload"]
+    link [href="js/backdrops.min.js" rel="modulepreload"]
+    link [href="js/scenes/plan.min.js" rel="modulepreload"]
+    link [href="js/scenes/space.min.js" rel="modulepreload"]
+    link [href="js/scenes/fine.min.js" rel="modulepreload"]
+    link [href="js/scenes/handshake.min.js" rel="modulepreload"]
+    link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
+    link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
+    link [href="css/meme.min.css?v=7" rel="stylesheet"]
+    noscript
+      link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
+  body.mm-body
+    h1.sr-only
+      "Meme Studio"
+    noscript
+      div.noscript-fallback
+        h1
+          "Meme Studio"
+        p
+          "This is a meme generator with you in it, and it needs JavaScript to run. Your SceneXP avatar stands in each panel of a classic meme layout, built as a row of small lit 3D boxes. You choose a template, type a caption for each panel, and add a friend's avatar if you like. Then you share the result as a picture, or as a link your friend can open and remix with their own avatar."
+        p
+          "Everything is made on your own device. Nothing you type or make is sent to us."
+        nav [aria-label="Site sections"]
+          ul
+            li
+              a [href="/"]
+                "More 3D worlds to explore at SceneXP.com"
+            li
+              a [href="/avatar/"]
+                "Make your avatar"
+            li
+              a [href="/privacy.html"]
+                "Privacy"
+    div#meme-app.mm-app [hidden]
+      div.mm-stage
+        canvas#mm-canvas.mm-canvas [aria-label="Your meme's panels: small lit boxes with a figure wearing your avatar's face in each" role="img"]
+        canvas#mm-overlay.mm-overlay [aria-hidden="true"]
+        p#mm-stage-status.mm-stage-status [aria-live="polite" role="status"]
+      section.mm-sheet [aria-labelledby="mm-heading"]
+        div.mm-top
+          a#mm-return.mm-return [href="/"]
+            svg.mm-return-icon [aria-hidden="true" focusable="false" viewbox="0 0 24 24"]
+              path [d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4"]
+            span#mm-return-text
+              "Back to SceneXP"
+        p.mm-eyebrow
+          "Meme Studio"
+        h2#mm-heading.mm-heading
+          "Put yourself in the meme"
+        p#mm-lede.mm-lede
+          "Your avatar is already standing in the first one. Pick a meme, type your captions, and share it as a picture or a link."
+        div#mm-start.mm-start [aria-labelledby="mm-start-text" hidden role="region"]
+          p#mm-start-text.mm-start-text
+            "A visitor is standing in for you."
+          p.mm-start-note
+            "Make your avatar once and you'll star in every meme here. This one will be waiting when you come back."
+          a#mm-start-avatar.mm-primary.mm-start-button [href="/avatar/?return=/meme/"]
+            "Make your avatar"
+        div#mm-incoming.mm-incoming [aria-labelledby="mm-incoming-text" hidden role="region"]
+          p#mm-incoming-text.mm-incoming-text
+            "A friend made this meme for you."
+          div.mm-row
+            button#mm-make-mine.mm-primary [type="button"]
+              "Make it mine"
+            button#mm-keep-theirs.mm-secondary [type="button"]
+              "Keep it as it is"
+          p#mm-incoming-note.mm-note [hidden]
+            "You have no avatar yet."
+            a.mm-link [href="/avatar/?return=/meme/"]
+              "Make yours"
+            ", then come back here: this meme will be waiting."
+        div#mm-editor.mm-editor
+          div#mm-tabs.mm-tabs [aria-label="Choose what to change" role="tablist"]
+            button#mm-tab-meme.mm-tab [aria-controls="mm-panel-meme" aria-selected="true" role="tab" type="button"]
+              "Meme"
+            button#mm-tab-captions.mm-tab [aria-controls="mm-panel-captions" aria-selected="false" role="tab" tabindex="-1" type="button"]
+              "Captions"
+            button#mm-tab-people.mm-tab [aria-controls="mm-panel-people" aria-selected="false" role="tab" tabindex="-1" type="button"]
+              "People"
+          div#mm-panel-meme.mm-panel [aria-labelledby="mm-tab-meme" role="tabpanel"]
+            div#mm-picker.mm-picker [aria-label="Choose a meme" role="group"]
+            div#mm-tint.mm-tint [hidden]
+            p#mm-hint.mm-note.mm-hint [hidden]
+              "Tap a panel to step into it, and tap again to step back. Drag to tilt the view."
+            div#mm-view.mm-view [aria-label="Look at" hidden role="group"]
+            h3.mm-subhead
+              "The faces"
+            div#mm-faces.mm-faces
+          div#mm-panel-captions.mm-panel [aria-labelledby="mm-tab-captions" hidden role="tabpanel"]
+            div#mm-captions.mm-captions
+          div#mm-panel-people.mm-panel [aria-labelledby="mm-tab-people" hidden role="tabpanel"]
+            ul#mm-people.mm-people
+            input#mm-friend-file [accept=".json,application/json" aria-label="Open a friend's avatar file" hidden tabindex="-1" type="file"]
+            p#mm-people-status.mm-note [aria-live="polite" role="status"]
+            p.mm-note
+              a#mm-make-avatar.mm-link [href="/avatar/?return=/meme/"]
+                "Make your avatar"
+        h3.mm-subhead
+          "Your picture"
+        canvas#mm-preview.mm-preview [aria-label="A preview of your meme picture, with your captions and the SceneXP.com mark in the corner" height="540" role="img" width="540"]
+        fieldset.mm-group
+          legend.mm-legend
+            "Size"
+          div.mm-options
+            label.mm-option
+              input#mm-size-square.mm-radio [checked name="mm-size" type="radio" value="square"]
+              span.mm-word
+                "Square"
+            label.mm-option
+              input#mm-size-portrait.mm-radio [name="mm-size" type="radio" value="portrait"]
+              span.mm-word
+                "Portrait"
+        div.mm-row
+          button#mm-picture-save.mm-primary [hidden type="button"]
+            "Save picture"
+          button#mm-link.mm-secondary [title="A link that opens this meme, for a friend to make their own" type="button"]
+            "Share link"
+          button#mm-start-over.mm-secondary [type="button"]
+            "Start over"
+        p.mm-note
+          "The link carries the meme and your avatar. Whoever opens it can put their own avatar in your place."
+        p#mm-status.mm-status [aria-live="polite" role="status"]
+        div#mm-next.mm-next [hidden]
+        p.mm-note.mm-privacy
+          "Made on this device. Nothing you type or make is sent to us."
+          a [href="/privacy.html"]
+            "Privacy"
+        p.mm-note.mm-report
+          "Seen a meme from here that should not exist?"
+          a [href="/contact.html"]
+            "Please tell us"
+          "."
     script [src="../lib/three/r186/three.min.js" type="module"]
     script [src="js/main.min.js" type="module"]"
 `;
@@ -6051,7 +6323,7 @@ html [lang="en"]
             li
               strong
                 "Your avatar."
-              "When you save an avatar on the Your Avatar page, its choices are kept in your browser's local storage: its face, eyes, expression, hair, build, clothes and shoes, each one picked from a short list or, for a color, from your browser's color picker, with no name and nothing typed. Beside them is a small picture of its face, drawn right on your device. Nothing about your avatar is ever sent to us, and it is never in our usage pings. The page's pings, described below, count only what kind of thing was done, such as a save or a change to the hair, and never what was chosen. A link or a file you make to move it to another device holds only those choices, and the part of the link that holds them is never sent to our server. A picture or a short video you export of your avatar is made right on your device and handed only to your own share sheet or downloads folder. The Forget my avatar button on that page clears it on the spot."
+              "When you save an avatar on the Your Avatar page, its choices are kept in your browser's local storage: its face, eyes, expression, hair, build, clothes and shoes, each one picked from a short list or, for a color, from your browser's color picker. The one thing you can type is a name for the back of a sports jersey, if you want one there, and it is kept the same way, with the avatar. Beside them is a small picture of its face, drawn right on your device. Nothing about your avatar is ever sent to us, and it is never in our usage pings. The page's pings, described below, count only what kind of thing was done, such as a save or a change to the hair, and never what was chosen. A link or a file you make to move it to another device holds only those choices, a jersey's name among them, and the part of the link that holds them is never sent to our server. A picture or a short video you export of your avatar is made right on your device and handed only to your own share sheet or downloads folder. The Forget my avatar button on that page clears it on the spot."
             li
               strong
                 "Your cars in Derby Day."
@@ -6060,6 +6332,10 @@ html [lang="en"]
               strong
                 "Your home in Whitestone Home Care."
               "The Whitestone demo keeps the home you build in your browser's local storage, so it is waiting for you when you come back: the kind of home, its floors and rooms, the tasks you chose with their options, stars, and notes, your care preferences, and where you are in Maya's steps. Photos you add to a task are resized and stripped of their location before they are saved, in your browser's own database. There is no Whitestone server, so a checklist you book is kept only in this same browser too, sealed so that it opens only with its link and PIN. If you open a shared checklist on its cleaner's page, that page keeps the checklist's key, a pass that lasts for the visit, the visit's marks and add-ons, and a sealed copy for the hours of the visit, along with any photos taken as proof of the work, for up to 30 days. It also keeps a copy of its own page files so that it can reopen without a connection. Maya's Start over link clears everything the demo keeps on the spot, once you confirm it."
+            li
+              strong
+                "Your last meme in Meme Studio."
+              "Meme Studio keeps the meme you are making in your browser's local storage, so it is just as you left it when you come back: which meme you picked, your captions, the face chosen for each panel, and the avatar of a friend in it, whether you added them from their link or file or they sent you the meme, along with anyone you dressed yourself with Customize. Your own avatar is read from where the Your Avatar page keeps it, never copied. None of it is ever sent to us. The page's usage pings say only which meme you picked and what kind of thing you did, such as saving a picture, and never anything you typed. A picture you make of your meme is made right on your device and handed only to your own share sheet or downloads folder. A link you share holds the meme, your captions, your avatar and the looks of the other people you put in it, in the part of the link that is never sent to our server, by you or by the friend who opens it. The Start over button clears your meme on the spot."
             li
               strong
                 "You can remove any of it whenever you like."
@@ -6091,7 +6367,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated October 26, 2026."
+              "Last updated October 28, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand
@@ -6223,6 +6499,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="../shared/js/checklist-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/cameo-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/autopilot-1.0.0.min.js" rel="modulepreload"]
     link [href="js/listings.min.js" rel="modulepreload"]
     link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
@@ -6539,6 +6816,7 @@ html [data-ui-theme="garden" lang="en"]
     link [href="../shared/js/checklist-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/share-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/cameo-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/world-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/autopilot-1.0.0.min.js" rel="modulepreload"]
     link [href="js/listings.min.js" rel="modulepreload"]

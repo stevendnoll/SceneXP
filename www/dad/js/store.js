@@ -1779,9 +1779,11 @@ function applyBikeShorts(person, skinTone) {
  *  already built underneath, so removing the skirt mesh is enough. It is the
  *  only direct-child cylinder flaring at the waist (y ~0.63) in the person
  *  builder, so it can be identified safely without a tag. Called from
- *  main.js right after the walkers spawn. */
+ *  main.js right after the walkers spawn. The visitor's own avatar
+ *  (cameo-1.0.0) is shown exactly as made, a skirt too, so it is passed by. */
 export function dressWalkersForTheTrail() {
     getVisitorMeshes().forEach((walker) => {
+        if (walker.userData.isCameo) return;
         for (let i = walker.children.length - 1; i >= 0; i--) {
             const child = walker.children[i];
             if (child.isMesh && child.geometry && child.geometry.type === 'CylinderGeometry' &&

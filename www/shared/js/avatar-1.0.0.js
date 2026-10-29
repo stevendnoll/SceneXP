@@ -14,7 +14,10 @@
  * real option is kept, anything else becomes the default's. `normalizeAvatar`
  * takes anything at all and always returns a real figure. The two shapes
  * since: any color as six hex digits (`CUSTOM_COLOR`), and a jersey number
- * as one of a list of a hundred and two (JERSEY_NUMBERS).
+ * as one of a list of a hundred and two (JERSEY_NUMBERS). And ONE TYPED
+ * FIELD since 2026-10-28: the name on the back of a jersey (`JERSEY_NAME`),
+ * held to capitals, spaces, hyphens and apostrophes, twelve at most, so it
+ * is checked as strictly as an id.
  *
  * TODAY'S LISTS COME FROM cast-1.0.0 (frozen, Leaf Blower and Derby Day run
  * on it): the shirts, pants, skin tones, hair colors and hair lengths. The
@@ -233,6 +236,53 @@ export const NUMBER_COLORS = Object.freeze([
     { id: 'green', label: 'Green', color: 0x2f7a4f },
     { id: 'orange', label: 'Orange', color: 0xe07a1f }
 ]);
+
+/**
+ * The name on the back of a sports jersey (Steve's son, 2026-10-28: "like a
+ * real sports jersey, the player's name above the number"). THE ONE TYPED
+ * FIELD. A name is `none` (lowercase, so the name NONE is still a name) or
+ * one to `max` of A to Z, a hyphen and an apostrophe in words parted by
+ * single spaces, with a letter in it: O'NEIL, SMITH-JONES, VAN DYKE. Typing
+ * makes one through `jerseyName` (accents dropped, as JOSE for José, and the
+ * rest left out); nothing else is ever kept. Drawn by avatar-wardrobe over
+ * the back number, only on the jersey, in the number's color. In a link a
+ * space travels as `_` and an apostrophe as `%27` (every character a URL
+ * carries as it is). Steve, 2026-10-28: twelve at most, no word filter (as
+ * the meme captions), and the privacy policy says it is kept and where it
+ * goes.
+ */
+export const JERSEY_NAME = Object.freeze({ max: 12, pattern: /^(?=.*[A-Z])[A-Z'-]+(?: [A-Z'-]+)*$/ });
+
+/** The name's list, for the parts that read every field as one: `none`
+ *  alone, every other value checked by `isJerseyName`. */
+export const JERSEY_NAMES = Object.freeze([{ id: 'none', label: 'None' }]);
+
+/** Whether `value` is a name a jersey may carry (not `none`). */
+export function isJerseyName(value) {
+    return typeof value === 'string' && value.length <= JERSEY_NAME.max && JERSEY_NAME.pattern.test(value);
+}
+
+/** What typing `text` shows in the box as it goes: capitals, accents
+ *  dropped, curly apostrophes made straight, anything else left out, spaces
+ *  gathered to one and none first, `max` at most. A space may end it while
+ *  the next word is typed. */
+export function typedJerseyName(text) {
+    return String(text ?? '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/[\u2018\u2019\u02bc`\u00b4]/g, "'")
+        .replace(/[^A-Z' -]/g, '')
+        .replace(/\s+/g, ' ')
+        .replace(/^ /, '')
+        .slice(0, JERSEY_NAME.max);
+}
+
+/** The name `text` makes once typed (`typedJerseyName`, its ends trimmed),
+ *  or `none` for one that is not a name. */
+export function jerseyName(text) {
+    const name = typedJerseyName(text).trim();
+    return isJerseyName(name) ? name : 'none';
+}
 
 /** The mouth (Steve's QA, 2026-10-24: expressions, lip colors, teeth). All
  *  of them friendly: the figure has no eyebrows, so the mouth is the whole
@@ -542,7 +592,9 @@ export const FIELDS = Object.freeze([
     Object.freeze(['armwear', ARMWEAR]),
     Object.freeze(['armwearColor', LAYER_COLORS]),
     // Appended 2026-10-26 (Steve): which hand leads.
-    Object.freeze(['handedness', HANDEDNESS])
+    Object.freeze(['handedness', HANDEDNESS]),
+    // Appended 2026-10-28 (Steve's son): the name on the jersey's back.
+    Object.freeze(['jerseyName', JERSEY_NAMES])
 ]);
 
 /** The list a field's ids come from, or null for a field that is not one. */
@@ -590,7 +642,8 @@ export const DEFAULT_AVATAR = Object.freeze({
     legwearColor: 'black',
     armwear: 'none',
     armwearColor: 'black',
-    handedness: 'right'
+    handedness: 'right',
+    jerseyName: 'none'
 });
 
 const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
@@ -602,6 +655,7 @@ const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
 function valid(key, list, value) {
     if (typeof value !== 'string') return false;
     if (optionOf(list, value)) return true;
+    if (key === 'jerseyName') return isJerseyName(value);
     return COLOR_FIELDS.includes(key) && CUSTOM_COLOR.test(value);
 }
 
@@ -659,36 +713,110 @@ export function withOverrides(avatar, overrides = {}) {
 /**
  * How often a random avatar goes without a piece it could go without: a
  * field with a "none" (facial hair, glasses, a hat, legwear, armwear) is
- * none this share of the time. A straight roll over the lists would wear a
- * hat thirteen times in fourteen and glasses seven in eight: a costume
- * every time.
+ * none this share of the time, unless its look says otherwise
+ * (RANDOM_LOOKS). A straight roll over the lists would wear a hat thirteen
+ * times in fourteen and glasses seven in eight: a costume every time.
  */
 export const NONE_ODDS = 0.5;
+
+/** How often a random avatar is left-handed (Steve, 2026-10-28: an even
+ *  roll made half of them left-handed). About one person in ten is. */
+export const LEFT_HANDED_ODDS = 0.1;
+
+/**
+ * THE LOOKS A RANDOM AVATAR IS ROLLED IN (Steve, 2026-10-28: "the random
+ * avatars are a little too random"). The editor's lists are named by style,
+ * never by who wears them, and a visitor may wear anything at all. The dice
+ * are another matter: a stranger made at random reads best when the pieces
+ * go together the way they usually do, so each roll first picks a look, and
+ * the look sets aside what would usually be out of place on it. Generally
+ * speaking, not a rule about anybody: the mixed look keeps the free roll,
+ * so now and then a stranger is a real surprise ("it's funny to
+ * occasionally get a truly random avatar"). A look is never stored or said.
+ * An avatar has no field for it, and one that is saved is simply what it
+ * is.
+ *
+ *   share     how often the look is rolled (the shares sum to 1)
+ *   without   per field, the ids this look never rolls
+ *   none      per field, how often a piece it can go without is none
+ *             (NONE_ODDS unless given): 1 is never worn
+ *
+ * Steve's to tune. tests/shared-avatar holds every id here to a real
+ * option, and every field to something left to roll.
+ */
+export const RANDOM_LOOKS = Object.freeze([
+    Object.freeze({
+        id: 'masculine',
+        share: 0.45,
+        without: Object.freeze({
+            length: Object.freeze(['pigtails', 'spaceBuns', 'bob']),
+            glasses: Object.freeze(['catEye']),
+            build: Object.freeze(['curvy', 'pear']),
+            sleeves: Object.freeze(['leotard', 'bodysuit']),
+            bottom: Object.freeze(['skirt', 'longSkirt', 'miniSkirt', 'pleatedSkirt', 'tutu', 'leggings', 'shortShorts']),
+            shoes: Object.freeze(['maryJane', 'flats', 'heels', 'platforms']),
+            lips: Object.freeze(['rose', 'red', 'berry', 'softPink']),
+            eyeShape: Object.freeze(['lashes'])
+        }),
+        none: Object.freeze({ legwear: 1, armwear: 1 })
+    }),
+    Object.freeze({
+        id: 'feminine',
+        share: 0.45,
+        without: Object.freeze({
+            length: Object.freeze(['bald']),
+            build: Object.freeze(['broad']),
+            muscles: Object.freeze(['buff'])
+        }),
+        none: Object.freeze({ facial: 1 })
+    }),
+    Object.freeze({ id: 'mixed', share: 0.1, without: Object.freeze({}), none: Object.freeze({}) })
+]);
 
 /**
  * A random avatar (Steve, 2026-10-26: a "Surprise me" button on /avatar/),
  * from the lists alone, never a custom color, so it is always said in
- * words. Every field is rolled in the link's order with `rand` (0 up to 1,
- * Math.random unless given), under the editor's own rules: a field with a
- * "none" is none `NONE_ODDS` of the time and one of the rest evenly
- * otherwise; an option offered only with another (`onlyWith`, bare legs
- * under a one-piece) is in the draw only while that field, rolled before
- * it, holds one of its values; and a jersey number is drawn only on a
- * jersey (a number then, never none). Nothing is kept: the caller shows it,
- * and only Save keeps it.
+ * words. A look is rolled first (RANDOM_LOOKS, by its share, unless `look`
+ * names one), then every field in the link's order with `rand` (0 up to 1,
+ * Math.random unless given), under the editor's own rules and the look's:
+ * an id the look sets aside is never drawn; a field with a "none" is none
+ * the look's odds of the time (NONE_ODDS unless it says) and one of the
+ * rest evenly otherwise; an option offered only with another (`onlyWith`,
+ * bare legs under a one-piece) is in the draw only while that field, rolled
+ * before it, holds one of its values; a jersey number is drawn only on a
+ * jersey (a number then, never none); and the left hand leads
+ * LEFT_HANDED_ODDS of the time. Nothing is kept: the caller shows it, and
+ * only Save keeps it.
  */
-export function randomAvatar(rand = Math.random) {
+export function randomAvatar(rand = Math.random, { look = null } = {}) {
     const out = { v: AVATAR_VERSION };
     const roll = () => Math.min(0.999999, Math.max(0, Number(rand()) || 0));
     const pick = (options) => options[Math.floor(roll() * options.length)].id;
+    const chosen = RANDOM_LOOKS.find((l) => l.id === look) || lookAt(roll());
     for (const [key, list] of FIELDS) {
-        const offered = list.filter((o) => !o.onlyWith || o.onlyWith.values.includes(out[o.onlyWith.field]));
+        const without = chosen.without[key] || [];
+        const offered = list.filter((o) => !without.includes(o.id)
+            && (!o.onlyWith || o.onlyWith.values.includes(out[o.onlyWith.field])));
         const rest = offered.filter((o) => o.id !== 'none');
-        if (key === 'jerseyNumber') out[key] = out.sleeves === 'jersey' ? pick(rest) : 'none';
-        else if (rest.length < offered.length && roll() < NONE_ODDS) out[key] = 'none';
+        const noneOdds = own(chosen.none, key) ? chosen.none[key] : NONE_ODDS;
+        if (key === 'handedness') out[key] = roll() < LEFT_HANDED_ODDS ? 'left' : 'right';
+        // A stranger's jersey is never anyone's name.
+        else if (key === 'jerseyName') out[key] = 'none';
+        else if (key === 'jerseyNumber') out[key] = out.sleeves === 'jersey' ? pick(rest) : 'none';
+        else if (rest.length < offered.length && roll() < noneOdds) out[key] = 'none';
         else out[key] = pick(rest.length ? rest : offered);
     }
     return normalizeAvatar(out);
+}
+
+/** The look a roll `r` (0 up to 1) lands in, by the looks' shares. */
+function lookAt(r) {
+    let edge = 0;
+    for (const l of RANDOM_LOOKS) {
+        edge += l.share;
+        if (r < edge) return l;
+    }
+    return RANDOM_LOOKS[RANDOM_LOOKS.length - 1];
 }
 
 /**
@@ -834,11 +962,14 @@ export function describeAvatar(avatar) {
     if (a.footSize !== 'standard') limbs.push(`${word(FOOT_SIZES, a.footSize)} feet`);
     // "a straight build with a leading left hand" (nothing said of the usual).
     if (a.handedness === 'left') limbs.push('a leading left hand');
-    // "a purple sports jersey with the number 8 in white" (nothing said of
-    // the standard color, which is the jersey's own trim).
+    // "a purple sports jersey with the name SMITH and the number 8 in white"
+    // (nothing said of the standard color, which is the jersey's own trim).
     const number = optionOf(JERSEY_NUMBERS, a.jerseyNumber);
-    const numbered = a.sleeves === 'jersey' && number.digits
-        ? ` with the number ${number.digits}${a.numberColor === 'standard' ? '' : ` in ${word(NUMBER_COLORS, a.numberColor)}`}`
+    const marks = [];
+    if (a.sleeves === 'jersey' && a.jerseyName !== 'none') marks.push(`the name ${a.jerseyName}`);
+    if (a.sleeves === 'jersey' && number.digits) marks.push(`the number ${number.digits}`);
+    const numbered = marks.length
+        ? ` with ${marks.join(' and ')}${a.numberColor === 'standard' ? '' : ` in ${word(NUMBER_COLORS, a.numberColor)}`}`
         : '';
     const clothes = [
         `a ${muscles}${optionOf(BUILDS, a.build).said || word(BUILDS, a.build)} build${limbs.length ? ` with ${limbs.join(' and ')}` : ''}`,
@@ -865,14 +996,33 @@ export const LINK_VERSION = 1;
  *  every field to grow. */
 export const MAX_LINK = 768;
 
+/** A field's value as it travels in a link, and back: the jersey's name
+ *  with a space as `_` and an apostrophe as `%27` (every character one a
+ *  URL carries as it is, and none of them the link's `.`); an id as it is. */
+function linkPart(key, value) {
+    return key === 'jerseyName' ? value.replace(/ /g, '_').replace(/'/g, '%27') : value;
+}
+
+function fromLinkPart(key, part) {
+    if (key !== 'jerseyName') return part;
+    let text;
+    try {
+        text = decodeURIComponent(part);
+    } catch (e) {
+        return part;
+    }
+    return text.replace(/_/g, ' ');
+}
+
 /**
  * The avatar as a fragment, without the `#`: `a=1.fair.darkBrown...`, each
- * field's id in FIELDS order after the version. Readable, no base64, and
- * after the `#` it never reaches the server or its logs.
+ * field's id in FIELDS order after the version (the jersey's name as
+ * `linkPart` writes it). Readable, no base64, and after the `#` it never
+ * reaches the server or its logs.
  */
 export function encodeLink(avatar) {
     const a = normalizeAvatar(avatar);
-    return `a=${LINK_VERSION}.${FIELDS.map(([key]) => a[key]).join('.')}`;
+    return `a=${LINK_VERSION}.${FIELDS.map(([key]) => linkPart(key, a[key])).join('.')}`;
 }
 
 /** The whole address of the avatar page carrying `avatar`, for `origin`
@@ -895,7 +1045,7 @@ export function decodeLink(hash) {
     if (ids[0] !== String(LINK_VERSION)) return null;
     const raw = {};
     FIELDS.forEach(([key], i) => {
-        if (ids[i + 1] !== undefined) raw[key] = ids[i + 1];
+        if (ids[i + 1] !== undefined) raw[key] = fromLinkPart(key, ids[i + 1]);
     });
     return validCount(raw) > 0 ? normalizeAvatar(raw) : null;
 }

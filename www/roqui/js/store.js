@@ -181,9 +181,11 @@ const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughnes
 const foliageMaterial = new THREE.MeshStandardMaterial({ color: 0x2d5a27, roughness: 0.8, metalness: 0.0 });
 
 /**
- * Initialize the studio world
+ * Initialize the studio world. `cameo` is the visitor's own avatar, built by
+ * cameo-1.0.0's loadCameo when one is saved (null otherwise), who dances in
+ * the class with its twin in the mirror.
  */
-export function initStore() {
+export function initStore({ cameo = null } = {}) {
     const scene = getScene();
     if (!scene) {
         return;
@@ -204,7 +206,7 @@ export function initStore() {
     createSoundRig();         // PA speakers, cables, and Roqui's iPhone
     createDiscoBall();        // over the dance floor, of course
     createExterior();         // lawn, trees, and sky dressing seen through the windows
-    createRoquiAndClass();    // the instructor, her class, and their mirror twins
+    createRoquiAndClass(cameo); // the instructor, her class, and their mirror twins
 
     // Add background scenery (drifting clouds, per the config toggles)
     createBackgroundScenery();
@@ -1354,6 +1356,10 @@ const DANCER_CASTS = [
     { shirt: PALETTE.purple, pants: 0xff8fc0, skin: 0x9c6b3f, hair: 0x14100c, hairStyle: 'short', legs: 'leggings', shoes: PALETTE.lime,   headband: PALETTE.teal,  lag: 0.42, amp: 1.1,  catchup: 0.7, x: 2.6,   z: 1.7 }
 ];
 
+/** The regular whose place the visitor's own avatar takes: the back row's
+ *  east end, nearest the door and the visitor's start. */
+const CAMEO_DANCER = 5;
+
 let performers = [];   // [{ rig, twinRig, profile, paused, pose, base }]
 let roquiPerformer = null;
 
@@ -1529,16 +1535,18 @@ function buildDancer(cast) {
     return dancer;
 }
 
-/** Cache the pose-able parts of a person group: the two arm groups (tagged
- *  isArm) and the two leg groups (the untagged groups hinged at y 0.75),
- *  keyed by which side of the body they hang on. */
-function buildRig(person, baseX, baseZ, baseRotY) {
+/** Cache the pose-able parts of a person group: the two arm groups and the
+ *  two leg groups (both tagged by the rig, isArm and isLeg), keyed by which
+ *  side of the body they hang on. `body` is the person the parts hang from
+ *  when the group that moves is another: the visitor's own avatar
+ *  (cameo-1.0.0) is a group holding its person. */
+function buildRig(person, baseX, baseZ, baseRotY, body = person) {
     const rig = { group: person, baseX, baseZ, baseRotY, armP: null, armN: null, legP: null, legN: null };
-    person.children.forEach((group) => {
+    body.children.forEach((group) => {
         if (!group.isGroup) return;
         if (group.userData.isArm) {
             if (group.position.x > 0) rig.armP = group; else rig.armN = group;
-        } else if (Math.abs(group.position.y - 0.75) < 0.02) {
+        } else if (group.userData.isLeg) {
             if (group.position.x > 0) rig.legP = group; else rig.legN = group;
         }
     });
@@ -1547,7 +1555,7 @@ function buildRig(person, baseX, baseZ, baseRotY) {
     return rig;
 }
 
-function createRoquiAndClass() {
+function createRoquiAndClass(cameo) {
     performers = [];
 
     const peopleGroup = new THREE.Group();
@@ -1599,17 +1607,25 @@ function createRoquiAndClass() {
         (ROQUI_CONFIG.dancers && ROQUI_CONFIG.dancers.count) || 6,
         DANCER_CASTS.length
     );
+    // The visitor's own avatar (cameo-1.0.0), when one is saved, dances in
+    // the place of the regular nearest the door: the first one a visitor sees
+    // from the back of the room. Its twin in the mirror is a second build of
+    // the same avatar. Shown exactly as made, so none of the regulars' gym
+    // legs, sneakers or headband.
+    const cameoAt = cameo ? Math.min(CAMEO_DANCER, count - 1) : -1;
     for (let i = 0; i < count; i++) {
         const cast = DANCER_CASTS[i];
-        const dancer = buildDancer(cast);
+        const figure = i === cameoAt ? cameo : null;
+        const twinFigure = figure ? cameo.another() : null;
+        const dancer = figure ? figure.group : buildDancer(cast);
         dancer.userData.isDancer = true;
         dancer.userData.dancerIndex = i;
-        const rig = buildRig(dancer, cast.x, cast.z, Math.PI);   // facing Roqui (−Z)
+        const rig = buildRig(dancer, cast.x, cast.z, Math.PI, figure ? figure.person : dancer);   // facing Roqui (−Z)
         peopleGroup.add(dancer);
 
-        const twin = buildDancer(cast);
+        const twin = twinFigure ? twinFigure.group : buildDancer(cast);
         applyMirrorTint(twin);
-        const twinRig = buildRig(twin, cast.x, mirrorZOf(cast.z), mirrorRotYOf(Math.PI));
+        const twinRig = buildRig(twin, cast.x, mirrorZOf(cast.z), mirrorRotYOf(Math.PI), twinFigure ? twinFigure.person : twin);
         peopleGroup.add(twin);
 
         performers.push({

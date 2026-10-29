@@ -133,6 +133,7 @@ function pressEscape() {
 const HOST = { userData: { isShopkeeper: true }, parent: null };
 const CYCLIST = { userData: { isCyclist: true }, parent: null };
 const WALKER = { userData: { isCustomer: true }, parent: null };
+const CAMEO = { userData: { isCustomer: true, isCameo: true }, parent: null };
 const prop = (propKind) => ({ userData: { isProp: true, propKind }, parent: null });
 const PIECE = {
   userData: {
@@ -200,7 +201,7 @@ test('pointer lock starts play, the crosshair hover cycles targets, and Escape p
   expect(dom.el('look-label').textContent).toContain('greet the rider');
   ray.hit = WALKER;
   stepFrames(10);
-  expect(dom.el('look-label').textContent).toContain('chat with the customer');
+  expect(dom.el('look-label').textContent).toContain('chat with a walker');
   ray.hit = null;
   stepFrames(10);
   expect(dom.el('look-label').classList.contains('visible')).toBe(false);
@@ -264,6 +265,17 @@ test('clicks open every dialog kind, and four discoveries surface the nudge', as
   clickCanvas();
   expect(title.textContent).toBe('Out for a Walk');
   expect(dom.el('dialog-return-btn').classList.contains('hidden')).toBe(true);
+  pressEscape();
+  await jest.advanceTimersByTimeAsync(250);
+
+  // The visitor's own avatar out walking (cameo-1.0.0): its hover and its
+  // words are for the person who made it.
+  ray.hit = CAMEO;
+  stepFrames(10);
+  expect(dom.el('look-label').textContent).toContain('say hello to yourself');
+  clickCanvas();
+  expect(title.textContent).toBe("Look Who's Out Walking");
+  expect(message.textContent).toMatch(/^(Well, look who|Fancy meeting you here|Out for a stroll)/);
   pressEscape();
   await jest.advanceTimersByTimeAsync(250);
 

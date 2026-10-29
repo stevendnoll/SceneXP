@@ -214,6 +214,40 @@ describe('initGalleryVisitors', () => {
     expect(npcs.initGalleryVisitors(10)).toHaveLength(3);
   });
 
+  test('a cameo (the visitor\'s own avatar) takes the first spot in place of a drawn visitor', () => {
+    npcs.setWanderWaypoints(SPOTS);
+    const cameo = new StubGroup();
+    cameo.userData = { isCameo: true, isCustomer: true };
+    const meshes = npcs.initGalleryVisitors(3, { cameo });
+    expect(meshes).toHaveLength(3);
+    expect(meshes[0]).toBe(cameo);
+    // Where, and facing what, the first drawn visitor would have.
+    expect(cameo.position).toMatchObject({ x: SPOTS[0].x, y: 0.055, z: SPOTS[0].z });
+    expect(cameo.rotation.y).toBeCloseTo(Math.atan2(SPOTS[0].lookAtX - SPOTS[0].x, SPOTS[0].lookAtZ - SPOTS[0].z), 10);
+    expect(cameo.parent.name).toBe('galleryVisitors');
+    // Only the other two are drawn.
+    expect(personLog.calls).toHaveLength(2);
+    expect(meshes.slice(1).every((m) => m !== cameo && m.userData.role === 'customer')).toBe(true);
+  });
+
+  test('a cameo wanders like the others, kept at the floor height every visitor walks at', () => {
+    npcs.setWanderWaypoints(SPOTS);
+    const cameo = new StubGroup();
+    npcs.initGalleryVisitors(2, { cameo });
+    const start = { x: cameo.position.x, z: cameo.position.z };
+    for (let i = 0; i < 40; i++) npcs.updateCustomerAI(PLAYER, 0.25);
+    expect(Math.hypot(cameo.position.x - start.x, cameo.position.z - start.z)).toBeGreaterThan(0.5);
+    expect(Math.abs(cameo.position.y - 0.055)).toBeLessThan(0.02);
+  });
+
+  test('without a cameo, or with no room for anyone, every visitor is drawn as before', () => {
+    npcs.setWanderWaypoints(SPOTS);
+    npcs.initGalleryVisitors(3, {});
+    expect(personLog.calls).toHaveLength(3);
+    npcs.setWanderWaypoints([]);
+    expect(npcs.initGalleryVisitors(3, { cameo: new StubGroup() })).toEqual([]);
+  });
+
   test('an experience-supplied skin tone palette overrides the design pool tones', () => {
     worldState.config.visitors = { skinTones: [0x123456] };
     npcs.setWanderWaypoints(SPOTS);
