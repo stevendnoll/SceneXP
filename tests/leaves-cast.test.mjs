@@ -248,7 +248,7 @@ describe('on the real three.js', () => {
         };
         const tubeOf = (fig) => {
             let tube = null;
-            fig.group.traverse((o) => { if (o.userData && o.userData.tube) tube = o.userData.tube; });
+            fig.group.traverse((o) => { if (o.name === 'tube' && o.visible && o.parent.visible) tube = o; });
             return new THREE.Vector3().setFromMatrixPosition(tube.matrixWorld);
         };
         const op = { x: 0, z: 0, heading: 0, speed: 0, stride: 0 };
@@ -277,6 +277,99 @@ describe('on the real three.js', () => {
         left.group.updateMatrixWorld(true);
         expect(tubeOf(left).x).toBeCloseTo(-tubeOf(right).x, 6);
         expect(tubeOf(right).x).toBeLessThan(0);
+    });
+
+    test('the hand closes round the blower\'s handle on every body, which hangs clear of the leg, and the nozzle never moves (Steve, 2026-10-28)', async () => {
+        const F = await import('../www/shared/js/avatar-figure-1.0.0.js');
+        const A = await import('../www/shared/js/avatar-1.0.0.js');
+        const Hd = await import('../www/shared/js/hands-1.0.0.js');
+        const B = C.blower;
+        const op = { x: 0, z: 0, heading: 0, speed: 0, stride: 0 };
+        const bodies = [
+            ['the default', { ...A.DEFAULT_AVATAR }, 'right'],
+            ...A.BUILDS.map((b) => [b.id, { ...A.DEFAULT_AVATAR, build: b.id }, 'right']),
+            ['buff', { ...A.DEFAULT_AVATAR, build: 'broad', muscles: 'buff' }, 'right'],
+            ...A.HAND_SIZES.map((s) => [`${s.id} hands`, { ...A.DEFAULT_AVATAR, handSize: s.id }, 'right']),
+            // A skirt's hem flares as wide as the blower hangs: the arm
+            // swings out further to clear it (the knee-length one by 10 cm).
+            ['a skirt', { ...A.DEFAULT_AVATAR, build: 'full', bottom: 'skirt' }, 'right'],
+            ['a long skirt', { ...A.DEFAULT_AVATAR, build: 'curvy', bottom: 'longSkirt' }, 'right'],
+            ['a pleated skirt', { ...A.DEFAULT_AVATAR, build: 'pear', bottom: 'pleatedSkirt' }, 'right'],
+            ['left-handed', { ...A.DEFAULT_AVATAR, handedness: 'left' }, 'left'],
+            ['the cast\'s figure', K.personConfig(K.DEFAULT_CHOICE), 'right']
+        ];
+        for (const [name, look, hand] of bodies) {
+            const person = look.v ? F.createAvatar(look, { role: 'operator', extra: { shoulderRound: 0.4 } }).person : look;
+            const fig = Op.createOperatorFigure(B, C.look, { person, hand });
+            fig.update(op, false, 0, 'carry');
+            fig.group.updateMatrixWorld(true);
+            let fist = null;
+            let handle = null;
+            let body = null;
+            let tube = null;
+            const legs = [];
+            fig.group.traverse((o) => {
+                if (o.userData && o.userData.isHand && o.userData.shape === 'fist') fist = o;
+                if (o.isMesh && o.parent && o.parent.visible) {
+                    if (o.name === 'handle') handle = o;
+                    if (o.name === 'body' && o.geometry.parameters.depth === Op.HANDHELD.body[2]) body = o;
+                    if (o.name === 'tube') tube = o;
+                }
+                if (o.userData && (o.userData.isLeg || o.userData.isSkirt)) legs.push(o);
+            });
+            expect(`${name}: fist ${Boolean(fist)}`).toBe(`${name}: fist true`);
+            // The bar's top is the fist's own grip, within a few millimeters.
+            const unit = fist.userData.handUnit;
+            const grip = Hd.gripPoint(unit).applyMatrix4(fist.matrixWorld);
+            const top = new THREE.Vector3(0, Op.HANDHELD.radius, 0).applyMatrix4(handle.matrixWorld);
+            expect(`${name}: grip off the bar ${grip.distanceTo(top) < 0.004}`).toBe(`${name}: grip off the bar true`);
+            // The knuckles' line runs along the bar, front to back, near level.
+            const knuckles = new THREE.Vector3(1, 0, 0).applyQuaternion(fist.getWorldQuaternion(new THREE.Quaternion()));
+            expect(`${name}: knuckles along the bar ${Math.abs(knuckles.z) > Math.cos(0.15)}`).toBe(`${name}: knuckles along the bar true`);
+            // The body hangs under the handle and clear of the leg (or skirt).
+            const bb = new THREE.Box3().setFromObject(body, true);
+            for (const leg of legs) {
+                const lb = new THREE.Box3().setFromObject(leg, true);
+                expect(`${name}: body in the leg ${bb.intersectsBox(lb)}`).toBe(`${name}: body in the leg false`);
+            }
+            expect(bb.min.y).toBeGreaterThan(0.2);
+            // The hose ends at the nozzle, where the jet starts, on every body.
+            const end = new THREE.Vector3(0, tube.geometry.parameters.height / 2, 0).applyMatrix4(tube.matrixWorld);
+            const side = hand === 'left' ? 1 : -1;
+            expect(`${name}: nozzle ${end.distanceTo(new THREE.Vector3(side * B.side, B.height, B.reach)) < 1e-6}`).toBe(`${name}: nozzle true`);
+            // Any other pose opens the hand again.
+            fig.update(op, false, 0, 'wave');
+            let shape = null;
+            fig.group.traverse((o) => { if (o === fist) shape = o.userData.shape; });
+            expect(`${name}: ${shape}`).toBe(`${name}: open`);
+        }
+    });
+
+    test('the backpack\'s hose drops behind the arm to a tube the fist holds, and on to the same nozzle (2026-10-28)', () => {
+        const fig = Op.createOperatorFigure(C.blower, C.look, { person: K.personConfig(K.DEFAULT_CHOICE) });
+        fig.update({ x: 0, z: 0, heading: 0, speed: 0, stride: 0 }, false, 0, 'carry', true);
+        fig.group.updateMatrixWorld(true);
+        const named = {};
+        let fist = null;
+        let upper = null;
+        fig.group.traverse((o) => {
+            if (o.isMesh && o.parent && o.parent.visible && ['hose', 'sleeve', 'tube'].includes(o.name)) named[o.name] = o;
+            if (o.userData && o.userData.isHand && o.userData.shape === 'fist') fist = o;
+            if (o.userData && o.userData.isArm && o.userData.armSide === -1) upper = o;
+        });
+        expect(Object.keys(named).sort()).toEqual(['hose', 'sleeve', 'tube']);
+        // The fist holds the sleeve.
+        const sb = new THREE.Box3().setFromObject(named.sleeve, true);
+        const fb = new THREE.Box3().setFromObject(fist, true);
+        expect(sb.intersectsBox(fb)).toBe(true);
+        // The hose stays behind the arm: every point of it is behind the
+        // arm's own back at its height (none runs down through the arm).
+        const ab = new THREE.Box3();
+        upper.traverse((o) => { if (o.isMesh && !o.userData.isHand) ab.union(new THREE.Box3().setFromObject(o, true)); });
+        const hb = new THREE.Box3().setFromObject(named.hose, true);
+        expect(hb.max.z).toBeLessThan(ab.min.z + 0.02);
+        const end = new THREE.Vector3(0, named.tube.geometry.parameters.height / 2, 0).applyMatrix4(named.tube.matrixWorld);
+        expect(end.distanceTo(new THREE.Vector3(-C.blower.side, C.blower.height, C.blower.reach))).toBeLessThan(1e-6);
     });
 
     test('the chosen skin, hair, shirt and pants are what is drawn', () => {

@@ -274,10 +274,23 @@ describe('his figure, on the real three.js', () => {
         expect(right.x).toBeLessThan(-0.3);
     });
 
-    test('carrying, the right hand is down at the blower and the left hangs at the side', () => {
-        const { left, right } = hands('carry');
-        expect(right.y).toBeLessThan(1);
-        expect(right.z).toBeGreaterThan(0.25);
+    test('carrying, the right hand is down at the side, a fist on the blower\'s handle, and the left hangs (2026-10-28)', () => {
+        const { fig, left, right } = hands('carry');
+        // Down at the hip, out from the side, no longer reaching forward.
+        expect(right.y).toBeLessThan(0.85);
+        expect(right.x).toBeLessThan(-0.25);
+        expect(Math.abs(right.z)).toBeLessThan(0.12);
         expect(left.y).toBeLessThan(0.9);
+        // The hand is a fist, and the handle's bar runs through it.
+        let hand = null;
+        let handle = null;
+        fig.group.traverse((o) => {
+            if (o.userData && o.userData.isHand && o.userData.shape === 'fist') hand = o;
+            if (o.name === 'handle' && o.parent && o.parent.visible) handle = o;
+        });
+        expect(hand).not.toBeNull();
+        const top = new THREE.Vector3(0, Op.HANDHELD.radius, 0).applyMatrix4(handle.matrixWorld);
+        const hb = new THREE.Box3().setFromObject(hand, true);
+        expect(hb.containsPoint(top)).toBe(true);
     });
 });

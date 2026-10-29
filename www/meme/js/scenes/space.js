@@ -17,8 +17,9 @@ export const SPACE = Object.freeze({
      *  (chunky, a ring round the muzzle, a low sight on top, no real firearm's
      *  shape), in the hand's own frame, which the pose's twist stands
      *  thumb up (poses.js): the barrel along the fingers' -y out past the
-     *  knuckles of the fist (hands.js): the frame `body` [across, along,
-     *  deep] meters sitting `over` the fist's top and reaching `ahead` of
+     *  knuckles of the fist (the shared hands-1.0.0.js): the frame `body`
+     *  [across, along, deep] meters sitting `over` the fist's top and
+     *  reaching `ahead` of
      *  the hand's middle back over the knuckles, a low `sight` on it, the
      *  `grip` [thick, long, deep] down through the fist and out below it,
      *  raked back `rake` radians, `barrel` out of the frame's front.

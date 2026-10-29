@@ -1,8 +1,11 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
- * hands.js - hand shapes for a pose (Steve's QA, 2026-10-28: "a big part
- * of the meme is in the point", then "a custom hand rig that really looks
- * like the avatar is using its index finger"). The shared rig draws its
+ * hands.js - hand shapes for a pose, made for Meme Studio (Steve's QA,
+ * 2026-10-28: "a big part of the meme is in the point", then "a custom hand
+ * rig that really looks like the avatar is using its index finger") and
+ * promoted here the same day for Leaf Blower, whose operator grips the
+ * blower's handle in the fist (a second scene customizing the figure's
+ * hands: Steve's rule, NPC customization belongs here). The shared rig draws its
  * hand as ONE mesh (people-1.0.0 `handGeometry`: a palm, four fingers and
  * a thumb), so these are second geometries in the same frame, swapped onto
  * the hand mesh of the arm that leads: the hand's middle at the origin,
@@ -11,7 +14,8 @@
  *
  *   fist      the fingers curled into a block under the palm, the thumb
  *             laid over them on the inner side: for a thing held (the
- *             blaster), the barrel out past the knuckles
+ *             meme's blaster, its barrel out past the knuckles; the leaf
+ *             blower's handle, through the curled fingers at `gripPoint`)
  *   pointing  the fist with the index out straight and long, a cartoon's
  *             point, drawn a little larger than the rig's hand
  *   open      the rig's own hand at that larger size, for the other
@@ -22,7 +26,7 @@
  * capsules, bent), which read as a lumpy palm at panel size.
  */
 
-import { HAND, handGeometry, mergeParts } from '../../shared/js/people-1.0.0.min.js';
+import { HAND, handGeometry, mergeParts } from './people-1.0.0.min.js';
 
 /** The shapes' measures in hand units (people-1.0.0 HAND): the curled
  *  fingers' block `knuckles` wide, `curl` tall and `deep` toward the palm;
@@ -85,6 +89,49 @@ export function fistGeometry(unit, inner, { index = false } = {}) {
         place(new THREE.CapsuleGeometry(r * unit, body * unit, 3, 8), [middle.x, middle.y, middle.z], new THREE.Euler().setFromQuaternion(q));
     }
     return mergeParts(parts);
+}
+
+/**
+ * Where a bar held in the fist passes, in the hand's own frame (`unit`
+ * meters a hand unit, as `fistGeometry` was built): the middle of the
+ * curled fingers' block. A bar through it runs along the hand's x, the
+ * knuckles' line (Leaf Blower's handle, 2026-10-28).
+ */
+export function gripPoint(unit) {
+    const pd = FIST.deep * 0.7;
+    const palmBottom = HAND.palmTop - HAND.palm[1];
+    const curlMid = palmBottom - FIST.curl / 2 + 0.15;
+    return new THREE.Vector3(0, curlMid * unit, (-FIST.deep / 2 + pd / 2) * unit);
+}
+
+/**
+ * A rig hand (the mesh people-1.0.0 tags `isHand`) closed into a fist at
+ * `scale` times its own size, the thumb on the rig's inner side, found from
+ * the arm it hangs from: for a scene that has the person, not an avatar
+ * figure (Leaf Blower's operator). Returns `{ hand, unit, open() }`, `open`
+ * giving back the rig's own hand, or null for a mesh that is not one.
+ */
+export function closeHand(hand, { scale = 1 } = {}) {
+    if (!hand || !hand.userData || !hand.userData.isHand) return null;
+    let arm = hand.parent;
+    while (arm && !(arm.userData && arm.userData.isArm)) arm = arm.parent;
+    const inner = arm && arm.userData.armSide > 0 ? -1 : 1;
+    const unit = (hand.userData.handUnit || HAND.unit) * scale;
+    const own = hand.geometry;
+    const fist = fistGeometry(unit, inner);
+    hand.geometry = fist;
+    hand.userData.shape = 'fist';
+    return {
+        hand,
+        unit,
+        open() {
+            if (hand.geometry === fist) {
+                hand.geometry = own;
+                fist.dispose();
+            }
+            hand.userData.shape = 'open';
+        }
+    };
 }
 
 /** The pointing hand's geometry: the fist with the index out. */

@@ -21,7 +21,7 @@
 import { createAvatar } from '../../shared/js/avatar-figure-1.0.0.min.js';
 import { expressionOverrides, applyExpression } from '../../shared/js/avatar-expressions-1.0.0.min.js';
 import { armsFor, headTurnFor, legsFor, nodFor, POINTING, FISTED, ENLARGED, STRIDE } from './poses.min.js';
-import { pointWith, fistWith, openWith } from './hands.min.js';
+import { pointWith, fistWith, openWith } from '../../shared/js/hands-1.0.0.min.js';
 import { SCENES } from './scenes/index.min.js';
 import { paintTexture, haloTexture, tintOf } from './backdrops.min.js';
 

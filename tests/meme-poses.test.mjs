@@ -155,7 +155,7 @@ test('the point puts the hand out to the leading side at chest height, the forea
 });
 
 test('a pointing hand swaps the leading hand\'s geometry for a fist with the index out, larger, and leaves the other hand', async () => {
-    const Hd = await import('../www/meme/js/hands.js');
+    const Hd = await import('../www/shared/js/hands-1.0.0.js');
     const figure = F.createAvatar({});
     const before = Hd.handOf(figure, 'left');
     const other = Hd.handOf(figure, 'right');

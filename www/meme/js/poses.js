@@ -32,8 +32,9 @@
  *             here is the visitor's; the friend's hand needs 0.91, which
  *             the template gives as the figure's own `twist`)
  *   point     the arm out to the figure's own side and forward at chest
- *             height, the forearm, and so the index (hands.js), pointing
- *             that way: solved for the left arm, the hand at
+ *             height, the forearm, and so the index (the shared
+ *             hands-1.0.0.js), pointing that way: solved for the left
+ *             arm, the hand at
  *             (0.62, 1.27, 0.37), the forearm along (0.67, 0.17, 0.72)
  *   aim       the arm straight out in front at shoulder height, a little
  *             across the body, for a thing held: the hand at
@@ -72,9 +73,10 @@ export const ARM_POSES = Object.freeze({
 });
 
 /** The poses that swap the leading hand for the pointing one, and for
- *  the fist (hands.js). The twists above were solved so the thumb is up
- *  on each (2026-10-28): the point's index then shows in profile, and a
- *  thing held in the fist stands upright, its barrel past the knuckles. */
+ *  the fist (the shared hands-1.0.0.js). The twists above were solved so
+ *  the thumb is up on each (2026-10-28): the point's index then shows in
+ *  profile, and a thing held in the fist stands upright, its barrel past
+ *  the knuckles. */
 export const POINTING = Object.freeze(['point']);
 export const FISTED = Object.freeze(['aim']);
 
