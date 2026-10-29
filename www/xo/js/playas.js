@@ -67,6 +67,22 @@ export function labelOf(id) {
     return slotOf(id).label;
 }
 
+/**
+ * LEFT OUT OF THE PLAYBOOK'S LIST (Steve, 2026-10-29). Linemen 4 to 6 come on
+ * only for the heavier sets, 8, 5 and 3 of the seventeen plays, so a visitor
+ * who picked one from a list would spend most of the game on the sideline.
+ * They are still players: a tap on one in a heavy formation chooses him, and
+ * the list then carries him too, so it never disagrees with the field.
+ */
+const UNLISTED = new Set(['x4', 'x5', 'x6']);
+
+/** The slots the playbook's list offers, with `current` among them whatever
+ *  it is. */
+export function listedSlots(current = DEFAULT_SLOT) {
+    const now = normalizeSlot(current);
+    return SLOTS.filter((s) => !UNLISTED.has(s.id) || s.id === now);
+}
+
 /** The welcome card's line for a visitor with an avatar. The quarterback keeps
  *  the sentence it has had since M7. */
 export function playingLine(id) {

@@ -1096,6 +1096,10 @@ describe('the keyboard', () => {
         // because the row it presses only exists during a replay.
         expect(keyAction('V')).toBe('view');
         expect(keyAction('v')).toBe('view');
+        // P is Play as (specs/xo-photos-plan), before the snap, and only for a
+        // visitor with an avatar: the row it presses exists nowhere else.
+        expect(keyAction('P')).toBe('playas');
+        expect(keyAction('p')).toBe('playas');
     });
 
     /**
@@ -1107,7 +1111,8 @@ describe('the keyboard', () => {
         // J joined 2026-09-23 with the visitor's jump. Space is not listed
         // twice: the snap and the jump share it and are never on screen
         // together, which is the row's business rather than this table's.
-        const keys = ['A', 'B', 'C', 'D', ' ', 'S', 'Q', 'K', 'V', 'J'];
+        // P joined 2026-10-29 with Play as.
+        const keys = ['A', 'B', 'C', 'D', ' ', 'S', 'Q', 'K', 'V', 'J', 'P'];
         const seen = new Map();
         for (const key of keys) {
             const act = keyAction(key);
@@ -1116,9 +1121,9 @@ describe('the keyboard', () => {
             expect(had === undefined || had === act).toBe(true);
             seen.set(key, act);
         }
-        // Snap has three keys and the rest have one each, so ten keys reach
-        // eight actions.
-        expect(new Set(seen.values()).size).toBe(8);
+        // Snap has three keys and the rest have one each, so eleven keys reach
+        // nine actions.
+        expect(new Set(seen.values()).size).toBe(9);
     });
 
     test('and every letter that means something on screen has a control', () => {

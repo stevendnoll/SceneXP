@@ -54,7 +54,7 @@ import {
     clearActions, showResult, hideResult, announce, showWelcome, showHelp, showSkipReplay,
     showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
     hideMilestoneTitle, showSkipOpening, setOpeningTitle, hideOpeningTitle, hideWelcome,
-    showInFlight, setJumpCue,
+    showInFlight, setJumpCue, showPick, setPickChoice,
 } from './hud.min.js';
 import { openingFrame, planOpening, castAt, propsAt } from './opening.min.js';
 import { initColorsCard, showColorsCard, colorsCardOpen } from './colors-ui.min.js';
@@ -85,7 +85,7 @@ import {
 import {
     initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings, setPlayAs,
 } from './playbook-ui.min.js';
-import { isSlot, SLOTS, playingLine, DEFAULT_SLOT } from './playas.min.js';
+import { isSlot, SLOTS, playingLine, DEFAULT_SLOT, labelOf, slotOf } from './playas.min.js';
 import {
     installCardFocusTrap, installCardScrollReset, getProofOfWork,
 } from '../../shared/js/boot-1.0.0.min.js';
@@ -123,6 +123,16 @@ const cycle = {
      * only stops the camera, see `animate`.
      */
     reading: false,
+    /**
+     * CHOOSING A PLAYER OFF THE FIELD (specs/xo-photos-plan, Step 2), before
+     * the snap: `{ at }`, the slot the choice is on, or null. Not a phase
+     * either: the formation holds, and the pre-snap row comes back after.
+     * `pickedAt` is `state.elapsed` at the last choice, for the tap guard, and
+     * `glow` the spot left on whoever was chosen, `{ slot, left }` or null.
+     */
+    pick: null,
+    pickedAt: -Infinity,
+    glow: null,
     held: 0,
     accumulator: 0,
     playNumber: 0,        // 1 to CFG.rules.playsPerGame
@@ -918,6 +928,13 @@ function onSnap() {
      */
     playSound('hike');
 
+    // The spot left on a player just chosen goes with the snap. The spot is
+    // where a play ENDS, and it must not stand anywhere during one.
+    if (cycle.pick || cycle.glow) {
+        cycle.pick = null;
+        cycle.glow = null;
+        hideSpot();
+    }
     snap(cycle.play);
     visit.plays += 1;
     report('snap', { outcome: calledFields() });
@@ -1872,6 +1889,7 @@ function stepCycle(delta) {
         // player faces the other team (QA item 12).
         syncFigures(cycle.play.game.objects, delta, { presnap: true });
         showBall(cycle.play.game.objects, delta);
+        tendPickSpot(delta);
         return;
     }
     if (cycle.phase === 'live') {
@@ -2197,6 +2215,11 @@ function toScreen(x, y, z) {
 /** Who can be tapped right now, and what tapping them does. */
 function tapTargets() {
     if (!cycle.play) return [];
+    // CHOOSING A PLAYER: everybody who can be chosen, and every ring breathes,
+    // which is what says the whole field is pressable now.
+    if (cycle.phase === 'presnap' && cycle.pick) {
+        return pickable().map((position) => ({ position, act: () => choosePick(position) }));
+    }
     if (cycle.phase === 'presnap') return [{ position: 'qb', act: onSnap }];
     if (cycle.phase === 'live' && !cycle.play.game.throwTo && !cycle.play.game.runForYourLife) {
         return [
@@ -2331,29 +2354,51 @@ function onCanvasPointer(event) {
     // figures is a hunt for no reason. The quarterback stays tappable because
     // he is still the one under the finger most of the time, and the marker
     // under him still breathes, so the gesture the 2D game taught still works.
-    if (cycle.phase === 'presnap') {
+    //
+    // NOT WHILE A PLAYER IS BEING CHOSEN, when a tap is the choice, and not
+    // for a moment after one (`pick.guard`): a double tap or a finger that
+    // bounced would otherwise choose a player and start the play in one go.
+    if (cycle.phase === 'presnap' && !cycle.pick) {
         event.preventDefault();
+        if (state.elapsed - cycle.pickedAt < CFG.pick.guard) return;
         onSnap();
         return;
     }
 
-    const targets = tapTargets();
-    if (!targets.length) return;
+    const best = nearestTarget(event.clientX, event.clientY);
+    if (!best) return;
+    event.preventDefault();
+    best.act();
+}
 
+/**
+ * WHOEVER IS NEAREST THE POINTER, of everybody who can be tapped right now,
+ * or null. The rule the 2D game taught: no radius, the nearest wins.
+ */
+function nearestTarget(clientX, clientY) {
     let best = null;
-    for (const target of targets) {
+    for (const target of tapTargets()) {
         const figure = figureFor(target.position);
         if (!figure || !figure.visible) continue;
         for (const [x, y, z] of tapProbes(figure)) {
             const at = toScreen(x, y, z);
             if (!at) continue;
-            const d = Math.hypot(at.x - event.clientX, at.y - event.clientY);
+            const d = Math.hypot(at.x - clientX, at.y - clientY);
             if (!best || d < best.d) best = { d, target };
         }
     }
-    if (!best) return;
-    event.preventDefault();
-    best.target.act();
+    return best ? best.target : null;
+}
+
+/**
+ * WHILE CHOOSING A PLAYER, THE CHOICE FOLLOWS THE POINTER, so a mouse shows
+ * who a click would choose before it is made. Not for a finger: a touch has
+ * nothing to show before it lands, and it lands on a choice.
+ */
+function onCanvasHover(event) {
+    if (!cycle.pick || event.pointerType === 'touch') return;
+    const best = nearestTarget(event.clientX, event.clientY);
+    if (best) pickAt(best.position);
 }
 
 /**
@@ -2447,6 +2492,11 @@ async function init() {
     setStandingReach(standingReach());
     initHud({
         onSnap, onThrow, onRun, onNext, onChangePlay,
+        // Play as (specs/xo-photos-plan, Step 2), only with an avatar to move.
+        canPlayAs: () => Boolean(visitorAvatar),
+        onPlayAs: openPick,
+        onPickCancel: cancelPick,
+        onPickChoose: () => choosePick(),
         onJump: () => onJump(),
         onReplay: startReplay,
         onSkipReplay,
@@ -2462,6 +2512,10 @@ async function init() {
     });
     initPlaybook(onPlaybookChoice, onStartOver, {
         defense: (slug) => report('set-defense', { kind: slug || 'random' }),
+        // The Play as row, for a visitor with an avatar; without one the row
+        // is a pointer to the avatar page instead. Not reported: only avatar
+        // holders can choose, so the ping would say who has one (D11).
+        playAs: visitorAvatar ? (slot) => playAs(slot) : null,
         // Worth knowing how many visitors turn the timed jump off.
         autoJumpChanged: (on) => report('auto-jump', { kind: on ? 'on' : 'off' }),
         // The welcome card again, from "How to play". `back` puts the book
@@ -2527,10 +2581,13 @@ async function init() {
     // one of them exists during a replay.
     canvas.addEventListener('pointerdown', onCanvasDragStart, { signal });
     canvas.addEventListener('pointermove', onCanvasDragMove, { signal });
+    // ...and the choice of player following a mouse (specs/xo-photos-plan).
+    canvas.addEventListener('pointermove', onCanvasHover, { signal });
     canvas.addEventListener('pointerup', onCanvasDragEnd, { signal });
     canvas.addEventListener('pointercancel', onCanvasDragEnd, { signal });
     canvas.addEventListener('wheel', onCanvasWheel, { signal, passive: false });
     document.addEventListener('keydown', onReplayKey, { signal });
+    document.addEventListener('keydown', onPickKey, { signal });
     // THE WELCOME CARD COMES FIRST, and only on arrival. "Play again" from the
     // summary goes straight back to the playbook, because somebody who has
     // just finished ten plays does not need the rules again.
@@ -2653,6 +2710,110 @@ function playAs(slot) {
     }
     showPlaying();
     return true;
+}
+
+// ---- Choosing a player off the field (specs/xo-photos-plan, Step 2) ---------
+
+/** Who can be chosen off the field: every slot standing in this formation, in
+ *  the playbook's order, and the visitor's own even while they wait on the
+ *  sideline, so the choice can start on them. */
+function pickable() {
+    const on = new Set(cycle.play.game.objects
+        .filter((o) => o.settings && !o.settings.benched)
+        .map((o) => o.settings.position));
+    on.add(state.playAs);
+    return SLOTS.map((s) => s.id).filter((id) => on.has(id));
+}
+
+/**
+ * "PLAY AS…": THE ROW ASKS FOR A PLAYER AND THE FIELD ANSWERS (Steve's flow,
+ * 2026-10-29). The choice starts on whoever the visitor is now, so Enter
+ * straight away changes nothing, and the spot stands on them.
+ */
+function openPick() {
+    if (cycle.phase !== 'presnap' || !visitorAvatar || cycle.pick) return;
+    uiClick();
+    cycle.glow = null;
+    cycle.pick = { at: state.playAs };
+    const prompt = isTouch()
+        ? 'Tap any player to play as them.'
+        : 'Click any player to play as them, or use the arrow keys.';
+    showPick(prompt, labelOf(state.playAs));
+    announce(prompt);
+}
+
+/** Move the choice onto `slot`. The button names them, and `tendPickSpot`
+ *  stands the spot on them on the next frame. */
+function pickAt(slot) {
+    if (!cycle.pick || slot === cycle.pick.at) return;
+    cycle.pick.at = slot;
+    setPickChoice(labelOf(slot));
+}
+
+/** The arrow keys walk the choice through the players on the field, round
+ *  from the last to the first. */
+function stepPick(by) {
+    const list = pickable();
+    const at = Math.max(0, list.indexOf(cycle.pick.at));
+    const next = list[(at + by + list.length) % list.length];
+    pickAt(next);
+    announce(labelOf(next));
+}
+
+/** Chosen: by a tap, or by the button naming them. Choosing whoever they are
+ *  already just closes the question. */
+function choosePick(slot = cycle.pick && cycle.pick.at) {
+    if (!cycle.pick) return;
+    cycle.pick = null;
+    cycle.pickedAt = state.elapsed;
+    playAs(slot);
+    cycle.glow = { slot: state.playAs, left: CFG.pick.glow };
+    showSnap();
+    announce(`You are playing as ${slotOf(state.playAs).phrase}.`);
+}
+
+function cancelPick() {
+    if (!cycle.pick) return;
+    cycle.pick = null;
+    hideSpot();
+    showSnap();
+}
+
+/** The arrows, while a player is being chosen. Nothing else on this screen
+ *  uses them, and a field that takes typing is never open under the row. */
+function onPickKey(event) {
+    if (!cycle.pick || event.metaKey || event.ctrlKey || event.altKey) return;
+    const tag = ((event.target && event.target.tagName) || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    const by = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+    if (!by) return;
+    event.preventDefault();
+    stepPick(by);
+}
+
+/**
+ * THE SPOT ON WHOEVER THE CHOICE IS ON, and on whoever was just chosen for
+ * `pick.glow` seconds after, which is the moment the eye needs telling where
+ * the visitor went. The spot is the end-of-play marker, and before the snap it
+ * has nothing else to do. Read off the DRAWN figure, so it follows a man still
+ * walking to a new formation or standing on the sideline.
+ */
+function tendPickSpot(delta) {
+    let slot = null;
+    if (cycle.pick) {
+        slot = cycle.pick.at;
+    } else if (cycle.glow) {
+        cycle.glow.left -= delta;
+        if (cycle.glow.left > 0) {
+            slot = cycle.glow.slot;
+        } else {
+            cycle.glow = null;
+            hideSpot();
+        }
+    }
+    if (!slot) return;
+    const figure = figureFor(slot);
+    if (figure && figure.visible) showSpot(figure.position.x, figure.position.z);
 }
 
 /**

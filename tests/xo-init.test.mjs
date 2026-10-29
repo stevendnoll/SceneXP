@@ -1392,3 +1392,211 @@ describe('the visitor plays as the player they chose', () => {
         expect(r.isVisitorFigure(r.figureFor('wr1'))).toBe(true);
     });
 });
+
+/**
+ * CHOOSING WHO TO PLAY AS (specs/xo-photos-plan, Step 2): the playbook's row,
+ * the tags on the plays that sit the visitor out, and the pre-snap "Play as…"
+ * that asks for a player on the field.
+ */
+describe('choosing who to play as', () => {
+    const PLAY_KEY = 'exes-n-ohs-play-settings';
+
+    async function saveAvatar() {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        createAvatarStore({ win: null }).save({ skin: 'deep', shirt: 'teal' });
+    }
+    const body = () => dom.el('playbook').querySelector('.playbook-body');
+    const byId = (id) => deep(body()).find((n) => n && n.id === id);
+    const cardsFor = (slug) => deep(body()).filter((n) => n && n.dataset && n.dataset.slug === slug);
+    const tagged = (button) => button.children.some((c) => c.classList && c.classList.contains('play-out'));
+    const visitorAt = async () => {
+        const r = await import('../www/xo/js/roster.min.js');
+        const { SLOTS } = await import('../www/xo/js/playas.min.js');
+        return SLOTS.map((s) => s.id).filter((id) => r.isVisitorFigure(r.figureFor(id)));
+    };
+    async function takeTheField() {
+        dom.el('welcome-actions').children[0].click();
+        await flushAsync();
+    }
+    /** Call the first play in the book, which leaves the formation waiting on
+     *  the snap. */
+    async function callAPlay(slug = null) {
+        const cards = deep(body()).filter((n) => n && n.dataset && n.dataset.slug);
+        (slug ? cards.find((n) => n.dataset.slug === slug) : cards[0]).click();
+        await flushAsync();
+    }
+    /** Frames on a running clock, for anything timed in game seconds. */
+    let now = 100000;
+    const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
+
+    test('with an avatar: a list in two groups, without the linemen who mostly sit out, and it moves the avatar', async () => {
+        await saveAvatar();
+        const main = await boot();
+        expect(main.getState().isLoaded).toBe(true);
+        await takeTheField();
+        const select = byId('play-as-select');
+        expect(select).toBeTruthy();
+        expect(select.children.map((g) => g.label)).toEqual(['Offense', 'Defense']);
+        const values = select.children.flatMap((g) => g.children.map((o) => o.value));
+        expect(values).toEqual(['qb', 'wr1', 'wr2', 'wr3', 'wr4', 'x1', 'x2', 'x3',
+            'db1', 'db2', 'db3', 'db4', 's1', 's2']);
+        expect(select.children[0].children[2].textContent).toBe('Receiver B');
+        expect(select.value).toBe('qb');
+        // Labelled, for a screen reader and a click on the words.
+        const label = deep(body()).find((n) => n && n.htmlFor === 'play-as-select');
+        expect(label.textContent).toBe('Play as');
+        // Nobody sits out as the quarterback.
+        expect(cardsFor('jumbo1').some(tagged)).toBe(false);
+
+        select.value = 'wr3';
+        fire(select, 'change');
+        expect(main.getState().playAs).toBe('wr3');
+        expect(await visitorAt()).toEqual(['wr3']);
+        expect(JSON.parse(globalThis.localStorage.getItem(PLAY_KEY)).playAs).toBe('wr3');
+        // Receiver C sits out the two jumbo sets and Screen Left, and nothing else.
+        for (const slug of ['jumbo1', 'jumbo2', 'screen1']) {
+            expect(cardsFor(slug).length).toBeGreaterThan(0);
+            expect(`${slug} ${cardsFor(slug).every(tagged)}`).toBe(`${slug} true`);
+        }
+        for (const slug of ['pass1', 'pass2', 'run1', 'screen2', 'slant1']) {
+            expect(`${slug} ${cardsFor(slug).some(tagged)}`).toBe(`${slug} false`);
+        }
+        const tag = cardsFor('jumbo1')[0].children.find((c) => c.classList && c.classList.contains('play-out'));
+        expect(tag.textContent).toBe('You sit this one out');
+        // And back: the tags come off, they do not pile up.
+        select.value = 'wr1';
+        fire(select, 'change');
+        expect(cardsFor('jumbo1').some(tagged)).toBe(false);
+        select.value = 'wr4';
+        fire(select, 'change');
+        select.value = 'wr4';
+        fire(select, 'change');
+        expect(cardsFor('screen2')[0].children.filter((c) => c.classList && c.classList.contains('play-out'))).toHaveLength(1);
+    });
+
+    test('without an avatar the row points to the avatar page, and no play says anybody sits out', async () => {
+        globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'wr3' }));
+        await boot();
+        await takeTheField();
+        expect(byId('play-as-select')).toBeUndefined();
+        const row = deep(body()).find((n) => n && n.classList && n.classList.contains('playbook-playas'));
+        expect(row.textContent).toBe('Play any position as yourself.Make your avatar');
+        const link = row.children.find((c) => c.tagName === 'A');
+        expect(link.href).toBe('../avatar/?return=/xo/');
+        expect(link.textContent).toBe('Make your avatar');
+        for (const slug of ['jumbo1', 'jumbo2', 'screen1']) expect(cardsFor(slug).some(tagged)).toBe(false);
+        // And nothing before the snap but the two buttons it has always had.
+        await callAPlay();
+        expect(actionLabels()).toEqual(['Change play', 'Snap the ball']);
+    });
+
+    test('a lineman chosen on the field is in the list too, so it never disagrees with the field', async () => {
+        await saveAvatar();
+        globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'x5' }));
+        await boot();
+        await takeTheField();
+        const select = byId('play-as-select');
+        const values = select.children.flatMap((g) => g.children.map((o) => o.value));
+        expect(values.filter((v) => /^x[4-6]$/.test(v))).toEqual(['x5']);
+        expect(select.value).toBe('x5');
+        // Chosen away from him, he leaves the list.
+        select.value = 'db2';
+        fire(select, 'change');
+        expect(select.children.flatMap((g) => g.children.map((o) => o.value)).some((v) => /^x[4-6]$/.test(v))).toBe(false);
+    });
+
+    test('"Play as…" before the snap asks for a player, and the arrows and the button choose one', async () => {
+        await saveAvatar();
+        const main = await boot();
+        await takeTheField();
+        await callAPlay('pass1');
+        expect(actionLabels()).toEqual(['Change play', 'Play as…', 'Snap the ball']);
+        const asBtn = dom.el('hud-actions').children.find((b) => b.id === 'play-as-btn');
+        expect(asBtn.dataset.keys).toBe('P');
+        expect(asBtn.getAttribute('aria-label')).toBe('Play as… another player');
+
+        press('Play as…');
+        await flushAsync();
+        const prompt = 'Click any player to play as them, or use the arrow keys.';
+        expect(actionLabels()).toEqual([prompt, 'Cancel', 'Play as Quarterback']);
+        await jest.advanceTimersByTimeAsync(100);
+        expect(dom.el('hud-live').textContent).toBe(prompt);
+        const choose = () => dom.el('hud-actions').children.find((b) => b.id === 'pick-choose-btn');
+        expect(choose().focused).toBe(true);
+        expect(choose().getAttribute('aria-describedby')).toBe('pick-prompt');
+
+        const key = (k) => fire(dom.documentStub, 'keydown', { key: k });
+        key('ArrowRight');
+        expect(choose().textContent).toBe('Play as Receiver A');
+        key('ArrowLeft');
+        key('ArrowLeft');
+        // Round from the first to the last player on the field: Pass 1 has no
+        // lineman 4 to 6, and the defense ends with the safeties.
+        expect(choose().textContent).toBe('Play as Safety 2');
+        // Nothing has moved yet.
+        expect(main.getState().playAs).toBe('qb');
+
+        choose().click();
+        await flushAsync();
+        expect(main.getState().playAs).toBe('s2');
+        expect(await visitorAt()).toEqual(['s2']);
+        expect(actionLabels()).toEqual(['Change play', 'Play as…', 'Snap the ball']);
+        await jest.advanceTimersByTimeAsync(100);
+        expect(dom.el('hud-live').textContent).toBe('You are playing as safety 2.');
+
+        // And the playbook says so next time it opens.
+        press('Change play');
+        await flushAsync();
+        expect(byId('play-as-select').value).toBe('s2');
+    });
+
+    test('Cancel keeps the player, Escape is its key, and the arrows do nothing once it is closed', async () => {
+        await saveAvatar();
+        const main = await boot();
+        await takeTheField();
+        await callAPlay('pass1');
+        press('Play as…');
+        await flushAsync();
+        const cancel = dom.el('hud-actions').children.find((b) => b.id === 'pick-cancel-btn');
+        expect(cancel.dataset.keys).toBe('Escape');
+        expect(cancel.getAttribute('aria-label')).toBe('Cancel and keep your player');
+        fire(dom.documentStub, 'keydown', { key: 'ArrowRight' });
+        cancel.click();
+        await flushAsync();
+        expect(main.getState().playAs).toBe('qb');
+        expect(actionLabels()).toEqual(['Change play', 'Play as…', 'Snap the ball']);
+        const after = fire(dom.documentStub, 'keydown', { key: 'ArrowRight' });
+        expect(after.defaultPrevented).toBe(false);
+        expect(main.getState().playAs).toBe('qb');
+    });
+
+    test('while choosing, a tap chooses instead of snapping, and the tap straight after does not snap either', async () => {
+        await saveAvatar();
+        const main = await boot();
+        await takeTheField();
+        await callAPlay('pass1');
+        const tap = () => fire(dom.el('game-canvas'), 'pointerdown', {
+            clientX: 400, clientY: 300, pointerId: 1, button: 0, pointerType: 'touch',
+        });
+        // Start somewhere other than the quarterback, so a tap choosing him is
+        // a change. (Under the stub every player projects to the same point, so
+        // the nearest is the first in the list, the quarterback.)
+        globalThis.window.xo.playAs('wr2');
+        frames(5);
+        press('Play as…');
+        await flushAsync();
+        tap();
+        await flushAsync();
+        expect(main.getState().playAs).toBe('qb');
+        expect(actionLabels()).toEqual(['Change play', 'Play as…', 'Snap the ball']);
+        // A second tap at once is the same gesture, not a snap.
+        tap();
+        await flushAsync();
+        expect(actionLabels()).toEqual(['Change play', 'Play as…', 'Snap the ball']);
+        // Once the guard has passed, a tap snaps the ball as it always has.
+        frames(40);
+        tap();
+        await flushAsync();
+        expect(actionLabels()).toContain('Keep it');
+    });
+});

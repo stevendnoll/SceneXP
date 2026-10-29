@@ -18,7 +18,7 @@ import { OffensivePlaybookClass } from './playbook.min.js';
 import { XO_CONFIG as CFG } from './config.min.js';
 import { muteButton } from './hud.min.js';
 import { autoJump, setAutoJump } from './jump.min.js';
-import { DEFAULT_SLOT, normalizeSlot } from './playas.min.js';
+import { DEFAULT_SLOT, normalizeSlot, listedSlots, sitsOut } from './playas.min.js';
 
 /**
  * ALL SEVENTEEN PLAYS, WHICH IS WHAT THE 2D GAME HAS.
@@ -108,6 +108,21 @@ let onHelp = null;
 let onColors = null;
 /** Told when the defense is changed, for the usage log (see telemetry.js). */
 let onDefense = null;
+/** Told when the visitor chooses another player in the Play as row
+ *  (specs/xo-photos-plan), or null when there is no avatar to move, which is
+ *  also what turns the row into a pointer to the avatar page. */
+let onPlayAs = null;
+let playAsSelect = null;
+/**
+ * EVERY CARD'S BUTTON, BY SLUG, kept as the cards are built rather than found
+ * by a search: the tags below are put on and taken off every time the book
+ * opens and every time the player changes, and a list held here is the one
+ * that cannot miss a card. `repeatCard` is the "last play" copy at the top,
+ * rebuilt on every open.
+ */
+const cardButtons = new Map();
+let repeatCard = null;
+const sitOutTags = new Set();
 let settings = { lastPlay: '', defense: '', playAs: DEFAULT_SLOT };
 
 // ---- Persistence -----------------------------------------------------------
@@ -333,7 +348,116 @@ function buildCard(play, repeat = false) {
     // The "Last play" tag is not built here. See `markLastPlay`.
     button.addEventListener('click', () => choose(play.slug, repeat));
     item.appendChild(button);
+    if (repeat) repeatCard = { slug: play.slug, button };
+    else cardButtons.set(play.slug, button);
     return item;
+}
+
+// ---- Who the visitor plays as (specs/xo-photos-plan, Step 2) ---------------
+
+/**
+ * THE PLAY AS ROW, BESIDE THE DEFENSE, AND ONLY WITH AN AVATAR.
+ *
+ * Without one there is nobody to move, so the row is a pointer to the avatar
+ * page instead, which brings the visitor straight back here (?return=), the
+ * way the welcome card's line does.
+ */
+function buildPlayAsRow() {
+    const wrap = document.createElement('p');
+    wrap.className = 'playbook-defense playbook-playas';
+
+    if (!onPlayAs) {
+        const text = document.createElement('span');
+        text.textContent = 'Play any position as yourself.';
+        wrap.appendChild(text);
+        const link = document.createElement('a');
+        link.className = 'playbook-playas-link';
+        link.href = '../avatar/?return=/xo/';
+        link.textContent = 'Make your avatar';
+        wrap.appendChild(link);
+        return wrap;
+    }
+
+    const label = document.createElement('label');
+    label.htmlFor = 'play-as-select';
+    label.textContent = 'Play as';
+    wrap.appendChild(label);
+
+    const select = document.createElement('select');
+    select.id = 'play-as-select';
+    playAsSelect = select;
+    fillPlayAs();
+    select.addEventListener('change', () => {
+        onPlayAs(select.value);
+        // Whatever the game made of it: a refused change puts the old player
+        // back in the box, and a lineman the list only carried for the old
+        // choice comes out of it.
+        fillPlayAs();
+        markSitsOut();
+    });
+    wrap.appendChild(select);
+    return wrap;
+}
+
+/**
+ * THE LIST, OFFENSE AND DEFENSE IN TWO GROUPS, showing the player the visitor
+ * is. Rebuilt only when what it should hold has changed, so a keyboard
+ * walking a closed select one arrow at a time is not having the options
+ * swapped under it on every press.
+ */
+let playAsListed = '';
+
+function fillPlayAs() {
+    const select = playAsSelect;
+    if (!select) return;
+    const slots = listedSlots(settings.playAs);
+    const key = slots.map((s) => s.id).join(' ');
+    if (key !== playAsListed) {
+        playAsListed = key;
+        select.textContent = '';
+        for (const [team, name] of [[0, 'Offense'], [1, 'Defense']]) {
+            const group = document.createElement('optgroup');
+            group.label = name;
+            for (const s of slots.filter((x) => x.team === team)) {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.label;
+                group.appendChild(opt);
+            }
+            select.appendChild(group);
+        }
+    }
+    select.value = settings.playAs;
+}
+
+/**
+ * "YOU SIT THIS ONE OUT" on every play that leaves the visitor's player on the
+ * sideline (Steve, D1), and on none without an avatar. Taken off and put back
+ * whole, like the "Last play" tag, so it can never describe a player the
+ * visitor has stopped being.
+ */
+function markSitsOut() {
+    for (const tag of sitOutTags) tag.remove();
+    sitOutTags.clear();
+    if (!onPlayAs) return;
+    const cards = [...cardButtons];
+    if (repeatCard) cards.push([repeatCard.slug, repeatCard.button]);
+    for (const [slug, button] of cards) {
+        const out = sitsOut(settings.playAs, slug);
+        // The repeat card is named by its aria-label rather than its text, so
+        // the tag has to be said there too or a screen reader never hears it.
+        if (repeatCard && button === repeatCard.button) {
+            const play = PLAYS.find((p) => p.slug === slug);
+            button.setAttribute('aria-label', `${play.name}, your last play, again`
+                + (out ? ', you sit this one out' : ''));
+        }
+        if (!out) continue;
+        const tag = document.createElement('span');
+        tag.className = 'play-out';
+        tag.textContent = 'You sit this one out';
+        button.appendChild(tag);
+        sitOutTags.add(tag);
+    }
 }
 
 /**
@@ -384,6 +508,7 @@ function syncRepeatCard(root) {
     const grid = root.querySelector('.playbook-grid');
     if (!grid) return;
     for (const old of grid.querySelectorAll('.play-card.is-repeat')) old.remove();
+    repeatCard = null;
     if (!settings.lastPlay) return;
     const play = PLAYS.find((p) => p.slug === settings.lastPlay);
     if (!play) return;
@@ -633,10 +758,11 @@ function buildAutoJump(onChange) {
 }
 
 export function initPlaybook(handler, startOver = null,
-    { defense = null, help = null, colors = null, autoJumpChanged = null } = {}) {
+    { defense = null, help = null, colors = null, autoJumpChanged = null, playAs = null } = {}) {
     onChoose = handler;
     onStartOver = startOver;
     onDefense = defense;
+    onPlayAs = playAs;
     onHelp = help;
     onColors = colors;
     load();
@@ -668,7 +794,13 @@ export function initPlaybook(handler, startOver = null,
     const body = root.querySelector('.playbook-body');
     if (!body) return;
     body.textContent = '';
-    body.appendChild(buildDefenseRow());
+    // The two choices about the next play that are not the play itself, side
+    // by side where there is room and one above the other where there is not.
+    const options = document.createElement('div');
+    options.className = 'playbook-options';
+    options.appendChild(buildDefenseRow());
+    options.appendChild(buildPlayAsRow());
+    body.appendChild(options);
 
     const grid = document.createElement('ul');
     grid.className = 'playbook-grid';
@@ -697,6 +829,10 @@ export function show(opts = {}) {
     // only moment at which the answer is current (QA item 1).
     syncRepeatCard(root);
     markLastPlay(root);
+    // ...and who the visitor is, which a choice made on the field before the
+    // snap may have changed since the book last opened.
+    fillPlayAs();
+    markSitsOut();
     settleStartOver(root);
     // Focus the first play so a keyboard visitor lands somewhere useful rather
     // than at the top of the document.

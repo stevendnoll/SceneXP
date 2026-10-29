@@ -1141,6 +1141,16 @@ const XO_CONFIG = {
      */
     bench: { along: 4.5, out: 0.8 },
 
+    /**
+     * CHOOSING A PLAYER OFF THE FIELD BEFORE THE SNAP (specs/xo-photos-plan,
+     * Step 2), in seconds. `glow` is how long the spot stands on whoever was
+     * just chosen, so the eye finds the change. `guard` is how long after a
+     * choice a tap on the field is still part of the same gesture rather than
+     * a snap: before the snap a tap anywhere snaps the ball, and a double tap
+     * or a bounced finger would otherwise choose a player and start the play.
+     */
+    pick: { glow: 1.6, guard: 0.45 },
+
     /** The two kits, from the 2D game's own rgba(255,153,44) and
      *  rgba(155,207,255). Two hues rather than two values, which is what keeps
      *  them separable at 45m under floodlights (D23). */

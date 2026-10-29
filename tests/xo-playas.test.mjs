@@ -79,6 +79,29 @@ describe('the slots are the players who take the field', () => {
     });
 });
 
+describe('the playbook lists the players who play most downs', () => {
+    test('linemen 4 to 6 are left out (Steve, 2026-10-29), and they are the ones who sit out most', () => {
+        const listed = P.listedSlots().map((s) => s.id);
+        expect(listed).toHaveLength(14);
+        expect(listed.filter((id) => /^x[4-6]$/.test(id))).toEqual([]);
+        // The reason, measured: each of them sits out more plays than any
+        // listed player does.
+        const outFor = (id) => sim.OFFENSIVE_PLAYS.filter((slug) => P.sitsOut(id, slug)).length;
+        const worstListed = Math.max(...listed.map(outFor));
+        for (const id of ['x4', 'x5', 'x6']) expect(outFor(id)).toBeGreaterThan(worstListed);
+        // In the table's own order.
+        expect(listed).toEqual(P.SLOTS.map((s) => s.id).filter((id) => listed.includes(id)));
+    });
+
+    test('a visitor who tapped one of them finds him in the list, and only him', () => {
+        const listed = P.listedSlots('x5').map((s) => s.id);
+        expect(listed).toHaveLength(15);
+        expect(listed.filter((id) => /^x[4-6]$/.test(id))).toEqual(['x5']);
+        expect(listed.indexOf('x5')).toBe(listed.indexOf('x3') + 1);
+        expect(P.listedSlots('nonsense').map((s) => s.id)).toEqual(P.listedSlots().map((s) => s.id));
+    });
+});
+
 describe('a stored or requested slot is made safe', () => {
     test('anything that is not one of the seventeen is the quarterback', () => {
         const hostile = [undefined, null, '', 'db6', 'db5', 'QB', 'WR1', ' wr1', 'wr1 ', '__proto__',
