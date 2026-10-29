@@ -44,6 +44,7 @@ import {
 } from '../../shared/js/checklist-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
+import { loadCameo } from '../../shared/js/cameo-1.0.0.min.js';
 import { isMobileDevice } from '../../shared/js/world-1.0.0.min.js';
 import {
     initAutopilot, toggleAutopilot, setAutopilotEnabled,
@@ -197,6 +198,11 @@ async function init() {
     // (The Home button this used to wire first was removed from this scene.)
     applySiteLinks();
 
+    // The visitor's own avatar, strolling the garden with the others when one
+    // is saved on /avatar/ (null otherwise, and nothing more is downloaded).
+    // Started now so its modules load while the proof of work runs.
+    const cameoReady = loadCameo();
+
     // Soft bot deterrent: solve a tiny proof of work before building the scene
     // (or reuse a still-valid one from sessionStorage). Hand the hash to the
     // telemetry layer so it tags every ping.
@@ -233,7 +239,8 @@ async function init() {
         { x: -15.5, z: -6.6, lookAtX: -17.8, lookAtZ: -6.6 }, // the compost bins
         { x: 11,  z: 9.2,  lookAtX: 3,   lookAtZ: 3.5 }     // the bench view of it all
     ]);
-    initGalleryVisitors(isMobileDevice() ? SEED_CONFIG.walkers.mobileCount : SEED_CONFIG.walkers.count);
+    const cameo = await cameoReady;
+    initGalleryVisitors(isMobileDevice() ? SEED_CONFIG.walkers.mobileCount : SEED_CONFIG.walkers.count, { cameo: cameo && cameo.group });
     buildRaycastTargets();
 
     // Discovery checklist: install the trail item list, restore any session
@@ -967,7 +974,8 @@ function updateHover() {
             clearHover();
             hoveredVisitor = visitor;
             if (lookLabel) {
-                lookLabel.textContent = `${state.isMobile ? 'Tap' : 'Click'} to chat with a visitor`;
+                const verb = state.isMobile ? 'Tap' : 'Click';
+                lookLabel.textContent = visitor.userData.isCameo ? `${verb} to say hello to yourself` : `${verb} to chat with a visitor`;
                 lookLabel.classList.add('visible');
             }
             if (hud) hud.classList.add('targeting');
@@ -1079,6 +1087,15 @@ const VISITOR_LINES = [
     "Do check the chalkboard by the path. He keeps a little list of things worth finding out here."
 ];
 
+// The visitor's own avatar in the garden (cameo-1.0.0): a few words for the
+// person who made it, shown in place of a guest's line.
+const CAMEO_TITLE = "Look Who's in the Garden";
+const CAMEO_LINES = [
+    "Well, look who came to see the garden! You fit right in among the raised beds.",
+    "Fancy meeting you here. Ask the gardener about soil sometime, and be ready for a long and happy answer.",
+    "Good taste in gardens, and in outfits. Do check the chalkboard by the path for a few things worth finding."
+];
+
 function pickLine(list, key) {
     // Defensive: callers may pass a list that no longer exists (e.g. scenery
     // whose hint entry was removed), so never index into undefined.
@@ -1137,9 +1154,10 @@ function openVisitorModal(visitorMesh) {
     // Stop the guest and turn them to face the player while they "speak".
     pauseCustomerForDialog(visitorMesh, _playerPos);
 
-    if (dialogModalTitle) dialogModalTitle.textContent = 'A Garden Guest';
+    const cameo = !!visitorMesh.userData.isCameo;
+    if (dialogModalTitle) dialogModalTitle.textContent = cameo ? CAMEO_TITLE : 'A Garden Guest';
     // Random each click so re-clicking the same guest gives a fresh line.
-    if (dialogModalMessage) dialogModalMessage.textContent = pickRandomLine(VISITOR_LINES);
+    if (dialogModalMessage) dialogModalMessage.textContent = pickRandomLine(cameo ? CAMEO_LINES : VISITOR_LINES);
     setDialogReturnVisible(false);
     dialogModal.classList.remove('hidden');
     hud.classList.remove('visible');

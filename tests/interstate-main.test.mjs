@@ -362,6 +362,18 @@ test('interior interactions: hover labels, modals, and the light switch', async 
   expect(dom.el('dialog-modal').classList.contains('hidden')).toBe(true);
   await jest.advanceTimersByTimeAsync(250);
 
+  // The visitor's own avatar in the waiting room (cameo-1.0.0): its hover
+  // and its words are for the person who made it.
+  ray.hits = [hit({ isCustomer: true, isCameo: true })];
+  stepFrames(10);
+  expect(dom.el('look-label').textContent).toContain('say hello to yourself');
+  tap(canvas);
+  expect(dom.el('dialog-title').textContent).toBe("Look Who's Waiting");
+  expect(dom.el('dialog-message').textContent).toMatch(/^(Well, look who|Fancy meeting you here|Good taste in tire shops)/);
+  fire(dom.el('dialog-return-btn'), 'click');
+  expect(dom.el('dialog-modal').classList.contains('hidden')).toBe(true);
+  await jest.advanceTimersByTimeAsync(250);
+
   // Scenery: the TV, the lift, and the tire racks tick discoveries and use
   // their fixed titles; a plant introduces itself by its punny name.
   const sceneryCases = [

@@ -46,6 +46,7 @@ import {
 } from '../../shared/js/checklist-1.0.0.min.js';
 import { track, trackFinal, setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
 import { installShare } from '../../shared/js/share-1.0.0.min.js';
+import { loadCameo } from '../../shared/js/cameo-1.0.0.min.js';
 import {
     initAutopilot, toggleAutopilot, setAutopilotEnabled,
     isAutopilotEnabled, onAutopilotChange, updateAutopilot
@@ -203,6 +204,11 @@ async function init() {
     // are baked into the HTML for the no-JS path.
     applySiteLinks();
 
+    // The visitor's own avatar, out for a walk with the others when one is
+    // saved on /avatar/ (null otherwise, and nothing more is downloaded).
+    // Started now so its modules load while the proof of work runs.
+    const cameoReady = loadCameo();
+
     // Soft bot deterrent: solve a tiny proof of work before building the scene
     // (or reuse a still-valid one from sessionStorage). Hand the hash to the
     // telemetry layer so it tags every ping.
@@ -237,7 +243,8 @@ async function init() {
         { x: 29,  z: 1.4,  lookAtX: 30,  lookAtZ: 2.6 },   // mile marker 7
         { x: -30, z: 0.6,  lookAtX: -34, lookAtZ: 0.6 }    // a quiet stretch of trail
     ]);
-    initGalleryVisitors(DAD_CONFIG.walkers.count);
+    const cameo = await cameoReady;
+    initGalleryVisitors(DAD_CONFIG.walkers.count, { cameo: cameo && cameo.group });
     dressWalkersForTheTrail(); // trail dress code: shorts and trousers, no skirts
     buildRaycastTargets();
 
@@ -956,7 +963,8 @@ function updateHover() {
             clearHover();
             hoveredVisitor = visitor;
             if (lookLabel) {
-                lookLabel.textContent = `${state.isMobile ? 'Tap' : 'Click'} to chat with the customer`;
+                const verb = state.isMobile ? 'Tap' : 'Click';
+                lookLabel.textContent = visitor.userData.isCameo ? `${verb} to say hello to yourself` : `${verb} to chat with the customer`;
                 lookLabel.classList.add('visible');
             }
             if (hud) hud.classList.add('targeting');
@@ -1074,6 +1082,15 @@ const WALKER_LINES = [
     "Mile marker seven is just up the way. The kids like to race to it and back."
 ];
 
+// The visitor's own avatar out walking (cameo-1.0.0): a few words for the
+// person who made it, shown in place of a walker's line.
+const CAMEO_TITLE = "Look Who's Out Walking";
+const CAMEO_LINES = [
+    "Well, look who made it out to the trail! You look right at home out here.",
+    "Fancy meeting you here. The bench by the fence has the best view of the river, if you'd like to sit a while.",
+    "Out for a stroll on the NCR Trail, just like you. Give the riders a wave as they pass."
+];
+
 function pickLine(list, key) {
     // Defensive: callers may pass a list that no longer exists (e.g. scenery
     // whose hint entry was removed), so never index into undefined.
@@ -1153,9 +1170,10 @@ function openVisitorModal(visitorMesh) {
     // Stop the walker and turn them to face the player while they "speak".
     pauseCustomerForDialog(visitorMesh, _playerPos);
 
-    if (dialogModalTitle) dialogModalTitle.textContent = 'Out for a Walk';
+    const cameo = !!visitorMesh.userData.isCameo;
+    if (dialogModalTitle) dialogModalTitle.textContent = cameo ? CAMEO_TITLE : 'Out for a Walk';
     // Random each click so re-clicking the same walker gives a fresh line.
-    if (dialogModalMessage) dialogModalMessage.textContent = pickRandomLine(WALKER_LINES);
+    if (dialogModalMessage) dialogModalMessage.textContent = pickRandomLine(cameo ? CAMEO_LINES : WALKER_LINES);
     setDialogReturnVisible(false);
     dialogModal.classList.remove('hidden');
     hud.classList.remove('visible');

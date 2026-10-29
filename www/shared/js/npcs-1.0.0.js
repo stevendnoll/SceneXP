@@ -116,10 +116,16 @@ export function setWanderWaypoints(waypoints) {
  * Call AFTER initWorld() (so the world group + collider registry exist) and AFTER
  * setWanderWaypoints() (so there are spots to visit).
  *
+ * A `cameo` (2026-10-28) is the visitor's own avatar, from cameo-1.0.0's
+ * loadCameo built with the 'customer' role: it takes the first visitor's
+ * spot in place of a drawn design, and wanders like the rest. Without one,
+ * the visitors are exactly as before.
+ *
  * @param {number} count - How many visitors to spawn (capped by palette count)
+ * @param {{ cameo?: THREE.Object3D }} [options] - the cameo's group, or null
  * @returns {THREE.Object3D[]} the visitor meshes
  */
-export function initGalleryVisitors(count = 3) {
+export function initGalleryVisitors(count = 3, { cameo = null } = {}) {
     if (!getWorldGroup()) return [];
 
     // Fresh start (also clears any legacy store customers).
@@ -169,21 +175,28 @@ export function initGalleryVisitors(count = 3) {
 
         // Face the piece this spot belongs to.
         const rotationY = Math.atan2(spot.lookAtX - spot.x, spot.lookAtZ - spot.z);
-        const visitor = createPerson({
-            role: 'customer',
-            x: spot.x,
-            z: spot.z,
-            rotationY,
-            shirtColor: palettes[i].shirtColor,
-            pantsColor: palettes[i].pantsColor,
-            skinTone: skinTonePalette
-                ? skinTonePalette[Math.floor(Math.random() * skinTonePalette.length)]
-                : palettes[i].skinTone,
-            hairColor: palettes[i].hairColor,
-            hairStyle: palettes[i].hairStyle,
-            hasSkirt: !!palettes[i].hasSkirt,
-            hasApron: false
-        });
+        let visitor;
+        if (i === 0 && cameo) {
+            visitor = cameo;
+            visitor.position.set(spot.x, 0.055, spot.z);
+            visitor.rotation.y = rotationY;
+        } else {
+            visitor = createPerson({
+                role: 'customer',
+                x: spot.x,
+                z: spot.z,
+                rotationY,
+                shirtColor: palettes[i].shirtColor,
+                pantsColor: palettes[i].pantsColor,
+                skinTone: skinTonePalette
+                    ? skinTonePalette[Math.floor(Math.random() * skinTonePalette.length)]
+                    : palettes[i].skinTone,
+                hairColor: palettes[i].hairColor,
+                hairStyle: palettes[i].hairStyle,
+                hasSkirt: !!palettes[i].hasSkirt,
+                hasApron: false
+            });
+        }
         peopleGroup.add(visitor);
         galleryVisitorMeshes.push(visitor);
 
