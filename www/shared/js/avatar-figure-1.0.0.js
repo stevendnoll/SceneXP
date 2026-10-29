@@ -44,7 +44,7 @@ import { eachVertex, solidGrid } from './avatar-shapes-1.0.0.min.js';
 import { buildHair, HAIR_DRAWN } from './avatar-hair-1.0.0.min.js';
 import { buildHat, HAT_SIZE, trimUnder } from './avatar-hats-1.0.0.min.js';
 import {
-    block, legParts, blockShoes, shaft, EXTRA_SHOES, dressExtraShoes, SHIRT_SIZE, dressShirt, BOTTOM_SIZE, dressBottom, numberJersey
+    block, legParts, blockShoes, shaft, EXTRA_SHOES, dressExtraShoes, SHIRT_SIZE, dressShirt, BOTTOM_SIZE, dressBottom, numberJersey, nameJersey
 } from './avatar-wardrobe-1.0.0.min.js';
 
 export { EXTRA_SHOES, SHIRT_SIZE, BOTTOM_SIZE };
@@ -1318,6 +1318,8 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     // The jersey's number (2026-10-26), in its chosen color or the trim's.
     const number = optionOf(JERSEY_NUMBERS, a.jerseyNumber);
     if (a.sleeves === 'jersey' && number && number.digits) numberJersey(person, number.digits, colorOf('numberColor', a.numberColor), colorOf('shirt', a.shirt));
+    // And the name over the back number (2026-10-28), in the same color.
+    if (a.sleeves === 'jersey' && a.jerseyName !== 'none') nameJersey(person, a.jerseyName, colorOf('numberColor', a.numberColor), colorOf('shirt', a.shirt));
     if (BOTTOM_SIZE[bottom]) dressBottom(person, bottom, colorOf('bottomColor', a.bottomColor), skin);
     // The underlayer (2026-10-26), wherever the legs and the arms are bare
     // once the clothes are on.

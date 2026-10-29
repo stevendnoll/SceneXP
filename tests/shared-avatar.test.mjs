@@ -78,7 +78,7 @@ describe('the lists', () => {
         expect(FIELD_KEYS).toEqual(['skin', 'eyes', 'hair', 'length', 'facial', 'glasses', 'build', 'shirt',
             'sleeves', 'bottom', 'bottomColor', 'shoes', 'shoeColor', 'hat', 'hatColor', 'mouth', 'lips', 'muscles',
             'facialColor', 'brows', 'eyeShape', 'nose', 'faceShape', 'cheeks', 'frameColor', 'lensColor', 'handSize', 'footSize',
-            'jerseyNumber', 'numberColor', 'legwear', 'legwearColor', 'armwear', 'armwearColor', 'handedness']);
+            'jerseyNumber', 'numberColor', 'legwear', 'legwearColor', 'armwear', 'armwearColor', 'handedness', 'jerseyName']);
         for (const [key, list] of A.FIELDS) {
             const ids = list.map((o) => o.id);
             expect(`${key}: ${new Set(ids).size}`).toBe(`${key}: ${ids.length}`);
@@ -195,9 +195,10 @@ describe('normalizeAvatar takes anything', () => {
             mouth: 'smile', lips: 'natural', muscles: 'standard',
             facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
             frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black',
-            handedness: 'right'
+            handedness: 'right', jerseyName: 'none'
         });
-        // No free text survives, whatever it was called.
+        // No free text survives, whatever it was called: the one typed field
+        // (the jersey's name, 2026-10-28) keeps only a name it can be.
         expect(a.name).toBeUndefined();
     });
 
@@ -623,7 +624,7 @@ describe('the link', () => {
     test('the default\'s link is pinned, so the field order can never move under a link already sent', () => {
         expect(A.encodeLink(A.DEFAULT_AVATAR))
             .toBe('a=1.fair.darkBrown.darkBrown.short.none.none.straight.rust.long.pants.navy.classic.black.none.navy.smile.natural.standard'
-                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard.none.black.none.black.right');
+                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard.none.black.none.black.right.none');
         // A link made before the mouth and the muscles (2026-10-23) still
         // opens, its new fields at their defaults.
         expect(A.decodeLink('#a=1.deep.blue.gray.long.beard.round.curvy.teal.short.skirt.khaki.maryJane.red.cap.mustard'))
@@ -632,7 +633,7 @@ describe('the link', () => {
                 hatColor: 'mustard', mouth: 'smile', lips: 'natural', muscles: 'standard',
                 facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
                 frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black',
-                handedness: 'right' });
+                handedness: 'right', jerseyName: 'none' });
         expect(A.linkUrl(A.DEFAULT_AVATAR, 'https://www.scenexp.com/'))
             .toBe(`https://www.scenexp.com/avatar/#${A.encodeLink(A.DEFAULT_AVATAR)}`);
         expect(A.linkUrl(null, '')).toBe(`/avatar/#${A.encodeLink(null)}`);
@@ -922,5 +923,79 @@ describe('the corner chip', () => {
         // Parts the page left out are simply not touched.
         const bare = { img: { alt: '', src: '' } };
         expect(A.installChip(bare, { store }).saved).toBe(true);
+    });
+});
+
+describe('the name on the jersey\'s back (Steve\'s son, 2026-10-28)', () => {
+    test('typing makes a name: capitals, accents dropped, curly apostrophes made straight, anything else left out, twelve at most', () => {
+        const cases = [
+            ['Smith', 'SMITH'], ['van  dyke', 'VAN DYKE'], ['O’Neil', "O'NEIL"], ['José', 'JOSE'], ['Zoë', 'ZOE'],
+            ['smith-jones', 'SMITH-JONES'], ['  lead', 'LEAD'], ['<b>x</b>', 'BXB'], ['straße', 'STRASSE'],
+            ['abcdefghijklmnop', 'ABCDEFGHIJKL'], ['NONE', 'NONE'], ['de la cruz ', 'DE LA CRUZ']
+        ];
+        for (const [typed, name] of cases) expect(`${typed}: ${A.jerseyName(typed)}`).toBe(`${typed}: ${name}`);
+        // Nothing that is a name: none.
+        for (const typed of ['', '   ', '12345', '---', "'", '\u{1F600}', null, undefined, 42]) expect(A.jerseyName(typed)).toBe('none');
+        // While typing, the box keeps a space at the end for the next word.
+        expect(A.typedJerseyName('van ')).toBe('VAN ');
+        expect(A.typedJerseyName(' van')).toBe('VAN');
+        expect(A.typedJerseyName('a'.repeat(20))).toHaveLength(A.JERSEY_NAME.max);
+    });
+
+    test('only a real name is kept from anywhere; none is the default, and NONE is a name', () => {
+        expect(A.DEFAULT_AVATAR.jerseyName).toBe('none');
+        // The field is the last, appended: links made before still read.
+        expect(A.FIELDS[A.FIELDS.length - 1][0]).toBe('jerseyName');
+        for (const name of ['SMITH', "O'NEIL", 'VAN DYKE', 'SMITH-JONES', 'ABCDEFGHIJKL', 'NONE', 'X']) {
+            expect(A.normalizeAvatar({ jerseyName: name }).jerseyName).toBe(name);
+            expect(A.isJerseyName(name)).toBe(true);
+        }
+        // Lower case, too long, marks it cannot hold, spaces at the ends or
+        // twice, no letter at all, markup, and anything not a string: none.
+        for (const name of ['smith', 'ABCDEFGHIJKLM', 'SMITH!', 'SMITH.', ' SMITH', 'SMITH ', 'VAN  DYKE', '---', "'", '<B>', 'SMÍTH', 'NO\nLL', 7, null, ['SMITH'], { SMITH: 1 }]) {
+            expect(`${JSON.stringify(name)}: ${A.normalizeAvatar({ jerseyName: name }).jerseyName}`).toBe(`${JSON.stringify(name)}: none`);
+        }
+        expect(A.isJerseyName('none')).toBe(false);
+        // A scene's overrides are held to the same rule.
+        expect(A.withOverrides({}, { jerseyName: 'SMITH' }).jerseyName).toBe('SMITH');
+        expect(A.withOverrides({ jerseyName: 'SMITH' }, { jerseyName: '<i>' }).jerseyName).toBe('SMITH');
+    });
+
+    test('a link carries the name in characters a URL keeps as they are, and reads it back; an older link has none', () => {
+        const a = A.normalizeAvatar({ sleeves: 'jersey', jerseyNumber: 'n8', jerseyName: "O'NEIL VAN" });
+        const link = A.encodeLink(a);
+        expect(link.endsWith(".O%27NEIL_VAN")).toBe(true);
+        expect(link).toMatch(/^[A-Za-z0-9\-._~!$&()*+,;=:@/?%]*$/);
+        expect(link).not.toMatch(/[ ']/);
+        expect(A.decodeLink(link)).toEqual(a);
+        expect(A.decodeLink(`#${link}&m=2/x`)).toEqual(a);
+        // A browser that left the apostrophe as it is, or one that wrote the
+        // space as %20: the same name.
+        expect(A.decodeLink(link.replace('%27', "'")).jerseyName).toBe("O'NEIL VAN");
+        expect(A.decodeLink(link.replace('_', '%20')).jerseyName).toBe("O'NEIL VAN");
+        // A link from before the name: the same figure, no name.
+        const older = link.slice(0, link.lastIndexOf('.'));
+        expect(A.decodeLink(older)).toEqual({ ...a, jerseyName: 'none' });
+        // A broken or hostile name part is none; the rest still reads.
+        for (const bad of ['%E0%A4%A', '%3Cscript%3E', 'smith', 'A'.repeat(40), '..']) {
+            const back = A.decodeLink(`${older}.${bad}`);
+            expect(back.jerseyName).toBe('none');
+            expect(back.jerseyNumber).toBe('n8');
+        }
+        // The longest name still leaves the link far under its ceiling.
+        expect(A.encodeLink({ ...a, jerseyName: "O'O'O'O'O'O'" }).length).toBeLessThan(A.MAX_LINK / 2);
+    });
+
+    test('a file keeps it, a stranger never has one, and the figure in words says it', () => {
+        const a = A.normalizeAvatar({ sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n8', jerseyName: 'SMITH' });
+        expect(A.fromFile(A.toFile(a))).toEqual(a);
+        const rand = rng(5);
+        for (let i = 0; i < 300; i++) expect(A.randomAvatar(rand).jerseyName).toBe('none');
+        expect(A.describeAvatar(a)).toMatch(/a navy sports jersey with the name SMITH and the number 8,/);
+        expect(A.describeAvatar({ ...a, jerseyNumber: 'none' })).toMatch(/a navy sports jersey with the name SMITH,/);
+        expect(A.describeAvatar({ ...a, numberColor: 'gold' })).toMatch(/with the name SMITH and the number 8 in gold,/);
+        // Off the jersey the name is kept but neither drawn nor said.
+        expect(A.describeAvatar({ ...a, sleeves: 'short' })).not.toMatch(/SMITH/);
+        expect(A.normalizeAvatar({ ...a, sleeves: 'short' }).jerseyName).toBe('SMITH');
     });
 });

@@ -224,6 +224,18 @@ await sheet('jersey-numbers', [
     { sleeves: 'jersey', shirt: 'teal', jerseyNumber: 'n45', build: 'curvy' }, { sleeves: 'jersey', shirt: 'x241773', jerseyNumber: 'n52', muscles: 'buff', numberColor: 'black' },
     { sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n3', numberColor: 'x00ff88' }
 ], 'torso', [0, Math.PI]);
+// Names on the jersey's back (Steve's son, 2026-10-28), from behind: short
+// and long, with and without a number, on a broad, a curvy and a slim back,
+// in the trim and in a chosen color.
+await sheet('jersey-names', [
+    { sleeves: 'jersey', shirt: 'navy', jerseyNumber: 'n8', jerseyName: 'SMITH' },
+    { sleeves: 'jersey', shirt: 'white', jerseyNumber: 'n23', jerseyName: "O'NEIL" },
+    { sleeves: 'jersey', shirt: 'x241773', jerseyNumber: 'n12', jerseyName: 'VAN DYKE', numberColor: 'gold' },
+    { sleeves: 'jersey', shirt: 'rust', jerseyNumber: 'n00', jerseyName: 'SMITH-JONES' },
+    { sleeves: 'jersey', shirt: 'teal', jerseyNumber: 'n45', jerseyName: 'ABCDEFGHIJKL', build: 'curvy' },
+    { sleeves: 'jersey', shirt: 'x241773', jerseyNumber: 'n52', jerseyName: 'MWQGRZ', muscles: 'buff', numberColor: 'black' },
+    { sleeves: 'jersey', shirt: 'navy', jerseyName: 'NOLL', build: 'slim' }
+], 'torso', [Math.PI, Math.PI + 0.6]);
 await sheet('feet-sizes', [
     { footSize: 'small' }, { footSize: 'standard' }, { footSize: 'large' }, { footSize: 'large', muscles: 'buff' }, { footSize: 'small', shoes: 'heels', build: 'curvy' }, { footSize: 'large', shoes: 'highTops' }
 ], 'feet', [0, 0.75]);

@@ -22,7 +22,7 @@
  * security policy allows, where a style attribute would not be.
  */
 
-import { listOf, optionOf, colorOf, customColor, CUSTOM_COLOR, COLOR_FIELDS } from './avatar-1.0.0.min.js';
+import { listOf, optionOf, colorOf, customColor, CUSTOM_COLOR, COLOR_FIELDS, JERSEY_NAME, typedJerseyName, jerseyName } from './avatar-1.0.0.min.js';
 import { drawnOptions } from './avatar-figure-1.0.0.min.js';
 
 const deepFreeze = (o) => {
@@ -39,7 +39,9 @@ const deepFreeze = (o) => {
  * while the avatar holds that value (no beard, no beard's color), and one
  * with `showWhen` shows only while it does (a jersey's number, on the
  * jersey). A 'number' field is typed, not chosen from a row (a hundred
- * buttons would be no row). A tab shows only when it has a field to show.
+ * buttons would be no row), and so is a 'name' (the jersey's name, the one
+ * value that is not an id; it shows whenever its `showWhen` does, since
+ * there is no list to count). A tab shows only when it has a field to show.
  * Every color field ends in a custom swatch (any color, the browser's own
  * picker). A field with a `frame` of its own is framed by it when chosen,
  * not by its tab's (the shoes, on the Clothes tab, still look at the feet).
@@ -99,6 +101,8 @@ export const EDITOR_TABS = deepFreeze([
             { key: 'shirt', legend: 'Shirt', kind: 'swatch' },
             { key: 'sleeves', legend: 'Style', kind: 'text' },
             { key: 'jerseyNumber', legend: 'Jersey number', kind: 'number', showWhen: { field: 'sleeves', value: 'jersey' } },
+            // The name over the back number (Steve's son, 2026-10-28).
+            { key: 'jerseyName', legend: 'Name on the back', kind: 'name', showWhen: { field: 'sleeves', value: 'jersey' } },
             { key: 'numberColor', legend: 'Number color', kind: 'swatch', showWhen: { field: 'sleeves', value: 'jersey' } },
             { key: 'bottom', legend: 'Pants, skirt or shorts', kind: 'text' },
             { key: 'bottomColor', legend: 'Color', kind: 'swatch' },
@@ -129,7 +133,8 @@ export function optionsFor(key) {
  *  loop, is followed to its end). */
 export function visibleFields(tab, omit = []) {
     const visible = (field, seen = new Set()) => {
-        if (seen.has(field.key) || omit.includes(field.key) || optionsFor(field.key).length < 2) return false;
+        if (seen.has(field.key) || omit.includes(field.key)) return false;
+        if (field.kind !== 'name' && optionsFor(field.key).length < 2) return false;
         if (!field.requires) return true;
         const needed = tab.fields.find((g) => g.key === field.requires);
         return Boolean(needed) && visible(needed, new Set([...seen, field.key]));
@@ -183,7 +188,8 @@ export function tabKey(key, index, count) {
  * every id and radio group name ('av' unless given), so a second editor on a
  * page never shares one with the first.
  *
- * Returns `{ tabs, set(avatar), select(id), selected, inputs }`.
+ * Returns `{ tabs, set(avatar), select(id), selected, inputs, customs,
+ * numbers, names, labelOf(key, id) }`.
  */
 export function createEditor({ doc = document, tablist, panels, tabs, avatar, onChange = () => {}, onTab = () => {}, omit = [], prefix = 'av' }) {
     const shown = visibleTabs(tabs, omit);
@@ -192,6 +198,7 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
     const inputs = {};
     const customs = {};      // each color field's own color picker
     const numbers = {};      // each number field's own text box
+    const names = {};        // and each name field's (the jersey's)
     const shows = {};        // and the way to show it an id
     const groups = [];       // [field, fieldset], for the groups a choice hides
     const onlyWith = [];     // [option, label], for the options another choice offers
@@ -284,6 +291,45 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
      * it is typed, so the figure wears each keystroke. Empty is none. What
      * is kept is always one of the list's ids (`numberId`), never the text.
      */
+    /**
+     * A typed name (the jersey's, 2026-10-28): one text box, read as it is
+     * typed, so the back wears each keystroke. What shows is cleaned as it
+     * goes (`typedJerseyName`: capitals, accents dropped, anything else
+     * left out); what is kept is a valid name or `none` (`jerseyName`),
+     * never the raw text. Empty is none.
+     */
+    function buildName(field) {
+        const input = make('input', 'av-name');
+        input.type = 'text';
+        input.autocomplete = 'off';
+        input.maxLength = JERSEY_NAME.max;
+        input.placeholder = 'None';
+        input.spellcheck = false;
+        input.setAttribute('autocapitalize', 'characters');
+        input.setAttribute('aria-label', field.legend);
+        let shown = jerseyName(avatar[field.key] === 'none' ? '' : avatar[field.key]);
+        input.value = shown === 'none' ? '' : shown;
+        const send = () => {
+            const text = typedJerseyName(input.value);
+            if (input.value !== text) input.value = text;
+            const id = jerseyName(text);
+            if (id === shown) return;
+            shown = id;
+            onChange(field.key, id);
+        };
+        input.addEventListener('input', send);
+        input.addEventListener('change', send);
+        names[field.key] = input;
+        shows[field.key] = (id) => {
+            shown = jerseyName(id === 'none' ? '' : id);
+            const text = shown === 'none' ? '' : shown;
+            // The box keeps what is being typed (a space before the next
+            // word) while it still says the same name.
+            if (jerseyName(input.value) !== shown) input.value = text;
+        };
+        return input;
+    }
+
     function buildNumber(field) {
         const input = make('input', 'av-number');
         input.type = 'text';
@@ -343,6 +389,7 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
             group.appendChild(make('legend', 'av-legend', field.legend));
             const row = make('div', `av-options av-options-${field.kind}`);
             if (field.kind === 'number') row.appendChild(buildNumber(field));
+            else if (field.kind === 'name') row.appendChild(buildName(field));
             else for (const option of optionsFor(field.key)) row.appendChild(buildOption(field, option));
             if (field.kind === 'swatch' && COLOR_FIELDS.includes(field.key)) {
                 row.appendChild(buildCustom(field));
@@ -373,6 +420,7 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
         inputs,
         customs,
         numbers,
+        names,
         get selected() {
             return selected;
         },

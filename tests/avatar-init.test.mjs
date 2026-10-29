@@ -524,12 +524,13 @@ describe('the editor and the way back', () => {
         expect(E.visibleFields({ fields: [{ key: 'skin', kind: 'swatch', requires: 'hat' }] })).toEqual([]);
         expect(E.visibleFields({ fields: [{ key: 'skin', kind: 'swatch', requires: 'eyes' }, { key: 'eyes', kind: 'swatch', requires: 'skin' }] })).toEqual([]);
         // Every field of every tab is a real field of the avatar.
-        for (const tab of CONFIG.tabs) for (const f of tab.fields) expect(['swatch', 'text', 'number']).toContain(f.kind);
-        // The jersey's number and its color follow the shirt's style
-        // (2026-10-26), shown only on the jersey.
-        expect(fields('clothes')).toEqual(['shirt', 'sleeves', 'jerseyNumber', 'numberColor', 'bottom', 'bottomColor', 'shoes', 'shoeColor']);
-        for (const key of ['jerseyNumber', 'numberColor']) expect(clothes.fields.find((f) => f.key === key).showWhen).toEqual({ field: 'sleeves', value: 'jersey' });
+        for (const tab of CONFIG.tabs) for (const f of tab.fields) expect(['swatch', 'text', 'number', 'name']).toContain(f.kind);
+        // The jersey's number, the name over it (2026-10-28) and their color
+        // follow the shirt's style (2026-10-26), shown only on the jersey.
+        expect(fields('clothes')).toEqual(['shirt', 'sleeves', 'jerseyNumber', 'jerseyName', 'numberColor', 'bottom', 'bottomColor', 'shoes', 'shoeColor']);
+        for (const key of ['jerseyNumber', 'jerseyName', 'numberColor']) expect(clothes.fields.find((f) => f.key === key).showWhen).toEqual({ field: 'sleeves', value: 'jersey' });
         expect(clothes.fields.find((f) => f.key === 'jerseyNumber').kind).toBe('number');
+        expect(clothes.fields.find((f) => f.key === 'jerseyName').kind).toBe('name');
     });
 
     test('bare legs are offered only while a one-piece is worn, and the layers\' colors step aside with no layer (2026-10-26)', () => {
@@ -612,6 +613,63 @@ describe('the editor and the way back', () => {
         expect(box.value).toBe('12');
         ed.set({ sleeves: 'jersey', jerseyNumber: 'none' });
         expect(box.value).toBe('');
+    });
+
+    test('a jersey name is typed: cleaned as it goes, twelve at most, kept as a name or none, shown only on the jersey (Steve\'s son, 2026-10-28)', () => {
+        const tablist = document.createElement('div');
+        const panels = document.createElement('div');
+        const changes = [];
+        const ed = E.createEditor({ tablist, panels, tabs: CONFIG.tabs, avatar: { sleeves: 'short', jerseyName: 'none' }, onChange: (k, id) => changes.push([k, id]) });
+        const box = ed.names.jerseyName;
+        expect(Object.keys(ed.names)).toEqual(['jerseyName']);
+        expect(box.getAttribute('aria-label')).toBe('Name on the back');
+        expect(box.maxLength).toBe(12);
+        expect(box.getAttribute('autocapitalize')).toBe('characters');
+        expect(box.spellcheck).toBe(false);
+        expect(box.value).toBe('');
+        // Off the jersey it steps aside with the number.
+        const groupOf = (el) => el.parentNode.parentNode;
+        expect(groupOf(box).tagName).toBe('FIELDSET');
+        expect(groupOf(box).hidden).toBe(true);
+        ed.set({ sleeves: 'jersey', jerseyName: 'none' });
+        expect(groupOf(box).hidden).toBe(false);
+        // Typed: each keystroke dresses the back, cleaned in the box as it
+        // goes; only a real name or none is ever sent.
+        box.value = 'van';
+        fire(box, 'input');
+        expect(box.value).toBe('VAN');
+        expect(changes).toEqual([['jerseyName', 'VAN']]);
+        box.value = 'van ';
+        fire(box, 'input');
+        expect(box.value).toBe('VAN ');
+        expect(changes).toHaveLength(1);
+        // The page shows the avatar again after each change: the space being
+        // typed stays.
+        ed.set({ sleeves: 'jersey', jerseyName: 'VAN' });
+        expect(box.value).toBe('VAN ');
+        box.value = 'van dyke!';
+        fire(box, 'input');
+        expect(box.value).toBe('VAN DYKE');
+        expect(changes[1]).toEqual(['jerseyName', 'VAN DYKE']);
+        box.value = 'Jos\u00e9 <b>';
+        fire(box, 'change');
+        expect(box.value).toBe('JOSE B');
+        expect(changes[2]).toEqual(['jerseyName', 'JOSE B']);
+        // Cleared, or nothing that is a name, is none.
+        box.value = '123';
+        fire(box, 'input');
+        expect(box.value).toBe('');
+        expect(changes[3]).toEqual(['jerseyName', 'none']);
+        // set() shows the avatar's name, or nothing.
+        ed.set({ sleeves: 'jersey', jerseyName: "O'NEIL" });
+        expect(box.value).toBe("O'NEIL");
+        ed.set({ sleeves: 'jersey', jerseyName: 'none' });
+        expect(box.value).toBe('');
+        // An editor opened on an avatar with a name shows it.
+        const named = E.createEditor({ tablist: document.createElement('div'), panels: document.createElement('div'), tabs: CONFIG.tabs, avatar: { sleeves: 'jersey', jerseyName: 'SMITH' } });
+        expect(named.names.jerseyName.value).toBe('SMITH');
+        // The box is styled, its own [hidden]-safe pill.
+        expect(readFileSync('www/avatar/css/avatar.css', 'utf8')).toMatch(/\n\.av-name \{[^}]*font-size:\s*16px/);
     });
 
     test('swatches carry their color, and the tab row\'s keys wrap', () => {
@@ -800,7 +858,12 @@ describe('the page', () => {
         // Meme Studio's copy of the editor's styles holds it too.
         expect(readFileSync('www/meme/css/meme.css', 'utf8')).toMatch(/\.mm-customize \.av-option\[hidden\] \{\s*display:\s*none;\s*\}/);
         const html = readFileSync('www/avatar/index.html', 'utf8');
-        expect(html.match(/css\/avatar\.min\.css\?v=(\d+)/g)).toEqual(['css/avatar.min.css?v=14', 'css/avatar.min.css?v=14']);
+        // The stylesheet's version moved on from the fix together in both
+        // places (v=14 brought the rule).
+        const versions = (html.match(/css\/avatar\.min\.css\?v=(\d+)/g) || []).map((m) => Number(m.split('=')[1]));
+        expect(versions).toHaveLength(2);
+        expect(versions[0]).toBe(versions[1]);
+        expect(versions[0]).toBeGreaterThanOrEqual(14);
     });
 
     test('the studio sticks to the viewport on a phone: the body is not a scroll container (Steve\'s phone QA, 2026-10-27)', () => {

@@ -207,8 +207,12 @@ test('and the policy actually describes them, in words a visitor would use', () 
     // clear it. The home chip's visit count joins it with the chip (M4).
     expect(text).toMatch(/When you save an avatar on the Your Avatar page/i);
     expect(text).toMatch(/small picture of its face, drawn right on your device/i);
-    // Custom colors (2026-10-24): still nothing typed, and said so.
-    expect(text).toMatch(/from your browser.s color picker, with no name and nothing typed/i);
+    // Custom colors (2026-10-24), and the one typed field (2026-10-28): a
+    // name for the jersey's back, kept with the avatar and carried only in
+    // the visitor's own links and files, and said so.
+    expect(text).not.toMatch(/with no name and nothing typed/i);
+    expect(text).toMatch(/The one thing you can type is a name for the back of a sports jersey/i);
+    expect(text).toMatch(/holds only those choices, a jersey.s name among them/i);
     expect(text).toMatch(/never in our usage pings/i);
     // Export my avatar (2026-10-26): the picture or clip is made on the
     // device and goes only to the visitor's own share sheet or downloads.

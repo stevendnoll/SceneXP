@@ -331,6 +331,158 @@ export const NUMBER_SIZE = Object.freeze({
     fit: 0.85
 });
 
+/**
+ * The name on the jersey's back (Steve's son, 2026-10-28): capitals from
+ * the classic 5 by 7 pixel alphabet, made bold (`NAME_SIZE.bold`: each mark
+ * one pixel wider, two to an upright, near the number's own cut), and a
+ * hyphen, an apostrophe and a space. A row is a string of marks; `#` is
+ * cloth of the number's color. Only what avatar-1.0.0's `JERSEY_NAME`
+ * allows is ever set.
+ */
+export const LETTERS = Object.freeze({
+    A: ['.###.', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
+    B: ['####.', '#...#', '#...#', '####.', '#...#', '#...#', '####.'],
+    C: ['.###.', '#...#', '#....', '#....', '#....', '#...#', '.###.'],
+    D: ['####.', '#...#', '#...#', '#...#', '#...#', '#...#', '####.'],
+    E: ['#####', '#....', '#....', '####.', '#....', '#....', '#####'],
+    F: ['#####', '#....', '#....', '####.', '#....', '#....', '#....'],
+    G: ['.###.', '#...#', '#....', '#.###', '#...#', '#...#', '.####'],
+    H: ['#...#', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
+    I: ['#####', '..#..', '..#..', '..#..', '..#..', '..#..', '#####'],
+    J: ['..###', '...#.', '...#.', '...#.', '...#.', '#..#.', '.##..'],
+    K: ['#...#', '#..#.', '#.#..', '##...', '#.#..', '#..#.', '#...#'],
+    L: ['#....', '#....', '#....', '#....', '#....', '#....', '#####'],
+    M: ['#...#', '##.##', '#.#.#', '#.#.#', '#...#', '#...#', '#...#'],
+    N: ['#...#', '##..#', '##..#', '#.#.#', '#..##', '#..##', '#...#'],
+    O: ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+    P: ['####.', '#...#', '#...#', '####.', '#....', '#....', '#....'],
+    Q: ['.###.', '#...#', '#...#', '#...#', '#.#.#', '#..#.', '.##.#'],
+    R: ['####.', '#...#', '#...#', '####.', '#.#..', '#..#.', '#...#'],
+    S: ['.####', '#....', '#....', '.###.', '....#', '....#', '####.'],
+    T: ['#####', '..#..', '..#..', '..#..', '..#..', '..#..', '..#..'],
+    U: ['#...#', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+    V: ['#...#', '#...#', '#...#', '#...#', '#...#', '.#.#.', '..#..'],
+    W: ['#...#', '#...#', '#...#', '#.#.#', '#.#.#', '##.##', '#...#'],
+    X: ['#...#', '#...#', '.#.#.', '..#..', '.#.#.', '#...#', '#...#'],
+    Y: ['#...#', '#...#', '.#.#.', '..#..', '..#..', '..#..', '..#..'],
+    Z: ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####'],
+    '-': ['...', '...', '...', '###', '...', '...', '...'],
+    "'": ['#', '#', '.', '.', '.', '.', '.'],
+    ' ': ['...', '...', '...', '...', '...', '...', '...']
+});
+
+/** Where the name goes: across the back over the number, its middle
+ *  `center` above the torso's middle (the back number is 0.2 tall about
+ *  the middle, so the name sits a hand's width over it, below the
+ *  shoulders), `height` meters tall at most, a `gap` of pixels between
+ *  letters, `proud` of the cloth, never wider than `fit` of the torso
+ *  there: a long name sets smaller rather than run off the back. */
+export const NAME_SIZE = Object.freeze({ height: 0.055, center: 0.155, gap: 1, proud: 0.006, fit: 0.85, bold: true });
+
+/** A glyph made bold: each mark one pixel wider to the right. */
+function embolden(rows) {
+    return rows.map((row) => Array.from({ length: row.length + 1 }, (_, c) => (row[c] === '#' || row[c - 1] === '#' ? '#' : '.')).join(''));
+}
+
+/** The glyphs `name` is set in, the letters' own (bold when `NAME_SIZE`
+ *  says), anything the alphabet lacks left out. */
+function nameGlyphs(name) {
+    return String(name).split('').filter((ch) => LETTERS[ch]).map((ch) => (NAME_SIZE.bold ? embolden(LETTERS[ch]) : LETTERS[ch]));
+}
+
+/** How wide `glyphs` set `gap` pixels apart are, in pixels. */
+function glyphsWidth(glyphs, gap) {
+    return glyphs.reduce((n, g) => n + g[0].length, 0) + Math.max(0, glyphs.length - 1) * gap;
+}
+
+/**
+ * `glyphs` (each its rows of `#` and `.`, all as tall) set `gap` pixels
+ * apart as one flat geometry `height` meters tall, centered on the origin
+ * in the x-y plane facing +z: each row's runs of pixels as rectangles, so a
+ * stroke is one piece rather than a row of squares.
+ */
+function setGlyphs(glyphs, height, gap) {
+    const rows = glyphs.length ? glyphs[0].length : 1;
+    const px = height / rows;
+    const width = glyphsWidth(glyphs, gap);
+    const shapes = [];
+    let left = -width / 2;
+    for (const glyph of glyphs) {
+        const cols = glyph[0].length;
+        glyph.forEach((row, r) => {
+            const y1 = height / 2 - r * px;
+            const y0 = y1 - px;
+            let c = 0;
+            while (c < cols) {
+                if (row[c] !== '#') {
+                    c++;
+                    continue;
+                }
+                let end = c;
+                while (end < cols && row[end] === '#') end++;
+                const x0 = (left + c) * px;
+                const x1 = (left + end) * px;
+                const s = new THREE.Shape();
+                s.moveTo(x0, y0);
+                s.lineTo(x1, y0);
+                s.lineTo(x1, y1);
+                s.lineTo(x0, y1);
+                s.closePath();
+                shapes.push(s);
+                c = end;
+            }
+        });
+        left += cols + gap;
+    }
+    return new THREE.ShapeGeometry(shapes);
+}
+
+/** How wide `name` is for each meter of height (LETTERS' grid). */
+export function nameAspect(name) {
+    const glyphs = nameGlyphs(name);
+    return glyphsWidth(glyphs, NAME_SIZE.gap) / LETTERS.A.length;
+}
+
+/** `name` ("O'NEIL") as one flat geometry `height` meters tall, centered on
+ *  the origin facing +z. */
+export function nameGeometry(name, height) {
+    return setGlyphs(nameGlyphs(name), height, NAME_SIZE.gap);
+}
+
+/**
+ * The name across the jersey's back, over the number: `name` in `color` (a
+ * display hex), or in the jersey's own trim for the shirt's `shirtColor`
+ * when `color` is null, as the number is. As tall as `NAME_SIZE` allows,
+ * unless that is too wide for the back there. Named 'jerseyName'; null for
+ * no name.
+ */
+export function nameJersey(person, name, color, shirtColor) {
+    const { torso } = bodyParts(person);
+    const text = String(name || '');
+    if (!torso || !nameGlyphs(text).length) return null;
+    const { depth } = torsoBox(torso);
+    const spec = SHIRT_SIZE.jersey;
+    const N = NAME_SIZE;
+    const mat = material(color ?? (isLight(shirtColor) ? spec.dark : spec.light), 0.8);
+    // Measured where the name ends up: a long name sets smaller, into a
+    // thinner band, which on a rounded back reads a little narrower than
+    // the full one did, so the fit is taken again at each size until the
+    // name fits the band it stands in.
+    const aspect = nameAspect(text);
+    let height = N.height;
+    for (let k = 0; k < 8; k++) {
+        const fits = (torsoWidthAt(torso, N.center - height / 2, N.center + height / 2) * N.fit) / aspect;
+        if (fits >= height - 1e-9) break;
+        height = fits;
+    }
+    const mesh = new THREE.Mesh(nameGeometry(text, height), mat);
+    mesh.position.set(0, torso.position.y + N.center, -(depth / 2 + N.proud));
+    mesh.rotation.y = Math.PI;
+    mesh.name = 'jerseyName';
+    person.add(mesh);
+    return mesh;
+}
+
 /** How many pieces a jersey's side stripe is cut into down a shaped
  *  torso. */
 export const STRIPE_PIECES = 8;
@@ -402,39 +554,7 @@ export function numberAspect(digits) {
  * rectangles, so a stroke is one piece rather than a row of squares.
  */
 export function numberGeometry(digits, height) {
-    const rows = DIGITS[0].length;
-    const cols = DIGITS[0][0].length;
-    const px = height / rows;
-    const chars = String(digits).split('').filter((d) => DIGITS[d]);
-    const width = chars.length * cols + Math.max(0, chars.length - 1) * NUMBER_SIZE.gap;
-    const shapes = [];
-    chars.forEach((d, k) => {
-        const left = k * (cols + NUMBER_SIZE.gap) - width / 2;
-        DIGITS[d].forEach((row, r) => {
-            const y1 = height / 2 - r * px;
-            const y0 = y1 - px;
-            let c = 0;
-            while (c < cols) {
-                if (row[c] !== '#') {
-                    c++;
-                    continue;
-                }
-                let end = c;
-                while (end < cols && row[end] === '#') end++;
-                const x0 = (left + c) * px;
-                const x1 = (left + end) * px;
-                const s = new THREE.Shape();
-                s.moveTo(x0, y0);
-                s.lineTo(x1, y0);
-                s.lineTo(x1, y1);
-                s.lineTo(x0, y1);
-                s.closePath();
-                shapes.push(s);
-                c = end;
-            }
-        });
-    });
-    return new THREE.ShapeGeometry(shapes);
+    return setGlyphs(String(digits).split('').filter((d) => DIGITS[d]).map((d) => DIGITS[d]), height, NUMBER_SIZE.gap);
 }
 
 /**

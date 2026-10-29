@@ -119,7 +119,10 @@ describe('round trips', () => {
 
     test('three people in their heaviest clothes and every caption full still fit under the ceiling', () => {
         // Every color field a custom color: the longest an avatar's link gets.
-        const heavy = (skin) => normalizeAvatar({ skin, eyes: 'x111111', hair: 'x222222', shirt: 'x333333', bottomColor: 'x444444', shoeColor: 'x555555', hatColor: 'x666666', hat: 'beret', lips: 'x777777', facial: 'beard', facialColor: 'x888888', glasses: 'round', frameColor: 'x999999', lensColor: 'xaaaaaa', sleeves: 'jersey', jerseyNumber: 'n00', numberColor: 'xbbbbbb', legwear: 'fishnets', legwearColor: 'xcccccc', armwear: 'fishnets', armwearColor: 'xdddddd' });
+        // And the longest a jersey's name travels (2026-10-28): twelve, each
+        // apostrophe three characters in a link.
+        const heavy = (skin) => normalizeAvatar({ skin, eyes: 'x111111', hair: 'x222222', shirt: 'x333333', bottomColor: 'x444444', shoeColor: 'x555555', hatColor: 'x666666', hat: 'beret', lips: 'x777777', facial: 'beard', facialColor: 'x888888', glasses: 'round', frameColor: 'x999999', lensColor: 'xaaaaaa', sleeves: 'jersey', jerseyNumber: 'n00', numberColor: 'xbbbbbb', legwear: 'fishnets', legwearColor: 'xcccccc', armwear: 'fishnets', armwearColor: 'xdddddd', jerseyName: "O'O'O'O'O'O'" });
+        expect(heavy('deep').jerseyName).toBe("O'O'O'O'O'O'");
         const t = TEMPLATES.find((x) => x.id === 'headTurn');
         const full = meme({ template: t.id, captions: slotsOf(t).map(() => 'W'.repeat(CONFIG.caption.maxChars)), friend: heavy('deep'), cast: { other: heavy('light') } });
         const hash = R.encodeRemix(full, heavy('medium'), { max: MAX });
@@ -138,7 +141,7 @@ describe('round trips', () => {
         // sub-delims, and the percent sign of an escape. `|` is not one, and
         // a browser or a chat wrote it %7C: "ME|WORK|MEMES" in one label.
         const CODE_POINTS = /^[A-Za-z0-9\-._~!$&'()*+,;=:@/?%]*$/;
-        const heavy = normalizeAvatar({ skin: 'deep', shirt: 'xabcdef', hat: 'beret' });
+        const heavy = normalizeAvatar({ skin: 'deep', shirt: 'xabcdef', hat: 'beret', sleeves: 'jersey', jerseyName: "VAN O'DYKE" });
         for (const t of TEMPLATES) {
             const captions = slotsOf(t).map((_, k) => HOSTILE[k % HOSTILE.length]);
             const crowd = t.roles.filter((r) => r.cast === 'random').map((r) => r.id);

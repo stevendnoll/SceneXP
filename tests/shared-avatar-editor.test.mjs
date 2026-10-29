@@ -99,3 +99,14 @@ test('an editor with no one listening still takes a choice and a tab', () => {
     tablist.children[2].click();
     expect(ed.selected).toBe('hair');
 });
+
+test('a typed name field shows by its rule alone, with no list to count, and leaves out like any other (2026-10-28)', () => {
+    const clothes = E.EDITOR_TABS.find((t) => t.id === 'clothes');
+    expect(E.optionsFor('jerseyName')).toHaveLength(1);
+    expect(E.visibleFields(clothes).map((f) => f.key)).toContain('jerseyName');
+    expect(E.visibleFields(clothes, ['jerseyName']).map((f) => f.key)).not.toContain('jerseyName');
+    // A second editor's box is its own.
+    const { ed } = build({ prefix: 'mm-cz', avatar: { sleeves: 'jersey', jerseyName: 'NOLL' } });
+    expect(ed.names.jerseyName.value).toBe('NOLL');
+    expect(build({ omit: ['jerseyName'] }).ed.names.jerseyName).toBeUndefined();
+});

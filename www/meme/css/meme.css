@@ -658,6 +658,27 @@ body.mm-body {
     text-align: center;
 }
 
+.mm-customize .av-name {
+    width: min(15em, 100%);
+    padding: 7px 14px;
+    border: 1px solid var(--mm-line);
+    border-radius: 999px;
+    background: var(--mm-paper);
+    color: inherit;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.mm-customize .av-name::placeholder {
+    letter-spacing: normal;
+    text-transform: none;
+    font-weight: 500;
+}
+
+.mm-customize .av-name:focus-visible,
 .mm-customize .av-number:focus-visible {
     outline: 2px solid var(--mm-focus);
     outline-offset: 4px;

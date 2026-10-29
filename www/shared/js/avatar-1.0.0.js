@@ -14,7 +14,10 @@
  * real option is kept, anything else becomes the default's. `normalizeAvatar`
  * takes anything at all and always returns a real figure. The two shapes
  * since: any color as six hex digits (`CUSTOM_COLOR`), and a jersey number
- * as one of a list of a hundred and two (JERSEY_NUMBERS).
+ * as one of a list of a hundred and two (JERSEY_NUMBERS). And ONE TYPED
+ * FIELD since 2026-10-28: the name on the back of a jersey (`JERSEY_NAME`),
+ * held to capitals, spaces, hyphens and apostrophes, twelve at most, so it
+ * is checked as strictly as an id.
  *
  * TODAY'S LISTS COME FROM cast-1.0.0 (frozen, Leaf Blower and Derby Day run
  * on it): the shirts, pants, skin tones, hair colors and hair lengths. The
@@ -233,6 +236,53 @@ export const NUMBER_COLORS = Object.freeze([
     { id: 'green', label: 'Green', color: 0x2f7a4f },
     { id: 'orange', label: 'Orange', color: 0xe07a1f }
 ]);
+
+/**
+ * The name on the back of a sports jersey (Steve's son, 2026-10-28: "like a
+ * real sports jersey, the player's name above the number"). THE ONE TYPED
+ * FIELD. A name is `none` (lowercase, so the name NONE is still a name) or
+ * one to `max` of A to Z, a hyphen and an apostrophe in words parted by
+ * single spaces, with a letter in it: O'NEIL, SMITH-JONES, VAN DYKE. Typing
+ * makes one through `jerseyName` (accents dropped, as JOSE for José, and the
+ * rest left out); nothing else is ever kept. Drawn by avatar-wardrobe over
+ * the back number, only on the jersey, in the number's color. In a link a
+ * space travels as `_` and an apostrophe as `%27` (every character a URL
+ * carries as it is). Steve, 2026-10-28: twelve at most, no word filter (as
+ * the meme captions), and the privacy policy says it is kept and where it
+ * goes.
+ */
+export const JERSEY_NAME = Object.freeze({ max: 12, pattern: /^(?=.*[A-Z])[A-Z'-]+(?: [A-Z'-]+)*$/ });
+
+/** The name's list, for the parts that read every field as one: `none`
+ *  alone, every other value checked by `isJerseyName`. */
+export const JERSEY_NAMES = Object.freeze([{ id: 'none', label: 'None' }]);
+
+/** Whether `value` is a name a jersey may carry (not `none`). */
+export function isJerseyName(value) {
+    return typeof value === 'string' && value.length <= JERSEY_NAME.max && JERSEY_NAME.pattern.test(value);
+}
+
+/** What typing `text` shows in the box as it goes: capitals, accents
+ *  dropped, curly apostrophes made straight, anything else left out, spaces
+ *  gathered to one and none first, `max` at most. A space may end it while
+ *  the next word is typed. */
+export function typedJerseyName(text) {
+    return String(text ?? '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/[\u2018\u2019\u02bc`\u00b4]/g, "'")
+        .replace(/[^A-Z' -]/g, '')
+        .replace(/\s+/g, ' ')
+        .replace(/^ /, '')
+        .slice(0, JERSEY_NAME.max);
+}
+
+/** The name `text` makes once typed (`typedJerseyName`, its ends trimmed),
+ *  or `none` for one that is not a name. */
+export function jerseyName(text) {
+    const name = typedJerseyName(text).trim();
+    return isJerseyName(name) ? name : 'none';
+}
 
 /** The mouth (Steve's QA, 2026-10-24: expressions, lip colors, teeth). All
  *  of them friendly: the figure has no eyebrows, so the mouth is the whole
@@ -542,7 +592,9 @@ export const FIELDS = Object.freeze([
     Object.freeze(['armwear', ARMWEAR]),
     Object.freeze(['armwearColor', LAYER_COLORS]),
     // Appended 2026-10-26 (Steve): which hand leads.
-    Object.freeze(['handedness', HANDEDNESS])
+    Object.freeze(['handedness', HANDEDNESS]),
+    // Appended 2026-10-28 (Steve's son): the name on the jersey's back.
+    Object.freeze(['jerseyName', JERSEY_NAMES])
 ]);
 
 /** The list a field's ids come from, or null for a field that is not one. */
@@ -590,7 +642,8 @@ export const DEFAULT_AVATAR = Object.freeze({
     legwearColor: 'black',
     armwear: 'none',
     armwearColor: 'black',
-    handedness: 'right'
+    handedness: 'right',
+    jerseyName: 'none'
 });
 
 const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
@@ -602,6 +655,7 @@ const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
 function valid(key, list, value) {
     if (typeof value !== 'string') return false;
     if (optionOf(list, value)) return true;
+    if (key === 'jerseyName') return isJerseyName(value);
     return COLOR_FIELDS.includes(key) && CUSTOM_COLOR.test(value);
 }
 
@@ -746,6 +800,8 @@ export function randomAvatar(rand = Math.random, { look = null } = {}) {
         const rest = offered.filter((o) => o.id !== 'none');
         const noneOdds = own(chosen.none, key) ? chosen.none[key] : NONE_ODDS;
         if (key === 'handedness') out[key] = roll() < LEFT_HANDED_ODDS ? 'left' : 'right';
+        // A stranger's jersey is never anyone's name.
+        else if (key === 'jerseyName') out[key] = 'none';
         else if (key === 'jerseyNumber') out[key] = out.sleeves === 'jersey' ? pick(rest) : 'none';
         else if (rest.length < offered.length && roll() < noneOdds) out[key] = 'none';
         else out[key] = pick(rest.length ? rest : offered);
@@ -906,11 +962,14 @@ export function describeAvatar(avatar) {
     if (a.footSize !== 'standard') limbs.push(`${word(FOOT_SIZES, a.footSize)} feet`);
     // "a straight build with a leading left hand" (nothing said of the usual).
     if (a.handedness === 'left') limbs.push('a leading left hand');
-    // "a purple sports jersey with the number 8 in white" (nothing said of
-    // the standard color, which is the jersey's own trim).
+    // "a purple sports jersey with the name SMITH and the number 8 in white"
+    // (nothing said of the standard color, which is the jersey's own trim).
     const number = optionOf(JERSEY_NUMBERS, a.jerseyNumber);
-    const numbered = a.sleeves === 'jersey' && number.digits
-        ? ` with the number ${number.digits}${a.numberColor === 'standard' ? '' : ` in ${word(NUMBER_COLORS, a.numberColor)}`}`
+    const marks = [];
+    if (a.sleeves === 'jersey' && a.jerseyName !== 'none') marks.push(`the name ${a.jerseyName}`);
+    if (a.sleeves === 'jersey' && number.digits) marks.push(`the number ${number.digits}`);
+    const numbered = marks.length
+        ? ` with ${marks.join(' and ')}${a.numberColor === 'standard' ? '' : ` in ${word(NUMBER_COLORS, a.numberColor)}`}`
         : '';
     const clothes = [
         `a ${muscles}${optionOf(BUILDS, a.build).said || word(BUILDS, a.build)} build${limbs.length ? ` with ${limbs.join(' and ')}` : ''}`,
@@ -937,14 +996,33 @@ export const LINK_VERSION = 1;
  *  every field to grow. */
 export const MAX_LINK = 768;
 
+/** A field's value as it travels in a link, and back: the jersey's name
+ *  with a space as `_` and an apostrophe as `%27` (every character one a
+ *  URL carries as it is, and none of them the link's `.`); an id as it is. */
+function linkPart(key, value) {
+    return key === 'jerseyName' ? value.replace(/ /g, '_').replace(/'/g, '%27') : value;
+}
+
+function fromLinkPart(key, part) {
+    if (key !== 'jerseyName') return part;
+    let text;
+    try {
+        text = decodeURIComponent(part);
+    } catch (e) {
+        return part;
+    }
+    return text.replace(/_/g, ' ');
+}
+
 /**
  * The avatar as a fragment, without the `#`: `a=1.fair.darkBrown...`, each
- * field's id in FIELDS order after the version. Readable, no base64, and
- * after the `#` it never reaches the server or its logs.
+ * field's id in FIELDS order after the version (the jersey's name as
+ * `linkPart` writes it). Readable, no base64, and after the `#` it never
+ * reaches the server or its logs.
  */
 export function encodeLink(avatar) {
     const a = normalizeAvatar(avatar);
-    return `a=${LINK_VERSION}.${FIELDS.map(([key]) => a[key]).join('.')}`;
+    return `a=${LINK_VERSION}.${FIELDS.map(([key]) => linkPart(key, a[key])).join('.')}`;
 }
 
 /** The whole address of the avatar page carrying `avatar`, for `origin`
@@ -967,7 +1045,7 @@ export function decodeLink(hash) {
     if (ids[0] !== String(LINK_VERSION)) return null;
     const raw = {};
     FIELDS.forEach(([key], i) => {
-        if (ids[i + 1] !== undefined) raw[key] = ids[i + 1];
+        if (ids[i + 1] !== undefined) raw[key] = fromLinkPart(key, ids[i + 1]);
     });
     return validCount(raw) > 0 ? normalizeAvatar(raw) : null;
 }
