@@ -1544,13 +1544,37 @@ describe('the moments worth a photo', () => {
  * sheet or the downloads folder. A catch (and a tackle, where wanted) is set
  * on the live play through `__test__`, as in the moments tests above.
  */
+/**
+ * A thrown ball caught by receiver A, then whatever the play does; with
+ * `downed`, he is brought down at once too. Leaves the result card up.
+ * `frames(n)` is the caller's own clock, so a describe's `now` keeps counting.
+ */
+async function catchToResult(frames, { downed = false } = {}) {
+    const main = await toLivePlay();
+    const find = (position) => main.__test__.play().game.objects.find((o) => o.settings.position === position);
+    press('Snap the ball');
+    await flushAsync();
+    frames(3);
+    press('Throw A');
+    await flushAsync();
+    find('wr1').state.hasBall = true;
+    frames(2);
+    if (downed) {
+        const st = main.__test__.play().playState.state;
+        st.tackled = true;
+        st.anim.done = true;
+    }
+    await runToResult(() => frames(1));
+    return main;
+}
+
 describe('the photo sheet', () => {
     const PLAY_KEY = 'exes-n-ohs-play-settings';
     let now = 300000;
     const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
-    const find = (main, position) => main.__test__.play().game.objects.find((o) => o.settings.position === position);
     const resultLabels = () => dom.el('result-actions').children.map((b) => b.textContent);
     const share = () => dom.el('photo-share');
+    const aCatch = (opts) => catchToResult(frames, opts);
 
     /** Canvases that can encode a file, which the stub's cannot. */
     function canvasesEncode() {
@@ -1560,26 +1584,6 @@ describe('the photo sheet', () => {
             if (tag === 'canvas') node.toBlob = (cb, type) => cb({ size: 2048, type });
             return node;
         };
-    }
-
-    /** A thrown ball caught by receiver A, then whatever the play does; with
-     *  `downed`, he is brought down at once too. Leaves the result card up. */
-    async function aCatch({ downed = false } = {}) {
-        const main = await toLivePlay();
-        press('Snap the ball');
-        await flushAsync();
-        frames(3);
-        press('Throw A');
-        await flushAsync();
-        find(main, 'wr1').state.hasBall = true;
-        frames(2);
-        if (downed) {
-            const st = main.__test__.play().playState.state;
-            st.tackled = true;
-            st.anim.done = true;
-        }
-        await runToResult(() => dom.loops[0](now += 16.7));
-        return main;
     }
 
     async function ranked(main, visitor = null) {
@@ -1722,6 +1726,245 @@ describe('the photo sheet', () => {
         dom.el('photo-prev').click();
         expect(page()).toBe('3 of 3: The quarterback lets it fly to you.');
         expect(dom.el('photo-title').textContent).toBe('The throw');
+    });
+});
+
+/**
+ * THE CLIP'S TAKE (specs/xo-photos-plan, Step 6): the last seconds of the
+ * recording re-run for a recorder, drawn frame by frame into a stage canvas
+ * through the clip's own camera while the game's canvas is hidden, and
+ * everything given back at the end or on a cancel. The sheet that will drive
+ * it is Step 7, so the take is reached through `__test__` and the console
+ * hook `xo.clip(view)`.
+ */
+describe('the clip\'s take', () => {
+    let now = 400000;
+    const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
+    const aCatch = (opts) => catchToResult(frames, opts);
+    const canvas = () => dom.el('game-canvas');
+
+    /** A stage canvas whose context writes down what is drawn on it. */
+    function recordingStage() {
+        const drawn = [];
+        const stage = dom.documentStub.createElement('canvas');
+        stage.getContext = () => new Proxy({}, {
+            get: (t, k) => (k in t ? t[k] : (...args) => drawn.push([k, ...args])),
+            set: (t, k, v) => { t[k] = v; return true; },
+        });
+        return { stage, drawn };
+    }
+
+    /** Step frames until `promise` settles, within a budget of frames. */
+    async function settle(promise, budget = 3000) {
+        let done = false;
+        let value;
+        promise.then((v) => { done = true; value = v; });
+        for (let i = 0; i < budget && !done; i += 1) {
+            frames(1);
+            await flushAsync(2);
+        }
+        expect(done).toBe(true);
+        return value;
+    }
+
+    /** What the stamp should say, from the card. */
+    function stampOnCard() {
+        const headline = dom.el('result-headline').textContent;
+        const points = dom.el('result-points').textContent;
+        return points === '0' ? headline : `${headline} ${points}`;
+    }
+
+    test('a take re-runs the last seconds of the play for the recorder, with the field hidden, and gives everything back', async () => {
+        const main = await aCatch();
+        const { XO_CONFIG: CFG } = await import('../www/xo/js/config.min.js');
+        const Clip = await import('../www/xo/js/clip.min.js');
+        const R = await import('../www/xo/js/replay.min.js');
+        const camera = await import('../www/xo/js/camera.min.js');
+        const { stage, drawn } = recordingStage();
+
+        // A stage with no context is refused, and nothing changes.
+        const bare = dom.documentStub.createElement('canvas');
+        bare.getContext = () => null;
+        await expect(main.__test__.take(bare)).resolves.toBeNull();
+        expect(main.__test__.phase()).toBe('result');
+
+        // The playhead is left at the end of the recording, so the take has to
+        // put it where the clip starts.
+        R.seek(R.frameCount() - 1);
+        const p = main.__test__.take(stage, { quarter: 1 });
+        expect(main.__test__.phase()).toBe('clip');
+        const t = main.__test__.taking();
+        expect(t.quarter).toBe(1);
+        expect([t.w, t.h]).toEqual([CFG.clip.width, CFG.clip.height]);
+        expect([stage.width, stage.height]).toEqual([CFG.clip.width, CFG.clip.height]);
+        expect(canvas().classList.contains('is-recording')).toBe(true);
+        // The plan starts the clip's seconds before the whistle, and the
+        // playhead is put there, where the camera opens.
+        expect(t.plan.start).toBe(Clip.clipStart(R.frameCount()));
+        expect(t.plan.ticks).toBe(R.frameCount());
+        expect(R.playheadFrame()).toBe(t.plan.start);
+        expect(t.plan.total).toBeGreaterThan(t.plan.play + CFG.clip.hold - 1e-9);
+        expect(t.shoulder).toEqual({ side: 1, want: 1, held: 0, seeded: false });
+        expect(Number.isFinite(t.anchor.x) && Number.isFinite(t.anchor.z)).toBe(true);
+        // A second take while one runs is refused.
+        await expect(main.__test__.take(stage, { quarter: 2 })).resolves.toBeNull();
+        expect(main.__test__.taking().quarter).toBe(1);
+
+        // Every frame goes to the stage with the wordmark on it, and the
+        // frame's own render is skipped: the shoulder memory has been asked.
+        frames(1);
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(1);
+        expect(drawn.filter((c) => c[0] === 'fillText').map((c) => c[1])).toEqual([CFG.clip.wordmark]);
+        expect(main.__test__.taking().shoulder.seeded).toBe(true);
+        expect(main.__test__.taking().frames).toBe(1);
+
+        const value = await settle(p);
+        expect(value.cancelled).toBe(false);
+        // The renderer was given its size and ratio back.
+        expect(value.released).toBe(true);
+        expect(value.seconds).toBeCloseTo(t.plan.total, 9);
+        const draws = drawn.filter((c) => c[0] === 'drawImage').length;
+        expect(value.frames).toBe(draws);
+        // About the plan's length of frames, at sixty a second.
+        expect(Math.abs(draws - t.plan.total / 0.0167)).toBeLessThan(4);
+        // The stamp was on the final hold's frames only.
+        const stamp = stampOnCard();
+        const stamped = drawn.filter((c) => c[0] === 'fillText' && c[1] === stamp).length;
+        expect(stamped).toBeGreaterThan(0);
+        expect(stamped).toBeLessThan(draws);
+        expect(Math.abs(stamped - CFG.clip.hold / 0.0167)).toBeLessThan(4);
+        // The wordmark was on every one.
+        expect(drawn.filter((c) => c[0] === 'fillText' && c[1] === CFG.clip.wordmark)).toHaveLength(draws);
+
+        // Everything back: the phase, the canvas, the card, and the replay's own camera after.
+        expect(main.__test__.phase()).toBe('result');
+        expect(main.__test__.taking()).toBeNull();
+        expect(canvas().classList.contains('is-recording')).toBe(false);
+        expect(dom.el('result').hidden).toBe(false);
+        frames(1);
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(draws);
+        dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+        await flushAsync();
+        frames(1);
+        expect(camera.getDriver()).toBe('replay');
+        expect(R.playheadFrame()).toBeLessThan(5);
+    });
+
+    test('a cancelled take gives the field back at once, the next play lets one go, and off the card a take is refused', async () => {
+        const main = await aCatch();
+        const { stage, drawn } = recordingStage();
+        const p = main.__test__.take(stage, {});
+        frames(5);
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(5);
+        expect(main.__test__.cancelTake()).toBe(true);
+        await expect(p).resolves.toEqual({ cancelled: true, frames: 5, seconds: expect.any(Number), released: true });
+        expect(main.__test__.phase()).toBe('result');
+        expect(canvas().classList.contains('is-recording')).toBe(false);
+        expect(main.__test__.cancelTake()).toBe(false);
+        // Nothing more is drawn into a stage whose take is over.
+        frames(2);
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(5);
+
+        // Next play lets a running take go on its way out.
+        const p2 = main.__test__.take(stage, { quarter: 3 });
+        frames(2);
+        dom.el('result-actions').children.find((b) => b.textContent === 'Next play').click();
+        await expect(p2).resolves.toMatchObject({ cancelled: true, frames: 2 });
+        await flushAsync();
+        expect(main.__test__.phase()).toBe('playbook');
+        expect(canvas().classList.contains('is-recording')).toBe(false);
+        // Off the result card there is nothing to take.
+        await expect(main.__test__.take(stage, {})).resolves.toBeNull();
+    });
+
+    test('xo.clip(view) records a take and saves the file, named for the result, the size and the format', async () => {
+        class FakeRecorder {
+            static isTypeSupported(t) { return t === 'video/webm'; }
+
+            constructor(stream, options) { this.mimeType = options.mimeType; FakeRecorder.starts += 1; }
+
+            start() {}
+
+            stop() {
+                this.ondataavailable({ data: new Blob(['clip']) });
+                this.onstop();
+            }
+        }
+        FakeRecorder.starts = 0;
+        const Canvas = function () {};
+        Canvas.prototype.captureStream = () => ({});
+        Object.assign(dom.windowStub, { MediaRecorder: FakeRecorder, HTMLCanvasElement: Canvas, Blob });
+        const saved = [];
+        const make = dom.documentStub.createElement;
+        dom.documentStub.createElement = (tag) => {
+            const e = make(tag);
+            if (tag === 'canvas') e.captureStream = () => ({});
+            if (tag === 'a') e.click = () => saved.push(e.download);
+            return e;
+        };
+        const made = [];
+        const realCreate = globalThis.URL.createObjectURL;
+        const realRevoke = globalThis.URL.revokeObjectURL;
+        globalThis.URL.createObjectURL = (blob) => { made.push(blob); return 'blob:clip'; };
+        globalThis.URL.revokeObjectURL = () => {};
+        try {
+            const main = await aCatch();
+            const xo = globalThis.window.xo;
+            const p = xo.clip(2);
+            await flushAsync();
+            expect(main.__test__.phase()).toBe('clip');
+            expect(FakeRecorder.starts).toBe(1);
+            expect(main.__test__.taking().quarter).toBe(1);
+            const line = await settle(p);
+            expect(line).toMatch(/^Saved scenexp-xo-[a-z0-9-]+-1080x1920\.webm \(\d+ KB, \d+\.\d s, \d+ frames, view 2 of 4\)\.$/);
+            expect(saved).toHaveLength(1);
+            expect(saved[0]).toMatch(/^scenexp-xo-(catch|incomplete|interception|sack|run|run-50)-1080x1920\.webm$/);
+            expect(made[0].type).toBe('video/webm');
+            expect(main.__test__.phase()).toBe('result');
+
+            // A view past the four goes round; the browser without a recorder is told.
+            const p2 = xo.clip(5);
+            await flushAsync();
+            expect(main.__test__.taking().quarter).toBe(0);
+            main.__test__.cancelTake();
+            await expect(p2).resolves.toBe('The clip could not be made.');
+            delete dom.windowStub.MediaRecorder;
+            await expect(xo.clip()).resolves.toBe("This browser can't record a video.");
+            dom.el('result-actions').children.find((b) => b.textContent === 'Next play').click();
+            await flushAsync();
+            await expect(xo.clip()).resolves.toBe('On the result card only, after a play.');
+        } finally {
+            globalThis.URL.createObjectURL = realCreate;
+            globalThis.URL.revokeObjectURL = realRevoke;
+        }
+    });
+
+    test('a moment put on the field never touches the milestone level, and after a show the replay keeps its camera', async () => {
+        const main = await aCatch();
+        const camera = await import('../www/xo/js/camera.min.js');
+        expect(main.__test__.level()).toBe(0);
+        let carried = 0;
+        main.beginMilestone(100, () => { carried += 1; });
+        dom.el('hud-actions').children.find((b) => b.id === 'skip-show-btn').click();
+        await flushAsync();
+        expect(carried).toBe(1);
+        expect(main.__test__.level()).toBe(100);
+        expect(main.__test__.phase()).toBe('result');
+        // The console shows a moment and puts the field back: the level stays.
+        const xo = globalThis.window.xo;
+        expect(xo.moment(1)).toMatch(/^Showing /);
+        frames(1);
+        expect(camera.getDriver()).toBe('show');
+        expect(xo.moment()).toBe('Back to the field as it was.');
+        expect(main.__test__.level()).toBe(100);
+        // The card has the play camera, and the replay its own, show or no show.
+        frames(1);
+        expect(camera.getDriver()).toBe('play');
+        dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+        await flushAsync();
+        frames(1);
+        expect(camera.getDriver()).toBe('replay');
+        expect(main.__test__.level()).toBe(100);
     });
 });
 

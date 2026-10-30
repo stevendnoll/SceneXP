@@ -1205,6 +1205,39 @@ const XO_CONFIG = {
         armFor: 0.45,
     },
 
+    /**
+     * THE CLIP OF A PLAY (specs/xo-photos-plan, Part three, clip.js), the
+     * shareable video: the replay the visitor just watched, from its own
+     * director camera, recorded on the device into a 9:16 portrait at `width`
+     * by `height` (`mobileWidth` by `mobileHeight` on a phone, where the live
+     * frame is already more pixels than that) at `fps`, at `bitrate` bits a
+     * second (`mobileBitrate` on a phone), as Derby Day's clip is.
+     *
+     * NOT THE WHOLE PLAY (D15). The front of a pass play is the quarterback
+     * reading the field while the visitor decides, and the end is where the
+     * catch, the run and the hit are, so the clip is the last `seconds` of
+     * the play before the whistle, CLIP seconds at the replay's own speed
+     * (`camera.replay.speed`), or the whole play when it was shorter. The
+     * ending the replay plays at the whistle (the tackle or the party) rides
+     * on top, then the frame is held `hold` seconds.
+     *
+     * `wordmark` is stamped bottom right on every frame (D2, D8: a video on a
+     * feed carries no link). `stamp` puts the result ("Caught +15") over the
+     * final hold, `stampHeight` of the frame tall with its baseline `stampAt`
+     * of the way down (D19), because Instagram drops the text that goes with a
+     * shared file. `near` and `far` are the clip camera's planes. `armFor` is
+     * the sheet's tap guard, as the photo's.
+     */
+    clip: {
+        width: 1080, height: 1920, mobileWidth: 720, mobileHeight: 1280,
+        fps: 30, bitrate: 8000000, mobileBitrate: 5000000,
+        seconds: 8, hold: 1.0,
+        wordmark: 'SceneXP.com/xo',
+        stamp: true, stampHeight: 0.05, stampAt: 0.84,
+        near: 0.5, far: 400,
+        armFor: 0.45,
+    },
+
     /** The two kits, from the 2D game's own rgba(255,153,44) and
      *  rgba(155,207,255). Two hues rather than two values, which is what keeps
      *  them separable at 45m under floodlights (D23). */

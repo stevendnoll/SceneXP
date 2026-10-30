@@ -832,6 +832,15 @@ body {
     gap: 0.5rem;
 }
 
+/* THE FIELD IS OUT OF SIGHT WHILE A CLIP IS RECORDED (specs/xo-photos-plan,
+ * Step 6). The take borrows the game's own canvas at the clip's size and
+ * shape and copies each frame into the sheet, so for those seconds the canvas
+ * holds a portrait stretched over the screen behind the sheet. Hidden, not
+ * removed: a canvas with no layout cannot be drawn from. */
+#game-canvas.is-recording {
+    visibility: hidden;
+}
+
 /* ---- The photo sheet (specs/xo-photos-plan, Step 5) -------------------------
  *
  * The picture is 4 by 5 and is as large as the screen allows: as wide as the

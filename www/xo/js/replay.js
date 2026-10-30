@@ -222,6 +222,15 @@ export function rewind() {
     playhead = 0;
 }
 
+/** Put the playhead on frame `f`, held inside the recording. The clip
+ *  (specs/xo-photos-plan, Step 6) starts a few seconds before the whistle
+ *  rather than at the snap. Returns where it landed. */
+export function seek(f) {
+    const n = Number(f);
+    playhead = ticks === 0 || !Number.isFinite(n) ? 0 : Math.max(0, Math.min(ticks - 1, n));
+    return playhead;
+}
+
 /** Advance the playhead by `delta` seconds at `hz`, and say whether the
  *  recording has run out. `speed` below 1 is slow motion. */
 export function advance(delta, hz, speed = 1) {

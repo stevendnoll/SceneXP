@@ -266,12 +266,22 @@ export function idleDriver(t, aspect = 1.78) {
  * field shrank from 50m to 35m they did not shrink with it, which is how a
  * replay ended up shot through the uprights with a player filling three
  * quarters of the frame.
+ *
+ * IT OPENS ON `anchor` AND ARRIVES ON THE CARRIER. The replay opens on the
+ * line of scrimmage (the default), because it starts at the snap and the
+ * formation is the picture. The shareable clip (specs/xo-photos-plan, Step
+ * 6, D22) starts a few seconds before the whistle, when the carrier may be
+ * anywhere, so it hands in where the ball was on its own first frame: opened
+ * on the line it would swing from an empty formation to a man already
+ * downfield. `{ x, z }` in world metres.
  */
-export function replayDriver(progress, focus, shoulder) {
+export function replayDriver(progress, focus, shoulder, anchor = null) {
     const r = CFG.camera.replay;
     const t = clamp01(progress);
     const iv = FIELD.lineInterval;
     const snapX = FIELD.lineInterval;
+    const openX = anchor && Number.isFinite(anchor.x) ? anchor.x : snapX;
+    const openZ = anchor && Number.isFinite(anchor.z) ? anchor.z : 0;
 
     const arrive = smooth(Math.min(1, t / r.establishFor));
     const height = lerp(r.establishHeight, r.trackHeight, arrive) * iv;
@@ -289,10 +299,11 @@ export function replayDriver(progress, focus, shoulder) {
     const settle = smooth(clamp01((t - r.settleFrom) / (1 - r.settleFrom)));
     const close = lerp(1, r.settleCloseness, settle);
 
-    // Anchored on the line of scrimmage at first, so the replay opens on the
-    // formation rather than on whoever happens to be holding the ball.
-    const anchorX = lerp(snapX, focus.x, arrive);
-    const anchorZ = focus.z * arrive;
+    // Anchored on the opening point at first (the line of scrimmage, unless a
+    // caller says otherwise), so the replay opens on the formation rather than
+    // on whoever happens to be holding the ball.
+    const anchorX = lerp(openX, focus.x, arrive);
+    const anchorZ = lerp(openZ, focus.z, arrive);
 
     let angle = rad(lerp(r.angleFrom, r.angleTo, t));
     let dist = r.radius * iv * close;
@@ -360,7 +371,14 @@ export function replayDriver(progress, focus, shoulder) {
  * `side` is near zero, which puts the camera straight behind the carrier with
  * no lateral offset: a real shot, and the one it passes through on its way.
  */
-const shoulder = { side: 1, want: 1, held: 0, seeded: false };
+/** A fresh shoulder memory. The live replay's is the module's own below; the
+ *  shareable clip (specs/xo-photos-plan, Step 6) runs its own, so a take can
+ *  never move the shoulder the replay on screen is rounding. */
+export function newShoulder() {
+    return { side: 1, want: 1, held: 0, seeded: false };
+}
+
+const shoulder = newShoulder();
 
 /** Back to whichever side this carrier's position asks for, with no swing.
  *  Called when a replay starts, so it opens on the right shoulder rather than
@@ -370,27 +388,27 @@ export function resetShoulder() {
     shoulder.held = 0;
 }
 
-export function shoulderFor(z, delta = 0) {
+export function shoulderFor(z, delta = 0, s = shoulder) {
     const R = CFG.camera.replay;
     const asked = z > 0 ? -1 : 1;
-    if (!shoulder.seeded) {
-        shoulder.seeded = true;
-        shoulder.side = asked;
-        shoulder.want = asked;
-        shoulder.held = 0;
-        return shoulder.side;
+    if (!s.seeded) {
+        s.seeded = true;
+        s.side = asked;
+        s.want = asked;
+        s.held = 0;
+        return s.side;
     }
 
-    shoulder.held += delta;
+    s.held += delta;
     // Only ask once he is properly on the other half of the field.
-    const clear = z > R.shoulderSwap ? -1 : (z < -R.shoulderSwap ? 1 : shoulder.want);
-    if (clear !== shoulder.want && shoulder.held >= R.shoulderHold) {
-        shoulder.want = clear;
-        shoulder.held = 0;
+    const clear = z > R.shoulderSwap ? -1 : (z < -R.shoulderSwap ? 1 : s.want);
+    if (clear !== s.want && s.held >= R.shoulderHold) {
+        s.want = clear;
+        s.held = 0;
     }
     const rate = R.shoulderEase > 0 ? 1 - Math.exp(-delta / R.shoulderEase) : 1;
-    shoulder.side += (shoulder.want - shoulder.side) * rate;
-    return shoulder.side;
+    s.side += (s.want - s.side) * rate;
+    return s.side;
 }
 
 /**
@@ -432,10 +450,23 @@ const view = { yaw: 0, lift: 0, zoom: 1, quarter: 0 };
  * a different picture rather than a nudge: the opposite end of the field comes
  * first, then the two touchlines.
  */
-const QUARTERS = [0, Math.PI, Math.PI / 2, -Math.PI / 2];
+export const QUARTERS = Object.freeze([0, Math.PI, Math.PI / 2, -Math.PI / 2]);
 
 /** How many there are, for anything that wants to say so. */
 export const REPLAY_VIEWS = QUARTERS.length;
+
+/**
+ * The offset for vantage point `quarter` on its own, without touching the
+ * view the live replay is showing: the shareable clip (specs/xo-photos-plan,
+ * Step 6, D16) is turned to the quarter the visitor chose on its sheet, and
+ * the replay they may watch next still opens on the director's shot. Any
+ * whole number is taken round the four.
+ */
+export function viewOffset(quarter = 0) {
+    const n = QUARTERS.length;
+    const q = ((Math.round(Number(quarter) || 0) % n) + n) % n;
+    return { yaw: QUARTERS[q], lift: 0, zoom: 1, quarter: q };
+}
 
 /**
  * Move to the next vantage point and say which one it is.

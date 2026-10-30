@@ -32,7 +32,11 @@ import {
 } from './moments.min.js';
 import { captureDrawn, applyDrawn } from './snapshot.min.js';
 import { photoShot, drawPhoto, photoBlob, photoName } from './photo.min.js';
+import {
+    clipSize, clipPlan, clipProgress, clipShot, stampText, clipName, takeFrame, holdSize, recordTake,
+} from './clip.min.js';
 import { saveFile } from '../../shared/js/sharefile-1.0.0.min.js';
+import { canRecord, pickMime, extensionOf } from '../../shared/js/recorder-1.0.0.min.js';
 import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments, noteThrow,
     setVisitorJumps, standingReach,
@@ -80,11 +84,11 @@ import { cheerFor } from './stunt.min.js';
 import { showSummary, hideSummary, readBest } from './summary.min.js';
 import {
     startRecording, record, frameCount, frameAt, focusAt,
-    rewind, advance, playheadFrame, isEmpty, discard, noteLeap,
+    rewind, seek, advance, playheadFrame, isEmpty, discard, noteLeap,
 } from './replay.min.js';
 import {
     setDriver, setAspect, update as updateCamera, nudgeView, resetView, switchView,
-    resetShoulder, viewQuarter,
+    resetShoulder, viewQuarter, newShoulder,
 } from './camera.min.js';
 import {
     initAudio, unlock as unlockAudio, play as playSound, simAudio,
@@ -146,13 +150,16 @@ const cycle = {
      * `moments` are taken: `{ kind, hero, partner, at, focus, snapshot }`.
      * `pendingMoments` are waiting for their frame: `{ kind, hero, partner,
      * due }`, `due` on `state.elapsed`. `ballWas` is who held the ball last
-     * frame, for a catch or a pick. `shown` is a moment the console has put on
-     * the field, with the live frame kept to put back.
+     * frame, for a catch or a pick. `shownMoment` is a moment the console has
+     * put on the field, with the live frame kept to put back. NOT `shown`:
+     * that is the milestone level below, and for a day (2026-10-29) the two
+     * shared the name, so the first show of a game left every camera on the
+     * show driver and the photo sheet wiped the level.
      */
     moments: [],
     pendingMoments: [],
     ballWas: null,
-    shown: null,
+    shownMoment: null,
     held: 0,
     accumulator: 0,
     playNumber: 0,        // 1 to CFG.rules.playsPerGame
@@ -160,6 +167,13 @@ const cycle = {
     results: [],
     lastOutcome: null,
     replayHold: 0,
+    /**
+     * A CLIP BEING TAKEN (specs/xo-photos-plan, Step 6, clip.js): the last
+     * seconds of the recording re-run and drawn into somebody's canvas while
+     * the phase is 'clip'. `{ plan, quarter, stage, g, w, h, shoulder, anchor,
+     * live, release, held, frames, finished, resolve }`, or null.
+     */
+    take: null,
     /**
      * WHICH PLAY THE CHOSEN CAMERA ANGLE BELONGS TO.
      *
@@ -441,7 +455,7 @@ function driverForPhase(phase) {
     // six lines of rules watches the pitch slide sideways underneath them.
     if (phase === 'welcome') return 'play';
     // A moment the console has put on the field brings its own shot.
-    if (cycle.shown) return 'show';
+    if (cycle.shownMoment) return 'show';
     if (phase === 'playbook') return 'idle';
     if (phase === 'replay') return 'replay';
     if (phase === 'show' || phase === 'opening') return 'show';
@@ -451,7 +465,7 @@ function driverForPhase(phase) {
 /** What the active driver needs to know. Only the replay driver needs
  *  anything, and what it needs is where the ball was on this frame. */
 function cameraState() {
-    if (cycle.shown) return { shot: cycle.shown.shot };
+    if (cycle.shownMoment) return { shot: cycle.shownMoment.shot };
     if (cycle.phase === 'show') return { shot: cycle.showShot };
     if (cycle.phase === 'opening') return { shot: cycle.openingShot };
     if (cycle.phase !== 'replay') return {};
@@ -1227,6 +1241,8 @@ async function makePhoto(moment) {
 /** Roll the recording. The live simulation is not touched: playback rebuilds
  *  objects from the buffer, so a replay can never disturb what it recorded. */
 function startReplay() {
+    // A clip still being taken is let go: the replay wants the field.
+    cancelTake();
     if (isEmpty()) { presentResult(); return; }
     report('show-replay', {
         kind: cycle.viewPlay === cycle.playNumber ? 'again' : 'first',
@@ -1313,6 +1329,7 @@ function onSwitchView() {
 }
 
 function onNext() {
+    cancelTake();
     const last = cycle.playNumber >= CFG.rules.playsPerGame;
     report('next-play', {
         kind: last ? 'summary' : 'playbook',
@@ -1717,7 +1734,7 @@ function installQaHook() {
     if (typeof window === 'undefined' || !qaEnabled(window.location && window.location.href)) return;
     window.xo = Object.freeze({
         show: qaShow, opening: qaOpening, colors: qaColors, playAs: qaPlayAs,
-        moments: qaMoments, moment: qaMoment, photo: qaPhoto,
+        moments: qaMoments, moment: qaMoment, photo: qaPhoto, clip: qaClip,
         levels: [...CFG.milestones.built],
     });
 }
@@ -1901,6 +1918,13 @@ function stepCycle(delta) {
     // last play left them while the stadium does the moving.
     if (cycle.phase === 'show') {
         stepMilestone(delta);
+        return;
+    }
+
+    // A clip being taken: the replay, from a few seconds before the whistle,
+    // drawn for the recorder rather than for the screen (see `beginTake`).
+    if (cycle.phase === 'clip') {
+        stepTake(delta);
         return;
     }
 
@@ -2105,7 +2129,13 @@ export function showBall(objects, delta) {
  * moment apart, so taking it once means they can never disagree about which
  * player was carrying.
  */
-const BAND_PHASES = new Set(['live', 'settle', 'replay', 'result']);
+const BAND_PHASES = new Set(['live', 'settle', 'replay', 'result', 'clip']);
+
+/** Is the field being drawn from the recording rather than the simulation: a
+ *  replay, or a clip being taken, which is a replay for the recorder. */
+function fromRecording() {
+    return cycle.phase === 'replay' || cycle.phase === 'clip';
+}
 
 function trackBall(delta) {
     // ON THE RESULT CARD IT HOLDS WHERE IT FINISHED, rather than going out at
@@ -2134,7 +2164,7 @@ function trackBall(delta) {
  * show. It is the SCORING band that would be lying.
  */
 function bandPoint() {
-    if (cycle.phase === 'replay') {
+    if (fromRecording()) {
         const f = replayFocus();
         return f && litFor(f.holder) ? simToWorld(f.x, f.y, 0) : null;
     }
@@ -2168,7 +2198,7 @@ export function litFor(position) {
  * and the shot cannot disagree about where the ball got to.
  */
 function ballWorldPoint() {
-    if (cycle.phase === 'replay') {
+    if (fromRecording()) {
         const f = replayFocus();
         return f ? simToWorld(f.x, f.y, 0) : null;
     }
@@ -2226,6 +2256,13 @@ function animate(now) {
     // AND ANY PHOTO OWED, for the same reason: it borrows the whole buffer,
     // and the render below paints the live field back over it unseen.
     takePhotos();
+    // A CLIP BEING TAKEN IS DRAWN INSTEAD OF THE LIVE FIELD: the canvas is
+    // hidden for the take and holds the clip's size, and the frame goes to the
+    // recorder's stage, not the screen (specs/xo-photos-plan, Step 6).
+    if (cycle.phase === 'clip' && cycle.take) {
+        drawTake(delta);
+        return;
+    }
     renderer.render(scene, camera);
 }
 
@@ -3017,9 +3054,9 @@ function describeMoment(m) {
  * the result phase, so it stays.
  */
 function showMoment(m) {
-    if (!cycle.shown) cycle.shown = { live: captureDrawn(movingRoots()), shot: null };
+    if (!cycle.shownMoment) cycle.shownMoment = { live: captureDrawn(movingRoots()), shot: null };
     applyDrawn(m.snapshot);
-    cycle.shown.shot = photoShot(m, camera && camera.aspect > 0 ? Number(camera.aspect) : 0.8);
+    cycle.shownMoment.shot = photoShot(m, camera && camera.aspect > 0 ? Number(camera.aspect) : 0.8);
     hideResult();
     hideSpot();
 }
@@ -3049,9 +3086,9 @@ function takePhotos() {
 }
 
 function putBackLive() {
-    if (!cycle.shown) return false;
-    applyDrawn(cycle.shown.live);
-    cycle.shown = null;
+    if (!cycle.shownMoment) return false;
+    applyDrawn(cycle.shownMoment.live);
+    cycle.shownMoment = null;
     return true;
 }
 
@@ -3103,6 +3140,189 @@ export function qaMoment(n) {
     return `Showing ${describeMoment(m)}. xo.moment() puts the field back.`;
 }
 
+// ---- The clip (specs/xo-photos-plan, Part three, Step 6) --------------------
+//
+// THE CLIP IS THE REPLAY, RECORDED (clip.js). A take re-runs the recording from
+// `clip.seconds` before the whistle the way the replay phase does, through the
+// director's camera turned to the quarter the visitor chose, and draws every
+// frame into a canvas somebody is recording. While it runs the phase is 'clip',
+// the game's own canvas is hidden and held at the clip's size, and nothing is
+// drawn for the screen. When it ends the field, the renderer and the canvas
+// are given back exactly as the result card had them.
+
+/** The game's canvas element, for the class that hides it during a take.
+ *  Looked up rather than kept: under the suite's stub the renderer's
+ *  `domElement` is not the element on the page. */
+function gameCanvas() {
+    return typeof document !== 'undefined' ? document.getElementById('game-canvas') : null;
+}
+
+/** How long the ending the replay plays at the whistle takes: the longer of
+ *  the tackle and the party, as the replay's own hold has it. */
+function endingLength() {
+    return Math.max(
+        cycle.tackle.tackler ? takedownLength() : 0,
+        cycle.party ? celebrationLength(cycle.party) : 0
+    );
+}
+
+/**
+ * BEGIN A TAKE into `stage`, a 2D canvas somebody is recording, from vantage
+ * point `quarter`. Resolves `{ cancelled, frames, seconds }` once the last
+ * frame has been drawn (or the take was cancelled), or null at once when
+ * there is nothing to take: not on the result card, no recording, a take
+ * already running, or a stage with no context.
+ *
+ * It is the replay's own opening (`startReplay`) with three differences: the
+ * playhead goes to the plan's start rather than the snap, the camera opens on
+ * where the ball is on that frame (D22), and the frames go to the stage.
+ */
+function beginTake(stage, { quarter = 0 } = {}) {
+    if (cycle.phase !== 'result' || cycle.take || isEmpty() || !renderer || !scene) return Promise.resolve(null);
+    const g = stage && typeof stage.getContext === 'function' ? stage.getContext('2d') : null;
+    if (!g) return Promise.resolve(null);
+    const { w, h } = clipSize(isTouch());
+    if (stage.width !== w) stage.width = w;
+    if (stage.height !== h) stage.height = h;
+
+    // A moment the console left on the field goes first, and the field as the
+    // card had it is kept, to be put back when the take is over.
+    putBackLive();
+    const live = captureDrawn([...movingRoots(), getSpot()]);
+    hideSpot();
+    // The rings and letters on the grass are the game's HUD, not the picture
+    // (D23, as the photo has it).
+    const markers = getMarkerGroup();
+    if (markers) markers.visible = false;
+
+    // The endings are reset so they can play again at the whistle, and the
+    // stands sit down to go up again on the same frame, as a replay does.
+    resetTakedown();
+    resetCelebration();
+    cheerCrowd(null, state.elapsed);
+    cycle.cheered = false;
+
+    const plan = clipPlan({ ticks: frameCount(), ending: endingLength() });
+    seek(plan.start);
+    focusMemo.at = -1;
+    const first = focusAt(plan.start);
+    const opening = simToWorld(first.x, first.y, 0);
+    const release = holdSize(renderer, w, h);
+    const canvas = gameCanvas();
+    if (canvas && canvas.classList) canvas.classList.add('is-recording');
+
+    cycle.phase = 'clip';
+    return new Promise((resolve) => {
+        cycle.take = {
+            plan, quarter, stage, g, w, h,
+            shoulder: newShoulder(),
+            anchor: { x: opening.x, z: opening.z },
+            live, release, held: 0, frames: 0, finished: false, resolve,
+        };
+    });
+}
+
+/** Advance the take by `delta` seconds: the replay branch of `stepCycle`,
+ *  with the hold measured against the plan rather than the card. */
+function stepTake(delta) {
+    const t = cycle.take;
+    if (!t) { cycle.phase = 'result'; return; }
+    const done = advance(delta, CFG.simHz, CFG.camera.replay.speed);
+    const objs = frameAt(playheadFrame(), teamOfPosition);
+    syncFigures(objs, delta, { live: !done });
+    showBall(objs, delta);
+    if (!done) return;
+    if (cycle.tackle.tackler && takedownClock() < 0) {
+        startTakedown(objs, cycle.tackle.tackler, cycle.tackle.carrier);
+    }
+    if (cycle.party && celebrationClock() < 0) beginCelebration(cycle.party);
+    if (cycle.cheer && !cycle.cheered) {
+        cycle.cheered = true;
+        cheerCrowd(cycle.cheer, state.elapsed, { calm: reducedMotion });
+    }
+    t.held += delta;
+    // The frame that reaches the end is still drawn; the take ends after it.
+    if (t.held >= t.plan.ending + t.plan.hold) t.finished = true;
+}
+
+/** Draw this frame of the take into the stage, and end the take after the
+ *  last one. From `animate`, in place of the live render. */
+function drawTake(delta) {
+    const t = cycle.take;
+    if (!t) return;
+    const f = replayFocus();
+    const focus = simToWorld(f.x, f.y, f.z || 0);
+    const shot = clipShot(clipProgress(playheadFrame(), t.plan), focus, {
+        anchor: t.anchor, shoulder: t.shoulder, quarter: t.quarter, delta,
+    });
+    // The result is stamped over the final hold only (D19).
+    const stamp = CFG.clip.stamp && t.held >= t.plan.ending ? stampText(cycle.lastOutcome) : '';
+    takeFrame({
+        renderer, scene, canvas: renderer.domElement, shot,
+        g: t.g, w: t.w, h: t.h, wordmark: CFG.clip.wordmark, stamp,
+    });
+    t.frames += 1;
+    if (t.finished) endTake(false);
+}
+
+/**
+ * END THE TAKE, finished or cancelled, and give everything back: the field at
+ * its end the way a skipped replay leaves it (`landReplay`), then exactly as
+ * the card had it drawn, the renderer its size and ratio, the canvas its
+ * place on the screen with the live frame painted before it is seen again.
+ */
+function endTake(cancelled) {
+    const t = cycle.take;
+    if (!t) return;
+    cycle.take = null;
+    cycle.phase = 'result';
+    landReplay();
+    applyDrawn(t.live);
+    if (cycle.spotAt) showSpot(cycle.spotAt.x, cycle.spotAt.z);
+    const released = t.release();
+    const canvas = gameCanvas();
+    if (canvas && canvas.classList) canvas.classList.remove('is-recording');
+    if (renderer && scene && camera) renderer.render(scene, camera);
+    t.resolve({ cancelled: !!cancelled, frames: t.frames, seconds: t.plan.total, released });
+}
+
+/** Let a running take go: a closed sheet, a switched view, or anything that
+ *  wants the field. Says whether there was one. */
+function cancelTake() {
+    if (!cycle.take) return false;
+    endTake(true);
+    return true;
+}
+
+/**
+ * `xo.clip(view)` records the clip of the last play from vantage point `view`
+ * (1 to 4, 1 being the director's own) and saves it to the downloads folder,
+ * so the clip can be judged before the sheet that will offer it exists (Step
+ * 7). Resolves to a sentence for the console.
+ */
+export async function qaClip(view = 1) {
+    if (cycle.phase !== 'result') return 'On the result card only, after a play.';
+    if (isEmpty()) return 'No recording of this play to clip.';
+    if (typeof window === 'undefined' || !canRecord(window)) return "This browser can't record a video.";
+    const mime = pickMime((t) => window.MediaRecorder.isTypeSupported(t));
+    if (!mime) return "This browser can't make a video.";
+    const quarter = (((Math.round(Number(view) || 1) - 1) % 4) + 4) % 4;
+    const stage = document.createElement('canvas');
+    const { w, h } = clipSize(isTouch());
+    const made = await recordTake(stage, () => beginTake(stage, { quarter }), {
+        w, h, mime, fps: CFG.clip.fps,
+        bitrate: isTouch() ? CFG.clip.mobileBitrate : CFG.clip.bitrate, win: window,
+    });
+    if (!made || !made.blob || !made.blob.size) return 'The clip could not be made.';
+    if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return "This browser couldn't save the clip.";
+    const name = clipName(cycle.lastOutcome && cycle.lastOutcome.result, w, h, extensionOf(made.mime));
+    const url = URL.createObjectURL(made.blob);
+    saveFile(url, name);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return `Saved ${name} (${Math.round(made.blob.size / 1024)} KB, ${made.seconds.toFixed(1)} s, `
+        + `${made.frames} frames, view ${quarter + 1} of 4).`;
+}
+
 /**
  * `xo.playAs('wr2')` puts the visitor's avatar at receiver B from the console
  * (localhost or ?qa), before the playbook row exists, through the same path
@@ -3152,6 +3372,15 @@ export const __test__ = {
     play: () => cycle.play,
     moments: () => cycle.moments.slice(),
     pending: () => cycle.pendingMoments.slice(),
+    /** The clip's take (specs/xo-photos-plan, Step 6), before the sheet
+     *  that will drive it exists. */
+    take: (stage, options) => beginTake(stage, options),
+    cancelTake: () => cancelTake(),
+    taking: () => (cycle.take ? { ...cycle.take, stage: undefined, g: undefined, live: undefined, release: undefined, resolve: undefined } : null),
+    phase: () => cycle.phase,
+    /** The milestone level the stadium is awake to, which a shown moment must
+     *  never touch (the `shown` collision of 2026-10-29). */
+    level: () => cycle.shown,
 };
 
 /** `beginMilestone` is exposed for the suite too: reaching 100 by actually
