@@ -841,74 +841,84 @@ body {
     visibility: hidden;
 }
 
-/* ---- The photo sheet (specs/xo-photos-plan, Step 5) -------------------------
+/* ---- Share the play (specs/xo-photos-plan, Step 7) --------------------------
  *
- * The picture is 4 by 5 and is as large as the screen allows: as wide as the
- * card, or as tall as most of the screen, whichever comes first, so the
- * caption, the pager and the buttons always fit under it without a scroll on
- * a phone. The frame holds that shape while the photo develops, so nothing
- * jumps when it lands.
+ * The stage is 9 by 16, the clip's own shape, and as large as the screen
+ * allows with the words and the buttons still under it without a scroll on a
+ * phone: no taller than under half the screen, no wider than the card. It
+ * holds that shape while the clip is made, so nothing jumps when the video
+ * takes the canvas's place.
  */
-.photo-frame {
-    position: relative;
+.clip-stage {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: min(100%, calc(min(56vh, 34rem) * 0.8));
-    aspect-ratio: 4 / 5;
+    width: min(100%, calc(min(46vh, 28rem) * 9 / 16));
+    aspect-ratio: 9 / 16;
     margin: 0.9rem auto 0;
     border-radius: 10px;
     overflow: hidden;
     background: #0b0f15;
 }
 
-.photo-canvas {
+.clip-stage canvas,
+.clip-stage video {
     display: block;
     width: 100%;
     height: 100%;
+    object-fit: contain;
 }
 
-.photo-wait {
-    margin: 0;
-    padding: 1rem;
-    color: #aeb6c6;
-    font-size: 0.95rem;
+/* REDUCED MOTION: the take is recorded, not watched. The canvas keeps its
+   layout (a recording wants it laid out) and is simply not shown. */
+.clip-stage canvas.is-unseen {
+    opacity: 0;
 }
 
-/* A display rule beats the browser's own [hidden], so it is restated. */
-.photo-wait[hidden],
-.photo-pager[hidden],
-.photo-nudge[hidden] {
-    display: none;
+.clip-progress {
+    min-height: 1.4em;
+    margin-top: 0.7rem;
 }
 
-.photo-pager {
+.clip-tools {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.8rem;
-    margin-top: 0.7rem;
+    margin-top: 0.6rem;
 }
 
-.photo-count {
-    min-width: 4.5ch;
+.clip-count {
     color: #c9d1de;
     font-variant-numeric: tabular-nums;
 }
 
-.photo-nudge-link {
+/* A display rule beats the browser's own [hidden], so it is restated. */
+.clip-tools[hidden],
+.clip-nudge[hidden],
+.card-actions .hud-btn[hidden] {
+    display: none;
+}
+
+.clip-nudge-link {
     color: #ff992c;
     font-weight: 600;
     text-decoration: underline;
     text-underline-offset: 0.18em;
 }
 
-.photo-nudge-link:hover,
-.photo-nudge-link:focus-visible {
+.clip-nudge-link:hover,
+.clip-nudge-link:focus-visible {
     color: #ffb76b;
 }
 
-/* STILL DEVELOPING. Never `disabled` (that would throw keyboard focus out of
+.clip-note {
+    margin-top: 0.8rem;
+    font-size: 0.78rem;
+    color: #8d97a8;
+}
+
+/* STILL BEING MADE. Never `disabled` (that would throw keyboard focus out of
    the dialog), so it is dimmed and says so when pressed. */
 .hud-btn[aria-disabled="true"] {
     opacity: 0.55;

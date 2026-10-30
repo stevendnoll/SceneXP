@@ -8828,7 +8828,7 @@ html [data-ui-theme="neon" lang="en"]
   head
     meta [charset="UTF-8"]
     meta [content="width=device-width, initial-scale=1.0" name="viewport"]
-    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
     meta [content="A 3D football game where you are always on offense. Call a play, pick your receiver, and dress both teams and the field in your favorite team's colors." name="description"]
     meta [content="#080b12" name="theme-color"]
@@ -8930,7 +8930,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/progress.min.js" rel="modulepreload"]
     link [href="js/scoring.min.js" rel="modulepreload"]
     link [href="js/hud.min.js" rel="modulepreload"]
-    link [href="js/photo-ui.min.js" rel="modulepreload"]
+    link [href="js/clip-ui.min.js" rel="modulepreload"]
     link [href="js/opening.min.js" rel="modulepreload"]
     link [href="js/colors-ui.min.js" rel="modulepreload"]
     link [href="js/colors-preview.min.js" rel="modulepreload"]
@@ -9192,32 +9192,33 @@ html [data-ui-theme="neon" lang="en"]
         p#result-detail.card-detail
         p#result-running.card-meta
         div#result-actions.card-actions
-    div#photo.card-overlay [hidden]
-      div#photo-panel.card-panel.photo-panel [aria-describedby="photo-caption" aria-labelledby="photo-title" aria-modal="true" role="dialog" tabindex="-1"]
-        h2#photo-title.card-title
-          "The photo"
-        div#photo-frame.photo-frame
-          p#photo-wait.photo-wait
-            "Developing the photo…"
-        p#photo-caption.card-detail.photo-caption
-        div#photo-pager.photo-pager [hidden]
-          button#photo-prev.hud-btn [aria-label="Previous photo" type="button"]
-            "Previous"
-          span#photo-count.photo-count
-            "1 of 1"
-          button#photo-next.hud-btn [aria-label="Next photo" type="button"]
-            "Next"
-        p#photo-nudge.card-meta.photo-nudge [hidden]
-          span#photo-nudge-text
-            "Want to be in the picture?"
-          a#photo-nudge-link.photo-nudge-link [href="../avatar/?return=/xo/"]
+    div#clip.card-overlay [hidden]
+      div#clip-panel.card-panel.clip-panel [aria-describedby="clip-progress" aria-labelledby="clip-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#clip-title.card-title
+          "Share the play"
+        div#clip-stage.clip-stage
+        p#clip-progress.card-detail.clip-progress
+          "Making your clip…"
+        div#clip-tools.clip-tools
+          button#clip-view.hud-btn [aria-keyshortcuts="V" aria-label="Switch view to see the play from another side of the field" type="button"]
+            "Switch view"
+          span#clip-view-count.clip-count [aria-hidden="true"]
+            "View 1 of 4"
+        p#clip-nudge.card-meta.clip-nudge [hidden]
+          span#clip-nudge-text
+            "Want to be the one on the field?"
+          a#clip-nudge-link.clip-nudge-link [href="../avatar/?return=/xo/"]
             "Make your avatar"
-        p#photo-status.sr-only [aria-live="polite" role="status"]
+        p#clip-status.sr-only [aria-live="polite" role="status"]
         div.card-actions
-          button#photo-close.hud-btn [type="button"]
+          button#clip-picture.hud-btn [aria-disabled="true" type="button"]
+            "Save a picture"
+          button#clip-close.hud-btn [type="button"]
             "Close"
-          button#photo-share.hud-btn.hud-btn-primary [aria-disabled="true" type="button"]
-            "Share picture"
+          button#clip-share.hud-btn.hud-btn-primary [aria-disabled="true" type="button"]
+            "Share video"
+        p.card-meta.clip-note
+          "Made on this device. Nothing is uploaded."
     div#summary.card-overlay [hidden]
       div.card-panel [aria-labelledby="summary-title" aria-modal="true" role="dialog"]
         h2#summary-title.card-title

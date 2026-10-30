@@ -850,7 +850,7 @@ export function showHelp(onClose) {
  * button onward. It takes focus so the game can be played entirely by keyboard
  * without ever hunting for where the focus went.
  */
-export function showResult(outcome, playNumber, playsPerGame, runningTotal, canReplay = false, canPhoto = false) {
+export function showResult(outcome, playNumber, playsPerGame, runningTotal, canReplay = false, canShare = false) {
     const card = el('result');
     if (!card) return;
     const isLast = playNumber >= playsPerGame;
@@ -876,13 +876,14 @@ export function showResult(outcome, playNumber, playsPerGame, runningTotal, canR
             () => handlers.onReplay(), 'of this play'));
     }
 
-    // AND THE PHOTO OF IT, when the play left a moment worth one
-    // (specs/xo-photos-plan, Step 5). Made only if pressed.
-    if (handlers.onPhoto && canPhoto) {
-        const photo = button('See the photo', 'hud-btn',
-            () => handlers.onPhoto(), 'of this play');
-        photo.id = 'result-photo-btn';
-        box.appendChild(photo);
+    // AND THE CLIP OF IT, with the picture of its best moment under it
+    // (specs/xo-photos-plan, Step 7), whenever there is a recording to clip.
+    // Nothing is made until it is pressed.
+    if (handlers.onShare && canShare) {
+        const share = button('Share the play', 'hud-btn',
+            () => handlers.onShare(), 'as a video');
+        share.id = 'result-share-btn';
+        box.appendChild(share);
     }
 
     const next = button(isLast ? 'See how you did' : 'Next play',

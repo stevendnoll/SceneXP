@@ -103,6 +103,28 @@ export function stampText(outcome) {
     return `${outcome.headline} ${points > 0 ? '+' : ''}${points}`;
 }
 
+/** The line that goes with a shared clip, by the play's result. A fifty is a
+ *  fifty however it was scored. */
+const SHARE_LINES = Object.freeze({
+    fifty: "Fifty points in X's and O's!",
+    catch: "What a catch in X's and O's!",
+    run: "Kept it and ran in X's and O's!",
+    'run-50': "Fifty points in X's and O's!",
+    sack: "Sacked in X's and O's!",
+    interception: "Picked off in X's and O's!",
+    incomplete: "So close in X's and O's!",
+});
+
+/** The words that go with the clip to a share sheet, with the address. Some
+ *  sheets keep them (Messages), some drop them (Instagram), which is why the
+ *  result is also stamped on the clip. */
+export function clipShareText(outcome, url = '') {
+    const points = outcome ? Number(outcome.points) || 0 : 0;
+    const line = (points === 50 ? SHARE_LINES.fifty : SHARE_LINES[outcome && outcome.result])
+        || "A play from X's and O's.";
+    return url ? `${line} ${url}` : line;
+}
+
 /** "scenexp-xo-catch-720x1280.mp4". `result` is the outcome's own slug. */
 export function clipName(result, w, h, ext = 'mp4') {
     const slug = String(result || 'play').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'play';

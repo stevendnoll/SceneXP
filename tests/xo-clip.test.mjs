@@ -190,6 +190,19 @@ describe('the words and the names', () => {
         expect(C.stampText({})).toBe('');
     });
 
+    test('the share line follows the result, a fifty is a fifty however scored, and the address goes with it', () => {
+        expect(C.clipShareText({ result: 'catch', points: 15 })).toBe("What a catch in X's and O's!");
+        expect(C.clipShareText({ result: 'catch', points: 50 })).toBe("Fifty points in X's and O's!");
+        expect(C.clipShareText({ result: 'run-50', points: 50 })).toBe("Fifty points in X's and O's!");
+        expect(C.clipShareText({ result: 'run', points: 15 })).toBe("Kept it and ran in X's and O's!");
+        expect(C.clipShareText({ result: 'sack', points: -5 })).toBe("Sacked in X's and O's!");
+        expect(C.clipShareText({ result: 'interception', points: -10 })).toBe("Picked off in X's and O's!");
+        expect(C.clipShareText({ result: 'incomplete', points: 0 })).toBe("So close in X's and O's!");
+        expect(C.clipShareText({ result: 'something-new', points: 0 })).toBe("A play from X's and O's.");
+        expect(C.clipShareText(null)).toBe("A play from X's and O's.");
+        expect(C.clipShareText({ result: 'sack', points: -5 }, 'https://www.scenexp.com/xo/')).toBe("Sacked in X's and O's! https://www.scenexp.com/xo/");
+    });
+
     test('the file is named for the result and the size, safe on every system', () => {
         expect(C.clipName('catch', 720, 1280, 'mp4')).toBe('scenexp-xo-catch-720x1280.mp4');
         expect(C.clipName('run-50', 1080, 1920, 'webm')).toBe('scenexp-xo-run-50-1080x1920.webm');

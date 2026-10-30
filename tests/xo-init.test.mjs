@@ -1538,13 +1538,6 @@ describe('the moments worth a photo', () => {
 });
 
 /**
- * THE PHOTO SHEET (specs/xo-photos-plan, Step 5): offered on the result card
- * when the play left a moment, opened over the field with the card out of the
- * way, made ahead so Share has a file under the tap, and handed to the share
- * sheet or the downloads folder. A catch (and a tackle, where wanted) is set
- * on the live play through `__test__`, as in the moments tests above.
- */
-/**
  * A thrown ball caught by receiver A, then whatever the play does; with
  * `downed`, he is brought down at once too. Leaves the result card up.
  * `frames(n)` is the caller's own clock, so a describe's `now` keeps counting.
@@ -1568,22 +1561,103 @@ async function catchToResult(frames, { downed = false } = {}) {
     return main;
 }
 
-describe('the photo sheet', () => {
+/**
+ * THE SHARE SHEET (specs/xo-photos-plan, Step 7): offered on the result card
+ * whenever there is a recording, opened over the field with the card out of
+ * the way, the clip made as it opens (a take in the page's own loop, recorded
+ * by a MediaRecorder the suite fakes), played back when it is done, switched
+ * round the four views, and handed to the share sheet or the downloads folder.
+ * The picture of the play's best moment rides along as before. Modelled on
+ * Derby Day's share card tests (tests/derby-share.test.mjs).
+ */
+describe('the share sheet', () => {
     const PLAY_KEY = 'exes-n-ohs-play-settings';
     let now = 300000;
     const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
-    const resultLabels = () => dom.el('result-actions').children.map((b) => b.textContent);
-    const share = () => dom.el('photo-share');
     const aCatch = (opts) => catchToResult(frames, opts);
+    const resultLabels = () => dom.el('result-actions').children.map((b) => b.textContent);
+    const shareBtn = () => dom.el('result-actions').children.find((b) => b.id === 'result-share-btn');
+    const stage = () => dom.el('clip-stage');
+    const share = () => dom.el('clip-share');
+    const picture = () => dom.el('clip-picture');
+    const progress = () => dom.el('clip-progress').textContent;
+    const status = () => dom.el('clip-status').textContent;
 
-    /** Canvases that can encode a file, which the stub's cannot. */
-    function canvasesEncode() {
+    /** The names nginx keeps from a beacon (specs/nginx-config.txt); any other
+     *  is sent and silently dropped, so none may carry anything. */
+    const LOGGED = ['action', 'mobile', 'scene', 'lang', 'hash', 'kind', 'outcome', 'seconds', 'saved', 'destroyed', 'timestamp'];
+
+    /** Canvases that encode a picture and capture a stream, videos that play,
+     *  and download links that write down what they saved. */
+    function encodingCanvases() {
+        const saved = [];
         const make = dom.documentStub.createElement;
         dom.documentStub.createElement = (tag) => {
-            const node = make(tag);
-            if (tag === 'canvas') node.toBlob = (cb, type) => cb({ size: 2048, type });
-            return node;
+            const e = make(tag);
+            if (tag === 'canvas') {
+                e.captureStream = () => ({});
+                e.toBlob = (cb, type) => cb({ size: 2048, type });
+            }
+            if (tag === 'a') e.click = () => saved.push(e.download);
+            if (tag === 'video') e.play = () => Promise.resolve();
+            return e;
         };
+        return saved;
+    }
+
+    /** A browser that records (WebM, as an older Chrome does), on top of the
+     *  canvases above. */
+    function recordingBrowser() {
+        class FakeRecorder {
+            static isTypeSupported(t) { return t === 'video/webm'; }
+
+            constructor(stream, options) { this.mimeType = options.mimeType; FakeRecorder.starts += 1; FakeRecorder.last = this; }
+
+            start() {}
+
+            stop() {
+                this.ondataavailable({ data: new Blob(['clip']) });
+                this.onstop();
+            }
+        }
+        FakeRecorder.starts = 0;
+        const Canvas = function () {};
+        Canvas.prototype.captureStream = () => ({});
+        Object.assign(dom.windowStub, { MediaRecorder: FakeRecorder, HTMLCanvasElement: Canvas, Blob });
+        return { FakeRecorder, saved: encodingCanvases() };
+    }
+
+    /** Object URLs written down rather than made. */
+    function objectUrls() {
+        const made = [];
+        const revoked = [];
+        const realCreate = globalThis.URL.createObjectURL;
+        const realRevoke = globalThis.URL.revokeObjectURL;
+        globalThis.URL.createObjectURL = (blob) => { made.push(blob); return `blob:clip-${made.length}`; };
+        globalThis.URL.revokeObjectURL = (url) => { revoked.push(url); };
+        return {
+            made,
+            revoked,
+            restore() { globalThis.URL.createObjectURL = realCreate; globalThis.URL.revokeObjectURL = realRevoke; },
+        };
+    }
+
+    /** The usage pings, as URLs. */
+    function beacons() {
+        const sent = [];
+        globalThis.Image = class { set src(url) { sent.push(new URL(url, 'http://localhost:8000/xo/')); } };
+        return sent;
+    }
+    const of = (sent, action) => sent.filter((u) => u.searchParams.get('action') === action);
+    const kinds = (sent, action) => of(sent, action).map((u) => u.searchParams.get('kind'));
+
+    /** Step frames until `pred` holds, within a budget of frames. */
+    async function settle(pred, budget = 3000) {
+        for (let i = 0; i < budget && !pred(); i += 1) {
+            frames(1);
+            await flushAsync(2);
+        }
+        expect(pred()).toBe(true);
     }
 
     async function ranked(main, visitor = null) {
@@ -1591,141 +1665,318 @@ describe('the photo sheet', () => {
         return rankMoments(main.__test__.moments(), visitor);
     }
 
-    test('offered on the card, opened over the field, developing, then ready, then closed back to the card', async () => {
-        const sent = [];
-        globalThis.Image = class { set src(url) { sent.push(new URL(url, 'http://localhost:8000/xo/')); } };
+    test('offered on the card, the clip made as the sheet opens, counted down, played back, and shared with the address', async () => {
+        const { FakeRecorder } = recordingBrowser();
+        const urls = objectUrls();
+        const sent = beacons();
+        const handed = [];
+        globalThis.navigator.canShare = () => true;
+        globalThis.navigator.share = async (data) => { handed.push(data); };
+        dom.windowStub.File = class { constructor(parts, name, opts) { this.name = name; this.type = opts.type; } };
         try {
             const main = await aCatch();
-            expect(resultLabels()).toEqual(['Watch the replay', 'See the photo', 'Next play']);
-            const photoBtn = dom.el('result-actions').children.find((b) => b.id === 'result-photo-btn');
-            expect(photoBtn.getAttribute('aria-label')).toBe('See the photo of this play');
+            expect(resultLabels()).toEqual(['Watch the replay', 'Share the play', 'Next play']);
+            expect(shareBtn().getAttribute('aria-label')).toBe('Share the play as a video');
 
-            photoBtn.click();
+            shareBtn().click();
             await flushAsync();
-            const best = (await ranked(main))[0];
-            const words = await import('../www/xo/js/moments.min.js');
-            expect(dom.el('photo').hidden).toBe(false);
+            expect(dom.el('clip').hidden).toBe(false);
             expect(dom.el('result').hidden).toBe(true);
-            expect(dom.el('photo-panel').focused).toBe(true);
-            expect(dom.el('photo-title').textContent).toBe(words.photoTitle(best.kind));
-            expect(dom.el('photo-caption').textContent).toBe(words.photoCaption(best, null));
-            // Still developing: the words, and Share busy rather than disabled.
-            expect(dom.el('photo-wait').hidden).toBe(false);
+            expect(dom.el('clip-panel').focused).toBe(true);
+            // The take began at once, from the director's own view, into a
+            // canvas in the stage, with the recorder on it.
+            expect(main.__test__.phase()).toBe('clip');
+            expect(main.__test__.taking().quarter).toBe(0);
+            expect(FakeRecorder.starts).toBe(1);
+            expect(stage().children).toHaveLength(1);
+            expect(stage().children[0].tagName).toMatch(/canvas/i);
+            expect(stage().children[0].classList.contains('is-unseen')).toBe(false);
+            expect(dom.el('clip-view-count').textContent).toBe('View 1 of 4');
+            expect(progress()).toBe('Making your clip…');
+            expect(dom.el('clip-tools').hidden).toBe(false);
+            // Share waits, busy rather than disabled, named for what this browser can do.
+            expect(share().hidden).toBe(false);
+            expect(share().textContent).toBe('Share video');
             expect(share().getAttribute('aria-disabled')).toBe('true');
             expect(share().disabled).toBe(false);
+            // The picture is offered and developing.
+            expect(picture().hidden).toBe(false);
+            expect(picture().textContent).toBe('Share a picture');
+            expect(picture().getAttribute('aria-disabled')).toBe('true');
             // No avatar, so the nudge, in the moment's own words.
-            expect(dom.el('photo-nudge').hidden).toBe(false);
-            expect(dom.el('photo-nudge-text').textContent).toBe(words.photoNudge(best.kind));
+            const best = (await ranked(main))[0];
+            const words = await import('../www/xo/js/moments.min.js');
+            expect(dom.el('clip-nudge').hidden).toBe(false);
+            expect(dom.el('clip-nudge-text').textContent).toBe(words.photoNudge(best.kind));
 
+            frames(2);
+            await flushAsync();
+            await flushAsync();
+            expect(progress()).toMatch(/^Making your clip… \d+ seconds? to go$/);
+            expect(picture().getAttribute('aria-disabled')).toBe('false');
+            // Pressed early: said so, nothing sent.
+            const ui = await import('../www/xo/js/clip-ui.min.js');
+            await expect(ui.shareClip()).resolves.toBe('');
+            expect(status()).toBe('Your clip is still being made.');
+            expect(handed).toEqual([]);
+
+            // The take runs out: the video in the stage, playing, Share lit.
+            await settle(() => main.__test__.phase() === 'result');
+            await flushAsync();
+            await flushAsync();
+            expect(stage().children).toHaveLength(1);
+            const video = stage().children[0];
+            expect(video.tagName).toMatch(/video/i);
+            expect(video.src).toBe('blob:clip-1');
+            expect(urls.made[0].type).toBe('video/webm');
+            expect(video.muted).toBe(true);
+            expect(video.loop).toBe(true);
+            expect(video.autoplay).toBe(true);
+            expect(video.controls).toBe(true);
+            expect(video.getAttribute('aria-label')).toBe('Your clip of the play');
+            expect(progress()).toMatch(/^Your clip is ready, \d+ seconds? long\.$/);
+            expect(status()).toBe('Your clip is ready to share.');
+            expect(share().getAttribute('aria-disabled')).toBe('false');
+            expect(dom.el('game-canvas').classList.contains('is-recording')).toBe(false);
+
+            // Share: the file, named for the result, with the words and the address.
+            await expect(ui.shareClip()).resolves.toBe('shared');
+            expect(handed).toHaveLength(1);
+            expect(handed[0].files[0].name).toMatch(/^scenexp-xo-(catch|incomplete|interception|sack|run|run-50)-1080x1920\.webm$/);
+            expect(handed[0].files[0].type).toBe('video/webm');
+            expect(handed[0].title).toBe("X's and O's");
+            expect(handed[0].text).toMatch(/X's and O's[!.] http:\/\/.+\/$/);
+            expect(status()).toBe('Shared.');
+            // A dismissed share sheet is the visitor's decision.
+            globalThis.navigator.share = async () => { const e = new Error('closed'); e.name = 'AbortError'; throw e; };
+            await expect(ui.shareClip()).resolves.toBe('cancelled');
+            expect(status()).toBe('Shared.');
+            // The picture goes the same way.
+            globalThis.navigator.share = async (data) => { handed.push(data); };
+            await expect(ui.sharePicture()).resolves.toBe('shared');
+            expect(handed[1].files[0].name).toBe(`scenexp-xo-${best.kind}-1080x1350.jpg`);
+            expect(handed[1].files[0].type).toBe('image/jpeg');
+
+            // The pings: opened, made (the format and the view, the length on
+            // its own where the log keeps it), then how each hand-off went,
+            // and the picture's own. Only names the log keeps.
+            const clip = of(sent, 'clip');
+            expect(clip.map((u) => u.searchParams.get('kind'))).toEqual(['opened', 'made', 'shared', 'cancelled']);
+            expect(clip[0].searchParams.get('outcome')).toMatch(/^result=[a-z0-9-]+&view=1$/);
+            expect(clip[1].searchParams.get('outcome')).toBe('format=webm&view=1');
+            expect(Number(clip[1].searchParams.get('seconds'))).toBeGreaterThan(0);
+            expect(clip[2].searchParams.get('outcome')).toBe('format=webm&view=1');
+            expect(clip[2].searchParams.get('seconds')).toBe(clip[1].searchParams.get('seconds'));
+            expect(kinds(sent, 'photo')).toEqual(['shared']);
+            for (const u of sent) {
+                for (const key of u.searchParams.keys()) expect(LOGGED).toContain(key);
+            }
+
+            // Close: back to the card with focus on its button, the clip's address let go.
+            dom.el('clip-close').click();
+            await flushAsync();
+            expect(dom.el('clip').hidden).toBe(true);
+            expect(dom.el('result').hidden).toBe(false);
+            expect(shareBtn().focused).toBe(true);
+            expect(urls.revoked).toEqual(['blob:clip-1']);
+            expect(stage().children).toHaveLength(0);
+            // Escape closes it too.
+            shareBtn().click();
+            await flushAsync();
+            expect(dom.el('clip').hidden).toBe(false);
+            fire(dom.documentStub, 'keydown', { key: 'Escape' });
+            expect(dom.el('clip').hidden).toBe(true);
+            expect(main.__test__.phase()).toBe('result');
+            expect(main.getState().isLoaded).toBe(true);
+        } finally {
+            urls.restore();
+            delete globalThis.Image;
+        }
+    });
+
+    test('Switch view, and V, make the clip again from the next vantage point, and a closed sheet lets a take go', async () => {
+        recordingBrowser();
+        const urls = objectUrls();
+        const sent = beacons();
+        try {
+            const main = await aCatch();
+            shareBtn().click();
+            await flushAsync();
+            expect(main.__test__.taking().quarter).toBe(0);
+            frames(3);
+            dom.el('clip-view').click();
+            await flushAsync();
+            expect(main.__test__.phase()).toBe('clip');
+            expect(main.__test__.taking().quarter).toBe(1);
+            expect(main.__test__.taking().frames).toBe(0);
+            expect(dom.el('clip-view-count').textContent).toBe('View 2 of 4');
+            expect(status()).toBe('View 2 of 4. Making the clip again from here.');
+            expect(progress()).toBe('Making your clip…');
+            expect(stage().children).toHaveLength(1);
+            // V, as in the replay, but not with a modifier held.
+            fire(dom.documentStub, 'keydown', { key: 'v' });
+            await flushAsync();
+            expect(main.__test__.taking().quarter).toBe(2);
+            fire(dom.documentStub, 'keydown', { key: 'V', metaKey: true });
+            await flushAsync();
+            expect(main.__test__.taking().quarter).toBe(2);
+            // Round the four and back to the director's own.
+            fire(dom.documentStub, 'keydown', { key: 'V' });
+            fire(dom.documentStub, 'keydown', { key: 'v' });
+            await flushAsync();
+            expect(main.__test__.taking().quarter).toBe(0);
+            expect(dom.el('clip-view-count').textContent).toBe('View 1 of 4');
+
+            // Let it finish, then switch: the finished clip is let go and a new take begins.
+            await settle(() => main.__test__.phase() === 'result');
+            await flushAsync();
+            await flushAsync();
+            expect(stage().children[0].tagName).toMatch(/video/i);
+            expect(urls.made).toHaveLength(1);
+            dom.el('clip-view').click();
+            await flushAsync();
+            expect(urls.revoked).toEqual(['blob:clip-1']);
+            expect(main.__test__.phase()).toBe('clip');
+            expect(main.__test__.taking().quarter).toBe(1);
+            expect(share().getAttribute('aria-disabled')).toBe('true');
+            expect(stage().children[0].tagName).toMatch(/canvas/i);
+
+            // Closing mid-take cancels it and gives the field back.
+            frames(2);
+            dom.el('clip-close').click();
+            await flushAsync();
+            expect(dom.el('clip').hidden).toBe(true);
+            expect(main.__test__.phase()).toBe('result');
+            expect(main.__test__.taking()).toBeNull();
+            expect(dom.el('game-canvas').classList.contains('is-recording')).toBe(false);
+            expect(dom.el('result').hidden).toBe(false);
+            // No ping for a take nobody finished, one for every switch.
+            expect(kinds(sent, 'clip')).toEqual(['opened', 'view', 'view', 'view', 'view', 'made', 'view']);
+            expect(of(sent, 'clip')[1].searchParams.get('outcome')).toBe('view=2');
+        } finally {
+            urls.restore();
+            delete globalThis.Image;
+        }
+    });
+
+    test('where a file cannot be shared, Save video and Save a picture put them in the downloads folder', async () => {
+        const { saved } = recordingBrowser();
+        const urls = objectUrls();
+        delete globalThis.navigator.share;
+        delete globalThis.navigator.canShare;
+        try {
+            const main = await aCatch();
+            shareBtn().click();
+            await flushAsync();
+            expect(share().textContent).toBe('Save video');
+            expect(picture().textContent).toBe('Save a picture');
+            await settle(() => main.__test__.phase() === 'result');
+            await flushAsync();
+            await flushAsync();
+            const ui = await import('../www/xo/js/clip-ui.min.js');
+            await expect(ui.shareClip()).resolves.toBe('saved');
+            expect(saved).toHaveLength(1);
+            expect(saved[0]).toMatch(/^scenexp-xo-[a-z0-9-]+-1080x1920\.webm$/);
+            expect(status()).toBe('Your clip is in your downloads.');
+            await expect(ui.sharePicture()).resolves.toBe('saved');
+            expect(saved[1]).toMatch(/^scenexp-xo-[a-z]+-1080x1350\.jpg$/);
+            expect(status()).toBe('Your picture is in your downloads.');
+            // The clip is saved from the address it plays from: one for it, one for the picture.
+            expect(urls.made).toHaveLength(2);
+        } finally {
+            urls.restore();
+        }
+    });
+
+    test('a browser that cannot record is offered the picture alone, and told kindly', async () => {
+        encodingCanvases();
+        const sent = beacons();
+        try {
+            const main = await aCatch();
+            shareBtn().click();
+            await flushAsync();
+            expect(main.__test__.phase()).toBe('result');
+            expect(progress()).toBe("This browser can't make a video, but you can save a picture of the play.");
+            expect(share().hidden).toBe(true);
+            expect(dom.el('clip-tools').hidden).toBe(true);
+            expect(picture().hidden).toBe(false);
+            expect(stage().children).toHaveLength(0);
             frames(1);
             await flushAsync();
-            const picture = dom.el('photo-frame').children.find((c) => c.className === 'photo-canvas');
-            expect(picture).toBeTruthy();
-            expect(picture.getAttribute('role')).toBe('img');
-            expect(picture.getAttribute('aria-label')).toBe(words.photoCaption(best, null));
-            expect(dom.el('photo-wait').hidden).toBe(true);
-            expect(share().getAttribute('aria-disabled')).toBe('false');
-
-            const opened = sent.find((u) => u.searchParams.get('action') === 'photo');
-            expect(opened.searchParams.get('kind')).toBe('opened');
-
-            dom.el('photo-close').click();
             await flushAsync();
-            expect(dom.el('photo').hidden).toBe(true);
+            expect(picture().getAttribute('aria-disabled')).toBe('false');
+            const ui = await import('../www/xo/js/clip-ui.min.js');
+            expect(ui.switchClipView()).toBe(false);
+            await expect(ui.shareClip()).resolves.toBe('');
+            expect(kinds(sent, 'clip')).toEqual(['unsupported']);
+            dom.el('clip-close').click();
+            await flushAsync();
             expect(dom.el('result').hidden).toBe(false);
-            expect(photoBtn.focused).toBe(true);
-            expect(dom.el('photo-frame').children.some((c) => c.className === 'photo-canvas')).toBe(false);
-
-            // Escape closes it too, and the photo made the first time is the
-            // one hung the second, not made again.
-            photoBtn.click();
+            // Where the share sheet takes a picture, the words say share.
+            globalThis.navigator.canShare = (data) => data.files[0].type === 'image/jpeg';
+            dom.windowStub.File = class { constructor(parts, name, opts) { this.name = name; this.type = opts.type; } };
+            shareBtn().click();
             await flushAsync();
-            await flushAsync();
-            expect(dom.el('photo-frame').children.find((c) => c.className === 'photo-canvas')).toBe(picture);
-            fire(dom.documentStub, 'keydown', { key: 'Escape' });
-            expect(dom.el('photo').hidden).toBe(true);
-            expect(main.getState().isLoaded).toBe(true);
+            expect(progress()).toBe("This browser can't make a video, but you can share a picture of the play.");
+            expect(picture().textContent).toBe('Share a picture');
         } finally {
             delete globalThis.Image;
         }
     });
 
-    test('Share hands a ready file to the share sheet with the address; a closed sheet is nobody\'s failure', async () => {
-        canvasesEncode();
-        const handed = [];
-        globalThis.navigator.canShare = () => true;
-        globalThis.navigator.share = async (data) => { handed.push(data); };
-        dom.windowStub.File = class { constructor(parts, name, opts) { this.name = name; this.type = opts.type; } };
-        const main = await aCatch();
-        dom.el('result-actions').children.find((b) => b.id === 'result-photo-btn').click();
-        await flushAsync();
-        expect(share().textContent).toBe('Share picture');
-        // Pressed before the photo has developed: said so, nothing sent.
-        const { sharePhoto } = await import('../www/xo/js/photo-ui.min.js');
-        await expect(sharePhoto()).resolves.toBe('');
-        expect(dom.el('photo-status').textContent).toBe('Developing the photo…');
-        expect(handed).toEqual([]);
-
-        frames(1);
-        await flushAsync();
-        await flushAsync();
-        await expect(sharePhoto()).resolves.toBe('shared');
-        const best = (await ranked(main))[0];
-        expect(handed).toHaveLength(1);
-        expect(handed[0].files[0].name).toBe(`scenexp-xo-${best.kind}-1080x1350.jpg`);
-        expect(handed[0].files[0].type).toBe('image/jpeg');
-        expect(handed[0].title).toBe("X's and O's");
-        expect(handed[0].text).toMatch(/in X's and O's! http:\/\/.+\/$/);
-        expect(dom.el('photo-status').textContent).toBe('Shared.');
-
-        globalThis.navigator.share = async () => { const e = new Error('closed'); e.name = 'AbortError'; throw e; };
-        await expect(sharePhoto()).resolves.toBe('cancelled');
-        expect(dom.el('photo-status').textContent).toBe('Shared.');
-    });
-
-    test('where a file cannot be shared, Save puts it in the downloads folder', async () => {
-        canvasesEncode();
-        delete globalThis.navigator.share;
-        delete globalThis.navigator.canShare;
-        const made = [];
-        const real = globalThis.URL.createObjectURL;
-        globalThis.URL.createObjectURL = (blob) => { made.push(blob); return 'blob:photo'; };
+    test('with an avatar there is no nudge, and the clip opens on the view the replay was watched from', async () => {
+        recordingBrowser();
+        const urls = objectUrls();
         try {
-            await aCatch();
-            dom.el('result-actions').children.find((b) => b.id === 'result-photo-btn').click();
+            const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+            createAvatarStore({ win: null }).save({ skin: 'deep', shirt: 'teal' });
+            globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'wr1' }));
+            const main = await aCatch({ downed: true });
+            const camera = await import('../www/xo/js/camera.min.js');
+            // Watch the replay from the third view, then come back to the card.
+            dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
             await flushAsync();
-            expect(share().textContent).toBe('Save picture');
             frames(1);
+            press('Switch view');
+            press('Switch view');
+            expect(camera.viewQuarter()).toBe(2);
+            press('Skip replay');
             await flushAsync();
+            expect(main.__test__.phase()).toBe('result');
+            shareBtn().click();
             await flushAsync();
-            const { sharePhoto } = await import('../www/xo/js/photo-ui.min.js');
-            await expect(sharePhoto()).resolves.toBe('saved');
-            expect(made).toHaveLength(1);
-            expect(dom.el('photo-status').textContent).toBe('Your photo is in your downloads.');
+            expect(dom.el('clip-nudge').hidden).toBe(true);
+            expect(main.__test__.taking().quarter).toBe(2);
+            expect(dom.el('clip-view-count').textContent).toBe('View 3 of 4');
+            dom.el('clip-close').click();
+            await flushAsync();
+            expect(main.__test__.phase()).toBe('result');
         } finally {
-            globalThis.URL.createObjectURL = real;
+            urls.restore();
         }
     });
 
-    test('with an avatar: the visitor is "you", no nudge, and the pager walks every moment round', async () => {
-        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
-        createAvatarStore({ win: null }).save({ skin: 'deep', shirt: 'teal' });
-        globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'wr1' }));
-        const main = await aCatch({ downed: true });
-        const list = await ranked(main, 'wr1');
-        expect(list.map((m) => m.kind)).toEqual(['catch', 'tackle', 'release']);
-        dom.el('result-actions').children.find((b) => b.id === 'result-photo-btn').click();
-        await flushAsync();
-        expect(dom.el('photo-nudge').hidden).toBe(true);
-        expect(dom.el('photo-pager').hidden).toBe(false);
-        const page = () => `${dom.el('photo-count').textContent}: ${dom.el('photo-caption').textContent}`;
-        expect(page()).toBe('1 of 3: You make the catch.');
-        dom.el('photo-next').click();
-        expect(page()).toMatch(/^2 of 3: .+ brings you down\.$/);
-        dom.el('photo-prev').click();
-        dom.el('photo-prev').click();
-        expect(page()).toBe('3 of 3: The quarterback lets it fly to you.');
-        expect(dom.el('photo-title').textContent).toBe('The throw');
+    test('reduced motion: the take is recorded unseen, and the finished clip waits for its play button', async () => {
+        dom.windowStub.matchMedia = (q) => ({
+            media: q, matches: /reduce/.test(q), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
+        });
+        recordingBrowser();
+        const urls = objectUrls();
+        try {
+            const main = await aCatch();
+            shareBtn().click();
+            await flushAsync();
+            expect(stage().children[0].classList.contains('is-unseen')).toBe(true);
+            await settle(() => main.__test__.phase() === 'result');
+            await flushAsync();
+            await flushAsync();
+            const video = stage().children[0];
+            expect(video.tagName).toMatch(/video/i);
+            expect(video.autoplay).toBe(false);
+            expect(video.controls).toBe(true);
+        } finally {
+            urls.restore();
+        }
     });
 });
 

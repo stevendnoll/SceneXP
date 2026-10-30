@@ -67,7 +67,7 @@ import {
     hideMilestoneTitle, showSkipOpening, setOpeningTitle, hideOpeningTitle, hideWelcome,
     showInFlight, setJumpCue, showPick, setPickChoice, returnToResult,
 } from './hud.min.js';
-import { initPhotoSheet, showPhotoSheet, photoSheetOpen } from './photo-ui.min.js';
+import { initClipSheet, showClipSheet, clipSheetOpen } from './clip-ui.min.js';
 import { openingFrame, planOpening, castAt, propsAt } from './opening.min.js';
 import { initColorsCard, showColorsCard, colorsCardOpen } from './colors-ui.min.js';
 import { drawColorsPreviews } from './colors-preview.min.js';
@@ -1206,28 +1206,36 @@ function presentResult() {
     // so without this the card hides the one thing it is reporting on. The
     // column rises past the card, which a ring on the grass could not.
     if (cycle.spotAt) showSpot(cycle.spotAt.x, cycle.spotAt.z);
+    // The replay and the clip of it are offered together: both need the
+    // recording and nothing else (D25).
     showResult(cycle.lastOutcome, cycle.playNumber, CFG.rules.playsPerGame,
-        cycle.total, !isEmpty(), rankedMoments().length > 0);
+        cycle.total, !isEmpty(), !isEmpty());
 }
 
 /**
- * "SEE THE PHOTO" (specs/xo-photos-plan, Step 5): the sheet over the field,
- * with this play's best moments, and back to the card where it was when it
- * closes. The card steps aside while the sheet is up, because only one dialog
- * may claim the screen at a time (the focus trap wraps the last one it finds).
+ * "SHARE THE PLAY" (specs/xo-photos-plan, Step 7): the sheet over the field
+ * with the clip of this play, made as it opens, and the picture of its best
+ * moment under it, and back to the card where it was when it closes. The card
+ * steps aside while the sheet is up, because only one dialog may claim the
+ * screen at a time (the focus trap wraps the last one it finds).
+ *
+ * THE CLIP OPENS ON THE VIEW THE VISITOR WATCHED THIS PLAY'S REPLAY FROM
+ * (D21), when they switched it: that is the angle they chose for this play.
+ * Otherwise the director's own.
  */
-function openPhotos() {
-    if (cycle.phase !== 'result' || photoSheetOpen()) return;
-    const moments = rankedMoments();
-    if (!moments.length) return;
+function openShare() {
+    if (cycle.phase !== 'result' || clipSheetOpen() || isEmpty()) return;
     uiClick();
     // A moment the console left on the field goes first: the sheet is of the
     // play, and the field behind it should be the field as it finished.
     if (putBackLive() && cycle.spotAt) showSpot(cycle.spotAt.x, cycle.spotAt.z);
     hideResult();
-    showPhotoSheet(moments, {
+    showClipSheet({
+        outcome: cycle.lastOutcome,
+        moment: rankedMoments()[0] || null,
         visitor: visitorAvatar ? state.playAs : null,
-        back: () => returnToResult('result-photo-btn'),
+        quarter: cycle.viewPlay === cycle.playNumber ? viewQuarter() : 0,
+        back: () => returnToResult('result-share-btn'),
     });
 }
 
@@ -2623,8 +2631,8 @@ async function init() {
         onPlayAs: openPick,
         onPickCancel: cancelPick,
         onPickChoose: () => choosePick(),
-        // The photo of the play, from the result card (Step 5).
-        onPhoto: openPhotos,
+        // The clip of the play, with its picture, from the result card (Step 7).
+        onShare: openShare,
         onJump: () => onJump(),
         onReplay: startReplay,
         onSkipReplay,
@@ -2676,10 +2684,14 @@ async function init() {
     // THE PHOTO SHEET. The address that goes with a shared picture is where
     // the page is served from, so a share is right on localhost, on a staging
     // host and in production alike (as the score share's is, summary.js).
-    initPhotoSheet({
-        make: makePhoto,
+    initClipSheet({
+        take: (stage, quarter, onFrame) => beginTake(stage, { quarter, onFrame }),
+        cancel: cancelTake,
+        picture: makePhoto,
         report,
         url: () => new URL('.', window.location.href).href,
+        recording: howToRecord,
+        calm: () => reducedMotion,
     });
 
     setProgress(0.9, 'Almost ready…');
@@ -3157,6 +3169,23 @@ function gameCanvas() {
     return typeof document !== 'undefined' ? document.getElementById('game-canvas') : null;
 }
 
+/**
+ * WHETHER AND HOW THIS BROWSER RECORDS A CLIP: the format MediaRecorder will
+ * make (MP4 first, recorder-1.0.0's order), the clip's size and rate for this
+ * device, or null when it cannot record at all. Asked when the sheet opens,
+ * so a browser that cannot is told at once and offered the picture.
+ */
+function howToRecord() {
+    if (typeof window === 'undefined' || !canRecord(window)) return null;
+    const mime = pickMime((t) => window.MediaRecorder.isTypeSupported(t));
+    if (!mime) return null;
+    const { w, h } = clipSize(isTouch());
+    return {
+        mime, w, h, fps: CFG.clip.fps,
+        bitrate: isTouch() ? CFG.clip.mobileBitrate : CFG.clip.bitrate,
+    };
+}
+
 /** How long the ending the replay plays at the whistle takes: the longer of
  *  the tackle and the party, as the replay's own hold has it. */
 function endingLength() {
@@ -3177,7 +3206,7 @@ function endingLength() {
  * playhead goes to the plan's start rather than the snap, the camera opens on
  * where the ball is on that frame (D22), and the frames go to the stage.
  */
-function beginTake(stage, { quarter = 0 } = {}) {
+function beginTake(stage, { quarter = 0, onFrame = null } = {}) {
     if (cycle.phase !== 'result' || cycle.take || isEmpty() || !renderer || !scene) return Promise.resolve(null);
     const g = stage && typeof stage.getContext === 'function' ? stage.getContext('2d') : null;
     if (!g) return Promise.resolve(null);
@@ -3217,7 +3246,10 @@ function beginTake(stage, { quarter = 0 } = {}) {
             plan, quarter, stage, g, w, h,
             shoulder: newShoulder(),
             anchor: { x: opening.x, z: opening.z },
-            live, release, held: 0, frames: 0, finished: false, resolve,
+            live, release, held: 0, elapsed: 0, frames: 0, finished: false, resolve,
+            // Told how many clip seconds are left after every frame, for the
+            // sheet's countdown.
+            onFrame: typeof onFrame === 'function' ? onFrame : null,
         };
     });
 }
@@ -3227,6 +3259,7 @@ function beginTake(stage, { quarter = 0 } = {}) {
 function stepTake(delta) {
     const t = cycle.take;
     if (!t) { cycle.phase = 'result'; return; }
+    t.elapsed += delta;
     const done = advance(delta, CFG.simHz, CFG.camera.replay.speed);
     const objs = frameAt(playheadFrame(), teamOfPosition);
     syncFigures(objs, delta, { live: !done });
@@ -3262,6 +3295,7 @@ function drawTake(delta) {
         g: t.g, w: t.w, h: t.h, wordmark: CFG.clip.wordmark, stamp,
     });
     t.frames += 1;
+    if (t.onFrame) t.onFrame(Math.max(0, t.plan.total - t.elapsed));
     if (t.finished) endTake(false);
 }
 
@@ -3303,19 +3337,14 @@ function cancelTake() {
 export async function qaClip(view = 1) {
     if (cycle.phase !== 'result') return 'On the result card only, after a play.';
     if (isEmpty()) return 'No recording of this play to clip.';
-    if (typeof window === 'undefined' || !canRecord(window)) return "This browser can't record a video.";
-    const mime = pickMime((t) => window.MediaRecorder.isTypeSupported(t));
-    if (!mime) return "This browser can't make a video.";
+    const rec = howToRecord();
+    if (!rec) return "This browser can't record a video.";
     const quarter = (((Math.round(Number(view) || 1) - 1) % 4) + 4) % 4;
     const stage = document.createElement('canvas');
-    const { w, h } = clipSize(isTouch());
-    const made = await recordTake(stage, () => beginTake(stage, { quarter }), {
-        w, h, mime, fps: CFG.clip.fps,
-        bitrate: isTouch() ? CFG.clip.mobileBitrate : CFG.clip.bitrate, win: window,
-    });
+    const made = await recordTake(stage, () => beginTake(stage, { quarter }), { ...rec, win: window });
     if (!made || !made.blob || !made.blob.size) return 'The clip could not be made.';
     if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return "This browser couldn't save the clip.";
-    const name = clipName(cycle.lastOutcome && cycle.lastOutcome.result, w, h, extensionOf(made.mime));
+    const name = clipName(cycle.lastOutcome && cycle.lastOutcome.result, rec.w, rec.h, extensionOf(made.mime));
     const url = URL.createObjectURL(made.blob);
     saveFile(url, name);
     window.setTimeout(() => URL.revokeObjectURL(url), 60000);
