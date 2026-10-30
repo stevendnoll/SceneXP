@@ -3104,6 +3104,24 @@ const XO_CONFIG = {
             stagger: 0.35,
             ease: 0.3,
         },
+        /**
+         * THE STANDS BEFORE AND DURING A PLAY (Steve, 2026-10-30: "all of the
+         * fans cheering before and during the play, then only the fans of the
+         * team that won the play keep cheering"). Every fan, both sides and
+         * the plain jackets, from the line-up to the whistle, each on their
+         * own rhythm: up and hopping for `duty` of a `cycle` and seated for
+         * the rest, their turn placed round the cycle by the seat's own phase,
+         * so about seven in ten are up at any moment and the stands read as a
+         * live crowd rather than a block bouncing behind the play. Lower and
+         * slower than the cheer that answers the whistle, which is the one
+         * that should land. `hop` is per unit of scale, `rate` hops a second,
+         * and `ease` fades a fan in and out of each turn (and the whole crowd
+         * in when the buzz starts). At the whistle each fan's buzz fades into
+         * their cheer, or into their seat, over `cheer.ease` after their
+         * `cheer.stagger` share, so the losing side sits down in the same
+         * ripple the winning side goes up in (stunt.js `fanPose`).
+         */
+        buzz: { hop: 0.07, rate: 1.6, cycle: 5.0, duty: 0.7, ease: 0.4 },
     },
 
     /** Turf appearance. The markings are baked into one canvas texture rather

@@ -387,6 +387,116 @@ describe('team colors', () => {
     });
 });
 
+/**
+ * THE STANDS BEFORE THE WHISTLE (Steve, 2026-10-30): up from the line-up,
+ * through the play, and at the whistle the cheer for whoever won it takes over
+ * from that very buzz while the rest sit down. Read through `crowdState` from
+ * the MIN build, as the replay's cheer test reads `cheerState`.
+ */
+describe('the stands before the whistle', () => {
+    const snapAndThrow = async () => {
+        press('Snap the ball');
+        await flushAsync();
+        press('Throw');
+        await flushAsync();
+    };
+
+    test('are up from the line-up to the whistle, when the cheer takes over from that very buzz', async () => {
+        const spectacle = await import('../www/xo/js/spectacle.min.js');
+        const main = await toLivePlay();
+        expect(main.__test__.phase()).toBe('presnap');
+        const before = spectacle.crowdState();
+        expect(before.buzzing).not.toBeNull();
+        expect(before.cheer).toBeNull();
+        await snapAndThrow();
+        let now = 0;
+        const frame = () => { now += 16.7; dom.loops[0](now); };
+        frame();
+        frame();
+        expect(main.__test__.phase()).toBe('live');
+        expect(spectacle.crowdState().buzzing).toBe(before.buzzing);
+        let tookOver = false;
+        for (let i = 0; i < 2000 && dom.el('result').hidden !== false; i += 1) {
+            frame();
+            const s = spectacle.crowdState();
+            if (s.cheer) {
+                expect(s.buzzing).toBeNull();
+                tookOver = tookOver || s.handoff === before.buzzing;
+            }
+        }
+        expect(dom.el('result').hidden).toBe(false);
+        expect(tookOver).toBe(true);
+    });
+
+    test('are up again from the replay\'s first frame, and hand over at its whistle', async () => {
+        const spectacle = await import('../www/xo/js/spectacle.min.js');
+        const main = await toLivePlay();
+        const live = spectacle.crowdState().buzzing;
+        await snapAndThrow();
+        let now = 0;
+        const frame = () => { now += 16.7; dom.loops[0](now); };
+        await runToResult(frame);
+        const watch = dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay');
+        watch.click();
+        await flushAsync();
+        const replay = spectacle.crowdState();
+        expect(replay.cheer).toBeNull();
+        expect(replay.buzzing).not.toBeNull();
+        expect(replay.buzzing).toBeGreaterThan(live);
+        expect(replay.buzzing).toBe(main.getState().elapsed);
+        let tookOver = false;
+        for (let i = 0; i < 2000 && dom.el('result').hidden !== false; i += 1) {
+            frame();
+            const s = spectacle.crowdState();
+            if (s.cheer) tookOver = tookOver || s.handoff === replay.buzzing;
+        }
+        expect(dom.el('result').hidden).toBe(false);
+        expect(tookOver).toBe(true);
+    });
+
+    /**
+     * UNDER THE STUB THE STANDS ARE NEVER BUILT, so a cheer runs until something
+     * seats it, which is exactly the case a quick Next play meets on a real
+     * page for a moment: the buzz must wait for that cheer rather than cut it.
+     */
+    test('a next play called while the stands still cheer waits for them to sit', async () => {
+        const spectacle = await import('../www/xo/js/spectacle.min.js');
+        const main = await toLivePlay();
+        await snapAndThrow();
+        let now = 0;
+        const frame = () => { now += 16.7; dom.loops[0](now); };
+        await runToResult(frame);
+        expect(spectacle.crowdState().cheer).not.toBeNull();
+        // Next play opens the playbook, and choosing from it is the line-up.
+        dom.el('result-actions').children.find((b) => b.textContent === 'Next play').click();
+        await flushAsync();
+        expect(spectacle.crowdState()).toMatchObject({ pending: false, buzzing: null });
+        const body = dom.el('playbook').querySelector('.playbook-body');
+        deep(body).find((n) => n.dataset && n.dataset.slug).click();
+        await flushAsync();
+        expect(main.__test__.phase()).toBe('presnap');
+        const s = spectacle.crowdState();
+        expect(s.cheer).not.toBeNull();
+        expect(s).toMatchObject({ pending: true, buzzing: null });
+    });
+
+    test('keep still for somebody who asked not to be moved about', async () => {
+        const plain = globalThis.window.matchMedia;
+        globalThis.window.matchMedia = (q) => ({
+            matches: /reduce/.test(q), media: q,
+            addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
+        });
+        try {
+            const spectacle = await import('../www/xo/js/spectacle.min.js');
+            const main = await toLivePlay();
+            expect(main.__test__.phase()).toBe('presnap');
+            expect(spectacle.crowdState()).toEqual({ buzzing: null, pending: false, cheer: null, handoff: null });
+        } finally {
+            globalThis.window.matchMedia = plain;
+        }
+    });
+});
+
 describe('the opening for somebody who asked not to be moved about', () => {
     test('is the shorter, held version, and still ends on the welcome card', async () => {
         const plain = globalThis.window.matchMedia;
@@ -1679,6 +1789,34 @@ describe('the share sheet', () => {
         const { rankMoments } = await import('../www/xo/js/moments.min.js');
         return rankMoments(main.__test__.moments(), visitor);
     }
+
+    /** THE STANDS IN THE TAKE (Steve, 2026-10-30): up from its first frame, as
+     *  in a replay, and the cheer takes over from them at its whistle. */
+    test('the stands are up through the take and the cheer takes over at its whistle', async () => {
+        recordingBrowser();
+        const urls = objectUrls();
+        dom.windowStub.File = class { constructor(parts, name, opts) { this.name = name; this.type = opts.type; } };
+        try {
+            const spectacle = await import('../www/xo/js/spectacle.min.js');
+            const main = await aCatch();
+            shareBtn().click();
+            await flushAsync();
+            expect(main.__test__.phase()).toBe('clip');
+            const take = spectacle.crowdState();
+            expect(take.cheer).toBeNull();
+            expect(take.buzzing).toBe(main.getState().elapsed);
+            let tookOver = false;
+            for (let i = 0; i < 2000 && main.__test__.phase() === 'clip'; i += 1) {
+                frames(1);
+                const s = spectacle.crowdState();
+                if (s.cheer) tookOver = tookOver || s.handoff === take.buzzing;
+            }
+            expect(main.__test__.phase()).toBe('result');
+            expect(tookOver).toBe(true);
+        } finally {
+            urls.restore();
+        }
+    });
 
     test('offered on the card, the clip made as the sheet opens, counted down, played back, and shared with the address', async () => {
         const { FakeRecorder } = recordingBrowser();

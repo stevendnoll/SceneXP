@@ -79,7 +79,7 @@ import {
     milestoneDue, litStars, showFrame, showUsesTeam, stageTeam, turfSetup,
 } from './milestones.min.js';
 import {
-    initSpectacle, beginShow, applyShow, setAwake, endShow, tickAwake, cheerCrowd, applyCrowdColors,
+    initSpectacle, beginShow, applyShow, setAwake, endShow, tickAwake, cheerCrowd, buzzCrowd, applyCrowdColors,
 } from './spectacle.min.js';
 import { cheerFor } from './stunt.min.js';
 import { showSummary, hideSummary, readBest } from './summary.min.js';
@@ -734,6 +734,11 @@ function startPlay(offensive, defense) {
     cycle.accumulator = 0;
     cycle.settleFor = HOLD_SETTLE;
     cycle.playNumber += 1;
+    // THE STANDS ARE UP FROM THE LINE-UP (Steve, 2026-10-30): every fan, both
+    // sides, until the whistle, when the cheer for whoever won the play takes
+    // over and the rest sit down (`finishPlay`). Still running from the last
+    // play's cheer, the buzz waits for it; a changed play keeps it.
+    buzzCrowd(true, state.elapsed, { calm: reducedMotion });
     syncFigures(cycle.play.game.objects, 0, { presnap: true });
     showBall(cycle.play.game.objects, 0);
 
@@ -1439,9 +1444,11 @@ function startReplay() {
     resetTakedown();
     resetCelebration();
     // The stands sit down with it, whether or not the live cheer had finished,
-    // and go up again at the same whistle below.
+    // are up again from the replay's first frame as they were from the
+    // line-up, and cheer again at the same whistle below.
     cheerCrowd(null, state.elapsed);
     cycle.cheered = false;
+    buzzCrowd(true, state.elapsed, { calm: reducedMotion });
     rewind();
     // The recording begins ON the snap, so the playhead going back to frame
     // one is the same instant the visitor's press was, and he takes the ball
@@ -3380,11 +3387,13 @@ function beginTake(stage, { quarter = 0, onFrame = null, follow = 'ball' } = {})
     if (markers) markers.visible = false;
 
     // The endings are reset so they can play again at the whistle, and the
-    // stands sit down to go up again on the same frame, as a replay does.
+    // stands sit down to be up again through the take and cheer again on the
+    // same frame, as a replay does.
     resetTakedown();
     resetCelebration();
     cheerCrowd(null, state.elapsed);
     cycle.cheered = false;
+    buzzCrowd(true, state.elapsed, { calm: reducedMotion });
 
     const plan = clipPlan({ ticks: frameCount(), ending: endingLength() });
     seek(plan.start);
