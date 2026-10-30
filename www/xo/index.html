@@ -127,7 +127,7 @@
     <title>X's and O's | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=22" as="style">
+    <link rel="preload" href="css/experience.min.css?v=23" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -198,7 +198,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=22">
+    <link rel="stylesheet" href="css/experience.min.css?v=23">
     <!-- The welcome card's avatar portrait (shared with the home page). -->
     <link rel="stylesheet" href="../shared/css/avatar-1.0.0.min.css">
 
@@ -434,9 +434,12 @@
     </div>
 
     <!-- THE TEAM COLORS CARD (colors-ui.js), opened from the playbook's header. A
-         jersey and a helmet for each team and one field color, in the browser's
+         jersey, its letter, a helmet, pants and shoes for each team, a stripe
+         over the helmet and stripes down the pants (a switch each, with a
+         picker beside it once it is on), and one field color, in the browser's
          own color pickers, so there is no library and every visitor gets the
-         picker their device already has. Each picker has a visible label, the
+         picker their device already has. Each picker has a visible label (the
+         stripe pickers an aria-label that starts with their row's words), the
          warning is a polite live region rewritten only when what it says
          changes, and Match jersey only appears once a helmet has a color of its
          own. Team names never appear: a visitor knows these teams as the X's
@@ -449,7 +452,7 @@
             aria-labelledby="colors-title" aria-describedby="colors-intro" tabindex="-1">
             <h2 id="colors-title" class="card-title">Team colors</h2>
             <p id="colors-intro" class="card-detail">Dress the X's and the O's in your team's colors and
-                your rival's, and pick a field for them to play on.</p>
+                your rival's, down to the stripes and the shoes, and pick a field for them to play on.</p>
             <div class="colors-teams">
                 <section class="colors-team" aria-labelledby="colors-x-title">
                     <h3 id="colors-x-title" class="colors-team-title">The X's</h3>
@@ -463,11 +466,39 @@
                         <input id="colors-x-jersey" class="colors-input" type="color" value="#ff992c">
                     </div>
                     <div class="colors-row">
+                        <label for="colors-x-letter">Letter</label>
+                        <input id="colors-x-letter" class="colors-input" type="color" value="#ffffff">
+                    </div>
+                    <div class="colors-row">
                         <label for="colors-x-helmet">Helmet</label>
                         <input id="colors-x-helmet" class="colors-input" type="color" value="#ff992c">
                     </div>
                     <button id="colors-x-match" class="colors-match" type="button"
                         aria-label="Match jersey color on the X's helmet" hidden>Match jersey</button>
+                    <div class="colors-row">
+                        <label for="colors-x-helmet-stripe">Helmet stripe</label>
+                        <span class="colors-pair">
+                            <input id="colors-x-helmet-stripe" class="colors-check" type="checkbox">
+                            <input id="colors-x-helmet-stripe-color" class="colors-input" type="color" value="#ffffff"
+                                aria-label="Helmet stripe color for the X's" hidden>
+                        </span>
+                    </div>
+                    <div class="colors-row">
+                        <label for="colors-x-pants">Pants</label>
+                        <input id="colors-x-pants" class="colors-input" type="color" value="#3a2410">
+                    </div>
+                    <div class="colors-row">
+                        <label for="colors-x-pants-stripe">Pants stripes</label>
+                        <span class="colors-pair">
+                            <input id="colors-x-pants-stripe" class="colors-check" type="checkbox">
+                            <input id="colors-x-pants-stripe-color" class="colors-input" type="color" value="#ff992c"
+                                aria-label="Pants stripes color for the X's" hidden>
+                        </span>
+                    </div>
+                    <div class="colors-row">
+                        <label for="colors-x-shoes">Shoes</label>
+                        <input id="colors-x-shoes" class="colors-input" type="color" value="#1a1a1a">
+                    </div>
                 </section>
                 <section class="colors-team" aria-labelledby="colors-o-title">
                     <h3 id="colors-o-title" class="colors-team-title">The O's</h3>
@@ -478,11 +509,39 @@
                         <input id="colors-o-jersey" class="colors-input" type="color" value="#9bcfff">
                     </div>
                     <div class="colors-row">
+                        <label for="colors-o-letter">Letter</label>
+                        <input id="colors-o-letter" class="colors-input" type="color" value="#ffffff">
+                    </div>
+                    <div class="colors-row">
                         <label for="colors-o-helmet">Helmet</label>
                         <input id="colors-o-helmet" class="colors-input" type="color" value="#9bcfff">
                     </div>
                     <button id="colors-o-match" class="colors-match" type="button"
                         aria-label="Match jersey color on the O's helmet" hidden>Match jersey</button>
+                    <div class="colors-row">
+                        <label for="colors-o-helmet-stripe">Helmet stripe</label>
+                        <span class="colors-pair">
+                            <input id="colors-o-helmet-stripe" class="colors-check" type="checkbox">
+                            <input id="colors-o-helmet-stripe-color" class="colors-input" type="color" value="#ffffff"
+                                aria-label="Helmet stripe color for the O's" hidden>
+                        </span>
+                    </div>
+                    <div class="colors-row">
+                        <label for="colors-o-pants">Pants</label>
+                        <input id="colors-o-pants" class="colors-input" type="color" value="#1b2c40">
+                    </div>
+                    <div class="colors-row">
+                        <label for="colors-o-pants-stripe">Pants stripes</label>
+                        <span class="colors-pair">
+                            <input id="colors-o-pants-stripe" class="colors-check" type="checkbox">
+                            <input id="colors-o-pants-stripe-color" class="colors-input" type="color" value="#9bcfff"
+                                aria-label="Pants stripes color for the O's" hidden>
+                        </span>
+                    </div>
+                    <div class="colors-row">
+                        <label for="colors-o-shoes">Shoes</label>
+                        <input id="colors-o-shoes" class="colors-input" type="color" value="#1a1a1a">
+                    </div>
                 </section>
             </div>
             <div class="colors-row colors-field">

@@ -34,7 +34,7 @@ import { createPerson } from '../../shared/js/people-1.0.0.min.js';
 import { createAvatar } from '../../shared/js/avatar-figure-1.0.0.min.js';
 import { XO_CONFIG as CFG } from './config.min.js';
 import { solveArm, calibrate } from './arm.min.js';
-import { jerseyOf, helmetOf, markInk } from './colors.min.js';
+import { kitOf, OWN } from './colors.min.js';
 
 /** The 2D game's own team colours and names. */
 export const TEAMS = {
@@ -49,11 +49,20 @@ export const TEAMS = {
  * 30m up they are most of what is visible: the eye gets a coloured head and
  * shoulders and very little else. The trousers stay a dark neutral so a figure
  * reads as a bright top over a dark bottom rather than as a solid lozenge.
+ *
+ * THE PANTS AND THE SHOES ARE READ FROM colors.js (`OWN`), because a visitor
+ * can now recolor both and "back to the game's own" has to be one number in
+ * one place. Everything here is what a figure is BUILT in; what it is dressed
+ * in afterwards is `kitOf`.
  */
+const num = (hex) => parseInt(hex.slice(1), 16);
 const KITS = {
-    0: { shirt: 0xff992c, pants: 0x3a2410, helmet: 0xff992c, mask: 0x2a1a0c },
-    1: { shirt: 0x9bcfff, pants: 0x1b2c40, helmet: 0x9bcfff, mask: 0x16222f },
+    0: { shirt: 0xff992c, pants: num(OWN.pants[0]), helmet: 0xff992c, mask: 0x2a1a0c, shoes: num(OWN.shoes) },
+    1: { shirt: 0x9bcfff, pants: num(OWN.pants[1]), helmet: 0x9bcfff, mask: 0x16222f, shoes: num(OWN.shoes) },
 };
+
+/** What a stripe is built in before it is dressed: white, and hidden. */
+const STRIPE_BUILT = 0xffffff;
 
 const SKIN = [0xffdbac, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0x5c3317];
 
@@ -150,7 +159,7 @@ export function helmetRim() {
  * face or buried inside the shell. Both were wrong, and neither was visible in
  * a screenshot until somebody looked at a 60-pixel crop.
  */
-export function buildHelmetParts(shellMat, maskMat) {
+export function buildHelmetParts(shellMat, maskMat, stripeMat = null) {
     const parts = [];
 
     /**
@@ -281,7 +290,51 @@ export function buildHelmetParts(shellMat, maskMat) {
     strap.name = 'helmet-strap';
     parts.push(strap);
 
+    if (stripeMat) parts.push(buildHelmetStripe(stripeMat, CROWN));
+
     return parts;
+}
+
+/**
+ * THE STRIPE OVER THE HELMET, front to back (Steve, 2026-10-30).
+ *
+ * A BAND OF THE SHELL'S OWN SPHERE, TURNED ON ITS SIDE. The obvious cut, a
+ * narrow slice of longitude, meets itself at the pole the way the face
+ * opening's pie slice did, so a stripe built that way is two petals touching
+ * at a point on top. Instead this is a narrow band about the sphere's EQUATOR,
+ * which has one width all the way round, and the sphere is then rolled a
+ * quarter turn about z so its poles point out of the ears and the band runs
+ * front to back over the crown. The shell's scale goes with it, with its x
+ * and y swapped for the same roll, so the band hugs the ellipsoid at every
+ * point rather than lifting off it at the long back.
+ *
+ * WHERE IT RUNS, in the rolled sphere's phi: a point at phi lies at
+ * (0, -cos phi, sin phi) of the shell, so phi = pi/2 is the front at the
+ * equator, pi the top and 3pi/2 the back. The shell's own angle from the top
+ * is pi - phi over the front and phi - pi down the back, so the stripe starts
+ * at the brow, where the crown cap ends and the face opening begins (anything
+ * lower at the front would float over the face), and ends `END` of a
+ * half-turn down the back, above the rim at `SHELL.sweep`.
+ */
+export function buildHelmetStripe(stripeMat, crown = Math.PI * 0.42) {
+    const S = CFG.stripes.helmet;
+    const END = 0.86;
+    const phiStart = Math.PI - crown;
+    const phiEnd = Math.PI + Math.PI * END;
+    const stripe = new THREE.Mesh(
+        new THREE.SphereGeometry(
+            SHELL.r * (1 + S.lift), S.segments, 2,
+            phiStart, phiEnd - phiStart,
+            Math.PI / 2 - S.halfWidth, 2 * S.halfWidth
+        ),
+        stripeMat
+    );
+    stripe.position.set(...SHELL.at);
+    stripe.rotation.z = Math.PI / 2;
+    stripe.scale.set(SHELL.scale[1], SHELL.scale[0], SHELL.scale[2]);
+    stripe.name = 'helmet-stripe';
+    stripe.visible = false;
+    return stripe;
 }
 
 function addHelmet(person, kit) {
@@ -295,10 +348,80 @@ function addHelmet(person, kit) {
     const maskMat = new THREE.MeshStandardMaterial({
         color: kit.mask, roughness: 0.45, metalness: 0.45,
     });
+    // The stripe's own material, a shade glossier than the shell so it reads
+    // as paint on paint. Built hidden; `dress` shows it when a visitor asks.
+    const stripeMat = new THREE.MeshStandardMaterial({
+        color: STRIPE_BUILT, roughness: 0.24, metalness: 0.2,
+    });
 
-    const parts = buildHelmetParts(shellMat, maskMat);
+    const parts = buildHelmetParts(shellMat, maskMat, stripeMat);
     for (const part of parts) person.add(part);
     return parts[0];      // the shell
+}
+
+/**
+ * THE STRIPES DOWN THE PANTS (Steve, 2026-10-30): one down the outside of
+ * each thigh and each shin, as a narrow section of that segment's own
+ * cylinder a little proud of it, so it follows the leg's taper and swings
+ * with the leg (it is a child of the rig's leg group, which is the stride's
+ * pivot). The knee sphere between them is left bare: the gap is a few
+ * millimetres and the knee is inside the thigh's end anyway.
+ *
+ * MEASURED OFF THE LEG THAT WAS BUILT, as the jersey mark is off the torso:
+ * the thigh and the shin are the two cylinders under the leg group, and their
+ * radii, heights and places are read from their geometry. The fallback is the
+ * rig's own numbers for a figure of this build, for the test stub, whose
+ * geometry has no parameters (and whose leg groups cannot be found at all, so
+ * under it nothing is added, which is also what the stub does with a helmet).
+ */
+export function buildPantsStripeParts(leg, material, { muscular = false } = {}) {
+    const S = CFG.stripes.pants;
+    const side = leg.userData && leg.userData.legSide < 0 ? -1 : 1;
+    const r = 0.065 * (muscular ? 1.35 : 1);
+    const fallback = [
+        { radiusTop: r, radiusBottom: r * 1.1, height: 0.375, y: -0.1875 },
+        { radiusTop: r * 0.8, radiusBottom: r * 0.9, height: 0.36, y: -0.5625 },
+    ];
+    const measured = (leg.children || [])
+        .filter((c) => c && c.isMesh && c.geometry && c.geometry.type === 'CylinderGeometry'
+            && c.geometry.parameters && Number.isFinite(c.geometry.parameters.radiusTop))
+        .map((c) => ({ ...c.geometry.parameters, y: c.position.y }));
+    const segments = measured.length === 2 ? measured : fallback;
+    const parts = [];
+    for (const seg of segments) {
+        // Three's cylinder puts theta 0 at +z and pi/2 at +x, so the strip is
+        // cut about +x, the outside of the right leg, and TURNED a half turn
+        // for the left rather than cut about -x: one geometry then serves
+        // both legs once `shareGeometryAndMaterials` has keyed it by its
+        // parameters, where a different start angle would be two.
+        const strip = new THREE.Mesh(
+            new THREE.CylinderGeometry(
+                seg.radiusTop * (1 + S.lift), seg.radiusBottom * (1 + S.lift), seg.height,
+                3, 1, true, Math.PI / 2 - S.halfWidth, 2 * S.halfWidth
+            ),
+            material
+        );
+        strip.position.y = seg.y;
+        if (side < 0) strip.rotation.y = Math.PI;
+        strip.name = 'pants-stripe';
+        strip.visible = false;
+        parts.push(strip);
+    }
+    return parts;
+}
+
+function addPantsStripes(person, muscular) {
+    const material = new THREE.MeshStandardMaterial({ color: STRIPE_BUILT, roughness: 0.8, metalness: 0 });
+    const legs = Array.isArray(person.children)
+        ? person.children.filter((c) => c && c.userData && c.userData.isLeg) : [];
+    const parts = [];
+    for (const leg of legs) {
+        for (const strip of buildPantsStripeParts(leg, material, { muscular })) {
+            leg.add(strip);
+            parts.push(strip);
+        }
+    }
+    return parts;
 }
 
 /**
@@ -1016,18 +1139,26 @@ function measureArm(person) {
  * Found by what the figure was BUILT with, which is always the game's own kit
  * (`initRoster` applies the visitor's colors afterwards), so a shirt is the one
  * material in the shirt's color at the shirt's roughness and nothing a visitor
- * picks can make the pants look like one.
+ * picks can make the pants look like one. The pants and the shoes are found the
+ * same way (the skin shares the pants' roughness, but never their color), and
+ * the stripes and the mark by the names they were built under.
  */
 function tagKit(person, team, kit) {
     const shirt = new THREE.Color(kit.shirt).getHexString();
+    const pants = new THREE.Color(kit.pants).getHexString();
+    const shoes = new THREE.Color(kit.shoes).getHexString();
     person.traverse((node) => {
         const m = node.isMesh && node.material;
         if (!m || Array.isArray(m) || !m.color) return;
         let role = '';
         if (node.name === 'jersey-mark') role = 'mark';
+        else if (node.name === 'helmet-stripe') role = 'helmetStripe';
+        else if (node.name === 'pants-stripe') role = 'pantsStripe';
         else if (node.name === 'helmet-shell' || node.name === 'helmet-crown' || node.name === 'helmet-flap') role = 'helmet';
         else if (m.color.getHexString() === shirt && m.roughness === 0.7) role = 'shirt';
         else if (m.color.getHexString() === shirt && m.roughness === 0.75) role = 'sleeve';
+        else if (m.color.getHexString() === pants && m.roughness === 0.8) role = 'pants';
+        else if (m.color.getHexString() === shoes && m.roughness === 0.6) role = 'shoes';
         if (!role) return;
         m.userData = { ...(m.userData || {}), kit: role, team };
     });
@@ -1035,27 +1166,38 @@ function tagKit(person, team, kit) {
 
 /**
  * DRESS A TEAM: its jersey on every shirt and sleeve, its helmet on every shell,
- * and the X or O on the jersey in whichever of white or near-black reads on it.
- * Every figure of the team shares these materials, so this is a handful of
- * color writes however many players there are.
+ * the X or O on the jersey, the pants, the shoes, and its stripes shown in
+ * their colors or hidden. Every figure of the team shares these materials, so
+ * this is a handful of color writes however many players there are; the
+ * stripes' visibility is per mesh, so that is a flag on each of them.
  */
 export function setTeamKit(team, kit = {}) {
     if (!group) return 0;
     return dress(group, team, kit);
 }
 
-/** Put a kit's colors on every tagged material of `team` under `root`. */
-function dress(root, team, { jersey, helmet, mark } = {}) {
+/** The material roles a plain color write dresses, by the kit's name for them. */
+const PAINTED = { jersey: ['shirt', 'sleeve'], helmet: ['helmet'], pants: ['pants'], shoes: ['shoes'], helmetStripe: ['helmetStripe'], pantsStripe: ['pantsStripe'] };
+const STRIPE_NODES = { 'helmet-stripe': 'helmetStripe', 'pants-stripe': 'pantsStripe' };
+
+/** Put a kit's colors on every tagged material of `team` under `root`, and
+ *  show or hide its stripes (`kit.helmetStripe` / `kit.pantsStripe`: a color
+ *  shows them in it, null hides them, undefined leaves them be). */
+function dress(root, team, kit = {}) {
     const seen = new Set();
     root.traverse((node) => {
         const m = node.isMesh && node.material;
-        if (!m || Array.isArray(m) || seen.has(m) || !m.userData || m.userData.team !== team) return;
+        if (!m || Array.isArray(m) || !m.userData || m.userData.team !== team) return;
+        const stripe = STRIPE_NODES[node.name];
+        if (stripe && stripe in kit) node.visible = !!kit[stripe];
+        if (seen.has(m)) return;
         seen.add(m);
-        if ((m.userData.kit === 'shirt' || m.userData.kit === 'sleeve') && jersey) m.color.set(jersey);
-        if (m.userData.kit === 'helmet' && helmet) m.color.set(helmet);
-        if (m.userData.kit === 'mark' && mark) {
-            m.color.set(mark);
-            m.emissive.set(mark);
+        for (const [part, roles] of Object.entries(PAINTED)) {
+            if (kit[part] && roles.includes(m.userData.kit)) m.color.set(kit[part]);
+        }
+        if (m.userData.kit === 'mark' && kit.mark) {
+            m.color.set(kit.mark);
+            m.emissive.set(kit.mark);
         }
     });
     return seen.size;
@@ -1076,6 +1218,7 @@ export function buildKitFigure(team) {
         shirtColor: kit.shirt,
         sleeveColor: kit.shirt,
         pantsColor: kit.pants,
+        shoeColor: kit.shoes,
         skinTone: SKIN[(team * 3 + 2) % SKIN.length],
         hairColor: 0x2b1d14,
         shoulderRound: 0.35,
@@ -1083,6 +1226,7 @@ export function buildKitFigure(team) {
     });
     addHelmet(person, kit);
     addJersey(person, TEAMS[team].glyph, false);
+    addPantsStripes(person, false);
     tagKit(person, team, kit);
     addContactShadow(person);
     person.name = `kit-${team}`;
@@ -1092,14 +1236,12 @@ export function buildKitFigure(team) {
 
 /** Dress a figure from `buildKitFigure` in its team's colors as colors.js has them now. */
 export function dressKitFigure(figure, team) {
-    return dress(figure, team, { jersey: jerseyOf(team), helmet: helmetOf(team), mark: markInk(jerseyOf(team)) });
+    return dress(figure, team, kitOf(team));
 }
 
 /** Dress both teams in whatever colors.js holds now. */
 export function applyTeamColors() {
-    for (const team of [0, 1]) {
-        setTeamKit(team, { jersey: jerseyOf(team), helmet: helmetOf(team), mark: markInk(jerseyOf(team)) });
-    }
+    for (const team of [0, 1]) setTeamKit(team, kitOf(team));
 }
 
 /**
@@ -1164,6 +1306,7 @@ export function buildPlayer(settings, i, avatar = null, as = 'qb') {
             // distance, and it is what a player in pads actually wears.
             sleeveColor: kit.shirt,
             pantsColor: kit.pants,
+            shoeColor: kit.shoes,
             skinTone: SKIN[(i * 7 + team * 3) % SKIN.length],
             hairColor: 0x2b1d14,
             muscular: isLineman,
@@ -1197,6 +1340,7 @@ export function buildPlayer(settings, i, avatar = null, as = 'qb') {
         // the opposite trade: the person carries the scene and the letter
         // carries the name.
         addJersey(person, TEAMS[team].glyph, isLineman);
+        addPantsStripes(person, isLineman);
         tagKit(person, team, kit);
         addContactShadow(person);
     }

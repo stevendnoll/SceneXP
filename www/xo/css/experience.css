@@ -689,9 +689,32 @@ body {
 }
 
 .colors-input:focus-visible,
+.colors-check:focus-visible,
 .colors-match:focus-visible {
     outline: 2px solid #ff992c;
     outline-offset: 2px;
+}
+
+/* A stripe is a switch and, once it is on, a picker beside it. The picker is
+   hidden rather than disabled while the stripe is off, so the row is one
+   question until it is answered. Stated outright, as every hidden control
+   here is, so no later display rule can bring it back. */
+.colors-pair {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.colors-check {
+    inline-size: 1.4rem;
+    block-size: 1.4rem;
+    margin: 0;
+    accent-color: #ff992c;
+    cursor: pointer;
+}
+
+.colors-input[hidden] {
+    display: none;
 }
 
 .colors-match {

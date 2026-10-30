@@ -848,11 +848,17 @@ const XO_CONFIG = {
              *
              * A third is not actually reachable. It wants either a 58 degree
              * lens, which bends a figure noticeably at eleven metres, or a
-             * radius past the 12.4m the field's tightest corner allows. 52 puts
-             * him at 41%, which is the most this field has room for, and the
-             * honest version of the sentence below.
+             * radius past the 12.4m the field's tightest corner allows. 52 put
+             * him at 41%, which was the most this field had room for.
+             *
+             * 56, WIDENED ONCE MORE (Steve's QA, 2026-10-30: "zoomed in just a
+             * little too far"). The radius cannot grow (see below), so the lens
+             * is the only lever, and four degrees takes a settled player from
+             * 41% to 37% of the frame height without the bend 58 brings. The
+             * shareable clip is this same director's camera, so it zooms out
+             * with it.
              */
-            fov: 52,
+            fov: 56,
             /**
              * IT ORBITS THE CARRIER RATHER THAN CHASING HIM.
              *
@@ -1025,6 +1031,28 @@ const XO_CONFIG = {
          *  white mark on the shaded side of a player is otherwise the same
          *  value as the shirt it is on. */
         glow: 0.35,
+    },
+
+    /**
+     * THE STRIPES A VISITOR CAN ADD (Steve, 2026-10-30; colors.js holds
+     * whether they are on and in what color, roster.js builds them).
+     *
+     * BOTH ARE BANDS OF THE SURFACE THEY SIT ON, NOT BOXES LAID AGAINST IT.
+     * The helmet's stripe is a narrow band of the shell's own sphere, turned
+     * so the band runs front to back over the crown, scaled as the shell is,
+     * so it hugs the ellipsoid at every point and keeps one width all the way
+     * (a longitude band would narrow to a point on top). The pants' stripes
+     * are narrow sections of each thigh's and shin's own cylinder, so they
+     * follow the taper. Each floats `lift` of its radius clear of the surface
+     * it is on: the amount that never z-fights at the replay's distance and
+     * still reads as painted on. `halfWidth` is radians of arc either side of
+     * the centre line: at the shell's 0.145 m the helmet's stripe is about
+     * 3 cm wide at life size, a tenth of the helmet, and at a 0.065 m leg the
+     * pants' are about 2 cm, both before `figureScale`.
+     */
+    stripes: {
+        helmet: { halfWidth: 0.10, lift: 0.03, segments: 24 },
+        pants: { halfWidth: 0.16, lift: 0.05 },
     },
 
     /**

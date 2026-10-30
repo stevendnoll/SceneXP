@@ -1844,17 +1844,20 @@ export function qaOpening() {
 }
 
 /**
- * DRESS THE TEAMS AND THE FIELD FROM THE CONSOLE, until the Team colors card
- * exists, and keep it: `xo.colors({ x: '#4b2e83', o: '#ffb612', field: '#0033a0' })`,
+ * DRESS THE TEAMS AND THE FIELD FROM THE CONSOLE, beside the Team colors card,
+ * and keep it: `xo.colors({ x: '#4b2e83', o: '#ffb612', field: '#0033a0' })`,
  * with `xHelmet` and `oHelmet` for a helmet of its own (null to follow the jersey
- * again), `xo.colors('reset')` for the game's own, and `xo.colors()` to read what
- * is set. The answer includes any warning the card would show.
+ * again), or a whole kit for a team, `xo.colors({ x: { jersey, helmet, mark,
+ * pants, shoes, helmetStripe, pantsStripe } })`, any part of it (null for the
+ * color decided for it, a stripe `true` for one in the color decided for it,
+ * false for none). `xo.colors('reset')` for the game's own, and `xo.colors()`
+ * to read what is set. The answer includes any warning the card would show.
  */
 export function qaColors(change) {
     if (change === 'reset') resetColors();
     else if (change && typeof change === 'object') {
-        const team = (jersey, helmet) => ({
-            ...(jersey !== undefined ? { jersey } : {}),
+        const team = (own, helmet) => ({
+            ...(own && typeof own === 'object' ? own : (own !== undefined ? { jersey: own } : {})),
             ...(helmet !== undefined ? { helmet } : {}),
         });
         setColors({

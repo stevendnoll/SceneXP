@@ -69,7 +69,7 @@ const pick = (id, value, type = 'input') => {
 
 describe('opening and closing', () => {
     test('opens saying what is chosen, with the card focused rather than a picker', () => {
-        C.setColors({ teams: { 1: { jersey: '#ffb612', helmet: '#000000' } } });
+        C.setColors({ teams: { 1: { jersey: '#ffb612', helmet: '#000000', shoes: '#ffffff', pantsStripe: null } } });
         const back = jest.fn();
         UI.showColorsCard(back);
         expect(el('colors').hidden).toBe(false);
@@ -78,6 +78,19 @@ describe('opening and closing', () => {
         expect(el('colors-o-helmet').value).toBe('#000000');
         expect(el('colors-x-match').hidden).toBe(true);
         expect(el('colors-o-match').hidden).toBe(false);
+        // The rest of the uniform, decided or chosen.
+        expect(el('colors-x-letter').value).toBe('#ffffff');
+        expect(el('colors-o-letter').value).toBe(C.markInk('#ffb612'));
+        expect(el('colors-x-pants').value).toBe(C.OWN.pants[0]);
+        expect(el('colors-x-shoes').value).toBe(C.OWN.shoes);
+        expect(el('colors-o-shoes').value).toBe('#ffffff');
+        // A stripe that is off is a switch alone, one that is on shows its color.
+        expect(el('colors-x-pants-stripe').checked).toBeFalsy();
+        expect(el('colors-x-pants-stripe-color').hidden).toBe(true);
+        expect(el('colors-o-pants-stripe').checked).toBe(true);
+        expect(el('colors-o-pants-stripe-color').hidden).toBe(false);
+        expect(el('colors-o-pants-stripe-color').value).toBe('#ffb612');
+        expect(el('colors-o-helmet-stripe').checked).toBeFalsy();
         // A phone opened the X's jersey picker when it was focused out of the
         // tap on Team colors, so the card itself takes focus.
         expect(el('colors-panel').focused).toBe(true);
@@ -207,13 +220,74 @@ describe('the pickers', () => {
         expect(note.hidden).toBe(true);
     });
 
+    test('the letter, the pants and the shoes show at once and are kept when let go', () => {
+        pick('colors-x-letter', '#000000');
+        expect(C.markOf(0)).toBe('#000000');
+        pick('colors-o-pants', '#ffffff', 'change');
+        expect(C.pantsOf(1)).toBe('#ffffff');
+        expect(JSON.parse(localStorage.getItem(KEY)).teams[1].pants).toBe('#ffffff');
+        pick('colors-x-shoes', '#ff0000');
+        expect(C.shoesOf(0)).toBe('#ff0000');
+        jest.advanceTimersByTime(20);
+        expect(applied.at(-1)).toEqual({ teams: true, field: false });
+        // The other team's pants were never touched.
+        expect(el('colors-x-pants').value).toBe(C.OWN.pants[0]);
+    });
+
+    const flip = (id, checked) => {
+        el(id).checked = checked;
+        fire(el(id), 'change');
+    };
+
+    test('a stripe switch turns it on in a decided color, its picker appears saying so, a picked color is kept, and off forgets it', () => {
+        expect(el('colors-x-helmet-stripe-color').hidden).toBe(true);
+        flip('colors-x-helmet-stripe', true);
+        expect(C.helmetStripeOf(0)).toBe('#ffffff');
+        expect(el('colors-x-helmet-stripe-color').hidden).toBe(false);
+        expect(el('colors-x-helmet-stripe-color').value).toBe('#ffffff');
+        jest.advanceTimersByTime(20);
+        expect(applied).toEqual([{ teams: true, field: false }]);
+        // Kept as "on, decided", so the color can still follow the kit.
+        expect(JSON.parse(localStorage.getItem(KEY)).teams[0].helmetStripe).toBeNull();
+
+        pick('colors-x-helmet-stripe-color', '#000000', 'change');
+        expect(C.helmetStripeOf(0)).toBe('#000000');
+        expect(JSON.parse(localStorage.getItem(KEY)).teams[0].helmetStripe).toBe('#000000');
+
+        flip('colors-x-helmet-stripe', false);
+        expect(C.helmetStripeOf(0)).toBeNull();
+        expect(el('colors-x-helmet-stripe-color').hidden).toBe(true);
+        expect(C.teamColors().teams[0].helmetStripe).toBe(false);
+        // On again is the decided color again, not the black.
+        flip('colors-x-helmet-stripe', true);
+        expect(el('colors-x-helmet-stripe-color').value).toBe('#ffffff');
+        // The other team's switch is untouched.
+        expect(el('colors-o-helmet-stripe').checked).toBeFalsy();
+    });
+
+    test('a decided stripe color follows the jersey in its picker until somebody picks one', () => {
+        flip('colors-x-pants-stripe', true);
+        expect(el('colors-x-pants-stripe-color').value).toBe('#ff992c');
+        pick('colors-x-jersey', '#ffb612');
+        expect(C.pantsStripeOf(0)).toBe('#ffb612');
+        expect(el('colors-x-pants-stripe-color').value).toBe('#ffb612');
+        pick('colors-x-pants-stripe-color', '#ffffff');
+        pick('colors-x-jersey', '#9bcfff');
+        expect(el('colors-x-pants-stripe-color').value).toBe('#ffffff');
+    });
+
     test('Reset puts the game\'s own colors back, keeps that, paints it and says so', () => {
         pick('colors-x-jersey', '#241773', 'change');
+        pick('colors-o-pants', '#ffffff', 'change');
+        flip('colors-o-pants-stripe', true);
         expect(localStorage.getItem(KEY)).not.toBeNull();
         el('colors-reset').click();
         expect(C.isDefault()).toBe(true);
         expect(localStorage.getItem(KEY)).toBeNull();
         expect(el('colors-x-jersey').value).toBe('#ff992c');
+        expect(el('colors-o-pants').value).toBe(C.OWN.pants[1]);
+        expect(el('colors-o-pants-stripe').checked).toBe(false);
+        expect(el('colors-o-pants-stripe-color').hidden).toBe(true);
         expect(applied.at(-1)).toEqual({ teams: true, field: true });
         expect(spoken).toEqual(['The original colors are back.']);
     });
@@ -242,9 +316,23 @@ describe('the card\'s copy', () => {
     });
 
     test('every picker has a label, and every aria-label starts with the words on screen', () => {
-        for (const id of ['colors-x-jersey', 'colors-x-helmet', 'colors-o-jersey', 'colors-o-helmet', 'colors-field']) {
-            expect(block).toContain(`<label for="${id}">`);
+        for (const team of ['x', 'o']) {
+            for (const tail of ['jersey', 'letter', 'helmet', 'pants', 'shoes', 'helmet-stripe', 'pants-stripe']) {
+                expect(block).toContain(`<label for="colors-${team}-${tail}">`);
+            }
+            // The stripe pickers share their row's label with the switch, so
+            // they carry a name of their own that starts with the row's words
+            // and says whose stripe it is.
+            for (const [tail, words] of [['helmet-stripe', 'Helmet stripe'], ['pants-stripe', 'Pants stripes']]) {
+                const tag = block.slice(block.indexOf(`id="colors-${team}-${tail}-color"`));
+                const label = /aria-label="([^"]+)"/.exec(tag.slice(0, tag.indexOf('>')))[1];
+                expect(label.startsWith(words)).toBe(true);
+                expect(label).toContain(`the ${team.toUpperCase()}'s`);
+            }
         }
-        for (const label of labels) expect(label.startsWith('Match jersey')).toBe(true);
+        expect(block).toContain('<label for="colors-field">');
+        for (const label of labels) {
+            expect(['Match jersey', 'Helmet stripe', 'Pants stripes'].some((words) => label.startsWith(words))).toBe(true);
+        }
     });
 });

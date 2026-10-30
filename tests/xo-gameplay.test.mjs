@@ -1376,8 +1376,11 @@ describe('the replay camera is above the players it is watching', () => {
         };
 
         const settled = shareAt(r.radius * r.settleCloseness);
-        expect(settled).toBeLessThan(0.45);
-        // And not so far off that the replay stops being about anybody.
+        // Under two fifths (Steve's QA, 2026-10-30: at 41% the replay was
+        // "zoomed in just a little too far", and the lens went to 56 degrees
+        // for 37%), and not so far off that the replay stops being about
+        // anybody.
+        expect(settled).toBeLessThan(0.4);
         expect(settled).toBeGreaterThan(0.2);
 
         expect(shareAt(r.minRadius)).toBeLessThan(0.55);

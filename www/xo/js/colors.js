@@ -9,6 +9,15 @@
  * fireworks. The helmet follows the jersey until it is given a color of its
  * own.
  *
+ * THE REST OF THE UNIFORM (Steve, 2026-10-30): the letter on the jersey, the
+ * pants, the shoes, a stripe over the helmet and stripes down the pants, each
+ * with a color of its own. NULL ALWAYS MEANS "DECIDED FOR YOU", as the helmet's
+ * null has always meant "the jersey": a null letter is white or near-black,
+ * whichever reads on the jersey; null pants and shoes are the game's own; a
+ * stripe turned on with a null color gets `accentFor` (the jersey where it
+ * stands apart from what it is on, else the ink that reads). A stripe is
+ * `false` until a visitor turns it on.
+ *
  * THE CHOICE LIVES HERE AND NOWHERE ELSE, because config.js is frozen at load
  * and a color that can change mid-game cannot be a config value. Everything
  * that paints a team asks this module at the moment it paints.
@@ -21,17 +30,36 @@ import { XO_CONFIG as CFG } from './config.min.js';
 /** The game's own colors, which is what a visitor who never opens the card sees. */
 export const DEFAULTS = Object.freeze({
     teams: Object.freeze({
-        0: Object.freeze({ jersey: '#ff992c', helmet: null }),
-        1: Object.freeze({ jersey: '#9bcfff', helmet: null }),
+        0: Object.freeze({
+            jersey: '#ff992c', helmet: null, mark: null, pants: null, shoes: null,
+            helmetStripe: false, pantsStripe: false,
+        }),
+        1: Object.freeze({
+            jersey: '#9bcfff', helmet: null, mark: null, pants: null, shoes: null,
+            helmetStripe: false, pantsStripe: false,
+        }),
     }),
     field: '#1f5c2e',
 });
 
+/**
+ * WHAT NULL PANTS AND SHOES ARE: the game's own kit (roster.js builds from these,
+ * so the two can never disagree). The pants are a dark neutral so a figure reads
+ * as a bright top over a dark bottom, and the shoes are the black every figure
+ * on the site has worn.
+ */
+export const OWN = Object.freeze({
+    pants: Object.freeze({ 0: '#3a2410', 1: '#1b2c40' }),
+    shoes: '#1a1a1a',
+});
+
+/** The parts of a team's kit, in the order the card shows them. */
+export const PARTS = Object.freeze(['jersey', 'helmet', 'mark', 'pants', 'shoes', 'helmetStripe', 'pantsStripe']);
+const STRIPES = Object.freeze(['helmetStripe', 'pantsStripe']);
+
+const cloneTeam = (t) => Object.fromEntries(PARTS.map((p) => [p, t[p]]));
 const clone = (c) => ({
-    teams: {
-        0: { jersey: c.teams[0].jersey, helmet: c.teams[0].helmet },
-        1: { jersey: c.teams[1].jersey, helmet: c.teams[1].helmet },
-    },
+    teams: { 0: cloneTeam(c.teams[0]), 1: cloneTeam(c.teams[1]) },
     field: c.field,
 });
 
@@ -47,6 +75,17 @@ export function normalHex(value) {
     return null;
 }
 
+/**
+ * A STRIPE, CHECKED: `false` is none, `null` (or `true`, for the console) is a
+ * stripe in the color decided for it, and a hex is a stripe in that color.
+ * Anything else is `fallback`.
+ */
+function stripeValue(v, fallback = false) {
+    if (v === null || v === true) return null;
+    if (v === false) return false;
+    return normalHex(v) || fallback;
+}
+
 /** A choice with every part checked: anything unreadable is the default. */
 function sanitize(raw) {
     const out = clone(DEFAULTS);
@@ -54,8 +93,10 @@ function sanitize(raw) {
     for (const team of [0, 1]) {
         const t = raw.teams && raw.teams[team];
         if (!t) continue;
-        out.teams[team].jersey = normalHex(t.jersey) || out.teams[team].jersey;
-        out.teams[team].helmet = normalHex(t.helmet);
+        const o = out.teams[team];
+        o.jersey = normalHex(t.jersey) || o.jersey;
+        for (const part of ['helmet', 'mark', 'pants', 'shoes']) o[part] = normalHex(t[part]);
+        for (const part of STRIPES) o[part] = stripeValue(t[part]);
     }
     out.field = normalHex(raw.field) || out.field;
     return out;
@@ -65,6 +106,8 @@ function sanitize(raw) {
 export function teamColors() {
     return clone(current);
 }
+
+const teamOf = (team) => current.teams[team] || current.teams[0];
 
 export function jerseyOf(team) {
     return current.teams[team] ? current.teams[team].jersey : DEFAULTS.teams[0].jersey;
@@ -76,22 +119,92 @@ export function helmetOf(team) {
     return t ? (t.helmet || t.jersey) : jerseyOf(team);
 }
 
+/** The X or the O on the jersey: chosen, or whichever of white and near-black
+ *  reads on the jersey (`markInk`). */
+export function markOf(team) {
+    return teamOf(team).mark || markInk(jerseyOf(team));
+}
+
+/** The pants: chosen, or the game's own dark neutral for that team. */
+export function pantsOf(team) {
+    return teamOf(team).pants || OWN.pants[team] || OWN.pants[0];
+}
+
+/** The shoes: chosen, or the black every figure has worn. */
+export function shoesOf(team) {
+    return teamOf(team).shoes || OWN.shoes;
+}
+
+/**
+ * THE COLOR A STRIPE GETS WHEN NOBODY PICKS ONE: `preferred` (the jersey, which
+ * is the team's color) when it stands apart from `base` (what the stripe is on)
+ * by the same margin two jerseys need to be told apart on the field, else
+ * whichever of white and near-black reads on `base`. The game's own kits get an
+ * orange stripe down dark brown pants and a white one over an orange helmet.
+ */
+export function accentFor(base, preferred) {
+    const b = normalHex(base) || '#000000';
+    const p = normalHex(preferred);
+    if (p && difference(b, p) >= CFG.colors.warnTeams) return p;
+    return markInk(b);
+}
+
+/** The helmet's stripe: null for none, else its color (chosen or `accentFor`). */
+export function helmetStripeOf(team) {
+    const s = teamOf(team).helmetStripe;
+    if (s === false) return null;
+    return s || accentFor(helmetOf(team), jerseyOf(team));
+}
+
+/** The pants' stripes: null for none, else their color (chosen or `accentFor`). */
+export function pantsStripeOf(team) {
+    const s = teamOf(team).pantsStripe;
+    if (s === false) return null;
+    return s || accentFor(pantsOf(team), jerseyOf(team));
+}
+
+/**
+ * THE WHOLE KIT A TEAM WEARS NOW, every part decided: `{ jersey, helmet, mark,
+ * pants, shoes, helmetStripe, pantsStripe }`, the stripes null when off. What
+ * roster.js dresses a figure from.
+ */
+export function kitOf(team) {
+    return {
+        jersey: jerseyOf(team),
+        helmet: helmetOf(team),
+        mark: markOf(team),
+        pants: pantsOf(team),
+        shoes: shoesOf(team),
+        helmetStripe: helmetStripeOf(team),
+        pantsStripe: pantsStripeOf(team),
+    };
+}
+
 export function fieldColor() {
     return current.field;
 }
 
 /**
  * CHANGE SOME OF IT. `{ teams: { 0: { jersey } }, field }` in any part; a
- * helmet given as null goes back to following its jersey. Returns the whole
- * choice, checked.
+ * helmet, letter, pants or shoes given as null go back to being decided for
+ * them, a stripe given as null (or true) is turned on in the color decided
+ * for it, as false is turned off, and as a hex is turned on in that color.
+ * Anything that is not a color changes nothing. Returns the whole choice,
+ * checked.
  */
 export function setColors(change = {}) {
     const next = clone(current);
     for (const team of [0, 1]) {
         const t = change.teams && change.teams[team];
         if (!t) continue;
-        if ('jersey' in t) next.teams[team].jersey = normalHex(t.jersey) || next.teams[team].jersey;
-        if ('helmet' in t) next.teams[team].helmet = t.helmet === null ? null : (normalHex(t.helmet) || next.teams[team].helmet);
+        const n = next.teams[team];
+        if ('jersey' in t) n.jersey = normalHex(t.jersey) || n.jersey;
+        for (const part of ['helmet', 'mark', 'pants', 'shoes']) {
+            if (part in t) n[part] = t[part] === null ? null : (normalHex(t[part]) || n[part]);
+        }
+        for (const part of STRIPES) {
+            if (part in t) n[part] = stripeValue(t[part], n[part]);
+        }
     }
     if ('field' in change) next.field = normalHex(change.field) || next.field;
     current = sanitize(next);
@@ -107,7 +220,7 @@ export function resetColors() {
 export function isDefault(choice = current) {
     const c = sanitize(choice);
     return c.field === DEFAULTS.field
-        && [0, 1].every((t) => c.teams[t].jersey === DEFAULTS.teams[t].jersey && !c.teams[t].helmet);
+        && [0, 1].every((t) => PARTS.every((p) => c.teams[t][p] === DEFAULTS.teams[t][p]));
 }
 
 /**

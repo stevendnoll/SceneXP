@@ -6312,7 +6312,7 @@ html [lang="en"]
             li
               strong
                 "Your game of X's and O's."
-              "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the player your avatar plays as if you chose one other than the quarterback, the colors you chose for the teams and the field, whether you turned the sound on or off, and whether you turned on Auto jump, so the game comes back the way you left it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot. A video clip or a photo of a play is made right on your device and handed only to your own share sheet or downloads folder. Neither is ever sent to us."
+              "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the player your avatar plays as if you chose one other than the quarterback, the colors and stripes you chose for the teams' uniforms and the color you chose for the field, whether you turned the sound on or off, and whether you turned on Auto jump, so the game comes back the way you left it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot. A video clip or a photo of a play is made right on your device and handed only to your own share sheet or downloads folder. Neither is ever sent to us."
             li
               strong
                 "Your job search in Corner Office."
@@ -8905,7 +8905,7 @@ html [data-ui-theme="neon" lang="en"]
     title
       "X's and O's | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=22" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=23" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -8969,7 +8969,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=22" rel="stylesheet"]
+    link [href="css/experience.min.css?v=23" rel="stylesheet"]
     link [href="../shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
@@ -9116,7 +9116,7 @@ html [data-ui-theme="neon" lang="en"]
         h2#colors-title.card-title
           "Team colors"
         p#colors-intro.card-detail
-          "Dress the X's and the O's in your team's colors and your rival's, and pick a field for them to play on."
+          "Dress the X's and the O's in your team's colors and your rival's, down to the stripes and the shoes, and pick a field for them to play on."
         div.colors-teams
           section.colors-team [aria-labelledby="colors-x-title"]
             h3#colors-x-title.colors-team-title
@@ -9127,11 +9127,35 @@ html [data-ui-theme="neon" lang="en"]
                 "Jersey"
               input#colors-x-jersey.colors-input [type="color" value="#ff992c"]
             div.colors-row
+              label [for="colors-x-letter"]
+                "Letter"
+              input#colors-x-letter.colors-input [type="color" value="#ffffff"]
+            div.colors-row
               label [for="colors-x-helmet"]
                 "Helmet"
               input#colors-x-helmet.colors-input [type="color" value="#ff992c"]
             button#colors-x-match.colors-match [aria-label="Match jersey color on the X's helmet" hidden type="button"]
               "Match jersey"
+            div.colors-row
+              label [for="colors-x-helmet-stripe"]
+                "Helmet stripe"
+              span.colors-pair
+                input#colors-x-helmet-stripe.colors-check [type="checkbox"]
+                input#colors-x-helmet-stripe-color.colors-input [aria-label="Helmet stripe color for the X's" hidden type="color" value="#ffffff"]
+            div.colors-row
+              label [for="colors-x-pants"]
+                "Pants"
+              input#colors-x-pants.colors-input [type="color" value="#3a2410"]
+            div.colors-row
+              label [for="colors-x-pants-stripe"]
+                "Pants stripes"
+              span.colors-pair
+                input#colors-x-pants-stripe.colors-check [type="checkbox"]
+                input#colors-x-pants-stripe-color.colors-input [aria-label="Pants stripes color for the X's" hidden type="color" value="#ff992c"]
+            div.colors-row
+              label [for="colors-x-shoes"]
+                "Shoes"
+              input#colors-x-shoes.colors-input [type="color" value="#1a1a1a"]
           section.colors-team [aria-labelledby="colors-o-title"]
             h3#colors-o-title.colors-team-title
               "The O's"
@@ -9141,11 +9165,35 @@ html [data-ui-theme="neon" lang="en"]
                 "Jersey"
               input#colors-o-jersey.colors-input [type="color" value="#9bcfff"]
             div.colors-row
+              label [for="colors-o-letter"]
+                "Letter"
+              input#colors-o-letter.colors-input [type="color" value="#ffffff"]
+            div.colors-row
               label [for="colors-o-helmet"]
                 "Helmet"
               input#colors-o-helmet.colors-input [type="color" value="#9bcfff"]
             button#colors-o-match.colors-match [aria-label="Match jersey color on the O's helmet" hidden type="button"]
               "Match jersey"
+            div.colors-row
+              label [for="colors-o-helmet-stripe"]
+                "Helmet stripe"
+              span.colors-pair
+                input#colors-o-helmet-stripe.colors-check [type="checkbox"]
+                input#colors-o-helmet-stripe-color.colors-input [aria-label="Helmet stripe color for the O's" hidden type="color" value="#ffffff"]
+            div.colors-row
+              label [for="colors-o-pants"]
+                "Pants"
+              input#colors-o-pants.colors-input [type="color" value="#1b2c40"]
+            div.colors-row
+              label [for="colors-o-pants-stripe"]
+                "Pants stripes"
+              span.colors-pair
+                input#colors-o-pants-stripe.colors-check [type="checkbox"]
+                input#colors-o-pants-stripe-color.colors-input [aria-label="Pants stripes color for the O's" hidden type="color" value="#9bcfff"]
+            div.colors-row
+              label [for="colors-o-shoes"]
+                "Shoes"
+              input#colors-o-shoes.colors-input [type="color" value="#1a1a1a"]
         div.colors-row.colors-field
           label [for="colors-field"]
             "Field"

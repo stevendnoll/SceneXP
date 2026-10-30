@@ -358,7 +358,7 @@ describe('team colors', () => {
         expect(C.jerseyOf(0)).toBe('#241773');
         expect(C.helmetOf(1)).toBe('#000000');
         const saved = JSON.parse(localStorage.getItem('exes-n-ohs-team-colors'));
-        expect(saved.teams[1]).toEqual({ jersey: '#ffb612', helmet: '#000000' });
+        expect(saved.teams[1]).toMatchObject({ jersey: '#ffb612', helmet: '#000000' });
         // The field too, with the warning the card will show.
         const answer = JSON.parse(window.xo.colors({ field: '#ffb612' }));
         expect(C.fieldColor()).toBe('#ffb612');
@@ -369,6 +369,21 @@ describe('team colors', () => {
         window.xo.colors('reset');
         expect(C.isDefault()).toBe(true);
         expect(localStorage.getItem('exes-n-ohs-team-colors')).toBeNull();
+    });
+
+    test('the console hook takes a whole kit for a team, stripes included', async () => {
+        await boot();
+        const C = await import('../www/xo/js/colors.min.js');
+        window.xo.colors({ x: { mark: '#000000', pants: '#ffffff', shoes: '#ff0000', helmetStripe: true, pantsStripe: '#123456' }, o: '#ffb612' });
+        expect(C.kitOf(0)).toEqual({
+            jersey: '#ff992c', helmet: '#ff992c', mark: '#000000', pants: '#ffffff', shoes: '#ff0000',
+            helmetStripe: '#ffffff', pantsStripe: '#123456',
+        });
+        expect(C.jerseyOf(1)).toBe('#ffb612');
+        const saved = JSON.parse(localStorage.getItem('exes-n-ohs-team-colors'));
+        expect(saved.teams[0]).toMatchObject({ helmetStripe: null, pantsStripe: '#123456', pants: '#ffffff' });
+        window.xo.colors('reset');
+        expect(C.isDefault()).toBe(true);
     });
 });
 
