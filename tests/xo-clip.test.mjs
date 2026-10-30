@@ -25,6 +25,7 @@ let Cam;
 let R;
 let CFG;
 let FIELD;
+let projectPoint;
 
 beforeAll(async () => {
     THREE = await loadRealThree({ console });
@@ -33,6 +34,7 @@ beforeAll(async () => {
     Cam = await import(join(scene, 'camera.js'));
     R = await import(join(scene, 'replay.js'));
     ({ XO_CONFIG: CFG, FIELD } = await import(join(scene, 'config.js')));
+    ({ projectPoint } = await import(join(scene, 'milestones.js')));
 });
 
 const SPEED = { seconds: 8, speed: 0.85, simHz: 80 };   // 544 frames of clip
@@ -218,6 +220,80 @@ describe('the director\'s shot, for the clip', () => {
         const r1 = C.clipShot(0.5, { x: 10, y: 0.9, z: 0 }, { shoulder: Cam.newShoulder(), delta: 1 / 60 });
         const r2 = C.clipShot(0.5, { x: 11, y: 0.9, z: 0 }, { shoulder: Cam.newShoulder(), delta: 1 / 60 });
         expect(r2.target.x - r1.target.x).toBeCloseTo(1, 9);
+    });
+
+    test('the ending keeps both bodies in frame (QA, 2026-10-30): the lens opens only as far as the frame needs, upright more than wide, and never narrows back within an ending', () => {
+        const E = CFG.camera.replay.ending;
+        const portrait = 9 / 16;
+        const landscape = 16 / 9;
+        // The replay's settled shot: 11 m off, a little above, the tightest lens.
+        const shot = { position: { x: 0, y: 6.5, z: 0 }, target: { x: 11, y: 0.9, z: 0 }, fov: 46 };
+        const within = (s, aspect, p) => {
+            const q = projectPoint(s, aspect, p);
+            return Math.max(Math.abs(q.x), Math.abs(q.y));
+        };
+        // Two men standing close: already in frame, nothing changes.
+        const near = [{ x: 11, y: 0.5, z: 0.6 }, { x: 11, y: 3.9, z: -0.6 }];
+        expect(Cam.fitBodies(shot, near, portrait)).toBe(shot);
+        // Two men lying along the ground, six metres across the frame: out of
+        // an upright frame, inside a wide one.
+        const sprawl = [{ x: 11, y: 0.2, z: -3.6 }, { x: 11, y: 0.2, z: 3.6 }, { x: 12.5, y: 1.4, z: 0 }];
+        expect(Math.max(...sprawl.map((p) => within(shot, portrait, p)))).toBeGreaterThan(1);
+        const wide = Cam.fitBodies(shot, sprawl, portrait);
+        expect(wide.fov).toBeGreaterThan(shot.fov);
+        expect(wide.fov).toBeLessThanOrEqual(E.maxFov);
+        expect(wide.position).toEqual(shot.position);
+        expect(wide.target).toEqual(shot.target);
+        for (const p of sprawl) expect(within(wide, portrait, p)).toBeLessThanOrEqual(1 - E.margin + 1e-9);
+        // Just enough: the furthest body sits on the margin, measured with
+        // milestones' own projection.
+        expect(Math.max(...sprawl.map((p) => within(wide, portrait, p)))).toBeCloseTo(1 - E.margin, 6);
+        expect(Cam.fitBodies(shot, sprawl, landscape)).toBe(shot);
+        // A body behind the lens cannot be framed and is left out; a body
+        // impossibly wide meets the widest lens there is.
+        expect(Cam.fitBodies(shot, [{ x: -5, y: 1, z: 0 }], portrait)).toBe(shot);
+        expect(Cam.fitBodies(shot, [{ x: 11, y: 0.2, z: 60 }], portrait).fov).toBe(E.maxFov);
+        expect(Cam.fitBodies(shot, [], portrait)).toBe(shot);
+        // THE RATCHET: through a memory the lens stays as wide as this ending
+        // has needed, so it never pumps as the bodies settle; a fresh memory
+        // starts again; and a shot already wider is left alone.
+        const m = Cam.newAim();
+        expect(Cam.fitBodies(shot, sprawl, portrait, m).fov).toBeCloseTo(wide.fov, 9);
+        expect(Cam.fitBodies(shot, near, portrait, m).fov).toBeCloseTo(wide.fov, 9);
+        expect(Cam.fitBodies(shot, near, portrait, Cam.newAim())).toBe(shot);
+        expect(Cam.fitBodies({ ...shot, fov: 70 }, near, portrait, m).fov).toBe(70);
+
+        // THE REPLAY, TOLD OF AN ENDING: aimed at the drawn carrier (seeded,
+        // no lag) and opened for the bodies at the screen's own shape.
+        const lead = CFG.camera.replay.lead * FIELD.lineInterval;
+        Cam.setDriver('replay');
+        Cam.setAspect(portrait);
+        Cam.resetShoulder();
+        const plain = Cam.update(1 / 60, { progress: 1, focus: { x: 10, y: 0.9, z: 0 } });
+        Cam.resetShoulder();
+        const ending = { focus: { x: 13, y: 0.9, z: 0 }, points: [{ x: 13, y: 0.2, z: -4 }, { x: 13, y: 0.2, z: 4 }] };
+        const ended = Cam.update(1 / 60, { progress: 1, focus: { x: 10, y: 0.9, z: 0 }, ending });
+        expect(ended.target.x).toBeCloseTo(13 + lead, 9);
+        expect(ended.fov).toBeGreaterThan(plain.fov);
+        for (const p of ending.points) expect(within(ended, portrait, p)).toBeLessThanOrEqual(1 - E.margin + 1e-9);
+        // In landscape the same ending needs nothing more than the aim.
+        Cam.setAspect(landscape);
+        Cam.resetShoulder();
+        const wideScreen = Cam.update(1 / 60, { progress: 1, focus: { x: 10, y: 0.9, z: 0 }, ending });
+        expect(wideScreen.fov).toBeCloseTo(plain.fov, 9);
+        Cam.setAspect(1.78);
+        Cam.setDriver('play');
+
+        // THE CLIP, handed the ending's points at its own upright shape.
+        const aim = Cam.newAim();
+        const tight = C.clipShot(1, ending.focus, { shoulder: Cam.newShoulder(), aim: Cam.newAim(), aspect: portrait });
+        const fitted = C.clipShot(1, ending.focus, { shoulder: Cam.newShoulder(), aim, points: ending.points, aspect: portrait });
+        expect(fitted.fov).toBeGreaterThan(tight.fov);
+        expect(fitted.target).toEqual(tight.target);
+        for (const p of ending.points) expect(within(fitted, portrait, p)).toBeLessThanOrEqual(1 - E.margin + 1e-9);
+        // The clip's aspect is 9:16 unless told otherwise.
+        expect(CFG.clip.width / CFG.clip.height).toBeCloseTo(portrait, 9);
+        expect(C.clipShot(1, ending.focus, { shoulder: Cam.newShoulder(), aim: Cam.newAim(), points: ending.points }).fov).toBeCloseTo(fitted.fov, 9);
     });
 
     test('the clip\'s shoulder memory is its own: a take never moves the replay\'s', () => {

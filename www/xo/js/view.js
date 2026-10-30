@@ -763,7 +763,29 @@ export function frontOf(target) {
  * 84 tackles (see takedown.js). The names are positions, so the same call works
  * on a live play and on a frame rebuilt from the recording.
  */
-const takedown = { at: -1, tackler: '', carrier: '', from: null, to: null };
+const takedown = { at: -1, tackler: '', carrier: '', from: null, to: null, motion: null };
+
+/**
+ * THE CARRIER'S MOMENTUM, read off his drawn figure the moment the tackle
+ * begins (Steve's QA, 2026-10-30): the speed he was running at and the way he
+ * faced, which takedown.js carries him on through the hit with. Read ONCE,
+ * here, because the figures go on being handed the whistle's frame and would
+ * read as standing a few frames later. World metres a second, radians.
+ */
+function carrierMotion(position) {
+    const fig = figureFor(position);
+    if (!fig) return null;
+    const u = fig.userData || {};
+    const mps = Number.isFinite(u.mps) ? u.mps : 0;
+    const drawn = Number(fig.rotation && fig.rotation.y);
+    const yaw = Number.isFinite(drawn) ? drawn : (Number.isFinite(u.facing) ? u.facing : 0);
+    return { velocity: { x: Math.sin(yaw) * mps, z: Math.cos(yaw) * mps }, facing: yaw };
+}
+
+/** The motion the running tackle was given, or null between tackles. */
+export function takedownMotion() {
+    return takedown.at >= 0 ? takedown.motion : null;
+}
 
 /**
  * `at` STARTS THE CLOCK PART WAY IN, which is for one caller: a visitor who
@@ -784,6 +806,8 @@ export function beginTakedown(tacklerPos, carrierPos, at = 0) {
     // simulation's last frame over and over.
     takedown.from = null;
     takedown.to = null;
+    // And how fast the carrier was going, and which way (see `carrierMotion`).
+    takedown.motion = carrierMotion(carrierPos);
     return true;
 }
 
@@ -813,6 +837,7 @@ export function resetTakedown() {
     takedown.carrier = '';
     takedown.from = null;
     takedown.to = null;
+    takedown.motion = null;
 }
 
 /** How far into the tackle we are, in seconds, or -1 when there is not one. */
@@ -1520,7 +1545,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
     // The tackle's own clock, advanced once whatever else is happening.
     if (takedown.at >= 0) takedown.at += delta;
     const hit = takedown.at >= 0
-        ? takedownAt(takedown.at, takedownFrom(objects), takedownTo(objects))
+        ? takedownAt(takedown.at, takedownFrom(objects), takedownTo(objects), takedown.motion)
         : null;
 
     // ...and the celebration's, which is the same arrangement one ending over.
@@ -2035,12 +2060,19 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // branch of its own: the roll is the only sideways lean this rig has,
         // and a man swinging his shoulders and a man cutting away from a
         // defender are asking it for the same thing.
-        const wantRoll = cheer ? (cheer.roll || 0)
-            : (shoving > 0
-                ? jukeRoll(esc.away, figure.userData.facing, CFG.pose.juke.roll) * shoving
-                : 0);
-        figure.rotation.z += (wantRoll - figure.rotation.z)
-            * (1 - Math.exp(-delta / CFG.pose.juke.snap));
+        if (isFloored && role) {
+            // A MAN BROUGHT DOWN LANDS ON THE SHOULDER THE HIT SENT HIM TO
+            // (takedown.js `roll`, Steve's QA 2026-10-30), applied whole like
+            // his lean below: the takedown is already eased.
+            figure.rotation.z = role.roll || 0;
+        } else {
+            const wantRoll = cheer ? (cheer.roll || 0)
+                : (shoving > 0
+                    ? jukeRoll(esc.away, figure.userData.facing, CFG.pose.juke.roll) * shoving
+                    : 0);
+            figure.rotation.z += (wantRoll - figure.rotation.z)
+                * (1 - Math.exp(-delta / CFG.pose.juke.snap));
+        }
 
         // THE LEAN, WHICH IS THE WHOLE FIGURE, because the rig has no waist.
         // A tackler pitches forward into the hit and the man being hit goes

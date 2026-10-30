@@ -24,6 +24,7 @@ let UNITS_TO_METRES;
 let roster;
 let view;
 let objects;
+let takedownLength;
 
 /** Everything live reads the same way: a frame of simulation stepped by hand. */
 const DT = 1 / 60;
@@ -42,6 +43,7 @@ beforeAll(async () => {
     const P = await import(js('play.min.js'));
     roster = await import(js('roster.min.js'));
     view = await import(js('view.js'));
+    ({ takedownLength } = await import(js('takedown.js')));
     const scene = new THREE.Scene();
     const play = P.createPlay();
     objects = P.lineUp(play, 'pass2', 'cover2');
@@ -118,5 +120,48 @@ describe('the hands of a receiver who has run out of route', () => {
         runStill(120);
         close(anglesOf(figure, side), anglesOf(posting, side));
         expect(wr2.state.hasBall).toBe(false);
+    });
+});
+
+/**
+ * THE HIT ON THE REAL RIG (Steve's QA, 2026-10-30): the carrier's speed and
+ * facing are read off his drawn figure when the tackle begins, and he lands
+ * rolled onto a shoulder, which is the one axis the takedown did not use.
+ */
+describe('the hit, on the real rig', () => {
+    test('the tackle reads the carrier\'s motion off his figure, and lays him down rolled onto a shoulder', () => {
+        const wr1 = byPosition('wr1');
+        const db1 = byPosition('db1');
+        const figure = roster.figureFor('wr1');
+        for (const o of objects) {
+            if (o.state) { o.state.hasBall = false; o.state.run = false; o.state.xSpeed = 0; o.state.ySpeed = 0; }
+        }
+        wr1.state.hasBall = true;
+        // Sprinting downfield when the whistle went, as his figure records it.
+        view.resetTakedown();
+        figure.userData.mps = 6;
+        figure.rotation.y = Math.PI / 2;
+        // The tackler beside him, a body and a bit away across the field.
+        db1.coords.x = wr1.coords.x;
+        db1.coords.y = wr1.coords.y - 1.85 / UNITS_TO_METRES;
+        expect(view.takedownMotion()).toBeNull();
+        expect(view.beginTakedown('db1', 'wr1')).toBe(true);
+        const motion = view.takedownMotion();
+        expect(motion.facing).toBeCloseTo(Math.PI / 2, 9);
+        expect(motion.velocity.x).toBeCloseTo(6, 9);
+        expect(motion.velocity.z).toBeCloseTo(0, 9);
+
+        // Run the whole tackle: flat on his back, and on a shoulder.
+        const frames = Math.ceil(takedownLength(1.85) / DT) + 5;
+        for (let i = 0; i < frames; i += 1) view.syncFigures(objects, DT, { live: true });
+        expect(Math.abs(figure.rotation.x)).toBeCloseTo(Math.abs(CFG.pose.takedown.carrierLean), 3);
+        expect(Math.abs(figure.rotation.z)).toBeGreaterThan(0.1);
+        expect(Math.abs(figure.rotation.z)).toBeLessThanOrEqual(CFG.pose.takedown.roll + 1e-6);
+        // The tackler lies flat too, and the two are within a body of each other.
+        const tackler = roster.figureFor('db1');
+        expect(Math.abs(tackler.rotation.x)).toBeCloseTo(Math.abs(CFG.pose.takedown.tacklerLean), 3);
+        expect(Math.hypot(tackler.position.x - figure.position.x, tackler.position.z - figure.position.z)).toBeLessThan(CFG.separation);
+        view.resetTakedown();
+        expect(view.takedownMotion()).toBeNull();
     });
 });

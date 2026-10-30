@@ -29,6 +29,27 @@ const smooth = (t) => t * t * (3 - 2 * t);
 /** Fast out of the blocks and slowing into the hit, which is a lunge. */
 const launch = (t) => 1 - (1 - t) * (1 - t);
 
+/** Where in the fall the ground is: the rest is the settle. */
+const LAND = 0.82;
+
+/**
+ * GRAVITY, NOT A SMOOTHSTEP (Steve's QA, 2026-10-30: "more fluid and
+ * violent"). A smoothstep eased a man over gently and stopped him dead,
+ * which is a lean. This accelerates him into the ground, lands him a little
+ * past flat and settles him back. `u` is 0 to 1 across the fall, `bounce` how
+ * far past flat he lands as a fraction of his lean. 1 past the end, so the
+ * pose holds however long it is asked for.
+ */
+export function landing(u, bounce = 0) {
+    if (!(u > 0)) return 0;
+    if (u >= 1) return 1;
+    if (u < LAND) {
+        const v = u / LAND;
+        return v * v;
+    }
+    return 1 + bounce * Math.sin((Math.PI * (u - LAND)) / (1 - LAND));
+}
+
 /**
  * WHEN THE TWO OF THEM MEET, as a fraction of the dive. QA ITEM 5.
  *
@@ -91,19 +112,54 @@ export function takedownLength(gap = Infinity) {
  *
  *   tackler.x/y/z   metres to add to where he was standing
  *   tackler.lean    radians of forward pitch, positive is face first
- *   carrier.x/z     metres, driven backwards along the line of the hit
+ *   carrier.x/z     metres: on into the hit at his own speed, then driven
+ *                   along the line of it and carried on by his own momentum
  *   carrier.lean    radians, negative is onto his back
+ *   carrier.roll    radians onto a shoulder, positive toward his right
  *   contact         0 before the hit, 1 after it, for anything that has to
  *                   know whether the two have met yet
+ *
+ * `motion` is the carrier's own at the whistle, optional: `{ velocity: { x, z }
+ * }` in world metres a second and `facing` in radians (the figure's yaw).
+ * Without it he was standing, which is a sack, and every caller that says
+ * nothing gets that. WITH IT THE HIT IS FLUID AND VIOLENT (Steve's QA,
+ * 2026-10-30): he runs into the hit rather than standing still for the tenths
+ * of a second the dive takes to reach him, the tackler dives at where he will
+ * be, his momentum carries him on through the hit so a man hit from the side
+ * goes sideways AND forward, the drive skids out into the settle instead of
+ * stopping dead, both men fall under gravity and land a little past flat, and
+ * he rolls onto the shoulder the hit sent him to.
  */
-export function takedownAt(t, from, to) {
+export function takedownAt(t, from, to, motion = null) {
     const T = CFG.pose.takedown;
-    const dx = to.x - from.x;
-    const dz = to.z - from.z;
+    const M = T.momentum;
+    const vx = motion && motion.velocity ? (Number(motion.velocity.x) || 0) : 0;
+    const vz = motion && motion.velocity ? (Number(motion.velocity.z) || 0) : 0;
+    const speed = Math.hypot(vx, vz);
+    const moving = speed > M.still;
+    const hx = moving ? vx / speed : 0;
+    const hz = moving ? vz / speed : 0;
+
+    // WHEN THEY MEET, solved on the gap at the whistle (`contactFraction`).
+    // THE FALL IS CLOCKED FROM THE HIT, NOT FROM THE END OF THE DIVE. That one
+    // line is QA item 5: the carrier starts going over on the frame the two
+    // of them meet, while the tackler is still in the air and still driving
+    // through him.
+    const gap0 = Math.hypot(to.x - from.x, to.z - from.z) || 1e-6;
+    const hit = contactFraction(gap0) * T.dive;
+
+    // HE RUNS INTO THE HIT. The recording stops at the whistle with him at
+    // full stride, and a man standing still for the dive's first tenths of a
+    // second read as a stutter. He keeps his speed until contact...
+    const run = moving ? Math.min(Math.max(0, t), hit) : 0;
+    const runX = vx * run;
+    const runZ = vz * run;
+    // ...so the tackler dives at where he will be when they meet. The unit
+    // vector from the tackler to that point is the line everything else
+    // happens along: he dives down it and the carrier is driven along it.
+    const dx = to.x + vx * (moving ? hit : 0) - from.x;
+    const dz = to.z + vz * (moving ? hit : 0) - from.z;
     const gap = Math.hypot(dx, dz) || 1e-6;
-    // The unit vector from the tackler to the carrier, which is the line
-    // everything else happens along: he dives down it and the carrier is driven
-    // back along it.
     const ux = dx / gap;
     const uz = dz / gap;
 
@@ -112,38 +168,58 @@ export function takedownAt(t, from, to) {
     const travel = Math.max(0, gap - T.close);
 
     const dive = Math.min(1, Math.max(0, t / T.dive));
-
-    // THE FALL IS CLOCKED FROM THE HIT, NOT FROM THE END OF THE DIVE. That one
-    // line is QA item 5: the carrier now starts going over on the frame the
-    // two of them meet, while the tackler is still in the air and still
-    // driving through him.
-    const hit = contactFraction(gap) * T.dive;
     const after = Math.min(1, Math.max(0, (t - hit) / T.fall));
+    // THE SKID. The drive and the momentum run on past the fall into the
+    // settle, fast then slowing (`launch`), where a smoothstep eased out and
+    // stopped both men dead. `skid` stays inside `settle`, so the card never
+    // opens over a body still sliding.
+    const slide = launch(Math.min(1, Math.max(0, (t - hit) / (T.fall + T.skid))));
 
     // AND HE LEAVES HIS FEET. A dive is airborne: up on the way in and down on
     // the way through, which is a single arc rather than a jump and a landing.
     const air = Math.sin(Math.PI * dive) * T.leap;
     const settled = Math.max(0, 1 - after * 1.6);
 
-    // How far the carrier has been driven back, which BOTH of them ride: the
-    // tackler is carried along with the man he has hold of, or he stops dead
-    // while his own tackle flies away from him.
-    const drivenX = ux * T.driven * smooth(after);
-    const drivenZ = uz * T.driven * smooth(after);
+    // WHERE THE HIT SENDS HIM: driven along the line of it by `driven`, and
+    // carried on along his own heading by `momentum.keep` of his speed for the
+    // fall's length. A man hit from the side goes sideways and forward; a man
+    // hit head on is stopped in his tracks. BOTH of them ride it: the tackler
+    // is carried along with the man he has hold of, or he stops dead while
+    // his own tackle flies away from him.
+    const keep = moving ? M.keep * speed * T.fall : 0;
+    const sendX = ux * T.driven + hx * keep;
+    const sendZ = uz * T.driven + hz * keep;
+    const movedX = sendX * slide;
+    const movedZ = sendZ * slide;
+
+    // ONTO A SHOULDER: as far as the hit sends him sideways to the way he was
+    // facing, so he is not a plank on his back. A positive `rotation.z` tilts
+    // the figure's head toward its right (local -X), so a man sent to his
+    // right lands on his right shoulder. Nothing without a facing.
+    let roll = 0;
+    const facing = motion && Number.isFinite(motion.facing) ? motion.facing : null;
+    if (facing !== null) {
+        const sent = Math.hypot(sendX, sendZ) || 1;
+        const sideways = (sendX * -Math.cos(facing) + sendZ * Math.sin(facing)) / sent;
+        roll = T.roll * sideways * smooth(after);
+    }
 
     return {
         tackler: {
-            x: ux * travel * launch(dive) + drivenX * T.carry,
+            x: ux * travel * launch(dive) + movedX * T.carry,
             y: air * settled,
-            z: uz * travel * launch(dive) + drivenZ * T.carry,
-            lean: T.tacklerLean * smooth(dive),
+            z: uz * travel * launch(dive) + movedZ * T.carry,
+            // Laid out on the way in, landing a little past flat and settling.
+            lean: T.tacklerLean * landing(dive, T.bounce),
         },
         carrier: {
-            // Driven backwards along the same line, and only once he has been
-            // hit: before that he is standing exactly where the play left him.
-            x: drivenX,
-            z: drivenZ,
-            lean: T.carrierLean * smooth(after),
+            // Into the hit at his own speed, then sent, and only once he has
+            // been hit: before that he is where the play left him, running.
+            x: runX + movedX,
+            z: runZ + movedZ,
+            // Gravity from the hit, not a smoothstep.
+            lean: T.carrierLean * landing(after, T.bounce),
+            roll,
         },
         contact: t >= hit ? 1 : 0,
     };
@@ -161,11 +237,14 @@ export function takedownAt(t, from, to) {
  *   tackler   { x, z } where his feet are once he has landed
  *   carrier   { x, z } where the carrier's feet are, driven back
  *   length    seconds, the same number `takedownLength` gives for this gap
+ *
+ * `motion` is the carrier's, as `takedownAt` takes it, so a quarterback who
+ * was moving lands where the view draws him landing.
  */
-export function takedownRest(from, to) {
+export function takedownRest(from, to, motion = null) {
     const gap = Math.hypot(to.x - from.x, to.z - from.z);
     const length = takedownLength(gap);
-    const end = takedownAt(length, from, to);
+    const end = takedownAt(length, from, to, motion);
     return {
         tackler: { x: from.x + end.tackler.x, z: from.z + end.tackler.z },
         carrier: { x: to.x + end.carrier.x, z: to.z + end.carrier.z },

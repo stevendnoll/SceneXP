@@ -36,7 +36,7 @@ installThree();
 const CONFIG_MODULE = await import(join(scene, 'config.js'));
 const { XO_CONFIG: CFG, UNITS_TO_METRES, FIELD, SIM } = CONFIG_MODULE;
 const { solveArm, handAt, RIG } = await import(join(scene, 'arm.js'));
-const { takedownAt, takedownLength, contactFraction } = await import(join(scene, 'takedown.js'));
+const { takedownAt, takedownLength, contactFraction, takedownRest, landing } = await import(join(scene, 'takedown.js'));
 const {
     toWorld, carryHold, HEADING_DEADZONE, TURN_RESPONSE,
     syncFigures, beginSnapMotion, resetThrow, throwClock, blockersEngaged, postingFor,
@@ -336,6 +336,126 @@ describe('the tackle, and when the two of them actually meet', () => {
         const drive = end.carrier.x - (GAP - T.close);
         expect(end.tackler.x).toBeGreaterThan(GAP - T.close);
         expect(end.tackler.x).toBeLessThan(end.carrier.x + GAP);
+    });
+});
+
+/**
+ * THE HIT, MADE FLUID AND VIOLENT (Steve's QA, 2026-10-30). The carrier's
+ * own momentum at the whistle goes into the tackle: he runs into the hit, the
+ * tackler dives at where he will be, his speed carries him on through it, the
+ * drive skids out instead of stopping dead, both men fall under gravity and
+ * land a little past flat, and he rolls onto the shoulder the hit sent him to.
+ * A caller that says nothing about his motion gets a standing man, which is a
+ * sack and every test above.
+ */
+describe('the hit, fluid and violent', () => {
+    const T = CFG.pose.takedown;
+    const GAP = 1.85;
+    // The carrier faces downfield (+x). The tackler comes from his left (-z),
+    // so the hit sends him toward +z, which is his right.
+    const from = { x: 0, y: 0, z: -GAP };
+    const to = { x: 0, y: 0, z: 0 };
+    const running = { velocity: { x: 7, z: 0 }, facing: Math.PI / 2 };
+    const standing = { velocity: { x: 0, z: 0 }, facing: Math.PI / 2 };
+    const hit = contactFraction(GAP) * T.dive;
+
+    test('a running carrier runs into the hit and is carried on by his own speed; a standing one is not', () => {
+        const before = takedownAt(hit * 0.5, from, to, running);
+        expect(before.contact).toBe(0);
+        expect(before.carrier.x).toBeCloseTo(7 * hit * 0.5, 9);
+        expect(before.carrier.z).toBe(0);
+        expect(before.carrier.lean).toBeCloseTo(0, 12);
+        expect(takedownAt(hit * 0.5, from, to, standing).carrier.x).toBe(0);
+
+        // By the end he has gone on along his own line as well as across it:
+        // the drive along the hit (aimed at where he was at contact) and the
+        // momentum he kept for the fall's length.
+        const end = takedownAt(takedownLength(GAP), from, to, running);
+        const line = { x: 7 * hit, z: GAP };
+        const len = Math.hypot(line.x, line.z);
+        const keep = T.momentum.keep * 7 * T.fall;
+        expect(end.carrier.x).toBeCloseTo(7 * hit + (line.x / len) * T.driven + keep, 6);
+        expect(end.carrier.z).toBeCloseTo((line.z / len) * T.driven, 6);
+        expect(keep).toBeGreaterThan(0.9);
+        // Standing, he is simply driven along the hit, as before, and no
+        // motion at all is the same man.
+        const stood = takedownAt(takedownLength(GAP), from, to, standing);
+        expect(stood.carrier.x).toBeCloseTo(0, 9);
+        expect(stood.carrier.z).toBeCloseTo(T.driven, 6);
+        const none = takedownAt(takedownLength(GAP), from, to);
+        expect(none.carrier.x).toBeCloseTo(stood.carrier.x, 9);
+        expect(none.carrier.z).toBeCloseTo(stood.carrier.z, 9);
+    });
+
+    test('the tackler dives at where the carrier will be, and lands wrapped on him', () => {
+        for (const motion of [running, standing, null]) {
+            const end = takedownAt(takedownLength(GAP), from, to, motion);
+            const apart = Math.hypot(
+                (from.x + end.tackler.x) - (to.x + end.carrier.x),
+                (from.z + end.tackler.z) - (to.z + end.carrier.z)
+            );
+            // On him, not a stride behind, and not through him.
+            expect(apart).toBeLessThan(CFG.separation);
+            expect(apart).toBeGreaterThan(T.close * 0.5);
+        }
+    });
+
+    test('gravity, not a smoothstep: he accelerates into the ground, lands past flat and settles back', () => {
+        const lean = (u) => Math.abs(takedownAt(hit + u * T.fall, from, to).carrier.lean) / Math.abs(T.carrierLean);
+        // Under the straight line early, well over it late.
+        expect(lean(0.25)).toBeLessThan(0.25);
+        expect(lean(0.5)).toBeLessThan(0.5);
+        expect(lean(0.8)).toBeGreaterThan(0.9);
+        // Past flat at the landing's middle, flat again at the end and after.
+        expect(lean(0.91)).toBeCloseTo(1 + T.bounce, 6);
+        expect(lean(1)).toBeCloseTo(1, 9);
+        expect(lean(3)).toBeCloseTo(1, 9);
+        // The curve itself: nought at nought, continuous at the ground, one past the end.
+        expect(landing(0, 0.1)).toBe(0);
+        expect(landing(-1, 0.1)).toBe(0);
+        expect(landing(0.82, 0.1)).toBeCloseTo(1, 9);
+        expect(landing(0.82 - 1e-9, 0.1)).toBeCloseTo(1, 6);
+        expect(landing(1, 0.1)).toBe(1);
+        expect(landing(2, 0.1)).toBe(1);
+        // The tackler lands the same way.
+        expect(takedownAt(T.dive * 0.91, from, to).tackler.lean).toBeCloseTo(T.tacklerLean * (1 + T.bounce), 6);
+        expect(takedownAt(60, from, to).tackler.lean).toBeCloseTo(T.tacklerLean, 9);
+    });
+
+    test('the drive skids on into the settle rather than stopping dead, and the skid stays inside the settle', () => {
+        expect(T.skid).toBeGreaterThan(0);
+        expect(T.skid).toBeLessThanOrEqual(T.settle);
+        const gone = (t) => Math.hypot(takedownAt(t, from, to).carrier.x, takedownAt(t, from, to).carrier.z);
+        // More than half the drive is done by the fall's end, and it is still
+        // moving after it, and done by the length.
+        expect(gone(hit + T.fall)).toBeGreaterThan(T.driven * 0.5);
+        expect(gone(hit + T.fall + T.skid * 0.5)).toBeGreaterThan(gone(hit + T.fall));
+        expect(gone(takedownLength(GAP))).toBeCloseTo(T.driven, 6);
+    });
+
+    test('a carrier sent sideways to his heading lands on that shoulder; sent straight back he does not roll', () => {
+        const end = takedownAt(takedownLength(GAP), from, to, running);
+        expect(end.carrier.roll).toBeGreaterThan(0.1);
+        expect(end.carrier.roll).toBeLessThanOrEqual(T.roll + 1e-9);
+        // From his right, onto his left.
+        const other = takedownAt(takedownLength(GAP), { x: 0, y: 0, z: GAP }, to, running);
+        expect(other.carrier.roll).toBeLessThan(-0.1);
+        // Head on: nothing to speak of. Standing, hit square from the side: the
+        // full roll. Without a facing: none at all.
+        const headOn = takedownAt(takedownLength(GAP), { x: -GAP, y: 0, z: 0 }, to, running);
+        expect(Math.abs(headOn.carrier.roll)).toBeLessThan(1e-9);
+        expect(takedownAt(takedownLength(GAP), from, to, standing).carrier.roll).toBeCloseTo(T.roll, 9);
+        expect(takedownAt(takedownLength(GAP), from, to).carrier.roll).toBe(0);
+        // It comes with the fall, not before the hit.
+        expect(takedownAt(hit * 0.5, from, to, running).carrier.roll).toBe(0);
+    });
+
+    test('the rest spots carry the momentum too, for the sack that starts where the tackle ends', () => {
+        const still = takedownRest(from, to);
+        const moving = takedownRest(from, to, running);
+        expect(moving.length).toBe(still.length);
+        expect(moving.carrier.x).toBeGreaterThan(still.carrier.x + 1);
+        expect(takedownRest(from, to, standing)).toEqual(still);
     });
 });
 

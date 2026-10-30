@@ -31,7 +31,7 @@ import {
     ballEvent, tackleKind, delayFor, rankMoments, KIND_NAMES,
 } from './moments.min.js';
 import { captureDrawn, applyDrawn } from './snapshot.min.js';
-import { photoShot, drawPhoto, photoBlob, photoName } from './photo.min.js';
+import { photoShot, drawPhoto, photoBlob, photoName, bodyPoints } from './photo.min.js';
 import {
     clipSize, clipPlan, clipProgress, clipShot, stampText, clipName, takeFrame, holdSize, recordTake,
     openingFor,
@@ -41,7 +41,7 @@ import { canRecord, pickMime, extensionOf } from '../../shared/js/recorder-1.0.0
 import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments, noteThrow,
     setVisitorJumps, standingReach,
-    beginTakedown, resetTakedown, takedownClock, beginSnapMotion, finishSnapMotion, resetThrow,
+    beginTakedown, resetTakedown, takedownClock, takedownMotion, beginSnapMotion, finishSnapMotion, resetThrow,
     beginRelocate, resetRelocate, airborne,
     beginCelebration, resetCelebration, celebrationClock,
     beginStaging, resetStaging, drawnSpots, setScripted, resetScripted,
@@ -473,7 +473,30 @@ function cameraState() {
     const total = Math.max(1, frameCount());
     const f = replayFocus();
     const focus = simToWorld(f.x, f.y, f.z || 0);
-    return { progress: playheadFrame() / total, focus };
+    return { progress: playheadFrame() / total, focus, ending: endingBodies() };
+}
+
+/**
+ * THE ENDING'S OWN AIM (Steve's QA, 2026-10-30). Once the recording has run
+ * out, the tackle or the party moves the drawn bodies on for a second or more
+ * while the recording's last frame stands still, so a camera aimed at the
+ * recording lost them: half of two tackled men out of an upright frame. The
+ * carrier AS DRAWN is the aim, because he is the star of the clip whether he
+ * scores or is flattened, and the bodies that move with him (the tackler, for
+ * a tackle), feet to hands and following their leans, are the points the lens
+ * must keep in frame (camera.js `fitBodies`). Null while the recording still
+ * runs, or when nobody was carrying at the whistle (a pass that fell).
+ */
+function endingBodies() {
+    if (!fromRecording() || playheadFrame() < frameCount()) return null;
+    const last = focusAt(Math.max(0, frameCount() - 1));
+    const carrier = cycle.tackle.carrier || (last && last.holder) || '';
+    if (!carrier) return null;
+    const figures = [carrier, cycle.tackle.tackler].filter(Boolean)
+        .map(figureFor).filter((fig) => fig && fig.visible);
+    if (!figures.length) return null;
+    const bodies = figures.map(bodyOf);
+    return { focus: { x: bodies[0].x, y: bodies[0].y, z: bodies[0].z }, points: bodyPoints(bodies) };
 }
 
 /** The opening shot, before the first frame is drawn. */
@@ -881,7 +904,7 @@ function planCelebration(result, pair = { tackler: '', carrier: '' }) {
          * `takedownRest` reads the same function the view draws with, so all
          * three are the numbers on screen.
          */
-        const rest = takedownRest(at(sacker), at(carrier));
+        const rest = takedownRest(at(sacker), at(carrier), takedownMotion());
         // He was looking downfield, so on his back he lies toward his own end
         // zone. His team runs at +x, which puts his head at lower x.
         const behind = carrier.settings.team === 0 ? -1 : 1;
@@ -3335,8 +3358,12 @@ function drawTake(delta) {
     if (!t) return;
     const f = replayFocus();
     const focus = simToWorld(f.x, f.y, f.z || 0);
-    const shot = clipShot(clipProgress(playheadFrame(), t.plan), focus, {
+    // Once the recording has run out, the drawn carrier is the aim and both
+    // bodies set the lens, at the clip's own shape (`endingBodies`).
+    const ending = endingBodies();
+    const shot = clipShot(clipProgress(playheadFrame(), t.plan), ending ? ending.focus : focus, {
         anchor: t.anchor, shoulder: t.shoulder, aim: t.aim, quarter: t.quarter, delta,
+        points: ending ? ending.points : null, aspect: t.w / t.h,
     });
     // The result is stamped over the final hold only (D19).
     const stamp = CFG.clip.stamp && t.held >= t.plan.ending ? stampText(cycle.lastOutcome) : '';
@@ -3460,6 +3487,9 @@ export const __test__ = {
     /** The milestone level the stadium is awake to, which a shown moment must
      *  never touch (the `shown` collision of 2026-10-29). */
     level: () => cycle.shown,
+    /** What the camera is told, and the ending's bodies (QA, 2026-10-30). */
+    cameraState: () => cameraState(),
+    ending: () => endingBodies(),
 };
 
 /** `beginMilestone` is exposed for the suite too: reaching 100 by actually

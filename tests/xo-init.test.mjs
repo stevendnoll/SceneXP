@@ -2247,6 +2247,47 @@ describe('the clip\'s take', () => {
         }
     });
 
+    test('once the recording runs out, the camera is told the ending\'s bodies: the drawn carrier and his tackler (QA, 2026-10-30)', async () => {
+        const main = await aCatch({ downed: true });
+        const R = await import('../www/xo/js/replay.min.js');
+        const roster = await import('../www/xo/js/roster.min.js');
+        // On the card nothing is being replayed, so there is no ending to aim at.
+        expect(main.__test__.ending()).toBeNull();
+        dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+        await flushAsync();
+        frames(1);
+        expect(main.__test__.phase()).toBe('replay');
+        expect(R.playheadFrame()).toBeLessThan(R.frameCount());
+        expect(main.__test__.ending()).toBeNull();
+        expect(main.__test__.cameraState().ending).toBeNull();
+        // Run the recording out: the tackle plays on, and the camera is handed
+        // the carrier as drawn and both bodies' points (eight a body).
+        for (let i = 0; i < 2000 && R.playheadFrame() < R.frameCount(); i += 1) frames(1);
+        expect(R.playheadFrame()).toBeGreaterThanOrEqual(R.frameCount());
+        expect(main.__test__.phase()).toBe('replay');
+        const ending = main.__test__.ending();
+        expect(ending).toBeTruthy();
+        expect(ending.points).toHaveLength(16);
+        const carrier = roster.figureFor('wr1');
+        expect(ending.focus).toEqual({
+            x: Number(carrier.position.x) || 0, y: Number(carrier.position.y) || 0, z: Number(carrier.position.z) || 0,
+        });
+        expect(main.__test__.cameraState().ending).toEqual(ending);
+
+        // And the take, in its ending, is told the same.
+        for (let i = 0; i < 400 && main.__test__.phase() === 'replay'; i += 1) frames(1);
+        expect(main.__test__.phase()).toBe('result');
+        expect(main.__test__.ending()).toBeNull();
+        const { stage } = recordingStage();
+        const p = main.__test__.take(stage, {});
+        const t = main.__test__.taking();
+        for (let i = 0; i < 2000 && R.playheadFrame() < t.plan.ticks; i += 1) frames(1);
+        expect(main.__test__.phase()).toBe('clip');
+        expect(main.__test__.ending().points).toHaveLength(16);
+        main.__test__.cancelTake();
+        await p;
+    });
+
     test('a moment put on the field never touches the milestone level, and after a show the replay keeps its camera', async () => {
         const main = await aCatch();
         const camera = await import('../www/xo/js/camera.min.js');

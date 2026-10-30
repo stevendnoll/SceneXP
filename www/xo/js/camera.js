@@ -405,7 +405,7 @@ const shoulder = newShoulder();
  * (clip.js) brings its own, so a take never moves the replay on screen.
  */
 export function newAim() {
-    return { x: 0, y: 0, z: 0, seeded: false };
+    return { x: 0, y: 0, z: 0, seeded: false, fov: 0 };
 }
 
 const aim = newAim();
@@ -437,6 +437,67 @@ export function resetShoulder() {
     shoulder.seeded = false;
     shoulder.held = 0;
     aim.seeded = false;
+    aim.fov = 0;
+}
+
+/**
+ * THE ENDING KEEPS BOTH BODIES IN FRAME (Steve's QA, 2026-10-30: "the
+ * portrait crop cuts off half of the tackled bodies"). `points` are the bodies
+ * as drawn, feet to raised hands following their leans (photo.js
+ * `bodyPoints`), and the lens is opened only as far as the frame at `aspect`
+ * needs to hold every one of them `ending.margin` clear of the edges, never
+ * past `ending.maxFov` and never narrower than the shot already is. The
+ * position and the aim are untouched: a lens that gives is what the rest of
+ * this camera does at its clamps, and a camera that backed away would read as
+ * a cut.
+ *
+ * Upright, the settled 46 degree lens is 27 degrees across, 5 m of field at
+ * 11 m, and two 3.85 m men lying along the ground span more than that even
+ * centered; in landscape the same lens shows 17 m and this rarely does
+ * anything. The projection is the one milestones.js `projectPoint` uses
+ * (three's vertical field of view, x scaled by the aspect), written here
+ * because camera.js is imported by milestones.js and cannot import it back.
+ *
+ * `memory` (an aim, `newAim()`) makes it a RATCHET within one ending: the lens
+ * stays as wide as it has been, so it never pumps as the bodies settle, and a
+ * new replay's reset starts it again.
+ */
+export function fitBodies(shot, points, aspect = 1.78, memory = null) {
+    const E = CFG.camera.replay.ending;
+    if (!shot || !points || !points.length) return shot;
+    const P = shot.position;
+    const T = shot.target;
+    let fx = T.x - P.x;
+    let fy = T.y - P.y;
+    let fz = T.z - P.z;
+    const fn = Math.hypot(fx, fy, fz) || 1;
+    fx /= fn; fy /= fn; fz /= fn;
+    let rx = -fz;
+    let rz = fx;
+    const rn = Math.hypot(rx, rz) || 1;
+    rx /= rn; rz /= rn;
+    const ux = -rz * fy;
+    const uy = rz * fx - rx * fz;
+    const uz = rx * fy;
+    const half = Math.tan((shot.fov * Math.PI) / 360);
+    const room = Math.max(0.05, 1 - E.margin);
+    let need = 1;
+    for (const q of points) {
+        const dx = q.x - P.x;
+        const dy = q.y - P.y;
+        const dz = q.z - P.z;
+        const depth = dx * fx + dy * fy + dz * fz;
+        if (!(depth >= E.near)) continue;
+        const x = (dx * rx + dz * rz) / (depth * half * Math.max(0.01, aspect));
+        const y = (dx * ux + dy * uy + dz * uz) / (depth * half);
+        need = Math.max(need, Math.abs(x) / room, Math.abs(y) / room);
+    }
+    let fov = Math.min(E.maxFov, (2 * Math.atan(half * need) * 180) / Math.PI);
+    if (memory) {
+        memory.fov = Math.max(memory.fov || 0, fov);
+        fov = memory.fov;
+    }
+    return fov > shot.fov ? { ...shot, fov } : shot;
 }
 
 export function shoulderFor(z, delta = 0, s = shoulder) {
@@ -665,11 +726,15 @@ export function update(delta, state = {}) {
     elapsed += delta;
     if (current === DRIVERS.replay) {
         // The director's shot first, aimed through the smoothed aim (see
-        // `smoothAim`), then whatever the visitor has done to it.
-        const focus = smoothAim(aim, state.focus, delta);
-        return applyView(
+        // `smoothAim`) at the recording, or at the drawn carrier once the
+        // recording has run out (`state.ending`), then whatever the visitor
+        // has done to it, then the lens opened for the bodies of the ending.
+        const ending = state.ending || null;
+        const focus = smoothAim(aim, ending ? ending.focus : state.focus, delta);
+        const shot = applyView(
             replayDriver(state.progress || 0, focus, shoulderFor(focus.z, delta))
         );
+        return ending && ending.points ? fitBodies(shot, ending.points, aspect, aim) : shot;
     }
     if (current === DRIVERS.idle) return idleDriver(elapsed, aspect);
     // A show brings its own shot. Without one it holds the play camera, which

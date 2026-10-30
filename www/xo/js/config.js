@@ -919,6 +919,20 @@ const XO_CONFIG = {
              * longer trails the runner. 0 is the old, unsmoothed aim.
              */
             focusSmooth: 0.12,
+            /**
+             * THE ENDING (Steve's QA, 2026-10-30: "the portrait crop cuts off
+             * half of the tackled bodies"). Once the recording runs out the
+             * tackle or the party moves the drawn bodies on while the
+             * recording's last frame stands still, so the camera aims at the
+             * carrier AS DRAWN and opens the lens only as far as both bodies
+             * need to stay inside the frame with `margin` clear at each edge
+             * (camera.js `fitBodies`), never past `maxFov`. A body nearer the
+             * lens than `near` metres cannot be framed and is left out. In
+             * landscape the settled lens already shows 17 m across and rarely
+             * opens; upright it shows 5 m, and two 3.85 m men lying down need
+             * more.
+             */
+            ending: { margin: 0.12, maxFov: 80, near: 0.5 },
 
             /**
              * WHICH SHOULDER THE CAMERA ORBITS FROM, AND WHY IT NOW HAS A
@@ -1228,7 +1242,10 @@ const XO_CONFIG = {
      * the play before the whistle, CLIP seconds at the replay's own speed
      * (`camera.replay.speed`), or the whole play when it was shorter. The
      * ending the replay plays at the whistle (the tackle or the party) rides
-     * on top, then the frame is held `hold` seconds.
+     * on top, then the frame is held `hold` seconds. Six, down from eight
+     * (Steve's QA, 2026-10-30: the clips ran long): 5.1 s of play, which still
+     * reaches back past the throw on a typical pass, and a whole clip of
+     * about 8 to 11 seconds.
      *
      * `wordmark` is stamped bottom right on every frame (D2, D8: a video on a
      * feed carries no link). `stamp` puts the result ("Caught +15") over the
@@ -1240,7 +1257,7 @@ const XO_CONFIG = {
     clip: {
         width: 1080, height: 1920, mobileWidth: 720, mobileHeight: 1280,
         fps: 30, bitrate: 8000000, mobileBitrate: 5000000,
-        seconds: 8, hold: 1.0,
+        seconds: 6, hold: 1.0,
         wordmark: 'SceneXP.com/xo',
         stamp: true, stampHeight: 0.05, stampAt: 0.84,
         near: 0.5, far: 400,
@@ -2291,8 +2308,32 @@ const XO_CONFIG = {
             contactAt: { min: 0.22, max: 0.62 },
             /** How much of the carrier's drive the tackler is carried along
              *  with, 0 to 1. A tackler who stops dead while the man he hit
-             *  flies backwards has not tackled him, he has been run into. */
-            carry: 0.55,
+             *  flies backwards has not tackled him, he has been run into.
+             *  0.8, up from 0.55 (Steve's QA, 2026-10-30): wrapped up, the two
+             *  of them land together rather than a stride apart. */
+            carry: 0.8,
+            /**
+             * THE HIT, MADE FLUID AND VIOLENT (Steve's QA, 2026-10-30), in
+             * four numbers, all read by takedown.js.
+             *
+             * `skid`: seconds past the fall that the drive runs on, fast then
+             * slowing, into the settle, where a smoothstep eased out and
+             * stopped both men dead. It must stay inside `settle`, or the card
+             * opens over a body still sliding (asserted in the suite).
+             * `bounce`: how far past flat each man lands before settling back,
+             * as a fraction of his lean. `roll`: radians onto a shoulder for a
+             * carrier sent sideways to the way he was facing, so he is not a
+             * plank on his back. `momentum.keep`: how much of the carrier's
+             * speed at the whistle carries on through the hit for the fall's
+             * length, so a 7 m/s runner goes about a metre further along his
+             * own line, and he runs INTO the hit instead of standing still
+             * while the dive reaches him. `momentum.still`: metres a second
+             * below which he is simply standing, which is a sack.
+             */
+            skid: 0.3,
+            bounce: 0.06,
+            roll: 0.32,
+            momentum: { keep: 0.35, still: 0.6 },
             /** Radians of pitch: the tackler laid out flat, and the carrier on
              *  his back. Negative is backwards. */
             tacklerLean: 1.15,

@@ -32,7 +32,7 @@
  */
 import { XO_CONFIG as CFG } from './config.min.js';
 import {
-    replayDriver, applyView, viewOffset, shoulderFor, newShoulder, smoothAim,
+    replayDriver, applyView, viewOffset, shoulderFor, newShoulder, smoothAim, fitBodies,
 } from './camera.min.js';
 import { drawWordmark, wordmarkFont, WORDMARK } from '../../shared/js/wordmark-1.0.0.min.js';
 import { startRecording } from '../../shared/js/recorder-1.0.0.min.js';
@@ -107,12 +107,18 @@ export function clipProgress(frame, plan) {
  * memory (`newAim()`, one a take, camera.js `smoothAim`: the replay's twitch
  * is the clip's too), turned to vantage point `quarter` (0 is the director's
  * own). `focus` is where the ball or its carrier is on this frame, in world
- * metres. Without an `aim` the focus is taken as it is.
+ * metres (the drawn carrier, once the recording has run out). Without an
+ * `aim` the focus is taken as it is. `points`, when given, are the ending's
+ * bodies, and the lens opens for them at the clip's `aspect` (camera.js
+ * `fitBodies`, ratcheted through the same `aim`).
  */
-export function clipShot(progress, focus, { anchor = null, shoulder = null, quarter = 0, delta = 0, aim = null } = {}) {
+export function clipShot(progress, focus, {
+    anchor = null, shoulder = null, quarter = 0, delta = 0, aim = null, points = null, aspect = K().width / K().height,
+} = {}) {
     const f = aim ? smoothAim(aim, focus, delta) : (focus || { x: 0, y: 0, z: 0 });
     const side = shoulderFor(f.z, delta, shoulder || newShoulder());
-    return applyView(replayDriver(progress, f, side, anchor), viewOffset(quarter));
+    const shot = applyView(replayDriver(progress, f, side, anchor), viewOffset(quarter));
+    return points && points.length ? fitBodies(shot, points, aspect, aim) : shot;
 }
 
 /** "Caught +15", "Intercepted -10", "Incomplete": the result line stamped
