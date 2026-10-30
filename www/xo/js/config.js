@@ -1406,6 +1406,29 @@ const XO_CONFIG = {
     lead: {
         /** Seconds of travel averaged into the heading a pass is led off. */
         window: LEAD_WINDOW,
+        /**
+         * LEADING THE RECEIVER (Steve's QA, 2026-10-30, lead.js). On, the
+         * ball lands where the receiver will be when it arrives, solved from
+         * his heading and the ball's own speed, so a crossing route is caught
+         * in stride. Off is the 2D game's hand-tuned multipliers, which on
+         * crossing routes landed the ball a median 1.24 m from in stride (10 m
+         * at worst) and turned the receiver a median 25 degrees off his route
+         * toward it. Kept for QA to compare (`xo.lead(false)` on localhost).
+         */
+        intercept: true,
+        /** Ticks of extra lead when a defender is on the receiver's heels: the
+         *  ball lands a step further along his line, so he runs onto it and
+         *  away from the man behind him. The port's own touch (its `xLead`). */
+        trail: 10,
+        /** The longest flight the solve will assume, in ticks: a receiver
+         *  outrunning the ball downfield gets it as far as it goes. */
+        maxTicks: 120,
+        /** A step longer than this many times a man's top speed is not running
+         *  but the port's collision code moving him apart from somebody in one
+         *  tick (`separate` rests two bodies 1.45 m apart), and it is left out
+         *  of his heading (play.js `markHeading`), because a lead solved from
+         *  a step nobody ran lands the ball where nobody is going. */
+        teleport: 1.5,
     },
 
     /**

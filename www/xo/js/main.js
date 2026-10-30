@@ -1872,7 +1872,7 @@ function installQaHook() {
     if (typeof window === 'undefined' || !qaEnabled(window.location && window.location.href)) return;
     window.xo = Object.freeze({
         show: qaShow, opening: qaOpening, colors: qaColors, playAs: qaPlayAs,
-        moments: qaMoments, moment: qaMoment, photo: qaPhoto, clip: qaClip,
+        moments: qaMoments, moment: qaMoment, photo: qaPhoto, clip: qaClip, lead: qaLead,
         levels: [...CFG.milestones.built],
     });
 }
@@ -3515,6 +3515,24 @@ export async function qaClip(view = 1) {
     window.setTimeout(() => URL.revokeObjectURL(url), 60000);
     return `Saved ${name} (${Math.round(made.blob.size / 1024)} KB, ${made.seconds.toFixed(1)} s, `
         + `${made.frames} frames, view ${quarter + 1} of 4).`;
+}
+
+/**
+ * `xo.lead(false)` throws the 2D game's way for the plays that follow, and
+ * `xo.lead(true)` the solve's (lead.js, Steve's QA 2026-10-30), so the two can
+ * be compared by eye on the same route. `xo.lead()` says which is in force.
+ * The one play object is reused for the whole visit, so this sticks until the
+ * page is reloaded.
+ */
+export function qaLead(on) {
+    if (!cycle.play) return 'Not yet: the field is still being built.';
+    if (on === undefined) {
+        return (cycle.play.lead || CFG.lead).intercept
+            ? 'Leading the receiver: the ball lands where he will be.'
+            : "Throwing the 2D game's way.";
+    }
+    cycle.play.lead = { ...CFG.lead, intercept: !!on };
+    return qaLead();
 }
 
 /**

@@ -38,6 +38,10 @@
  * yard lines they are standing on.
  */
 
+// LEADING THE RECEIVER (lead.js, 2026-10-30): the one piece of the throw that
+// is not the 2D game's, imported rather than written into the port.
+import { interceptTarget } from './lead.min.js';
+
 export class TeamFormationsClass {
 
   // eslint-disable-next-line
@@ -4016,6 +4020,35 @@ export class TeamFormationsClass {
       let targetY = receiverObj.coords.y;
       const xDist = (targetX - startX);
       const yDist = (targetY - startY);
+      /**
+       * HOW HARD HE THROWS IT, which is the ball's downfield field units a
+       * tick: the 2D game's own ladder on the throw's length and the screen's
+       * width, and its two bumps for a wide screen, gathered into one place so
+       * the intercept below can ask it twice. Unchanged in every number.
+       */
+      const throttleFor = (dist) => {
+        let throttle = (state.window.width < 700) ? 4 : 5;
+        if ( dist < 50 ) {
+          throttle = (state.window.width < 700) ? 2 : 3;
+        } else if ( dist < 65 ) {
+          throttle = 3;
+        } else if ( dist < 80 ) {
+          throttle = 4;
+        } else if ( dist > lineInterval * 2.75 && state.window.width > 700 ) {
+          throttle = 7;
+        } else if ( dist > lineInterval * 2.25 ) {
+          throttle = (state.window.width < 700) ? 5 : 6;
+        } else if ( dist > lineInterval ) {
+          throttle = 5;
+        }
+        if (this.state.container.width >= 900 && dist > 500 && throttle < 8) {
+          throttle += 1;
+        } else if (this.state.container.width >= 900 && dist > 400 && throttle < 7) {
+          throttle += 1;
+        }
+        return throttle;
+      };
+      let throttle = throttleFor(xDist);
       const xIntervals = Math.ceil(xDist / lineInterval);
       let xLead = 0;
       let xDistDiv = 3.4;
@@ -4065,28 +4098,50 @@ export class TeamFormationsClass {
       const recVy = heading ? heading.y : receiverObj.state.ySpeed;
       // Find closest defender.
       const defenderObj = this.gameState.getClosestTeamObjectToPosition(game.objects, 1, (recX - 20), recY, 30, ['db1', 'db2', 'db3', 'db4', 'db6', 's1', 's2']);
-      if ( defenderObj ) {
-        const defX = defenderObj.coords.x;
-        if ( defX < recX ) {
+      const trailing = !!(defenderObj && defenderObj.coords.x < recX);
+      const lead = state.lead || {};
+      if ( lead.intercept ) {
+        /**
+         * LEADING THE RECEIVER (Steve's QA, 2026-10-30, lead.js): the ball
+         * lands where he WILL BE when it arrives, solved from his heading and
+         * the ball's own downfield speed, twice, because how hard the
+         * quarterback throws it depends on how far it has to go and how far
+         * it has to go depends on how hard he throws it. A defender on the
+         * receiver's heels buys `lead.trail` ticks more, the port's own
+         * `xLead` made consistent in both axes. The field's edges are applied
+         * below as they always were.
+         */
+        const solve = (speed) => interceptTarget({
+          start: { x: startX, y: startY }, at: { x: recX, y: recY },
+          heading: { x: recVx, y: recVy }, throttle: speed,
+          extra: trailing ? lead.trail : 0, maxTicks: lead.maxTicks,
+        });
+        let land = solve(throttle);
+        throttle = throttleFor(land.x - startX);
+        land = solve(throttle);
+        targetX = land.x;
+        targetY = land.y;
+      } else {
+        if ( trailing ) {
           xLead = (recVx * 10);
         }
-      }
-      if ( recVx !== 0 ) {
-        let xSpeed = recVx;
-        if ( xSpeed < 0 ) {
-          xSpeed = 0.1;
+        if ( recVx !== 0 ) {
+          let xSpeed = recVx;
+          if ( xSpeed < 0 ) {
+            xSpeed = 0.1;
+          }
+          targetX += (xSpeed * (xDist / xDistDiv)) + xLead;
         }
-        targetX += (xSpeed * (xDist / xDistDiv)) + xLead;
-      }
-      if ( recVy !== 0 ) {
-        if ( targetY < qbObj.coords.y && recVy < 0 ) {
-          targetY += (recVy * (yDist / 4)) + (recVy * 45);
-        } else if ( targetY >= qbObj.coords.y && recVy < 0 ) {
-          targetY += (recVy * (yDist / 4)) + (recVy * 10);
-        } else if ( targetY >= qbObj.coords.y && recVy > 0 ) {
-          targetY += (recVy * (yDist / 4)) + (recVy * 12);
-        } else {
-          targetY += (recVy * (yDist / 4)) + (recVy * 25);
+        if ( recVy !== 0 ) {
+          if ( targetY < qbObj.coords.y && recVy < 0 ) {
+            targetY += (recVy * (yDist / 4)) + (recVy * 45);
+          } else if ( targetY >= qbObj.coords.y && recVy < 0 ) {
+            targetY += (recVy * (yDist / 4)) + (recVy * 10);
+          } else if ( targetY >= qbObj.coords.y && recVy > 0 ) {
+            targetY += (recVy * (yDist / 4)) + (recVy * 12);
+          } else {
+            targetY += (recVy * (yDist / 4)) + (recVy * 25);
+          }
         }
       }
       if ( targetX > xMax ) {
@@ -4098,20 +4153,6 @@ export class TeamFormationsClass {
         targetY = yMax;
       } else if ( targetY < yMin ) {
         targetY = yMin;
-      }
-      let throttle = (state.window.width < 700) ? 4 : 5;
-      if ( xDist < 50 ) {
-        throttle = (state.window.width < 700) ? 2 : 3;
-      } else if ( xDist < 65 ) {
-        throttle = 3;
-      } else if ( xDist < 80 ) {
-        throttle = 4;
-      } else if ( xDist > lineInterval * 2.75 && state.window.width > 700 ) {
-        throttle = 7;
-      } else if ( xDist > lineInterval * 2.25 ) {
-        throttle = (state.window.width < 700) ? 5 : 6;
-      } else if ( xDist > lineInterval ) {
-        throttle = 5;
       }
       let slope = ((targetY - startY) / (targetX - startX));
       if ( slope > 1 ) {
@@ -4151,13 +4192,7 @@ export class TeamFormationsClass {
           width: 5
         }
       };
-      if (this.state.container.width >= 900 && xDist > 500 && throttle < 8) {
-        throttle += 1;
-        // ballObject.style.height = 4;
-        // ballObject.style.width = 6;
-      } else if (this.state.container.width >= 900 && xDist > 400 && throttle < 7) {
-        throttle += 1;
-      }
+      // (The wide-screen bumps that sat here are in `throttleFor` now.)
       ballObject.coords.list = this.gameState.getLineCoords([ballObject.coords.startX, ballObject.coords.startY], [ballObject.coords.targetX, ballObject.coords.targetY], throttle);
       return ballObject;
     } else {

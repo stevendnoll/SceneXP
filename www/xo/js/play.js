@@ -824,11 +824,35 @@ export function markHeading(play) {
         // Not enough history to average yet. Leave `heading` absent rather than
         // writing a bad one: absent means "use the ported speeds".
         if (s.track.length < (frames + 1) * 2) continue;
+        /**
+         * THE MEAN OF HIS STEPS, LEAVING OUT THE ONES NOBODY RAN (lead.js,
+         * 2026-10-30). Net travel over the window is the mean step, and it
+         * cancels the steer's wobble (see below). But the port's collision
+         * code SEPARATES two bodies by moving them apart in one tick (`separate`
+         * rests them 1.45 m apart), and that step would sit in the window for
+         * its whole length, reading as a sprint sideways that nobody ran, and a
+         * lead solved from it would land the ball where nobody is going. A
+         * step longer than `lead.teleport` times his top speed is not running,
+         * so it is left out of the mean. With no such step this is exactly the
+         * net travel it always was.
+         */
+        const limit = obj.physics && obj.physics.maxSpeed > 0
+            ? obj.physics.maxSpeed * CFG.lead.teleport : Infinity;
+        let sx = 0;
+        let sy = 0;
+        let n = 0;
+        for (let i = 2; i < s.track.length; i += 2) {
+            const dx = s.track[i] - s.track[i - 2];
+            const dy = s.track[i + 1] - s.track[i - 1];
+            if (Math.hypot(dx, dy) > limit) continue;
+            sx += dx;
+            sy += dy;
+            n += 1;
+        }
         const span = (s.track.length / 2) - 1;
-        s.heading = {
-            x: (obj.coords.x - s.track[0]) / span,
-            y: (obj.coords.y - s.track[1]) / span,
-        };
+        s.heading = n > 0
+            ? { x: sx / n, y: sy / n }
+            : { x: (obj.coords.x - s.track[0]) / span, y: (obj.coords.y - s.track[1]) / span };
         marked += 1;
     }
     return marked;
@@ -1359,8 +1383,12 @@ export function throwTo(play, position) {
     game.throwTo = position;
     // The ball leaves from the quarterback's throwing hand: `play.throwHand`
     // ('left' or 'right', right by default) is set by main.js from the figure
-    // on the field, so a left-handed avatar's throws start on his left.
-    const ballObj = play.formations.generateBallObject({ ...factoryState(), game, throwHand: play.throwHand || 'right' }, play.routes);
+    // on the field, so a left-handed avatar's throws start on his left. And it
+    // is led the way `play.lead` says (the config's unless a caller set the
+    // play's own, which is how QA compares the two): see lead.js.
+    const ballObj = play.formations.generateBallObject({
+        ...factoryState(), game, throwHand: play.throwHand || 'right', lead: play.lead || CFG.lead,
+    }, play.routes);
     if (ballObj) game.objects.push(ballObj);
 
     const qb = play.routes.getObjectByPosition(game.objects, 'qb');

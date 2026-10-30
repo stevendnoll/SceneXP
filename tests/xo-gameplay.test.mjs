@@ -1970,15 +1970,20 @@ describe('a pass is led off where the receiver is going', () => {
 
     test('throwing one frame later does not move the aim point by a body width', () => {
         /**
-         * SEEDED, BECAUSE EVERY LINE-UP ROLLS A FRESH SET OF SPEEDS. Left to
-         * the real Math.random this measures a different set of players on
-         * every run, and the MAXIMUM of a sample is the least stable thing you
-         * can assert on: it moved between 1.0m and 1.8m run to run while the
-         * mean sat still. The mean is the honest statistic here and the seed is
-         * what makes the bound on the worst case mean anything at all.
+         * SEEDED AFRESH FOR EACH PAIR, BECAUSE EVERY LINE-UP ROLLS A FRESH SET
+         * OF SPEEDS. Left to the real Math.random this measures a different set
+         * of players on every run, and the MAXIMUM of a sample is the least
+         * stable thing you can assert on. Seeded ONCE (as this test first was)
+         * the two throws of a pair still came from two different line-ups, so
+         * "one frame later" compared two different receivers: under the port's
+         * multipliers that passed only because its crossing lead was so small
+         * that two different men got nearly the same aim (2026-10-30, found
+         * when the intercept did not). The seed is set before each throw of a
+         * pair, so both come from the same eleven men on the same frames, and
+         * the one thing that differs is the frame the visitor pressed on.
          */
         const real = Math.random;
-        let seed = 20260911;
+        let seed = 0;
         Math.random = () => {
             seed |= 0; seed = seed + 0x6D2B79F5 | 0;
             let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
@@ -1988,7 +1993,9 @@ describe('a pass is led off where the receiver is going', () => {
         const jumps = [];
         for (const slug of OFFENSIVE_PLAYS) {
             for (let f = 30; f < 44; f += 1) {
+                seed = 20260911 + slug.length * 977 + f;
                 const a = aimOnFrame(slug, 'cover2', f);
+                seed = 20260911 + slug.length * 977 + f;
                 const b = aimOnFrame(slug, 'cover2', f + 1);
                 if (a === null || b === null) continue;
                 jumps.push(Math.abs(a - b) * UNITS_TO_METRES);
@@ -1997,11 +2004,15 @@ describe('a pass is led off where the receiver is going', () => {
         Math.random = real;
         expect(jumps.length).toBeGreaterThan(50);
         const mean = jumps.reduce((s, v) => s + v, 0) / jumps.length;
-        // The ported build measures 0.162m mean and 5.41m worst over a much
-        // larger sweep. Both bounds are far inside that and far outside what
-        // the damped build produces (0.040m mean, 0.60m worst).
-        expect(mean).toBeLessThan(0.09);
-        expect(Math.max(...jumps)).toBeLessThan(1.5);
+        // Measured on this basis: the port's multipliers 0.011m mean and 0.27m
+        // worst, the intercept (lead.js, 2026-10-30) 0.033m mean and 0.34m
+        // worst. A correct lead is the receiver's speed times the flight, so
+        // the same frame-to-frame change in his heading moves it a little
+        // further than multipliers that knew nothing of the flight did, and it
+        // stays well inside a body width (1.45m), which is the property in this
+        // test's name. The old one-frame speeds measured 0.162m and 5.41m.
+        expect(mean).toBeLessThan(0.08);
+        expect(Math.max(...jumps)).toBeLessThan(0.6);
     });
 
     /**
@@ -2061,6 +2072,45 @@ describe('a pass is led off where the receiver is going', () => {
         // He is back where he started on the axis, so the lead is nothing,
         // however fast he was moving on the frame the visitor pressed.
         expect(Math.abs(man.state.heading.y)).toBeLessThan(0.2);
+    });
+
+    /**
+     * A STEP NOBODY RAN IS LEFT OUT (lead.js, 2026-10-30). The port's collision
+     * code moves two bodies apart in one tick, over a metre at times, and that
+     * step sat in the heading's window for its whole length: a man crossing
+     * the field read as crossing the other way, and a lead solved from it
+     * landed the ball five metres from him.
+     */
+    test('a man shoved a metre sideways in one tick keeps the heading he was running', () => {
+        const frames = Math.max(1, Math.round(CFG.simHz * CFG.lead.window));
+        const play = createPlayForDifficulty();
+        lineUp(play, 'pass2', 'cover2');
+        snap(play);
+        const man = play.game.objects
+            .find((o) => o.settings.position === 'wr1' && !o.settings.benched);
+        man.state.track = null;
+        man.physics.maxSpeed = 3;
+        // Running across at 2 a tick...
+        for (let f = 0; f < frames + 2; f += 1) {
+            man.coords.x = 300;
+            man.coords.y = 100 + 2 * f;
+            markHeading(play);
+        }
+        expect(man.state.heading.y).toBeCloseTo(2, 9);
+        // ...then moved 30 units in one tick by a collision, and running on.
+        man.coords.y += 30;
+        markHeading(play);
+        for (let f = 0; f < 4; f += 1) {
+            man.coords.y += 2;
+            markHeading(play);
+        }
+        expect(man.state.heading.y).toBeCloseTo(2, 9);
+        expect(man.state.heading.x).toBeCloseTo(0, 9);
+        // A step within his reach is simply his: 4 a tick is under the limit.
+        man.coords.y += 4;
+        markHeading(play);
+        expect(man.state.heading.y).toBeGreaterThan(2);
+        expect(man.state.heading.y).toBeLessThan(2.5);
     });
 });
 
