@@ -912,10 +912,10 @@ body {
     color: #ffb76b;
 }
 
+/* The colour is .card-meta's own, so it stays in step with the other notes. */
 .clip-note {
     margin-top: 0.8rem;
     font-size: 0.78rem;
-    color: #8d97a8;
 }
 
 /* STILL BEING MADE. Never `disabled` (that would throw keyboard focus out of

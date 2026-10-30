@@ -226,6 +226,13 @@ test('and the policy actually describes them, in words a visitor would use', () 
     expect(text).toMatch(/Your own avatar is read from where the Your Avatar page keeps it, never copied/i);
     expect(text).toMatch(/which meme you picked and what kind of thing you did/i);
     expect(text).toMatch(/Start over button clears your meme/i);
+    // X's and O's clips and pictures (specs/xo-photos-plan, 2026-10-30): made
+    // on the device, handed only to the visitor's own share sheet or
+    // downloads, and the pings say only what was done with them.
+    expect(text).toMatch(/video clip or a photo of a play is made right on your device/i);
+    expect(text).toMatch(/Neither is ever sent to us/i);
+    expect(text).toMatch(/which of the four views it was from/i);
+    expect(text).toMatch(/The clip itself never leaves your device/i);
 
     // AND HOW TO GET RID OF IT, which is the part that makes the disclosure
     // useful rather than merely honest.

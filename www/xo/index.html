@@ -22,7 +22,7 @@
         content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
-    <meta name="description" content="A 3D football game where you are always on offense. Call a play, pick your receiver, and dress both teams and the field in your favorite team's colors.">
+    <meta name="description" content="A 3D football game where you are always on offense. Call a play, pick your receiver, dress both teams in your colors, and share a clip of your best play.">
     <meta name="theme-color" content="#080b12">
     <meta name="author" content="Steve Noll">
 
@@ -35,7 +35,7 @@
 
     <!-- Open Graph -->
     <meta property="og:title" content="X's and O's">
-    <meta property="og:description" content="Call a play, snap the ball, pick your receiver. Dress the X's and the O's as your favorite team and its rival, then make them pay.">
+    <meta property="og:description" content="Call a play, snap the ball, pick your receiver. Dress the X's and the O's as your favorite team and its rival, make them pay, and share the clip.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SceneXP">
     <meta property="og:url" content="https://www.scenexp.com/xo/">
@@ -64,7 +64,7 @@
          one image and has no type property. -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="X's and O's">
-    <meta name="twitter:description" content="A 3D football game where you are always on offense. Pick your team's colors, call a play, and the farther you carry it the more it is worth.">
+    <meta name="twitter:description" content="A 3D football game where you are always on offense. Pick your team's colors, call a play, carry it as far as you can, and share a clip of your best play.">
     <meta name="twitter:image" content="https://www.scenexp.com/xo/assets/og-xo.jpg?v=1">
     <meta name="twitter:image:alt" content="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides.">
 
@@ -78,7 +78,7 @@
       "url": "https://www.scenexp.com/xo/",
       "name": "X's and O's",
       "image": "https://www.scenexp.com/xo/assets/og-xo.jpg?v=1",
-      "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival.",
+      "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's four views, and with an avatar saved on the Your Avatar page you can play as any player on the field.",
       "genre": ["Sports", "Strategy"],
       "gamePlatform": "Web browser",
       "applicationCategory": "Game",
@@ -344,6 +344,13 @@
                     late and the pass can sail past him or be picked off. If you
                     would rather just watch, turn on Auto jump in the
                     playbook.</li>
+                <!-- SHARE THE PLAY (specs/xo-photos-plan, 2026-10-30). The clip
+                     and the picture are made on the device and go only where
+                     the visitor sends them, so the rule can promise that. -->
+                <li><strong>Share the play.</strong> After the whistle, watch the
+                    replay from any of four views, then share a short clip of it,
+                    made right on your device, or save a picture of its best
+                    moment.</li>
             </ol>
 
             <!-- ONE LINE, AND ONLY BECAUSE THE LETTERS ARE ALREADY THERE. The
@@ -356,7 +363,8 @@
                 the play before you do, <kbd>A</kbd> to <kbd>D</kbd> throw to
                 that receiver, and <kbd>K</kbd> keeps it. With the ball in the
                 air, <kbd>J</kbd> or <kbd>Space</kbd> jumps. During a replay,
-                <kbd>V</kbd> or the arrow keys switch the view.</p>
+                <kbd>V</kbd> or the arrow keys switch the view, and <kbd>V</kbd>
+                switches it again when you share the play.</p>
 
             <p class="welcome-ladder-title">What a play is worth</p>
             <ul class="welcome-ladder">
@@ -394,7 +402,7 @@
             <p id="avatar-playing" class="card-meta avatar-line">
                 <img id="avatar-playing-img" src="../assets/avatar/default.png" width="28" height="28" alt=""
                     loading="lazy" decoding="async" hidden>
-                <span id="avatar-playing-text">Take the snap at quarterback as yourself.</span>
+                <span id="avatar-playing-text">Take the field as yourself, at quarterback or any position you like.</span>
                 <a id="avatar-playing-link" class="welcome-explore" href="../avatar/?return=/xo/">Make your avatar</a>
             </p>
 

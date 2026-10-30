@@ -3383,7 +3383,7 @@ function showPlaying() {
     // The player they chose, or the quarterback they always were.
     text.textContent = saved
         ? playingLine(state.playAs)
-        : 'Take the snap at quarterback as yourself.';
+        : 'Take the field as yourself, at quarterback or any position you like.';
     link.textContent = saved ? 'Change your avatar' : 'Make your avatar';
 }
 

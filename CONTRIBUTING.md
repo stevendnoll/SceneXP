@@ -111,6 +111,12 @@ difference between a scene visitors look at and a scene they share:
   and a warm invitation card that appears as visitors explore. Always with
   the owner's permission, and always in the spirit of a tribute rather than
   an advertisement.
+- **Something to take away.** A picture or a short video the visitor made,
+  drawn or recorded on their own device and handed to their share sheet or
+  downloads folder, with the site's wordmark in the corner. Derby Day's race
+  clip, the avatar's clip, Meme Studio's picture and X's and O's clip of a
+  play all run on the shared recorder, sharefile and wordmark parts, and
+  nothing is ever uploaded.
 
 The shared modules behind each of these live in `www/shared/js`, documented
 part by part in its `README.md`.

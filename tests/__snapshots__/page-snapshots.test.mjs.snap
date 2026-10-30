@@ -6312,7 +6312,7 @@ html [lang="en"]
             li
               strong
                 "Your game of X's and O's."
-              "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the player your avatar plays as if you chose one other than the quarterback, the colors you chose for the teams and the field, whether you turned the sound on or off, and whether you turned on Auto jump, so the game comes back the way you left it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot. A photo of a play is drawn right on your device and handed only to your own share sheet or downloads folder. It is never sent to us."
+              "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the player your avatar plays as if you chose one other than the quarterback, the colors you chose for the teams and the field, whether you turned the sound on or off, and whether you turned on Auto jump, so the game comes back the way you left it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot. A video clip or a photo of a play is made right on your device and handed only to your own share sheet or downloads folder. Neither is ever sent to us."
             li
               strong
                 "Your job search in Corner Office."
@@ -6352,7 +6352,7 @@ html [lang="en"]
           p
             "The pings are gathered into a public summary for each day, which anyone can read, and which Steve's office displays inside the world itself as a little visitor dashboard. Each visit appears under a throwaway label, such as "Curious Otter," as a timeline of its pings and the time each one arrived, along with its language setting and whether it came from a phone or a computer. The puzzle token stays private, and the summary carries no names, no IP addresses, and no browser fingerprints. Because each visit's pings are listed with their times, someone who already knew exactly when you visited could recognize your visit in the summary."
           p
-            "X's and O's notes a little more, because the game is the plays. Each time you call a play, snap the ball, or throw it, and each time a play ends, it records the play and the defense, the receiver you picked, how it turned out and what it was worth, along with your running score, whether the sound was on, and whether your screen was held upright or sideways. These notes appear in the public summary along with the rest of the visit. It never records the size of your screen or anything else that could pick your device out from anyone else's."
+            "X's and O's notes a little more, because the game is the plays. Each time you call a play, snap the ball, or throw it, and each time a play ends, it records the play and the defense, the receiver you picked, how it turned out and what it was worth, along with your running score, whether the sound was on, and whether your screen was held upright or sideways. When you share a play, it notes only that a clip or a picture was made, shared or saved, how many seconds the clip ran and which of the four views it was from. The clip itself never leaves your device. These notes appear in the public summary along with the rest of the visit. It never records the size of your screen or anything else that could pick your device out from anyone else's."
           p
             "Whitestone Home Care sends a ping for each button you press, saying only which one and where, such as adding a kitchen from Maya's suggestions, along with whether a demo booking went through and whether a cleaner's PIN opened the checklist. It never sends anything you typed, a price, a date or time, or the PIN itself."
           h2
@@ -6368,7 +6368,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated October 28, 2026."
+              "Last updated October 30, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand
@@ -8830,12 +8830,12 @@ html [data-ui-theme="neon" lang="en"]
     meta [content="width=device-width, initial-scale=1.0" name="viewport"]
     meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
-    meta [content="A 3D football game where you are always on offense. Call a play, pick your receiver, and dress both teams and the field in your favorite team's colors." name="description"]
+    meta [content="A 3D football game where you are always on offense. Call a play, pick your receiver, dress both teams in your colors, and share a clip of your best play." name="description"]
     meta [content="#080b12" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/xo/" rel="canonical"]
     meta [content="X's and O's" property="og:title"]
-    meta [content="Call a play, snap the ball, pick your receiver. Dress the X's and the O's as your favorite team and its rival, then make them pay." property="og:description"]
+    meta [content="Call a play, snap the ball, pick your receiver. Dress the X's and the O's as your favorite team and its rival, make them pay, and share the clip." property="og:description"]
     meta [content="website" property="og:type"]
     meta [content="SceneXP" property="og:site_name"]
     meta [content="https://www.scenexp.com/xo/" property="og:url"]
@@ -8847,7 +8847,7 @@ html [data-ui-theme="neon" lang="en"]
     meta [content="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." property="og:image:alt"]
     meta [content="summary_large_image" name="twitter:card"]
     meta [content="X's and O's" name="twitter:title"]
-    meta [content="A 3D football game where you are always on offense. Pick your team's colors, call a play, and the farther you carry it the more it is worth." name="twitter:description"]
+    meta [content="A 3D football game where you are always on offense. Pick your team's colors, call a play, carry it as far as you can, and share a clip of your best play." name="twitter:description"]
     meta [content="https://www.scenexp.com/xo/assets/og-xo.jpg?v=1" name="twitter:image"]
     meta [content="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." name="twitter:image:alt"]
     script [type="application/ld+json"]
@@ -8858,7 +8858,7 @@ html [data-ui-theme="neon" lang="en"]
         "url": "https://www.scenexp.com/xo/",
         "name": "X's and O's",
         "image": "https://www.scenexp.com/xo/assets/og-xo.jpg?v=1",
-        "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival.",
+        "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's four views, and with an avatar saved on the Your Avatar page you can play as any player on the field.",
         "genre": [
           "Sports",
           "Strategy"
@@ -9028,6 +9028,10 @@ html [data-ui-theme="neon" lang="en"]
             strong
               "Jump for it."
             "While the ball is in the air, press Jump or tap your receiver to send him up for it. The button lights up as the ball arrives. Jump too early or too late and the pass can sail past him or be picked off. If you would rather just watch, turn on Auto jump in the playbook."
+          li
+            strong
+              "Share the play."
+            "After the whistle, watch the replay from any of four views, then share a short clip of it, made right on your device, or save a picture of its best moment."
         p.welcome-keys.card-meta
           "On a keyboard:"
           kbd
@@ -9059,7 +9063,10 @@ html [data-ui-theme="neon" lang="en"]
           "jumps. During a replay,"
           kbd
             "V"
-          "or the arrow keys switch the view."
+          "or the arrow keys switch the view, and"
+          kbd
+            "V"
+          "switches it again when you share the play."
         p.welcome-ladder-title
           "What a play is worth"
         ul.welcome-ladder
@@ -9097,7 +9104,7 @@ html [data-ui-theme="neon" lang="en"]
         p#avatar-playing.card-meta.avatar-line
           img#avatar-playing-img [alt="" decoding="async" height="28" hidden loading="lazy" src="../assets/avatar/default.png" width="28"]
           span#avatar-playing-text
-            "Take the snap at quarterback as yourself."
+            "Take the field as yourself, at quarterback or any position you like."
           a#avatar-playing-link.welcome-explore [href="../avatar/?return=/xo/"]
             "Make your avatar"
         p.welcome-explore-row

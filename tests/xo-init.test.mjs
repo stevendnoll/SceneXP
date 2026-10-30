@@ -1243,7 +1243,7 @@ describe("the visitor's avatar at quarterback (specs/avatar M7, 2026-10-26)", ()
         // told so (the ball starts at his throwing hand).
         expect(main.getState().throwHand).toBe('right');
         expect(dom.el('avatar-playing-img').hidden).toBe(true);
-        expect(dom.el('avatar-playing-text').textContent).toBe('Take the snap at quarterback as yourself.');
+        expect(dom.el('avatar-playing-text').textContent).toBe('Take the field as yourself, at quarterback or any position you like.');
         expect(dom.el('avatar-playing-link').textContent).toBe('Make your avatar');
         // Nothing is counted toward the home page's label by looking.
         expect(globalThis.localStorage.getItem('scenexp-avatar-chip')).toBeNull();
@@ -1367,7 +1367,7 @@ describe('the visitor plays as the player they chose', () => {
         expect(main.getState().playAs).toBe('wr4');
         expect(await visitorSlots()).toEqual([]);
         expect(main.getState().throwHand).toBe('right');
-        expect(dom.el('avatar-playing-text').textContent).toBe('Take the snap at quarterback as yourself.');
+        expect(dom.el('avatar-playing-text').textContent).toBe('Take the field as yourself, at quarterback or any position you like.');
     });
 
     test('a play that sits the visitor out has them on the sideline, and every other benched player out of sight', async () => {
