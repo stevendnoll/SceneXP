@@ -1284,6 +1284,10 @@ describe('the keyboard', () => {
         // visitor with an avatar: the row it presses exists nowhere else.
         expect(keyAction('P')).toBe('playas');
         expect(keyAction('p')).toBe('playas');
+        // F is Follow me (QA 2026-10-30), on the replay row and the share
+        // sheet, and only for a visitor whose avatar is on the field.
+        expect(keyAction('F')).toBe('follow');
+        expect(keyAction('f')).toBe('follow');
     });
 
     /**

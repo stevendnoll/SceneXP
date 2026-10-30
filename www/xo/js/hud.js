@@ -403,13 +403,17 @@ const PLAY_AS_KEY = 'P';
 /** V, and it only ever means anything while a replay is running: the row it
  *  presses does not exist at any other time. */
 const VIEW_KEY = 'V';
+/** F, for Follow me (Steve's QA, 2026-10-30): the replay camera on the
+ *  visitor's avatar instead of the ball. On the replay row and the share
+ *  sheet, and only for a visitor whose avatar is on the field. */
+const FOLLOW_KEY = 'F';
 /** Escape, which gets out of anything that plays on its own: a replay, a
  *  celebration, a milestone show. It presses whichever Skip is on screen. */
 const SKIP_KEY = 'Escape';
 // A NOTE ON THE MATCH BELOW, which is a SUBSTRING match on `data-keys`. It is
 // safe only because attribute matching is case sensitive and every other key is
-// a single capital: "Escape" contains no S, Q, K, C, P, V, J or A to D in capitals.
-// A new named key has to keep that true.
+// a single capital: "Escape" contains no S, Q, K, C, P, V, F, J or A to D in
+// capitals. A new named key has to keep that true.
 
 /** Tag a button with the keys that press it, for the handler and for anything
  *  reading the page out loud. */
@@ -445,6 +449,7 @@ export function keyAction(key, { inField = false, modified = false, onControl = 
     if (up === PLAY_AS_KEY) return 'playas';
     if (up === JUMP_KEY) return 'jump';
     if (up === VIEW_KEY) return 'view';
+    if (up === FOLLOW_KEY) return 'follow';
     if (up === SKIP_KEY) return 'skip';
     if (/^[A-D]$/.test(up)) return up;
     return '';
@@ -479,7 +484,7 @@ export function initKeys(signal) {
         // C during a play and changes the play before one, and those two rows
         // never coexist, so the right answer is to look rather than to decide.
         const named = {
-            snap: 'S', keep: KEEP_KEY, view: VIEW_KEY, skip: SKIP_KEY, jump: JUMP_KEY,
+            snap: 'S', keep: KEEP_KEY, view: VIEW_KEY, follow: FOLLOW_KEY, skip: SKIP_KEY, jump: JUMP_KEY,
             playas: PLAY_AS_KEY,
         }[want];
         // THE SPACE BAR PRESSES WHATEVER ON SCREEN WEARS IT, which is the snap
@@ -566,7 +571,7 @@ export function clearActions() {
  * It takes focus, so a keyboard visitor can press Enter to get out of something
  * that started on its own, which is the case that matters most.
  */
-export function showSkipReplay() {
+export function showSkipReplay({ follow = null } = {}) {
     const box = actions();
     if (!box) return;
 
@@ -588,12 +593,36 @@ export function showSkipReplay() {
     swap.id = 'switch-view-btn';
     box.appendChild(swap);
 
+    /**
+     * AND WHO THE CAMERA FOLLOWS (Steve's QA, 2026-10-30), for a visitor whose
+     * avatar is on the field: the ball, or them. A toggle that says its state
+     * (`aria-pressed`, pressed for "me"), so a screen reader hears which, and
+     * the same F as the share sheet's. `follow` is 'ball' or 'avatar', or null
+     * for a visitor with nobody on the field to follow, who gets no button. No
+     * ping for it, for the cameo rule: only avatar holders ever see it.
+     */
+    if (follow !== null) {
+        const me = bindKeys(button('Follow me', 'hud-btn hud-toggle',
+            () => handlers.onFollow && handlers.onFollow(),
+            'with the replay camera, instead of the ball'), [FOLLOW_KEY]);
+        me.id = 'follow-btn';
+        me.setAttribute('aria-pressed', follow === 'avatar' ? 'true' : 'false');
+        box.appendChild(me);
+    }
+
     const skip = bindKeys(button('Skip replay', 'hud-btn',
         () => handlers.onSkipReplay && handlers.onSkipReplay(),
         'and see the result'), [SKIP_KEY]);
     skip.id = 'skip-replay-btn';
     box.appendChild(skip);
     skip.focus();
+}
+
+/** The Follow me toggle on the replay row says its new state, if it is up. */
+export function setFollow(following) {
+    const me = el('hud-actions') && el('hud-actions').children
+        ? el('hud-actions').children.find((b) => b.id === 'follow-btn') : null;
+    if (me) me.setAttribute('aria-pressed', following ? 'true' : 'false');
 }
 
 /**

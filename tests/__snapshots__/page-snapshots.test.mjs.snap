@@ -9211,6 +9211,8 @@ html [data-ui-theme="neon" lang="en"]
             "Switch view"
           span#clip-view-count.clip-count [aria-hidden="true"]
             "View 1 of 4"
+          button#clip-follow.hud-btn.hud-toggle [aria-keyshortcuts="F" aria-label="Follow me with the camera, instead of the ball" aria-pressed="false" hidden type="button"]
+            "Follow me"
         p#clip-nudge.card-meta.clip-nudge [hidden]
           span#clip-nudge-text
             "Want to be the one on the field?"

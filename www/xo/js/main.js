@@ -66,7 +66,7 @@ import {
     clearActions, showResult, hideResult, announce, showWelcome, showHelp, showSkipReplay,
     showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
     hideMilestoneTitle, showSkipOpening, setOpeningTitle, hideOpeningTitle, hideWelcome,
-    showInFlight, setJumpCue, showPick, setPickChoice, returnToResult,
+    showInFlight, setJumpCue, showPick, setPickChoice, returnToResult, setFollow,
 } from './hud.min.js';
 import { initClipSheet, showClipSheet, clipSheetOpen } from './clip-ui.min.js';
 import { openingFrame, planOpening, castAt, propsAt } from './opening.min.js';
@@ -113,6 +113,16 @@ const state = {
     elapsed: 0,
     /** The player the visitor's avatar is (playas.js), stored or not. */
     playAs: DEFAULT_SLOT,
+    /**
+     * WHO THE REPLAY CAMERA FOLLOWS (Steve's QA, 2026-10-30): 'ball' (the
+     * ball or its carrier, the default) or 'avatar' (the visitor's own player,
+     * wherever he is: a blocker, a defender, the man making the hit). Shared
+     * by the replay on screen and the clip, remembered for the visit and no
+     * longer: not stored (a new stored choice would want a privacy sentence
+     * nobody asked for) and never pinged (only avatar holders can choose, so a
+     * ping would say that a visitor has an avatar: the cameo rule, D11).
+     */
+    follow: 'ball',
 };
 
 /**
@@ -471,9 +481,64 @@ function cameraState() {
     if (cycle.phase === 'opening') return { shot: cycle.openingShot };
     if (cycle.phase !== 'replay') return {};
     const total = Math.max(1, frameCount());
-    const f = replayFocus();
+    const f = aimAt();
     const focus = simToWorld(f.x, f.y, f.z || 0);
     return { progress: playheadFrame() / total, focus, ending: endingBodies() };
+}
+
+/** Is the visitor's avatar on the field in this play: an avatar saved, and
+ *  his player lined up rather than sat out on the sideline (D1)? */
+function avatarOnField() {
+    if (!visitorAvatar || !cycle.play || !cycle.play.game) return false;
+    const me = cycle.play.game.objects.find((o) => o.settings && o.settings.position === state.playAs);
+    return !!me && !me.settings.benched;
+}
+
+/** Whether the camera is following the avatar right now: the running take's
+ *  own choice while one runs (a take keeps the choice it opened with), the
+ *  visit's otherwise, and only with the avatar on the field to follow. */
+function followingAvatar() {
+    const want = cycle.take ? cycle.take.follow : state.follow;
+    return want === 'avatar' && avatarOnField();
+}
+
+/**
+ * WHO THE REPLAY CAMERA IS AIMED AT THIS FRAME, in simulation coordinates:
+ * the ball or its carrier (`replayFocus`), or the visitor's avatar where the
+ * recording has him on this frame when they asked to be followed (Steve's QA,
+ * 2026-10-30). Memoised on the frame like `replayFocus`, because `frameAt`
+ * rebuilds twenty objects to answer. `source` says which, for the suite.
+ */
+const aimMemo = { at: -1, follow: '', value: null };
+function aimAt() {
+    const frame = playheadFrame();
+    const want = followingAvatar() ? 'avatar' : 'ball';
+    if (aimMemo.at === frame && aimMemo.follow === want && aimMemo.value) return aimMemo.value;
+    let value = null;
+    if (want === 'avatar') {
+        const me = frameAt(frame, teamOfPosition).find((o) => o.settings.position === state.playAs);
+        if (me && !me.settings.benched) value = { x: me.coords.x, y: me.coords.y, z: me.coords.z || 0, source: 'avatar' };
+    }
+    if (!value) {
+        const f = replayFocus();
+        value = { x: f.x, y: f.y, z: f.z || 0, source: 'ball' };
+    }
+    aimMemo.at = frame;
+    aimMemo.follow = want;
+    aimMemo.value = value;
+    return value;
+}
+
+/** The visitor asked the camera to follow them, or the ball again: from the
+ *  replay row's toggle. The aim eases across (camera.js `smoothAim`), so a
+ *  press mid-replay is a swing rather than a cut. Nothing is pinged (D11). */
+function toggleFollow() {
+    if (!avatarOnField()) return false;
+    state.follow = state.follow === 'avatar' ? 'ball' : 'avatar';
+    uiClick();
+    setFollow(state.follow === 'avatar');
+    announce(state.follow === 'avatar' ? 'Following you.' : 'Following the ball.');
+    return true;
 }
 
 /**
@@ -489,11 +554,22 @@ function cameraState() {
  */
 function endingBodies() {
     if (!fromRecording() || playheadFrame() < frameCount()) return null;
-    const last = focusAt(Math.max(0, frameCount() - 1));
-    const carrier = cycle.tackle.carrier || (last && last.holder) || '';
-    if (!carrier) return null;
-    const figures = [carrier, cycle.tackle.tackler].filter(Boolean)
-        .map(figureFor).filter((fig) => fig && fig.visible);
+    let named;
+    if (followingAvatar()) {
+        // FOLLOWING THE VISITOR: he is the aim, and when he is one of the two
+        // in the tackle the other is kept in frame with him. A blocker or a
+        // defender away from the play is framed alone.
+        const pair = [cycle.tackle.carrier, cycle.tackle.tackler].filter(Boolean);
+        named = pair.includes(state.playAs)
+            ? [state.playAs, ...pair.filter((p) => p !== state.playAs)]
+            : [state.playAs];
+    } else {
+        const last = focusAt(Math.max(0, frameCount() - 1));
+        const carrier = cycle.tackle.carrier || (last && last.holder) || '';
+        if (!carrier) return null;
+        named = [carrier, cycle.tackle.tackler].filter(Boolean);
+    }
+    const figures = named.map(figureFor).filter((fig) => fig && fig.visible);
     if (!figures.length) return null;
     const bodies = figures.map(bodyOf);
     return { focus: { x: bodies[0].x, y: bodies[0].y, z: bodies[0].z }, points: bodyPoints(bodies) };
@@ -1286,6 +1362,8 @@ function openShare() {
         moment: rankedMoments()[0] || null,
         visitor: visitorAvatar ? state.playAs : null,
         quarter: cycle.viewPlay === cycle.playNumber ? viewQuarter() : 0,
+        // Follow me only with the avatar on the field; the visit's choice.
+        follow: avatarOnField() ? state.follow : null,
         back: () => returnToResult('result-share-btn'),
     });
 }
@@ -1314,7 +1392,8 @@ function startReplay() {
     // hidden for the duration, so a replay that started on its own (D36 plays
     // the highlights unasked) had no way out but to wait for it.
     showHud(true);
-    showSkipReplay();
+    // The row carries Follow me only for a visitor with an avatar on the field.
+    showSkipReplay({ follow: avatarOnField() ? state.follow : null });
     // The spot belongs to the end of the play, and a replay is about to start
     // at the beginning of it. Leaving it standing would give away the ending.
     hideSpot();
@@ -2687,6 +2766,8 @@ async function init() {
         onPickChoose: () => choosePick(),
         // The clip of the play, with its picture, from the result card (Step 7).
         onShare: openShare,
+        // The replay camera on the visitor's avatar, or back on the ball.
+        onFollow: toggleFollow,
         onJump: () => onJump(),
         onReplay: startReplay,
         onSkipReplay,
@@ -2739,8 +2820,11 @@ async function init() {
     // the page is served from, so a share is right on localhost, on a staging
     // host and in production alike (as the score share's is, summary.js).
     initClipSheet({
-        take: (stage, quarter, onFrame) => beginTake(stage, { quarter, onFrame }),
+        take: (stage, quarter, onFrame) => beginTake(stage, { quarter, onFrame, follow: state.follow }),
         cancel: cancelTake,
+        // The sheet's Follow me is the visit's choice too, so the next replay
+        // on screen opens following the same man.
+        follow: (next) => { state.follow = next === 'avatar' ? 'avatar' : 'ball'; },
         picture: makePhoto,
         report,
         url: () => new URL('.', window.location.href).href,
@@ -3260,7 +3344,7 @@ function endingLength() {
  * playhead goes to the plan's start rather than the snap, the camera opens on
  * where the ball is on that frame (D22), and the frames go to the stage.
  */
-function beginTake(stage, { quarter = 0, onFrame = null } = {}) {
+function beginTake(stage, { quarter = 0, onFrame = null, follow = 'ball' } = {}) {
     if (cycle.phase !== 'result' || cycle.take || isEmpty() || !renderer || !scene) return Promise.resolve(null);
     const g = stage && typeof stage.getContext === 'function' ? stage.getContext('2d') : null;
     if (!g) return Promise.resolve(null);
@@ -3319,6 +3403,9 @@ function beginTake(stage, { quarter = 0, onFrame = null } = {}) {
             shoulder: newShoulder(),
             aim: newAim(),
             anchor: { x: opening.x, z: opening.z },
+            // Who the camera follows for this take, kept whatever the visit's
+            // choice becomes while it runs (the sheet re-records on a change).
+            follow: follow === 'avatar' ? 'avatar' : 'ball',
             live, release, held: 0, elapsed: 0, frames: 0, finished: false, resolve,
             // Told how many clip seconds are left after every frame, for the
             // sheet's countdown.
@@ -3356,10 +3443,11 @@ function stepTake(delta) {
 function drawTake(delta) {
     const t = cycle.take;
     if (!t) return;
-    const f = replayFocus();
+    const f = aimAt();
     const focus = simToWorld(f.x, f.y, f.z || 0);
-    // Once the recording has run out, the drawn carrier is the aim and both
-    // bodies set the lens, at the clip's own shape (`endingBodies`).
+    // Once the recording has run out, the drawn carrier (or the visitor, when
+    // followed) is the aim and the bodies set the lens, at the clip's own
+    // shape (`endingBodies`).
     const ending = endingBodies();
     const shot = clipShot(clipProgress(playheadFrame(), t.plan), ending ? ending.focus : focus, {
         anchor: t.anchor, shoulder: t.shoulder, aim: t.aim, quarter: t.quarter, delta,
@@ -3490,6 +3578,9 @@ export const __test__ = {
     /** What the camera is told, and the ending's bodies (QA, 2026-10-30). */
     cameraState: () => cameraState(),
     ending: () => endingBodies(),
+    /** Who the camera follows this visit, and what it is aimed at this frame. */
+    follow: () => state.follow,
+    aim: () => aimAt(),
 };
 
 /** `beginMilestone` is exposed for the suite too: reaching 100 by actually

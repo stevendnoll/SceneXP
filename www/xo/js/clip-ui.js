@@ -60,6 +60,8 @@ export const WORDS = Object.freeze({
     shareFailed: "This browser couldn't hand the file on. Please try again.",
     view: (n, of) => `View ${n} of ${of}`,
     viewSaid: (n, of) => `View ${n} of ${of}. Making the clip again from here.`,
+    followingYou: 'Following you. Making the clip again.',
+    followingBall: 'Following the ball. Making the clip again.',
     nudge: 'Want to be the one on the field?',
     shareTitle: "X's and O's",
     videoLabel: 'Your clip of the play',
@@ -71,6 +73,7 @@ const set = (id, text) => { const node = el(id); if (node) node.textContent = te
 
 let hooks = {
     take: null, cancel() {}, picture: null, report() {}, url: () => '', recording: () => null, calm: () => false,
+    follow() {},
 };
 let wired = false;
 /**
@@ -92,7 +95,7 @@ let armedUntil = -Infinity;
 /**
  * Wire the sheet once. See the top of the file for what each hook does.
  */
-export function initClipSheet({ take, cancel, picture, report, url, recording, calm } = {}) {
+export function initClipSheet({ take, cancel, picture, report, url, recording, calm, follow } = {}) {
     hooks = {
         take: take || null,
         cancel: cancel || (() => {}),
@@ -101,12 +104,15 @@ export function initClipSheet({ take, cancel, picture, report, url, recording, c
         url: url || (() => ''),
         recording: recording || (() => null),
         calm: calm || (() => false),
+        // Told the visit's new choice of who the camera follows.
+        follow: follow || (() => {}),
     };
     if (wired) return;
     wired = true;
     if (typeof document !== 'undefined') document.addEventListener('click', swallowEarlyTap, true);
     const on = (id, fn) => { const b = el(id); if (b) b.addEventListener('click', fn); };
     on('clip-view', () => { switchClipView(); });
+    on('clip-follow', () => { toggleClipFollow(); });
     on('clip-picture', () => { sharePicture(); });
     on('clip-close', () => closeClipSheet());
     on('clip-share', () => { shareClip(); });
@@ -152,13 +158,17 @@ function pictureVerb() {
  * is also what shows the nudge toward the avatar page. `quarter` is the
  * vantage point the clip opens from (D21). `back` is called when it closes.
  */
-export function showClipSheet({ outcome = null, moment = null, visitor = null, quarter = 0, back = null } = {}) {
+export function showClipSheet({ outcome = null, moment = null, visitor = null, quarter = 0, follow = null, back = null } = {}) {
     const card = el('clip');
     if (!card) { if (back) back(); return false; }
     if (session) closeClipSheet();
     const rec = hooks.recording() || null;
     session = {
         outcome, moment, visitor, back, quarter: wrap(quarter), rec,
+        // Who the camera follows: 'ball' or 'avatar', or null for a visitor
+        // with nobody on the field to follow, who gets no toggle (D11: no
+        // ping about it either).
+        follow: follow === 'avatar' || follow === 'ball' ? follow : null,
         running: null, clip: null, onKey: null, shown: -1,
     };
     session.onKey = (event) => {
@@ -168,12 +178,15 @@ export function showClipSheet({ outcome = null, moment = null, visitor = null, q
             closeClipSheet();
             return;
         }
-        // V, the replay's own key for the same thing, from anywhere in the
-        // sheet but a text field, and not with a modifier held.
-        if ((event.key === 'v' || event.key === 'V') && !event.metaKey && !event.ctrlKey && !event.altKey
-            && !onTextField(event.target)) {
+        // V and F, the replay row's own keys for the same two things, from
+        // anywhere in the sheet but a text field, and not with a modifier held.
+        const plain = !event.metaKey && !event.ctrlKey && !event.altKey && !onTextField(event.target);
+        if ((event.key === 'v' || event.key === 'V') && plain) {
             event.preventDefault();
             switchClipView();
+        } else if ((event.key === 'f' || event.key === 'F') && plain) {
+            event.preventDefault();
+            toggleClipFollow();
         }
     };
     document.addEventListener('keydown', session.onKey);
@@ -197,6 +210,11 @@ export function showClipSheet({ outcome = null, moment = null, visitor = null, q
     const share = el('clip-share');
     const viewBtn = el('clip-view');
     const tools = el('clip-tools');
+    const followBtn = el('clip-follow');
+    if (followBtn) {
+        followBtn.hidden = session.follow === null;
+        followBtn.setAttribute('aria-pressed', session.follow === 'avatar' ? 'true' : 'false');
+    }
     const result = outcome && outcome.result ? outcome.result : '';
     if (!rec) {
         // No video from this browser: the picture is the offer, said kindly.
@@ -371,6 +389,23 @@ export function switchClipView() {
     return true;
 }
 
+/**
+ * THE CAMERA ON THE VISITOR, OR BACK ON THE BALL (Steve's QA, 2026-10-30), and
+ * the clip made again that way. Only with an avatar on the field to follow,
+ * and only where a clip can be made. Says which, and tells main.js, so the
+ * next replay on screen follows the same man. Nothing is pinged (D11).
+ */
+export function toggleClipFollow() {
+    if (!session || session.follow === null || !session.rec) return false;
+    session.follow = session.follow === 'avatar' ? 'ball' : 'avatar';
+    hooks.follow(session.follow);
+    const followBtn = el('clip-follow');
+    if (followBtn) followBtn.setAttribute('aria-pressed', session.follow === 'avatar' ? 'true' : 'false');
+    say(session.follow === 'avatar' ? WORDS.followingYou : WORDS.followingBall);
+    startTake();
+    return true;
+}
+
 /** Start the picture of `moment` if it is not made, and light its button
  *  when it is, if it is still the one on the sheet. */
 function developPicture(moment) {
@@ -480,4 +515,10 @@ export function clipSheetOpen() {
 /** The vantage point the sheet is on, 0 to 3, or -1 when it is closed. */
 export function clipSheetView() {
     return session ? session.quarter : -1;
+}
+
+/** Who the sheet's clip follows, 'ball' or 'avatar', or null without a
+ *  toggle or a sheet. */
+export function clipSheetFollow() {
+    return session ? session.follow : null;
 }

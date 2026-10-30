@@ -618,12 +618,18 @@
             <div id="clip-stage" class="clip-stage"></div>
             <p id="clip-progress" class="card-detail clip-progress">Making your clip…</p>
             <!-- The replay's four vantage points, one press each, and V as in
-                 the replay. The count is read out by the status line. -->
+                 the replay. The count is read out by the status line. And who
+                 the camera follows, the ball or the visitor's own player: a
+                 toggle that says its state, shown only for a visitor whose
+                 avatar is on the field, F as on the replay row. -->
             <div id="clip-tools" class="clip-tools">
                 <button id="clip-view" class="hud-btn" type="button"
                     aria-label="Switch view to see the play from another side of the field"
                     aria-keyshortcuts="V">Switch view</button>
                 <span id="clip-view-count" class="clip-count" aria-hidden="true">View 1 of 4</span>
+                <button id="clip-follow" class="hud-btn hud-toggle" type="button"
+                    aria-label="Follow me with the camera, instead of the ball"
+                    aria-keyshortcuts="F" aria-pressed="false" hidden>Follow me</button>
             </div>
             <!-- For a visitor with no avatar: under a clip of somebody else
                  doing the thing, which is when the offer lands best. -->

@@ -896,8 +896,25 @@ body {
 /* A display rule beats the browser's own [hidden], so it is restated. */
 .clip-tools[hidden],
 .clip-nudge[hidden],
+.clip-tools .hud-btn[hidden],
 .card-actions .hud-btn[hidden] {
     display: none;
+}
+
+/* WHO THE CAMERA FOLLOWS (Steve's QA, 2026-10-30): a toggle that says its
+   state. Off is the ball, the default, in the ordinary outline; on wears the
+   orange border, as Auto jump does, so a visitor can see at a glance that the
+   camera is on them. Every property the on rule sets is named again under
+   hover, for the partial-override reason noted by the playbook's switches. */
+.hud-toggle[aria-pressed="true"] {
+    border-color: #ff992c;
+    color: #ffd2a3;
+}
+
+.hud-toggle[aria-pressed="true"]:hover,
+.hud-toggle[aria-pressed="true"]:focus-visible {
+    border-color: #ffab52;
+    color: #fff1e0;
 }
 
 .clip-nudge-link {

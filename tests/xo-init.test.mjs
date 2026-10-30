@@ -1694,6 +1694,9 @@ describe('the share sheet', () => {
             expect(dom.el('clip-view-count').textContent).toBe('View 1 of 4');
             expect(progress()).toBe('Making your clip…');
             expect(dom.el('clip-tools').hidden).toBe(false);
+            // No avatar, so nobody to follow: no Follow me.
+            expect(dom.el('clip-follow').hidden).toBe(true);
+            expect(main.__test__.taking().follow).toBe('ball');
             // Share waits, busy rather than disabled, named for what this browser can do.
             expect(share().hidden).toBe(false);
             expect(share().textContent).toBe('Share video');
@@ -1951,6 +1954,158 @@ describe('the share sheet', () => {
             dom.el('clip-close').click();
             await flushAsync();
             expect(main.__test__.phase()).toBe('result');
+        } finally {
+            urls.restore();
+        }
+    });
+
+    test('Follow me (QA 2026-10-30): with an avatar on the field the camera can follow the visitor instead of the ball, on the sheet and the replay, kept for the visit and never pinged', async () => {
+        recordingBrowser();
+        const urls = objectUrls();
+        const sent = beacons();
+        try {
+            const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+            createAvatarStore({ win: null }).save({ skin: 'deep', shirt: 'teal' });
+            // The visitor plays receiver B, who is a blocker on this play:
+            // receiver A catches it and is brought down.
+            globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'wr2' }));
+            const main = await aCatch({ downed: true });
+            const R = await import('../www/xo/js/replay.min.js');
+            const roster = await import('../www/xo/js/roster.min.js');
+            const find = (p) => main.__test__.play().game.objects.find((o) => o.settings.position === p);
+            expect(main.__test__.follow()).toBe('ball');
+
+            // THE SHEET: the toggle is there, off, and the take follows the ball.
+            shareBtn().click();
+            await flushAsync();
+            const followBtn = dom.el('clip-follow');
+            expect(followBtn.hidden).toBe(false);
+            expect(followBtn.getAttribute('aria-pressed')).toBe('false');
+            expect(main.__test__.taking().follow).toBe('ball');
+            frames(2);
+            expect(main.__test__.aim().source).toBe('ball');
+            // Pressed: the clip is made again, following the visitor.
+            followBtn.click();
+            await flushAsync();
+            expect(followBtn.getAttribute('aria-pressed')).toBe('true');
+            expect(status()).toBe('Following you. Making the clip again.');
+            expect(main.__test__.follow()).toBe('avatar');
+            expect(main.__test__.taking().follow).toBe('avatar');
+            expect(main.__test__.taking().frames).toBe(0);
+            frames(2);
+            const aim = main.__test__.aim();
+            expect(aim.source).toBe('avatar');
+            const me = R.frameAt(R.playheadFrame()).find((o) => o.settings.position === 'wr2');
+            expect([aim.x, aim.y]).toEqual([me.coords.x, me.coords.y]);
+            // Through the ending the visitor, as drawn, is the aim, framed alone:
+            // he is a blocker, not one of the two in the tackle.
+            const t = main.__test__.taking();
+            for (let i = 0; i < 2000 && R.playheadFrame() < t.plan.ticks; i += 1) frames(1);
+            const ending = main.__test__.ending();
+            expect(ending.points).toHaveLength(8);
+            const figure = roster.figureFor('wr2');
+            expect(ending.focus).toEqual({
+                x: Number(figure.position.x) || 0, y: Number(figure.position.y) || 0, z: Number(figure.position.z) || 0,
+            });
+            // F toggles it back, as on the replay row.
+            fire(dom.documentStub, 'keydown', { key: 'f' });
+            await flushAsync();
+            expect(followBtn.getAttribute('aria-pressed')).toBe('false');
+            expect(status()).toBe('Following the ball. Making the clip again.');
+            expect(main.__test__.taking().follow).toBe('ball');
+            followBtn.click();
+            await flushAsync();
+            expect(main.__test__.follow()).toBe('avatar');
+            dom.el('clip-close').click();
+            await flushAsync();
+
+            // THE REPLAY ROW remembers the visit's choice, says it, and toggles live.
+            dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+            await flushAsync();
+            expect(actionLabels()).toEqual(['Switch view', 'Follow me', 'Skip replay']);
+            const rowBtn = dom.el('hud-actions').children.find((b) => b.id === 'follow-btn');
+            expect(rowBtn.getAttribute('aria-pressed')).toBe('true');
+            expect(rowBtn.dataset.keys).toBe('F');
+            frames(2);
+            expect(main.__test__.aim().source).toBe('avatar');
+            expect(main.__test__.cameraState().focus).toBeTruthy();
+            press('Follow me');
+            await flushAsync();
+            expect(rowBtn.getAttribute('aria-pressed')).toBe('false');
+            expect(main.__test__.follow()).toBe('ball');
+            frames(2);
+            expect(main.__test__.aim().source).toBe('ball');
+            // And back, live, mid-replay. (The row's F reaches it through the
+            // HUD's key map, which keyAction's own test holds; the stub's
+            // element search cannot find a row button by attribute.)
+            press('Follow me');
+            await flushAsync();
+            expect(main.__test__.follow()).toBe('avatar');
+            expect(rowBtn.getAttribute('aria-pressed')).toBe('true');
+            expect(rowBtn.getAttribute('aria-keyshortcuts')).toBe('F');
+            frames(2);
+            expect(main.__test__.aim().source).toBe('avatar');
+            press('Skip replay');
+            await flushAsync();
+
+            // NOTHING IS PINGED ABOUT IT: no beacon of its own, and no word of
+            // it on the clip's.
+            expect(sent.some((u) => u.searchParams.get('action') === 'follow')).toBe(false);
+            for (const u of sent) {
+                expect(u.searchParams.get('kind')).not.toBe('follow');
+                expect(u.searchParams.get('outcome') || '').not.toMatch(/follow/);
+            }
+
+            // A VISITOR WHOSE PLAYER SAT THE PLAY OUT has nobody to follow: the
+            // camera stays on the ball, through the ending too.
+            find('wr2').settings.benched = true;
+            shareBtn().click();
+            await flushAsync();
+            expect(dom.el('clip-follow').hidden).toBe(true);
+            expect(main.__test__.taking().follow).toBe('avatar');
+            frames(1);
+            expect(main.__test__.aim().source).toBe('ball');
+            const benched = main.__test__.taking();
+            for (let i = 0; i < 2000 && R.playheadFrame() < benched.plan.ticks; i += 1) frames(1);
+            expect(main.__test__.ending().points).toHaveLength(16);
+            dom.el('clip-close').click();
+            await flushAsync();
+            dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+            await flushAsync();
+            expect(actionLabels()).toEqual(['Switch view', 'Skip replay']);
+        } finally {
+            urls.restore();
+            delete globalThis.Image;
+        }
+    });
+
+    test('followed into the tackle, the visitor is the aim and the man with him stays in frame', async () => {
+        recordingBrowser();
+        const urls = objectUrls();
+        try {
+            const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+            createAvatarStore({ win: null }).save({ skin: 'deep', shirt: 'teal' });
+            // The visitor is receiver A: he catches it and is brought down.
+            globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'wr1' }));
+            const main = await aCatch({ downed: true });
+            const R = await import('../www/xo/js/replay.min.js');
+            const roster = await import('../www/xo/js/roster.min.js');
+            shareBtn().click();
+            await flushAsync();
+            dom.el('clip-follow').click();
+            await flushAsync();
+            expect(main.__test__.taking().follow).toBe('avatar');
+            const t = main.__test__.taking();
+            for (let i = 0; i < 2000 && R.playheadFrame() < t.plan.ticks; i += 1) frames(1);
+            const ending = main.__test__.ending();
+            // Two bodies: him first, then his tackler.
+            expect(ending.points).toHaveLength(16);
+            const figure = roster.figureFor('wr1');
+            expect(ending.focus).toEqual({
+                x: Number(figure.position.x) || 0, y: Number(figure.position.y) || 0, z: Number(figure.position.z) || 0,
+            });
+            dom.el('clip-close').click();
+            await flushAsync();
         } finally {
             urls.restore();
         }
