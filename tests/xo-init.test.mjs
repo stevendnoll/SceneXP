@@ -2031,7 +2031,10 @@ describe('the clip\'s take', () => {
         const Clip = await import('../www/xo/js/clip.min.js');
         const R = await import('../www/xo/js/replay.min.js');
         const camera = await import('../www/xo/js/camera.min.js');
+        const view = await import('../www/xo/js/view.min.js');
         const { stage, drawn } = recordingStage();
+        // The live play threw it, so the view's throw clock has run on.
+        expect(view.throwClock()).toBeGreaterThan(CFG.pose.throwRelease.time);
 
         // A stage with no context is refused, and nothing changes.
         const bare = dom.documentStub.createElement('canvas');
@@ -2039,8 +2042,13 @@ describe('the clip\'s take', () => {
         await expect(main.__test__.take(bare)).resolves.toBeNull();
         expect(main.__test__.phase()).toBe('result');
 
-        // The playhead is left at the end of the recording, so the take has to
-        // put it where the clip starts.
+        // A SHORT RECORDING, so the clip's window starts at the snap whatever
+        // this play's dice rolled: the play as it finished, held for a hundred
+        // ticks. And the playhead left at its end, so the take has to put it
+        // where the clip starts.
+        const objects = main.__test__.play().game.objects;
+        R.startRecording(objects);
+        for (let i = 0; i < 100; i += 1) R.record(objects);
         R.seek(R.frameCount() - 1);
         const p = main.__test__.take(stage, { quarter: 1 });
         expect(main.__test__.phase()).toBe('clip');
@@ -2052,8 +2060,13 @@ describe('the clip\'s take', () => {
         // The plan starts the clip's seconds before the whistle, and the
         // playhead is put there, where the camera opens.
         expect(t.plan.start).toBe(Clip.clipStart(R.frameCount()));
-        expect(t.plan.ticks).toBe(R.frameCount());
+        expect(t.plan.ticks).toBe(100);
         expect(R.playheadFrame()).toBe(t.plan.start);
+        // A short play's window starts at the snap, so the take opens as the
+        // replay does: the snap motion begins and the throw is forgotten.
+        expect(t.plan.start).toBe(0);
+        expect(view.throwClock()).toBe(-1);
+        expect(view.snapProgress()).toBe(0);
         expect(t.plan.total).toBeGreaterThan(t.plan.play + CFG.clip.hold - 1e-9);
         expect(t.shoulder).toEqual({ side: 1, want: 1, held: 0, seeded: false });
         expect(Number.isFinite(t.anchor.x) && Number.isFinite(t.anchor.z)).toBe(true);
@@ -2067,6 +2080,8 @@ describe('the clip\'s take', () => {
         expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(1);
         expect(drawn.filter((c) => c[0] === 'fillText').map((c) => c[1])).toEqual([CFG.clip.wordmark]);
         expect(main.__test__.taking().shoulder.seeded).toBe(true);
+        // ...and so has the aim's own memory (the smoothed aim, QA 2026-10-30).
+        expect(main.__test__.taking().aim.seeded).toBe(true);
         expect(main.__test__.taking().frames).toBe(1);
 
         const value = await settle(p);
@@ -2126,6 +2141,48 @@ describe('the clip\'s take', () => {
         expect(canvas().classList.contains('is-recording')).toBe(false);
         // Off the result card there is nothing to take.
         await expect(main.__test__.take(stage, {})).resolves.toBeNull();
+    });
+
+    test('a take that opens mid-play forgets the throw only while the quarterback still holds the ball (QA, 2026-10-30)', async () => {
+        const main = await aCatch();
+        const R = await import('../www/xo/js/replay.min.js');
+        const view = await import('../www/xo/js/view.min.js');
+        const Clip = await import('../www/xo/js/clip.min.js');
+        const { XO_CONFIG: CFG } = await import('../www/xo/js/config.min.js');
+        const { stage } = recordingStage();
+        const thrown = view.throwClock();
+        expect(thrown).toBeGreaterThan(CFG.pose.throwRelease.time);
+        const span = Math.round(CFG.clip.seconds * CFG.camera.replay.speed * CFG.simHz);
+        const objects = main.__test__.play().game.objects;
+
+        // Pad the recording past the clip's window with frames where receiver
+        // A carries it: the window opens with the ball away, so the throw stays
+        // thrown and the snap is simply over.
+        for (let i = 0; i < span + 20; i += 1) R.record(objects);
+        const p = main.__test__.take(stage, {});
+        const t = main.__test__.taking();
+        expect(t.plan.start).toBeGreaterThan(0);
+        expect(Clip.openingFor(R.frameAt(t.plan.start), t.plan.start)).toBe('away');
+        expect(view.throwClock()).toBe(thrown);
+        expect(view.snapProgress()).toBe(1);
+        main.__test__.cancelTake();
+        await p;
+
+        // Now pad with the quarterback holding it: the window opens before the
+        // throw, which the view must forget, and the snap is over too.
+        const held = objects.map((o) => ({
+            settings: o.settings, coords: o.coords,
+            state: { ...(o.state || {}), hasBall: o.settings.position === 'qb', run: false },
+        }));
+        for (let i = 0; i < span + 20; i += 1) R.record(held);
+        const p2 = main.__test__.take(stage, {});
+        const t2 = main.__test__.taking();
+        expect(Clip.openingFor(R.frameAt(t2.plan.start), t2.plan.start)).toBe('held');
+        expect(view.throwClock()).toBe(-1);
+        expect(view.snapProgress()).toBe(1);
+        main.__test__.cancelTake();
+        await p2;
+        expect(main.__test__.phase()).toBe('result');
     });
 
     test('xo.clip(view) records a take and saves the file, named for the result, the size and the format', async () => {
@@ -2216,6 +2273,80 @@ describe('the clip\'s take', () => {
         frames(1);
         expect(camera.getDriver()).toBe('replay');
         expect(main.__test__.level()).toBe(100);
+    });
+});
+
+/**
+ * THE JUMP GOES TO THE MAN MEANT (Steve's QA, 2026-10-30). The Jump button
+ * sends up whoever the ball is coming to, which is usually but not always the
+ * man it was thrown to; a tap sends up the man under the finger, and a second
+ * tap on him does nothing rather than sending the next nearest man up.
+ */
+describe('the jump goes to the man meant', () => {
+    let now = 500000;
+    const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
+    const find = (main, position) => main.__test__.play().game.objects.find((o) => o.settings.position === position);
+    const tap = () => fire(dom.el('game-canvas'), 'pointerdown', {
+        clientX: 400, clientY: 300, pointerId: 1, button: 0, pointerType: 'touch',
+    });
+
+    /** A live play with the ball just thrown to receiver A. */
+    async function thrown() {
+        const main = await toLivePlay();
+        press('Snap the ball');
+        await flushAsync();
+        frames(3);
+        press('Throw A');
+        await flushAsync();
+        const { ballInFlight } = await import('../www/xo/js/play.min.js');
+        expect(ballInFlight(main.__test__.play())).toBe(true);
+        return main;
+    }
+
+    test('the Jump button sends up the man the ball is coming to, not the man it was thrown to', async () => {
+        const main = await thrown();
+        const ball = find(main, 'ball');
+        const a = find(main, 'wr1');
+        const b = find(main, 'wr2');
+        expect(ball.coords.list.length).toBeGreaterThan(8);
+        // Receiver B stands on the ball's path a few steps ahead; A, whom it
+        // was thrown to, is nowhere near it.
+        const ahead = ball.coords.list[8];
+        b.coords.x = ahead[0];
+        b.coords.y = ahead[1];
+        b.state.xSpeed = 0;
+        b.state.ySpeed = 0;
+        a.coords.x = ball.coords.x + 600;
+        a.coords.y = ball.coords.y + 600;
+        a.state.xSpeed = 0;
+        a.state.ySpeed = 0;
+        expect(actionLabels()).toContain('Jump');
+        press('Jump');
+        await flushAsync();
+        expect(b.state.leapt).toBe(true);
+        expect(a.state.leapt).toBeFalsy();
+        // The button's one jump is spent.
+        expect(actionLabels()).not.toContain('Jump');
+    });
+
+    test('a tap sends up the man under the finger, and a second tap on him sends nobody else', async () => {
+        const main = await thrown();
+        const a = find(main, 'wr1');
+        const others = ['wr2', 'wr3', 'wr4'].map((p) => find(main, p)).filter((o) => o && !o.settings.benched);
+        expect(others.length).toBeGreaterThan(0);
+        // Under the stub every figure projects to the same point, so the man
+        // under the finger is the first receiver in the list.
+        tap();
+        await flushAsync();
+        expect(a.state.leapt).toBe(true);
+        expect(others.every((o) => !o.state.leapt)).toBe(true);
+        // He has gone up already: the same tap again is his, and does nothing.
+        tap();
+        await flushAsync();
+        expect(others.every((o) => !o.state.leapt)).toBe(true);
+        tap();
+        await flushAsync();
+        expect(others.every((o) => !o.state.leapt)).toBe(true);
     });
 });
 

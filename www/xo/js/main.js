@@ -34,13 +34,14 @@ import { captureDrawn, applyDrawn } from './snapshot.min.js';
 import { photoShot, drawPhoto, photoBlob, photoName } from './photo.min.js';
 import {
     clipSize, clipPlan, clipProgress, clipShot, stampText, clipName, takeFrame, holdSize, recordTake,
+    openingFor,
 } from './clip.min.js';
 import { saveFile } from '../../shared/js/sharefile-1.0.0.min.js';
 import { canRecord, pickMime, extensionOf } from '../../shared/js/recorder-1.0.0.min.js';
 import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments, noteThrow,
     setVisitorJumps, standingReach,
-    beginTakedown, resetTakedown, takedownClock, beginSnapMotion,
+    beginTakedown, resetTakedown, takedownClock, beginSnapMotion, finishSnapMotion, resetThrow,
     beginRelocate, resetRelocate, airborne,
     beginCelebration, resetCelebration, celebrationClock,
     beginStaging, resetStaging, drawnSpots, setScripted, resetScripted,
@@ -57,7 +58,7 @@ import {
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome, decisionLeft,
     clearEscapes, clockReading, requestLeap, ballInFlight, setStandingReach,
 } from './play.min.js';
-import { autoJump, cueLit } from './jump.min.js';
+import { autoJump, cueLit, nearestToBall } from './jump.min.js';
 import { readGame, saveGame, clearGame } from './progress.min.js';
 import { nextStreak, streakOver, difficultyFor, endSounds } from './scoring.min.js';
 import {
@@ -88,7 +89,7 @@ import {
 } from './replay.min.js';
 import {
     setDriver, setAspect, update as updateCamera, nudgeView, resetView, switchView,
-    resetShoulder, viewQuarter, newShoulder,
+    resetShoulder, viewQuarter, newShoulder, newAim,
 } from './camera.min.js';
 import {
     initAudio, unlock as unlockAudio, play as playSound, simAudio,
@@ -1043,17 +1044,41 @@ function onThrow(position) {
 }
 
 /**
+ * WHO THE JUMP BUTTON WOULD SEND UP RIGHT NOW: of the receivers who can still
+ * go up, the one the ball is coming to (jump.js `nearestToBall`), which is
+ * usually but not always the man it was thrown to. Empty when nobody can.
+ */
+function buttonChoice() {
+    const play = cycle.play;
+    if (!play || !ballInFlight(play)) return '';
+    const objects = play.game.objects;
+    const ball = objects.find((o) => o.settings && o.settings.position === 'ball');
+    const receivers = eligibleReceivers(play)
+        .map((pos) => objects.find((o) => o.settings && o.settings.position === pos))
+        .filter((o) => o && o.state && !o.state.leapt && !o.state.hasBall);
+    const pick = nearestToBall(ball, receivers, JUMP_REACH);
+    return pick ? pick.settings.position : '';
+}
+
+/**
  * SEND A RECEIVER UP FOR IT. `position` is whoever a tap landed on; the Jump
- * button, J and the space bar name nobody, and mean the man it was thrown to.
+ * button, J and the space bar name nobody, and mean whoever the ball is coming
+ * to (`buttonChoice`), which was "the man it was thrown to" until Steve's QA
+ * of 2026-10-30 found a pass thrown behind him going up for by nobody.
  *
- * `requestLeap` refuses a second jump by the same man, a ball already caught
- * and anybody but a receiver, so a press that cannot do anything does nothing.
- * The jump is logged for the replay as it happens, because the recorder stores
- * where everybody was, not why anybody left the ground.
+ * A TAP ON A MAN WHO HAS ALREADY GONE UP DOES NOTHING. It used to pass to the
+ * next nearest receiver, so a second tap on the man under the finger sent a
+ * different man up (the same QA). `requestLeap` refuses a second jump by the
+ * same man, a ball already caught and anybody but a receiver, so a press that
+ * cannot do anything does nothing. The jump is logged for the replay as it
+ * happens, because the recorder stores where everybody was, not why anybody
+ * left the ground.
  */
 function onJump(position) {
     const game = cycle.play && cycle.play.game;
-    const who = position || (game && game.throwTo);
+    if (!game) return false;
+    const choice = buttonChoice();
+    const who = position || choice;
     if (!who || !requestLeap(cycle.play, who)) return false;
     noteLeap(who, SIM_STEP);
     const target = who === game.throwTo;
@@ -1062,9 +1087,9 @@ function onJump(position) {
         outcome: { ...calledFields(), jumped: who },
         seconds: sinceSnap(),
     });
-    // His one jump is spent, so the button that jumps him has nothing left to
-    // do. A tap can still send somebody else up.
-    if (target && cycle.jumpRow) {
+    // The button's one jump is spent once the man it would send up has gone,
+    // by the button or by a tap on him. A tap can still send somebody else up.
+    if (cycle.jumpRow && (!position || who === choice)) {
         clearActions();
         cycle.jumpRow = false;
     }
@@ -1085,7 +1110,10 @@ function tendJumpRow() {
     }
     const game = cycle.play.game;
     const ball = game.objects.find((o) => o.settings && o.settings.position === 'ball');
-    const target = game.objects.find((o) => o.settings && o.settings.position === game.throwTo);
+    // The cue is for the man the button would send up, which is the man the
+    // ball is coming to.
+    const who = buttonChoice() || game.throwTo;
+    const target = game.objects.find((o) => o.settings && o.settings.position === who);
     setJumpCue(cueLit(ball, target, JUMP_REACH));
 }
 
@@ -2364,18 +2392,21 @@ function tapTargets() {
         ];
     }
     // THE BALL IS IN THE AIR: A TAP SENDS UP WHOEVER IS NEAREST THE FINGER
-    // (2026-09-23). Any receiver who has not jumped yet, because the one the
-    // visitor meant is the one under the finger. Only the man it was thrown to
-    // breathes, though: four pulsing markers under a ball in flight is a busy
-    // field, and he is the one worth looking at.
+    // (2026-09-23), because the one the visitor meant is the one under the
+    // finger. EVERY receiver is a target, the ones who have already gone up
+    // included: a tap on a man who has jumped does nothing (`onJump`), where
+    // leaving him out handed the tap to the next nearest receiver and sent the
+    // wrong man up (Steve's QA, 2026-10-30). Only the man it was thrown to
+    // breathes, and only until he goes: four pulsing markers under a ball in
+    // flight is a busy field, and he is the one worth looking at.
     if (cycle.phase === 'live' && cycle.visitorJumps && ballInFlight(cycle.play)) {
         const game = cycle.play.game;
+        const leapt = (pos) => {
+            const o = game.objects.find((x) => x.settings && x.settings.position === pos);
+            return !!(o && o.state && o.state.leapt);
+        };
         return eligibleReceivers(cycle.play)
-            .filter((pos) => {
-                const o = game.objects.find((x) => x.settings && x.settings.position === pos);
-                return o && o.state && !o.state.leapt;
-            })
-            .map((pos) => ({ position: pos, act: () => onJump(pos), pulse: pos === game.throwTo }));
+            .map((pos) => ({ position: pos, act: () => onJump(pos), pulse: pos === game.throwTo && !leapt(pos) }));
     }
     return [];
 }
@@ -3234,6 +3265,24 @@ function beginTake(stage, { quarter = 0, onFrame = null } = {}) {
     const plan = clipPlan({ ticks: frameCount(), ending: endingLength() });
     seek(plan.start);
     focusMemo.at = -1;
+    /**
+     * THE VIEW'S CLOCKS, AS THE REPLAY SETS THEM AT THE SNAP. A replay opens
+     * with `beginSnapMotion`, which also forgets the throw the live play saw.
+     * A take that opens mid-play with the ball still in the quarterback's
+     * hands has not seen that throw either, however long ago the live play
+     * threw it, so it is forgotten the same way, and the snap is simply over.
+     * Left running, the arm sat in the follow-through from the clip's first
+     * frame while the ball rode up by his ear (QA, 2026-10-30). A take that
+     * opens with the ball already away keeps the throw where the live play
+     * left it. See clip.js `openingFor`.
+     */
+    const how = openingFor(frameAt(plan.start, teamOfPosition), plan.start);
+    if (how === 'snap') {
+        beginSnapMotion();
+    } else {
+        finishSnapMotion();
+        if (how === 'held') resetThrow();
+    }
     const first = focusAt(plan.start);
     const opening = simToWorld(first.x, first.y, 0);
     const release = holdSize(renderer, w, h);
@@ -3245,6 +3294,7 @@ function beginTake(stage, { quarter = 0, onFrame = null } = {}) {
         cycle.take = {
             plan, quarter, stage, g, w, h,
             shoulder: newShoulder(),
+            aim: newAim(),
             anchor: { x: opening.x, z: opening.z },
             live, release, held: 0, elapsed: 0, frames: 0, finished: false, resolve,
             // Told how many clip seconds are left after every frame, for the
@@ -3286,7 +3336,7 @@ function drawTake(delta) {
     const f = replayFocus();
     const focus = simToWorld(f.x, f.y, f.z || 0);
     const shot = clipShot(clipProgress(playheadFrame(), t.plan), focus, {
-        anchor: t.anchor, shoulder: t.shoulder, quarter: t.quarter, delta,
+        anchor: t.anchor, shoulder: t.shoulder, aim: t.aim, quarter: t.quarter, delta,
     });
     // The result is stamped over the final hold only (D19).
     const stamp = CFG.clip.stamp && t.held >= t.plan.ending ? stampText(cycle.lastOutcome) : '';

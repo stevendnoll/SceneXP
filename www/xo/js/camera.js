@@ -380,12 +380,63 @@ export function newShoulder() {
 
 const shoulder = newShoulder();
 
-/** Back to whichever side this carrier's position asks for, with no swing.
- *  Called when a replay starts, so it opens on the right shoulder rather than
- *  swinging in from wherever the last one finished. */
+/**
+ * THE AIM IS SMOOTHED, AND THAT IS STEVE'S QA OF 2026-10-30: "both replay
+ * cameras are a little twitchy". The director aims at where the recording
+ * says the ball or its carrier is on this frame, and that point twitches: the
+ * ported motion model accelerates on two axes separately, so a quarterback in
+ * the pocket shuffles, and a 60 fps frame of replay steps the recording by one
+ * tick or by two (80 Hz at 0.85), so even a smooth run arrives in uneven
+ * steps. The figures are eased toward their positions and look smooth; the
+ * camera was not, so the whole frame followed every shuffle. The live play's
+ * camera is fixed, which is why nobody saw it there.
+ *
+ * MEASURED over twelve simulated plays sampled the way the replay samples:
+ * the aim's twitch (the RMS change in its frame-to-frame motion) was 52 mm a
+ * frame in the pocket and 97 mm on a run. Through this filter at
+ * `focusSmooth` 0.12 s it is 6 mm and 13 mm, under a pixel on a phone, and
+ * the aim sits a mean 0.77 m behind a sprinting carrier, which `lead` (2.8 m
+ * ahead of him) more than covers. At 0.08 s: 8 and 17 mm, 0.47 m behind. At
+ * 0.20 s: 4 and 8 mm, 1.43 m behind. A time constant rather than a frame
+ * count, so a slow phone smooths the same seconds (`1 - exp(-delta / tau)`).
+ *
+ * A MEMORY OF ITS OWN, like the shoulder's: the live replay keeps the
+ * module's, reset with the shoulder when a replay starts, and the clip's take
+ * (clip.js) brings its own, so a take never moves the replay on screen.
+ */
+export function newAim() {
+    return { x: 0, y: 0, z: 0, seeded: false };
+}
+
+const aim = newAim();
+
+/**
+ * The aim eased toward `focus` over `delta` seconds, seeded ON the first
+ * focus it is given so a replay opens with no lag at all. Returns a fresh
+ * point; `a` is the memory it advances.
+ */
+export function smoothAim(a, focus, delta = 0, tau = CFG.camera.replay.focusSmooth) {
+    const f = focus || { x: 0, y: 0, z: 0 };
+    if (!a.seeded || !(tau > 0)) {
+        a.x = f.x; a.y = f.y || 0; a.z = f.z;
+        a.seeded = true;
+    } else {
+        const rate = 1 - Math.exp(-Math.max(0, delta) / tau);
+        a.x += (f.x - a.x) * rate;
+        a.y += ((f.y || 0) - a.y) * rate;
+        a.z += (f.z - a.z) * rate;
+    }
+    return { x: a.x, y: a.y, z: a.z };
+}
+
+/** Back to whichever side this carrier's position asks for, with no swing,
+ *  and the aim forgotten with it. Called when a replay starts, so it opens on
+ *  the right shoulder, aimed where the ball is, rather than swinging in from
+ *  wherever the last one finished. */
 export function resetShoulder() {
     shoulder.seeded = false;
     shoulder.held = 0;
+    aim.seeded = false;
 }
 
 export function shoulderFor(z, delta = 0, s = shoulder) {
@@ -613,8 +664,9 @@ export function getDriver() {
 export function update(delta, state = {}) {
     elapsed += delta;
     if (current === DRIVERS.replay) {
-        // The director's shot first, then whatever the visitor has done to it.
-        const focus = state.focus || { x: 0, y: 0, z: 0 };
+        // The director's shot first, aimed through the smoothed aim (see
+        // `smoothAim`), then whatever the visitor has done to it.
+        const focus = smoothAim(aim, state.focus, delta);
         return applyView(
             replayDriver(state.progress || 0, focus, shoulderFor(focus.z, delta))
         );

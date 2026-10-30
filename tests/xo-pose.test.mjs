@@ -39,7 +39,8 @@ const { solveArm, handAt, RIG } = await import(join(scene, 'arm.js'));
 const { takedownAt, takedownLength, contactFraction } = await import(join(scene, 'takedown.js'));
 const {
     toWorld, carryHold, HEADING_DEADZONE, TURN_RESPONSE,
-    syncFigures, beginSnapMotion, resetThrow, throwClock, blockersEngaged,
+    syncFigures, beginSnapMotion, resetThrow, throwClock, blockersEngaged, postingFor,
+    finishSnapMotion, snapProgress, resetSnapMotion,
     beginRelocate, resetRelocate, relocateProgress,
     syncBall, resetBallFlight, ballSpan, turnFor, frontOf, jumpClearance, jumpCommit,
     noteThrow, airborne, intendedReceiver,
@@ -573,6 +574,69 @@ describe('a replay starts from the snap, not from the last thing that happened',
         expect(throwClock()).toBeLessThan(0);
         syncFigures([qb(false)], 0.1, {});
         expect(throwClock()).toBeGreaterThanOrEqual(0);
+    });
+});
+
+/**
+ * HANDS UP ONLY WHILE THERE IS SOMEBODY TO ASK (Steve's QA, 2026-10-30): the
+ * receivers kept raising their arms after another receiver had the ball, or
+ * after the quarterback had kept it. The rule is pure, so it is asked case by
+ * case here; tests/xo-posting-drawn.test.mjs proves the arm follows it.
+ */
+describe('a receiver asks for the ball only while the quarterback has it to throw', () => {
+    const qb = (state = {}) => ({ settings: { position: 'qb', team: 0, benched: false }, coords: { x: 0, y: 0 }, state: { hasBall: true, run: false, ...state } });
+    const wr = (position = 'wr2', state = {}) => ({ settings: { position, team: 0, benched: false }, coords: { x: 0, y: 0 }, state: { hasBall: false, ...state } });
+    const db = () => ({ settings: { position: 'db1', team: 1, benched: false }, coords: { x: 0, y: 0 }, state: {} });
+    const live = { live: true, standing: true, flying: false };
+
+    test('a standing receiver posts up while the quarterback surveys', () => {
+        expect(postingFor(wr(), qb(), live)).toBe(1);
+        expect(postingFor(wr('wr4'), qb(), live)).toBe(1);
+    });
+
+    test('not once the ball is in the air, caught, or tucked and run', () => {
+        expect(postingFor(wr(), null, { ...live, flying: true })).toBe(0);
+        // A ball in the air outranks whoever the frame still says is holding it.
+        expect(postingFor(wr(), qb(), { ...live, flying: true })).toBe(0);
+        expect(postingFor(wr(), null, live)).toBe(0);
+        expect(postingFor(wr('wr2'), wr('wr1', { hasBall: true }), live)).toBe(0);
+        expect(postingFor(wr(), qb({ run: true }), live)).toBe(0);
+    });
+
+    test('not the carrier himself, not a defender, not before the snap, not on the move', () => {
+        const a = qb();
+        expect(postingFor(a, a, live)).toBe(0);
+        const carrier = wr('wr1', { hasBall: true });
+        expect(postingFor(carrier, carrier, live)).toBe(0);
+        expect(postingFor(db(), qb(), live)).toBe(0);
+        expect(postingFor(wr(), qb(), { ...live, live: false })).toBe(0);
+        expect(postingFor(wr(), qb(), { ...live, standing: false })).toBe(0);
+        expect(postingFor(null, qb(), live)).toBe(0);
+    });
+});
+
+/**
+ * THE SNAP IS OVER FOR A PLAYBACK THAT OPENS MID-PLAY (the clip, 2026-10-30):
+ * `finishSnapMotion` puts the snap clock at its end whatever it was, and never
+ * winds a finished one back.
+ */
+describe('finishing the snap motion', () => {
+    test('a half-done snap is finished, a finished one is left, and the throw is not touched', () => {
+        beginSnapMotion();
+        syncFigures([], CFG.pose.snap.time * 0.3, {});
+        expect(snapProgress()).toBeGreaterThan(0);
+        expect(snapProgress()).toBeLessThan(1);
+        finishSnapMotion();
+        expect(snapProgress()).toBe(1);
+        // Already past the end: nothing moves back.
+        syncFigures([], 5, {});
+        finishSnapMotion();
+        expect(snapProgress()).toBe(1);
+        // And a snap never begun is simply over too, rather than held under centre.
+        resetSnapMotion();
+        expect(snapProgress()).toBe(0);
+        finishSnapMotion();
+        expect(snapProgress()).toBe(1);
     });
 });
 

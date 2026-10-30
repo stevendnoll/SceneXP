@@ -69,6 +69,23 @@ describe('which seconds of the play', () => {
         expect(C.clipPlan({ ticks: 1200 }).hold).toBe(CFG.clip.hold);
     });
 
+    test('how the take opens: at the snap, with the ball still the quarterback\'s, or with it away', () => {
+        const qb = (hasBall, run = false) => ({ settings: { position: 'qb', benched: false }, state: { hasBall, run }, coords: {} });
+        const wr = (hasBall) => ({ settings: { position: 'wr1', benched: false }, state: { hasBall }, coords: {} });
+        // From the snap, whoever holds it: the replay's own opening.
+        expect(C.openingFor([qb(true), wr(false)], 0)).toBe('snap');
+        expect(C.openingFor([qb(false), wr(true)], 0)).toBe('snap');
+        expect(C.openingFor([], 0)).toBe('snap');
+        // Mid-play: the ball in his hands, or away.
+        expect(C.openingFor([qb(true), wr(false)], 300)).toBe('held');
+        expect(C.openingFor([qb(true, true), wr(false)], 300)).toBe('held');
+        expect(C.openingFor([qb(false), wr(true)], 300)).toBe('away');
+        expect(C.openingFor([qb(false), wr(false)], 300)).toBe('away');
+        // A benched quarterback is nobody's hands.
+        expect(C.openingFor([{ settings: { position: 'qb', benched: true }, state: { hasBall: true } }], 300)).toBe('away');
+        expect(C.openingFor(null, 300)).toBe('away');
+    });
+
     test('progress runs 0 to 1 over the play part and stays at 1 through the ending', () => {
         const plan = C.clipPlan({ ticks: 1200, ending: 1.2, ...SPEED });
         expect(C.clipProgress(656, plan)).toBe(0);
@@ -154,6 +171,53 @@ describe('the director\'s shot, for the clip', () => {
         Cam.viewOffset(2);
         expect(Cam.viewQuarter()).toBe(0);
         expect(Cam.getView().yaw).toBe(0);
+    });
+
+    test('the aim is smoothed (Steve\'s QA, 2026-10-30): seeded on the first frame, eased after, forgotten with the shoulder', () => {
+        const tau = CFG.camera.replay.focusSmooth;
+        expect(tau).toBeGreaterThan(0);
+        // Seeded exactly on the first focus: a replay opens with no lag.
+        const a = Cam.newAim();
+        expect(Cam.smoothAim(a, { x: 10, y: 0.9, z: -3 }, 1 / 60)).toEqual({ x: 10, y: 0.9, z: -3 });
+        // Then eased: a step of one time constant covers 1 - 1/e of a jump.
+        const next = Cam.smoothAim(a, { x: 11, y: 0.9, z: -3 }, tau);
+        expect(next.x).toBeCloseTo(10 + (1 - Math.exp(-1)), 9);
+        expect(next.z).toBeCloseTo(-3, 9);
+        // No time, no movement; no smoothing, the focus as it is.
+        expect(Cam.smoothAim(a, { x: 20, y: 0.9, z: 0 }, 0).x).toBeCloseTo(next.x, 9);
+        expect(Cam.smoothAim(Cam.newAim(), { x: 5, y: 1, z: 2 }, 1, 0)).toEqual({ x: 5, y: 1, z: 2 });
+        expect(Cam.smoothAim(Cam.newAim(), null, 1)).toEqual({ x: 0, y: 0, z: 0 });
+
+        // THE REPLAY AIMS THROUGH IT: a focus that jumps a metre between
+        // frames moves the shot's target by a fraction of that, not all of it.
+        const lead = CFG.camera.replay.lead * FIELD.lineInterval;
+        const rate = 1 - Math.exp(-(1 / 60) / tau);
+        Cam.setDriver('replay');
+        Cam.resetShoulder();
+        const first = Cam.update(1 / 60, { progress: 0.5, focus: { x: 10, y: 0.9, z: 0 } });
+        expect(first.target.x).toBeCloseTo(10 + lead, 9);
+        const second = Cam.update(1 / 60, { progress: 0.5, focus: { x: 11, y: 0.9, z: 0 } });
+        expect(second.target.x - first.target.x).toBeCloseTo(rate, 6);
+        // Held there, it arrives.
+        let shot = second;
+        for (let i = 0; i < 600; i += 1) shot = Cam.update(1 / 60, { progress: 0.5, focus: { x: 11, y: 0.9, z: 0 } });
+        expect(shot.target.x).toBeCloseTo(11 + lead, 3);
+        // A new replay forgets the aim with the shoulder, and opens on its own
+        // first frame rather than swinging in from the last one.
+        Cam.resetShoulder();
+        const fresh = Cam.update(1 / 60, { progress: 0, focus: { x: 20, y: 0.9, z: 4 } });
+        expect(fresh.target.x).toBeCloseTo(20 + lead, 9);
+        expect(fresh.target.z).toBeCloseTo(4, 9);
+        Cam.setDriver('play');
+
+        // THE CLIP'S OWN AIM: handed a memory, the shot eases the same way; without one, the focus is taken as it is.
+        const aim = Cam.newAim();
+        const s1 = C.clipShot(0.5, { x: 10, y: 0.9, z: 0 }, { aim, shoulder: Cam.newShoulder(), delta: 1 / 60 });
+        const s2 = C.clipShot(0.5, { x: 11, y: 0.9, z: 0 }, { aim, shoulder: Cam.newShoulder(), delta: 1 / 60 });
+        expect(s2.target.x - s1.target.x).toBeCloseTo(rate, 6);
+        const r1 = C.clipShot(0.5, { x: 10, y: 0.9, z: 0 }, { shoulder: Cam.newShoulder(), delta: 1 / 60 });
+        const r2 = C.clipShot(0.5, { x: 11, y: 0.9, z: 0 }, { shoulder: Cam.newShoulder(), delta: 1 / 60 });
+        expect(r2.target.x - r1.target.x).toBeCloseTo(1, 9);
     });
 
     test('the clip\'s shoulder memory is its own: a take never moves the replay\'s', () => {

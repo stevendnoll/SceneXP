@@ -31,7 +31,9 @@
  * the downloads folder is the only place it goes.
  */
 import { XO_CONFIG as CFG } from './config.min.js';
-import { replayDriver, applyView, viewOffset, shoulderFor, newShoulder } from './camera.min.js';
+import {
+    replayDriver, applyView, viewOffset, shoulderFor, newShoulder, smoothAim,
+} from './camera.min.js';
 import { drawWordmark, wordmarkFont, WORDMARK } from '../../shared/js/wordmark-1.0.0.min.js';
 import { startRecording } from '../../shared/js/recorder-1.0.0.min.js';
 
@@ -70,6 +72,23 @@ export function clipPlan({ ticks, ending = 0, seconds = K().seconds, hold = K().
     return { start, ticks: n, play, ending: end, hold: rest, total: play + end + rest };
 }
 
+/**
+ * HOW THE TAKE OPENS, for the view's own clocks, from the objects of its first
+ * frame (`replay.frameAt(start)`):
+ *   'snap'  the window starts at the snap, so it opens as the replay does,
+ *           snap motion and all;
+ *   'held'  mid-play with the ball still in the quarterback's hands, so the
+ *           throw the live play saw has NOT happened yet: the view must forget
+ *           it, or the arm sits in the follow-through from the first frame
+ *           while the ball rides up by his ear (Steve's QA, 2026-10-30);
+ *   'away'  mid-play with the ball already thrown, caught or on the grass.
+ */
+export function openingFor(objects, start) {
+    if (!(start > 0)) return 'snap';
+    const qb = (objects || []).find((o) => o && o.settings && o.settings.position === 'qb' && !o.settings.benched);
+    return qb && qb.state && qb.state.hasBall ? 'held' : 'away';
+}
+
 /** How far through the play part of the take frame `frame` is, 0 to 1. The
  *  director's shot establishes, tracks and settles over this, as it does over
  *  a whole replay. Past the whistle it is 1. */
@@ -84,12 +103,14 @@ export function clipProgress(frame, plan) {
  * THE DIRECTOR'S SHOT OF THIS FRAME, FOR THE CLIP: the replay camera
  * (camera.js `replayDriver`) opened on `anchor` (where the ball was on the
  * take's first frame, world metres), rounding the shoulder its own `shoulder`
- * memory says (`newShoulder()`, one a take), turned to vantage point
- * `quarter` (0 is the director's own). `focus` is where the ball or its
- * carrier is on this frame, in world metres.
+ * memory says (`newShoulder()`, one a take), aimed through its own `aim`
+ * memory (`newAim()`, one a take, camera.js `smoothAim`: the replay's twitch
+ * is the clip's too), turned to vantage point `quarter` (0 is the director's
+ * own). `focus` is where the ball or its carrier is on this frame, in world
+ * metres. Without an `aim` the focus is taken as it is.
  */
-export function clipShot(progress, focus, { anchor = null, shoulder = null, quarter = 0, delta = 0 } = {}) {
-    const f = focus || { x: 0, y: 0, z: 0 };
+export function clipShot(progress, focus, { anchor = null, shoulder = null, quarter = 0, delta = 0, aim = null } = {}) {
+    const f = aim ? smoothAim(aim, focus, delta) : (focus || { x: 0, y: 0, z: 0 });
     const side = shoulderFor(f.z, delta, shoulder || newShoulder());
     return applyView(replayDriver(progress, f, side, anchor), viewOffset(quarter));
 }

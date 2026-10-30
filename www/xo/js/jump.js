@@ -119,6 +119,26 @@ export function leapCatches(standing, leapFor, ballY) {
 }
 
 /**
+ * WHO THE JUMP BUTTON SENDS UP (Steve's QA, 2026-10-30): of the receivers who
+ * can still go up (handed in already sifted), the one the ball reaches soonest
+ * along its written path, which is usually but not always the man it was
+ * thrown to: a pass thrown behind him can be another receiver's to go up for.
+ * A ball coming to nobody, and a tie, go to whoever stands nearest it now.
+ * Null when there is nobody. Pure, so main.js hands in plain objects.
+ */
+export function nearestToBall(ball, receivers, reach) {
+    let best = null;
+    for (const r of receivers || []) {
+        if (!r || !r.coords) continue;
+        const when = arrivalIn(ball, r, reach);
+        const now = ball && ball.coords
+            ? Math.hypot(r.coords.x - ball.coords.x, r.coords.y - ball.coords.y) : Infinity;
+        if (!best || when < best.when || (when === best.when && now < best.now)) best = { r, when, now };
+    }
+    return best ? best.r : null;
+}
+
+/**
  * HOW SOON THE BALL GETS TO HIM, in seconds, or Infinity if it is not coming.
  *
  * THE BALL'S PATH IS ALREADY WRITTEN DOWN. The ported routes give a thrown

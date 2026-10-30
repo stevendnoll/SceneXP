@@ -910,6 +910,15 @@ const XO_CONFIG = {
             settleZoom: 6,
             speed: 0.85,
             holdEnd: 1.0,
+            /**
+             * SECONDS OF SMOOTHING ON THE AIM (Steve's QA, 2026-10-30: the
+             * replay cameras twitched with the quarterback's shuffle in the
+             * pocket). Measured, camera.js `smoothAim`: 0.12 takes the twitch
+             * from 52 to 6 mm a frame in the pocket and sits 0.77 m behind a
+             * sprinting carrier, which `lead` covers. Shorter is twitchier,
+             * longer trails the runner. 0 is the old, unsmoothed aim.
+             */
+            focusSmooth: 0.12,
 
             /**
              * WHICH SHOULDER THE CAMERA ORBITS FROM, AND WHY IT NOW HAS A

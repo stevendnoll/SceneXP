@@ -133,6 +133,28 @@ function carryFor(obj, carrier) {
 }
 
 /**
+ * ASKING FOR IT, AND ONLY WHILE THERE IS SOMEBODY TO ASK (Steve's QA,
+ * 2026-10-30). A receiver who has run out of route turns back and puts his
+ * hands up for the ball while the quarterback is still surveying the field
+ * with it. Once it is in the air, once somebody has caught it, or once the
+ * quarterback has tucked it and taken off, there is nothing left to ask for:
+ * receivers with their hands up over another man's run read as waiting for a
+ * pass that was never coming. Blocking outranks this in the arm's order of
+ * poses anyway (roster.js), so a receiver who has found somebody to block
+ * keeps blocking.
+ *
+ * Pure, and exported for the suite: `obj` is the receiver, `carrier` whoever
+ * holds the ball (null for nobody), `flying` whether a thrown ball is in the
+ * air, `live` and `standing` the frame's own readings.
+ */
+export function postingFor(obj, carrier, { live = false, standing = false, flying = false } = {}) {
+    if (!live || !standing || flying) return 0;
+    if (!obj || !obj.settings || obj.settings.team !== 0 || !/^wr\d$/.test(obj.settings.position)) return 0;
+    if (!carrier || carrier === obj || !carrier.settings || carrier.settings.position !== 'qb') return 0;
+    return carryFor(carrier, carrier) === 'throw' ? 1 : 0;
+}
+
+/**
  * THE RELEASE, TIMED FROM THE FRAME THE BALL LEFT HIS HAND.
  *
  * Nothing in the simulation announces a throw to the view, and nothing needs
@@ -232,6 +254,18 @@ export function beginSnapMotion() {
 /** Hold him under centre. A new line-up, and the presnap frames. */
 export function resetSnapMotion() {
     snapAt.t = -1;
+}
+
+/**
+ * THE SNAP IS LONG OVER. For a playback that opens mid-play (the clip,
+ * specs/xo-photos-plan Step 6), where the quarterback is drawn with the ball
+ * already up by his ear rather than bringing it back from under centre, and
+ * where a snap motion a skipped replay left half done would otherwise finish
+ * itself in the first frames of the clip.
+ */
+export function finishSnapMotion() {
+    const T = CFG.pose.snap.time;
+    snapAt.t = Math.max(snapAt.t, T > 0 ? T : 1);
 }
 
 /** 0 while he is still waiting for it, easing to 1 once it is away. */
@@ -1919,12 +1953,12 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             : null;
 
         // ASKING FOR IT. A receiver who has stopped getting anywhere while the
-        // play is still running has finished his route, so he turns back to
-        // whoever has the ball (above) and puts his hands up. Gated on the
-        // play being live, or every receiver would raise his arms over a
-        // finished play while the result card opened.
-        const posting = (opts.live && standing && obj.settings.team === 0
-            && /^wr\d$/.test(obj.settings.position) && carrier !== obj) ? 1 : 0;
+        // quarterback still surveys the field has finished his route, so he
+        // turns back (above) and puts his hands up. Gated on the play being
+        // live, or every receiver would raise his arms over a finished play
+        // while the result card opened, and on the ball still being the
+        // quarterback's to throw: see `postingFor`.
+        const posting = postingFor(obj, carrier, { live: !!opts.live, standing, flying: flight.has });
 
         /**
          * BREAKING FREE, WHICH IS THE ONE POSE THE SIMULATION ASKS FOR.

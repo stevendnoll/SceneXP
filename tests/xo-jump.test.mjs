@@ -195,6 +195,46 @@ describe('the Auto jump switch', () => {
     });
 });
 
+describe('who the Jump button sends up (Steve\'s QA, 2026-10-30)', () => {
+    /** A ball at (0, 0) flying along +x, a point a step. */
+    const ball = { coords: { x: 0, y: 0, list: Array.from({ length: 40 }, (_, i) => [i + 1, 0]) } };
+    const man = (position, x, y, state = {}) => ({ settings: { position }, coords: { x, y }, state: { xSpeed: 0, ySpeed: 0, ...state } });
+
+    test('the man the ball reaches soonest, not the man it was thrown to', () => {
+        // The ball passes A at step 20 and B at step 10: B is nearer along the path.
+        const a = man('wr1', 20, 0);
+        const b = man('wr2', 10, 0);
+        expect(jump.nearestToBall(ball, [a, b], 1)).toBe(b);
+        expect(jump.nearestToBall(ball, [b, a], 1)).toBe(b);
+        // A receiver standing off the path by less than the reach is reached too.
+        const c = man('wr3', 5, 0.5);
+        expect(jump.nearestToBall(ball, [a, b, c], 1)).toBe(c);
+        // THE PATH DECIDES, NOT THE DISTANCE NOW: a man standing close to the
+        // ball but off its path is never reached, and a man far down the path
+        // is. He is the one to send up.
+        const beside = man('wr3', 3, 3);
+        const down = man('wr4', 15, 0);
+        expect(jump.nearestToBall(ball, [beside, down], 1)).toBe(down);
+    });
+
+    test('a ball coming to nobody goes to whoever stands nearest it now, and so does a tie', () => {
+        const far = man('wr1', 30, 20);
+        const nearer = man('wr2', 3, 8);
+        expect(jump.nearestToBall(ball, [far, nearer], 1)).toBe(nearer);
+        // Both reached on the same step: the nearer now.
+        const onPath = man('wr3', 12, 0);
+        const beside = man('wr4', 12, 0.9);
+        expect(jump.nearestToBall(ball, [beside, onPath], 1)).toBe(onPath);
+    });
+
+    test('nobody to send is nobody', () => {
+        expect(jump.nearestToBall(ball, [], 1)).toBeNull();
+        expect(jump.nearestToBall(ball, null, 1)).toBeNull();
+        expect(jump.nearestToBall(null, [man('wr1', 1, 1)], 1)).toEqual(man('wr1', 1, 1));
+        expect(jump.nearestToBall(ball, [{ settings: { position: 'wr1' } }], 1)).toBeNull();
+    });
+});
+
 describe('sending a receiver up', () => {
     P.setStandingReach(STANDING);
 
