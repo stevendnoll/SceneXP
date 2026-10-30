@@ -1682,6 +1682,14 @@ const XO_CONFIG = {
          *  down the pulse dips, so it never fades toward invisible. */
         pulseFloor: 0.55,
         pulseScale: 1.18,
+        /**
+         * THE RING WHERE A PASS WILL COME DOWN (markers.js `showLanding`,
+         * Steve's QA, 2026-10-30), on the grass from the release until the
+         * ball is caught or down, in the ink of the man it was thrown to. A
+         * shade wider than his painted disc (0.63 m across at `namedRadius`),
+         * so the disc fills the ring when he gets there.
+         */
+        landing: { inner: 0.66, outer: 0.9, opacity: 0.8 },
     },
 
     /**

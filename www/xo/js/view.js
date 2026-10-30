@@ -29,7 +29,7 @@ import { XO_CONFIG as CFG, simToWorld, FIELD, SIM, UNITS_TO_METRES } from './con
 import { bandAt } from './scoring.min.js';
 import { figureFor, poseFigure, THROWING_SIDE, throwSideOf, FIGURE_LIFT, isVisitorFigure } from './roster.min.js';
 import { getBall, aimBall, placeSpot, BALL_FAT } from './ball.min.js';
-import { placeMarker, hideMarker } from './markers.min.js';
+import { placeMarker, hideMarker, showLanding, hideLanding } from './markers.min.js';
 import { toRigSpace, RIG } from './arm.min.js';
 import { takedownAt } from './takedown.min.js';
 import { celebrationAt } from './celebration.min.js';
@@ -2220,6 +2220,8 @@ function endFlight() {
     flight.still = 0;
     flight.rest = -1;
     flight.restHeading = null;
+    // A ball in somebody's hands is going nowhere.
+    hideLanding();
 }
 
 /** Reset between plays, so a new throw does not inherit the last one's
@@ -2500,6 +2502,8 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             aimBall(flight.restHeading, flight.spin);
             ball.visible = true;
             placeSpot(0, 0, 0, false);
+            // Down is where it was going. The ring has nothing left to say.
+            hideLanding();
             return;
         }
 
@@ -2512,6 +2516,22 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             if (Math.hypot(d.x, d.y, d.z) > 0.004) flight.dir = d;
         }
         flight.x = p.x; flight.y = y; flight.z = p.z; flight.has = true;
+
+        // WHERE IT IS GOING, on the grass, in the ink of the man it is going
+        // to (markers.js `showLanding`, Steve's QA of 2026-10-30: a pass led
+        // well across the field read as a throw to whoever happened to be
+        // nearer the spot). `aimedAt` is main.js's own word at the throw; in a
+        // replay nobody says, and `intendedReceiver` latches its guess on the
+        // flight's first frame of figures. Drawn for a man or not at all, so
+        // the one frame before that guess shows no ring rather than a wrong
+        // colour.
+        const owner = aimedAt || flight.aimed;
+        if (flight.span && owner) {
+            const aim = simToWorld(flight.span.tx, flight.span.ty, 0);
+            showLanding(aim.x, aim.z, owner);
+        } else {
+            hideLanding();
+        }
 
         flight.spin += delta * SPIRAL_HZ * Math.PI * 2;
         ball.position.set(p.x, y, p.z);

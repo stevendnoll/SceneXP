@@ -58,7 +58,7 @@ import {
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome, decisionLeft,
     clearEscapes, clockReading, requestLeap, ballInFlight, setStandingReach,
 } from './play.min.js';
-import { autoJump, cueLit, nearestToBall } from './jump.min.js';
+import { autoJump, cueLit, buttonTarget, jumpCeiling } from './jump.min.js';
 import { readGame, saveGame, clearGame } from './progress.min.js';
 import { nextStreak, streakOver, difficultyFor, endSounds } from './scoring.min.js';
 import {
@@ -324,6 +324,14 @@ const SIM_STEP = 1 / CFG.simHz;
 /** A leaping receiver's reach in field units, the same box `motion.checkCatch`
  *  gives him (`airborneReach`), for the Jump button's cue. */
 const JUMP_REACH = CFG.pose.jump.range / UNITS_TO_METRES;
+/** ...AND HOW HIGH THAT REACH GOES, in metres: his hands at the top of a jump
+ *  plus the catch's slack (jump.js `jumpCeiling`). A ball passing over a man
+ *  higher than this is not coming to him however close its shadow runs to his
+ *  feet, so neither the button nor its cue goes to him. Steve's QA of
+ *  2026-10-30: a deep pass led across the field sailed over the shallow
+ *  receiver, the cue lit him for most of the flight, and the whole thing read
+ *  as the quarterback having thrown to the wrong man. */
+const JUMP_CEILING = jumpCeiling(standingReach());
 /**
  * THE BOARD, PAINTED FROM ONE PLACE.
  *
@@ -1122,6 +1130,8 @@ function onThrow(position) {
         // to may leave his feet for it, and an inference that is wrong 13% of
         // the time puts the wrong man in the air (QA round twenty-four).
         noteThrow(position);
+        // A new flight, a new question of whom the ball is coming to.
+        cycle.ballComing = false;
         playSound('wind');
         // The throw, half way through the arm's sweep, with the man it went to.
         noteMoment('release', 'qb', position);
@@ -1144,8 +1154,10 @@ function onThrow(position) {
 
 /**
  * WHO THE JUMP BUTTON WOULD SEND UP RIGHT NOW: of the receivers who can still
- * go up, the one the ball is coming to (jump.js `nearestToBall`), which is
- * usually but not always the man it was thrown to. Empty when nobody can.
+ * go up, the man it was thrown to while the ball is coming to him, and
+ * otherwise whoever it does reach (jump.js `buttonTarget`, Steve's QA of
+ * 2026-10-30 twice over). `cycle.ballComing` is the latch that keeps him once
+ * the ball has been coming to him this flight. Empty when nobody can.
  */
 function buttonChoice() {
     const play = cycle.play;
@@ -1155,8 +1167,10 @@ function buttonChoice() {
     const receivers = eligibleReceivers(play)
         .map((pos) => objects.find((o) => o.settings && o.settings.position === pos))
         .filter((o) => o && o.state && !o.state.leapt && !o.state.hasBall);
-    const pick = nearestToBall(ball, receivers, JUMP_REACH);
-    return pick ? pick.settings.position : '';
+    const { who, coming } = buttonTarget(ball, receivers, JUMP_REACH, JUMP_CEILING,
+        play.game.throwTo, cycle.ballComing);
+    cycle.ballComing = coming;
+    return who ? who.settings.position : '';
 }
 
 /**
@@ -1213,7 +1227,7 @@ function tendJumpRow() {
     // ball is coming to.
     const who = buttonChoice() || game.throwTo;
     const target = game.objects.find((o) => o.settings && o.settings.position === who);
-    setJumpCue(cueLit(ball, target, JUMP_REACH));
+    setJumpCue(cueLit(ball, target, JUMP_REACH, JUMP_CEILING));
 }
 
 function onRun() {
@@ -3599,6 +3613,10 @@ export const __test__ = {
     /** Who the camera follows this visit, and what it is aimed at this frame. */
     follow: () => state.follow,
     aim: () => aimAt(),
+    /** Who the Jump button would send up, and the height past which a ball is
+     *  nobody's (Steve's QA, 2026-10-30). */
+    buttonChoice: () => buttonChoice(),
+    jumpCeiling: () => JUMP_CEILING,
 };
 
 /** `beginMilestone` is exposed for the suite too: reaching 100 by actually

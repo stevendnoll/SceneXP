@@ -2486,12 +2486,13 @@ describe('the jump goes to the man meant', () => {
         clientX: 400, clientY: 300, pointerId: 1, button: 0, pointerType: 'touch',
     });
 
-    /** A live play with the ball just thrown to receiver A. */
-    async function thrown() {
+    /** A live play with the ball just thrown to receiver A, `wait` frames
+     *  after the snap: three for a flick, ninety for a deep ball. */
+    async function thrown(wait = 3) {
         const main = await toLivePlay();
         press('Snap the ball');
         await flushAsync();
-        frames(3);
+        frames(wait);
         press('Throw A');
         await flushAsync();
         const { ballInFlight } = await import('../www/xo/js/play.min.js');
@@ -2523,6 +2524,95 @@ describe('the jump goes to the man meant', () => {
         expect(a.state.leapt).toBeFalsy();
         // The button's one jump is spent.
         expect(actionLabels()).not.toContain('Jump');
+    });
+
+    /** Stand a man still at a point, with no heading to carry him anywhere. */
+    const stand = (o, x, y) => {
+        o.coords.x = x;
+        o.coords.y = y;
+        o.state.xSpeed = 0;
+        o.state.ySpeed = 0;
+        o.state.heading = { x: 0, y: 0 };
+    };
+
+    // STEVE'S QA, 2026-10-30, SECOND ROUND ON THE BUTTON: a deep pass led across
+    // the field flew over the shallow receiver and the button went to him. The
+    // ball's own arc now has a say (jump.js `jumpCeiling`), and the man it was
+    // thrown to comes first (`buttonTarget`).
+    test('a man the ball is sailing over, out of any jump\'s reach, is not the man it is coming to', async () => {
+        const main = await thrown(90);   // a deep ball, whose arc tops any jump
+        const { spanOf, arcHeightAt } = await import('../www/xo/js/jump.min.js');
+        const ball = find(main, 'ball');
+        const a = find(main, 'wr1');
+        const b = find(main, 'wr2');
+        const list = ball.coords.list;
+        expect(list.length).toBeGreaterThan(8);
+        // B under the middle of the arc, where the ball is highest; A, whom it
+        // was thrown to, nowhere near it.
+        const mid = list[Math.floor(list.length / 2)];
+        stand(b, mid[0], mid[1]);
+        stand(a, ball.coords.x + 600, ball.coords.y + 600);
+        // The premise, measured on this very throw: over B the ball is higher
+        // than any jump reaches.
+        const ceiling = main.__test__.jumpCeiling();
+        expect(arcHeightAt(spanOf(ball.coords), mid[0], mid[1])).toBeGreaterThan(ceiling);
+        // So it is coming to nobody, and a ball coming to nobody is A's: the
+        // grass alone would have handed B the button here.
+        expect(main.__test__.buttonChoice()).toBe('wr1');
+        // B where it comes down, where it is low: his, since A is not reached.
+        stand(b, ball.coords.targetX, ball.coords.targetY);
+        expect(main.__test__.buttonChoice()).toBe('wr2');
+    });
+
+    test('the man it was thrown to comes first while the ball is coming to him, and the button sends him up', async () => {
+        const main = await thrown();
+        const ball = find(main, 'ball');
+        const a = find(main, 'wr1');
+        const b = find(main, 'wr2');
+        expect(ball.coords.list.length).toBeGreaterThan(8);
+        // B on the path a few steps ahead, where the ball is still low, so the
+        // ball reaches him first; A, whom it was thrown to, where it comes down.
+        const ahead = ball.coords.list[8];
+        stand(b, ahead[0], ahead[1]);
+        stand(a, ball.coords.targetX, ball.coords.targetY);
+        expect(main.__test__.buttonChoice()).toBe('wr1');
+        // THE LATCH: a frame on which A reads as running off the path does not
+        // hand B the button, because the ball has been coming to A this flight.
+        a.state.heading = { x: 0, y: 40 };
+        expect(main.__test__.buttonChoice()).toBe('wr1');
+        a.state.heading = { x: 0, y: 0 };
+        press('Jump');
+        await flushAsync();
+        expect(a.state.leapt).toBe(true);
+        expect(b.state.leapt).toBeFalsy();
+    });
+
+    test('the latch belongs to one flight: the next play\'s ball, thrown past A, is somebody else\'s', async () => {
+        const main = await thrown();
+        let ball = find(main, 'ball');
+        // The first ball comes down on A, so the button latches onto him...
+        stand(find(main, 'wr1'), ball.coords.targetX, ball.coords.targetY);
+        expect(main.__test__.buttonChoice()).toBe('wr1');
+        // ...and the play runs out to its card. The next play is a new question.
+        await runToResult(() => frames(1));
+        dom.el('result-actions').children.find((x) => x.textContent === 'Next play').click();
+        await flushAsync();
+        frames(1);
+        const body = dom.el('playbook').querySelector('.playbook-body');
+        deep(body).find((n) => n.dataset && n.dataset.slug).click();
+        await flushAsync();
+        press('Snap the ball');
+        await flushAsync();
+        frames(3);
+        press('Throw A');
+        await flushAsync();
+        ball = find(main, 'ball');
+        const a = find(main, 'wr1');
+        const b = find(main, 'wr2');
+        // This one is thrown past A, and B stands where it comes down: his.
+        stand(a, ball.coords.x + 600, ball.coords.y + 600);
+        stand(b, ball.coords.targetX, ball.coords.targetY);
+        expect(main.__test__.buttonChoice()).toBe('wr2');
     });
 
     test('a tap sends up the man under the finger, and a second tap on him sends nobody else', async () => {
