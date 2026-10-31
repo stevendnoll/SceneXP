@@ -2546,6 +2546,32 @@ const XO_CONFIG = {
              *  standing in the end zone. */
             scoredWeights: { solo: 4, mob: 6, house: 0 },
             /**
+             * THE SHARED DANCES (shared/js/dance-1.0.0.js; Steve, 2026-10-30:
+             * "add the shared dance moves to the list of celebration
+             * options"). The man being celebrated may pull one out beside the
+             * four of this game's own, and his mates still put their arms up.
+             *
+             * `sharedDance` is the seconds one runs for when there is room.
+             * Our own four are built to end where they started inside
+             * `dance`; a shared dance is a loop and simply holds its pose
+             * when the time is up, so it gets long enough for its first
+             * figure to read (the YMCA's four letters take 2.4 s). `cap`
+             * still bounds the whole thing and `danceFloor` is still the
+             * least it may be squeezed to.
+             *
+             * `sharedDances` are offered to anybody; `bareHeadDances` only to
+             * a hero with no helmet, which is the visitor's avatar. MEASURED
+             * (tests/xo-dance.test.mjs, every pose of every loop against the
+             * helmet's shell): the Macarena's hands on the head sit deep
+             * inside a helmet for 13% of its loop, and the Sprinkler's hand
+             * behind the head is inside it for 45%. The shared part solved
+             * its contact poses for a bare head, and a helmet is a size
+             * larger. The other six never touch it.
+             */
+            sharedDance: 2.6,
+            sharedDances: ['robot', 'chicken', 'ymca', 'floss', 'disco', 'dab'],
+            bareHeadDances: ['macarena', 'sprinkler'],
+            /**
              * A SACK, WHICH THE DEFENSE CELEBRATES AFTER THE TACKLE.
              *
              * MEASURED FIRST, over 2,400 headless pass plays at six different

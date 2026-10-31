@@ -42,8 +42,20 @@
  * takedown and the party waits for it: the sacker gets up off the quarterback
  * and the plan runs from there. A PLAY CLOCK RUNNING OUT is the small one, arms
  * up where they stand, because nobody made a play (see `clockRanOut`).
+ *
+ * AND THE SHARED DANCES (Steve, 2026-10-30), from shared/js/dance-1.0.0.js:
+ * the Robot, the Chicken Dance, the YMCA, the Macarena, the Floss, the
+ * Sprinkler, the Disco Point and the Dab join the four above in the roll for
+ * the man being celebrated. The rig CAN do them now: roster.js gives every
+ * figure the shared part's waist and neck at build. A shared dance's root (a
+ * bounce, a step, a turn, a lean) rides the same fields as our own, scaled to
+ * the figure, and its joints ride `pose`, which roster.js applies. It is a
+ * loop rather than a thing that ends where it started, so it runs for
+ * `celebration.sharedDance` seconds where there is room and then holds its
+ * pose, and the ball stays in the hero's hand (`held`) rather than tucked.
  */
 import { XO_CONFIG as CFG } from './config.min.js';
+import { danceOf, danceAt as sharedPoseAt } from '../../shared/js/dance-1.0.0.min.js';
 
 /** Ease in, ease out. Every run and every ramp in this file uses it. */
 const smooth = (t) => {
@@ -69,8 +81,26 @@ export const MODES = ['solo', 'mob', 'house', 'team'];
  *            lead, no travel, and over quickly
  */
 export const OCCASIONS = ['pick', 'fifty', 'sack', 'expired'];
-/** ...and the four dances the man with the ball may pull out. */
-export const DANCES = ['bow', 'spin', 'point', 'shimmy'];
+/** ...and the four dances of this game's own the man with the ball may pull
+ *  out, with the shared ones `config.pose.celebration.sharedDances` offers. */
+export const OWN_DANCES = ['bow', 'spin', 'point', 'shimmy'];
+const shared = (list) => (list || []).filter((id) => danceOf(id));
+/** Every dance a man might do: ours, the shared ones for anybody, and the
+ *  shared ones for a bare head (the avatar's; a helmet is in their way). */
+export const DANCES = [...OWN_DANCES, ...shared(CFG.pose.celebration.sharedDances), ...shared(CFG.pose.celebration.bareHeadDances)];
+
+/** The dances offered to a hero: all of them for a bare head, else without
+ *  the ones whose hands would be inside his helmet. */
+export function dancesFor(bareHead = false) {
+    if (bareHead) return DANCES;
+    const kept = shared(CFG.pose.celebration.bareHeadDances);
+    return DANCES.filter((id) => !kept.includes(id));
+}
+
+/** Whether `id` is one of the shared part's dances rather than our own. */
+export function isSharedDance(id) {
+    return !OWN_DANCES.includes(id) && !!danceOf(id);
+}
 
 /**
  * WHICH OF THE FOUR THIS WHISTLE IS, OR '' FOR NONE.
@@ -134,6 +164,8 @@ export function weightedPick(weights, roll) {
  *   wait      seconds of something else first, which is the sack's tackle
  *   floor     { x, z } points nobody may be sent onto: a man lying on the grass
  *   calm      the visitor asked not to be moved about
+ *   bareHead  the hero wears no helmet (the visitor's avatar), so the shared
+ *             dances with a hand on or behind the head are his to roll too
  *   roll      () => 0..1, injected so a test can pin every choice
  *
  * Returns null when there is nothing to celebrate, which a caller should treat
@@ -143,7 +175,7 @@ export function chooseCelebration({
     hero, mates = [], rivals = [], homeX = 0, toward = -1,
     blameAt = null, crowdAt = null,
     bounds = null, scored = false, occasion = '', wait = 0, floor = [],
-    calm = false, roll = Math.random,
+    calm = false, bareHead = false, roll = Math.random,
 } = {}) {
     if (!hero || !hero.position) return null;
     const C = CFG.pose.celebration;
@@ -179,7 +211,8 @@ export function chooseCelebration({
     const weights = sacked ? budget.weights
         : (what === 'fifty' ? C.scoredWeights : C.weights);
     const mode = calm ? 'solo' : weightedPick(weights, roll());
-    const dance = calm ? 'bow' : DANCES[Math.floor(clamp(roll(), 0, 0.999999) * DANCES.length)];
+    const offered = dancesFor(bareHead);
+    const dance = calm ? 'bow' : offered[Math.floor(clamp(roll(), 0, 0.999999) * offered.length)];
     if (!mode) return null;
 
     // WHERE THE PARTY IS. In a mob it is the man with the ball, standing still.
@@ -653,7 +686,10 @@ function part({ who, to, delay, dance, faceAt, lead, C }) {
  */
 function fit(plan, C, { beat = C.beat, cap = C.cap, danceFloor = C.danceFloor } = {}) {
     const arrive = plan.parts.reduce((m, p) => Math.max(m, p.delay + p.travel), 0);
-    let danceFor = plan.calm ? Math.max(danceFloor, C.dance * 0.6) : C.dance;
+    // A shared dance is given longer, where there is room: it is a loop that
+    // holds its pose when the time is up, and its first figure has to read.
+    const asked = isSharedDance(plan.dance) ? C.sharedDance : C.dance;
+    let danceFor = plan.calm ? Math.max(danceFloor, C.dance * 0.6) : asked;
     const settle = C.settle;
 
     // `cap` here is what is left AFTER the wait, which the caller has already
@@ -758,6 +794,13 @@ export function celebrationAt(t, plan) {
             ? Math.atan2(p.dx, p.dz)
             : bearing(p.to, p.faceAt);
 
+        // A SHARED DANCE'S STEP IS THE DANCER'S OWN, turned the way he faces
+        // (the same turn dance-1.0.0's applyPose makes), so a Floss sways
+        // across his own front wherever he stands.
+        const yaw = face === null ? 0 : face;
+        const sx = step.step ? step.step.x * Math.cos(yaw) + step.step.z * Math.sin(yaw) : 0;
+        const sz = step.step ? step.step.z * Math.cos(yaw) - step.step.x * Math.sin(yaw) : 0;
+
         /**
          * AND THE SACKER GETS UP FIRST. The takedown left him face down on the
          * quarterback and the takedown's clock keeps him there, so the view
@@ -769,8 +812,8 @@ export function celebrationAt(t, plan) {
 
         out.set(p.position, {
             ...rising,
-            x: p.dx * going,
-            z: p.dz * going,
+            x: p.dx * going + sx,
+            z: p.dz * going + sz,
             y: step.y,
             face,
             spin: step.spin,
@@ -779,6 +822,10 @@ export function celebrationAt(t, plan) {
             arms: since >= 0 ? step.arms : '',
             amount: since >= 0 ? step.amount : 0,
             raised: since >= 0 && step.raised,
+            // A shared dance: every joint (roster.js applies it), and the
+            // ball in his hand rather than tucked, so both arms are free.
+            pose: since >= 0 && step.pose ? step.pose : null,
+            held: since >= 0 && step.held === true,
             running: moving,
         });
     }
@@ -848,6 +895,42 @@ export function celebrationAt(t, plan) {
     return out;
 }
 
+/**
+ * ONE OF THE SHARED DANCES, `since` seconds in, for a figure at this game's
+ * scale. The pose is dance-1.0.0's own (`danceAt`), frozen once `dur` is up
+ * so it is held through the settle like our own four. Its root is split the
+ * way view.js already draws a celebrant: the bounce and the step in metres
+ * (the shared part's are for a life-size figure, so they are scaled), the
+ * turn as `spin`, the leans as `lean` and `roll`, every one of them brought
+ * up by `amount` so a man eases into the dance rather than snapping. The
+ * joints go whole in `pose` for roster.js, which blends them by `amount`
+ * itself. `arms` says 'dance' so the view treats him as celebrating, and
+ * `held` keeps the ball in his hand, because both arms are busy.
+ *
+ * AND IT ENDS WHERE IT STARTED, as our own four do: the ROOT settles back to
+ * upright, square and on the grass over the last `blend` before `dur`, so the
+ * pose that is held through the settle is a man standing on his feet facing
+ * whoever he was addressing, with the dance's arms, hips and head frozen on
+ * him. A root frozen mid-bounce would hang him in the air under the card.
+ */
+function sharedStep(id, since, dur, amount, carrying, blend) {
+    const S = CFG.figureScale;
+    const pose = sharedPoseAt(danceOf(id), Math.min(Math.max(0, since), dur));
+    const root = amount * smooth((dur - since) / Math.max(0.01, blend));
+    return {
+        y: pose.root.y * S * root,
+        spin: pose.root.ry * root,
+        lean: pose.root.rx * root,
+        roll: pose.root.rz * root,
+        step: { x: pose.root.x * S * root, z: pose.root.z * S * root },
+        arms: 'dance',
+        amount,
+        raised: false,
+        held: !!carrying,
+        pose,
+    };
+}
+
 /** The angle from one world point to another, or null when there is nothing to
  *  look at. `z` first, because the rig faces +z (see view.js `targetFacing`). */
 function bearing(at, target) {
@@ -901,6 +984,8 @@ function danceAt(p, since, plan, C) {
     if (plan.calm) {
         return { y: 0, spin: 0, lean: 0, roll: 0, arms: 'up', amount, raised: carrying };
     }
+
+    if (isSharedDance(p.dance)) return sharedStep(p.dance, since, dur, amount, carrying, C.blend);
 
     if (p.dance === 'spin') {
         const turns = C.spin.turns;

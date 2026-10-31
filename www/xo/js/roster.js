@@ -32,6 +32,7 @@
  */
 import { createPerson } from '../../shared/js/people-1.0.0.min.js';
 import { createAvatar } from '../../shared/js/avatar-figure-1.0.0.min.js';
+import { jointPerson } from '../../shared/js/dance-1.0.0.min.js';
 import { XO_CONFIG as CFG } from './config.min.js';
 import { solveArm, calibrate } from './arm.min.js';
 import { kitOf, OWN } from './colors.min.js';
@@ -565,8 +566,63 @@ function addContactShadow(person) {
     );
     disc.rotation.x = -Math.PI / 2;
     disc.position.y = 0.02;
+    disc.name = 'contact-shadow';
     person.add(disc);
     return disc;
+}
+
+/**
+ * A WAIST AND A NECK FOR EVERY FIGURE (Steve, 2026-10-30: the shared dances
+ * as celebrations), through the shared part's own `jointPerson`
+ * (dance-1.0.0), which the avatar page already uses on a dressed figure:
+ * every child drawn above the neck's base (the head, the hair, the whole
+ * helmet) goes under the neck, everything else but the legs (the torso, the
+ * arms, the letter on the shirt) under the waist, each kept exactly where it
+ * was drawn. The rig itself (people-1.0.0) is untouched, as it has always
+ * been here.
+ *
+ * ORDER IS EVERYTHING, AND IT IS THIS: the arms and the legs are found and
+ * their resting angles read FIRST, because the arms are the waist's children
+ * afterwards and `person.children` no longer holds them; the arm is measured
+ * for the solver BEFORE, because `measureArm` reads the shoulder's height off
+ * the arm's own position, which is relative to the waist afterwards; and the
+ * contact shadow is added AFTER, because it has to stay on the grass under a
+ * man bowing from the waist. Scaling comes after all of it, in the caller.
+ * Under the test stub the children cannot be read and nothing is moved; the
+ * waist and the neck still exist, as empty groups.
+ */
+function jointFigure(person, { calibrate = true } = {}) {
+    const children = Array.isArray(person.children) ? person.children : [];
+    // THE RESTING ANGLES ARE CAPTURED, NOT ASSUMED. The shared rig sets a
+    // slight natural pose on every shoulder, and every pose starts from it.
+    // Hard-coding the numbers here would work until people-1.0.0 changed one
+    // of them, at which point every player would develop a permanent lean
+    // that nothing in this file explains.
+    person.userData.arms = children.filter((c) => c && c.userData && c.userData.isArm);
+    for (const arm of person.userData.arms) {
+        arm.userData.restX = arm.rotation.x;
+        arm.userData.restZ = arm.rotation.z;
+    }
+    // AND THE LEGS, THE SAME WAY. The hip pivot was always there and nothing
+    // had asked for it, so people-1.0.0 did not tag it: this file's own note
+    // used to say the legs were "bare meshes with no pivot", which was wrong
+    // and cost the game its stride. Found by the tag rather than by position,
+    // because a lookup by position into a shared rig is the fault
+    // person-rig-seams.test.mjs exists for.
+    person.userData.legs = children.filter((c) => c && c.userData && c.userData.isLeg);
+    for (const leg of person.userData.legs) leg.userData.restX = leg.rotation.x;
+    // AND THE ARM'S MEASUREMENTS, for the same reason: arm.js has to know
+    // where the shoulder is and how long the two segments are to put a hand
+    // anywhere, and reading them off a figure that was actually built means
+    // a change in the shared part arrives here rather than quietly moving
+    // every pose in the game.
+    if (calibrate) measureArm(person);
+
+    const rig = jointPerson(person);
+    person.userData.waist = rig.waist;
+    person.userData.neck = rig.neck;
+    addContactShadow(person);
+    return person;
 }
 
 /**
@@ -785,6 +841,11 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
         let x = rest + (side < 0 ? swing : -swing);
         let z = restZ;
         let fore = -(P.runElbow.rest + effort * P.runElbow.sprint);
+        // A twist along the arm, which only a shared dance asks for (the arms
+        // turn twist first: dance-1.0.0 sets their order to XZY at the
+        // jointing). Zero for every pose of our own, so an arm untwists once
+        // a dance is over.
+        let twist = 0;
 
         /**
          * AND IT IS FIRST IN THE CHAIN, DELIBERATELY.
@@ -801,7 +862,21 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
          * puts the hand where it says.
          */
         const celebrating = cel && !(clamped && side === T);
-        if (celebrating) {
+        if (celebrating && cel.pose) {
+            /**
+             * A SHARED DANCE: the joint angles themselves (dance-1.0.0's
+             * conventions: "L" is the figure's own left, +x side; `z` and the
+             * twist `y` mirror onto the right, as its applyPose has them),
+             * blended in from wherever the arm was by `amount`, then followed
+             * exactly. Nothing is solved: the shared part solved its contact
+             * poses against this same rig.
+             */
+            const a = cel.pose[side > 0 ? 'armL' : 'armR'];
+            x = lerp(x, a.x, cel.amount);
+            z = lerp(z, side * a.z, cel.amount);
+            fore = lerp(fore, a.fore, cel.amount);
+            twist = side * a.y * cel.amount;
+        } else if (celebrating) {
             const C = P.celebration;
             const ballArm = raising && side === T;
             const hand = ballArm
@@ -960,6 +1035,7 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
             && act.throwT > 0 && act.throwT < 1;
         arm.rotation.x = snap ? x : arm.rotation.x + (x - arm.rotation.x) * ease;
         arm.rotation.z = snap ? z : arm.rotation.z + (z - arm.rotation.z) * ease;
+        if (typeof arm.rotation.y === 'number') arm.rotation.y += (twist - arm.rotation.y) * ease;
 
         // THE ELBOW, which the rig did not have until this round. A scene that
         // never asks for one still gets the straight arm it always drew,
@@ -971,7 +1047,57 @@ export function poseFigure(figure, speed = 0, phase = 0, act = {}, delta = 1 / 6
         }
     }
 
-    strideLegs(figure, gait, ease);
+    // A shared dance owns the legs while it runs (a kick, a stance), and the
+    // waist and the neck, which nothing else here moves; otherwise the stride.
+    if (cel && cel.pose) danceLegs(figure, cel, ease);
+    else strideLegs(figure, gait, ease);
+    danceJoints(figure, cel && cel.pose ? cel : null, ease);
+}
+
+/**
+ * THE LEGS IN A SHARED DANCE: each hip to the pose's own angles (`legL`,
+ * `legR`: x a kick forward, z out to the side, mirrored onto the right as
+ * dance-1.0.0's applyPose has it), blended in from the stride by `amount`.
+ */
+function danceLegs(figure, cel, ease) {
+    const legs = figure.userData.legs;
+    if (!legs || !legs.length) return;
+    for (const leg of legs) {
+        const side = leg.userData.legSide < 0 ? -1 : 1;
+        const rest = leg.userData.restX !== undefined ? leg.userData.restX : 0;
+        const l = cel.pose[side > 0 ? 'legL' : 'legR'];
+        const x = lerp(rest, l.x, cel.amount);
+        const z = side * l.z * cel.amount;
+        leg.rotation.x += (x - leg.rotation.x) * ease;
+        if (typeof leg.rotation.z === 'number') leg.rotation.z += (z - leg.rotation.z) * ease;
+    }
+}
+
+/**
+ * THE WAIST AND THE NECK (dance-1.0.0's joints, given to every figure at
+ * build by `jointFigure`): a shared dance's bow, twist and bend, and its
+ * nod, turn and tilt, brought up by `amount`; at rest otherwise, eased back
+ * so a man finishing a dance straightens rather than snapping. A figure
+ * without them (the test stub's) is left alone, and so is a leg's sideways
+ * angle when no dance is running, beyond easing it back to the stride's zero.
+ */
+function danceJoints(figure, cel, ease) {
+    const pose = cel ? cel.pose : null;
+    const k = cel ? cel.amount : 0;
+    for (const name of ['waist', 'neck']) {
+        const joint = figure.userData[name];
+        if (!joint || !joint.rotation || typeof joint.rotation.x !== 'number') continue;
+        const j = pose ? pose[name] : null;
+        const want = j ? [j.x * k, j.y * k, j.z * k] : [0, 0, 0];
+        joint.rotation.x += (want[0] - joint.rotation.x) * ease;
+        joint.rotation.y += (want[1] - joint.rotation.y) * ease;
+        joint.rotation.z += (want[2] - joint.rotation.z) * ease;
+    }
+    if (!pose) {
+        for (const leg of figure.userData.legs || []) {
+            if (typeof leg.rotation.z === 'number') leg.rotation.z -= leg.rotation.z * ease;
+        }
+    }
 }
 
 /**
@@ -1228,7 +1354,7 @@ export function buildKitFigure(team) {
     addJersey(person, TEAMS[team].glyph, false);
     addPantsStripes(person, false);
     tagKit(person, team, kit);
-    addContactShadow(person);
+    jointFigure(person, { calibrate: false });
     person.name = `kit-${team}`;
     dressKitFigure(person, team);
     return person;
@@ -1270,7 +1396,6 @@ function buildAvatarPerson(avatar) {
     // Their own throwing arm (Steve, 2026-10-26): the avatar's handedness,
     // read by every pose and the held ball through `throwSideOf`.
     throwSides.set(person, built.avatar && built.avatar.handedness === 'left' ? 1 : -1);
-    addContactShadow(person);
     person.userData.avatar = true;
     visitorFigures.add(person);
     return person;
@@ -1342,15 +1467,17 @@ export function buildPlayer(settings, i, avatar = null, as = 'qb') {
         addJersey(person, TEAMS[team].glyph, isLineman);
         addPantsStripes(person, isLineman);
         tagKit(person, team, kit);
-        addContactShadow(person);
     }
     // Read before anything overwrites it, and only when it is a real
     // number: under the test stub every property is a proxy. The field's
     // lift comes from the players; the visitor's own (platform shoes stand
-    // them taller) is theirs alone, kept on the figure for view.js.
+    // them taller) is theirs alone, kept on the figure for view.js. Before
+    // the jointing, which stands the figure on its soles again itself.
     const lift = Number.isFinite(person.position.y) && person.position.y > 0 ? person.position.y * CFG.figureScale : null;
     if (lift !== null && !visitor) FIGURE_LIFT = lift;
     person.userData.lift = lift;
+    // The waist and the neck, the limbs found and measured, the shadow last.
+    jointFigure(person);
     // Scaled as a whole, so the helmet, the contact shadow and every limb
     // pivot move together. Scaling the rig's parts individually would put
     // the helmet through the head.
@@ -1366,31 +1493,8 @@ export function buildPlayer(settings, i, avatar = null, as = 'qb') {
     // which tips a player facing across the field sideways instead of
     // forward.
     person.rotation.order = 'YXZ';
-    // The arms, found once at build time rather than searched every frame.
-    // THE RESTING ANGLES ARE CAPTURED, NOT ASSUMED. The shared rig sets a
-    // slight natural pose on every shoulder, and every pose below starts
-    // from it. Hard-coding the numbers here would work until people-1.0.0
-    // changed one of them, at which point every player would develop a
-    // permanent lean that nothing in this file explains.
-    person.userData.arms = person.children.filter((c) => c.userData && c.userData.isArm);
-    for (const arm of person.userData.arms) {
-        arm.userData.restX = arm.rotation.x;
-        arm.userData.restZ = arm.rotation.z;
-    }
-    // AND THE LEGS, THE SAME WAY, WHICH IS NEW. The hip pivot was always
-    // there and nothing had ever asked for it, so `people-1.0.0` did not
-    // tag it: this file's own note used to say the legs were "bare meshes
-    // with no pivot", which was wrong and cost the game its stride. Found
-    // by the tag rather than by position, because a lookup by position into
-    // a shared rig is the fault `person-rig-seams.test.mjs` exists for.
-    person.userData.legs = person.children.filter((c) => c.userData && c.userData.isLeg);
-    for (const leg of person.userData.legs) leg.userData.restX = leg.rotation.x;
-    // AND THE ARM'S MEASUREMENTS GO THE SAME WAY, for the same reason.
-    // arm.js has to know where the shoulder is and how long the two
-    // segments are to put a hand anywhere, and reading them off a figure
-    // that was actually built means a change in the shared part arrives
-    // here rather than quietly moving every pose in the game.
-    measureArm(person);
+    // The arms and the legs were found once at build time, in `jointFigure`,
+    // rather than being searched every frame.
     return person;
 }
 

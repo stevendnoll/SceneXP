@@ -17,7 +17,7 @@
  */
 import { XO_CONFIG as CFG, FIELD, simToWorld, UNITS_TO_METRES } from './config.min.js';
 import { initField, setBandAt, fadeBand, updateScoreboard, applyFieldColors } from './field.min.js';
-import { initRoster, figureFor, TEAMS, applyTeamColors, throwSideOf, getRosterGroup } from './roster.min.js';
+import { initRoster, figureFor, TEAMS, applyTeamColors, throwSideOf, getRosterGroup, isVisitorFigure } from './roster.min.js';
 import { createAvatarStore, installChip } from '../../shared/js/avatar-1.0.0.min.js';
 import {
     loadColors, saveColors, setColors, resetColors, teamColors, warningsFor,
@@ -984,6 +984,7 @@ function planCelebration(result, pair = { tackler: '', carrier: '' }) {
         if (occasion === 'expired') {
             return chooseCelebration({
                 occasion, hero: at(sacker), mates, rivals: rivals.map(at), calm: reducedMotion,
+                bareHead: bareHeaded(sacker),
             });
         }
         /**
@@ -1013,6 +1014,7 @@ function planCelebration(result, pair = { tackler: '', carrier: '' }) {
             },
             wait: rest.length,
             calm: reducedMotion,
+            bareHead: bareHeaded(sacker),
         });
     }
 
@@ -1046,7 +1048,16 @@ function planCelebration(result, pair = { tackler: '', carrier: '' }) {
         // Somebody who asked not to be moved about gets the still version: arms
         // up and held, no run, no spin, no hop. celebration.js owns that.
         calm: reducedMotion,
+        bareHead: bareHeaded(carrier),
     });
+}
+
+/** Whether `obj`'s player wears no helmet, which is the visitor's avatar
+ *  (roster.js, D10): the shared dances with a hand on or behind the head are
+ *  his to roll, and nobody else's (celebration.js `dancesFor`). */
+function bareHeaded(obj) {
+    const figure = obj ? figureFor(obj.settings.position) : null;
+    return !!figure && isVisitorFigure(figure);
 }
 
 /** Out of the celebration and on to the card, for anybody who would rather

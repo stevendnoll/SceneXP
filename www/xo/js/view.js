@@ -128,8 +128,38 @@ function carryFor(obj, carrier) {
     // the carry out for themselves, and a ball that disagrees with the arm
     // holding it is the one fault this whole path exists to avoid.
     if (raisingBall(obj.settings.position) > 0) return 'raise';
+    // ...OR IN HIS HAND THROUGH A SHARED DANCE (celebration.js `held`), where
+    // both arms are busy and the ball goes wherever the hand does
+    // (`handPoint`), rather than to the tuck's fixed point.
+    if (heldInHand(obj.settings.position)) return 'hand';
     if (obj.settings.position !== 'qb') return 'tuck';
     return obj.state.run ? 'tuck' : 'throw';
+}
+
+/** Whether the party has `position` dancing with the ball in his hand. */
+function heldInHand(position) {
+    if (!party) return false;
+    const got = party.get(position);
+    return !!(got && got.held === true && (got.amount || 0) > 0);
+}
+
+/**
+ * WHERE A FIGURE'S HAND IS, in world metres: the rig's own hand mesh on the
+ * `side` arm (the forearm's `isHand` child), read through the matrices as
+ * drawn this frame. Null when the figure has no such hand to read (the test
+ * stub's), so a caller falls back to the tuck's point.
+ */
+export function handPoint(figure, side) {
+    const arms = figure && figure.userData ? figure.userData.arms : null;
+    if (!Array.isArray(arms)) return null;
+    const arm = arms.find((a) => a && a.userData && a.userData.armSide === side);
+    const forearm = arm && arm.userData ? arm.userData.forearm : null;
+    const kids = forearm && Array.isArray(forearm.children) ? forearm.children : [];
+    const hand = kids.find((c) => c && c.isMesh && c.userData && c.userData.isHand);
+    if (!hand || typeof hand.getWorldPosition !== 'function') return null;
+    figure.updateMatrixWorld(true);
+    const v = hand.getWorldPosition(new THREE.Vector3());
+    return { x: v.x, y: v.y, z: v.z };
 }
 
 /**
@@ -2048,7 +2078,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             // reads this first of everything, because every pose below it is a
             // judgement about a play that is no longer running.
             celebrate: cheer && cheer.arms
-                ? { arms: cheer.arms, amount: cheer.amount } : null,
+                ? { arms: cheer.arms, amount: cheer.amount, pose: cheer.pose || null } : null,
         }, delta);
 
         // THE JUKE IS A ROLL, and it is the only thing in the game that uses
@@ -2567,7 +2597,11 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             // is facing, exactly as `pose.tuck.hand` does. That is what keeps a
             // ball in the hand that is posed to be holding it: the two numbers
             // are read off the same picture rather than converted between two.
-            const want = toWorld(figure, hold.ball);
+            // In a shared dance the ball is wherever the hand is, read off the
+            // drawn arm, since the arm is following a pose rather than a
+            // point written down for it.
+            const inHand = mode === 'hand' ? handPoint(figure, throwSideOf(figure)) : null;
+            const want = inHand || toWorld(figure, hold.ball);
             const aim = toWorld(figure, hold.aim, true);
 
             // GATHERING IT IN. On the frame a pass is caught the ball is still
