@@ -823,7 +823,10 @@ function bumpAside(slump, parts, lim, C) {
                 return false;
             };
             // ...and never BACK toward the man hitting him: a knock carries a
-            // man sideways or along the run, not into the runner's face.
+            // man sideways or along the run, not into the runner's face. The
+            // fan below never offers a backward spot, but the settle can push
+            // one there (traced: a mark just ahead of him sent the landing
+            // 0.56 m back up the line), so it is asked of the SETTLED spot.
             const backward = (to) => (to.x - at.x) * near.ux + (to.z - at.z) * near.uz < -1e-9;
             let best = { to: at, far: 0, room: room(at) };
             const reach = body * B.clear;
@@ -842,7 +845,7 @@ function bumpAside(slump, parts, lim, C) {
                     };
                     if (crosses(try_)) continue;
                     const to = settle(try_);
-                    if (crosses(to)) continue;
+                    if (crosses(to) || backward(to)) continue;
                     const got = room(to);
                     const far = Math.hypot(to.x - at.x, to.z - at.z);
                     // A touchline turns an outward push into one along the
