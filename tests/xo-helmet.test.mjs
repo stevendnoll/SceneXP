@@ -271,6 +271,15 @@ describe("the visitor's avatar at quarterback", () => {
         for (let p = m; p; p = p.parent) if (p.visible === false) return false;
         return true;
     };
+    /** Every node under `person` named `name`. Searched deep, not among the
+     *  direct children: since 2026-10-30 a figure has a waist and a neck
+     *  (dance-1.0.0's jointing, for the shared dances), and the head and the
+     *  helmet are the neck's, the torso and the letter the waist's. */
+    const named = (person, name) => {
+        const out = [];
+        person.traverse((o) => { if (o !== person && o.name === name) out.push(o); });
+        return out;
+    };
 
     test('without a saved avatar the quarterback is exactly a plain player', () => {
         const outline = (person) => {
@@ -283,11 +292,12 @@ describe("the visitor's avatar at quarterback", () => {
         const wr = roster.buildPlayer(WR, 0, null);
         expect(outline(qb)).toEqual(outline(wr));
         expect(qb.userData.avatar).toBeUndefined();
-        expect(qb.children.filter((o) => o.name === 'jersey-mark').length).toBeGreaterThan(0);
+        expect(named(qb, 'jersey-mark').length).toBeGreaterThan(0);
         expect(roster.helmetRim()).toBeCloseTo(1.367, 2);
-        // The usual quarterback keeps his helmet.
+        // The usual quarterback keeps his helmet, on his neck.
         for (const name of HELMET_PARTS) {
-            expect(`${name}: ${qb.children.filter((o) => o.name === name).length > 0}`).toBe(`${name}: true`);
+            expect(`${name}: ${named(qb, name).length > 0}`).toBe(`${name}: true`);
+            expect(named(qb, name).every((o) => o.parent === qb.userData.neck)).toBe(true);
         }
     });
 
@@ -295,13 +305,13 @@ describe("the visitor's avatar at quarterback", () => {
         const hat = A.HATS.find((h) => h.id !== 'none').id;
         const qb = plain(roster.buildPlayer(QB, 0, { hat, glasses: 'sunglasses', shirt: 'teal' }));
         expect(qb.userData.avatar).toBe(true);
-        const head = qb.children.find((o) => o.name === 'head');
+        const head = named(qb, 'head')[0];
         expect(head).toBeDefined();
         expect(head.children.find((o) => o.name === 'hat')).toBeDefined();
         expect(head.children.find((o) => o.name === 'glasses')).toBeDefined();
-        expect(qb.children.filter((o) => o.name === 'jersey-mark')).toHaveLength(0);
+        expect(named(qb, 'jersey-mark')).toHaveLength(0);
         for (const name of HELMET_PARTS) {
-            expect(`${name}: ${qb.children.filter((o) => o.name === name).length}`).toBe(`${name}: 0`);
+            expect(`${name}: ${named(qb, name).length}`).toBe(`${name}: 0`);
         }
         // Nothing of theirs is tagged for the team's colors: not the shirt,
         // and no longer a helmet.
@@ -328,7 +338,7 @@ describe("the visitor's avatar at quarterback", () => {
         // The hair as the avatar page itself draws it, piece for piece and
         // vertex for vertex, so a hidden piece or a trimmed hank shows.
         const hairOf = (person) => {
-            const head = person.children.find((o) => o.name === 'head');
+            const head = named(person, 'head')[0];
             const hair = head.children.find((o) => o.userData && o.userData.isHair);
             if (!hair) return null;
             const pieces = [];
@@ -350,6 +360,35 @@ describe("the visitor's avatar at quarterback", () => {
             }
         }
         expect(styles).toBeGreaterThan(10);
+    });
+
+    /**
+     * AT ANY SLOT THEY CHOOSE (specs/xo-photos-plan, Step 1). The avatar goes
+     * wherever `as` says and nowhere else, and the quarterback it left is a
+     * plain player again: helmeted, lettered, and throwing with the field's
+     * right hand whichever hand the avatar has.
+     */
+    test('at the slot the visitor chose: the avatar there, and every other slot a plain player', async () => {
+        const { SLOTS } = await import(join(root, 'www/xo/js/playas.js'));
+        const look = { shirt: 'teal', handedness: 'left' };
+        const settingsOf = (id, team) => ({ team, positionGroup: id.replace(/\d+$/, ''), position: id });
+        const helmeted = (person) => HELMET_PARTS.every((name) => named(person, name).length > 0);
+        for (const s of SLOTS) {
+            const theirs = roster.buildPlayer(settingsOf(s.id, s.team), 0, look, s.id);
+            expect(`${s.id}: ${roster.isVisitorFigure(theirs)} ${helmeted(theirs)}`).toBe(`${s.id}: true false`);
+            expect(theirs.userData.avatar).toBe(true);
+            if (s.id === 'qb') continue;
+            // The quarterback they left, and this slot when they chose the
+            // quarterback (the default), are both the usual player.
+            const qb = roster.buildPlayer(QB, 0, look, s.id);
+            expect(`${s.id}: ${roster.isVisitorFigure(qb)} ${helmeted(qb)}`).toBe(`${s.id}: false true`);
+            expect(roster.throwSideOf(qb)).toBe(roster.THROWING_SIDE);
+            const usual = roster.buildPlayer(settingsOf(s.id, s.team), 0, look);
+            expect(`${s.id}: ${roster.isVisitorFigure(usual)} ${helmeted(usual)}`).toBe(`${s.id}: false true`);
+        }
+        // Without an avatar no slot is ever the visitor.
+        expect(roster.isVisitorFigure(roster.buildPlayer(WR, 0, null, 'wr1'))).toBe(false);
+        expect(roster.isVisitorFigure(null)).toBe(false);
     });
 });
 

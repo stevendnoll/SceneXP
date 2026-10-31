@@ -19,7 +19,7 @@
  * actually told apart.
  */
 import { jest } from '@jest/globals';
-import { installThree } from './helpers/three-stub.mjs';
+import { installThree, keepPropRecords } from './helpers/three-stub.mjs';
 import { installDom, fire, flushAsync } from './helpers/dom-stub.mjs';
 import { readFile } from 'node:fs/promises';
 
@@ -358,7 +358,7 @@ describe('team colors', () => {
         expect(C.jerseyOf(0)).toBe('#241773');
         expect(C.helmetOf(1)).toBe('#000000');
         const saved = JSON.parse(localStorage.getItem('exes-n-ohs-team-colors'));
-        expect(saved.teams[1]).toEqual({ jersey: '#ffb612', helmet: '#000000' });
+        expect(saved.teams[1]).toMatchObject({ jersey: '#ffb612', helmet: '#000000' });
         // The field too, with the warning the card will show.
         const answer = JSON.parse(window.xo.colors({ field: '#ffb612' }));
         expect(C.fieldColor()).toBe('#ffb612');
@@ -369,6 +369,131 @@ describe('team colors', () => {
         window.xo.colors('reset');
         expect(C.isDefault()).toBe(true);
         expect(localStorage.getItem('exes-n-ohs-team-colors')).toBeNull();
+    });
+
+    test('the console hook takes a whole kit for a team, stripes included', async () => {
+        await boot();
+        const C = await import('../www/xo/js/colors.min.js');
+        window.xo.colors({ x: { mark: '#000000', pants: '#ffffff', shoes: '#ff0000', helmetStripe: true, pantsStripe: '#123456' }, o: '#ffb612' });
+        expect(C.kitOf(0)).toEqual({
+            jersey: '#ff992c', helmet: '#ff992c', mark: '#000000', pants: '#ffffff', shoes: '#ff0000',
+            helmetStripe: '#ffffff', pantsStripe: '#123456',
+        });
+        expect(C.jerseyOf(1)).toBe('#ffb612');
+        const saved = JSON.parse(localStorage.getItem('exes-n-ohs-team-colors'));
+        expect(saved.teams[0]).toMatchObject({ helmetStripe: null, pantsStripe: '#123456', pants: '#ffffff' });
+        window.xo.colors('reset');
+        expect(C.isDefault()).toBe(true);
+    });
+});
+
+/**
+ * THE STANDS BEFORE THE WHISTLE (Steve, 2026-10-30): up from the line-up,
+ * through the play, and at the whistle the cheer for whoever won it takes over
+ * from that very buzz while the rest sit down. Read through `crowdState` from
+ * the MIN build, as the replay's cheer test reads `cheerState`.
+ */
+describe('the stands before the whistle', () => {
+    const snapAndThrow = async () => {
+        press('Snap the ball');
+        await flushAsync();
+        press('Throw');
+        await flushAsync();
+    };
+
+    test('are up from the line-up to the whistle, when the cheer takes over from that very buzz', async () => {
+        const spectacle = await import('../www/xo/js/spectacle.min.js');
+        const main = await toLivePlay();
+        expect(main.__test__.phase()).toBe('presnap');
+        const before = spectacle.crowdState();
+        expect(before.buzzing).not.toBeNull();
+        expect(before.cheer).toBeNull();
+        await snapAndThrow();
+        let now = 0;
+        const frame = () => { now += 16.7; dom.loops[0](now); };
+        frame();
+        frame();
+        expect(main.__test__.phase()).toBe('live');
+        expect(spectacle.crowdState().buzzing).toBe(before.buzzing);
+        let tookOver = false;
+        for (let i = 0; i < 2000 && dom.el('result').hidden !== false; i += 1) {
+            frame();
+            const s = spectacle.crowdState();
+            if (s.cheer) {
+                expect(s.buzzing).toBeNull();
+                tookOver = tookOver || s.handoff === before.buzzing;
+            }
+        }
+        expect(dom.el('result').hidden).toBe(false);
+        expect(tookOver).toBe(true);
+    });
+
+    test('are up again from the replay\'s first frame, and hand over at its whistle', async () => {
+        const spectacle = await import('../www/xo/js/spectacle.min.js');
+        const main = await toLivePlay();
+        const live = spectacle.crowdState().buzzing;
+        await snapAndThrow();
+        let now = 0;
+        const frame = () => { now += 16.7; dom.loops[0](now); };
+        await runToResult(frame);
+        const watch = dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay');
+        watch.click();
+        await flushAsync();
+        const replay = spectacle.crowdState();
+        expect(replay.cheer).toBeNull();
+        expect(replay.buzzing).not.toBeNull();
+        expect(replay.buzzing).toBeGreaterThan(live);
+        expect(replay.buzzing).toBe(main.getState().elapsed);
+        let tookOver = false;
+        for (let i = 0; i < 2000 && dom.el('result').hidden !== false; i += 1) {
+            frame();
+            const s = spectacle.crowdState();
+            if (s.cheer) tookOver = tookOver || s.handoff === replay.buzzing;
+        }
+        expect(dom.el('result').hidden).toBe(false);
+        expect(tookOver).toBe(true);
+    });
+
+    /**
+     * UNDER THE STUB THE STANDS ARE NEVER BUILT, so a cheer runs until something
+     * seats it, which is exactly the case a quick Next play meets on a real
+     * page for a moment: the buzz must wait for that cheer rather than cut it.
+     */
+    test('a next play called while the stands still cheer waits for them to sit', async () => {
+        const spectacle = await import('../www/xo/js/spectacle.min.js');
+        const main = await toLivePlay();
+        await snapAndThrow();
+        let now = 0;
+        const frame = () => { now += 16.7; dom.loops[0](now); };
+        await runToResult(frame);
+        expect(spectacle.crowdState().cheer).not.toBeNull();
+        // Next play opens the playbook, and choosing from it is the line-up.
+        dom.el('result-actions').children.find((b) => b.textContent === 'Next play').click();
+        await flushAsync();
+        expect(spectacle.crowdState()).toMatchObject({ pending: false, buzzing: null });
+        const body = dom.el('playbook').querySelector('.playbook-body');
+        deep(body).find((n) => n.dataset && n.dataset.slug).click();
+        await flushAsync();
+        expect(main.__test__.phase()).toBe('presnap');
+        const s = spectacle.crowdState();
+        expect(s.cheer).not.toBeNull();
+        expect(s).toMatchObject({ pending: true, buzzing: null });
+    });
+
+    test('keep still for somebody who asked not to be moved about', async () => {
+        const plain = globalThis.window.matchMedia;
+        globalThis.window.matchMedia = (q) => ({
+            matches: /reduce/.test(q), media: q,
+            addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
+        });
+        try {
+            const spectacle = await import('../www/xo/js/spectacle.min.js');
+            const main = await toLivePlay();
+            expect(main.__test__.phase()).toBe('presnap');
+            expect(spectacle.crowdState()).toEqual({ buzzing: null, pending: false, cheer: null, handoff: null });
+        } finally {
+            globalThis.window.matchMedia = plain;
+        }
     });
 });
 
@@ -1243,7 +1368,7 @@ describe("the visitor's avatar at quarterback (specs/avatar M7, 2026-10-26)", ()
         // told so (the ball starts at his throwing hand).
         expect(main.getState().throwHand).toBe('right');
         expect(dom.el('avatar-playing-img').hidden).toBe(true);
-        expect(dom.el('avatar-playing-text').textContent).toBe('Take the snap at quarterback as yourself.');
+        expect(dom.el('avatar-playing-text').textContent).toBe('Take the field as yourself, at quarterback or any position you like.');
         expect(dom.el('avatar-playing-link').textContent).toBe('Make your avatar');
         // Nothing is counted toward the home page's label by looking.
         expect(globalThis.localStorage.getItem('scenexp-avatar-chip')).toBeNull();
@@ -1275,5 +1400,1599 @@ describe("the visitor's avatar at quarterback (specs/avatar M7, 2026-10-26)", ()
         expect(dom.el('avatar-playing-link').textContent).toBe('Make your avatar');
         // The quarterback on the field changes on the next load, not mid-game.
         expect(main.getState().avatarQb).toBe(true);
+    });
+});
+
+/**
+ * PLAY AS ANY PLAYER (specs/xo-photos-plan, Step 1). The slot is stored with
+ * the play settings and read at boot, before the playbook is built. The
+ * playbook row and the pick come in Step 2, so here the console hook drives
+ * it, through the same `playAs` the row will call.
+ */
+describe('the visitor plays as the player they chose', () => {
+    const PLAY_KEY = 'exes-n-ohs-play-settings';
+
+    async function saveAvatar(look = { skin: 'deep', shirt: 'teal', handedness: 'left' }) {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        createAvatarStore({ win: null }).save(look);
+    }
+    const roster = () => import('../www/xo/js/roster.min.js');
+    /** Which slots the visitor's avatar is drawn in. */
+    async function visitorSlots() {
+        const r = await roster();
+        const { SLOTS } = await import('../www/xo/js/playas.min.js');
+        return SLOTS.map((s) => s.id).filter((id) => r.isVisitorFigure(r.figureFor(id)));
+    }
+
+    test('a stored choice is read at boot: the avatar at receiver C, the usual quarterback throwing right-handed', async () => {
+        await saveAvatar();
+        globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ lastPlay: 'pass1', playAs: 'wr3' }));
+        const main = await boot();
+        expect(main.getState().isLoaded).toBe(true);
+        expect(main.getState().playAs).toBe('wr3');
+        expect(await visitorSlots()).toEqual(['wr3']);
+        // The avatar is left-handed, and it is not the one throwing.
+        expect(main.getState().avatarQb).toBe(false);
+        expect(main.getState().throwHand).toBe('right');
+        expect(dom.el('avatar-playing-text').textContent).toBe('You line up at receiver C as your avatar.');
+    });
+
+    test('the console hook moves them before the snap, says why not during a play, and remembers', async () => {
+        await saveAvatar();
+        const main = await boot();
+        expect(main.getState().isLoaded).toBe(true);
+        const xo = globalThis.window.xo;
+        expect(xo.playAs()).toBe('qb');
+        expect(await visitorSlots()).toEqual(['qb']);
+        expect(main.getState().throwHand).toBe('left');
+
+        // On the welcome card.
+        expect(xo.playAs('wr2')).toBe('wr2');
+        expect(await visitorSlots()).toEqual(['wr2']);
+        expect(main.getState().throwHand).toBe('right');
+        expect(dom.el('avatar-playing-text').textContent).toBe('You line up at receiver B as your avatar.');
+        expect(JSON.parse(globalThis.localStorage.getItem(PLAY_KEY)).playAs).toBe('wr2');
+
+        // Nobody by that name, and nothing moves.
+        expect(xo.playAs('db6')).toMatch(/^No player "db6"/);
+        expect(xo.playAs('captain')).toMatch(/One of: qb, wr1, wr2/);
+        expect(await visitorSlots()).toEqual(['wr2']);
+
+        // Before the snap, on the defense.
+        dom.el('welcome-actions').children[0].click();   // Take the field
+        await flushAsync();
+        const body = dom.el('playbook').querySelector('.playbook-body');
+        deep(body).find((n) => n.dataset && n.dataset.slug).click();
+        await flushAsync();
+        expect(xo.playAs('s1')).toBe('s1');
+        expect(await visitorSlots()).toEqual(['s1']);
+
+        // During the play, refused.
+        press('Snap the ball');
+        await flushAsync();
+        expect(xo.playAs('wr1')).toMatch(/^Not now/);
+        expect(await visitorSlots()).toEqual(['s1']);
+        expect(main.getState().playAs).toBe('s1');
+
+        // Back to the quarterback, which stores nothing at all.
+        await runToResultFromZero();
+        dom.el('result-actions').children
+            .find((b) => b.textContent === 'Next play').click();
+        await flushAsync();
+        // The playbook is open over the field the play finished on.
+        expect(xo.playAs('qb')).toBe('qb');
+        expect(main.getState().throwHand).toBe('left');
+        expect('playAs' in JSON.parse(globalThis.localStorage.getItem(PLAY_KEY))).toBe(false);
+    });
+
+    test('without an avatar the choice is kept, and nobody on the field is the visitor', async () => {
+        const main = await boot();
+        expect(main.getState().isLoaded).toBe(true);
+        expect(globalThis.window.xo.playAs('wr4')).toBe('wr4');
+        expect(main.getState().playAs).toBe('wr4');
+        expect(await visitorSlots()).toEqual([]);
+        expect(main.getState().throwHand).toBe('right');
+        expect(dom.el('avatar-playing-text').textContent).toBe('Take the field as yourself, at quarterback or any position you like.');
+    });
+
+    test('a play that sits the visitor out has them on the sideline, and every other benched player out of sight', async () => {
+        // Real `visible` flags on every Group, which the plain stub swallows.
+        keepPropRecords();
+        await saveAvatar();
+        // Jumbo Split benches receivers C and D. It is the play behind the
+        // welcome card because it was the last one called, which is only true
+        // if the stored settings are read before the line-up.
+        globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ lastPlay: 'jumbo1', playAs: 'wr3' }));
+        const main = await boot();
+        expect(main.getState().isLoaded).toBe(true);
+        const r = await roster();
+        expect(r.isVisitorFigure(r.figureFor('wr3'))).toBe(true);
+        expect(r.figureFor('wr4').visible).toBe(false);
+        expect(r.figureFor('wr3').visible).toBe(true);
+        expect(r.figureFor('wr1').visible).toBe(true);
+        // Change to a player who IS in this formation and the sideline empties.
+        globalThis.window.xo.playAs('wr1');
+        expect(r.figureFor('wr3').visible).toBe(false);
+        expect(r.figureFor('wr1').visible).toBe(true);
+        expect(r.isVisitorFigure(r.figureFor('wr1'))).toBe(true);
+    });
+});
+
+/**
+ * THE PHOTO MOMENTS OF A PLAY (specs/xo-photos-plan, Step 3). A real play's
+ * outcome is a random roll, so each event is SET on the live play through
+ * `__test__` and the page is left to notice it: who held the ball, the
+ * whistle's tackle, the fifty. What is asserted is the wiring, that each one
+ * becomes a moment of the right kind and is taken on a LATER frame than the
+ * one it happened on. moments.js and snapshot.js have their own suite.
+ */
+describe('the moments worth a photo', () => {
+    let now = 200000;
+    const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
+    const kinds = (main) => main.__test__.moments().map((m) => `${m.kind}:${m.hero}:${m.partner || ''}`);
+    const find = (main, position) => main.__test__.play().game.objects.find((o) => o.settings.position === position);
+
+    async function snapped() {
+        const main = await toLivePlay();
+        press('Snap the ball');
+        await flushAsync();
+        frames(3);
+        return main;
+    }
+
+    test('a throw, then a catch: both taken, a frame or more after they happened', async () => {
+        const main = await snapped();
+        press('Throw A');
+        await flushAsync();
+        // Noted, not yet taken: the throw is photographed mid-sweep.
+        expect(main.__test__.pending().map((m) => m.kind)).toEqual(['release']);
+        expect(main.__test__.moments()).toEqual([]);
+        // The ball arrives in receiver A's hands before the next frame, as a
+        // short pass does on a slow phone, and before the real flight can
+        // land it (which it does, a dozen frames on).
+        find(main, 'wr1').state.hasBall = true;
+        frames(1);
+        expect(main.__test__.pending().map((m) => `${m.kind}:${m.hero}`)).toEqual(['release:qb', 'catch:wr1']);
+        expect(main.__test__.moments()).toEqual([]);
+        frames(15);
+        expect(kinds(main)).toEqual(expect.arrayContaining(['catch:wr1:', 'release:qb:wr1']));
+        // Neither is still waiting. (The real play may have gone on to a
+        // tackle, which is its own moment.)
+        expect(main.__test__.pending().filter((m) => m.kind === 'catch' || m.kind === 'release')).toEqual([]);
+        const moment = main.__test__.moments().find((m) => m.kind === 'catch');
+        expect(moment.at).toBeGreaterThan(0);
+        expect(moment.snapshot).toBeTruthy();
+    });
+
+    test('a ball in an O\'s hands is a pick', async () => {
+        const main = await snapped();
+        press('Throw B');
+        await flushAsync();
+        find(main, 'db2').state.hasBall = true;
+        frames(15);
+        expect(kinds(main)).toContain('pick:db2:');
+        expect(kinds(main).some((k) => k.startsWith('catch'))).toBe(false);
+    });
+
+    test('a tackle at the whistle is the carrier with the man who brought him down, and a sack when nobody threw', async () => {
+        const main = await snapped();
+        const play = main.__test__.play();
+        // The quarterback still has it, nobody threw, and he is down.
+        play.playState.state.tackled = true;
+        play.playState.state.anim.done = true;
+        frames(120);
+        const sack = main.__test__.moments().find((m) => m.kind === 'sack');
+        expect(sack).toBeTruthy();
+        expect(sack.hero).toBe('qb');
+        expect(['db1', 'db2', 'db3', 'db4', 's1', 's2']).toContain(sack.partner);
+        // Taken after the contact, not at the whistle.
+        expect(sack.at).toBeGreaterThan(0);
+    });
+
+    test('crossing into the fifty is the whistle, and it is the carrier\'s', async () => {
+        const main = await snapped();
+        press('Keep it');
+        await flushAsync();
+        const play = main.__test__.play();
+        play.playState.state.anim.run50 = true;
+        play.playState.state.anim.done = true;
+        frames(30);
+        expect(kinds(main)).toContain('fifty:qb:');
+    });
+
+    test('the console lists them on the result card, shows one with the card out of the way, and puts the field back', async () => {
+        const main = await boot();
+        const xo = globalThis.window.xo;
+        expect(xo.moments()).toMatch(/^No moments yet/);
+        expect(xo.moment(1)).toBe('On the result card only, after a play.');
+        await expect(xo.photo(1)).resolves.toBe('On the result card only, after a play.');
+
+        dom.el('welcome-actions').children[0].click();
+        await flushAsync();
+        const body = dom.el('playbook').querySelector('.playbook-body');
+        deep(body).find((n) => n.dataset && n.dataset.slug).click();
+        await flushAsync();
+        press('Snap the ball');
+        await flushAsync();
+        press('Throw A');
+        await flushAsync();
+        await runToResult(() => dom.loops[0](now += 16.7));
+        // Watch the replay is offered on the card, so the card is the screen.
+        const lines = xo.moments().split('\n');
+        expect(lines.length).toBeGreaterThan(0);
+        expect(lines.length).toBeLessThanOrEqual(3);
+        for (const [i, line] of lines.entries()) {
+            expect(line).toMatch(new RegExp(`^${i + 1}\\. (Fifty|Interception|Catch|Sack|Tackle|Throw): [a-z]`));
+            expect(line).toMatch(/\d\.\d s after the snap$/);
+        }
+
+        const camera = await import('../www/xo/js/camera.min.js');
+        expect(xo.moment(1)).toMatch(/^Showing /);
+        expect(dom.el('result').hidden).toBe(true);
+        frames(1);
+        expect(camera.getDriver()).toBe('show');
+        expect(xo.moment(9)).toMatch(/^No moment 9\. This play has \d\.$/);
+        expect(xo.moment()).toBe('Back to the field as it was.');
+        expect(dom.el('result').hidden).toBe(false);
+        frames(1);
+        expect(camera.getDriver()).toBe('play');
+
+        // The photo is drawn on the next frame, in the frame loop. The stub's
+        // canvas cannot encode a file, which is the answer a browser without
+        // toBlob gets, and the page carries on.
+        const photo = xo.photo(1);
+        frames(1);
+        await expect(photo).resolves.toBe("This browser couldn't make the picture.");
+        await expect(xo.photo(9)).resolves.toMatch(/^No moment 9\./);
+        expect(dom.el('result').hidden).toBe(false);
+
+        // Shown and left up, the next play takes it down with it, and the next
+        // snap starts the list again.
+        xo.moment(1);
+        dom.el('result-actions').children.find((b) => b.textContent === 'Next play').click();
+        await flushAsync();
+        frames(1);
+        expect(camera.getDriver()).toBe('idle');
+        deep(body).find((n) => n.dataset && n.dataset.slug).click();
+        await flushAsync();
+        press('Snap the ball');
+        await flushAsync();
+        expect(xo.moments()).toMatch(/^No moments yet/);
+        expect(main.getState().isLoaded).toBe(true);
+    });
+});
+
+/**
+ * A thrown ball caught by receiver A, then whatever the play does; with
+ * `downed`, he is brought down at once too. Leaves the result card up.
+ * `frames(n)` is the caller's own clock, so a describe's `now` keeps counting.
+ */
+async function catchToResult(frames, { downed = false } = {}) {
+    const main = await toLivePlay();
+    const find = (position) => main.__test__.play().game.objects.find((o) => o.settings.position === position);
+    press('Snap the ball');
+    await flushAsync();
+    frames(3);
+    press('Throw A');
+    await flushAsync();
+    find('wr1').state.hasBall = true;
+    frames(2);
+    if (downed) {
+        const st = main.__test__.play().playState.state;
+        st.tackled = true;
+        st.anim.done = true;
+    }
+    await runToResult(() => frames(1));
+    return main;
+}
+
+/**
+ * THE SHARE SHEET (specs/xo-photos-plan, Step 7): offered on the result card
+ * whenever there is a recording, opened over the field with the card out of
+ * the way, the clip made as it opens (a take in the page's own loop, recorded
+ * by a MediaRecorder the suite fakes), played back when it is done, switched
+ * round the four views, and handed to the share sheet or the downloads folder.
+ * The picture of the play's best moment rides along as before. Modelled on
+ * Derby Day's share card tests (tests/derby-share.test.mjs).
+ */
+describe('the share sheet', () => {
+    const PLAY_KEY = 'exes-n-ohs-play-settings';
+    let now = 300000;
+    const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
+    const aCatch = (opts) => catchToResult(frames, opts);
+    const resultLabels = () => dom.el('result-actions').children.map((b) => b.textContent);
+    const shareBtn = () => dom.el('result-actions').children.find((b) => b.id === 'result-share-btn');
+    const stage = () => dom.el('clip-stage');
+    const share = () => dom.el('clip-share');
+    const picture = () => dom.el('clip-picture');
+    const progress = () => dom.el('clip-progress').textContent;
+    const status = () => dom.el('clip-status').textContent;
+
+    /** The names nginx keeps from a beacon (specs/nginx-config.txt); any other
+     *  is sent and silently dropped, so none may carry anything. */
+    const LOGGED = ['action', 'mobile', 'scene', 'lang', 'hash', 'kind', 'outcome', 'seconds', 'saved', 'destroyed', 'timestamp'];
+
+    /** Canvases that encode a picture and capture a stream, videos that play,
+     *  and download links that write down what they saved. */
+    function encodingCanvases() {
+        const saved = [];
+        const make = dom.documentStub.createElement;
+        dom.documentStub.createElement = (tag) => {
+            const e = make(tag);
+            if (tag === 'canvas') {
+                e.captureStream = () => ({});
+                e.toBlob = (cb, type) => cb({ size: 2048, type });
+            }
+            if (tag === 'a') e.click = () => saved.push(e.download);
+            if (tag === 'video') e.play = () => Promise.resolve();
+            return e;
+        };
+        return saved;
+    }
+
+    /** A browser that records (WebM, as an older Chrome does), on top of the
+     *  canvases above. */
+    function recordingBrowser() {
+        class FakeRecorder {
+            static isTypeSupported(t) { return t === 'video/webm'; }
+
+            constructor(stream, options) { this.mimeType = options.mimeType; FakeRecorder.starts += 1; FakeRecorder.last = this; }
+
+            start() {}
+
+            stop() {
+                this.ondataavailable({ data: new Blob(['clip']) });
+                this.onstop();
+            }
+        }
+        FakeRecorder.starts = 0;
+        const Canvas = function () {};
+        Canvas.prototype.captureStream = () => ({});
+        Object.assign(dom.windowStub, { MediaRecorder: FakeRecorder, HTMLCanvasElement: Canvas, Blob });
+        return { FakeRecorder, saved: encodingCanvases() };
+    }
+
+    /** Object URLs written down rather than made. */
+    function objectUrls() {
+        const made = [];
+        const revoked = [];
+        const realCreate = globalThis.URL.createObjectURL;
+        const realRevoke = globalThis.URL.revokeObjectURL;
+        globalThis.URL.createObjectURL = (blob) => { made.push(blob); return `blob:clip-${made.length}`; };
+        globalThis.URL.revokeObjectURL = (url) => { revoked.push(url); };
+        return {
+            made,
+            revoked,
+            restore() { globalThis.URL.createObjectURL = realCreate; globalThis.URL.revokeObjectURL = realRevoke; },
+        };
+    }
+
+    /** The usage pings, as URLs. */
+    function beacons() {
+        const sent = [];
+        globalThis.Image = class { set src(url) { sent.push(new URL(url, 'http://localhost:8000/xo/')); } };
+        return sent;
+    }
+    const of = (sent, action) => sent.filter((u) => u.searchParams.get('action') === action);
+    const kinds = (sent, action) => of(sent, action).map((u) => u.searchParams.get('kind'));
+
+    /** Step frames until `pred` holds, within a budget of frames. */
+    async function settle(pred, budget = 3000) {
+        for (let i = 0; i < budget && !pred(); i += 1) {
+            frames(1);
+            await flushAsync(2);
+        }
+        expect(pred()).toBe(true);
+    }
+
+    async function ranked(main, visitor = null) {
+        const { rankMoments } = await import('../www/xo/js/moments.min.js');
+        return rankMoments(main.__test__.moments(), visitor);
+    }
+
+    /** THE STANDS IN THE TAKE (Steve, 2026-10-30): up from its first frame, as
+     *  in a replay, and the cheer takes over from them at its whistle. */
+    test('the stands are up through the take and the cheer takes over at its whistle', async () => {
+        recordingBrowser();
+        const urls = objectUrls();
+        dom.windowStub.File = class { constructor(parts, name, opts) { this.name = name; this.type = opts.type; } };
+        try {
+            const spectacle = await import('../www/xo/js/spectacle.min.js');
+            const main = await aCatch();
+            shareBtn().click();
+            await flushAsync();
+            expect(main.__test__.phase()).toBe('clip');
+            const take = spectacle.crowdState();
+            expect(take.cheer).toBeNull();
+            expect(take.buzzing).toBe(main.getState().elapsed);
+            let tookOver = false;
+            for (let i = 0; i < 2000 && main.__test__.phase() === 'clip'; i += 1) {
+                frames(1);
+                const s = spectacle.crowdState();
+                if (s.cheer) tookOver = tookOver || s.handoff === take.buzzing;
+            }
+            expect(main.__test__.phase()).toBe('result');
+            expect(tookOver).toBe(true);
+        } finally {
+            urls.restore();
+        }
+    });
+
+    test('offered on the card, the clip made as the sheet opens, counted down, played back, and shared with the address', async () => {
+        const { FakeRecorder } = recordingBrowser();
+        const urls = objectUrls();
+        const sent = beacons();
+        const handed = [];
+        globalThis.navigator.canShare = () => true;
+        globalThis.navigator.share = async (data) => { handed.push(data); };
+        dom.windowStub.File = class { constructor(parts, name, opts) { this.name = name; this.type = opts.type; } };
+        try {
+            const main = await aCatch();
+            expect(resultLabels()).toEqual(['Watch the replay', 'Share the play', 'Next play']);
+            expect(shareBtn().getAttribute('aria-label')).toBe('Share the play as a video');
+
+            shareBtn().click();
+            await flushAsync();
+            expect(dom.el('clip').hidden).toBe(false);
+            expect(dom.el('result').hidden).toBe(true);
+            expect(dom.el('clip-panel').focused).toBe(true);
+            // The take began at once, from the director's own view, into a
+            // canvas in the stage, with the recorder on it.
+            expect(main.__test__.phase()).toBe('clip');
+            expect(main.__test__.taking().quarter).toBe(0);
+            expect(FakeRecorder.starts).toBe(1);
+            expect(stage().children).toHaveLength(1);
+            expect(stage().children[0].tagName).toMatch(/canvas/i);
+            expect(stage().children[0].classList.contains('is-unseen')).toBe(false);
+            expect(dom.el('clip-view-count').textContent).toBe('View 1 of 4');
+            expect(progress()).toBe('Making your clip…');
+            expect(dom.el('clip-tools').hidden).toBe(false);
+            // No avatar, so nobody to follow: no Follow me.
+            expect(dom.el('clip-follow').hidden).toBe(true);
+            expect(main.__test__.taking().follow).toBe('ball');
+            // Share waits, busy rather than disabled, named for what this browser can do.
+            expect(share().hidden).toBe(false);
+            expect(share().textContent).toBe('Share video');
+            expect(share().getAttribute('aria-disabled')).toBe('true');
+            expect(share().disabled).toBe(false);
+            // The picture is offered and developing.
+            expect(picture().hidden).toBe(false);
+            expect(picture().textContent).toBe('Share a picture');
+            expect(picture().getAttribute('aria-disabled')).toBe('true');
+            // No avatar, so the nudge, in the moment's own words.
+            const best = (await ranked(main))[0];
+            const words = await import('../www/xo/js/moments.min.js');
+            expect(dom.el('clip-nudge').hidden).toBe(false);
+            expect(dom.el('clip-nudge-text').textContent).toBe(words.photoNudge(best.kind));
+
+            frames(2);
+            await flushAsync();
+            await flushAsync();
+            expect(progress()).toMatch(/^Making your clip… \d+ seconds? to go$/);
+            expect(picture().getAttribute('aria-disabled')).toBe('false');
+            // Pressed early: said so, nothing sent.
+            const ui = await import('../www/xo/js/clip-ui.min.js');
+            await expect(ui.shareClip()).resolves.toBe('');
+            expect(status()).toBe('Your clip is still being made.');
+            expect(handed).toEqual([]);
+
+            // The take runs out: the video in the stage, playing, Share lit.
+            await settle(() => main.__test__.phase() === 'result');
+            await flushAsync();
+            await flushAsync();
+            expect(stage().children).toHaveLength(1);
+            const video = stage().children[0];
+            expect(video.tagName).toMatch(/video/i);
+            expect(video.src).toBe('blob:clip-1');
+            expect(urls.made[0].type).toBe('video/webm');
+            expect(video.muted).toBe(true);
+            expect(video.loop).toBe(true);
+            expect(video.autoplay).toBe(true);
+            expect(video.controls).toBe(true);
+            expect(video.getAttribute('aria-label')).toBe('Your clip of the play');
+            expect(progress()).toMatch(/^Your clip is ready, \d+ seconds? long\.$/);
+            expect(status()).toBe('Your clip is ready to share.');
+            expect(share().getAttribute('aria-disabled')).toBe('false');
+            expect(dom.el('game-canvas').classList.contains('is-recording')).toBe(false);
+
+            // Share: the file, named for the result, with the words and the address.
+            await expect(ui.shareClip()).resolves.toBe('shared');
+            expect(handed).toHaveLength(1);
+            expect(handed[0].files[0].name).toMatch(/^scenexp-xo-(catch|incomplete|interception|sack|run|run-50)-1080x1920\.webm$/);
+            expect(handed[0].files[0].type).toBe('video/webm');
+            expect(handed[0].title).toBe("X's and O's");
+            expect(handed[0].text).toMatch(/X's and O's[!.] http:\/\/.+\/$/);
+            expect(status()).toBe('Shared.');
+            // A dismissed share sheet is the visitor's decision.
+            globalThis.navigator.share = async () => { const e = new Error('closed'); e.name = 'AbortError'; throw e; };
+            await expect(ui.shareClip()).resolves.toBe('cancelled');
+            expect(status()).toBe('Shared.');
+            // The picture goes the same way.
+            globalThis.navigator.share = async (data) => { handed.push(data); };
+            await expect(ui.sharePicture()).resolves.toBe('shared');
+            expect(handed[1].files[0].name).toBe(`scenexp-xo-${best.kind}-1080x1350.jpg`);
+            expect(handed[1].files[0].type).toBe('image/jpeg');
+
+            // The pings: opened, made (the format and the view, the length on
+            // its own where the log keeps it), then how each hand-off went,
+            // and the picture's own. Only names the log keeps.
+            const clip = of(sent, 'clip');
+            expect(clip.map((u) => u.searchParams.get('kind'))).toEqual(['opened', 'made', 'shared', 'cancelled']);
+            expect(clip[0].searchParams.get('outcome')).toMatch(/^result=[a-z0-9-]+&view=1$/);
+            expect(clip[1].searchParams.get('outcome')).toBe('format=webm&view=1');
+            expect(Number(clip[1].searchParams.get('seconds'))).toBeGreaterThan(0);
+            expect(clip[2].searchParams.get('outcome')).toBe('format=webm&view=1');
+            expect(clip[2].searchParams.get('seconds')).toBe(clip[1].searchParams.get('seconds'));
+            expect(kinds(sent, 'photo')).toEqual(['shared']);
+            for (const u of sent) {
+                for (const key of u.searchParams.keys()) expect(LOGGED).toContain(key);
+            }
+
+            // Close: back to the card with focus on its button, the clip's address let go.
+            dom.el('clip-close').click();
+            await flushAsync();
+            expect(dom.el('clip').hidden).toBe(true);
+            expect(dom.el('result').hidden).toBe(false);
+            expect(shareBtn().focused).toBe(true);
+            expect(urls.revoked).toEqual(['blob:clip-1']);
+            expect(stage().children).toHaveLength(0);
+            // Escape closes it too.
+            shareBtn().click();
+            await flushAsync();
+            expect(dom.el('clip').hidden).toBe(false);
+            fire(dom.documentStub, 'keydown', { key: 'Escape' });
+            expect(dom.el('clip').hidden).toBe(true);
+            expect(main.__test__.phase()).toBe('result');
+            expect(main.getState().isLoaded).toBe(true);
+        } finally {
+            urls.restore();
+            delete globalThis.Image;
+        }
+    });
+
+    test('Switch view, and V, make the clip again from the next vantage point, and a closed sheet lets a take go', async () => {
+        recordingBrowser();
+        const urls = objectUrls();
+        const sent = beacons();
+        try {
+            const main = await aCatch();
+            shareBtn().click();
+            await flushAsync();
+            expect(main.__test__.taking().quarter).toBe(0);
+            frames(3);
+            dom.el('clip-view').click();
+            await flushAsync();
+            expect(main.__test__.phase()).toBe('clip');
+            expect(main.__test__.taking().quarter).toBe(1);
+            expect(main.__test__.taking().frames).toBe(0);
+            expect(dom.el('clip-view-count').textContent).toBe('View 2 of 4');
+            expect(status()).toBe('View 2 of 4. Making the clip again from here.');
+            expect(progress()).toBe('Making your clip…');
+            expect(stage().children).toHaveLength(1);
+            // V, as in the replay, but not with a modifier held.
+            fire(dom.documentStub, 'keydown', { key: 'v' });
+            await flushAsync();
+            expect(main.__test__.taking().quarter).toBe(2);
+            fire(dom.documentStub, 'keydown', { key: 'V', metaKey: true });
+            await flushAsync();
+            expect(main.__test__.taking().quarter).toBe(2);
+            // Round the four and back to the director's own.
+            fire(dom.documentStub, 'keydown', { key: 'V' });
+            fire(dom.documentStub, 'keydown', { key: 'v' });
+            await flushAsync();
+            expect(main.__test__.taking().quarter).toBe(0);
+            expect(dom.el('clip-view-count').textContent).toBe('View 1 of 4');
+
+            // Let it finish, then switch: the finished clip is let go and a new take begins.
+            await settle(() => main.__test__.phase() === 'result');
+            await flushAsync();
+            await flushAsync();
+            expect(stage().children[0].tagName).toMatch(/video/i);
+            expect(urls.made).toHaveLength(1);
+            dom.el('clip-view').click();
+            await flushAsync();
+            expect(urls.revoked).toEqual(['blob:clip-1']);
+            expect(main.__test__.phase()).toBe('clip');
+            expect(main.__test__.taking().quarter).toBe(1);
+            expect(share().getAttribute('aria-disabled')).toBe('true');
+            expect(stage().children[0].tagName).toMatch(/canvas/i);
+
+            // Closing mid-take cancels it and gives the field back.
+            frames(2);
+            dom.el('clip-close').click();
+            await flushAsync();
+            expect(dom.el('clip').hidden).toBe(true);
+            expect(main.__test__.phase()).toBe('result');
+            expect(main.__test__.taking()).toBeNull();
+            expect(dom.el('game-canvas').classList.contains('is-recording')).toBe(false);
+            expect(dom.el('result').hidden).toBe(false);
+            // No ping for a take nobody finished, one for every switch.
+            expect(kinds(sent, 'clip')).toEqual(['opened', 'view', 'view', 'view', 'view', 'made', 'view']);
+            expect(of(sent, 'clip')[1].searchParams.get('outcome')).toBe('view=2');
+        } finally {
+            urls.restore();
+            delete globalThis.Image;
+        }
+    });
+
+    test('where a file cannot be shared, Save video and Save a picture put them in the downloads folder', async () => {
+        const { saved } = recordingBrowser();
+        const urls = objectUrls();
+        delete globalThis.navigator.share;
+        delete globalThis.navigator.canShare;
+        try {
+            const main = await aCatch();
+            shareBtn().click();
+            await flushAsync();
+            expect(share().textContent).toBe('Save video');
+            expect(picture().textContent).toBe('Save a picture');
+            await settle(() => main.__test__.phase() === 'result');
+            await flushAsync();
+            await flushAsync();
+            const ui = await import('../www/xo/js/clip-ui.min.js');
+            await expect(ui.shareClip()).resolves.toBe('saved');
+            expect(saved).toHaveLength(1);
+            expect(saved[0]).toMatch(/^scenexp-xo-[a-z0-9-]+-1080x1920\.webm$/);
+            expect(status()).toBe('Your clip is in your downloads.');
+            await expect(ui.sharePicture()).resolves.toBe('saved');
+            expect(saved[1]).toMatch(/^scenexp-xo-[a-z]+-1080x1350\.jpg$/);
+            expect(status()).toBe('Your picture is in your downloads.');
+            // The clip is saved from the address it plays from: one for it, one for the picture.
+            expect(urls.made).toHaveLength(2);
+        } finally {
+            urls.restore();
+        }
+    });
+
+    test('a browser that cannot record is offered the picture alone, and told kindly', async () => {
+        encodingCanvases();
+        const sent = beacons();
+        try {
+            const main = await aCatch();
+            shareBtn().click();
+            await flushAsync();
+            expect(main.__test__.phase()).toBe('result');
+            expect(progress()).toBe("This browser can't make a video, but you can save a picture of the play.");
+            expect(share().hidden).toBe(true);
+            expect(dom.el('clip-tools').hidden).toBe(true);
+            expect(picture().hidden).toBe(false);
+            expect(stage().children).toHaveLength(0);
+            frames(1);
+            await flushAsync();
+            await flushAsync();
+            expect(picture().getAttribute('aria-disabled')).toBe('false');
+            const ui = await import('../www/xo/js/clip-ui.min.js');
+            expect(ui.switchClipView()).toBe(false);
+            await expect(ui.shareClip()).resolves.toBe('');
+            expect(kinds(sent, 'clip')).toEqual(['unsupported']);
+            dom.el('clip-close').click();
+            await flushAsync();
+            expect(dom.el('result').hidden).toBe(false);
+            // Where the share sheet takes a picture, the words say share.
+            globalThis.navigator.canShare = (data) => data.files[0].type === 'image/jpeg';
+            dom.windowStub.File = class { constructor(parts, name, opts) { this.name = name; this.type = opts.type; } };
+            shareBtn().click();
+            await flushAsync();
+            expect(progress()).toBe("This browser can't make a video, but you can share a picture of the play.");
+            expect(picture().textContent).toBe('Share a picture');
+        } finally {
+            delete globalThis.Image;
+        }
+    });
+
+    test('with an avatar there is no nudge, and the clip opens on the view the replay was watched from', async () => {
+        recordingBrowser();
+        const urls = objectUrls();
+        try {
+            const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+            createAvatarStore({ win: null }).save({ skin: 'deep', shirt: 'teal' });
+            globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'wr1' }));
+            const main = await aCatch({ downed: true });
+            const camera = await import('../www/xo/js/camera.min.js');
+            // Watch the replay from the third view, then come back to the card.
+            dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+            await flushAsync();
+            frames(1);
+            press('Switch view');
+            press('Switch view');
+            expect(camera.viewQuarter()).toBe(2);
+            press('Skip replay');
+            await flushAsync();
+            expect(main.__test__.phase()).toBe('result');
+            shareBtn().click();
+            await flushAsync();
+            expect(dom.el('clip-nudge').hidden).toBe(true);
+            expect(main.__test__.taking().quarter).toBe(2);
+            expect(dom.el('clip-view-count').textContent).toBe('View 3 of 4');
+            dom.el('clip-close').click();
+            await flushAsync();
+            expect(main.__test__.phase()).toBe('result');
+        } finally {
+            urls.restore();
+        }
+    });
+
+    test('Follow me (QA 2026-10-30): with an avatar on the field the camera can follow the visitor instead of the ball, on the sheet and the replay, kept for the visit and never pinged', async () => {
+        recordingBrowser();
+        const urls = objectUrls();
+        const sent = beacons();
+        try {
+            const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+            createAvatarStore({ win: null }).save({ skin: 'deep', shirt: 'teal' });
+            // The visitor plays receiver B, who is a blocker on this play:
+            // receiver A catches it and is brought down.
+            globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'wr2' }));
+            const main = await aCatch({ downed: true });
+            const R = await import('../www/xo/js/replay.min.js');
+            const roster = await import('../www/xo/js/roster.min.js');
+            const find = (p) => main.__test__.play().game.objects.find((o) => o.settings.position === p);
+            expect(main.__test__.follow()).toBe('ball');
+
+            // THE SHEET: the toggle is there, off, and the take follows the ball.
+            shareBtn().click();
+            await flushAsync();
+            const followBtn = dom.el('clip-follow');
+            expect(followBtn.hidden).toBe(false);
+            expect(followBtn.getAttribute('aria-pressed')).toBe('false');
+            expect(main.__test__.taking().follow).toBe('ball');
+            frames(2);
+            expect(main.__test__.aim().source).toBe('ball');
+            // Pressed: the clip is made again, following the visitor.
+            followBtn.click();
+            await flushAsync();
+            expect(followBtn.getAttribute('aria-pressed')).toBe('true');
+            expect(status()).toBe('Following you. Making the clip again.');
+            expect(main.__test__.follow()).toBe('avatar');
+            expect(main.__test__.taking().follow).toBe('avatar');
+            expect(main.__test__.taking().frames).toBe(0);
+            frames(2);
+            const aim = main.__test__.aim();
+            expect(aim.source).toBe('avatar');
+            const me = R.frameAt(R.playheadFrame()).find((o) => o.settings.position === 'wr2');
+            expect([aim.x, aim.y]).toEqual([me.coords.x, me.coords.y]);
+            // Through the ending the visitor, as drawn, is the aim, framed alone:
+            // he is a blocker, not one of the two in the tackle.
+            const t = main.__test__.taking();
+            for (let i = 0; i < 2000 && R.playheadFrame() < t.plan.ticks; i += 1) frames(1);
+            const ending = main.__test__.ending();
+            expect(ending.points).toHaveLength(8);
+            const figure = roster.figureFor('wr2');
+            expect(ending.focus).toEqual({
+                x: Number(figure.position.x) || 0, y: Number(figure.position.y) || 0, z: Number(figure.position.z) || 0,
+            });
+            // F toggles it back, as on the replay row.
+            fire(dom.documentStub, 'keydown', { key: 'f' });
+            await flushAsync();
+            expect(followBtn.getAttribute('aria-pressed')).toBe('false');
+            expect(status()).toBe('Following the ball. Making the clip again.');
+            expect(main.__test__.taking().follow).toBe('ball');
+            followBtn.click();
+            await flushAsync();
+            expect(main.__test__.follow()).toBe('avatar');
+            dom.el('clip-close').click();
+            await flushAsync();
+
+            // THE REPLAY ROW remembers the visit's choice, says it, and toggles live.
+            dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+            await flushAsync();
+            expect(actionLabels()).toEqual(['Switch view', 'Follow me', 'Skip replay']);
+            const rowBtn = dom.el('hud-actions').children.find((b) => b.id === 'follow-btn');
+            expect(rowBtn.getAttribute('aria-pressed')).toBe('true');
+            expect(rowBtn.dataset.keys).toBe('F');
+            frames(2);
+            expect(main.__test__.aim().source).toBe('avatar');
+            expect(main.__test__.cameraState().focus).toBeTruthy();
+            press('Follow me');
+            await flushAsync();
+            expect(rowBtn.getAttribute('aria-pressed')).toBe('false');
+            expect(main.__test__.follow()).toBe('ball');
+            frames(2);
+            expect(main.__test__.aim().source).toBe('ball');
+            // And back, live, mid-replay. (The row's F reaches it through the
+            // HUD's key map, which keyAction's own test holds; the stub's
+            // element search cannot find a row button by attribute.)
+            press('Follow me');
+            await flushAsync();
+            expect(main.__test__.follow()).toBe('avatar');
+            expect(rowBtn.getAttribute('aria-pressed')).toBe('true');
+            expect(rowBtn.getAttribute('aria-keyshortcuts')).toBe('F');
+            frames(2);
+            expect(main.__test__.aim().source).toBe('avatar');
+            press('Skip replay');
+            await flushAsync();
+
+            // NOTHING IS PINGED ABOUT IT: no beacon of its own, and no word of
+            // it on the clip's.
+            expect(sent.some((u) => u.searchParams.get('action') === 'follow')).toBe(false);
+            for (const u of sent) {
+                expect(u.searchParams.get('kind')).not.toBe('follow');
+                expect(u.searchParams.get('outcome') || '').not.toMatch(/follow/);
+            }
+
+            // A VISITOR WHOSE PLAYER SAT THE PLAY OUT has nobody to follow: the
+            // camera stays on the ball, through the ending too.
+            find('wr2').settings.benched = true;
+            shareBtn().click();
+            await flushAsync();
+            expect(dom.el('clip-follow').hidden).toBe(true);
+            expect(main.__test__.taking().follow).toBe('avatar');
+            frames(1);
+            expect(main.__test__.aim().source).toBe('ball');
+            const benched = main.__test__.taking();
+            for (let i = 0; i < 2000 && R.playheadFrame() < benched.plan.ticks; i += 1) frames(1);
+            expect(main.__test__.ending().points).toHaveLength(16);
+            dom.el('clip-close').click();
+            await flushAsync();
+            dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+            await flushAsync();
+            expect(actionLabels()).toEqual(['Switch view', 'Skip replay']);
+        } finally {
+            urls.restore();
+            delete globalThis.Image;
+        }
+    });
+
+    test('followed into the tackle, the visitor is the aim and the man with him stays in frame', async () => {
+        recordingBrowser();
+        const urls = objectUrls();
+        try {
+            const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+            createAvatarStore({ win: null }).save({ skin: 'deep', shirt: 'teal' });
+            // The visitor is receiver A: he catches it and is brought down.
+            globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'wr1' }));
+            const main = await aCatch({ downed: true });
+            const R = await import('../www/xo/js/replay.min.js');
+            const roster = await import('../www/xo/js/roster.min.js');
+            shareBtn().click();
+            await flushAsync();
+            dom.el('clip-follow').click();
+            await flushAsync();
+            expect(main.__test__.taking().follow).toBe('avatar');
+            const t = main.__test__.taking();
+            for (let i = 0; i < 2000 && R.playheadFrame() < t.plan.ticks; i += 1) frames(1);
+            const ending = main.__test__.ending();
+            // Two bodies: him first, then his tackler.
+            expect(ending.points).toHaveLength(16);
+            const figure = roster.figureFor('wr1');
+            expect(ending.focus).toEqual({
+                x: Number(figure.position.x) || 0, y: Number(figure.position.y) || 0, z: Number(figure.position.z) || 0,
+            });
+            dom.el('clip-close').click();
+            await flushAsync();
+        } finally {
+            urls.restore();
+        }
+    });
+
+    test('reduced motion: the take is recorded unseen, and the finished clip waits for its play button', async () => {
+        dom.windowStub.matchMedia = (q) => ({
+            media: q, matches: /reduce/.test(q), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
+        });
+        recordingBrowser();
+        const urls = objectUrls();
+        try {
+            const main = await aCatch();
+            shareBtn().click();
+            await flushAsync();
+            expect(stage().children[0].classList.contains('is-unseen')).toBe(true);
+            await settle(() => main.__test__.phase() === 'result');
+            await flushAsync();
+            await flushAsync();
+            const video = stage().children[0];
+            expect(video.tagName).toMatch(/video/i);
+            expect(video.autoplay).toBe(false);
+            expect(video.controls).toBe(true);
+        } finally {
+            urls.restore();
+        }
+    });
+});
+
+/**
+ * THE CLIP'S TAKE (specs/xo-photos-plan, Step 6): the last seconds of the
+ * recording re-run for a recorder, drawn frame by frame into a stage canvas
+ * through the clip's own camera while the game's canvas is hidden, and
+ * everything given back at the end or on a cancel. The sheet that will drive
+ * it is Step 7, so the take is reached through `__test__` and the console
+ * hook `xo.clip(view)`.
+ */
+describe('the clip\'s take', () => {
+    let now = 400000;
+    const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
+    const aCatch = (opts) => catchToResult(frames, opts);
+    const canvas = () => dom.el('game-canvas');
+
+    /** A stage canvas whose context writes down what is drawn on it. */
+    function recordingStage() {
+        const drawn = [];
+        const stage = dom.documentStub.createElement('canvas');
+        stage.getContext = () => new Proxy({}, {
+            get: (t, k) => (k in t ? t[k] : (...args) => drawn.push([k, ...args])),
+            set: (t, k, v) => { t[k] = v; return true; },
+        });
+        return { stage, drawn };
+    }
+
+    /** Step frames until `promise` settles, within a budget of frames. */
+    async function settle(promise, budget = 3000) {
+        let done = false;
+        let value;
+        promise.then((v) => { done = true; value = v; });
+        for (let i = 0; i < budget && !done; i += 1) {
+            frames(1);
+            await flushAsync(2);
+        }
+        expect(done).toBe(true);
+        return value;
+    }
+
+    /** What the stamp should say, from the card. */
+    function stampOnCard() {
+        const headline = dom.el('result-headline').textContent;
+        const points = dom.el('result-points').textContent;
+        return points === '0' ? headline : `${headline} ${points}`;
+    }
+
+    test('a take re-runs the last seconds of the play for the recorder, with the field hidden, and gives everything back', async () => {
+        const main = await aCatch();
+        const { XO_CONFIG: CFG } = await import('../www/xo/js/config.min.js');
+        const Clip = await import('../www/xo/js/clip.min.js');
+        const R = await import('../www/xo/js/replay.min.js');
+        const camera = await import('../www/xo/js/camera.min.js');
+        const view = await import('../www/xo/js/view.min.js');
+        const { stage, drawn } = recordingStage();
+        // The live play threw it, so the view's throw clock has run on.
+        expect(view.throwClock()).toBeGreaterThan(CFG.pose.throwRelease.time);
+
+        // A stage with no context is refused, and nothing changes.
+        const bare = dom.documentStub.createElement('canvas');
+        bare.getContext = () => null;
+        await expect(main.__test__.take(bare)).resolves.toBeNull();
+        expect(main.__test__.phase()).toBe('result');
+
+        // A SHORT RECORDING, so the clip's window starts at the snap whatever
+        // this play's dice rolled: the play as it finished, held for a hundred
+        // ticks. And the playhead left at its end, so the take has to put it
+        // where the clip starts.
+        const objects = main.__test__.play().game.objects;
+        R.startRecording(objects);
+        for (let i = 0; i < 100; i += 1) R.record(objects);
+        R.seek(R.frameCount() - 1);
+        const p = main.__test__.take(stage, { quarter: 1 });
+        expect(main.__test__.phase()).toBe('clip');
+        const t = main.__test__.taking();
+        expect(t.quarter).toBe(1);
+        expect([t.w, t.h]).toEqual([CFG.clip.width, CFG.clip.height]);
+        expect([stage.width, stage.height]).toEqual([CFG.clip.width, CFG.clip.height]);
+        expect(canvas().classList.contains('is-recording')).toBe(true);
+        // The plan starts the clip's seconds before the whistle, and the
+        // playhead is put there, where the camera opens.
+        expect(t.plan.start).toBe(Clip.clipStart(R.frameCount()));
+        expect(t.plan.ticks).toBe(100);
+        expect(R.playheadFrame()).toBe(t.plan.start);
+        // A short play's window starts at the snap, so the take opens as the
+        // replay does: the snap motion begins and the throw is forgotten.
+        expect(t.plan.start).toBe(0);
+        expect(view.throwClock()).toBe(-1);
+        expect(view.snapProgress()).toBe(0);
+        expect(t.plan.total).toBeGreaterThan(t.plan.play + CFG.clip.hold - 1e-9);
+        expect(t.shoulder).toEqual({ side: 1, want: 1, held: 0, seeded: false });
+        expect(Number.isFinite(t.anchor.x) && Number.isFinite(t.anchor.z)).toBe(true);
+        // A second take while one runs is refused.
+        await expect(main.__test__.take(stage, { quarter: 2 })).resolves.toBeNull();
+        expect(main.__test__.taking().quarter).toBe(1);
+
+        // Every frame goes to the stage with the wordmark on it, and the
+        // frame's own render is skipped: the shoulder memory has been asked.
+        frames(1);
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(1);
+        expect(drawn.filter((c) => c[0] === 'fillText').map((c) => c[1])).toEqual([CFG.clip.wordmark]);
+        expect(main.__test__.taking().shoulder.seeded).toBe(true);
+        // ...and so has the aim's own memory (the smoothed aim, QA 2026-10-30).
+        expect(main.__test__.taking().aim.seeded).toBe(true);
+        expect(main.__test__.taking().frames).toBe(1);
+
+        const value = await settle(p);
+        expect(value.cancelled).toBe(false);
+        // The renderer was given its size and ratio back.
+        expect(value.released).toBe(true);
+        expect(value.seconds).toBeCloseTo(t.plan.total, 9);
+        const draws = drawn.filter((c) => c[0] === 'drawImage').length;
+        expect(value.frames).toBe(draws);
+        // About the plan's length of frames, at sixty a second.
+        expect(Math.abs(draws - t.plan.total / 0.0167)).toBeLessThan(4);
+        // The stamp was on the final hold's frames only.
+        const stamp = stampOnCard();
+        const stamped = drawn.filter((c) => c[0] === 'fillText' && c[1] === stamp).length;
+        expect(stamped).toBeGreaterThan(0);
+        expect(stamped).toBeLessThan(draws);
+        expect(Math.abs(stamped - CFG.clip.hold / 0.0167)).toBeLessThan(4);
+        // The wordmark was on every one.
+        expect(drawn.filter((c) => c[0] === 'fillText' && c[1] === CFG.clip.wordmark)).toHaveLength(draws);
+
+        // Everything back: the phase, the canvas, the card, and the replay's own camera after.
+        expect(main.__test__.phase()).toBe('result');
+        expect(main.__test__.taking()).toBeNull();
+        expect(canvas().classList.contains('is-recording')).toBe(false);
+        expect(dom.el('result').hidden).toBe(false);
+        frames(1);
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(draws);
+        dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+        await flushAsync();
+        frames(1);
+        expect(camera.getDriver()).toBe('replay');
+        expect(R.playheadFrame()).toBeLessThan(5);
+    });
+
+    test('a cancelled take gives the field back at once, the next play lets one go, and off the card a take is refused', async () => {
+        const main = await aCatch();
+        const { stage, drawn } = recordingStage();
+        const p = main.__test__.take(stage, {});
+        frames(5);
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(5);
+        expect(main.__test__.cancelTake()).toBe(true);
+        await expect(p).resolves.toEqual({ cancelled: true, frames: 5, seconds: expect.any(Number), released: true });
+        expect(main.__test__.phase()).toBe('result');
+        expect(canvas().classList.contains('is-recording')).toBe(false);
+        expect(main.__test__.cancelTake()).toBe(false);
+        // Nothing more is drawn into a stage whose take is over.
+        frames(2);
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(5);
+
+        // Next play lets a running take go on its way out.
+        const p2 = main.__test__.take(stage, { quarter: 3 });
+        frames(2);
+        dom.el('result-actions').children.find((b) => b.textContent === 'Next play').click();
+        await expect(p2).resolves.toMatchObject({ cancelled: true, frames: 2 });
+        await flushAsync();
+        expect(main.__test__.phase()).toBe('playbook');
+        expect(canvas().classList.contains('is-recording')).toBe(false);
+        // Off the result card there is nothing to take.
+        await expect(main.__test__.take(stage, {})).resolves.toBeNull();
+    });
+
+    test('a take that opens mid-play forgets the throw only while the quarterback still holds the ball (QA, 2026-10-30)', async () => {
+        const main = await aCatch();
+        const R = await import('../www/xo/js/replay.min.js');
+        const view = await import('../www/xo/js/view.min.js');
+        const Clip = await import('../www/xo/js/clip.min.js');
+        const { XO_CONFIG: CFG } = await import('../www/xo/js/config.min.js');
+        const { stage } = recordingStage();
+        const thrown = view.throwClock();
+        expect(thrown).toBeGreaterThan(CFG.pose.throwRelease.time);
+        const span = Math.round(CFG.clip.seconds * CFG.camera.replay.speed * CFG.simHz);
+        const objects = main.__test__.play().game.objects;
+
+        // Pad the recording past the clip's window with frames where receiver
+        // A carries it: the window opens with the ball away, so the throw stays
+        // thrown and the snap is simply over.
+        for (let i = 0; i < span + 20; i += 1) R.record(objects);
+        const p = main.__test__.take(stage, {});
+        const t = main.__test__.taking();
+        expect(t.plan.start).toBeGreaterThan(0);
+        expect(Clip.openingFor(R.frameAt(t.plan.start), t.plan.start)).toBe('away');
+        expect(view.throwClock()).toBe(thrown);
+        expect(view.snapProgress()).toBe(1);
+        main.__test__.cancelTake();
+        await p;
+
+        // Now pad with the quarterback holding it: the window opens before the
+        // throw, which the view must forget, and the snap is over too.
+        const held = objects.map((o) => ({
+            settings: o.settings, coords: o.coords,
+            state: { ...(o.state || {}), hasBall: o.settings.position === 'qb', run: false },
+        }));
+        for (let i = 0; i < span + 20; i += 1) R.record(held);
+        const p2 = main.__test__.take(stage, {});
+        const t2 = main.__test__.taking();
+        expect(Clip.openingFor(R.frameAt(t2.plan.start), t2.plan.start)).toBe('held');
+        expect(view.throwClock()).toBe(-1);
+        expect(view.snapProgress()).toBe(1);
+        main.__test__.cancelTake();
+        await p2;
+        expect(main.__test__.phase()).toBe('result');
+    });
+
+    test('xo.clip(view) records a take and saves the file, named for the result, the size and the format', async () => {
+        class FakeRecorder {
+            static isTypeSupported(t) { return t === 'video/webm'; }
+
+            constructor(stream, options) { this.mimeType = options.mimeType; FakeRecorder.starts += 1; }
+
+            start() {}
+
+            stop() {
+                this.ondataavailable({ data: new Blob(['clip']) });
+                this.onstop();
+            }
+        }
+        FakeRecorder.starts = 0;
+        const Canvas = function () {};
+        Canvas.prototype.captureStream = () => ({});
+        Object.assign(dom.windowStub, { MediaRecorder: FakeRecorder, HTMLCanvasElement: Canvas, Blob });
+        const saved = [];
+        const make = dom.documentStub.createElement;
+        dom.documentStub.createElement = (tag) => {
+            const e = make(tag);
+            if (tag === 'canvas') e.captureStream = () => ({});
+            if (tag === 'a') e.click = () => saved.push(e.download);
+            return e;
+        };
+        const made = [];
+        const realCreate = globalThis.URL.createObjectURL;
+        const realRevoke = globalThis.URL.revokeObjectURL;
+        globalThis.URL.createObjectURL = (blob) => { made.push(blob); return 'blob:clip'; };
+        globalThis.URL.revokeObjectURL = () => {};
+        try {
+            const main = await aCatch();
+            const xo = globalThis.window.xo;
+            const p = xo.clip(2);
+            await flushAsync();
+            expect(main.__test__.phase()).toBe('clip');
+            expect(FakeRecorder.starts).toBe(1);
+            expect(main.__test__.taking().quarter).toBe(1);
+            const line = await settle(p);
+            expect(line).toMatch(/^Saved scenexp-xo-[a-z0-9-]+-1080x1920\.webm \(\d+ KB, \d+\.\d s, \d+ frames, view 2 of 4\)\.$/);
+            expect(saved).toHaveLength(1);
+            expect(saved[0]).toMatch(/^scenexp-xo-(catch|incomplete|interception|sack|run|run-50)-1080x1920\.webm$/);
+            expect(made[0].type).toBe('video/webm');
+            expect(main.__test__.phase()).toBe('result');
+
+            // A view past the four goes round; the browser without a recorder is told.
+            const p2 = xo.clip(5);
+            await flushAsync();
+            expect(main.__test__.taking().quarter).toBe(0);
+            main.__test__.cancelTake();
+            await expect(p2).resolves.toBe('The clip could not be made.');
+            delete dom.windowStub.MediaRecorder;
+            await expect(xo.clip()).resolves.toBe("This browser can't record a video.");
+            dom.el('result-actions').children.find((b) => b.textContent === 'Next play').click();
+            await flushAsync();
+            await expect(xo.clip()).resolves.toBe('On the result card only, after a play.');
+        } finally {
+            globalThis.URL.createObjectURL = realCreate;
+            globalThis.URL.revokeObjectURL = realRevoke;
+        }
+    });
+
+    test('once the recording runs out, the camera is told the ending\'s bodies: the drawn carrier and his tackler (QA, 2026-10-30)', async () => {
+        const main = await aCatch({ downed: true });
+        const R = await import('../www/xo/js/replay.min.js');
+        const roster = await import('../www/xo/js/roster.min.js');
+        // On the card nothing is being replayed, so there is no ending to aim at.
+        expect(main.__test__.ending()).toBeNull();
+        dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+        await flushAsync();
+        frames(1);
+        expect(main.__test__.phase()).toBe('replay');
+        expect(R.playheadFrame()).toBeLessThan(R.frameCount());
+        expect(main.__test__.ending()).toBeNull();
+        expect(main.__test__.cameraState().ending).toBeNull();
+        // Run the recording out: the tackle plays on, and the camera is handed
+        // the carrier as drawn and both bodies' points (eight a body).
+        for (let i = 0; i < 2000 && R.playheadFrame() < R.frameCount(); i += 1) frames(1);
+        expect(R.playheadFrame()).toBeGreaterThanOrEqual(R.frameCount());
+        expect(main.__test__.phase()).toBe('replay');
+        const ending = main.__test__.ending();
+        expect(ending).toBeTruthy();
+        expect(ending.points).toHaveLength(16);
+        const carrier = roster.figureFor('wr1');
+        expect(ending.focus).toEqual({
+            x: Number(carrier.position.x) || 0, y: Number(carrier.position.y) || 0, z: Number(carrier.position.z) || 0,
+        });
+        expect(main.__test__.cameraState().ending).toEqual(ending);
+
+        // And the take, in its ending, is told the same.
+        for (let i = 0; i < 400 && main.__test__.phase() === 'replay'; i += 1) frames(1);
+        expect(main.__test__.phase()).toBe('result');
+        expect(main.__test__.ending()).toBeNull();
+        const { stage } = recordingStage();
+        const p = main.__test__.take(stage, {});
+        const t = main.__test__.taking();
+        for (let i = 0; i < 2000 && R.playheadFrame() < t.plan.ticks; i += 1) frames(1);
+        expect(main.__test__.phase()).toBe('clip');
+        expect(main.__test__.ending().points).toHaveLength(16);
+        main.__test__.cancelTake();
+        await p;
+    });
+
+    test('a moment put on the field never touches the milestone level, and after a show the replay keeps its camera', async () => {
+        const main = await aCatch();
+        const camera = await import('../www/xo/js/camera.min.js');
+        expect(main.__test__.level()).toBe(0);
+        let carried = 0;
+        main.beginMilestone(100, () => { carried += 1; });
+        dom.el('hud-actions').children.find((b) => b.id === 'skip-show-btn').click();
+        await flushAsync();
+        expect(carried).toBe(1);
+        expect(main.__test__.level()).toBe(100);
+        expect(main.__test__.phase()).toBe('result');
+        // The console shows a moment and puts the field back: the level stays.
+        const xo = globalThis.window.xo;
+        expect(xo.moment(1)).toMatch(/^Showing /);
+        frames(1);
+        expect(camera.getDriver()).toBe('show');
+        expect(xo.moment()).toBe('Back to the field as it was.');
+        expect(main.__test__.level()).toBe(100);
+        // The card has the play camera, and the replay its own, show or no show.
+        frames(1);
+        expect(camera.getDriver()).toBe('play');
+        dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+        await flushAsync();
+        frames(1);
+        expect(camera.getDriver()).toBe('replay');
+        expect(main.__test__.level()).toBe(100);
+    });
+});
+
+/**
+ * THE JUMP GOES TO THE MAN MEANT (Steve's QA, 2026-10-30). The Jump button
+ * sends up whoever the ball is coming to, which is usually but not always the
+ * man it was thrown to; a tap sends up the man under the finger, and a second
+ * tap on him does nothing rather than sending the next nearest man up.
+ */
+describe('the jump goes to the man meant', () => {
+    let now = 500000;
+    const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
+    const find = (main, position) => main.__test__.play().game.objects.find((o) => o.settings.position === position);
+    const tap = () => fire(dom.el('game-canvas'), 'pointerdown', {
+        clientX: 400, clientY: 300, pointerId: 1, button: 0, pointerType: 'touch',
+    });
+
+    /** A live play with the ball just thrown to receiver A, `wait` frames
+     *  after the snap: three for a flick, ninety for a deep ball. */
+    async function thrown(wait = 3) {
+        const main = await toLivePlay();
+        press('Snap the ball');
+        await flushAsync();
+        frames(wait);
+        press('Throw A');
+        await flushAsync();
+        const { ballInFlight } = await import('../www/xo/js/play.min.js');
+        expect(ballInFlight(main.__test__.play())).toBe(true);
+        return main;
+    }
+
+    test('the Jump button sends up the man the ball is coming to, not the man it was thrown to', async () => {
+        const main = await thrown();
+        const ball = find(main, 'ball');
+        const a = find(main, 'wr1');
+        const b = find(main, 'wr2');
+        expect(ball.coords.list.length).toBeGreaterThan(8);
+        // Receiver B stands on the ball's path a few steps ahead; A, whom it
+        // was thrown to, is nowhere near it.
+        const ahead = ball.coords.list[8];
+        b.coords.x = ahead[0];
+        b.coords.y = ahead[1];
+        b.state.xSpeed = 0;
+        b.state.ySpeed = 0;
+        a.coords.x = ball.coords.x + 600;
+        a.coords.y = ball.coords.y + 600;
+        a.state.xSpeed = 0;
+        a.state.ySpeed = 0;
+        expect(actionLabels()).toContain('Jump');
+        press('Jump');
+        await flushAsync();
+        expect(b.state.leapt).toBe(true);
+        expect(a.state.leapt).toBeFalsy();
+        // The button's one jump is spent.
+        expect(actionLabels()).not.toContain('Jump');
+    });
+
+    /** Stand a man still at a point, with no heading to carry him anywhere. */
+    const stand = (o, x, y) => {
+        o.coords.x = x;
+        o.coords.y = y;
+        o.state.xSpeed = 0;
+        o.state.ySpeed = 0;
+        o.state.heading = { x: 0, y: 0 };
+    };
+
+    // STEVE'S QA, 2026-10-30, SECOND ROUND ON THE BUTTON: a deep pass led across
+    // the field flew over the shallow receiver and the button went to him. The
+    // ball's own arc now has a say (jump.js `jumpCeiling`), and the man it was
+    // thrown to comes first (`buttonTarget`).
+    test('a man the ball is sailing over, out of any jump\'s reach, is not the man it is coming to', async () => {
+        const main = await thrown(90);   // a deep ball, whose arc tops any jump
+        const { spanOf, arcHeightAt } = await import('../www/xo/js/jump.min.js');
+        const ball = find(main, 'ball');
+        const a = find(main, 'wr1');
+        const b = find(main, 'wr2');
+        const list = ball.coords.list;
+        expect(list.length).toBeGreaterThan(8);
+        // B under the middle of the arc, where the ball is highest; A, whom it
+        // was thrown to, nowhere near it.
+        const mid = list[Math.floor(list.length / 2)];
+        stand(b, mid[0], mid[1]);
+        stand(a, ball.coords.x + 600, ball.coords.y + 600);
+        // The premise, measured on this very throw: over B the ball is higher
+        // than any jump reaches.
+        const ceiling = main.__test__.jumpCeiling();
+        expect(arcHeightAt(spanOf(ball.coords), mid[0], mid[1])).toBeGreaterThan(ceiling);
+        // So it is coming to nobody, and a ball coming to nobody is A's: the
+        // grass alone would have handed B the button here.
+        expect(main.__test__.buttonChoice()).toBe('wr1');
+        // B where it comes down, where it is low: his, since A is not reached.
+        stand(b, ball.coords.targetX, ball.coords.targetY);
+        expect(main.__test__.buttonChoice()).toBe('wr2');
+    });
+
+    test('the man it was thrown to comes first while the ball is coming to him, and the button sends him up', async () => {
+        const main = await thrown();
+        const ball = find(main, 'ball');
+        const a = find(main, 'wr1');
+        const b = find(main, 'wr2');
+        expect(ball.coords.list.length).toBeGreaterThan(8);
+        // B on the path a few steps ahead, where the ball is still low, so the
+        // ball reaches him first; A, whom it was thrown to, where it comes down.
+        const ahead = ball.coords.list[8];
+        stand(b, ahead[0], ahead[1]);
+        stand(a, ball.coords.targetX, ball.coords.targetY);
+        expect(main.__test__.buttonChoice()).toBe('wr1');
+        // THE LATCH: a frame on which A reads as running off the path does not
+        // hand B the button, because the ball has been coming to A this flight.
+        a.state.heading = { x: 0, y: 40 };
+        expect(main.__test__.buttonChoice()).toBe('wr1');
+        a.state.heading = { x: 0, y: 0 };
+        press('Jump');
+        await flushAsync();
+        expect(a.state.leapt).toBe(true);
+        expect(b.state.leapt).toBeFalsy();
+    });
+
+    test('the latch belongs to one flight: the next play\'s ball, thrown past A, is somebody else\'s', async () => {
+        const main = await thrown();
+        let ball = find(main, 'ball');
+        // The first ball comes down on A, so the button latches onto him...
+        stand(find(main, 'wr1'), ball.coords.targetX, ball.coords.targetY);
+        expect(main.__test__.buttonChoice()).toBe('wr1');
+        // ...and the play runs out to its card. The next play is a new question.
+        await runToResult(() => frames(1));
+        dom.el('result-actions').children.find((x) => x.textContent === 'Next play').click();
+        await flushAsync();
+        frames(1);
+        const body = dom.el('playbook').querySelector('.playbook-body');
+        deep(body).find((n) => n.dataset && n.dataset.slug).click();
+        await flushAsync();
+        press('Snap the ball');
+        await flushAsync();
+        frames(3);
+        press('Throw A');
+        await flushAsync();
+        ball = find(main, 'ball');
+        const a = find(main, 'wr1');
+        const b = find(main, 'wr2');
+        // This one is thrown past A, and B stands where it comes down: his.
+        stand(a, ball.coords.x + 600, ball.coords.y + 600);
+        stand(b, ball.coords.targetX, ball.coords.targetY);
+        expect(main.__test__.buttonChoice()).toBe('wr2');
+    });
+
+    test('a tap sends up the man under the finger, and a second tap on him sends nobody else', async () => {
+        const main = await thrown();
+        const a = find(main, 'wr1');
+        const others = ['wr2', 'wr3', 'wr4'].map((p) => find(main, p)).filter((o) => o && !o.settings.benched);
+        expect(others.length).toBeGreaterThan(0);
+        // Under the stub every figure projects to the same point, so the man
+        // under the finger is the first receiver in the list.
+        tap();
+        await flushAsync();
+        expect(a.state.leapt).toBe(true);
+        expect(others.every((o) => !o.state.leapt)).toBe(true);
+        // He has gone up already: the same tap again is his, and does nothing.
+        tap();
+        await flushAsync();
+        expect(others.every((o) => !o.state.leapt)).toBe(true);
+        tap();
+        await flushAsync();
+        expect(others.every((o) => !o.state.leapt)).toBe(true);
+    });
+});
+
+/**
+ * CHOOSING WHO TO PLAY AS (specs/xo-photos-plan, Step 2): the playbook's row,
+ * the tags on the plays that sit the visitor out, and the pre-snap "Play as…"
+ * that asks for a player on the field.
+ */
+describe('choosing who to play as', () => {
+    const PLAY_KEY = 'exes-n-ohs-play-settings';
+
+    async function saveAvatar() {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        createAvatarStore({ win: null }).save({ skin: 'deep', shirt: 'teal' });
+    }
+    const body = () => dom.el('playbook').querySelector('.playbook-body');
+    const byId = (id) => deep(body()).find((n) => n && n.id === id);
+    const cardsFor = (slug) => deep(body()).filter((n) => n && n.dataset && n.dataset.slug === slug);
+    const tagged = (button) => button.children.some((c) => c.classList && c.classList.contains('play-out'));
+    const visitorAt = async () => {
+        const r = await import('../www/xo/js/roster.min.js');
+        const { SLOTS } = await import('../www/xo/js/playas.min.js');
+        return SLOTS.map((s) => s.id).filter((id) => r.isVisitorFigure(r.figureFor(id)));
+    };
+    async function takeTheField() {
+        dom.el('welcome-actions').children[0].click();
+        await flushAsync();
+    }
+    /** Call the first play in the book, which leaves the formation waiting on
+     *  the snap. */
+    async function callAPlay(slug = null) {
+        const cards = deep(body()).filter((n) => n && n.dataset && n.dataset.slug);
+        (slug ? cards.find((n) => n.dataset.slug === slug) : cards[0]).click();
+        await flushAsync();
+    }
+    /** Frames on a running clock, for anything timed in game seconds. */
+    let now = 100000;
+    const frames = (n) => { for (let i = 0; i < n; i += 1) dom.loops[0](now += 16.7); };
+
+    test('with an avatar: a list in two groups, without the linemen who mostly sit out, and it moves the avatar', async () => {
+        await saveAvatar();
+        const main = await boot();
+        expect(main.getState().isLoaded).toBe(true);
+        await takeTheField();
+        const select = byId('play-as-select');
+        expect(select).toBeTruthy();
+        expect(select.children.map((g) => g.label)).toEqual(['Offense', 'Defense']);
+        const values = select.children.flatMap((g) => g.children.map((o) => o.value));
+        expect(values).toEqual(['qb', 'wr1', 'wr2', 'wr3', 'wr4', 'x1', 'x2', 'x3',
+            'db1', 'db2', 'db3', 'db4', 's1', 's2']);
+        expect(select.children[0].children[2].textContent).toBe('Receiver B');
+        expect(select.value).toBe('qb');
+        // Labelled, for a screen reader and a click on the words.
+        const label = deep(body()).find((n) => n && n.htmlFor === 'play-as-select');
+        expect(label.textContent).toBe('Play as');
+        // Nobody sits out as the quarterback.
+        expect(cardsFor('jumbo1').some(tagged)).toBe(false);
+
+        select.value = 'wr3';
+        fire(select, 'change');
+        expect(main.getState().playAs).toBe('wr3');
+        expect(await visitorAt()).toEqual(['wr3']);
+        expect(JSON.parse(globalThis.localStorage.getItem(PLAY_KEY)).playAs).toBe('wr3');
+        // Receiver C sits out the two jumbo sets and Screen Left, and nothing else.
+        for (const slug of ['jumbo1', 'jumbo2', 'screen1']) {
+            expect(cardsFor(slug).length).toBeGreaterThan(0);
+            expect(`${slug} ${cardsFor(slug).every(tagged)}`).toBe(`${slug} true`);
+        }
+        for (const slug of ['pass1', 'pass2', 'run1', 'screen2', 'slant1']) {
+            expect(`${slug} ${cardsFor(slug).some(tagged)}`).toBe(`${slug} false`);
+        }
+        const tag = cardsFor('jumbo1')[0].children.find((c) => c.classList && c.classList.contains('play-out'));
+        expect(tag.textContent).toBe('You sit this one out');
+        // And back: the tags come off, they do not pile up.
+        select.value = 'wr1';
+        fire(select, 'change');
+        expect(cardsFor('jumbo1').some(tagged)).toBe(false);
+        select.value = 'wr4';
+        fire(select, 'change');
+        select.value = 'wr4';
+        fire(select, 'change');
+        expect(cardsFor('screen2')[0].children.filter((c) => c.classList && c.classList.contains('play-out'))).toHaveLength(1);
+    });
+
+    test('without an avatar the row points to the avatar page, and no play says anybody sits out', async () => {
+        globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'wr3' }));
+        await boot();
+        await takeTheField();
+        expect(byId('play-as-select')).toBeUndefined();
+        const row = deep(body()).find((n) => n && n.classList && n.classList.contains('playbook-playas'));
+        expect(row.textContent).toBe('Play any position as yourself.Make your avatar');
+        const link = row.children.find((c) => c.tagName === 'A');
+        expect(link.href).toBe('../avatar/?return=/xo/');
+        expect(link.textContent).toBe('Make your avatar');
+        for (const slug of ['jumbo1', 'jumbo2', 'screen1']) expect(cardsFor(slug).some(tagged)).toBe(false);
+        // And nothing before the snap but the two buttons it has always had.
+        await callAPlay();
+        expect(actionLabels()).toEqual(['Change play', 'Snap the ball']);
+    });
+
+    test('a lineman chosen on the field is in the list too, so it never disagrees with the field', async () => {
+        await saveAvatar();
+        globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'x5' }));
+        await boot();
+        await takeTheField();
+        const select = byId('play-as-select');
+        const values = select.children.flatMap((g) => g.children.map((o) => o.value));
+        expect(values.filter((v) => /^x[4-6]$/.test(v))).toEqual(['x5']);
+        expect(select.value).toBe('x5');
+        // Chosen away from him, he leaves the list.
+        select.value = 'db2';
+        fire(select, 'change');
+        expect(select.children.flatMap((g) => g.children.map((o) => o.value)).some((v) => /^x[4-6]$/.test(v))).toBe(false);
+    });
+
+    test('"Play as…" before the snap asks for a player, and the arrows and the button choose one', async () => {
+        await saveAvatar();
+        const main = await boot();
+        await takeTheField();
+        await callAPlay('pass1');
+        expect(actionLabels()).toEqual(['Change play', 'Play as…', 'Snap the ball']);
+        const asBtn = dom.el('hud-actions').children.find((b) => b.id === 'play-as-btn');
+        expect(asBtn.dataset.keys).toBe('P');
+        expect(asBtn.getAttribute('aria-label')).toBe('Play as… another player');
+
+        press('Play as…');
+        await flushAsync();
+        const prompt = 'Click any player to play as them, or use the arrow keys.';
+        expect(actionLabels()).toEqual([prompt, 'Cancel', 'Play as Quarterback']);
+        await jest.advanceTimersByTimeAsync(100);
+        expect(dom.el('hud-live').textContent).toBe(prompt);
+        const choose = () => dom.el('hud-actions').children.find((b) => b.id === 'pick-choose-btn');
+        expect(choose().focused).toBe(true);
+        expect(choose().getAttribute('aria-describedby')).toBe('pick-prompt');
+
+        const key = (k) => fire(dom.documentStub, 'keydown', { key: k });
+        key('ArrowRight');
+        expect(choose().textContent).toBe('Play as Receiver A');
+        key('ArrowLeft');
+        key('ArrowLeft');
+        // Round from the first to the last player on the field: Pass 1 has no
+        // lineman 4 to 6, and the defense ends with the safeties.
+        expect(choose().textContent).toBe('Play as Safety 2');
+        // Nothing has moved yet.
+        expect(main.getState().playAs).toBe('qb');
+
+        choose().click();
+        await flushAsync();
+        expect(main.getState().playAs).toBe('s2');
+        expect(await visitorAt()).toEqual(['s2']);
+        expect(actionLabels()).toEqual(['Change play', 'Play as…', 'Snap the ball']);
+        await jest.advanceTimersByTimeAsync(100);
+        expect(dom.el('hud-live').textContent).toBe('You are playing as safety 2.');
+
+        // And the playbook says so next time it opens.
+        press('Change play');
+        await flushAsync();
+        expect(byId('play-as-select').value).toBe('s2');
+    });
+
+    test('Cancel keeps the player, Escape is its key, and the arrows do nothing once it is closed', async () => {
+        await saveAvatar();
+        const main = await boot();
+        await takeTheField();
+        await callAPlay('pass1');
+        press('Play as…');
+        await flushAsync();
+        const cancel = dom.el('hud-actions').children.find((b) => b.id === 'pick-cancel-btn');
+        expect(cancel.dataset.keys).toBe('Escape');
+        expect(cancel.getAttribute('aria-label')).toBe('Cancel and keep your player');
+        fire(dom.documentStub, 'keydown', { key: 'ArrowRight' });
+        cancel.click();
+        await flushAsync();
+        expect(main.getState().playAs).toBe('qb');
+        expect(actionLabels()).toEqual(['Change play', 'Play as…', 'Snap the ball']);
+        const after = fire(dom.documentStub, 'keydown', { key: 'ArrowRight' });
+        expect(after.defaultPrevented).toBe(false);
+        expect(main.getState().playAs).toBe('qb');
+    });
+
+    test('while choosing, a tap chooses instead of snapping, and the tap straight after does not snap either', async () => {
+        await saveAvatar();
+        const main = await boot();
+        await takeTheField();
+        await callAPlay('pass1');
+        const tap = () => fire(dom.el('game-canvas'), 'pointerdown', {
+            clientX: 400, clientY: 300, pointerId: 1, button: 0, pointerType: 'touch',
+        });
+        // Start somewhere other than the quarterback, so a tap choosing him is
+        // a change. (Under the stub every player projects to the same point, so
+        // the nearest is the first in the list, the quarterback.)
+        globalThis.window.xo.playAs('wr2');
+        frames(5);
+        press('Play as…');
+        await flushAsync();
+        tap();
+        await flushAsync();
+        expect(main.getState().playAs).toBe('qb');
+        expect(actionLabels()).toEqual(['Change play', 'Play as…', 'Snap the ball']);
+        // A second tap at once is the same gesture, not a snap.
+        tap();
+        await flushAsync();
+        expect(actionLabels()).toEqual(['Change play', 'Play as…', 'Snap the ball']);
+        // Once the guard has passed, a tap snaps the ball as it always has.
+        frames(40);
+        tap();
+        await flushAsync();
+        expect(actionLabels()).toContain('Keep it');
     });
 });

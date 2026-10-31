@@ -27,9 +27,9 @@
  */
 import { XO_CONFIG as CFG, simToWorld, FIELD, SIM, UNITS_TO_METRES } from './config.min.js';
 import { bandAt } from './scoring.min.js';
-import { figureFor, poseFigure, THROWING_SIDE, throwSideOf, FIGURE_LIFT } from './roster.min.js';
+import { figureFor, poseFigure, THROWING_SIDE, throwSideOf, FIGURE_LIFT, isVisitorFigure } from './roster.min.js';
 import { getBall, aimBall, placeSpot, BALL_FAT } from './ball.min.js';
-import { placeMarker, hideMarker } from './markers.min.js';
+import { placeMarker, hideMarker, showLanding, hideLanding } from './markers.min.js';
 import { toRigSpace, RIG } from './arm.min.js';
 import { takedownAt } from './takedown.min.js';
 import { celebrationAt } from './celebration.min.js';
@@ -128,8 +128,60 @@ function carryFor(obj, carrier) {
     // the carry out for themselves, and a ball that disagrees with the arm
     // holding it is the one fault this whole path exists to avoid.
     if (raisingBall(obj.settings.position) > 0) return 'raise';
+    // ...OR IN HIS HAND THROUGH A SHARED DANCE (celebration.js `held`), where
+    // both arms are busy and the ball goes wherever the hand does
+    // (`handPoint`), rather than to the tuck's fixed point.
+    if (heldInHand(obj.settings.position)) return 'hand';
     if (obj.settings.position !== 'qb') return 'tuck';
     return obj.state.run ? 'tuck' : 'throw';
+}
+
+/** Whether the party has `position` dancing with the ball in his hand. */
+function heldInHand(position) {
+    if (!party) return false;
+    const got = party.get(position);
+    return !!(got && got.held === true && (got.amount || 0) > 0);
+}
+
+/**
+ * WHERE A FIGURE'S HAND IS, in world metres: the rig's own hand mesh on the
+ * `side` arm (the forearm's `isHand` child), read through the matrices as
+ * drawn this frame. Null when the figure has no such hand to read (the test
+ * stub's), so a caller falls back to the tuck's point.
+ */
+export function handPoint(figure, side) {
+    const arms = figure && figure.userData ? figure.userData.arms : null;
+    if (!Array.isArray(arms)) return null;
+    const arm = arms.find((a) => a && a.userData && a.userData.armSide === side);
+    const forearm = arm && arm.userData ? arm.userData.forearm : null;
+    const kids = forearm && Array.isArray(forearm.children) ? forearm.children : [];
+    const hand = kids.find((c) => c && c.isMesh && c.userData && c.userData.isHand);
+    if (!hand || typeof hand.getWorldPosition !== 'function') return null;
+    figure.updateMatrixWorld(true);
+    const v = hand.getWorldPosition(new THREE.Vector3());
+    return { x: v.x, y: v.y, z: v.z };
+}
+
+/**
+ * ASKING FOR IT, AND ONLY WHILE THERE IS SOMEBODY TO ASK (Steve's QA,
+ * 2026-10-30). A receiver who has run out of route turns back and puts his
+ * hands up for the ball while the quarterback is still surveying the field
+ * with it. Once it is in the air, once somebody has caught it, or once the
+ * quarterback has tucked it and taken off, there is nothing left to ask for:
+ * receivers with their hands up over another man's run read as waiting for a
+ * pass that was never coming. Blocking outranks this in the arm's order of
+ * poses anyway (roster.js), so a receiver who has found somebody to block
+ * keeps blocking.
+ *
+ * Pure, and exported for the suite: `obj` is the receiver, `carrier` whoever
+ * holds the ball (null for nobody), `flying` whether a thrown ball is in the
+ * air, `live` and `standing` the frame's own readings.
+ */
+export function postingFor(obj, carrier, { live = false, standing = false, flying = false } = {}) {
+    if (!live || !standing || flying) return 0;
+    if (!obj || !obj.settings || obj.settings.team !== 0 || !/^wr\d$/.test(obj.settings.position)) return 0;
+    if (!carrier || carrier === obj || !carrier.settings || carrier.settings.position !== 'qb') return 0;
+    return carryFor(carrier, carrier) === 'throw' ? 1 : 0;
 }
 
 /**
@@ -232,6 +284,18 @@ export function beginSnapMotion() {
 /** Hold him under centre. A new line-up, and the presnap frames. */
 export function resetSnapMotion() {
     snapAt.t = -1;
+}
+
+/**
+ * THE SNAP IS LONG OVER. For a playback that opens mid-play (the clip,
+ * specs/xo-photos-plan Step 6), where the quarterback is drawn with the ball
+ * already up by his ear rather than bringing it back from under centre, and
+ * where a snap motion a skipped replay left half done would otherwise finish
+ * itself in the first frames of the clip.
+ */
+export function finishSnapMotion() {
+    const T = CFG.pose.snap.time;
+    snapAt.t = Math.max(snapAt.t, T > 0 ? T : 1);
 }
 
 /** 0 while he is still waiting for it, easing to 1 once it is away. */
@@ -729,7 +793,29 @@ export function frontOf(target) {
  * 84 tackles (see takedown.js). The names are positions, so the same call works
  * on a live play and on a frame rebuilt from the recording.
  */
-const takedown = { at: -1, tackler: '', carrier: '', from: null, to: null };
+const takedown = { at: -1, tackler: '', carrier: '', from: null, to: null, motion: null };
+
+/**
+ * THE CARRIER'S MOMENTUM, read off his drawn figure the moment the tackle
+ * begins (Steve's QA, 2026-10-30): the speed he was running at and the way he
+ * faced, which takedown.js carries him on through the hit with. Read ONCE,
+ * here, because the figures go on being handed the whistle's frame and would
+ * read as standing a few frames later. World metres a second, radians.
+ */
+function carrierMotion(position) {
+    const fig = figureFor(position);
+    if (!fig) return null;
+    const u = fig.userData || {};
+    const mps = Number.isFinite(u.mps) ? u.mps : 0;
+    const drawn = Number(fig.rotation && fig.rotation.y);
+    const yaw = Number.isFinite(drawn) ? drawn : (Number.isFinite(u.facing) ? u.facing : 0);
+    return { velocity: { x: Math.sin(yaw) * mps, z: Math.cos(yaw) * mps }, facing: yaw };
+}
+
+/** The motion the running tackle was given, or null between tackles. */
+export function takedownMotion() {
+    return takedown.at >= 0 ? takedown.motion : null;
+}
 
 /**
  * `at` STARTS THE CLOCK PART WAY IN, which is for one caller: a visitor who
@@ -750,6 +836,8 @@ export function beginTakedown(tacklerPos, carrierPos, at = 0) {
     // simulation's last frame over and over.
     takedown.from = null;
     takedown.to = null;
+    // And how fast the carrier was going, and which way (see `carrierMotion`).
+    takedown.motion = carrierMotion(carrierPos);
     return true;
 }
 
@@ -779,6 +867,7 @@ export function resetTakedown() {
     takedown.carrier = '';
     takedown.from = null;
     takedown.to = null;
+    takedown.motion = null;
 }
 
 /** How far into the tackle we are, in seconds, or -1 when there is not one. */
@@ -1367,6 +1456,85 @@ export function stillFor(net, was) {
 }
 
 /**
+ * WHERE THE VISITOR WAITS when their play leaves them out (config `bench`), in
+ * world metres, on their own team's sideline. Pure, and exported so the suite
+ * can put it through the play camera.
+ */
+export function benchSpot(team = 0) {
+    const B = CFG.bench;
+    const side = team === 0 ? CFG.crowd.xSide : -CFG.crowd.xSide;
+    return {
+        x: FIELD.lineInterval * B.along,
+        z: side * (FIELD.width / 2 + B.out),
+    };
+}
+
+/** What a man on the sideline watches: the ball in the air, whoever is
+ *  carrying it, or the quarterback before anybody is. Drawn positions, so he
+ *  follows what the visitor sees. Null when there is nothing to watch. */
+function watchedBall(carrier) {
+    if (flight.has) return { x: flight.x, z: flight.z };
+    const held = figureFor(carrier ? carrier.settings.position : 'qb');
+    if (!held || !held.visible) return null;
+    return { x: Number(held.position.x) || 0, z: Number(held.position.z) || 0 };
+}
+
+/** How `team` is taking the whistle, from the first of its men on the field
+ *  the party has an entry for, or null when there is no party. */
+function teamMood(objects, team) {
+    if (!party) return null;
+    for (const o of objects) {
+        if (o.settings.team !== team || BENCHED(o)) continue;
+        const entry = party.get(o.settings.position);
+        if (entry && entry.arms) return entry;
+    }
+    return null;
+}
+
+/**
+ * THE VISITOR, STANDING ON THE SIDELINE AND WATCHING THE BALL.
+ *
+ * PLACED, NEVER EASED OR WALKED, and his drawn history is left empty so that
+ * coming back into a formation on the next play is a placement too. A walk
+ * from the sideline would be a sprint of twenty-five metres across the field.
+ *
+ * AT THE WHISTLE HE DOES WHAT HIS TEAM DOES: both arms up while the X's are
+ * celebrating and a slump while the O's are. Read off a team-mate's entry in
+ * the party rather than planned, because the celebration was planned for the
+ * men on the field and he is not one of them. Never the dance itself, which
+ * belongs to whoever has the ball.
+ */
+function waitOnSideline(figure, team, objects, carrier, delta) {
+    const spot = benchSpot(team);
+    figure.userData.at = null;
+    figure.userData.walkFrom = null;
+    figure.userData.cheerAt = null;
+    figure.position.set(spot.x, figure.userData.lift ?? FIGURE_LIFT, spot.z);
+
+    // Facing the field when there is nothing to watch, which is the way the
+    // sideline faces.
+    const ball = watchedBall(carrier);
+    const want = ball
+        ? Math.atan2(ball.x - spot.x, ball.z - spot.z)
+        : Math.atan2(0, -spot.z);
+    figure.userData.facing = want;
+    if (!figure.visible) figure.rotation.y = want;
+    else figure.rotation.y += wrapAngle(want - figure.rotation.y) * (1 - Math.exp(-delta * TURN_RESPONSE));
+
+    const mood = teamMood(objects, team);
+    poseFigure(figure, 0, figure.userData.phase, {
+        carry: 'none',
+        celebrate: mood
+            ? { arms: mood.arms === 'slump' ? 'slump' : 'up', amount: mood.amount }
+            : null,
+    }, delta);
+    const settle = 1 - Math.exp(-delta / CFG.pose.blend);
+    figure.rotation.x -= figure.rotation.x * settle;
+    figure.rotation.z -= figure.rotation.z * settle;
+    figure.visible = true;
+}
+
+/**
  * Move every figure to where the simulation says its player is.
  *
  * Called once per frame after play.tick(). Benched players are hidden rather
@@ -1407,7 +1575,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
     // The tackle's own clock, advanced once whatever else is happening.
     if (takedown.at >= 0) takedown.at += delta;
     const hit = takedown.at >= 0
-        ? takedownAt(takedown.at, takedownFrom(objects), takedownTo(objects))
+        ? takedownAt(takedown.at, takedownFrom(objects), takedownTo(objects), takedown.motion)
         : null;
 
     // ...and the celebration's, which is the same arrangement one ending over.
@@ -1422,10 +1590,19 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         const figure = figureFor(obj.settings.position);
         if (!figure) continue;
         if (BENCHED(obj)) {
-            figure.visible = false;
             // A benched player's letter must not sit on the grass with nobody
             // standing on it.
             hideMarker(obj.settings.position);
+            // THE VISITOR IS NOT HIDDEN, THEY WAIT ON THE SIDELINE (Steve,
+            // specs/xo-photos-plan D1). Everybody else sits out unseen, as
+            // before. Not while the opening or a show has the field: both
+            // stage the home sideline, and a show's camera looks at the X's
+            // stand straight past where the visitor would be standing.
+            if (isVisitorFigure(figure) && !script && staging.at < 0) {
+                waitOnSideline(figure, obj.settings.team, objects, carrier, delta);
+            } else {
+                figure.visible = false;
+            }
             continue;
         }
 
@@ -1831,12 +2008,12 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             : null;
 
         // ASKING FOR IT. A receiver who has stopped getting anywhere while the
-        // play is still running has finished his route, so he turns back to
-        // whoever has the ball (above) and puts his hands up. Gated on the
-        // play being live, or every receiver would raise his arms over a
-        // finished play while the result card opened.
-        const posting = (opts.live && standing && obj.settings.team === 0
-            && /^wr\d$/.test(obj.settings.position) && carrier !== obj) ? 1 : 0;
+        // quarterback still surveys the field has finished his route, so he
+        // turns back (above) and puts his hands up. Gated on the play being
+        // live, or every receiver would raise his arms over a finished play
+        // while the result card opened, and on the ball still being the
+        // quarterback's to throw: see `postingFor`.
+        const posting = postingFor(obj, carrier, { live: !!opts.live, standing, flying: flight.has });
 
         /**
          * BREAKING FREE, WHICH IS THE ONE POSE THE SIMULATION ASKS FOR.
@@ -1901,7 +2078,7 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             // reads this first of everything, because every pose below it is a
             // judgement about a play that is no longer running.
             celebrate: cheer && cheer.arms
-                ? { arms: cheer.arms, amount: cheer.amount } : null,
+                ? { arms: cheer.arms, amount: cheer.amount, pose: cheer.pose || null } : null,
         }, delta);
 
         // THE JUKE IS A ROLL, and it is the only thing in the game that uses
@@ -1913,12 +2090,19 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         // branch of its own: the roll is the only sideways lean this rig has,
         // and a man swinging his shoulders and a man cutting away from a
         // defender are asking it for the same thing.
-        const wantRoll = cheer ? (cheer.roll || 0)
-            : (shoving > 0
-                ? jukeRoll(esc.away, figure.userData.facing, CFG.pose.juke.roll) * shoving
-                : 0);
-        figure.rotation.z += (wantRoll - figure.rotation.z)
-            * (1 - Math.exp(-delta / CFG.pose.juke.snap));
+        if (isFloored && role) {
+            // A MAN BROUGHT DOWN LANDS ON THE SHOULDER THE HIT SENT HIM TO
+            // (takedown.js `roll`, Steve's QA 2026-10-30), applied whole like
+            // his lean below: the takedown is already eased.
+            figure.rotation.z = role.roll || 0;
+        } else {
+            const wantRoll = cheer ? (cheer.roll || 0)
+                : (shoving > 0
+                    ? jukeRoll(esc.away, figure.userData.facing, CFG.pose.juke.roll) * shoving
+                    : 0);
+            figure.rotation.z += (wantRoll - figure.rotation.z)
+                * (1 - Math.exp(-delta / CFG.pose.juke.snap));
+        }
 
         // THE LEAN, WHICH IS THE WHOLE FIGURE, because the rig has no waist.
         // A tackler pitches forward into the hit and the man being hit goes
@@ -2066,6 +2250,8 @@ function endFlight() {
     flight.still = 0;
     flight.rest = -1;
     flight.restHeading = null;
+    // A ball in somebody's hands is going nowhere.
+    hideLanding();
 }
 
 /** Reset between plays, so a new throw does not inherit the last one's
@@ -2346,6 +2532,8 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             aimBall(flight.restHeading, flight.spin);
             ball.visible = true;
             placeSpot(0, 0, 0, false);
+            // Down is where it was going. The ring has nothing left to say.
+            hideLanding();
             return;
         }
 
@@ -2358,6 +2546,22 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             if (Math.hypot(d.x, d.y, d.z) > 0.004) flight.dir = d;
         }
         flight.x = p.x; flight.y = y; flight.z = p.z; flight.has = true;
+
+        // WHERE IT IS GOING, on the grass, in the ink of the man it is going
+        // to (markers.js `showLanding`, Steve's QA of 2026-10-30: a pass led
+        // well across the field read as a throw to whoever happened to be
+        // nearer the spot). `aimedAt` is main.js's own word at the throw; in a
+        // replay nobody says, and `intendedReceiver` latches its guess on the
+        // flight's first frame of figures. Drawn for a man or not at all, so
+        // the one frame before that guess shows no ring rather than a wrong
+        // colour.
+        const owner = aimedAt || flight.aimed;
+        if (flight.span && owner) {
+            const aim = simToWorld(flight.span.tx, flight.span.ty, 0);
+            showLanding(aim.x, aim.z, owner);
+        } else {
+            hideLanding();
+        }
 
         flight.spin += delta * SPIRAL_HZ * Math.PI * 2;
         ball.position.set(p.x, y, p.z);
@@ -2393,7 +2597,11 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             // is facing, exactly as `pose.tuck.hand` does. That is what keeps a
             // ball in the hand that is posed to be holding it: the two numbers
             // are read off the same picture rather than converted between two.
-            const want = toWorld(figure, hold.ball);
+            // In a shared dance the ball is wherever the hand is, read off the
+            // drawn arm, since the arm is following a pose rather than a
+            // point written down for it.
+            const inHand = mode === 'hand' ? handPoint(figure, throwSideOf(figure)) : null;
+            const want = inHand || toWorld(figure, hold.ball);
             const aim = toWorld(figure, hold.aim, true);
 
             // GATHERING IT IN. On the frame a pass is caught the ball is still

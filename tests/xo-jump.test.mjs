@@ -156,6 +156,144 @@ describe('the cue on the Jump button', () => {
     });
 });
 
+/**
+ * A BALL SAILING OVER A MAN OUT OF REACH IS NOT COMING TO HIM (Steve's QA,
+ * 2026-10-30). Once the quarterback led his receivers properly, a deep pass
+ * across the field flew over the shallow receiver a median 4.6 m up, and the
+ * grass-only walk called that "reached": the cue lit him and the button sent
+ * him up for a ball no jump could touch, which read as the quarterback having
+ * thrown to the wrong man. The walk now asks the ball's own arc at each point.
+ */
+describe('a ball sailing over a man out of reach is not coming to him', () => {
+    /** A real throw, 800 units downfield along y = 0, a point every 5 units:
+     *  the arc climbs to its full height in the middle and is back at hand
+     *  height at the end. `from` is how many points have already gone by. */
+    const throwAt = (from = 0) => {
+        const list = Array.from({ length: 160 }, (_, i) => [5 * (i + 1), 0]);
+        return { coords: { startX: 0, startY: 0, targetX: 800, targetY: 0, x: 5 * from, y: 0, list: list.slice(from) } };
+    };
+    const man = (position, x, y = 0) => ({ settings: { position }, coords: { x, y }, state: { xSpeed: 0, ySpeed: 0 } });
+    const span = () => jump.spanOf(throwAt().coords);
+    const CEILING = jump.jumpCeiling(STANDING);
+    /** The step on which a ball from the hand first comes within `r` of `x`. */
+    const stepTo = (x, r) => throwAt().coords.list.findIndex((p) => Math.abs(p[0] - x) <= r) + 1;
+
+    test('the ceiling is his hands at the top of the jump plus the catch\'s slack, and none without a standing height', () => {
+        expect(CEILING).toBeCloseTo(STANDING + J.lift + J.manual.slack, 9);
+        expect(CEILING).toBeCloseTo(jump.handsAt(STANDING, J.peakAt * J.hang) + J.manual.slack, 9);
+        // The most `leapCatches` ever says yes to, and no more.
+        expect(jump.leapCatches(STANDING, J.peakAt * J.hang, CEILING)).toBe(true);
+        expect(jump.leapCatches(STANDING, J.peakAt * J.hang, CEILING + 0.01)).toBe(false);
+        expect(jump.jumpCeiling(null)).toBe(Infinity);
+        expect(jump.jumpCeiling(0)).toBe(Infinity);
+    });
+
+    test('the premise: a deep ball is higher than any jump in the middle and at hand height at the end', () => {
+        expect(jump.arcHeightAt(span(), 400, 0)).toBeGreaterThan(CEILING);
+        expect(jump.arcHeightAt(span(), 800, 0)).toBeLessThan(CEILING);
+    });
+
+    test('a man under the middle of the arc is reached on the grass and never in the air', () => {
+        const under = man('wr3', 400);
+        const k = stepTo(400, 10);
+        expect(k).toBeGreaterThan(0);
+        expect(jump.arrivalIn(throwAt(), under, 10)).toBeCloseTo(k / HZ, 9);
+        expect(jump.arrivalIn(throwAt(), under, 10, CEILING)).toBe(Infinity);
+        // A ceiling above the whole arc changes nothing.
+        expect(jump.arrivalIn(throwAt(), under, 10, jump.arcHeightAt(span(), 400, 0) + 1)).toBeCloseTo(k / HZ, 9);
+    });
+
+    test('a man where it comes down is reached with the ceiling, and a ball over his head right now is not here yet', () => {
+        const k = stepTo(800, 10);
+        expect(jump.arrivalIn(throwAt(), man('wr1', 800), 10, CEILING)).toBeCloseTo(k / HZ, 9);
+        // The ball is right over the man under the apex: inside his reach on
+        // the grass, out of it in the air, and it is not coming back down to him.
+        const over = throwAt(80);
+        expect(over.coords.x).toBe(400);
+        expect(jump.arrivalIn(over, man('wr3', 400), 10)).toBe(0);
+        expect(jump.arrivalIn(over, man('wr3', 400), 10, CEILING)).toBe(Infinity);
+    });
+
+    test('so the button and its cue go to the man it is coming down to, not the man it is flying over', () => {
+        const under = man('wr3', 400);
+        const spot = man('wr1', 800);
+        // The grass alone reaches the man under the arc first, which was the fault.
+        expect(jump.nearestToBall(throwAt(), [spot, under], 10)).toBe(under);
+        expect(jump.nearestToBall(throwAt(), [spot, under], 10, CEILING)).toBe(spot);
+        // The cue, with the ball two steps from passing over him.
+        const near = throwAt(76);
+        expect(jump.cueLit(near, under, 10)).toBe(true);
+        expect(jump.cueLit(near, under, 10, CEILING)).toBe(false);
+        // ...and lit for the man it is coming down to, once it is close.
+        expect(jump.cueLit(throwAt(150), spot, 10, CEILING)).toBe(true);
+    });
+
+    test('a ball with no written throw behind it is judged on the grass alone, as before', () => {
+        const flat = { coords: { x: 0, y: 0, list: Array.from({ length: 40 }, (_, i) => [i + 1, 0]) } };
+        expect(jump.arrivalIn(flat, man('wr1', 20), 1, 2)).toBeCloseTo(19 / HZ, 9);
+        expect(jump.arrivalIn(flat, man('wr1', 20), 1, Infinity)).toBeCloseTo(19 / HZ, 9);
+    });
+
+    test('a man is carried along his windowed heading when he has one, and this frame\'s speed when not', () => {
+        const k = stepTo(800, 10);
+        // This frame's speed says he is running off the path at thirty a step;
+        // his heading says he is standing where the ball comes down. The
+        // heading wins, because the frame's speed is the steer's square wave.
+        const steady = man('wr1', 800);
+        steady.state.ySpeed = 30;
+        expect(jump.arrivalIn(throwAt(), steady, 10, CEILING)).toBe(Infinity);
+        steady.state.heading = { x: 0, y: 0 };
+        expect(jump.arrivalIn(throwAt(), steady, 10, CEILING)).toBeCloseTo(k / HZ, 9);
+        // And the other way round: a heading that carries him off the path.
+        const drifting = man('wr1', 800);
+        drifting.state.heading = { x: 0, y: 30 };
+        expect(jump.arrivalIn(throwAt(), drifting, 10, CEILING)).toBe(Infinity);
+    });
+
+    // THE BUTTON ITSELF (`buttonTarget`): the man it was thrown to first.
+    test('the man it was thrown to comes first while the ball is coming to him, however soon it reaches somebody else', () => {
+        const spot = man('wr1', 800);
+        const first = man('wr2', 60);          // by the hand, where the ball is still low
+        expect(jump.arrivalIn(throwAt(), first, 10, CEILING)).toBeLessThan(jump.arrivalIn(throwAt(), spot, 10, CEILING));
+        // Soonest alone is the man by the hand, which was the fault.
+        expect(jump.nearestToBall(throwAt(), [first, spot], 10, CEILING)).toBe(first);
+        expect(jump.buttonTarget(throwAt(), [first, spot], 10, CEILING, 'wr1')).toEqual({ who: spot, coming: true });
+        expect(jump.buttonTarget(throwAt(), [spot, first], 10, Infinity, 'wr1').who).toBe(spot);
+    });
+
+    test('a ball thrown past him goes to whoever it does reach, and the latch stays off', () => {
+        const wide = man('wr1', 800, 200);      // A, well off where it comes down
+        const other = man('wr4', 790);
+        expect(jump.buttonTarget(throwAt(), [wide, other], 10, CEILING, 'wr1')).toEqual({ who: other, coming: false });
+        // No such man in the list, as once he has gone up: the others' own answer, and the latch as handed in.
+        expect(jump.buttonTarget(throwAt(), [other], 10, CEILING, 'wr1', true)).toEqual({ who: other, coming: true });
+        expect(jump.buttonTarget(throwAt(), [], 10, CEILING, 'wr1')).toEqual({ who: null, coming: false });
+        expect(jump.buttonTarget(throwAt(), null, 10, CEILING, 'wr1')).toEqual({ who: null, coming: false });
+    });
+
+    test('a ball coming to nobody is his while he is still here, not whoever stands nearest it', () => {
+        // Both off the path. The man under the arc is nearer the ball now, and
+        // the first round's rule sent him up for a ball five metres over him.
+        const underish = man('wr3', 400, 30);
+        const wide = man('wr1', 800, 200);
+        expect(jump.nearestToBall(throwAt(), [underish, wide], 10, CEILING)).toBe(underish);
+        expect(jump.buttonTarget(throwAt(), [underish, wide], 10, CEILING, 'wr1')).toEqual({ who: wide, coming: false });
+        // Without him in the list the old answer stands.
+        expect(jump.buttonTarget(throwAt(), [underish], 10, CEILING, 'wr1')).toEqual({ who: underish, coming: false });
+    });
+
+    test('once the ball has been coming to him it stays his, though this frame says otherwise', () => {
+        const first = man('wr2', 60);
+        // A, carried off the path by a bad speed reading this frame, is not reached...
+        const wobble = man('wr1', 800);
+        wobble.state.ySpeed = 30;
+        expect(jump.arrivalIn(throwAt(), wobble, 10, CEILING)).toBe(Infinity);
+        expect(jump.buttonTarget(throwAt(), [first, wobble], 10, CEILING, 'wr1')).toEqual({ who: first, coming: false });
+        // ...but handed the latch, he keeps the button.
+        expect(jump.buttonTarget(throwAt(), [first, wobble], 10, CEILING, 'wr1', true)).toEqual({ who: wobble, coming: true });
+    });
+});
+
 describe('the Auto jump switch', () => {
     let store;
     beforeEach(() => {
@@ -192,6 +330,46 @@ describe('the Auto jump switch', () => {
     test('its key is one of the game\'s own and the privacy page says so', () => {
         expect(CFG.storage.jump).toMatch(/^exes-n-ohs-/);
         expect(read('www', 'privacy.html')).toMatch(/Auto jump/);
+    });
+});
+
+describe('who the Jump button sends up (Steve\'s QA, 2026-10-30)', () => {
+    /** A ball at (0, 0) flying along +x, a point a step. */
+    const ball = { coords: { x: 0, y: 0, list: Array.from({ length: 40 }, (_, i) => [i + 1, 0]) } };
+    const man = (position, x, y, state = {}) => ({ settings: { position }, coords: { x, y }, state: { xSpeed: 0, ySpeed: 0, ...state } });
+
+    test('the man the ball reaches soonest, not the man it was thrown to', () => {
+        // The ball passes A at step 20 and B at step 10: B is nearer along the path.
+        const a = man('wr1', 20, 0);
+        const b = man('wr2', 10, 0);
+        expect(jump.nearestToBall(ball, [a, b], 1)).toBe(b);
+        expect(jump.nearestToBall(ball, [b, a], 1)).toBe(b);
+        // A receiver standing off the path by less than the reach is reached too.
+        const c = man('wr3', 5, 0.5);
+        expect(jump.nearestToBall(ball, [a, b, c], 1)).toBe(c);
+        // THE PATH DECIDES, NOT THE DISTANCE NOW: a man standing close to the
+        // ball but off its path is never reached, and a man far down the path
+        // is. He is the one to send up.
+        const beside = man('wr3', 3, 3);
+        const down = man('wr4', 15, 0);
+        expect(jump.nearestToBall(ball, [beside, down], 1)).toBe(down);
+    });
+
+    test('a ball coming to nobody goes to whoever stands nearest it now, and so does a tie', () => {
+        const far = man('wr1', 30, 20);
+        const nearer = man('wr2', 3, 8);
+        expect(jump.nearestToBall(ball, [far, nearer], 1)).toBe(nearer);
+        // Both reached on the same step: the nearer now.
+        const onPath = man('wr3', 12, 0);
+        const beside = man('wr4', 12, 0.9);
+        expect(jump.nearestToBall(ball, [beside, onPath], 1)).toBe(onPath);
+    });
+
+    test('nobody to send is nobody', () => {
+        expect(jump.nearestToBall(ball, [], 1)).toBeNull();
+        expect(jump.nearestToBall(ball, null, 1)).toBeNull();
+        expect(jump.nearestToBall(null, [man('wr1', 1, 1)], 1)).toEqual(man('wr1', 1, 1));
+        expect(jump.nearestToBall(ball, [{ settings: { position: 'wr1' } }], 1)).toBeNull();
     });
 });
 

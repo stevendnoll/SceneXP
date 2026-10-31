@@ -305,12 +305,70 @@ export function showSnap() {
     change.id = 'change-play-btn';
     box.appendChild(change);
 
+    /**
+     * AND WHO THEY ARE, for a visitor with an avatar to move
+     * (specs/xo-photos-plan, Step 2). Quiet like Change play, and named apart
+     * from it on purpose: "Change play" and "Change player" side by side
+     * differ by two letters, and the playbook's own row is called Play as.
+     */
+    if (handlers.canPlayAs && handlers.canPlayAs()) {
+        const as = bindKeys(button('Play as…', 'hud-btn',
+            () => handlers.onPlayAs && handlers.onPlayAs(),
+            'another player'), [PLAY_AS_KEY]);
+        as.id = 'play-as-btn';
+        box.appendChild(as);
+    }
+
     const snap = button('Snap the ball', 'hud-btn hud-btn-primary',
         () => handlers.onSnap && handlers.onSnap());
     snap.id = 'snap-btn';
     bindKeys(snap, SNAP_KEYS);
     box.appendChild(snap);
     snap.focus();
+}
+
+/**
+ * CHOOSING A PLAYER OFF THE FIELD (specs/xo-photos-plan, Step 2).
+ *
+ * The row says what to do, offers a way back, and names who the visitor would
+ * become. A tap on the field chooses at once (main.js). The named button is
+ * the keyboard's and the screen reader's way through the same choice: the
+ * arrow keys walk it through the players on the field, it takes focus so
+ * Enter chooses whoever it names, and Escape presses Cancel.
+ */
+let pickChoose = null;
+
+export function showPick(prompt, label) {
+    const box = actions();
+    if (!box) return;
+    const say = document.createElement('span');
+    say.className = 'hud-prompt';
+    say.id = 'pick-prompt';
+    say.textContent = prompt;
+    box.appendChild(say);
+
+    const cancel = bindKeys(button('Cancel', 'hud-btn',
+        () => handlers.onPickCancel && handlers.onPickCancel(),
+        'and keep your player'), [SKIP_KEY]);
+    cancel.id = 'pick-cancel-btn';
+    box.appendChild(cancel);
+
+    pickChoose = button(`Play as ${label}`, 'hud-btn hud-btn-primary',
+        () => handlers.onPickChoose && handlers.onPickChoose());
+    pickChoose.id = 'pick-choose-btn';
+    pickChoose.setAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight');
+    pickChoose.setAttribute('aria-describedby', 'pick-prompt');
+    box.appendChild(pickChoose);
+    pickChoose.focus();
+}
+
+/** Name somebody else on the choose button, as the arrows or the pointer move
+ *  the choice. Kept as a reference rather than looked up, because the row is
+ *  rebuilt whole on every phase and a lookup could find the last one. */
+export function setPickChoice(label) {
+    if (!pickChoose || !pickChoose.parentNode) return false;
+    pickChoose.textContent = `Play as ${label}`;
+    return true;
 }
 
 /**
@@ -339,16 +397,23 @@ const JUMP_KEY = 'J';
  *  key throws to receiver C, and the two can never both be on screen: the
  *  lookup below asks what is actually there rather than what the key "is". */
 const CHANGE_KEY = 'C';
+/** P, for Play as, before the snap and only for a visitor with an avatar
+ *  (specs/xo-photos-plan). No other row carries it. */
+const PLAY_AS_KEY = 'P';
 /** V, and it only ever means anything while a replay is running: the row it
  *  presses does not exist at any other time. */
 const VIEW_KEY = 'V';
+/** F, for Follow me (Steve's QA, 2026-10-30): the replay camera on the
+ *  visitor's avatar instead of the ball. On the replay row and the share
+ *  sheet, and only for a visitor whose avatar is on the field. */
+const FOLLOW_KEY = 'F';
 /** Escape, which gets out of anything that plays on its own: a replay, a
  *  celebration, a milestone show. It presses whichever Skip is on screen. */
 const SKIP_KEY = 'Escape';
 // A NOTE ON THE MATCH BELOW, which is a SUBSTRING match on `data-keys`. It is
 // safe only because attribute matching is case sensitive and every other key is
-// a single capital: "Escape" contains no S, Q, K, C, V, J or A to D in capitals.
-// A new named key has to keep that true.
+// a single capital: "Escape" contains no S, Q, K, C, P, V, F, J or A to D in
+// capitals. A new named key has to keep that true.
 
 /** Tag a button with the keys that press it, for the handler and for anything
  *  reading the page out loud. */
@@ -381,8 +446,10 @@ export function keyAction(key, { inField = false, modified = false, onControl = 
     const up = key.length === 1 ? key.toUpperCase() : key;
     if (SNAP_KEYS.includes(up)) return 'snap';
     if (up === KEEP_KEY) return 'keep';
+    if (up === PLAY_AS_KEY) return 'playas';
     if (up === JUMP_KEY) return 'jump';
     if (up === VIEW_KEY) return 'view';
+    if (up === FOLLOW_KEY) return 'follow';
     if (up === SKIP_KEY) return 'skip';
     if (/^[A-D]$/.test(up)) return up;
     return '';
@@ -417,7 +484,8 @@ export function initKeys(signal) {
         // C during a play and changes the play before one, and those two rows
         // never coexist, so the right answer is to look rather than to decide.
         const named = {
-            snap: 'S', keep: KEEP_KEY, view: VIEW_KEY, skip: SKIP_KEY, jump: JUMP_KEY,
+            snap: 'S', keep: KEEP_KEY, view: VIEW_KEY, follow: FOLLOW_KEY, skip: SKIP_KEY, jump: JUMP_KEY,
+            playas: PLAY_AS_KEY,
         }[want];
         // THE SPACE BAR PRESSES WHATEVER ON SCREEN WEARS IT, which is the snap
         // before a play and the jump during one. It is looked for by the space
@@ -503,7 +571,7 @@ export function clearActions() {
  * It takes focus, so a keyboard visitor can press Enter to get out of something
  * that started on its own, which is the case that matters most.
  */
-export function showSkipReplay() {
+export function showSkipReplay({ follow = null } = {}) {
     const box = actions();
     if (!box) return;
 
@@ -525,12 +593,36 @@ export function showSkipReplay() {
     swap.id = 'switch-view-btn';
     box.appendChild(swap);
 
+    /**
+     * AND WHO THE CAMERA FOLLOWS (Steve's QA, 2026-10-30), for a visitor whose
+     * avatar is on the field: the ball, or them. A toggle that says its state
+     * (`aria-pressed`, pressed for "me"), so a screen reader hears which, and
+     * the same F as the share sheet's. `follow` is 'ball' or 'avatar', or null
+     * for a visitor with nobody on the field to follow, who gets no button. No
+     * ping for it, for the cameo rule: only avatar holders ever see it.
+     */
+    if (follow !== null) {
+        const me = bindKeys(button('Follow me', 'hud-btn hud-toggle',
+            () => handlers.onFollow && handlers.onFollow(),
+            'with the replay camera, instead of the ball'), [FOLLOW_KEY]);
+        me.id = 'follow-btn';
+        me.setAttribute('aria-pressed', follow === 'avatar' ? 'true' : 'false');
+        box.appendChild(me);
+    }
+
     const skip = bindKeys(button('Skip replay', 'hud-btn',
         () => handlers.onSkipReplay && handlers.onSkipReplay(),
         'and see the result'), [SKIP_KEY]);
     skip.id = 'skip-replay-btn';
     box.appendChild(skip);
     skip.focus();
+}
+
+/** The Follow me toggle on the replay row says its new state, if it is up. */
+export function setFollow(following) {
+    const me = el('hud-actions') && el('hud-actions').children
+        ? el('hud-actions').children.find((b) => b.id === 'follow-btn') : null;
+    if (me) me.setAttribute('aria-pressed', following ? 'true' : 'false');
 }
 
 /**
@@ -787,7 +879,7 @@ export function showHelp(onClose) {
  * button onward. It takes focus so the game can be played entirely by keyboard
  * without ever hunting for where the focus went.
  */
-export function showResult(outcome, playNumber, playsPerGame, runningTotal, canReplay = false) {
+export function showResult(outcome, playNumber, playsPerGame, runningTotal, canReplay = false, canShare = false) {
     const card = el('result');
     if (!card) return;
     const isLast = playNumber >= playsPerGame;
@@ -813,6 +905,16 @@ export function showResult(outcome, playNumber, playsPerGame, runningTotal, canR
             () => handlers.onReplay(), 'of this play'));
     }
 
+    // AND THE CLIP OF IT, with the picture of its best moment under it
+    // (specs/xo-photos-plan, Step 7), whenever there is a recording to clip.
+    // Nothing is made until it is pressed.
+    if (handlers.onShare && canShare) {
+        const share = button('Share the play', 'hud-btn',
+            () => handlers.onShare(), 'as a video');
+        share.id = 'result-share-btn';
+        box.appendChild(share);
+    }
+
     const next = button(isLast ? 'See how you did' : 'Next play',
         'hud-btn hud-btn-primary', () => handlers.onNext && handlers.onNext());
     box.appendChild(next);
@@ -828,4 +930,21 @@ export function showResult(outcome, playNumber, playsPerGame, runningTotal, canR
 export function hideResult() {
     const card = el('result');
     if (card) card.hidden = true;
+}
+
+/**
+ * BACK TO THE CARD AS IT WAS, after a sheet that opened from it closes, with
+ * focus on the button that opened the sheet. Not `showResult` again: that
+ * rebuilds the row and reads the whole result out a second time.
+ */
+export function returnToResult(focusId) {
+    const card = el('result');
+    if (!card) return;
+    card.hidden = false;
+    const box = el('result-actions');
+    const back = box && box.children && box.children.find
+        ? box.children.find((b) => b.id === focusId)
+        : null;
+    const target = back || (focusId ? el(focusId) : null);
+    if (target && target.focus) target.focus();
 }

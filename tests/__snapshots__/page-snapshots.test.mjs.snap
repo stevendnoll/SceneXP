@@ -5298,6 +5298,7 @@ html [lang="en"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
     link [href="js/panels.min.js" rel="modulepreload"]
+    link [href="../shared/js/wordmark-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-layers-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
@@ -6311,7 +6312,7 @@ html [lang="en"]
             li
               strong
                 "Your game of X's and O's."
-              "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the colors you chose for the teams and the field, whether you turned the sound on or off, and whether you turned on Auto jump, so the game comes back the way you left it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot."
+              "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the player your avatar plays as if you chose one other than the quarterback, the colors and stripes you chose for the teams' uniforms and the color you chose for the field, whether you turned the sound on or off, and whether you turned on Auto jump, so the game comes back the way you left it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot. A video clip or a photo of a play is made right on your device and handed only to your own share sheet or downloads folder. Neither is ever sent to us."
             li
               strong
                 "Your job search in Corner Office."
@@ -6351,7 +6352,7 @@ html [lang="en"]
           p
             "The pings are gathered into a public summary for each day, which anyone can read, and which Steve's office displays inside the world itself as a little visitor dashboard. Each visit appears under a throwaway label, such as "Curious Otter," as a timeline of its pings and the time each one arrived, along with its language setting and whether it came from a phone or a computer. The puzzle token stays private, and the summary carries no names, no IP addresses, and no browser fingerprints. Because each visit's pings are listed with their times, someone who already knew exactly when you visited could recognize your visit in the summary."
           p
-            "X's and O's notes a little more, because the game is the plays. Each time you call a play, snap the ball, or throw it, and each time a play ends, it records the play and the defense, the receiver you picked, how it turned out and what it was worth, along with your running score, whether the sound was on, and whether your screen was held upright or sideways. These notes appear in the public summary along with the rest of the visit. It never records the size of your screen or anything else that could pick your device out from anyone else's."
+            "X's and O's notes a little more, because the game is the plays. Each time you call a play, snap the ball, or throw it, and each time a play ends, it records the play and the defense, the receiver you picked, how it turned out and what it was worth, along with your running score, whether the sound was on, and whether your screen was held upright or sideways. When you share a play, it notes only that a clip or a picture was made, shared or saved, how many seconds the clip ran and which of the four views it was from. The clip itself never leaves your device. These notes appear in the public summary along with the rest of the visit. It never records the size of your screen or anything else that could pick your device out from anyone else's."
           p
             "Whitestone Home Care sends a ping for each button you press, saying only which one and where, such as adding a kitchen from Maya's suggestions, along with whether a demo booking went through and whether a cleaner's PIN opened the checklist. It never sends anything you typed, a price, a date or time, or the PIN itself."
           h2
@@ -6367,7 +6368,7 @@ html [lang="en"]
             ". We are happy to explain anything in more detail."
           p
             em
-              "Last updated October 28, 2026."
+              "Last updated October 31, 2026."
     footer.site-footer
       div.container.site-footer-inner
         div.footer-brand
@@ -8827,14 +8828,14 @@ html [data-ui-theme="neon" lang="en"]
   head
     meta [charset="UTF-8"]
     meta [content="width=device-width, initial-scale=1.0" name="viewport"]
-    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
+    meta [content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'" http-equiv="Content-Security-Policy"]
     meta [content="strict-origin-when-cross-origin" name="referrer"]
-    meta [content="A 3D football game where you are always on offense. Call a play, pick your receiver, and dress both teams and the field in your favorite team's colors." name="description"]
+    meta [content="A 3D football game where you are always on offense. Call a play, pick your receiver, dress both teams in your colors, and share a clip of your best play." name="description"]
     meta [content="#080b12" name="theme-color"]
     meta [content="Steve Noll" name="author"]
     link [href="https://www.scenexp.com/xo/" rel="canonical"]
     meta [content="X's and O's" property="og:title"]
-    meta [content="Call a play, snap the ball, pick your receiver. Dress the X's and the O's as your favorite team and its rival, then make them pay." property="og:description"]
+    meta [content="Call a play, snap the ball, pick your receiver. Dress the X's and the O's as your favorite team and its rival, make them pay, and share the clip." property="og:description"]
     meta [content="website" property="og:type"]
     meta [content="SceneXP" property="og:site_name"]
     meta [content="https://www.scenexp.com/xo/" property="og:url"]
@@ -8846,7 +8847,7 @@ html [data-ui-theme="neon" lang="en"]
     meta [content="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." property="og:image:alt"]
     meta [content="summary_large_image" name="twitter:card"]
     meta [content="X's and O's" name="twitter:title"]
-    meta [content="A 3D football game where you are always on offense. Pick your team's colors, call a play, and the farther you carry it the more it is worth." name="twitter:description"]
+    meta [content="A 3D football game where you are always on offense. Pick your team's colors, call a play, carry it as far as you can, and share a clip of your best play." name="twitter:description"]
     meta [content="https://www.scenexp.com/xo/assets/og-xo.jpg?v=1" name="twitter:image"]
     meta [content="A 3D football field seen from high behind the offense in the middle of a play. Orange players with a white X on their jerseys run routes against blue defenders marked O, with lettered rings A to D under the receivers and Q under the quarterback. The 5, 15, 30 and 50 point lines are painted across the green turf, and fans in orange and blue fill the stands on both sides." name="twitter:image:alt"]
     script [type="application/ld+json"]
@@ -8857,7 +8858,7 @@ html [data-ui-theme="neon" lang="en"]
         "url": "https://www.scenexp.com/xo/",
         "name": "X's and O's",
         "image": "https://www.scenexp.com/xo/assets/og-xo.jpg?v=1",
-        "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival.",
+        "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's four views, and with an avatar saved on the Your Avatar page you can play as any player on the field.",
         "genre": [
           "Sports",
           "Strategy"
@@ -8904,7 +8905,7 @@ html [data-ui-theme="neon" lang="en"]
     title
       "X's and O's | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=19" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=23" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -8914,6 +8915,12 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/colors.min.js" rel="modulepreload"]
     link [href="js/ball.min.js" rel="modulepreload"]
     link [href="js/markers.min.js" rel="modulepreload"]
+    link [href="js/moments.min.js" rel="modulepreload"]
+    link [href="js/snapshot.min.js" rel="modulepreload"]
+    link [href="js/photo.min.js" rel="modulepreload"]
+    link [href="js/clip.min.js" rel="modulepreload"]
+    link [href="../shared/js/sharefile-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/recorder-1.0.0.min.js" rel="modulepreload"]
     link [href="js/view.min.js" rel="modulepreload"]
     link [href="js/takedown.min.js" rel="modulepreload"]
     link [href="js/celebration.min.js" rel="modulepreload"]
@@ -8923,6 +8930,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/progress.min.js" rel="modulepreload"]
     link [href="js/scoring.min.js" rel="modulepreload"]
     link [href="js/hud.min.js" rel="modulepreload"]
+    link [href="js/clip-ui.min.js" rel="modulepreload"]
     link [href="js/opening.min.js" rel="modulepreload"]
     link [href="js/colors-ui.min.js" rel="modulepreload"]
     link [href="js/colors-preview.min.js" rel="modulepreload"]
@@ -8935,14 +8943,17 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/camera.min.js" rel="modulepreload"]
     link [href="js/audio.min.js" rel="modulepreload"]
     link [href="js/playbook-ui.min.js" rel="modulepreload"]
+    link [href="js/playas.min.js" rel="modulepreload"]
     link [href="../shared/js/boot-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="js/telemetry.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/dance-1.0.0.min.js" rel="modulepreload"]
     link [href="js/arm.min.js" rel="modulepreload"]
     link [href="../shared/js/cast-1.0.0.min.js" rel="modulepreload"]
+    link [href="../shared/js/wordmark-1.0.0.min.js" rel="modulepreload"]
     link [href="js/formations.min.js" rel="modulepreload"]
     link [href="js/routes.min.js" rel="modulepreload"]
     link [href="js/motion.min.js" rel="modulepreload"]
@@ -8956,9 +8967,10 @@ html [data-ui-theme="neon" lang="en"]
     link [href="../shared/js/avatar-hats-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-wardrobe-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/crowd-1.0.0.min.js" rel="modulepreload"]
+    link [href="js/lead.min.js" rel="modulepreload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=19" rel="stylesheet"]
+    link [href="css/experience.min.css?v=23" rel="stylesheet"]
     link [href="../shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
@@ -9017,7 +9029,11 @@ html [data-ui-theme="neon" lang="en"]
           li
             strong
               "Jump for it."
-            "While the ball is in the air, press Jump or tap your receiver to send him up for it. The button lights up as the ball arrives. Jump too early or too late and the pass can sail past him or be picked off. If you would rather just watch, turn on Auto jump in the playbook."
+            "While the ball is in the air, a ring on the grass marks where it will come down. Press Jump or tap your receiver to send him up for it. The button lights up as the ball arrives. Jump too early or too late and the pass can sail past him or be picked off. If you would rather just watch, turn on Auto jump in the playbook."
+          li
+            strong
+              "Share the play."
+            "After the whistle, watch the replay from any of four views, then share a short clip of it, made right on your device, or save a picture of its best moment."
         p.welcome-keys.card-meta
           "On a keyboard:"
           kbd
@@ -9049,7 +9065,10 @@ html [data-ui-theme="neon" lang="en"]
           "jumps. During a replay,"
           kbd
             "V"
-          "or the arrow keys switch the view."
+          "or the arrow keys switch the view, and"
+          kbd
+            "V"
+          "switches it again when you share the play."
         p.welcome-ladder-title
           "What a play is worth"
         ul.welcome-ladder
@@ -9087,7 +9106,7 @@ html [data-ui-theme="neon" lang="en"]
         p#avatar-playing.card-meta.avatar-line
           img#avatar-playing-img [alt="" decoding="async" height="28" hidden loading="lazy" src="../assets/avatar/default.png" width="28"]
           span#avatar-playing-text
-            "Take the snap at quarterback as yourself."
+            "Take the field as yourself, at quarterback or any position you like."
           a#avatar-playing-link.welcome-explore [href="../avatar/?return=/xo/"]
             "Make your avatar"
         p.welcome-explore-row
@@ -9098,7 +9117,7 @@ html [data-ui-theme="neon" lang="en"]
         h2#colors-title.card-title
           "Team colors"
         p#colors-intro.card-detail
-          "Dress the X's and the O's in your team's colors and your rival's, and pick a field for them to play on."
+          "Dress the X's and the O's in your team's colors and your rival's, down to the stripes and the shoes, and pick a field for them to play on."
         div.colors-teams
           section.colors-team [aria-labelledby="colors-x-title"]
             h3#colors-x-title.colors-team-title
@@ -9109,11 +9128,35 @@ html [data-ui-theme="neon" lang="en"]
                 "Jersey"
               input#colors-x-jersey.colors-input [type="color" value="#ff992c"]
             div.colors-row
+              label [for="colors-x-letter"]
+                "Letter"
+              input#colors-x-letter.colors-input [type="color" value="#ffffff"]
+            div.colors-row
               label [for="colors-x-helmet"]
                 "Helmet"
               input#colors-x-helmet.colors-input [type="color" value="#ff992c"]
             button#colors-x-match.colors-match [aria-label="Match jersey color on the X's helmet" hidden type="button"]
               "Match jersey"
+            div.colors-row
+              label [for="colors-x-helmet-stripe"]
+                "Helmet stripe"
+              span.colors-pair
+                input#colors-x-helmet-stripe.colors-check [type="checkbox"]
+                input#colors-x-helmet-stripe-color.colors-input [aria-label="Helmet stripe color for the X's" hidden type="color" value="#ffffff"]
+            div.colors-row
+              label [for="colors-x-pants"]
+                "Pants"
+              input#colors-x-pants.colors-input [type="color" value="#3a2410"]
+            div.colors-row
+              label [for="colors-x-pants-stripe"]
+                "Pants stripes"
+              span.colors-pair
+                input#colors-x-pants-stripe.colors-check [type="checkbox"]
+                input#colors-x-pants-stripe-color.colors-input [aria-label="Pants stripes color for the X's" hidden type="color" value="#ff992c"]
+            div.colors-row
+              label [for="colors-x-shoes"]
+                "Shoes"
+              input#colors-x-shoes.colors-input [type="color" value="#1a1a1a"]
           section.colors-team [aria-labelledby="colors-o-title"]
             h3#colors-o-title.colors-team-title
               "The O's"
@@ -9123,11 +9166,35 @@ html [data-ui-theme="neon" lang="en"]
                 "Jersey"
               input#colors-o-jersey.colors-input [type="color" value="#9bcfff"]
             div.colors-row
+              label [for="colors-o-letter"]
+                "Letter"
+              input#colors-o-letter.colors-input [type="color" value="#ffffff"]
+            div.colors-row
               label [for="colors-o-helmet"]
                 "Helmet"
               input#colors-o-helmet.colors-input [type="color" value="#9bcfff"]
             button#colors-o-match.colors-match [aria-label="Match jersey color on the O's helmet" hidden type="button"]
               "Match jersey"
+            div.colors-row
+              label [for="colors-o-helmet-stripe"]
+                "Helmet stripe"
+              span.colors-pair
+                input#colors-o-helmet-stripe.colors-check [type="checkbox"]
+                input#colors-o-helmet-stripe-color.colors-input [aria-label="Helmet stripe color for the O's" hidden type="color" value="#ffffff"]
+            div.colors-row
+              label [for="colors-o-pants"]
+                "Pants"
+              input#colors-o-pants.colors-input [type="color" value="#1b2c40"]
+            div.colors-row
+              label [for="colors-o-pants-stripe"]
+                "Pants stripes"
+              span.colors-pair
+                input#colors-o-pants-stripe.colors-check [type="checkbox"]
+                input#colors-o-pants-stripe-color.colors-input [aria-label="Pants stripes color for the O's" hidden type="color" value="#9bcfff"]
+            div.colors-row
+              label [for="colors-o-shoes"]
+                "Shoes"
+              input#colors-o-shoes.colors-input [type="color" value="#1a1a1a"]
         div.colors-row.colors-field
           label [for="colors-field"]
             "Field"
@@ -9182,6 +9249,35 @@ html [data-ui-theme="neon" lang="en"]
         p#result-detail.card-detail
         p#result-running.card-meta
         div#result-actions.card-actions
+    div#clip.card-overlay [hidden]
+      div#clip-panel.card-panel.clip-panel [aria-describedby="clip-progress" aria-labelledby="clip-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#clip-title.card-title
+          "Share the play"
+        div#clip-stage.clip-stage
+        p#clip-progress.card-detail.clip-progress
+          "Making your clip…"
+        div#clip-tools.clip-tools
+          button#clip-view.hud-btn [aria-keyshortcuts="V" aria-label="Switch view to see the play from another side of the field" type="button"]
+            "Switch view"
+          span#clip-view-count.clip-count [aria-hidden="true"]
+            "View 1 of 4"
+          button#clip-follow.hud-btn.hud-toggle [aria-keyshortcuts="F" aria-label="Follow me with the camera, instead of the ball" aria-pressed="false" hidden type="button"]
+            "Follow me"
+        p#clip-nudge.card-meta.clip-nudge [hidden]
+          span#clip-nudge-text
+            "Want to be the one on the field?"
+          a#clip-nudge-link.clip-nudge-link [href="../avatar/?return=/xo/"]
+            "Make your avatar"
+        p#clip-status.sr-only [aria-live="polite" role="status"]
+        div.card-actions
+          button#clip-picture.hud-btn [aria-disabled="true" type="button"]
+            "Save a picture"
+          button#clip-close.hud-btn [type="button"]
+            "Close"
+          button#clip-share.hud-btn.hud-btn-primary [aria-disabled="true" type="button"]
+            "Share video"
+        p.card-meta.clip-note
+          "Made on this device. Nothing is uploaded."
     div#summary.card-overlay [hidden]
       div.card-panel [aria-labelledby="summary-title" aria-modal="true" role="dialog"]
         h2#summary-title.card-title

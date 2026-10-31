@@ -1627,11 +1627,14 @@ describe('delights and surprises (M6)', () => {
         expect(dom.el('round-status').textContent.length).toBeGreaterThan(0);
     });
 
-    // It boots the page four times, each a whole yard: slow in the sandbox
-    // with coverage on, so it has longer than the usual five seconds.
-    test('the decorations are up all October, the week\'s extras are not, and the lab can ask for either', async () => {
+    // ONE BOOT A TEST. These four were one test with four boots, each a whole
+    // yard, under the allowance a single boot gets, and the CI runner, about
+    // twice as slow as a laptop with coverage on, ran it out (2026-10-31).
+    // Split, each case has the standard allowance and names itself when it
+    // fails. The fresh page each one needs is the beforeEach's.
+    test('the decorations are up all October, and the week\'s extras are not', async () => {
         jest.setSystemTime(new Date(2026, 9, 7, 15));
-        let main = await boot();
+        const main = await boot();
         expect(main.getState().decor).toBe(true);
         expect(main.getState().halloween).toBe(false);
         // The porch pumpkins are carved all October (Steve, 2026-10-09).
@@ -1640,31 +1643,30 @@ describe('delights and surprises (M6)', () => {
         expect(main.getState().treaters).not.toBe(null);
         fire(dom.el('blocker'), 'click');
         expect(() => frames(main, 1, 20)).not.toThrow();
-        dom.uninstall();
-        jest.resetModules();
-        installThree();
-        dom = installDom({ innerWidth: 390, innerHeight: 844 });
+    });
+
+    test('the lab can ask for Halloween week by the address, whatever the date', async () => {
+        // September, the suite's fixed day: the address alone turns it on.
         dom.windowStub.location.search = '?leaves=600&halloween=1';
-        main = await boot();
+        const main = await boot();
         expect(main.getState().halloween).toBe(true);
-        dom.uninstall();
-        jest.resetModules();
-        installThree();
-        dom = installDom({ innerWidth: 390, innerHeight: 844 });
+        expect(main.getState().decor).toBe(true);
+    });
+
+    test('the lab can ask for none of it, even in Halloween week', async () => {
+        jest.setSystemTime(new Date(2026, 9, 28, 15));
         dom.windowStub.location.search = '?leaves=600&halloween=0';
-        main = await boot();
+        const main = await boot();
         expect(main.getState().decor).toBe(false);
-        // And come November they are down.
-        dom.uninstall();
-        jest.resetModules();
-        installThree();
-        dom = installDom({ innerWidth: 390, innerHeight: 844 });
-        dom.windowStub.location.search = '?leaves=600';
+        expect(main.getState().halloween).toBe(false);
+    });
+
+    test('come November the decorations are down and the pumpkins are plain', async () => {
         jest.setSystemTime(new Date(2026, 10, 3, 15));
-        main = await boot();
+        const main = await boot();
         expect(main.getState().decor).toBe(false);
         expect(main.getState().carved).toBe(false);
-    }, 20000);
+    });
 
     describe('a find', () => {
         // Enough leaves to bury the lawn, so the finds can be hidden.

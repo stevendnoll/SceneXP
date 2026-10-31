@@ -28,7 +28,7 @@ import {
     fireworksSetup, finaleFireworksSetup, turfSetup, trophySpot, blimpOrbitPosition,
 } from './milestones.min.js';
 import {
-    crowdSeats, pixelMessage, cardRow, cardAt, messageColumn, fanArrival, cheerHop, cheerArms, cheerLength,
+    crowdSeats, pixelMessage, cardRow, cardAt, messageColumn, fanArrival, cheerLength, fanPose,
     cardLayout, cardSpot, NEUTRAL,
 } from './stunt.min.js';
 import { buildFanParts, POSES, HAIR } from './fans.min.js';
@@ -211,9 +211,12 @@ export function beginShow(level, { seed = 1, calm = false } = {}) {
     plan = null;
     // A CHEER STOPS FOR A SHOW, SEATED. Only the finale poses the crowd, so a
     // cheer merely dropped here would leave fans hanging in mid-air through
-    // the lights, the fireworks, the blimp or the numbers.
-    if (cheering) {
+    // the lights, the fireworks, the blimp or the numbers. The buzz before a
+    // play too, though a show comes after a whistle and finds none.
+    if (cheering || buzzing || handoff) {
         cheering = null;
+        buzzing = null;
+        handoff = null;
         poseCrowd(null);
     }
     if (level === 100) {
@@ -422,6 +425,14 @@ let crowd = null;
 let stuntMessages = null;
 /** The cheer after the last play: `{ cheer, start }` in `tickAwake`'s clock. */
 let cheering = null;
+/** The stands up before and during a play (Steve, 2026-10-30): `{ start,
+ *  pending }` in the same clock. `pending` while a cheer still runs from the
+ *  last play, so the buzz begins the moment that cheer seats them rather than
+ *  cutting it short. */
+let buzzing = null;
+/** The buzz a running cheer took over from at the whistle: `{ start }`, so
+ *  each fan can fade from one into the other (stunt.js `fanPose`). */
+let handoff = null;
 const dummy = { current: null };
 
 function scratch() {
@@ -556,12 +567,14 @@ function hidden() {
  * The crowd at time `t` into the finale, or at rest (`t` null).
  *
  * At rest that is the regulars before 500 and every seat after it, each fan
- * lifted and waving by the cheer after the last play if there is one. In the
- * finale the rest of the seats fill in around the regulars, the far stand puts
- * its cards up in front of its faces, everybody bounces once the number has
- * landed, and the near stand throws its arms up.
+ * up and hopping in the buzz before and during a play (`buzzT` seconds in),
+ * lifted and waving by the cheer after the whistle if there is one, or fading
+ * from the one into the other (stunt.js `fanPose`). In the finale the rest of
+ * the seats fill in around the regulars, the far stand puts its cards up in
+ * front of its faces, everybody bounces once the number has landed, and the
+ * near stand throws its arms up.
  */
-function poseCrowd(t, { bouncing = false, cardsUp = false, cheer = null, cheerT = 0 } = {}) {
+function poseCrowd(t, { bouncing = false, cardsUp = false, cheer = null, cheerT = null, buzzT = null } = {}) {
     if (!crowd) return;
     const o = scratch();
     const full = t !== null || awake >= 500;
@@ -577,8 +590,7 @@ function poseCrowd(t, { bouncing = false, cardsUp = false, cheer = null, cheerT 
             hop = bounce ? CFG.crowd.bounce * CFG.crowd.scale * Math.abs(Math.sin(Math.PI * 2 * (seat.phase + 1.6 * t))) : 0;
             pose = seat.side > 0 && holding ? 'cards' : (bounce ? 'up' : 'down');
         } else {
-            hop = cheerHop(cheerT, seat, cheer);
-            pose = cheerArms(cheerT, seat, cheer);
+            ({ hop, arms: pose } = fanPose(seat, { buzzT, cheer, cheerT }));
         }
         const s = Math.max(0.001, here);
         // The figure faces +z, so the near stand (z < 0) faces the field as
@@ -651,14 +663,43 @@ function poseCrowd(t, { bouncing = false, cardsUp = false, cheer = null, cheerT 
  * Somebody who asked not to be moved about gets stands that keep still.
  */
 export function cheerCrowd(cheer, elapsed, { calm = false } = {}) {
-    const was = cheering;
+    const was = cheering || buzzing || handoff;
     cheering = cheer && !calm && !inShow ? { cheer, start: elapsed } : null;
+    // THE CHEER TAKES OVER FROM THE BUZZ. The stands have been up since the
+    // line-up, and at the whistle each fan fades from that into their cheer or
+    // their seat (`fanPose`), which needs the buzz's clock kept until the cheer
+    // is over. Nothing given, or a calm visitor, and the buzz simply ends.
+    handoff = cheering && buzzing && !buzzing.pending ? { start: buzzing.start } : null;
+    buzzing = null;
     // A CHEER STOPPED SHORT SITS DOWN. A replay rewinds to the snap and calls
     // this with nothing, and the fans have to be back in their seats for it:
-    // `tickCheer` only poses a crowd while somebody is cheering, so merely
-    // dropping the cheer would leave them frozen mid-hop through the replay.
-    // Same reason `beginShow` seats them. A show owns the crowd while it runs.
+    // `tickCheer` only poses a crowd while somebody is up, so merely dropping
+    // the cheer would leave them frozen mid-hop through the replay. Same
+    // reason `beginShow` seats them. A show owns the crowd while it runs.
     if (was && !cheering && crowd && !inShow) poseCrowd(null);
+}
+
+/**
+ * THE STANDS BEFORE AND DURING A PLAY (Steve, 2026-10-30). `on` from the
+ * line-up (and from the first frame of a replay or a take, which show the play
+ * again from the snap) until the whistle's `cheerCrowd` takes over; `off` seats
+ * them. Asked for while the last play's cheer is still running, the buzz
+ * waits for that cheer to seat them and begins then, so no fan is cut off
+ * mid-hop. Asking again while it runs changes nothing, so a changed play keeps
+ * the stands as they are. Somebody who asked not to be moved about gets stands
+ * that keep still, as with the cheer.
+ */
+export function buzzCrowd(on, elapsed, { calm = false } = {}) {
+    if (on) {
+        if (calm || inShow || buzzing) return;
+        buzzing = { start: elapsed, pending: !!cheering };
+        return;
+    }
+    const was = cheering || buzzing || handoff;
+    cheering = null;
+    buzzing = null;
+    handoff = null;
+    if (was && crowd && !inShow) poseCrowd(null);
 }
 
 /** The cheer running now, and the clock it started on, or null. For the suite:
@@ -667,16 +708,35 @@ export function cheerState() {
     return cheering ? { ...cheering.cheer, start: cheering.start } : null;
 }
 
-/** Only while somebody is jumping: a crowd at rest is not reposed per frame. */
+/** Everything the stands are doing, for the suite: when the buzz began (null
+ *  for none, or while it waits on a cheer), the cheer, and the buzz the cheer
+ *  took over from. */
+export function crowdState() {
+    return {
+        buzzing: buzzing && !buzzing.pending ? buzzing.start : null,
+        pending: !!(buzzing && buzzing.pending),
+        cheer: cheerState(),
+        handoff: handoff ? handoff.start : null,
+    };
+}
+
+/** Only while somebody is up: a crowd at rest is not reposed per frame. */
 function tickCheer(elapsed) {
-    if (!cheering || !crowd || inShow) return;
-    const t = elapsed - cheering.start;
-    if (!(t < cheerLength(cheering.cheer))) {
-        cheering = null;
-        poseCrowd(null);
+    if (!crowd || inShow) return;
+    if (cheering) {
+        const t = elapsed - cheering.start;
+        if (!(t < cheerLength(cheering.cheer))) {
+            cheering = null;
+            handoff = null;
+            // A buzz that waited on this cheer begins now, from their seats.
+            if (buzzing && buzzing.pending) buzzing = { start: elapsed, pending: false };
+            poseCrowd(null);
+            return;
+        }
+        poseCrowd(null, { cheer: cheering.cheer, cheerT: t, buzzT: handoff ? elapsed - handoff.start : null });
         return;
     }
-    poseCrowd(null, { cheer: cheering.cheer, cheerT: t });
+    if (buzzing && !buzzing.pending) poseCrowd(null, { buzzT: elapsed - buzzing.start });
 }
 
 // ---- The trophy and the confetti (500) ---------------------------------------------
@@ -848,6 +908,8 @@ export function setAwake(level = 0) {
     if (inShow) return;
     buildCrowd();
     cheering = null;
+    buzzing = null;
+    handoff = null;
     poseCrowd(null, { cardsUp: false });
 }
 
@@ -898,6 +960,8 @@ export function disposeSpectacle() {
     confetti = null;
     crowd = null;
     cheering = null;
+    buzzing = null;
+    handoff = null;
     blimp = null;
     trophy = null;
     glow = null;

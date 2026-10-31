@@ -36,10 +36,11 @@ installThree();
 const CONFIG_MODULE = await import(join(scene, 'config.js'));
 const { XO_CONFIG: CFG, UNITS_TO_METRES, FIELD, SIM } = CONFIG_MODULE;
 const { solveArm, handAt, RIG } = await import(join(scene, 'arm.js'));
-const { takedownAt, takedownLength, contactFraction } = await import(join(scene, 'takedown.js'));
+const { takedownAt, takedownLength, contactFraction, takedownRest, landing } = await import(join(scene, 'takedown.js'));
 const {
     toWorld, carryHold, HEADING_DEADZONE, TURN_RESPONSE,
-    syncFigures, beginSnapMotion, resetThrow, throwClock, blockersEngaged,
+    syncFigures, beginSnapMotion, resetThrow, throwClock, blockersEngaged, postingFor,
+    finishSnapMotion, snapProgress, resetSnapMotion,
     beginRelocate, resetRelocate, relocateProgress,
     syncBall, resetBallFlight, ballSpan, turnFor, frontOf, jumpClearance, jumpCommit,
     noteThrow, airborne, intendedReceiver,
@@ -338,6 +339,126 @@ describe('the tackle, and when the two of them actually meet', () => {
     });
 });
 
+/**
+ * THE HIT, MADE FLUID AND VIOLENT (Steve's QA, 2026-10-30). The carrier's
+ * own momentum at the whistle goes into the tackle: he runs into the hit, the
+ * tackler dives at where he will be, his speed carries him on through it, the
+ * drive skids out instead of stopping dead, both men fall under gravity and
+ * land a little past flat, and he rolls onto the shoulder the hit sent him to.
+ * A caller that says nothing about his motion gets a standing man, which is a
+ * sack and every test above.
+ */
+describe('the hit, fluid and violent', () => {
+    const T = CFG.pose.takedown;
+    const GAP = 1.85;
+    // The carrier faces downfield (+x). The tackler comes from his left (-z),
+    // so the hit sends him toward +z, which is his right.
+    const from = { x: 0, y: 0, z: -GAP };
+    const to = { x: 0, y: 0, z: 0 };
+    const running = { velocity: { x: 7, z: 0 }, facing: Math.PI / 2 };
+    const standing = { velocity: { x: 0, z: 0 }, facing: Math.PI / 2 };
+    const hit = contactFraction(GAP) * T.dive;
+
+    test('a running carrier runs into the hit and is carried on by his own speed; a standing one is not', () => {
+        const before = takedownAt(hit * 0.5, from, to, running);
+        expect(before.contact).toBe(0);
+        expect(before.carrier.x).toBeCloseTo(7 * hit * 0.5, 9);
+        expect(before.carrier.z).toBe(0);
+        expect(before.carrier.lean).toBeCloseTo(0, 12);
+        expect(takedownAt(hit * 0.5, from, to, standing).carrier.x).toBe(0);
+
+        // By the end he has gone on along his own line as well as across it:
+        // the drive along the hit (aimed at where he was at contact) and the
+        // momentum he kept for the fall's length.
+        const end = takedownAt(takedownLength(GAP), from, to, running);
+        const line = { x: 7 * hit, z: GAP };
+        const len = Math.hypot(line.x, line.z);
+        const keep = T.momentum.keep * 7 * T.fall;
+        expect(end.carrier.x).toBeCloseTo(7 * hit + (line.x / len) * T.driven + keep, 6);
+        expect(end.carrier.z).toBeCloseTo((line.z / len) * T.driven, 6);
+        expect(keep).toBeGreaterThan(0.9);
+        // Standing, he is simply driven along the hit, as before, and no
+        // motion at all is the same man.
+        const stood = takedownAt(takedownLength(GAP), from, to, standing);
+        expect(stood.carrier.x).toBeCloseTo(0, 9);
+        expect(stood.carrier.z).toBeCloseTo(T.driven, 6);
+        const none = takedownAt(takedownLength(GAP), from, to);
+        expect(none.carrier.x).toBeCloseTo(stood.carrier.x, 9);
+        expect(none.carrier.z).toBeCloseTo(stood.carrier.z, 9);
+    });
+
+    test('the tackler dives at where the carrier will be, and lands wrapped on him', () => {
+        for (const motion of [running, standing, null]) {
+            const end = takedownAt(takedownLength(GAP), from, to, motion);
+            const apart = Math.hypot(
+                (from.x + end.tackler.x) - (to.x + end.carrier.x),
+                (from.z + end.tackler.z) - (to.z + end.carrier.z)
+            );
+            // On him, not a stride behind, and not through him.
+            expect(apart).toBeLessThan(CFG.separation);
+            expect(apart).toBeGreaterThan(T.close * 0.5);
+        }
+    });
+
+    test('gravity, not a smoothstep: he accelerates into the ground, lands past flat and settles back', () => {
+        const lean = (u) => Math.abs(takedownAt(hit + u * T.fall, from, to).carrier.lean) / Math.abs(T.carrierLean);
+        // Under the straight line early, well over it late.
+        expect(lean(0.25)).toBeLessThan(0.25);
+        expect(lean(0.5)).toBeLessThan(0.5);
+        expect(lean(0.8)).toBeGreaterThan(0.9);
+        // Past flat at the landing's middle, flat again at the end and after.
+        expect(lean(0.91)).toBeCloseTo(1 + T.bounce, 6);
+        expect(lean(1)).toBeCloseTo(1, 9);
+        expect(lean(3)).toBeCloseTo(1, 9);
+        // The curve itself: nought at nought, continuous at the ground, one past the end.
+        expect(landing(0, 0.1)).toBe(0);
+        expect(landing(-1, 0.1)).toBe(0);
+        expect(landing(0.82, 0.1)).toBeCloseTo(1, 9);
+        expect(landing(0.82 - 1e-9, 0.1)).toBeCloseTo(1, 6);
+        expect(landing(1, 0.1)).toBe(1);
+        expect(landing(2, 0.1)).toBe(1);
+        // The tackler lands the same way.
+        expect(takedownAt(T.dive * 0.91, from, to).tackler.lean).toBeCloseTo(T.tacklerLean * (1 + T.bounce), 6);
+        expect(takedownAt(60, from, to).tackler.lean).toBeCloseTo(T.tacklerLean, 9);
+    });
+
+    test('the drive skids on into the settle rather than stopping dead, and the skid stays inside the settle', () => {
+        expect(T.skid).toBeGreaterThan(0);
+        expect(T.skid).toBeLessThanOrEqual(T.settle);
+        const gone = (t) => Math.hypot(takedownAt(t, from, to).carrier.x, takedownAt(t, from, to).carrier.z);
+        // More than half the drive is done by the fall's end, and it is still
+        // moving after it, and done by the length.
+        expect(gone(hit + T.fall)).toBeGreaterThan(T.driven * 0.5);
+        expect(gone(hit + T.fall + T.skid * 0.5)).toBeGreaterThan(gone(hit + T.fall));
+        expect(gone(takedownLength(GAP))).toBeCloseTo(T.driven, 6);
+    });
+
+    test('a carrier sent sideways to his heading lands on that shoulder; sent straight back he does not roll', () => {
+        const end = takedownAt(takedownLength(GAP), from, to, running);
+        expect(end.carrier.roll).toBeGreaterThan(0.1);
+        expect(end.carrier.roll).toBeLessThanOrEqual(T.roll + 1e-9);
+        // From his right, onto his left.
+        const other = takedownAt(takedownLength(GAP), { x: 0, y: 0, z: GAP }, to, running);
+        expect(other.carrier.roll).toBeLessThan(-0.1);
+        // Head on: nothing to speak of. Standing, hit square from the side: the
+        // full roll. Without a facing: none at all.
+        const headOn = takedownAt(takedownLength(GAP), { x: -GAP, y: 0, z: 0 }, to, running);
+        expect(Math.abs(headOn.carrier.roll)).toBeLessThan(1e-9);
+        expect(takedownAt(takedownLength(GAP), from, to, standing).carrier.roll).toBeCloseTo(T.roll, 9);
+        expect(takedownAt(takedownLength(GAP), from, to).carrier.roll).toBe(0);
+        // It comes with the fall, not before the hit.
+        expect(takedownAt(hit * 0.5, from, to, running).carrier.roll).toBe(0);
+    });
+
+    test('the rest spots carry the momentum too, for the sack that starts where the tackle ends', () => {
+        const still = takedownRest(from, to);
+        const moving = takedownRest(from, to, running);
+        expect(moving.length).toBe(still.length);
+        expect(moving.carrier.x).toBeGreaterThan(still.carrier.x + 1);
+        expect(takedownRest(from, to, standing)).toEqual(still);
+    });
+});
+
 describe('a receiver who has run out of route', () => {
     /**
      * QA ITEM 3, AND IT IS THE SIMULATION RATHER THAN THE ANIMATION.
@@ -573,6 +694,69 @@ describe('a replay starts from the snap, not from the last thing that happened',
         expect(throwClock()).toBeLessThan(0);
         syncFigures([qb(false)], 0.1, {});
         expect(throwClock()).toBeGreaterThanOrEqual(0);
+    });
+});
+
+/**
+ * HANDS UP ONLY WHILE THERE IS SOMEBODY TO ASK (Steve's QA, 2026-10-30): the
+ * receivers kept raising their arms after another receiver had the ball, or
+ * after the quarterback had kept it. The rule is pure, so it is asked case by
+ * case here; tests/xo-posting-drawn.test.mjs proves the arm follows it.
+ */
+describe('a receiver asks for the ball only while the quarterback has it to throw', () => {
+    const qb = (state = {}) => ({ settings: { position: 'qb', team: 0, benched: false }, coords: { x: 0, y: 0 }, state: { hasBall: true, run: false, ...state } });
+    const wr = (position = 'wr2', state = {}) => ({ settings: { position, team: 0, benched: false }, coords: { x: 0, y: 0 }, state: { hasBall: false, ...state } });
+    const db = () => ({ settings: { position: 'db1', team: 1, benched: false }, coords: { x: 0, y: 0 }, state: {} });
+    const live = { live: true, standing: true, flying: false };
+
+    test('a standing receiver posts up while the quarterback surveys', () => {
+        expect(postingFor(wr(), qb(), live)).toBe(1);
+        expect(postingFor(wr('wr4'), qb(), live)).toBe(1);
+    });
+
+    test('not once the ball is in the air, caught, or tucked and run', () => {
+        expect(postingFor(wr(), null, { ...live, flying: true })).toBe(0);
+        // A ball in the air outranks whoever the frame still says is holding it.
+        expect(postingFor(wr(), qb(), { ...live, flying: true })).toBe(0);
+        expect(postingFor(wr(), null, live)).toBe(0);
+        expect(postingFor(wr('wr2'), wr('wr1', { hasBall: true }), live)).toBe(0);
+        expect(postingFor(wr(), qb({ run: true }), live)).toBe(0);
+    });
+
+    test('not the carrier himself, not a defender, not before the snap, not on the move', () => {
+        const a = qb();
+        expect(postingFor(a, a, live)).toBe(0);
+        const carrier = wr('wr1', { hasBall: true });
+        expect(postingFor(carrier, carrier, live)).toBe(0);
+        expect(postingFor(db(), qb(), live)).toBe(0);
+        expect(postingFor(wr(), qb(), { ...live, live: false })).toBe(0);
+        expect(postingFor(wr(), qb(), { ...live, standing: false })).toBe(0);
+        expect(postingFor(null, qb(), live)).toBe(0);
+    });
+});
+
+/**
+ * THE SNAP IS OVER FOR A PLAYBACK THAT OPENS MID-PLAY (the clip, 2026-10-30):
+ * `finishSnapMotion` puts the snap clock at its end whatever it was, and never
+ * winds a finished one back.
+ */
+describe('finishing the snap motion', () => {
+    test('a half-done snap is finished, a finished one is left, and the throw is not touched', () => {
+        beginSnapMotion();
+        syncFigures([], CFG.pose.snap.time * 0.3, {});
+        expect(snapProgress()).toBeGreaterThan(0);
+        expect(snapProgress()).toBeLessThan(1);
+        finishSnapMotion();
+        expect(snapProgress()).toBe(1);
+        // Already past the end: nothing moves back.
+        syncFigures([], 5, {});
+        finishSnapMotion();
+        expect(snapProgress()).toBe(1);
+        // And a snap never begun is simply over too, rather than held under centre.
+        resetSnapMotion();
+        expect(snapProgress()).toBe(0);
+        finishSnapMotion();
+        expect(snapProgress()).toBe(1);
     });
 });
 
@@ -1096,6 +1280,14 @@ describe('the keyboard', () => {
         // because the row it presses only exists during a replay.
         expect(keyAction('V')).toBe('view');
         expect(keyAction('v')).toBe('view');
+        // P is Play as (specs/xo-photos-plan), before the snap, and only for a
+        // visitor with an avatar: the row it presses exists nowhere else.
+        expect(keyAction('P')).toBe('playas');
+        expect(keyAction('p')).toBe('playas');
+        // F is Follow me (QA 2026-10-30), on the replay row and the share
+        // sheet, and only for a visitor whose avatar is on the field.
+        expect(keyAction('F')).toBe('follow');
+        expect(keyAction('f')).toBe('follow');
     });
 
     /**
@@ -1107,7 +1299,8 @@ describe('the keyboard', () => {
         // J joined 2026-09-23 with the visitor's jump. Space is not listed
         // twice: the snap and the jump share it and are never on screen
         // together, which is the row's business rather than this table's.
-        const keys = ['A', 'B', 'C', 'D', ' ', 'S', 'Q', 'K', 'V', 'J'];
+        // P joined 2026-10-29 with Play as.
+        const keys = ['A', 'B', 'C', 'D', ' ', 'S', 'Q', 'K', 'V', 'J', 'P'];
         const seen = new Map();
         for (const key of keys) {
             const act = keyAction(key);
@@ -1116,9 +1309,9 @@ describe('the keyboard', () => {
             expect(had === undefined || had === act).toBe(true);
             seen.set(key, act);
         }
-        // Snap has three keys and the rest have one each, so ten keys reach
-        // eight actions.
-        expect(new Set(seen.values()).size).toBe(8);
+        // Snap has three keys and the rest have one each, so eleven keys reach
+        // nine actions.
+        expect(new Set(seen.values()).size).toBe(9);
     });
 
     test('and every letter that means something on screen has a control', () => {

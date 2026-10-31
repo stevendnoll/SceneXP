@@ -266,12 +266,22 @@ export function idleDriver(t, aspect = 1.78) {
  * field shrank from 50m to 35m they did not shrink with it, which is how a
  * replay ended up shot through the uprights with a player filling three
  * quarters of the frame.
+ *
+ * IT OPENS ON `anchor` AND ARRIVES ON THE CARRIER. The replay opens on the
+ * line of scrimmage (the default), because it starts at the snap and the
+ * formation is the picture. The shareable clip (specs/xo-photos-plan, Step
+ * 6, D22) starts a few seconds before the whistle, when the carrier may be
+ * anywhere, so it hands in where the ball was on its own first frame: opened
+ * on the line it would swing from an empty formation to a man already
+ * downfield. `{ x, z }` in world metres.
  */
-export function replayDriver(progress, focus, shoulder) {
+export function replayDriver(progress, focus, shoulder, anchor = null) {
     const r = CFG.camera.replay;
     const t = clamp01(progress);
     const iv = FIELD.lineInterval;
     const snapX = FIELD.lineInterval;
+    const openX = anchor && Number.isFinite(anchor.x) ? anchor.x : snapX;
+    const openZ = anchor && Number.isFinite(anchor.z) ? anchor.z : 0;
 
     const arrive = smooth(Math.min(1, t / r.establishFor));
     const height = lerp(r.establishHeight, r.trackHeight, arrive) * iv;
@@ -289,10 +299,11 @@ export function replayDriver(progress, focus, shoulder) {
     const settle = smooth(clamp01((t - r.settleFrom) / (1 - r.settleFrom)));
     const close = lerp(1, r.settleCloseness, settle);
 
-    // Anchored on the line of scrimmage at first, so the replay opens on the
-    // formation rather than on whoever happens to be holding the ball.
-    const anchorX = lerp(snapX, focus.x, arrive);
-    const anchorZ = focus.z * arrive;
+    // Anchored on the opening point at first (the line of scrimmage, unless a
+    // caller says otherwise), so the replay opens on the formation rather than
+    // on whoever happens to be holding the ball.
+    const anchorX = lerp(openX, focus.x, arrive);
+    const anchorZ = lerp(openZ, focus.z, arrive);
 
     let angle = rad(lerp(r.angleFrom, r.angleTo, t));
     let dist = r.radius * iv * close;
@@ -360,37 +371,156 @@ export function replayDriver(progress, focus, shoulder) {
  * `side` is near zero, which puts the camera straight behind the carrier with
  * no lateral offset: a real shot, and the one it passes through on its way.
  */
-const shoulder = { side: 1, want: 1, held: 0, seeded: false };
+/** A fresh shoulder memory. The live replay's is the module's own below; the
+ *  shareable clip (specs/xo-photos-plan, Step 6) runs its own, so a take can
+ *  never move the shoulder the replay on screen is rounding. */
+export function newShoulder() {
+    return { side: 1, want: 1, held: 0, seeded: false };
+}
 
-/** Back to whichever side this carrier's position asks for, with no swing.
- *  Called when a replay starts, so it opens on the right shoulder rather than
- *  swinging in from wherever the last one finished. */
+const shoulder = newShoulder();
+
+/**
+ * THE AIM IS SMOOTHED, AND THAT IS STEVE'S QA OF 2026-10-30: "both replay
+ * cameras are a little twitchy". The director aims at where the recording
+ * says the ball or its carrier is on this frame, and that point twitches: the
+ * ported motion model accelerates on two axes separately, so a quarterback in
+ * the pocket shuffles, and a 60 fps frame of replay steps the recording by one
+ * tick or by two (80 Hz at 0.85), so even a smooth run arrives in uneven
+ * steps. The figures are eased toward their positions and look smooth; the
+ * camera was not, so the whole frame followed every shuffle. The live play's
+ * camera is fixed, which is why nobody saw it there.
+ *
+ * MEASURED over twelve simulated plays sampled the way the replay samples:
+ * the aim's twitch (the RMS change in its frame-to-frame motion) was 52 mm a
+ * frame in the pocket and 97 mm on a run. Through this filter at
+ * `focusSmooth` 0.12 s it is 6 mm and 13 mm, under a pixel on a phone, and
+ * the aim sits a mean 0.77 m behind a sprinting carrier, which `lead` (2.8 m
+ * ahead of him) more than covers. At 0.08 s: 8 and 17 mm, 0.47 m behind. At
+ * 0.20 s: 4 and 8 mm, 1.43 m behind. A time constant rather than a frame
+ * count, so a slow phone smooths the same seconds (`1 - exp(-delta / tau)`).
+ *
+ * A MEMORY OF ITS OWN, like the shoulder's: the live replay keeps the
+ * module's, reset with the shoulder when a replay starts, and the clip's take
+ * (clip.js) brings its own, so a take never moves the replay on screen.
+ */
+export function newAim() {
+    return { x: 0, y: 0, z: 0, seeded: false, fov: 0 };
+}
+
+const aim = newAim();
+
+/**
+ * The aim eased toward `focus` over `delta` seconds, seeded ON the first
+ * focus it is given so a replay opens with no lag at all. Returns a fresh
+ * point; `a` is the memory it advances.
+ */
+export function smoothAim(a, focus, delta = 0, tau = CFG.camera.replay.focusSmooth) {
+    const f = focus || { x: 0, y: 0, z: 0 };
+    if (!a.seeded || !(tau > 0)) {
+        a.x = f.x; a.y = f.y || 0; a.z = f.z;
+        a.seeded = true;
+    } else {
+        const rate = 1 - Math.exp(-Math.max(0, delta) / tau);
+        a.x += (f.x - a.x) * rate;
+        a.y += ((f.y || 0) - a.y) * rate;
+        a.z += (f.z - a.z) * rate;
+    }
+    return { x: a.x, y: a.y, z: a.z };
+}
+
+/** Back to whichever side this carrier's position asks for, with no swing,
+ *  and the aim forgotten with it. Called when a replay starts, so it opens on
+ *  the right shoulder, aimed where the ball is, rather than swinging in from
+ *  wherever the last one finished. */
 export function resetShoulder() {
     shoulder.seeded = false;
     shoulder.held = 0;
+    aim.seeded = false;
+    aim.fov = 0;
 }
 
-export function shoulderFor(z, delta = 0) {
+/**
+ * THE ENDING KEEPS BOTH BODIES IN FRAME (Steve's QA, 2026-10-30: "the
+ * portrait crop cuts off half of the tackled bodies"). `points` are the bodies
+ * as drawn, feet to raised hands following their leans (photo.js
+ * `bodyPoints`), and the lens is opened only as far as the frame at `aspect`
+ * needs to hold every one of them `ending.margin` clear of the edges, never
+ * past `ending.maxFov` and never narrower than the shot already is. The
+ * position and the aim are untouched: a lens that gives is what the rest of
+ * this camera does at its clamps, and a camera that backed away would read as
+ * a cut.
+ *
+ * Upright, the settled 46 degree lens is 27 degrees across, 5 m of field at
+ * 11 m, and two 3.85 m men lying along the ground span more than that even
+ * centered; in landscape the same lens shows 17 m and this rarely does
+ * anything. The projection is the one milestones.js `projectPoint` uses
+ * (three's vertical field of view, x scaled by the aspect), written here
+ * because camera.js is imported by milestones.js and cannot import it back.
+ *
+ * `memory` (an aim, `newAim()`) makes it a RATCHET within one ending: the lens
+ * stays as wide as it has been, so it never pumps as the bodies settle, and a
+ * new replay's reset starts it again.
+ */
+export function fitBodies(shot, points, aspect = 1.78, memory = null) {
+    const E = CFG.camera.replay.ending;
+    if (!shot || !points || !points.length) return shot;
+    const P = shot.position;
+    const T = shot.target;
+    let fx = T.x - P.x;
+    let fy = T.y - P.y;
+    let fz = T.z - P.z;
+    const fn = Math.hypot(fx, fy, fz) || 1;
+    fx /= fn; fy /= fn; fz /= fn;
+    let rx = -fz;
+    let rz = fx;
+    const rn = Math.hypot(rx, rz) || 1;
+    rx /= rn; rz /= rn;
+    const ux = -rz * fy;
+    const uy = rz * fx - rx * fz;
+    const uz = rx * fy;
+    const half = Math.tan((shot.fov * Math.PI) / 360);
+    const room = Math.max(0.05, 1 - E.margin);
+    let need = 1;
+    for (const q of points) {
+        const dx = q.x - P.x;
+        const dy = q.y - P.y;
+        const dz = q.z - P.z;
+        const depth = dx * fx + dy * fy + dz * fz;
+        if (!(depth >= E.near)) continue;
+        const x = (dx * rx + dz * rz) / (depth * half * Math.max(0.01, aspect));
+        const y = (dx * ux + dy * uy + dz * uz) / (depth * half);
+        need = Math.max(need, Math.abs(x) / room, Math.abs(y) / room);
+    }
+    let fov = Math.min(E.maxFov, (2 * Math.atan(half * need) * 180) / Math.PI);
+    if (memory) {
+        memory.fov = Math.max(memory.fov || 0, fov);
+        fov = memory.fov;
+    }
+    return fov > shot.fov ? { ...shot, fov } : shot;
+}
+
+export function shoulderFor(z, delta = 0, s = shoulder) {
     const R = CFG.camera.replay;
     const asked = z > 0 ? -1 : 1;
-    if (!shoulder.seeded) {
-        shoulder.seeded = true;
-        shoulder.side = asked;
-        shoulder.want = asked;
-        shoulder.held = 0;
-        return shoulder.side;
+    if (!s.seeded) {
+        s.seeded = true;
+        s.side = asked;
+        s.want = asked;
+        s.held = 0;
+        return s.side;
     }
 
-    shoulder.held += delta;
+    s.held += delta;
     // Only ask once he is properly on the other half of the field.
-    const clear = z > R.shoulderSwap ? -1 : (z < -R.shoulderSwap ? 1 : shoulder.want);
-    if (clear !== shoulder.want && shoulder.held >= R.shoulderHold) {
-        shoulder.want = clear;
-        shoulder.held = 0;
+    const clear = z > R.shoulderSwap ? -1 : (z < -R.shoulderSwap ? 1 : s.want);
+    if (clear !== s.want && s.held >= R.shoulderHold) {
+        s.want = clear;
+        s.held = 0;
     }
     const rate = R.shoulderEase > 0 ? 1 - Math.exp(-delta / R.shoulderEase) : 1;
-    shoulder.side += (shoulder.want - shoulder.side) * rate;
-    return shoulder.side;
+    s.side += (s.want - s.side) * rate;
+    return s.side;
 }
 
 /**
@@ -432,10 +562,23 @@ const view = { yaw: 0, lift: 0, zoom: 1, quarter: 0 };
  * a different picture rather than a nudge: the opposite end of the field comes
  * first, then the two touchlines.
  */
-const QUARTERS = [0, Math.PI, Math.PI / 2, -Math.PI / 2];
+export const QUARTERS = Object.freeze([0, Math.PI, Math.PI / 2, -Math.PI / 2]);
 
 /** How many there are, for anything that wants to say so. */
 export const REPLAY_VIEWS = QUARTERS.length;
+
+/**
+ * The offset for vantage point `quarter` on its own, without touching the
+ * view the live replay is showing: the shareable clip (specs/xo-photos-plan,
+ * Step 6, D16) is turned to the quarter the visitor chose on its sheet, and
+ * the replay they may watch next still opens on the director's shot. Any
+ * whole number is taken round the four.
+ */
+export function viewOffset(quarter = 0) {
+    const n = QUARTERS.length;
+    const q = ((Math.round(Number(quarter) || 0) % n) + n) % n;
+    return { yaw: QUARTERS[q], lift: 0, zoom: 1, quarter: q };
+}
 
 /**
  * Move to the next vantage point and say which one it is.
@@ -582,11 +725,16 @@ export function getDriver() {
 export function update(delta, state = {}) {
     elapsed += delta;
     if (current === DRIVERS.replay) {
-        // The director's shot first, then whatever the visitor has done to it.
-        const focus = state.focus || { x: 0, y: 0, z: 0 };
-        return applyView(
+        // The director's shot first, aimed through the smoothed aim (see
+        // `smoothAim`) at the recording, or at the drawn carrier once the
+        // recording has run out (`state.ending`), then whatever the visitor
+        // has done to it, then the lens opened for the bodies of the ending.
+        const ending = state.ending || null;
+        const focus = smoothAim(aim, ending ? ending.focus : state.focus, delta);
+        const shot = applyView(
             replayDriver(state.progress || 0, focus, shoulderFor(focus.z, delta))
         );
+        return ending && ending.points ? fitBodies(shot, ending.points, aspect, aim) : shot;
     }
     if (current === DRIVERS.idle) return idleDriver(elapsed, aspect);
     // A show brings its own shot. Without one it holds the play camera, which

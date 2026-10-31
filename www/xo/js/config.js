@@ -462,6 +462,65 @@ const ESCAPE_SHOVE = 1;
  */
 const MATE_GIVE = 1;
 
+/**
+ * HOW FAR FROM THE MAN WITH THE BALL A DEFENDER TURNS TO RUN AT HIM, as a
+ * multiple of the port's own radius. 1 IS THE PORT.
+ *
+ * THE SAME OVERSIGHT AS `collisionScale`, IN THE ROUTES RATHER THAN THE BOXES.
+ * routes.js `getCoverCoords` is the 2D game's contain: inside 0.3 of an
+ * interval a defender runs straight at the carrier, and outside it he runs to
+ * the midpoint between the carrier and the fourth line, staying between the
+ * ball and his goal. 0.3 of an interval is 60 units, 2.1 m, measured against a
+ * letterform twelve units tall. At `figureScale` a man is 4 m tall, so a
+ * defender two and a half metres in front of the carrier, touching distance on
+ * screen, was outside the radius and sprinting AWAY from him toward a midpoint
+ * that recedes at half the carrier's speed. QA, 2026-10-30: "a defender right
+ * in front of the ball carrier that doesn't tackle them, he just keeps backing
+ * up until blockers show up".
+ *
+ * MEASURED over 2,964 plays on matched seeds, every play in the book against
+ * every playbook defense, as a keeper and as a throw to each receiver. A
+ * retreat is a defender 0 to 5 m ahead of the carrier and within 2 m across,
+ * moving away while the carrier runs at him and no blocker touches him:
+ *
+ *     chase radius        plays with a retreat >= 0.75 s   pts/play   fifties
+ *        0.3 (the port)          259 of 2,501 (10.4%)        23.8      27.9%
+ *        0.3 x 2.2                14 of 2,501  (0.6%)        20.4      20.3%
+ *        0.3 x 3.3                 6 of 2,501  (0.2%)        20.2      21.6%
+ *
+ * IT IS A BALANCE CHANGE AS WELL AS A PICTURE, taken deliberately (Steve,
+ * 2026-10-30, "Sounds good. Please proceed."): the man in front engages about
+ * 2.5 m sooner, so points a play go 23.8 to 20.4 and fifties 28% to 21%, which
+ * is about where the game sat when `tackle.hold` was chosen on 2026-09-22,
+ * before the lead solve eased it. "Whistled before he moved 0.5 m" stays at
+ * 8.5%, so the catch does not become the whistle again. If QA finds the game
+ * harder, `tackle.hold` and `difficultySwing` are the levers, not this.
+ *
+ * A NUMBER OF ITS OWN rather than `collisionScale` reused, because one number
+ * doing two jobs is how the boxes and this radius came apart.
+ */
+const CHASE_SCALE = FIGURE_SCALE;
+
+/**
+ * ...AND HOW MUCH OF A SIDE COLLISION'S DOWNFIELD KNOCK A DEFENDER TAKES. 1 IS
+ * THE PORT, 0 IS NONE.
+ *
+ * The two sideline responders in motion.js finish by knocking the man they
+ * resolve downfield, whoever he is: `decelUpfield` then `accelDownfield`. For
+ * a blocker that is forward. For a DEFENDER it is backwards, toward his own
+ * goal, and in the same-team branch it is "away from the team-mate", which for
+ * a corner stacked behind his own safety on the touchline is backwards too.
+ * Traced, that corner was pushed downfield at a steady 0.95 units a frame for
+ * 1.35 s while his route pulled him the other way. About a quarter of every
+ * frame a defender spent retreating in front of the carrier came from here.
+ *
+ * At 0 he keeps his drive and takes only the damping. Measured on the same
+ * 2,964 plays it moves nothing about the balance (points a play 23.8 to 24.0
+ * alone) and, with the chase radius above, takes the long retreats from 14
+ * plays to 1.
+ */
+const SIDE_KNOCK_DEFENSE = 0;
+
 /** The fraction a team's speed and acceleration move at full difficulty. Up
  *  here because `formationSettings` has to hand it to the ported formations
  *  class. See `difficulty` in the config below for what it means. */
@@ -637,6 +696,12 @@ function formationSettings() {
         // ...and how much of his own speed the man with the play in his hands
         // keeps when he runs into a TEAM-MATE. See `MATE_GIVE`.
         mateGive: MATE_GIVE,
+        // How far from the carrier a defender turns to run at him, as a
+        // multiple of the port's radius, and how much of a side collision's
+        // downfield knock a defender takes. See `CHASE_SCALE` and
+        // `SIDE_KNOCK_DEFENSE`.
+        chaseScale: CHASE_SCALE,
+        sideKnockDefense: SIDE_KNOCK_DEFENSE,
         /** How hard the game is leaning right now, -1 to +1, written by
          *  `play.setDifficulty` before each line-up. See `difficulty` below. */
         difficulty: 0,
@@ -848,11 +913,17 @@ const XO_CONFIG = {
              *
              * A third is not actually reachable. It wants either a 58 degree
              * lens, which bends a figure noticeably at eleven metres, or a
-             * radius past the 12.4m the field's tightest corner allows. 52 puts
-             * him at 41%, which is the most this field has room for, and the
-             * honest version of the sentence below.
+             * radius past the 12.4m the field's tightest corner allows. 52 put
+             * him at 41%, which was the most this field had room for.
+             *
+             * 56, WIDENED ONCE MORE (Steve's QA, 2026-10-30: "zoomed in just a
+             * little too far"). The radius cannot grow (see below), so the lens
+             * is the only lever, and four degrees takes a settled player from
+             * 41% to 37% of the frame height without the bend 58 brings. The
+             * shareable clip is this same director's camera, so it zooms out
+             * with it.
              */
-            fov: 52,
+            fov: 56,
             /**
              * IT ORBITS THE CARRIER RATHER THAN CHASING HIM.
              *
@@ -910,6 +981,29 @@ const XO_CONFIG = {
             settleZoom: 6,
             speed: 0.85,
             holdEnd: 1.0,
+            /**
+             * SECONDS OF SMOOTHING ON THE AIM (Steve's QA, 2026-10-30: the
+             * replay cameras twitched with the quarterback's shuffle in the
+             * pocket). Measured, camera.js `smoothAim`: 0.12 takes the twitch
+             * from 52 to 6 mm a frame in the pocket and sits 0.77 m behind a
+             * sprinting carrier, which `lead` covers. Shorter is twitchier,
+             * longer trails the runner. 0 is the old, unsmoothed aim.
+             */
+            focusSmooth: 0.12,
+            /**
+             * THE ENDING (Steve's QA, 2026-10-30: "the portrait crop cuts off
+             * half of the tackled bodies"). Once the recording runs out the
+             * tackle or the party moves the drawn bodies on while the
+             * recording's last frame stands still, so the camera aims at the
+             * carrier AS DRAWN and opens the lens only as far as both bodies
+             * need to stay inside the frame with `margin` clear at each edge
+             * (camera.js `fitBodies`), never past `maxFov`. A body nearer the
+             * lens than `near` metres cannot be framed and is left out. In
+             * landscape the settled lens already shows 17 m across and rarely
+             * opens; upright it shows 5 m, and two 3.85 m men lying down need
+             * more.
+             */
+            ending: { margin: 0.12, maxFov: 80, near: 0.5 },
 
             /**
              * WHICH SHOULDER THE CAMERA ORBITS FROM, AND WHY IT NOW HAS A
@@ -1002,6 +1096,28 @@ const XO_CONFIG = {
          *  white mark on the shaded side of a player is otherwise the same
          *  value as the shirt it is on. */
         glow: 0.35,
+    },
+
+    /**
+     * THE STRIPES A VISITOR CAN ADD (Steve, 2026-10-30; colors.js holds
+     * whether they are on and in what color, roster.js builds them).
+     *
+     * BOTH ARE BANDS OF THE SURFACE THEY SIT ON, NOT BOXES LAID AGAINST IT.
+     * The helmet's stripe is a narrow band of the shell's own sphere, turned
+     * so the band runs front to back over the crown, scaled as the shell is,
+     * so it hugs the ellipsoid at every point and keeps one width all the way
+     * (a longitude band would narrow to a point on top). The pants' stripes
+     * are narrow sections of each thigh's and shin's own cylinder, so they
+     * follow the taper. Each floats `lift` of its radius clear of the surface
+     * it is on: the amount that never z-fights at the replay's distance and
+     * still reads as painted on. `halfWidth` is radians of arc either side of
+     * the centre line: at the shell's 0.145 m the helmet's stripe is about
+     * 3 cm wide at life size, a tenth of the helmet, and at a 0.065 m leg the
+     * pants' are about 2 cm, both before `figureScale`.
+     */
+    stripes: {
+        helmet: { halfWidth: 0.10, lift: 0.03, segments: 24 },
+        pants: { halfWidth: 0.16, lift: 0.05 },
     },
 
     /**
@@ -1118,6 +1234,128 @@ const XO_CONFIG = {
     /** The quarterback is the other thing a visitor presses, and an unmarked
      *  figure does not look pressable. */
     qb: { letter: 'Q', ink: '#ffd166' },
+
+    /**
+     * WHERE THE VISITOR WAITS WHEN THEIR PLAY DOES NOT USE THEM
+     * (specs/xo-photos-plan, D1). On the X's own sideline (`crowd.xSide`),
+     * `out` metres beyond the touchline and `along` line intervals from the
+     * near goal line, watching the ball.
+     *
+     * NOT BESIDE THE LINE OF SCRIMMAGE, WHERE A REAL BENCH WOULD BE, BECAUSE NO
+     * PHONE CAN SEE IT THERE. The play camera fits the touchlines with
+     * `camera.sideMargin` to spare at the near end line, where the frame is
+     * narrowest, and a body is 1.45m across. Measured through `playDriver` on
+     * upright phones from 320x568 to 430x932, a man 0.8m out at the line of
+     * scrimmage has his outer shoulder at 1.10 to 1.17 of the half-frame,
+     * which is off the screen. The frame widens down the field, and 4.5
+     * intervals along (31.5m, between the last two lines) the same shoulder
+     * is at 0.89 to 0.97 on every one of them. Landscape has room anywhere.
+     *
+     * 0.8m OUT is the opening's own line (`opening.stage.line.out`): the body
+     * clears the paint, and `keepInbounds` holds every man in play inside the
+     * touchline by his own half-width, so the two never overlap.
+     */
+    bench: { along: 4.5, out: 0.8 },
+
+    /**
+     * CHOOSING A PLAYER OFF THE FIELD BEFORE THE SNAP (specs/xo-photos-plan,
+     * Step 2), in seconds. `glow` is how long the spot stands on whoever was
+     * just chosen, so the eye finds the change. `guard` is how long after a
+     * choice a tap on the field is still part of the same gesture rather than
+     * a snap: before the snap a tap anywhere snaps the ball, and a double tap
+     * or a bounced finger would otherwise choose a player and start the play.
+     */
+    pick: { glow: 1.6, guard: 0.45 },
+
+    /**
+     * THE MOMENTS WORTH A PHOTO (specs/xo-photos-plan, Step 3, moments.js).
+     *
+     * `after` is how many seconds past each event the picture is taken, so
+     * "just as" lands on the frame that reads best. A catch and a pick are the
+     * ball arriving in the hands, a fifty is the whistle as he crosses, a
+     * tackle and a sack are counted from the takedown's moment of CONTACT (the
+     * frame the grunt is timed to) and wait for the lean to show, and a throw
+     * is half way through the arm's sweep (`pose.throwRelease.time`). Starting
+     * values, for Steve's QA to tune.
+     *
+     * `keep` is how many a play offers.
+     */
+    moments: {
+        after: { catch: 0.05, pick: 0.05, fifty: 0.1, tackle: 0.15, sack: 0.15, release: 0.17 },
+        keep: 3,
+    },
+
+    /**
+     * THE PHOTO OF A MOMENT (specs/xo-photos-plan, Step 4, photo.js).
+     *
+     * 1080 by 1350, the portrait a phone's feed shows whole (D9), a JPEG at
+     * `quality`, stamped `wordmark` in the corner (D2, D8). Drawn at
+     * `supersample` times that and drawn down, which is how a phone, whose
+     * renderer runs without antialiasing, still gets smooth edges.
+     *
+     * THE CAMERA IS A PHOTOGRAPHER ON THE FIELD with a long lens: `fov`
+     * vertical degrees, opened by `widen` at a time up to `maxFov` only when
+     * the lens would need the photographer to stand off the grass. They stand
+     * to the hero's side and `ahead` of him (0 square to his side, 1 at 45
+     * degrees in front), so the picture sees a face rather than a shoulder,
+     * nearly level (`rise`, no lower than `floor` metres) at the height of the
+     * players' chests, aimed `lead` metres in front of him so there is room in
+     * the frame to run into.
+     *
+     * A body is `reach` figure units tall with its hands up (the catch, the
+     * celebration), at `aimAt` of which the aim sits, and the frame keeps
+     * `margin` clear at every edge. `clear` is how near another player may
+     * stand to the line of sight before a side counts as blocked. `markers`
+     * says whether the rings and letters on the grass are in the picture: off,
+     * because a photo is of the people and the rings are the game's HUD.
+     */
+    photo: {
+        width: 1080, height: 1350, supersample: 2, type: 'image/jpeg', quality: 0.9,
+        wordmark: 'SceneXP.com/xo',
+        fov: 24, widen: 1.15, maxFov: 50, ahead: 0.45, rise: 0.04, floor: 1.0, lead: 0.9,
+        reach: 2.0, aimAt: 0.5, margin: 0.1, clear: 0.9, near: 0.5, far: 400,
+        markers: false,
+        /** Seconds the photo sheet ignores a pointer press after it opens,
+         *  as the Team colors card does (`colors.armFor`): the tap on "See the
+         *  photo" lands where Share is about to be. */
+        armFor: 0.45,
+    },
+
+    /**
+     * THE CLIP OF A PLAY (specs/xo-photos-plan, Part three, clip.js), the
+     * shareable video: the replay the visitor just watched, from its own
+     * director camera, recorded on the device into a 9:16 portrait at `width`
+     * by `height` (`mobileWidth` by `mobileHeight` on a phone, where the live
+     * frame is already more pixels than that) at `fps`, at `bitrate` bits a
+     * second (`mobileBitrate` on a phone), as Derby Day's clip is.
+     *
+     * NOT THE WHOLE PLAY (D15). The front of a pass play is the quarterback
+     * reading the field while the visitor decides, and the end is where the
+     * catch, the run and the hit are, so the clip is the last `seconds` of
+     * the play before the whistle, CLIP seconds at the replay's own speed
+     * (`camera.replay.speed`), or the whole play when it was shorter. The
+     * ending the replay plays at the whistle (the tackle or the party) rides
+     * on top, then the frame is held `hold` seconds. Six, down from eight
+     * (Steve's QA, 2026-10-30: the clips ran long): 5.1 s of play, which still
+     * reaches back past the throw on a typical pass, and a whole clip of
+     * about 8 to 11 seconds.
+     *
+     * `wordmark` is stamped bottom right on every frame (D2, D8: a video on a
+     * feed carries no link). `stamp` puts the result ("Caught +15") over the
+     * final hold, `stampHeight` of the frame tall with its baseline `stampAt`
+     * of the way down (D19), because Instagram drops the text that goes with a
+     * shared file. `near` and `far` are the clip camera's planes. `armFor` is
+     * the sheet's tap guard, as the photo's.
+     */
+    clip: {
+        width: 1080, height: 1920, mobileWidth: 720, mobileHeight: 1280,
+        fps: 30, bitrate: 8000000, mobileBitrate: 5000000,
+        seconds: 6, hold: 1.0,
+        wordmark: 'SceneXP.com/xo',
+        stamp: true, stampHeight: 0.05, stampAt: 0.84,
+        near: 0.5, far: 400,
+        armFor: 0.45,
+    },
 
     /** The two kits, from the 2D game's own rgba(255,153,44) and
      *  rgba(155,207,255). Two hues rather than two values, which is what keeps
@@ -1261,6 +1499,29 @@ const XO_CONFIG = {
     lead: {
         /** Seconds of travel averaged into the heading a pass is led off. */
         window: LEAD_WINDOW,
+        /**
+         * LEADING THE RECEIVER (Steve's QA, 2026-10-30, lead.js). On, the
+         * ball lands where the receiver will be when it arrives, solved from
+         * his heading and the ball's own speed, so a crossing route is caught
+         * in stride. Off is the 2D game's hand-tuned multipliers, which on
+         * crossing routes landed the ball a median 1.24 m from in stride (10 m
+         * at worst) and turned the receiver a median 25 degrees off his route
+         * toward it. Kept for QA to compare (`xo.lead(false)` on localhost).
+         */
+        intercept: true,
+        /** Ticks of extra lead when a defender is on the receiver's heels: the
+         *  ball lands a step further along his line, so he runs onto it and
+         *  away from the man behind him. The port's own touch (its `xLead`). */
+        trail: 10,
+        /** The longest flight the solve will assume, in ticks: a receiver
+         *  outrunning the ball downfield gets it as far as it goes. */
+        maxTicks: 120,
+        /** A step longer than this many times a man's top speed is not running
+         *  but the port's collision code moving him apart from somebody in one
+         *  tick (`separate` rests two bodies 1.45 m apart), and it is left out
+         *  of his heading (play.js `markHeading`), because a lead solved from
+         *  a step nobody ran lands the ball where nobody is going. */
+        teleport: 1.5,
     },
 
     /**
@@ -1514,6 +1775,14 @@ const XO_CONFIG = {
          *  down the pulse dips, so it never fades toward invisible. */
         pulseFloor: 0.55,
         pulseScale: 1.18,
+        /**
+         * THE RING WHERE A PASS WILL COME DOWN (markers.js `showLanding`,
+         * Steve's QA, 2026-10-30), on the grass from the release until the
+         * ball is caught or down, in the ink of the man it was thrown to. A
+         * shade wider than his painted disc (0.63 m across at `namedRadius`),
+         * so the disc fills the ring when he gets there.
+         */
+        landing: { inner: 0.66, outer: 0.9, opacity: 0.8 },
     },
 
     /**
@@ -2163,8 +2432,32 @@ const XO_CONFIG = {
             contactAt: { min: 0.22, max: 0.62 },
             /** How much of the carrier's drive the tackler is carried along
              *  with, 0 to 1. A tackler who stops dead while the man he hit
-             *  flies backwards has not tackled him, he has been run into. */
-            carry: 0.55,
+             *  flies backwards has not tackled him, he has been run into.
+             *  0.8, up from 0.55 (Steve's QA, 2026-10-30): wrapped up, the two
+             *  of them land together rather than a stride apart. */
+            carry: 0.8,
+            /**
+             * THE HIT, MADE FLUID AND VIOLENT (Steve's QA, 2026-10-30), in
+             * four numbers, all read by takedown.js.
+             *
+             * `skid`: seconds past the fall that the drive runs on, fast then
+             * slowing, into the settle, where a smoothstep eased out and
+             * stopped both men dead. It must stay inside `settle`, or the card
+             * opens over a body still sliding (asserted in the suite).
+             * `bounce`: how far past flat each man lands before settling back,
+             * as a fraction of his lean. `roll`: radians onto a shoulder for a
+             * carrier sent sideways to the way he was facing, so he is not a
+             * plank on his back. `momentum.keep`: how much of the carrier's
+             * speed at the whistle carries on through the hit for the fall's
+             * length, so a 7 m/s runner goes about a metre further along his
+             * own line, and he runs INTO the hit instead of standing still
+             * while the dive reaches him. `momentum.still`: metres a second
+             * below which he is simply standing, which is a sack.
+             */
+            skid: 0.3,
+            bounce: 0.06,
+            roll: 0.32,
+            momentum: { keep: 0.35, still: 0.6 },
             /** Radians of pitch: the tackler laid out flat, and the carrier on
              *  his back. Negative is backwards. */
             tacklerLean: 1.15,
@@ -2318,6 +2611,32 @@ const XO_CONFIG = {
              *  standing in the end zone. */
             scoredWeights: { solo: 4, mob: 6, house: 0 },
             /**
+             * THE SHARED DANCES (shared/js/dance-1.0.0.js; Steve, 2026-10-30:
+             * "add the shared dance moves to the list of celebration
+             * options"). The man being celebrated may pull one out beside the
+             * four of this game's own, and his mates still put their arms up.
+             *
+             * `sharedDance` is the seconds one runs for when there is room.
+             * Our own four are built to end where they started inside
+             * `dance`; a shared dance is a loop and simply holds its pose
+             * when the time is up, so it gets long enough for its first
+             * figure to read (the YMCA's four letters take 2.4 s). `cap`
+             * still bounds the whole thing and `danceFloor` is still the
+             * least it may be squeezed to.
+             *
+             * `sharedDances` are offered to anybody; `bareHeadDances` only to
+             * a hero with no helmet, which is the visitor's avatar. MEASURED
+             * (tests/xo-dance.test.mjs, every pose of every loop against the
+             * helmet's shell): the Macarena's hands on the head sit deep
+             * inside a helmet for 13% of its loop, and the Sprinkler's hand
+             * behind the head is inside it for 45%. The shared part solved
+             * its contact poses for a bare head, and a helmet is a size
+             * larger. The other six never touch it.
+             */
+            sharedDance: 2.6,
+            sharedDances: ['robot', 'chicken', 'ymca', 'floss', 'disco', 'dab'],
+            bareHeadDances: ['macarena', 'sprinkler'],
+            /**
              * A SACK, WHICH THE DEFENSE CELEBRATES AFTER THE TACKLE.
              *
              * MEASURED FIRST, over 2,400 headless pass plays at six different
@@ -2460,6 +2779,56 @@ const XO_CONFIG = {
                  * cycles and leaves him facing where he started.
                  */
                 shake: { yaw: 0.17, hz: 0.75 },
+                /**
+                 * BUMPED OUT OF THE WAY (Steve, 2026-10-30): "the defenders
+                 * will run through the offensive players. Ideally there would
+                 * be collision detection and the offensive players would get
+                 * bumped out of the way."
+                 *
+                 * MEASURED FIRST, over 80 real interceptions with the plan
+                 * built in each mode: the run home sent at least one man
+                 * through an offensive player on 98 plans in 100, three men a
+                 * plan, the mob on a third of them, the solo never. Nothing in
+                 * the plan looked at a path: destinations were kept a body
+                 * apart and the other team stood where the whistle left them.
+                 *
+                 * So a man a runner's line passes within a body of is shoved
+                 * off it, planned in the celebration itself (celebration.js
+                 * `bumpAside`), so the replay and the clip get the same bump.
+                 *
+                 *   time    seconds from the hit to standing still again: fast
+                 *           in and a slide out, so it reads as a knock rather
+                 *           than a sidestep
+                 *   clear   how far off the runner's line he finishes, in bodies
+                 *   along   ...and how far along the run he is carried, in
+                 *           bodies: a man hit from behind goes forward
+                 *   roll    radians he tips toward the push at the hit, gone
+                 *           by the time he stops
+                 *   knocks  the most times one man may be knocked: two men
+                 *           converging on a ring pass a body and a half apart,
+                 *           and a man between them is knocked one way by the
+                 *           first and back by the second
+                 *   settle  how close to a celebrant's mark or another man a
+                 *           knocked man may finish, in bodies. Less than the
+                 *           whole body the marks keep from each other, because
+                 *           a man knocked aside inside a mob's ring is hemmed
+                 *           by three marks a body away, and held a whole body
+                 *           off all of them he could not move at all and was
+                 *           run through instead. Shoulder to shoulder in a
+                 *           mob is what a mob looks like
+                 *
+                 * The hit is timed to the runner's BODY reaching his, a body
+                 * width before the centres would meet. A man standing between
+                 * two runners' lines a body and a half apart cannot be clear
+                 * of both, so he is knocked to the middle and brushed by each
+                 * rather than run through by one; the suite holds every pair
+                 * at every frame of every plan outside 0.45 of a body (0.65 m),
+                 * which at this size is shoulders touching, never a man passing
+                 * through another's chest. 0.3 s rather than longer because the
+                 * runner's centre is level with him about 0.13 s after his body
+                 * reaches him, and the knock has to have moved him by then.
+                 */
+                bump: { time: 0.3, clear: 1.0, along: 0.3, roll: 0.22, knocks: 3, settle: 0.75 },
             },
             /** Seconds for any pose here to blend in, and for the dance to ramp
              *  up once a man has arrived. */
@@ -2876,6 +3245,24 @@ const XO_CONFIG = {
             stagger: 0.35,
             ease: 0.3,
         },
+        /**
+         * THE STANDS BEFORE AND DURING A PLAY (Steve, 2026-10-30: "all of the
+         * fans cheering before and during the play, then only the fans of the
+         * team that won the play keep cheering"). Every fan, both sides and
+         * the plain jackets, from the line-up to the whistle, each on their
+         * own rhythm: up and hopping for `duty` of a `cycle` and seated for
+         * the rest, their turn placed round the cycle by the seat's own phase,
+         * so about seven in ten are up at any moment and the stands read as a
+         * live crowd rather than a block bouncing behind the play. Lower and
+         * slower than the cheer that answers the whistle, which is the one
+         * that should land. `hop` is per unit of scale, `rate` hops a second,
+         * and `ease` fades a fan in and out of each turn (and the whole crowd
+         * in when the buzz starts). At the whistle each fan's buzz fades into
+         * their cheer, or into their seat, over `cheer.ease` after their
+         * `cheer.stagger` share, so the losing side sits down in the same
+         * ripple the winning side goes up in (stunt.js `fanPose`).
+         */
+        buzz: { hop: 0.07, rate: 1.6, cycle: 5.0, duty: 0.7, ease: 0.4 },
     },
 
     /** Turf appearance. The markings are baked into one canvas texture rather

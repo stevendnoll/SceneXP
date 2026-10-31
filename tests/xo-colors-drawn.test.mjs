@@ -75,50 +75,101 @@ beforeEach(() => {
     roster.applyTeamColors();
 });
 
+/** Every tagged role a dressed figure carries, the stripes included. */
+const ROLES = ['helmet', 'helmetStripe', 'mark', 'pants', 'pantsStripe', 'shirt', 'shoes', 'sleeve'];
+
+/** The stripe meshes on a figure, by name, with whether each is shown. */
+function stripesOn(position) {
+    const out = [];
+    roster.figureFor(position).traverse((n) => {
+        if (n.name === 'helmet-stripe' || n.name === 'pants-stripe') out.push([n.name, n.visible]);
+    });
+    return out;
+}
+
 describe('the kits', () => {
     test('are built in the game\'s own colors, every part of every figure tagged', () => {
-        for (const [position, team] of [['qb', 0], ['wr1', 0], ['db1', 1], ['s1', 1]]) {
+        for (const [position, team] of [['qb', 0], ['wr1', 0], ['x1', 0], ['db1', 1], ['s1', 1]]) {
             const kit = kitOf(position);
-            expect(Object.keys(kit).sort()).toEqual(['helmet', 'mark', 'shirt', 'sleeve']);
+            expect(Object.keys(kit).sort()).toEqual(ROLES);
             expect(hexOf(kit.shirt)).toBe(C.jerseyOf(team));
             expect(hexOf(kit.mark)).toBe('#ffffff');
+            expect(hexOf(kit.pants)).toBe(C.OWN.pants[team]);
+            expect(hexOf(kit.shoes)).toBe(C.OWN.shoes);
         }
     });
 
     test('two teams dressed alike still do not share a material', () => {
-        C.setColors({ teams: { 0: { jersey: '#123456' }, 1: { jersey: '#123456' } } });
+        const alike = { jersey: '#123456', pants: '#654321', shoes: '#abcdef', helmetStripe: '#ffffff', pantsStripe: '#ffffff' };
+        C.setColors({ teams: { 0: alike, 1: alike } });
         roster.applyTeamColors();
-        C.setColors({ teams: { 0: { jersey: '#aa0000' } } });
+        C.setColors({ teams: { 0: { jersey: '#aa0000', pants: '#00aa00', shoes: '#0000aa', helmetStripe: '#111111', pantsStripe: '#222222' } } });
         roster.applyTeamColors();
-        for (const part of ['shirt', 'sleeve', 'helmet']) {
-            expect(hexOf(kitOf('qb')[part])).toBe('#aa0000');
-            expect(hexOf(kitOf('db1')[part])).toBe('#123456');
+        const want = { shirt: '#aa0000', sleeve: '#aa0000', helmet: '#aa0000', pants: '#00aa00', shoes: '#0000aa', helmetStripe: '#111111', pantsStripe: '#222222' };
+        const kept = { shirt: '#123456', sleeve: '#123456', helmet: '#123456', pants: '#654321', shoes: '#abcdef', helmetStripe: '#ffffff', pantsStripe: '#ffffff' };
+        for (const part of Object.keys(want)) {
+            expect([part, hexOf(kitOf('qb')[part])]).toEqual([part, want[part]]);
+            expect([part, hexOf(kitOf('db1')[part])]).toEqual([part, kept[part]]);
             expect(kitOf('qb')[part]).not.toBe(kitOf('db1')[part]);
         }
         expect(kitOf('qb').mark).not.toBe(kitOf('db1').mark);
     });
 
-    test('a helmet of its own, a dark letter on a light jersey, and the pants left alone', () => {
-        const pantsBefore = [];
-        roster.figureFor('wr1').traverse((n) => {
-            if (n.isMesh && n.material && !n.material.userData.kit && n.material.roughness === 0.8) {
-                pantsBefore.push(`${n.material.uuid}:${n.material.color.getHexString()}`);
-            }
-        });
-        C.setColors({ teams: { 0: { jersey: '#ffff00', helmet: '#000000' } } });
+    test('a helmet of its own, a dark letter on a light jersey, new pants, and the skin left alone', () => {
+        const skin = () => {
+            const out = [];
+            roster.figureFor('wr1').traverse((n) => {
+                if (n.isMesh && n.material && !n.material.userData.kit && n.material.roughness === 0.8) {
+                    out.push(`${n.material.uuid}:${n.material.color.getHexString()}`);
+                }
+            });
+            return out;
+        };
+        const skinBefore = skin();
+        expect(skinBefore.length).toBeGreaterThan(0);
+        C.setColors({ teams: { 0: { jersey: '#ffff00', helmet: '#000000', pants: '#ffffff', shoes: '#ff0000' } } });
         roster.applyTeamColors();
         const kit = kitOf('wr1');
         expect(hexOf(kit.shirt)).toBe('#ffff00');
         expect(hexOf(kit.helmet)).toBe('#000000');
         expect(hexOf(kit.mark)).toBe(C.markInk('#ffff00'));
         expect(`#${kit.mark.emissive.getHexString()}`).toBe(C.markInk('#ffff00'));
-        const pantsAfter = [];
-        roster.figureFor('wr1').traverse((n) => {
-            if (n.isMesh && n.material && !n.material.userData.kit && n.material.roughness === 0.8) {
-                pantsAfter.push(`${n.material.uuid}:${n.material.color.getHexString()}`);
-            }
-        });
-        expect(pantsAfter).toEqual(pantsBefore);
+        expect(hexOf(kit.pants)).toBe('#ffffff');
+        expect(hexOf(kit.shoes)).toBe('#ff0000');
+        // The pants share the skin's roughness and nothing else: the skin is
+        // the untagged material at that roughness, and it has not moved.
+        expect(skin()).toEqual(skinBefore);
+        // A letter of its own, on top of the rule.
+        C.setColors({ teams: { 0: { mark: '#00ff00' } } });
+        roster.applyTeamColors();
+        expect(hexOf(kitOf('wr1').mark)).toBe('#00ff00');
+    });
+
+    /**
+     * THE STRIPES ARE THERE ON EVERY PLAYER AND HIDDEN UNTIL ASKED FOR: one over
+     * the helmet, one down the outside of each thigh and each shin. Showing
+     * them is a flag on each mesh, so it is asserted on the meshes, per team.
+     */
+    test('the stripes are hidden until a team turns them on, and shown in their color', () => {
+        const hidden = [['helmet-stripe', false], ...Array(4).fill(['pants-stripe', false])];
+        for (const position of ['qb', 'wr1', 'x1', 'db1', 's1']) {
+            expect([...stripesOn(position)].sort()).toEqual([...hidden].sort());
+        }
+        C.setColors({ teams: { 0: { helmetStripe: null, pantsStripe: '#123456' } } });
+        roster.applyTeamColors();
+        for (const position of ['qb', 'wr1', 'x1']) {
+            expect(stripesOn(position).every(([, shown]) => shown)).toBe(true);
+        }
+        expect(stripesOn('db1').some(([, shown]) => shown)).toBe(false);
+        expect(hexOf(kitOf('qb').helmetStripe)).toBe(C.helmetStripeOf(0));
+        expect(hexOf(kitOf('qb').pantsStripe)).toBe('#123456');
+        // Just the helmet's, then none.
+        C.setColors({ teams: { 0: { pantsStripe: false } } });
+        roster.applyTeamColors();
+        expect(stripesOn('qb').filter(([, shown]) => shown).map(([name]) => name)).toEqual(['helmet-stripe']);
+        C.resetColors();
+        roster.applyTeamColors();
+        expect(stripesOn('qb').some(([, shown]) => shown)).toBe(false);
     });
 });
 
@@ -219,16 +270,25 @@ describe('the players in the card', () => {
     test('are built with the roster\'s own kit, in materials of their own, and dressed as chosen', () => {
         const figure = roster.buildKitFigure(1);
         const kit = {};
-        figure.traverse((n) => { if (n.isMesh && n.material.userData.kit) kit[n.material.userData.kit] = n.material; });
-        expect(Object.keys(kit).sort()).toEqual(['helmet', 'mark', 'shirt', 'sleeve']);
+        const stripes = [];
+        figure.traverse((n) => {
+            if (n.isMesh && n.material.userData.kit) kit[n.material.userData.kit] = n.material;
+            if (n.name === 'helmet-stripe' || n.name === 'pants-stripe') stripes.push(n);
+        });
+        expect(Object.keys(kit).sort()).toEqual(ROLES);
+        expect(stripes.map((s) => s.visible)).toEqual([false, false, false, false, false]);
         expect(kit.shirt).not.toBe(kitOf('db1').shirt);
-        C.setColors({ teams: { 1: { jersey: '#ffff00', helmet: '#000000' } } });
+        C.setColors({ teams: { 1: { jersey: '#ffff00', helmet: '#000000', pants: '#ffffff', pantsStripe: null } } });
         roster.dressKitFigure(figure, 1);
         expect(hexOf(kit.shirt)).toBe('#ffff00');
         expect(hexOf(kit.helmet)).toBe('#000000');
         expect(hexOf(kit.mark)).toBe(C.markInk('#ffff00'));
+        expect(hexOf(kit.pants)).toBe('#ffffff');
+        expect(hexOf(kit.pantsStripe)).toBe(C.pantsStripeOf(1));
+        expect(stripes.filter((s) => s.visible).map((s) => s.name)).toEqual(Array(4).fill('pants-stripe'));
         // ...and the field's own player is not touched by dressing this one.
         expect(hexOf(kitOf('db1').shirt)).toBe('#9bcfff');
+        expect(stripesOn('db1').some(([, shown]) => shown)).toBe(false);
     });
 
     /**

@@ -44,6 +44,9 @@
  * receiver turns is unreadable. They live in their own group in world space and
  * view.js slides them under the right feet each frame, so a letter always reads
  * the same way up.
+ *
+ * AND ONE RING WITH NOBODY UNDER IT: where a thrown ball will come down, in the
+ * ink of the man it is thrown to (`showLanding`, at the bottom).
  */
 import { XO_CONFIG as CFG } from './config.min.js';
 import { jerseyOf, fieldColor, difference } from './colors.min.js';
@@ -281,6 +284,12 @@ export function initMarkers(scene, objects) {
         markers.set(position, mesh);
     }
 
+    // The landing ring rides in the same group, so wherever the discs go out
+    // of sight (a picture, a clip) it goes with them: it is the game's HUD
+    // exactly as they are.
+    landing = buildLanding();
+    group.add(landing);
+
     scene.add(group);
     return markers;
 }
@@ -338,6 +347,69 @@ export function setPulse(live, amount) {
             * (live.has(position) ? M.pulseScale : 1));
         seat(mesh);
     }
+}
+
+// ---- Where the pass is going ------------------------------------------------
+
+let landing = null;
+
+/**
+ * THE RING WHERE THE BALL WILL COME DOWN (Steve's QA, 2026-10-30).
+ *
+ * Since lead.js the quarterback throws to where his receiver WILL BE, and on a
+ * deep crossing route that is a median 6 m along the man's diagonal from where
+ * he is. Measured over 54 such throws, at the moment of release that spot was
+ * nearer to a DIFFERENT receiver than to the man it was meant for on 23 of
+ * them, twice as often as the port's short lead managed, and from behind the
+ * quarterback it read as a pass to the wrong man. The ring says where the ball
+ * is going and whose it is, in his own ink, from the release until it is caught
+ * or down. Built once with the markers and moved, like the spot: a throw should
+ * not allocate.
+ */
+function buildLanding() {
+    const L = CFG.markers.landing;
+    const mesh = new THREE.Mesh(
+        new THREE.RingGeometry(L.inner, L.outer, 32),
+        new THREE.MeshBasicMaterial({
+            color: CFG.band.ink, transparent: true, opacity: L.opacity,
+            depthWrite: false, toneMapped: false, side: THREE.DoubleSide,
+        })
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    // Over the discs, so a receiver arriving on it does not hide it under his own.
+    mesh.position.y = CFG.markers.lift * 2;
+    mesh.renderOrder = 3;
+    mesh.visible = false;
+    mesh.name = 'landing';
+    return mesh;
+}
+
+/** The ink the ring takes for a throw to `position`: the receiver's own, the
+ *  one his disc, his route and his button already share, or the field band's
+ *  for anybody without a letter. */
+export function landingInk(position) {
+    const r = CFG.receivers[position];
+    return r ? r.ink : CFG.band.ink;
+}
+
+/** Put the ring where the ball is going, in world metres, for a throw to
+ *  `position`. Null before `initMarkers`, when there is nothing to show it on. */
+export function showLanding(x, z, position) {
+    if (!landing) return null;
+    const at = landing.userData.at;
+    if (!at || at.position !== position) landing.material.color.set(landingInk(position));
+    landing.position.set(x, CFG.markers.lift * 2, z);
+    landing.userData.at = { x, z, position };
+    landing.visible = true;
+    return landing;
+}
+
+export function hideLanding() {
+    if (landing) landing.visible = false;
+}
+
+export function getLanding() {
+    return landing;
 }
 
 // ---- Where the play ended ---------------------------------------------------
@@ -404,6 +476,12 @@ export function hideSpot() {
     if (spot) spot.visible = false;
 }
 
+/** The spot itself, for a photo to put out of sight while it is taken (it
+ *  marks where a play ENDED, and a photo is of a moment during one). */
+export function getSpot() {
+    return spot;
+}
+
 export function getMarkerGroup() {
     return group;
 }
@@ -446,6 +524,7 @@ export function disposeMarkers() {
     textures.forEach((t) => t.dispose());
     textures.length = 0;
     group = null;
+    landing = null;
     markers.clear();
 }
 

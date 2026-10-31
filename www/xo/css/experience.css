@@ -264,6 +264,35 @@ body {
     font: inherit;
 }
 
+/* THE DEFENSE AND WHO YOU PLAY AS (specs/xo-photos-plan), side by side where
+   there is room and stacked where there is not. The row keeps the defense's
+   own spacing below it, so the grid does not move when the second one lands. */
+.playbook-options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1.8rem;
+    margin: 0 0 1.1rem;
+}
+
+.playbook-options .playbook-defense {
+    margin: 0;
+}
+
+/* Without an avatar, the row is a pointer to the avatar page. The same orange
+   as the "Last play" tag, underlined because it is a link and not a label. */
+.playbook-playas-link {
+    color: #ff992c;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+}
+
+.playbook-playas-link:hover,
+.playbook-playas-link:focus-visible {
+    color: #ffb76b;
+}
+
 .playbook-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
@@ -341,6 +370,25 @@ body {
     color: #ff992c;
     font-size: 0.75rem;
     font-weight: 700;
+}
+
+/* A PLAY THAT LEAVES YOUR PLAYER ON THE SIDELINE (specs/xo-photos-plan D1).
+   The "Last play" tag's shape in a quiet grey: a fact about the play, not a
+   warning against calling it. Beside a "Last play" tag it borrows that tag's
+   gap rather than adding its own. */
+.play-out {
+    display: inline-block;
+    margin: 0 0.8rem 0.8rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #c9d1de;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.play-last + .play-out {
+    margin-left: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -477,6 +525,19 @@ body {
 .hud-btn-primary:focus-visible {
     background: #ffab52;
     color: #21140a;
+}
+
+/* WHAT TO DO WHILE CHOOSING A PLAYER (specs/xo-photos-plan). The buttons' own
+   pill, in a darker glass and with no border, so it reads as words beside the
+   controls rather than as one more thing to press. */
+.hud-prompt {
+    align-self: center;
+    padding: 0.55rem 1rem;
+    border-radius: 999px;
+    background: rgba(13, 17, 23, 0.86);
+    color: #f2f5fa;
+    font-weight: 600;
+    text-align: center;
 }
 
 /* ---- The Jump button (2026-09-23) -----------------------------------------
@@ -628,9 +689,32 @@ body {
 }
 
 .colors-input:focus-visible,
+.colors-check:focus-visible,
 .colors-match:focus-visible {
     outline: 2px solid #ff992c;
     outline-offset: 2px;
+}
+
+/* A stripe is a switch and, once it is on, a picker beside it. The picker is
+   hidden rather than disabled while the stripe is off, so the row is one
+   question until it is answered. Stated outright, as every hidden control
+   here is, so no later display rule can bring it back. */
+.colors-pair {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.colors-check {
+    inline-size: 1.4rem;
+    block-size: 1.4rem;
+    margin: 0;
+    accent-color: #ff992c;
+    cursor: pointer;
+}
+
+.colors-input[hidden] {
+    display: none;
 }
 
 .colors-match {
@@ -764,8 +848,121 @@ body {
 .card-actions {
     margin-top: 1.2rem;
     display: flex;
+    /* The result card can carry three now (the replay, the photo, the next
+       play), which is more than a 320 pixel phone has across. */
+    flex-wrap: wrap;
     justify-content: center;
     gap: 0.5rem;
+}
+
+/* THE FIELD IS OUT OF SIGHT WHILE A CLIP IS RECORDED (specs/xo-photos-plan,
+ * Step 6). The take borrows the game's own canvas at the clip's size and
+ * shape and copies each frame into the sheet, so for those seconds the canvas
+ * holds a portrait stretched over the screen behind the sheet. Hidden, not
+ * removed: a canvas with no layout cannot be drawn from. */
+#game-canvas.is-recording {
+    visibility: hidden;
+}
+
+/* ---- Share the play (specs/xo-photos-plan, Step 7) --------------------------
+ *
+ * The stage is 9 by 16, the clip's own shape, and as large as the screen
+ * allows with the words and the buttons still under it without a scroll on a
+ * phone: no taller than under half the screen, no wider than the card. It
+ * holds that shape while the clip is made, so nothing jumps when the video
+ * takes the canvas's place.
+ */
+.clip-stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: min(100%, calc(min(46vh, 28rem) * 9 / 16));
+    aspect-ratio: 9 / 16;
+    margin: 0.9rem auto 0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #0b0f15;
+}
+
+.clip-stage canvas,
+.clip-stage video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* REDUCED MOTION: the take is recorded, not watched. The canvas keeps its
+   layout (a recording wants it laid out) and is simply not shown. */
+.clip-stage canvas.is-unseen {
+    opacity: 0;
+}
+
+.clip-progress {
+    min-height: 1.4em;
+    margin-top: 0.7rem;
+}
+
+.clip-tools {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8rem;
+    margin-top: 0.6rem;
+}
+
+.clip-count {
+    color: #c9d1de;
+    font-variant-numeric: tabular-nums;
+}
+
+/* A display rule beats the browser's own [hidden], so it is restated. */
+.clip-tools[hidden],
+.clip-nudge[hidden],
+.clip-tools .hud-btn[hidden],
+.card-actions .hud-btn[hidden] {
+    display: none;
+}
+
+/* WHO THE CAMERA FOLLOWS (Steve's QA, 2026-10-30): a toggle that says its
+   state. Off is the ball, the default, in the ordinary outline; on wears the
+   orange border, as Auto jump does, so a visitor can see at a glance that the
+   camera is on them. Every property the on rule sets is named again under
+   hover, for the partial-override reason noted by the playbook's switches. */
+.hud-toggle[aria-pressed="true"] {
+    border-color: #ff992c;
+    color: #ffd2a3;
+}
+
+.hud-toggle[aria-pressed="true"]:hover,
+.hud-toggle[aria-pressed="true"]:focus-visible {
+    border-color: #ffab52;
+    color: #fff1e0;
+}
+
+.clip-nudge-link {
+    color: #ff992c;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+}
+
+.clip-nudge-link:hover,
+.clip-nudge-link:focus-visible {
+    color: #ffb76b;
+}
+
+/* The colour is .card-meta's own, so it stays in step with the other notes. */
+.clip-note {
+    margin-top: 0.8rem;
+    font-size: 0.78rem;
+}
+
+/* STILL BEING MADE. Never `disabled` (that would throw keyboard focus out of
+   the dialog), so it is dimmed and says so when pressed. */
+.hud-btn[aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: progress;
 }
 
 /* Under the actions and the status line. The card itself is the shared sheet's

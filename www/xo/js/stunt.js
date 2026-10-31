@@ -281,6 +281,76 @@ export function cheerHop(t, seat, cheer, { calm = false } = {}) {
     return hop * envelope * Math.abs(Math.sin(Math.PI * C.rate * local));
 }
 
+const smooth = (t) => t * t * (3 - 2 * t);
+
+/**
+ * HOW FAR INTO THEIR TURN A FAN IS, 0 to 1, `t` seconds into the buzz before
+ * and during a play. Each fan is up for `duty` of every `cycle` and seated for
+ * the rest, their turn placed round the cycle by the seat's own phase, eased in
+ * and out over `ease` so the hop below is zero at both ends of it.
+ */
+export function buzzTurn(t, seat) {
+    const B = CFG.crowd.buzz;
+    const w = (((t / B.cycle) + seat.phase) % 1) * B.cycle;
+    const on = B.duty * B.cycle;
+    if (w >= on) return 0;
+    return Math.min(1, w / B.ease, (on - w) / B.ease);
+}
+
+/**
+ * HOW HIGH A FAN IS OFF THEIR SEAT, `t` seconds into the buzz, in metres: every
+ * fan, both sides and the plain jackets, on their own turn (`buzzTurn`) and
+ * their own beat, and the whole crowd eased up from their seats over `ease`
+ * when the buzz starts, so a fan whose turn is already under way does not pop.
+ * Somebody who asked not to be moved about sees the stands keep still.
+ */
+export function buzzHop(t, seat, { calm = false } = {}) {
+    if (calm || !(t > 0)) return 0;
+    const B = CFG.crowd.buzz;
+    const envelope = buzzTurn(t, seat) * Math.min(1, t / B.ease);
+    if (envelope <= 0) return 0;
+    return B.hop * CFG.crowd.scale * envelope * Math.abs(Math.sin(Math.PI * B.rate * t + Math.PI * seat.phase));
+}
+
+/** Where a fan's arms are in the buzz: 'up' once their turn is well under way
+ *  and down a beat before it ends, so the arms never snap on the riser. */
+export function buzzArms(t, seat, { calm = false } = {}) {
+    if (calm || !(t > 0)) return 'down';
+    return buzzTurn(t, seat) >= 0.5 && t / CFG.crowd.buzz.ease >= 0.5 ? 'up' : 'down';
+}
+
+/**
+ * WHERE A FAN IS, ALL TOLD: the buzz, the cheer, and the hand-off between them
+ * at the whistle. `buzzT` is seconds since the buzz began (null for none),
+ * `cheer` and `cheerT` the cheer and seconds since the whistle (null for none).
+ *
+ * THE HAND-OFF IS A FADE, PER FAN. Over `cheer.ease` after their own
+ * `cheer.stagger` share of the whistle, each fan's buzz fades into their cheer
+ * (the cheering team's, and the plain jackets' for a big one) or into their
+ * seat (everybody else's), so nobody is moved in one frame and the losing side
+ * sits down in the same ripple the winning side goes up in. The arms stay as
+ * the buzz had them until the cheer raises them, or until the fade is half
+ * done for a fan who is sitting down.
+ */
+export function fanPose(seat, { buzzT = null, cheer = null, cheerT = null, calm = false } = {}) {
+    const buzz = buzzT === null ? 0 : buzzHop(buzzT, seat, { calm });
+    if (!cheer || cheerT === null) {
+        return { hop: buzz, arms: buzzT !== null ? buzzArms(buzzT, seat, { calm }) : 'down' };
+    }
+    const C = CFG.crowd.cheer;
+    const hop = cheerHop(cheerT, seat, cheer, { calm });
+    const up = cheerArms(cheerT, seat, cheer, { calm }) === 'up';
+    // The arms AS THE WHISTLE FOUND THEM, not as the buzz would go on to move
+    // them: a turn ending in the beat before the cheer raises them would
+    // otherwise drop and raise them again, a flicker.
+    const buzzUp = buzzT !== null && buzzArms(buzzT - cheerT, seat, { calm }) === 'up';
+    const k = buzzT === null ? 1 : smooth(clamp01((cheerT - seat.phase * C.stagger) / C.ease));
+    return {
+        hop: buzz * (1 - k) + hop * k,
+        arms: up || (buzzUp && k < 0.5) ? 'up' : 'down',
+    };
+}
+
 /**
  * WHICH COLUMN OF THE MESSAGE A COLUMN OF CARDS SHOWS, and it is mirrored.
  *

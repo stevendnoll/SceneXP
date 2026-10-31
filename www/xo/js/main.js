@@ -17,7 +17,7 @@
  */
 import { XO_CONFIG as CFG, FIELD, simToWorld, UNITS_TO_METRES } from './config.min.js';
 import { initField, setBandAt, fadeBand, updateScoreboard, applyFieldColors } from './field.min.js';
-import { initRoster, figureFor, TEAMS, applyTeamColors, throwSideOf } from './roster.min.js';
+import { initRoster, figureFor, TEAMS, applyTeamColors, throwSideOf, getRosterGroup, isVisitorFigure } from './roster.min.js';
 import { createAvatarStore, installChip } from '../../shared/js/avatar-1.0.0.min.js';
 import {
     loadColors, saveColors, setColors, resetColors, teamColors, warningsFor,
@@ -25,11 +25,23 @@ import {
 import { initBall, getBall } from './ball.min.js';
 import {
     initMarkers, setPulse, initSpot, showSpot, hideSpot, markerGeometry, applyMarkerColors,
+    getMarkerGroup, getSpot,
 } from './markers.min.js';
+import {
+    ballEvent, tackleKind, delayFor, rankMoments, KIND_NAMES,
+} from './moments.min.js';
+import { captureDrawn, applyDrawn } from './snapshot.min.js';
+import { photoShot, drawPhoto, photoBlob, photoName, bodyPoints } from './photo.min.js';
+import {
+    clipSize, clipPlan, clipProgress, clipShot, stampText, clipName, takeFrame, holdSize, recordTake,
+    openingFor,
+} from './clip.min.js';
+import { saveFile } from '../../shared/js/sharefile-1.0.0.min.js';
+import { canRecord, pickMime, extensionOf } from '../../shared/js/recorder-1.0.0.min.js';
 import {
     syncFigures, syncBall, setViewCamera, resetBallFlight, resetAssignments, noteThrow,
     setVisitorJumps, standingReach,
-    beginTakedown, resetTakedown, takedownClock, beginSnapMotion,
+    beginTakedown, resetTakedown, takedownClock, takedownMotion, beginSnapMotion, finishSnapMotion, resetThrow,
     beginRelocate, resetRelocate, airborne,
     beginCelebration, resetCelebration, celebrationClock,
     beginStaging, resetStaging, drawnSpots, setScripted, resetScripted,
@@ -46,7 +58,7 @@ import {
     isDone, throwTo, keepAndRun, eligibleReceivers, outcome, decisionLeft,
     clearEscapes, clockReading, requestLeap, ballInFlight, setStandingReach,
 } from './play.min.js';
-import { autoJump, cueLit } from './jump.min.js';
+import { autoJump, cueLit, buttonTarget, jumpCeiling } from './jump.min.js';
 import { readGame, saveGame, clearGame } from './progress.min.js';
 import { nextStreak, streakOver, difficultyFor, endSounds } from './scoring.min.js';
 import {
@@ -54,8 +66,9 @@ import {
     clearActions, showResult, hideResult, announce, showWelcome, showHelp, showSkipReplay,
     showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
     hideMilestoneTitle, showSkipOpening, setOpeningTitle, hideOpeningTitle, hideWelcome,
-    showInFlight, setJumpCue,
+    showInFlight, setJumpCue, showPick, setPickChoice, returnToResult, setFollow,
 } from './hud.min.js';
+import { initClipSheet, showClipSheet, clipSheetOpen } from './clip-ui.min.js';
 import { openingFrame, planOpening, castAt, propsAt } from './opening.min.js';
 import { initColorsCard, showColorsCard, colorsCardOpen } from './colors-ui.min.js';
 import { drawColorsPreviews } from './colors-preview.min.js';
@@ -66,25 +79,26 @@ import {
     milestoneDue, litStars, showFrame, showUsesTeam, stageTeam, turfSetup,
 } from './milestones.min.js';
 import {
-    initSpectacle, beginShow, applyShow, setAwake, endShow, tickAwake, cheerCrowd, applyCrowdColors,
+    initSpectacle, beginShow, applyShow, setAwake, endShow, tickAwake, cheerCrowd, buzzCrowd, applyCrowdColors,
 } from './spectacle.min.js';
 import { cheerFor } from './stunt.min.js';
 import { showSummary, hideSummary, readBest } from './summary.min.js';
 import {
     startRecording, record, frameCount, frameAt, focusAt,
-    rewind, advance, playheadFrame, isEmpty, discard, noteLeap,
+    rewind, seek, advance, playheadFrame, isEmpty, discard, noteLeap,
 } from './replay.min.js';
 import {
     setDriver, setAspect, update as updateCamera, nudgeView, resetView, switchView,
-    resetShoulder, viewQuarter,
+    resetShoulder, viewQuarter, newShoulder, newAim,
 } from './camera.min.js';
 import {
     initAudio, unlock as unlockAudio, play as playSound, simAudio,
     isMuted, toggleMuted,
 } from './audio.min.js';
 import {
-    initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings,
+    initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings, setPlayAs,
 } from './playbook-ui.min.js';
+import { isSlot, SLOTS, playingLine, DEFAULT_SLOT, labelOf, slotOf } from './playas.min.js';
 import {
     installCardFocusTrap, installCardScrollReset, getProofOfWork,
 } from '../../shared/js/boot-1.0.0.min.js';
@@ -97,6 +111,18 @@ const state = {
     isLoaded: false,
     lastFrame: 0,
     elapsed: 0,
+    /** The player the visitor's avatar is (playas.js), stored or not. */
+    playAs: DEFAULT_SLOT,
+    /**
+     * WHO THE REPLAY CAMERA FOLLOWS (Steve's QA, 2026-10-30): 'ball' (the
+     * ball or its carrier, the default) or 'avatar' (the visitor's own player,
+     * wherever he is: a blocker, a defender, the man making the hit). Shared
+     * by the replay on screen and the clip, remembered for the visit and no
+     * longer: not stored (a new stored choice would want a privacy sentence
+     * nobody asked for) and never pinged (only avatar holders can choose, so a
+     * ping would say that a visitor has an avatar: the cameo rule, D11).
+     */
+    follow: 'ball',
 };
 
 /**
@@ -120,6 +146,31 @@ const cycle = {
      * only stops the camera, see `animate`.
      */
     reading: false,
+    /**
+     * CHOOSING A PLAYER OFF THE FIELD (specs/xo-photos-plan, Step 2), before
+     * the snap: `{ at }`, the slot the choice is on, or null. Not a phase
+     * either: the formation holds, and the pre-snap row comes back after.
+     * `pickedAt` is `state.elapsed` at the last choice, for the tap guard, and
+     * `glow` the spot left on whoever was chosen, `{ slot, left }` or null.
+     */
+    pick: null,
+    pickedAt: -Infinity,
+    glow: null,
+    /**
+     * THE PHOTO MOMENTS OF THIS PLAY (specs/xo-photos-plan, Step 3).
+     * `moments` are taken: `{ kind, hero, partner, at, focus, snapshot }`.
+     * `pendingMoments` are waiting for their frame: `{ kind, hero, partner,
+     * due }`, `due` on `state.elapsed`. `ballWas` is who held the ball last
+     * frame, for a catch or a pick. `shownMoment` is a moment the console has
+     * put on the field, with the live frame kept to put back. NOT `shown`:
+     * that is the milestone level below, and for a day (2026-10-29) the two
+     * shared the name, so the first show of a game left every camera on the
+     * show driver and the photo sheet wiped the level.
+     */
+    moments: [],
+    pendingMoments: [],
+    ballWas: null,
+    shownMoment: null,
     held: 0,
     accumulator: 0,
     playNumber: 0,        // 1 to CFG.rules.playsPerGame
@@ -127,6 +178,13 @@ const cycle = {
     results: [],
     lastOutcome: null,
     replayHold: 0,
+    /**
+     * A CLIP BEING TAKEN (specs/xo-photos-plan, Step 6, clip.js): the last
+     * seconds of the recording re-run and drawn into somebody's canvas while
+     * the phase is 'clip'. `{ plan, quarter, stage, g, w, h, shoulder, anchor,
+     * live, release, held, frames, finished, resolve }`, or null.
+     */
+    take: null,
     /**
      * WHICH PLAY THE CHOSEN CAMERA ANGLE BELONGS TO.
      *
@@ -266,6 +324,14 @@ const SIM_STEP = 1 / CFG.simHz;
 /** A leaping receiver's reach in field units, the same box `motion.checkCatch`
  *  gives him (`airborneReach`), for the Jump button's cue. */
 const JUMP_REACH = CFG.pose.jump.range / UNITS_TO_METRES;
+/** ...AND HOW HIGH THAT REACH GOES, in metres: his hands at the top of a jump
+ *  plus the catch's slack (jump.js `jumpCeiling`). A ball passing over a man
+ *  higher than this is not coming to him however close its shadow runs to his
+ *  feet, so neither the button nor its cue goes to him. Steve's QA of
+ *  2026-10-30: a deep pass led across the field sailed over the shallow
+ *  receiver, the cue lit him for most of the flight, and the whole thing read
+ *  as the quarterback having thrown to the wrong man. */
+const JUMP_CEILING = jumpCeiling(standingReach());
 /**
  * THE BOARD, PAINTED FROM ONE PLACE.
  *
@@ -407,6 +473,8 @@ function driverForPhase(phase) {
     // reading matter it is just a moving background: a visitor trying to read
     // six lines of rules watches the pitch slide sideways underneath them.
     if (phase === 'welcome') return 'play';
+    // A moment the console has put on the field brings its own shot.
+    if (cycle.shownMoment) return 'show';
     if (phase === 'playbook') return 'idle';
     if (phase === 'replay') return 'replay';
     if (phase === 'show' || phase === 'opening') return 'show';
@@ -416,13 +484,103 @@ function driverForPhase(phase) {
 /** What the active driver needs to know. Only the replay driver needs
  *  anything, and what it needs is where the ball was on this frame. */
 function cameraState() {
+    if (cycle.shownMoment) return { shot: cycle.shownMoment.shot };
     if (cycle.phase === 'show') return { shot: cycle.showShot };
     if (cycle.phase === 'opening') return { shot: cycle.openingShot };
     if (cycle.phase !== 'replay') return {};
     const total = Math.max(1, frameCount());
-    const f = replayFocus();
+    const f = aimAt();
     const focus = simToWorld(f.x, f.y, f.z || 0);
-    return { progress: playheadFrame() / total, focus };
+    return { progress: playheadFrame() / total, focus, ending: endingBodies() };
+}
+
+/** Is the visitor's avatar on the field in this play: an avatar saved, and
+ *  his player lined up rather than sat out on the sideline (D1)? */
+function avatarOnField() {
+    if (!visitorAvatar || !cycle.play || !cycle.play.game) return false;
+    const me = cycle.play.game.objects.find((o) => o.settings && o.settings.position === state.playAs);
+    return !!me && !me.settings.benched;
+}
+
+/** Whether the camera is following the avatar right now: the running take's
+ *  own choice while one runs (a take keeps the choice it opened with), the
+ *  visit's otherwise, and only with the avatar on the field to follow. */
+function followingAvatar() {
+    const want = cycle.take ? cycle.take.follow : state.follow;
+    return want === 'avatar' && avatarOnField();
+}
+
+/**
+ * WHO THE REPLAY CAMERA IS AIMED AT THIS FRAME, in simulation coordinates:
+ * the ball or its carrier (`replayFocus`), or the visitor's avatar where the
+ * recording has him on this frame when they asked to be followed (Steve's QA,
+ * 2026-10-30). Memoised on the frame like `replayFocus`, because `frameAt`
+ * rebuilds twenty objects to answer. `source` says which, for the suite.
+ */
+const aimMemo = { at: -1, follow: '', value: null };
+function aimAt() {
+    const frame = playheadFrame();
+    const want = followingAvatar() ? 'avatar' : 'ball';
+    if (aimMemo.at === frame && aimMemo.follow === want && aimMemo.value) return aimMemo.value;
+    let value = null;
+    if (want === 'avatar') {
+        const me = frameAt(frame, teamOfPosition).find((o) => o.settings.position === state.playAs);
+        if (me && !me.settings.benched) value = { x: me.coords.x, y: me.coords.y, z: me.coords.z || 0, source: 'avatar' };
+    }
+    if (!value) {
+        const f = replayFocus();
+        value = { x: f.x, y: f.y, z: f.z || 0, source: 'ball' };
+    }
+    aimMemo.at = frame;
+    aimMemo.follow = want;
+    aimMemo.value = value;
+    return value;
+}
+
+/** The visitor asked the camera to follow them, or the ball again: from the
+ *  replay row's toggle. The aim eases across (camera.js `smoothAim`), so a
+ *  press mid-replay is a swing rather than a cut. Nothing is pinged (D11). */
+function toggleFollow() {
+    if (!avatarOnField()) return false;
+    state.follow = state.follow === 'avatar' ? 'ball' : 'avatar';
+    uiClick();
+    setFollow(state.follow === 'avatar');
+    announce(state.follow === 'avatar' ? 'Following you.' : 'Following the ball.');
+    return true;
+}
+
+/**
+ * THE ENDING'S OWN AIM (Steve's QA, 2026-10-30). Once the recording has run
+ * out, the tackle or the party moves the drawn bodies on for a second or more
+ * while the recording's last frame stands still, so a camera aimed at the
+ * recording lost them: half of two tackled men out of an upright frame. The
+ * carrier AS DRAWN is the aim, because he is the star of the clip whether he
+ * scores or is flattened, and the bodies that move with him (the tackler, for
+ * a tackle), feet to hands and following their leans, are the points the lens
+ * must keep in frame (camera.js `fitBodies`). Null while the recording still
+ * runs, or when nobody was carrying at the whistle (a pass that fell).
+ */
+function endingBodies() {
+    if (!fromRecording() || playheadFrame() < frameCount()) return null;
+    let named;
+    if (followingAvatar()) {
+        // FOLLOWING THE VISITOR: he is the aim, and when he is one of the two
+        // in the tackle the other is kept in frame with him. A blocker or a
+        // defender away from the play is framed alone.
+        const pair = [cycle.tackle.carrier, cycle.tackle.tackler].filter(Boolean);
+        named = pair.includes(state.playAs)
+            ? [state.playAs, ...pair.filter((p) => p !== state.playAs)]
+            : [state.playAs];
+    } else {
+        const last = focusAt(Math.max(0, frameCount() - 1));
+        const carrier = cycle.tackle.carrier || (last && last.holder) || '';
+        if (!carrier) return null;
+        named = [carrier, cycle.tackle.tackler].filter(Boolean);
+    }
+    const figures = named.map(figureFor).filter((fig) => fig && fig.visible);
+    if (!figures.length) return null;
+    const bodies = figures.map(bodyOf);
+    return { focus: { x: bodies[0].x, y: bodies[0].y, z: bodies[0].z }, points: bodyPoints(bodies) };
 }
 
 /** The opening shot, before the first frame is drawn. */
@@ -576,6 +734,11 @@ function startPlay(offensive, defense) {
     cycle.accumulator = 0;
     cycle.settleFor = HOLD_SETTLE;
     cycle.playNumber += 1;
+    // THE STANDS ARE UP FROM THE LINE-UP (Steve, 2026-10-30): every fan, both
+    // sides, until the whistle, when the cheer for whoever won the play takes
+    // over and the rest sit down (`finishPlay`). Still running from the last
+    // play's cheer, the buzz waits for it; a changed play keeps it.
+    buzzCrowd(true, state.elapsed, { calm: reducedMotion });
     syncFigures(cycle.play.game.objects, 0, { presnap: true });
     showBall(cycle.play.game.objects, 0);
 
@@ -676,9 +839,24 @@ function beginSettle() {
      * the other.
      */
     const tackleToo = !party || party.occasion === 'sack';
+    // A FIFTY IS THE WHISTLE: the simulation ends the play on the step the
+    // carrier crosses into the band, so this frame is the crossing. The
+    // offense's only, as the lit band is (`litFor`).
+    const crossing = cycle.play.playState.state.anim.run50 ? ballCarrier(cycle.play) : null;
+    if (crossing && litFor(crossing.settings.position)) noteMoment('fifty', crossing.settings.position);
     if (tackleToo && pair.tackler) {
         cycle.tackle = pair;
-        startTakedown(cycle.play.game.objects, pair.tackler, pair.carrier);
+        const contact = startTakedown(cycle.play.game.objects, pair.tackler, pair.carrier);
+        // AND A TACKLE IS THE CONTACT, timed off the same clock as the grunt,
+        // with the man who made it in the picture too.
+        if (contact !== false) {
+            const kind = tackleKind({
+                carrier: pair.carrier,
+                threw: !!cycle.play.game.throwTo,
+                ran: !!cycle.play.game.runForYourLife,
+            });
+            noteMoment(kind, pair.carrier, pair.tackler, contact + delayFor(kind));
+        }
         // Long enough to land the hit and let him lie there for a beat. A
         // card opening over a man in mid-air is worse than no animation at
         // all.
@@ -806,6 +984,7 @@ function planCelebration(result, pair = { tackler: '', carrier: '' }) {
         if (occasion === 'expired') {
             return chooseCelebration({
                 occasion, hero: at(sacker), mates, rivals: rivals.map(at), calm: reducedMotion,
+                bareHead: bareHeaded(sacker),
             });
         }
         /**
@@ -815,7 +994,7 @@ function planCelebration(result, pair = { tackler: '', carrier: '' }) {
          * `takedownRest` reads the same function the view draws with, so all
          * three are the numbers on screen.
          */
-        const rest = takedownRest(at(sacker), at(carrier));
+        const rest = takedownRest(at(sacker), at(carrier), takedownMotion());
         // He was looking downfield, so on his back he lies toward his own end
         // zone. His team runs at +x, which puts his head at lower x.
         const behind = carrier.settings.team === 0 ? -1 : 1;
@@ -835,6 +1014,7 @@ function planCelebration(result, pair = { tackler: '', carrier: '' }) {
             },
             wait: rest.length,
             calm: reducedMotion,
+            bareHead: bareHeaded(sacker),
         });
     }
 
@@ -868,7 +1048,16 @@ function planCelebration(result, pair = { tackler: '', carrier: '' }) {
         // Somebody who asked not to be moved about gets the still version: arms
         // up and held, no run, no spin, no hop. celebration.js owns that.
         calm: reducedMotion,
+        bareHead: bareHeaded(carrier),
     });
+}
+
+/** Whether `obj`'s player wears no helmet, which is the visitor's avatar
+ *  (roster.js, D10): the shared dances with a hand on or behind the head are
+ *  his to roll, and nobody else's (celebration.js `dancesFor`). */
+function bareHeaded(obj) {
+    const figure = obj ? figureFor(obj.settings.position) : null;
+    return !!figure && isVisitorFigure(figure);
 }
 
 /** Out of the celebration and on to the card, for anybody who would rather
@@ -915,6 +1104,16 @@ function onSnap() {
      */
     playSound('hike');
 
+    // The spot left on a player just chosen goes with the snap. The spot is
+    // where a play ENDS, and it must not stand anywhere during one.
+    if (cycle.pick || cycle.glow) {
+        cycle.pick = null;
+        cycle.glow = null;
+        hideSpot();
+    }
+    // A new play, and its moments start empty. The quarterback has the ball.
+    resetMoments();
+    cycle.ballWas = { holder: 'qb', team: 0, thrown: false };
     snap(cycle.play);
     visit.plays += 1;
     report('snap', { outcome: calledFields() });
@@ -947,7 +1146,11 @@ function onThrow(position) {
         // to may leave his feet for it, and an inference that is wrong 13% of
         // the time puts the wrong man in the air (QA round twenty-four).
         noteThrow(position);
+        // A new flight, a new question of whom the ball is coming to.
+        cycle.ballComing = false;
         playSound('wind');
+        // The throw, half way through the arm's sweep, with the man it went to.
+        noteMoment('release', 'qb', position);
         // THE BALL IS UP, AND SO IS THE ONE THING LEFT TO DO. With the jump
         // the visitor's, the row becomes the Jump button until the ball comes
         // down or he has gone up for it.
@@ -966,17 +1169,45 @@ function onThrow(position) {
 }
 
 /**
+ * WHO THE JUMP BUTTON WOULD SEND UP RIGHT NOW: of the receivers who can still
+ * go up, the man it was thrown to while the ball is coming to him, and
+ * otherwise whoever it does reach (jump.js `buttonTarget`, Steve's QA of
+ * 2026-10-30 twice over). `cycle.ballComing` is the latch that keeps him once
+ * the ball has been coming to him this flight. Empty when nobody can.
+ */
+function buttonChoice() {
+    const play = cycle.play;
+    if (!play || !ballInFlight(play)) return '';
+    const objects = play.game.objects;
+    const ball = objects.find((o) => o.settings && o.settings.position === 'ball');
+    const receivers = eligibleReceivers(play)
+        .map((pos) => objects.find((o) => o.settings && o.settings.position === pos))
+        .filter((o) => o && o.state && !o.state.leapt && !o.state.hasBall);
+    const { who, coming } = buttonTarget(ball, receivers, JUMP_REACH, JUMP_CEILING,
+        play.game.throwTo, cycle.ballComing);
+    cycle.ballComing = coming;
+    return who ? who.settings.position : '';
+}
+
+/**
  * SEND A RECEIVER UP FOR IT. `position` is whoever a tap landed on; the Jump
- * button, J and the space bar name nobody, and mean the man it was thrown to.
+ * button, J and the space bar name nobody, and mean whoever the ball is coming
+ * to (`buttonChoice`), which was "the man it was thrown to" until Steve's QA
+ * of 2026-10-30 found a pass thrown behind him going up for by nobody.
  *
- * `requestLeap` refuses a second jump by the same man, a ball already caught
- * and anybody but a receiver, so a press that cannot do anything does nothing.
- * The jump is logged for the replay as it happens, because the recorder stores
- * where everybody was, not why anybody left the ground.
+ * A TAP ON A MAN WHO HAS ALREADY GONE UP DOES NOTHING. It used to pass to the
+ * next nearest receiver, so a second tap on the man under the finger sent a
+ * different man up (the same QA). `requestLeap` refuses a second jump by the
+ * same man, a ball already caught and anybody but a receiver, so a press that
+ * cannot do anything does nothing. The jump is logged for the replay as it
+ * happens, because the recorder stores where everybody was, not why anybody
+ * left the ground.
  */
 function onJump(position) {
     const game = cycle.play && cycle.play.game;
-    const who = position || (game && game.throwTo);
+    if (!game) return false;
+    const choice = buttonChoice();
+    const who = position || choice;
     if (!who || !requestLeap(cycle.play, who)) return false;
     noteLeap(who, SIM_STEP);
     const target = who === game.throwTo;
@@ -985,9 +1216,9 @@ function onJump(position) {
         outcome: { ...calledFields(), jumped: who },
         seconds: sinceSnap(),
     });
-    // His one jump is spent, so the button that jumps him has nothing left to
-    // do. A tap can still send somebody else up.
-    if (target && cycle.jumpRow) {
+    // The button's one jump is spent once the man it would send up has gone,
+    // by the button or by a tap on him. A tap can still send somebody else up.
+    if (cycle.jumpRow && (!position || who === choice)) {
         clearActions();
         cycle.jumpRow = false;
     }
@@ -1008,8 +1239,11 @@ function tendJumpRow() {
     }
     const game = cycle.play.game;
     const ball = game.objects.find((o) => o.settings && o.settings.position === 'ball');
-    const target = game.objects.find((o) => o.settings && o.settings.position === game.throwTo);
-    setJumpCue(cueLit(ball, target, JUMP_REACH));
+    // The cue is for the man the button would send up, which is the man the
+    // ball is coming to.
+    const who = buttonChoice() || game.throwTo;
+    const target = game.objects.find((o) => o.settings && o.settings.position === who);
+    setJumpCue(cueLit(ball, target, JUMP_REACH, JUMP_CEILING));
 }
 
 function onRun() {
@@ -1072,6 +1306,9 @@ function finishPlay() {
     // result card is open has finished it just as much as one who clicks on.
     saveGame(cycle);
 
+    // Anything still waiting for its frame is taken now, on the last frame of
+    // the play, rather than lost: the card is about to freeze the field.
+    takeMoments(true);
     landTackle();
     presentResult();
 }
@@ -1126,13 +1363,53 @@ function presentResult() {
     // so without this the card hides the one thing it is reporting on. The
     // column rises past the card, which a ring on the grass could not.
     if (cycle.spotAt) showSpot(cycle.spotAt.x, cycle.spotAt.z);
+    // The replay and the clip of it are offered together: both need the
+    // recording and nothing else (D25).
     showResult(cycle.lastOutcome, cycle.playNumber, CFG.rules.playsPerGame,
-        cycle.total, !isEmpty());
+        cycle.total, !isEmpty(), !isEmpty());
+}
+
+/**
+ * "SHARE THE PLAY" (specs/xo-photos-plan, Step 7): the sheet over the field
+ * with the clip of this play, made as it opens, and the picture of its best
+ * moment under it, and back to the card where it was when it closes. The card
+ * steps aside while the sheet is up, because only one dialog may claim the
+ * screen at a time (the focus trap wraps the last one it finds).
+ *
+ * THE CLIP OPENS ON THE VIEW THE VISITOR WATCHED THIS PLAY'S REPLAY FROM
+ * (D21), when they switched it: that is the angle they chose for this play.
+ * Otherwise the director's own.
+ */
+function openShare() {
+    if (cycle.phase !== 'result' || clipSheetOpen() || isEmpty()) return;
+    uiClick();
+    // A moment the console left on the field goes first: the sheet is of the
+    // play, and the field behind it should be the field as it finished.
+    if (putBackLive() && cycle.spotAt) showSpot(cycle.spotAt.x, cycle.spotAt.z);
+    hideResult();
+    showClipSheet({
+        outcome: cycle.lastOutcome,
+        moment: rankedMoments()[0] || null,
+        visitor: visitorAvatar ? state.playAs : null,
+        quarter: cycle.viewPlay === cycle.playNumber ? viewQuarter() : 0,
+        // Follow me only with the avatar on the field; the visit's choice.
+        follow: avatarOnField() ? state.follow : null,
+        back: () => returnToResult('result-share-btn'),
+    });
+}
+
+/** One moment's photo and its file, for the sheet: drawn on the next frame,
+ *  then encoded. */
+async function makePhoto(moment) {
+    const picture = await requestPhoto(moment);
+    return { picture, blob: await photoBlob(picture) };
 }
 
 /** Roll the recording. The live simulation is not touched: playback rebuilds
  *  objects from the buffer, so a replay can never disturb what it recorded. */
 function startReplay() {
+    // A clip still being taken is let go: the replay wants the field.
+    cancelTake();
     if (isEmpty()) { presentResult(); return; }
     report('show-replay', {
         kind: cycle.viewPlay === cycle.playNumber ? 'again' : 'first',
@@ -1140,11 +1417,13 @@ function startReplay() {
     });
     uiClick();
     hideResult();
+    putBackLive();
     // THE HUD STAYS UP THROUGH A REPLAY, carrying one button. It used to be
     // hidden for the duration, so a replay that started on its own (D36 plays
     // the highlights unasked) had no way out but to wait for it.
     showHud(true);
-    showSkipReplay();
+    // The row carries Follow me only for a visitor with an avatar on the field.
+    showSkipReplay({ follow: avatarOnField() ? state.follow : null });
     // The spot belongs to the end of the play, and a replay is about to start
     // at the beginning of it. Leaving it standing would give away the ending.
     hideSpot();
@@ -1176,9 +1455,11 @@ function startReplay() {
     resetTakedown();
     resetCelebration();
     // The stands sit down with it, whether or not the live cheer had finished,
-    // and go up again at the same whistle below.
+    // are up again from the replay's first frame as they were from the
+    // line-up, and cheer again at the same whistle below.
     cheerCrowd(null, state.elapsed);
     cycle.cheered = false;
+    buzzCrowd(true, state.elapsed, { calm: reducedMotion });
     rewind();
     // The recording begins ON the snap, so the playhead going back to frame
     // one is the same instant the visitor's press was, and he takes the ball
@@ -1218,6 +1499,7 @@ function onSwitchView() {
 }
 
 function onNext() {
+    cancelTake();
     const last = cycle.playNumber >= CFG.rules.playsPerGame;
     report('next-play', {
         kind: last ? 'summary' : 'playbook',
@@ -1225,6 +1507,9 @@ function onNext() {
     });
     uiClick();
     hideResult();
+    // A moment the console left on the field goes, and the field as it was
+    // comes back, before anything else is drawn over it.
+    putBackLive();
     const then = last ? finishGame : openPlaybook;
     /**
      * A MILESTONE SHOW PLAYS HERE, BETWEEN THE CARD AND WHATEVER COMES NEXT.
@@ -1577,17 +1862,20 @@ export function qaOpening() {
 }
 
 /**
- * DRESS THE TEAMS AND THE FIELD FROM THE CONSOLE, until the Team colors card
- * exists, and keep it: `xo.colors({ x: '#4b2e83', o: '#ffb612', field: '#0033a0' })`,
+ * DRESS THE TEAMS AND THE FIELD FROM THE CONSOLE, beside the Team colors card,
+ * and keep it: `xo.colors({ x: '#4b2e83', o: '#ffb612', field: '#0033a0' })`,
  * with `xHelmet` and `oHelmet` for a helmet of its own (null to follow the jersey
- * again), `xo.colors('reset')` for the game's own, and `xo.colors()` to read what
- * is set. The answer includes any warning the card would show.
+ * again), or a whole kit for a team, `xo.colors({ x: { jersey, helmet, mark,
+ * pants, shoes, helmetStripe, pantsStripe } })`, any part of it (null for the
+ * color decided for it, a stripe `true` for one in the color decided for it,
+ * false for none). `xo.colors('reset')` for the game's own, and `xo.colors()`
+ * to read what is set. The answer includes any warning the card would show.
  */
 export function qaColors(change) {
     if (change === 'reset') resetColors();
     else if (change && typeof change === 'object') {
-        const team = (jersey, helmet) => ({
-            ...(jersey !== undefined ? { jersey } : {}),
+        const team = (own, helmet) => ({
+            ...(own && typeof own === 'object' ? own : (own !== undefined ? { jersey: own } : {})),
             ...(helmet !== undefined ? { helmet } : {}),
         });
         setColors({
@@ -1618,7 +1906,9 @@ function applyColors({ teams = true, field = true } = {}) {
 function installQaHook() {
     if (typeof window === 'undefined' || !qaEnabled(window.location && window.location.href)) return;
     window.xo = Object.freeze({
-        show: qaShow, opening: qaOpening, colors: qaColors, levels: [...CFG.milestones.built],
+        show: qaShow, opening: qaOpening, colors: qaColors, playAs: qaPlayAs,
+        moments: qaMoments, moment: qaMoment, photo: qaPhoto, clip: qaClip, lead: qaLead,
+        levels: [...CFG.milestones.built],
     });
 }
 
@@ -1739,7 +2029,8 @@ function startTakedown(objects, tacklerPos, carrierPos, from = 0) {
     // noise from nowhere.
     const hit = contactFraction(gap) * CFG.pose.takedown.dive;
     if (from < hit) playSound('grunt', (hit - from) * 1000);
-    return true;
+    // How long until the two bodies meet, for the photo of it.
+    return Math.max(0, hit - from);
 }
 
 /**
@@ -1800,6 +2091,13 @@ function stepCycle(delta) {
     // last play left them while the stadium does the moving.
     if (cycle.phase === 'show') {
         stepMilestone(delta);
+        return;
+    }
+
+    // A clip being taken: the replay, from a few seconds before the whistle,
+    // drawn for the recorder rather than for the screen (see `beginTake`).
+    if (cycle.phase === 'clip') {
+        stepTake(delta);
         return;
     }
 
@@ -1868,6 +2166,7 @@ function stepCycle(delta) {
         // player faces the other team (QA item 12).
         syncFigures(cycle.play.game.objects, delta, { presnap: true });
         showBall(cycle.play.game.objects, delta);
+        tendPickSpot(delta);
         return;
     }
     if (cycle.phase === 'live') {
@@ -1893,6 +2192,9 @@ function stepCycle(delta) {
             record(cycle.play.game.objects);
             cycle.accumulator -= SIM_STEP;
         }
+        // BEFORE THE WHISTLE IS ANSWERED, because a pick ends the play on the
+        // very step the ball is caught.
+        watchBall();
         tendJumpRow();
         /**
          * THE CLOCK IS READ FROM THE SIMULATION, NEVER COUNTED HERE.
@@ -1947,6 +2249,9 @@ function stepCycle(delta) {
 
     syncFigures(cycle.play.game.objects, delta, { live: cycle.phase === 'live' });
     showBall(cycle.play.game.objects, delta);
+    // After everything is drawn for this frame, so a moment due now keeps
+    // exactly what is about to be rendered.
+    takeMoments();
 }
 
 /**
@@ -1997,7 +2302,13 @@ export function showBall(objects, delta) {
  * moment apart, so taking it once means they can never disagree about which
  * player was carrying.
  */
-const BAND_PHASES = new Set(['live', 'settle', 'replay', 'result']);
+const BAND_PHASES = new Set(['live', 'settle', 'replay', 'result', 'clip']);
+
+/** Is the field being drawn from the recording rather than the simulation: a
+ *  replay, or a clip being taken, which is a replay for the recorder. */
+function fromRecording() {
+    return cycle.phase === 'replay' || cycle.phase === 'clip';
+}
 
 function trackBall(delta) {
     // ON THE RESULT CARD IT HOLDS WHERE IT FINISHED, rather than going out at
@@ -2026,7 +2337,7 @@ function trackBall(delta) {
  * show. It is the SCORING band that would be lying.
  */
 function bandPoint() {
-    if (cycle.phase === 'replay') {
+    if (fromRecording()) {
         const f = replayFocus();
         return f && litFor(f.holder) ? simToWorld(f.x, f.y, 0) : null;
     }
@@ -2060,7 +2371,7 @@ export function litFor(position) {
  * and the shot cannot disagree about where the ball got to.
  */
 function ballWorldPoint() {
-    if (cycle.phase === 'replay') {
+    if (fromRecording()) {
         const f = replayFocus();
         return f ? simToWorld(f.x, f.y, 0) : null;
     }
@@ -2115,6 +2426,16 @@ function animate(now) {
     // corner of this frame's buffer and the main render below clears it.
     // Drawn after, the frame would be shown with a player in the corner.
     if (colorsCardOpen()) drawColorsPreviews(renderer, state.elapsed, { calm: reducedMotion });
+    // AND ANY PHOTO OWED, for the same reason: it borrows the whole buffer,
+    // and the render below paints the live field back over it unseen.
+    takePhotos();
+    // A CLIP BEING TAKEN IS DRAWN INSTEAD OF THE LIVE FIELD: the canvas is
+    // hidden for the take and holds the clip's size, and the frame goes to the
+    // recorder's stage, not the screen (specs/xo-photos-plan, Step 6).
+    if (cycle.phase === 'clip' && cycle.take) {
+        drawTake(delta);
+        return;
+    }
     renderer.render(scene, camera);
 }
 
@@ -2193,6 +2514,11 @@ function toScreen(x, y, z) {
 /** Who can be tapped right now, and what tapping them does. */
 function tapTargets() {
     if (!cycle.play) return [];
+    // CHOOSING A PLAYER: everybody who can be chosen, and every ring breathes,
+    // which is what says the whole field is pressable now.
+    if (cycle.phase === 'presnap' && cycle.pick) {
+        return pickable().map((position) => ({ position, act: () => choosePick(position) }));
+    }
     if (cycle.phase === 'presnap') return [{ position: 'qb', act: onSnap }];
     if (cycle.phase === 'live' && !cycle.play.game.throwTo && !cycle.play.game.runForYourLife) {
         return [
@@ -2203,18 +2529,21 @@ function tapTargets() {
         ];
     }
     // THE BALL IS IN THE AIR: A TAP SENDS UP WHOEVER IS NEAREST THE FINGER
-    // (2026-09-23). Any receiver who has not jumped yet, because the one the
-    // visitor meant is the one under the finger. Only the man it was thrown to
-    // breathes, though: four pulsing markers under a ball in flight is a busy
-    // field, and he is the one worth looking at.
+    // (2026-09-23), because the one the visitor meant is the one under the
+    // finger. EVERY receiver is a target, the ones who have already gone up
+    // included: a tap on a man who has jumped does nothing (`onJump`), where
+    // leaving him out handed the tap to the next nearest receiver and sent the
+    // wrong man up (Steve's QA, 2026-10-30). Only the man it was thrown to
+    // breathes, and only until he goes: four pulsing markers under a ball in
+    // flight is a busy field, and he is the one worth looking at.
     if (cycle.phase === 'live' && cycle.visitorJumps && ballInFlight(cycle.play)) {
         const game = cycle.play.game;
+        const leapt = (pos) => {
+            const o = game.objects.find((x) => x.settings && x.settings.position === pos);
+            return !!(o && o.state && o.state.leapt);
+        };
         return eligibleReceivers(cycle.play)
-            .filter((pos) => {
-                const o = game.objects.find((x) => x.settings && x.settings.position === pos);
-                return o && o.state && !o.state.leapt;
-            })
-            .map((pos) => ({ position: pos, act: () => onJump(pos), pulse: pos === game.throwTo }));
+            .map((pos) => ({ position: pos, act: () => onJump(pos), pulse: pos === game.throwTo && !leapt(pos) }));
     }
     return [];
 }
@@ -2327,29 +2656,51 @@ function onCanvasPointer(event) {
     // figures is a hunt for no reason. The quarterback stays tappable because
     // he is still the one under the finger most of the time, and the marker
     // under him still breathes, so the gesture the 2D game taught still works.
-    if (cycle.phase === 'presnap') {
+    //
+    // NOT WHILE A PLAYER IS BEING CHOSEN, when a tap is the choice, and not
+    // for a moment after one (`pick.guard`): a double tap or a finger that
+    // bounced would otherwise choose a player and start the play in one go.
+    if (cycle.phase === 'presnap' && !cycle.pick) {
         event.preventDefault();
+        if (state.elapsed - cycle.pickedAt < CFG.pick.guard) return;
         onSnap();
         return;
     }
 
-    const targets = tapTargets();
-    if (!targets.length) return;
+    const best = nearestTarget(event.clientX, event.clientY);
+    if (!best) return;
+    event.preventDefault();
+    best.act();
+}
 
+/**
+ * WHOEVER IS NEAREST THE POINTER, of everybody who can be tapped right now,
+ * or null. The rule the 2D game taught: no radius, the nearest wins.
+ */
+function nearestTarget(clientX, clientY) {
     let best = null;
-    for (const target of targets) {
+    for (const target of tapTargets()) {
         const figure = figureFor(target.position);
         if (!figure || !figure.visible) continue;
         for (const [x, y, z] of tapProbes(figure)) {
             const at = toScreen(x, y, z);
             if (!at) continue;
-            const d = Math.hypot(at.x - event.clientX, at.y - event.clientY);
+            const d = Math.hypot(at.x - clientX, at.y - clientY);
             if (!best || d < best.d) best = { d, target };
         }
     }
-    if (!best) return;
-    event.preventDefault();
-    best.target.act();
+    return best ? best.target : null;
+}
+
+/**
+ * WHILE CHOOSING A PLAYER, THE CHOICE FOLLOWS THE POINTER, so a mouse shows
+ * who a click would choose before it is made. Not for a finger: a touch has
+ * nothing to show before it lands, and it lands on a choice.
+ */
+function onCanvasHover(event) {
+    if (!cycle.pick || event.pointerType === 'touch') return;
+    const best = nearestTarget(event.clientX, event.clientY);
+    if (best) pickAt(best.position);
 }
 
 /**
@@ -2412,20 +2763,15 @@ async function init() {
     // playbook shows a real formation rather than an empty pitch. The last
     // play a visitor chose is remembered, so a returning visitor sees theirs.
     const objects = lineUp(cycle.play, getSettings().lastPlay || 'pass2', '');
-    // THE VISITOR TAKES THE SNAP (specs/avatar M7, 2026-10-26): with an avatar
-    // saved on /avatar/, the quarterback is them, in their own clothes and the
-    // team's helmet. Without one, the usual quarterback. Read once a load: a
-    // save in another tab shows on the welcome card now and at quarterback
-    // next time.
+    // THE VISITOR IS ON THE FIELD (specs/avatar M7, 2026-10-26): with an
+    // avatar saved on /avatar/, one player is them, in their own clothes.
+    // The quarterback, unless they chose another (specs/xo-photos-plan).
+    // Without one, every player is the usual player. Read once a load: a save
+    // in another tab shows on the welcome card now and on the field next time.
     avatarStore = createAvatarStore();
-    const avatar = avatarStore.hasSaved() ? avatarStore.load() : null;
-    initRoster(scene, objects, { avatar });
-    state.avatarQb = Boolean(avatar);
-    // And the simulation starts a thrown ball at that quarterback's throwing
-    // hand (Steve's QA, 2026-10-26: the hold was right, the arc began on
-    // the left, where the 2D game's sprite threw from).
-    cycle.play.throwHand = throwSideOf(figureFor('qb')) === 1 ? 'left' : 'right';
-    state.throwHand = cycle.play.throwHand;
+    visitorAvatar = avatarStore.hasSaved() ? avatarStore.load() : null;
+    state.playAs = getSettings().playAs;
+    buildRoster();
     initMarkers(scene, objects);
     initSpot(scene);
     initBall(scene);
@@ -2448,6 +2794,15 @@ async function init() {
     setStandingReach(standingReach());
     initHud({
         onSnap, onThrow, onRun, onNext, onChangePlay,
+        // Play as (specs/xo-photos-plan, Step 2), only with an avatar to move.
+        canPlayAs: () => Boolean(visitorAvatar),
+        onPlayAs: openPick,
+        onPickCancel: cancelPick,
+        onPickChoose: () => choosePick(),
+        // The clip of the play, with its picture, from the result card (Step 7).
+        onShare: openShare,
+        // The replay camera on the visitor's avatar, or back on the ball.
+        onFollow: toggleFollow,
         onJump: () => onJump(),
         onReplay: startReplay,
         onSkipReplay,
@@ -2463,6 +2818,10 @@ async function init() {
     });
     initPlaybook(onPlaybookChoice, onStartOver, {
         defense: (slug) => report('set-defense', { kind: slug || 'random' }),
+        // The Play as row, for a visitor with an avatar; without one the row
+        // is a pointer to the avatar page instead. Not reported: only avatar
+        // holders can choose, so the ping would say who has one (D11).
+        playAs: visitorAvatar ? (slot) => playAs(slot) : null,
         // Worth knowing how many visitors turn the timed jump off.
         autoJumpChanged: (on) => report('auto-jump', { kind: on ? 'on' : 'off' }),
         // The welcome card again, from "How to play". `back` puts the book
@@ -2491,6 +2850,21 @@ async function init() {
         apply: ({ teams, field }) => applyColors({ teams, field }),
         report,
         announce,
+    });
+    // THE PHOTO SHEET. The address that goes with a shared picture is where
+    // the page is served from, so a share is right on localhost, on a staging
+    // host and in production alike (as the score share's is, summary.js).
+    initClipSheet({
+        take: (stage, quarter, onFrame) => beginTake(stage, { quarter, onFrame, follow: state.follow }),
+        cancel: cancelTake,
+        // The sheet's Follow me is the visit's choice too, so the next replay
+        // on screen opens following the same man.
+        follow: (next) => { state.follow = next === 'avatar' ? 'avatar' : 'ball'; },
+        picture: makePhoto,
+        report,
+        url: () => new URL('.', window.location.href).href,
+        recording: howToRecord,
+        calm: () => reducedMotion,
     });
 
     setProgress(0.9, 'Almost ready…');
@@ -2528,10 +2902,13 @@ async function init() {
     // one of them exists during a replay.
     canvas.addEventListener('pointerdown', onCanvasDragStart, { signal });
     canvas.addEventListener('pointermove', onCanvasDragMove, { signal });
+    // ...and the choice of player following a mouse (specs/xo-photos-plan).
+    canvas.addEventListener('pointermove', onCanvasHover, { signal });
     canvas.addEventListener('pointerup', onCanvasDragEnd, { signal });
     canvas.addEventListener('pointercancel', onCanvasDragEnd, { signal });
     canvas.addEventListener('wheel', onCanvasWheel, { signal, passive: false });
     document.addEventListener('keydown', onReplayKey, { signal });
+    document.addEventListener('keydown', onPickKey, { signal });
     // THE WELCOME CARD COMES FIRST, and only on arrival. "Play again" from the
     // summary goes straight back to the playbook, because somebody who has
     // just finished ten plays does not need the rules again.
@@ -2604,6 +2981,608 @@ async function init() {
 
 let avatarStore = null;
 let playing = null;
+/** The avatar read at boot, or null. Kept for a rebuild when the visitor
+ *  chooses another player, which must not pick up a save from another tab
+ *  mid-game any more than the boot does. */
+let visitorAvatar = null;
+
+/**
+ * THE ROSTER, WITH THE VISITOR WHERE THEY CHOSE TO BE.
+ *
+ * And the simulation is told which hand the quarterback throws with, because
+ * a thrown ball starts there (Steve's QA, 2026-10-26: the hold was right, the
+ * arc began on the left, where the 2D game's sprite threw from). That is the
+ * avatar's own hand only while the avatar is the quarterback.
+ */
+function buildRoster() {
+    initRoster(scene, cycle.play.game.objects, { avatar: visitorAvatar, as: state.playAs });
+    state.avatarQb = Boolean(visitorAvatar) && state.playAs === DEFAULT_SLOT;
+    cycle.play.throwHand = throwSideOf(figureFor('qb')) === 1 ? 'left' : 'right';
+    state.throwHand = cycle.play.throwHand;
+}
+
+/** Where a change of player can happen: the field is standing still and
+ *  nothing on it is mid-animation. During a play, a replay, a show or the
+ *  opening, a rebuilt roster would lose whatever the figures were doing. */
+const REBUILD_PHASES = new Set(['welcome', 'playbook', 'presnap']);
+
+/**
+ * PLAY AS ANOTHER PLAYER (specs/xo-photos-plan). Remembered whether or not
+ * there is an avatar, and the roster rebuilt only when there is one to move.
+ * Returns false, changing nothing, outside `REBUILD_PHASES`.
+ *
+ * THE REBUILT FIGURES ARE DRAWN AT ONCE, because outside a play nothing else
+ * would draw them: behind the playbook and the welcome card the field holds
+ * its last frame and `stepCycle` returns early. A formation nobody has
+ * snapped yet is drawn as one, facing the other team. A field a play has
+ * finished on is drawn as it finished, with the tackle and the party still on.
+ */
+function playAs(slot) {
+    if (!REBUILD_PHASES.has(cycle.phase) || !cycle.play) return false;
+    const next = setPlayAs(slot);
+    if (next === state.playAs) return true;
+    state.playAs = next;
+    if (visitorAvatar) {
+        // The last play's moments hold the figures this throws away.
+        resetMoments();
+        buildRoster();
+        const objects = cycle.play.game.objects;
+        const fresh = cycle.play.frame === 0;
+        syncFigures(objects, 0, fresh ? { presnap: true } : { live: false });
+        showBall(objects, 0);
+    }
+    showPlaying();
+    return true;
+}
+
+// ---- Choosing a player off the field (specs/xo-photos-plan, Step 2) ---------
+
+/** Who can be chosen off the field: every slot standing in this formation, in
+ *  the playbook's order, and the visitor's own even while they wait on the
+ *  sideline, so the choice can start on them. */
+function pickable() {
+    const on = new Set(cycle.play.game.objects
+        .filter((o) => o.settings && !o.settings.benched)
+        .map((o) => o.settings.position));
+    on.add(state.playAs);
+    return SLOTS.map((s) => s.id).filter((id) => on.has(id));
+}
+
+/**
+ * "PLAY AS…": THE ROW ASKS FOR A PLAYER AND THE FIELD ANSWERS (Steve's flow,
+ * 2026-10-29). The choice starts on whoever the visitor is now, so Enter
+ * straight away changes nothing, and the spot stands on them.
+ */
+function openPick() {
+    if (cycle.phase !== 'presnap' || !visitorAvatar || cycle.pick) return;
+    uiClick();
+    cycle.glow = null;
+    cycle.pick = { at: state.playAs };
+    const prompt = isTouch()
+        ? 'Tap any player to play as them.'
+        : 'Click any player to play as them, or use the arrow keys.';
+    showPick(prompt, labelOf(state.playAs));
+    announce(prompt);
+}
+
+/** Move the choice onto `slot`. The button names them, and `tendPickSpot`
+ *  stands the spot on them on the next frame. */
+function pickAt(slot) {
+    if (!cycle.pick || slot === cycle.pick.at) return;
+    cycle.pick.at = slot;
+    setPickChoice(labelOf(slot));
+}
+
+/** The arrow keys walk the choice through the players on the field, round
+ *  from the last to the first. */
+function stepPick(by) {
+    const list = pickable();
+    const at = Math.max(0, list.indexOf(cycle.pick.at));
+    const next = list[(at + by + list.length) % list.length];
+    pickAt(next);
+    announce(labelOf(next));
+}
+
+/** Chosen: by a tap, or by the button naming them. Choosing whoever they are
+ *  already just closes the question. */
+function choosePick(slot = cycle.pick && cycle.pick.at) {
+    if (!cycle.pick) return;
+    cycle.pick = null;
+    cycle.pickedAt = state.elapsed;
+    playAs(slot);
+    cycle.glow = { slot: state.playAs, left: CFG.pick.glow };
+    showSnap();
+    announce(`You are playing as ${slotOf(state.playAs).phrase}.`);
+}
+
+function cancelPick() {
+    if (!cycle.pick) return;
+    cycle.pick = null;
+    hideSpot();
+    showSnap();
+}
+
+/** The arrows, while a player is being chosen. Nothing else on this screen
+ *  uses them, and a field that takes typing is never open under the row. */
+function onPickKey(event) {
+    if (!cycle.pick || event.metaKey || event.ctrlKey || event.altKey) return;
+    const tag = ((event.target && event.target.tagName) || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    const by = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+    if (!by) return;
+    event.preventDefault();
+    stepPick(by);
+}
+
+/**
+ * THE SPOT ON WHOEVER THE CHOICE IS ON, and on whoever was just chosen for
+ * `pick.glow` seconds after, which is the moment the eye needs telling where
+ * the visitor went. The spot is the end-of-play marker, and before the snap it
+ * has nothing else to do. Read off the DRAWN figure, so it follows a man still
+ * walking to a new formation or standing on the sideline.
+ */
+function tendPickSpot(delta) {
+    let slot = null;
+    if (cycle.pick) {
+        slot = cycle.pick.at;
+    } else if (cycle.glow) {
+        cycle.glow.left -= delta;
+        if (cycle.glow.left > 0) {
+            slot = cycle.glow.slot;
+        } else {
+            cycle.glow = null;
+            hideSpot();
+        }
+    }
+    if (!slot) return;
+    const figure = figureFor(slot);
+    if (figure && figure.visible) showSpot(figure.position.x, figure.position.z);
+}
+
+// ---- The photo moments (specs/xo-photos-plan, Step 3) -----------------------
+
+function resetMoments() {
+    cycle.moments = [];
+    cycle.pendingMoments = [];
+    cycle.ballWas = null;
+}
+
+/** A moment worth a photo has happened, to be taken `delay` seconds from now
+ *  (its kind's own `after` unless the caller knows better, as a tackle does). */
+function noteMoment(kind, hero, partner = null, delay = delayFor(kind)) {
+    if (!hero) return;
+    cycle.pendingMoments.push({ kind, hero, partner, due: state.elapsed + delay });
+}
+
+/** Who holds the ball this frame, against last frame: a catch or a pick. */
+function watchBall() {
+    const holder = ballCarrier(cycle.play);
+    const now = {
+        holder: holder ? holder.settings.position : '',
+        team: holder ? holder.settings.team : -1,
+        thrown: !!cycle.play.game.throwTo,
+    };
+    const event = ballEvent(cycle.ballWas, now);
+    cycle.ballWas = now;
+    if (event) noteMoment(event.kind, event.hero, event.partner);
+}
+
+/** Everything on the field that moves, which is what a snapshot keeps. */
+function movingRoots() {
+    return [getRosterGroup(), getBall(), getMarkerGroup()];
+}
+
+/** A drawn figure's root, as the photo camera needs it (photo.js). */
+function bodyOf(figure) {
+    return {
+        x: Number(figure.position.x) || 0,
+        y: Number(figure.position.y) || 0,
+        z: Number(figure.position.z) || 0,
+        yaw: Number(figure.rotation.y) || 0,
+        pitch: Number(figure.rotation.x) || 0,
+    };
+}
+
+/**
+ * TAKE EVERY MOMENT WHOSE FRAME HAS COME, or every one still waiting when
+ * `flush` (the card is opening and there will be no more frames).
+ *
+ * `bodies` are who the picture is of, the hero first and the man with him
+ * for a tackle, and `others` everybody else standing, for the photographer to
+ * keep out of the way of. All of it read off the DRAWN figures, which are
+ * what the snapshot holds.
+ */
+function takeMoments(flush = false) {
+    if (!cycle.pendingMoments.length) return;
+    const due = cycle.pendingMoments.filter((m) => flush || m.due <= state.elapsed);
+    if (!due.length) return;
+    cycle.pendingMoments = cycle.pendingMoments.filter((m) => !due.includes(m));
+    for (const m of due) {
+        const named = [m.hero, m.partner].filter(Boolean);
+        const bodies = named.map(figureFor).filter(Boolean).map(bodyOf);
+        const others = cycle.play.game.objects
+            .filter((o) => o.settings && o.settings.position !== 'ball' && !named.includes(o.settings.position))
+            .map((o) => figureFor(o.settings.position))
+            .filter((f) => f && f.visible)
+            .map((f) => ({ x: Number(f.position.x) || 0, z: Number(f.position.z) || 0 }));
+        cycle.moments.push({
+            kind: m.kind,
+            hero: m.hero,
+            partner: m.partner,
+            at: sinceSnap(),
+            bodies,
+            others,
+            snapshot: captureDrawn(movingRoots()),
+        });
+    }
+}
+
+/** This play's moments, best first, for whoever the visitor is. */
+function rankedMoments() {
+    return rankMoments(cycle.moments, visitorAvatar ? state.playAs : null);
+}
+
+/** "Tackle: receiver B, brought down by safety 1, 2.4 s after the snap". */
+function describeMoment(m) {
+    const who = slotOf(m.hero).phrase;
+    const by = m.partner && (m.kind === 'tackle' || m.kind === 'sack')
+        ? `, brought down by ${slotOf(m.partner).phrase}` : '';
+    const to = m.partner && m.kind === 'release' ? `, to ${slotOf(m.partner).phrase}` : '';
+    return `${KIND_NAMES[m.kind]}: ${who}${by}${to}, ${m.at.toFixed(1)} s after the snap`;
+}
+
+/**
+ * PUT A MOMENT ON THE FIELD, for the console (`xo.moment(n)`), and the live
+ * frame back after. The card and the spot step aside while it is up, and the
+ * camera takes the photographer's shot of it at the screen's own shape, which
+ * is the photo's camera at another aspect. Nothing on the field is stepped in
+ * the result phase, so it stays.
+ */
+function showMoment(m) {
+    if (!cycle.shownMoment) cycle.shownMoment = { live: captureDrawn(movingRoots()), shot: null };
+    applyDrawn(m.snapshot);
+    cycle.shownMoment.shot = photoShot(m, camera && camera.aspect > 0 ? Number(camera.aspect) : 0.8);
+    hideResult();
+    hideSpot();
+}
+
+/**
+ * PHOTOS OWED, drawn in the frame loop before the frame's own render (see
+ * photo.js): `{ moment, resolve }`. A photo asked for between frames waits for
+ * the next one, because only there can the canvas be borrowed unseen.
+ */
+const photosOwed = [];
+
+function requestPhoto(moment) {
+    return new Promise((resolve) => photosOwed.push({ moment, resolve }));
+}
+
+/** Draw every photo owed. The rings on the grass and the end-of-play spot are
+ *  put out of sight for the picture (`photo.markers`). */
+function takePhotos() {
+    if (!photosOwed.length) return;
+    const hide = [getSpot(), ...(CFG.photo.markers ? [] : [getMarkerGroup()])];
+    for (const owed of photosOwed.splice(0)) {
+        owed.resolve(drawPhoto({
+            renderer, scene, canvas: renderer && renderer.domElement,
+            moment: owed.moment, roots: movingRoots(), hide,
+        }));
+    }
+}
+
+function putBackLive() {
+    if (!cycle.shownMoment) return false;
+    applyDrawn(cycle.shownMoment.live);
+    cycle.shownMoment = null;
+    return true;
+}
+
+/**
+ * `xo.moments()` lists the last play's moments, best first; `xo.moment(1)`
+ * puts the first of them on the field with the card out of the way, and
+ * `xo.moment()` brings the field and the card back. On the result card only:
+ * that is the one screen where nothing on the field is being drawn.
+ */
+export function qaMoments() {
+    const list = rankedMoments();
+    if (!list.length) return 'No moments yet. Play a down, then ask on the result card.';
+    return list.map((m, i) => `${i + 1}. ${describeMoment(m)}`).join('\n');
+}
+
+/**
+ * `xo.photo(1)` makes the photo of the first moment and saves it to the
+ * downloads folder, so the picture itself can be judged before the photo sheet
+ * exists (Step 5). Resolves to a sentence for the console.
+ */
+export async function qaPhoto(n = 1) {
+    if (cycle.phase !== 'result') return 'On the result card only, after a play.';
+    const list = rankedMoments();
+    const m = list[Math.round(n) - 1];
+    if (!m) return `No moment ${n}. This play has ${list.length}.`;
+    const picture = await requestPhoto(m);
+    const blob = await photoBlob(picture);
+    if (!blob || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+        return "This browser couldn't make the picture.";
+    }
+    const url = URL.createObjectURL(blob);
+    const name = photoName(m.kind);
+    saveFile(url, name);
+    // Long enough for the download to have started from it.
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return `Saved ${name} (${Math.round(blob.size / 1024)} KB): ${describeMoment(m)}.`;
+}
+
+export function qaMoment(n) {
+    if (cycle.phase !== 'result') return 'On the result card only, after a play.';
+    if (n === undefined || n === 0) {
+        if (putBackLive()) presentResult();
+        return 'Back to the field as it was.';
+    }
+    const list = rankedMoments();
+    const m = list[Math.round(n) - 1];
+    if (!m) return `No moment ${n}. This play has ${list.length}.`;
+    showMoment(m);
+    return `Showing ${describeMoment(m)}. xo.moment() puts the field back.`;
+}
+
+// ---- The clip (specs/xo-photos-plan, Part three, Step 6) --------------------
+//
+// THE CLIP IS THE REPLAY, RECORDED (clip.js). A take re-runs the recording from
+// `clip.seconds` before the whistle the way the replay phase does, through the
+// director's camera turned to the quarter the visitor chose, and draws every
+// frame into a canvas somebody is recording. While it runs the phase is 'clip',
+// the game's own canvas is hidden and held at the clip's size, and nothing is
+// drawn for the screen. When it ends the field, the renderer and the canvas
+// are given back exactly as the result card had them.
+
+/** The game's canvas element, for the class that hides it during a take.
+ *  Looked up rather than kept: under the suite's stub the renderer's
+ *  `domElement` is not the element on the page. */
+function gameCanvas() {
+    return typeof document !== 'undefined' ? document.getElementById('game-canvas') : null;
+}
+
+/**
+ * WHETHER AND HOW THIS BROWSER RECORDS A CLIP: the format MediaRecorder will
+ * make (MP4 first, recorder-1.0.0's order), the clip's size and rate for this
+ * device, or null when it cannot record at all. Asked when the sheet opens,
+ * so a browser that cannot is told at once and offered the picture.
+ */
+function howToRecord() {
+    if (typeof window === 'undefined' || !canRecord(window)) return null;
+    const mime = pickMime((t) => window.MediaRecorder.isTypeSupported(t));
+    if (!mime) return null;
+    const { w, h } = clipSize(isTouch());
+    return {
+        mime, w, h, fps: CFG.clip.fps,
+        bitrate: isTouch() ? CFG.clip.mobileBitrate : CFG.clip.bitrate,
+    };
+}
+
+/** How long the ending the replay plays at the whistle takes: the longer of
+ *  the tackle and the party, as the replay's own hold has it. */
+function endingLength() {
+    return Math.max(
+        cycle.tackle.tackler ? takedownLength() : 0,
+        cycle.party ? celebrationLength(cycle.party) : 0
+    );
+}
+
+/**
+ * BEGIN A TAKE into `stage`, a 2D canvas somebody is recording, from vantage
+ * point `quarter`. Resolves `{ cancelled, frames, seconds }` once the last
+ * frame has been drawn (or the take was cancelled), or null at once when
+ * there is nothing to take: not on the result card, no recording, a take
+ * already running, or a stage with no context.
+ *
+ * It is the replay's own opening (`startReplay`) with three differences: the
+ * playhead goes to the plan's start rather than the snap, the camera opens on
+ * where the ball is on that frame (D22), and the frames go to the stage.
+ */
+function beginTake(stage, { quarter = 0, onFrame = null, follow = 'ball' } = {}) {
+    if (cycle.phase !== 'result' || cycle.take || isEmpty() || !renderer || !scene) return Promise.resolve(null);
+    const g = stage && typeof stage.getContext === 'function' ? stage.getContext('2d') : null;
+    if (!g) return Promise.resolve(null);
+    const { w, h } = clipSize(isTouch());
+    if (stage.width !== w) stage.width = w;
+    if (stage.height !== h) stage.height = h;
+
+    // A moment the console left on the field goes first, and the field as the
+    // card had it is kept, to be put back when the take is over.
+    putBackLive();
+    const live = captureDrawn([...movingRoots(), getSpot()]);
+    hideSpot();
+    // The rings and letters on the grass are the game's HUD, not the picture
+    // (D23, as the photo has it).
+    const markers = getMarkerGroup();
+    if (markers) markers.visible = false;
+
+    // The endings are reset so they can play again at the whistle, and the
+    // stands sit down to be up again through the take and cheer again on the
+    // same frame, as a replay does.
+    resetTakedown();
+    resetCelebration();
+    cheerCrowd(null, state.elapsed);
+    cycle.cheered = false;
+    buzzCrowd(true, state.elapsed, { calm: reducedMotion });
+
+    const plan = clipPlan({ ticks: frameCount(), ending: endingLength() });
+    seek(plan.start);
+    focusMemo.at = -1;
+    /**
+     * THE VIEW'S CLOCKS, AS THE REPLAY SETS THEM AT THE SNAP. A replay opens
+     * with `beginSnapMotion`, which also forgets the throw the live play saw.
+     * A take that opens mid-play with the ball still in the quarterback's
+     * hands has not seen that throw either, however long ago the live play
+     * threw it, so it is forgotten the same way, and the snap is simply over.
+     * Left running, the arm sat in the follow-through from the clip's first
+     * frame while the ball rode up by his ear (QA, 2026-10-30). A take that
+     * opens with the ball already away keeps the throw where the live play
+     * left it. See clip.js `openingFor`.
+     */
+    const how = openingFor(frameAt(plan.start, teamOfPosition), plan.start);
+    if (how === 'snap') {
+        beginSnapMotion();
+    } else {
+        finishSnapMotion();
+        if (how === 'held') resetThrow();
+    }
+    const first = focusAt(plan.start);
+    const opening = simToWorld(first.x, first.y, 0);
+    const release = holdSize(renderer, w, h);
+    const canvas = gameCanvas();
+    if (canvas && canvas.classList) canvas.classList.add('is-recording');
+
+    cycle.phase = 'clip';
+    return new Promise((resolve) => {
+        cycle.take = {
+            plan, quarter, stage, g, w, h,
+            shoulder: newShoulder(),
+            aim: newAim(),
+            anchor: { x: opening.x, z: opening.z },
+            // Who the camera follows for this take, kept whatever the visit's
+            // choice becomes while it runs (the sheet re-records on a change).
+            follow: follow === 'avatar' ? 'avatar' : 'ball',
+            live, release, held: 0, elapsed: 0, frames: 0, finished: false, resolve,
+            // Told how many clip seconds are left after every frame, for the
+            // sheet's countdown.
+            onFrame: typeof onFrame === 'function' ? onFrame : null,
+        };
+    });
+}
+
+/** Advance the take by `delta` seconds: the replay branch of `stepCycle`,
+ *  with the hold measured against the plan rather than the card. */
+function stepTake(delta) {
+    const t = cycle.take;
+    if (!t) { cycle.phase = 'result'; return; }
+    t.elapsed += delta;
+    const done = advance(delta, CFG.simHz, CFG.camera.replay.speed);
+    const objs = frameAt(playheadFrame(), teamOfPosition);
+    syncFigures(objs, delta, { live: !done });
+    showBall(objs, delta);
+    if (!done) return;
+    if (cycle.tackle.tackler && takedownClock() < 0) {
+        startTakedown(objs, cycle.tackle.tackler, cycle.tackle.carrier);
+    }
+    if (cycle.party && celebrationClock() < 0) beginCelebration(cycle.party);
+    if (cycle.cheer && !cycle.cheered) {
+        cycle.cheered = true;
+        cheerCrowd(cycle.cheer, state.elapsed, { calm: reducedMotion });
+    }
+    t.held += delta;
+    // The frame that reaches the end is still drawn; the take ends after it.
+    if (t.held >= t.plan.ending + t.plan.hold) t.finished = true;
+}
+
+/** Draw this frame of the take into the stage, and end the take after the
+ *  last one. From `animate`, in place of the live render. */
+function drawTake(delta) {
+    const t = cycle.take;
+    if (!t) return;
+    const f = aimAt();
+    const focus = simToWorld(f.x, f.y, f.z || 0);
+    // Once the recording has run out, the drawn carrier (or the visitor, when
+    // followed) is the aim and the bodies set the lens, at the clip's own
+    // shape (`endingBodies`).
+    const ending = endingBodies();
+    const shot = clipShot(clipProgress(playheadFrame(), t.plan), ending ? ending.focus : focus, {
+        anchor: t.anchor, shoulder: t.shoulder, aim: t.aim, quarter: t.quarter, delta,
+        points: ending ? ending.points : null, aspect: t.w / t.h,
+    });
+    // The result is stamped over the final hold only (D19).
+    const stamp = CFG.clip.stamp && t.held >= t.plan.ending ? stampText(cycle.lastOutcome) : '';
+    takeFrame({
+        renderer, scene, canvas: renderer.domElement, shot,
+        g: t.g, w: t.w, h: t.h, wordmark: CFG.clip.wordmark, stamp,
+    });
+    t.frames += 1;
+    if (t.onFrame) t.onFrame(Math.max(0, t.plan.total - t.elapsed));
+    if (t.finished) endTake(false);
+}
+
+/**
+ * END THE TAKE, finished or cancelled, and give everything back: the field at
+ * its end the way a skipped replay leaves it (`landReplay`), then exactly as
+ * the card had it drawn, the renderer its size and ratio, the canvas its
+ * place on the screen with the live frame painted before it is seen again.
+ */
+function endTake(cancelled) {
+    const t = cycle.take;
+    if (!t) return;
+    cycle.take = null;
+    cycle.phase = 'result';
+    landReplay();
+    applyDrawn(t.live);
+    if (cycle.spotAt) showSpot(cycle.spotAt.x, cycle.spotAt.z);
+    const released = t.release();
+    const canvas = gameCanvas();
+    if (canvas && canvas.classList) canvas.classList.remove('is-recording');
+    if (renderer && scene && camera) renderer.render(scene, camera);
+    t.resolve({ cancelled: !!cancelled, frames: t.frames, seconds: t.plan.total, released });
+}
+
+/** Let a running take go: a closed sheet, a switched view, or anything that
+ *  wants the field. Says whether there was one. */
+function cancelTake() {
+    if (!cycle.take) return false;
+    endTake(true);
+    return true;
+}
+
+/**
+ * `xo.clip(view)` records the clip of the last play from vantage point `view`
+ * (1 to 4, 1 being the director's own) and saves it to the downloads folder,
+ * so the clip can be judged before the sheet that will offer it exists (Step
+ * 7). Resolves to a sentence for the console.
+ */
+export async function qaClip(view = 1) {
+    if (cycle.phase !== 'result') return 'On the result card only, after a play.';
+    if (isEmpty()) return 'No recording of this play to clip.';
+    const rec = howToRecord();
+    if (!rec) return "This browser can't record a video.";
+    const quarter = (((Math.round(Number(view) || 1) - 1) % 4) + 4) % 4;
+    const stage = document.createElement('canvas');
+    const made = await recordTake(stage, () => beginTake(stage, { quarter }), { ...rec, win: window });
+    if (!made || !made.blob || !made.blob.size) return 'The clip could not be made.';
+    if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return "This browser couldn't save the clip.";
+    const name = clipName(cycle.lastOutcome && cycle.lastOutcome.result, rec.w, rec.h, extensionOf(made.mime));
+    const url = URL.createObjectURL(made.blob);
+    saveFile(url, name);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return `Saved ${name} (${Math.round(made.blob.size / 1024)} KB, ${made.seconds.toFixed(1)} s, `
+        + `${made.frames} frames, view ${quarter + 1} of 4).`;
+}
+
+/**
+ * `xo.lead(false)` throws the 2D game's way for the plays that follow, and
+ * `xo.lead(true)` the solve's (lead.js, Steve's QA 2026-10-30), so the two can
+ * be compared by eye on the same route. `xo.lead()` says which is in force.
+ * The one play object is reused for the whole visit, so this sticks until the
+ * page is reloaded.
+ */
+export function qaLead(on) {
+    if (!cycle.play) return 'Not yet: the field is still being built.';
+    if (on === undefined) {
+        return (cycle.play.lead || CFG.lead).intercept
+            ? 'Leading the receiver: the ball lands where he will be.'
+            : "Throwing the 2D game's way.";
+    }
+    cycle.play.lead = { ...CFG.lead, intercept: !!on };
+    return qaLead();
+}
+
+/**
+ * `xo.playAs('wr2')` puts the visitor's avatar at receiver B from the console
+ * (localhost or ?qa), before the playbook row exists, through the same path
+ * the row will take. `xo.playAs()` reads the slot in effect.
+ */
+export function qaPlayAs(slot) {
+    if (slot === undefined) return state.playAs;
+    if (!isSlot(slot)) return `No player "${slot}". One of: ${SLOTS.map((s) => s.id).join(', ')}.`;
+    if (!playAs(slot)) return `Not now: players can be changed before the snap, not during "${cycle.phase}".`;
+    return state.playAs;
+}
 
 /** The welcome card's line about who takes the snap: with a saved avatar,
  *  its portrait and "Change your avatar"; without one, a quiet pointer to
@@ -2621,15 +3600,47 @@ function showPlaying() {
     state.avatarSaved = saved;
     img.hidden = !saved;
     img.alt = '';
+    // The player they chose, or the quarterback they always were.
     text.textContent = saved
-        ? 'You take the snap at quarterback as your avatar.'
-        : 'Take the snap at quarterback as yourself.';
+        ? playingLine(state.playAs)
+        : 'Take the field as yourself, at quarterback or any position you like.';
     link.textContent = saved ? 'Change your avatar' : 'Make your avatar';
 }
 
 export function getState() {
     return { ...state };
 }
+
+/**
+ * For tests/xo-init.test.mjs: the play on the field and its photo moments
+ * (specs/xo-photos-plan, Step 3). The suite sets a catch, a pick, a tackle or
+ * a fifty on the play directly, because the random roll of a real play cannot
+ * be relied on to produce any one of them.
+ */
+export const __test__ = {
+    play: () => cycle.play,
+    moments: () => cycle.moments.slice(),
+    pending: () => cycle.pendingMoments.slice(),
+    /** The clip's take (specs/xo-photos-plan, Step 6), before the sheet
+     *  that will drive it exists. */
+    take: (stage, options) => beginTake(stage, options),
+    cancelTake: () => cancelTake(),
+    taking: () => (cycle.take ? { ...cycle.take, stage: undefined, g: undefined, live: undefined, release: undefined, resolve: undefined } : null),
+    phase: () => cycle.phase,
+    /** The milestone level the stadium is awake to, which a shown moment must
+     *  never touch (the `shown` collision of 2026-10-29). */
+    level: () => cycle.shown,
+    /** What the camera is told, and the ending's bodies (QA, 2026-10-30). */
+    cameraState: () => cameraState(),
+    ending: () => endingBodies(),
+    /** Who the camera follows this visit, and what it is aimed at this frame. */
+    follow: () => state.follow,
+    aim: () => aimAt(),
+    /** Who the Jump button would send up, and the height past which a ball is
+     *  nobody's (Steve's QA, 2026-10-30). */
+    buttonChoice: () => buttonChoice(),
+    jumpCeiling: () => JUMP_CEILING,
+};
 
 /** `beginMilestone` is exposed for the suite too: reaching 100 by actually
  *  playing needs two fifties in a row, which no test should depend on. */

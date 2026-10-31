@@ -51,10 +51,15 @@ beforeEach(() => {
     C.resetColors();
 });
 
+/** A team's kit with nothing chosen: the jersey, and everything else decided for it. */
+const OWN_TEAM = (jersey) => ({
+    jersey, helmet: null, mark: null, pants: null, shoes: null, helmetStripe: false, pantsStripe: false,
+});
+
 describe('the choice', () => {
     test('starts as the game\'s own colors', () => {
         expect(C.teamColors()).toEqual({
-            teams: { 0: { jersey: '#ff992c', helmet: null }, 1: { jersey: '#9bcfff', helmet: null } },
+            teams: { 0: OWN_TEAM('#ff992c'), 1: OWN_TEAM('#9bcfff') },
             field: '#1f5c2e',
         });
         expect(C.isDefault()).toBe(true);
@@ -87,15 +92,132 @@ describe('the choice', () => {
     });
 });
 
+/**
+ * THE REST OF THE UNIFORM (Steve, 2026-10-30): the letter, the pants, the shoes
+ * and the two stripes. Null always means "decided for you", as the helmet's
+ * null has always meant "the jersey".
+ */
+describe('the rest of the uniform', () => {
+    test('the letter, the pants and the shoes are decided until chosen, and go back on null', () => {
+        expect(C.markOf(0)).toBe('#ffffff');
+        expect(C.pantsOf(0)).toBe(C.OWN.pants[0]);
+        expect(C.pantsOf(1)).toBe(C.OWN.pants[1]);
+        expect(C.shoesOf(1)).toBe(C.OWN.shoes);
+        // The decided letter follows the jersey it is on.
+        C.setColors({ teams: { 0: { jersey: '#ffff00' } } });
+        expect(C.markOf(0)).toBe(CFG.colors.darkMark);
+
+        C.setColors({ teams: { 0: { mark: '#00ff00', pants: '#ffffff', shoes: '#ff0000' } } });
+        expect(C.markOf(0)).toBe('#00ff00');
+        expect(C.pantsOf(0)).toBe('#ffffff');
+        expect(C.shoesOf(0)).toBe('#ff0000');
+        // The other team is untouched, and garbage changes nothing.
+        expect(C.pantsOf(1)).toBe(C.OWN.pants[1]);
+        C.setColors({ teams: { 0: { mark: 'green', pants: 7, shoes: [] } } });
+        expect(C.kitOf(0)).toMatchObject({ mark: '#00ff00', pants: '#ffffff', shoes: '#ff0000' });
+
+        C.setColors({ teams: { 0: { mark: null, pants: null, shoes: null } } });
+        expect(C.markOf(0)).toBe(CFG.colors.darkMark);
+        expect(C.pantsOf(0)).toBe(C.OWN.pants[0]);
+        expect(C.shoesOf(0)).toBe(C.OWN.shoes);
+    });
+
+    test('a stripe is off until turned on, gets a color decided for it, keeps one it is given, and forgets it when turned off', () => {
+        expect(C.helmetStripeOf(0)).toBeNull();
+        expect(C.pantsStripeOf(0)).toBeNull();
+        // On, in the decided color: white over an orange helmet (the helmet IS
+        // the jersey, so the jersey cannot be the stripe), the orange jersey
+        // down dark brown pants.
+        C.setColors({ teams: { 0: { helmetStripe: null, pantsStripe: true } } });
+        expect(C.helmetStripeOf(0)).toBe('#ffffff');
+        expect(C.pantsStripeOf(0)).toBe('#ff992c');
+        expect(C.teamColors().teams[0]).toMatchObject({ helmetStripe: null, pantsStripe: null });
+        // ...and that color follows the jersey while nobody has picked one.
+        C.setColors({ teams: { 0: { jersey: '#ffb612' } } });
+        expect(C.pantsStripeOf(0)).toBe('#ffb612');
+
+        C.setColors({ teams: { 0: { pantsStripe: '#123456' } } });
+        expect(C.pantsStripeOf(0)).toBe('#123456');
+        C.setColors({ teams: { 0: { jersey: '#241773', pantsStripe: 'purple' } } });
+        expect(C.pantsStripeOf(0)).toBe('#123456');
+
+        C.setColors({ teams: { 0: { pantsStripe: false } } });
+        expect(C.pantsStripeOf(0)).toBeNull();
+        expect(C.teamColors().teams[0].pantsStripe).toBe(false);
+        // On again is decided again: a dark purple jersey does not stand
+        // apart from dark brown pants, so the stripe is white, not purple.
+        C.setColors({ teams: { 0: { pantsStripe: null } } });
+        expect(C.pantsStripeOf(0)).toBe('#ffffff');
+        // The other team never had one.
+        expect(C.helmetStripeOf(1)).toBeNull();
+    });
+
+    test('the decided stripe is the jersey where it stands apart from what it is on, else the ink that reads', () => {
+        expect(C.accentFor('#3a2410', '#ff992c')).toBe('#ff992c');
+        expect(C.accentFor('#ff992c', '#ff992c')).toBe('#ffffff');
+        expect(C.accentFor('#ffffff', '#f8f8f8')).toBe(CFG.colors.darkMark);
+        // Navy on black: too close to tell apart on the field, so white.
+        expect(C.accentFor('#101820', '#0b162a')).toBe('#ffffff');
+        expect(C.accentFor('#0b162a', null)).toBe('#ffffff');
+        // A purple jersey over a gold helmet: the jersey.
+        C.setColors({ teams: { 0: { jersey: '#241773', helmet: '#ffb612', helmetStripe: null } } });
+        expect(C.helmetStripeOf(0)).toBe('#241773');
+    });
+
+    test('the whole kit comes decided', () => {
+        expect(C.kitOf(1)).toEqual({
+            jersey: '#9bcfff', helmet: '#9bcfff', mark: '#ffffff', pants: C.OWN.pants[1], shoes: C.OWN.shoes,
+            helmetStripe: null, pantsStripe: null,
+        });
+        C.setColors({ teams: { 1: { helmet: '#000000', helmetStripe: true, pantsStripe: '#ffffff', shoes: '#ffffff' } } });
+        expect(C.kitOf(1)).toEqual({
+            jersey: '#9bcfff', helmet: '#000000', mark: '#ffffff', pants: C.OWN.pants[1], shoes: '#ffffff',
+            helmetStripe: '#9bcfff', pantsStripe: '#ffffff',
+        });
+    });
+
+    test('every part counts toward whether anything was chosen', () => {
+        for (const change of [
+            { mark: '#000000' }, { pants: '#ffffff' }, { shoes: '#ffffff' }, { helmetStripe: null }, { pantsStripe: '#ffffff' },
+        ]) {
+            C.resetColors();
+            C.setColors({ teams: { 1: change } });
+            expect({ change, isDefault: C.isDefault() }).toEqual({ change, isDefault: false });
+        }
+        C.setColors({ teams: { 1: { mark: null, pants: null, shoes: null, helmetStripe: false, pantsStripe: false } } });
+        expect(C.isDefault()).toBe(true);
+    });
+});
+
 describe('the saved choice', () => {
     test('is kept, and read back', () => {
-        C.setColors({ teams: { 0: { jersey: '#4b2e83', helmet: '#000000' }, 1: { jersey: '#ffb612' } } });
+        C.setColors({
+            teams: {
+                0: { jersey: '#4b2e83', helmet: '#000000', mark: '#ffb612', helmetStripe: null },
+                1: { jersey: '#ffb612', pants: '#ffffff', shoes: '#4b2e83', pantsStripe: '#000000' },
+            },
+        });
         expect(C.saveColors()).toBe(true);
         C.resetColors();
         C.loadColors();
         expect(C.jerseyOf(0)).toBe('#4b2e83');
         expect(C.helmetOf(0)).toBe('#000000');
         expect(C.jerseyOf(1)).toBe('#ffb612');
+        // The helmet's stripe was turned on with no color: the purple jersey
+        // over a black helmet.
+        expect(C.kitOf(0)).toMatchObject({ mark: '#ffb612', helmetStripe: '#4b2e83' });
+        expect(C.kitOf(1)).toMatchObject({ pants: '#ffffff', shoes: '#4b2e83', pantsStripe: '#000000' });
+        expect(C.helmetStripeOf(1)).toBeNull();
+    });
+
+    test('a file saved before the uniform had stripes still loads, with those decided', () => {
+        localStorage.setItem(KEY, JSON.stringify({
+            v: 1, teams: { 0: { jersey: '#4b2e83', helmet: null }, 1: { jersey: '#ffb612', helmet: '#000000' } }, field: '#1f5c2e',
+        }));
+        C.loadColors();
+        expect(C.jerseyOf(0)).toBe('#4b2e83');
+        expect(C.helmetOf(1)).toBe('#000000');
+        expect(C.teamColors().teams[0]).toMatchObject({ mark: null, pants: null, shoes: null, helmetStripe: false, pantsStripe: false });
     });
 
     test('is removed rather than written when it is the game\'s own again', () => {
@@ -109,7 +231,8 @@ describe('the saved choice', () => {
 
     test('a broken, foreign or future file is the game\'s own colors', () => {
         for (const raw of ['{not json', JSON.stringify({ v: 2, teams: { 0: { jersey: '#000000' } } }),
-            JSON.stringify({ v: 1, teams: { 0: { jersey: 'red', helmet: 7 } }, field: null })]) {
+            JSON.stringify({ v: 1, teams: { 0: { jersey: 'red', helmet: 7 } }, field: null }),
+            JSON.stringify({ v: 1, teams: { 1: { mark: 'red', pants: 7, shoes: [], helmetStripe: 'x', pantsStripe: 'auto' } } })]) {
             localStorage.setItem(KEY, raw);
             C.loadColors();
             expect(C.isDefault()).toBe(true);
