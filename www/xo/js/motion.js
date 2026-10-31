@@ -1026,6 +1026,45 @@ export class MotionClass {
     return free > 0 ? (current * free) + (clamped * (1 - free)) : clamped;
   }
 
+  /**
+   * HOW MUCH OF THE SIDE COLLISION'S DOWNFIELD KNOCK A DEFENDER TAKES. 1 IS
+   * THE PORT.
+   *
+   * The two sideline responders below finish by knocking the man they are
+   * resolving DOWNFIELD, `decelUpfield` then `accelDownfield`, whoever he is
+   * and whichever branch he came through. For a blocker that is forward, which
+   * is the 2D game's picture of a man hit from the side being carried along
+   * with the play. For a DEFENDER it is backwards, toward his own goal, and in
+   * the same-team branch it is "away from the team-mate", which for a defender
+   * stacked behind his own man is backwards too. Traced (QA 2026-10-30, the
+   * defender who backs up and never tackles): a corner on the touchline behind
+   * his own safety was pushed downfield at a steady 0.95 units a frame for
+   * 1.35 s while his route pulled him the other way, one knock and one accel
+   * cancelling. About a quarter of every frame a defender spent retreating in
+   * front of the carrier came from here; the rest was the chase radius
+   * (routes.js `chaseScale`).
+   *
+   * At 0 a defender keeps his drive and takes only the damping, which is what
+   * the responders do to him on his own axis anyway. Measured over 2,964
+   * matched plays, it moved nothing about the balance (points a play 23.8 to
+   * 24.0) and removed the residual retreats the radius left. Injected like
+   * every other setting here; a caller that says nothing gets the port.
+   */
+  sideKnockDefense() {
+    const k = this.settings && this.settings.sideKnockDefense;
+    return typeof k === 'number' && k >= 0 ? (k > 1 ? 1 : k) : 1;
+  }
+
+  /** The knock itself: the port's two calls at full strength for the offense,
+   *  and `sideKnockDefense` of them for the defense. */
+  // eslint-disable-next-line
+  knockDownfield(obj = {}) {
+    const k = obj.settings && obj.settings.team === 1 ? this.sideKnockDefense() : 1;
+    if (k <= 0) return;
+    this.decelUpfield(obj, k);
+    this.accelDownfield(obj, k);
+  }
+
   // eslint-disable-next-line
   checkCollisionsToRightSideline(obj = {}, object = {}, set1 = {}, set2 = {}) {
     if ( (set1.x1 >= set2.x1 && set1.x1 <= set2.x2) || (set1.x2 >= set2.x1 && set1.x2 <= set2.x2) ) {
@@ -1044,8 +1083,7 @@ export class MotionClass {
           } else {
             obj.state.ySpeed = (obj.state.ySpeed * (0.2 + 0.8 * this.shedFor(obj, set1.pocket)));
           }
-          this.decelUpfield(obj);
-          this.accelDownfield(obj);
+          this.knockDownfield(obj);
         } else if ( this.mateJostles(set1.onBall) ) {
           // Same team, AND THE PLAY IS NOT IN HIS HANDS. See `mateGive`: at 0
           // this is the 2D game's own jostle, a fifth of his speed for a
@@ -1057,8 +1095,7 @@ export class MotionClass {
             this.decelDownfield(obj);
             this.accelUpfield(obj);
           } else {
-            this.decelUpfield(obj);
-            this.accelDownfield(obj);
+            this.knockDownfield(obj);
           }
         }
       }
@@ -1171,8 +1208,7 @@ export class MotionClass {
           } else {
             obj.state.ySpeed = (obj.state.ySpeed * (0.2 + 0.8 * this.shedFor(obj, set1.pocket)));
           }
-          this.decelUpfield(obj);
-          this.accelDownfield(obj);
+          this.knockDownfield(obj);
         } else if ( this.mateJostles(set1.onBall) ) {
           // Same team, AND THE PLAY IS NOT IN HIS HANDS. See `mateGive`: at 0
           // this is the 2D game's own jostle, a fifth of his speed for a
@@ -1184,8 +1220,7 @@ export class MotionClass {
             this.decelDownfield(obj);
             this.accelUpfield(obj);
           } else {
-            this.decelUpfield(obj);
-            this.accelDownfield(obj);
+            this.knockDownfield(obj);
           }
         }
       }

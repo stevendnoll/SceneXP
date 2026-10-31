@@ -357,6 +357,287 @@ describe('the physics knows how big the players are drawn', () => {
     });
 });
 
+/**
+ * THE RETREAT IN FRONT OF THE CARRIER, MEASURED THE WAY IT WAS FOUND, over the
+ * book in plain Node (tests/helpers/outside.mjs). A fault frame is a defender 0
+ * to 5 m ahead of the carrier and within 2 m across, moving away in the
+ * carrier's direction while the carrier runs at him and no blocker's box
+ * touches him. The port is run in the same job as the floor, by telling the
+ * routes and the physics the 2D game's own numbers after the play is built,
+ * so the suite measures both and cannot be passed by a change that moves
+ * neither. Keepers and a throw to the first receiver, one seed, every second
+ * playbook defense: about 330 plays a side in a few seconds.
+ */
+async function retreatJob({ port }, load) {
+    (await load('tests/helpers/three-stub.mjs')).installThree();
+    const { XO_CONFIG: CFG, UNITS_TO_METRES, formationSettings } = await load('www/xo/js/config.js');
+    const P = await load('www/xo/js/play.js');
+    const HZ = CFG.simHz;
+    const FS = formationSettings();
+    const K = FS.collisionScale || 1;
+    const PAD = FS.collisionPad || 0;
+    const L = FS.linemanScale || 1;
+    const AHEAD = 5 / UNITS_TO_METRES;
+    const ACROSS = 2 / UNITS_TO_METRES;
+    const LONG = Math.round(HZ * 0.75);
+    const isLine = (o) => /^x[1-6]$/.test(o.settings.position);
+    const halfX = (o) => (isLine(o) ? 10 * L : 5) * K + PAD;
+    const halfY = (o) => (isLine(o) ? 12 * L : 6) * K + PAD;
+    const overlap = (a, b) => Math.abs(a.coords.x - b.coords.x) <= halfX(a) + halfX(b)
+        && Math.abs(a.coords.y - b.coords.y) <= halfY(a) + halfY(b);
+    let seed = 20261030;
+    Math.random = () => {
+        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+    const defenses = ['cover2', 'cover5', 'cover9', 'cover12', 'cover14', 'cover16',
+        'zone5', 'zone7', 'zone9', 'zone11'];
+    let loose = 0;
+    let long = 0;
+    let points = 0;
+    let plays = 0;
+    for (const slug of P.OFFENSIVE_PLAYS) {
+        for (const defense of defenses) {
+            for (const mode of ['run', 'throw']) {
+                const play = P.createPlay();
+                if (port) {
+                    // The 2D game's own radius and knock, told after the fact.
+                    play.routes.settings = { ...play.routes.settings, chaseScale: 1 };
+                    play.motion.settings = { ...play.motion.settings, sideKnockDefense: 1 };
+                }
+                P.lineUp(play, slug, defense);
+                P.snap(play);
+                const st = play.playState.state;
+                const runs = new Map();
+                let wasLoose = false;
+                let longest = 0;
+                let decided = false;
+                for (let f = 0; f < HZ * 28 && !P.isDone(play); f += 1) {
+                    if (!decided && f >= Math.round(HZ * (mode === 'run' ? 0.8 : 1.2))) {
+                        decided = true;
+                        if (mode === 'run') P.keepAndRun(play);
+                        else P.throwTo(play, P.eligibleReceivers(play)[0]);
+                    }
+                    P.tick(play);
+                    const carrier = P.ballCarrier(play);
+                    const isLoose = play.game.runForYourLife || (st.ball && st.ball.caught);
+                    if (!carrier || !isLoose || carrier.settings.team !== 0) continue;
+                    wasLoose = true;
+                    const moving = carrier.state.xSpeed > 0.4;
+                    const offense = play.game.objects.filter((o) => o.settings.team === 0
+                        && !o.settings.benched && o !== carrier && o.settings.position !== 'ball');
+                    for (const d of play.game.objects) {
+                        if (d.settings.team !== 1 || d.settings.benched) continue;
+                        const pos = d.settings.position;
+                        const dx = d.coords.x - carrier.coords.x;
+                        const dy = d.coords.y - carrier.coords.y;
+                        const fault = moving && dx > 0 && dx <= AHEAD && Math.abs(dy) <= ACROSS
+                            && d.state.xSpeed > 0.15 && !offense.some((o) => overlap(o, d));
+                        const r = runs.get(pos);
+                        if (!fault) {
+                            if (r) { r.gap += 1; if (r.gap > 8) runs.delete(pos); }
+                            continue;
+                        }
+                        const run = r || { len: 0, gap: 0 };
+                        run.len += 1; run.gap = 0;
+                        runs.set(pos, run);
+                        if (run.len > longest) longest = run.len;
+                    }
+                }
+                plays += 1;
+                points += P.outcome(play).points || 0;
+                if (wasLoose) loose += 1;
+                if (longest >= LONG) long += 1;
+            }
+        }
+    }
+    return { plays, loose, long, points: points / plays };
+}
+
+/**
+ * THE DEFENSE COMES UP TO MAKE THE TACKLE (Steve's QA, 2026-10-30).
+ *
+ * "A defender right in front of the ball carrier that doesn't tackle them, he
+ * just keeps backing up until blockers show up." Two ported rules, both
+ * measured before anything was changed (specs/xo-photos-plan.md, "Two
+ * lingering nits"):
+ *
+ *   - routes.js `getCoverCoords` runs a defender AT the carrier only inside
+ *     0.3 of an interval (2.1 m, half a figure's height at this scale) and
+ *     otherwise at the midpoint between the carrier and the fourth line, so a
+ *     man 2.5 m in front sprinted away from the carrier at the carrier's own
+ *     speed. 241 of 259 retreats of 0.75 s or more.
+ *   - motion.js's two sideline responders knock the man they resolve
+ *     DOWNFIELD, which for a defender is backwards. The other 18.
+ *
+ * Both corrections are injected like `collisionScale`: told nothing, the port
+ * is exactly what runs, which is what the second half of each case pins.
+ */
+describe('the defense comes up to make the tackle', () => {
+    const LI = SIM.lineInterval;
+
+    test('the chase radius is scaled the way the figures are, and the knock is off for the defense', () => {
+        const s = formationSettings();
+        expect(s.chaseScale).toBe(CFG.figureScale);
+        expect(s.sideKnockDefense).toBe(0);
+        // Told nothing, or nonsense, both are the port.
+        const play = createPlayForDifficulty();
+        for (const chaseScale of [undefined, 0, -1, 'no']) {
+            play.routes.settings = { ...play.routes.settings, chaseScale };
+            expect(play.routes.chaseScale()).toBe(1);
+        }
+        for (const sideKnockDefense of [undefined, -1, 'no']) {
+            expect(new MotionClass({ sideKnockDefense }, {}, {}).sideKnockDefense()).toBe(1);
+        }
+        expect(new MotionClass({ sideKnockDefense: 4 }, {}, {}).sideKnockDefense()).toBe(1);
+        expect(new MotionClass({ sideKnockDefense: 0 }, {}, {}).sideKnockDefense()).toBe(0);
+    });
+
+    /** A carrier running downfield at x 300 with a defender `ahead` metres in
+     *  front of him, on a real line-up so the routes have their state. */
+    const inFront = (ahead) => {
+        const play = createPlayForDifficulty();
+        lineUp(play, 'pass2', 'cover2');
+        const carrier = play.game.objects.find((o) => o.settings.position === 'wr1');
+        const defender = play.game.objects.find((o) => o.settings.position === 'db1');
+        carrier.coords.x = 300; carrier.coords.y = 300;
+        carrier.state.xSpeed = 2; carrier.state.ySpeed = 0; carrier.state.hasBall = true;
+        defender.coords.x = 300 + ahead / UNITS_TO_METRES; defender.coords.y = 300;
+        defender.state.xSpeed = 0; defender.state.ySpeed = 0;
+        return { play, carrier, defender };
+    };
+    // db1's own deep limit on a cover route, see routes.js `runDbRoute`.
+    const minX = LI * 1.4;
+    const cover = (play, defender, carrier) => play.routes.getCoverCoords(defender, carrier, LI, minX, 0, 600);
+
+    test('a defender two and a half metres in front runs at the carrier here, and away from him in the port', () => {
+        const { play, carrier, defender } = inFront(2.5);
+        const next = carrier.coords.x + carrier.state.xSpeed;
+        // At the carrier: his target is the carrier's next step, behind himself.
+        const now = cover(play, defender, carrier);
+        expect(now.x).toBeLessThan(defender.coords.x);
+        expect(now.x).toBeCloseTo(next, 6);
+        expect(now.y).toBeCloseTo(carrier.coords.y, 6);
+        // The port's radius, told nothing or told 1: the midpoint between the
+        // carrier and the fourth line, AHEAD of him, so he runs away.
+        for (const chaseScale of [undefined, 1]) {
+            play.routes.settings = { ...play.routes.settings, chaseScale };
+            const port = cover(play, defender, carrier);
+            expect(port.x).toBeGreaterThan(defender.coords.x);
+            expect(port.x).toBeCloseTo((next + LI * 4) / 2, 6);
+        }
+    });
+
+    test('...and the contain still holds further out, so a defender well ahead still gives ground', () => {
+        const { play, carrier, defender } = inFront(6);
+        const far = cover(play, defender, carrier);
+        expect(far.x).toBeGreaterThan(defender.coords.x);
+        // The radius is the port's times the scale, no more: just inside it he
+        // turns, just outside it he does not.
+        const radius = LI * 0.3 * CFG.figureScale * UNITS_TO_METRES;
+        const inside = inFront(radius - 0.1);
+        expect(cover(inside.play, inside.defender, inside.carrier).x).toBeLessThan(inside.defender.coords.x);
+        const outside = inFront(radius + 0.1);
+        expect(cover(outside.play, outside.defender, outside.carrier).x).toBeGreaterThan(outside.defender.coords.x);
+    });
+
+    /** A MotionClass with these settings, two men whose boxes overlap in both
+     *  axes, and the pair `checkCollisions` would build for them. The ball is
+     *  caught, so this is a live carry and not pass protection. */
+    const motionWith = (settings) => new MotionClass(
+        { style: { gutters: { x: SIM.gutter, y: SIM.gutter } }, ...settings },
+        { state: { ball: { caught: true, position: 'wr1', team: 0 },
+            measurements: { height: 600, width: 1000, lineInterval: LI } } },
+        { collide() {}, catch() {}, incomplete() {} }
+    );
+    const man = (team, positionGroup, position, xSpeed, ySpeed, x = 0) => ({
+        coords: { x, y: 0 },
+        physics: { maxSpeed: 2.35, accel: 0.4, decel: 1.5 },
+        settings: { position, positionGroup, team, route: { type: 'cover' } },
+        state: { xSpeed, ySpeed, hasBall: false, tackle: 0 },
+    });
+    const sets = (a, b) => {
+        const set = (o) => ({
+            hasBall: false, position: o.settings.position, team: o.settings.team,
+            pocket: false, onBall: false,
+            x: o.coords.x, x1: o.coords.x - 10, x2: o.coords.x + 10, xSpeed: o.state.xSpeed,
+            y: o.coords.y, y1: -10, y2: 10, ySpeed: o.state.ySpeed,
+        });
+        return [set(a), set(b)];
+    };
+
+    test('a defender hit from the side keeps his drive at the carrier, and took the knock in the port', () => {
+        for (const [settings, keeps] of [[{ sideKnockDefense: 0 }, true], [{}, false], [{ sideKnockDefense: 1 }, false]]) {
+            for (const side of ['checkCollisionsToRightSideline', 'checkCollisionsToLeftSideline']) {
+                const motion = motionWith(settings);
+                const def = man(1, 'db', 'db1', -2.0, 1.0);
+                const blocker = man(0, 'wr', 'wr2', 1.0, 0);
+                const [set1, set2] = sets(def, blocker);
+                motion[side](def, blocker, set1, set2);
+                // His own axis is damped either way, as the port damps it.
+                expect(def.state.ySpeed).toBeCloseTo(1.0 * 0.2, 6);
+                // The port: `decel` 1.5 against his 2.0 and one `accel` the wrong
+                // way, so a man driving upfield is all but stopped in one frame.
+                if (keeps) expect(def.state.xSpeed).toBe(-2.0);
+                else expect(def.state.xSpeed).toBeCloseTo(-2.0 + 1.5 + 0.4, 6);
+            }
+        }
+    });
+
+    test('a blocker is still knocked downfield, exactly as the port knocks him', () => {
+        for (const settings of [{ sideKnockDefense: 0 }, {}]) {
+            for (const side of ['checkCollisionsToRightSideline', 'checkCollisionsToLeftSideline']) {
+                const motion = motionWith(settings);
+                const blocker = man(0, 'wr', 'wr2', 1.0, 1.0);
+                const def = man(1, 'db', 'db1', 0, 0);
+                const [set1, set2] = sets(blocker, def);
+                motion[side](blocker, def, set1, set2);
+                expect(blocker.state.xSpeed).toBeCloseTo(1.4, 6);
+            }
+        }
+    });
+
+    test('a defender stacked behind his own man is no longer shoved toward his own goal, and one in front is still pushed on', () => {
+        for (const [settings, keeps] of [[{ sideKnockDefense: 0 }, true], [{}, false]]) {
+            // `obj` stands downfield of his team-mate: the port's same-team
+            // branch pushes him further downfield, which is backwards for him.
+            const motion = motionWith(settings);
+            const back = man(1, 'db', 'db4', -1.0, 0.5, 5);
+            const mate = man(1, 's', 's1', 0, 0, 0);
+            const [set1, set2] = sets(back, mate);
+            motion.checkCollisionsToRightSideline(back, mate, set1, set2);
+            // Different position groups: four fifths of his speed across, as the port.
+            expect(back.state.ySpeed).toBeCloseTo(0.5 * 0.8, 6);
+            if (keeps) expect(back.state.xSpeed).toBe(-1.0);
+            else expect(back.state.xSpeed).toBeCloseTo(0.4, 6);
+            // ...and a defender in FRONT of his team-mate is pushed upfield,
+            // which is forward for him, in both.
+            const front = man(1, 'db', 'db4', -1.0, 0.5, -5);
+            const [s1, s2] = sets(front, mate);
+            motion.checkCollisionsToRightSideline(front, mate, s1, s2);
+            expect(front.state.xSpeed).toBeLessThan(-1.0);
+        }
+    });
+
+    test('over the book, a defender in front of the carrier no longer backs away for long', async () => {
+        const [port, now] = await Promise.all([outside(retreatJob, { port: true }), outside(retreatJob, { port: false })]);
+        // The floor is measured, not remembered: one loose play in ten had a
+        // retreat of 0.75 s or more in the port (10.4% over 2,501), and if that
+        // ever stops being true the fix below is being measured against nothing.
+        expect(port.loose).toBeGreaterThan(150);
+        expect(port.long / port.loose).toBeGreaterThan(0.05);
+        expect(now.loose).toBeGreaterThan(150);
+        expect(now.long / now.loose).toBeLessThan(0.01);
+        // AND THE TRADE IS THE ONE THAT WAS TAKEN: the man in front engages
+        // sooner, so the game scores less, by a seventh or so (23.8 to 20.4 a
+        // play), not by half. A radius that stopped every run would fail here.
+        expect(now.points).toBeLessThan(port.points);
+        expect(now.points).toBeGreaterThan(port.points * 0.7);
+    }, OUTSIDE_TIMEOUT);
+});
+
 describe('bodies stay out of each other', () => {
     /**
      * THE INVARIANT THAT KEEPS PLAYS ENDING. A tackle fires when a carrier's

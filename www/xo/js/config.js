@@ -462,6 +462,65 @@ const ESCAPE_SHOVE = 1;
  */
 const MATE_GIVE = 1;
 
+/**
+ * HOW FAR FROM THE MAN WITH THE BALL A DEFENDER TURNS TO RUN AT HIM, as a
+ * multiple of the port's own radius. 1 IS THE PORT.
+ *
+ * THE SAME OVERSIGHT AS `collisionScale`, IN THE ROUTES RATHER THAN THE BOXES.
+ * routes.js `getCoverCoords` is the 2D game's contain: inside 0.3 of an
+ * interval a defender runs straight at the carrier, and outside it he runs to
+ * the midpoint between the carrier and the fourth line, staying between the
+ * ball and his goal. 0.3 of an interval is 60 units, 2.1 m, measured against a
+ * letterform twelve units tall. At `figureScale` a man is 4 m tall, so a
+ * defender two and a half metres in front of the carrier, touching distance on
+ * screen, was outside the radius and sprinting AWAY from him toward a midpoint
+ * that recedes at half the carrier's speed. QA, 2026-10-30: "a defender right
+ * in front of the ball carrier that doesn't tackle them, he just keeps backing
+ * up until blockers show up".
+ *
+ * MEASURED over 2,964 plays on matched seeds, every play in the book against
+ * every playbook defense, as a keeper and as a throw to each receiver. A
+ * retreat is a defender 0 to 5 m ahead of the carrier and within 2 m across,
+ * moving away while the carrier runs at him and no blocker touches him:
+ *
+ *     chase radius        plays with a retreat >= 0.75 s   pts/play   fifties
+ *        0.3 (the port)          259 of 2,501 (10.4%)        23.8      27.9%
+ *        0.3 x 2.2                14 of 2,501  (0.6%)        20.4      20.3%
+ *        0.3 x 3.3                 6 of 2,501  (0.2%)        20.2      21.6%
+ *
+ * IT IS A BALANCE CHANGE AS WELL AS A PICTURE, taken deliberately (Steve,
+ * 2026-10-30, "Sounds good. Please proceed."): the man in front engages about
+ * 2.5 m sooner, so points a play go 23.8 to 20.4 and fifties 28% to 21%, which
+ * is about where the game sat when `tackle.hold` was chosen on 2026-09-22,
+ * before the lead solve eased it. "Whistled before he moved 0.5 m" stays at
+ * 8.5%, so the catch does not become the whistle again. If QA finds the game
+ * harder, `tackle.hold` and `difficultySwing` are the levers, not this.
+ *
+ * A NUMBER OF ITS OWN rather than `collisionScale` reused, because one number
+ * doing two jobs is how the boxes and this radius came apart.
+ */
+const CHASE_SCALE = FIGURE_SCALE;
+
+/**
+ * ...AND HOW MUCH OF A SIDE COLLISION'S DOWNFIELD KNOCK A DEFENDER TAKES. 1 IS
+ * THE PORT, 0 IS NONE.
+ *
+ * The two sideline responders in motion.js finish by knocking the man they
+ * resolve downfield, whoever he is: `decelUpfield` then `accelDownfield`. For
+ * a blocker that is forward. For a DEFENDER it is backwards, toward his own
+ * goal, and in the same-team branch it is "away from the team-mate", which for
+ * a corner stacked behind his own safety on the touchline is backwards too.
+ * Traced, that corner was pushed downfield at a steady 0.95 units a frame for
+ * 1.35 s while his route pulled him the other way. About a quarter of every
+ * frame a defender spent retreating in front of the carrier came from here.
+ *
+ * At 0 he keeps his drive and takes only the damping. Measured on the same
+ * 2,964 plays it moves nothing about the balance (points a play 23.8 to 24.0
+ * alone) and, with the chase radius above, takes the long retreats from 14
+ * plays to 1.
+ */
+const SIDE_KNOCK_DEFENSE = 0;
+
 /** The fraction a team's speed and acceleration move at full difficulty. Up
  *  here because `formationSettings` has to hand it to the ported formations
  *  class. See `difficulty` in the config below for what it means. */
@@ -637,6 +696,12 @@ function formationSettings() {
         // ...and how much of his own speed the man with the play in his hands
         // keeps when he runs into a TEAM-MATE. See `MATE_GIVE`.
         mateGive: MATE_GIVE,
+        // How far from the carrier a defender turns to run at him, as a
+        // multiple of the port's radius, and how much of a side collision's
+        // downfield knock a defender takes. See `CHASE_SCALE` and
+        // `SIDE_KNOCK_DEFENSE`.
+        chaseScale: CHASE_SCALE,
+        sideKnockDefense: SIDE_KNOCK_DEFENSE,
         /** How hard the game is leaning right now, -1 to +1, written by
          *  `play.setDifficulty` before each line-up. See `difficulty` below. */
         difficulty: 0,
@@ -2714,6 +2779,56 @@ const XO_CONFIG = {
                  * cycles and leaves him facing where he started.
                  */
                 shake: { yaw: 0.17, hz: 0.75 },
+                /**
+                 * BUMPED OUT OF THE WAY (Steve, 2026-10-30): "the defenders
+                 * will run through the offensive players. Ideally there would
+                 * be collision detection and the offensive players would get
+                 * bumped out of the way."
+                 *
+                 * MEASURED FIRST, over 80 real interceptions with the plan
+                 * built in each mode: the run home sent at least one man
+                 * through an offensive player on 98 plans in 100, three men a
+                 * plan, the mob on a third of them, the solo never. Nothing in
+                 * the plan looked at a path: destinations were kept a body
+                 * apart and the other team stood where the whistle left them.
+                 *
+                 * So a man a runner's line passes within a body of is shoved
+                 * off it, planned in the celebration itself (celebration.js
+                 * `bumpAside`), so the replay and the clip get the same bump.
+                 *
+                 *   time    seconds from the hit to standing still again: fast
+                 *           in and a slide out, so it reads as a knock rather
+                 *           than a sidestep
+                 *   clear   how far off the runner's line he finishes, in bodies
+                 *   along   ...and how far along the run he is carried, in
+                 *           bodies: a man hit from behind goes forward
+                 *   roll    radians he tips toward the push at the hit, gone
+                 *           by the time he stops
+                 *   knocks  the most times one man may be knocked: two men
+                 *           converging on a ring pass a body and a half apart,
+                 *           and a man between them is knocked one way by the
+                 *           first and back by the second
+                 *   settle  how close to a celebrant's mark or another man a
+                 *           knocked man may finish, in bodies. Less than the
+                 *           whole body the marks keep from each other, because
+                 *           a man knocked aside inside a mob's ring is hemmed
+                 *           by three marks a body away, and held a whole body
+                 *           off all of them he could not move at all and was
+                 *           run through instead. Shoulder to shoulder in a
+                 *           mob is what a mob looks like
+                 *
+                 * The hit is timed to the runner's BODY reaching his, a body
+                 * width before the centres would meet. A man standing between
+                 * two runners' lines a body and a half apart cannot be clear
+                 * of both, so he is knocked to the middle and brushed by each
+                 * rather than run through by one; the suite holds every pair
+                 * at every frame of every plan outside 0.45 of a body (0.65 m),
+                 * which at this size is shoulders touching, never a man passing
+                 * through another's chest. 0.3 s rather than longer because the
+                 * runner's centre is level with him about 0.13 s after his body
+                 * reaches him, and the knock has to have moved him by then.
+                 */
+                bump: { time: 0.3, clear: 1.0, along: 0.3, roll: 0.22, knocks: 3, settle: 0.75 },
             },
             /** Seconds for any pose here to blend in, and for the dance to ramp
              *  up once a man has arrived. */

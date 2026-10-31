@@ -372,6 +372,288 @@ describe('nobody ends up standing inside anybody', () => {
     });
 });
 
+/**
+ * WHERE EVERYBODY IS DRAWN AT `t`: a celebrant at his start plus his offset,
+ * a watcher where he stood plus his. The view adds a party entry's x and z to
+ * the drawn position whoever the entry is for, so this is what is on screen.
+ */
+const drawnAt = (plan, t) => {
+    const at = celebrationAt(t, plan);
+    const runners = plan.parts.map((p) => {
+        const me = at.get(p.position);
+        return { position: p.position, x: p.from.x + me.x, z: p.from.z + me.z };
+    });
+    const standing = plan.slump.map((s) => {
+        const me = at.get(s.position);
+        return { position: s.position, x: s.x + me.x, z: s.z + me.z, bumps: s.bumps || [] };
+    });
+    return { runners, standing };
+};
+
+/**
+ * EVERY CELEBRANT AGAINST EVERY WATCHER, OVER THE WHOLE PLAN: the pairs the
+ * party brought inside `bar` of each other, when the whistle had not already
+ * left them that close. The simulation skips its own separation on the
+ * whistle's frame and never separates a carrier from an opponent, so a man
+ * who intercepted inside a receiver's body starts the party there; the bar,
+ * as for the destinations (`roomEnough`), is that the party never makes it
+ * WORSE.
+ *
+ * THE BAR IS 0.45 OF A BODY, 0.65 m, AND NOT HALF, because of the corridor:
+ * two men converging on the ring or running home run a body and a half apart
+ * at the whistle's own spacing, and a man standing between them has no spot
+ * clear of both. The bump puts him in the middle, where each brushes past
+ * him, and the brush is this close. A man run THROUGH measures 0.1 to 0.4 m
+ * (the fault as found: 0.05 m), so the bar still tells the two apart.
+ */
+const BRUSH = C.body * 0.45;
+const runThrough = (plan, bar = BRUSH) => {
+    const start = drawnAt(plan, 0);
+    const worst = new Map();
+    const key = (r, s) => `${r.position}>${s.position}`;
+    for (const r of start.runners) for (const s of start.standing) worst.set(key(r, s), gap(r, s));
+    for (let t = 0; t <= plan.length; t += 0.04) {
+        const { runners, standing } = drawnAt(plan, t);
+        for (const r of runners) {
+            for (const s of standing) {
+                const k = key(r, s);
+                worst.set(k, Math.min(worst.get(k), gap(r, s)));
+            }
+        }
+    }
+    const offenders = [];
+    for (const r of start.runners) {
+        for (const s of start.standing) {
+            const k = key(r, s);
+            const was = gap(r, s);
+            if (worst.get(k) < Math.min(was, bar) - 1e-9) offenders.push(`${k} ${worst.get(k).toFixed(2)}m (was ${was.toFixed(2)})`);
+        }
+    }
+    return offenders;
+};
+
+/**
+ * BUMPED OUT OF THE WAY (Steve, 2026-10-30): "the defenders will run through
+ * the offensive players. Ideally there would be collision detection and the
+ * offensive players would get bumped out of the way."
+ *
+ * Measured over 80 real picks before anything was built, a run home sent a man
+ * through an offensive player on 98 plans in 100 and a mob on a third: nothing
+ * in the plan looked at a path. The bump is planned in the celebration itself
+ * (`bumpAside`), so the replay and the clip get the same one.
+ */
+describe('a man standing in a runner\'s way is bumped out of it', () => {
+    const B = C.dejection.bump;
+
+    test('the fault, stated as a fact: with no bump a run home goes straight through the other team', () => {
+        let through = 0;
+        let homes = 0;
+        for (const plan of everyPlan()) {
+            if (plan.mode !== 'house') continue;
+            homes += 1;
+            const bare = { ...plan, slump: plan.slump.map((s) => ({ ...s, bumps: [] })) };
+            if (runThrough(bare).length) through += 1;
+        }
+        expect(homes).toBeGreaterThan(10);
+        expect(through).toBeGreaterThan(homes * 0.5);
+    });
+
+    test('with it, nobody is run through, at any frame of any plan', () => {
+        let bumped = 0;
+        for (const plan of everyPlan()) {
+            expect(runThrough(plan)).toEqual([]);
+            bumped += plan.slump.filter((s) => s.bumps.length).length;
+        }
+        // ...and the rule is doing the work, not a lucky layout.
+        expect(bumped).toBeGreaterThan(20);
+    });
+
+    /** When a knock lands, in plan seconds: read off the runner's FITTED part,
+     *  the way celebrationAt reads it. */
+    const hitAt = (plan, b) => {
+        const by = plan.parts.find((p) => p.position === b.by);
+        return (plan.wait || 0) + plan.beat + by.delay + by.travel * b.run;
+    };
+
+    test('a knocked man moves only once the runner reaches him, is knocked once by each, and then stands', () => {
+        let seen = 0;
+        let twice = 0;
+        for (const plan of everyPlan()) {
+            for (const s of plan.slump) {
+                if (!s.bumps.length) continue;
+                seen += 1;
+                if (s.bumps.length > 1) twice += 1;
+                const byWho = new Set();
+                for (const b of s.bumps) {
+                    const by = plan.parts.find((p) => p.position === b.by);
+                    expect(by).toBeTruthy();
+                    expect(by.travel).toBeGreaterThan(0);
+                    expect(b.run).toBeGreaterThanOrEqual(0);
+                    expect(b.run).toBeLessThanOrEqual(1);
+                    // One go each, and a real shove, never a twitch.
+                    expect(byWho.has(b.by)).toBe(false);
+                    byWho.add(b.by);
+                    expect(Math.hypot(b.dx, b.dz)).toBeGreaterThan(C.body * 0.05 - 1e-9);
+                }
+                // In the order they arrive.
+                for (let i = 1; i < s.bumps.length; i += 1) {
+                    expect(hitAt(plan, s.bumps[i])).toBeGreaterThanOrEqual(hitAt(plan, s.bumps[i - 1]) - 1e-9);
+                }
+                const first = hitAt(plan, s.bumps[0]);
+                const done = hitAt(plan, s.bumps[s.bumps.length - 1]) + B.time;
+                // Still until the first hit...
+                for (const t of [0, first * 0.5, first - 0.001]) {
+                    const me = celebrationAt(t, plan).get(s.position);
+                    expect(Math.hypot(me.x, me.z)).toBe(0);
+                    expect(me.roll).toBe(0);
+                }
+                // ...tipping toward the push while he is being knocked...
+                let tipped = 0;
+                for (let t = first; t <= done; t += 0.01) {
+                    tipped = Math.max(tipped, Math.abs(celebrationAt(t, plan).get(s.position).roll));
+                }
+                expect(tipped).toBeGreaterThan(0.05);
+                // ...and standing again, square, where the knocks add up to.
+                const end = celebrationAt(done, plan).get(s.position);
+                expect(end.x).toBeCloseTo(s.bumps.reduce((n, b) => n + b.dx, 0), 6);
+                expect(end.z).toBeCloseTo(s.bumps.reduce((n, b) => n + b.dz, 0), 6);
+                expect(Math.abs(end.roll)).toBeLessThan(1e-6);
+                expect(end.y).toBe(0);
+                expect(end.arms).toBe('slump');
+                // A man knocked once goes one way and never back.
+                if (s.bumps.length === 1) {
+                    let last = 0;
+                    for (let t = first; t <= done + 0.3; t += 0.01) {
+                        const far = Math.hypot(...[celebrationAt(t, plan).get(s.position)].map((m) => [m.x, m.z])[0]);
+                        expect(far).toBeGreaterThanOrEqual(last - 1e-9);
+                        last = far;
+                    }
+                }
+            }
+        }
+        expect(seen).toBeGreaterThan(20);
+        // The corridor case exists in the invented crowd too, or the second
+        // knock is never exercised here.
+        expect(twice).toBeGreaterThan(0);
+    });
+
+    test('he lands on the paint, off every celebrant\'s mark and out of everybody else', () => {
+        for (const plan of everyPlan()) {
+            const { runners, standing } = drawnAt(plan, plan.length);
+            for (const s of standing) {
+                if (!s.bumps.length) continue;
+                expect(s.x).toBeGreaterThanOrEqual(BOUNDS.minX - 1e-9);
+                expect(s.x).toBeLessThanOrEqual(BOUNDS.maxX + 1e-9);
+                expect(Math.abs(s.z)).toBeLessThanOrEqual(BOUNDS.halfZ + 1e-9);
+                // The knocked man's own bar, `bump.settle` of a body (shoulder
+                // to shoulder in a mob), approached the way `roomEnough` says
+                // a relaxation approaches its request.
+                const near = C.body * B.settle * 0.9 - 0.01;
+                for (const r of runners) expect(gap(r, s)).toBeGreaterThan(near);
+                for (const o of standing) {
+                    if (o !== s) expect(gap(o, s)).toBeGreaterThan(near);
+                }
+            }
+        }
+    });
+
+    test('a man nobody runs near is left exactly where he stands', () => {
+        let still = 0;
+        for (const plan of everyPlan()) {
+            for (const s of plan.slump) {
+                if (s.bumps.length) continue;
+                // No runner's line ever came within a body of him.
+                for (const p of plan.parts) {
+                    if (!(p.travel > 0)) continue;
+                    const dx = p.to.x - p.from.x;
+                    const dz = p.to.z - p.from.z;
+                    const l2 = dx * dx + dz * dz;
+                    const u = Math.max(0, Math.min(1, ((s.x - p.from.x) * dx + (s.z - p.from.z) * dz) / l2));
+                    expect(Math.hypot(s.x - (p.from.x + dx * u), s.z - (p.from.z + dz * u)))
+                        .toBeGreaterThanOrEqual(C.body - 1e-9);
+                }
+                still += 1;
+            }
+        }
+        expect(still).toBeGreaterThan(20);
+    });
+
+    /**
+     * EVERY KNOCK OBEYS THE BODY. Four rules, each traced from a real man run
+     * through (specs/xo-photos-plan.md, "Two lingering nits"): a man is
+     * knocked only by a runner yet to reach him, never back toward the man
+     * hitting him, never through that man's line, and never across the line
+     * of another runner about to pass. Measured over 400 seeded real plans,
+     * dropping any one of them loses about one plan in a hundred to a man run
+     * through (worst pair 0.05 to 0.17 m against 0.26 m with all four), and a
+     * sample of a hundred and twenty does not always hold such a plan, so the
+     * rules are held here directly, over the invented crowd and the real one.
+     */
+    test('every knock is from a runner yet to arrive, away from him, and across nobody\'s path', () => {
+        const unsmooth = (u) => {
+            let lo = 0; let hi = 1;
+            for (let i = 0; i < 40; i += 1) { const m = (lo + hi) / 2; if (m * m * (3 - 2 * m) < u) lo = m; else hi = m; }
+            return (lo + hi) / 2;
+        };
+        /** Where a spot stands against a run: the distance, which side (0 on
+         *  the line or off the run's length), and when the runner is level. */
+        const against = (p, q) => {
+            const dx = p.to.x - p.from.x; const dz = p.to.z - p.from.z; const len = Math.hypot(dx, dz);
+            const ux = dx / len; const uz = dz / len;
+            const u = Math.max(0, Math.min(1, ((q.x - p.from.x) * ux + (q.z - p.from.z) * uz) / len));
+            const px = p.from.x + ux * u * len; const pz = p.from.z + uz * u * len;
+            const d = Math.hypot(q.x - px, q.z - pz);
+            const side = (d <= C.body * 0.1 || u <= 0 || u >= 1) ? 0 : Math.sign((q.x - px) * -uz + (q.z - pz) * ux);
+            return { d, side, ux, uz, pass: p.delay + p.travel * unsmooth(u) };
+        };
+        let knocks = 0;
+        const plans = [...everyPlan(), ...picks.map((r) => r.plan), ...fifties.map((r) => r.plan)];
+        for (const plan of plans) {
+            const runs = plan.parts.filter((p) => p.travel > 0);
+            for (const s of plan.slump) {
+                let at = { x: s.x, z: s.z };
+                for (let i = 0; i < s.bumps.length; i += 1) {
+                    const b = s.bumps[i];
+                    knocks += 1;
+                    const p = plan.parts.find((q) => q.position === b.by);
+                    const landing = { x: at.x + b.dx, z: at.z + b.dz };
+                    const was = against(p, at);
+                    const now = against(p, landing);
+                    // The last knock also carries the final settling of every
+                    // landing together, which may add a small push of its own.
+                    const slack = i === s.bumps.length - 1 ? C.body * 0.3 : 1e-6;
+                    // 1. Only a runner yet to reach where he stood.
+                    if (i > 0) expect(was.pass).toBeGreaterThan(s.bumps[i - 1].when - 1e-9);
+                    // 2. Never back toward the man hitting him.
+                    expect(b.dx * was.ux + b.dz * was.uz).toBeGreaterThanOrEqual(-slack);
+                    // 3. Never through that man's line.
+                    if (was.side !== 0 && now.side !== 0 && slack < C.body * 0.1) expect(now.side).toBe(was.side);
+                    // 4. Never across the line of another runner about to pass.
+                    for (const q of runs) {
+                        if (q === p) continue;
+                        const qWas = against(q, at);
+                        const qNow = against(q, landing);
+                        if (qWas.side === 0 || qNow.side === 0 || qWas.side === qNow.side) continue;
+                        const soon = qNow.pass > b.when && qNow.pass < b.when + B.time * 2;
+                        if (slack < C.body * 0.1) expect(soon).toBe(false);
+                    }
+                    at = landing;
+                }
+            }
+        }
+        expect(knocks).toBeGreaterThan(100);
+    });
+
+    test('somebody who asked not to be moved about is still knocked clear, but does not tip', () => {
+        // A calm plan has no travel in it, so nobody is in anybody's way; the
+        // rule is that IF a bump were planned, the roll would stay at zero.
+        for (const plan of everyPlan({ calm: true })) {
+            for (const s of plan.slump) expect(s.bumps).toEqual([]);
+            for (const p of plan.parts) expect(p.travel).toBe(0);
+        }
+    });
+});
+
 describe('a man pinned on the touchline', () => {
     /**
      * FOUND BY THE REAL-PLAY CASE BELOW, ONE RUN IN TWENTY. A mob's hero stood
@@ -520,7 +802,14 @@ describe('who celebrates, and what the ball does while they do', () => {
                 for (const s of plan.slump) {
                     const man = at.get(s.position);
                     expect(man.y).toBe(0);                       // never leaves the ground
-                    expect(Math.hypot(man.x, man.z)).toBe(0);    // never travels
+                    // Never travels, unless a runner knocked him aside, and then
+                    // no further than his knocks add up to (see "bumped out of
+                    // the way").
+                    if (!s.bumps.length) expect(Math.hypot(man.x, man.z)).toBe(0);
+                    else {
+                        const reach = s.bumps.reduce((n, b) => n + Math.hypot(b.dx, b.dz), 0);
+                        expect(Math.hypot(man.x, man.z)).toBeLessThanOrEqual(reach + 1e-9);
+                    }
                     expect(man.running).toBe(false);
                     expect(man.raised).toBe(false);              // never holds the ball up
                     expect(man.arms).toBe('slump');
@@ -656,7 +945,15 @@ describe('who celebrates, and what the ball does while they do', () => {
             // him. No lean any more: see the case above for why that term is 0.
             expect(man.arms).toBe('slump');
             expect(man.amount).toBeCloseTo(1, 6);
-            expect(Math.hypot(man.x, man.z)).toBe(0);
+            // Exactly where the whistle left him, or exactly where a runner
+            // knocked him to (see "bumped out of the way").
+            const s = plan.slump.find((w) => w.position === position);
+            if (!s.bumps.length) expect(Math.hypot(man.x, man.z)).toBe(0);
+            else {
+                const dx = s.bumps.reduce((n, b) => n + b.dx, 0);
+                const dz = s.bumps.reduce((n, b) => n + b.dz, 0);
+                expect(Math.hypot(man.x - dx, man.z - dz)).toBeLessThan(1e-9);
+            }
             // He is given a POINT to look at rather than an angle, because only
             // the caller knows where a man who has not moved is standing.
             expect(man.face).toBeNull();
@@ -1114,6 +1411,17 @@ async function harvestJob({ want, limit, PLAYS, BOUNDS, FIELD_LEN }, load) {
             return s / 0x7fffffff;
         };
     };
+    // AND THE GAME'S OWN DICE ARE SEEDED TOO (the defense each line-up rolls,
+    // every player's speed), so this is one fixed sample of endings rather
+    // than a different forty every run: the bump's cases below hold rates
+    // over it, and a rate over a moving sample is a coin toss.
+    let seed = 20260914;
+    Math.random = () => {
+        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
 
     const play = createPlay();
     const out = [];
@@ -1171,9 +1479,13 @@ async function harvestJob({ want, limit, PLAYS, BOUNDS, FIELD_LEN }, load) {
 }
 
 const HARVEST = { PLAYS: ['pass1', 'pass2', 'pass3', 'pass4', 'pass5', 'pass6', 'pass7', 'pass8'], BOUNDS, FIELD_LEN };
+// Sixty of each rather than forty, since the bump's two bars (below) are rates
+// and a floor over the sample: measured over 400, the rules that keep a man
+// from being run through each fail on about one plan in a hundred without
+// them, so a sample this size usually holds one.
 const [picks, fifties] = await Promise.all([
-    outside(harvestJob, { ...HARVEST, want: 'pick', limit: 40 }),
-    outside(harvestJob, { ...HARVEST, want: 'fifty', limit: 40 }),
+    outside(harvestJob, { ...HARVEST, want: 'pick', limit: 60 }),
+    outside(harvestJob, { ...HARVEST, want: 'fifty', limit: 60 }),
 ]);
 
 describe('against real interceptions and real fifties', () => {
@@ -1196,6 +1508,35 @@ describe('against real interceptions and real fifties', () => {
             // Same bar as the invented people above, and the same reasoning.
             expect(after).toBeGreaterThan(Math.min(before, C.body * 0.9) - 0.01);
         }
+    });
+
+    /**
+     * THE REAL THING IS CROWDED IN WAYS THE INVENTED CROWD IS NOT: six men run
+     * home through a formation whose lines are a body and a half apart, and a
+     * mob's ring can close round a receiver who was standing beside the man
+     * who picked it off. So the real bar is two bars. Nobody is ever RUN
+     * THROUGH (inside 0.15 of a body, 0.22 m: the fault as found measured 0.02
+     * to 0.4 m), and the BRUSHES, inside 0.45 of a body, stay rare. Measured
+     * over 400 seeded real plans: no bump, 26% of plans had a pair inside half
+     * a body and 29% a brush; with it, 0.8% and 3.8%, the worst pair 0.40 m.
+     * A run home still brushes on a fifth of its plans, because two men in
+     * single file a body and a half apart leave a man between them nowhere
+     * clear of both, and that is the brush, not the run-through.
+     */
+    test('a real party runs through nobody, and brushes few', () => {
+        let bumped = 0;
+        let brushed = 0;
+        const all = [...picks, ...fifties];
+        for (const { plan } of all) {
+            expect(runThrough(plan, C.body * 0.15)).toEqual([]);
+            if (runThrough(plan).length) brushed += 1;
+            bumped += plan.slump.filter((s) => s.bumps.length).length;
+        }
+        expect(brushed / all.length).toBeLessThan(0.08);
+        // Measured before the bump existed: three men a run home and half a
+        // man a mob were run through, so a sample of real picks that bumps
+        // nobody would mean the rule has stopped looking.
+        expect(bumped).toBeGreaterThan(10);
     });
 
     /**

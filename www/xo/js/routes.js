@@ -47,6 +47,34 @@ export class ObjectAnimationsClass {
     obj.settings.route.boundaries.top = 0;
   }
 
+  /**
+   * HOW FAR FROM THE MAN WITH THE BALL A DEFENDER TURNS TO RUN AT HIM, as a
+   * multiple of the port's own radius. 1 IS THE PORT.
+   *
+   * `getCoverCoords` below is the 2D game's contain: inside three tenths of an
+   * interval of the carrier a defender runs straight at him, and outside it he
+   * runs to the MIDPOINT between the carrier and the fourth line, which keeps
+   * him between the ball and the goal. Three tenths of an interval is 60 units,
+   * 2.1 m, and it was tuned against a letterform twelve units tall. The figure
+   * here is drawn 2.2 times life size, so it is half a man's height, and a
+   * defender two and a half metres in front of the carrier was sprinting AWAY
+   * from him toward a midpoint that recedes at half the carrier's speed. QA,
+   * 2026-10-30: "a defender right in front of the ball carrier that doesn't
+   * tackle them, he just keeps backing up". Measured over 2,501 plays with the
+   * ball loose, one in ten had such a retreat of 0.75 s or more and a quarter
+   * had one of 0.25 to 0.5 s, at a sprint.
+   *
+   * THE SAME CORRECTION `collisionScale` IS, AND A NUMBER OF ITS OWN, because
+   * one number doing two jobs is how the boxes and this radius came apart in
+   * the first place. Injected on the settings object the class is constructed
+   * with, like everything else the 3D game has had to tell the port, and a
+   * caller that says nothing gets the 2D game exactly.
+   */
+  chaseScale() {
+    const s = this.settings && this.settings.chaseScale;
+    return typeof s === 'number' && s > 0 ? s : 1;
+  }
+
   // eslint-disable-next-line
   getCoverCoords(obj = {}, coverObj = {}, lineInterval = 0, minX = 0, minY = 0, maxY = 0) {
     const coords = {
@@ -62,7 +90,9 @@ export class ObjectAnimationsClass {
     const targetX = (lineInterval * 4);
     const midCoverTarget = this.gameState.getMidPoint(coverX, targetX);
     const distToCover = this.gameState.getCoordDistance(objX, objY, coverX, coverY);
-    const coverIntervals = Math.floor(distToCover / (lineInterval * 0.3));
+    // The port's 0.3 of an interval, at the scale the figures are drawn. See
+    // `chaseScale`: at 1 this is the 2D game's own radius.
+    const coverIntervals = Math.floor(distToCover / (lineInterval * 0.3 * this.chaseScale()));
 
     if (coverX < minX) {
       coverX = minX;

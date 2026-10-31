@@ -349,6 +349,15 @@ export function chooseCelebration({
      * points, exactly the way the man being celebrated is pinned, and anybody
      * whose ring spot lands on him is pushed off it.
      */
+    /**
+     * THE OTHER TEAM IS NOT PINNED HERE, AND IT WAS TRIED. Pinning their spots
+     * so that no mark could land on a man sounded right and cost more than it
+     * bought: eleven more fixed points left two celebrants' marks half a body
+     * apart on a real pick, and a mate standing beside an opponent at a calm
+     * whistle was given a walk nobody asked for. A mark that lands on a
+     * watcher is the knock's business (`bumpAside`), which moves HIM, off the
+     * mark and out of the line, and does it as the runner arrives.
+     */
     const fixed = floor.map((f) => ({ to: { x: f.x, z: f.z }, lead: true, fixed: true }));
     relax([...seats, ...fixed], lim, C);
     const parts = seats.map((s) => part({ ...s, C }));
@@ -368,9 +377,27 @@ export function chooseCelebration({
         .sort((a, b) => a.gap - b.gap)
         .map((r, i) => ({
             position: r.position,
+            // Where he stands, which only the caller knew until now: the bump
+            // below is planned from it, and the view needs nothing more.
+            x: r.x,
+            z: r.z,
             faceAt: heroTo,
             delay: Math.min(i * C.stagger, C.staggerMax),
+            bumps: [],
         }));
+
+    /**
+     * AND ANYBODY STANDING IN A RUNNER'S WAY IS BUMPED OUT OF IT.
+     *
+     * Steve, 2026-10-30: "the defenders will run through the offensive
+     * players. Ideally there would be collision detection and the offensive
+     * players would get bumped out of the way." Measured over 80 real picks, a
+     * run home sent a man through somebody on 98 plans in 100, three men a
+     * plan, and a mob on a third of them. Nothing above looks at a PATH:
+     * `relax` keeps the destinations apart, and the other team stood exactly
+     * where the whistle left them while six men ran through the formation.
+     */
+    bumpAside(slump, parts, lim, C);
 
     return fit({
         mode,
@@ -604,6 +631,268 @@ function relax(seats, lim, C) {
     }
     // ...and it still has the last word, because the final pass shoved.
     fence();
+}
+
+/**
+ * THE INVERSE OF `smooth` ON [0, 1]: the fraction of a run's TIME at which a
+ * runner has covered fraction `u` of its distance. A bisection, because the
+ * cubic has no closed inverse worth writing, and it runs once a bump at plan
+ * time rather than once a frame.
+ */
+function unsmooth(u) {
+    if (u <= 0) return 0;
+    if (u >= 1) return 1;
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 30; i += 1) {
+        const mid = (lo + hi) / 2;
+        if (smooth(mid) < u) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+}
+
+/** Where on the segment a-b the point p is nearest: the distance `d`, the
+ *  fraction `u` along it, and the length `len` of the segment. */
+function nearestOn(p, a, b) {
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-9) return { d: Math.hypot(p.x - a.x, p.z - a.z), u: 0, len: 0 };
+    const u = clamp(((p.x - a.x) * dx + (p.z - a.z) * dz) / (len * len), 0, 1);
+    const qx = a.x + dx * u;
+    const qz = a.z + dz * u;
+    return { d: Math.hypot(p.x - qx, p.z - qz), u, len, qx, qz, ux: dx / len, uz: dz / len };
+}
+
+/**
+ * BUMP THE MEN STANDING IN A RUNNER'S WAY OUT OF IT, AND PLAN IT, so the
+ * replay and the clip get the same knocks the live play got.
+ *
+ * Each man of the other team stands where the whistle left him (`x`, `z` on
+ * his slump entry). Of the runners whose lines pass within a body width of
+ * him, the first to arrive knocks him, and the knock is timed to when the
+ * runner's BODY reaches his, a body width before the centres would meet:
+ * `run` is the fraction of that runner's travel TIME at which it happens,
+ * through `unsmooth`, because a runner eases in and out and the time is what
+ * `celebrationAt` has.
+ *
+ * THE SHOVE IS OFF THE LINE, NOT AWAY FROM THE RUNNER. Perpendicular to the
+ * run, on the side he is already on, far enough that he finishes `clear`
+ * bodies from the line, with `along` of a body in the run's own direction
+ * because a man hit from behind goes forward. A man standing exactly on the
+ * line is sent toward the middle of the field, which keeps him on the paint.
+ * The landing is relaxed the way a destination is, against every celebrant's
+ * mark, every runner's start and every other watcher, with the touchline part
+ * of it, so he is never knocked onto anybody.
+ *
+ * AND HE MAY BE KNOCKED AGAIN. Measured on real mobs, two men converging on
+ * the ring run a body and a half apart, and a man between them shoved off one
+ * line lands on the other: with one shove and a second pass the two lines
+ * traded him back and forth and he finished on one of them. So after each
+ * knock the runners who have NOT yet gone by are asked again, and the next to
+ * arrive knocks him in turn, up to `knocks` times. Two men passing either side
+ * of him knock him one way and then the other, which is what that looks like,
+ * and a runner who has already passed is no longer in the question.
+ *
+ * Mutates the slump entries: `bumps` is a list of { by, run, when, dx, dz },
+ * each offset measured from where the knock before left him, and empty for a
+ * man nobody came near.
+ */
+function bumpAside(slump, parts, lim, C) {
+    const B = C.dejection && C.dejection.bump;
+    for (const s of slump) s.bumps = [];
+    if (!B || !(B.time > 0)) return 0;
+    const body = C.body;
+    const runs = parts.filter((p) => p.travel > 0);
+    if (!runs.length || !slump.length) return 0;
+    const knocks = Math.max(1, B.knocks | 0);
+    // How close a knocked man may finish to a mark or another man: closer
+    // than the marks keep from each other, see `bump.settle` in config.
+    const soft = { ...C, body: body * (B.settle > 0 ? B.settle : 1) };
+    // Where a watcher is standing now, which moves as he is knocked.
+    const spot = (s) => s.bumps.reduce(
+        (p, b) => ({ x: p.x + b.dx, z: p.z + b.dz }), { x: s.x, z: s.z }
+    );
+    // Every celebrant's mark and every runner's start, pinned: a man knocked
+    // onto either would be standing inside somebody.
+    const marks = [
+        ...parts.map((p) => ({ to: { x: p.to.x, z: p.to.z }, lead: true, fixed: true })),
+        ...runs.map((p) => ({ to: { x: p.from.x, z: p.from.z }, lead: true, fixed: true })),
+    ];
+    let bumped = 0;
+
+    // When runner `p` goes past a spot: the moment his centre is level with it.
+    const passes = (p, near) => p.delay + p.travel * unsmooth(near.u);
+
+    for (const s of slump) {
+        if (typeof s.x !== 'number' || typeof s.z !== 'number') continue;
+        let at = { x: s.x, z: s.z };
+        let last = -Infinity;
+        // Each runner gets one go at him, knock or no knock.
+        const asked = new Set();
+        while (s.bumps.length < knocks) {
+            let hit = null;
+            for (const p of runs) {
+                if (asked.has(p)) continue;
+                const near = nearestOn(at, p.from, p.to);
+                if (near.d >= body) continue;
+                // A runner who had already gone past this spot when the last
+                // knock landed him here is not going to hit him.
+                if (passes(p, near) <= last) continue;
+                // The runner's body reaches his a body width before the centres
+                // would, along the line, and no earlier than the knock that put
+                // him here: two men arriving together hit him together.
+                const reach = Math.sqrt(Math.max(0, body * body - near.d * near.d));
+                const u = near.len > 0 ? clamp((near.u * near.len - reach) / near.len, 0, 1) : 0;
+                const run = unsmooth(u);
+                const when = Math.max(last, p.delay + p.travel * run);
+                if (!hit || when < hit.when) hit = { p, near, run, when };
+            }
+            if (!hit) break;
+            asked.add(hit.p);
+            const { p, near } = hit;
+            /**
+             * WHERE TO, IS WHEREVER NEARBY HAS THE MOST ROOM. A man between two
+             * lines a body and a half apart has no spot clear of both, and
+             * knocking him a full body off the first put him on the second
+             * (traced: three knocks in seven hundredths of a second that summed
+             * to leaving him exactly on the hero's line as the hero arrived).
+             * And a landing chosen for the lines alone was then pushed off a
+             * mark by the relaxation, as often as not straight back across a
+             * line.
+             *
+             * So every spot within a clear body of him on his own side of the
+             * line is tried, SETTLED first against the marks, the runners'
+             * starts and every other watcher exactly as it will be, and scored
+             * by its room: the nearest line among the runners who have not yet
+             * gone by, or the nearest mark or man, whichever is closer. The
+             * most room wins, the shorter knock among equals, and a man who
+             * cannot gain any is not knocked by this runner at all: the one
+             * coming the other way will do it, and that knock is the one that
+             * puts him where both brush past him rather than one running
+             * through him. A man standing on the line itself has no side, and
+             * may go either way.
+             */
+            // Everybody else is where he stands or where he has been knocked
+            // to, and pinned: the one man moving takes the whole push.
+            const others = slump
+                .filter((o) => o !== s && typeof o.x === 'number' && typeof o.z === 'number')
+                .map((o) => ({ to: spot(o), lead: true, fixed: true }));
+            const blocks = [...marks, ...others];
+            // Which runners are still to come PAST A GIVEN SPOT, asked of the
+            // spot itself: a knock that carries a man along a run can put him
+            // back in front of a runner who had gone past where he stood.
+            const stillComing = (q, to) => q !== p && passes(q, nearestOn(to, q.from, q.to)) > hit.when;
+            const room = (to) => {
+                let worst = nearestOn(to, p.from, p.to).d;
+                for (const q of runs) {
+                    if (!stillComing(q, to)) continue;
+                    worst = Math.min(worst, nearestOn(to, q.from, q.to).d);
+                }
+                for (const b of blocks) worst = Math.min(worst, Math.hypot(to.x - b.to.x, to.z - b.to.z));
+                return Math.min(worst, body);
+            };
+            const settle = (to) => {
+                const mover = { to: { x: to.x, z: to.z } };
+                relax([...blocks, mover], lim, soft);
+                return mover.to;
+            };
+            // Which side of a run a spot is on: the sign of the perpendicular,
+            // and 0 for a spot off the run's own length, which is no side.
+            const sideOf = (q, spotAt) => {
+                const n = nearestOn(spotAt, q.from, q.to);
+                // Off the run's own length, or standing on the line itself
+                // (within a tenth of a body), is no side.
+                if (n.len <= 0 || n.u <= 0 || n.u >= 1 || n.d <= body * 0.1) return 0;
+                return Math.sign((spotAt.x - n.qx) * -n.uz + (spotAt.z - n.qz) * n.ux);
+            };
+            const mySide = sideOf(p, at);
+            // A landing may not put him through the man hitting him, nor
+            // across the path of any runner about to pass: he would be in it
+            // as the runner came through.
+            const crosses = (to) => {
+                if (mySide !== 0 && sideOf(p, to) !== 0 && sideOf(p, to) !== mySide) return true;
+                for (const q of runs) {
+                    if (q === p) continue;
+                    const was = sideOf(q, at);
+                    const now = sideOf(q, to);
+                    if (was === 0 || now === 0 || was === now) continue;
+                    const soon = passes(q, nearestOn(to, q.from, q.to));
+                    if (soon > hit.when && soon < hit.when + B.time * 2) return true;
+                }
+                return false;
+            };
+            // ...and never BACK toward the man hitting him: a knock carries a
+            // man sideways or along the run, not into the runner's face.
+            const backward = (to) => (to.x - at.x) * near.ux + (to.z - at.z) * near.uz < -1e-9;
+            let best = { to: at, far: 0, room: room(at) };
+            const reach = body * B.clear;
+            // A fan in the run's own frame, from straight across one way to
+            // straight across the other through straight on, so the two
+            // perpendiculars are always among the candidates.
+            for (let ring = 1; ring <= 5; ring += 1) {
+                const r = reach * (ring / 5);
+                for (let step = -4; step <= 4; step += 1) {
+                    const a = (Math.PI / 2) * (step / 4);
+                    const along = Math.cos(a) * r;
+                    const across = Math.sin(a) * r;
+                    const try_ = {
+                        x: at.x + near.ux * along - near.uz * across,
+                        z: at.z + near.uz * along + near.ux * across,
+                    };
+                    if (crosses(try_)) continue;
+                    const to = settle(try_);
+                    if (crosses(to)) continue;
+                    const got = room(to);
+                    const far = Math.hypot(to.x - at.x, to.z - at.z);
+                    // A touchline turns an outward push into one along the
+                    // line, and a man settled three metres down it has been
+                    // thrown, not knocked.
+                    if (far > reach * 1.5) continue;
+                    if (got > best.room + 1e-6 || (Math.abs(got - best.room) <= 1e-6 && far < best.far - 1e-9)) {
+                        best = { to, far, room: got };
+                    }
+                }
+            }
+            // Nothing to gain by moving him: the other man's knock is the one.
+            if (best.far < body * 0.05 || best.room <= room(at) + 1e-6) continue;
+            const mover = { to: best.to };
+            s.bumps.push({
+                by: p.position,
+                run: hit.run,
+                when: hit.when,
+                dx: mover.to.x - at.x,
+                dz: mover.to.z - at.z,
+            });
+            at = mover.to;
+            last = hit.when;
+        }
+        if (s.bumps.length) bumped += 1;
+    }
+
+    /**
+     * AND ONCE EVERYBODY HAS BEEN KNOCKED, THE LANDINGS ARE SETTLED TOGETHER.
+     * Each man's knocks were relaxed against the others where they stood AT
+     * THE TIME, so two men knocked toward each other could finish inside one
+     * another. One more relaxation over every landing, with the marks and the
+     * men nobody touched pinned, and each man's last knock takes the
+     * difference.
+     */
+    const landed = slump.filter((s) => s.bumps.length);
+    if (landed.length) {
+        const movers = landed.map((s) => ({ s, to: spot(s) }));
+        const still = slump
+            .filter((s) => !s.bumps.length && typeof s.x === 'number' && typeof s.z === 'number')
+            .map((s) => ({ to: { x: s.x, z: s.z }, lead: true, fixed: true }));
+        relax([...marks, ...still, ...movers], lim, soft);
+        for (const m of movers) {
+            const was = spot(m.s);
+            const final = m.s.bumps[m.s.bumps.length - 1];
+            final.dx += m.to.x - was.x;
+            final.dz += m.to.z - was.z;
+        }
+    }
+    return bumped;
 }
 
 /**
@@ -857,6 +1146,38 @@ export function celebrationAt(t, plan) {
         const since = now - (plan.beat + s.delay);
         const grief = smooth(since / D.sink);
         /**
+         * BUMPED, IF A RUNNER CAME THROUGH HIM (see `bumpAside`). Timed off
+         * the runner's FITTED part, because `fit` may have shortened every
+         * run after the bump was planned: the plan keeps the fraction of the
+         * runner's time, and the seconds are read here. The hit lands him
+         * fast and he slides to a stop (an ease-out), tipping toward the push
+         * on the way, and the slump carries on from wherever he ends up.
+         */
+        let bx = 0;
+        let bz = 0;
+        let stagger = 0;
+        if (s.bumps && s.bumps.length && D.bump && D.bump.time > 0) {
+            // Which way is "toward the push" on his own roll axis: he faces
+            // `faceAt`, his local +x is (cos yaw, -sin yaw) in world, and a
+            // positive roll tips his head toward local -x.
+            const yaw = s.faceAt && typeof s.x === 'number'
+                ? Math.atan2(s.faceAt.x - s.x, s.faceAt.z - s.z) : 0;
+            for (const b of s.bumps) {
+                const by = plan.parts.find((q) => q.position === b.by);
+                const hitAt = plan.beat + (by ? by.delay + by.travel * b.run : 0);
+                const k = clamp((now - hitAt) / D.bump.time, 0, 1);
+                const slide = 1 - (1 - k) * (1 - k);
+                bx += b.dx * slide;
+                bz += b.dz * slide;
+                const toward = -(b.dx * Math.cos(yaw) - b.dz * Math.sin(yaw));
+                const side = toward === 0 ? 1 : Math.sign(toward);
+                // Zero outside the knock, and never a -0 times something: it
+                // is a number the view blends toward.
+                const wobble = k > 0 && k < 1 ? Math.sin(Math.PI * k) : 0;
+                if (!plan.calm && wobble !== 0) stagger += side * D.bump.roll * wobble;
+            }
+        }
+        /**
          * THE SHAKE FILLS WHATEVER IS LEFT, AND IT IS SOLVED PER MAN.
          *
          * Running it for a fixed stretch does not work: a man near the back of
@@ -873,8 +1194,8 @@ export function celebrationAt(t, plan) {
         const cycles = Math.max(1, Math.round(window * D.shake.hz));
         const swing = shaking ? clamp((now - from) / window, 0, 1) : 0;
         out.set(s.position, {
-            x: 0,
-            z: 0,
+            x: bx,
+            z: bz,
             y: 0,
             face: null,
             watch: s.faceAt,
@@ -884,7 +1205,7 @@ export function celebrationAt(t, plan) {
                 ? D.shake.yaw * Math.sin(Math.PI * 2 * cycles * swing) * grief
                 : 0,
             lean: D.lean * grief,
-            roll: 0,
+            roll: stagger,
             arms: 'slump',
             amount: grief,
             raised: false,
