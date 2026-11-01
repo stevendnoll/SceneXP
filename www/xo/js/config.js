@@ -1493,6 +1493,108 @@ const XO_CONFIG = {
     },
 
     /**
+     * TWO RECEIVERS WHOSE ROUTES CROSS, AND WHY A STAGGERED BREAK CANNOT
+     * KEEP THEM APART. Steve's QA, 2026-10-31: on Stack Right, Deep Drift,
+     * Split Verticals, Twin Slants Right and Deep Crossers "the two receivers
+     * run into each other in the middle of the field", on nearly every play.
+     *
+     * THE PLAYBOOK WAS DESIGNED SO ONE MAN BREAKS FIRST, AND IT DOES NOT HELP
+     * HERE. Both men in a crossing pair line up on the same yard line and run
+     * downfield at the same top speed, so when the crosser reaches his
+     * team-mate's lane he reaches it at exactly the downfield spot his
+     * team-mate has reached. Changing who breaks first only moves that meeting
+     * point. Measured (scratchpad rr-contact, 114 plays a setting): Twin
+     * Slants' wr2 and wr3 met on 75 plays with wr2 breaking at 1.45, 75 at
+     * 1.9 and 78 at 2.2 intervals, the meeting sliding from 1.94 to 2.08
+     * intervals downfield. The 2D game got away with it because its players
+     * were letters 12 units tall; these figures are 2.2 times life size with
+     * a collision box 1.6 by 1.8 m, so the same brush is a shove, the ported
+     * same-team jostle fires (a fifth of his speed and a steer, every frame),
+     * and both men stall.
+     *
+     * WHAT SEPARATES THEM IS A DOWNFIELD SPEED DIFFERENCE, so that is what
+     * `yieldToCrossing` in play.js creates: when two route runners are on a
+     * collision course, the one behind (the later breaker, when level) is held
+     * to a jog until the other has crossed in front of him, a quarter of a
+     * second or so. Real crossers do exactly this; the under man throttles so
+     * the over man clears. Measured over every play against every defense
+     * with the quarterback holding (1,292 plays over four seeds), plays with
+     * a sustained stall between two crossing receivers went from 18% to 5%
+     * on Stack Right, 37% to 1% on Deep Drift, 68% to 11% on Twin Slants
+     * Right, 51% to 17% on Split Verticals and 59% to 28% on Deep Crossers,
+     * and on the plays nobody named, 53% to 13% on Deep Split and 17% to 1%
+     * on Jumbo Split, while Four Verticals stayed at 0%: 29% to 14% of all
+     * seventeen plays' snaps. The two residuals among the five named are
+     * different faults: Split Verticals' wr4 ends his route 1.75 m
+     * beside wr3's lane and the two run parallel inside each other's boxes,
+     * and Deep Crossers' three bunched receivers are jammed together at the
+     * line.
+     *
+     * THE TRADE: receivers who no longer stall are easier to hit. Over 6,954
+     * matched throws completions went 59.2% to 60.9% (48.9% to 51.6% on the
+     * five plays named), interceptions 5.4% to 5.3%, points a play 17.26 to
+     * 17.73, and the man thrown to stood where he had: his depth at the
+     * throw was unchanged.
+     *
+     * TWO THINGS TRIED AND LEFT OUT, both measured on the same sweep. Letting
+     * an engaged pair skip the ported jostle made the stalls WORSE (ALL 14% to
+     * 16%, and 39% with no brake at all): the jostle's own knock on the man
+     * behind is a crude yield and was doing useful work. And releasing the
+     * brake on a velocity prediction flickered, seven engagements a play of
+     * 0.08 s each, because the braked man's own slow speed made the gap look
+     * like it would open; the release below reads positions instead: 1.6
+     * engagements a play over every play (3.2 on the five named), a median
+     * 0.20 s, and one in ten running to the hold.
+     */
+    crossing: {
+        /** Seconds ahead a collision course is looked for. A longer look
+         *  engages sooner and buys more gap; 0.75 left Twin Slants at 11%. */
+        horizon: 1.0,
+        /** Metres: closer than this at the predicted nearest approach is a
+         *  collision course. The box is 1.61 m across, so this is the box
+         *  and a third of a metre for the speed wobble. */
+        miss: 2.1,
+        /** Metres of DOWNFIELD gap at which the brake is released. It must
+         *  be at least `miss`, or the released man is on a collision course
+         *  again on the next frame and the brake flickers. */
+        clear: 2.24,
+        /** Fraction of his top speed the yielder is held to. 0 is the route's
+         *  own acceleration step a frame, a jog of about 1.6 m/s; 0.1 scored
+         *  the same and 0.3 left Twin Slants at 41%. */
+        speed: 0,
+        /** Metres a second the pair must be converging ACROSS the field.
+         *  A crossing is a lateral thing; two bunched men knocked toward each
+         *  other by the jostle for a frame are not one. */
+        lateral: 3.4,
+        /** Consecutive frames the course must hold before anybody yields.
+         *  A floor under `shrink`, which at running speed (both men at 2.2
+         *  units a frame) takes four course frames to close, so this never
+         *  decides anything on its own: a planted break setting it to 1 was
+         *  caught by no test on 2026-11-01, and that is why. */
+        frames: 3,
+        /** Metres the lateral gap must have CLOSED while the course held
+         *  before anybody yields. A defender's jam kicks a man sideways at a
+         *  run for a few frames and the prediction from that speed said two
+         *  men in adjacent lanes would meet; measured, those pairs never got
+         *  closer (under six units over a second), and the "yield" ran until
+         *  the downfield gap opened. Four Verticals, which has no crossing
+         *  route, had a receiver jogging for two seconds. A real cross closes
+         *  this in two or three frames, and every frame of delay costs Twin
+         *  Slants, whose cross has the shortest fuse: 0.5 m left it at 20%. */
+        shrink: 0.35,
+        /** Seconds a yield may last at most. One yield in ten runs to this,
+         *  waiting on a leader a defender has slowed, so it is also how long
+         *  a receiver may be seen jogging behind a tangled team-mate: 0.6 s
+         *  left Twin Slants at 20% and 1.0 s took it to 12%, for a jog a
+         *  visitor can see. The pair is then left alone for as long again. */
+        hold: 0.8,
+        /** Metres of downfield gap inside which the pair counts as level, so
+         *  the later breaker yields rather than whoever happens to trail by
+         *  a step. */
+        level: 0.28,
+    },
+
+    /**
      * WHERE THE RECEIVER IS ACTUALLY GOING, WHICH IS NOT WHERE HE IS GOING
      * THIS FRAME. See `LEAD_WINDOW` above and `markHeading` in play.js.
      */
