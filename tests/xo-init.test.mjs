@@ -1845,7 +1845,9 @@ describe('the share sheet', () => {
             expect(stage().children[0].tagName).toMatch(/canvas/i);
             expect(stage().children[0].classList.contains('is-unseen')).toBe(false);
             expect(dom.el('clip-view-count').textContent).toBe('View 1 of 4');
-            expect(progress()).toBe('Making your clip…');
+            // The first frame was drawn as the take began (before the stage
+            // was captured), so the countdown is already up.
+            expect(progress()).toBe(`Making your clip… ${Math.ceil(main.__test__.taking().plan.total)} seconds to go`);
             expect(dom.el('clip-tools').hidden).toBe(false);
             // No avatar, so nobody to follow: no Follow me.
             expect(dom.el('clip-follow').hidden).toBe(true);
@@ -1964,10 +1966,11 @@ describe('the share sheet', () => {
             await flushAsync();
             expect(main.__test__.phase()).toBe('clip');
             expect(main.__test__.taking().quarter).toBe(1);
-            expect(main.__test__.taking().frames).toBe(0);
+            // A fresh take, its first frame already drawn.
+            expect(main.__test__.taking().frames).toBe(1);
             expect(dom.el('clip-view-count').textContent).toBe('View 2 of 4');
             expect(status()).toBe('View 2 of 4. Making the clip again from here.');
-            expect(progress()).toBe('Making your clip…');
+            expect(progress()).toBe(`Making your clip… ${Math.ceil(main.__test__.taking().plan.total)} seconds to go`);
             expect(stage().children).toHaveLength(1);
             // V, as in the replay, but not with a modifier held.
             fire(dom.documentStub, 'keydown', { key: 'v' });
@@ -2144,7 +2147,7 @@ describe('the share sheet', () => {
             expect(status()).toBe('Following you. Making the clip again.');
             expect(main.__test__.follow()).toBe('avatar');
             expect(main.__test__.taking().follow).toBe('avatar');
-            expect(main.__test__.taking().frames).toBe(0);
+            expect(main.__test__.taking().frames).toBe(1);
             frames(2);
             const aim = main.__test__.aim();
             expect(aim.source).toBe('avatar');
@@ -2376,21 +2379,27 @@ describe('the clip\'s take', () => {
         expect(view.throwClock()).toBe(-1);
         expect(view.snapProgress()).toBe(0);
         expect(t.plan.total).toBeGreaterThan(t.plan.play + CFG.clip.hold - 1e-9);
-        expect(t.shoulder).toEqual({ side: 1, want: 1, held: 0, seeded: false });
         expect(Number.isFinite(t.anchor.x) && Number.isFinite(t.anchor.z)).toBe(true);
+        // THE FIRST FRAME IS ALREADY ON THE STAGE, drawn as the take began
+        // and before anything captures the stage (Steve's QA, 2026-11-01: a
+        // recorder started first captured the empty stage, and iMessage made
+        // that black frame the shared video's poster). One frame with the
+        // wordmark on it, and both camera memories asked by it: the
+        // shoulder's and the smoothed aim's (QA 2026-10-30).
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(1);
+        expect(drawn.filter((c) => c[0] === 'fillText').map((c) => c[1])).toEqual([CFG.clip.wordmark]);
+        expect(t.shoulder.seeded).toBe(true);
+        expect(t.aim.seeded).toBe(true);
+        expect(t.frames).toBe(1);
         // A second take while one runs is refused.
         await expect(main.__test__.take(stage, { quarter: 2 })).resolves.toBeNull();
         expect(main.__test__.taking().quarter).toBe(1);
 
-        // Every frame goes to the stage with the wordmark on it, and the
-        // frame's own render is skipped: the shoulder memory has been asked.
+        // Every frame after goes to the stage the same way, and the frame's
+        // own render is skipped.
         frames(1);
-        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(1);
-        expect(drawn.filter((c) => c[0] === 'fillText').map((c) => c[1])).toEqual([CFG.clip.wordmark]);
-        expect(main.__test__.taking().shoulder.seeded).toBe(true);
-        // ...and so has the aim's own memory (the smoothed aim, QA 2026-10-30).
-        expect(main.__test__.taking().aim.seeded).toBe(true);
-        expect(main.__test__.taking().frames).toBe(1);
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(2);
+        expect(main.__test__.taking().frames).toBe(2);
 
         const value = await settle(p);
         expect(value.cancelled).toBe(false);
@@ -2429,21 +2438,23 @@ describe('the clip\'s take', () => {
         const { stage, drawn } = recordingStage();
         const p = main.__test__.take(stage, {});
         frames(5);
-        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(5);
+        // The opening frame, drawn as the take began, and five more.
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(6);
         expect(main.__test__.cancelTake()).toBe(true);
-        await expect(p).resolves.toEqual({ cancelled: true, frames: 5, seconds: expect.any(Number), released: true });
+        await expect(p).resolves.toEqual({ cancelled: true, frames: 6, seconds: expect.any(Number), released: true });
         expect(main.__test__.phase()).toBe('result');
         expect(canvas().classList.contains('is-recording')).toBe(false);
         expect(main.__test__.cancelTake()).toBe(false);
         // Nothing more is drawn into a stage whose take is over.
         frames(2);
-        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(5);
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(6);
 
-        // Next play lets a running take go on its way out.
+        // Next play lets a running take go on its way out (its opening frame
+        // and two more had been drawn).
         const p2 = main.__test__.take(stage, { quarter: 3 });
         frames(2);
         dom.el('result-actions').children.find((b) => b.textContent === 'Next play').click();
-        await expect(p2).resolves.toMatchObject({ cancelled: true, frames: 2 });
+        await expect(p2).resolves.toMatchObject({ cancelled: true, frames: 3 });
         await flushAsync();
         expect(main.__test__.phase()).toBe('playbook');
         expect(canvas().classList.contains('is-recording')).toBe(false);

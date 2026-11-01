@@ -3369,8 +3369,9 @@ function endingLength() {
 }
 
 /**
- * BEGIN A TAKE into `stage`, a 2D canvas somebody is recording, from vantage
- * point `quarter`. Resolves `{ cancelled, frames, seconds }` once the last
+ * BEGIN A TAKE into `stage`, a 2D canvas somebody is about to record, from
+ * vantage point `quarter`. The first frame is drawn into the stage before
+ * this hands back. Resolves `{ cancelled, frames, seconds }` once the last
  * frame has been drawn (or the take was cancelled), or null at once when
  * there is nothing to take: not on the result card, no recording, a take
  * already running, or a stage with no context.
@@ -3434,7 +3435,7 @@ function beginTake(stage, { quarter = 0, onFrame = null, follow = 'ball' } = {})
     if (canvas && canvas.classList) canvas.classList.add('is-recording');
 
     cycle.phase = 'clip';
-    return new Promise((resolve) => {
+    const taken = new Promise((resolve) => {
         cycle.take = {
             plan, quarter, stage, g, w, h,
             shoulder: newShoulder(),
@@ -3449,6 +3450,14 @@ function beginTake(stage, { quarter = 0, onFrame = null, follow = 'ball' } = {})
             onFrame: typeof onFrame === 'function' ? onFrame : null,
         };
     });
+    // THE FIRST FRAME IS DRAWN NOW, before the take is handed back and the
+    // stage is captured (clip.js `recordTake`): the opening frame posed and
+    // shot with no time passed. The recorder's first frame is the one
+    // iMessage shows as a shared video's poster, and it used to be the empty
+    // stage, a black rectangle (Steve's QA, 2026-11-01).
+    stepTake(0);
+    drawTake(0);
+    return taken;
 }
 
 /** Advance the take by `delta` seconds: the replay branch of `stepCycle`,

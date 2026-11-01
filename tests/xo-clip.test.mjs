@@ -4,7 +4,8 @@
  * which seconds of the recording it is, the director's shot opened on its
  * first frame and turned to the chosen quarter, the words and the names, one
  * frame drawn for the recorder, the renderer held and given back, and the
- * recorder started before the first frame and stopped after the last.
+ * recorder started once the first frame is on the stage and stopped after
+ * the last.
  *
  * The frame is drawn on a real three (the camera is a real PerspectiveCamera)
  * with a renderer and a context that write down what they are asked. The take
@@ -472,13 +473,18 @@ describe('recording a take', () => {
         return { width: 0, height: 0, captureStream: (fps) => { log.push(`capture:${fps}`); return {}; } };
     }
 
-    test('the stage sized then captured, the recorder started before the first frame and stopped after the last', async () => {
+    test('the stage sized and its first frame drawn, THEN captured and the recorder started, and stopped after the last frame', async () => {
         const log = [];
         const win = browser(log);
         const s = stage(log);
+        // A take draws its first frame as it begins (main.js `beginTake`),
+        // before it hands back.
         const take = async () => { log.push(`frames:${s.width}x${s.height}`); return { cancelled: false, frames: 12, seconds: 3.5 }; };
         const made = await C.recordTake(s, take, { w: 720, h: 1280, mime: 'video/webm', fps: 30, bitrate: 5, win });
-        expect(log).toEqual(['capture:30', 'new', 'start:1000', 'frames:720x1280', 'stop']);
+        // The first frame is on the stage before the stage is captured. A
+        // recorder started first captured the empty stage, and iMessage made
+        // that black frame the shared video's poster (Steve's QA, 2026-11-01).
+        expect(log).toEqual(['frames:720x1280', 'capture:30', 'new', 'start:1000', 'stop']);
         expect(made.blob.type).toBe('video/webm');
         expect(made.blob.size).toBe(4);
         expect(made).toMatchObject({ mime: 'video/webm', seconds: 3.5, frames: 12 });

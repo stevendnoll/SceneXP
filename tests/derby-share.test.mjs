@@ -458,7 +458,9 @@ describe('the share card on the page', () => {
     }
 
     /** A browser that can record: MediaRecorder, canvas capture, and the
-     *  canvases able to stream and to make a PNG. */
+     *  canvases able to stream and to make a PNG. Each canvas counts the
+     *  frames drawn onto it (`draws`), and `captured` holds that count for
+     *  each canvas at the moment it was captured. */
     function recordingBrowser() {
         class FakeRecorder {
             static isTypeSupported(t) { return t === 'video/webm'; }
@@ -474,16 +476,34 @@ describe('the share card on the page', () => {
         Object.assign(dom.windowStub, { MediaRecorder: FakeRecorder, HTMLCanvasElement: Canvas, Blob, File });
         const realCreate = dom.documentStub.createElement;
         const saved = [];
+        const captured = [];
         dom.documentStub.createElement = (tag) => {
             const e = realCreate(tag);
             if (tag === 'canvas') {
-                e.captureStream = () => ({ tracks: [], addTrack(t) { this.tracks.push(t); } });
+                e.draws = 0;
+                const helpers = {
+                    measureText: () => ({ width: 10 }),
+                    createLinearGradient: () => ({ addColorStop() {} }),
+                    createRadialGradient: () => ({ addColorStop() {} }),
+                    getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+                    canvas: e,
+                };
+                e.getContext = () => new Proxy({}, {
+                    get: (t, k) => {
+                        if (k === 'then') return undefined;
+                        if (k in helpers) return helpers[k];
+                        if (k in t) return t[k];
+                        return () => { if (k === 'drawImage') e.draws += 1; };
+                    },
+                    set: (t, k, v) => { t[k] = v; return true; },
+                });
+                e.captureStream = () => { captured.push(e.draws); return { tracks: [], addTrack(t) { this.tracks.push(t); } }; };
                 e.toBlob = (cb) => cb(new Blob(['png'], { type: 'image/png' }));
             }
             if (tag === 'a') e.click = () => saved.push(e.download);
             return e;
         };
-        return { FakeRecorder, saved };
+        return { FakeRecorder, saved, captured };
     }
 
     async function toResults(main) {
@@ -540,13 +560,20 @@ describe('the share card on the page', () => {
     });
 
     test('a clip is made live, plays back in the card, and is saved where it cannot be shared', async () => {
-        const { FakeRecorder, saved } = recordingBrowser();
+        const { FakeRecorder, saved, captured } = recordingBrowser();
         const main = await boot();
         await toResults(main);
         fire(dom.el('results-share'), 'click');
         const state = main.getState();
         expect(state.clip.recording).toBe(true);
         expect(state.clip.mime).toBe('video/webm');
+        // The canvas had its first frame on it when it was captured, and the
+        // recorder came after, so the recorder's first frame (iMessage's
+        // poster for a shared video) is the clip's opening and not an empty
+        // canvas (Steve's QA on X's and O's, 2026-11-01).
+        expect(captured).toEqual([state.clip.out.draws]);
+        expect(captured[0]).toBeGreaterThan(0);
+        expect(state.clip.rec).toBeTruthy();
         // Save a picture is seen to wait while the clip is made (QA, 2026-10-22).
         expect(dom.el('clip-image').disabled).toBe(true);
         // The live canvas is in the stage while it is made.

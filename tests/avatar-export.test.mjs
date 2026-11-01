@@ -376,6 +376,7 @@ describe('the dialog, end to end with fakes', () => {
     let renderers;
     let canvases;
     let made;
+    let captured;
 
     /** A renderer that draws nothing and counts. */
     function fakeRenderer(canvas) {
@@ -405,13 +406,21 @@ describe('the dialog, end to end with fakes', () => {
         renderers = [];
         canvases = [];
         made = [];
-        // Canvases that can give a Blob and a stream, as a browser's can.
+        // Canvases that can give a Blob and a stream, as a browser's can. Each
+        // counts the frames drawn onto it (`draws`), and `captured` holds
+        // that count for each canvas at the moment it was captured.
+        captured = [];
         const create = document.createElement;
         document.createElement = (tag) => {
             const el = create(tag);
             if (tag === 'canvas') {
                 el.toBlob = (cb, type) => cb(new Blob(['picture'], { type: type || 'image/png' }));
-                el.captureStream = () => ({ stream: true });
+                el.draws = 0;
+                const realContext = el.getContext.bind(el);
+                el.getContext = (type) => new Proxy(realContext(type), {
+                    get: (t, k) => (k === 'drawImage' ? (...args) => { el.draws += 1; return t.drawImage(...args); } : t[k]),
+                });
+                el.captureStream = () => { captured.push(el.draws); return { stream: true }; };
                 canvases.push(el);
             }
             if (tag === 'a') made.push(el);
@@ -589,6 +598,13 @@ describe('the dialog, end to end with fakes', () => {
         const pending = ex.makeClip();
         expect(dom.el('av-export-status').textContent).toBe(X.WORDS.clipMaking(CONFIG.export.clip.seconds));
         expect(ex.state.recording.rig).toBeNull();
+        // The first frame was drawn onto the canvas before it was captured
+        // and the recorder made, so the recorder's first frame (iMessage's
+        // poster for a shared video) is the figure and not an empty canvas
+        // (Steve's QA on X's and O's, 2026-11-01).
+        expect(dom.el('av-export-stage').children[0].draws).toBe(1);
+        expect(captured).toEqual([1]);
+        expect(ex.state.recording.rec).toBeTruthy();
         // Busy, never disabled (the accessibility sweep, 2026-10-26): a
         // disabled button drops the focus that pressed it. A press while
         // the clip is made is nothing.

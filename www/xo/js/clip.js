@@ -235,12 +235,21 @@ export function holdSize(renderer, w, h) {
 }
 
 /**
- * RECORD A TAKE: the stage canvas sized to `w` by `h` and captured at `fps`,
- * the recorder started BEFORE the first frame is drawn and stopped AFTER the
- * last, which is when `take()` resolves (main.js draws the frames). Resolves
- * `{ blob, mime, seconds, frames }`, or null when the take was refused or
- * cancelled, or when the stage cannot be captured. A recorder that fails
- * rejects the way recorder-1.0.0 does.
+ * RECORD A TAKE: the stage canvas sized to `w` by `h`, the take begun (main.js
+ * `beginTake`, which draws the first frame into the stage before it hands
+ * back), THEN the stage captured at `fps` and the recorder started, and the
+ * recorder stopped AFTER the last frame, which is when the take resolves.
+ * Resolves `{ blob, mime, seconds, frames }`, or null when the take was
+ * refused or cancelled, or when the stage cannot be captured. A recorder that
+ * fails rejects the way recorder-1.0.0 does.
+ *
+ * THE FIRST FRAME IS ON THE STAGE BEFORE THE STAGE IS CAPTURED (Steve's QA,
+ * 2026-11-01). The recorder used to be started first, so as to miss nothing,
+ * and the first thing it captured was the empty stage: a new canvas is
+ * transparent, transparent encodes as black, and iMessage makes a shared
+ * video's poster from its first frame, so every clip sent by text arrived as
+ * a black rectangle. Safari's canvas capture samples whatever the canvas
+ * holds, so with the first frame already painted nothing is missed either.
  *
  * The stage is sized before it is captured, never during: an encoder handed
  * frames of a new size part way through a recording may give up on it.
@@ -251,11 +260,12 @@ export async function recordTake(stage, take, { w, h, mime, fps = K().fps, bitra
         if (stage.width !== w) stage.width = w;
         if (stage.height !== h) stage.height = h;
     }
+    const run = take();
     const stream = stage.captureStream(fps);
     const rec = startRecording(stream, mime, { bitrate, win });
     let outcome = null;
     try {
-        outcome = await take();
+        outcome = await run;
     } finally {
         try { rec.recorder.stop(); } catch (e) { /* already stopped */ }
     }
