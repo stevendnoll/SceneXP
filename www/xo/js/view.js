@@ -29,6 +29,7 @@ import { XO_CONFIG as CFG, simToWorld, FIELD, SIM, UNITS_TO_METRES } from './con
 import { bandAt } from './scoring.min.js';
 import { figureFor, poseFigure, THROWING_SIDE, throwSideOf, FIGURE_LIFT, isVisitorFigure } from './roster.min.js';
 import { getBall, aimBall, placeSpot, BALL_FAT } from './ball.min.js';
+import { gripHand } from '../../shared/js/hands-1.0.0.min.js';
 import { placeMarker, hideMarker, showLanding, hideLanding } from './markers.min.js';
 import { toRigSpace, RIG } from './arm.min.js';
 import { takedownAt } from './takedown.min.js';
@@ -2487,11 +2488,55 @@ export function carryHold(mode, snapped, lift = 1, side = THROWING_SIDE) {
         mix(P.underCentre.aim, P.throwHold.aim, t));
 }
 
+/**
+ * THE QUARTERBACK'S HAND ON THE BALL (Steve's QA, 2026-11-01, from the new
+ * over-the-shoulder replay view: "the QB's fingers are going through the
+ * ball"). The throw hold puts the ball at a point written in `config.pose`,
+ * beside his ear, and the arm is solved to end near it; the rig's hand hangs
+ * from that arm with its palm toward his head and its fingers straight, and
+ * at this scale (the ball is 2.6 times life size to the figure's 2.2) the
+ * thumb side of the hand was inside the ball. While he holds it, the
+ * throwing hand is turned about the forearm to face the ball where it is and
+ * given the shared grip shape (hands-1.0.0 `gripHand`): fingers bent down
+ * onto the ball, thumb round its inner side, on whichever arm is his
+ * throwing arm. The ball itself does not move. His own hand comes back the
+ * frame the hold ends: the throw, the tuck, a sack, the catch by somebody
+ * else. One hold at a time, because there is one ball.
+ */
+const gripping = { figure: null, grip: null };
+
+function releaseGrip() {
+    if (gripping.grip) gripping.grip.open();
+    gripping.figure = null;
+    gripping.grip = null;
+}
+
+function holdBallInHand(figure, side, ballWorld, want) {
+    if (!want || !figure) { releaseGrip(); return; }
+    if (gripping.figure !== figure) releaseGrip();
+    const arms = figure.userData ? figure.userData.arms : null;
+    const arm = Array.isArray(arms) ? arms.find((a) => a && a.userData && a.userData.armSide === side) : null;
+    const forearm = arm && arm.userData ? arm.userData.forearm : null;
+    const kids = forearm && Array.isArray(forearm.children) ? forearm.children : [];
+    const hand = kids.find((c) => c && c.isMesh && c.userData && c.userData.isHand);
+    if (!hand || typeof forearm.worldToLocal !== 'function') return;
+    figure.updateMatrixWorld(true);
+    const local = forearm.worldToLocal(new THREE.Vector3(ballWorld.x, ballWorld.y, ballWorld.z));
+    if (![local.x, local.y, local.z].every(Number.isFinite)) return;
+    // Held already: the hand keeps facing the ball as the arm settles.
+    if (gripping.grip) { gripping.grip.follow(local); return; }
+    const grip = gripHand(hand, { radius: BALL_FAT * CFG.ballScale / CFG.figureScale, ball: local });
+    if (!grip) return;
+    gripping.figure = figure;
+    gripping.grip = grip;
+}
+
 export function syncBall(ballObj, carrier, delta = 1 / 60) {
     const ball = getBall();
     if (!ball) return;
 
     if (ballObj && !BENCHED(ballObj)) {
+        releaseGrip();
         const p = simToWorld(ballObj.coords.x, ballObj.coords.y, 0);
 
         // HAS IT STOPPED? A ball still travelling covers ground every frame;
@@ -2579,6 +2624,7 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
     endFlight();
     placeSpot(0, 0, 0, false);
 
+    if (!carrier) releaseGrip();
     if (carrier) {
         const figure = figureFor(carrier.settings.position);
         if (figure) {
@@ -2603,6 +2649,9 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             const inHand = mode === 'hand' ? handPoint(figure, throwSideOf(figure)) : null;
             const want = inHand || toWorld(figure, hold.ball);
             const aim = toWorld(figure, hold.aim, true);
+            // His hand on it for the throw hold, once the snap has brought it
+            // up to his ear; his own hand for every other carry.
+            holdBallInHand(figure, throwSideOf(figure), want, mode === 'throw' && snapProgress() >= 1);
 
             // GATHERING IT IN. On the frame a pass is caught the ball is still
             // out in front of the receiver's hands, and jumping it to his ribs

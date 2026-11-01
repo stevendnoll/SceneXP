@@ -35,6 +35,84 @@ function handOn(side) {
     return { person, hand };
 }
 
+test('a hand on a ball: turned to face it, fingers bent onto it, thumb round it, nothing inside it (X\'s and O\'s, 2026-11-01)', () => {
+    const { hand } = handOn(-1);
+    const own = hand.geometry;
+    const rest = hand.rotation.y;
+    const unit = hand.userData.handUnit;
+    const up = new THREE.Vector3(0, 1, 0);
+    // The ball where X's and O's throw hold put it, measured on the real rig
+    // in the resting hand's own frame: 2.51 units off the thumb side, 0.39
+    // up, 0.77 toward the palm, radius 2.18 units. In the forearm's frame:
+    const inOwn = new THREE.Vector3(2.51, 0.39, -0.77).multiplyScalar(unit);
+    const ball = inOwn.clone().applyAxisAngle(up, rest).add(hand.position);
+    const radius = 2.18 * unit;
+    // The rig's own hand was through it: its nearest vertex inside the ball.
+    const nearestOf = (geometry, centre) => {
+        const pos = geometry.getAttribute('position');
+        let nearest = Infinity;
+        for (let i = 0; i < pos.count; i += 1) nearest = Math.min(nearest, new THREE.Vector3().fromBufferAttribute(pos, i).distanceTo(centre));
+        return nearest;
+    };
+    expect(nearestOf(own, inOwn)).toBeLessThan(radius);
+
+    const grip = Hd.gripHand(hand, { radius, ball });
+    expect(grip.hand).toBe(hand);
+    expect(hand.userData.shape).toBe('grip');
+    expect(hand.geometry).not.toBe(own);
+    // Turned so the ball lies straight in front of the palm, at the same
+    // height and the same distance it was.
+    const local = ball.clone().sub(hand.position).applyAxisAngle(up, -hand.rotation.y);
+    expect(Math.abs(local.x)).toBeLessThan(1e-9);
+    expect(local.z).toBeLessThan(0);
+    expect(grip.at.y).toBeCloseTo(0.39, 9);
+    expect(grip.at.z).toBeCloseTo(-Math.hypot(2.51, 0.77), 9);
+    // Nothing of the new hand is inside the ball, and the fingertips are on it.
+    const centre = new THREE.Vector3(0, grip.at.y * unit, grip.at.z * unit);
+    const nearest = nearestOf(hand.geometry, centre);
+    expect(nearest).toBeGreaterThan(radius - 0.03 * unit);
+    expect(nearest).toBeLessThan(radius + 0.2 * unit);
+    // Bent, not the rig's straight fingers: a finger's tip is well forward
+    // of the palm's front, where a straight finger's never is.
+    const pos = hand.geometry.getAttribute('position');
+    let mostForward = 0;
+    for (let i = 0; i < pos.count; i += 1) mostForward = Math.min(mostForward, pos.getZ(i));
+    expect(mostForward).toBeLessThan(-0.8 * unit);
+    // The ball moving in the forearm's frame (an arm still settling): the
+    // hand turns to keep facing it, reshaped only for a real move.
+    const kept = hand.geometry;
+    const nudged = ball.clone().add(new THREE.Vector3(0.03 * unit, 0, 0.02 * unit));
+    grip.follow(nudged);
+    const after = nudged.clone().sub(hand.position).applyAxisAngle(up, -hand.rotation.y);
+    expect(Math.abs(after.x)).toBeLessThan(1e-9);
+    expect(hand.geometry).toBe(kept);
+    const moved = inOwn.clone().add(new THREE.Vector3(0, 0.5 * unit, 0)).applyAxisAngle(up, rest).add(hand.position);
+    grip.follow(moved);
+    expect(hand.geometry).not.toBe(kept);
+    expect(grip.at.y).toBeCloseTo(0.89, 9);
+    grip.follow(ball);
+    // His own hand and its resting turn come back.
+    const g = hand.geometry;
+    const disposed = jest.spyOn(g, 'dispose');
+    grip.open();
+    expect(hand.geometry).toBe(own);
+    expect(hand.rotation.y).toBe(rest);
+    expect(hand.userData.shape).toBe('open');
+    expect(disposed).toHaveBeenCalled();
+    // The other arm mirrors it: the thumb on its own inner side.
+    const left = handOn(1);
+    const mirrored = new THREE.Vector3(-2.51, 0.39, -0.77).multiplyScalar(unit).applyAxisAngle(up, left.hand.rotation.y).add(left.hand.position);
+    const g2 = Hd.gripHand(left.hand, { radius, ball: mirrored });
+    expect(g2).toBeTruthy();
+    expect(nearestOf(left.hand.geometry, new THREE.Vector3(0, g2.at.y * unit, g2.at.z * unit))).toBeGreaterThan(radius - 0.03 * unit);
+    g2.open();
+    // Not a hand, or no ball, is nothing.
+    expect(Hd.gripHand(null, { radius, ball })).toBeNull();
+    expect(Hd.gripHand(hand, { radius, ball: null })).toBeNull();
+    expect(Hd.gripHand(hand, { radius: 0, ball })).toBeNull();
+    expect(hand.userData.shape).toBe('open');
+});
+
 test('a tagged hand closes into the fist and opens again into its own hand', () => {
     const { hand } = handOn(-1);
     const own = hand.geometry;
