@@ -89,7 +89,7 @@ import {
 } from './replay.min.js';
 import {
     setDriver, setAspect, update as updateCamera, nudgeView, resetView, switchView,
-    resetShoulder, viewQuarter, newShoulder, newAim,
+    resetShoulder, viewQuarter, viewRide, viewOffset, newShoulder, newAim, newRide,
 } from './camera.min.js';
 import {
     initAudio, unlock as unlockAudio, play as playSound, simAudio,
@@ -491,7 +491,33 @@ function cameraState() {
     const total = Math.max(1, frameCount());
     const f = aimAt();
     const focus = simToWorld(f.x, f.y, f.z || 0);
-    return { progress: playheadFrame() / total, focus, ending: endingBodies() };
+    // A ride (the fifth view) sits behind a man as drawn and looks at the ball.
+    const riding = Boolean(viewRide());
+    return {
+        progress: playheadFrame() / total, focus, ending: endingBodies(),
+        rider: riding ? riderBody() : null, ball: riding ? ballWorld() : null,
+    };
+}
+
+/**
+ * THE MAN THE RIDE SITS BEHIND, AS DRAWN (camera.js `rideDriver`, Steve,
+ * 2026-11-01): the visitor's own when the camera follows him, else the
+ * quarterback. Read from the figure rather than the recording, so the camera
+ * rides the body the frame shows, lift and lean included. Null when he is not
+ * on the field, and the director's own shot stands in.
+ */
+function riderBody() {
+    const who = followingAvatar() ? state.playAs : 'qb';
+    const figure = figureFor(who);
+    // `who` names him for the suite, whose stub keeps no positions to tell
+    // two figures apart by; the camera reads only the body.
+    return figure && figure.visible ? { ...bodyOf(figure), who } : null;
+}
+
+/** Where the recording says the ball or its carrier is, in world metres. */
+function ballWorld() {
+    const b = replayFocus();
+    return b ? simToWorld(b.x, b.y, b.z || 0) : null;
 }
 
 /** Is the visitor's avatar on the field in this play: an avatar saved, and
@@ -3440,6 +3466,7 @@ function beginTake(stage, { quarter = 0, onFrame = null, follow = 'ball' } = {})
             plan, quarter, stage, g, w, h,
             shoulder: newShoulder(),
             aim: newAim(),
+            ride: newRide(),
             anchor: { x: opening.x, z: opening.z },
             // Who the camera follows for this take, kept whatever the visit's
             // choice becomes while it runs (the sheet re-records on a change).
@@ -3495,9 +3522,11 @@ function drawTake(delta) {
     // followed) is the aim and the bodies set the lens, at the clip's own
     // shape (`endingBodies`).
     const ending = endingBodies();
+    const riding = Boolean(viewOffset(t.quarter).ride);
     const shot = clipShot(clipProgress(playheadFrame(), t.plan), ending ? ending.focus : focus, {
         anchor: t.anchor, shoulder: t.shoulder, aim: t.aim, quarter: t.quarter, delta,
         points: ending ? ending.points : null, aspect: t.w / t.h,
+        rider: riding ? riderBody() : null, ball: riding ? ballWorld() : null, ride: t.ride,
     });
     // The result is stamped over the final hold only (D19).
     const stamp = CFG.clip.stamp && t.held >= t.plan.ending ? stampText(cycle.lastOutcome) : '';
@@ -3633,6 +3662,7 @@ export const __test__ = {
     /** The clip's take (specs/xo-photos-plan, Step 6), before the sheet
      *  that will drive it exists. */
     take: (stage, options) => beginTake(stage, options),
+    rider: () => riderBody(),
     cancelTake: () => cancelTake(),
     taking: () => (cycle.take ? { ...cycle.take, stage: undefined, g: undefined, live: undefined, release: undefined, resolve: undefined } : null),
     phase: () => cycle.phase,

@@ -156,19 +156,21 @@ describe('the director\'s shot, for the clip', () => {
             diff = Math.atan2(Math.sin(diff), Math.cos(diff));
             expect(Math.abs(diff)).toBeLessThan(1e-6);
         }
-        // Any whole number goes round the four.
-        expect(C.clipShot(0.6, focus, { quarter: 4, shoulder: Cam.newShoulder() })).toEqual(base);
-        expect(C.clipShot(0.6, focus, { quarter: -1, shoulder: Cam.newShoulder() }))
+        // Any whole number goes round the five (the fifth is the ride, which
+        // with nobody to ride is the director's own shot: xo-ride).
+        expect(C.clipShot(0.6, focus, { quarter: Cam.REPLAY_VIEWS, shoulder: Cam.newShoulder() })).toEqual(base);
+        expect(C.clipShot(0.6, focus, { quarter: -2, shoulder: Cam.newShoulder() }))
             .toEqual(C.clipShot(0.6, focus, { quarter: 3, shoulder: Cam.newShoulder() }));
     });
 
-    test('viewOffset names the four without touching the view on screen', () => {
-        expect(Cam.viewOffset(0)).toEqual({ yaw: 0, lift: 0, zoom: 1, quarter: 0 });
+    test('viewOffset names the five without touching the view on screen', () => {
+        expect(Cam.viewOffset(0)).toEqual({ yaw: 0, lift: 0, zoom: 1, quarter: 0, ride: null });
         expect(Cam.viewOffset(1).yaw).toBe(Math.PI);
         expect(Cam.viewOffset(2).yaw).toBe(Math.PI / 2);
         expect(Cam.viewOffset(3).yaw).toBe(-Math.PI / 2);
-        expect(Cam.viewOffset(4)).toEqual(Cam.viewOffset(0));
-        expect(Cam.viewOffset(-1)).toEqual(Cam.viewOffset(3));
+        expect(Cam.viewOffset(4)).toEqual({ yaw: 0, lift: 0, zoom: 1, quarter: 4, ride: 'shoulder' });
+        expect(Cam.viewOffset(5)).toEqual(Cam.viewOffset(0));
+        expect(Cam.viewOffset(-1)).toEqual(Cam.viewOffset(4));
         expect(Cam.viewOffset('x').quarter).toBe(0);
         Cam.resetView();
         Cam.viewOffset(2);

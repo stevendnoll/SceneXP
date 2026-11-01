@@ -740,7 +740,7 @@ describe('a replay can be got out of', () => {
             .find((b) => b.textContent === 'Switch view');
         expect(swap).toBeTruthy();
         expect(swap.getAttribute('aria-label'))
-            .toBe('Switch view to see the replay from another side of the field');
+            .toBe('Switch view to see the replay from another side of the field, or from behind the quarterback');
         expect(swap.getAttribute('aria-keyshortcuts')).toBe('V');
         expect(swap.focused).not.toBe(true);
         // Pressing it changes the camera and leaves the replay running.
@@ -1844,7 +1844,7 @@ describe('the share sheet', () => {
             expect(stage().children).toHaveLength(1);
             expect(stage().children[0].tagName).toMatch(/canvas/i);
             expect(stage().children[0].classList.contains('is-unseen')).toBe(false);
-            expect(dom.el('clip-view-count').textContent).toBe('View 1 of 4');
+            expect(dom.el('clip-view-count').textContent).toBe('View 1 of 5');
             // The first frame was drawn as the take began (before the stage
             // was captured), so the countdown is already up.
             expect(progress()).toBe(`Making your clip… ${Math.ceil(main.__test__.taking().plan.total)} seconds to go`);
@@ -1968,8 +1968,8 @@ describe('the share sheet', () => {
             expect(main.__test__.taking().quarter).toBe(1);
             // A fresh take, its first frame already drawn.
             expect(main.__test__.taking().frames).toBe(1);
-            expect(dom.el('clip-view-count').textContent).toBe('View 2 of 4');
-            expect(status()).toBe('View 2 of 4. Making the clip again from here.');
+            expect(dom.el('clip-view-count').textContent).toBe('View 2 of 5');
+            expect(status()).toBe('View 2 of 5. Making the clip again from here.');
             expect(progress()).toBe(`Making your clip… ${Math.ceil(main.__test__.taking().plan.total)} seconds to go`);
             expect(stage().children).toHaveLength(1);
             // V, as in the replay, but not with a modifier held.
@@ -1979,12 +1979,17 @@ describe('the share sheet', () => {
             fire(dom.documentStub, 'keydown', { key: 'V', metaKey: true });
             await flushAsync();
             expect(main.__test__.taking().quarter).toBe(2);
-            // Round the four and back to the director's own.
+            // Round the five, through the ride over the quarterback's
+            // shoulder (the fifth), and back to the director's own.
             fire(dom.documentStub, 'keydown', { key: 'V' });
             fire(dom.documentStub, 'keydown', { key: 'v' });
             await flushAsync();
+            expect(main.__test__.taking().quarter).toBe(4);
+            expect(dom.el('clip-view-count').textContent).toBe('View 5 of 5');
+            fire(dom.documentStub, 'keydown', { key: 'V' });
+            await flushAsync();
             expect(main.__test__.taking().quarter).toBe(0);
-            expect(dom.el('clip-view-count').textContent).toBe('View 1 of 4');
+            expect(dom.el('clip-view-count').textContent).toBe('View 1 of 5');
 
             // Let it finish, then switch: the finished clip is let go and a new take begins.
             await settle(() => main.__test__.phase() === 'result');
@@ -2010,7 +2015,7 @@ describe('the share sheet', () => {
             expect(dom.el('game-canvas').classList.contains('is-recording')).toBe(false);
             expect(dom.el('result').hidden).toBe(false);
             // No ping for a take nobody finished, one for every switch.
-            expect(kinds(sent, 'clip')).toEqual(['opened', 'view', 'view', 'view', 'view', 'made', 'view']);
+            expect(kinds(sent, 'clip')).toEqual(['opened', 'view', 'view', 'view', 'view', 'view', 'made', 'view']);
             expect(of(sent, 'clip')[1].searchParams.get('outcome')).toBe('view=2');
         } finally {
             urls.restore();
@@ -2083,6 +2088,42 @@ describe('the share sheet', () => {
         }
     });
 
+    test('the fifth view rides the quarterback as drawn, or the visitor with Follow me on (Steve, 2026-11-01)', async () => {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        createAvatarStore({ win: null }).save({ skin: 'deep', shirt: 'teal' });
+        globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'wr1' }));
+        const main = await aCatch({ downed: true });
+        const camera = await import('../www/xo/js/camera.min.js');
+        dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+        await flushAsync();
+        frames(1);
+        // The four turns hand the camera nobody to ride.
+        expect(main.__test__.cameraState().rider).toBeNull();
+        expect(main.__test__.cameraState().ball).toBeNull();
+        for (let i = 0; i < camera.QUARTERS.length; i += 1) press('Switch view');
+        expect(camera.viewRide()).toBe('shoulder');
+        frames(1);
+        // The fifth rides the quarterback's drawn body, and looks at the ball.
+        // (The stub keeps no positions, so the body is checked by shape and
+        // the man by name.)
+        let s = main.__test__.cameraState();
+        expect(s.rider).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, who: 'qb' });
+        expect(Number.isFinite(s.ball.x) && Number.isFinite(s.ball.z)).toBe(true);
+        // Follow me: the visitor's own body is the one ridden.
+        press('Follow me');
+        frames(1);
+        s = main.__test__.cameraState();
+        expect(s.rider.who).toBe('wr1');
+        // Home again, and the ride is forgotten with the view.
+        press('Switch view');
+        expect(camera.viewRide()).toBeNull();
+        frames(1);
+        expect(main.__test__.cameraState().rider).toBeNull();
+        press('Skip replay');
+        await flushAsync();
+        expect(main.__test__.phase()).toBe('result');
+    });
+
     test('with an avatar there is no nudge, and the clip opens on the view the replay was watched from', async () => {
         recordingBrowser();
         const urls = objectUrls();
@@ -2106,7 +2147,7 @@ describe('the share sheet', () => {
             await flushAsync();
             expect(dom.el('clip-nudge').hidden).toBe(true);
             expect(main.__test__.taking().quarter).toBe(2);
-            expect(dom.el('clip-view-count').textContent).toBe('View 3 of 4');
+            expect(dom.el('clip-view-count').textContent).toBe('View 3 of 5');
             dom.el('clip-close').click();
             await flushAsync();
             expect(main.__test__.phase()).toBe('result');

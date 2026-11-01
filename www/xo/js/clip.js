@@ -32,7 +32,7 @@
  */
 import { XO_CONFIG as CFG } from './config.min.js';
 import {
-    replayDriver, applyView, viewOffset, shoulderFor, newShoulder, smoothAim, fitBodies,
+    replayDriver, applyView, viewOffset, shoulderFor, newShoulder, smoothAim, fitBodies, rideDriver,
 } from './camera.min.js';
 import { drawWordmark, wordmarkFont, WORDMARK } from '../../shared/js/wordmark-1.0.0.min.js';
 import { startRecording } from '../../shared/js/recorder-1.0.0.min.js';
@@ -111,14 +111,27 @@ export function clipProgress(frame, plan) {
  * `aim` the focus is taken as it is. `points`, when given, are the ending's
  * bodies, and the lens opens for them at the clip's `aspect` (camera.js
  * `fitBodies`, ratcheted through the same `aim`).
+ *
+ * A RIDE (camera.js `rideDriver`, `quarter` past the four turns) sits behind
+ * `rider`, the man as drawn, looking at `ball`, through the take's own `ride`
+ * memory (`newRide()`), until the ending's bodies arrive: then the director's
+ * settled shot, as the live replay hands off. With no `rider` (he is off the
+ * field) the director's own shot stands in.
  */
 export function clipShot(progress, focus, {
     anchor = null, shoulder = null, quarter = 0, delta = 0, aim = null, points = null, aspect = K().width / K().height,
+    rider = null, ball = null, ride = null,
 } = {}) {
     const f = aim ? smoothAim(aim, focus, delta) : (focus || { x: 0, y: 0, z: 0 });
-    const side = shoulderFor(f.z, delta, shoulder || newShoulder());
-    const shot = applyView(replayDriver(progress, f, side, anchor), viewOffset(quarter));
-    return points && points.length ? fitBodies(shot, points, aspect, aim) : shot;
+    const offset = viewOffset(quarter);
+    const handoff = Boolean(points && points.length);
+    let shot = null;
+    if (offset.ride && rider && !handoff) shot = rideDriver(rider, ball || f, { memory: ride, delta, aspect });
+    if (!shot) {
+        const side = shoulderFor(f.z, delta, shoulder || newShoulder());
+        shot = applyView(replayDriver(progress, f, side, anchor), offset.ride ? viewOffset(0) : offset);
+    }
+    return handoff ? fitBodies(shot, points, aspect, aim) : shot;
 }
 
 /** "Caught +15", "Intercepted -10", "Incomplete": the result line stamped

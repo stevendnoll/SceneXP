@@ -78,7 +78,7 @@
       "url": "https://www.scenexp.com/xo/",
       "name": "X's and O's",
       "image": "https://www.scenexp.com/xo/assets/og-xo.jpg?v=1",
-      "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's four views, and with an avatar saved on the Your Avatar page you can play as any player on the field.",
+      "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's five views, one of them over the quarterback's shoulder, and with an avatar saved on the Your Avatar page you can play as any player on the field.",
       "genre": ["Sports", "Strategy"],
       "gamePlatform": "Web browser",
       "applicationCategory": "Game",
@@ -354,7 +354,8 @@
                      and the picture are made on the device and go only where
                      the visitor sends them, so the rule can promise that. -->
                 <li><strong>Share the play.</strong> After the whistle, watch the
-                    replay from any of four views, then share a short clip of it,
+                    replay from any of five views, one of them over the
+                    quarterback's shoulder, then share a short clip of it,
                     made right on your device, or save a picture of its best
                     moment.</li>
             </ol>
@@ -668,7 +669,7 @@
     <!-- SHARE THE PLAY (specs/xo-photos-plan, Step 7), opened from the result
          card: the clip of the play just over, made on this device as soon as
          the sheet opens and played back in it when it is done, from whichever
-         of the replay's four vantage points the visitor picks, and a way to
+         of the replay's five vantage points the visitor picks, and a way to
          share or save it. The sideline photo of the play's best moment is the
          picture under it, and all a browser that cannot record is offered.
          The stage holds the canvas being recorded and then the video, at a
@@ -682,16 +683,17 @@
             <h2 id="clip-title" class="card-title">Share the play</h2>
             <div id="clip-stage" class="clip-stage"></div>
             <p id="clip-progress" class="card-detail clip-progress">Making your clip…</p>
-            <!-- The replay's four vantage points, one press each, and V as in
-                 the replay. The count is read out by the status line. And who
+            <!-- The replay's five vantage points (four turns and the ride over
+                 a shoulder), one press each, and V as in the replay. The count
+                 is read out by the status line. And who
                  the camera follows, the ball or the visitor's own player: a
                  toggle that says its state, shown only for a visitor whose
                  avatar is on the field, F as on the replay row. -->
             <div id="clip-tools" class="clip-tools">
                 <button id="clip-view" class="hud-btn" type="button"
-                    aria-label="Switch view to see the play from another side of the field"
+                    aria-label="Switch view to see the play from another side of the field, or from behind the quarterback"
                     aria-keyshortcuts="V">Switch view</button>
-                <span id="clip-view-count" class="clip-count" aria-hidden="true">View 1 of 4</span>
+                <span id="clip-view-count" class="clip-count" aria-hidden="true">View 1 of 5</span>
                 <button id="clip-follow" class="hud-btn hud-toggle" type="button"
                     aria-label="Follow me with the camera, instead of the ball"
                     aria-keyshortcuts="F" aria-pressed="false" hidden>Follow me</button>

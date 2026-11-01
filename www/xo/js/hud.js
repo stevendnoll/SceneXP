@@ -589,7 +589,7 @@ export function showSkipReplay({ follow = null } = {}) {
      */
     const swap = bindKeys(button('Switch view', 'hud-btn',
         () => handlers.onSwitchView && handlers.onSwitchView(),
-        'to see the replay from another side of the field'), [VIEW_KEY]);
+        'to see the replay from another side of the field, or from behind the quarterback'), [VIEW_KEY]);
     swap.id = 'switch-view-btn';
     box.appendChild(swap);
 

@@ -1,6 +1,8 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * camera.js - The director. One camera, three drivers, and only one driving.
+ * The replay's driver has two shots of its own: the orbit, turned to any of
+ * four quarters, and the ride over a player's shoulder (`rideDriver`).
  *
  * PURE, AND THAT IS THE POINT (PLANNING section 5). Every driver is a function
  * of time and state returning a position, a target and a field of view in world
@@ -410,6 +412,9 @@ export function newAim() {
 
 const aim = newAim();
 
+/** The live replay's ride memory (see `newRide`); the clip brings its own. */
+const ride = newRide();
+
 /**
  * The aim eased toward `focus` over `delta` seconds, seeded ON the first
  * focus it is given so a replay opens with no lag at all. Returns a fresh
@@ -438,6 +443,16 @@ export function resetShoulder() {
     shoulder.held = 0;
     aim.seeded = false;
     aim.fov = 0;
+    resetRide(ride);
+}
+
+/** A ride memory forgotten: its heading seeds again on the next frame. */
+export function resetRide(r = ride) {
+    r.seeded = false;
+    r.heading = 0;
+    r.aim.seeded = false;
+    r.aim.fov = 0;
+    return r;
 }
 
 /**
@@ -545,7 +560,7 @@ export function shoulderFor(z, delta = 0, s = shoulder) {
  * watching something else. Four fixed vantage points ask for one press and
  * cannot be got wrong. See `switchView`.
  */
-const view = { yaw: 0, lift: 0, zoom: 1, quarter: 0 };
+const view = { yaw: 0, lift: 0, zoom: 1, quarter: 0, ride: null };
 
 /**
  * THE FOUR VANTAGE POINTS, AS QUARTER TURNS ABOUT THE SHOT'S OWN TARGET.
@@ -564,20 +579,31 @@ const view = { yaw: 0, lift: 0, zoom: 1, quarter: 0 };
  */
 export const QUARTERS = Object.freeze([0, Math.PI, Math.PI / 2, -Math.PI / 2]);
 
+/**
+ * AND AFTER THE FOUR, THE RIDES (Steve, 2026-11-01): a different camera
+ * rather than a turn of the same one, over the shoulder of the man the camera
+ * follows (`rideDriver`). Named here so a view is a whole number everywhere,
+ * on the replay row, on the sheet and in the telemetry, and the ride is simply
+ * the fifth. The helmet, at eye height, is the next one to add here.
+ */
+export const RIDES = Object.freeze(['shoulder']);
+
 /** How many there are, for anything that wants to say so. */
-export const REPLAY_VIEWS = QUARTERS.length;
+export const REPLAY_VIEWS = QUARTERS.length + RIDES.length;
 
 /**
  * The offset for vantage point `quarter` on its own, without touching the
  * view the live replay is showing: the shareable clip (specs/xo-photos-plan,
  * Step 6, D16) is turned to the quarter the visitor chose on its sheet, and
  * the replay they may watch next still opens on the director's shot. Any
- * whole number is taken round the four.
+ * whole number is taken round the five. A ride's offset is the director's
+ * own (no turn), with `ride` naming the camera that replaces it.
  */
 export function viewOffset(quarter = 0) {
-    const n = QUARTERS.length;
+    const n = REPLAY_VIEWS;
     const q = ((Math.round(Number(quarter) || 0) % n) + n) % n;
-    return { yaw: QUARTERS[q], lift: 0, zoom: 1, quarter: q };
+    if (q < QUARTERS.length) return { yaw: QUARTERS[q], lift: 0, zoom: 1, quarter: q, ride: null };
+    return { yaw: 0, lift: 0, zoom: 1, quarter: q, ride: RIDES[q - QUARTERS.length] };
 }
 
 /**
@@ -585,18 +611,27 @@ export function viewOffset(quarter = 0) {
  *
  * IT CUTS RATHER THAN SWINGS. A quarter turn eased across would take a second
  * of a replay that runs for four, and switching cameras mid-replay is a cut
- * everywhere else in the sport.
+ * everywhere else in the sport. A ride starts fresh: its heading seeds on the
+ * first frame it is shown rather than swinging in from a view it never had.
  */
 export function switchView(step = 1) {
-    const n = QUARTERS.length;
+    const n = REPLAY_VIEWS;
     view.quarter = (((view.quarter + step) % n) + n) % n;
-    view.yaw = QUARTERS[view.quarter];
+    const offset = viewOffset(view.quarter);
+    view.yaw = offset.yaw;
+    view.ride = offset.ride;
+    resetRide(ride);
     return view.quarter;
 }
 
-/** Which of the four is showing, 0 for the director's own. */
+/** Which of the five is showing, 0 for the director's own. */
 export function viewQuarter() {
     return view.quarter;
+}
+
+/** The ride showing ('shoulder'), or null for one of the four turns. */
+export function viewRide() {
+    return view.ride;
 }
 
 /** How far a visitor may take it. The floor on elevation is what keeps the
@@ -636,6 +671,7 @@ export function resetView() {
     view.lift = 0;
     view.zoom = 1;
     view.quarter = 0;
+    view.ride = null;
     // A new replay also opens on the shoulder its own carrier asks for, rather
     // than swinging in from wherever the last one finished.
     resetShoulder();
@@ -649,7 +685,7 @@ export function getView() {
 /** Has the visitor moved it at all? The hint on screen goes away once they
  *  have, because it has done its job. */
 export function viewMoved() {
-    return view.yaw !== 0 || view.lift !== 0 || view.zoom !== 1;
+    return view.yaw !== 0 || view.lift !== 0 || view.zoom !== 1 || Boolean(view.ride);
 }
 
 /**
@@ -691,6 +727,102 @@ export function applyView(shot, offset = view) {
     };
 }
 
+// ---- The ride ---------------------------------------------------------------
+
+/**
+ * OVER THE SHOULDER OF THE MAN THE CAMERA FOLLOWS (Steve, 2026-11-01). See
+ * `ride` in config.js for what it is for, and why a near chase works on this
+ * field where the far one (D56) did not.
+ *
+ * `rider` is the man AS DRAWN, `{ x, y, z, yaw }` in world metres, `y` his
+ * feet and `yaw` his facing (three's turn about y: he faces (sin yaw, cos
+ * yaw)). `ball` is where the ball or its carrier is, world metres, or null.
+ *
+ * THE HEADING is his own facing, swung toward the ball once the ball is in
+ * front of him and more than `near` away, wholly so by `far`. A quarterback in
+ * the pocket looks downfield and his ride swings onto his own throw; a
+ * receiver's ride watches his route and picks the ball up as it comes past
+ * him. The camera stands `back` behind him and `height` above his feet along
+ * that heading, and looks `ahead` metres along it at `eye` height, blended to
+ * the ball by the same amount it drew the heading.
+ *
+ * `memory` (`newRide()`) eases the heading over `turnSmooth`, the short way
+ * round, and smooths the ball through an aim of its own, so a quarterback's
+ * shuffle in the pocket does not turn the whole frame. Without one the shot
+ * is computed cold, which is what the tests want.
+ *
+ * CLAMPED INSIDE THE FIELD: never behind an end line, never in the seats,
+ * never below `floor`. Here the position gives way, not the heading, because
+ * this camera is a step from its subject and a metre of give is invisible,
+ * where the same give froze the far chase in place. The lens is wider upright
+ * (`fovUpright`), or a phone's frame shows a slice of one lane.
+ */
+export function newRide() {
+    return { heading: 0, seeded: false, aim: newAim() };
+}
+
+export function rideDriver(rider, ball = null, { memory = null, delta = 0, aspect = 1.78 } = {}) {
+    if (!rider || !Number.isFinite(rider.x) || !Number.isFinite(rider.z)) return null;
+    const R = CFG.camera.ride;
+    const s = CFG.figureScale;
+    const feet = Number.isFinite(rider.y) ? rider.y : 0;
+    const face = Number.isFinite(rider.yaw) ? rider.yaw : Math.PI / 2;
+    const fx = Math.sin(face);
+    const fz = Math.cos(face);
+    const focus = ball ? (memory ? smoothAim(memory.aim, ball, delta) : ball) : null;
+
+    // How much of the look the ball draws: none behind him or in his hands,
+    // all of it once it is `far` in front.
+    let pull = 0;
+    let bx = 0;
+    let bz = 0;
+    if (focus) {
+        const dx = focus.x - rider.x;
+        const dz = focus.z - rider.z;
+        const d = Math.hypot(dx, dz);
+        if (d > R.near && dx * fx + dz * fz > 0) {
+            pull = clamp01((d - R.near) / Math.max(1e-6, R.far - R.near));
+            bx = dx / d;
+            bz = dz / d;
+        }
+    }
+    let hx = lerp(fx, bx, pull);
+    let hz = lerp(fz, bz, pull);
+    const hn = Math.hypot(hx, hz);
+    if (hn < 1e-6) { hx = fx; hz = fz; } else { hx /= hn; hz /= hn; }
+    let heading = Math.atan2(hx, hz);
+    if (memory) {
+        if (!memory.seeded) {
+            memory.heading = heading;
+            memory.seeded = true;
+        } else {
+            const diff = Math.atan2(Math.sin(heading - memory.heading), Math.cos(heading - memory.heading));
+            const rate = R.turnSmooth > 0 ? 1 - Math.exp(-Math.max(0, delta) / R.turnSmooth) : 1;
+            memory.heading += diff * rate;
+        }
+        heading = memory.heading;
+    }
+    const ux = Math.sin(heading);
+    const uz = Math.cos(heading);
+
+    const minX = -FIELD.endZone + 0.5;
+    const maxX = FIELD.lineInterval * FIELD.segments + FIELD.endZone - 0.5;
+    const maxZ = FIELD.width / 2 + FIELD.sideline;
+    const position = {
+        x: clamp(rider.x - ux * R.back * s, minX, maxX),
+        y: Math.max(feet + R.height * s, R.floor),
+        z: clamp(rider.z - uz * R.back * s, -maxZ, maxZ),
+    };
+    const eye = feet + R.eye * s;
+    const target = { x: rider.x + ux * R.ahead, y: eye, z: rider.z + uz * R.ahead };
+    if (focus && pull > 0) {
+        target.x = lerp(target.x, focus.x, pull);
+        target.y = lerp(eye, Math.max(focus.y || 0, 0.9), pull);
+        target.z = lerp(target.z, focus.z, pull);
+    }
+    return { position, target, fov: aspect < 1 ? R.fovUpright : R.fov, progress: 1 };
+}
+
 // ---- The director -----------------------------------------------------------
 
 /** ...and `show`, the milestone shows, whose every shot is solved in
@@ -720,7 +852,8 @@ export function getDriver() {
  * Advance the director and say where the camera should be.
  *
  * `state` carries whatever the active driver needs: `focus` and `progress` for
- * the replay, nothing at all for the other two.
+ * the replay, with `rider` (the man as drawn, `bodyOf`) and `ball` (world
+ * metres) for a ride, nothing at all for the other two.
  */
 export function update(delta, state = {}) {
     elapsed += delta;
@@ -731,10 +864,22 @@ export function update(delta, state = {}) {
         // has done to it, then the lens opened for the bodies of the ending.
         const ending = state.ending || null;
         const focus = smoothAim(aim, ending ? ending.focus : state.focus, delta);
-        const shot = applyView(
-            replayDriver(state.progress || 0, focus, shoulderFor(focus.z, delta))
-        );
-        return ending && ending.points ? fitBodies(shot, ending.points, aspect, aim) : shot;
+        const handoff = Boolean(ending && ending.points && ending.points.length);
+        let shot = null;
+        // THE RIDE, UNTIL THE WHISTLE. The ending (a tackle, a party) is the
+        // director's settled shot in every view, so both bodies stay large
+        // and in frame: a ride into a tackle is a camera in the turf. With
+        // nobody to ride (he is off the field) the director's own shot stands in.
+        if (view.ride && state.rider && !handoff) {
+            shot = rideDriver(state.rider, state.ball || focus, { memory: ride, delta, aspect });
+        }
+        if (!shot) {
+            shot = applyView(
+                replayDriver(state.progress || 0, focus, shoulderFor(focus.z, delta)),
+                view.ride ? null : view
+            );
+        }
+        return handoff ? fitBodies(shot, ending.points, aspect, aim) : shot;
     }
     if (current === DRIVERS.idle) return idleDriver(elapsed, aspect);
     // A show brings its own shot. Without one it holds the play camera, which

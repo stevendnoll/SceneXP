@@ -8858,7 +8858,7 @@ html [data-ui-theme="neon" lang="en"]
         "url": "https://www.scenexp.com/xo/",
         "name": "X's and O's",
         "image": "https://www.scenexp.com/xo/assets/og-xo.jpg?v=1",
-        "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's four views, and with an avatar saved on the Your Avatar page you can play as any player on the field.",
+        "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's five views, one of them over the quarterback's shoulder, and with an avatar saved on the Your Avatar page you can play as any player on the field.",
         "genre": [
           "Sports",
           "Strategy"
@@ -9033,7 +9033,7 @@ html [data-ui-theme="neon" lang="en"]
           li
             strong
               "Share the play."
-            "After the whistle, watch the replay from any of four views, then share a short clip of it, made right on your device, or save a picture of its best moment."
+            "After the whistle, watch the replay from any of five views, one of them over the quarterback's shoulder, then share a short clip of it, made right on your device, or save a picture of its best moment."
         p.welcome-keys.card-meta
           "On a keyboard:"
           kbd
@@ -9257,10 +9257,10 @@ html [data-ui-theme="neon" lang="en"]
         p#clip-progress.card-detail.clip-progress
           "Making your clip…"
         div#clip-tools.clip-tools
-          button#clip-view.hud-btn [aria-keyshortcuts="V" aria-label="Switch view to see the play from another side of the field" type="button"]
+          button#clip-view.hud-btn [aria-keyshortcuts="V" aria-label="Switch view to see the play from another side of the field, or from behind the quarterback" type="button"]
             "Switch view"
           span#clip-view-count.clip-count [aria-hidden="true"]
-            "View 1 of 4"
+            "View 1 of 5"
           button#clip-follow.hud-btn.hud-toggle [aria-keyshortcuts="F" aria-label="Follow me with the camera, instead of the ball" aria-pressed="false" hidden type="button"]
             "Follow me"
         p#clip-nudge.card-meta.clip-nudge [hidden]

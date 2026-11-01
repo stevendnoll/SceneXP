@@ -1033,6 +1033,53 @@ const XO_CONFIG = {
             shoulderHold: 4.0,       // ...and seconds before it may change again
             shoulderEase: 1.2,       // seconds to swing across, rather than cut
         },
+
+        /**
+         * THE RIDE: OVER THE SHOULDER OF THE MAN THE CAMERA FOLLOWS (Steve,
+         * 2026-11-01), the fifth view after the four quarter turns, in the
+         * replay and in the clip. The quarterback's shoulder, or the
+         * visitor's own with Follow me on. The play unfolds AWAY from this
+         * camera, so the receivers, the ball and the defenders are in front
+         * of it by construction, which is the problem it answers: from the
+         * director's orbit the visitor's receiver ran out of frame, and
+         * following him the quarterback and the ball did.
+         *
+         * IT IS A NEAR CHASE, AND THAT IS WHY IT WORKS WHERE THE FIRST CHASE
+         * DID NOT (D56, `replay` above). A camera two intervals behind the
+         * ball wanted to stand behind the goal post on this 35 m field; one
+         * a step behind a man's back needs almost no field behind it. It is
+         * still clamped inside the end lines and the touchlines.
+         *
+         * WHERE IT LOOKS (camera.js `rideDriver`): along the man's own
+         * facing, which for a quarterback in the pocket is downfield and for
+         * a receiver is his route, and toward the ball once the ball is in
+         * front of him and further than `near`, blending fully by `far`. So
+         * the quarterback's ride swings onto his own throw, and a receiver's
+         * ride watches his route until the ball comes past him. The heading
+         * is eased over `turnSmooth`, the short way round, and the ball is
+         * smoothed through an aim of the ride's own (`focusSmooth` above).
+         *
+         * AT THE WHISTLE IT HANDS OFF to the director's settled shot for the
+         * ending (the tackle or the party), which keeps both bodies large
+         * and in frame (`fitBodies`): a ride into a tackle is a camera in the
+         * turf.
+         *
+         * Distances before `figureScale` are in the figures' own metres and
+         * are scaled with them, so the camera stays over a shoulder whatever
+         * size the men are drawn. `ahead` is field metres.
+         */
+        ride: {
+            back: 1.1,          // metres behind him, before figureScale
+            height: 2.6,        // metres above his feet, before figureScale
+            eye: 1.45,          // metres: the height the look point sits at, before figureScale
+            ahead: 9,           // field metres ahead of him the camera looks, with nothing else to look at
+            near: 2.5,          // field metres: the ball closer than this is his
+            far: 7,             // field metres: the ball further than this draws the whole look
+            turnSmooth: 0.35,   // seconds of ease on the heading
+            fov: 62,            // degrees, in landscape
+            fovUpright: 84,     // degrees, a phone held upright: see fitBodies on the narrow frame
+            floor: 1.2,         // metres: never below this off the grass
+        },
     },
 
     /**
