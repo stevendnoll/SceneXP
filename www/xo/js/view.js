@@ -2009,8 +2009,12 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             const turnTo = wrapAngle(Math.atan2(glanceAt.x - p.x, glanceAt.z - p.z) - figure.rotation.y);
             const max = CFG.pose.glance.max;
             figure.userData.glance = turnTo > max ? max : (turnTo < -max ? -max : turnTo);
+            // And the point itself, world metres, for a camera riding his
+            // shoulder to look where he looks (camera.js `rideDriver`).
+            figure.userData.glanceAt = { x: glanceAt.x, z: glanceAt.z };
         } else {
             figure.userData.glance = null;
+            figure.userData.glanceAt = null;
         }
 
         // STRIDE ADVANCES WITH DISTANCE COVERED, and now it genuinely does.

@@ -734,17 +734,23 @@ export function applyView(shot, offset = view) {
  * `ride` in config.js for what it is for, and why a near chase works on this
  * field where the far one (D56) did not.
  *
- * `rider` is the man AS DRAWN, `{ x, y, z, yaw }` in world metres, `y` his
- * feet and `yaw` his facing (three's turn about y: he faces (sin yaw, cos
- * yaw)). `ball` is where the ball or its carrier is, world metres, or null.
+ * `rider` is the man AS DRAWN, `{ x, y, z, yaw, look }` in world metres, `y`
+ * his feet, `yaw` his facing (three's turn about y: he faces (sin yaw, cos
+ * yaw)) and `look` the point his head is turned to (view.js `glanceFor`), or
+ * null. `ball` is where the ball or its carrier is, world metres, or null.
  *
  * THE HEADING is his own facing, swung toward the ball once the ball is in
  * front of him and more than `near` away, wholly so by `far`. A quarterback in
- * the pocket looks downfield and his ride swings onto his own throw; a
- * receiver's ride watches his route and picks the ball up as it comes past
- * him. The camera stands `back` behind him and `height` above his feet along
- * that heading, and looks `ahead` metres along it at `eye` height, blended to
- * the ball by the same amount it drew the heading.
+ * the pocket looks downfield and his ride swings onto his own throw. A man
+ * WITH A LOOK IS LOOKED ALONG WITH (Steve's QA, 2026-11-01, Follow me: "the
+ * replay camera still has the receiver looking straight ahead"): the heading
+ * is the way his head is turned, wherever that is, so a receiver looking back
+ * for the ball is shot from his far side, over the shoulder he is looking
+ * over, with the quarterback beyond him and the ball coming toward the lens.
+ * The camera stands `back` behind him and `height` above his feet along that
+ * heading, and looks `ahead` metres along it at `eye` height, blended to the
+ * ball by the amount it drew the heading, or at the look point at his eye
+ * height.
  *
  * `memory` (`newRide()`) eases the heading over `turnSmooth`, the short way
  * round, and smooths the ball through an aim of its own, so a quarterback's
@@ -769,14 +775,23 @@ export function rideDriver(rider, ball = null, { memory = null, delta = 0, aspec
     const face = Number.isFinite(rider.yaw) ? rider.yaw : Math.PI / 2;
     const fx = Math.sin(face);
     const fz = Math.cos(face);
-    const focus = ball ? (memory ? smoothAim(memory.aim, ball, delta) : ball) : null;
+    const look = rider.look && Number.isFinite(rider.look.x) && Number.isFinite(rider.look.z)
+        ? { x: rider.look.x, y: feet + R.eye * s, z: rider.look.z } : null;
+    const drawn = look || ball;
+    const focus = drawn ? (memory ? smoothAim(memory.aim, drawn, delta) : drawn) : null;
 
     // How much of the look the ball draws: none behind him or in his hands,
-    // all of it once it is `far` in front.
+    // all of it once it is `far` in front. A look of his own draws all of it,
+    // wherever it is.
     let pull = 0;
     let bx = 0;
     let bz = 0;
-    if (focus) {
+    if (focus && look) {
+        const dx = focus.x - rider.x;
+        const dz = focus.z - rider.z;
+        const d = Math.hypot(dx, dz);
+        if (d > 1e-6) { pull = 1; bx = dx / d; bz = dz / d; }
+    } else if (focus) {
         const dx = focus.x - rider.x;
         const dz = focus.z - rider.z;
         const d = Math.hypot(dx, dz);

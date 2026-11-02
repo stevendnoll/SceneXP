@@ -119,6 +119,34 @@ describe('where the ride stands and looks', () => {
         expect(shot.target.y).toBeCloseTo((R.eye * S + 0.9) / 2, 9);
     });
 
+    test('a man with a look of his own is shot along it: a receiver looking back is seen from his far side, the quarterback beyond', () => {
+        // Running downfield, head turned back to a quarterback behind him and
+        // to one side (Follow me, Steve's QA 2026-11-01).
+        const rider = { ...man(20, 2), look: { x: 6, z: -1 } };
+        const shot = Cam.rideDriver(rider, { x: 6, y: 0, z: -1 });
+        const d = Math.hypot(6 - 20, -1 - 2);
+        const ux = (6 - 20) / d;
+        const uz = (-1 - 2) / d;
+        // Behind the heading is in FRONT of the man: the camera is downfield
+        // of him, looking back past his shoulder.
+        near(shot.position, { x: 20 - ux * R.back * S, y: R.height * S, z: 2 - uz * R.back * S });
+        expect(shot.position.x).toBeGreaterThan(20);
+        // Aimed at the point he looks at, at his eye height.
+        near(shot.target, { x: 6, y: R.eye * S, z: -1 });
+        // A look in front of him is the same shot the ball would give, lifted to his eyes.
+        const ahead = Cam.rideDriver({ ...man(), look: { x: 30, z: 8 } });
+        near(ahead.position, Cam.rideDriver(man(), { x: 30, y: 0, z: 8 }).position);
+        near(ahead.target, { x: 30, y: R.eye * S, z: 8 });
+        // No look, or a look that is not a point: the ball rule as before.
+        expect(Cam.rideDriver({ ...man(), look: null }, { x: 2, y: 0, z: 0 })).toEqual(Cam.rideDriver(man()));
+        expect(Cam.rideDriver({ ...man(), look: { x: NaN, z: 0 } })).toEqual(Cam.rideDriver(man()));
+        // Eased like any heading: a short frame after seeding on the run barely moves it.
+        const memory = Cam.newRide();
+        const cold = Cam.rideDriver(man(20, 2), null, { memory, delta: 0 });
+        const soon = Cam.rideDriver(rider, null, { memory, delta: 0.001 });
+        expect(Math.abs(soon.position.x - cold.position.x)).toBeLessThan(0.05);
+    });
+
     test('never behind an end line, never in the seats, never below the floor', () => {
         // On his own goal line facing downfield: a step behind him is in the end zone, past the line.
         const deep = Cam.rideDriver(man(-FIELD.endZone, 0));

@@ -2107,7 +2107,7 @@ describe('the share sheet', () => {
         // (The stub keeps no positions, so the body is checked by shape and
         // the man by name.)
         let s = main.__test__.cameraState();
-        expect(s.rider).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, who: 'qb' });
+        expect(s.rider).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, who: 'qb', look: null });
         expect(Number.isFinite(s.ball.x) && Number.isFinite(s.ball.z)).toBe(true);
         // Follow me: the visitor's own body is the one ridden.
         press('Follow me');

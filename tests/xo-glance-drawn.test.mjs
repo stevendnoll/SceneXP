@@ -141,6 +141,9 @@ describe('on the real rig', () => {
         const G = CFG.pose.glance;
         const held1 = Math.max(-G.max, Math.min(G.max, want1));
         expect(f1.userData.glance).toBeCloseTo(held1, 2);
+        // And the point itself, for the ride camera to look along.
+        expect(f1.userData.glanceAt).toEqual({ x: simToWorld(qb.coords.x, qb.coords.y, 0).x, z: simToWorld(qb.coords.x, qb.coords.y, 0).z });
+        expect(f2.userData.glanceAt).toBeNull();
         expect(f1.userData.neck.rotation.y).toBeCloseTo(held1, 1);
         expect(Math.abs(f1.userData.neck.rotation.y)).toBeLessThanOrEqual(G.max + 1e-9);
         expect(f2.userData.glance).toBeNull();

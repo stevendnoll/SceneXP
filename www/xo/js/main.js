@@ -509,9 +509,14 @@ function cameraState() {
 function riderBody() {
     const who = followingAvatar() ? state.playAs : 'qb';
     const figure = figureFor(who);
+    if (!figure || !figure.visible) return null;
     // `who` names him for the suite, whose stub keeps no positions to tell
-    // two figures apart by; the camera reads only the body.
-    return figure && figure.visible ? { ...bodyOf(figure), who } : null;
+    // two figures apart by; the camera reads the body and `look`, the point
+    // his head is turned to (view.js `glanceFor`), so the ride looks where
+    // he looks: back at the quarterback, or at the ball coming.
+    const at = figure.userData ? figure.userData.glanceAt : null;
+    const look = at && Number.isFinite(at.x) && Number.isFinite(at.z) ? { x: at.x, z: at.z } : null;
+    return { ...bodyOf(figure), who, look };
 }
 
 /** Where the recording says the ball or its carrier is, in world metres. */
