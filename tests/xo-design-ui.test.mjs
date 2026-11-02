@@ -451,40 +451,63 @@ describe('saving', () => {
         expect(JSON.stringify(reports)).not.toMatch(/B go/);
     });
 
-    test('one of the visitor’s own plays opens with its lines, and saving under its name replaces it after a question', () => {
+    test('one of the visitor’s own plays opens with its lines, and Save changes updates it, renamed or not, with no question', () => {
         const mine = S.addPlay({ name: 'Mine', base: 'pass2', routes: { wr1: [[0.19, 0.08], [0.5, 0.08]] } }, 1);
         UI.showDesigner(() => {}, { play: `mine:${mine.id}` });
         const p = parts();
         expect(p.name.value).toBe('Mine');
         expect(UI.designerState().routes).toEqual(mine.routes);
         expect(byText('Delete my play')).toBeTruthy();
+        // The buttons say what they will do to the play that is open.
+        expect(byText('Save play')).toBeUndefined();
+        expect(byText('Save changes')).toBeTruthy();
+        expect(byText('Save as new play').hidden).toBe(false);
         player('wr2').click();
         const spot = A.formationSpots('pass2').wr2;
         drag([spot, [spot[0] + 0.4, spot[1]]]);
-        byText('Save play').click();
-        // Asked first, and No keeps everything as it was.
-        expect(p.confirm.hidden).toBe(false);
-        expect(p.confirm.children[0].textContent).toMatch(/Replace Mine/);
-        byText('No, keep it').click();
+        p.name.value = 'Mine, renamed';
+        byText('Save changes').click();
         expect(p.confirm.hidden).toBe(true);
-        expect(el('designer').hidden).toBe(false);
-        expect(S.listPlays()).toHaveLength(1);
-        byText('Save play').click();
-        byText('Yes, replace it').click();
         expect(el('designer').hidden).toBe(true);
         expect(S.listPlays()).toHaveLength(1);
-        expect(Object.keys(S.getPlay(mine.id).routes).sort()).toEqual(['wr1', 'wr2']);
+        const kept = S.getPlay(mine.id);
+        expect(kept.name).toBe('Mine, renamed');
+        expect(Object.keys(kept.routes).sort()).toEqual(['wr1', 'wr2']);
         expect(saved[0].id).toBe(mine.id);
+        expect(reports.find(([, d]) => d.kind === 'update')[1].outcome).toEqual({ base: 'pass2' });
     });
 
-    test('a new name on an old play is a new play', () => {
+    test('Save as new play is the explicit way to a copy, and a formation or a book play only ever saves a new one', () => {
         const mine = S.addPlay({ name: 'Mine', base: 'pass2', routes: { wr1: [[0.19, 0.08], [0.5, 0.08]] } }, 1);
         UI.showDesigner(() => {}, { play: `mine:${mine.id}` });
         parts().name.value = 'Mine again';
-        byText('Save play').click();
+        byText('Save as new play').click();
         expect(S.listPlays()).toHaveLength(2);
         expect(S.listPlays()[0].name).toBe('Mine again');
         expect(S.getPlay(mine.id).name).toBe('Mine');
+        // The same name as an existing play gets a number rather than a replace.
+        UI.showDesigner(() => {});
+        const p = parts();
+        expect(byText('Save as new play').hidden).toBe(true);
+        expect(byText('Save play')).toBeTruthy();
+        player('wr1').click();
+        const spot = A.formationSpots('pass4').wr1;
+        drag([spot, [spot[0] + 0.4, spot[1]]]);
+        p.name.value = 'Mine';
+        byText('Save play').click();
+        expect(S.listPlays()).toHaveLength(3);
+        expect(S.listPlays()[0].name).toBe('Mine 2');
+        expect(S.getPlay(mine.id).routes).toEqual(mine.routes);
+    });
+
+    test('the question row can hide itself: the stylesheet gives its flex display a hidden rule', async () => {
+        // A display rule beats the hidden attribute, and the headless DOM
+        // cannot see it: the "Yes, delete it" question stayed on a phone's
+        // screen after the play was gone (QA, 2026-11-02).
+        const { readFileSync } = await import('node:fs');
+        const css = readFileSync(join(here, '..', 'www', 'xo', 'css', 'experience.css'), 'utf8');
+        expect(css).toMatch(/\.designer-question\s*\{[^}]*display:\s*flex/);
+        expect(css).toMatch(/\.designer-question\[hidden\]\s*\{[^}]*display:\s*none/);
     });
 
     test('leaving with lines drawn is asked twice, and Escape is the way out too', () => {
@@ -509,30 +532,29 @@ describe('saving', () => {
 });
 
 describe('the formation', () => {
-    test('changing it with lines drawn is asked first, and No puts the select back', () => {
+    test('changing it is a new start, with no question: unsaved lines go with the old formation', () => {
         UI.showDesigner(() => {});
         const p = parts();
         player('wr1').click();
         const spot = A.formationSpots('pass4').wr1;
         drag([spot, [spot[0] + 0.4, spot[1]]]);
-        p.formation.value = 'book:pass7';
-        fire(p.formation, 'change');
-        expect(p.confirm.hidden).toBe(false);
-        expect(p.formation.value).toBe('tpl:spread');
-        expect(UI.designerState().base).toBe('pass4');
-        byText('No, keep it').click();
         expect(UI.designerState().routes.wr1).toBeDefined();
         p.formation.value = 'book:pass7';
         fire(p.formation, 'change');
-        byText('Yes, change it').click();
+        expect(p.confirm.hidden).toBe(true);
         expect(UI.designerState().base).toBe('pass7');
         expect(UI.designerState().routes).toEqual({});
         expect(p.formation.value).toBe('book:pass7');
-        // With nothing drawn, no question.
+        expect(p.status.textContent).toBe('Stack Right formation. Nothing drawn yet.');
         p.formation.value = 'tpl:screen';
         fire(p.formation, 'change');
-        expect(p.confirm.hidden).toBe(true);
         expect(UI.designerState().base).toBe('run3');
+        expect(p.status.textContent).toBe('Screen formation. Nothing drawn yet.');
+        // The same choice again changes nothing and says nothing new.
+        p.status.textContent = '';
+        p.formation.value = 'tpl:screen';
+        fire(p.formation, 'change');
+        expect(p.status.textContent).toBe('');
     });
 });
 

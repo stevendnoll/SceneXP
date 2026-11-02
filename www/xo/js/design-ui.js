@@ -135,8 +135,15 @@ export function initDesigner({ report, announce, onSaved } = {}) {
     ui.confirm.hidden = true;
 
     ui.back = button('Back to the playbook', 'hud-btn', onBack, { 'aria-keyshortcuts': 'Escape' });
-    ui.save = button('Save play', 'hud-btn hud-btn-primary', onSave);
-    const actions = h('div', { class: 'card-actions designer-actions' }, [ui.back, ui.save]);
+    // WITH ONE OF THE VISITOR'S OWN PLAYS OPEN, SAVING SAVES IT (QA,
+    // 2026-11-02): "Save changes" keeps the name and the lines as they now
+    // are, renamed or not, and "Save as new play" is the explicit way to a
+    // copy. The earlier rule, a new name is a new play, made renaming a
+    // play all but impossible by accident.
+    ui.saveNew = button('Save as new play', 'hud-btn', () => onSave(true));
+    ui.saveNew.hidden = true;
+    ui.save = button('Save play', 'hud-btn hud-btn-primary', () => onSave(false));
+    const actions = h('div', { class: 'card-actions designer-actions' }, [ui.back, ui.saveNew, ui.save]);
 
     // THE MEN ABOVE THE FIELD (QA, 2026-11-02): choose, then draw, reads top
     // to bottom, the row is on screen whenever the field is, and nobody has to
@@ -227,6 +234,8 @@ function refreshTools() {
     ui.undo.disabled = st.undo.length === 0 || st.readOnly;
     ui.clear.disabled = Object.keys(st.routes).length === 0 || st.readOnly;
     ui.save.disabled = st.readOnly;
+    ui.save.textContent = c.kind === 'mine' ? 'Save changes' : 'Save play';
+    ui.saveNew.hidden = c.kind !== 'mine';
     const drawn = Object.keys(st.routes).length;
     ui.hint.textContent = st.readOnly
         ? 'This play is out of the playbook. Restore it to call it again, or start from another formation.'
@@ -535,20 +544,22 @@ function answer(yes) {
 
 // ---- The formation, Save and the way out ---------------------------------------------------
 
+/**
+ * A NEW FORMATION IS A NEW START, and it is not asked about (Steve, QA
+ * 2026-11-02: the question was "unnecessary and clunky"). Lines not yet
+ * saved go with the old formation; the Back button still asks before the
+ * screen closes on unsaved lines, which is the one place losing them is a
+ * surprise.
+ */
 function onFormation(value) {
     if (!st) return;
     const current = `${st.choice.kind}:${st.choice.key}`;
     if (value === current) return;
-    if (Object.keys(st.routes).length > 0 && !st.readOnly) {
-        // Until answered, the select says what the screen shows.
-        ui.formation.value = current;
-        ask('Change formation? Your lines will be cleared.', 'Yes, change it', ui.formation, () => applyChoice(value));
-        return;
-    }
     applyChoice(value);
+    status(`${st.choice.name} formation. Nothing drawn yet.`);
 }
 
-function onSave() {
+function onSave(asNew = false) {
     if (!st || st.readOnly) return;
     const name = String(ui.name.value || '').trim();
     if (!name) {
@@ -562,22 +573,16 @@ function onSave() {
         return;
     }
     const c = st.choice;
-    const keep = () => {
-        const record = c.kind === 'mine' && c.record && name === c.record.name
-            ? replacePlay(c.key, { name, base: c.base, routes: st.routes })
-            : addPlay({ name, base: c.base, routes: st.routes });
-        if (!record) {
-            status('The browser is holding as many plays as it can. Delete one for good to make room.');
-            return;
-        }
-        hooks.report('design', { kind: 'save', outcome: { base: c.base } });
-        finish(record);
-    };
-    if (c.kind === 'mine' && c.record && name === c.record.name) {
-        ask(`Replace ${c.record.name} with this drawing?`, 'Yes, replace it', ui.save, keep);
+    const updating = c.kind === 'mine' && c.record && !asNew;
+    const record = updating
+        ? replacePlay(c.key, { name, base: c.base, routes: st.routes })
+        : addPlay({ name, base: c.base, routes: st.routes });
+    if (!record) {
+        status('The browser is holding as many plays as it can. Delete one for good to make room.');
         return;
     }
-    keep();
+    hooks.report('design', { kind: updating ? 'update' : 'save', outcome: { base: c.base } });
+    finish(record);
 }
 
 function onBack() {

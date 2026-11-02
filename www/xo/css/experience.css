@@ -610,6 +610,13 @@ body {
     color: #f2f5fa;
 }
 
+/* `display: flex` beats the hidden attribute, so the row has to be told to
+   hide (QA, 2026-11-02: the "Yes, delete it" question stayed on screen after
+   the play was gone). */
+.designer-question[hidden] {
+    display: none;
+}
+
 .designer-actions {
     justify-content: space-between;
     flex-wrap: wrap;
