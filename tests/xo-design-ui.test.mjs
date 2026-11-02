@@ -558,6 +558,53 @@ describe('the formation', () => {
     });
 });
 
+describe('the name', () => {
+    test('follows the choice: a fresh name for a formation or a book play, the play’s own for one of yours, and a fresh one again after a delete', () => {
+        const mine = S.addPlay({ name: 'Mine', base: 'pass2', routes: { wr1: [[0.19, 0.08], [0.5, 0.08]] } }, 1);
+        UI.showDesigner(() => {});
+        const p = parts();
+        expect(p.name.value).toBe('My play 1');
+        p.formation.value = 'book:pass7';
+        fire(p.formation, 'change');
+        expect(p.name.value).toBe('My play 1');
+        p.formation.value = `mine:${mine.id}`;
+        fire(p.formation, 'change');
+        expect(p.name.value).toBe('Mine');
+        // ...and on to a formation again: not left saying "Mine".
+        p.formation.value = 'tpl:bunch';
+        fire(p.formation, 'change');
+        expect(p.name.value).toBe('My play 1');
+        // A delete resets it too.
+        p.formation.value = `mine:${mine.id}`;
+        fire(p.formation, 'change');
+        byText('Delete my play').click();
+        byText('Yes, delete it').click();
+        expect(p.formation.value).toBe(`gone:${mine.id}`);
+        expect(p.name.value).toBe('My play 1');
+    });
+
+    test('a name the visitor typed stays through formation changes, until one of their own plays is chosen', () => {
+        const mine = S.addPlay({ name: 'Mine', base: 'pass2', routes: { wr1: [[0.19, 0.08], [0.5, 0.08]] } }, 1);
+        UI.showDesigner(() => {});
+        const p = parts();
+        p.name.value = 'Flood B post';
+        fire(p.name, 'input');
+        p.formation.value = 'tpl:bunch';
+        fire(p.formation, 'change');
+        expect(p.name.value).toBe('Flood B post');
+        p.formation.value = 'book:pass7';
+        fire(p.formation, 'change');
+        expect(p.name.value).toBe('Flood B post');
+        p.formation.value = `mine:${mine.id}`;
+        fire(p.formation, 'change');
+        expect(p.name.value).toBe('Mine');
+        // Opening again starts fresh.
+        byText('Back to the playbook').click();
+        UI.showDesigner(() => {});
+        expect(parts().name.value).toBe('My play 1');
+    });
+});
+
 describe('removing and restoring', () => {
     test('a book play is removed after a question, listed under Removed plays, read-only there, and restored from there', () => {
         UI.showDesigner(() => {});

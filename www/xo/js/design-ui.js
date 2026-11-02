@@ -84,6 +84,9 @@ export function initDesigner({ report, announce, onSaved } = {}) {
 
     // The name and the formation, side by side where there is room.
     ui.name = h('input', { id: 'designer-name', class: 'designer-input', type: 'text', maxlength: String(MAX_NAME), autocomplete: 'off' });
+    // A name the visitor typed is theirs and stays; one this screen put there
+    // follows the formation (see `suggestName`).
+    ui.name.addEventListener('input', () => { if (st) st.nameIsOurs = false; });
     ui.formation = h('select', { id: 'designer-formation', class: 'designer-select' });
     ui.formation.addEventListener('change', () => onFormation(ui.formation.value));
     const top = h('div', { class: 'designer-top' }, [
@@ -209,12 +212,31 @@ function applyChoice(value) {
     st.undo = [];
     st.stroke = null;
     st.keys = null;
-    if (c.record && c.kind === 'mine') ui.name.value = c.record.name;
+    suggestName(c);
     st.readOnly = c.kind === 'gone';
     if (st.selected && !st.spots[st.selected]) st.selected = '';
     fillFormations(value);
     refreshTools();
     paint();
+}
+
+/**
+ * THE NAME FOLLOWS THE CHOICE (QA, 2026-11-02: it was set once, on the first
+ * of the visitor's own plays chosen, and then sat there through every later
+ * formation and a delete). One of the visitor's own plays brings its name,
+ * so Save changes keeps it; anything else, a starting formation, a book play
+ * or a removed one, brings the next free "My play N". A name the visitor
+ * typed themselves is kept until they choose one of their own plays.
+ */
+function suggestName(c) {
+    if (c.kind === 'mine' && c.record) {
+        ui.name.value = c.record.name;
+        st.nameIsOurs = true;
+        return;
+    }
+    if (st.nameIsOurs === false) return;
+    ui.name.value = nextName();
+    st.nameIsOurs = true;
 }
 
 function copyRoutes(routes) {
@@ -618,7 +640,7 @@ export function showDesigner(back, { play = '' } = {}) {
         readOnly: false, rotate: false, scale: [1, 1], layout: null, asking: null, startedWith: '{}',
         // Nobody chosen until the visitor chooses: see `selectPlayer`.
     };
-    ui.name.value = nextName();
+    st.nameIsOurs = true;
     ui.confirm.hidden = true;
     ui.status.textContent = '';
     card.hidden = false;
