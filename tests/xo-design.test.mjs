@@ -654,6 +654,24 @@ describe('from a finger to a line', () => {
         // The scrimmage line, the other lines, B's route in B's ink, and B's ring.
         expect(strokes).toContain('S');
         expect(strokes).toContain('L');
+        // The field is closed at BOTH ends: a line at the offense's own end
+        // line (along 0) and one at the far end (along 1), as well as the
+        // two touchlines (Steve, 2026-11-02: the near end was missing).
+        // Read as SEGMENTS, a moveTo and the lineTo after it, because the
+        // touchlines start at the same corner the near end line does and a
+        // test that only looked for a point there passed without the line.
+        const segments = [];
+        calls.forEach((c, i) => {
+            const next = calls[i + 1];
+            if (c[0] === 'moveTo' && next && next[0] === 'lineTo') segments.push([c[1], c[2], next[1], next[2]]);
+        });
+        const upright = segments.filter(([x1, , x2, y2], i) => Math.abs(x1 - x2) < 1e-9 && Math.abs(segments[i][1] - y2) > 1);
+        const nearEnd = L.toCanvas([0, 0])[0];
+        const farEnd = L.toCanvas([1, 0])[0];
+        expect(upright.some(([x]) => Math.abs(x - nearEnd) < 1e-9)).toBe(true);
+        expect(upright.some(([x]) => Math.abs(x - farEnd) < 1e-9)).toBe(true);
+        // Six lines across the field, the near end line among them.
+        expect(upright.length).toBe(6);
         expect(strokes.filter((s) => s === 'B').length).toBeGreaterThanOrEqual(2);
         expect(strokes).not.toContain('A');
         const fills = calls.filter((c) => c[0] === 'set' && c[1] === 'fillStyle').map((c) => c[2]);

@@ -472,9 +472,11 @@ export function drawDesign(ctx, w, h, { spots = {}, routes = {}, ink, selected =
     ctx.save();
     ctx.fillStyle = ink.ground;
     ctx.fillRect(0, 0, w, h);
-    // The five painted lines, the first of them the line of scrimmage.
+    // The offense's own end line, the five painted lines (the first of them
+    // the line of scrimmage) and the far end line: six, so the field is
+    // closed at both ends (Steve, 2026-11-02: the near end was missing).
     ctx.lineWidth = 1 * u;
-    for (let k = 1; k <= 5; k += 1) {
+    for (let k = 0; k <= 5; k += 1) {
         const along = k * ALONG_INTERVAL;
         const a = L.toCanvas([along, 0]);
         const b = L.toCanvas([along, 1]);
