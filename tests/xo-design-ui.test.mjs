@@ -82,8 +82,9 @@ const parts = () => {
     return {
         name: b.children[0].children[0].children[1],
         formation: b.children[0].children[1].children[1],
-        canvas: b.children[1],
-        players: b.children[2].children,
+        // The men sit above the field (QA, 2026-11-02).
+        players: b.children[1].children,
+        canvas: b.children[2],
         tools: b.children[3].children,
         hint: b.children[4],
         status: b.children[5],
@@ -235,12 +236,16 @@ describe('opening the designer', () => {
         expect(p.formation.value).toBe('tpl:spread');
         const state = UI.designerState();
         expect(state.base).toBe('pass4');
-        expect(state.selected).toBe('wr1');
+        // NOBODY CHOSEN, so a first touch on the field scrolls the page rather
+        // than drawing (QA on a phone, 2026-11-02), and the hint says what to do.
+        expect(state.selected).toBe('');
         expect(state.routes).toEqual({});
-        // Five men, the first chosen, each named for a screen reader.
+        expect(p.canvas.classList.contains('is-armed')).toBe(false);
+        expect(p.hint.textContent).toMatch(/^Choose a player above the field/);
+        // Five men above the field, none chosen, each named for a screen reader.
         expect([...p.players].map((b) => b.dataset.pos)).toEqual(['wr1', 'wr2', 'wr3', 'wr4', 'qb']);
-        expect(player('wr1').getAttribute('aria-checked')).toBe('true');
-        expect(player('wr2').getAttribute('aria-checked')).toBe('false');
+        for (const pos of ['wr1', 'wr2', 'wr3', 'wr4', 'qb']) expect(player(pos).getAttribute('aria-checked')).toBe('false');
+        expect(body().children.indexOf(p.players[0].parentElement)).toBeLessThan(body().children.indexOf(p.canvas));
         expect(player('qb').getAttribute('aria-label')).toBe('Quarterback');
         // The field is an image that says what is on it.
         expect(p.canvas.getAttribute('role')).toBe('img');
@@ -296,8 +301,41 @@ describe('drawing', () => {
         expect(parts().canvas.getAttribute('aria-label')).toMatch(/A, C and D blocking/);
     });
 
-    test('a tap is not a route, a second finger is ignored, and a drag with nobody chosen says so', () => {
+    test('with nobody chosen the field is the page’s to scroll, a tap says what to do, and choosing again un-chooses', () => {
         UI.showDesigner(() => {});
+        const p = parts();
+        const spot = A.formationSpots('pass4').wr1;
+        // A drag with nobody chosen draws nothing, takes no capture, and says
+        // nothing: it is a scroll. Only a finished tap gets the hint.
+        const down = fire(p.canvas, 'pointerdown', { ...toClient(spot), pointerId: 9, button: 0 });
+        expect(down.defaultPrevented).toBe(false);
+        fire(p.canvas, 'pointermove', { ...toClient([spot[0] + 0.3, spot[1]]), pointerId: 9 });
+        fire(p.canvas, 'pointerup', { ...toClient([spot[0] + 0.3, spot[1]]), pointerId: 9 });
+        expect(UI.designerState().routes).toEqual({});
+        expect(p.status.textContent).toBe('');
+        fire(p.canvas, 'click');
+        expect(p.status.textContent).toMatch(/Choose a player first/);
+        // Chosen: the field is armed and the hint names him. Chosen again: not.
+        player('wr2').click();
+        expect(UI.designerState().selected).toBe('wr2');
+        expect(p.canvas.classList.contains('is-armed')).toBe(true);
+        expect(p.hint.textContent).toMatch(/^Draw Receiver B's route/);
+        player('wr2').click();
+        expect(UI.designerState().selected).toBe('');
+        expect(p.canvas.classList.contains('is-armed')).toBe(false);
+        expect(player('wr2').getAttribute('aria-checked')).toBe('false');
+        // A formation that does not stand the chosen man un-chooses him.
+        player('wr4').click();
+        p.formation.value = 'book:jumbo1';
+        fire(p.formation, 'change');
+        expect(UI.designerState().selected).toBe('');
+        p.formation.value = 'tpl:spread';
+        fire(p.formation, 'change');
+    });
+
+    test('a tap is not a route, a second finger is ignored, and a right button does nothing', () => {
+        UI.showDesigner(() => {});
+        player('wr1').click();
         const spot = A.formationSpots('pass4').wr1;
         drag([spot, [spot[0] + 0.01, spot[1]]]);
         expect(UI.designerState().routes).toEqual({});

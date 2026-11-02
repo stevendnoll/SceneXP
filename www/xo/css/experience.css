@@ -502,6 +502,15 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
     background: #161d28;
+    /* A finger on the field scrolls the page until a player is chosen
+       (design-ui.js `is-armed`): the first touch on a phone is usually a
+       scroll to see the rest of the screen, and a field that swallowed it
+       drew a route instead (QA, 2026-11-02). */
+    touch-action: pan-y;
+    cursor: default;
+}
+
+.designer-canvas.is-armed {
     touch-action: none;
     cursor: crosshair;
 }
@@ -511,10 +520,13 @@ body {
     outline-offset: 2px;
 }
 
+/* Upright, the field turns to run up the screen, and it is kept to about
+   half the viewport so the player row above it and the tools below it share
+   the screen with it. */
 @media (orientation: portrait) {
     .designer-canvas {
         aspect-ratio: 3 / 5;
-        max-height: 62vh;
+        max-height: 50vh;
     }
 }
 
@@ -526,7 +538,9 @@ body {
     flex-wrap: wrap;
     justify-content: center;
     gap: 0.5rem;
-    margin: 0.8rem 0 0;
+    /* Room below as well as above: the row sits over the field now, and the
+       buttons were touching its top edge (Steve, 2026-11-02). */
+    margin: 0.8rem 0 0.9rem;
 }
 
 .designer-player {

@@ -98,6 +98,11 @@ export function initDesigner({ report, announce, onSaved } = {}) {
     ui.canvas.addEventListener('pointerup', onPointerUp);
     ui.canvas.addEventListener('pointercancel', onPointerUp);
     ui.canvas.addEventListener('keydown', onCanvasKey);
+    // A finished tap with nobody chosen gets the hint said out loud. A scroll
+    // drag never becomes a click, so scrolling past the field stays quiet.
+    ui.canvas.addEventListener('click', () => {
+        if (st && !st.selected && !st.readOnly) status('Choose a player first, from the row above the field.');
+    });
 
     // The men. A radio group of real buttons, in their own ink.
     ui.players = {};
@@ -133,7 +138,10 @@ export function initDesigner({ report, announce, onSaved } = {}) {
     ui.save = button('Save play', 'hud-btn hud-btn-primary', onSave);
     const actions = h('div', { class: 'card-actions designer-actions' }, [ui.back, ui.save]);
 
-    for (const node of [top, ui.canvas, row, tools, ui.hint, ui.status, ui.confirm, actions]) body.appendChild(node);
+    // THE MEN ABOVE THE FIELD (QA, 2026-11-02): choose, then draw, reads top
+    // to bottom, the row is on screen whenever the field is, and nobody has to
+    // scroll past a canvas that eats touches to reach the next man.
+    for (const node of [top, row, ui.canvas, tools, ui.hint, ui.status, ui.confirm, actions]) body.appendChild(node);
     return ui;
 }
 
@@ -196,6 +204,7 @@ function applyChoice(value) {
     st.keys = null;
     if (c.record && c.kind === 'mine') ui.name.value = c.record.name;
     st.readOnly = c.kind === 'gone';
+    if (st.selected && !st.spots[st.selected]) st.selected = '';
     fillFormations(value);
     refreshTools();
     paint();
@@ -221,9 +230,12 @@ function refreshTools() {
     const drawn = Object.keys(st.routes).length;
     ui.hint.textContent = st.readOnly
         ? 'This play is out of the playbook. Restore it to call it again, or start from another formation.'
-        : drawn === 0
-            ? 'Choose a player, then draw their route from where they stand. Where the line ends is where they stop. Draw at least one route to save.'
-            : 'Where a line ends is where that player stops. Draw a line again to replace it.';
+        : !st.selected
+            ? `Choose a player above the field, then draw their route from where they stand.${drawn === 0 ? ' Draw at least one route to save.' : ''}`
+            : `Draw ${labelOf(st.selected)}'s route from where they stand. Where the line ends is where they stop.${st.routes[st.selected] ? ' Drawing again replaces the line.' : ''}`;
+    // The field takes touches as lines only while somebody is chosen; the
+    // rest of the time a finger on it scrolls the page.
+    ui.canvas.classList.toggle('is-armed', !!st.selected && !st.readOnly);
     for (const pos of PATH_PLAYERS) {
         const b = ui.players[pos];
         b.setAttribute('aria-checked', pos === st.selected ? 'true' : 'false');
@@ -237,9 +249,17 @@ function refreshTools() {
     ui.canvas.setAttribute('aria-label', words ? `The field. ${words}.` : 'The field. Nothing drawn yet.');
 }
 
+/**
+ * CHOOSE A MAN, OR CHOOSE HIM AGAIN TO CHOOSE NOBODY. Nobody is chosen when
+ * the screen opens (QA on a phone, 2026-11-02: with A chosen by default, the
+ * first touch meant to scroll the page drew him a route instead). While
+ * somebody is chosen the canvas takes every touch as a line; with nobody
+ * chosen it scrolls like the rest of the page (`is-armed`), so pressing the
+ * chosen man again is also the way to get the page scrolling back.
+ */
 function selectPlayer(pos) {
     if (!st || !st.spots[pos]) return;
-    st.selected = pos;
+    st.selected = st.selected === pos ? '' : pos;
     st.keys = null;
     refreshTools();
     paint();
@@ -310,10 +330,9 @@ function onPointerDown(event) {
     if (event.button !== undefined && event.button !== 0) return;
     // One finger draws. A second one while the first is down is ignored.
     if (st.stroke) return;
-    if (!st.selected || !st.spots[st.selected]) {
-        status('Choose a player first.');
-        return;
-    }
+    // Nobody chosen: this touch is the page's, to scroll with. The click that
+    // a finished tap becomes says what to do.
+    if (!st.selected || !st.spots[st.selected]) return;
     if (event.preventDefault) event.preventDefault();
     fit();
     paint();
@@ -590,8 +609,9 @@ export function showDesigner(back, { play = '' } = {}) {
     const card = el('designer');
     if (!card || !ui) { if (back) back(); return; }
     st = {
-        back, choice: {}, routes: {}, spots: {}, selected: 'wr1', undo: [], stroke: null, keys: null,
+        back, choice: {}, routes: {}, spots: {}, selected: '', undo: [], stroke: null, keys: null,
         readOnly: false, rotate: false, scale: [1, 1], layout: null, asking: null, startedWith: '{}',
+        // Nobody chosen until the visitor chooses: see `selectPlayer`.
     };
     ui.name.value = nextName();
     ui.confirm.hidden = true;
