@@ -32,7 +32,7 @@
 import { XO_CONFIG as CFG } from './config.min.js';
 import { photoShareText, photoNudge } from './moments.min.js';
 import { photoName } from './photo.min.js';
-import { clipName, clipShareText, recordTake } from './clip.min.js';
+import { clipName, clipShareText, shareSlug, recordTake } from './clip.min.js';
 import { REPLAY_VIEWS } from './camera.min.js';
 import { extensionOf } from '../../shared/js/recorder-1.0.0.min.js';
 import { shareFile, canShareFiles, saveFile } from '../../shared/js/sharefile-1.0.0.min.js';
@@ -343,7 +343,7 @@ function finishedTake(clip) {
         ? URL.createObjectURL(clip.blob) : '';
     s.clip = {
         blob: clip.blob, mime: clip.mime, url, seconds: clip.seconds,
-        name: clipName(s.outcome && s.outcome.result, s.rec.w, s.rec.h, ext),
+        name: clipName(shareSlug(s.outcome), s.rec.w, s.rec.h, ext),
         view: s.quarter + 1,
     };
     const calm = hooks.calm();

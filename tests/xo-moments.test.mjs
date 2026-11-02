@@ -234,6 +234,82 @@ describe('a snapshot keeps what was drawn, and the live frame comes back exactly
         expect(S.snapshotSize(live)).toBeGreaterThan(20);
     });
 
+    /**
+     * THE RINGS AFTER A CLIP (Steve's QA, 2026-11-02, with a screenshot). Closing
+     * the share sheet on a take still recording put the transforms back, and the
+     * very next frame's `setPulse` re-seated every ring from the spot the take
+     * had left in `userData.at`, so they stood where nobody was. The same
+     * sequence as `endTake`, then the frame after it.
+     */
+    describe('the spot a node is kept on', () => {
+        let markers;
+        const ringOf = (mesh) => ({ x: mesh.position.x, z: mesh.position.z });
+
+        beforeAll(async () => {
+            // A marker with no 2D context gets no texture and is not built, so
+            // the context answers everything and draws nothing.
+            const quiet = () => new Proxy(function () {}, {
+                get: (_t, p) => (p === Symbol.toPrimitive ? () => 0 : (p === 'then' ? undefined : quiet())),
+                set: () => true, apply: () => quiet(), construct: () => quiet(),
+            });
+            globalThis.document = { createElement: () => ({ width: 0, height: 0, style: {}, getContext: () => quiet() }) };
+            markers = await import(join(scene, 'markers.js'));
+            markers.initMarkers(new THREE.Scene(), [
+                { settings: { position: 'wr1', team: 0, positionGroup: 'wr' } },
+                { settings: { position: 'db1', team: 1, positionGroup: 'db' } },
+            ]);
+        });
+
+        test('a ring put back stays put on the next frame, named or plain', () => {
+            const named = markers.placeMarker('wr1', 12, 3);
+            const plain = markers.placeMarker('db1', 9, -4);
+            const live = S.captureDrawn([markers.getMarkerGroup()]);
+            const namedAt = ringOf(named);
+            const plainAt = ringOf(plain);
+
+            // Where a take cancelled part way through leaves them.
+            markers.placeMarker('wr1', -20, -8);
+            markers.placeMarker('db1', -30, 6);
+            S.applyDrawn(live);
+            expect(ringOf(named)).toEqual(namedAt);
+
+            // What `animate` does on every frame after.
+            markers.setPulse(new Set(), 1);
+            expect(ringOf(named)).toEqual(namedAt);
+            expect(ringOf(plain)).toEqual(plainAt);
+        });
+
+        test('a figure gets back the spot it eases from, and a later frame cannot reach the snapshot', () => {
+            const figure = new THREE.Object3D();
+            const joint = new THREE.Object3D();
+            figure.add(joint);
+            figure.userData.at = { x: 14, z: 2 };
+            const live = S.captureDrawn([figure]);
+
+            figure.userData.at.x = 99;
+            figure.userData.at = { x: -7, z: -7 };
+            S.applyDrawn(live);
+            expect(figure.userData.at).toEqual({ x: 14, z: 2 });
+
+            // Written over in place after being put back, and still the same
+            // snapshot the second time.
+            figure.userData.at.x = 55;
+            S.applyDrawn(live);
+            expect(figure.userData.at).toEqual({ x: 14, z: 2 });
+            // A node with no spot does not grow one.
+            expect('at' in joint.userData).toBe(false);
+        });
+
+        test('a spot the snapshot never saw is cleared, not left over from a later play', () => {
+            const figure = new THREE.Object3D();
+            figure.userData.at = null;
+            const live = S.captureDrawn([figure]);
+            figure.userData.at = { x: 1, z: 1 };
+            S.applyDrawn(live);
+            expect(figure.userData.at).toBe(null);
+        });
+    });
+
     test('a missing root is skipped, and nothing at all is an empty snapshot', () => {
         const one = new THREE.Group();
         one.add(new THREE.Object3D());

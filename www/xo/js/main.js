@@ -33,7 +33,7 @@ import {
 import { captureDrawn, applyDrawn } from './snapshot.min.js';
 import { photoShot, drawPhoto, photoBlob, photoName, bodyPoints } from './photo.min.js';
 import {
-    clipSize, clipPlan, clipProgress, clipShot, stampText, clipName, takeFrame, holdSize, recordTake,
+    clipSize, clipPlan, clipProgress, clipShot, stampText, clipName, shareSlug, takeFrame, holdSize, recordTake,
     openingFor,
 } from './clip.min.js';
 import { saveFile } from '../../shared/js/sharefile-1.0.0.min.js';
@@ -63,7 +63,7 @@ import { readGame, saveGame, clearGame } from './progress.min.js';
 import { nextStreak, streakOver, difficultyFor, endSounds } from './scoring.min.js';
 import {
     initHud, setPlayNumber, setScore, showHud, showHudBar, showSnap, showInPlay,
-    clearActions, showResult, hideResult, announce, showWelcome, showHelp, showSkipReplay,
+    clearActions, showResult, hideResult, announce, showWelcome, showPracticeWelcome, setPracticeChrome, showHelp, showSkipReplay,
     showSkipCelebration, initKeys, setClock, showSkipShow, setMilestoneTitle,
     hideMilestoneTitle, showSkipOpening, setOpeningTitle, hideOpeningTitle, hideWelcome,
     showInFlight, setJumpCue, showPick, setPickChoice, returnToResult, setFollow,
@@ -101,7 +101,7 @@ import {
     isMuted, toggleMuted,
 } from './audio.min.js';
 import {
-    initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings, setPlayAs, focusPlay,
+    initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings, setPlayAs, focusPlay, setPracticeBook,
 } from './playbook-ui.min.js';
 import { isSlot, SLOTS, playingLine, DEFAULT_SLOT, labelOf, slotOf } from './playas.min.js';
 import {
@@ -109,7 +109,8 @@ import {
 } from '../../shared/js/boot-1.0.0.min.js';
 import { warmShaders } from '../../shared/js/warmup-1.0.0.min.js';
 import { setProofHash, setMobile } from '../../shared/js/telemetry-1.0.0.min.js';
-import { report, reportFinal, orientationOf, playRecord } from './telemetry.min.js';
+import { report, reportFinal, tagReports, orientationOf, playRecord } from './telemetry.min.js';
+import { isPracticeUrl, practiceUrl, realGameUrl, practiceSlot } from './practice.min.js';
 
 const state = {
     isRunning: false,
@@ -118,6 +119,9 @@ const state = {
     elapsed: 0,
     /** The player the visitor's avatar is (playas.js), stored or not. */
     playAs: DEFAULT_SLOT,
+    /** Practice Mode (practice.js): the address asked for it, or the welcome
+     *  card's button did. Nothing on this device remembers it. */
+    practice: false,
     /**
      * WHO THE REPLAY CAMERA FOLLOWS (Steve's QA, 2026-10-30): 'ball' (the
      * ball or its carrier, the default) or 'avatar' (the visitor's own player,
@@ -676,6 +680,69 @@ function initLighting() {
 
 // ---- Frame loop ------------------------------------------------------------
 
+// ---- Practice Mode (practice.js) ---------------------------------------------
+
+/**
+ * HOW HARD THE NEXT PLAY LEANS. A run of fifties slows the offense for a quicker
+ * defense, and in practice every play is a fifty and there is no defense to be
+ * quick, so all it would do is make a visitor's own receivers slower.
+ */
+function leanNow() {
+    return state.practice ? 0 : difficultyFor(cycle.streak, CFG.difficulty);
+}
+
+/** A real game's saved progress goes when a real game ends. A practice game
+ *  must never take it along: somebody four plays into a good round can come
+ *  here to try a route and go back to it. */
+function forgetGame() {
+    if (!state.practice) clearGame();
+}
+
+/** Everything on screen and in the log that says this is practice. */
+function showPracticeChrome() {
+    tagReports({ practice: true });
+    setPracticeChrome(true);
+    setPracticeBook(true);
+}
+
+/**
+ * THE WELCOME CARD'S BUTTON. The address changes without a reload, so the
+ * visitor is not sent back through the opening they just watched and the address
+ * bar can be copied straight away. `replaceState`, so Back leaves the game as it
+ * always has rather than undoing a mode nothing would notice leaving.
+ *
+ * The field behind the card is lined up again without its defense, and a visitor
+ * saved as a defender moves to quarterback for now (`practiceSlot`).
+ */
+function enterPractice() {
+    state.practice = true;
+    cycle.play.practice = true;
+    if (typeof window !== 'undefined' && window.history && window.location) {
+        window.history.replaceState(null, '', practiceUrl(window.location.href));
+    }
+    showPracticeChrome();
+    const objects = lineUp(cycle.play, callable(getSettings().lastPlay || 'pass2'), '');
+    const slot = practiceSlot(state.playAs);
+    if (slot !== state.playAs) {
+        state.playAs = slot;
+        if (visitorAvatar) {
+            resetMoments();
+            buildRoster();
+        }
+        showPlaying();
+    }
+    syncFigures(objects, 0, { presnap: true });
+    showBall(objects, 0);
+}
+
+/** On to the real game: a plain arrival at the address without the parameter,
+ *  so it opens as any visit does and offers back any game left saved. */
+function leaveForRealGame() {
+    reportFinal('leave-practice');
+    uiClick();
+    if (typeof window !== 'undefined') window.location.assign(realGameUrl(window.location.href));
+}
+
 /** Open the playbook and let the field idle behind it. */
 function openPlaybook() {
     cycle.phase = 'playbook';
@@ -706,7 +773,7 @@ function onPlaybookChoice(offensive, defense, { repeat = false } = {}) {
         kind: changing ? 'change' : 'next',
         outcome: {
             ...offenseFields(offensive, called && called.base),
-            defense: defense || 'random',
+            defense: state.practice ? 'none' : (defense || 'random'),
             repeat: repeat || undefined,
             playCount: changing ? cycle.playNumber : cycle.playNumber + 1,
         },
@@ -728,7 +795,7 @@ function onPlaybookChoice(offensive, defense, { repeat = false } = {}) {
  */
 function changePlay(offensive, defense) {
     uiClick();
-    setDifficulty(cycle.play, difficultyFor(cycle.streak, CFG.difficulty));
+    setDifficulty(cycle.play, leanNow());
     lineUp(cycle.play, offensive, defense || '');
     resetBallFlight();
     resetAssignments();
@@ -772,7 +839,7 @@ function startPlay(offensive, defense) {
     resetRelocate();
     // BEFORE THE LINE-UP, because the lean is applied where every player's
     // speed is rolled and that happens once, here.
-    setDifficulty(cycle.play, difficultyFor(cycle.streak, CFG.difficulty));
+    setDifficulty(cycle.play, leanNow());
     lineUp(cycle.play, offensive, defense || '');
     resetBallFlight();
     // Coverage assignments are cached for the replay, so a new line-up has to
@@ -1364,7 +1431,7 @@ function finishPlay() {
     // four. Written here rather than on "Next play" because the play is over
     // and scored at this point, and a visitor who closes the tab while the
     // result card is open has finished it just as much as one who clicks on.
-    saveGame(cycle);
+    if (!state.practice) saveGame(cycle);
 
     // Anything still waiting for its frame is taken now, on the last frame of
     // the play, rather than lost: the card is about to freeze the field.
@@ -1581,8 +1648,11 @@ function onNext() {
      * first, and the show that total has earned plays on the way out of it. On
      * the last play that means before the summary, which is where a finale
      * belongs anyway.
+     *
+     * NOT IN PRACTICE. With no defense every play can be a fifty, and these are
+     * what a real game's score earns.
      */
-    const due = milestoneDue(cycle.results, cycle.shown);
+    const due = state.practice ? 0 : milestoneDue(cycle.results, cycle.shown);
     if (due) {
         beginMilestone(due, then);
         return;
@@ -1596,12 +1666,12 @@ function finishGame() {
     // THE SAVED GAME GOES WHEN THE GAME DOES. A finished ten is not
     // something to resume into, and leaving it behind would mean a visitor
     // who reloads is handed a game with no plays left in it.
-    clearGame();
+    forgetGame();
     // The 2D game's `finalScore` hit, plus whether it beat this browser's best.
     // Read BEFORE the summary, which is what writes a new best.
     const best = readBest();
     report('game-summary', {
-        kind: cycle.total > best ? 'record' : 'played',
+        kind: state.practice ? 'practice' : (cycle.total > best ? 'record' : 'played'),
         outcome: {
             finalScore: cycle.total, best, orientation: orientation(),
             muted: isMuted(), games: visit.games,
@@ -1614,6 +1684,7 @@ function finishGame() {
         startGame();
     }, {
         onShare: (how) => report('share', { kind: how, outcome: { finalScore: total } }),
+        practice: state.practice ? { onRealGame: leaveForRealGame } : null,
     });
 }
 
@@ -1834,6 +1905,15 @@ function endOpening() {
     resetScripted();
     hideOpeningProps();
     cheerCrowd(null, state.elapsed);
+    settleOnWelcome(s.then);
+}
+
+/**
+ * THE WELCOME STATE ITSELF, reached from the end of the opening or, on a
+ * practice link, instead of it: the opening's captain and bumper are defenders,
+ * and somebody sent here came to practice.
+ */
+function settleOnWelcome(then) {
     const objects = cycle.play.game.objects;
     for (let i = 0; i < CFG.opening.settleFrames; i += 1) {
         syncFigures(objects, 1 / 30, { presnap: true });
@@ -1843,7 +1923,7 @@ function endOpening() {
     showHudBar(true);
     showHud(false);
     cycle.phase = 'welcome';
-    s.then();
+    then();
 }
 
 function onSkipOpening() {
@@ -1908,6 +1988,7 @@ export function qaShow(level) {
  * wherever it was called from.
  */
 export function qaOpening() {
+    if (state.practice) return 'Not in Practice Mode: the opening needs its defense.';
     if (cycle.phase === 'welcome' && cycle.welcome) {
         hideWelcome();
         beginOpening(cycle.welcome);
@@ -1980,7 +2061,7 @@ function startGame() {
     cycle.results = [];
     cycle.lastOutcome = null;
     cycle.streak = 0;
-    clearGame();
+    forgetGame();
     hideSummary();
     hideResult();
     setScore(0);
@@ -2036,7 +2117,7 @@ function resumeGame(saved) {
 function onStartOver() {
     report('start-over', { outcome: { playCount: cycle.playNumber, currentScore: cycle.total } });
     uiClick();
-    clearGame();
+    forgetGame();
     startGame();
 }
 
@@ -2819,6 +2900,11 @@ async function init() {
     setProgress(0.7, 'Calling the teams out…');
     setViewCamera(camera);
     cycle.play = createPlay(simAudio());
+    // PRACTICE MODE IS DECIDED BEFORE THE FIRST LINE-UP, so nobody draws a
+    // defense on a practice link. `showPracticeChrome` tags the log below, ahead
+    // of the first ping.
+    state.practice = typeof window !== 'undefined' && isPracticeUrl(window.location.href);
+    cycle.play.practice = state.practice;
     // Line up once so the roster knows who exists, and so the field behind the
     // playbook shows a real formation rather than an empty pitch. The last
     // play a visitor chose is remembered, so a returning visitor sees theirs.
@@ -2830,7 +2916,7 @@ async function init() {
     // in another tab shows on the welcome card now and on the field next time.
     avatarStore = createAvatarStore();
     visitorAvatar = avatarStore.hasSaved() ? avatarStore.load() : null;
-    state.playAs = getSettings().playAs;
+    state.playAs = state.practice ? practiceSlot(getSettings().playAs) : getSettings().playAs;
     buildRoster();
     initMarkers(scene, objects);
     initSpot(scene);
@@ -2882,6 +2968,7 @@ async function init() {
         // is a pointer to the avatar page instead. Not reported: only avatar
         // holders can choose, so the ping would say who has one (D11).
         playAs: visitorAvatar ? (slot) => playAs(slot) : null,
+        realGame: leaveForRealGame,
         // Worth knowing how many visitors turn the timed jump off.
         autoJumpChanged: (on) => report('auto-jump', { kind: on ? 'on' : 'off' }),
         // The welcome card again, from "How to play". `back` puts the book
@@ -3006,15 +3093,23 @@ async function init() {
         uiClick();
         go();
     };
-    cycle.welcome = () => showWelcome(
-        saved ? takeTheField('resume-game', () => resumeGame(saved))
-            : takeTheField('take-field', startGame),
-        saved,
-        takeTheField('new-game', startGame)
-    );
+    cycle.welcome = state.practice
+        ? () => showPracticeWelcome(takeTheField('take-field', startGame), leaveForRealGame)
+        : () => showWelcome(
+            saved ? takeTheField('resume-game', () => resumeGame(saved))
+                : takeTheField('take-field', startGame),
+            saved,
+            takeTheField('new-game', startGame),
+            takeTheField('practice-mode', () => { enterPractice(); startGame(); })
+        );
     // ...AFTER THE OPENING, on every load, a resumed game included. See
-    // `beginOpening`.
-    beginOpening(cycle.welcome);
+    // `beginOpening`. A practice link goes straight to the card.
+    if (state.practice) {
+        showPracticeChrome();
+        settleOnWelcome(cycle.welcome);
+    } else {
+        beginOpening(cycle.welcome);
+    }
 
     // ON THE RECORD FROM HERE, before anybody has pressed anything, so the
     // count includes the visitors who read the rules and left.
@@ -3098,7 +3193,7 @@ const REBUILD_PHASES = new Set(['welcome', 'playbook', 'presnap']);
  */
 function playAs(slot) {
     if (!REBUILD_PHASES.has(cycle.phase) || !cycle.play) return false;
-    const next = setPlayAs(slot);
+    const next = setPlayAs(state.practice ? practiceSlot(slot) : slot);
     if (next === state.playAs) return true;
     state.playAs = next;
     if (visitorAvatar) {
@@ -3637,7 +3732,7 @@ export async function qaClip(view = 1) {
     const made = await recordTake(stage, () => beginTake(stage, { quarter }), { ...rec, win: window });
     if (!made || !made.blob || !made.blob.size) return 'The clip could not be made.';
     if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return "This browser couldn't save the clip.";
-    const name = clipName(cycle.lastOutcome && cycle.lastOutcome.result, rec.w, rec.h, extensionOf(made.mime));
+    const name = clipName(shareSlug(cycle.lastOutcome), rec.w, rec.h, extensionOf(made.mime));
     const url = URL.createObjectURL(made.blob);
     saveFile(url, name);
     window.setTimeout(() => URL.revokeObjectURL(url), 60000);

@@ -78,7 +78,7 @@
       "url": "https://www.scenexp.com/xo/",
       "name": "X's and O's",
       "image": "https://www.scenexp.com/xo/assets/og-xo.jpg?v=1",
-      "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's five views, one of them over the quarterback's shoulder, and with an avatar saved on the Your Avatar page you can play as any player on the field. You can also design your own plays by drawing routes on a formation, kept in your browser.",
+      "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's five views, one of them over the quarterback's shoulder, and with an avatar saved on the Your Avatar page you can play as any player on the field. You can also design your own plays by drawing routes on a formation, kept in your browser, and try them out in Practice Mode, a shareable game with no defense on the field.",
       "genre": ["Sports", "Strategy"],
       "gamePlatform": "Web browser",
       "applicationCategory": "Game",
@@ -127,7 +127,7 @@
     <title>X's and O's | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=28" as="style">
+    <link rel="preload" href="css/experience.min.css?v=29" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -174,6 +174,7 @@
     <link rel="modulepreload" href="../shared/js/warmup-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/telemetry-1.0.0.min.js">
     <link rel="modulepreload" href="js/telemetry.min.js">
+    <link rel="modulepreload" href="js/practice.min.js">
     <link rel="modulepreload" href="../shared/js/people-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/avatar-figure-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/dance-1.0.0.min.js">
@@ -203,7 +204,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=28">
+    <link rel="stylesheet" href="css/experience.min.css?v=29">
     <!-- The welcome card's avatar portrait (shared with the home page). -->
     <link rel="stylesheet" href="../shared/css/avatar-1.0.0.min.css">
 
@@ -322,10 +323,16 @@
                  than the title and a button with the rules unread above it. -->
             <p id="welcome-intro" class="card-detail">Ten plays, and you are on offense for every one
                 of them. The farther you carry the ball, the more the play is worth.</p>
+            <!-- PRACTICE MODE (js/practice.js), said first on the card. hud.js
+                 `setPracticeChrome` shows it, and the same call swaps the few
+                 sentences below that mention a defense. -->
+            <p id="welcome-practice" class="card-detail welcome-practice" hidden>You are in Practice Mode.
+                There is no defense on the field, so you can learn the routes and try out your own plays.
+                Practice scores never touch your best score or a game you have saved.</p>
 
             <ol class="welcome-steps">
-                <li><strong>Call a play.</strong> Pick one from the playbook, and
-                    choose a defense to face or leave it to chance.</li>
+                <li><strong>Call a play.</strong> Pick one from the playbook<span class="real-game-only">, and
+                    choose a defense to face or leave it to chance</span>.</li>
                 <li><strong>Snap the ball.</strong> Take as long as you like reading
                     the formation first.</li>
                 <!-- THE CLOCK IS SPELLED OUT HERE BECAUSE THE READOUT IS
@@ -338,7 +345,7 @@
                 <li><strong>Throw or run.</strong> Hit a receiver, or keep it
                     yourself and see how far you get. You have ten seconds from
                     the snap to make up your mind, and holding on past that is
-                    a sack.</li>
+                    <span class="real-game-only">a sack</span><span class="practice-only">five points off</span>.</li>
                 <!-- THE JUMP IS THE VISITOR'S SINCE 2026-09-23. It used to
                      happen by itself, so the rules had nothing to say about
                      it. Now a mistimed press loses the pass, which is a rule a
@@ -351,7 +358,7 @@
                     a ring on the grass marks where it will come down. Press Jump
                     or tap your receiver to send him up for it. The button
                     lights up as the ball arrives. Jump too early or too late
-                    and the pass can sail past him or be picked off. If you
+                    and the pass can sail past him<span class="real-game-only"> or be picked off</span>. If you
                     would rather just watch, turn on Auto jump in the
                     playbook.</li>
                 <!-- SHARE THE PLAY (specs/xo-photos-plan, 2026-10-30). The clip
@@ -393,8 +400,8 @@
                 <li><span class="ladder-pts is-good">15</span> past the second</li>
                 <li><span class="ladder-pts is-good">30</span> past the third</li>
                 <li><span class="ladder-pts is-good">50</span> all the way across</li>
-                <li><span class="ladder-pts is-bad">-5</span> sacked holding the ball</li>
-                <li><span class="ladder-pts is-bad">-10</span> intercepted</li>
+                <li><span class="ladder-pts is-bad">-5</span> <span class="real-game-only">sacked holding the ball</span><span class="practice-only">out of time holding the ball</span></li>
+                <li class="real-game-only"><span class="ladder-pts is-bad">-10</span> intercepted</li>
             </ul>
 
             <!-- THE 2D GAME GIVES YOU A NUMBER TO BEAT, and it is worth having.
@@ -433,7 +440,7 @@
                  a shared link has no other route to the rest of the site.
 
                  SAME TAB, and nothing is lost by following it: nothing here
-                 writes history, so Back returns to the game, and a game in
+                 adds to history, so Back returns to the game, and a game in
                  progress is already saved at every whistle.
 
                  NO overlay shield, unlike most of the nine. This card is not a
@@ -638,6 +645,7 @@
              yet, and the only thing on screen during the intro should be the
              way out of it. See `showHudBar`. -->
         <div id="hud-bar" class="hud-bar">
+            <span id="hud-practice" class="hud-stat hud-practice" hidden>Practice</span>
             <span class="hud-stat">Play <strong id="hud-play">1</strong> of <strong id="hud-of">10</strong></span>
             <span class="hud-stat">Score <strong id="hud-score">0</strong></span>
             <!-- THE PLAY CLOCK. `aria-hidden` on the whole stat, and that is

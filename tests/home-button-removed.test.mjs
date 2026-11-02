@@ -68,6 +68,9 @@ const REPLACES_ONLY = {
   // An edit link's keys come off the address bar before anything else, so a
   // screen share never shows them (PLANNING 7.3).
   whitestone: 'strips an edit link’s keys from the address bar',
+  // The Practice Mode button writes ?practice=true so the address can be copied
+  // and shared, with no reload and no extra press of Back.
+  xo: 'writes ?practice=true when Practice Mode is chosen',
 };
 
 const SLOT_PITCH = 62;   // a 50px button plus a 12px gap

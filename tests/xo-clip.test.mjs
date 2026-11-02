@@ -341,6 +341,11 @@ describe('the words and the names', () => {
         expect(C.clipShareText({ result: 'sack', points: -5 })).toBe("Sacked in X's and O's!");
         expect(C.clipShareText({ result: 'interception', points: -10 })).toBe("Picked off in X's and O's!");
         expect(C.clipShareText({ result: 'incomplete', points: 0 })).toBe("So close in X's and O's!");
+        // Practice Mode's clock is not a sack, and an outcome may say so.
+        expect(C.clipShareText({ result: 'sack', shareAs: 'out-of-time', points: -5 })).toBe("Out of time in X's and O's!");
+        expect(C.shareSlug({ result: 'sack', shareAs: 'out-of-time' })).toBe('out-of-time');
+        expect(C.shareSlug({ result: 'sack' })).toBe('sack');
+        expect(C.shareSlug(null)).toBe('');
         expect(C.clipShareText({ result: 'something-new', points: 0 })).toBe("A play from X's and O's.");
         expect(C.clipShareText(null)).toBe("A play from X's and O's.");
         expect(C.clipShareText({ result: 'sack', points: -5 }, 'https://www.scenexp.com/xo/')).toBe("Sacked in X's and O's! https://www.scenexp.com/xo/");

@@ -238,6 +238,36 @@ body {
     color: #ffb3a8;
 }
 
+/* PRACTICE MODE (js/practice.js). The body class swaps the welcome card's few
+   sentences about a defense. Ladder rows and inline words alike go by display. */
+.practice-only {
+    display: none;
+}
+
+body.is-practice .practice-only {
+    display: inline;
+}
+
+body.is-practice .real-game-only {
+    display: none;
+}
+
+.welcome-practice {
+    color: #ff992c;
+    font-weight: 600;
+}
+
+/* The word in the HUD, so a practice score is never taken for a real one. */
+.hud-practice {
+    color: #ff992c;
+    font-weight: 700;
+}
+
+/* A display rule beats the hidden attribute, and `.playbook-defense` has one. */
+.playbook-defense[hidden] {
+    display: none;
+}
+
 /* The line on the welcome card that says how far into a game you are. */
 .welcome-resume {
     margin-top: 0.9rem;

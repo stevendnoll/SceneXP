@@ -19,6 +19,7 @@ import { XO_CONFIG as CFG } from './config.min.js';
 import { muteButton } from './hud.min.js';
 import { autoJump, setAutoJump } from './jump.min.js';
 import { DEFAULT_SLOT, normalizeSlot, listedSlots, sitsOut, formationSpots } from './playas.min.js';
+import { practiceSlot } from './practice.min.js';
 import { listPlays, getPlay, isHidden, hiddenCount } from './plays-store.min.js';
 import { drawDesign, describePlay, isCustomId, FORMATION_TEMPLATES } from './design.min.js';
 
@@ -318,6 +319,7 @@ function themeCanvas(canvas) {
 function buildDefenseRow() {
     const wrap = document.createElement('p');
     wrap.className = 'playbook-defense';
+    defenseRow = wrap;
 
     const label = document.createElement('label');
     label.htmlFor = 'defense-select';
@@ -536,18 +538,69 @@ function buildPlayAsRow() {
  */
 let playAsListed = '';
 
+/**
+ * PRACTICE MODE'S BOOK (practice.js). "Defense to face" has nothing to choose
+ * from, so a line saying so and leading to the real game stands in its place,
+ * and a saved defender shows as the quarterback they play as here. The saved
+ * choice itself is not touched.
+ */
+let practiceBook = false;
+let defenseRow = null;
+let practiceRow = null;
+let onRealGame = null;
+
+/** The player the visitor is as this book sees it. */
+function shownSlot() {
+    return practiceBook ? practiceSlot(settings.playAs) : settings.playAs;
+}
+
+function buildPracticeRow() {
+    const wrap = document.createElement('p');
+    wrap.className = 'playbook-defense playbook-practice';
+    wrap.hidden = true;
+    practiceRow = wrap;
+    const text = document.createElement('span');
+    text.textContent = 'Practice Mode, with no defense on the field.';
+    wrap.appendChild(text);
+    const link = document.createElement('a');
+    link.className = 'playbook-playas-link';
+    link.href = './';
+    link.textContent = 'Play the real game';
+    link.addEventListener('click', (event) => {
+        if (!onRealGame) return;
+        event.preventDefault();
+        onRealGame();
+    });
+    wrap.appendChild(link);
+    return wrap;
+}
+
+/** Turn the book's Practice Mode on, once the game has decided it is on. */
+export function setPracticeBook(on) {
+    load();
+    practiceBook = !!on;
+    if (defenseRow) defenseRow.hidden = practiceBook;
+    if (practiceRow) practiceRow.hidden = !practiceBook;
+    fillPlayAs();
+    markSitsOut();
+}
+
 function fillPlayAs() {
     const select = playAsSelect;
     if (!select) return;
-    const slots = listedSlots(settings.playAs);
+    const me = shownSlot();
+    // No defense in Practice Mode, so no defender to be.
+    const slots = listedSlots(me).filter((s) => !practiceBook || s.team === 0);
     const key = slots.map((s) => s.id).join(' ');
     if (key !== playAsListed) {
         playAsListed = key;
         select.textContent = '';
         for (const [team, name] of [[0, 'Offense'], [1, 'Defense']]) {
+            const members = slots.filter((x) => x.team === team);
+            if (!members.length) continue;
             const group = document.createElement('optgroup');
             group.label = name;
-            for (const s of slots.filter((x) => x.team === team)) {
+            for (const s of members) {
                 const opt = document.createElement('option');
                 opt.value = s.id;
                 opt.textContent = s.label;
@@ -556,7 +609,7 @@ function fillPlayAs() {
             select.appendChild(group);
         }
     }
-    select.value = settings.playAs;
+    select.value = me;
 }
 
 /**
@@ -574,7 +627,7 @@ function markSitsOut() {
     for (const [slug, button] of cards) {
         // A designed play benches whoever its formation benches; the record
         // says which formation.
-        const out = sitsOut(settings.playAs, isCustomId(slug) ? (getPlay(slug) || slug) : slug);
+        const out = sitsOut(shownSlot(), isCustomId(slug) ? (getPlay(slug) || slug) : slug);
         // The repeat card is named by its aria-label rather than its text, so
         // the tag has to be said there too or a screen reader never hears it.
         if (repeatCard && button === repeatCard.button) {
@@ -972,8 +1025,9 @@ function buildAutoJump(onChange) {
 }
 
 export function initPlaybook(handler, startOver = null,
-    { defense = null, help = null, colors = null, autoJumpChanged = null, playAs = null, design = null } = {}) {
+    { defense = null, help = null, colors = null, autoJumpChanged = null, playAs = null, design = null, realGame = null } = {}) {
     onChoose = handler;
+    onRealGame = realGame;
     onStartOver = startOver;
     onDefense = defense;
     onPlayAs = playAs;
@@ -1014,6 +1068,7 @@ export function initPlaybook(handler, startOver = null,
     const options = document.createElement('div');
     options.className = 'playbook-options';
     options.appendChild(buildDefenseRow());
+    options.appendChild(buildPracticeRow());
     options.appendChild(buildPlayAsRow());
     body.appendChild(options);
 

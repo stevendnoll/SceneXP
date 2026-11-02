@@ -231,7 +231,11 @@ export function lineUp(play, offensive = 'pass2', defensive = '') {
      */
     const chosen = resolvePlay(offensive);
     play.formations.setTeamFormation(play.game.objects, 0, chosen.base);
-    play.formations.setTeamFormation(play.game.objects, 1, defensive);
+    // PRACTICE MODE (practice.js) IS THIS ONE LINE NOT RUNNING. A team given no
+    // formation is parked where the library parks a player with none, and the
+    // benching loop below finds all of them there, so every rule that already
+    // skips a benched man skips the whole defense.
+    if (!play.practice) play.formations.setTeamFormation(play.game.objects, 1, defensive);
     // WHAT WAS ACTUALLY LINED UP, for the usage log. An empty `defensive` is the
     // library's own signal to roll one, and the roll is only knowable here: the
     // library keeps the last formation it set on its state, and the defense is
@@ -239,7 +243,8 @@ export function lineUp(play, offensive = 'pass2', defensive = '') {
     // one of those, and `base` the formation it stood in.
     play.offense = chosen.id;
     play.base = chosen.base;
-    play.defense = (play.formations.state && play.formations.state.formation) || defensive || '';
+    play.defense = play.practice ? ''
+        : (play.formations.state && play.formations.state.formation) || defensive || '';
 
     // WHO IS BENCHED IS DECIDED HERE, ONCE, AND REMEMBERED.
     //
@@ -1679,7 +1684,7 @@ export function outcome(play) {
     const carrierPos = game.runForYourLife ? 'qb' : (st.ball && st.ball.position);
     const carrier = carrierPos
         ? play.routes.getObjectByPosition(game.objects, carrierPos) : null;
-    return classifyPlay({
+    const result = classifyPlay({
         ranWithBall: !!game.runForYourLife,
         threwTo: game.throwTo || '',
         ball: st.ball,
@@ -1687,4 +1692,16 @@ export function outcome(play) {
         lineInterval: st.measurements.lineInterval,
         reached50: st.anim.run50 === true,
     });
+    // NOBODY CAN BE SACKED BY NOBODY. In Practice Mode a ball held too long is
+    // the clock's doing alone, so it is called that. The slug and the points
+    // stay, because everything counting the play reads those. `shareAs` is for
+    // what leaves with a clip of it (clip.js `shareSlug`).
+    return play.practice && result.result === 'sack'
+        ? {
+            ...result,
+            headline: 'Out of time',
+            detail: 'The clock ran out with the ball still in hand.',
+            shareAs: 'out-of-time',
+        }
+        : result;
 }
