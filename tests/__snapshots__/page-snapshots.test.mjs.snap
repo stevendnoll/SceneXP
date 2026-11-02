@@ -8905,7 +8905,7 @@ html [data-ui-theme="neon" lang="en"]
     title
       "X's and O's | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=27" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=28" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -8974,7 +8974,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/lead.min.js" rel="modulepreload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=27" rel="stylesheet"]
+    link [href="css/experience.min.css?v=28" rel="stylesheet"]
     link [href="../shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]

@@ -448,8 +448,41 @@ body {
    `layoutFor` decides from the pixels it is given). `touch-action: none` is
    what lets a finger draw without scrolling the page. */
 .designer-panel {
+    position: relative;
     width: min(64rem, 100%);
     text-align: left;
+}
+
+/* The way out, top right, for a screen taller than a phone. */
+.designer-close {
+    position: absolute;
+    top: 0.7rem;
+    right: 0.7rem;
+    width: 2.4rem;
+    height: 2.4rem;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: transparent;
+    color: #aab4c4;
+    font: inherit;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.designer-close:hover,
+.designer-close:focus-visible {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #f2f5fa;
+}
+
+/* Whom to choose, standing between the row and the field while nobody is. */
+.designer-prompt {
+    margin: 0 0 0.6rem;
+    color: #ffd2a3;
+    text-align: center;
+    font-weight: 600;
 }
 
 .designer-panel:focus {

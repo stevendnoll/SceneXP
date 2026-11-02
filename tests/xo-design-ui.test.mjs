@@ -84,12 +84,13 @@ const parts = () => {
         formation: b.children[0].children[1].children[1],
         // The men sit above the field (QA, 2026-11-02).
         players: b.children[1].children,
-        canvas: b.children[2],
-        tools: b.children[3].children,
-        hint: b.children[4],
-        status: b.children[5],
-        confirm: b.children[6],
-        actions: b.children[7].children,
+        prompt: b.children[2],
+        canvas: b.children[3],
+        tools: b.children[4].children,
+        hint: b.children[5],
+        status: b.children[6],
+        confirm: b.children[7],
+        actions: b.children[8].children,
     };
 };
 const player = (pos) => [...parts().players].find((b) => b.dataset.pos === pos);
@@ -242,6 +243,10 @@ describe('opening the designer', () => {
         expect(state.routes).toEqual({});
         expect(p.canvas.classList.contains('is-armed')).toBe(false);
         expect(p.hint.textContent).toMatch(/^Choose a player above the field/);
+        // ...and the prompt between the row and the field says whom.
+        expect(p.prompt.hidden).toBe(false);
+        expect(p.prompt.textContent).toBe('Please choose a player (A, B, C, D, or QB).');
+        expect(body().children.indexOf(p.prompt)).toBe(body().children.indexOf(p.canvas) - 1);
         // Five men above the field, none chosen, each named for a screen reader.
         expect([...p.players].map((b) => b.dataset.pos)).toEqual(['wr1', 'wr2', 'wr3', 'wr4', 'qb']);
         for (const pos of ['wr1', 'wr2', 'wr3', 'wr4', 'qb']) expect(player(pos).getAttribute('aria-checked')).toBe('false');
@@ -314,15 +319,18 @@ describe('drawing', () => {
         expect(UI.designerState().routes).toEqual({});
         expect(p.status.textContent).toBe('');
         fire(p.canvas, 'click');
-        expect(p.status.textContent).toMatch(/Choose a player first/);
-        // Chosen: the field is armed and the hint names him. Chosen again: not.
+        expect(p.status.textContent).toBe('Please choose a player (A, B, C, D, or QB).');
+        // Chosen: the field is armed, the prompt goes, the hint names him.
+        // Chosen again: not.
         player('wr2').click();
         expect(UI.designerState().selected).toBe('wr2');
         expect(p.canvas.classList.contains('is-armed')).toBe(true);
+        expect(p.prompt.hidden).toBe(true);
         expect(p.hint.textContent).toMatch(/^Draw Receiver B's route/);
         player('wr2').click();
         expect(UI.designerState().selected).toBe('');
         expect(p.canvas.classList.contains('is-armed')).toBe(false);
+        expect(p.prompt.hidden).toBe(false);
         expect(player('wr2').getAttribute('aria-checked')).toBe('false');
         // A formation that does not stand the chosen man un-chooses him.
         player('wr4').click();
@@ -508,6 +516,30 @@ describe('saving', () => {
         const css = readFileSync(join(here, '..', 'www', 'xo', 'css', 'experience.css'), 'utf8');
         expect(css).toMatch(/\.designer-question\s*\{[^}]*display:\s*flex/);
         expect(css).toMatch(/\.designer-question\[hidden\]\s*\{[^}]*display:\s*none/);
+    });
+
+    test('the close button in the top right is the Back button by another shape', () => {
+        const back = jest.fn();
+        UI.showDesigner(back);
+        const panel = el('designer-panel');
+        const close = panel.children[0];
+        expect(close.className).toBe('designer-close');
+        expect(close.getAttribute('aria-label')).toBe('Back to the playbook');
+        player('wr1').click();
+        const spot = A.formationSpots('pass4').wr1;
+        drag([spot, [spot[0] + 0.4, spot[1]]]);
+        close.click();
+        // Asked, like Back, because lines are unsaved.
+        expect(parts().confirm.hidden).toBe(false);
+        expect(el('designer').hidden).toBe(false);
+        byText('Yes, leave').click();
+        expect(el('designer').hidden).toBe(true);
+        expect(back).toHaveBeenCalledTimes(1);
+        // With nothing drawn it simply closes.
+        UI.showDesigner(back);
+        close.click();
+        expect(el('designer').hidden).toBe(true);
+        expect(back).toHaveBeenCalledTimes(2);
     });
 
     test('leaving with lines drawn is asked twice, and Escape is the way out too', () => {

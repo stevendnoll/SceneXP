@@ -38,6 +38,9 @@ import {
 import { formationSpots, labelOf } from './playas.min.js';
 
 let hooks = { report() {}, announce() {}, onSaved() {} };
+
+/** What the screen says while nobody is chosen to draw for. */
+const CHOOSE_PROMPT = 'Please choose a player (A, B, C, D, or QB).';
 let ui = null;
 let st = null;
 
@@ -104,8 +107,12 @@ export function initDesigner({ report, announce, onSaved } = {}) {
     // A finished tap with nobody chosen gets the hint said out loud. A scroll
     // drag never becomes a click, so scrolling past the field stays quiet.
     ui.canvas.addEventListener('click', () => {
-        if (st && !st.selected && !st.readOnly) status('Choose a player first, from the row above the field.');
+        if (st && !st.selected && !st.readOnly) status(CHOOSE_PROMPT);
     });
+    // The same words, standing between the row and the field whenever nobody
+    // is chosen (Steve, 2026-11-02: a message at the bottom of the screen is
+    // not where the finger is).
+    ui.prompt = h('p', { id: 'designer-prompt', class: 'designer-prompt', text: CHOOSE_PROMPT });
 
     // The men. A radio group of real buttons, in their own ink.
     ui.players = {};
@@ -151,7 +158,16 @@ export function initDesigner({ report, announce, onSaved } = {}) {
     // THE MEN ABOVE THE FIELD (QA, 2026-11-02): choose, then draw, reads top
     // to bottom, the row is on screen whenever the field is, and nobody has to
     // scroll past a canvas that eats touches to reach the next man.
-    for (const node of [top, row, ui.canvas, tools, ui.hint, ui.status, ui.confirm, actions]) body.appendChild(node);
+    for (const node of [top, row, ui.prompt, ui.canvas, tools, ui.hint, ui.status, ui.confirm, actions]) body.appendChild(node);
+
+    // A CLOSE BUTTON IN THE TOP RIGHT, so nobody scrolls to the bottom of a
+    // tall screen to find the way out (Steve, 2026-11-02). It is the Back
+    // button by another shape: the same question when lines are unsaved.
+    const panel = el('designer-panel');
+    if (panel) {
+        ui.close = button('\u2715', 'designer-close', onBack, { 'aria-label': 'Back to the playbook', title: 'Back to the playbook' });
+        panel.insertBefore(ui.close, panel.children[0] || null);
+    }
     return ui;
 }
 
@@ -265,8 +281,10 @@ function refreshTools() {
             ? `Choose a player above the field, then draw their route from where they stand.${drawn === 0 ? ' Draw at least one route to save.' : ''}`
             : `Draw ${labelOf(st.selected)}'s route from where they stand. Where the line ends is where they stop.${st.routes[st.selected] ? ' Drawing again replaces the line.' : ''}`;
     // The field takes touches as lines only while somebody is chosen; the
-    // rest of the time a finger on it scrolls the page.
+    // rest of the time a finger on it scrolls the page, and the prompt above
+    // it says whom to choose.
     ui.canvas.classList.toggle('is-armed', !!st.selected && !st.readOnly);
+    ui.prompt.hidden = !!st.selected || st.readOnly;
     for (const pos of PATH_PLAYERS) {
         const b = ui.players[pos];
         b.setAttribute('aria-checked', pos === st.selected ? 'true' : 'false');
