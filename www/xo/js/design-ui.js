@@ -106,8 +106,16 @@ export function initDesigner({ report, announce, onSaved } = {}) {
     ui.canvas.addEventListener('keydown', onCanvasKey);
     // A finished tap with nobody chosen gets the hint said out loud. A scroll
     // drag never becomes a click, so scrolling past the field stays quiet.
-    ui.canvas.addEventListener('click', () => {
-        if (st && !st.selected && !st.readOnly) status(CHOOSE_PROMPT);
+    // A TAP ON A MAN CHOOSES HIM (Steve, 2026-11-02: after reading the prompt
+    // he tapped receiver A on the field, which is the obvious thing to do).
+    // With nobody chosen the field is the page's to scroll, so the choosing
+    // waits for the click a finished tap becomes. A tap on the grass with
+    // nobody chosen repeats the prompt.
+    ui.canvas.addEventListener('click', (event) => {
+        if (!st || st.readOnly || st.selected) return;
+        const pos = playerAt(event);
+        if (pos) selectPlayer(pos, { fromField: true });
+        else status(CHOOSE_PROMPT);
     });
     // The same words, standing between the row and the field whenever nobody
     // is chosen (Steve, 2026-11-02: a message at the bottom of the screen is
@@ -230,7 +238,8 @@ function applyChoice(value) {
     st.keys = null;
     suggestName(c);
     st.readOnly = c.kind === 'gone';
-    if (st.selected && !st.spots[st.selected]) st.selected = '';
+    // Nobody to draw for on a removed play, or a man this formation benches.
+    if (st.readOnly || (st.selected && !st.spots[st.selected])) st.selected = '';
     fillFormations(value);
     refreshTools();
     paint();
@@ -306,13 +315,39 @@ function refreshTools() {
  * chosen it scrolls like the rest of the page (`is-armed`), so pressing the
  * chosen man again is also the way to get the page scrolling back.
  */
-function selectPlayer(pos) {
+function selectPlayer(pos, { fromField = false } = {}) {
     if (!st || !st.spots[pos]) return;
-    st.selected = st.selected === pos ? '' : pos;
+    st.selected = fromField ? pos : (st.selected === pos ? '' : pos);
     st.keys = null;
     refreshTools();
     paint();
+    if (fromField) {
+        // Chosen on the field: the field keeps the finger, and the words say
+        // what happened and what comes next.
+        status(`${labelOf(pos)} chosen. Draw their route from where they stand.`);
+        return;
+    }
     ui.players[pos].focus();
+}
+
+/** Which man, if any, a pointer event is on: the nearest disc within a
+ *  thumb's reach of it, in the field's own pixels. */
+function playerAt(event) {
+    if (!st || !st.layout) return '';
+    const canvas = ui.canvas;
+    const rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : { left: 0, top: 0 };
+    const x = (event.clientX - rect.left) * st.scale[0];
+    const y = (event.clientY - rect.top) * st.scale[1];
+    const reach = 14 * Math.max(0.6, Math.min(canvas.width, canvas.height) / 150);
+    let best = '';
+    let nearest = reach;
+    for (const pos of PATH_PLAYERS) {
+        if (!st.spots[pos]) continue;
+        const c = st.layout.toCanvas(st.spots[pos]);
+        const d = Math.hypot(c[0] - x, c[1] - y);
+        if (d <= nearest) { nearest = d; best = pos; }
+    }
+    return best;
 }
 
 /** Say something on the screen's own status line, and to the live region. */
@@ -386,7 +421,11 @@ function onPointerDown(event) {
     fit();
     paint();
     st.keys = null;
-    st.stroke = { id: event.pointerId, samples: [], ema: {} };
+    // A drag that begins on another man's disc is his: switch to him and
+    // draw his route. A mere tap on a disc is a choice and nothing more.
+    const onDisc = playerAt(event);
+    if (onDisc && onDisc !== st.selected) selectPlayer(onDisc, { fromField: true });
+    st.stroke = { id: event.pointerId, samples: [], ema: {}, onDisc: !!onDisc };
     if (ui.canvas.setPointerCapture && event.pointerId !== undefined) {
         try { ui.canvas.setPointerCapture(event.pointerId); } catch (e) { /* a synthetic event */ }
     }
@@ -416,7 +455,7 @@ function onPointerUp(event) {
     }
     const line = strokeToLine(stroke.samples, st.spots[st.selected], STROKE);
     if (!line) {
-        status('That was too short to be a route. Draw a longer line from the player.');
+        if (!stroke.onDisc) status('That was too short to be a route. Draw a longer line from the player.');
         paint();
         return;
     }

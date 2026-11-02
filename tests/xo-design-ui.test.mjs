@@ -341,13 +341,56 @@ describe('drawing', () => {
         fire(p.formation, 'change');
     });
 
+    test('a tap on a man on the field chooses him, and a drag from another man’s disc is his route', () => {
+        UI.showDesigner(() => {});
+        const p = parts();
+        const spots = A.formationSpots('pass4');
+        // Nobody chosen: a tap on the grass repeats the prompt, a tap on A chooses A.
+        fire(p.canvas, 'click', toClient([0.6, 0.5]));
+        expect(UI.designerState().selected).toBe('');
+        expect(p.status.textContent).toBe('Please choose a player (A, B, C, D, or QB).');
+        fire(p.canvas, 'click', toClient(spots.wr1));
+        expect(UI.designerState().selected).toBe('wr1');
+        expect(p.prompt.hidden).toBe(true);
+        expect(p.canvas.classList.contains('is-armed')).toBe(true);
+        expect(player('wr1').getAttribute('aria-checked')).toBe('true');
+        expect(p.status.textContent).toBe('Receiver A chosen. Draw their route from where they stand.');
+        // The field keeps the finger: focus did not jump to the button.
+        expect(player('wr1').focused).not.toBe(true);
+        // A chosen, a tap on the quarterback's disc chooses him with no
+        // "too short" complaint, and a drag from C's disc is C's route.
+        drag([spots.qb, [spots.qb[0] + 0.002, spots.qb[1]]]);
+        expect(UI.designerState().selected).toBe('qb');
+        expect(UI.designerState().routes).toEqual({});
+        expect(p.status.textContent).toBe('Quarterback chosen. Draw their route from where they stand.');
+        drag([spots.wr3, [spots.wr3[0] + 0.3, spots.wr3[1]], [spots.wr3[0] + 0.3, spots.wr3[1] + 0.2]]);
+        expect(UI.designerState().selected).toBe('wr3');
+        expect(Object.keys(UI.designerState().routes)).toEqual(['wr3']);
+        // A drag from the grass is still the chosen man's, anchored to him.
+        drag([[0.6, 0.6], [0.8, 0.6]]);
+        expect(UI.designerState().selected).toBe('wr3');
+        expect(UI.designerState().routes.wr3[0]).toEqual(spots.wr3);
+        // A removed play's field chooses nobody.
+        S.hidePlay('pass7');
+        p.formation.value = 'gone:pass7';
+        fire(p.formation, 'change');
+        fire(p.canvas, 'click', toClient(A.formationSpots('pass7').wr1));
+        expect(UI.designerState().selected).toBe('');
+    });
+
     test('a tap is not a route, a second finger is ignored, and a right button does nothing', () => {
         UI.showDesigner(() => {});
         player('wr1').click();
         const spot = A.formationSpots('pass4').wr1;
-        drag([spot, [spot[0] + 0.01, spot[1]]]);
+        // A tap on the grass away from the man is a straight route from him
+        // to it, because every line is anchored to him: tap where he should
+        // go. (A tap on a man's disc is a choice instead, see the case above,
+        // and only a stroke that stays within a stride of him is too short.)
+        drag([[0.6, 0.5], [0.61, 0.5]]);
+        expect(UI.designerState().routes.wr1).toHaveLength(2);
+        expect(UI.designerState().routes.wr1[0]).toEqual(spot);
+        byText('Undo').click();
         expect(UI.designerState().routes).toEqual({});
-        expect(parts().status.textContent).toMatch(/too short/);
         // Two fingers: the second one's moves do not join the first's line.
         const canvas = parts().canvas;
         fire(canvas, 'pointerdown', { ...toClient(spot), pointerId: 1, button: 0 });
