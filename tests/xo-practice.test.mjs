@@ -453,6 +453,81 @@ describe('what a run of fifties would otherwise do', () => {
     }, 120000);
 });
 
+describe('a clip of a play that ran out of time', () => {
+    test('leaves with words and a file name about the clock, while the log still counts a sack', async () => {
+        // A browser that records, as the share sheet's own suite fakes one.
+        class FakeRecorder {
+            static isTypeSupported(t) { return t === 'video/webm'; }
+
+            constructor(_stream, options) { this.mimeType = options.mimeType; }
+
+            start() {}
+
+            stop() {
+                this.ondataavailable({ data: new Blob(['clip']) });
+                this.onstop();
+            }
+        }
+        const Canvas = function () {};
+        Canvas.prototype.captureStream = () => ({});
+        Object.assign(dom.windowStub, {
+            MediaRecorder: FakeRecorder,
+            HTMLCanvasElement: Canvas,
+            Blob,
+            File: class { constructor(_parts, name, opts) { this.name = name; this.type = opts.type; } },
+        });
+        const make = dom.documentStub.createElement;
+        dom.documentStub.createElement = (tag) => {
+            const e = make(tag);
+            if (tag === 'canvas') {
+                e.captureStream = () => ({});
+                e.toBlob = (cb, type) => cb({ size: 2048, type });
+            }
+            if (tag === 'video') e.play = () => Promise.resolve();
+            return e;
+        };
+        const realCreate = globalThis.URL.createObjectURL;
+        const realRevoke = globalThis.URL.revokeObjectURL;
+        globalThis.URL.createObjectURL = () => 'blob:clip';
+        globalThis.URL.revokeObjectURL = () => {};
+        const handed = [];
+        globalThis.navigator.canShare = () => true;
+        globalThis.navigator.share = async (data) => { handed.push(data); };
+        try {
+            const main = await boot(PRACTICE, { skip: false });
+            buttonNamed('welcome-actions', 'Start practice').click();
+            await flushAsync();
+            await callPlay();
+            dom.el('hud-actions').children.find((b) => (b.textContent || '').startsWith('Snap the ball')).click();
+            await flushAsync();
+
+            // Nothing pressed until the clock has run out.
+            let now = 0;
+            for (let i = 0; i < 2400 && dom.el('result').hidden !== false; i += 1) dom.loops[0](now += 16.7);
+            expect(dom.el('result').hidden).toBe(false);
+            expect(dom.el('result-detail').textContent).toMatch(/clock ran out/);
+            expect(pings('play-result')[0].searchParams.get('kind')).toBe('sack');
+
+            dom.el('result-actions').children.find((b) => b.id === 'result-share-btn').click();
+            await flushAsync();
+            for (let i = 0; i < 4000 && main.__test__.phase() !== 'result'; i += 1) dom.loops[0](now += 16.7);
+            expect(main.__test__.phase()).toBe('result');
+            await flushAsync();
+            await flushAsync();
+
+            const ui = await import('../www/xo/js/clip-ui.min.js');
+            await expect(ui.shareClip()).resolves.toBe('shared');
+            expect(handed[0].text).toMatch(/^Out of time in X's and O's! /);
+            expect(handed[0].files[0].name).toBe('scenexp-xo-out-of-time-1080x1920.webm');
+        } finally {
+            delete globalThis.navigator.share;
+            delete globalThis.navigator.canShare;
+            globalThis.URL.createObjectURL = realCreate;
+            globalThis.URL.revokeObjectURL = realRevoke;
+        }
+    }, 60000);
+});
+
 describe('the console', () => {
     test('cannot put the visitor on a defense that is not there, or run an opening without one', async () => {
         const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');

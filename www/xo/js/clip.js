@@ -151,21 +151,29 @@ const SHARE_LINES = Object.freeze({
     run: "Kept it and ran in X's and O's!",
     'run-50': "Fifty points in X's and O's!",
     sack: "Sacked in X's and O's!",
+    'out-of-time': "Out of time in X's and O's!",
     interception: "Picked off in X's and O's!",
     incomplete: "So close in X's and O's!",
 });
+
+/** What a clip is called once it leaves: the outcome's own slug, unless the
+ *  outcome says it is shared as something else, as a Practice Mode play that
+ *  ran out of time is (nobody sacked anybody). */
+export function shareSlug(outcome) {
+    return outcome ? outcome.shareAs || outcome.result || '' : '';
+}
 
 /** The words that go with the clip to a share sheet, with the address. Some
  *  sheets keep them (Messages), some drop them (Instagram), which is why the
  *  result is also stamped on the clip. */
 export function clipShareText(outcome, url = '') {
     const points = outcome ? Number(outcome.points) || 0 : 0;
-    const line = (points === 50 ? SHARE_LINES.fifty : SHARE_LINES[outcome && outcome.result])
+    const line = (points === 50 ? SHARE_LINES.fifty : SHARE_LINES[shareSlug(outcome)])
         || "A play from X's and O's.";
     return url ? `${line} ${url}` : line;
 }
 
-/** "scenexp-xo-catch-720x1280.mp4". `result` is the outcome's own slug. */
+/** "scenexp-xo-catch-720x1280.mp4". `result` is the outcome's `shareSlug`. */
 export function clipName(result, w, h, ext = 'mp4') {
     const slug = String(result || 'play').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'play';
     return `scenexp-xo-${slug}-${w}x${h}.${ext}`;

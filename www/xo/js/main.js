@@ -33,7 +33,7 @@ import {
 import { captureDrawn, applyDrawn } from './snapshot.min.js';
 import { photoShot, drawPhoto, photoBlob, photoName, bodyPoints } from './photo.min.js';
 import {
-    clipSize, clipPlan, clipProgress, clipShot, stampText, clipName, takeFrame, holdSize, recordTake,
+    clipSize, clipPlan, clipProgress, clipShot, stampText, clipName, shareSlug, takeFrame, holdSize, recordTake,
     openingFor,
 } from './clip.min.js';
 import { saveFile } from '../../shared/js/sharefile-1.0.0.min.js';
@@ -3732,7 +3732,7 @@ export async function qaClip(view = 1) {
     const made = await recordTake(stage, () => beginTake(stage, { quarter }), { ...rec, win: window });
     if (!made || !made.blob || !made.blob.size) return 'The clip could not be made.';
     if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return "This browser couldn't save the clip.";
-    const name = clipName(cycle.lastOutcome && cycle.lastOutcome.result, rec.w, rec.h, extensionOf(made.mime));
+    const name = clipName(shareSlug(cycle.lastOutcome), rec.w, rec.h, extensionOf(made.mime));
     const url = URL.createObjectURL(made.blob);
     saveFile(url, name);
     window.setTimeout(() => URL.revokeObjectURL(url), 60000);

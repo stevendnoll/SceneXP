@@ -1694,8 +1694,14 @@ export function outcome(play) {
     });
     // NOBODY CAN BE SACKED BY NOBODY. In Practice Mode a ball held too long is
     // the clock's doing alone, so it is called that. The slug and the points
-    // stay, because everything counting the play reads those.
+    // stay, because everything counting the play reads those. `shareAs` is for
+    // what leaves with a clip of it (clip.js `shareSlug`).
     return play.practice && result.result === 'sack'
-        ? { ...result, headline: 'Out of time', detail: 'The clock ran out with the ball still in hand.' }
+        ? {
+            ...result,
+            headline: 'Out of time',
+            detail: 'The clock ran out with the ball still in hand.',
+            shareAs: 'out-of-time',
+        }
         : result;
 }
