@@ -284,6 +284,15 @@ magick og-world.png -profile "$SRGB" -strip \
   -quality 92 -sampling-factor 4:4:4 -interlace Plane og-world.jpg
 ```
 
+On a Mac, `scripts/image-converter.mjs` handles a whole folder of captures in one
+command. It writes a JPG and a WebP beside each PNG and never changes the PNG.
+Its JPG matches the recipe above. Its WebP is lossy at quality 92 with sharp YUV,
+which is explained below, rather than lossless.
+
+```bash
+node scripts/image-converter.mjs path/to/captures
+```
+
 `-strip` also removes the screenshot's EXIF and XMP, which is worth doing on
 its own account. Two encoder choices are deliberate and worth understanding
 rather than copying blindly:
@@ -299,7 +308,7 @@ rather than copying blindly:
 - **`-sampling-factor 4:4:4` for the JPEG.** The default 4:2:0 washes out
   saturated colour against near-black, which on our cards is exactly where the
   accent colour lives.
-- **`cwebp -sharp_yuv` when the card holds a small saturated object.** Lossy
+- **Sharp YUV when the card holds a small saturated object.** Lossy
   WebP is always 4:2:0 internally and there is no flag to change it, so a
   brightly coloured thing only a few pixels across loses half its chroma
   resolution, and **raising the quality will not buy it back**. On the High Water
@@ -307,19 +316,18 @@ rather than copying blindly:
   0.0127 at quality 88 against 0.0112 at 97. A number that barely moves with
   quality is chroma subsampling rather than ringing, and it is the tell worth
   learning, because the instinct is to reach for a higher quality or for
-  lossless and neither helps. `-sharp_yuv` took it to 0.0103 at 24.0 KB against
+  lossless and neither helps. Sharp YUV took it to 0.0103 at 24.0 KB against
   24.2, so it cost nothing at all, where lossless would have been 136.6 KB.
-  ImageMagick has no equivalent, so a card like that is encoded with `cwebp`
-  from a PNG that ImageMagick has already converted out of the display profile:
+  ImageMagick can do this itself with a single define, and its output was
+  byte-identical to `cwebp -q 92 -sharp_yuv` when we compared the two:
 
   ```bash
-  magick og-world.png -profile "$SRGB" -strip -alpha off /tmp/card.png
-  cwebp -q 92 -sharp_yuv -metadata none /tmp/card.png -o og-world.webp
-  magick /tmp/card.png -quality 92 -sampling-factor 4:4:4 -interlace Plane -strip og-world.jpg
+  magick og-world.png -profile "$SRGB" -strip -alpha off \
+    -quality 92 -define webp:use-sharp-yuv=1 og-world.webp
   ```
 
   Measure your own card. A view with nothing small and saturated in it does not
-  need this, and the plain ImageMagick recipe above is fine.
+  need this, and the plain recipe above is fine.
 - **Watch what your picture is actually made of.** For the shipped card the
   real risk was never the text but the starfield, since lossy codecs like to
   eat isolated bright pixels on black. Counting them is a one-line check, and
