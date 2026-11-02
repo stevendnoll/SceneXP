@@ -3640,7 +3640,7 @@ html [lang="en"]
               li.spotlight-slide.is-active [aria-label="1 of 4" aria-roledescription="slide" data-slug="meme"]
                 a [href="/meme/"]
                   div.spotlight-media
-                    img [alt="A 3D meme on a painted city street: three figures walk toward the camera on a sidewalk, each labeled in white meme letters. MEMES, on the left, has a purple bob, a lilac top, a black mini skirt and fishnet tights. ME, in the middle, has a beard and a navy sweater and glances toward MEMES with an open mouth. WORK, on the right, frowns in a yellow beanie and a teal T-shirt." decoding="async" fetchpriority="high" height="630" loading="eager" src="/meme/assets/og-meme.webp?v=2" width="1200"]
+                    img [alt="A 3D meme on a painted city street: three figures walk toward the camera on a sidewalk, each labeled in white meme letters. MEMES, on the left, has a purple bob, a lilac top, a black mini skirt and fishnet tights. ME, in the middle, has a beard and a navy sweater and glances toward MEMES with an open mouth. WORK, on the right, frowns in a yellow beanie and a teal T-shirt." decoding="async" fetchpriority="high" height="630" loading="eager" src="/meme/assets/og-meme.webp?v=3" width="1200"]
                   div.spotlight-body
                     p.spotlight-date
                       "Released"
@@ -3711,7 +3711,7 @@ html [lang="en"]
             ul.experience-grid
               li.experience-card [data-slug="meme"]
                 a [href="/meme/"]
-                  img [alt="A 3D meme on a painted city street: three figures walk toward the camera on a sidewalk, each labeled in white meme letters. MEMES, on the left, has a purple bob, a lilac top, a black mini skirt and fishnet tights. ME, in the middle, has a beard and a navy sweater and glances toward MEMES with an open mouth. WORK, on the right, frowns in a yellow beanie and a teal T-shirt." decoding="async" height="630" loading="lazy" src="/meme/assets/og-meme.webp?v=2" width="1200"]
+                  img [alt="A 3D meme on a painted city street: three figures walk toward the camera on a sidewalk, each labeled in white meme letters. MEMES, on the left, has a purple bob, a lilac top, a black mini skirt and fishnet tights. ME, in the middle, has a beard and a navy sweater and glances toward MEMES with an open mouth. WORK, on the right, frowns in a yellow beanie and a teal T-shirt." decoding="async" height="630" loading="lazy" src="/meme/assets/og-meme.webp?v=3" width="1200"]
                   div.experience-card-body
                     p.experience-eyebrow
                       "Put yourself in the meme"
@@ -5216,7 +5216,7 @@ html [lang="en"]
     meta [content="SceneXP" property="og:site_name"]
     meta [content="https://www.scenexp.com/meme/" property="og:url"]
     meta [content="en_US" property="og:locale"]
-    meta [content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=2" property="og:image"]
+    meta [content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=3" property="og:image"]
     meta [content="image/jpeg" property="og:image:type"]
     meta [content="1200" property="og:image:width"]
     meta [content="630" property="og:image:height"]
@@ -5224,7 +5224,7 @@ html [lang="en"]
     meta [content="summary_large_image" name="twitter:card"]
     meta [content="Meme Studio" name="twitter:title"]
     meta [content="Put yourself in the meme. Your SceneXP avatar stars in a 3D meme you caption and share." name="twitter:description"]
-    meta [content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=2" name="twitter:image"]
+    meta [content="https://www.scenexp.com/meme/assets/og-meme.jpg?v=3" name="twitter:image"]
     meta [content="A 3D meme on a painted city street: three figures walk toward the camera on a sidewalk, each labeled in white meme letters. MEMES, on the left, has a purple bob, a lilac top, a black mini skirt and fishnet tights. ME, in the middle, has a beard and a navy sweater and glances toward MEMES with an open mouth. WORK, on the right, frowns in a yellow beanie and a teal T-shirt." name="twitter:image:alt"]
     script [type="application/ld+json"]
       {
@@ -5234,7 +5234,7 @@ html [lang="en"]
         "url": "https://www.scenexp.com/meme/",
         "name": "Meme Studio",
         "datePublished": "2026-10-28",
-        "image": "https://www.scenexp.com/meme/assets/og-meme.jpg?v=2",
+        "image": "https://www.scenexp.com/meme/assets/og-meme.jpg?v=3",
         "description": "A browser-based 3D meme generator for SceneXP. The visitor's own avatar stars in a meme laid out as a grid of small lit 3D boxes, one for each panel. Choose a template, type a caption for each panel, add a friend's avatar or dress anyone else in it by hand, and share the result as a picture or as a link the friend can open and remix with their own avatar. Everything is made on the visitor's own device and nothing is uploaded.",
         "applicationCategory": "EntertainmentApplication",
         "operatingSystem": "Any",
