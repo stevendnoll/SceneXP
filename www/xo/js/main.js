@@ -71,6 +71,11 @@ import {
 import { initClipSheet, showClipSheet, clipSheetOpen } from './clip-ui.min.js';
 import { openingFrame, planOpening, castAt, propsAt } from './opening.min.js';
 import { initColorsCard, showColorsCard, colorsCardOpen } from './colors-ui.min.js';
+// THE DESIGNED PLAYS (specs/custom-plays-PRD): the screen that draws them,
+// the store that keeps them, and the test that tells one from a slug.
+import { initDesigner, showDesigner } from './design-ui.min.js';
+import { getPlay } from './plays-store.min.js';
+import { isCustomId } from './design.min.js';
 import { drawColorsPreviews } from './colors-preview.min.js';
 import {
     initOpeningProps, applyOpeningProps, hideOpeningProps, splashBuffer,
@@ -96,7 +101,7 @@ import {
     isMuted, toggleMuted,
 } from './audio.min.js';
 import {
-    initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings, setPlayAs,
+    initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings, setPlayAs, focusPlay,
 } from './playbook-ui.min.js';
 import { isSlot, SLOTS, playingLine, DEFAULT_SLOT, labelOf, slotOf } from './playas.min.js';
 import {
@@ -273,7 +278,29 @@ function orientation() {
  *  defense is the one the library rolled when the visitor left it to chance. */
 function calledFields() {
     const play = cycle.play || {};
-    return { defense: play.defense || '', offense: play.offense || '', playCount: cycle.playNumber };
+    return { defense: play.defense || '', ...offenseFields(play.offense, play.base), playCount: cycle.playNumber };
+}
+
+/**
+ * A DESIGNED PLAY IS LOGGED AS "custom" AND ITS FORMATION, never its name and
+ * never its lines (specs/custom-plays-PRD, Section 8). A play from the book is
+ * its slug, as it always was, with no `base` field so the record's shape does
+ * not change for the seventeen.
+ */
+function offenseFields(offense, base) {
+    if (isCustomId(offense)) return { offense: 'custom', base: base || '' };
+    return { offense: offense || '' };
+}
+
+/**
+ * WHAT TO HAND `lineUp` FOR A PLAY AS CALLED: a slug is itself, a designed
+ * play's id is its record from the store, and an id the store no longer has
+ * (deleted for good in another tab, or hand-edited away) falls back to the
+ * book's first play rather than to an empty field.
+ */
+function callable(offense) {
+    if (!isCustomId(offense)) return offense;
+    return getPlay(offense) || 'pass2';
 }
 
 /** How long, in simulated seconds, the ball has been out. Simulated rather than
@@ -674,17 +701,18 @@ function openPlaybook() {
  */
 function onPlaybookChoice(offensive, defense, { repeat = false } = {}) {
     const changing = cycle.phase === 'presnap';
+    const called = callable(offensive);
     report('call-play', {
         kind: changing ? 'change' : 'next',
         outcome: {
-            offense: offensive,
+            ...offenseFields(offensive, called && called.base),
             defense: defense || 'random',
             repeat: repeat || undefined,
             playCount: changing ? cycle.playNumber : cycle.playNumber + 1,
         },
     });
-    if (changing) changePlay(offensive, defense);
-    else startPlay(offensive, defense);
+    if (changing) changePlay(called, defense);
+    else startPlay(called, defense);
 }
 
 /**
@@ -1313,6 +1341,7 @@ function finishPlay() {
         outcome: playRecord({
             defense: called.defense,
             offense: called.offense,
+            base: called.base,
             orientation: orientation(),
             points: result.points,
             result: result.result,
@@ -2793,7 +2822,7 @@ async function init() {
     // Line up once so the roster knows who exists, and so the field behind the
     // playbook shows a real formation rather than an empty pitch. The last
     // play a visitor chose is remembered, so a returning visitor sees theirs.
-    const objects = lineUp(cycle.play, getSettings().lastPlay || 'pass2', '');
+    const objects = lineUp(cycle.play, callable(getSettings().lastPlay || 'pass2'), '');
     // THE VISITOR IS ON THE FIELD (specs/avatar M7, 2026-10-26): with an
     // avatar saved on /avatar/, one player is them, in their own clothes.
     // The quarterback, unless they chose another (specs/xo-photos-plan).
@@ -2875,6 +2904,25 @@ async function init() {
                 cycle.reading = false;
                 back();
             });
+        },
+        // DESIGN A PLAY (specs/custom-plays-PRD), the same arrangement again.
+        design: (back) => {
+            uiClick();
+            cycle.reading = true;
+            showDesigner(() => {
+                cycle.reading = false;
+                back();
+            });
+        },
+    });
+    initDesigner({
+        report,
+        announce,
+        // The book is already back when this is called (design-ui `finish`),
+        // with the new card in it: put the visitor's focus on it and say so.
+        onSaved: (record) => {
+            focusPlay(record.id);
+            announce(`Saved. ${record.name} is in your playbook.`);
         },
     });
     initColorsCard({

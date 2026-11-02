@@ -18,7 +18,9 @@ import { OffensivePlaybookClass } from './playbook.min.js';
 import { XO_CONFIG as CFG } from './config.min.js';
 import { muteButton } from './hud.min.js';
 import { autoJump, setAutoJump } from './jump.min.js';
-import { DEFAULT_SLOT, normalizeSlot, listedSlots, sitsOut } from './playas.min.js';
+import { DEFAULT_SLOT, normalizeSlot, listedSlots, sitsOut, formationSpots } from './playas.min.js';
+import { listPlays, getPlay, isHidden, hiddenCount } from './plays-store.min.js';
+import { drawDesign, describePlay, isCustomId, FORMATION_TEMPLATES } from './design.min.js';
 
 /**
  * ALL SEVENTEEN PLAYS, WHICH IS WHAT THE 2D GAME HAS.
@@ -122,6 +124,14 @@ let playAsSelect = null;
  */
 const cardButtons = new Map();
 let repeatCard = null;
+/** The Design a Play tile, the grid it leads, the designed plays' cards now
+ *  in it, and the note under it (specs/custom-plays-PRD). */
+let designTile = null;
+let grid = null;
+let mineCards = [];
+let removedNote = null;
+/** Opens the designer, handed the function that brings the book back. */
+let onDesign = null;
 const sitOutTags = new Set();
 let settings = { lastPlay: '', defense: '', playAs: DEFAULT_SLOT };
 
@@ -223,6 +233,37 @@ function hexToRgba(hex, alpha) {
 }
 
 /**
+ * THE SAME ROOM'S PALETTE FOR A DRAWN PLAY (design.js `drawDesign`): the card
+ * ground, the painted lines and the receivers' inks are the ones the ported
+ * diagrams are remapped to above, so a designed play's card sits beside the
+ * book's without looking like it came from somewhere else. The designer's
+ * canvas uses it too.
+ */
+export function designInk() {
+    return {
+        ground: DIAGRAM_INK['rgb(235, 235, 235)'],
+        lines: `rgba(${DIAGRAM_INK['0, 125, 0, 0.4']})`,
+        scrimmage: 'rgba(120, 200, 140, 0.7)',
+        letters: '#12171f',
+        linemen: `rgba(${DIAGRAM_INK['50, 50, 50, 0.8']})`,
+        players: {
+            wr1: CFG.receivers.wr1.ink,
+            wr2: CFG.receivers.wr2.ink,
+            wr3: CFG.receivers.wr3.ink,
+            wr4: CFG.receivers.wr4.ink,
+            qb: CFG.qb.ink,
+        },
+    };
+}
+
+/** A play by its slug or a designed play by its id: its name, for the tags
+ *  that have to say one. Null for a play that is not in the book or the store. */
+function playNamed(key) {
+    if (isCustomId(key)) return getPlay(key);
+    return PLAYS.find((p) => p.slug === key) || null;
+}
+
+/**
  * Hand a canvas a context that recolours as it draws.
  *
  * The ported methods find their canvas by selector and call `getContext('2d')`
@@ -307,7 +348,8 @@ function buildDefenseRow() {
 
 function buildCard(play, repeat = false) {
     const item = document.createElement('li');
-    item.className = repeat ? 'play-card is-repeat' : 'play-card';
+    const mine = isCustomId(play.slug);
+    item.className = `play-card${repeat ? ' is-repeat' : ''}${mine ? ' is-mine' : ''}`;
 
     const button = document.createElement('button');
     button.type = 'button';
@@ -331,8 +373,9 @@ function buildCard(play, repeat = false) {
     // see. This is the "text alternative for every diagram" M3 asks for.
     canvas.setAttribute('aria-hidden', 'true');
     // Hand it a context that repaints the 2D game's light palette for a dark
-    // room. Done here rather than in playbook.js, which is a port.
-    themeCanvas(canvas);
+    // room. Done here rather than in playbook.js, which is a port. A designed
+    // play is painted in that palette directly (`paintCard`).
+    if (!mine) themeCanvas(canvas);
     button.appendChild(canvas);
 
     const name = document.createElement('span');
@@ -345,11 +388,97 @@ function buildCard(play, repeat = false) {
     blurb.textContent = play.blurb;
     button.appendChild(blurb);
 
+    if (mine) {
+        const tag = document.createElement('span');
+        tag.className = 'play-mine';
+        tag.textContent = 'Yours';
+        button.appendChild(tag);
+    }
+
     // The "Last play" tag is not built here. See `markLastPlay`.
     button.addEventListener('click', () => choose(play.slug, repeat));
     item.appendChild(button);
-    if (repeat) repeatCard = { slug: play.slug, button };
+    if (repeat) repeatCard = { slug: play.slug, button, canvas };
     else cardButtons.set(play.slug, button);
+    if (mine) item.canvas = canvas;
+    return item;
+}
+
+/**
+ * A DESIGNED PLAY AS A CARD (specs/custom-plays-PRD, Section 7): the same
+ * skeleton as the book's, its diagram painted from the stored lines on the
+ * formation it stands in, its blurb written from the lines (design.js
+ * `describePlay`), and a "Yours" tag. `slug` carries the record's id, so the
+ * choosing, the "Last play" tag and the repeat card need no second path.
+ */
+function cardOf(record) {
+    const spots = formationSpots(record.base);
+    const words = describePlay(record.routes, spots);
+    const base = PLAYS.find((p) => p.slug === record.base);
+    return {
+        slug: record.id,
+        name: record.name,
+        blurb: `Your play${base ? `, on the ${base.name} formation` : ''}. ${words ? `${words}.` : ''}`.trim(),
+        record, spots,
+    };
+}
+
+/** Paint a designed play's diagram on its card's canvas. */
+function paintCard(canvas, play) {
+    const ctx = canvas.getContext && canvas.getContext('2d');
+    if (!ctx) return;
+    drawDesign(ctx, canvas.width, canvas.height, { spots: play.spots, routes: play.record.routes, ink: designInk() });
+}
+
+/**
+ * THE FIRST TILE IN THE BOOK: "Design a Play". A card like the others so the
+ * grid stays a grid, its picture the first starting formation with nothing
+ * drawn on it, its blurb an invitation. Built once; `syncCards` keeps it first.
+ */
+function buildDesignTile() {
+    const item = document.createElement('li');
+    item.className = 'play-card is-design';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'play-choose play-design';
+    button.dataset.design = 'true';
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 300;
+    canvas.height = 150;
+    canvas.setAttribute('aria-hidden', 'true');
+    button.appendChild(canvas);
+    const ctx = canvas.getContext && canvas.getContext('2d');
+    if (ctx) {
+        drawDesign(ctx, canvas.width, canvas.height, {
+            spots: formationSpots(FORMATION_TEMPLATES[0].base), routes: {}, ink: designInk(),
+        });
+    }
+
+    const name = document.createElement('span');
+    name.className = 'play-name';
+    name.textContent = 'Design a Play';
+    button.appendChild(name);
+    const blurb = document.createElement('span');
+    blurb.className = 'play-blurb';
+    blurb.textContent = 'Draw your own routes on any formation, and keep the play in your book.';
+    button.appendChild(blurb);
+
+    button.addEventListener('click', () => {
+        const root = document.getElementById('playbook');
+        if (!root || !onDesign) return;
+        root.hidden = true;
+        onDesign(() => {
+            root.hidden = false;
+            settleStartOver(root);
+            syncCards(root);
+            markLastPlay(root);
+            markSitsOut();
+            button.focus();
+        });
+    });
+    item.appendChild(button);
+    designTile = { item, button };
     return item;
 }
 
@@ -443,13 +572,17 @@ function markSitsOut() {
     const cards = [...cardButtons];
     if (repeatCard) cards.push([repeatCard.slug, repeatCard.button]);
     for (const [slug, button] of cards) {
-        const out = sitsOut(settings.playAs, slug);
+        // A designed play benches whoever its formation benches; the record
+        // says which formation.
+        const out = sitsOut(settings.playAs, isCustomId(slug) ? (getPlay(slug) || slug) : slug);
         // The repeat card is named by its aria-label rather than its text, so
         // the tag has to be said there too or a screen reader never hears it.
         if (repeatCard && button === repeatCard.button) {
-            const play = PLAYS.find((p) => p.slug === slug);
-            button.setAttribute('aria-label', `${play.name}, your last play, again`
-                + (out ? ', you sit this one out' : ''));
+            const play = playNamed(slug);
+            if (play) {
+                button.setAttribute('aria-label', `${play.name}, your last play, again`
+                    + (out ? ', you sit this one out' : ''));
+            }
         }
         if (!out) continue;
         const tag = document.createElement('span');
@@ -504,23 +637,104 @@ function markLastPlay(root) {
  * change where every other play sits from one play to the next, which is the
  * one thing a book you are learning to read must not do.
  */
-function syncRepeatCard(root) {
-    const grid = root.querySelector('.playbook-grid');
+/** `children` is an HTMLCollection in a browser and an array in the suite's
+ *  stand-in, so the two things done with it are done through these. */
+const indexOfChild = (parent, node) => Array.prototype.indexOf.call(parent.children, node);
+const childAt = (parent, i) => (i >= 0 && i < parent.children.length ? parent.children[i] : null);
+
+function syncRepeatCard() {
     if (!grid) return;
-    for (const old of grid.querySelectorAll('.play-card.is-repeat')) old.remove();
+    if (repeatCard) {
+        const item = repeatCard.button.parentElement || repeatCard.button.parentNode;
+        if (item && item.remove) item.remove();
+    }
     repeatCard = null;
-    if (!settings.lastPlay) return;
-    const play = PLAYS.find((p) => p.slug === settings.lastPlay);
-    if (!play) return;
+    if (!settings.lastPlay || isHidden(settings.lastPlay)) return;
+    const named = playNamed(settings.lastPlay);
+    if (!named) return;
+    const play = isCustomId(settings.lastPlay) ? cardOf(named) : named;
 
     const card = buildCard(play, true);
-    grid.insertBefore(card, grid.firstChild);
+    // SECOND, behind the Design a Play tile, which is always first (PRD
+    // Decision 1).
+    const after = designTile ? designTile.item : null;
+    const before = after ? childAt(grid, indexOfChild(grid, after) + 1) : (childAt(grid, 0));
+    grid.insertBefore(card, before);
+    if (play.record) {
+        paintCard(repeatCard.canvas, play);
+        return;
+    }
     // AFTER it is in the document: the ported drawPlay methods find their
     // canvas by selector, so one that has not been inserted is not there.
     const method = `drawPlay${play.diagram}`;
     if (typeof book[method] === 'function') {
         book[method](`#play-diagram-repeat-${play.slug}`);
     }
+}
+
+/**
+ * THE CARDS THAT CHANGE BETWEEN OPENINGS (specs/custom-plays-PRD, Section 7):
+ * the repeat card, the visitor's own plays, and which of the book's plays are
+ * out of it. Rebuilt on every open, like the repeat card always was, because a
+ * play can be designed, removed or restored while the book is stepped aside.
+ * Order: the Design a Play tile, the last play, the visitor's plays newest
+ * first, then the book in its own order with the removed ones hidden.
+ */
+function syncCards(root) {
+    if (!grid) return;
+    for (const item of mineCards) {
+        cardButtons.delete(item.dataset.slug);
+        if (item.remove) item.remove();
+    }
+    mineCards = [];
+    syncRepeatCard();
+    // The visitor's plays, after the tile and the repeat card.
+    let before = designTile ? designTile.item : null;
+    if (repeatCard) before = repeatCard.button.parentElement || repeatCard.button.parentNode;
+    let at = before ? indexOfChild(grid, before) + 1 : 0;
+    for (const record of listPlays()) {
+        const play = cardOf(record);
+        const item = buildCard(play);
+        item.dataset.slug = record.id;
+        grid.insertBefore(item, childAt(grid, at));
+        at += 1;
+        paintCard(item.canvas, play);
+        mineCards.push(item);
+    }
+    // The book's own cards, hidden when removed.
+    for (const play of PLAYS) {
+        const button = cardButtons.get(play.slug);
+        const item = button && (button.parentElement || button.parentNode);
+        if (item) item.hidden = isHidden(play.slug);
+    }
+    // ...and the note that says where they went.
+    if (removedNote) {
+        const n = hiddenCount();
+        removedNote.hidden = n === 0;
+        removedNote.textContent = n === 1
+            ? 'One play is out of your book. Restore it from Design a Play.'
+            : `${n} plays are out of your book. Restore them from Design a Play.`;
+    }
+    if (root) markLastPlay(root);
+}
+
+/** The first play a keyboard lands on: the last play if it is there, else the
+ *  first card in the book that is showing. Not the tile: between plays the
+ *  job is to call a play. */
+function firstPlayButton() {
+    if (repeatCard) return repeatCard.button;
+    if (mineCards.length) return mineCards[0].children[0];
+    for (const play of PLAYS) {
+        if (!isHidden(play.slug)) return cardButtons.get(play.slug) || null;
+    }
+    return designTile ? designTile.button : null;
+}
+
+/** Put focus on a play's card, after a save (main.js). */
+export function focusPlay(key) {
+    const button = cardButtons.get(key);
+    if (button && button.focus) button.focus();
+    return !!button;
 }
 
 /** Draw every diagram. Must run AFTER the canvases are in the document,
@@ -758,13 +972,14 @@ function buildAutoJump(onChange) {
 }
 
 export function initPlaybook(handler, startOver = null,
-    { defense = null, help = null, colors = null, autoJumpChanged = null, playAs = null } = {}) {
+    { defense = null, help = null, colors = null, autoJumpChanged = null, playAs = null, design = null } = {}) {
     onChoose = handler;
     onStartOver = startOver;
     onDefense = defense;
     onPlayAs = playAs;
     onHelp = help;
     onColors = colors;
+    onDesign = design;
     load();
 
     const root = document.getElementById('playbook');
@@ -802,10 +1017,19 @@ export function initPlaybook(handler, startOver = null,
     options.appendChild(buildPlayAsRow());
     body.appendChild(options);
 
-    const grid = document.createElement('ul');
+    grid = document.createElement('ul');
     grid.className = 'playbook-grid';
+    cardButtons.clear();
+    mineCards = [];
+    repeatCard = null;
+    designTile = null;
+    if (onDesign) grid.appendChild(buildDesignTile());
     for (const play of PLAYS) grid.appendChild(buildCard(play));
     body.appendChild(grid);
+    removedNote = document.createElement('p');
+    removedNote.className = 'playbook-removed card-meta';
+    removedNote.hidden = true;
+    body.appendChild(removedNote);
 
     drawAll();
     return root;
@@ -826,9 +1050,9 @@ export function show(opts = {}) {
     root.hidden = false;
     setCancel(root, opts.canCancel ? opts.onCancel : null);
     // Read the last play HERE, every time, rather than once at boot: it is the
-    // only moment at which the answer is current (QA item 1).
-    syncRepeatCard(root);
-    markLastPlay(root);
+    // only moment at which the answer is current (QA item 1). The visitor's
+    // own plays and the removed ones are read the same way.
+    syncCards(root);
     // ...and who the visitor is, which a choice made on the field before the
     // snap may have changed since the book last opened.
     fillPlayAs();
@@ -836,7 +1060,7 @@ export function show(opts = {}) {
     settleStartOver(root);
     // Focus the first play so a keyboard visitor lands somewhere useful rather
     // than at the top of the document.
-    const first = root.querySelector('.play-choose');
+    const first = firstPlayButton() || root.querySelector('.play-choose');
     if (first) first.focus();
 }
 

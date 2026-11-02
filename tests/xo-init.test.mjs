@@ -3048,3 +3048,116 @@ describe('choosing who to play as', () => {
         expect(actionLabels()).toContain('Keep it');
     });
 });
+
+/**
+ * DESIGN A PLAY (specs/custom-plays-PRD, Phase 2): the first tile in the book,
+ * the designer stepping the book aside and coming back, a saved play as a card
+ * of its own that lines up on its formation and is logged as "custom", and a
+ * removed play gone from the grid with the note that says where.
+ */
+describe('design a play', () => {
+    const KEY = 'exes-n-ohs-plays';
+    const openBook = async () => {
+        await boot();
+        dom.el('welcome-actions').children[0].click();   // Take the field
+        await flushAsync();
+        const body = dom.el('playbook').querySelector('.playbook-body');
+        const grid = body.children.find((n) => n.className === 'playbook-grid');
+        expect(grid).toBeTruthy();
+        return { body, grid };
+    };
+    const record = {
+        id: 'custom-seeded', name: 'B go', base: 'pass2', created: '2026-11-02T00:00:00Z', hidden: false,
+        routes: { wr2: [[0.2, 0.37], [0.6, 0.37]] },
+    };
+
+    test('the tile is first, opens the designer in the book’s place, and the book comes back to it', async () => {
+        const { grid } = await openBook();
+        const tile = grid.children[0];
+        expect(tile.className).toContain('is-design');
+        const button = tile.children[0];
+        expect(button.dataset.design).toBe('true');
+        expect((button.textContent || '')).toContain('Design a Play');
+        // Focus is on the first PLAY, not the tile: between plays the job is
+        // to call a play.
+        expect(button.focused).not.toBe(true);
+        expect(grid.children[1].children[0].focused).toBe(true);
+
+        button.click();
+        expect(dom.el('playbook').hidden).toBe(true);
+        expect(dom.el('designer').hidden).toBe(false);
+        expect(dom.el('designer-panel').focused).toBe(true);
+        const UI = await import('../www/xo/js/design-ui.min.js');
+        expect(UI.designerOpen()).toBe(true);
+        const back = deep(dom.el('designer-body')).find((n) => n && (n.textContent || '').trim() === 'Back to the playbook');
+        back.click();
+        expect(dom.el('designer').hidden).toBe(true);
+        expect(dom.el('playbook').hidden).toBe(false);
+        expect(button.focused).toBe(true);
+    });
+
+    test('a saved play is a card behind the tile, lines up on its formation when called, and is logged as custom', async () => {
+        localStorage.setItem(KEY, JSON.stringify({ v: 1, plays: [record], hidden: [] }));
+        const sent = [];
+        globalThis.Image = class { set src(url) { sent.push(new URL(url, 'http://localhost:8000/xo/')); } };
+        try {
+            const { grid } = await openBook();
+            const card = grid.children[1];
+            expect(card.className).toContain('is-mine');
+            const button = card.children[0];
+            expect(button.dataset.slug).toBe('custom-seeded');
+            expect(button.textContent).toContain('B go');
+            expect(button.textContent).toContain('Yours');
+            expect(button.textContent).toContain('Flood Left formation');
+            expect(button.textContent).toContain('B medium straight');
+            button.click();
+            await flushAsync();
+            expect(dom.el('playbook').hidden).toBe(true);
+            const call = sent.find((u) => u.searchParams.get('action') === 'call-play');
+            const detail = Object.fromEntries(new URLSearchParams(call.searchParams.get('outcome') || ''));
+            expect(detail.offense).toBe('custom');
+            expect(detail.base).toBe('pass2');
+            expect(call.href).not.toMatch(/B%20go|B\+go/);
+            // The last play is the designed one, and the book's repeat card is it.
+            expect(JSON.parse(localStorage.getItem('exes-n-ohs-play-settings')).lastPlay).toBe('custom-seeded');
+            // The field is lined up on the base, and B carries the drawn line.
+            const main = await import('../www/xo/js/main.js');
+            const play = main.__test__.play();
+            expect(play.base).toBe('pass2');
+            expect(play.offense).toBe('custom-seeded');
+            const b = play.routes.getObjectByPosition(play.game.objects, 'wr2');
+            expect(b.settings.route.type).toBe('path');
+            expect(b.settings.route.path.points).toHaveLength(2);
+        } finally {
+            delete globalThis.Image;
+        }
+    });
+
+    test('a removed play is out of the grid, never the repeat card, and the note says where it went', async () => {
+        localStorage.setItem(KEY, JSON.stringify({ v: 1, plays: [], hidden: ['pass7'] }));
+        localStorage.setItem('exes-n-ohs-play-settings', JSON.stringify({ lastPlay: 'pass7', defense: '' }));
+        const { body, grid } = await openBook();
+        const cards = grid.children.filter((li) => li.children[0] && li.children[0].dataset.slug === 'pass7');
+        expect(cards).toHaveLength(1);
+        expect(cards[0].hidden).toBe(true);
+        expect(grid.children.some((li) => li.className.includes('is-repeat'))).toBe(false);
+        const note = body.children.find((n) => n.className && n.className.includes('playbook-removed'));
+        expect(note.hidden).toBe(false);
+        expect(note.textContent).toMatch(/One play is out of your book/);
+    });
+
+    test('a deleted-for-good last play falls back to the book at boot rather than an empty field', async () => {
+        localStorage.setItem('exes-n-ohs-play-settings', JSON.stringify({ lastPlay: 'custom-gone', defense: '' }));
+        const { grid } = await openBook();
+        // No repeat card for a play that no longer exists, and the field
+        // behind the book is a real formation, the book's first.
+        expect(grid.children.some((li) => li.className.includes('is-repeat'))).toBe(false);
+        expect(dom.el('playbook').hidden).toBe(false);
+        const main = await import('../www/xo/js/main.js');
+        expect(main.__test__.play().offense).toBe('pass2');
+        // (-100, -50) is where the library parks a man with no formation at
+        // all; db5 sits there in every play, so only the offense is asked.
+        expect(main.__test__.play().game.objects.filter((o) => o.settings.team === 0)
+            .some((o) => o.coords.x === -100 && o.coords.y === -50)).toBe(false);
+    });
+});

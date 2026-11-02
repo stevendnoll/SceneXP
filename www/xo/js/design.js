@@ -259,3 +259,306 @@ export function approachSpeed(speed, wanted, accel, decel) {
     if (Math.abs(diff) <= step) return wanted;
     return speed + Math.sign(diff) * step;
 }
+
+// ---- From a finger to a line --------------------------------------------------
+
+/**
+ * THE FORMATIONS OFFERED AS A STARTING POINT, by friendly name. In the MVP each
+ * is the starting positions of a play in the book with its routes stripped
+ * (PRD Decision 2), so the linemen, the benching and the quarterback's pocket
+ * stay consistent with the simulation at no cost. `from` is the book play the
+ * label admits to.
+ */
+export const FORMATION_TEMPLATES = Object.freeze([
+    Object.freeze({ id: 'spread', name: 'Spread', base: 'pass4', from: 'Four Verticals' }),
+    Object.freeze({ id: 'bunch', name: 'Bunch', base: 'pass2', from: 'Flood Left' }),
+    Object.freeze({ id: 'screen', name: 'Screen', base: 'run3', from: 'Run Middle' }),
+]);
+
+/**
+ * The smoothing a finger needs, in normalized field units. `alpha` is the
+ * weight of a new sample in the running average (lower is smoother and lags
+ * more), `minStep` the distance a sample must have moved from the last one
+ * kept, `epsilon` how far the simplified line may stray from the smoothed one
+ * (0.012 of the field is 12 units, 0.42 m, under a stride), and `minLength` how
+ * long a stroke has to be before it is a route rather than a tap: 60 units is
+ * 2.1 m, a short flat route, and nothing a resting finger draws.
+ */
+export const STROKE = Object.freeze({ alpha: 0.35, minStep: 0.004, epsilon: 0.012, minLength: 0.06 });
+
+/** The across axis is 600 units to the along axis's 1000, so a distance in
+ *  normalized units has to be measured with the field's shape in it. */
+const ASPECT = 0.6;
+const span = (a, b) => Math.hypot(b[0] - a[0], (b[1] - a[1]) * ASPECT);
+
+/**
+ * AN EXPONENTIAL MOVING AVERAGE OF THE POINTER, kept while the finger is down.
+ * Each call returns the point to add to the stroke, or null when the finger has
+ * not moved far enough from the last point kept. The first sample is taken
+ * whole, so the average does not start from the origin.
+ */
+export function smoothSample(state, point, opts = STROKE) {
+    if (!state.last) {
+        state.ema = [point[0], point[1]];
+        state.last = [point[0], point[1]];
+        return state.last;
+    }
+    const a = opts.alpha;
+    state.ema = [state.ema[0] + (point[0] - state.ema[0]) * a, state.ema[1] + (point[1] - state.ema[1]) * a];
+    if (span(state.last, state.ema) < opts.minStep) return null;
+    state.last = [state.ema[0], state.ema[1]];
+    return state.last;
+}
+
+/** Distance from point p to the segment a-b, in the field's own shape. */
+function offSegment(p, a, b) {
+    const ax = a[0]; const ay = a[1] * ASPECT;
+    const bx = b[0]; const by = b[1] * ASPECT;
+    const px = p[0]; const py = p[1] * ASPECT;
+    const dx = bx - ax; const dy = by - ay;
+    const l2 = dx * dx + dy * dy;
+    let t = l2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+}
+
+/**
+ * RAMER-DOUGLAS-PEUCKER: keep the points that matter, drop the ones that only
+ * trace a line between them. The corners survive, the wobble does not.
+ */
+export function simplifyLine(points, epsilon) {
+    if (!Array.isArray(points) || points.length <= 2) return points ? points.slice() : [];
+    const keep = new Array(points.length).fill(false);
+    keep[0] = true;
+    keep[points.length - 1] = true;
+    const stack = [[0, points.length - 1]];
+    while (stack.length) {
+        const [from, to] = stack.pop();
+        let worst = 0;
+        let at = -1;
+        for (let i = from + 1; i < to; i += 1) {
+            const d = offSegment(points[i], points[from], points[to]);
+            if (d > worst) { worst = d; at = i; }
+        }
+        if (at >= 0 && worst > epsilon) {
+            keep[at] = true;
+            stack.push([from, at], [at, to]);
+        }
+    }
+    return points.filter((_, i) => keep[i]);
+}
+
+/**
+ * A FINISHED STROKE MADE INTO A ROUTE: anchored at the player's own spot,
+ * simplified to at most `MAX_POINTS`, each point inside the field. Null when
+ * the stroke is shorter than `minLength`, which is a tap or a slip and not a
+ * route. The anchor is the first point whatever the finger did, because on a
+ * phone the finger covers the disc it is drawing from (PRD 4.4).
+ */
+export function strokeToLine(samples, start, opts = STROKE) {
+    if (!Array.isArray(samples) || !start) return null;
+    const pts = [[clamp01(start[0]), clamp01(start[1])]];
+    for (const s of samples) {
+        if (!Array.isArray(s) || !Number.isFinite(s[0]) || !Number.isFinite(s[1])) continue;
+        pts.push([clamp01(s[0]), clamp01(s[1])]);
+    }
+    let length = 0;
+    for (let i = 1; i < pts.length; i += 1) length += span(pts[i - 1], pts[i]);
+    if (length < opts.minLength) return null;
+    let eps = opts.epsilon;
+    let line = simplifyLine(pts, eps);
+    while (line.length > MAX_POINTS) {
+        eps *= 1.5;
+        line = simplifyLine(pts, eps);
+    }
+    if (line.length < 2) return null;
+    return line;
+}
+
+// ---- Words for a drawing --------------------------------------------------------
+
+/** The receivers' letters, the order they are read in. The quarterback is
+ *  named outright. */
+const LETTERS = Object.freeze({ wr1: 'A', wr2: 'B', wr3: 'C', wr4: 'D' });
+
+/** One line interval along, and the across axis in intervals. */
+const ALONG_INTERVAL = 0.2;
+const ACROSS_INTERVALS = 3;
+
+/**
+ * THE WORDS A SCREEN READER HEARS FOR A DRAWING, and a card's blurb: the same
+ * measurement the book's own names came from, depth and net lateral travel,
+ * not where anybody ends up. Depth is the line's end past its start in
+ * intervals (short under 1.5, medium under 3, deep otherwise), direction its
+ * net travel across (straight within half an interval, else left toward the
+ * sideline the simulation calls zero, which is the viewer's left from behind
+ * the offense). Players who share a phrase are read together, receivers with
+ * no line are blocking, and the quarterback's line is a drop or a rollout.
+ */
+export function describePlay(routes = {}, spots = {}) {
+    const phrases = new Map();
+    const say = (who, phrase) => {
+        if (!phrases.has(phrase)) phrases.set(phrase, []);
+        phrases.get(phrase).push(who);
+    };
+    for (const pos of ['wr1', 'wr2', 'wr3', 'wr4']) {
+        if (!spots[pos]) continue;
+        const line = routes[pos];
+        if (!Array.isArray(line) || line.length < 2) { say(LETTERS[pos], 'blocking'); continue; }
+        const start = line[0];
+        const end = line[line.length - 1];
+        const depth = (end[0] - start[0]) / ALONG_INTERVAL;
+        const lateral = (end[1] - start[1]) * ACROSS_INTERVALS;
+        const d = depth < 1.5 ? 'short' : depth < 3 ? 'medium' : 'deep';
+        const dir = Math.abs(lateral) < 0.5 ? 'straight' : lateral < 0 ? 'left' : 'right';
+        say(LETTERS[pos], `${d} ${dir}`);
+    }
+    const parts = [];
+    for (const [phrase, who] of phrases) {
+        const names = who.length === 1 ? who[0]
+            : `${who.slice(0, -1).join(', ')} and ${who[who.length - 1]}`;
+        parts.push(`${names} ${phrase}`);
+    }
+    const qb = routes.qb;
+    if (Array.isArray(qb) && qb.length >= 2 && spots.qb) {
+        const lateral = (qb[qb.length - 1][1] - qb[0][1]) * ACROSS_INTERVALS;
+        parts.push(Math.abs(lateral) > 1 ? `QB rollout ${lateral < 0 ? 'left' : 'right'}` : 'QB drop');
+    }
+    return parts.join(', ');
+}
+
+// ---- Drawing the field, the men and their lines ---------------------------------
+
+/** How the field sits on a canvas of w by h pixels: `rotate` runs the offense
+ *  up the screen, for a phone held upright, else left to right like the
+ *  playbook's cards. `margin` is a fraction of the shorter side. */
+export function layoutFor(w, h, rotate = false, margin = 0.08) {
+    const m = Math.min(w, h) * margin;
+    if (!rotate) {
+        const sx = w - 2 * m;
+        const sy = h - 2 * m;
+        return {
+            rotate: false, m,
+            toCanvas: (p) => [m + p[0] * sx, m + p[1] * sy],
+            fromCanvas: (x, y) => [(x - m) / sx, (y - m) / sy],
+        };
+    }
+    const sx = w - 2 * m;
+    const sy = h - 2 * m;
+    return {
+        rotate: true, m,
+        // Across runs left to right, along runs up from the bottom.
+        toCanvas: (p) => [m + p[1] * sx, h - m - p[0] * sy],
+        fromCanvas: (x, y) => [(h - m - y) / sy, (x - m) / sx],
+    };
+}
+
+/**
+ * PAINT A DESIGN. The same painter draws the designer's canvas and a saved
+ * play's card, so what was drawn, what is shown and what is run agree. Takes a
+ * context rather than a canvas, and so stays free of the document: the
+ * playbook's palette map is handed in as `ink`.
+ *
+ *   spots     every on-field offensive player's spot, by position
+ *   routes    lines by position
+ *   ink       { ground, lines, scrimmage, letters, linemen, players: { wr1..qb } }
+ *   selected  a position to ring, or ''
+ *   rotate    see `layoutFor`
+ *   extra     an unfinished stroke to show under the finger, as points
+ */
+export function drawDesign(ctx, w, h, { spots = {}, routes = {}, ink, selected = '', rotate = false, extra = null } = {}) {
+    const L = layoutFor(w, h, rotate);
+    const u = Math.max(0.6, Math.min(w, h) / 150);
+    ctx.save();
+    ctx.fillStyle = ink.ground;
+    ctx.fillRect(0, 0, w, h);
+    // The five painted lines, the first of them the line of scrimmage.
+    ctx.lineWidth = 1 * u;
+    for (let k = 1; k <= 5; k += 1) {
+        const along = k * ALONG_INTERVAL;
+        const a = L.toCanvas([along, 0]);
+        const b = L.toCanvas([along, 1]);
+        ctx.strokeStyle = k === 1 ? ink.scrimmage : ink.lines;
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(b[0], b[1]);
+        ctx.stroke();
+    }
+    // The touchlines.
+    ctx.strokeStyle = ink.lines;
+    for (const across of [0, 1]) {
+        const a = L.toCanvas([0, across]);
+        const b = L.toCanvas([1, across]);
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(b[0], b[1]);
+        ctx.stroke();
+    }
+    // The routes, under the men.
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const drawLine = (pts, color, width, dashed) => {
+        if (!pts || pts.length < 2) return;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        if (dashed && ctx.setLineDash) ctx.setLineDash([4 * u, 4 * u]);
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+            const c = L.toCanvas(p);
+            if (i === 0) ctx.moveTo(c[0], c[1]);
+            else ctx.lineTo(c[0], c[1]);
+        });
+        ctx.stroke();
+        if (dashed && ctx.setLineDash) ctx.setLineDash([]);
+        // Where the line stops, a bar across it: the man stops here.
+        const a = L.toCanvas(pts[pts.length - 2]);
+        const b = L.toCanvas(pts[pts.length - 1]);
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const n = Math.hypot(dx, dy) || 1;
+        const px = -dy / n * 4 * u;
+        const py = dx / n * 4 * u;
+        if (!dashed) {
+            ctx.beginPath();
+            ctx.moveTo(b[0] - px, b[1] - py);
+            ctx.lineTo(b[0] + px, b[1] + py);
+            ctx.stroke();
+        }
+    };
+    for (const pos of PATH_PLAYERS) {
+        if (routes[pos] && spots[pos]) drawLine(routes[pos], ink.players[pos], 2 * u, false);
+    }
+    if (extra && extra.length >= 2 && selected) drawLine(extra, ink.players[selected], 1.4 * u, true);
+    // The linemen, small and quiet.
+    ctx.font = `bold ${9 * u}px Tahoma, Geneva, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = ink.linemen;
+    for (const pos of Object.keys(spots)) {
+        if (!pos.startsWith('x')) continue;
+        const c = L.toCanvas(spots[pos]);
+        ctx.fillText('X', c[0], c[1]);
+    }
+    // The receivers and the quarterback: a disc in their ink, the letter on it.
+    for (const pos of PATH_PLAYERS) {
+        if (!spots[pos]) continue;
+        const c = L.toCanvas(spots[pos]);
+        const r = 7 * u;
+        if (pos === selected) {
+            ctx.strokeStyle = ink.players[pos];
+            ctx.lineWidth = 2 * u;
+            ctx.beginPath();
+            ctx.arc(c[0], c[1], r + 4 * u, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        ctx.fillStyle = ink.players[pos];
+        ctx.beginPath();
+        ctx.arc(c[0], c[1], r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = ink.letters;
+        ctx.font = `bold ${9 * u}px Tahoma, Geneva, sans-serif`;
+        ctx.fillText(pos === 'qb' ? 'Q' : LETTERS[pos], c[0], c[1] + 0.5 * u);
+    }
+    ctx.restore();
+    return L;
+}

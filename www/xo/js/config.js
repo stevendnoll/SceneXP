@@ -3684,6 +3684,10 @@ const XO_CONFIG = {
          *  once they have touched the switch, and named in www/privacy.html
          *  like every other key here. */
         jump: 'exes-n-ohs-jump-settings',
+        /** The plays a visitor designed and the plays they took out of the
+         *  book (plays-store.js, specs/custom-plays-PRD). Removed again when
+         *  there is nothing left in it. Named in www/privacy.html. */
+        plays: 'exes-n-ohs-plays',
     },
 
     /**

@@ -54,6 +54,9 @@ const PERSISTENT = {
     'www/xo/js/progress.js': 'a game of X’s and O’s that has not finished yet',
     'www/xo/js/colors.js': 'the team and field colors chosen in X’s and O’s',
     'www/xo/js/jump.js': 'whether Auto jump is on in X’s and O’s',
+    // Design a Play (specs/custom-plays-PRD, 2026-11-02): the plays a visitor
+    // drew, and which of the book's plays they took out of their playbook.
+    'www/xo/js/plays-store.js': 'the plays a visitor designs in X’s and O’s, and the plays they took out of their playbook',
     // The shared figure store (promoted from www/leaves/js/cast.js on
     // 2026-10-19), under each scene's own key: Leaf Blower's character, and
     // Derby Day's family (M6, key derby-family).
@@ -167,6 +170,10 @@ test('and the policy actually describes them, in words a visitor would use', () 
     expect(text).toMatch(/Earth Defense saves your best score/i);
     // The Auto jump switch in X's and O's (2026-09-23).
     expect(text).toMatch(/whether you turned on Auto jump/i);
+    // Design a Play (specs/custom-plays-PRD): the plays kept, and the ping
+    // that never carries a name or a line.
+    expect(text).toMatch(/If you design a play of your own, it keeps that too/i);
+    expect(text).toMatch(/never its name or the lines you drew/i);
     // Corner Office (released 2026-09-28): the store a visitor would care
     // about most, a whole job search, and that none of it is sent.
     expect(text).toMatch(/Corner Office keeps everything you enter/i);

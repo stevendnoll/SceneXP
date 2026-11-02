@@ -547,3 +547,152 @@ describe('a designed play benches whoever its base benches', () => {
         expect(benchedIn({ id: 'custom-x', base: 'nope', routes: {} }).size).toBe(0);
     });
 });
+
+// ---- From a finger to a line (Phase 2) ----------------------------------------
+
+describe('from a finger to a line', () => {
+    const { smoothSample, simplifyLine, strokeToLine, STROKE, describePlay, layoutFor, drawDesign, FORMATION_TEMPLATES } = D;
+
+    test('the running average takes the first sample whole and then only steps worth keeping', () => {
+        const s = {};
+        expect(smoothSample(s, [0.5, 0.5])).toEqual([0.5, 0.5]);
+        // A wobble smaller than a step is swallowed.
+        expect(smoothSample(s, [0.501, 0.5])).toBeNull();
+        expect(smoothSample(s, [0.502, 0.501])).toBeNull();
+        // A real move comes through, lagging the finger.
+        const kept = smoothSample(s, [0.6, 0.5]);
+        expect(kept).not.toBeNull();
+        expect(kept[0]).toBeGreaterThan(0.5);
+        expect(kept[0]).toBeLessThan(0.6);
+    });
+
+    test('a jittery straight line simplifies to its two ends, and an L keeps its corner', () => {
+        const wobbly = Array.from({ length: 40 }, (_, i) => [i / 40, 0.5 + (i % 2 ? 0.004 : -0.004)]);
+        expect(simplifyLine(wobbly, STROKE.epsilon)).toEqual([wobbly[0], wobbly[39]]);
+        const ell = [...Array.from({ length: 20 }, (_, i) => [i / 40, 0.5]), ...Array.from({ length: 20 }, (_, i) => [0.5, 0.5 - i / 60])];
+        const out = simplifyLine(ell, STROKE.epsilon);
+        expect(out).toHaveLength(3);
+        expect(out[1]).toEqual([0.5, 0.5]);
+        expect(simplifyLine([[0, 0]], 1)).toEqual([[0, 0]]);
+        expect(simplifyLine(null, 1)).toEqual([]);
+    });
+
+    test('a stroke becomes a line anchored to the man, clamped, capped, or refused when it is a tap', () => {
+        const start = [0.2, 0.3];
+        expect(strokeToLine([[0.21, 0.3], [0.22, 0.3]], start)).toBeNull();
+        expect(strokeToLine(null, start)).toBeNull();
+        expect(strokeToLine([[0.5, 0.3]], null)).toBeNull();
+        const line = strokeToLine([[0.25, 0.31], [0.5, 0.3], [0.5, -0.2], ['x', 1], [NaN, 0]], start);
+        expect(line[0]).toEqual(start);
+        expect(line[line.length - 1]).toEqual([0.5, 0]);
+        expect(line.length).toBeLessThanOrEqual(MAX_POINTS);
+        // A long zigzag is simplified harder until it fits.
+        // A zigzag that calms down, so raising the tolerance drops the small
+        // wobbles first and keeps the big ones.
+        const zig = Array.from({ length: 60 }, (_, i) => [0.2 + i * 0.012, 0.3 + (i % 2 ? 1 : -1) * 0.12 * (1 - i / 60)]);
+        const fitted = strokeToLine(zig, start);
+        expect(fitted.length).toBeLessThanOrEqual(MAX_POINTS);
+        expect(fitted.length).toBeGreaterThanOrEqual(2);
+        // ...and a shape with fewer corners than the cap keeps every one.
+        const stairs = [];
+        for (let i = 1; i <= 6; i += 1) stairs.push([0.2 + i * 0.1, 0.3 + (i % 2) * 0.3], [0.2 + i * 0.1, 0.3 + ((i + 1) % 2) * 0.3]);
+        const kept = strokeToLine(stairs, start);
+        expect(kept).toHaveLength(13);
+    });
+
+    test('the words for a drawing: depth and direction, grouped, blocking for no line, a drop or a rollout for the quarterback', () => {
+        const spots = { wr1: [0.19, 0.08], wr2: [0.2, 0.37], wr3: [0.2, 0.58], wr4: [0.2, 0.89], qb: [0.16, 0.49] };
+        expect(describePlay({}, spots)).toBe('A, B, C and D blocking');
+        expect(describePlay({
+            wr1: [[0.19, 0.08], [0.9, 0.08]],          // 3.5 intervals, straight
+            wr2: [[0.2, 0.37], [0.45, 0.1]],            // 1.25 intervals, left
+            wr3: [[0.2, 0.58], [0.6, 0.9]],             // 2 intervals, right
+            qb: [[0.16, 0.49], [0.1, 0.49]],
+        }, spots)).toBe('A deep straight, B short left, C medium right, D blocking, QB drop');
+        expect(describePlay({ wr1: [[0.19, 0.08], [0.9, 0.08]], wr4: [[0.2, 0.89], [0.9, 0.89]], qb: [[0.16, 0.49], [0.12, 0.95]] }, spots))
+            .toBe('A and D deep straight, B and C blocking, QB rollout right');
+        // Only the men the formation stands are spoken of.
+        expect(describePlay({}, { wr1: [0.19, 0.08], wr2: [0.2, 0.37] })).toBe('A and B blocking');
+        expect(describePlay({}, {})).toBe('');
+    });
+
+    test('the layout puts the field on the canvas both ways round, and back', () => {
+        const flat = layoutFor(300, 150, false);
+        const c = flat.toCanvas([0.5, 0]);
+        expect(c[0]).toBeCloseTo(150);
+        expect(c[1]).toBeCloseTo(150 * 0.08);
+        const back = flat.fromCanvas(c[0], c[1]);
+        expect(back[0]).toBeCloseTo(0.5);
+        expect(back[1]).toBeCloseTo(0);
+        // Upright: downfield runs UP the screen, across runs left to right.
+        const tall = layoutFor(300, 500, true);
+        const bottom = tall.toCanvas([0, 0]);
+        const top = tall.toCanvas([1, 0]);
+        expect(top[1]).toBeLessThan(bottom[1]);
+        const right = tall.toCanvas([0, 1]);
+        expect(right[0]).toBeGreaterThan(bottom[0]);
+        const again = tall.fromCanvas(...tall.toCanvas([0.3, 0.7]));
+        expect(again[0]).toBeCloseTo(0.3);
+        expect(again[1]).toBeCloseTo(0.7);
+    });
+
+    test('the painter draws the lines, the men in their inks, the ring on the chosen one and the bar where a line stops', () => {
+        const calls = [];
+        const ctx = new Proxy({ canvas: { width: 300, height: 150 } }, {
+            get(t, prop) {
+                if (prop in t) return t[prop];
+                return (...args) => { calls.push([prop, ...args]); };
+            },
+            set(t, prop, value) { calls.push(['set', prop, value]); return true; },
+        });
+        const ink = { ground: '#161d28', lines: 'L', scrimmage: 'S', letters: '#12171f', linemen: 'X', players: { wr1: 'A', wr2: 'B', wr3: 'C', wr4: 'D', qb: 'Q' } };
+        const spots = { wr1: [0.19, 0.08], wr2: [0.2, 0.37], qb: [0.16, 0.49], x1: [0.19, 0.44] };
+        const routes = { wr2: [[0.2, 0.37], [0.5, 0.37], [0.5, 0.1]] };
+        const L = drawDesign(ctx, 300, 150, { spots, routes, ink, selected: 'wr2' });
+        expect(L.rotate).toBe(false);
+        const strokes = calls.filter((c) => c[0] === 'set' && c[1] === 'strokeStyle').map((c) => c[2]);
+        // The scrimmage line, the other lines, B's route in B's ink, and B's ring.
+        expect(strokes).toContain('S');
+        expect(strokes).toContain('L');
+        expect(strokes.filter((s) => s === 'B').length).toBeGreaterThanOrEqual(2);
+        expect(strokes).not.toContain('A');
+        const fills = calls.filter((c) => c[0] === 'set' && c[1] === 'fillStyle').map((c) => c[2]);
+        expect(fills).toContain('A');
+        expect(fills).toContain('Q');
+        expect(fills).toContain('X');
+        const texts = calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
+        expect(texts).toEqual(expect.arrayContaining(['A', 'B', 'Q', 'X']));
+        expect(texts).not.toContain('C');
+        // The bar at the end of B's line: a stroke after the last lineTo.
+        const lineTos = calls.filter((c) => c[0] === 'lineTo');
+        expect(lineTos.length).toBeGreaterThan(0);
+        // An unfinished stroke is dashed and has no bar.
+        calls.length = 0;
+        drawDesign(ctx, 300, 150, { spots, routes: {}, ink, selected: 'wr1', extra: [[0.19, 0.08], [0.4, 0.08], [0.5, 0.2]] });
+        expect(calls.some((c) => c[0] === 'setLineDash' && c[1].length === 2)).toBe(true);
+    });
+
+    test('every starting formation is a play the simulation knows, and stands the men somewhere', async () => {
+        const { formationSpots } = await import(join(scene, 'playas.js'));
+        for (const t of FORMATION_TEMPLATES) {
+            expect(OFFENSIVE_PLAYS).toContain(t.base);
+            const spots = formationSpots(t.base);
+            for (const pos of ['qb', 'wr1', 'wr2']) {
+                expect(spots[pos]).toBeDefined();
+                expect(spots[pos][0]).toBeGreaterThan(0);
+                expect(spots[pos][0]).toBeLessThan(0.3);
+            }
+        }
+        // A record resolves to its base's spots; an unknown base to none.
+        expect(formationSpots({ id: 'custom-x', base: 'jumbo1', routes: {} })).toEqual(formationSpots('jumbo1'));
+        expect(formationSpots('nope')).toEqual({});
+        // The spots are the line-up's own, not a copy that drifts.
+        const probe = createPlay();
+        seed(9);
+        lineUp(probe, 'pass4', 'cover2');
+        const b = byPosition(probe, 'wr2');
+        const spots = formationSpots('pass4');
+        expect(spots.wr2[0]).toBeCloseTo(b.coords.x / M.width, 6);
+        expect(spots.wr2[1]).toBeCloseTo(b.coords.y / M.height, 6);
+    });
+});

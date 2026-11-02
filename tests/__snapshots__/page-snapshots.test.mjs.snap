@@ -6312,7 +6312,7 @@ html [lang="en"]
             li
               strong
                 "Your game of X's and O's."
-              "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the player your avatar plays as if you chose one other than the quarterback, the colors and stripes you chose for the teams' uniforms and the color you chose for the field, whether you turned the sound on or off, and whether you turned on Auto jump, so the game comes back the way you left it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot. A video clip or a photo of a play is made right on your device and handed only to your own share sheet or downloads folder. Neither is ever sent to us."
+              "X's and O's saves your best score in your browser's local storage, along with the last play you called, the defense you chose to face, the player your avatar plays as if you chose one other than the quarterback, the colors and stripes you chose for the teams' uniforms and the color you chose for the field, whether you turned the sound on or off, and whether you turned on Auto jump, so the game comes back the way you left it. If you design a play of your own, it keeps that too, with the name you gave it, the formation it starts from and the routes you drew, along with which plays you have taken out of your playbook, so your book is the way you left it. Clearing your browser's site data clears all of it. It also keeps a game you have not finished, which is the play number, the running score, and one line for each play so far, so closing the tab halfway through does not cost you the whole game. That one is cleared as soon as the game ends, and the Start over button in the playbook clears it on the spot. A video clip or a photo of a play is made right on your device and handed only to your own share sheet or downloads folder. Neither is ever sent to us."
             li
               strong
                 "Your job search in Corner Office."
@@ -6352,7 +6352,7 @@ html [lang="en"]
           p
             "The pings are gathered into a public summary for each day, which anyone can read, and which Steve's office displays inside the world itself as a little visitor dashboard. Each visit appears under a throwaway label, such as "Curious Otter," as a timeline of its pings and the time each one arrived, along with its language setting and whether it came from a phone or a computer. The puzzle token stays private, and the summary carries no names, no IP addresses, and no browser fingerprints. Because each visit's pings are listed with their times, someone who already knew exactly when you visited could recognize your visit in the summary."
           p
-            "X's and O's notes a little more, because the game is the plays. Each time you call a play, snap the ball, or throw it, and each time a play ends, it records the play and the defense, the receiver you picked, how it turned out and what it was worth, along with your running score, whether the sound was on, and whether your screen was held upright or sideways. When you share a play, it notes only that a clip or a picture was made, shared or saved, how many seconds the clip ran and which of the four views it was from. The clip itself never leaves your device. These notes appear in the public summary along with the rest of the visit. It never records the size of your screen or anything else that could pick your device out from anyone else's."
+            "X's and O's notes a little more, because the game is the plays. Each time you call a play, snap the ball, or throw it, and each time a play ends, it records the play and the defense, the receiver you picked, how it turned out and what it was worth, along with your running score, whether the sound was on, and whether your screen was held upright or sideways. When you share a play, it notes only that a clip or a picture was made, shared or saved, how many seconds the clip ran and which of the four views it was from. The clip itself never leaves your device. If you design a play, it notes only that one was saved, removed or restored and which formation it started from, never its name or the lines you drew. These notes appear in the public summary along with the rest of the visit. It never records the size of your screen or anything else that could pick your device out from anyone else's."
           p
             "Whitestone Home Care sends a ping for each button you press, saying only which one and where, such as adding a kitchen from Maya's suggestions, along with whether a demo booking went through and whether a cleaner's PIN opened the checklist. It never sends anything you typed, a price, a date or time, or the PIN itself."
           h2
@@ -8858,7 +8858,7 @@ html [data-ui-theme="neon" lang="en"]
         "url": "https://www.scenexp.com/xo/",
         "name": "X's and O's",
         "image": "https://www.scenexp.com/xo/assets/og-xo.jpg?v=1",
-        "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's five views, one of them over the quarterback's shoulder, and with an avatar saved on the Your Avatar page you can play as any player on the field.",
+        "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's five views, one of them over the quarterback's shoulder, and with an avatar saved on the Your Avatar page you can play as any player on the field. You can also design your own plays by drawing routes on a formation, kept in your browser.",
         "genre": [
           "Sports",
           "Strategy"
@@ -8905,7 +8905,7 @@ html [data-ui-theme="neon" lang="en"]
     title
       "X's and O's | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=23" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=24" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -8933,6 +8933,9 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/clip-ui.min.js" rel="modulepreload"]
     link [href="js/opening.min.js" rel="modulepreload"]
     link [href="js/colors-ui.min.js" rel="modulepreload"]
+    link [href="js/design-ui.min.js" rel="modulepreload"]
+    link [href="js/plays-store.min.js" rel="modulepreload"]
+    link [href="js/design.min.js" rel="modulepreload"]
     link [href="js/colors-preview.min.js" rel="modulepreload"]
     link [href="js/opening-props.min.js" rel="modulepreload"]
     link [href="js/milestones.min.js" rel="modulepreload"]
@@ -8959,7 +8962,6 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/routes.min.js" rel="modulepreload"]
     link [href="js/motion.min.js" rel="modulepreload"]
     link [href="js/playstate.min.js" rel="modulepreload"]
-    link [href="js/design.min.js" rel="modulepreload"]
     link [href="js/fans.min.js" rel="modulepreload"]
     link [href="../shared/js/promo-1.0.0.min.js" rel="modulepreload"]
     link [href="js/playbook.min.js" rel="modulepreload"]
@@ -8972,7 +8974,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/lead.min.js" rel="modulepreload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=23" rel="stylesheet"]
+    link [href="css/experience.min.css?v=24" rel="stylesheet"]
     link [href="../shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
@@ -9036,6 +9038,10 @@ html [data-ui-theme="neon" lang="en"]
             strong
               "Share the play."
             "After the whistle, watch the replay from any of five views, one of them over the quarterback's shoulder, then share a short clip of it, made right on your device, or save a picture of its best moment."
+          li
+            strong
+              "Design a play."
+            "The first tile in the playbook opens a field to draw on. Pick a formation, choose a receiver or the quarterback, and draw their route from where they stand. Where the line ends is where they stop. Saved plays stay in your book, on this device."
         p.welcome-keys.card-meta
           "On a keyboard:"
           kbd
@@ -9114,6 +9120,13 @@ html [data-ui-theme="neon" lang="en"]
         p.welcome-explore-row
           a#explore-link.welcome-explore [href="/"]
             "More 3D worlds to explore at SceneXP.com"
+    div#designer.card-overlay.designer [hidden]
+      div#designer-panel.card-panel.designer-panel [aria-describedby="designer-intro" aria-labelledby="designer-title" aria-modal="true" role="dialog" tabindex="-1"]
+        h2#designer-title.card-title
+          "Design a play"
+        p#designer-intro.card-detail
+          "Pick a formation, choose a player, and draw their route from where they stand. Your play is kept in your browser, on this device."
+        div#designer-body.designer-body
     div#colors.card-overlay [hidden]
       div#colors-panel.card-panel.colors-panel [aria-describedby="colors-intro" aria-labelledby="colors-title" aria-modal="true" role="dialog" tabindex="-1"]
         h2#colors-title.card-title
