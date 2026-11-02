@@ -21,6 +21,7 @@
  */
 import { XO_CONFIG as CFG } from './config.min.js';
 import { createPlay, lineUp, OFFENSIVE_PLAYS } from './play.min.js';
+import { resolvePlay, toNormalized } from './design.min.js';
 
 /** The slot a visitor is when they have chosen nothing, and the one every
  *  stored value that is not a slot falls back to. */
@@ -100,20 +101,53 @@ export function playingLine(id) {
  * answer kept. The defense is named rather than rolled because it changes
  * nothing here: no defense benches anybody on offense. An unknown slug benches
  * nobody.
+ *
+ * A DESIGNED PLAY BENCHES WHOEVER ITS BASE FORMATION BENCHES, because that is
+ * the formation it lines up in (play.js `lineUp`). It may arrive as the record
+ * or as anything `resolvePlay` understands.
  */
 let probe = null;
-const benchings = new Map();
+const lineups = new Map();
 
-export function benchedIn(slug) {
-    if (!OFFENSIVE_PLAYS.includes(slug)) return new Set();
-    if (!benchings.has(slug)) {
+/** One quiet line-up per base, kept: who it benches, and where it stands
+ *  everybody who plays, in the designer's normalized units. */
+function lineupOf(slug) {
+    if (!lineups.has(slug)) {
         if (!probe) probe = createPlay();
         const objects = lineUp(probe, slug, 'cover2');
-        benchings.set(slug, new Set(objects
-            .filter((o) => o.settings.team === 0 && o.settings.benched)
-            .map((o) => o.settings.position)));
+        const m = probe.playState.state.measurements;
+        const benched = new Set();
+        const spots = {};
+        for (const o of objects) {
+            if (o.settings.team !== 0) continue;
+            if (o.settings.benched) benched.add(o.settings.position);
+            else spots[o.settings.position] = toNormalized(o.coords.x, o.coords.y, m);
+        }
+        lineups.set(slug, { benched, spots });
     }
-    return new Set(benchings.get(slug));
+    return lineups.get(slug);
+}
+
+export function benchedIn(play) {
+    const slug = resolvePlay(play).base;
+    if (!OFFENSIVE_PLAYS.includes(slug)) return new Set();
+    return new Set(lineupOf(slug).benched);
+}
+
+/**
+ * WHERE A FORMATION STANDS ITS OFFENSE, by position, as `[along, across]` from
+ * 0 to 1 (design.js), from the same quiet line-up `benchedIn` reads. The
+ * designer draws a formation from this and anchors every line to it, and a
+ * saved play's card is painted from it, so the canvas, the card and the field
+ * all put a man in one place. An unknown base is an empty formation.
+ */
+export function formationSpots(play) {
+    const slug = resolvePlay(play).base;
+    if (!OFFENSIVE_PLAYS.includes(slug)) return {};
+    const spots = lineupOf(slug).spots;
+    const out = {};
+    for (const pos of Object.keys(spots)) out[pos] = [spots[pos][0], spots[pos][1]];
+    return out;
 }
 
 /** Does this play leave the visitor in slot `id` on the sideline? */

@@ -1082,8 +1082,12 @@ function paintNotes(t) {
 function skyTime(t) {
     if (ui.lapse) return new Date(ui.lapse.at);
     if (ui.hourPin == null) return t;
-    const midnight = new Date(t.getFullYear(), t.getMonth(), t.getDate());
-    return new Date(midnight.getTime() + ui.hourPin * 60 * 60 * 1000);
+    // Built from wall-clock fields, so the Date constructor resolves the
+    // offset for that local hour. Midnight plus the hour in milliseconds
+    // was an hour off on the two days a year the clocks change: hour 15
+    // fell on 2:00 PM on 2026-11-01 (Steve's test run).
+    const h = Math.floor(ui.hourPin);
+    return new Date(t.getFullYear(), t.getMonth(), t.getDate(), h, 0, 0, (ui.hourPin - h) * 60 * 60 * 1000);
 }
 
 /**

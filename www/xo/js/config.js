@@ -373,6 +373,18 @@ const CATCH_FAR_SCALE = 0.42;   // what the receiver's box is multiplied by ther
  */
 const STEER_DEADBAND = 0.15;
 
+/**
+ * HOW FAR AHEAD ON A DRAWN LINE A MAN AIMS, in metres (specs/custom-plays-PRD,
+ * 2026-11-02). A designed play's receiver follows the line the visitor drew by
+ * steering at a point this far along it (routes.js `runPath`, design.js
+ * `followPath`), which pulls him onto the line and along it, and rounds each
+ * corner by about this much. One metre is under a body width at `figureScale`,
+ * so a drawn cut still reads as a cut, and above the steer deadband, so he
+ * never arrives at his carrot and stalls on it. Hands to the port through
+ * `formationSettings` like `steerDeadband` beside it.
+ */
+const PATH_LOOKAHEAD = 1.0;
+
 
 /**
  * ...AND HOW LONG A HEADING IS AVERAGED OVER BEFORE A PASS IS LED OFF IT.
@@ -690,6 +702,9 @@ function formationSettings() {
         // `steerDeadband` in motion.js for what the ported steer does without
         // it, and `STEER_DEADBAND` above for why this is the value.
         steerDeadband: STEER_DEADBAND / UNITS_TO_METRES,
+        // How far ahead on a drawn line a man aims, in FIELD UNITS. See
+        // `PATH_LOOKAHEAD`.
+        pathLookahead: PATH_LOOKAHEAD / UNITS_TO_METRES,
         // How much of a defender's shove a man breaking free ignores, while
         // `play.breakContact` says he is breaking free. See `ESCAPE_SHOVE`.
         escapeShove: ESCAPE_SHOVE,
@@ -1032,6 +1047,53 @@ const XO_CONFIG = {
             shoulderSwap: 3.0,       // metres off centre before the other side counts
             shoulderHold: 4.0,       // ...and seconds before it may change again
             shoulderEase: 1.2,       // seconds to swing across, rather than cut
+        },
+
+        /**
+         * THE RIDE: OVER THE SHOULDER OF THE MAN THE CAMERA FOLLOWS (Steve,
+         * 2026-11-01), the fifth view after the four quarter turns, in the
+         * replay and in the clip. The quarterback's shoulder, or the
+         * visitor's own with Follow me on. The play unfolds AWAY from this
+         * camera, so the receivers, the ball and the defenders are in front
+         * of it by construction, which is the problem it answers: from the
+         * director's orbit the visitor's receiver ran out of frame, and
+         * following him the quarterback and the ball did.
+         *
+         * IT IS A NEAR CHASE, AND THAT IS WHY IT WORKS WHERE THE FIRST CHASE
+         * DID NOT (D56, `replay` above). A camera two intervals behind the
+         * ball wanted to stand behind the goal post on this 35 m field; one
+         * a step behind a man's back needs almost no field behind it. It is
+         * still clamped inside the end lines and the touchlines.
+         *
+         * WHERE IT LOOKS (camera.js `rideDriver`): along the man's own
+         * facing, which for a quarterback in the pocket is downfield and for
+         * a receiver is his route, and toward the ball once the ball is in
+         * front of him and further than `near`, blending fully by `far`. So
+         * the quarterback's ride swings onto his own throw, and a receiver's
+         * ride watches his route until the ball comes past him. The heading
+         * is eased over `turnSmooth`, the short way round, and the ball is
+         * smoothed through an aim of the ride's own (`focusSmooth` above).
+         *
+         * AT THE WHISTLE IT HANDS OFF to the director's settled shot for the
+         * ending (the tackle or the party), which keeps both bodies large
+         * and in frame (`fitBodies`): a ride into a tackle is a camera in the
+         * turf.
+         *
+         * Distances before `figureScale` are in the figures' own metres and
+         * are scaled with them, so the camera stays over a shoulder whatever
+         * size the men are drawn. `ahead` is field metres.
+         */
+        ride: {
+            back: 1.1,          // metres behind him, before figureScale
+            height: 2.6,        // metres above his feet, before figureScale
+            eye: 1.45,          // metres: the height the look point sits at, before figureScale
+            ahead: 9,           // field metres ahead of him the camera looks, with nothing else to look at
+            near: 2.5,          // field metres: the ball closer than this is his
+            far: 7,             // field metres: the ball further than this draws the whole look
+            turnSmooth: 0.35,   // seconds of ease on the heading
+            fov: 62,            // degrees, in landscape
+            fovUpright: 84,     // degrees, a phone held upright: see fitBodies on the narrow frame
+            floor: 1.2,         // metres: never below this off the grass
         },
     },
 
@@ -1493,6 +1555,108 @@ const XO_CONFIG = {
     },
 
     /**
+     * TWO RECEIVERS WHOSE ROUTES CROSS, AND WHY A STAGGERED BREAK CANNOT
+     * KEEP THEM APART. Steve's QA, 2026-10-31: on Stack Right, Deep Drift,
+     * Split Verticals, Twin Slants Right and Deep Crossers "the two receivers
+     * run into each other in the middle of the field", on nearly every play.
+     *
+     * THE PLAYBOOK WAS DESIGNED SO ONE MAN BREAKS FIRST, AND IT DOES NOT HELP
+     * HERE. Both men in a crossing pair line up on the same yard line and run
+     * downfield at the same top speed, so when the crosser reaches his
+     * team-mate's lane he reaches it at exactly the downfield spot his
+     * team-mate has reached. Changing who breaks first only moves that meeting
+     * point. Measured (scratchpad rr-contact, 114 plays a setting): Twin
+     * Slants' wr2 and wr3 met on 75 plays with wr2 breaking at 1.45, 75 at
+     * 1.9 and 78 at 2.2 intervals, the meeting sliding from 1.94 to 2.08
+     * intervals downfield. The 2D game got away with it because its players
+     * were letters 12 units tall; these figures are 2.2 times life size with
+     * a collision box 1.6 by 1.8 m, so the same brush is a shove, the ported
+     * same-team jostle fires (a fifth of his speed and a steer, every frame),
+     * and both men stall.
+     *
+     * WHAT SEPARATES THEM IS A DOWNFIELD SPEED DIFFERENCE, so that is what
+     * `yieldToCrossing` in play.js creates: when two route runners are on a
+     * collision course, the one behind (the later breaker, when level) is held
+     * to a jog until the other has crossed in front of him, a quarter of a
+     * second or so. Real crossers do exactly this; the under man throttles so
+     * the over man clears. Measured over every play against every defense
+     * with the quarterback holding (1,292 plays over four seeds), plays with
+     * a sustained stall between two crossing receivers went from 18% to 5%
+     * on Stack Right, 37% to 1% on Deep Drift, 68% to 11% on Twin Slants
+     * Right, 51% to 17% on Split Verticals and 59% to 28% on Deep Crossers,
+     * and on the plays nobody named, 53% to 13% on Deep Split and 17% to 1%
+     * on Jumbo Split, while Four Verticals stayed at 0%: 29% to 14% of all
+     * seventeen plays' snaps. The two residuals among the five named are
+     * different faults: Split Verticals' wr4 ends his route 1.75 m
+     * beside wr3's lane and the two run parallel inside each other's boxes,
+     * and Deep Crossers' three bunched receivers are jammed together at the
+     * line.
+     *
+     * THE TRADE: receivers who no longer stall are easier to hit. Over 6,954
+     * matched throws completions went 59.2% to 60.9% (48.9% to 51.6% on the
+     * five plays named), interceptions 5.4% to 5.3%, points a play 17.26 to
+     * 17.73, and the man thrown to stood where he had: his depth at the
+     * throw was unchanged.
+     *
+     * TWO THINGS TRIED AND LEFT OUT, both measured on the same sweep. Letting
+     * an engaged pair skip the ported jostle made the stalls WORSE (ALL 14% to
+     * 16%, and 39% with no brake at all): the jostle's own knock on the man
+     * behind is a crude yield and was doing useful work. And releasing the
+     * brake on a velocity prediction flickered, seven engagements a play of
+     * 0.08 s each, because the braked man's own slow speed made the gap look
+     * like it would open; the release below reads positions instead: 1.6
+     * engagements a play over every play (3.2 on the five named), a median
+     * 0.20 s, and one in ten running to the hold.
+     */
+    crossing: {
+        /** Seconds ahead a collision course is looked for. A longer look
+         *  engages sooner and buys more gap; 0.75 left Twin Slants at 11%. */
+        horizon: 1.0,
+        /** Metres: closer than this at the predicted nearest approach is a
+         *  collision course. The box is 1.61 m across, so this is the box
+         *  and a third of a metre for the speed wobble. */
+        miss: 2.1,
+        /** Metres of DOWNFIELD gap at which the brake is released. It must
+         *  be at least `miss`, or the released man is on a collision course
+         *  again on the next frame and the brake flickers. */
+        clear: 2.24,
+        /** Fraction of his top speed the yielder is held to. 0 is the route's
+         *  own acceleration step a frame, a jog of about 1.6 m/s; 0.1 scored
+         *  the same and 0.3 left Twin Slants at 41%. */
+        speed: 0,
+        /** Metres a second the pair must be converging ACROSS the field.
+         *  A crossing is a lateral thing; two bunched men knocked toward each
+         *  other by the jostle for a frame are not one. */
+        lateral: 3.4,
+        /** Consecutive frames the course must hold before anybody yields.
+         *  A floor under `shrink`, which at running speed (both men at 2.2
+         *  units a frame) takes four course frames to close, so this never
+         *  decides anything on its own: a planted break setting it to 1 was
+         *  caught by no test on 2026-11-01, and that is why. */
+        frames: 3,
+        /** Metres the lateral gap must have CLOSED while the course held
+         *  before anybody yields. A defender's jam kicks a man sideways at a
+         *  run for a few frames and the prediction from that speed said two
+         *  men in adjacent lanes would meet; measured, those pairs never got
+         *  closer (under six units over a second), and the "yield" ran until
+         *  the downfield gap opened. Four Verticals, which has no crossing
+         *  route, had a receiver jogging for two seconds. A real cross closes
+         *  this in two or three frames, and every frame of delay costs Twin
+         *  Slants, whose cross has the shortest fuse: 0.5 m left it at 20%. */
+        shrink: 0.35,
+        /** Seconds a yield may last at most. One yield in ten runs to this,
+         *  waiting on a leader a defender has slowed, so it is also how long
+         *  a receiver may be seen jogging behind a tangled team-mate: 0.6 s
+         *  left Twin Slants at 20% and 1.0 s took it to 12%, for a jog a
+         *  visitor can see. The pair is then left alone for as long again. */
+        hold: 0.8,
+        /** Metres of downfield gap inside which the pair counts as level, so
+         *  the later breaker yields rather than whoever happens to trail by
+         *  a step. */
+        level: 0.28,
+    },
+
+    /**
      * WHERE THE RECEIVER IS ACTUALLY GOING, WHICH IS NOT WHERE HE IS GOING
      * THIS FRAME. See `LEAD_WINDOW` above and `markHeading` in play.js.
      */
@@ -1825,6 +1989,17 @@ const XO_CONFIG = {
      * or beside its own pose's hand, so the two cannot drift apart.
      */
     pose: {
+        /**
+         * THE GLANCE (Steve's QA, 2026-11-01, from the Follow me ride): a
+         * receiver's head turned toward the quarterback or the ball apart
+         * from his body (view.js `glanceFor`, the neck in roster.js
+         * `danceJoints`). `max` is how far the neck turns either way, in
+         * radians; a point further round than that gets the full turn. A
+         * route counts as vertical, so he keeps his eyes downfield until the
+         * throw, while his speed across the field is under `across` of his
+         * speed downfield: a slant's diagonal looks back, a go route does not.
+         */
+        glance: { max: 1.4, across: 0.8 },
         /** Cap on the stride swing, radians at the shoulder. */
         armSwing: 0.55,
         /**
@@ -3509,6 +3684,10 @@ const XO_CONFIG = {
          *  once they have touched the switch, and named in www/privacy.html
          *  like every other key here. */
         jump: 'exes-n-ohs-jump-settings',
+        /** The plays a visitor designed and the plays they took out of the
+         *  book (plays-store.js, specs/custom-plays-PRD). Removed again when
+         *  there is nothing left in it. Named in www/privacy.html. */
+        plays: 'exes-n-ohs-plays',
     },
 
     /**

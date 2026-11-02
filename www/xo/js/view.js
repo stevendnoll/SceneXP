@@ -29,6 +29,7 @@ import { XO_CONFIG as CFG, simToWorld, FIELD, SIM, UNITS_TO_METRES } from './con
 import { bandAt } from './scoring.min.js';
 import { figureFor, poseFigure, THROWING_SIDE, throwSideOf, FIGURE_LIFT, isVisitorFigure } from './roster.min.js';
 import { getBall, aimBall, placeSpot, BALL_FAT } from './ball.min.js';
+import { gripHand } from '../../shared/js/hands-1.0.0.min.js';
 import { placeMarker, hideMarker, showLanding, hideLanding } from './markers.min.js';
 import { toRigSpace, RIG } from './arm.min.js';
 import { takedownAt } from './takedown.min.js';
@@ -377,6 +378,42 @@ export function noteAssignments(objects) {
  * be asked a question with numbers rather than being inferred from a rendered
  * frame, which is the only place any of this used to be visible.
  */
+/**
+ * WHERE A RECEIVER'S HEAD TURNS, APART FROM HIS BODY (Steve's QA, 2026-11-01,
+ * from the Follow me ride: "the avatar doesn't look back at the QB until just
+ * before the ball arrives"). The body's facing (`lookTarget`) is capped for a
+ * running man by `turnFor`, so he is never drawn sprinting backwards, and
+ * that cap is why a crosser never looked back. This is the NECK (the joint
+ * every figure has had since the shared dances), which the body's cap does
+ * not bind: a world point for him to turn his head toward, or null for eyes
+ * where his body faces.
+ *
+ *   crossing the field, or stopped (a screen, a comeback), while the
+ *     quarterback still holds it: the quarterback;
+ *   running a vertical route (downfield faster than across, by
+ *     `pose.glance.across`): nothing, until the ball is thrown;
+ *   the ball in the air: the ball, whoever it is going to;
+ *   anybody else, and any other carry (a runner, a catch made): nothing.
+ *
+ * Pure, and exported for the suite. Speeds and the ball come off the play
+ * objects, which a replay rebuilds from the recording, so a replay and the
+ * clip answer the same way. `standing` is the frame's own reading.
+ */
+export function glanceFor(obj, objects, carrier, { standing = false } = {}) {
+    if (!obj || !obj.settings || !/^wr\d$/.test(obj.settings.position) || obj.settings.team !== 0) return null;
+    const at = (o) => (o ? simToWorld(o.coords.x, o.coords.y, 0) : null);
+    if (!carrier) {
+        const ball = objects.find((o) => o.settings.position === 'ball' && !BENCHED(o));
+        return ball ? at(ball) : null;
+    }
+    if (carrier === obj || carrier.settings.position !== 'qb' || carryFor(carrier, carrier) !== 'throw') return null;
+    const vx = Number(obj.state && obj.state.xSpeed) || 0;
+    const vy = Number(obj.state && obj.state.ySpeed) || 0;
+    const vertical = vx > 0 && Math.abs(vy) < CFG.pose.glance.across * vx;
+    if (!standing && vertical) return null;
+    return at(carrier);
+}
+
 export function lookTarget(obj, objects, carrier, here, standing, blocking) {
     const at = (o) => (o ? simToWorld(o.coords.x, o.coords.y, 0) : null);
 
@@ -1960,6 +1997,26 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
             figure.rotation.y += turn * (1 - Math.exp(-delta * TURN_RESPONSE));
         }
 
+        // AND WHERE HIS HEAD TURNS, apart from his body (`glanceFor`): the
+        // neck's turn to the point, measured from the body as drawn, held
+        // inside `pose.glance.max` either way. Off the play, blocking, going
+        // for the ball or in the air the body already answers, and the neck
+        // stays with it. roster.js `danceJoints` eases the neck to this, and
+        // a shared dance's own nod and turn outrank it.
+        const glanceAt = (opts.presnap || surveying || offPlay || engagement || going || leapWatch)
+            ? null : glanceFor(obj, objects, carrier, { standing });
+        if (glanceAt) {
+            const turnTo = wrapAngle(Math.atan2(glanceAt.x - p.x, glanceAt.z - p.z) - figure.rotation.y);
+            const max = CFG.pose.glance.max;
+            figure.userData.glance = turnTo > max ? max : (turnTo < -max ? -max : turnTo);
+            // And the point itself, world metres, for a camera riding his
+            // shoulder to look where he looks (camera.js `rideDriver`).
+            figure.userData.glanceAt = { x: glanceAt.x, z: glanceAt.z };
+        } else {
+            figure.userData.glance = null;
+            figure.userData.glanceAt = null;
+        }
+
         // STRIDE ADVANCES WITH DISTANCE COVERED, and now it genuinely does.
         //
         // The old line claimed exactly this and then wrote
@@ -2487,11 +2544,55 @@ export function carryHold(mode, snapped, lift = 1, side = THROWING_SIDE) {
         mix(P.underCentre.aim, P.throwHold.aim, t));
 }
 
+/**
+ * THE QUARTERBACK'S HAND ON THE BALL (Steve's QA, 2026-11-01, from the new
+ * over-the-shoulder replay view: "the QB's fingers are going through the
+ * ball"). The throw hold puts the ball at a point written in `config.pose`,
+ * beside his ear, and the arm is solved to end near it; the rig's hand hangs
+ * from that arm with its palm toward his head and its fingers straight, and
+ * at this scale (the ball is 2.6 times life size to the figure's 2.2) the
+ * thumb side of the hand was inside the ball. While he holds it, the
+ * throwing hand is turned about the forearm to face the ball where it is and
+ * given the shared grip shape (hands-1.0.0 `gripHand`): fingers bent down
+ * onto the ball, thumb round its inner side, on whichever arm is his
+ * throwing arm. The ball itself does not move. His own hand comes back the
+ * frame the hold ends: the throw, the tuck, a sack, the catch by somebody
+ * else. One hold at a time, because there is one ball.
+ */
+const gripping = { figure: null, grip: null };
+
+function releaseGrip() {
+    if (gripping.grip) gripping.grip.open();
+    gripping.figure = null;
+    gripping.grip = null;
+}
+
+function holdBallInHand(figure, side, ballWorld, want) {
+    if (!want || !figure) { releaseGrip(); return; }
+    if (gripping.figure !== figure) releaseGrip();
+    const arms = figure.userData ? figure.userData.arms : null;
+    const arm = Array.isArray(arms) ? arms.find((a) => a && a.userData && a.userData.armSide === side) : null;
+    const forearm = arm && arm.userData ? arm.userData.forearm : null;
+    const kids = forearm && Array.isArray(forearm.children) ? forearm.children : [];
+    const hand = kids.find((c) => c && c.isMesh && c.userData && c.userData.isHand);
+    if (!hand || typeof forearm.worldToLocal !== 'function') return;
+    figure.updateMatrixWorld(true);
+    const local = forearm.worldToLocal(new THREE.Vector3(ballWorld.x, ballWorld.y, ballWorld.z));
+    if (![local.x, local.y, local.z].every(Number.isFinite)) return;
+    // Held already: the hand keeps facing the ball as the arm settles.
+    if (gripping.grip) { gripping.grip.follow(local); return; }
+    const grip = gripHand(hand, { radius: BALL_FAT * CFG.ballScale / CFG.figureScale, ball: local });
+    if (!grip) return;
+    gripping.figure = figure;
+    gripping.grip = grip;
+}
+
 export function syncBall(ballObj, carrier, delta = 1 / 60) {
     const ball = getBall();
     if (!ball) return;
 
     if (ballObj && !BENCHED(ballObj)) {
+        releaseGrip();
         const p = simToWorld(ballObj.coords.x, ballObj.coords.y, 0);
 
         // HAS IT STOPPED? A ball still travelling covers ground every frame;
@@ -2579,6 +2680,7 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
     endFlight();
     placeSpot(0, 0, 0, false);
 
+    if (!carrier) releaseGrip();
     if (carrier) {
         const figure = figureFor(carrier.settings.position);
         if (figure) {
@@ -2603,6 +2705,9 @@ export function syncBall(ballObj, carrier, delta = 1 / 60) {
             const inHand = mode === 'hand' ? handPoint(figure, throwSideOf(figure)) : null;
             const want = inHand || toWorld(figure, hold.ball);
             const aim = toWorld(figure, hold.aim, true);
+            // His hand on it for the throw hold, once the snap has brought it
+            // up to his ear; his own hand for every other carry.
+            holdBallInHand(figure, throwSideOf(figure), want, mode === 'throw' && snapProgress() >= 1);
 
             // GATHERING IT IN. On the frame a pass is caught the ball is still
             // out in front of the receiver's hands, and jumping it to his ribs

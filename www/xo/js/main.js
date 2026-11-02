@@ -71,6 +71,11 @@ import {
 import { initClipSheet, showClipSheet, clipSheetOpen } from './clip-ui.min.js';
 import { openingFrame, planOpening, castAt, propsAt } from './opening.min.js';
 import { initColorsCard, showColorsCard, colorsCardOpen } from './colors-ui.min.js';
+// THE DESIGNED PLAYS (specs/custom-plays-PRD): the screen that draws them,
+// the store that keeps them, and the test that tells one from a slug.
+import { initDesigner, showDesigner } from './design-ui.min.js';
+import { getPlay } from './plays-store.min.js';
+import { isCustomId } from './design.min.js';
 import { drawColorsPreviews } from './colors-preview.min.js';
 import {
     initOpeningProps, applyOpeningProps, hideOpeningProps, splashBuffer,
@@ -89,14 +94,14 @@ import {
 } from './replay.min.js';
 import {
     setDriver, setAspect, update as updateCamera, nudgeView, resetView, switchView,
-    resetShoulder, viewQuarter, newShoulder, newAim,
+    resetShoulder, viewQuarter, viewRide, viewOffset, newShoulder, newAim, newRide,
 } from './camera.min.js';
 import {
     initAudio, unlock as unlockAudio, play as playSound, simAudio,
     isMuted, toggleMuted,
 } from './audio.min.js';
 import {
-    initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings, setPlayAs,
+    initPlaybook, show as showPlaybook, hide as hidePlaybook, getSettings, setPlayAs, focusPlay,
 } from './playbook-ui.min.js';
 import { isSlot, SLOTS, playingLine, DEFAULT_SLOT, labelOf, slotOf } from './playas.min.js';
 import {
@@ -273,7 +278,29 @@ function orientation() {
  *  defense is the one the library rolled when the visitor left it to chance. */
 function calledFields() {
     const play = cycle.play || {};
-    return { defense: play.defense || '', offense: play.offense || '', playCount: cycle.playNumber };
+    return { defense: play.defense || '', ...offenseFields(play.offense, play.base), playCount: cycle.playNumber };
+}
+
+/**
+ * A DESIGNED PLAY IS LOGGED AS "custom" AND ITS FORMATION, never its name and
+ * never its lines (specs/custom-plays-PRD, Section 8). A play from the book is
+ * its slug, as it always was, with no `base` field so the record's shape does
+ * not change for the seventeen.
+ */
+function offenseFields(offense, base) {
+    if (isCustomId(offense)) return { offense: 'custom', base: base || '' };
+    return { offense: offense || '' };
+}
+
+/**
+ * WHAT TO HAND `lineUp` FOR A PLAY AS CALLED: a slug is itself, a designed
+ * play's id is its record from the store, and an id the store no longer has
+ * (deleted for good in another tab, or hand-edited away) falls back to the
+ * book's first play rather than to an empty field.
+ */
+function callable(offense) {
+    if (!isCustomId(offense)) return offense;
+    return getPlay(offense) || 'pass2';
 }
 
 /** How long, in simulated seconds, the ball has been out. Simulated rather than
@@ -491,7 +518,38 @@ function cameraState() {
     const total = Math.max(1, frameCount());
     const f = aimAt();
     const focus = simToWorld(f.x, f.y, f.z || 0);
-    return { progress: playheadFrame() / total, focus, ending: endingBodies() };
+    // A ride (the fifth view) sits behind a man as drawn and looks at the ball.
+    const riding = Boolean(viewRide());
+    return {
+        progress: playheadFrame() / total, focus, ending: endingBodies(),
+        rider: riding ? riderBody() : null, ball: riding ? ballWorld() : null,
+    };
+}
+
+/**
+ * THE MAN THE RIDE SITS BEHIND, AS DRAWN (camera.js `rideDriver`, Steve,
+ * 2026-11-01): the visitor's own when the camera follows him, else the
+ * quarterback. Read from the figure rather than the recording, so the camera
+ * rides the body the frame shows, lift and lean included. Null when he is not
+ * on the field, and the director's own shot stands in.
+ */
+function riderBody() {
+    const who = followingAvatar() ? state.playAs : 'qb';
+    const figure = figureFor(who);
+    if (!figure || !figure.visible) return null;
+    // `who` names him for the suite, whose stub keeps no positions to tell
+    // two figures apart by; the camera reads the body and `look`, the point
+    // his head is turned to (view.js `glanceFor`), so the ride looks where
+    // he looks: back at the quarterback, or at the ball coming.
+    const at = figure.userData ? figure.userData.glanceAt : null;
+    const look = at && Number.isFinite(at.x) && Number.isFinite(at.z) ? { x: at.x, z: at.z } : null;
+    return { ...bodyOf(figure), who, look };
+}
+
+/** Where the recording says the ball or its carrier is, in world metres. */
+function ballWorld() {
+    const b = replayFocus();
+    return b ? simToWorld(b.x, b.y, b.z || 0) : null;
 }
 
 /** Is the visitor's avatar on the field in this play: an avatar saved, and
@@ -643,17 +701,18 @@ function openPlaybook() {
  */
 function onPlaybookChoice(offensive, defense, { repeat = false } = {}) {
     const changing = cycle.phase === 'presnap';
+    const called = callable(offensive);
     report('call-play', {
         kind: changing ? 'change' : 'next',
         outcome: {
-            offense: offensive,
+            ...offenseFields(offensive, called && called.base),
             defense: defense || 'random',
             repeat: repeat || undefined,
             playCount: changing ? cycle.playNumber : cycle.playNumber + 1,
         },
     });
-    if (changing) changePlay(offensive, defense);
-    else startPlay(offensive, defense);
+    if (changing) changePlay(called, defense);
+    else startPlay(called, defense);
 }
 
 /**
@@ -1282,6 +1341,7 @@ function finishPlay() {
         outcome: playRecord({
             defense: called.defense,
             offense: called.offense,
+            base: called.base,
             orientation: orientation(),
             points: result.points,
             result: result.result,
@@ -2762,7 +2822,7 @@ async function init() {
     // Line up once so the roster knows who exists, and so the field behind the
     // playbook shows a real formation rather than an empty pitch. The last
     // play a visitor chose is remembered, so a returning visitor sees theirs.
-    const objects = lineUp(cycle.play, getSettings().lastPlay || 'pass2', '');
+    const objects = lineUp(cycle.play, callable(getSettings().lastPlay || 'pass2'), '');
     // THE VISITOR IS ON THE FIELD (specs/avatar M7, 2026-10-26): with an
     // avatar saved on /avatar/, one player is them, in their own clothes.
     // The quarterback, unless they chose another (specs/xo-photos-plan).
@@ -2844,6 +2904,25 @@ async function init() {
                 cycle.reading = false;
                 back();
             });
+        },
+        // DESIGN A PLAY (specs/custom-plays-PRD), the same arrangement again.
+        design: (back) => {
+            uiClick();
+            cycle.reading = true;
+            showDesigner(() => {
+                cycle.reading = false;
+                back();
+            });
+        },
+    });
+    initDesigner({
+        report,
+        announce,
+        // The book is already back when this is called (design-ui `finish`),
+        // with the new card in it: put the visitor's focus on it and say so.
+        onSaved: (record) => {
+            focusPlay(record.id);
+            announce(`Saved. ${record.name} is in your playbook.`);
         },
     });
     initColorsCard({
@@ -3369,8 +3448,9 @@ function endingLength() {
 }
 
 /**
- * BEGIN A TAKE into `stage`, a 2D canvas somebody is recording, from vantage
- * point `quarter`. Resolves `{ cancelled, frames, seconds }` once the last
+ * BEGIN A TAKE into `stage`, a 2D canvas somebody is about to record, from
+ * vantage point `quarter`. The first frame is drawn into the stage before
+ * this hands back. Resolves `{ cancelled, frames, seconds }` once the last
  * frame has been drawn (or the take was cancelled), or null at once when
  * there is nothing to take: not on the result card, no recording, a take
  * already running, or a stage with no context.
@@ -3434,11 +3514,12 @@ function beginTake(stage, { quarter = 0, onFrame = null, follow = 'ball' } = {})
     if (canvas && canvas.classList) canvas.classList.add('is-recording');
 
     cycle.phase = 'clip';
-    return new Promise((resolve) => {
+    const taken = new Promise((resolve) => {
         cycle.take = {
             plan, quarter, stage, g, w, h,
             shoulder: newShoulder(),
             aim: newAim(),
+            ride: newRide(),
             anchor: { x: opening.x, z: opening.z },
             // Who the camera follows for this take, kept whatever the visit's
             // choice becomes while it runs (the sheet re-records on a change).
@@ -3449,6 +3530,14 @@ function beginTake(stage, { quarter = 0, onFrame = null, follow = 'ball' } = {})
             onFrame: typeof onFrame === 'function' ? onFrame : null,
         };
     });
+    // THE FIRST FRAME IS DRAWN NOW, before the take is handed back and the
+    // stage is captured (clip.js `recordTake`): the opening frame posed and
+    // shot with no time passed. The recorder's first frame is the one
+    // iMessage shows as a shared video's poster, and it used to be the empty
+    // stage, a black rectangle (Steve's QA, 2026-11-01).
+    stepTake(0);
+    drawTake(0);
+    return taken;
 }
 
 /** Advance the take by `delta` seconds: the replay branch of `stepCycle`,
@@ -3486,9 +3575,11 @@ function drawTake(delta) {
     // followed) is the aim and the bodies set the lens, at the clip's own
     // shape (`endingBodies`).
     const ending = endingBodies();
+    const riding = Boolean(viewOffset(t.quarter).ride);
     const shot = clipShot(clipProgress(playheadFrame(), t.plan), ending ? ending.focus : focus, {
         anchor: t.anchor, shoulder: t.shoulder, aim: t.aim, quarter: t.quarter, delta,
         points: ending ? ending.points : null, aspect: t.w / t.h,
+        rider: riding ? riderBody() : null, ball: riding ? ballWorld() : null, ride: t.ride,
     });
     // The result is stamped over the final hold only (D19).
     const stamp = CFG.clip.stamp && t.held >= t.plan.ending ? stampText(cycle.lastOutcome) : '';
@@ -3624,6 +3715,7 @@ export const __test__ = {
     /** The clip's take (specs/xo-photos-plan, Step 6), before the sheet
      *  that will drive it exists. */
     take: (stage, options) => beginTake(stage, options),
+    rider: () => riderBody(),
     cancelTake: () => cancelTake(),
     taking: () => (cycle.take ? { ...cycle.take, stage: undefined, g: undefined, live: undefined, release: undefined, resolve: undefined } : null),
     phase: () => cycle.phase,

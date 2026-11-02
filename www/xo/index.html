@@ -78,7 +78,7 @@
       "url": "https://www.scenexp.com/xo/",
       "name": "X's and O's",
       "image": "https://www.scenexp.com/xo/assets/og-xo.jpg?v=1",
-      "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's four views, and with an avatar saved on the Your Avatar page you can play as any player on the field.",
+      "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's five views, one of them over the quarterback's shoulder, and with an avatar saved on the Your Avatar page you can play as any player on the field. You can also design your own plays by drawing routes on a formation, kept in your browser.",
       "genre": ["Sports", "Strategy"],
       "gamePlatform": "Web browser",
       "applicationCategory": "Game",
@@ -127,7 +127,7 @@
     <title>X's and O's | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=23" as="style">
+    <link rel="preload" href="css/experience.min.css?v=28" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -156,6 +156,9 @@
     <link rel="modulepreload" href="js/clip-ui.min.js">
     <link rel="modulepreload" href="js/opening.min.js">
     <link rel="modulepreload" href="js/colors-ui.min.js">
+    <link rel="modulepreload" href="js/design-ui.min.js">
+    <link rel="modulepreload" href="js/plays-store.min.js">
+    <link rel="modulepreload" href="js/design.min.js">
     <link rel="modulepreload" href="js/colors-preview.min.js">
     <link rel="modulepreload" href="js/opening-props.min.js">
     <link rel="modulepreload" href="js/milestones.min.js">
@@ -177,6 +180,7 @@
     <link rel="modulepreload" href="js/arm.min.js">
     <link rel="modulepreload" href="../shared/js/cast-1.0.0.min.js">
     <link rel="modulepreload" href="../shared/js/wordmark-1.0.0.min.js">
+    <link rel="modulepreload" href="../shared/js/hands-1.0.0.min.js">
     <link rel="modulepreload" href="js/formations.min.js">
     <link rel="modulepreload" href="js/routes.min.js">
     <link rel="modulepreload" href="js/motion.min.js">
@@ -199,7 +203,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=23">
+    <link rel="stylesheet" href="css/experience.min.css?v=28">
     <!-- The welcome card's avatar portrait (shared with the home page). -->
     <link rel="stylesheet" href="../shared/css/avatar-1.0.0.min.css">
 
@@ -354,9 +358,20 @@
                      and the picture are made on the device and go only where
                      the visitor sends them, so the rule can promise that. -->
                 <li><strong>Share the play.</strong> After the whistle, watch the
-                    replay from any of four views, then share a short clip of it,
+                    replay from any of five views, one of them over the
+                    quarterback's shoulder, then share a short clip of it,
                     made right on your device, or save a picture of its best
                     moment.</li>
+                <!-- DESIGN A PLAY (specs/custom-plays-PRD, 2026-11-02). The
+                     first tile in the playbook opens a screen to draw routes
+                     on a formation. The rule worth stating up front is the one
+                     the designer repeats: where a line ends is where the
+                     player stops. -->
+                <li><strong>Design a play.</strong> The first tile in the
+                    playbook opens a field to draw on. Pick a formation, choose
+                    a receiver or the quarterback, and draw their route from
+                    where they stand. Where the line ends is where they stop.
+                    Saved plays stay in your book, on this device.</li>
             </ol>
 
             <!-- ONE LINE, AND ONLY BECAUSE THE LETTERS ARE ALREADY THERE. The
@@ -431,6 +446,24 @@
             <p class="welcome-explore-row">
                 <a id="explore-link" class="welcome-explore" href="/">More 3D worlds to explore at SceneXP.com</a>
             </p>
+        </div>
+    </div>
+
+    <!-- DESIGN A PLAY (design-ui.js, specs/custom-plays-PRD), opened from the
+         first tile in the playbook. The shell is here so the stylesheet has
+         something to hang on; design-ui.js builds the controls into
+         `designer-body` from tables, the way playbook-ui.js builds the cards.
+         It steps the playbook aside the way Team colors does, so only one
+         aria-modal dialog is showing. The canvas is a real image to a screen
+         reader, its label the words for what is drawn, and the arrow keys
+         draw on it as well as a finger. -->
+    <div id="designer" class="card-overlay designer" hidden>
+        <div id="designer-panel" class="card-panel designer-panel" role="dialog" aria-modal="true"
+            aria-labelledby="designer-title" aria-describedby="designer-intro" tabindex="-1">
+            <h2 id="designer-title" class="card-title">Design a play</h2>
+            <p id="designer-intro" class="card-detail">Pick a formation, choose a player, and draw
+                their route from where they stand. Your play is kept in your browser, on this device.</p>
+            <div id="designer-body" class="designer-body"></div>
         </div>
     </div>
 
@@ -668,7 +701,7 @@
     <!-- SHARE THE PLAY (specs/xo-photos-plan, Step 7), opened from the result
          card: the clip of the play just over, made on this device as soon as
          the sheet opens and played back in it when it is done, from whichever
-         of the replay's four vantage points the visitor picks, and a way to
+         of the replay's five vantage points the visitor picks, and a way to
          share or save it. The sideline photo of the play's best moment is the
          picture under it, and all a browser that cannot record is offered.
          The stage holds the canvas being recorded and then the video, at a
@@ -682,16 +715,17 @@
             <h2 id="clip-title" class="card-title">Share the play</h2>
             <div id="clip-stage" class="clip-stage"></div>
             <p id="clip-progress" class="card-detail clip-progress">Making your clip…</p>
-            <!-- The replay's four vantage points, one press each, and V as in
-                 the replay. The count is read out by the status line. And who
+            <!-- The replay's five vantage points (four turns and the ride over
+                 a shoulder), one press each, and V as in the replay. The count
+                 is read out by the status line. And who
                  the camera follows, the ball or the visitor's own player: a
                  toggle that says its state, shown only for a visitor whose
                  avatar is on the field, F as on the replay row. -->
             <div id="clip-tools" class="clip-tools">
                 <button id="clip-view" class="hud-btn" type="button"
-                    aria-label="Switch view to see the play from another side of the field"
+                    aria-label="Switch view to see the play from another side of the field, or from behind the quarterback"
                     aria-keyshortcuts="V">Switch view</button>
-                <span id="clip-view-count" class="clip-count" aria-hidden="true">View 1 of 4</span>
+                <span id="clip-view-count" class="clip-count" aria-hidden="true">View 1 of 5</span>
                 <button id="clip-follow" class="hud-btn hud-toggle" type="button"
                     aria-label="Follow me with the camera, instead of the ball"
                     aria-keyshortcuts="F" aria-pressed="false" hidden>Follow me</button>

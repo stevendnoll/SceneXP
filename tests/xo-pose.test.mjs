@@ -58,7 +58,7 @@ const { boardColumns } = await import(join(scene, 'field.js'));
 const {
     framingFor, applyView, nudgeView, resetView, getView,
     shoulderFor, resetShoulder, replayDriver,
-    switchView, viewQuarter, REPLAY_VIEWS,
+    switchView, viewQuarter, REPLAY_VIEWS, QUARTERS,
 } = await import(join(scene, 'camera.js'));
 const { PLAYS } = await import(join(scene, 'playbook-ui.js'));
 const { ladderBands, bandAt } = await import(join(scene, 'scoring.js'));
@@ -2223,11 +2223,12 @@ describe('four ways to watch a replay', () => {
     );
     const elevation = (s) => Math.asin((s.position.y - s.target.y) / radius(s));
 
-    test('every view is the same height and the same angle down', () => {
+    test('every quarter turn is the same height and the same angle down', () => {
+        // The four turns; the ride after them is another camera (xo-ride).
         resetView();
         const first = applyView(shot(), getView());
         const seen = new Set();
-        for (let i = 0; i < REPLAY_VIEWS; i += 1) {
+        for (let i = 0; i < QUARTERS.length; i += 1) {
             const s = applyView(shot(), getView());
             expect(radius(s)).toBeCloseTo(radius(first), 6);
             expect(elevation(s)).toBeCloseTo(elevation(first), 6);
@@ -2238,10 +2239,10 @@ describe('four ways to watch a replay', () => {
             switchView();
         }
         // Four presses, four DIFFERENT places to stand.
-        expect(seen.size).toBe(REPLAY_VIEWS);
+        expect(seen.size).toBe(QUARTERS.length);
     });
 
-    test('and the fourth press brings it home', () => {
+    test('and the last press brings it home', () => {
         resetView();
         expect(viewQuarter()).toBe(0);
         for (let i = 1; i < REPLAY_VIEWS; i += 1) {

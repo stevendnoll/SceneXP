@@ -401,6 +401,266 @@ body {
     }
 }
 
+/* ---- Designed plays (specs/custom-plays-PRD) ----------------------------------
+ *
+ * THE DESIGN A PLAY TILE IS A CARD WITH A DASHED EDGE: it sits in the grid as
+ * the first tile, the same shape as the plays so the grid stays a grid, and
+ * the dashed outline is what says "this one makes plays rather than being
+ * one". A saved play's card is an ordinary card with a "Yours" tag in the
+ * "Last play" tag's shape, in the receivers' quiet grey rather than the
+ * team's orange: a fact about the play, not a shortcut.
+ */
+.play-card.is-design .play-choose {
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.play-card.is-design .play-choose:hover,
+.play-card.is-design .play-choose:focus-visible {
+    border-color: #ff992c;
+}
+
+.play-mine {
+    display: inline-block;
+    margin: 0 0.8rem 0.8rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(109, 156, 255, 0.18);
+    color: #9dbcff;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.play-last + .play-mine,
+.play-out + .play-mine {
+    margin-left: 0;
+}
+
+/* The line under the grid that says where the removed plays went. */
+.playbook-removed {
+    margin: 0.9rem 0 0;
+    text-align: center;
+}
+
+/* THE DESIGNER. A card like Team colors, as wide as the playbook, its field
+   the largest thing on it. The canvas keeps the field's own shape, five by
+   three, and on a phone held upright turns to run up the screen (design.js
+   `layoutFor` decides from the pixels it is given). `touch-action: none` is
+   what lets a finger draw without scrolling the page. */
+.designer-panel {
+    position: relative;
+    width: min(64rem, 100%);
+    text-align: left;
+}
+
+/* The way out, top right, for a screen taller than a phone. */
+.designer-close {
+    position: absolute;
+    top: 0.7rem;
+    right: 0.7rem;
+    width: 2.4rem;
+    height: 2.4rem;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: transparent;
+    color: #aab4c4;
+    font: inherit;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.designer-close:hover,
+.designer-close:focus-visible {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #f2f5fa;
+}
+
+/* Whom to choose, standing between the row and the field while nobody is. */
+.designer-prompt {
+    margin: 0 0 0.6rem;
+    color: #ffd2a3;
+    text-align: center;
+    font-weight: 600;
+}
+
+.designer-panel:focus {
+    outline: none;
+}
+
+.designer-panel .card-title,
+.designer-panel .card-detail {
+    text-align: center;
+}
+
+.designer-top {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem 1rem;
+    margin: 1rem 0 0.8rem;
+}
+
+.designer-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin: 0;
+    color: #c3cbd9;
+    font-size: 0.9rem;
+}
+
+.designer-input,
+.designer-select {
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    background: #1a212c;
+    color: #e8ecf3;
+    font: inherit;
+}
+
+.designer-input:focus-visible,
+.designer-select:focus-visible {
+    outline: 2px solid #ff992c;
+    outline-offset: 1px;
+}
+
+.designer-canvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 5 / 3;
+    max-height: 58vh;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: #161d28;
+    /* A finger on the field scrolls the page until a player is chosen
+       (design-ui.js `is-armed`): the first touch on a phone is usually a
+       scroll to see the rest of the screen, and a field that swallowed it
+       drew a route instead (QA, 2026-11-02). */
+    touch-action: pan-y;
+    cursor: default;
+}
+
+.designer-canvas.is-armed {
+    touch-action: none;
+    cursor: crosshair;
+}
+
+.designer-canvas:focus-visible {
+    outline: 2px solid #ff992c;
+    outline-offset: 2px;
+}
+
+/* Upright, the field turns to run up the screen, and it is kept to about
+   half the viewport so the player row above it and the tools below it share
+   the screen with it. */
+@media (orientation: portrait) {
+    .designer-canvas {
+        aspect-ratio: 3 / 5;
+        max-height: 50vh;
+    }
+}
+
+/* The five men. Each button wears its own ink, and the chosen one is filled
+   with it: a fill is a state, and the letter stays readable on it. A man with
+   a line drawn gets a small check after his letter. */
+.designer-players {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    /* Room below as well as above: the row sits over the field now, and the
+       buttons were touching its top edge (Steve, 2026-11-02). */
+    margin: 0.8rem 0 0.9rem;
+}
+
+.designer-player {
+    min-width: 3rem;
+    padding: 0.45rem 0.9rem;
+    border: 2px solid var(--player-ink, #e8ecf3);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--player-ink, #e8ecf3);
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.designer-player:hover,
+.designer-player:focus-visible {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.designer-player.is-selected,
+.designer-player.is-selected:hover,
+.designer-player.is-selected:focus-visible {
+    background: var(--player-ink, #e8ecf3);
+    color: #12171f;
+}
+
+.designer-player.has-route::after {
+    content: " \2713";
+}
+
+.designer-tools {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 0.7rem 0 0;
+}
+
+.designer-tools .playbook-restart-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.designer-hint {
+    margin: 0.7rem 0 0;
+    text-align: center;
+}
+
+.designer-status {
+    min-height: 1.4em;
+    margin: 0.4rem 0 0;
+    color: #ffd2a3;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.designer-question {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem 0.8rem;
+    margin: 0.6rem 0 0;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid rgba(255, 107, 92, 0.45);
+    border-radius: 10px;
+    color: #f2f5fa;
+}
+
+/* `display: flex` beats the hidden attribute, so the row has to be told to
+   hide (QA, 2026-11-02: the "Yes, delete it" question stayed on screen after
+   the play was gone). */
+.designer-question[hidden] {
+    display: none;
+}
+
+.designer-actions {
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 34rem) {
+    .designer-top {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* ---- HUD and cards (M4) ---------------------------------------------------
  *
  * Own names again, for the same reason the playbook has them: the shared sheet

@@ -649,13 +649,6 @@ export function createExporter(config, {
             say(WORDS.noClip);
             return Promise.resolve(null);
         }
-        let rec;
-        try {
-            rec = startRecording(out.captureStream(E.clip.fps), mime, { bitrate: mobile ? E.clip.mobileBitrate : E.clip.bitrate, win });
-        } catch (e) {
-            say(WORDS.noClip);
-            return Promise.resolve(null);
-        }
         setBackdrop(false);
         setFigure(state.avatar);
         const s = ensureStage();
@@ -668,13 +661,10 @@ export function createExporter(config, {
             rig = jointPerson(s.figure.person);
             s.figure.group.add(rig.root);
         }
-        setBusy(true);
-        say(WORDS.clipMaking(plan.seconds));
-        const recording = { rec, out, g, size, mime, plan, rig, t0: now(), last: 0, waved: false, cancelled: false };
-        state.recording = recording;
-        const step = () => {
-            if (recording.cancelled || state.recording !== recording) return;
-            const t = now() - recording.t0;
+        const recording = { rec: null, out, g, size, mime, plan, rig, t0: now(), last: 0, waved: false, cancelled: false };
+        /** The frame at clip time `t`: the figure posed or ticked, rendered
+         *  and drawn onto the canvas. Says where the clip is. */
+        const draw = (t) => {
             const dt = Math.min(0.1, Math.max(0, t - recording.last));
             recording.last = t;
             const m = clipMoment(t, E.clip, plan);
@@ -692,6 +682,29 @@ export function createExporter(config, {
             }
             const image = render(size.w, size.h, 'figure', m.angle);
             g.drawImage(image, 0, 0, size.w, size.h);
+            return m;
+        };
+        // THE FIRST FRAME IS PAINTED BEFORE THE CANVAS IS CAPTURED (Steve's QA
+        // on X's and O's, 2026-11-01, and this clip started the same way). A
+        // recorder started on an empty canvas captures the empty canvas
+        // first, transparent encodes as black, and iMessage makes a shared
+        // video's poster from its first frame: a black rectangle.
+        draw(0);
+        let rec;
+        try {
+            rec = startRecording(out.captureStream(E.clip.fps), mime, { bitrate: mobile ? E.clip.mobileBitrate : E.clip.bitrate, win });
+        } catch (e) {
+            say(WORDS.noClip);
+            return Promise.resolve(null);
+        }
+        recording.rec = rec;
+        setBusy(true);
+        say(WORDS.clipMaking(plan.seconds));
+        state.recording = recording;
+        recording.t0 = now();
+        const step = () => {
+            if (recording.cancelled || state.recording !== recording) return;
+            const m = draw(now() - recording.t0);
             if (m.done) {
                 try { rec.recorder.stop(); } catch (e) { /* already stopped */ }
                 return;

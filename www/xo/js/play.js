@@ -25,6 +25,7 @@ import { MotionClass } from './motion.min.js';
 import { ExesAndOhsStateClass } from './playstate.min.js';
 import { classifyPlay } from './scoring.min.js';
 import { ballHeight, leapCatches, inTheAir } from './jump.min.js';
+import { resolvePlay, toSim, pathState, PATH_PLAYERS, QB_BEHIND } from './design.min.js';
 
 /** How many resolution passes, and how far apart bodies are held. The distance
  *  is config's, in metres, and the simulation works in field units, so this is
@@ -219,13 +220,25 @@ export function lineUp(play, offensive = 'pass2', defensive = '') {
     play.game.objects = ROSTER.map(([group, position, team], i) =>
         play.formations.generateTeamFormationObject(st, team, i, group, position));
 
-    play.formations.setTeamFormation(play.game.objects, 0, offensive);
+    /**
+     * A SLUG OR A DESIGNED PLAY (specs/custom-plays-PRD, 2026-11-02). Either
+     * way the library lines the offense up on a formation it knows, `base`,
+     * which is the slug itself for a play from the book. That hands a designed
+     * play its linemen, its benching, the receivers' letters and the
+     * quarterback's pocket for free, and keeps the 144KB formation library
+     * unaware that designed plays exist. The drawn lines are laid over the
+     * top at the end of this function, see `applyLines`.
+     */
+    const chosen = resolvePlay(offensive);
+    play.formations.setTeamFormation(play.game.objects, 0, chosen.base);
     play.formations.setTeamFormation(play.game.objects, 1, defensive);
     // WHAT WAS ACTUALLY LINED UP, for the usage log. An empty `defensive` is the
     // library's own signal to roll one, and the roll is only knowable here: the
     // library keeps the last formation it set on its state, and the defense is
-    // set second.
-    play.offense = offensive;
+    // set second. `offense` is the play as called, a designed play's id for
+    // one of those, and `base` the formation it stood in.
+    play.offense = chosen.id;
+    play.base = chosen.base;
     play.defense = (play.formations.state && play.formations.state.formation) || defensive || '';
 
     // WHO IS BENCHED IS DECIDED HERE, ONCE, AND REMEMBERED.
@@ -255,6 +268,13 @@ export function lineUp(play, offensive = 'pass2', defensive = '') {
     play.frame = 0;
     play.live = false;
     play.expired = false;
+    // Which pairs of receivers are yielding to each other, and for how long a
+    // course has held. Per play, like everything else here. `rules` is a
+    // per-play override of config's `crossing`, the way `lead` is for the
+    // throw, and is how the tests switch the rule off: play.js reads the
+    // min build's config, so a value changed on the source module would not
+    // reach it. See `yieldToCrossing`.
+    play.crossing = { pairs: {}, pending: {}, rules: null };
 
     // RESET THE SIMULATION'S OWN END-OF-PLAY FLAGS TOO. They live on playState,
     // not on `game`, so clearing the game object alone leaves `anim.done` set
@@ -273,7 +293,54 @@ export function lineUp(play, offensive = 'pass2', defensive = '') {
     // without this the crowd is exactly what the pre-snap frame shows.
     separate(play, separationUnits(), SEPARATION.lineUp);
     keepInbounds(play);
+    // AFTER the settle, so every line begins where its man actually stands.
+    if (chosen.routes) applyLines(play, chosen.routes);
     return play.game.objects;
+}
+
+/**
+ * LAY THE DRAWN LINES OVER THE FORMATION.
+ *
+ * Every receiver on the field gets a `path` route: the line he was drawn, in
+ * simulation units, beginning at the spot the line-up left him on, or a line
+ * of one point when he was not drawn one, which is "hold at the line of
+ * scrimmage and block" (PRD Decision 3). His boundaries are the whole field,
+ * and zero means "no wall" to the ported `checkBoundaries`, so the four edges
+ * are written as the field's own extent rather than as zeros on two sides.
+ *
+ * THE QUARTERBACK KEEPS HIS PORTED ROUTE and gains a `path` beside it, because
+ * the pocket's boundaries, the blitz evasion and the run after a decision are
+ * all his ported behavior and only the first few seconds are drawn. His line
+ * is held behind the line of scrimmage (`QB_BEHIND`).
+ *
+ * `obj.state.formation` stays the base slug. It is what the after-the-catch
+ * switches in routes.js read, and a designed play should run after the catch
+ * the way the formation it stood in does.
+ */
+function applyLines(play, routes) {
+    const m = play.playState.state.measurements;
+    for (const obj of play.game.objects) {
+        const who = obj.settings.position;
+        if (obj.settings.team !== 0 || obj.settings.benched || !PATH_PLAYERS.includes(who)) continue;
+        const drawn = Array.isArray(routes[who]) ? routes[who].map((p) => toSim(p, m)) : null;
+        const start = { x: obj.coords.x, y: obj.coords.y };
+        if (who === 'qb') {
+            if (!drawn || drawn.length === 0) continue;
+            const limit = m.lineInterval * QB_BEHIND;
+            const points = drawn.map((p) => ({ x: Math.min(p.x, limit), y: p.y }));
+            points[0] = start;
+            obj.settings.route.path = pathState(points);
+            continue;
+        }
+        const points = drawn && drawn.length > 0 ? drawn : [start];
+        points[0] = start;
+        obj.settings.route = {
+            boundaries: { top: 0, left: 0, right: m.width, bottom: m.height },
+            break: 0,
+            type: 'path',
+            path: pathState(points),
+        };
+    }
 }
 
 /** Snap it. From here the routes run themselves. */
@@ -371,9 +438,14 @@ export function tick(play) {
     // it: separation can push a man off the edge of the field, so a clamp that
     // ran first would be undone by it on the same frame.
     keepInbounds(play);
-    // AND LAST OF ALL, a receiver who has run out of route stops running in
-    // circles. It reads the position AFTER the shove and the clamp, because
-    // those move him too and a man being shoved is not a man who has arrived.
+    // AND A RECEIVER ON A COLLISION COURSE WITH HIS OWN TEAM-MATE lets him
+    // cross first. After the shove and the clamp, which decide where the pair
+    // really is this frame, and before the settle, which must not read his
+    // jog as an arrival. See `yieldToCrossing`.
+    yieldToCrossing(play);
+    // AND THEN a receiver who has run out of route stops running in circles.
+    // It reads the position AFTER the shove and the clamp, because those move
+    // him too and a man being shoved is not a man who has arrived.
     settleArrived(play);
     // AND WHOEVER HAS HAD SOMEBODY HANGING ON HIM LONG ENOUGH GETS OUT OF IT.
     // Also after the shove, because the shove is what decides how far apart two
@@ -1108,8 +1180,12 @@ export function settleArrived(play) {
         // The man the ball is on its way to has somewhere to be, and so does
         // anybody carrying it. Both drop their history, so a receiver who is
         // thrown at while settled starts the test again from scratch rather
-        // than from where he was standing.
-        if (loose || s.hasBall || play.game.throwTo === obj.settings.position) {
+        // than from where he was standing. So does a man letting a team-mate
+        // cross in front of him (`yieldToCrossing`): his jog covers under a
+        // metre in the window and would read as an arrival, which would hold
+        // him at a tenth of his speed for another half second after the yield
+        // had ended.
+        if (loose || s.hasBall || s.yielding || play.game.throwTo === obj.settings.position) {
             s.arrival = null;
             continue;
         }
@@ -1129,6 +1205,181 @@ export function settleArrived(play) {
         if (Math.abs(s.ySpeed) > cap) s.ySpeed = Math.sign(s.ySpeed) * cap;
         held += 1;
     }
+    return held;
+}
+
+/**
+ * THE CLOSEST TWO MEN WILL COME IF BOTH KEEP RUNNING AS THEY ARE, within
+ * `horizon` frames. `t` is when, in frames from now (0 when they are already
+ * separating, `horizon` when it is further off than that), `miss` how far apart
+ * they are then, `now` how far apart they are this frame, and `closing` is
+ * negative while they converge. Plain kinematics on the ported per-frame
+ * speeds, in field units. Exported for the tests.
+ */
+export function nearestApproach(a, b, horizon) {
+    const px = b.coords.x - a.coords.x;
+    const py = b.coords.y - a.coords.y;
+    const vx = b.state.xSpeed - a.state.xSpeed;
+    const vy = b.state.ySpeed - a.state.ySpeed;
+    const vv = vx * vx + vy * vy;
+    const closing = px * vx + py * vy;
+    let t = vv > 1e-9 ? -closing / vv : 0;
+    if (t < 0) t = 0;
+    if (t > horizon) t = horizon;
+    return {
+        t,
+        miss: Math.hypot(px + vx * t, py + vy * t),
+        now: Math.hypot(px, py),
+        closing,
+    };
+}
+
+/**
+ * ONE RECEIVER LETS HIS TEAM-MATE CROSS IN FRONT OF HIM. Steve's QA,
+ * 2026-10-31. See `crossing` in config.js for the fault, why the playbook's
+ * own staggered breaks cannot fix it, the measurements and the trade.
+ *
+ * WHO: the offense's receivers, running routes, before the visitor has
+ * decided. Once the ball is thrown or the quarterback takes off they are
+ * blockers, the library's own route code tests the same two flags to say so,
+ * and a blocker goes where the ball is. A man carrying it never yields.
+ *
+ * WHEN: a pair is clear of each other now, will not be within the horizon if
+ * both keep running as they are, is converging ACROSS the field at a run, and
+ * has been for `frames` consecutive frames. A pair already inside each other's
+ * boxes is a bunched line-up, not a crossing, and is left to the ported
+ * jostle, and a one-frame kick from that jostle is not a course.
+ *
+ * WHO YIELDS is decided once, at engagement, so he cannot swap mid-cross: the
+ * man behind, or the later breaker when they are level. He is held to `speed`
+ * of his top speed on both axes, and the route's own acceleration step is what
+ * moves him: a jog along his line.
+ *
+ * UNTIL: the DOWNFIELD gap is `clear`, or the pair has passed (the sign of
+ * their lateral offset has flipped), or `hold` has run out. Positions, not a
+ * prediction. A prediction made with the braked man's own slow speed says the
+ * gap will open, and it stops opening the moment he is released, inside the
+ * box, so a velocity-based release engaged seven times a play for a few frames
+ * each. This one engages 1.6 times a play over every play (3.2 on the five
+ * crossing plays named) for a median 0.20 s. A hold that runs out
+ * (his leader is stuck on a defender) is followed by a cooldown as long as the
+ * hold, or the pair re-engages on the next frame and the cap means nothing.
+ *
+ * IT RUNS BEFORE `settleArrived` AND IS EXCUSED FROM IT (see the note there).
+ * `state.yielding` is true on the frames a man is held and false otherwise,
+ * written here and read only there.
+ *
+ * IT LIVES HERE, like `separate` and `settleArrived`, rather than in motion.js
+ * or routes.js, which are ports and stay ports. Returns how many pairs are
+ * yielding this frame.
+ */
+export function yieldToCrossing(play) {
+    if (!play.crossing) play.crossing = { pairs: {}, pending: {}, rules: null };
+    const C = play.crossing.rules || CFG.crossing;
+    if (!C || !(C.hold > 0)) return 0;
+    const game = play.game;
+    const st = play.playState.state;
+    const { pairs, pending } = play.crossing;
+
+    const runners = [];
+    for (const obj of game.objects) {
+        if (!obj.settings || !obj.state || obj.settings.benched) continue;
+        if (obj.settings.positionGroup !== 'wr' || obj.settings.team !== 0) continue;
+        obj.state.yielding = false;
+        runners.push(obj);
+    }
+    const decided = !!game.throwTo || game.runForYourLife === true
+        || !!(st.ball && st.ball.caught);
+    if (decided) {
+        play.crossing.pairs = {};
+        play.crossing.pending = {};
+        return 0;
+    }
+
+    const horizon = Math.max(1, Math.round(CFG.simHz * C.horizon));
+    const hold = Math.max(1, Math.round(CFG.simHz * C.hold));
+    const miss = C.miss / UNITS_TO_METRES;
+    const clear = C.clear / UNITS_TO_METRES;
+    const level = C.level / UNITS_TO_METRES;
+    const shrink = C.shrink / UNITS_TO_METRES;
+    // Metres a second, to field units a frame.
+    const lateral = C.lateral / UNITS_TO_METRES / CFG.simHz;
+    const seen = new Set();
+    let held = 0;
+
+    for (let i = 0; i < runners.length; i += 1) {
+        for (let j = i + 1; j < runners.length; j += 1) {
+            const a = runners[i];
+            const b = runners[j];
+            if (a.state.hasBall || b.state.hasBall) continue;
+            const key = `${a.settings.position}-${b.settings.position}`;
+            seen.add(key);
+            const dx = b.coords.x - a.coords.x;
+            const dy = b.coords.y - a.coords.y;
+            const across = Math.abs(b.state.ySpeed - a.state.ySpeed);
+            let on = pairs[key];
+            if (on) {
+                on.frames += 1;
+                /**
+                 * NOT RELEASED WHEN THE PAIR STOPS CONVERGING, and that was
+                 * tried: a release after three frames below three quarters of
+                 * the engagement's lateral speed. It let go of REAL crosses,
+                 * because a crossing leader's lateral speed dips for a few
+                 * frames whenever a defender jostles him or his steer nears
+                 * its line, and the released man ran back into him: Split
+                 * Verticals 18% to 38% stalled, Deep Drift 4% to 11%. The
+                 * `hold` is the only clock on a yield whose cross is late.
+                 */
+                const passed = Math.sign(dy) !== on.sign;
+                const expired = on.frames > hold;
+                if (Math.abs(dx) >= clear || passed || expired) {
+                    delete pairs[key];
+                    pending[key] = expired ? { n: -hold, from: 0 } : null;
+                    continue;
+                }
+            } else {
+                const ap = nearestApproach(a, b, horizon);
+                const course = ap.now >= miss && ap.miss < miss
+                    && ap.t > 0 && ap.t < horizon && ap.closing < 0 && across >= lateral;
+                let p = pending[key];
+                if (!course) {
+                    // A broken course forgets its count; a cooldown keeps counting up.
+                    pending[key] = p && p.n < 0 ? { n: p.n + 1, from: 0 } : null;
+                    continue;
+                }
+                if (!p || p.n === 0) p = { n: 0, from: Math.abs(dy) };
+                p.n += 1;
+                if (p.n > 0 && p.from === 0) p.from = Math.abs(dy);
+                pending[key] = p;
+                // A COURSE IS CONFIRMED BY THE GROUND IT HAS COVERED, not by a
+                // speed. The ported jostle kicks a jammed man sideways at a
+                // run for a few frames and his steer brings him back; the
+                // prediction from that speed said two men in adjacent lanes
+                // would meet, and they never got any closer. Here the lateral
+                // gap must actually have closed by `shrink` while the course
+                // held, which a real cross does in four frames.
+                if (p.n < C.frames || p.from - Math.abs(dy) < shrink) continue;
+                const breakA = (a.settings.route && a.settings.route.break) || 0;
+                const breakB = (b.settings.route && b.settings.route.break) || 0;
+                let yielder;
+                if (Math.abs(dx) > level) yielder = dx > 0 ? a : b;
+                else if (breakA !== breakB) yielder = breakB > breakA ? b : a;
+                else yielder = a.settings.position < b.settings.position ? b : a;
+                on = { yielder, frames: 0, sign: Math.sign(dy) };
+                pairs[key] = on;
+                pending[key] = null;
+            }
+            const y = on.yielder;
+            const top = C.speed * y.physics.maxSpeed;
+            if (Math.abs(y.state.xSpeed) > top) y.state.xSpeed = Math.sign(y.state.xSpeed) * top;
+            if (Math.abs(y.state.ySpeed) > top) y.state.ySpeed = Math.sign(y.state.ySpeed) * top;
+            y.state.yielding = true;
+            held += 1;
+        }
+    }
+    // A pair that is no longer two route runners (one was benched, or caught
+    // the ball) is forgotten rather than left engaged.
+    for (const key of Object.keys(pairs)) if (!seen.has(key)) delete pairs[key];
     return held;
 }
 

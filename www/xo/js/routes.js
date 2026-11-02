@@ -16,7 +16,15 @@
  * a real parabola, so catches land on the frame they land on today.
  *
  * NO THREE, NO DOM, NO GLOBALS (PLANNING D1).
+ *
+ * A DRAWN LINE IS THE ONE ROUTE THE 2D GAME NEVER HAD (specs/custom-plays-PRD,
+ * 2026-11-02). A receiver whose route is `{ type: 'path' }` follows the points
+ * the visitor drew (`runPath`), and a quarterback whose route carries a `path`
+ * runs it before the ported drop-back takes over. Both are reached only through
+ * those two fields, so a play from the book runs exactly the code it ran
+ * before: the only edits to the ported methods are one `case` and one `if`.
  */
+import { followPath, approachSpeed } from './design.min.js';
 
 export class ObjectAnimationsClass {
 
@@ -438,7 +446,10 @@ export class ObjectAnimationsClass {
         } else {
           // No defenders are close.
           if ( !this.gameState.state.tackled ) {
-            this.motion.runAround(obj, game);
+            // A drawn line first, the ported pocket after it (design.js).
+            if ( !this.runQbPath(obj, game, lineInterval) ) {
+              this.motion.runAround(obj, game);
+            }
           } else {
             this.motion.decelX(obj);
             this.motion.decelY(obj);
@@ -1029,10 +1040,98 @@ export class ObjectAnimationsClass {
           this.runWrStopRoute(obj, lineInterval);
           this.motion.moveObject(obj, game);
           break;
+        case 'path':
+          this.runPath(obj, game, lineInterval);
+          break;
         default:
           break;
       }
     }
+  }
+
+  /**
+   * HOW FAR AHEAD ON HIS LINE A MAN AIMS, in field units. Injected on the
+   * settings object like every other number the 3D game has had to tell the
+   * port (config `formationSettings`), with a fallback of a sixth of a line
+   * interval for a caller that says nothing.
+   */
+  pathLookahead(lineInterval = 0) {
+    const l = this.settings && this.settings.pathLookahead;
+    return typeof l === 'number' && l > 0 ? l : lineInterval / 6;
+  }
+
+  /**
+   * RUN THE LINE THE VISITOR DREW, and stop where it stops.
+   *
+   * `followPath` (design.js) hands back a point a little way ahead on the
+   * line. The speed wanted toward it is the man's own top speed, with the
+   * PORT'S HABIT of capping each axis separately: the larger component runs
+   * at `maxSpeed`, so a drawn diagonal is as fast as a ported one and a
+   * designed post route is not slower than the book's. Near the end of the
+   * line the wanted speed falls to what `decel` can stop in the distance left,
+   * and inside the steer deadband it is zero, so he settles on his last point
+   * rather than circling it. Each axis is moved toward what is wanted by
+   * `accel` or `decel`, the same two numbers every ported route uses.
+   *
+   * Then `moveObject`, which is the port's collisions and integration, so a
+   * man on a drawn line is blocked, jostled and tackled like anybody else.
+   */
+  runPath(obj = {}, game = {}, lineInterval = 0) {
+    const route = obj.settings.route;
+    const path = route && route.path;
+    const here = followPath(path, obj.coords.x, obj.coords.y, this.pathLookahead(lineInterval));
+    if (!here) return false;
+    const dead = (this.motion && this.motion.steerDeadband && this.motion.steerDeadband()) || 0;
+    const top = obj.physics.maxSpeed;
+    const decel = obj.physics.decel;
+    let wanted = top;
+    if (here.end) {
+      const room = here.toEnd - dead;
+      wanted = room <= 0 ? 0 : Math.min(top, Math.sqrt(2 * decel * room));
+      if (room <= 0) path.done = true;
+    }
+    const dx = here.x - obj.coords.x;
+    const dy = here.y - obj.coords.y;
+    const longest = Math.max(Math.abs(dx), Math.abs(dy));
+    const vx = longest > 0 ? wanted * dx / longest : 0;
+    const vy = longest > 0 ? wanted * dy / longest : 0;
+    obj.state.xSpeed = approachSpeed(obj.state.xSpeed, vx, obj.physics.accel, decel);
+    obj.state.ySpeed = approachSpeed(obj.state.ySpeed, vy, obj.physics.accel, decel);
+    this.motion.moveObject(obj, game);
+    return true;
+  }
+
+  /**
+   * THE QUARTERBACK'S DRAWN LINE, run until it ends, then the pocket is moved
+   * to where it ended so the ported drop-back wanders there rather than
+   * marching him back to where the formation had him. Once. Returns whether
+   * the line still has him.
+   *
+   * The pocket is the port's own size, twelve gutters either side and a
+   * quarter interval before and behind, and its far wall is never moved past
+   * where the formation had it, so a rollout still ends behind the line. What
+   * the wander does inside it is the book's: measured on 2026-11-02, the
+   * book's own quarterback overruns his pocket walls by fifty units or more
+   * in most plays, and so does this one from his drawn stop.
+   */
+  runQbPath(obj = {}, game = {}, lineInterval = 0) {
+    const route = obj.settings.route;
+    const path = route && route.path;
+    if (!path || path.settled) return false;
+    this.runPath(obj, game, lineInterval);
+    if (path.done) {
+      path.settled = true;
+      if (route.boundaries) {
+        const height = this.gameState.state.measurements.height;
+        const gy = this.settings.style.gutters.y;
+        const end = path.points[path.points.length - 1];
+        route.boundaries.left = Math.max(0, end.x - (lineInterval * 0.25));
+        route.boundaries.right = Math.min(route.boundaries.right || end.x, end.x + (lineInterval * 0.25));
+        route.boundaries.top = Math.max(0, end.y - (gy * 12));
+        route.boundaries.bottom = Math.min(height, end.y + (gy * 12));
+      }
+    }
+    return true;
   }
 
   // eslint-disable-next-line

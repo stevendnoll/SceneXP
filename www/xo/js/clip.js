@@ -32,7 +32,7 @@
  */
 import { XO_CONFIG as CFG } from './config.min.js';
 import {
-    replayDriver, applyView, viewOffset, shoulderFor, newShoulder, smoothAim, fitBodies,
+    replayDriver, applyView, viewOffset, shoulderFor, newShoulder, smoothAim, fitBodies, rideDriver,
 } from './camera.min.js';
 import { drawWordmark, wordmarkFont, WORDMARK } from '../../shared/js/wordmark-1.0.0.min.js';
 import { startRecording } from '../../shared/js/recorder-1.0.0.min.js';
@@ -111,14 +111,27 @@ export function clipProgress(frame, plan) {
  * `aim` the focus is taken as it is. `points`, when given, are the ending's
  * bodies, and the lens opens for them at the clip's `aspect` (camera.js
  * `fitBodies`, ratcheted through the same `aim`).
+ *
+ * A RIDE (camera.js `rideDriver`, `quarter` past the four turns) sits behind
+ * `rider`, the man as drawn, looking at `ball`, through the take's own `ride`
+ * memory (`newRide()`), until the ending's bodies arrive: then the director's
+ * settled shot, as the live replay hands off. With no `rider` (he is off the
+ * field) the director's own shot stands in.
  */
 export function clipShot(progress, focus, {
     anchor = null, shoulder = null, quarter = 0, delta = 0, aim = null, points = null, aspect = K().width / K().height,
+    rider = null, ball = null, ride = null,
 } = {}) {
     const f = aim ? smoothAim(aim, focus, delta) : (focus || { x: 0, y: 0, z: 0 });
-    const side = shoulderFor(f.z, delta, shoulder || newShoulder());
-    const shot = applyView(replayDriver(progress, f, side, anchor), viewOffset(quarter));
-    return points && points.length ? fitBodies(shot, points, aspect, aim) : shot;
+    const offset = viewOffset(quarter);
+    const handoff = Boolean(points && points.length);
+    let shot = null;
+    if (offset.ride && rider && !handoff) shot = rideDriver(rider, ball || f, { memory: ride, delta, aspect });
+    if (!shot) {
+        const side = shoulderFor(f.z, delta, shoulder || newShoulder());
+        shot = applyView(replayDriver(progress, f, side, anchor), offset.ride ? viewOffset(0) : offset);
+    }
+    return handoff ? fitBodies(shot, points, aspect, aim) : shot;
 }
 
 /** "Caught +15", "Intercepted -10", "Incomplete": the result line stamped
@@ -235,12 +248,21 @@ export function holdSize(renderer, w, h) {
 }
 
 /**
- * RECORD A TAKE: the stage canvas sized to `w` by `h` and captured at `fps`,
- * the recorder started BEFORE the first frame is drawn and stopped AFTER the
- * last, which is when `take()` resolves (main.js draws the frames). Resolves
- * `{ blob, mime, seconds, frames }`, or null when the take was refused or
- * cancelled, or when the stage cannot be captured. A recorder that fails
- * rejects the way recorder-1.0.0 does.
+ * RECORD A TAKE: the stage canvas sized to `w` by `h`, the take begun (main.js
+ * `beginTake`, which draws the first frame into the stage before it hands
+ * back), THEN the stage captured at `fps` and the recorder started, and the
+ * recorder stopped AFTER the last frame, which is when the take resolves.
+ * Resolves `{ blob, mime, seconds, frames }`, or null when the take was
+ * refused or cancelled, or when the stage cannot be captured. A recorder that
+ * fails rejects the way recorder-1.0.0 does.
+ *
+ * THE FIRST FRAME IS ON THE STAGE BEFORE THE STAGE IS CAPTURED (Steve's QA,
+ * 2026-11-01). The recorder used to be started first, so as to miss nothing,
+ * and the first thing it captured was the empty stage: a new canvas is
+ * transparent, transparent encodes as black, and iMessage makes a shared
+ * video's poster from its first frame, so every clip sent by text arrived as
+ * a black rectangle. Safari's canvas capture samples whatever the canvas
+ * holds, so with the first frame already painted nothing is missed either.
  *
  * The stage is sized before it is captured, never during: an encoder handed
  * frames of a new size part way through a recording may give up on it.
@@ -251,11 +273,12 @@ export async function recordTake(stage, take, { w, h, mime, fps = K().fps, bitra
         if (stage.width !== w) stage.width = w;
         if (stage.height !== h) stage.height = h;
     }
+    const run = take();
     const stream = stage.captureStream(fps);
     const rec = startRecording(stream, mime, { bitrate, win });
     let outcome = null;
     try {
-        outcome = await take();
+        outcome = await run;
     } finally {
         try { rec.recorder.stop(); } catch (e) { /* already stopped */ }
     }

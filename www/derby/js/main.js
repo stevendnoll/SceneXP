@@ -1694,6 +1694,20 @@ function openClip() {
     sound.ensure();
     const include = !el['clip-sound'] || el['clip-sound'].checked;
     sound.setRecording(true, include);
+    const focus = clipFocus(day);
+    state.clip = {
+        plan: planClip(day.race, focus, CONFIG), focus, t: 0, recording: true, rec: null, g, out, w, h, mime,
+        said: '', beeped: new Set(), lastS: day.entries.map(() => 0), shown: -1
+    };
+    pictureWaits(true);
+    clipText('Making your clip…');
+    // THE FIRST FRAME IS PAINTED BEFORE THE CANVAS IS CAPTURED (Steve's QA on
+    // X's and O's, 2026-11-01, and this clip starts the same way). A recorder
+    // started on an empty canvas captures the empty canvas first, transparent
+    // encodes as black, and iMessage makes a shared video's poster from its
+    // first frame: a black rectangle. The frame at time zero is drawn now,
+    // and the recorder starts with it already on the canvas.
+    stepClip(0);
     const stream = out.captureStream(CONFIG.clip.fps);
     const audio = sound.recordStream();
     if (audio && audio.getAudioTracks) for (const t of audio.getAudioTracks()) stream.addTrack(t);
@@ -1701,18 +1715,16 @@ function openClip() {
     try {
         rec = startRecording(stream, mime, { bitrate: state.isMobile ? CONFIG.clip.mobileBitrate : CONFIG.clip.bitrate, win: window });
     } catch (e) {
+        state.clip = null;
+        pictureWaits(false);
         sound.setRecording(false);
+        sound.roll(0);
+        restCars();
         clipText(`This browser can’t make a video, but you can ${verb} a picture of your race.`);
         track('clip-unsupported', { kind: state.event, outcome: 'start-failed' });
         return;
     }
-    const focus = clipFocus(day);
-    state.clip = {
-        plan: planClip(day.race, focus, CONFIG), focus, t: 0, recording: true, rec, g, out, w, h, mime,
-        said: '', beeped: new Set(), lastS: day.entries.map(() => 0), shown: -1
-    };
-    pictureWaits(true);
-    clipText('Making your clip…');
+    state.clip.rec = rec;
     clipSay('Making your clip. It takes about fifteen seconds.');
     track('clip-start', { kind: state.event, outcome: `sound=${include ? 'on' : 'off'}` });
     rec.done.then((blob) => finishedClip(blob)).catch(() => {

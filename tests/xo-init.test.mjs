@@ -740,7 +740,7 @@ describe('a replay can be got out of', () => {
             .find((b) => b.textContent === 'Switch view');
         expect(swap).toBeTruthy();
         expect(swap.getAttribute('aria-label'))
-            .toBe('Switch view to see the replay from another side of the field');
+            .toBe('Switch view to see the replay from another side of the field, or from behind the quarterback');
         expect(swap.getAttribute('aria-keyshortcuts')).toBe('V');
         expect(swap.focused).not.toBe(true);
         // Pressing it changes the camera and leaves the replay running.
@@ -1844,8 +1844,10 @@ describe('the share sheet', () => {
             expect(stage().children).toHaveLength(1);
             expect(stage().children[0].tagName).toMatch(/canvas/i);
             expect(stage().children[0].classList.contains('is-unseen')).toBe(false);
-            expect(dom.el('clip-view-count').textContent).toBe('View 1 of 4');
-            expect(progress()).toBe('Making your clip…');
+            expect(dom.el('clip-view-count').textContent).toBe('View 1 of 5');
+            // The first frame was drawn as the take began (before the stage
+            // was captured), so the countdown is already up.
+            expect(progress()).toBe(`Making your clip… ${Math.ceil(main.__test__.taking().plan.total)} seconds to go`);
             expect(dom.el('clip-tools').hidden).toBe(false);
             // No avatar, so nobody to follow: no Follow me.
             expect(dom.el('clip-follow').hidden).toBe(true);
@@ -1964,10 +1966,11 @@ describe('the share sheet', () => {
             await flushAsync();
             expect(main.__test__.phase()).toBe('clip');
             expect(main.__test__.taking().quarter).toBe(1);
-            expect(main.__test__.taking().frames).toBe(0);
-            expect(dom.el('clip-view-count').textContent).toBe('View 2 of 4');
-            expect(status()).toBe('View 2 of 4. Making the clip again from here.');
-            expect(progress()).toBe('Making your clip…');
+            // A fresh take, its first frame already drawn.
+            expect(main.__test__.taking().frames).toBe(1);
+            expect(dom.el('clip-view-count').textContent).toBe('View 2 of 5');
+            expect(status()).toBe('View 2 of 5. Making the clip again from here.');
+            expect(progress()).toBe(`Making your clip… ${Math.ceil(main.__test__.taking().plan.total)} seconds to go`);
             expect(stage().children).toHaveLength(1);
             // V, as in the replay, but not with a modifier held.
             fire(dom.documentStub, 'keydown', { key: 'v' });
@@ -1976,12 +1979,17 @@ describe('the share sheet', () => {
             fire(dom.documentStub, 'keydown', { key: 'V', metaKey: true });
             await flushAsync();
             expect(main.__test__.taking().quarter).toBe(2);
-            // Round the four and back to the director's own.
+            // Round the five, through the ride over the quarterback's
+            // shoulder (the fifth), and back to the director's own.
             fire(dom.documentStub, 'keydown', { key: 'V' });
             fire(dom.documentStub, 'keydown', { key: 'v' });
             await flushAsync();
+            expect(main.__test__.taking().quarter).toBe(4);
+            expect(dom.el('clip-view-count').textContent).toBe('View 5 of 5');
+            fire(dom.documentStub, 'keydown', { key: 'V' });
+            await flushAsync();
             expect(main.__test__.taking().quarter).toBe(0);
-            expect(dom.el('clip-view-count').textContent).toBe('View 1 of 4');
+            expect(dom.el('clip-view-count').textContent).toBe('View 1 of 5');
 
             // Let it finish, then switch: the finished clip is let go and a new take begins.
             await settle(() => main.__test__.phase() === 'result');
@@ -2007,7 +2015,7 @@ describe('the share sheet', () => {
             expect(dom.el('game-canvas').classList.contains('is-recording')).toBe(false);
             expect(dom.el('result').hidden).toBe(false);
             // No ping for a take nobody finished, one for every switch.
-            expect(kinds(sent, 'clip')).toEqual(['opened', 'view', 'view', 'view', 'view', 'made', 'view']);
+            expect(kinds(sent, 'clip')).toEqual(['opened', 'view', 'view', 'view', 'view', 'view', 'made', 'view']);
             expect(of(sent, 'clip')[1].searchParams.get('outcome')).toBe('view=2');
         } finally {
             urls.restore();
@@ -2080,6 +2088,42 @@ describe('the share sheet', () => {
         }
     });
 
+    test('the fifth view rides the quarterback as drawn, or the visitor with Follow me on (Steve, 2026-11-01)', async () => {
+        const { createAvatarStore } = await import('../www/shared/js/avatar-1.0.0.js');
+        createAvatarStore({ win: null }).save({ skin: 'deep', shirt: 'teal' });
+        globalThis.localStorage.setItem(PLAY_KEY, JSON.stringify({ playAs: 'wr1' }));
+        const main = await aCatch({ downed: true });
+        const camera = await import('../www/xo/js/camera.min.js');
+        dom.el('result-actions').children.find((b) => b.textContent === 'Watch the replay').click();
+        await flushAsync();
+        frames(1);
+        // The four turns hand the camera nobody to ride.
+        expect(main.__test__.cameraState().rider).toBeNull();
+        expect(main.__test__.cameraState().ball).toBeNull();
+        for (let i = 0; i < camera.QUARTERS.length; i += 1) press('Switch view');
+        expect(camera.viewRide()).toBe('shoulder');
+        frames(1);
+        // The fifth rides the quarterback's drawn body, and looks at the ball.
+        // (The stub keeps no positions, so the body is checked by shape and
+        // the man by name.)
+        let s = main.__test__.cameraState();
+        expect(s.rider).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, who: 'qb', look: null });
+        expect(Number.isFinite(s.ball.x) && Number.isFinite(s.ball.z)).toBe(true);
+        // Follow me: the visitor's own body is the one ridden.
+        press('Follow me');
+        frames(1);
+        s = main.__test__.cameraState();
+        expect(s.rider.who).toBe('wr1');
+        // Home again, and the ride is forgotten with the view.
+        press('Switch view');
+        expect(camera.viewRide()).toBeNull();
+        frames(1);
+        expect(main.__test__.cameraState().rider).toBeNull();
+        press('Skip replay');
+        await flushAsync();
+        expect(main.__test__.phase()).toBe('result');
+    });
+
     test('with an avatar there is no nudge, and the clip opens on the view the replay was watched from', async () => {
         recordingBrowser();
         const urls = objectUrls();
@@ -2103,7 +2147,7 @@ describe('the share sheet', () => {
             await flushAsync();
             expect(dom.el('clip-nudge').hidden).toBe(true);
             expect(main.__test__.taking().quarter).toBe(2);
-            expect(dom.el('clip-view-count').textContent).toBe('View 3 of 4');
+            expect(dom.el('clip-view-count').textContent).toBe('View 3 of 5');
             dom.el('clip-close').click();
             await flushAsync();
             expect(main.__test__.phase()).toBe('result');
@@ -2144,7 +2188,7 @@ describe('the share sheet', () => {
             expect(status()).toBe('Following you. Making the clip again.');
             expect(main.__test__.follow()).toBe('avatar');
             expect(main.__test__.taking().follow).toBe('avatar');
-            expect(main.__test__.taking().frames).toBe(0);
+            expect(main.__test__.taking().frames).toBe(1);
             frames(2);
             const aim = main.__test__.aim();
             expect(aim.source).toBe('avatar');
@@ -2376,21 +2420,27 @@ describe('the clip\'s take', () => {
         expect(view.throwClock()).toBe(-1);
         expect(view.snapProgress()).toBe(0);
         expect(t.plan.total).toBeGreaterThan(t.plan.play + CFG.clip.hold - 1e-9);
-        expect(t.shoulder).toEqual({ side: 1, want: 1, held: 0, seeded: false });
         expect(Number.isFinite(t.anchor.x) && Number.isFinite(t.anchor.z)).toBe(true);
+        // THE FIRST FRAME IS ALREADY ON THE STAGE, drawn as the take began
+        // and before anything captures the stage (Steve's QA, 2026-11-01: a
+        // recorder started first captured the empty stage, and iMessage made
+        // that black frame the shared video's poster). One frame with the
+        // wordmark on it, and both camera memories asked by it: the
+        // shoulder's and the smoothed aim's (QA 2026-10-30).
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(1);
+        expect(drawn.filter((c) => c[0] === 'fillText').map((c) => c[1])).toEqual([CFG.clip.wordmark]);
+        expect(t.shoulder.seeded).toBe(true);
+        expect(t.aim.seeded).toBe(true);
+        expect(t.frames).toBe(1);
         // A second take while one runs is refused.
         await expect(main.__test__.take(stage, { quarter: 2 })).resolves.toBeNull();
         expect(main.__test__.taking().quarter).toBe(1);
 
-        // Every frame goes to the stage with the wordmark on it, and the
-        // frame's own render is skipped: the shoulder memory has been asked.
+        // Every frame after goes to the stage the same way, and the frame's
+        // own render is skipped.
         frames(1);
-        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(1);
-        expect(drawn.filter((c) => c[0] === 'fillText').map((c) => c[1])).toEqual([CFG.clip.wordmark]);
-        expect(main.__test__.taking().shoulder.seeded).toBe(true);
-        // ...and so has the aim's own memory (the smoothed aim, QA 2026-10-30).
-        expect(main.__test__.taking().aim.seeded).toBe(true);
-        expect(main.__test__.taking().frames).toBe(1);
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(2);
+        expect(main.__test__.taking().frames).toBe(2);
 
         const value = await settle(p);
         expect(value.cancelled).toBe(false);
@@ -2429,21 +2479,23 @@ describe('the clip\'s take', () => {
         const { stage, drawn } = recordingStage();
         const p = main.__test__.take(stage, {});
         frames(5);
-        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(5);
+        // The opening frame, drawn as the take began, and five more.
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(6);
         expect(main.__test__.cancelTake()).toBe(true);
-        await expect(p).resolves.toEqual({ cancelled: true, frames: 5, seconds: expect.any(Number), released: true });
+        await expect(p).resolves.toEqual({ cancelled: true, frames: 6, seconds: expect.any(Number), released: true });
         expect(main.__test__.phase()).toBe('result');
         expect(canvas().classList.contains('is-recording')).toBe(false);
         expect(main.__test__.cancelTake()).toBe(false);
         // Nothing more is drawn into a stage whose take is over.
         frames(2);
-        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(5);
+        expect(drawn.filter((c) => c[0] === 'drawImage')).toHaveLength(6);
 
-        // Next play lets a running take go on its way out.
+        // Next play lets a running take go on its way out (its opening frame
+        // and two more had been drawn).
         const p2 = main.__test__.take(stage, { quarter: 3 });
         frames(2);
         dom.el('result-actions').children.find((b) => b.textContent === 'Next play').click();
-        await expect(p2).resolves.toMatchObject({ cancelled: true, frames: 2 });
+        await expect(p2).resolves.toMatchObject({ cancelled: true, frames: 3 });
         await flushAsync();
         expect(main.__test__.phase()).toBe('playbook');
         expect(canvas().classList.contains('is-recording')).toBe(false);
@@ -2994,5 +3046,118 @@ describe('choosing who to play as', () => {
         tap();
         await flushAsync();
         expect(actionLabels()).toContain('Keep it');
+    });
+});
+
+/**
+ * DESIGN A PLAY (specs/custom-plays-PRD, Phase 2): the first tile in the book,
+ * the designer stepping the book aside and coming back, a saved play as a card
+ * of its own that lines up on its formation and is logged as "custom", and a
+ * removed play gone from the grid with the note that says where.
+ */
+describe('design a play', () => {
+    const KEY = 'exes-n-ohs-plays';
+    const openBook = async () => {
+        await boot();
+        dom.el('welcome-actions').children[0].click();   // Take the field
+        await flushAsync();
+        const body = dom.el('playbook').querySelector('.playbook-body');
+        const grid = body.children.find((n) => n.className === 'playbook-grid');
+        expect(grid).toBeTruthy();
+        return { body, grid };
+    };
+    const record = {
+        id: 'custom-seeded', name: 'B go', base: 'pass2', created: '2026-11-02T00:00:00Z', hidden: false,
+        routes: { wr2: [[0.2, 0.37], [0.6, 0.37]] },
+    };
+
+    test('the tile is first, opens the designer in the book’s place, and the book comes back to it', async () => {
+        const { grid } = await openBook();
+        const tile = grid.children[0];
+        expect(tile.className).toContain('is-design');
+        const button = tile.children[0];
+        expect(button.dataset.design).toBe('true');
+        expect((button.textContent || '')).toContain('Design a Play');
+        // Focus is on the first PLAY, not the tile: between plays the job is
+        // to call a play.
+        expect(button.focused).not.toBe(true);
+        expect(grid.children[1].children[0].focused).toBe(true);
+
+        button.click();
+        expect(dom.el('playbook').hidden).toBe(true);
+        expect(dom.el('designer').hidden).toBe(false);
+        expect(dom.el('designer-panel').focused).toBe(true);
+        const UI = await import('../www/xo/js/design-ui.min.js');
+        expect(UI.designerOpen()).toBe(true);
+        const back = deep(dom.el('designer-body')).find((n) => n && (n.textContent || '').trim() === 'Back to the playbook');
+        back.click();
+        expect(dom.el('designer').hidden).toBe(true);
+        expect(dom.el('playbook').hidden).toBe(false);
+        expect(button.focused).toBe(true);
+    });
+
+    test('a saved play is a card behind the tile, lines up on its formation when called, and is logged as custom', async () => {
+        localStorage.setItem(KEY, JSON.stringify({ v: 1, plays: [record], hidden: [] }));
+        const sent = [];
+        globalThis.Image = class { set src(url) { sent.push(new URL(url, 'http://localhost:8000/xo/')); } };
+        try {
+            const { grid } = await openBook();
+            const card = grid.children[1];
+            expect(card.className).toContain('is-mine');
+            const button = card.children[0];
+            expect(button.dataset.slug).toBe('custom-seeded');
+            expect(button.textContent).toContain('B go');
+            expect(button.textContent).toContain('Yours');
+            expect(button.textContent).toContain('Flood Left formation');
+            expect(button.textContent).toContain('B medium straight');
+            button.click();
+            await flushAsync();
+            expect(dom.el('playbook').hidden).toBe(true);
+            const call = sent.find((u) => u.searchParams.get('action') === 'call-play');
+            const detail = Object.fromEntries(new URLSearchParams(call.searchParams.get('outcome') || ''));
+            expect(detail.offense).toBe('custom');
+            expect(detail.base).toBe('pass2');
+            expect(call.href).not.toMatch(/B%20go|B\+go/);
+            // The last play is the designed one, and the book's repeat card is it.
+            expect(JSON.parse(localStorage.getItem('exes-n-ohs-play-settings')).lastPlay).toBe('custom-seeded');
+            // The field is lined up on the base, and B carries the drawn line.
+            const main = await import('../www/xo/js/main.js');
+            const play = main.__test__.play();
+            expect(play.base).toBe('pass2');
+            expect(play.offense).toBe('custom-seeded');
+            const b = play.routes.getObjectByPosition(play.game.objects, 'wr2');
+            expect(b.settings.route.type).toBe('path');
+            expect(b.settings.route.path.points).toHaveLength(2);
+        } finally {
+            delete globalThis.Image;
+        }
+    });
+
+    test('a removed play is out of the grid, never the repeat card, and the note says where it went', async () => {
+        localStorage.setItem(KEY, JSON.stringify({ v: 1, plays: [], hidden: ['pass7'] }));
+        localStorage.setItem('exes-n-ohs-play-settings', JSON.stringify({ lastPlay: 'pass7', defense: '' }));
+        const { body, grid } = await openBook();
+        const cards = grid.children.filter((li) => li.children[0] && li.children[0].dataset.slug === 'pass7');
+        expect(cards).toHaveLength(1);
+        expect(cards[0].hidden).toBe(true);
+        expect(grid.children.some((li) => li.className.includes('is-repeat'))).toBe(false);
+        const note = body.children.find((n) => n.className && n.className.includes('playbook-removed'));
+        expect(note.hidden).toBe(false);
+        expect(note.textContent).toMatch(/One play is out of your book/);
+    });
+
+    test('a deleted-for-good last play falls back to the book at boot rather than an empty field', async () => {
+        localStorage.setItem('exes-n-ohs-play-settings', JSON.stringify({ lastPlay: 'custom-gone', defense: '' }));
+        const { grid } = await openBook();
+        // No repeat card for a play that no longer exists, and the field
+        // behind the book is a real formation, the book's first.
+        expect(grid.children.some((li) => li.className.includes('is-repeat'))).toBe(false);
+        expect(dom.el('playbook').hidden).toBe(false);
+        const main = await import('../www/xo/js/main.js');
+        expect(main.__test__.play().offense).toBe('pass2');
+        // (-100, -50) is where the library parks a man with no formation at
+        // all; db5 sits there in every play, so only the offense is asked.
+        expect(main.__test__.play().game.objects.filter((o) => o.settings.team === 0)
+            .some((o) => o.coords.x === -100 && o.coords.y === -50)).toBe(false);
     });
 });

@@ -115,11 +115,14 @@ export function reportFinal(action, detail = {}) {
  */
 export function playRecord({
     defense, offense, orientation, points, result, throwTo,
-    currentScore, playCount, muted, games, expired = false,
+    currentScore, playCount, muted, games, expired = false, base = '',
 }) {
     return {
         defense, offense, orientation, points, result, throwTo,
         currentScore, playCount, muted, games,
         ...(expired ? { expired: true } : {}),
+        // A designed play's formation, beside `offense: 'custom'`. Absent for
+        // the book's plays, whose record keeps the 2D game's shape exactly.
+        ...(base ? { base } : {}),
     };
 }

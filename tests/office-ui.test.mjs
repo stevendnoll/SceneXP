@@ -870,6 +870,16 @@ describe('the light', () => {
         window.cornerOffice.hour(6.5);
         const at = t.skyTime(new Date(2026, 8, 24, 15, 20));
         expect([at.getDate(), at.getHours(), at.getMinutes()]).toEqual([24, 6, 30]);
+        // On the two days a year the clocks change as well. Midnight plus
+        // the hour in milliseconds put 3 PM at 2 PM on the day they fell
+        // back (Steve's run, 2026-11-01) and would have put it at 4 PM on
+        // the day they spring forward. In a zone with no change, such as
+        // CI's UTC, this is the same check as the one above.
+        window.cornerOffice.hour(15);
+        for (const day of [new Date(2026, 2, 8, 9), new Date(2026, 10, 1, 9)]) {
+            const pinned = t.skyTime(day);
+            expect([pinned.getDate(), pinned.getHours(), pinned.getMinutes()]).toEqual([day.getDate(), 15, 0]);
+        }
         window.cornerOffice.hour(null);
         expect(t.skyTime(new Date(2026, 8, 24, 15, 20)).getHours()).toBe(15);
     });

@@ -20,6 +20,16 @@
  *
  * Every browser API is handed in (`win`), so tests run the whole path with
  * fakes.
+ *
+ * PAINT THE FIRST FRAME BEFORE YOU CAPTURE THE CANVAS (Steve's QA, 2026-11-01).
+ * A recorder started on a canvas nothing has drawn on yet captures that canvas
+ * first: a new canvas is transparent, transparent encodes as black, and
+ * iMessage makes a shared video's poster from its first frame, so every clip
+ * sent by text arrived as a black rectangle. Every caller (X's and O's
+ * clip.js `recordTake`, Derby Day's `openClip`, the avatar's `makeClip`) now
+ * draws its opening frame, then calls `captureStream` and `startRecording`.
+ * Nothing is missed by waiting: Safari's canvas capture samples what the
+ * canvas holds, and the next frame follows within a tick.
  */
 
 export const MIME_PREFERENCE = Object.freeze([
