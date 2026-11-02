@@ -1974,6 +1974,17 @@ const XO_CONFIG = {
      * or beside its own pose's hand, so the two cannot drift apart.
      */
     pose: {
+        /**
+         * THE GLANCE (Steve's QA, 2026-11-01, from the Follow me ride): a
+         * receiver's head turned toward the quarterback or the ball apart
+         * from his body (view.js `glanceFor`, the neck in roster.js
+         * `danceJoints`). `max` is how far the neck turns either way, in
+         * radians; a point further round than that gets the full turn. A
+         * route counts as vertical, so he keeps his eyes downfield until the
+         * throw, while his speed across the field is under `across` of his
+         * speed downfield: a slant's diagonal looks back, a go route does not.
+         */
+        glance: { max: 1.4, across: 0.8 },
         /** Cap on the stride swing, radians at the shoulder. */
         armSwing: 0.55,
         /**

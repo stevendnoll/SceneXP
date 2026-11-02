@@ -378,6 +378,42 @@ export function noteAssignments(objects) {
  * be asked a question with numbers rather than being inferred from a rendered
  * frame, which is the only place any of this used to be visible.
  */
+/**
+ * WHERE A RECEIVER'S HEAD TURNS, APART FROM HIS BODY (Steve's QA, 2026-11-01,
+ * from the Follow me ride: "the avatar doesn't look back at the QB until just
+ * before the ball arrives"). The body's facing (`lookTarget`) is capped for a
+ * running man by `turnFor`, so he is never drawn sprinting backwards, and
+ * that cap is why a crosser never looked back. This is the NECK (the joint
+ * every figure has had since the shared dances), which the body's cap does
+ * not bind: a world point for him to turn his head toward, or null for eyes
+ * where his body faces.
+ *
+ *   crossing the field, or stopped (a screen, a comeback), while the
+ *     quarterback still holds it: the quarterback;
+ *   running a vertical route (downfield faster than across, by
+ *     `pose.glance.across`): nothing, until the ball is thrown;
+ *   the ball in the air: the ball, whoever it is going to;
+ *   anybody else, and any other carry (a runner, a catch made): nothing.
+ *
+ * Pure, and exported for the suite. Speeds and the ball come off the play
+ * objects, which a replay rebuilds from the recording, so a replay and the
+ * clip answer the same way. `standing` is the frame's own reading.
+ */
+export function glanceFor(obj, objects, carrier, { standing = false } = {}) {
+    if (!obj || !obj.settings || !/^wr\d$/.test(obj.settings.position) || obj.settings.team !== 0) return null;
+    const at = (o) => (o ? simToWorld(o.coords.x, o.coords.y, 0) : null);
+    if (!carrier) {
+        const ball = objects.find((o) => o.settings.position === 'ball' && !BENCHED(o));
+        return ball ? at(ball) : null;
+    }
+    if (carrier === obj || carrier.settings.position !== 'qb' || carryFor(carrier, carrier) !== 'throw') return null;
+    const vx = Number(obj.state && obj.state.xSpeed) || 0;
+    const vy = Number(obj.state && obj.state.ySpeed) || 0;
+    const vertical = vx > 0 && Math.abs(vy) < CFG.pose.glance.across * vx;
+    if (!standing && vertical) return null;
+    return at(carrier);
+}
+
 export function lookTarget(obj, objects, carrier, here, standing, blocking) {
     const at = (o) => (o ? simToWorld(o.coords.x, o.coords.y, 0) : null);
 
@@ -1959,6 +1995,22 @@ export function syncFigures(objects, delta = 1 / 60, opts = {}) {
         } else {
             const turn = wrapAngle(figure.userData.facing - figure.rotation.y);
             figure.rotation.y += turn * (1 - Math.exp(-delta * TURN_RESPONSE));
+        }
+
+        // AND WHERE HIS HEAD TURNS, apart from his body (`glanceFor`): the
+        // neck's turn to the point, measured from the body as drawn, held
+        // inside `pose.glance.max` either way. Off the play, blocking, going
+        // for the ball or in the air the body already answers, and the neck
+        // stays with it. roster.js `danceJoints` eases the neck to this, and
+        // a shared dance's own nod and turn outrank it.
+        const glanceAt = (opts.presnap || surveying || offPlay || engagement || going || leapWatch)
+            ? null : glanceFor(obj, objects, carrier, { standing });
+        if (glanceAt) {
+            const turnTo = wrapAngle(Math.atan2(glanceAt.x - p.x, glanceAt.z - p.z) - figure.rotation.y);
+            const max = CFG.pose.glance.max;
+            figure.userData.glance = turnTo > max ? max : (turnTo < -max ? -max : turnTo);
+        } else {
+            figure.userData.glance = null;
         }
 
         // STRIDE ADVANCES WITH DISTANCE COVERED, and now it genuinely does.

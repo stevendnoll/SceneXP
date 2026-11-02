@@ -1080,15 +1080,21 @@ function danceLegs(figure, cel, ease) {
  * so a man finishing a dance straightens rather than snapping. A figure
  * without them (the test stub's) is left alone, and so is a leg's sideways
  * angle when no dance is running, beyond easing it back to the stride's zero.
+ *
+ * AT REST THE NECK STILL TURNS TO `userData.glance` (view.js `glanceFor`,
+ * Steve's QA 2026-11-01): a receiver's head on the quarterback or the ball,
+ * radians to his left, apart from where his body faces. Written there, eased
+ * here, so one place moves the neck and a dance's own turn outranks it.
  */
 function danceJoints(figure, cel, ease) {
     const pose = cel ? cel.pose : null;
     const k = cel ? cel.amount : 0;
+    const glance = Number.isFinite(figure.userData.glance) ? figure.userData.glance : 0;
     for (const name of ['waist', 'neck']) {
         const joint = figure.userData[name];
         if (!joint || !joint.rotation || typeof joint.rotation.x !== 'number') continue;
         const j = pose ? pose[name] : null;
-        const want = j ? [j.x * k, j.y * k, j.z * k] : [0, 0, 0];
+        const want = j ? [j.x * k, j.y * k, j.z * k] : [0, name === 'neck' ? glance : 0, 0];
         joint.rotation.x += (want[0] - joint.rotation.x) * ease;
         joint.rotation.y += (want[1] - joint.rotation.y) * ease;
         joint.rotation.z += (want[2] - joint.rotation.z) * ease;
