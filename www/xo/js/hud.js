@@ -780,7 +780,7 @@ export function hideWelcome() {
     if (card) card.hidden = true;
 }
 
-export function showWelcome(onStart, saved = null, onFresh = null) {
+export function showWelcome(onStart, saved = null, onFresh = null, onPractice = null) {
     const card = el('welcome');
     if (!card) { if (onStart) onStart(); return; }
     const box = el('welcome-actions');
@@ -814,8 +814,56 @@ export function showWelcome(onStart, saved = null, onFresh = null) {
         }, 'and discard the saved one'));
     }
 
+    // PRACTICE MODE (practice.js). A saved game is safe from it, so this button
+    // needs no warning beside it.
+    if (onPractice) {
+        box.appendChild(button('Practice Mode', 'hud-btn', () => {
+            card.hidden = true;
+            onPractice();
+        }, 'with no defense on the field'));
+    }
+
     card.hidden = false;
     start.focus();
+}
+
+/**
+ * THE WELCOME CARD FOR SOMEBODY WHO ARRIVED ON A PRACTICE LINK. The card's words
+ * have already changed (`setPracticeChrome`), a saved real game is not offered
+ * because this is not that game, and the way to the real one is right here.
+ */
+export function showPracticeWelcome(onStart, onRealGame) {
+    const card = el('welcome');
+    if (!card) { if (onStart) onStart(); return; }
+    const box = el('welcome-actions');
+    box.textContent = '';
+    const note = el('welcome-resume');
+    if (note) note.hidden = true;
+    const start = button('Start practice', 'hud-btn hud-btn-primary', () => {
+        card.hidden = true;
+        if (onStart) onStart();
+    });
+    box.appendChild(start);
+    if (onRealGame) box.appendChild(button('Play the real game', 'hud-btn', onRealGame));
+    card.hidden = false;
+    start.focus();
+}
+
+/**
+ * PRACTICE MODE, SAID ON SCREEN: the word in the HUD, the note on the welcome
+ * card, and the body class that swaps the card's few sentences about a defense
+ * (stylesheet, `.real-game-only` and `.practice-only`). So nobody takes a
+ * practice score for a real one, including in a screenshot.
+ */
+let practicing = false;
+
+export function setPracticeChrome(on) {
+    practicing = !!on;
+    const chip = el('hud-practice');
+    if (chip) chip.hidden = !practicing;
+    const note = el('welcome-practice');
+    if (note) note.hidden = !practicing;
+    if (document.body && document.body.classList) document.body.classList.toggle('is-practice', practicing);
 }
 
 /**
@@ -892,7 +940,8 @@ export function showResult(outcome, playNumber, playsPerGame, runningTotal, canR
     points.className = `result-points ${outcome.points > 0 ? 'is-good'
         : outcome.points < 0 ? 'is-bad' : 'is-neutral'}`;
 
-    el('result-running').textContent = `Score ${runningTotal} after ${playNumber} of ${playsPerGame}`;
+    const scoreWord = practicing ? 'Practice score' : 'Score';
+    el('result-running').textContent = `${scoreWord} ${runningTotal} after ${playNumber} of ${playsPerGame}`;
 
     const box = el('result-actions');
     box.textContent = '';
@@ -924,7 +973,7 @@ export function showResult(outcome, playNumber, playsPerGame, runningTotal, canR
 
     announce(`${outcome.headline}. ${outcome.detail} `
         + `${outcome.points > 0 ? 'Plus' : ''}${outcome.points} points. `
-        + `Score ${runningTotal} after play ${playNumber} of ${playsPerGame}.`);
+        + `${scoreWord} ${runningTotal} after play ${playNumber} of ${playsPerGame}.`);
 }
 
 export function hideResult() {

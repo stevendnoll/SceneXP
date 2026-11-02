@@ -92,16 +92,33 @@ export function beaconParams({ kind, outcome, seconds } = {}) {
     return params;
 }
 
+/**
+ * FIELDS EVERY PING CARRIES FROM NOW ON. Practice Mode tags itself here once,
+ * so its fifties cannot be read as real ones and no caller has to remember.
+ * Null is nothing extra.
+ */
+let tag = null;
+
+export function tagReports(fields = null) {
+    tag = fields;
+}
+
+function tagged(detail) {
+    if (!tag) return detail;
+    const outcome = detail && typeof detail.outcome === 'object' ? detail.outcome : {};
+    return { ...detail, outcome: { ...outcome, ...tag } };
+}
+
 /** Report one thing the visitor did. Returns whether it was sent. */
 export function report(action, detail = {}, now = Date.now()) {
     if (!mayReport(action, now)) return false;
-    track(action, beaconParams(detail));
+    track(action, beaconParams(tagged(detail)));
     return true;
 }
 
 /** The same, for a page on its way out, where an image ping gets cancelled. */
 export function reportFinal(action, detail = {}) {
-    trackFinal(action, beaconParams(detail));
+    trackFinal(action, beaconParams(tagged(detail)));
 }
 
 /**

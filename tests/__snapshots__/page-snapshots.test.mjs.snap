@@ -6352,7 +6352,7 @@ html [lang="en"]
           p
             "The pings are gathered into a public summary for each day, which anyone can read, and which Steve's office displays inside the world itself as a little visitor dashboard. Each visit appears under a throwaway label, such as "Curious Otter," as a timeline of its pings and the time each one arrived, along with its language setting and whether it came from a phone or a computer. The puzzle token stays private, and the summary carries no names, no IP addresses, and no browser fingerprints. Because each visit's pings are listed with their times, someone who already knew exactly when you visited could recognize your visit in the summary."
           p
-            "X's and O's notes a little more, because the game is the plays. Each time you call a play, snap the ball, or throw it, and each time a play ends, it records the play and the defense, the receiver you picked, how it turned out and what it was worth, along with your running score, whether the sound was on, and whether your screen was held upright or sideways. When you share a play, it notes only that a clip or a picture was made, shared or saved, how many seconds the clip ran and which of the four views it was from. The clip itself never leaves your device. If you design a play, it notes only that one was saved, removed or restored and which formation it started from, never its name or the lines you drew. These notes appear in the public summary along with the rest of the visit. It never records the size of your screen or anything else that could pick your device out from anyone else's."
+            "X's and O's notes a little more, because the game is the plays. Each time you call a play, snap the ball, or throw it, and each time a play ends, it records the play and the defense, the receiver you picked, how it turned out and what it was worth, along with your running score, whether the sound was on, and whether your screen was held upright or sideways. When you share a play, it notes only that a clip or a picture was made, shared or saved, how many seconds the clip ran and which of the four views it was from. The clip itself never leaves your device. If you design a play, it notes only that one was saved, removed or restored and which formation it started from, never its name or the lines you drew. In Practice Mode, these notes also say that it was a practice game. These notes appear in the public summary along with the rest of the visit. It never records the size of your screen or anything else that could pick your device out from anyone else's."
           p
             "Whitestone Home Care sends a ping for each button you press, saying only which one and where, such as adding a kitchen from Maya's suggestions, along with whether a demo booking went through and whether a cleaner's PIN opened the checklist. It never sends anything you typed, a price, a date or time, or the PIN itself."
           h2
@@ -8858,7 +8858,7 @@ html [data-ui-theme="neon" lang="en"]
         "url": "https://www.scenexp.com/xo/",
         "name": "X's and O's",
         "image": "https://www.scenexp.com/xo/assets/og-xo.jpg?v=1",
-        "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's five views, one of them over the quarterback's shoulder, and with an avatar saved on the Your Avatar page you can play as any player on the field. You can also design your own plays by drawing routes on a formation, kept in your browser.",
+        "description": "A browser-based 3D American football game. You are always on offense: call a play from the playbook, snap the ball, and choose a receiver or keep it and run. Ten plays make a game, and both teams and the field can be dressed in any colors, such as your favorite team and its rival. Any play can be shared as a short video clip made on your device, from any of the replay's five views, one of them over the quarterback's shoulder, and with an avatar saved on the Your Avatar page you can play as any player on the field. You can also design your own plays by drawing routes on a formation, kept in your browser, and try them out in Practice Mode, a shareable game with no defense on the field.",
         "genre": [
           "Sports",
           "Strategy"
@@ -8905,7 +8905,7 @@ html [data-ui-theme="neon" lang="en"]
     title
       "X's and O's | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=28" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=29" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -8951,6 +8951,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="../shared/js/warmup-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/telemetry-1.0.0.min.js" rel="modulepreload"]
     link [href="js/telemetry.min.js" rel="modulepreload"]
+    link [href="js/practice.min.js" rel="modulepreload"]
     link [href="../shared/js/people-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/avatar-figure-1.0.0.min.js" rel="modulepreload"]
     link [href="../shared/js/dance-1.0.0.min.js" rel="modulepreload"]
@@ -8974,7 +8975,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/lead.min.js" rel="modulepreload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=28" rel="stylesheet"]
+    link [href="css/experience.min.css?v=29" rel="stylesheet"]
     link [href="../shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
@@ -9017,11 +9018,16 @@ html [data-ui-theme="neon" lang="en"]
             "X's and O's"
         p#welcome-intro.card-detail
           "Ten plays, and you are on offense for every one of them. The farther you carry the ball, the more the play is worth."
+        p#welcome-practice.card-detail.welcome-practice [hidden]
+          "You are in Practice Mode. There is no defense on the field, so you can learn the routes and try out your own plays. Practice scores never touch your best score or a game you have saved."
         ol.welcome-steps
           li
             strong
               "Call a play."
-            "Pick one from the playbook, and choose a defense to face or leave it to chance."
+            "Pick one from the playbook"
+            span.real-game-only
+              ", and choose a defense to face or leave it to chance"
+            "."
           li
             strong
               "Snap the ball."
@@ -9029,11 +9035,19 @@ html [data-ui-theme="neon" lang="en"]
           li
             strong
               "Throw or run."
-            "Hit a receiver, or keep it yourself and see how far you get. You have ten seconds from the snap to make up your mind, and holding on past that is a sack."
+            "Hit a receiver, or keep it yourself and see how far you get. You have ten seconds from the snap to make up your mind, and holding on past that is"
+            span.real-game-only
+              "a sack"
+            span.practice-only
+              "five points off"
+            "."
           li
             strong
               "Jump for it."
-            "While the ball is in the air, a ring on the grass marks where it will come down. Press Jump or tap your receiver to send him up for it. The button lights up as the ball arrives. Jump too early or too late and the pass can sail past him or be picked off. If you would rather just watch, turn on Auto jump in the playbook."
+            "While the ball is in the air, a ring on the grass marks where it will come down. Press Jump or tap your receiver to send him up for it. The button lights up as the ball arrives. Jump too early or too late and the pass can sail past him"
+            span.real-game-only
+              "or be picked off"
+            ". If you would rather just watch, turn on Auto jump in the playbook."
           li
             strong
               "Share the play."
@@ -9099,8 +9113,11 @@ html [data-ui-theme="neon" lang="en"]
           li
             span.ladder-pts.is-bad
               "-5"
-            "sacked holding the ball"
-          li
+            span.real-game-only
+              "sacked holding the ball"
+            span.practice-only
+              "out of time holding the ball"
+          li.real-game-only
             span.ladder-pts.is-bad
               "-10"
             "intercepted"
@@ -9228,6 +9245,8 @@ html [data-ui-theme="neon" lang="en"]
         div.playbook-body
     div#game-hud.hud [hidden]
       div#hud-bar.hud-bar
+        span#hud-practice.hud-stat.hud-practice [hidden]
+          "Practice"
         span.hud-stat
           "Play"
           strong#hud-play

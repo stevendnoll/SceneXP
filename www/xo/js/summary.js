@@ -38,27 +38,37 @@ export function writeBest(total) {
  *
  * `plays` is the list of per-play outcomes in order. `onAgain` is called when
  * the visitor wants another ten.
+ *
+ * `practice` is `{ onRealGame }` for a Practice Mode game (practice.js): the
+ * best score is left alone, and there is no score to brag about, because with
+ * no defense on the field the next thing worth doing is the real game.
  */
-export function showSummary(plays, onAgain, { onShare = null } = {}) {
+export function showSummary(plays, onAgain, { onShare = null, practice = null } = {}) {
     const card = el('summary');
     if (!card) return;
 
     const stats = summarise(plays);
     const previousBest = readBest();
-    const isRecord = stats.total > previousBest;
+    const isRecord = !practice && stats.total > previousBest;
     if (isRecord) writeBest(stats.total);
 
     el('summary-total').textContent = `${stats.total}`;
-    el('summary-verdict').textContent = verdictFor(stats.total);
+    el('summary-verdict').textContent = practice
+        ? 'Practice complete. The defense is ready whenever you are.'
+        : verdictFor(stats.total);
 
     el('summary-line').textContent =
         `${stats.scored} of ${stats.plays} plays scored`
         + (stats.gaveAway ? `, and ${stats.gaveAway} cost you.` : '.');
 
     const bestLine = el('summary-best');
-    bestLine.textContent = isRecord
-        ? (previousBest > 0 ? `A new best, past ${previousBest}.` : 'A new best.')
-        : `Your best is ${previousBest}.`;
+    if (practice) {
+        bestLine.textContent = 'Practice scores do not count toward your best.';
+    } else {
+        bestLine.textContent = isRecord
+            ? (previousBest > 0 ? `A new best, past ${previousBest}.` : 'A new best.')
+            : `Your best is ${previousBest}.`;
+    }
 
     // The play-by-play, as a real list so it reads correctly out loud.
     const list = el('summary-plays');
@@ -87,6 +97,25 @@ export function showSummary(plays, onAgain, { onShare = null } = {}) {
 
     const box = el('summary-actions');
     box.textContent = '';
+
+    if (practice) {
+        const more = document.createElement('button');
+        more.type = 'button';
+        more.className = 'hud-btn';
+        more.textContent = 'Practice again';
+        more.addEventListener('click', () => { hideSummary(); if (onAgain) onAgain(); });
+        box.appendChild(more);
+        const real = document.createElement('button');
+        real.type = 'button';
+        real.className = 'hud-btn hud-btn-primary';
+        real.textContent = 'Play the real game';
+        real.addEventListener('click', () => { if (practice.onRealGame) practice.onRealGame(); });
+        box.appendChild(real);
+        fillPromo();
+        card.hidden = false;
+        real.focus();
+        return stats;
+    }
 
     // SHARING IS THE POINT OF A SCORE. A number nobody else ever sees is a
     // number that stops mattering the moment the card closes, and this is the
