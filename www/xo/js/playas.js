@@ -21,6 +21,7 @@
  */
 import { XO_CONFIG as CFG } from './config.min.js';
 import { createPlay, lineUp, OFFENSIVE_PLAYS } from './play.min.js';
+import { resolvePlay } from './design.min.js';
 
 /** The slot a visitor is when they have chosen nothing, and the one every
  *  stored value that is not a slot falls back to. */
@@ -100,11 +101,16 @@ export function playingLine(id) {
  * answer kept. The defense is named rather than rolled because it changes
  * nothing here: no defense benches anybody on offense. An unknown slug benches
  * nobody.
+ *
+ * A DESIGNED PLAY BENCHES WHOEVER ITS BASE FORMATION BENCHES, because that is
+ * the formation it lines up in (play.js `lineUp`). It may arrive as the record
+ * or as anything `resolvePlay` understands.
  */
 let probe = null;
 const benchings = new Map();
 
-export function benchedIn(slug) {
+export function benchedIn(play) {
+    const slug = resolvePlay(play).base;
     if (!OFFENSIVE_PLAYS.includes(slug)) return new Set();
     if (!benchings.has(slug)) {
         if (!probe) probe = createPlay();

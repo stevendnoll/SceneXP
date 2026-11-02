@@ -25,6 +25,7 @@ import { MotionClass } from './motion.min.js';
 import { ExesAndOhsStateClass } from './playstate.min.js';
 import { classifyPlay } from './scoring.min.js';
 import { ballHeight, leapCatches, inTheAir } from './jump.min.js';
+import { resolvePlay, toSim, pathState, PATH_PLAYERS, QB_BEHIND } from './design.min.js';
 
 /** How many resolution passes, and how far apart bodies are held. The distance
  *  is config's, in metres, and the simulation works in field units, so this is
@@ -219,13 +220,25 @@ export function lineUp(play, offensive = 'pass2', defensive = '') {
     play.game.objects = ROSTER.map(([group, position, team], i) =>
         play.formations.generateTeamFormationObject(st, team, i, group, position));
 
-    play.formations.setTeamFormation(play.game.objects, 0, offensive);
+    /**
+     * A SLUG OR A DESIGNED PLAY (specs/custom-plays-PRD, 2026-11-02). Either
+     * way the library lines the offense up on a formation it knows, `base`,
+     * which is the slug itself for a play from the book. That hands a designed
+     * play its linemen, its benching, the receivers' letters and the
+     * quarterback's pocket for free, and keeps the 144KB formation library
+     * unaware that designed plays exist. The drawn lines are laid over the
+     * top at the end of this function, see `applyLines`.
+     */
+    const chosen = resolvePlay(offensive);
+    play.formations.setTeamFormation(play.game.objects, 0, chosen.base);
     play.formations.setTeamFormation(play.game.objects, 1, defensive);
     // WHAT WAS ACTUALLY LINED UP, for the usage log. An empty `defensive` is the
     // library's own signal to roll one, and the roll is only knowable here: the
     // library keeps the last formation it set on its state, and the defense is
-    // set second.
-    play.offense = offensive;
+    // set second. `offense` is the play as called, a designed play's id for
+    // one of those, and `base` the formation it stood in.
+    play.offense = chosen.id;
+    play.base = chosen.base;
     play.defense = (play.formations.state && play.formations.state.formation) || defensive || '';
 
     // WHO IS BENCHED IS DECIDED HERE, ONCE, AND REMEMBERED.
@@ -280,7 +293,54 @@ export function lineUp(play, offensive = 'pass2', defensive = '') {
     // without this the crowd is exactly what the pre-snap frame shows.
     separate(play, separationUnits(), SEPARATION.lineUp);
     keepInbounds(play);
+    // AFTER the settle, so every line begins where its man actually stands.
+    if (chosen.routes) applyLines(play, chosen.routes);
     return play.game.objects;
+}
+
+/**
+ * LAY THE DRAWN LINES OVER THE FORMATION.
+ *
+ * Every receiver on the field gets a `path` route: the line he was drawn, in
+ * simulation units, beginning at the spot the line-up left him on, or a line
+ * of one point when he was not drawn one, which is "hold at the line of
+ * scrimmage and block" (PRD Decision 3). His boundaries are the whole field,
+ * and zero means "no wall" to the ported `checkBoundaries`, so the four edges
+ * are written as the field's own extent rather than as zeros on two sides.
+ *
+ * THE QUARTERBACK KEEPS HIS PORTED ROUTE and gains a `path` beside it, because
+ * the pocket's boundaries, the blitz evasion and the run after a decision are
+ * all his ported behavior and only the first few seconds are drawn. His line
+ * is held behind the line of scrimmage (`QB_BEHIND`).
+ *
+ * `obj.state.formation` stays the base slug. It is what the after-the-catch
+ * switches in routes.js read, and a designed play should run after the catch
+ * the way the formation it stood in does.
+ */
+function applyLines(play, routes) {
+    const m = play.playState.state.measurements;
+    for (const obj of play.game.objects) {
+        const who = obj.settings.position;
+        if (obj.settings.team !== 0 || obj.settings.benched || !PATH_PLAYERS.includes(who)) continue;
+        const drawn = Array.isArray(routes[who]) ? routes[who].map((p) => toSim(p, m)) : null;
+        const start = { x: obj.coords.x, y: obj.coords.y };
+        if (who === 'qb') {
+            if (!drawn || drawn.length === 0) continue;
+            const limit = m.lineInterval * QB_BEHIND;
+            const points = drawn.map((p) => ({ x: Math.min(p.x, limit), y: p.y }));
+            points[0] = start;
+            obj.settings.route.path = pathState(points);
+            continue;
+        }
+        const points = drawn && drawn.length > 0 ? drawn : [start];
+        points[0] = start;
+        obj.settings.route = {
+            boundaries: { top: 0, left: 0, right: m.width, bottom: m.height },
+            break: 0,
+            type: 'path',
+            path: pathState(points),
+        };
+    }
 }
 
 /** Snap it. From here the routes run themselves. */

@@ -373,6 +373,18 @@ const CATCH_FAR_SCALE = 0.42;   // what the receiver's box is multiplied by ther
  */
 const STEER_DEADBAND = 0.15;
 
+/**
+ * HOW FAR AHEAD ON A DRAWN LINE A MAN AIMS, in metres (specs/custom-plays-PRD,
+ * 2026-11-02). A designed play's receiver follows the line the visitor drew by
+ * steering at a point this far along it (routes.js `runPath`, design.js
+ * `followPath`), which pulls him onto the line and along it, and rounds each
+ * corner by about this much. One metre is under a body width at `figureScale`,
+ * so a drawn cut still reads as a cut, and above the steer deadband, so he
+ * never arrives at his carrot and stalls on it. Hands to the port through
+ * `formationSettings` like `steerDeadband` beside it.
+ */
+const PATH_LOOKAHEAD = 1.0;
+
 
 /**
  * ...AND HOW LONG A HEADING IS AVERAGED OVER BEFORE A PASS IS LED OFF IT.
@@ -690,6 +702,9 @@ function formationSettings() {
         // `steerDeadband` in motion.js for what the ported steer does without
         // it, and `STEER_DEADBAND` above for why this is the value.
         steerDeadband: STEER_DEADBAND / UNITS_TO_METRES,
+        // How far ahead on a drawn line a man aims, in FIELD UNITS. See
+        // `PATH_LOOKAHEAD`.
+        pathLookahead: PATH_LOOKAHEAD / UNITS_TO_METRES,
         // How much of a defender's shove a man breaking free ignores, while
         // `play.breakContact` says he is breaking free. See `ESCAPE_SHOVE`.
         escapeShove: ESCAPE_SHOVE,
