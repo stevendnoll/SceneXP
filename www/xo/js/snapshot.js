@@ -18,11 +18,25 @@
  * figure exactly as it was: a quaternion round trip rewraps a yaw past half a
  * turn, and the view eases from the yaw it finds.
  *
+ * AND THE SPOT A NODE IS KEPT ON, `userData.at`, BECAUSE A TRANSFORM IS NOT THE
+ * WHOLE ANSWER. A marker is re-seated from it on every frame (markers.js
+ * `setPulse`), and a figure eases and walks from it (view.js `syncFigures`). So
+ * a snapshot that put back only the position held for exactly one frame: after
+ * the sheet was closed on a clip still recording, every ring slid to where the
+ * take had left it and stood there with nobody on it (Steve's QA, 2026-11-02).
+ *
  * No THREE import: it reads and writes the fields every Object3D has, so the
  * suite measures it against a real three.
  */
 
 const STRIDE = 10;
+
+/** A node's `userData.at`, copied so a later frame cannot reach into the
+ *  snapshot. Null for a node that is not kept on a spot. */
+function spotOf(o) {
+    const at = o.userData && o.userData.at;
+    return at ? { ...at } : null;
+}
 
 /** Every node under `roots`, in traversal order, and its transform. A root
  *  that is missing is skipped. */
@@ -45,20 +59,23 @@ export function captureDrawn(roots) {
         data[k + 8] = o.scale.z;
         data[k + 9] = o.visible ? 1 : 0;
     });
-    return { nodes, data };
+    return { nodes, data, spots: nodes.map(spotOf) };
 }
 
 /** Put a snapshot back on the nodes it was taken from. The rotation keeps
  *  each node's own Euler order, which `set` does not touch. */
 export function applyDrawn(snap) {
     if (!snap || !snap.nodes) return false;
-    const { nodes, data } = snap;
+    const { nodes, data, spots } = snap;
     nodes.forEach((o, i) => {
         const k = i * STRIDE;
         o.position.set(data[k], data[k + 1], data[k + 2]);
         o.rotation.set(data[k + 3], data[k + 4], data[k + 5]);
         o.scale.set(data[k + 6], data[k + 7], data[k + 8]);
         o.visible = data[k + 9] === 1;
+        // Only a node that had a spot or has one now: most nodes never do, and
+        // a joint has no business growing an `at` of null.
+        if (o.userData && (spots[i] || o.userData.at)) o.userData.at = spots[i] ? { ...spots[i] } : null;
     });
     return true;
 }
