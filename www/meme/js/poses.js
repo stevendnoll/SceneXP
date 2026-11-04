@@ -39,6 +39,17 @@
  *   aim       the arm straight out in front at shoulder height, a little
  *             across the body, for a thing held: the hand at
  *             (-0.14, 1.39, 0.56), the forearm level along +z
+ *   ring      the hand raised beside the shoulder, the forearm up, turned so a
+ *             camera the figure stands 0.3 turned from sees the thumb's side
+ *             and the back of the hand about equally, which faces the ring
+ *             (leaning out toward the thumb, hands-1.0.0 `RING.open`) straight
+ *             at it with nothing behind the hole: the hand at
+ *             (-0.35, 1.52, 0.25) (2026-11-03)
+ *   drape     BOTH arms, reaching a medal's ribbon round the neck of someone
+ *             standing just in front and to the figure's right, at the box
+ *             spots The Medal names (`DRAPE`): the hands at (-0.14, 1.42,
+ *             0.54) and (-0.05, 1.42, 0.39), either side of that neck, above
+ *             its shoulders so the camera sees them (2026-11-03)
  *
  * tests/meme-poses.test.mjs holds the hands to those regions, so a rig edit
  * that moves them is caught.
@@ -69,6 +80,12 @@ export const ARM_POSES = Object.freeze({
     shake: Object.freeze({ z: -0.06, x: -0.84, fore: -1.28, twist: 1.22 }),
     point: Object.freeze({ z: 0.87, x: -1.09, fore: -0.51, twist: 1.48 }),
     aim: Object.freeze({ z: -0.13, x: -1.76, fore: 0.07, twist: 1.14 }),
+    ring: Object.freeze({ z: 0.72, x: -1.21, fore: -1.8, twist: -1.85 }),
+    // Both arms named: neither rests.
+    drape: Object.freeze({
+        right: Object.freeze({ z: -0.13, x: -1.55, fore: -0.43, twist: 0 }),
+        left: Object.freeze({ z: -0.72, x: -1.14, fore: -1.13, twist: 0 })
+    }),
     lookBack: null
 });
 
@@ -78,7 +95,13 @@ export const ARM_POSES = Object.freeze({
  *  profile, and a thing held in the fist stands upright, its barrel past
  *  the knuckles. */
 export const POINTING = Object.freeze(['point']);
-export const FISTED = Object.freeze(['aim']);
+export const FISTED = Object.freeze(['aim', 'drape']);
+
+/** The poses that make the finger-and-thumb ring of the leading hand. */
+export const RINGED = Object.freeze(['ring']);
+
+/** The poses that lead with both arms, so a hand shape goes on both. */
+export const TWO_ARMED = Object.freeze(['drape']);
 
 /** The poses whose leading hand stays the rig's open hand but is drawn
  *  at the fist's larger size, so every action hand is one size (Steve,
@@ -90,6 +113,14 @@ export const ENLARGED = Object.freeze(['dismiss', 'approve', 'present']);
  *  radians from facing each other toward the camera. */
 export const HANDSHAKE = Object.freeze({ gap: 0.8, aside: 0.23, turn: 0.5 });
 
+/** Where The Medal stands its two figures, `at` [x, z] in the box and `turn`
+ *  radians: the `receiver` facing the camera, the `giver` behind it on the
+ *  camera's right, turned to it. `drape` is solved for these spots. */
+export const DRAPE = Object.freeze({
+    receiver: Object.freeze({ at: Object.freeze([-0.18, 0.12]), turn: 0.2 }),
+    giver: Object.freeze({ at: Object.freeze([0.26, -0.1]), turn: -0.85 })
+});
+
 /** How far the head turns for each pose, radians (a figure that turns its
  *  back looks back over its shoulder). Which way is the figure's `look`. */
 export const HEAD_TURNS = Object.freeze({
@@ -100,6 +131,8 @@ export const HEAD_TURNS = Object.freeze({
     shake: 0,
     point: 0.35,
     aim: 0,
+    ring: 0,
+    drape: 0,
     lookBack: 0.95
 });
 
@@ -134,12 +167,14 @@ export const SIDES = Object.freeze(['right', 'left']);
 /** The `setPose` pose for `id`: the leading arm on `side` ('right' or
  *  'left', the figure's own), the other at rest, the hand's `twist` about
  *  the forearm the pose's own unless given (radians; a template gives one
- *  where two figures share a pose but not a stance, The Handshake). Rest
- *  for `stand` or an unknown id. */
+ *  where two figures share a pose but not a stance, The Handshake). A pose
+ *  that names both arms (`TWO_ARMED`) is itself whatever the side. Rest for
+ *  `stand` or an unknown id. */
 export function armsFor(id, side = 'right', twist = undefined) {
     const lead = ARM_POSES[id];
     const rest = { ...REST };
     if (!lead) return { right: { ...rest }, left: { ...rest } };
+    if (lead.right && lead.left) return { right: { ...lead.right }, left: { ...lead.left } };
     const arm = Number.isFinite(twist) ? { ...lead, twist } : { ...lead };
     return side === 'left' ? { right: rest, left: arm } : { right: arm, left: rest };
 }

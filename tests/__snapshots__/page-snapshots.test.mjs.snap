@@ -3718,7 +3718,7 @@ html [lang="en"]
                     h3
                       "Meme Studio"
                     p
-                      "Your avatar stars in a meme built from small lit 3D boxes. Pick one of ten templates, type a caption for each panel, choose the faces, and bring a friend's avatar in too. Then share it as a picture, or as a link your friend can open and remix with their own avatar."
+                      "Your avatar stars in a meme built from small lit 3D boxes. Pick one of fourteen templates, type a caption for each panel, choose the faces, and bring a friend's avatar in too. Then share it as a picture, or as a link your friend can open and remix with their own avatar."
                     p.experience-date
                       "Released"
                       time [datetime="2026-10-28"]
@@ -5314,6 +5314,10 @@ html [lang="en"]
     link [href="js/scenes/space.min.js" rel="modulepreload"]
     link [href="js/scenes/fine.min.js" rel="modulepreload"]
     link [href="js/scenes/handshake.min.js" rel="modulepreload"]
+    link [href="js/scenes/buttons.min.js" rel="modulepreload"]
+    link [href="js/scenes/hall.min.js" rel="modulepreload"]
+    link [href="js/scenes/medal.min.js" rel="modulepreload"]
+    link [href="js/scenes/wear.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/meme.min.css?v=7" rel="stylesheet"]

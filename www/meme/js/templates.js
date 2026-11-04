@@ -21,11 +21,14 @@
  *             stand-in with none saved) or 'random' (a cast member)
  *   cells     one per grid entry, in reading order:
  *     figures   who stands in it (none for a plain caption cell): `role`,
+ *               a `name` for its label's field when two figures share a role,
  *               `pose` (poses.js) on `side` (the arm that leads, 'right'
  *               unless said) with the head turned `look` ('right' or
  *               'left' by the pose's measure, or radians, positive toward
  *               the figure's left; toward the leading arm unless said)
- *               and nodded `nod` radians (negative looks up), its legs in
+ *               and nodded `nod` radians (negative looks up), its eyes rolled
+ *               `gaze` radians in that head (the same sign) with the whites
+ *               `eyes` times their size, its legs in
  *               a `stride` (radians, the right leg forward when positive),
  *               the leading hand's `twist` about the forearm (radians,
  *               the pose's own unless given), where its label pins
@@ -41,7 +44,10 @@
  *               2026-10-28).
  *     captions  the slots, 'top', 'bottom' and/or 'center', in that order,
  *               a `{ label }` pinned to a figure, or a `{ prop }` drawn on
- *               a surface the cell's scene names (the chart's sheet)
+ *               a surface the cell's scene names (the chart's sheet), with
+ *               the `name` its field goes by ("On the board" unless given)
+ *               and where on the surface it sits (`align`, a slot, 'top'
+ *               unless given)
  *     camera    `{ eye, aim, fov }` in the box's own coordinates (its
  *               origin at the middle of its floor, +z toward the open side)
  *     backdrop  the back wall's color, or the box's default
@@ -346,7 +352,113 @@ const FINE_TEMPLATE = {
     }]
 };
 
-export const TEMPLATES = deepFreeze([SURPRISED, PANIC, NOPE_YEP, THEN_NOW, GALAXY_BRAIN, PLAN, HEAD_TURN, HANDSHAKE, ALWAYS, FINE_TEMPLATE]);
+/** Two Buttons (template 14): two wide panels, the control panel above with
+ *  the visitor's words on the plate under each button (scenes/buttons.js),
+ *  and the visitor below, sweating over it. The panel's camera shows just
+ *  over a meter of wall: at the widest picture's panel that stops short of
+ *  the side wall's shadow strip (config.light), and at the narrowest it still
+ *  holds both plates. The face's stands a little closer than FACE_CAMERA and
+ *  a little higher, for a caption below rather than above. */
+const BUTTONS_CAMERA = { eye: [0, 1.15, 1.24], aim: [0, 1.1, -0.7], fov: 30 };
+const SWEAT_CAMERA = { eye: [0, 1.62, 1.05], aim: [0, 1.55, 0], fov: 28 };
+const TWO_BUTTONS = {
+    id: 'twoButtons',
+    title: 'Two Buttons',
+    line: 'Two choices, one sweaty brow.',
+    order: 14,
+    grid: [[{ span: 1 }], [{ span: 1 }]],
+    roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
+    cells: [
+        {
+            figures: [],
+            captions: [{ prop: 'left', name: 'Left button', align: 'center' }, { prop: 'right', name: 'Right button', align: 'center' }],
+            camera: BUTTONS_CAMERA,
+            backdrop: '#6E7B87',
+            scene: 'buttons'
+        },
+        { figures: [you({ expression: 'sweat' })], captions: ['bottom'], camera: SWEAT_CAMERA, backdrop: '#E7C9A0' }
+    ]
+};
+
+/** The Side Glance (template 12): two tall panels, the one figure turned
+ *  toward the camera's right in both, with nothing changed between them but
+ *  the eyes (Steve, 2026-11-03: the character never faces the camera): a
+ *  sideways look back at the camera, then straight ahead, past it. A flat
+ *  face, the whites a size up so the eyes do all the work, and any dark lenses
+ *  made clear, since a meme of eyes needs them seen; the frames stay. */
+const GLANCE_TURN = 0.7;
+const GLANCE_CAMERA = { eye: [0.02, 1.64, 1.5], aim: [0.02, 1.58, 0], fov: 28 };
+const glanceCell = (gaze) => ({
+    figures: [you({ expression: 'deadpan', turn: GLANCE_TURN, gaze, eyes: 1.5, overrides: { lensColor: 'clear' } })],
+    captions: ['top'],
+    camera: GLANCE_CAMERA,
+    backdrop: '#BFD9C8'
+});
+const SIDE_GLANCE = {
+    id: 'sideGlance',
+    title: 'The Side Glance',
+    line: 'You saw nothing.',
+    order: 12,
+    grid: [[{ span: 1 }, { span: 1 }]],
+    roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
+    // Just past the camera, so the look reads as a look, and no further: the
+    // iris sinks into the skin at the eye's rim.
+    cells: [glanceCell(-0.72), glanceCell(0)]
+};
+
+/** The Medal (template 11): one panel, the visitor twice over, one hanging a
+ *  medal on the other (scenes/medal.js), on a curtained stage with no seal or
+ *  flag. The receiver faces the camera, the giver stands behind on the camera's
+ *  right with both hands at the ribbon behind the neck (poses.js `drape`, solved
+ *  for these spots), the head turned round to show a face. A label over each
+ *  head, clear of the medal, as The Handshake's clear the clasp. */
+const MEDAL = {
+    id: 'medal',
+    title: 'The Medal',
+    line: 'Awarded by you, to you.',
+    order: 11,
+    grid: [[{ span: 1 }]],
+    roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
+    cells: [{
+        figures: [
+            { role: 'you', name: 'You, receiving', pose: 'stand', expression: 'bigGrin', nod: 0.1, at: [-0.18, 0.12], turn: 0.2, labelBelow: -0.2 },
+            { role: 'you', name: 'You, giving', pose: 'drape', expression: 'bigGrin', look: 0.45, at: [0.26, -0.1], turn: -0.85, labelBelow: -0.2 }
+        ],
+        captions: [{ label: 0 }, { label: 1 }, 'bottom'],
+        camera: { eye: [0.03, 1.32, 2.9], aim: [0.03, 1.2, 0], fov: 34 },
+        backdrop: '#2C3E7A',
+        floor: '#34384C',
+        paint: { wall: 'curtain' },
+        scene: 'medal'
+    }]
+};
+
+/** Not That Simple (template 13): one panel, the visitor explaining a fine
+ *  point with a raised hand, the finger and thumb in a ring (poses.js `ring`),
+ *  in a stone hall by torchlight, in a plain cloak (scenes/hall.js). The hand
+ *  is on the camera's left, against the dark of the wall, the torch on the
+ *  right. Dark plain clothes under the cloak are a costume; nothing more of
+ *  anyone's character is added. */
+const CLOAKED = { shirt: 'x3a2e26', sleeves: 'long', bottom: 'pants', bottomColor: 'x2b2420', shoeColor: 'black', hat: 'none' };
+const NOT_THAT_SIMPLE = {
+    id: 'notThatSimple',
+    title: 'Not That Simple',
+    line: 'Easier said than done.',
+    order: 13,
+    grid: [[{ span: 1 }]],
+    roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
+    cells: [{
+        figures: [{ role: 'you', pose: 'ring', side: 'right', expression: 'raisedBrow', look: 0.05, at: [0.1, 0], turn: -0.3, overrides: CLOAKED }],
+        captions: ['top', 'bottom'],
+        camera: { eye: [0.03, 1.42, 1.95], aim: [0.03, 1.36, 0], fov: 34 },
+        backdrop: '#6A5F52',
+        floor: '#4A423A',
+        paint: { wall: 'stone' },
+        scene: 'hall'
+    }]
+};
+
+export const TEMPLATES = deepFreeze([SURPRISED, PANIC, NOPE_YEP, THEN_NOW, GALAXY_BRAIN, PLAN, HEAD_TURN, HANDSHAKE, ALWAYS, FINE_TEMPLATE, MEDAL, SIDE_GLANCE, NOT_THAT_SIMPLE, TWO_BUTTONS]);
 
 /** The templates in the picker's order. */
 export function byOrder(templates = TEMPLATES) {
@@ -370,7 +482,7 @@ export function slotsOf(template) {
     const out = [];
     template.cells.forEach((cell, i) => {
         for (const slot of cell.captions) {
-            if (slot && typeof slot === 'object' && slot.prop) out.push({ cell: i, slot: 'prop', prop: slot.prop });
+            if (slot && typeof slot === 'object' && slot.prop) out.push({ cell: i, slot: 'prop', prop: slot.prop, name: slot.name });
             else if (slot && typeof slot === 'object') out.push({ cell: i, slot: 'label', figure: slot.label });
             else out.push({ cell: i, slot });
         }
@@ -426,12 +538,15 @@ export function validateTemplate(t, { expressions, poses, scenes = [], paints = 
         for (const f of cell.figures || []) {
             figures++;
             if (!roles.some((r) => r.id === f.role)) bad.push(`${here}: figure's role "${f.role}" is not declared`);
+            if (f.name !== undefined && (typeof f.name !== 'string' || !f.name)) bad.push(`${here}: a figure's name must be words`);
             if (!poses.includes(f.pose)) bad.push(`${here}: pose "${f.pose}" is not one the scene knows`);
             if (!expressions.includes(f.expression)) bad.push(`${here}: expression "${f.expression}" is not one the scene knows`);
             if (f.side !== undefined && !sides.includes(f.side)) bad.push(`${here}: side "${f.side}" is not right or left`);
             if (f.look !== undefined && !sides.includes(f.look) && !Number.isFinite(f.look)) bad.push(`${here}: look must be right, left or radians`);
             if (f.stride !== undefined && !Number.isFinite(f.stride)) bad.push(`${here}: stride must be radians`);
             if (f.nod !== undefined && !Number.isFinite(f.nod)) bad.push(`${here}: nod must be radians`);
+            if (f.gaze !== undefined && !Number.isFinite(f.gaze)) bad.push(`${here}: gaze must be radians`);
+            if (f.eyes !== undefined && !(f.eyes > 0)) bad.push(`${here}: eyes must be a size above zero`);
             if (f.twist !== undefined && !Number.isFinite(f.twist)) bad.push(`${here}: twist must be radians`);
             if (f.labelBelow !== undefined && !Number.isFinite(f.labelBelow)) bad.push(`${here}: labelBelow must be meters`);
             if (f.glow !== undefined && !(f.glow >= 0 && f.glow <= 1)) bad.push(`${here}: glow must be 0 to 1`);
@@ -442,6 +557,8 @@ export function validateTemplate(t, { expressions, poses, scenes = [], paints = 
             if (slot && typeof slot === 'object' && slot.prop !== undefined) {
                 if (typeof slot.prop !== 'string' || !slot.prop) bad.push(`${here}: a prop slot needs the surface's name`);
                 else if (cell.scene === undefined) bad.push(`${here}: caption on "${slot.prop}", but the cell has no scene to draw it`);
+                if (slot.name !== undefined && (typeof slot.name !== 'string' || !slot.name)) bad.push(`${here}: a prop slot's name must be words`);
+                if (slot.align !== undefined && !SLOTS.includes(slot.align)) bad.push(`${here}: a prop slot's align "${slot.align}" is not top, bottom or center`);
             } else if (slot && typeof slot === 'object') {
                 if (!Number.isInteger(slot.label) || !(cell.figures || [])[slot.label]) bad.push(`${here}: label pinned to figure ${slot.label}, which is not there`);
             } else if (!SLOTS.includes(slot)) bad.push(`${here}: caption slot "${slot}" is not top, bottom, center, a label or a prop`);

@@ -35,6 +35,52 @@ function handOn(side) {
     return { person, hand };
 }
 
+test('the finger-and-thumb ring: an open loop on the inner side, its tips meeting, on either hand (Meme Studio, 2026-11-03)', () => {
+    const R = Hd.RING;
+    const unit = 0.05;
+    for (const inner of [1, -1]) {
+        const geometry = Hd.ringGeometry(unit, inner);
+        const p = geometry.attributes.position;
+        const pts = [];
+        for (let i = 0; i < p.count; i++) pts.push(new THREE.Vector3().fromBufferAttribute(p, i));
+        const place = ([y, out]) => new THREE.Vector3(inner * (R.x + out * Math.sin(R.open)) * unit, y * unit, -out * Math.cos(R.open) * unit);
+        // Nothing of the hand in the hole, a good share of the loop's radius.
+        const hole = place(R.center);
+        const nearest = Math.min(...pts.map((v) => v.distanceTo(hole)));
+        expect(nearest).toBeGreaterThan(R.r * unit * 0.5);
+        // And it is closed, not a hook: a ray from the hole's middle meets the
+        // hand within about the loop's radius whichever way it goes in the
+        // loop's plane.
+        const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+        const caster = new THREE.Raycaster();
+        const along = (t) => new THREE.Vector3(inner * -Math.sin(t) * Math.sin(R.open), Math.cos(t), Math.sin(t) * Math.cos(R.open)).normalize();
+        for (let a = 0; a < 360; a += 15) {
+            caster.set(hole, along((a * Math.PI) / 180));
+            caster.far = R.r * unit * 1.6;
+            expect(`${inner} at ${a}: ${caster.intersectObject(mesh).length > 0}`).toBe(`${inner} at ${a}: true`);
+        }
+        // On the inner side of the palm's middle.
+        expect(hole.x * inner).toBeGreaterThan(0);
+        geometry.dispose();
+    }
+});
+
+test('a figure\'s hand made the ring keeps a name for it, a larger size, and nothing for a figure with no such arm', () => {
+    const { person, hand } = handOn(-1);
+    const arm = person.children.find((o) => o.userData && o.userData.isArm && o.userData.armSide === -1);
+    const made = Hd.ringWith({ arms: { right: arm } }, 'right');
+    expect(made).toBe(hand);
+    expect(hand.userData.shape).toBe('ring');
+    hand.geometry.computeBoundingBox();
+    const span = hand.geometry.boundingBox.max.y - hand.geometry.boundingBox.min.y;
+    const pointing = Hd.pointingHandGeometry(hand.userData.handUnit * Hd.FIST.scale, 1);
+    pointing.computeBoundingBox();
+    expect(Hd.RING.scale).toBeGreaterThan(1);
+    expect(span).toBeGreaterThan(0);
+    pointing.dispose();
+    expect(Hd.ringWith({ arms: {} }, 'right')).toBeNull();
+});
+
 test('a hand on a ball: turned to face it, fingers bent onto it, thumb round it, nothing inside it (X\'s and O\'s, 2026-11-01)', () => {
     const { hand } = handOn(-1);
     const own = hand.geometry;

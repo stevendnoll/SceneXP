@@ -64,6 +64,45 @@ function patch(pic, u, v, r = 0.06) {
 }
 
 describe('the painters', () => {
+    test('stone: dark mortar between blocks of their own shades, the wall lit round its light and dark away from it', () => {
+        const S = D.PAINTS.stone;
+        const pic = D.paintPixels('stone', '#6A5F52', WALL(), 256);
+        const { width: W, height: H } = WALL();
+        const bright = ([r, g, b]) => r + g + b;
+        // A horizontal mortar line against the block just above it, in one column.
+        const row = 3;
+        const u = 0.41;
+        const onLine = at(pic, u, (row * S.row) / H);
+        const inBlock = at(pic, u, ((row + 0.5) * S.row) / H);
+        expect(bright(onLine)).toBeLessThan(bright(inBlock) * 0.75);
+        // Every other course is set over by half: a vertical joint in one is
+        // the middle of a block in the next.
+        const jointU = (S.block * 2) / W;
+        expect(bright(at(pic, jointU, ((row + 1.5) * S.row) / H))).toBeGreaterThan(bright(at(pic, jointU, ((row + 0.5) * S.row) / H)) * 0.0);
+        // Round the light against the far corner.
+        expect(patch(pic, S.at[0], S.at[1])).toBeGreaterThan(patch(pic, 0.06, 0.06) * 1.2);
+        // Blocks differ: not all one flat shade.
+        const shades = new Set();
+        for (let c = 0; c < 5; c++) shades.add(Math.round(patch(pic, 0.1 + c * (S.block / W), ((row + 0.5) * S.row) / H, 0.01) / 4));
+        expect(shades.size).toBeGreaterThan(1);
+    });
+
+    test('curtain: folds that run the wall\'s full height, crests in the base and valleys well darker', () => {
+        const C = D.PAINTS.curtain;
+        const pic = D.paintPixels('curtain', '#2C3E7A', WALL(), 256);
+        const across = [];
+        for (let u = 0; u < 1; u += 1 / 256) across.push(at(pic, u, 0.5)[2]);
+        const [lo, hi] = [Math.min(...across), Math.max(...across)];
+        expect(lo).toBeLessThan(hi * (1 - C.depth * 0.6));
+        // Several crests across the wall.
+        let crests = 0;
+        for (let i = 1; i < across.length - 1; i++) if (across[i] > across[i - 1] && across[i] >= across[i + 1] && across[i] > (hi + lo) / 2) crests++;
+        expect(crests).toBeGreaterThan(3);
+        // A fold hangs straight: the same column is nearly as bright up the wall's middle.
+        const col = across.indexOf(hi) / 256;
+        expect(Math.abs(at(pic, col, 0.42)[2] - at(pic, col, 0.58)[2])).toBeLessThan(hi * 0.08);
+    });
+
     test('each paints an opaque square of the size asked for, the same every time, and an unknown id paints nothing', () => {
         for (const id of D.PAINT_IDS) {
             const pic = D.paintPixels(id, '#808080', WALL(), 32);

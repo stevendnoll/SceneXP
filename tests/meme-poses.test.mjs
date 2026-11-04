@@ -12,12 +12,16 @@ import { loadRealThree } from './helpers/real-three.mjs';
 let THREE;
 let P;
 let F;
+let TEMPLATES_PART;
+/** The catalog (no THREE of its own, so imported like the rest, in beforeAll). */
+const await_templates = () => TEMPLATES_PART;
 
 beforeAll(async () => {
     THREE = await loadRealThree();
     globalThis.THREE = THREE;
     P = await import('../www/meme/js/poses.js');
     F = await import('../www/shared/js/avatar-figure-1.0.0.min.js');
+    TEMPLATES_PART = await import('../www/meme/js/templates.js');
 });
 
 afterAll(() => {
@@ -31,6 +35,61 @@ function handOf(figure, side) {
     figure.arms[side].traverse((o) => { if (o.userData && o.userData.isHand && !hand) hand = o; });
     return hand.getWorldPosition(new THREE.Vector3());
 }
+
+test('the ring: the hand raised beside the shoulder, the forearm up, the ring facing the camera with the other arm at rest', () => {
+    const figure = F.createAvatar({});
+    figure.setPose(P.armsFor('ring'));
+    const hand = handOf(figure, 'right');
+    expect(hand.distanceTo(new THREE.Vector3(-0.35, 1.52, 0.25))).toBeLessThan(0.03);
+    const elbow = figure.arms.right.userData.forearm.getWorldPosition(new THREE.Vector3());
+    expect(hand.clone().sub(elbow).normalize().y).toBeGreaterThan(0.9);
+    expect(P.armsFor('ring').left).toEqual(P.armsFor('stand').left);
+    expect(P.RINGED).toContain('ring');
+    // The template's stance turns the figure toward the raised hand's side.
+    const { templateOf } = await_templates();
+    const spec = templateOf('notThatSimple').cells[0].figures[0];
+    expect(spec.pose).toBe('ring');
+    expect(spec.side).toBe('right');
+    figure.group.rotation.y = spec.turn;
+    figure.group.updateMatrixWorld(true);
+    let mesh = null;
+    figure.arms.right.traverse((o) => { if (!mesh && o.userData.isHand) mesh = o; });
+    const open = 0.75;
+    // The ring's plane faces out on the thumb's side and the back of the hand
+    // (hands-1.0.0 RING.open): its normal is the way a camera must look.
+    const normal = new THREE.Vector3(Math.cos(open), 0, Math.sin(open)).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
+    expect(normal.dot(new THREE.Vector3(0, 0, 1))).toBeGreaterThan(0.9);
+});
+
+test('the drape: both arms lead, and from The Medal\'s spots the hands land either side of the receiver\'s neck, on every build', () => {
+    const { templateOf } = await_templates();
+    const D = P.DRAPE;
+    const [receiver, giver] = templateOf('medal').cells[0].figures;
+    // The template stands them where the pose was solved.
+    expect(receiver.at).toEqual(D.receiver.at);
+    expect(receiver.turn).toBe(D.receiver.turn);
+    expect(giver.at).toEqual(D.giver.at);
+    expect(giver.turn).toBe(D.giver.turn);
+    for (const side of ['right', 'left']) expect(P.armsFor('drape', side)).toEqual(P.armsFor('drape'));
+    expect(P.TWO_ARMED).toEqual(['drape']);
+    for (const build of ['straight', 'slim', 'curvy', 'pear', 'broad', 'round', 'full']) {
+        const a = F.createAvatar({ build });
+        a.group.position.set(D.giver.at[0], 0, D.giver.at[1]);
+        a.group.rotation.y = D.giver.turn;
+        a.setPose(P.armsFor('drape'));
+        const neck = new THREE.Vector3(D.receiver.at[0], 1.42, D.receiver.at[1]);
+        // The receiver's own right and left, in the box.
+        const across = new THREE.Vector3(Math.cos(D.receiver.turn), 0, -Math.sin(D.receiver.turn));
+        const [nearSide, farSide] = [handOf(a, 'left'), handOf(a, 'right')];
+        expect(`${build} near ${nearSide.clone().sub(neck).dot(across) > 0.05}`).toBe(`${build} near true`);
+        expect(`${build} far ${farSide.clone().sub(neck).dot(across) < -0.03}`).toBe(`${build} far true`);
+        for (const hand of [nearSide, farSide]) {
+            expect(`${build} ${hand.distanceTo(neck) < 0.17}`).toBe(`${build} true`);
+            expect(Math.abs(hand.y - neck.y)).toBeLessThan(0.05);
+        }
+        a.dispose();
+    }
+});
 
 test('the handshake: two figures stood as The Handshake stands them clasp right hands on one spot, chest high', () => {
     const H = P.HANDSHAKE;
@@ -94,7 +153,7 @@ test('the handshake: two figures stood as The Handshake stands them clasp right 
 });
 
 test('the list names every pose once, stand and lookBack moving no arm', () => {
-    expect(P.POSES).toEqual(['stand', 'dismiss', 'approve', 'present', 'shake', 'point', 'aim', 'lookBack']);
+    expect(P.POSES).toEqual(['stand', 'dismiss', 'approve', 'present', 'shake', 'point', 'aim', 'ring', 'drape', 'lookBack']);
     expect(P.POINTING).toEqual(['point']);
     expect(P.ARM_POSES.stand).toBeNull();
     expect(P.ARM_POSES.lookBack).toBeNull();

@@ -287,6 +287,17 @@ describe('a caption', () => {
         }
     });
 
+    test('a caption on a prop sits where its slot says on the surface, centered for Two Buttons\' plates', () => {
+        const template = { cells: [{ captions: [{ prop: 'left', align: 'center' }, { prop: 'right' }], scene: 'buttons' }] };
+        const plate = { x: 40, y: 200, w: 300, h: 150 };
+        const ctx = recordingContext(0.5);
+        C.drawCaptions(ctx, template, ['rent', 'boat'], [{ x: 0, y: 0, w: 800, h: 400 }], CONFIG.caption, { props: [{ left: plate, right: { ...plate, x: 400 } }] });
+        const [rent, boat] = ctx.calls.filter((c) => c[0] === 'fillText');
+        expect(rent[3]).toBeCloseTo(plate.y + plate.h / 2, 6);
+        // Unsaid, a surface's caption stays at its top, as The Plan's does.
+        expect(boat[3]).toBeCloseTo(plate.y + plate.h * CONFIG.caption.inset, 6);
+    });
+
     test('only the tile takes the tile\'s face: a caption at the top or the bottom of a panel keeps its own', () => {
         const rect = { x: 0, y: 0, w: 500, h: 500 };
         for (const slot of ['top', 'bottom']) {

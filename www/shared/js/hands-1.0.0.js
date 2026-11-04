@@ -24,6 +24,8 @@
  *   grip      a hand on a ball (X's and O's quarterback, 2026-11-01): the
  *             hand turned about the forearm to face the ball, the fingers
  *             bent down onto its surface, the thumb round its inner side
+ *   ring      the index and the thumb meeting in a loop, the other fingers
+ *             curled (Meme Studio's Not That Simple, 2026-11-03)
  *
  * The rig's open hand curled its three fingers in the first cut (the same
  * capsules, bent), which read as a lumpy palm at panel size.
@@ -297,6 +299,83 @@ export function gripHand(hand, { radius, ball } = {}) {
     return held;
 }
 
+/**
+ * A HAND WITH THE FINGER AND THUMB IN A RING (Meme Studio's Not That Simple,
+ * 2026-11-03), the gesture of someone explaining a fine point. The palm is the
+ * rig's own. The index runs out from its knuckle and round toward the palm
+ * side to meet the thumb, which comes across from the palm's inner edge, so
+ * the two close a loop on the hand's inner side, with the other three fingers
+ * curled. The loop leans `open` radians out from square to the palm, toward
+ * the thumb's side, so a camera can see the ring round and the back of the hand
+ * at once, clear of the fingers (square to the palm, a ring seen round shows
+ * the palm edge on, and it read as a wire on a stick).
+ *
+ * In hand units, [y, out]: the loop is a circle about `center` of radius `r`,
+ * `out` the way off the palm's face, the index drawn from its `knuckle` through
+ * the circle at `indexAt` (degrees from the wrist's side, +y, toward the palm,
+ * -out), the thumb from its `base` through `thumbAt`, their tips overlapping.
+ * `x` is how far the loop stands toward the inner side, `indexR` and `thumbR` their thickness; `curl`
+ * how far the other fingers bend and `curled` the share of their length left
+ * showing; `scale` the whole hand against the pointing hand's size, since the
+ * ring is the point of the picture.
+ */
+export const RING = Object.freeze({
+    x: 0.5,
+    open: 0.75,
+    center: Object.freeze([-1.3, 0.62]),
+    r: 0.6,
+    knuckle: Object.freeze([-0.62, 0.08]),
+    indexAt: Object.freeze([70, 110, 150, 190, 230, 262]),
+    base: Object.freeze([0.35, 0]),
+    thumbAt: Object.freeze([305, 275]),
+    indexR: 0.2, thumbR: 0.24, curl: 1.15, curled: 0.75, scale: 1.3
+});
+
+export function ringGeometry(unit, inner) {
+    const H = HAND;
+    const R = RING;
+    const parts = [];
+    const [pw, ph, pd] = H.palm;
+    const palmBottom = H.palmTop - ph;
+    const outline = new THREE.Shape();
+    outline.moveTo(-pw / 2 * unit, palmBottom * unit);
+    outline.lineTo(pw / 2 * unit, palmBottom * unit);
+    outline.lineTo(H.palmNeck / 2 * unit, H.palmTop * unit);
+    outline.lineTo(-H.palmNeck / 2 * unit, H.palmTop * unit);
+    outline.closePath();
+    const palm = new THREE.Matrix4();
+    palm.setPosition(0, 0, -pd / 2 * unit);
+    parts.push({ geometry: new THREE.ExtrudeGeometry(outline, { depth: pd * unit, bevelEnabled: false }), matrix: palm });
+    /** A capsule of radius `r` from `a` to `b`, [x, y, z] in hand units. */
+    const limb = (a, b, r) => {
+        const from = new THREE.Vector3(...a);
+        const to = new THREE.Vector3(...b);
+        const m = new THREE.Matrix4();
+        m.makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.clone().sub(from).normalize()));
+        const middle = from.clone().add(to).multiplyScalar(0.5);
+        m.setPosition(middle.x * unit, middle.y * unit, middle.z * unit);
+        parts.push({ geometry: new THREE.CapsuleGeometry(r * unit, Math.max(0.01, from.distanceTo(to)) * unit, 3, 8), matrix: m });
+    };
+    const onLoop = (degrees) => {
+        const a = (degrees * Math.PI) / 180;
+        return [R.center[0] + R.r * Math.cos(a), R.center[1] - R.r * Math.sin(a)];
+    };
+    const chain = (from, angles, r) => {
+        const at = [from, ...angles.map(onLoop)].map(([y, out]) => [inner * (R.x + out * Math.sin(R.open)), y, -out * Math.cos(R.open)]);
+        for (let k = 1; k < at.length; k++) limb(at[k - 1], at[k], r);
+    };
+    chain(R.knuckle, R.indexAt, R.indexR);
+    chain(R.base, R.thumbAt, R.thumbR);
+    // The other three, curled toward the palm from their knuckles, the
+    // shortest farthest from the index.
+    [[0.16, 1], [-0.16, 2], [-0.48, 3]].forEach(([across, k]) => {
+        const length = H.finger.lengths[k] * R.curled;
+        const top = [inner * across, palmBottom + H.finger.radius, 0];
+        limb(top, [top[0], top[1] - length * Math.cos(R.curl), -length * Math.sin(R.curl)], H.finger.radius);
+    });
+    return mergeParts(parts);
+}
+
 /** The pointing hand's geometry: the fist with the index out. */
 export function pointingHandGeometry(unit, inner) {
     return fistGeometry(unit, inner, { index: true });
@@ -339,6 +418,12 @@ export function pointWith(figure, side) {
  *  null when there is none. */
 export function fistWith(figure, side) {
     return swapHand(figure, side, 'fist', (unit, inner) => fistGeometry(unit, inner));
+}
+
+/** The hand on `side` of `figure` made the finger-and-thumb ring. Returns the
+ *  hand mesh, or null when there is none. */
+export function ringWith(figure, side) {
+    return swapHand(figure, side, 'ring', (unit, inner) => ringGeometry(unit * RING.scale, inner));
 }
 
 /** The hand on `side` of `figure` the rig's own open hand, drawn at the

@@ -255,6 +255,82 @@ test('a sleepy eye is thrown open, and undo puts back everything exactly, once, 
     }
 });
 
+test('rolled eyes go round the ball and stay on it, the whites grown and the irises not, and undo puts it all back, once (2026-11-03)', () => {
+    const figure = F.createAvatar({});
+    const head = headOf(figure);
+    const eyes = eyesOf(head);
+    const lenses = lensesOf(head);
+    const snap = () => [...eyes, ...lenses].map((o) => [o.position.toArray(), o.scale.toArray(), o.rotation.y]);
+    const before = snap();
+    const parts = lenses.map((l) => ({ x: l.position.x, z: l.position.z, scale: l.scale.toArray() }));
+    const whites = eyes.map((e) => e.scale.toArray());
+    const turn = -0.72;
+    const grow = 1.5;
+    const undo = X.rollEyes(figure, turn, { grow });
+    // The whites grow across and up, not deeper; the irises keep their size.
+    eyes.forEach((e, i) => expect(e.scale.toArray()).toEqual([whites[i][0] * grow, whites[i][1] * grow, whites[i][2]]));
+    lenses.forEach((l, i) => {
+        expect(l.scale.toArray()).toEqual(parts[i].scale);
+        // Toward the figure's right for a negative turn, back round the ball,
+        // and turned with it.
+        expect(l.position.x).toBeLessThan(parts[i].x - 0.01);
+        expect(l.position.z).toBeLessThan(parts[i].z);
+        expect(l.rotation.y).toBe(turn);
+        const eye = eyes.find((e) => Math.sign(e.position.x) === Math.sign(parts[i].x));
+        const radius = eye.geometry.parameters.radius;
+        // A lens on the ball: the same share of its radius out as it was.
+        const was = (parts[i].z - eye.position.z) / (radius * eye.scale.z);
+        const now = Math.hypot((l.position.x - parts[i].x) / (radius * eye.scale.x), (l.position.z - eye.position.z) / (radius * eye.scale.z));
+        expect(now).toBeCloseTo(was, 6);
+    });
+    // At this roll the iris stops at the white's rim, not past it into the
+    // skin (the first cut, 0.85, sank there).
+    const irises = lenses.filter((l) => l.userData.isIris);
+    irises.forEach((iris) => {
+        const eye = eyes.find((e) => Math.sign(e.position.x) === Math.sign(iris.position.x));
+        const r = eye.geometry.parameters.radius * eye.scale.x;
+        expect(Math.abs(iris.position.x - eye.position.x) + iris.geometry.parameters.radius * iris.scale.x).toBeLessThan(r * 1.05);
+    });
+    undo();
+    expect(snap()).toEqual(before);
+    X.rollEyes(figure, 0.4)();
+    expect(snap()).toEqual(before);
+    undo();
+    expect(snap()).toEqual(before);
+    figure.dispose();
+});
+
+test('a positive roll goes to the figure\'s left, each lens on its own eye even when an expression has slid it', () => {
+    const figure = F.createAvatar({});
+    const head = headOf(figure);
+    X.applyExpression(figure, 'sideEye');
+    const lenses = lensesOf(head);
+    const before = lenses.map((l) => l.position.x);
+    X.rollEyes(figure, 0.5);
+    lenses.forEach((l, i) => expect(l.position.x).toBeGreaterThan(before[i]));
+    figure.dispose();
+});
+
+test('a sleepy lid and the lash line grow with the eye, so neither is left smaller than the white, and go back', () => {
+    for (const eyeShape of ['sleepy', 'lashes']) {
+        const figure = F.createAvatar({ eyeShape });
+        const head = headOf(figure);
+        const parts = head.children.filter((o) => o.name === 'lid' || o.name === 'lashes');
+        expect(parts.length).toBeGreaterThan(0);
+        const before = parts.map((o) => [o.scale.x, o.position.x, o.position.y]);
+        const undo = X.rollEyes(figure, 0, { grow: 1.5 });
+        parts.forEach((o, i) => expect(o.scale.x).toBeCloseTo(before[i][0] * 1.5, 9));
+        undo();
+        expect(parts.map((o) => [o.scale.x, o.position.x, o.position.y])).toEqual(before);
+        figure.dispose();
+    }
+});
+
+test('rolling the eyes of a figure with no head changes nothing', () => {
+    const undo = X.rollEyes({}, 0.5);
+    expect(() => undo()).not.toThrow();
+});
+
 test('the saved face, an unknown id, and a figure with no head change nothing', () => {
     const figure = F.createAvatar({});
     const head = headOf(figure);
