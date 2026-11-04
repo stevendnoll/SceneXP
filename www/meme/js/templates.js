@@ -82,7 +82,11 @@ const FIGURE_CAMERA = { eye: [0, 1.35, 2.4], aim: [0, 1.2, 0], fov: 34 };
 
 /** A plain caption cell: inside the box, looking at the back wall alone. */
 const WALL_CAMERA = { eye: [0, 1.15, 0.45], aim: [0, 1.15, -0.7], fov: 30 };
-const WALL = '#F4F1EA';
+/** A text tile's wall, a gray dark enough for the white caption (Steve's QA,
+ *  2026-11-03: hard to read, most of all on a phone). Lit and tone mapped it
+ *  shows as about #756F65, white on that about 5:1; the old paper wall showed
+ *  as #E6E4E1, about 1.3:1, the thin outline left to do all the work. */
+const WALL = '#63615C';
 
 const you = (figure) => ({ role: 'you', pose: 'stand', at: [0, 0], turn: 0, ...figure });
 const textCell = (backdrop = WALL) => ({ figures: [], captions: ['center'], camera: WALL_CAMERA, backdrop });

@@ -676,6 +676,27 @@ describe('the pieces (M5), measured', () => {
         expect(bars[0]).toBeGreaterThan(bars[1]);
     });
 
+    test('both of the aviators\' bars reach the frames, neither left floating (Steve\'s QA, 2026-11-03)', () => {
+        // The top bar was cut to the teardrop's widest point, so it stopped
+        // 3.7 mm short of each frame up where the lens is narrower.
+        const person = F.createAvatar({ glasses: 'aviators' }).person;
+        const glasses = person.getObjectByName('glasses');
+        const frames = glasses.children.filter((o) => o.geometry.type === 'TubeGeometry').map((f) => vertices(person, f));
+        expect(frames).toHaveLength(2);
+        // Near enough to touch: a tube's radius, and the half gap between
+        // the points drawn along it.
+        const touching = F.GLASSES_SIZE.aviators.tube * 1.6;
+        for (const bar of glasses.children.slice(-2)) {
+            const pts = vertices(person, bar);
+            const xs = pts.map((p) => p.x);
+            for (const end of [Math.min(...xs), Math.max(...xs)]) {
+                const tip = pts.find((p) => p.x === end);
+                const nearest = Math.min(...frames.map((frame) => Math.min(...frame.map((p) => p.distanceTo(tip)))));
+                expect(nearest).toBeLessThan(touching);
+            }
+        }
+    });
+
     test('a chosen frame color and lens color replace a style\'s own, metal frames shine, and clear lenses empty the frames (2026-10-25)', () => {
         const glasses = (look) => F.createAvatar(look).person.getObjectByName('glasses');
         const frameMat = (g) => g.children.find((o) => o.geometry.type === 'TorusGeometry' || o.geometry.type === 'TubeGeometry').material;

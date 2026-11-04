@@ -58,7 +58,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
   {
     "cells": [
       {
-        "backdrop": "#F4F1EA",
+        "backdrop": "#63615C",
         "camera": {
           "aim": [
             0,
@@ -107,7 +107,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         ],
       },
       {
-        "backdrop": "#F4F1EA",
+        "backdrop": "#63615C",
         "camera": {
           "aim": [
             0,
@@ -156,7 +156,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         ],
       },
       {
-        "backdrop": "#F4F1EA",
+        "backdrop": "#63615C",
         "camera": {
           "aim": [
             0,
@@ -277,7 +277,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         ],
       },
       {
-        "backdrop": "#F4F1EA",
+        "backdrop": "#63615C",
         "camera": {
           "aim": [
             0,
@@ -328,7 +328,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         ],
       },
       {
-        "backdrop": "#F4F1EA",
+        "backdrop": "#63615C",
         "camera": {
           "aim": [
             0,
@@ -476,7 +476,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
   {
     "cells": [
       {
-        "backdrop": "#F4F1EA",
+        "backdrop": "#63615C",
         "camera": {
           "aim": [
             0,
@@ -527,7 +527,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "tint": 0.15,
       },
       {
-        "backdrop": "#F4F1EA",
+        "backdrop": "#63615C",
         "camera": {
           "aim": [
             0,
@@ -578,7 +578,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "tint": 0.4,
       },
       {
-        "backdrop": "#F4F1EA",
+        "backdrop": "#63615C",
         "camera": {
           "aim": [
             0,
@@ -629,7 +629,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "tint": 0.7,
       },
       {
-        "backdrop": "#F4F1EA",
+        "backdrop": "#63615C",
         "camera": {
           "aim": [
             0,

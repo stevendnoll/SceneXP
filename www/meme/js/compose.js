@@ -243,6 +243,7 @@ export function composeMeme(ctx, { template, captions = [], w, h, config, imageF
 export function drawCaptions(ctx, template, captions, rects, C, { anchors = [], label = null, props = [] } = {}) {
     let k = 0;
     const onBoard = C.board ? { ...C, size: C.size * C.board.scale, maxLines: C.board.maxLines } : C;
+    const onTile = { ...C, ...C.tile };
     template.cells.forEach((cell, i) => {
         // The labels drawn on this panel so far, so the next keeps clear.
         const placed = [];
@@ -259,7 +260,7 @@ export function drawCaptions(ctx, template, captions, rects, C, { anchors = [], 
                     if (drawn) placed.push(drawn.box);
                 }
             } else {
-                drawCaption(ctx, text, rects[i], slot, C);
+                drawCaption(ctx, text, rects[i], slot, slot === 'center' ? onTile : C);
             }
         }
     });

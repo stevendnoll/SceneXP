@@ -220,6 +220,28 @@ describe('the catalog', () => {
     });
 });
 
+describe('white words stay readable (Steve\'s QA, 2026-11-03)', () => {
+    /** White's contrast on a 0xrrggbb color. These are the stored colors:
+     *  lit and tone mapped they show a little lighter (about 5:1 on screen
+     *  for these), so the floor here sits above the goal. */
+    const onWhite = (hex) => {
+        const linear = (v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
+        const y = 0.2126 * linear((hex >> 16) & 255) + 0.7152 * linear((hex >> 8) & 255) + 0.0722 * linear(hex & 255);
+        return 1.05 / (y + 0.05);
+    };
+
+    test('on every text tile', () => {
+        const tiles = T.TEMPLATES.flatMap((t) => t.cells).filter((c) => c.captions.includes('center'));
+        expect(tiles.length).toBeGreaterThan(0);
+        for (const cell of tiles) expect(onWhite(Number.parseInt(cell.backdrop.slice(1), 16))).toBeGreaterThan(5.5);
+    });
+
+    test('and on The Plan\'s board, which is darker than a whiteboard for it', async () => {
+        const { CHART } = await import('../www/meme/js/scenes/plan.js');
+        expect(onWhite(CHART.sheet)).toBeGreaterThan(5.5);
+    });
+});
+
 describe('the rules catch', () => {
     const base = () => copy(T.TEMPLATES[0]);
     const problems = (mutate) => {

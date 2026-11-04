@@ -2,9 +2,11 @@
 /**
  * scenes/plan.js - the props of The Plan (template 7): a flip chart on an
  * easel beside the figure, on the camera's right (Steve, 2026-10-28: where
- * the board usually is), a white sheet in a dark frame, the caption drawn
+ * the board usually is), a slate sheet in a dark frame, the caption drawn
  * over the panel standing in for what is written on it. Generic (PRD
- * section 7): an easel is an easel.
+ * section 7): an easel is an easel. The sheet is dark enough for the white
+ * words (Steve's QA, 2026-11-03): lit, it shows as about #6B6E71, white on
+ * that about 5:1, where the old white sheet gave about 1.2:1.
  */
 
 /** The chart's measures, meters: the sheet `w` by `h` at `at` (its middle),
@@ -12,7 +14,7 @@
  *  panel's caption (Steve, 2026-10-28: the words go on the board). */
 export const CHART = Object.freeze({
     at: Object.freeze([0.48, 1.3, -0.1]), w: 0.96, h: 0.8, depth: 0.03, lean: 0.12,
-    frame: 0x2a2d31, sheet: 0xfbfaf6, leg: 0x6b5a48, legR: 0.012, sheetShare: Object.freeze([0.92, 0.9])
+    frame: 0x2a2d31, sheet: 0x5c6064, leg: 0x6b5a48, legR: 0.012, sheetShare: Object.freeze([0.92, 0.9])
 });
 
 /** The sheet's four corners in the box's own meters (the board's lean
