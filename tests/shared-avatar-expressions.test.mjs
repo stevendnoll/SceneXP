@@ -326,6 +326,62 @@ test('a sleepy lid and the lash line grow with the eye, so neither is left small
     }
 });
 
+test('a leaned head goes over with the neck, about the neck\'s base, positive toward the figure\'s right, and undo puts it back, once (2026-11-05)', () => {
+    const figure = F.createAvatar({});
+    const head = headOf(figure);
+    const neck = figure.person.children.find((o) => o.userData.isNeck);
+    // The rig tags its neck: a lean with nothing to find would do nothing, quietly.
+    expect(neck).toBeTruthy();
+    const height = neck.geometry.parameters.height;
+    const [hx, hy, nx, ny] = [head.position.x, head.position.y, neck.position.x, neck.position.y];
+    const base = ny - height / 2;
+    const tilt = 0.24;
+    const undo = X.leanHead(figure, tilt);
+    // Over toward the figure's right (-x), the crown tipped that way as well.
+    expect(head.position.x).toBeLessThan(hx - 0.04);
+    expect(head.rotation.z).toBe(tilt);
+    expect(neck.rotation.z).toBe(tilt);
+    // The neck's base stays on the shoulders: its middle, less half its height
+    // along its new line, lands back where the base was.
+    const along = new THREE.Vector3(-Math.sin(tilt), Math.cos(tilt), 0);
+    const foot = neck.position.clone().addScaledVector(along, -height / 2);
+    expect(foot.x).toBeCloseTo(nx, 6);
+    expect(foot.y).toBeCloseTo(base, 6);
+    // And the head stays on the neck: as far along that line as it stood.
+    const fromFoot = head.position.clone().sub(foot);
+    expect(fromFoot.length()).toBeCloseTo(hy - base, 6);
+    expect(fromFoot.normalize().dot(along)).toBeCloseTo(1, 6);
+    // The hair and the face pieces are in the head group, so they go with it.
+    expect(head.children.length).toBeGreaterThan(3);
+    undo();
+    expect([head.position.x, head.position.y, neck.position.x, neck.position.y]).toEqual([hx, hy, nx, ny]);
+    expect([head.rotation.z, neck.rotation.z]).toEqual([0, 0]);
+    X.leanHead(figure, 0.3);
+    const leaned = head.position.x;
+    undo();
+    expect(head.position.x).toBe(leaned);
+    figure.dispose();
+});
+
+test('no lean, no head or no neck to find change nothing', () => {
+    const figure = F.createAvatar({});
+    const head = headOf(figure);
+    const x = head.position.x;
+    X.leanHead(figure, 0)();
+    expect(head.position.x).toBe(x);
+    expect(head.rotation.z).toBe(0);
+    expect(() => X.leanHead({}, 0.3)()).not.toThrow();
+    expect(() => X.leanHead(null, 0.3)()).not.toThrow();
+    // A figure with a head but no tagged neck.
+    const bare = new THREE.Group();
+    const lone = new THREE.Group();
+    lone.name = 'head';
+    bare.add(lone);
+    X.leanHead({ person: bare }, 0.3);
+    expect(lone.rotation.z).toBe(0);
+    figure.dispose();
+});
+
 test('rolling the eyes of a figure with no head changes nothing', () => {
     const undo = X.rollEyes({}, 0.5);
     expect(() => undo()).not.toThrow();

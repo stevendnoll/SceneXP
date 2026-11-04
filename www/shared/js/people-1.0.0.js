@@ -579,6 +579,7 @@ export function createPerson(config) {
         skinMaterial
     );
     neck.position.y = legLength + torsoHeight + neckHeight / 2;
+    neck.userData.isNeck = true;
     person.add(neck);
 
     // === TORSO ===

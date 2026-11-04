@@ -285,6 +285,13 @@ describe('the four templates of 2026-11-03', () => {
         expect(t.cells[1].scene).toBe('sweat');
     });
 
+    test('Not That Simple leans the head toward the raised hand: over to the figure\'s right, the arm that leads (Steve, 2026-11-05)', () => {
+        const [figure] = T.templateOf('notThatSimple').cells[0].figures;
+        expect(figure.side).toBe('right');
+        expect(figure.tilt).toBeGreaterThan(0.15);
+        expect(figure.tilt).toBeLessThan(0.4);
+    });
+
     test('nobody\'s name, place or line is in a template\'s words', () => {
         const words = JSON.stringify(T.TEMPLATES.map((t) => [t.id, t.title, t.line, t.roles])).toLowerCase();
         for (const name of ['obama', 'president', 'boromir', 'mordor', 'tolkien', 'gondor', 'one does not', 'walk into', 'pedro', 'monkey', 'puppet']) expect(`${name}: ${words.includes(name)}`).toBe(`${name}: false`);
@@ -439,6 +446,8 @@ describe('the rules catch', () => {
         expect(problems((t) => { t.cells[0].figures[0].gaze = -0.7; t.cells[0].figures[0].eyes = 1.5; })).toEqual([]);
         expect(problems((t) => { t.cells[0].figures[0].gaze = 'left'; })).toEqual([expect.stringMatching(/gaze must be radians/)]);
         expect(problems((t) => { t.cells[0].figures[0].eyes = 0; })).toEqual([expect.stringMatching(/eyes must be a size/)]);
+        expect(problems((t) => { t.cells[0].figures[0].tilt = 0.2; })).toEqual([]);
+        expect(problems((t) => { t.cells[0].figures[0].tilt = 'over'; })).toEqual([expect.stringMatching(/tilt must be radians/)]);
         // A catalog checked without the painters' list knows none.
         const t = base();
         t.cells[0].paint = { wall: 'city' };

@@ -42,8 +42,9 @@
  *   ring      the elbow low and forward, the forearm up, the palm to the camera
  *             and the hand beside the chin, so hand and face read as one
  *             thing, the ring (hands-1.0.0) toward the face: the hand at
- *             (-0.28, 1.49, 0.27) (Steve's QA, 2026-11-03: the first cut's arm
- *             stood out in an L, with the hand off on its own)
+ *             (-0.24, 1.47, 0.21), close by the head the template leans to it
+ *             (Steve's QA, 2026-11-03 and 2026-11-05: an arm out in an L, then
+ *             a hand a long way off the face)
  *   drape     BOTH arms, for fastening a ribbon at the nape of someone standing
  *             just in front with their back to the figure, both looking the
  *             same way (Steve's QA, 2026-11-03), at the box spots The Medal
@@ -81,7 +82,7 @@ export const ARM_POSES = Object.freeze({
     shake: Object.freeze({ z: -0.06, x: -0.84, fore: -1.28, twist: 1.22 }),
     point: Object.freeze({ z: 0.87, x: -1.09, fore: -0.51, twist: 1.48 }),
     aim: Object.freeze({ z: -0.13, x: -1.76, fore: 0.07, twist: 1.14 }),
-    ring: Object.freeze({ z: 0.35, x: -1.13, fore: -1.9, twist: 0 }),
+    ring: Object.freeze({ z: 0.28, x: -1.06, fore: -2.17, twist: 0.1 }),
     // Both arms named: neither rests.
     drape: Object.freeze({
         right: Object.freeze({ z: -0.03, x: -0.82, fore: -1.83, twist: -2.48 }),

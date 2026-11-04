@@ -19,7 +19,7 @@
  */
 
 import { createAvatar } from '../../shared/js/avatar-figure-1.0.0.min.js';
-import { expressionOverrides, applyExpression, rollEyes } from '../../shared/js/avatar-expressions-1.0.0.min.js';
+import { expressionOverrides, applyExpression, rollEyes, leanHead } from '../../shared/js/avatar-expressions-1.0.0.min.js';
 import { armsFor, headTurnFor, legsFor, nodFor, POINTING, FISTED, ENLARGED, RINGED, TWO_ARMED, SIDES, STRIDE } from './poses.min.js';
 import { pointWith, fistWith, openWith, ringWith } from '../../shared/js/hands-1.0.0.min.js';
 import { SCENES } from './scenes/index.min.js';
@@ -193,7 +193,7 @@ export function cellCamera(cell, box) {
  * posed on the spec's `side` (a pointing hand for a pointing pose, a fist
  * for one that holds, the hand's `twist` the spec's when given), its
  * legs in a `stride`, its head turned the spec's `look` (toward the
- * leading arm when unsaid) and nodded its `nod`, its eyes rolled `gaze` with
+ * leading arm when unsaid), nodded its `nod` and leaned over its `tilt`, its eyes rolled `gaze` with
  * the whites `eyes` times their size, standing `at` and turned `turn` in the
  * box, and
  * glowing when `glow` is above zero (the halo behind the head, the light
@@ -234,6 +234,7 @@ export function makeFigure(avatar, spec) {
     if (head) {
         head.rotation.y = headTurnFor(spec.pose, spec.look === undefined ? side : spec.look);
         if (spec.nod) head.rotation.x = nodFor(spec.nod);
+        if (spec.tilt) leanHead(figure, spec.tilt);
     }
     figure.glow = buildGlow(spec.glow);
     if (figure.glow) {

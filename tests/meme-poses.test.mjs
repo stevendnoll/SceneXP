@@ -40,7 +40,7 @@ test('the ring: the hand up beside the chin, the forearm rising to it, the palm 
     const figure = F.createAvatar({});
     figure.setPose(P.armsFor('ring'));
     const hand = handOf(figure, 'right');
-    expect(hand.distanceTo(new THREE.Vector3(-0.28, 1.49, 0.27))).toBeLessThan(0.03);
+    expect(hand.distanceTo(new THREE.Vector3(-0.24, 1.47, 0.21))).toBeLessThan(0.03);
     const elbow = figure.arms.right.userData.forearm.getWorldPosition(new THREE.Vector3());
     expect(hand.clone().sub(elbow).normalize().y).toBeGreaterThan(0.9);
     // Hand and face read as one thing: within a head's width or so of the

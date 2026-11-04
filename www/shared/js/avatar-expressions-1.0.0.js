@@ -209,6 +209,41 @@ export function rollEyes(figure, turn, { grow = 1 } = {}) {
     };
 }
 
+/**
+ * Lean a built figure's head over (Meme Studio's Not That Simple, Steve's QA
+ * 2026-11-05): the head and the neck tipped together `tilt` radians about the
+ * neck's base, positive toward the figure's right, so the head moves over and
+ * the neck stays on it and on the shoulders, where turning the head alone about
+ * its own middle only rolls it. The figure part's head group holds the hair and
+ * every face piece, so they go with it. Returns `undo()`. Nothing for no tilt, or
+ * a figure with no head or no tagged neck.
+ */
+export function leanHead(figure, tilt) {
+    const head = headOf(figure);
+    const root = figure && (figure.person || figure.group || figure);
+    const neck = root && root.children ? root.children.find((o) => o.userData && o.userData.isNeck) : null;
+    const height = neck && neck.geometry && neck.geometry.parameters ? neck.geometry.parameters.height : 0;
+    if (!head || !(height > 0) || !tilt) return () => {};
+    const base = neck.position.y - height / 2;
+    const saved = [head, neck].map((o) => ({ o, x: o.position.x, y: o.position.y, roll: o.rotation.z }));
+    for (const o of [head, neck]) {
+        const up = o.position.y - base;
+        o.position.x -= up * Math.sin(tilt);
+        o.position.y = base + up * Math.cos(tilt);
+        o.rotation.z = tilt;
+    }
+    let undone = false;
+    return () => {
+        if (undone) return;
+        undone = true;
+        for (const { o, x, y, roll } of saved) {
+            o.position.x = x;
+            o.position.y = y;
+            o.rotation.z = roll;
+        }
+    };
+}
+
 /** A drop of water on the face at `[x, y, z]` in the head's coordinates. */
 function drop(name, at, material) {
     const D = DROP_SIZE;

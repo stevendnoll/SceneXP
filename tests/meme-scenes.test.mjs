@@ -387,6 +387,36 @@ describe('Not That Simple', () => {
         panel.dispose();
     });
 
+    test('hand and face read as one: the head leaned toward the hand, the ring close by the cheek and not over it (Steve\'s QA, 2026-11-05)', () => {
+        const [w, h] = [1000, 1000];
+        const { panel, camera } = shot('notThatSimple', 0, w, h);
+        const figure = panel.figures[0];
+        const person = figure.person;
+        person.updateMatrixWorld(true);
+        const head = person.getObjectByName('head');
+        expect(head.rotation.z).toBe(T.templateOf('notThatSimple').cells[0].figures[0].tilt);
+        // The neck goes with it, not left standing.
+        expect(person.children.find((o) => o.userData.isNeck).rotation.z).toBe(head.rotation.z);
+        let hand = null;
+        figure.arms.right.traverse((o) => { if (!hand && o.userData.isHand) hand = o; });
+        const on = (v) => P.projectPoint(v.toArray(), camera, w, h);
+        const pos = hand.geometry.attributes.position;
+        let edge = -Infinity;
+        const v = new THREE.Vector3();
+        for (let i = 0; i < pos.count; i++) edge = Math.max(edge, on(v.fromBufferAttribute(pos, i).applyMatrix4(hand.matrixWorld)).x);
+        const middle = figure.head();
+        const face = on(middle);
+        // The head is drawn round; a head's radius on the picture at its depth.
+        const radius = Math.abs(on(middle.clone().add(new THREE.Vector3(0.12, 0, 0))).x - face.x);
+        const gap = (face.x - radius) - edge;
+        // Off the face, so the ring's hole still shows against the dark wall.
+        expect(gap).toBeGreaterThan(0);
+        // And close: less than a third of the head's width away. It was over a
+        // whole head's width (0.14 m) before.
+        expect(gap).toBeLessThan(radius * 2 * 0.34);
+        panel.dispose();
+    });
+
     test('a cloak on any build, a cape behind and a mantle over the shoulders, and on the figure built again', () => {
         for (const build of ['slim', 'round']) {
             const { panel } = shot('notThatSimple', 0, 1, 1, { build });

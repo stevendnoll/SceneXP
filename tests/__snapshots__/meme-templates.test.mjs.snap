@@ -1529,6 +1529,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
             "pose": "ring",
             "role": "you",
             "side": "right",
+            "tilt": 0.24,
             "turn": -0.3,
           },
         ],

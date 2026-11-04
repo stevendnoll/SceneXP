@@ -26,7 +26,9 @@
  *               unless said) with the head turned `look` ('right' or
  *               'left' by the pose's measure, or radians, positive toward
  *               the figure's left; toward the leading arm unless said)
- *               and nodded `nod` radians (negative looks up), its eyes rolled
+ *               and nodded `nod` radians (negative looks up), its head and neck
+ *               leaned over `tilt` radians (positive toward its own right), its
+ *               eyes rolled
  *               `gaze` radians in that head (the same sign) with the whites
  *               `eyes` times their size, its legs in
  *               a `stride` (radians, the right leg forward when positive),
@@ -454,7 +456,7 @@ const NOT_THAT_SIMPLE = {
     grid: [[{ span: 1 }]],
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
     cells: [{
-        figures: [{ role: 'you', pose: 'ring', side: 'right', expression: 'raisedBrow', look: 0.05, at: [0.1, 0], turn: -0.3, overrides: CLOAKED }],
+        figures: [{ role: 'you', pose: 'ring', side: 'right', expression: 'raisedBrow', look: 0.05, tilt: 0.24, at: [0.1, 0], turn: -0.3, overrides: CLOAKED }],
         captions: ['top', 'bottom'],
         camera: { eye: [-0.02, 1.48, 1.6], aim: [-0.02, 1.46, 0], fov: 34 },
         backdrop: '#54493D',
@@ -551,6 +553,7 @@ export function validateTemplate(t, { expressions, poses, scenes = [], paints = 
             if (f.look !== undefined && !sides.includes(f.look) && !Number.isFinite(f.look)) bad.push(`${here}: look must be right, left or radians`);
             if (f.stride !== undefined && !Number.isFinite(f.stride)) bad.push(`${here}: stride must be radians`);
             if (f.nod !== undefined && !Number.isFinite(f.nod)) bad.push(`${here}: nod must be radians`);
+            if (f.tilt !== undefined && !Number.isFinite(f.tilt)) bad.push(`${here}: tilt must be radians`);
             if (f.gaze !== undefined && !Number.isFinite(f.gaze)) bad.push(`${here}: gaze must be radians`);
             if (f.eyes !== undefined && !(f.eyes > 0)) bad.push(`${here}: eyes must be a size above zero`);
             if (f.twist !== undefined && !Number.isFinite(f.twist)) bad.push(`${here}: twist must be radians`);
